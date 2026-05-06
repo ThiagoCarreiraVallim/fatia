@@ -1,0 +1,33 @@
+{
+  "name": "fittrack",
+  "version": "0.1.0",
+  "private": true,
+  "description": "App pessoal de tracking de nutrição e treino com integração via MCP",
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "db:migrate": "pnpm --filter @fittrack/db prisma migrate dev",
+    "db:migrate:deploy": "pnpm --filter @fittrack/db prisma migrate deploy",
+    "db:push": "pnpm --filter @fittrack/db prisma db push",
+    "db:studio": "pnpm --filter @fittrack/db prisma studio",
+    "db:seed": "pnpm --filter @fittrack/db seed",
+    "db:seed:admin": "pnpm --filter @fittrack/db seed:admin",
+    "db:seed:taco": "pnpm --filter @fittrack/db seed:taco",
+    "db:seed:exercises": "pnpm --filter @fittrack/db seed:exercises",
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d postgres",
+    "infra:down": "docker compose -f infra/docker-compose.yml down",
+    "infra:logs": "docker compose -f infra/docker-compose.yml logs -f"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.0",
+    "turbo": "^2.0.0",
+    "typescript": "^5.5.0"
+  }
+}

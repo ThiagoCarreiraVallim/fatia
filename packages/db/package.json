@@ -1,0 +1,25 @@
+{
+  "name": "@fittrack/db",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "echo 'no build needed for db package'",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "seed": "tsx prisma/seed.ts",
+    "seed:admin": "tsx prisma/seed-admin.ts",
+    "seed:taco": "tsx prisma/seed-taco.ts",
+    "seed:exercises": "tsx prisma/seed-exercises.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.20.0"
+  },
+  "devDependencies": {
+    "argon2": "^0.41.0",
+    "prisma": "^5.20.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  }
+}

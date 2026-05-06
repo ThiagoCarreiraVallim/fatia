@@ -1,0 +1,299 @@
+// FitTrack — Prisma schema
+// Documentação: ../../../docs/ARCHITECTURE.md
+// Decisões: ../../../docs/ADR/
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// USERS & AUTH
+// ============================================================
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role     @default(USER)
+  timezone     String   @default("America/Sao_Paulo")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  goals           UserGoals?
+  mcpTokens       McpToken[]
+  meals           Meal[]
+  workoutPlans    WorkoutPlan[]
+  workoutSessions WorkoutSession[]
+  weightLogs      WeightLog[]
+  stepLogs        StepLog[]
+  customFoods     Food[]     @relation("UserCustomFoods")
+  customExercises Exercise[] @relation("UserCustomExercises")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model McpToken {
+  id         String    @id @default(uuid())
+  userId     String
+  tokenHash  String    @unique
+  label      String
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  revokedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model UserGoals {
+  userId           String   @id
+  kcalMin          Int
+  kcalMax          Int
+  proteinMinG      Int
+  proteinMaxG      Int
+  carbsMinG        Int
+  carbsMaxG        Int
+  fatMinG          Int
+  fatMaxG          Int
+  weeklyWorkouts   Int      @default(3)
+  dailyStepsTarget Int      @default(8000)
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// NUTRITION
+// ============================================================
+
+model FoodGroup {
+  id   Int    @id @default(autoincrement())
+  name String @unique // "cereais", "leguminosas", "carnes", "frutas", etc
+
+  foods     Food[]
+  mealItems MealItem[]
+}
+
+model Food {
+  id             Int        @id @default(autoincrement())
+  name           String
+  source         FoodSource
+  groupId        Int?
+  // Para CUSTOM foods: dono. Null para TACO/USDA (catálogo público).
+  createdByUserId String?
+  kcalPer100g    Float
+  proteinPer100g Float
+  carbsPer100g   Float
+  fatPer100g     Float
+  createdAt      DateTime   @default(now())
+
+  group         FoodGroup? @relation(fields: [groupId], references: [id])
+  createdBy     User?      @relation("UserCustomFoods", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  mealItems     MealItem[]
+
+  // Unicidade por (nome, source) só para públicos. Customs podem repetir nomes
+  // entre usuários — unicidade real é (nome, source, createdByUserId).
+  @@unique([name, source, createdByUserId])
+  @@index([name])
+  @@index([source])
+  @@index([createdByUserId])
+}
+
+enum FoodSource {
+  TACO
+  USDA
+  CUSTOM
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
+
+model Meal {
+  id        String   @id @default(uuid())
+  userId    String
+  mealType  MealType
+  eatenAt   DateTime
+  notes     String?
+  createdAt DateTime @default(now())
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items MealItem[]
+
+  @@index([userId, eatenAt])
+}
+
+model MealItem {
+  id       String  @id @default(uuid())
+  mealId   String
+  foodId   Int? // null = item livre estimado pelo Claude
+  groupId  Int? // copiado do food, ou inferido pelo Claude
+  foodName String // snapshot — sempre preenchido
+  grams    Float
+  kcal     Float
+  proteinG Float
+  carbsG   Float
+  fatG     Float
+
+  meal  Meal       @relation(fields: [mealId], references: [id], onDelete: Cascade)
+  food  Food?      @relation(fields: [foodId], references: [id])
+  group FoodGroup? @relation(fields: [groupId], references: [id])
+
+  @@index([mealId])
+}
+
+// ============================================================
+// WORKOUT
+// ============================================================
+
+model Exercise {
+  id              Int      @id @default(autoincrement())
+  name            String
+  muscleGroup     String // "peito", "costas", "pernas", "ombro", "braço", "core", "cardio"
+  // Para exercícios custom: dono. Null = catálogo público.
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+
+  createdBy     User?                 @relation("UserCustomExercises", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  planExercises WorkoutPlanExercise[]
+  sessionSets   SessionSet[]
+
+  @@unique([name, createdByUserId])
+  @@index([name])
+  @@index([muscleGroup])
+  @@index([createdByUserId])
+}
+
+model WorkoutPlan {
+  id        String   @id @default(uuid())
+  userId    String
+  name      String // "Push", "Pull", "Leg"
+  createdAt DateTime @default(now())
+
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercises WorkoutPlanExercise[]
+  sessions  WorkoutSession[]
+
+  @@index([userId])
+}
+
+model WorkoutPlanExercise {
+  id         String @id @default(uuid())
+  planId     String
+  exerciseId Int
+  order      Int
+  targetSets Int
+  targetReps String // "8-12", "5", "AMRAP" — string pra flexibilidade
+
+  plan     WorkoutPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  exercise Exercise    @relation(fields: [exerciseId], references: [id])
+
+  @@unique([planId, exerciseId])
+  @@index([planId])
+}
+
+model WorkoutSession {
+  id          String    @id @default(uuid())
+  userId      String
+  planId      String? // null = treino livre
+  startedAt   DateTime
+  completedAt DateTime?
+  notes       String?
+
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan WorkoutPlan? @relation(fields: [planId], references: [id])
+  sets SessionSet[]
+
+  @@index([userId, startedAt])
+}
+
+model SessionSet {
+  id         String @id @default(uuid())
+  sessionId  String
+  exerciseId Int
+  setNumber  Int
+
+  // Campos de força — opcionais pois SessionSet também cobre cardio
+  weightKg Float?
+  reps     Int?
+  rpe      Float? // 1-10, opcional
+
+  // Campos de cardio — opcionais pois também cobre força
+  durationSeconds Int?
+  distanceMeters  Float?
+  avgHeartRate    Int?
+  kcalBurned      Int?
+
+  notes String?
+
+  session  WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exercise Exercise       @relation(fields: [exerciseId], references: [id])
+
+  @@index([sessionId])
+  @@index([exerciseId])
+}
+
+// ============================================================
+// STEPS
+// ============================================================
+
+model StepLog {
+  id       String     @id @default(uuid())
+  userId   String
+  // YYYY-MM-DD no fuso do usuário. String pra evitar ambiguidade de timezone.
+  date     String
+  steps    Int
+  source   StepSource @default(MANUAL)
+  loggedAt DateTime   @default(now())
+  notes    String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Múltiplos logs por dia permitidos (várias fontes, correções, sync parcial).
+  // Política de "valor do dia" definida em ADR 007: maior valor entre os logs
+  // do dia. Implementada em StepLogService.getStepsForDate.
+  @@index([userId, date])
+  @@index([userId, loggedAt])
+}
+
+enum StepSource {
+  MANUAL
+  GOOGLE_FIT
+  APPLE_HEALTH
+  HEALTH_CONNECT
+  STRAVA
+  GARMIN
+  FITBIT
+  WEBHOOK
+}
+
+// ============================================================
+// PROGRESS
+// ============================================================
+
+model WeightLog {
+  id        String   @id @default(uuid())
+  userId    String
+  weightKg  Float
+  loggedAt  DateTime
+  notes     String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, loggedAt])
+}
