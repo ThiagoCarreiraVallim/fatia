@@ -84,21 +84,24 @@ const EXERCISES: Array<{ name: string; muscleGroup: string }> = [
 ];
 
 export async function runSeedExercises() {
-  let processed = 0;
+  let created = 0;
+  let updated = 0;
   for (const ex of EXERCISES) {
-    await prisma.exercise.upsert({
-      where: {
-        name_createdByUserId: {
-          name: ex.name,
-          createdByUserId: null as any,
-        },
-      },
-      update: { muscleGroup: ex.muscleGroup },
-      create: ex,
+    const existing = await prisma.exercise.findFirst({
+      where: { name: ex.name, createdByUserId: null },
     });
-    processed++;
+    if (existing) {
+      await prisma.exercise.update({
+        where: { id: existing.id },
+        data: { muscleGroup: ex.muscleGroup },
+      });
+      updated++;
+    } else {
+      await prisma.exercise.create({ data: ex });
+      created++;
+    }
   }
-  console.log(`  ✓ Exercícios: ${processed} processados`);
+  console.log(`  ✓ Exercícios: ${created} criados, ${updated} atualizados`);
 }
 
 if (require.main === module) {

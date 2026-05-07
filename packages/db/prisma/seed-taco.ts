@@ -84,40 +84,43 @@ export async function runSeedTaco() {
   const groupByName = new Map(groups.map((g) => [g.name, g.id]));
 
   // 2. Upsert de alimentos
+  // Prisma não suporta upsert com null em chaves únicas compostas,
+  // então usamos findFirst + create/update manualmente.
   let created = 0;
   let updated = 0;
   for (const food of SAMPLE_FOODS) {
-    const result = await prisma.food.upsert({
-      where: {
-        name_source_createdByUserId: {
+    const existing = await prisma.food.findFirst({
+      where: { name: food.name, source: FoodSource.TACO, createdByUserId: null },
+    });
+    if (existing) {
+      await prisma.food.update({
+        where: { id: existing.id },
+        data: {
+          kcalPer100g: food.kcalPer100g,
+          proteinPer100g: food.proteinPer100g,
+          carbsPer100g: food.carbsPer100g,
+          fatPer100g: food.fatPer100g,
+          groupId: groupByName.get(food.group),
+        },
+      });
+      updated++;
+    } else {
+      await prisma.food.create({
+        data: {
           name: food.name,
           source: FoodSource.TACO,
-          createdByUserId: null as any,
+          groupId: groupByName.get(food.group),
+          kcalPer100g: food.kcalPer100g,
+          proteinPer100g: food.proteinPer100g,
+          carbsPer100g: food.carbsPer100g,
+          fatPer100g: food.fatPer100g,
         },
-      },
-      update: {
-        kcalPer100g: food.kcalPer100g,
-        proteinPer100g: food.proteinPer100g,
-        carbsPer100g: food.carbsPer100g,
-        fatPer100g: food.fatPer100g,
-        groupId: groupByName.get(food.group),
-      },
-      create: {
-        name: food.name,
-        source: FoodSource.TACO,
-        groupId: groupByName.get(food.group),
-        kcalPer100g: food.kcalPer100g,
-        proteinPer100g: food.proteinPer100g,
-        carbsPer100g: food.carbsPer100g,
-        fatPer100g: food.fatPer100g,
-      },
-    });
-    // Sem distinção entre create/update no upsert do Prisma; logamos só total
-    void result;
-    created++;
+      });
+      created++;
+    }
   }
 
-  console.log(`  ✓ TACO: ${created} alimentos processados (sample)`);
+  console.log(`  ✓ TACO: ${created} criados, ${updated} atualizados (sample)`);
   console.log('  ⚠ STUB ativo. Implementar parser de CSV completo em F1.1.');
 }
 

@@ -13,31 +13,31 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 ## Fase 0 — Setup do projeto
 
 ### F0.1 — Inicialização do monorepo 🔴 ⏱️ 2h
-- [ ] `pnpm init` na raiz
-- [ ] Configurar `pnpm-workspace.yaml` com `apps/*` e `packages/*`
-- [ ] Adicionar Turborepo (`pnpm add -Dw turbo`)
-- [ ] Criar `turbo.json` com pipelines `dev`, `build`, `typecheck`, `lint`
-- [ ] `.gitignore` (node_modules, .env, dist, .next, .turbo)
-- [ ] `.editorconfig`
-- [ ] `.nvmrc` ou `.tool-versions` com Node 20+
-- [ ] Commitar estado inicial
+- [x] `pnpm init` na raiz
+- [x] Configurar `pnpm-workspace.yaml` com `apps/*` e `packages/*`
+- [x] Adicionar Turborepo (`pnpm add -Dw turbo`)
+- [x] Criar `turbo.json` com pipelines `dev`, `build`, `typecheck`, `lint`
+- [x] `.gitignore` (node_modules, .env, dist, .next, .turbo)
+- [x] `.editorconfig`
+- [x] `.nvmrc` ou `.tool-versions` com Node 20+
+- [x] Commitar estado inicial
 
 ### F0.2 — Docker Compose base 🔴 ⏱️ 1h
-- [ ] `infra/docker-compose.yml` com Postgres 16
-- [ ] Volume nomeado `fatia_pg_data`
-- [ ] Healthcheck no Postgres
-- [ ] `.env.example` na raiz com variáveis necessárias
-- [ ] Comando documentado no README
+- [x] `infra/docker-compose.yml` com Postgres 16
+- [x] Volume nomeado `fatia_pg_data`
+- [x] Healthcheck no Postgres
+- [x] `.env.example` na raiz com variáveis necessárias
+- [x] Comando documentado no README
 
 ### F0.3 — Pacote `db` (Prisma) 🔴 ⏱️ 3h
-- [ ] `packages/db/package.json`
-- [ ] `pnpm add prisma @prisma/client` no pacote
-- [ ] `prisma init`
-- [ ] Colar `schema.prisma` final (ver `packages/db/prisma/schema.prisma`)
-- [ ] Configurar `output` do client para dentro do pacote
-- [ ] Script `db:migrate`, `db:push`, `db:studio`, `db:seed` no `package.json` raiz
-- [ ] Primeira migration: `prisma migrate dev --name init`
-- [ ] Validar com `prisma studio`
+- [x] `packages/db/package.json`
+- [x] `pnpm add prisma @prisma/client` no pacote
+- [x] `prisma init`
+- [x] Colar `schema.prisma` final (ver `packages/db/prisma/schema.prisma`)
+- [x] Configurar `output` do client para dentro do pacote
+- [x] Script `db:migrate`, `db:push`, `db:studio`, `db:seed` no `package.json` raiz
+- [x] Primeira migration: `prisma migrate dev --name init`
+- [x] Validar com `prisma studio`
 
 ### F0.4 — App `api` (NestJS) 🔴 ⏱️ 3h
 - [ ] `nest new api` em `apps/`
