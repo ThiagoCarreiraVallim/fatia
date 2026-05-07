@@ -4,7 +4,7 @@ Instruções para o Claude (e outros assistentes IA) trabalhando neste repositó
 
 ## Contexto rápido
 
-FitTrack é um app pessoal multi-usuário para tracking de nutrição e treino. Backend NestJS + Postgres. Frontend Next.js PWA. Integração com IA via MCP. Detalhes em `docs/PRD.md` e `docs/ARCHITECTURE.md`.
+Fatia é um app pessoal multi-usuário para tracking de nutrição e treino. Backend NestJS + Postgres. Frontend Next.js PWA. Integração com IA via MCP. Detalhes em `docs/PRD.md` e `docs/ARCHITECTURE.md`.
 
 ## Antes de começar qualquer task
 

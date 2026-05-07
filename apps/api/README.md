@@ -1,4 +1,4 @@
-# @fittrack/api
+# @fatia/api
 
 Backend NestJS — REST + MCP server.
 
@@ -10,7 +10,7 @@ nest new api --package-manager pnpm
 cd api
 
 # Adicionar deps
-pnpm add @fittrack/db@workspace:*
+pnpm add @fatia/db@workspace:*
 pnpm add @nestjs/jwt @nestjs/passport passport passport-jwt
 pnpm add @nestjs/throttler helmet
 pnpm add nestjs-pino pino-http pino-pretty

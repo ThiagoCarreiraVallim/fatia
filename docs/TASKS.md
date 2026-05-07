@@ -24,7 +24,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 
 ### F0.2 — Docker Compose base 🔴 ⏱️ 1h
 - [ ] `infra/docker-compose.yml` com Postgres 16
-- [ ] Volume nomeado `fittrack_pg_data`
+- [ ] Volume nomeado `fatia_pg_data`
 - [ ] Healthcheck no Postgres
 - [ ] `.env.example` na raiz com variáveis necessárias
 - [ ] Comando documentado no README
@@ -42,7 +42,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 ### F0.4 — App `api` (NestJS) 🔴 ⏱️ 3h
 - [ ] `nest new api` em `apps/`
 - [ ] Configurar para usar pnpm workspace
-- [ ] Adicionar `@fittrack/db` como dep workspace
+- [ ] Adicionar `@fatia/db` como dep workspace
 - [ ] `nestjs-pino` para logs
 - [ ] Configurar `ConfigModule` com validação de env
 - [ ] `helmet`, CORS configurado

@@ -1,11 +1,11 @@
 # MCP Server — Especificação Completa de Tools
 
-> **Princípio fundamental:** o FitTrack é **MCP-first**. Toda funcionalidade disponível no PWA está disponível como tool MCP. O PWA é uma camada de visualização; o Claude é uma camada de ação tão capaz quanto. Se uma operação existe em um, existe no outro.
+> **Princípio fundamental:** o Fatia é **MCP-first**. Toda funcionalidade disponível no PWA está disponível como tool MCP. O PWA é uma camada de visualização; o Claude é uma camada de ação tão capaz quanto. Se uma operação existe em um, existe no outro.
 
 ## Endpoint
 
 ```
-https://api.fittrack.dominio/mcp
+https://api.fatia.dominio/mcp
 ```
 
 Transport: **Streamable HTTP** (recomendação atual do MCP, suporta unidirecional e bidirecional).
@@ -14,7 +14,7 @@ Transport: **Streamable HTTP** (recomendação atual do MCP, suporta unidirecion
 
 Bearer token no header HTTP:
 ```
-Authorization: Bearer fittrack_<base64url_32bytes>
+Authorization: Bearer fatia_<base64url_32bytes>
 ```
 
 Token gerado pelo usuário no PWA em `/profile`, mostrado uma única vez. Servidor armazena apenas o hash argon2 + label + timestamps.
@@ -278,7 +278,7 @@ Busca em TACO + alimentos custom do usuário.
 ```
 
 ### `get_food`
-**Input:** `{ foodId: number }`  
+**Input:** `{ foodId: number }`
 **Output:** mesmo formato de um item de `search_food`.
 
 ### `create_custom_food`
@@ -323,11 +323,11 @@ Atualiza alimento custom próprio. Não pode editar TACO (`source = TACO`).
 ### `delete_custom_food`
 Deleta alimento custom. Refeições que usaram esse alimento mantêm o snapshot via `MealItem.foodName` (ver ADR sobre snapshot).
 
-**Input:** `{ foodId: number }`  
+**Input:** `{ foodId: number }`
 **Output:** `{ deleted: true }`
 
 ### `list_food_groups`
-**Input:** _(nenhum)_  
+**Input:** _(nenhum)_
 **Output:** `{ groups: Array<{ id: number; name: string }> }`
 
 ---
@@ -378,7 +378,7 @@ Cria uma refeição com seus itens em uma única chamada. Tool principal usada p
 ```
 
 ### `get_meal`
-**Input:** `{ mealId: string }`  
+**Input:** `{ mealId: string }`
 **Output:**
 ```typescript
 {
@@ -436,7 +436,7 @@ Atualiza metadados da refeição (não os itens — use as tools de itens).
 ### `delete_meal`
 Deleta refeição e todos os seus itens (cascade).
 
-**Input:** `{ mealId: string }`  
+**Input:** `{ mealId: string }`
 **Output:** `{ deleted: true }`
 
 ---
@@ -485,7 +485,7 @@ Corrige um item já logado. **Caso de uso central:** "na verdade era 200g, não 
 **Output:** item atualizado + totais da refeição.
 
 ### `delete_meal_item`
-**Input:** `{ itemId: string }`  
+**Input:** `{ itemId: string }`
 **Output:**
 ```typescript
 {
@@ -581,7 +581,7 @@ Resumo agregado por dia em um período.
 ```
 
 ### `list_exercises_by_muscle`
-**Input:** `{ muscleGroup: string }`  
+**Input:** `{ muscleGroup: string }`
 **Output:** mesmo shape de `search_exercise`.
 
 ### `create_custom_exercise`
@@ -633,7 +633,7 @@ Cria um plano vazio.
 **Output:** `{ planId: string }`
 
 ### `get_workout_plan`
-**Input:** `{ planId: string }`  
+**Input:** `{ planId: string }`
 **Output:**
 ```typescript
 {
@@ -653,7 +653,7 @@ Cria um plano vazio.
 ```
 
 ### `list_workout_plans`
-**Input:** _(nenhum)_  
+**Input:** _(nenhum)_
 **Output:**
 ```typescript
 {
@@ -676,7 +676,7 @@ Cria um plano vazio.
 ```
 
 ### `delete_workout_plan`
-**Input:** `{ planId: string }`  
+**Input:** `{ planId: string }`
 **Output:** `{ deleted: true }`
 
 > **Nota:** sessões já realizadas com esse plano mantêm `planId` (não cascateia). Sessões futuras perdem a referência.
@@ -760,7 +760,7 @@ Inicia uma sessão. Pode ser livre ou baseada em plano.
 > **Decisão chave:** retornar `prefilledExercises` com `lastSet` no `start_workout` é o que torna a UX "mostrar previous" trivial. Cliente não precisa fazer N chamadas.
 
 ### `get_workout_session`
-**Input:** `{ sessionId: string }`  
+**Input:** `{ sessionId: string }`
 **Output:**
 ```typescript
 {
@@ -837,7 +837,7 @@ Marca sessão como concluída. Idempotente — chamar de novo só atualiza notes
 ### `delete_workout_session`
 Deleta sessão e todos os sets.
 
-**Input:** `{ sessionId: string }`  
+**Input:** `{ sessionId: string }`
 **Output:** `{ deleted: true }`
 
 ---
@@ -1521,7 +1521,7 @@ Correção: "ah, foi mais perto de 11000 na verdade, esqueci dos passos do merca
 
 ## Versionamento
 
-A v1 é `mcp.fittrack.v1`. Mudanças breaking incrementam para `v2` em endpoint paralelo (`/mcp/v2`). Adições não-breaking não exigem versão nova — adicionamos a tool, documentamos aqui.
+A v1 é `mcp.fatia.v1`. Mudanças breaking incrementam para `v2` em endpoint paralelo (`/mcp/v2`). Adições não-breaking não exigem versão nova — adicionamos a tool, documentamos aqui.
 
 ## Performance esperada
 

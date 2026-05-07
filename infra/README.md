@@ -23,7 +23,7 @@ pnpm infra:down
 ```bash
 # No servidor, primeira vez
 git clone <repo>
-cd fittrack
+cd fatia
 cp .env.example .env
 # Editar .env com secrets reais (JWT_SECRET, POSTGRES_PASSWORD, etc)
 docker compose -f infra/docker-compose.yml --profile full up -d --build
@@ -33,10 +33,10 @@ docker compose exec api pnpm db:seed
 
 ## Backup
 
-`backup.sh` (TODO em F4.5) faz `pg_dump` para `/var/backups/fittrack/` com retenção de 7 dias.
+`backup.sh` (TODO em F4.5) faz `pg_dump` para `/var/backups/fatia/` com retenção de 7 dias.
 
 ## Restauração
 
 ```bash
-docker compose exec -T postgres psql -U fittrack fittrack < /caminho/do/backup.sql
+docker compose exec -T postgres psql -U fatia fatia < /caminho/do/backup.sql
 ```

@@ -1,4 +1,4 @@
-# FitTrack
+# Fatia
 
 App pessoal multi-usuário para tracking de nutrição e treino, **MCP-first** com integração nativa ao Claude.
 
@@ -42,7 +42,7 @@ API em `http://localhost:3000`, Web em `http://localhost:3001`, MCP em `http://l
 ## Estrutura
 
 ```
-fittrack/
+fatia/
 ├── apps/
 │   ├── api/           # NestJS (REST + MCP)
 │   └── web/           # Next.js PWA

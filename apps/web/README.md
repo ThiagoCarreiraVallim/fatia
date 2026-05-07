@@ -1,4 +1,4 @@
-# @fittrack/web
+# @fatia/web
 
 PWA Next.js 15 — frontend para visualização e logging manual.
 

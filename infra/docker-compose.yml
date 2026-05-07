@@ -1,18 +1,18 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: fittrack-postgres
+    container_name: fatia-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-fittrack}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fittrack_dev}
-      POSTGRES_DB: ${POSTGRES_DB:-fittrack}
+      POSTGRES_USER: ${POSTGRES_USER:-fatia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fatia_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-fatia}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - fittrack_pg_data:/var/lib/postgresql/data
+      - fatia_pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fittrack}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fatia}"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -21,14 +21,14 @@ services:
     build:
       context: ..
       dockerfile: infra/api.Dockerfile
-    container_name: fittrack-api
+    container_name: fatia-api
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       NODE_ENV: ${NODE_ENV:-production}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-fittrack}:${POSTGRES_PASSWORD:-fittrack_dev}@postgres:5432/${POSTGRES_DB:-fittrack}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fatia}:${POSTGRES_PASSWORD:-fatia_dev}@postgres:5432/${POSTGRES_DB:-fatia}
       JWT_SECRET: ${JWT_SECRET}
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3001}
       PORT: 3000
@@ -40,7 +40,7 @@ services:
     build:
       context: ..
       dockerfile: infra/web.Dockerfile
-    container_name: fittrack-web
+    container_name: fatia-web
     restart: unless-stopped
     depends_on:
       - api
@@ -53,5 +53,5 @@ services:
     profiles: ["full"]
 
 volumes:
-  fittrack_pg_data:
-    name: fittrack_pg_data
+  fatia_pg_data:
+    name: fatia_pg_data

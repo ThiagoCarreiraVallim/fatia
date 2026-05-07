@@ -1,4 +1,4 @@
-# Product Requirements Document — FitTrack
+# Product Requirements Document — Fatia
 
 ## 1. Problema
 
@@ -30,9 +30,6 @@ Decididos conscientemente para manter escopo viável:
 - ❌ Barcode scanner de produtos
 - ❌ Fotos de progresso (Entries)
 - ❌ Sistema de aulas/lessons
-- ❌ Streak / gamificação visual elaborada
-- ❌ Mini-player flutuante de treino em andamento
-- ❌ Onboarding público / signup aberto
 - ❌ App nativo iOS/Android (PWA cobre)
 - ❌ Sincronização offline de escrita (read-only cache OK)
 - ❌ Exportação de dados (deixar pra quando alguém pedir)
@@ -102,9 +99,9 @@ Decididos conscientemente para manter escopo viável:
 
 ## 8. Decisões abertas
 
-- [ ] Importar TACO completa (~600 itens) ou só top 200 mais comuns?  
+- [ ] Importar TACO completa (~600 itens) ou só top 200 mais comuns?
   → **Decisão:** completa, é só uma vez.
-- [ ] USDA via API agora ou depois?  
+- [ ] USDA via API agora ou depois?
   → **Decisão:** depois (Fase 5+).
-- [ ] Mobile push notifications?  
+- [ ] Mobile push notifications?
   → **Decisão:** não, PWA já cobre instalação na home screen.

@@ -42,7 +42,7 @@
 
 **Regra de ouro:** se uma tool MCP e um endpoint REST fazem a mesma coisa, eles delegam para o **mesmo método de service**. Se você está duplicando lógica entre os dois, está errado.
 
-Tudo roda no servidor próprio via Docker Compose. Caddy ou nginx na frente para SSL e roteamento por subdomínio (`api.fittrack.dominio`, `app.fittrack.dominio`).
+Tudo roda no servidor próprio via Docker Compose. Caddy ou nginx na frente para SSL e roteamento por subdomínio (`api.fatia.dominio`, `app.fatia.dominio`).
 
 ## Stack
 
@@ -78,7 +78,7 @@ Tudo roda no servidor próprio via Docker Compose. Caddy ou nginx na frente para
 **Motivo:** API e Web compartilham tipos. Turborepo dá cache de builds. pnpm é mais rápido que npm/yarn e gerencia bem workspaces.
 
 ### D2. MCP server no mesmo processo da API
-**Motivo:** evitar duplicação de auth, acesso a Prisma, lógica de negócio. NestJS expõe um endpoint `/mcp` que delega para um `McpService` que usa os mesmos services REST.  
+**Motivo:** evitar duplicação de auth, acesso a Prisma, lógica de negócio. NestJS expõe um endpoint `/mcp` que delega para um `McpService` que usa os mesmos services REST.
 **Trade-off:** se MCP precisar escalar separado, refator depois. Por agora YAGNI.
 
 ### D3. Auth dupla: JWT (web) + Bearer Token (MCP)
@@ -87,7 +87,7 @@ Tudo roda no servidor próprio via Docker Compose. Caddy ou nginx na frente para
 - MCP: token longo (32 bytes random, base64), hasheado com argon2 no banco, sem expiração mas revogável
 
 ### D4. Sem armazenamento de fotos
-**Motivo:** Claude analisa a foto e envia dados estruturados. Foto cumpriu papel. Economiza storage, simplifica LGPD, remove dependência de S3/MinIO.  
+**Motivo:** Claude analisa a foto e envia dados estruturados. Foto cumpriu papel. Economiza storage, simplifica LGPD, remove dependência de S3/MinIO.
 **Reversibilidade:** adicionar `photoUrl` em `Meal` é uma migration trivial.
 
 ### D5. Schema com `MealItem.foodName` redundante
@@ -167,7 +167,7 @@ Ver `packages/db/prisma/schema.prisma` para o schema completo.
 ```bash
 git push
 ssh server
-cd fittrack
+cd fatia
 git pull
 docker compose pull
 docker compose up -d --build

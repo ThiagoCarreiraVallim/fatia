@@ -1,6 +1,6 @@
 # ADR 006 — MCP como interface primária e completa
 
-**Status:** Accepted  
+**Status:** Accepted
 **Data:** 2026-05-06
 
 ## Contexto
@@ -13,7 +13,7 @@ A pergunta arquitetural: o MCP deveria expor só o "essencial", e features avan�
 
 ## Decisão
 
-**MCP é a interface primária e completa do FitTrack.** Toda funcionalidade do sistema é expressável via tool MCP, com poucas exceções deliberadas (gestão de credenciais sensíveis: criar usuário, emitir token MCP, mudar senha).
+**MCP é a interface primária e completa do Fatia.** Toda funcionalidade do sistema é expressável via tool MCP, com poucas exceções deliberadas (gestão de credenciais sensíveis: criar usuário, emitir token MCP, mudar senha).
 
 O PWA é a interface secundária — uma camada de visualização que **espelha** o que o MCP oferece, com vantagem de UX visual (gráficos, listas, edição inline).
 
