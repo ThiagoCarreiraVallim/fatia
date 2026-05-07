@@ -3,6 +3,7 @@
 Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`-`) indicam subtarefas práticas; pais com `[ ]` representam o entregável da fase.
 
 **Legenda:**
+
 - 🔴 Bloqueante — outras tasks dependem desta
 - 🟡 Importante — fazer logo, mas não bloqueia
 - 🟢 Nice-to-have — pode esperar
@@ -13,6 +14,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 ## Fase 0 — Setup do projeto
 
 ### F0.1 — Inicialização do monorepo 🔴 ⏱️ 2h
+
 - [x] `pnpm init` na raiz
 - [x] Configurar `pnpm-workspace.yaml` com `apps/*` e `packages/*`
 - [x] Adicionar Turborepo (`pnpm add -Dw turbo`)
@@ -23,6 +25,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [x] Commitar estado inicial
 
 ### F0.2 — Docker Compose base 🔴 ⏱️ 1h
+
 - [x] `infra/docker-compose.yml` com Postgres 16
 - [x] Volume nomeado `fatia_pg_data`
 - [x] Healthcheck no Postgres
@@ -30,6 +33,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [x] Comando documentado no README
 
 ### F0.3 — Pacote `db` (Prisma) 🔴 ⏱️ 3h
+
 - [x] `packages/db/package.json`
 - [x] `pnpm add prisma @prisma/client` no pacote
 - [x] `prisma init`
@@ -40,41 +44,44 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [x] Validar com `prisma studio`
 
 ### F0.4 — App `api` (NestJS) 🔴 ⏱️ 3h
-- [ ] `nest new api` em `apps/`
-- [ ] Configurar para usar pnpm workspace
-- [ ] Adicionar `@fatia/db` como dep workspace
-- [ ] `nestjs-pino` para logs
-- [ ] Configurar `ConfigModule` com validação de env
-- [ ] `helmet`, CORS configurado
-- [ ] `/health` endpoint
+
+- [x] `nest new api` em `apps/`
+- [x] Configurar para usar pnpm workspace
+- [x] Adicionar `@fatia/db` como dep workspace
+- [x] `nestjs-pino` para logs
+- [x] Configurar `ConfigModule` com validação de env
+- [x] `helmet`, CORS configurado
+- [x] `/health` endpoint
 - [ ] Testar `pnpm --filter api dev` sobe na porta 3000
 
 ### F0.5 — App `web` (Next.js) 🔴 ⏱️ 2h
-- [ ] `npx create-next-app@latest web` em `apps/`
-- [ ] App Router, TypeScript, Tailwind, src dir
-- [ ] Adicionar shadcn/ui (`npx shadcn@latest init`)
-- [ ] Setup tema dark only
-- [ ] Configurar `next-pwa` (manifest + sw básico)
-- [ ] Layout root com bottom nav placeholder
+
+- [x] `npx create-next-app@latest web` em `apps/`
+- [x] App Router, TypeScript, Tailwind, src dir
+- [x] Setup tema dark only
+- [x] Configurar manifest PWA (manifest.json)
+- [x] Layout root com bottom nav (Nutrição, Treino, Progresso, Perfil)
 - [ ] Testar `pnpm --filter web dev` sobe na 3001
 
 ### F0.6 — Auth básica 🔴 ⏱️ 6h
-- [ ] `AuthModule` no Nest
-- [ ] `POST /auth/login` (email + senha → JWT)
-- [ ] `POST /auth/signup` (apenas admin pode criar — endpoint protegido por role)
-- [ ] `POST /auth/logout` (limpa cookie)
-- [ ] `JwtAuthGuard` aplicado globalmente, com `@Public()` decorator para exceções
-- [ ] `@CurrentUser()` decorator
-- [ ] Hash de senha com argon2
+
+- [x] `AuthModule` no Nest
+- [x] `POST /auth/login` (email + senha → JWT)
+- [x] `POST /auth/signup` (apenas admin pode criar — endpoint protegido por role)
+- [x] `POST /auth/logout` (limpa cookie)
+- [x] `JwtAuthGuard` aplicado globalmente, com `@Public()` decorator para exceções
+- [x] `@CurrentUser()` decorator
+- [x] Hash de senha com argon2
+- [x] Tela `/login` no PWA conectada
+- [x] Cookie httpOnly, secure em prod
 - [ ] Seed manual do primeiro admin via script (`pnpm db:seed:admin`)
-- [ ] Tela `/login` no PWA conectada
-- [ ] Cookie httpOnly, secure em prod
 
 ### F0.7 — Linting e formatação 🟡 ⏱️ 1h
-- [ ] ESLint config compartilhada na raiz
-- [ ] Prettier config
-- [ ] `lint-staged` + `husky` (opcional, ⏱️ +30min)
-- [ ] Scripts `lint`, `format`, `typecheck` rodando em todos os pacotes
+
+- [x] ESLint config compartilhada na raiz
+- [x] Prettier config
+- [x] `lint-staged` + `husky`
+- [x] Scripts `lint`, `format`, `typecheck` rodando em todos os pacotes
 
 ---
 
@@ -83,6 +90,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 > **Princípio MCP-first (ver ADR 006):** MCP cobre CRUD completo. PWA cobre o essencial pra v1 (visualização do dia, edição básica). Operações faltantes no PWA podem ser feitas via Claude.
 
 ### F1.1 — Seed da TACO 🔴 ⏱️ 4h
+
 - [ ] Baixar CSV da Tabela TACO (Unicamp)
 - [ ] Salvar em `packages/db/prisma/data/taco.csv`
 - [ ] Implementar parser real em `seed-taco.ts` (substituir o stub)
@@ -93,6 +101,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [ ] Documentar no README
 
 ### F1.2 — Services de nutrição 🔴 ⏱️ 6h
+
 - [ ] `FoodService.search(query, opts, userId)` — TACO + customs do user
 - [ ] `FoodService.get(id, userId)` — valida acesso
 - [ ] `FoodService.createCustom(dto, userId)`
@@ -114,7 +123,9 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [ ] Tests unitários: cálculo de totais, snapshot de foodName, isolamento por user
 
 ### F1.3 — Endpoints REST nutrição 🟡 ⏱️ 3h
+
 > REST espelha um subset do MCP — apenas o que o PWA usa. Não todos os métodos.
+
 - [ ] `GET /foods/search?q=`
 - [ ] `POST /custom-foods` `PATCH /custom-foods/:id` `DELETE /custom-foods/:id`
 - [ ] `GET /food-groups`
@@ -125,6 +136,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [ ] Todos com `JwtAuthGuard` + `@CurrentUser()`
 
 ### F1.4 — MCP infraestrutura 🔴 ⏱️ 6h
+
 - [ ] `pnpm add @modelcontextprotocol/sdk` em `apps/api`
 - [ ] `McpModule` com server HTTP (Streamable HTTP transport)
 - [ ] `McpAuthGuard` valida bearer, popula `req.user`, atualiza `lastUsedAt`
@@ -139,7 +151,9 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [ ] Testar localmente com MCP Inspector
 
 ### F1.5 — Tools MCP de nutrição 🔴 ⏱️ 8h
+
 > Cada tool é um wrapper fino sobre o Service correspondente. Validação Zod no input.
+
 - [ ] `search_food` `get_food`
 - [ ] `create_custom_food` `update_custom_food` `delete_custom_food`
 - [ ] `list_food_groups`
@@ -152,6 +166,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [ ] Testar fluxos completos de `docs/MCP.md` no MCP Inspector
 
 ### F1.6 — PWA Nutrição 🟡 ⏱️ 12h
+
 - [ ] Layout autenticado `(app)/layout.tsx` com bottom nav
 - [ ] Página `/` (Hoje) — fetch summary do dia
 - [ ] Componente `<DateNavigator />`
@@ -169,11 +184,13 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 ## Fase 2 — Treino core
 
 ### F2.1 — Seed de exercícios 🔴 ⏱️ 2h
+
 - [ ] Lista (já presente no `seed-exercises.ts`) com ~60 exercícios incluindo cardio expandido
 - [ ] Validar upsert idempotente após mudança de chave composta
 - [ ] Cobrir: peito, costas, ombro, braço, pernas, core, **cardio (esteira, bike, natação, corrida, caminhada, HIIT, escada, elíptico, remo, corda)**
 
 ### F2.2 — Services de treino 🔴 ⏱️ 10h
+
 - [ ] `ExerciseService.search(query, muscleGroup?, userId)` — públicos + customs
 - [ ] `ExerciseService.listByMuscle(group, userId)`
 - [ ] `ExerciseService.createCustom(dto, userId)`
@@ -208,6 +225,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [ ] Tests: `getLastForExercise` força e cardio, `getPersonalRecord` ambos, validação por tipo, treino híbrido
 
 ### F2.3 — Endpoints REST treino 🟡 ⏱️ 4h
+
 - [ ] CRUD `/workout-plans` e `/workout-plans/:id/exercises`
 - [ ] `POST /workout-plans/:id/reorder`
 - [ ] `POST /workout-sessions` (start), `POST /workout-sessions/:id/finish`
@@ -220,6 +238,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [ ] `GET /exercises/:id/last-set`, `GET /exercises/:id/pr`
 
 ### F2.4 — Tools MCP de treino 🔴 ⏱️ 7h
+
 - [ ] `search_exercise` `list_exercises_by_muscle`
 - [ ] `create_custom_exercise` `update_custom_exercise` `delete_custom_exercise`
 - [ ] `create_workout_plan` `get_workout_plan` `list_workout_plans`
@@ -236,6 +255,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [ ] Validação Zod robusta em todas
 
 ### F2.5 — PWA Treino 🟡 ⏱️ 16h
+
 - [ ] Página `/workout` — plano de hoje (ou seletor)
 - [ ] **Componente `<ExerciseCard />` que decide entre força e cardio pelo `muscleGroup`**
 - [ ] **Componente `<StrengthSetRow />` editável com inputs Kg, Reps, RPE**
@@ -254,6 +274,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 ## Fase 3 — Progresso e atividade
 
 ### F3.1 — Services de progresso 🔴 ⏱️ 8h
+
 - [ ] `WeightLogService.create(dto, userId)`
 - [ ] `WeightLogService.update(id, dto, userId)`
 - [ ] `WeightLogService.delete(id, userId)`
@@ -274,6 +295,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [ ] Tests: cálculo de delta, médias semanais, política de "valor do dia" em passos, cálculo de streak
 
 ### F3.2 — Endpoints REST progresso 🟡 ⏱️ 3h
+
 - [ ] CRUD `/weight-logs`
 - [ ] CRUD `/step-logs`
 - [ ] `GET /step-logs/by-date/:date` (retorna efetivo do dia)
@@ -284,6 +306,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [ ] `GET /progress/steps?days=`
 
 ### F3.3 — Tools MCP de progresso 🟡 ⏱️ 5h
+
 - [ ] `log_weight` `update_weight_log` `delete_weight_log` `list_weight_logs`
 - [ ] `log_steps` `update_step_log` `delete_step_log` `list_step_logs`
 - [ ] `get_steps_for_date` `get_steps_history`
@@ -294,7 +317,9 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [ ] `get_steps_progress`
 
 ### F3.4 — Services e tools de Dashboard 🟡 ⏱️ 5h
+
 > Endpoints agregadores que reduzem ida-e-volta. Importantes pro Claude responder "como tô hoje" em uma única chamada.
+
 - [ ] `DashboardService.today(userId)` — combina nutrition + workout + weight + **steps** + streak (incluindo streak de passos)
 - [ ] `DashboardService.week(userId)` — agregado semanal incluindo cardio total e passos da semana
 - [ ] Endpoint REST `GET /dashboard/today` `GET /dashboard/week`
@@ -302,6 +327,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [ ] Tool MCP `get_week_summary` (com blocos `cardio` e `steps`)
 
 ### F3.5 — PWA Progresso 🟡 ⏱️ 12h
+
 - [ ] Página `/progress` com tabs **Peso | Força | Cardio | Passos**
 - [ ] Filtros 14/30/90/180 dias
 - [ ] `<WeightChart />` com Recharts (área + linha)
@@ -315,6 +341,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [ ] Lista editável de logs de passos (correção)
 
 ### F3.6 — Card de passos no Dashboard 🟡 ⏱️ 3h
+
 - [ ] `<StepsCard />` — passos atuais + meta + barra
 - [ ] Integração no dashboard chamando `get_today_summary`
 - [ ] Botão de log rápido inline
@@ -324,13 +351,16 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 ## Fase 4 — Polimento
 
 ### F4.1 — PWA installable 🟡 ⏱️ 3h
+
 - [ ] Manifest completo com ícones
 - [ ] Service worker com cache de assets estáticos
 - [ ] Ícones 192/512/maskable
 - [ ] Testar instalação no iOS e Android
 
 ### F4.2 — Gerenciamento de tokens MCP 🔴 ⏱️ 4h
+
 > Crítico para onboarding de usuário no Claude. Sem isso, ninguém consegue usar o MCP.
+
 - [ ] Página `/profile`
 - [ ] Listar tokens com label, criado em, último uso
 - [ ] Modal "Criar token" → input de label → POST → mostra UMA VEZ com copy
@@ -339,16 +369,19 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [ ] Instruções de como configurar no Claude (texto + screenshot)
 
 ### F4.3 — Dashboard 🟢 ⏱️ 4h
+
 - [ ] Página `/dashboard` com saudação por horário
 - [ ] Checklist do dia (peso, refeições, treino) — via `get_today_summary`
 - [ ] Atalhos para ações rápidas
 
 ### F4.4 — Logout e segurança 🟡 ⏱️ 2h
+
 - [ ] Logout funcional com limpeza de cookie
 - [ ] Re-login automático ao expirar JWT
 - [ ] Mensagens de erro de auth claras
 
 ### F4.5 — Backup automático 🟡 ⏱️ 2h
+
 - [ ] Script `pg_dump` no host
 - [ ] Cron diário 4am
 - [ ] Retenção 7 dias local
@@ -359,17 +392,20 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 ## Tarefas transversais (em paralelo)
 
 ### T.1 — Documentação contínua 🟡
+
 - [ ] Atualizar ADRs quando decisão arquitetural mudar
 - [ ] README sempre alinhado com comandos atuais
 - [ ] Comentários em endpoints MCP (descrição visível para Claude)
 
 ### T.2 — Testes mínimos 🟡
+
 - [ ] Tests unitários: cálculo de totais nutricionais
 - [ ] Tests unitários: `getLastWeight`
 - [ ] Tests integration: guards de auth
 - [ ] Tests integration: isolamento user A não vê dados de user B
 
 ### T.3 — Setup do servidor de produção 🟡 (~Fase 4)
+
 - [ ] Caddy ou nginx na frente
 - [ ] Subdomínios `api.` e `app.`
 - [ ] SSL automático
@@ -391,11 +427,11 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 
 ## Resumo: cobertura de tools MCP por fase
 
-| Fase | Tools MCP entregues | Acumulado |
-|---|---|---|
-| F1 (Nutrição) | 18 tools (perfil, tokens, metas, food, meal, item, summary) | 18 |
-| F2 (Treino) | 19 tools (exercise, plan, plan-exercise, session, set [força+cardio], PR) | 37 |
-| F3 (Progresso + Passos + Dashboard) | 17 tools (weight 4 + steps 6 + progress 5 + dashboard 2) | ~54 |
-| F4 (Polimento) | 0 novas — apenas correções e documentação | ~54 |
+| Fase                                | Tools MCP entregues                                                       | Acumulado |
+| ----------------------------------- | ------------------------------------------------------------------------- | --------- |
+| F1 (Nutrição)                       | 18 tools (perfil, tokens, metas, food, meal, item, summary)               | 18        |
+| F2 (Treino)                         | 19 tools (exercise, plan, plan-exercise, session, set [força+cardio], PR) | 37        |
+| F3 (Progresso + Passos + Dashboard) | 17 tools (weight 4 + steps 6 + progress 5 + dashboard 2)                  | ~54       |
+| F4 (Polimento)                      | 0 novas — apenas correções e documentação                                 | ~54       |
 
 Total esperado ao fim da v1: **~54 tools MCP**, cobrindo CRUD completo de todas as entidades user-owned (incluindo passos com schema preparado para integrações futuras).
