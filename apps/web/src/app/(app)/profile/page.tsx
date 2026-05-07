@@ -1,6 +1,8 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -14,12 +16,17 @@ export default function ProfilePage() {
   return (
     <div className="p-4 space-y-6">
       <h1 className="text-xl font-semibold">Perfil</h1>
-      <button
-        onClick={handleLogout}
-        className="w-full rounded-md border border-destructive py-2 text-sm text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground"
-      >
-        Sair
-      </button>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Conta</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Button variant="destructive" className="w-full" onClick={handleLogout}>
+            Sair
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }
