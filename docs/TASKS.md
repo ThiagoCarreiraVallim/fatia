@@ -52,7 +52,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [x] Configurar `ConfigModule` com validação de env
 - [x] `helmet`, CORS configurado
 - [x] `/health` endpoint
-- [ ] Testar `pnpm --filter api dev` sobe na porta 3000
+- [x] Testar `pnpm --filter api dev` sobe na porta 3000
 
 ### F0.5 — App `web` (Next.js) 🔴 ⏱️ 2h
 
@@ -61,7 +61,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [x] Setup tema dark only
 - [x] Configurar manifest PWA (manifest.json)
 - [x] Layout root com bottom nav (Nutrição, Treino, Progresso, Perfil)
-- [ ] Testar `pnpm --filter web dev` sobe na 3001
+- [x] Testar `pnpm --filter web dev` sobe na 3001
 
 ### F0.6 — Auth básica 🔴 ⏱️ 6h
 
@@ -74,7 +74,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [x] Hash de senha com argon2
 - [x] Tela `/login` no PWA conectada
 - [x] Cookie httpOnly, secure em prod
-- [ ] Seed manual do primeiro admin via script (`pnpm db:seed:admin`)
+- [x] Seed manual do primeiro admin via script (`pnpm db:seed:admin`)
 
 ### F0.7 — Linting e formatação 🟡 ⏱️ 1h
 

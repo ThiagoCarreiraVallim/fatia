@@ -4,9 +4,9 @@ import {
   ForbiddenException,
   ConflictException,
 } from '@nestjs/common';
-import type { JwtService } from '@nestjs/jwt';
+import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
-import type { PrismaService } from '../common/prisma.service';
+import { PrismaService } from '../common/prisma.service';
 import type { LoginDto } from './dto/login.dto';
 import type { SignupDto } from './dto/signup.dto';
 import { Role } from '@prisma/client';
