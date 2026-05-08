@@ -1,13 +1,15 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Settings } from 'lucide-react';
-import { nutritionApi } from '@/lib/api/nutrition';
+import { nutritionApi, type MealType } from '@/lib/api/nutrition';
 import { DateNavigator } from '@/components/nutrition/date-navigator';
 import { MacroBar } from '@/components/nutrition/macro-bar';
-import { MealList } from '@/components/nutrition/meal-list';
+import { MealList, NewMealButton } from '@/components/nutrition/meal-list';
+import { FoodSearchDrawer } from '@/components/nutrition/food-search-drawer';
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -16,6 +18,7 @@ function todayIso(): string {
 export default function NutritionPage() {
   const params = useSearchParams();
   const date = params.get('date') ?? todayIso();
+  const [newMealType, setNewMealType] = useState<MealType | null>(null);
 
   const summary = useQuery({
     queryKey: ['nutrition', 'summary', date],
@@ -100,6 +103,15 @@ export default function NutritionPage() {
       )}
 
       {summary.data && <MealList meals={summary.data.meals} date={date} />}
+
+      {summary.data && <NewMealButton date={date} onClick={(mt) => setNewMealType(mt)} />}
+
+      <FoodSearchDrawer
+        open={newMealType !== null}
+        onOpenChange={(open) => !open && setNewMealType(null)}
+        mealType={newMealType ?? undefined}
+        date={date}
+      />
 
       {summary.error && (
         <p className="text-sm text-rose-500">
