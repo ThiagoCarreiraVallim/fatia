@@ -91,49 +91,49 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 
 ### F1.1 — Seed da TACO 🔴 ⏱️ 4h
 
-- [ ] Baixar CSV da Tabela TACO (Unicamp)
-- [ ] Salvar em `packages/db/prisma/data/taco.csv`
-- [ ] Implementar parser real em `seed-taco.ts` (substituir o stub)
-- [ ] Encoding correto (provavelmente latin1)
-- [ ] Mapear grupos para `FoodGroup`
-- [ ] Upsert idempotente em `Food` (chave: name + source + createdByUserId=null)
-- [ ] Validar com 5-10 alimentos comuns
-- [ ] Documentar no README
+- [x] Baixar CSV da Tabela TACO (Unicamp)
+- [x] Salvar em `packages/db/prisma/data/taco.csv`
+- [x] Implementar parser real em `seed-taco.ts` (substituir o stub)
+- [x] Encoding correto (provavelmente latin1)
+- [x] Mapear grupos para `FoodGroup`
+- [x] Upsert idempotente em `Food` (chave: name + source + createdByUserId=null)
+- [x] Validar com 5-10 alimentos comuns
+- [x] Documentar no README
 
 ### F1.2 — Services de nutrição 🔴 ⏱️ 6h
 
-- [ ] `FoodService.search(query, opts, userId)` — TACO + customs do user
-- [ ] `FoodService.get(id, userId)` — valida acesso
-- [ ] `FoodService.createCustom(dto, userId)`
-- [ ] `FoodService.updateCustom(id, dto, userId)` — bloqueia TACO
-- [ ] `FoodService.deleteCustom(id, userId)`
-- [ ] `FoodService.listGroups()`
-- [ ] `MealService.create(dto, userId)` — calcula totais a partir de items
-- [ ] `MealService.findById(id, userId)`
-- [ ] `MealService.list(filter, userId)` — com cursor pagination
-- [ ] `MealService.update(id, dto, userId)`
-- [ ] `MealService.delete(id, userId)` — cascade items
-- [ ] `MealItemService.add(mealId, dto, userId)` — recalcula totais
-- [ ] `MealItemService.update(itemId, dto, userId)` — recalcula totais
-- [ ] `MealItemService.delete(itemId, userId)` — recalcula totais
-- [ ] `NutritionSummaryService.getDay(date, userId)` — agregado
-- [ ] `NutritionSummaryService.getHistory(days, userId)` — médias e per-day
-- [ ] `UserGoalsService.upsert(dto, userId)` e `.get(userId)` — inclui `dailyStepsTarget` e `weeklyWorkouts`
-- [ ] Helper `calcMacrosFromFood(food, grams)` testado
-- [ ] Tests unitários: cálculo de totais, snapshot de foodName, isolamento por user
+- [x] `FoodService.search(query, opts, userId)` — TACO + customs do user
+- [x] `FoodService.get(id, userId)` — valida acesso
+- [x] `FoodService.createCustom(dto, userId)`
+- [x] `FoodService.updateCustom(id, dto, userId)` — bloqueia TACO
+- [x] `FoodService.deleteCustom(id, userId)`
+- [x] `FoodService.listGroups()`
+- [x] `MealService.create(dto, userId)` — calcula totais a partir de items
+- [x] `MealService.findById(id, userId)`
+- [x] `MealService.list(filter, userId)` — com cursor pagination
+- [x] `MealService.update(id, dto, userId)`
+- [x] `MealService.delete(id, userId)` — cascade items
+- [x] `MealItemService.add(mealId, dto, userId)` — recalcula totais
+- [x] `MealItemService.update(itemId, dto, userId)` — recalcula totais
+- [x] `MealItemService.delete(itemId, userId)` — recalcula totais
+- [x] `NutritionSummaryService.getDay(date, userId)` — agregado
+- [x] `NutritionSummaryService.getHistory(days, userId)` — médias e per-day
+- [x] `UserGoalsService.upsert(dto, userId)` e `.get(userId)` — inclui `dailyStepsTarget` e `weeklyWorkouts`
+- [x] Helper `calcMacrosFromFood(food, grams)` testado
+- [x] Tests unitários: cálculo de totais, snapshot de foodName, isolamento por user
 
 ### F1.3 — Endpoints REST nutrição 🟡 ⏱️ 3h
 
 > REST espelha um subset do MCP — apenas o que o PWA usa. Não todos os métodos.
 
-- [ ] `GET /foods/search?q=`
-- [ ] `POST /custom-foods` `PATCH /custom-foods/:id` `DELETE /custom-foods/:id`
-- [ ] `GET /food-groups`
-- [ ] `POST /meals` `GET /meals?date=` `GET /meals/:id` `PATCH /meals/:id` `DELETE /meals/:id`
-- [ ] `POST /meals/:id/items` `PATCH /meal-items/:id` `DELETE /meal-items/:id`
-- [ ] `GET /nutrition/summary?date=` `GET /nutrition/history?days=`
-- [ ] `GET /user-goals` `PUT /user-goals`
-- [ ] Todos com `JwtAuthGuard` + `@CurrentUser()`
+- [x] `GET /foods/search?q=`
+- [x] `POST /custom-foods` `PATCH /custom-foods/:id` `DELETE /custom-foods/:id`
+- [x] `GET /food-groups`
+- [x] `POST /meals` `GET /meals?date=` `GET /meals/:id` `PATCH /meals/:id` `DELETE /meals/:id`
+- [x] `POST /meals/:id/items` `PATCH /meal-items/:id` `DELETE /meal-items/:id`
+- [x] `GET /nutrition/summary?date=` `GET /nutrition/history?days=`
+- [x] `GET /user-goals` `PUT /user-goals`
+- [x] Todos com `JwtAuthGuard` + `@CurrentUser()`
 
 ### F1.4 — MCP infraestrutura 🔴 ⏱️ 6h
 
@@ -146,8 +146,8 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [x] Tool `list_my_tokens` (MCP) — só leitura, lista
 - [x] Tool `revoke_token` (MCP)
 - [x] Tool `get_me` `update_me` `update_timezone`
-- [ ] Logging estruturado por tool (name, userId, duration, success)
-- [ ] Rate limit por token (`@nestjs/throttler` customizado)
+- [x] Logging estruturado por tool (name, userId, duration, success)
+- [x] Rate limit por token (`@nestjs/throttler` customizado)
 - [x] Testar localmente com MCP Inspector
 
 ### F1.5 — Tools MCP de nutrição 🔴 ⏱️ 8h
@@ -167,17 +167,17 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 
 ### F1.6 — PWA Nutrição 🟡 ⏱️ 12h
 
-- [ ] Layout autenticado `(app)/layout.tsx` com bottom nav
-- [ ] Página `/` (Hoje) — fetch summary do dia
-- [ ] Componente `<DateNavigator />`
-- [ ] Componente `<MacroBar />` com cores corretas (range)
-- [ ] Componente `<MealGroup />` colapsável por tipo
-- [ ] Componente `<MealItemRow />` com swipe-to-delete
-- [ ] Modal `<FoodSearch />` para adicionar item (chama `search_food` + `add_meal_item`)
-- [ ] Modal de edição de item
-- [ ] Página `/nutrition/goals` com form de ranges (kcal, macros, treinos/sem, **passos/dia**)
-- [ ] Loading states e empty states
-- [ ] Testar em viewport mobile
+- [x] Layout autenticado `(app)/layout.tsx` com bottom nav
+- [x] Página `/` (Hoje) — fetch summary do dia
+- [x] Componente `<DateNavigator />`
+- [x] Componente `<MacroBar />` com cores corretas (range)
+- [x] Componente `<MealList />` (substitui MealGroup; lista por tipo de refeição)
+- [x] `<MealList />` com botões de editar/remover por item (alternativa ao swipe-to-delete)
+- [x] `<FoodSearchDrawer />` para adicionar item (drawer shadcn/vaul + busca debounced)
+- [x] `<EditMealItemDrawer />` para editar gramas
+- [x] Página `/nutrition/goals` com form de ranges (kcal, macros, treinos/sem, **passos/dia**)
+- [x] Loading states (skeleton) e empty states
+- [ ] Testar em viewport mobile (manual)
 
 ---
 
