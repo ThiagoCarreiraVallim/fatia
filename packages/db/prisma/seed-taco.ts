@@ -1,15 +1,19 @@
 /**
  * Seed da Tabela TACO (Tabela Brasileira de Composição de Alimentos).
  *
- * IMPORTANTE: este é um STUB. A implementação real precisa:
- * 1. Baixar o CSV da TACO no site da Unicamp:
- *    https://www.nepa.unicamp.br/taco/tabela.php
- * 2. Salvar como `prisma/data/taco.csv` (encoding pode ser latin1)
- * 3. Implementar o parser abaixo conforme as colunas reais do CSV
+ * Lê `prisma/data/taco.csv` (UTF-8, exportado da planilha NEPA/Unicamp).
+ * Estrutura:
+ *   - 3 linhas de cabeçalho no topo
+ *   - Linhas de grupo: col0 = nome do grupo, col1 vazia (sem número)
+ *   - Linhas de cabeçalho repetidas a cada ~30 linhas (paginação)
+ *   - Linhas de alimento: col0 = id numérico, col1 = descrição
+ *   - "NA" e "Tr" em colunas numéricas → tratados como 0
  *
- * Os 5 alimentos incluídos aqui são exemplo para validar o pipeline.
+ * Idempotente: chave (name, source=TACO, createdByUserId=null).
  */
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { PrismaClient, FoodSource } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -23,53 +27,123 @@ interface TacoFood {
   fatPer100g: number;
 }
 
-// TODO(F1.1): substituir por leitura de CSV real
-const SAMPLE_FOODS: TacoFood[] = [
-  {
-    name: 'Arroz, integral, cozido',
-    group: 'Cereais e derivados',
-    kcalPer100g: 124,
-    proteinPer100g: 2.6,
-    carbsPer100g: 25.8,
-    fatPer100g: 1.0,
-  },
-  {
-    name: 'Arroz, branco, cozido',
-    group: 'Cereais e derivados',
-    kcalPer100g: 128,
-    proteinPer100g: 2.5,
-    carbsPer100g: 28.1,
-    fatPer100g: 0.2,
-  },
-  {
-    name: 'Feijão, carioca, cozido',
-    group: 'Leguminosas',
-    kcalPer100g: 76,
-    proteinPer100g: 4.8,
-    carbsPer100g: 13.6,
-    fatPer100g: 0.5,
-  },
-  {
-    name: 'Frango, peito, sem pele, grelhado',
-    group: 'Carnes',
-    kcalPer100g: 159,
-    proteinPer100g: 32.0,
-    carbsPer100g: 0,
-    fatPer100g: 3.0,
-  },
-  {
-    name: 'Banana, prata, crua',
-    group: 'Frutas',
-    kcalPer100g: 89,
-    proteinPer100g: 1.3,
-    carbsPer100g: 23.0,
-    fatPer100g: 0.1,
-  },
-];
+// Índices das colunas no CSV TACO (0-based)
+const COL = {
+  id: 0,
+  description: 1,
+  kcal: 3,
+  protein: 5,
+  fat: 6,
+  carbs: 8,
+};
+
+/** CSV parser minimalista com suporte a campos entre aspas. */
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += c;
+      }
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ',') {
+      row.push(field);
+      field = '';
+    } else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(field);
+      field = '';
+      rows.push(row);
+      row = [];
+    } else {
+      field += c;
+    }
+  }
+  if (field.length > 0 || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows;
+}
+
+function parseNumeric(value: string | undefined): number {
+  if (!value) return 0;
+  const v = value.trim();
+  if (v === '' || v === 'NA' || v === 'Tr' || v === '*') return 0;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function isFoodRow(row: string[]): boolean {
+  const id = row[COL.id]?.trim() ?? '';
+  return /^\d+$/.test(id);
+}
+
+function isGroupRow(row: string[]): boolean {
+  const c0 = row[COL.id]?.trim() ?? '';
+  const c1 = row[COL.description]?.trim() ?? '';
+  if (!c0 || c1) return false;
+  if (/^\d+$/.test(c0)) return false;
+  if (c0 === 'Número do' || c0 === 'Alimento' || c0.startsWith('*')) return false;
+  return true;
+}
+
+function readTacoFoods(csvPath: string): TacoFood[] {
+  const text = readFileSync(csvPath, 'utf-8');
+  const rows = parseCsv(text);
+  const foods: TacoFood[] = [];
+  let currentGroup = '';
+
+  for (const row of rows) {
+    if (row.length < 9) continue;
+    if (isGroupRow(row)) {
+      currentGroup = row[COL.id].trim();
+      continue;
+    }
+    if (!isFoodRow(row)) continue;
+    if (!currentGroup) continue;
+
+    const name = row[COL.description].trim();
+    if (!name) continue;
+
+    foods.push({
+      name,
+      group: currentGroup,
+      kcalPer100g: round2(parseNumeric(row[COL.kcal])),
+      proteinPer100g: round2(parseNumeric(row[COL.protein])),
+      carbsPer100g: round2(parseNumeric(row[COL.carbs])),
+      fatPer100g: round2(parseNumeric(row[COL.fat])),
+    });
+  }
+  return foods;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
 
 export async function runSeedTaco() {
-  // 1. Garante grupos
-  const groupNames = Array.from(new Set(SAMPLE_FOODS.map((f) => f.group)));
+  const csvPath = resolve(__dirname, 'data', 'taco.csv');
+  const foods = readTacoFoods(csvPath);
+  if (foods.length === 0) {
+    throw new Error(`Nenhum alimento lido de ${csvPath}`);
+  }
+
+  // 1. Garante grupos (apenas os efetivamente usados por algum alimento)
+  const groupNames = Array.from(new Set(foods.map((f) => f.group)));
   for (const name of groupNames) {
     await prisma.foodGroup.upsert({
       where: { name },
@@ -77,18 +151,16 @@ export async function runSeedTaco() {
       create: { name },
     });
   }
-
   const groups = await prisma.foodGroup.findMany({
     where: { name: { in: groupNames } },
   });
   const groupByName = new Map(groups.map((g) => [g.name, g.id]));
 
-  // 2. Upsert de alimentos
-  // Prisma não suporta upsert com null em chaves únicas compostas,
-  // então usamos findFirst + create/update manualmente.
+  // 2. Upsert de alimentos (chave composta com null em createdByUserId não tem unique no schema)
   let created = 0;
   let updated = 0;
-  for (const food of SAMPLE_FOODS) {
+  for (const food of foods) {
+    const groupId = groupByName.get(food.group);
     const existing = await prisma.food.findFirst({
       where: { name: food.name, source: FoodSource.TACO, createdByUserId: null },
     });
@@ -100,7 +172,7 @@ export async function runSeedTaco() {
           proteinPer100g: food.proteinPer100g,
           carbsPer100g: food.carbsPer100g,
           fatPer100g: food.fatPer100g,
-          groupId: groupByName.get(food.group),
+          groupId,
         },
       });
       updated++;
@@ -109,7 +181,7 @@ export async function runSeedTaco() {
         data: {
           name: food.name,
           source: FoodSource.TACO,
-          groupId: groupByName.get(food.group),
+          groupId,
           kcalPer100g: food.kcalPer100g,
           proteinPer100g: food.proteinPer100g,
           carbsPer100g: food.carbsPer100g,
@@ -120,8 +192,9 @@ export async function runSeedTaco() {
     }
   }
 
-  console.log(`  ✓ TACO: ${created} criados, ${updated} atualizados (sample)`);
-  console.log('  ⚠ STUB ativo. Implementar parser de CSV completo em F1.1.');
+  console.log(
+    `  ✓ TACO: ${created} criados, ${updated} atualizados (${foods.length} total, ${groupNames.length} grupos)`,
+  );
 }
 
 if (require.main === module) {
