@@ -85,10 +85,10 @@ export class GetNutritionSummaryTool implements McpToolDef {
 // nutrition.module.ts
 @Module({
   providers: [
-    ,
-    /* services existentes */ GetNutritionSummaryTool,
+    // services existentes…
+    GetNutritionSummaryTool,
     LogMealTool,
-    /* … 15+ tools de nutrição … */
+    // … 15+ tools de nutrição …
   ],
 })
 export class NutritionModule {}
