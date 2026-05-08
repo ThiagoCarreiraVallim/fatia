@@ -2,7 +2,11 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { DiscoveryService } from '@nestjs/core';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { MCP_TOOL_METADATA, type McpToolContext, type McpToolDef } from './tool.decorator';
+import {
+  MCP_TOOL_METADATA,
+  type McpToolContext,
+  type McpToolDef,
+} from '../common/decorators/tool.decorator';
 
 type ToolResult = { content: Array<{ type: 'text'; text: string }> };
 

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { FoodService } from '../food.service';
-import { McpTool, type McpToolDef } from '../../mcp/tool.decorator';
+import { McpTool, type McpToolDef } from '../../common/decorators/tool.decorator';
 
 @Injectable()
 @McpTool()

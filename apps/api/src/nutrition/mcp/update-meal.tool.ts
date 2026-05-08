@@ -2,7 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { MealType } from '@prisma/client';
 import { MealService } from '../meal.service';
-import { McpTool, type McpToolContext, type McpToolDef } from '../../mcp/tool.decorator';
+import {
+  McpTool,
+  type McpToolContext,
+  type McpToolDef,
+} from '../../common/decorators/tool.decorator';
 
 @Injectable()
 @McpTool()

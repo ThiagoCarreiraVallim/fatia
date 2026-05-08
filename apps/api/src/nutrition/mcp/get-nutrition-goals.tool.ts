@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { UserGoalsService } from '../user-goals.service';
-import { McpTool, type McpToolContext, type McpToolDef } from '../../mcp/tool.decorator';
+import {
+  McpTool,
+  type McpToolContext,
+  type McpToolDef,
+} from '../../common/decorators/tool.decorator';
 
 @Injectable()
 @McpTool()

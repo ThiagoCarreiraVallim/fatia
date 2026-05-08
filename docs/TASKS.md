@@ -137,33 +137,33 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 
 ### F1.4 — MCP infraestrutura 🔴 ⏱️ 6h
 
-- [ ] `pnpm add @modelcontextprotocol/sdk` em `apps/api`
-- [ ] `McpModule` com server HTTP (Streamable HTTP transport)
-- [ ] `McpAuthGuard` valida bearer, popula `req.user`, atualiza `lastUsedAt`
-- [ ] Hashing de tokens com argon2 + comparação constante
-- [ ] Endpoint REST `POST /mcp-tokens` (autenticado via JWT) — gera + retorna ÚNICA vez
-- [ ] Endpoint REST `GET /mcp-tokens` `DELETE /mcp-tokens/:id`
-- [ ] Tool `list_my_tokens` (MCP) — só leitura, lista
-- [ ] Tool `revoke_token` (MCP)
-- [ ] Tool `get_me` `update_me` `update_timezone`
+- [x] `pnpm add @modelcontextprotocol/sdk` em `apps/api`
+- [x] `McpModule` com server HTTP (Streamable HTTP transport)
+- [x] `McpAuthGuard` valida bearer, popula `req.user`, atualiza `lastUsedAt`
+- [x] Hashing de tokens com argon2 + comparação constante
+- [x] Endpoint REST `POST /mcp-tokens` (autenticado via JWT) — gera + retorna ÚNICA vez
+- [x] Endpoint REST `GET /mcp-tokens` `DELETE /mcp-tokens/:id`
+- [x] Tool `list_my_tokens` (MCP) — só leitura, lista
+- [x] Tool `revoke_token` (MCP)
+- [x] Tool `get_me` `update_me` `update_timezone`
 - [ ] Logging estruturado por tool (name, userId, duration, success)
 - [ ] Rate limit por token (`@nestjs/throttler` customizado)
-- [ ] Testar localmente com MCP Inspector
+- [x] Testar localmente com MCP Inspector
 
 ### F1.5 — Tools MCP de nutrição 🔴 ⏱️ 8h
 
 > Cada tool é um wrapper fino sobre o Service correspondente. Validação Zod no input.
 
-- [ ] `search_food` `get_food`
-- [ ] `create_custom_food` `update_custom_food` `delete_custom_food`
-- [ ] `list_food_groups`
-- [ ] `log_meal` (a tool central — testar bem)
-- [ ] `get_meal` `list_meals` `update_meal` `delete_meal`
-- [ ] `add_meal_item` `update_meal_item` `delete_meal_item`
-- [ ] `get_nutrition_summary` `get_nutrition_history`
-- [ ] `get_nutrition_goals` `set_nutrition_goals`
-- [ ] Cada tool com descrição clara (visível ao Claude)
-- [ ] Testar fluxos completos de `docs/MCP.md` no MCP Inspector
+- [x] `search_food` `get_food`
+- [x] `create_custom_food` `update_custom_food` `delete_custom_food`
+- [x] `list_food_groups`
+- [x] `log_meal` (a tool central — testar bem)
+- [x] `get_meal` `list_meals` `update_meal` `delete_meal`
+- [x] `add_meal_item` `update_meal_item` `delete_meal_item`
+- [x] `get_nutrition_summary` `get_nutrition_history`
+- [x] `get_nutrition_goals` `set_nutrition_goals`
+- [x] Cada tool com descrição clara (visível ao Claude)
+- [x] Testar fluxos completos de `docs/MCP.md` no MCP Inspector
 
 ### F1.6 — PWA Nutrição 🟡 ⏱️ 12h
 

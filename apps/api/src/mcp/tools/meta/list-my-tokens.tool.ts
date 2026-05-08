@@ -1,7 +1,11 @@
 // apps/api/src/mcp/tools/meta/list-my-tokens.tool.ts
 import { Injectable } from '@nestjs/common';
 import { McpTokenService } from '../../mcp-token.service';
-import { McpTool, type McpToolContext, type McpToolDef } from '../../tool.decorator';
+import {
+  McpTool,
+  type McpToolContext,
+  type McpToolDef,
+} from '../../../common/decorators/tool.decorator';
 
 @Injectable()
 @McpTool()

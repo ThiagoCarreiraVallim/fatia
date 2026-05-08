@@ -7,6 +7,8 @@ import { HealthModule } from './health/health.module';
 import { CommonModule } from './common/common.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { NutritionModule } from './nutrition/nutrition.module';
+import { McpModule } from './mcp/mcp.module';
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { UsersModule } from './users/users.module';
     HealthModule,
     AuthModule,
     UsersModule,
+    NutritionModule,
+    McpModule,
   ],
 })
 export class AppModule {}

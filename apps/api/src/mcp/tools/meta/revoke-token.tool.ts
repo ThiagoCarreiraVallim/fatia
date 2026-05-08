@@ -2,7 +2,11 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { McpTokenService } from '../../mcp-token.service';
-import { McpTool, type McpToolContext, type McpToolDef } from '../../tool.decorator';
+import {
+  McpTool,
+  type McpToolContext,
+  type McpToolDef,
+} from '../../../common/decorators/tool.decorator';
 
 @Injectable()
 @McpTool()
