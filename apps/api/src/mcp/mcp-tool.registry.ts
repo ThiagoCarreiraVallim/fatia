@@ -45,7 +45,28 @@ export class McpToolRegistry implements OnModuleInit {
         tool.name,
         { description: tool.description, inputSchema: tool.inputSchema },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        async (input: any) => ok(await tool.execute(input, ctx)),
+        async (input: any) => {
+          const start = Date.now();
+          try {
+            const data = await tool.execute(input, ctx);
+            this.logger.log({
+              tool: tool.name,
+              userId: ctx.userId,
+              durationMs: Date.now() - start,
+              success: true,
+            });
+            return ok(data);
+          } catch (err) {
+            this.logger.error({
+              tool: tool.name,
+              userId: ctx.userId,
+              durationMs: Date.now() - start,
+              success: false,
+              error: err instanceof Error ? err.message : String(err),
+            });
+            throw err;
+          }
+        },
       );
     }
   }

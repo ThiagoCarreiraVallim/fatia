@@ -5,6 +5,7 @@ import { McpController } from './mcp.controller';
 import { McpTokensController } from './mcp-tokens.controller';
 import { McpTokenService } from './mcp-token.service';
 import { McpAuthGuard } from './mcp-auth.guard';
+import { McpThrottlerGuard } from './mcp-throttler.guard';
 import { McpToolRegistry } from './mcp-tool.registry';
 import { GetMeTool } from './tools/meta/get-me.tool';
 import { UpdateTimezoneTool } from './tools/meta/update-timezone.tool';
@@ -17,6 +18,7 @@ import { RevokeTokenTool } from './tools/meta/revoke-token.tool';
   providers: [
     McpTokenService,
     McpAuthGuard,
+    McpThrottlerGuard,
     McpToolRegistry,
     GetMeTool,
     UpdateTimezoneTool,
