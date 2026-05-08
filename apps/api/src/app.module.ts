@@ -12,6 +12,7 @@ import { UsersModule } from './users/users.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: ['.env', '../../.env'],
       validate: (config) => AppEnvSchema.parse(config),
     }),
     LoggerModule.forRoot({
