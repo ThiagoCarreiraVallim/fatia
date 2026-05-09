@@ -16,10 +16,19 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     credentials: 'include',
   });
 
+  if (res.status === 401) {
+    // Sessão Logto expirou ou inválida — manda re-login.
+    if (typeof window !== 'undefined') {
+      window.location.href = '/api/logto/sign-in';
+    }
+    throw new Error('Sessão expirada');
+  }
+
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.message ?? `HTTP ${res.status}`);
   }
 
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }

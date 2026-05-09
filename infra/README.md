@@ -33,10 +33,19 @@ docker compose exec api pnpm db:seed
 
 ## Backup
 
-`backup.sh` (TODO em F4.5) faz `pg_dump` para `/var/backups/fatia/` com retenção de 7 dias.
+`backup.sh` faz `pg_dumpall` (cobre `fatia` e `logto`), compactado em `gzip`,
+com retenção configurável (default 7 dias).
+
+```bash
+# Cron diário às 4h, agendar no host:
+0 4 * * * /opt/fatia/infra/backup.sh >> /var/log/fatia-backup.log 2>&1
+```
+
+Variáveis úteis: `BACKUP_DIR`, `RETENTION_DAYS`, `CONTAINER`, `POSTGRES_USER`.
 
 ## Restauração
 
 ```bash
-docker compose exec -T postgres psql -U fatia fatia < /caminho/do/backup.sql
+gunzip -c /opt/fatia/backups/fatia-YYYYMMDD-HHMMSS.sql.gz \
+  | docker exec -i fatia-postgres psql -U fatia
 ```

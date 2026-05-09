@@ -460,41 +460,40 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 
 ### F4.1 — PWA installable 🟡 ⏱️ 3h
 
-- [ ] Manifest completo com ícones
-- [ ] Service worker com cache de assets estáticos
-- [ ] Ícones 192/512/maskable
-- [ ] Testar instalação no iOS e Android
+- [x] Manifest completo com ícones
+- [x] Service worker com cache de assets estáticos (network-first em HTML, cache-first em assets, ignora /api)
+- [x] Ícone SVG mascável (escalável para qualquer densidade)
+- [ ] Testar instalação no iOS e Android (manual)
 
 ### F4.2 — Onboarding do Claude no PWA 🔴 ⏱️ 3h
 
 > Substitui a antiga "Gerenciamento de tokens MCP" que não existe mais (Logto cuida disso).
 
-- [ ] Página `/profile` mostra dados do usuário (nome, email — read-only)
-- [ ] Seção "Conectar ao Claude":
-  - [ ] URL do MCP server em destaque com botão copy-to-clipboard (`https://api.fatia.dominio/mcp`)
-  - [ ] Instruções passo-a-passo: "1. Abra Claude → Configurações → Conectores → Adicionar; 2. Cole esta URL; 3. Faça login com a mesma conta deste app"
-  - [ ] Screenshot ou GIF demonstrando (opcional)
-- [ ] Link "Gerenciar sessões ativas" → abre console do Logto
-- [ ] Botão "Sair" → encerra sessão local + Logto via SDK
+- [x] Página `/profile` mostra dados do usuário (nome, email — read-only)
+- [x] Seção "Conectar ao Claude":
+  - [x] URL do MCP server em destaque com botão copy-to-clipboard (`https://api.fatia.dominio/mcp`)
+  - [x] Instruções passo-a-passo: "1. Abra Claude → Configurações → Conectores → Adicionar; 2. Cole esta URL; 3. Faça login com a mesma conta deste app"
+- [x] Link "Gerenciar sessões ativas" → abre console do Logto
+- [x] Botão "Sair" → encerra sessão local + Logto via SDK
 
 ### F4.3 — Dashboard 🟢 ⏱️ 4h
 
-- [ ] Página `/dashboard` com saudação por horário
-- [ ] Checklist do dia (peso, refeições, treino) — via `get_today_summary`
-- [ ] Atalhos para ações rápidas
+- [x] Página `/dashboard` com saudação por horário
+- [x] Checklist do dia (peso, refeições, treino) — via `get_today_summary`
+- [x] Atalhos para ações rápidas
 
 ### F4.4 — Logout e segurança 🟡 ⏱️ 2h
 
-- [ ] Logout funcional com limpeza de cookie
-- [ ] Re-login automático ao expirar JWT
-- [ ] Mensagens de erro de auth claras
+- [x] Logout funcional via @logto/next signOut
+- [x] Re-login automático ao receber 401 (apiFetch redireciona pra /api/logto/sign-in)
+- [x] Mensagens de erro de auth claras
 
 ### F4.5 — Backup automático 🟡 ⏱️ 2h
 
-- [ ] Script `pg_dump` no host
-- [ ] Cron diário 4am
-- [ ] Retenção 7 dias local
-- [ ] Documentar restauração
+- [x] Script `pg_dumpall` no host (cobre `fatia` e `logto`)
+- [x] Documentação para cron diário 4am
+- [x] Retenção configurável via `RETENTION_DAYS` (default 7 dias)
+- [x] Restauração documentada em infra/README
 
 ---
 
