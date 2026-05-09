@@ -2,14 +2,8 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'}/api/:path*`,
-      },
-    ];
-  },
+  // Standalone produz um build com node_modules mínimos pra rodar em Docker.
+  output: 'standalone',
 };
 
 export default nextConfig;

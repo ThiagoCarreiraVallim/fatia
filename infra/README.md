@@ -18,18 +18,22 @@ pnpm infra:logs
 pnpm infra:down
 ```
 
-## Uso em produção
+## Uso em produção (Dokploy)
 
-```bash
-# No servidor, primeira vez
-git clone <repo>
-cd fatia
-cp .env.example .env
-# Editar .env com secrets reais (JWT_SECRET, POSTGRES_PASSWORD, etc)
-docker compose -f infra/docker-compose.yml --profile full up -d --build
-docker compose exec api pnpm db:migrate:deploy
-docker compose exec api pnpm db:seed
-```
+Stack de produção fica em `infra/docker-compose.prod.yml` e usa Traefik via
+`dokploy-network` (rede externa do Dokploy). Postgres roda fora do compose,
+como "Database" do próprio Dokploy.
+
+Passo a passo completo: [`infra/dokploy/README.md`](./dokploy/README.md).
+
+Resumo:
+
+1. Criar Postgres (Database do Dokploy) com databases `fatia` e `logto`.
+2. Criar Compose service apontando pra `infra/docker-compose.prod.yml`.
+3. Configurar variáveis no painel (ver `.env.production.example`).
+4. Deploy → o `api` aplica migrations no boot.
+5. Configurar tenant do Logto e preencher `LOGTO_APP_ID` / `LOGTO_APP_SECRET` →
+   redeploy.
 
 ## Backup
 
