@@ -13,17 +13,25 @@
 ┌─────────────────┐      ┌──────────────────┐
 │  Claude (app)   │      │   PWA (Next.js)  │
 │   via MCP       │      │   navegador      │
-│  ~54 tools      │      │  visualização    │
+│  ~52 tools      │      │  visualização    │
 └────────┬────────┘      └─────────┬────────┘
          │                         │
-         │  Streamable HTTP        │  HTTPS REST
-         │  (Bearer token)         │  (JWT cookie)
+         │ OAuth 2.1 + DCR + PKCE  │ OAuth code flow + PKCE
+         │ (JWT do Logto)          │ (cookie de sessão)
          │                         │
+         │              ┌──────────▼────────┐
+         │              │      Logto        │
+         │◄─────────────┤  Identity         │
+         │   redirect   │  Provider         │
+         │   + JWT      │  (auth.fatia...)  │
+         │              └──────────┬────────┘
+         │                         │ valida JWT
+         │                         │ via JWKS
          └────────────┬────────────┘
                       │
               ┌───────▼────────┐
-              │  NestJS API    │
-              │ ┌────────────┐ │
+              │  NestJS API    │  Resource server
+              │ ┌────────────┐ │  (só valida JWT, não emite)
               │ │ Controllers│ │  REST endpoints (PWA)
               │ │ MCP Tools  │ │  Tool handlers  (Claude)
               │ └─────┬──────┘ │
@@ -36,13 +44,19 @@
               └───────┼────────┘
                       │
               ┌───────▼────────┐
-              │  Postgres 16   │
+              │  Postgres 16   │  Database "fatia" (app)
+              │                │  Database "logto" (auth)
               └────────────────┘
 ```
 
 **Regra de ouro:** se uma tool MCP e um endpoint REST fazem a mesma coisa, eles delegam para o **mesmo método de service**. Se você está duplicando lógica entre os dois, está errado.
 
-Tudo roda no servidor próprio via Docker Compose. Caddy ou nginx na frente para SSL e roteamento por subdomínio (`api.fatia.dominio`, `app.fatia.dominio`).
+**Auth (ADR 008):** o NestJS é apenas **resource server**. Não emite credenciais, não armazena senhas, não gera tokens. Toda autenticação é delegada ao Logto. PWA e Claude usam o mesmo flow OAuth, terminando com um JWT que a API valida via JWKS do Logto.
+
+Tudo roda no servidor próprio. Em produção, Dokploy (Traefik) faz roteamento e SSL automático nos subdomínios:
+- `app.fatia.dominio` → PWA
+- `api.fatia.dominio` → NestJS (REST + MCP)
+- `auth.fatia.dominio` → Logto
 
 ## Stack
 
@@ -50,13 +64,15 @@ Tudo roda no servidor próprio via Docker Compose. Caddy ou nginx na frente para
 - **NestJS 10+** — modularidade, DI, decorators, ecossistema maduro
 - **Prisma** — type-safe, migrations, ergonomia
 - **Postgres 16** — relacional simples e suficiente
-- **JWT** (`@nestjs/jwt`) — auth web
-- **Argon2** — hashing de senhas e tokens MCP
+- **`jose`** — validação de JWT (assinatura via JWKS do Logto, audience, issuer, expiração)
 - **`@modelcontextprotocol/sdk`** — MCP server oficial em TypeScript
 - **Zod** — validação de input nas tools MCP e DTOs
 
+> **Não há mais** `@nestjs/jwt`, `argon2`, signup/login/password-reset. Tudo isso é responsabilidade do Logto (ADR 008). A API é puramente um resource server.
+
 ### Frontend (`apps/web`)
 - **Next.js 15 (App Router)** — SSR para auth, RSC para listas, client para forms
+- **`@logto/next`** — SDK oficial do Logto para Next.js (cookie de sessão, callback, refresh)
 - **Tailwind CSS** — styling
 - **shadcn/ui** — componentes base
 - **Recharts** — gráficos de progresso
@@ -67,10 +83,15 @@ Tudo roda no servidor próprio via Docker Compose. Caddy ou nginx na frente para
 - Schema Prisma único compartilhado entre API e (eventualmente) scripts/seeds
 - Tipos gerados consumidos pela API; o web NÃO importa Prisma direto, apenas DTOs via tipos compartilhados ou OpenAPI
 
+### Identidade (`infra/`, externa ao código)
+- **Logto** — Identity Provider OIDC self-hosted, container próprio, banco `logto` no mesmo Postgres
+- Console admin acessível pra criar usuários (admin manualmente convida família/amigos)
+
 ### Infra (`infra/`)
-- `docker-compose.yml` — Postgres + API + Web
-- Volumes nomeados para dados Postgres
-- Backups via `pg_dump` em cron host
+- `docker-compose.yml` — Postgres + Logto + API + Web
+- `postgres-init/` — scripts para criar database `logto` automaticamente
+- Volumes nomeados para dados Postgres (compartilhado entre databases)
+- Backups via `pg_dump --all` em cron host (cobre `fatia` e `logto` juntos)
 
 ## Decisões-chave
 
@@ -78,16 +99,15 @@ Tudo roda no servidor próprio via Docker Compose. Caddy ou nginx na frente para
 **Motivo:** API e Web compartilham tipos. Turborepo dá cache de builds. pnpm é mais rápido que npm/yarn e gerencia bem workspaces.
 
 ### D2. MCP server no mesmo processo da API
-**Motivo:** evitar duplicação de auth, acesso a Prisma, lógica de negócio. NestJS expõe um endpoint `/mcp` que delega para um `McpService` que usa os mesmos services REST.
+**Motivo:** evitar duplicação de auth, acesso a Prisma, lógica de negócio. NestJS expõe um endpoint `/mcp` que delega para um `McpService` que usa os mesmos services REST.  
 **Trade-off:** se MCP precisar escalar separado, refator depois. Por agora YAGNI.
 
-### D3. Auth dupla: JWT (web) + Bearer Token (MCP)
-**Motivo:** web precisa de session com refresh, MCP precisa de credencial estável que não expira. São casos de uso diferentes.
-- Web: JWT em cookie httpOnly, expira em 7 dias, refresh por re-login
-- MCP: token longo (32 bytes random, base64), hasheado com argon2 no banco, sem expiração mas revogável
+### D3. Auth via Logto (provider OIDC self-hosted) — supersedes a decisão original
+**Motivo:** conectores remotos no Claude exigem OAuth 2.1 com Dynamic Client Registration, PKCE e Resource Indicators. Implementar do zero leva ~14 dias e concentra risco de segurança. Logto resolve isso pronto.  
+**Implicações:** PWA e Claude usam o mesmo flow OAuth → mesmo identity, mesmo refresh. NestJS valida JWT, não emite. Ver ADR 008.
 
 ### D4. Sem armazenamento de fotos
-**Motivo:** Claude analisa a foto e envia dados estruturados. Foto cumpriu papel. Economiza storage, simplifica LGPD, remove dependência de S3/MinIO.
+**Motivo:** Claude analisa a foto e envia dados estruturados. Foto cumpriu papel. Economiza storage, simplifica LGPD, remove dependência de S3/MinIO.  
 **Reversibilidade:** adicionar `photoUrl` em `Meal` é uma migration trivial.
 
 ### D5. Schema com `MealItem.foodName` redundante
@@ -113,36 +133,46 @@ Tudo roda no servidor próprio via Docker Compose. Caddy ou nginx na frente para
 Ver `packages/db/prisma/schema.prisma` para o schema completo.
 
 **Entidades principais:**
-- `User`, `McpToken`, `UserGoals`
+- `User` (sem `passwordHash` — identidade externa via `logtoSub`), `UserGoals`
 - `Food`, `FoodGroup`, `Meal`, `MealItem`
 - `Exercise`, `WorkoutPlan`, `WorkoutPlanExercise`, `WorkoutSession`, `SessionSet` (cobre força e cardio)
 - `WeightLog`, `StepLog`
 
+> **Removido em ADR 008:** `McpToken`. Tokens MCP estáticos foram substituídos por JWTs do Logto (OAuth flow).
+
 **Invariantes:**
 - Toda entidade owned-by-user tem `userId` indexado
-- Toda query passa por um guard que injeta `userId` do JWT/token
+- Toda query passa por um guard que injeta `userId` do JWT validado
 - `onDelete: Cascade` em tudo que pertence ao usuário (LGPD-friendly)
+- Provisioning lazy: primeiro JWT com `sub` desconhecido cria `User` automaticamente
 
 ## Segurança
 
-### Autenticação
-- Senhas: argon2id, params `m=64MB, t=3, p=4`
-- JWT: HS256, secret de 64+ chars em env, expiração 7 dias
-- MCP tokens: 32 bytes random, base64url, mostrado uma vez na criação
+### Autenticação (delegada ao Logto)
+- Logto self-hosted gerencia senhas, hashing (argon2 internamente), recovery, MFA
+- API NestJS é puramente **resource server** — não vê senhas, não emite tokens
+- JWTs do Logto: assinados RS256, validados via JWKS público (`{LOGTO_ENDPOINT}/oidc/jwks`)
+- Validações obrigatórias em cada request:
+  - Assinatura via JWKS (cache de chaves públicas)
+  - `iss` (issuer) bate com `LOGTO_ENDPOINT`
+  - `aud` (audience) bate com `LOGTO_AUDIENCE` configurado
+  - `exp` não expirou
+  - `sub` (subject) presente
 
 ### Autorização
-- `JwtAuthGuard` em todo controller REST exceto `/auth/login` e `/auth/signup`
-- `McpAuthGuard` no endpoint `/mcp` valida bearer token
-- Ambos populam `req.user = { id, role }`
+- `JwtAuthGuard` global, com `@Public()` decorator pra exceções (apenas `/health` e `/.well-known/*`)
+- Mesmo guard cobre REST e MCP — JWT é JWT
+- Guard popula `req.user` com `{ id, role, logtoSub }` (resolve `User` local pelo `logtoSub`)
 - Services NUNCA aceitam `userId` como parâmetro do controller — sempre `@CurrentUser()`
+- Provisioning lazy: se `User` não existe pra um `logtoSub` válido, criar com role default `USER`
 
 ### Headers e CORS
-- HTTPS obrigatório em produção (Caddy/nginx)
-- CORS restrito ao domínio do PWA
+- HTTPS obrigatório em produção (Dokploy/Traefik faz SSL automático)
+- CORS restrito a `WEB_ORIGIN`
 - HSTS, CSP, X-Frame-Options via helmet
 
 ### Rate limiting
-- `@nestjs/throttler` no `/auth/login` (5/min) e `/mcp` (60/min por token)
+- `@nestjs/throttler` no `/mcp` (60/min por `sub`) e endpoints REST sensíveis
 
 ### Backup
 - `pg_dump` diário via cron no host

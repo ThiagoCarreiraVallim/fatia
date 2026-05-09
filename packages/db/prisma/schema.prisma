@@ -16,17 +16,17 @@ datasource db {
 // ============================================================
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  role         Role     @default(USER)
-  timezone     String   @default("America/Sao_Paulo")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id        String   @id @default(uuid())
+  // Sub claim do JWT do Logto. Identidade externa estável (ver ADR 008).
+  logtoSub  String   @unique
+  email     String   @unique
+  name      String
+  role      Role     @default(USER)
+  timezone  String   @default("America/Sao_Paulo")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   goals           UserGoals?
-  mcpTokens       McpToken[]
   meals           Meal[]
   workoutPlans    WorkoutPlan[]
   workoutSessions WorkoutSession[]
@@ -34,6 +34,8 @@ model User {
   stepLogs        StepLog[]
   customFoods     Food[]     @relation("UserCustomFoods")
   customExercises Exercise[] @relation("UserCustomExercises")
+
+  @@index([logtoSub])
 }
 
 enum Role {
@@ -41,19 +43,7 @@ enum Role {
   ADMIN
 }
 
-model McpToken {
-  id         String    @id @default(uuid())
-  userId     String
-  tokenHash  String    @unique
-  label      String
-  lastUsedAt DateTime?
-  createdAt  DateTime  @default(now())
-  revokedAt  DateTime?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
+// McpToken removido na ADR 008 — Claude usa OAuth do Logto, não bearer estático.
 
 model UserGoals {
   userId           String   @id
