@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ConflictException } from '@nestjs/common';
 import { ExerciseService } from './exercise.service';
 import type { PrismaService } from '../common/prisma.service';
 
