@@ -40,7 +40,7 @@ services:
       - "${LOGTO_PORT:-3002}:3001"
       - "${LOGTO_ADMIN_PORT:-3003}:3002"
     # Logto roda migrations automaticamente no boot. Primeira execução demora ~30s.
-    command: ["sh", "-c", "npm run cli db seed -- --swe && npm start"]
+    entrypoint: ["sh", "-c", "npm run cli db seed -- --swe && npm start"]
 
   api:
     build:

@@ -131,7 +131,9 @@ services:
         limits:
           memory: 512M
     # Logto roda migrations próprias na primeira execução (~30s).
-    command: ["sh", "-c", "npm run cli db seed -- --swe && npm start"]
+    # Usa entrypoint (não command) pois a imagem svhd/logto tem ENTRYPOINT próprio
+    # que interceptaria o command, causando "npm error Missing script: sh".
+    entrypoint: ["sh", "-c", "npm run cli db seed -- --swe && npm start"]
     labels:
       - traefik.enable=true
       - traefik.docker.network=dokploy-network
