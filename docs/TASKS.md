@@ -177,7 +177,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [x] `<EditMealItemDrawer />` para editar gramas
 - [x] Página `/nutrition/goals` com form de ranges (kcal, macros, treinos/sem, **passos/dia**)
 - [x] Loading states (skeleton) e empty states
-- [ ] Testar em viewport mobile (manual)
+- [x] Testar em viewport mobile (manual)
 
 ---
 

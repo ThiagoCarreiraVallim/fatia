@@ -50,7 +50,7 @@ export class SessionSetService {
     if (!exercise) throw new NotFoundException('Exercise not found');
 
     const isCardio = isCardioExercise(exercise);
-    const hasStrengthFields = dto.weightKg !== undefined;
+    const hasStrengthFields = dto.weightKg !== undefined || dto.reps !== undefined;
     const hasCardioFields = dto.durationSeconds !== undefined;
 
     if (isCardio && hasStrengthFields) {
