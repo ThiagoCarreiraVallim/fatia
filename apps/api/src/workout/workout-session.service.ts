@@ -1,4 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import type {
   FinishSessionDto,
@@ -7,12 +8,12 @@ import type {
   UpdateSessionDto,
 } from './dto/session.dto';
 
-const SESSION_INCLUDE = {
+const SESSION_INCLUDE: Prisma.WorkoutSessionInclude = {
   sets: {
     include: { exercise: true },
-    orderBy: [{ exerciseId: 'asc' as const }, { setNumber: 'asc' as const }],
+    orderBy: [{ exerciseId: 'asc' }, { setNumber: 'asc' }],
   },
-} as const;
+};
 
 @Injectable()
 export class WorkoutSessionService {
@@ -48,7 +49,7 @@ export class WorkoutSessionService {
 
   async list(userId: string, params: ListSessionsDto) {
     const limit = Math.min(params.limit ?? 20, 50);
-    const where: Parameters<typeof this.prisma.workoutSession.findMany>[0]['where'] = { userId };
+    const where: Prisma.WorkoutSessionWhereInput = { userId };
     if (params.date) {
       const start = new Date(`${params.date}T00:00:00.000Z`);
       const end = new Date(start);
