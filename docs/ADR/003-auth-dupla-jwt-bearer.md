@@ -1,7 +1,11 @@
 # ADR 003 — Auth dupla: JWT (web) + Bearer Token (MCP)
 
-**Status:** Accepted  
+**Status:** Superseded by ADR 008  
 **Data:** 2026-05-06
+
+> **Esta ADR está superseded pela ADR 008.** A decisão original de fazer auth manual com JWT + Bearer estático foi revertida quando descobrimos que conectores remotos no Claude exigem OAuth 2.1 conforme spec MCP. Adotamos Logto como provider único. Mantenho este documento como histórico do raciocínio inicial.
+
+---
 
 ## Contexto
 

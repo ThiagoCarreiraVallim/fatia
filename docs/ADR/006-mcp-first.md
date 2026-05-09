@@ -1,6 +1,6 @@
 # ADR 006 — MCP como interface primária e completa
 
-**Status:** Accepted
+**Status:** Accepted  
 **Data:** 2026-05-06
 
 ## Contexto

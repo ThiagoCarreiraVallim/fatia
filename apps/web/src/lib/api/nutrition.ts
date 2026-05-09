@@ -115,19 +115,3 @@ export const nutritionApi = {
     }),
 };
 
-export interface McpToken {
-  id: string;
-  label: string;
-  lastUsedAt: string | null;
-  createdAt: string;
-}
-
-export const mcpTokensApi = {
-  list: () => apiFetch<McpToken[]>('/api/mcp-tokens'),
-  create: (label: string) =>
-    apiFetch<McpToken & { plaintext: string }>('/api/mcp-tokens', {
-      method: 'POST',
-      body: JSON.stringify({ label }),
-    }),
-  revoke: (id: string) => apiFetch<void>(`/api/mcp-tokens/${id}`, { method: 'DELETE' }),
-};

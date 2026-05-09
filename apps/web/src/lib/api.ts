@@ -1,10 +1,19 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
-
+/**
+ * Cliente-side: chama o proxy do Next, que adiciona Bearer token (Logto) no
+ * server-side antes de encaminhar pra API NestJS. Cookie de sessão do Logto
+ * autentica o proxy.
+ */
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const proxyPath = path.startsWith('/api/') ? `/api/proxy${path.slice('/api'.length)}` : path;
+  const headers = new Headers(init?.headers);
+  if (!headers.has('Content-Type') && init?.body) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  const res = await fetch(proxyPath, {
     ...init,
+    headers,
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
   });
 
   if (!res.ok) {

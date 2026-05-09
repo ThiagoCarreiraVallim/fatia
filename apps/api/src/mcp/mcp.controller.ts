@@ -3,14 +3,12 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
-import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser, type CurrentUserPayload } from '../common/decorators/current-user.decorator';
-import { McpAuthGuard } from './mcp-auth.guard';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { McpThrottlerGuard } from './mcp-throttler.guard';
 import { McpToolRegistry } from './mcp-tool.registry';
 
-@Public() // bypass JwtAuthGuard global; McpAuthGuard handles auth
-@UseGuards(McpAuthGuard, McpThrottlerGuard)
+@UseGuards(JwtAuthGuard, McpThrottlerGuard)
 @Throttle({ default: { ttl: 60_000, limit: 60 } })
 @Controller('mcp')
 export class McpController {
