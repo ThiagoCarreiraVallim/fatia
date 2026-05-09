@@ -20,7 +20,7 @@ export class McpController {
       { name: 'fatia-mcp', version: '0.1.0' },
       { capabilities: { tools: {} } },
     );
-    this.registry.bindAll(server, { userId: user.id });
+    this.registry.bindAll(server, { userId: user.id, timezone: user.timezone });
 
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     res.on('close', () => {

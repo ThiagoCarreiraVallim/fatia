@@ -1,9 +1,9 @@
-// apps/api/src/mcp/tool.decorator.ts
 import 'reflect-metadata';
 import type { ZodRawShape, z } from 'zod';
 
 export interface McpToolContext {
   userId: string;
+  timezone: string;
 }
 
 export interface McpToolDef<S extends ZodRawShape = ZodRawShape> {
