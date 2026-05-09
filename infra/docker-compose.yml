@@ -6,16 +6,41 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-fatia}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fatia_dev}
+      # Cria a database principal. A database do Logto é criada via init script.
       POSTGRES_DB: ${POSTGRES_DB:-fatia}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - fatia_pg_data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fatia}"]
       interval: 5s
       timeout: 3s
       retries: 10
+
+  logto:
+    image: svhd/logto:latest
+    container_name: fatia-logto
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Conexão à database dedicada do Logto (criada pelo postgres-init/01-create-logto-db.sh)
+      DB_URL: postgresql://${POSTGRES_USER:-fatia}:${POSTGRES_PASSWORD:-fatia_dev}@postgres:5432/logto
+      # URL pública do Logto (Dokploy / Traefik faz o roteamento)
+      ENDPOINT: ${LOGTO_ENDPOINT:-http://localhost:3002}
+      ADMIN_ENDPOINT: ${LOGTO_ADMIN_ENDPOINT:-http://localhost:3003}
+      # Trust proxy = true porque Dokploy/Traefik fica na frente
+      TRUST_PROXY_HEADER: 1
+    ports:
+      # 3002 = endpoint público (login, /oidc, /.well-known)
+      # 3003 = console admin (gerenciar users, apps, roles)
+      - "${LOGTO_PORT:-3002}:3001"
+      - "${LOGTO_ADMIN_PORT:-3003}:3002"
+    # Logto roda migrations automaticamente no boot. Primeira execução demora ~30s.
+    command: ["sh", "-c", "npm run cli db seed -- --swe && npm start"]
 
   api:
     build:
@@ -26,10 +51,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      logto:
+        condition: service_started
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: postgresql://${POSTGRES_USER:-fatia}:${POSTGRES_PASSWORD:-fatia_dev}@postgres:5432/${POSTGRES_DB:-fatia}
-      JWT_SECRET: ${JWT_SECRET}
+      # Auth via Logto (ADR 008)
+      LOGTO_ENDPOINT: ${LOGTO_ENDPOINT}
+      LOGTO_AUDIENCE: ${LOGTO_AUDIENCE}
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3001}
       PORT: 3000
     ports:
@@ -44,9 +73,16 @@ services:
     restart: unless-stopped
     depends_on:
       - api
+      - logto
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+      # Logto SDK no Next.js
+      LOGTO_ENDPOINT: ${LOGTO_ENDPOINT}
+      LOGTO_APP_ID: ${LOGTO_APP_ID}
+      LOGTO_APP_SECRET: ${LOGTO_APP_SECRET}
+      LOGTO_COOKIE_SECRET: ${LOGTO_COOKIE_SECRET}
+      LOGTO_BASE_URL: ${LOGTO_BASE_URL:-http://localhost:3001}
       PORT: 3001
     ports:
       - "${WEB_PORT:-3001}:3001"

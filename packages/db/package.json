@@ -2,8 +2,8 @@
   "name": "@fatia/db",
   "version": "0.1.0",
   "private": true,
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
   "scripts": {
     "build": "echo 'no build needed for db package'",
     "lint": "eslint src",
@@ -17,6 +17,7 @@
     "@prisma/client": "^5.20.0"
   },
   "devDependencies": {
+    "@types/node": "^20.0.0",
     "argon2": "^0.41.0",
     "prisma": "^5.20.0",
     "tsx": "^4.19.0",

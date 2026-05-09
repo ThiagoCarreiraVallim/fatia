@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Apple, Dumbbell, TrendingUp, User } from 'lucide-react';
+import { Apple, Dumbbell, TrendingUp, User, Home } from 'lucide-react';
 
 const navItems = [
-  { href: '/', label: 'Nutrição', icon: Apple },
-  { href: '/workout', label: 'Treino', icon: Dumbbell },
   { href: '/progress', label: 'Progresso', icon: TrendingUp },
+  { href: '/nutrition', label: 'Nutrição', icon: Apple },
+  { href: '/', label: 'Dashboard', icon: Home },
+  { href: '/workout', label: 'Treino', icon: Dumbbell },
   { href: '/profile', label: 'Perfil', icon: User },
 ];
 

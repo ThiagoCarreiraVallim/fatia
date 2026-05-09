@@ -12,12 +12,41 @@ Transport: **Streamable HTTP** (recomendação atual do MCP, suporta unidirecion
 
 ## Autenticação
 
-Bearer token no header HTTP:
-```
-Authorization: Bearer fatia_<base64url_32bytes>
-```
+**Atualizado pela ADR 008.** O MCP do Fatia usa OAuth 2.1 conforme spec MCP, com identity provider externo (Logto self-hosted). Bearer tokens estáticos foram descontinuados.
 
-Token gerado pelo usuário no PWA em `/profile`, mostrado uma única vez. Servidor armazena apenas o hash argon2 + label + timestamps.
+### Fluxo de conexão no Claude
+
+1. Usuário no Claude (web ou app) adiciona conector apontando para `https://api.fatia.dominio/mcp`
+2. Claude faz GET em `/.well-known/oauth-protected-resource` → recebe URL do auth server (Logto)
+3. Claude faz Dynamic Client Registration no Logto (RFC 7591)
+4. Claude redireciona usuário pra tela de login do Logto
+5. Usuário faz login (mesma conta usada no PWA)
+6. Logto emite authorization code → Claude troca por access token + refresh token (PKCE, RFC 7636)
+7. Claude armazena tokens, usa em todas chamadas MCP via `Authorization: Bearer <jwt>`
+8. Quando expira, Claude usa refresh token automaticamente
+
+### Validação no servidor
+
+Cada request ao `/mcp` passa por validação:
+- Assinatura via JWKS público do Logto (cache de chaves)
+- `iss` = `LOGTO_ENDPOINT`
+- `aud` = `LOGTO_AUDIENCE` (URL do MCP)
+- `exp` no futuro
+- `sub` presente
+
+`sub` resolve para `User` local. Se não existe, é criado (provisioning lazy) com role `USER`.
+
+### Endpoints discovery
+
+A API NestJS expõe:
+- `GET /.well-known/oauth-protected-resource` — retorna metadata indicando o auth server (Logto)
+
+O Logto expõe (em `auth.fatia.dominio`):
+- `GET /.well-known/openid-configuration` — metadados OIDC
+- `GET /oidc/jwks` — chaves públicas pra validação
+- `POST /oidc/register` — Dynamic Client Registration
+- `GET /oidc/auth` — authorization endpoint
+- `POST /oidc/token` — token endpoint
 
 ## Convenções
 
@@ -63,8 +92,6 @@ Listagens com potencial de crescer usam cursor-based:
 | **Perfil** | `get_me` | R |
 | | `update_me` | U |
 | | `update_timezone` | U |
-| **Tokens MCP** | `list_my_tokens` | R |
-| | `revoke_token` | D |
 | **Metas** | `get_nutrition_goals` | R |
 | | `set_nutrition_goals` | C/U |
 | **Alimentos (catálogo)** | `search_food` | R |
@@ -126,7 +153,7 @@ Listagens com potencial de crescer usam cursor-based:
 | **Dashboard** | `get_today_summary` | R |
 | | `get_week_summary` | R |
 
-Total: ~54 tools. Cada uma documentada abaixo.
+Total: ~52 tools (após remoção das 2 tools de gerenciamento de token MCP). Cada uma documentada abaixo.
 
 ---
 
@@ -173,36 +200,6 @@ Atualiza fuso horário do usuário. Afeta interpretação de "hoje" em todas as 
 ```
 
 **Output:** `{ timezone: string }`
-
----
-
-## Tokens MCP
-
-### `list_my_tokens`
-Lista tokens MCP ativos do próprio usuário (sem expor o valor).
-
-**Input:** _(nenhum)_
-
-**Output:**
-```typescript
-{
-  tokens: Array<{
-    id: string;
-    label: string;
-    lastUsedAt: string | null;
-    createdAt: string;
-  }>;
-}
-```
-
-### `revoke_token`
-Revoga um token. Útil pra "esquecei o celular no Uber, revoga aquele dispositivo".
-
-**Input:** `{ tokenId: string }`
-
-**Output:** `{ revokedAt: string }`
-
-> **Nota:** criar tokens novos só pelo PWA. O MCP não pode emitir tokens para si mesmo (evita escalada).
 
 ---
 
@@ -278,7 +275,7 @@ Busca em TACO + alimentos custom do usuário.
 ```
 
 ### `get_food`
-**Input:** `{ foodId: number }`
+**Input:** `{ foodId: number }`  
 **Output:** mesmo formato de um item de `search_food`.
 
 ### `create_custom_food`
@@ -323,11 +320,11 @@ Atualiza alimento custom próprio. Não pode editar TACO (`source = TACO`).
 ### `delete_custom_food`
 Deleta alimento custom. Refeições que usaram esse alimento mantêm o snapshot via `MealItem.foodName` (ver ADR sobre snapshot).
 
-**Input:** `{ foodId: number }`
+**Input:** `{ foodId: number }`  
 **Output:** `{ deleted: true }`
 
 ### `list_food_groups`
-**Input:** _(nenhum)_
+**Input:** _(nenhum)_  
 **Output:** `{ groups: Array<{ id: number; name: string }> }`
 
 ---
@@ -378,7 +375,7 @@ Cria uma refeição com seus itens em uma única chamada. Tool principal usada p
 ```
 
 ### `get_meal`
-**Input:** `{ mealId: string }`
+**Input:** `{ mealId: string }`  
 **Output:**
 ```typescript
 {
@@ -436,7 +433,7 @@ Atualiza metadados da refeição (não os itens — use as tools de itens).
 ### `delete_meal`
 Deleta refeição e todos os seus itens (cascade).
 
-**Input:** `{ mealId: string }`
+**Input:** `{ mealId: string }`  
 **Output:** `{ deleted: true }`
 
 ---
@@ -485,7 +482,7 @@ Corrige um item já logado. **Caso de uso central:** "na verdade era 200g, não 
 **Output:** item atualizado + totais da refeição.
 
 ### `delete_meal_item`
-**Input:** `{ itemId: string }`
+**Input:** `{ itemId: string }`  
 **Output:**
 ```typescript
 {
@@ -581,7 +578,7 @@ Resumo agregado por dia em um período.
 ```
 
 ### `list_exercises_by_muscle`
-**Input:** `{ muscleGroup: string }`
+**Input:** `{ muscleGroup: string }`  
 **Output:** mesmo shape de `search_exercise`.
 
 ### `create_custom_exercise`
@@ -633,7 +630,7 @@ Cria um plano vazio.
 **Output:** `{ planId: string }`
 
 ### `get_workout_plan`
-**Input:** `{ planId: string }`
+**Input:** `{ planId: string }`  
 **Output:**
 ```typescript
 {
@@ -653,7 +650,7 @@ Cria um plano vazio.
 ```
 
 ### `list_workout_plans`
-**Input:** _(nenhum)_
+**Input:** _(nenhum)_  
 **Output:**
 ```typescript
 {
@@ -676,7 +673,7 @@ Cria um plano vazio.
 ```
 
 ### `delete_workout_plan`
-**Input:** `{ planId: string }`
+**Input:** `{ planId: string }`  
 **Output:** `{ deleted: true }`
 
 > **Nota:** sessões já realizadas com esse plano mantêm `planId` (não cascateia). Sessões futuras perdem a referência.
@@ -760,7 +757,7 @@ Inicia uma sessão. Pode ser livre ou baseada em plano.
 > **Decisão chave:** retornar `prefilledExercises` com `lastSet` no `start_workout` é o que torna a UX "mostrar previous" trivial. Cliente não precisa fazer N chamadas.
 
 ### `get_workout_session`
-**Input:** `{ sessionId: string }`
+**Input:** `{ sessionId: string }`  
 **Output:**
 ```typescript
 {
@@ -837,7 +834,7 @@ Marca sessão como concluída. Idempotente — chamar de novo só atualiza notes
 ### `delete_workout_session`
 Deleta sessão e todos os sets.
 
-**Input:** `{ sessionId: string }`
+**Input:** `{ sessionId: string }`  
 **Output:** `{ deleted: true }`
 
 ---
@@ -1376,10 +1373,10 @@ Resumo da semana corrente.
 
 Documentadas pra deixar claro o que NÃO fazemos via MCP:
 
-- **Criar usuários:** apenas admin via PWA. MCP não cria contas.
-- **Criar tokens MCP:** apenas via PWA (UI mostra o token uma vez). MCP não pode emitir tokens.
-- **Mudar senha:** apenas via PWA (fluxo precisa de senha atual + UX cuidadosa).
-- **Promover usuário a admin:** apenas via SQL/script administrativo.
+- **Criar usuários:** apenas admin via console do Logto. MCP não cria contas.
+- **Mudar senha:** flow nativo do Logto, fora do nosso código.
+- **Gerenciar sessões / tokens OAuth:** Logto gerencia. Usuário pode revogar sessões pelo console do Logto.
+- **Promover usuário a admin:** apenas via console do Logto (atribuição de role).
 - **Bulk import (massivo) de comidas/treinos:** se precisar, vira ADR e endpoint admin separado.
 - **Acesso a dados de outros usuários:** mesmo admin não acessa via MCP.
 
