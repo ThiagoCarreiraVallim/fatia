@@ -40,6 +40,7 @@ COPY --from=build /app/apps/api/package.json apps/api/
 COPY --from=build /app/packages/db/package.json packages/db/
 COPY --from=build /app/packages/db/prisma packages/db/prisma
 COPY --from=build /app/packages/db/src packages/db/src
+COPY --from=deps /app/packages/db/node_modules ./packages/db/node_modules
 
 # Reinstala apenas prod deps (mais leve).
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts \
