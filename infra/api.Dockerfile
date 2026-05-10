@@ -22,9 +22,10 @@ RUN pnpm install --frozen-lockfile
 
 # ---------- Build ----------
 FROM base AS build
-# Com node-linker=hoisted todos os pacotes ficam em node_modules/ (sem
-# package-level node_modules/), então basta copiar o root node_modules.
+# Com node-linker=hoisted o root node_modules/ contém as deps externas, mas
+# as workspace symlinks (ex: @fatia/db) ficam em apps/api/node_modules/.
 COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
 COPY .npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/api ./apps/api
 COPY packages/db ./packages/db
