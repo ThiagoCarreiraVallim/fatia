@@ -117,7 +117,9 @@ services:
     environment:
       DB_URL: ${LOGTO_DB_URL}
       ENDPOINT: https://auth.${DOMAIN}
-      ADMIN_ENDPOINT: https://auth.${DOMAIN}/admin
+      # O admin SPA do Logto sempre serve em / na porta ADMIN_PORT.
+      # Roteamento por path (/admin) não funciona — usa subdomínio separado.
+      ADMIN_ENDPOINT: https://logto-admin.${DOMAIN}
       TRUST_PROXY_HEADER: 1
       PORT: 3001
       ADMIN_PORT: 3002
@@ -137,20 +139,25 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=dokploy-network
-      # Endpoint público do Logto (login, /oidc, /.well-known)
+      # Endpoint público do Logto (login, /oidc, /.well-known) — porta 3001
       - traefik.http.routers.fatia-auth-http.rule=Host(`auth.${DOMAIN}`)
       - traefik.http.routers.fatia-auth-http.entrypoints=web
       - traefik.http.routers.fatia-auth-http.middlewares=fatia-auth-redirect
       - traefik.http.middlewares.fatia-auth-redirect.redirectscheme.scheme=https
       - traefik.http.middlewares.fatia-auth-redirect.redirectscheme.permanent=true
-      - traefik.http.routers.fatia-auth.rule=Host(`auth.${DOMAIN}`) && !PathPrefix(`/admin`)
+      - traefik.http.routers.fatia-auth.rule=Host(`auth.${DOMAIN}`)
       - traefik.http.routers.fatia-auth.entrypoints=websecure
       - traefik.http.routers.fatia-auth.tls=true
       - traefik.http.routers.fatia-auth.tls.certresolver=letsencrypt
       - traefik.http.routers.fatia-auth.service=fatia-auth
       - traefik.http.services.fatia-auth.loadbalancer.server.port=3001
-      # Console admin do Logto em /admin
-      - traefik.http.routers.fatia-auth-admin.rule=Host(`auth.${DOMAIN}`) && PathPrefix(`/admin`)
+      # Console admin do Logto — subdomínio separado, porta 3002
+      - traefik.http.routers.fatia-auth-admin-http.rule=Host(`logto-admin.${DOMAIN}`)
+      - traefik.http.routers.fatia-auth-admin-http.entrypoints=web
+      - traefik.http.routers.fatia-auth-admin-http.middlewares=fatia-auth-admin-redirect
+      - traefik.http.middlewares.fatia-auth-admin-redirect.redirectscheme.scheme=https
+      - traefik.http.middlewares.fatia-auth-admin-redirect.redirectscheme.permanent=true
+      - traefik.http.routers.fatia-auth-admin.rule=Host(`logto-admin.${DOMAIN}`)
       - traefik.http.routers.fatia-auth-admin.entrypoints=websecure
       - traefik.http.routers.fatia-auth-admin.tls=true
       - traefik.http.routers.fatia-auth-admin.tls.certresolver=letsencrypt
