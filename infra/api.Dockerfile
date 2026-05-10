@@ -11,7 +11,7 @@ WORKDIR /app
 # ---------- Deps ----------
 # Instala dependências do workspace inteiro (api, db) usando lockfile congelado.
 FROM base AS deps
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY .npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/api/package.json apps/api/
 COPY packages/db/package.json packages/db/
 RUN pnpm install --frozen-lockfile
@@ -21,7 +21,7 @@ FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=deps /app/packages/db/node_modules ./packages/db/node_modules
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY .npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/api ./apps/api
 COPY packages/db ./packages/db
 
@@ -35,7 +35,7 @@ ENV NODE_ENV=production \
     PORT=3000
 
 # Apenas o necessário pra rodar dist/.
-COPY --from=build /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
+COPY --from=build /app/.npmrc /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
 COPY --from=build /app/apps/api/package.json apps/api/
 COPY --from=build /app/packages/db/package.json packages/db/
 COPY --from=build /app/packages/db/prisma packages/db/prisma
