@@ -4,11 +4,10 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { CurrentUser, type CurrentUserPayload } from '../common/decorators/current-user.decorator';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { McpThrottlerGuard } from './mcp-throttler.guard';
 import { McpToolRegistry } from './mcp-tool.registry';
 
-@UseGuards(JwtAuthGuard, McpThrottlerGuard)
+@UseGuards(McpThrottlerGuard)
 @Throttle({ default: { ttl: 60_000, limit: 60 } })
 @Controller('mcp')
 export class McpController {
