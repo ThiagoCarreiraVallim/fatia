@@ -10,7 +10,7 @@ async function proxy(request: NextRequest, ctx: RouteContext) {
   const token = await getApiAccessToken();
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const url = new URL(`${API_BASE}/${path.join('/')}`);
+  const url = new URL(`${API_BASE}/api/${path.join('/')}`);
   request.nextUrl.searchParams.forEach((v, k) => url.searchParams.set(k, v));
 
   const headers = new Headers(request.headers);
