@@ -9,8 +9,7 @@ export async function GET(request: NextRequest, ctx: RouteContext) {
   const { action } = await ctx.params;
 
   if (action === 'sign-in') {
-    await signIn(logtoConfig);
-    // signIn redirects, but in case it doesn't:
+    await signIn(logtoConfig, `${logtoConfig.baseUrl}/api/logto/callback`);
     return NextResponse.redirect(new URL('/', logtoConfig.baseUrl));
   }
 
