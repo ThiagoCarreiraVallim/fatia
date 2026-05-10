@@ -1,4 +1,4 @@
-import { handleSignIn, signIn, signOut } from '@logto/next/server-actions';
+import LogtoClient, { handleSignIn } from '@logto/next/server-actions';
 import { NextRequest, NextResponse } from 'next/server';
 import { logtoConfig } from '@/lib/logto';
 
@@ -8,18 +8,30 @@ export async function GET(request: NextRequest, ctx: RouteContext) {
   const { action } = await ctx.params;
 
   if (action === 'sign-in') {
-    await signIn(logtoConfig, `${logtoConfig.baseUrl}/api/logto/callback`);
-    return NextResponse.redirect(new URL('/', logtoConfig.baseUrl));
+    const client = new LogtoClient(logtoConfig);
+    const { url } = await client.handleSignIn({
+      redirectUri: `${logtoConfig.baseUrl}/api/logto/callback`,
+    });
+    return NextResponse.redirect(url);
   }
 
   if (action === 'sign-out') {
-    await signOut(logtoConfig, logtoConfig.baseUrl);
-    return NextResponse.redirect(new URL('/login', logtoConfig.baseUrl));
+    const client = new LogtoClient(logtoConfig);
+    const url = await client.handleSignOut(logtoConfig.baseUrl);
+    return NextResponse.redirect(url);
   }
 
   if (action === 'callback') {
     try {
-      await handleSignIn(logtoConfig, new URL(request.url));
+      // Reconstruct the callback URI using baseUrl to avoid internal-URL mismatch
+      // behind Traefik: request.url may use http:// or an internal hostname, but
+      // the stored redirectUri always uses LOGTO_BASE_URL.
+      const { searchParams } = new URL(request.url);
+      const callbackUri = new URL(
+        `/api/logto/callback?${searchParams.toString()}`,
+        logtoConfig.baseUrl,
+      );
+      await handleSignIn(logtoConfig, callbackUri);
     } catch (error) {
       console.error('[logto callback error]', error);
       return NextResponse.json(
