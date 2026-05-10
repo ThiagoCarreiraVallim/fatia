@@ -41,3 +41,6 @@ coverage/
 
 # Testes
 .nyc_output/
+
+# MCP (contém chaves sensíveis)
+.mcp.json
