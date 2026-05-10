@@ -1,6 +1,10 @@
 # syntax=docker/dockerfile:1.7
 # Multi-stage build da API NestJS para Dokploy.
 # Camadas: base → deps → build → runner.
+#
+# Usa node-linker=hoisted (.npmrc) para que pnpm crie node_modules/ flat
+# (como npm), garantindo que `prisma generate` grave em
+# /app/node_modules/.prisma/client — caminho previsível para COPY.
 
 # ---------- Base ----------
 FROM node:20-alpine AS base
@@ -18,14 +22,15 @@ RUN pnpm install --frozen-lockfile
 
 # ---------- Build ----------
 FROM base AS build
+# Com node-linker=hoisted todos os pacotes ficam em node_modules/ (sem
+# package-level node_modules/), então basta copiar o root node_modules.
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
-COPY --from=deps /app/packages/db/node_modules ./packages/db/node_modules
 COPY .npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/api ./apps/api
 COPY packages/db ./packages/db
 
 # Gera Prisma Client e compila a API.
+# Com hoisted linker, prisma generate escreve em node_modules/.prisma/client.
 RUN pnpm --filter @fatia/db exec prisma generate \
  && pnpm --filter @fatia/api build
 
@@ -60,6 +65,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 EXPOSE 3000
 
 # Entrypoint: aplica migrations então inicia o server.
-# Em Dokploy, opcionalmente sobrescrever com apenas "node apps/api/dist/main"
-# pra rodar migrations num passo separado.
 CMD ["sh", "-c", "pnpm --filter @fatia/db exec prisma migrate deploy && node apps/api/dist/main"]
