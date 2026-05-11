@@ -42,6 +42,13 @@ export class OAuthFacadeService {
     return this.config.getOrThrow<string>('LOGTO_MCP_APP_SECRET');
   }
 
+  // Normaliza o resource para o identifier exato registrado no Logto.
+  // Clientes MCP frequentemente mandam a URL com trailing slash; Logto
+  // faz match exato e rejeita com invalid_target.
+  private resolveResource(_requested: string | undefined | null): string {
+    return this.config.getOrThrow<string>('LOGTO_AUDIENCE');
+  }
+
   async registerClient(input: { redirectUris: string[]; clientName?: string }) {
     if (!Array.isArray(input.redirectUris) || input.redirectUris.length === 0) {
       throw new BadRequestException('redirect_uris is required');
@@ -113,7 +120,7 @@ export class OAuthFacadeService {
     url.searchParams.set('code_challenge_method', 'S256');
     const scopes = new Set(['openid', 'offline_access', ...(params.scope?.split(/\s+/) ?? [])]);
     url.searchParams.set('scope', Array.from(scopes).filter(Boolean).join(' '));
-    if (params.resource) url.searchParams.set('resource', params.resource);
+    url.searchParams.set('resource', this.resolveResource(params.resource));
     return { logtoAuthorizeUrl: url.toString() };
   }
 
@@ -156,7 +163,7 @@ export class OAuthFacadeService {
       code: row.logtoCode,
       redirect_uri: callbackUrl,
       code_verifier: row.logtoCodeVerifier,
-      ...(row.resource ? { resource: row.resource } : {}),
+      resource: this.resolveResource(row.resource),
     });
 
     await this.prisma.mcpOAuthAuthorization.update({
@@ -175,7 +182,7 @@ export class OAuthFacadeService {
     return this.callLogtoToken({
       grant_type: 'refresh_token',
       refresh_token: params.refreshToken,
-      ...(params.resource ? { resource: params.resource } : {}),
+      resource: this.resolveResource(params.resource),
       ...(params.scope ? { scope: params.scope } : {}),
     });
   }
