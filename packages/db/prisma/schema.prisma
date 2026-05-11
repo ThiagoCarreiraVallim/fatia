@@ -43,7 +43,47 @@ enum Role {
   ADMIN
 }
 
-// McpToken removido na ADR 008 — Claude usa OAuth do Logto, não bearer estático.
+// OAuth facade pro MCP: Logto não expõe DCR público, então a API age
+// como AS público (DCR + authorize/token) e federa pro Logto internamente.
+model McpOAuthClient {
+  id           String   @id @default(uuid())
+  clientId     String   @unique
+  clientName   String?
+  redirectUris String[]
+  createdAt    DateTime @default(now())
+  lastUsedAt   DateTime?
+
+  authorizations McpOAuthAuthorization[]
+}
+
+model McpOAuthAuthorization {
+  id                  String    @id @default(uuid())
+  // State que mandamos pro Logto — usado no /oauth/callback
+  state               String    @unique
+  // Code que devolvemos pro cliente MCP (Claude) — preenchido no callback
+  code                String?   @unique
+  clientId            String
+  redirectUri         String
+  // State original do cliente MCP — relayed no redirect final
+  clientState         String?
+  // PKCE enviado pelo cliente MCP — verificado no /oauth/token
+  clientCodeChallenge String
+  // PKCE que nós usamos com o Logto — usado no token exchange downstream
+  logtoCodeVerifier   String
+  // Code recebido do Logto no /oauth/callback
+  logtoCode           String?
+  // resource indicator (RFC 8707), se enviado
+  resource            String?
+  scope               String?
+  expiresAt           DateTime
+  consumedAt          DateTime?
+  createdAt           DateTime  @default(now())
+
+  client McpOAuthClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([expiresAt])
+}
 
 model UserGoals {
   userId           String   @id
