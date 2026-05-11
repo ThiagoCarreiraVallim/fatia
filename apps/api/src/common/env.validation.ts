@@ -7,6 +7,9 @@ export const AppEnvSchema = z.object({
   // Logto (ADR 008) — provider OIDC. A API valida JWTs do Logto.
   LOGTO_ENDPOINT: z.string().url(),
   LOGTO_AUDIENCE: z.string().min(1),
+  // OAuth facade pro MCP — app dedicado no Logto (tipo Traditional Web).
+  LOGTO_MCP_APP_ID: z.string().min(1),
+  LOGTO_MCP_APP_SECRET: z.string().min(1),
   WEB_ORIGIN: z.string().url().default('http://localhost:3001'),
 });
 
