@@ -28,8 +28,8 @@ services:
       LOGTO_ENDPOINT: https://auth.${DOMAIN}
       LOGTO_AUDIENCE: ${LOGTO_AUDIENCE:-https://api.${DOMAIN}}
       WEB_ORIGIN: https://app.${DOMAIN}
-      LOGTO_MCP_APP_ID: ${LOGTO_APP_ID}
-      LOGTO_MCP_APP_SECRET: ${LOGTO_APP_SECRET}
+      LOGTO_MCP_APP_ID: ${LOGTO_MCP_APP_ID}
+      LOGTO_MCP_APP_SECRET: ${LOGTO_MCP_APP_SECRET}
     expose:
       - "3000"
     networks:
