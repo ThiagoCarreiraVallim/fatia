@@ -23,7 +23,7 @@ export class WorkoutSessionService {
     return this.prisma.workoutSession.create({
       data: {
         userId,
-        planId: null,
+        planId: dto.planId ?? null,
         startedAt: dto.startedAt ? new Date(dto.startedAt) : new Date(),
         notes: dto.notes,
       },

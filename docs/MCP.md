@@ -28,6 +28,7 @@ Transport: **Streamable HTTP** (recomendação atual do MCP, suporta unidirecion
 ### Validação no servidor
 
 Cada request ao `/mcp` passa por validação:
+
 - Assinatura via JWKS público do Logto (cache de chaves)
 - `iss` = `LOGTO_ENDPOINT`
 - `aud` = `LOGTO_AUDIENCE` (URL do MCP)
@@ -39,9 +40,11 @@ Cada request ao `/mcp` passa por validação:
 ### Endpoints discovery
 
 A API NestJS expõe:
+
 - `GET /.well-known/oauth-protected-resource` — retorna metadata indicando o auth server (Logto)
 
 O Logto expõe (em `auth.fatia.dominio`):
+
 - `GET /.well-known/openid-configuration` — metadados OIDC
 - `GET /oidc/jwks` — chaves públicas pra validação
 - `POST /oidc/register` — Dynamic Client Registration
@@ -51,25 +54,31 @@ O Logto expõe (em `auth.fatia.dominio`):
 ## Convenções
 
 ### Identidade do usuário
+
 Toda tool resolve `userId` implicitamente pelo token. **Nunca** aceitar `userId` como parâmetro de input — vazaria escopo entre usuários.
 
 ### IDs
+
 - IDs de entidades user-owned (`Meal`, `WorkoutSession`, etc): UUID string
 - IDs de catálogos compartilhados (`Food`, `Exercise`, `FoodGroup`): integer
 - Validação: tool retorna `NOT_FOUND` se ID não existe **ou** não pertence ao usuário (mesma resposta para não vazar info)
 
 ### Datas e timestamps
+
 - Toda data/datetime é ISO 8601: `2026-05-06`, `2026-05-06T14:30:00-03:00`
 - Quando timezone não é especificado, usa-se o `User.timezone` armazenado no perfil
 - "Hoje" sempre significa "hoje no fuso do usuário"
 
 ### Cálculo de macros
+
 Quando um `MealItem` referencia um `foodId`, **o servidor calcula** kcal/proteínas/carbos/gorduras a partir de `foodPer100g * grams / 100`. Cliente nunca envia esses valores nesse caso.
 
 Quando o item é livre (sem `foodId`), o cliente (Claude) **deve** enviar todos os macros — o servidor confia.
 
 ### Erros
+
 Todas as tools retornam erros MCP padrão. Categorias:
+
 - `INVALID_INPUT`: validação Zod falhou (detalha o campo)
 - `NOT_FOUND`: recurso não existe ou não pertence ao usuário
 - `CONFLICT`: violação de constraint (ex: nome duplicado, sessão já finalizada)
@@ -77,7 +86,9 @@ Todas as tools retornam erros MCP padrão. Categorias:
 - `RATE_LIMITED`: limite excedido (60 req/min por token)
 
 ### Paginação
+
 Listagens com potencial de crescer usam cursor-based:
+
 ```typescript
 { cursor?: string; limit?: number }  // limit default 20, max 100
 // Output: { items: [...], nextCursor?: string }
@@ -87,71 +98,71 @@ Listagens com potencial de crescer usam cursor-based:
 
 ## Catálogo de tools (resumo)
 
-| Categoria | Tool | Operação |
-|---|---|---|
-| **Perfil** | `get_me` | R |
-| | `update_me` | U |
-| | `update_timezone` | U |
-| **Metas** | `get_nutrition_goals` | R |
-| | `set_nutrition_goals` | C/U |
-| **Alimentos (catálogo)** | `search_food` | R |
-| | `get_food` | R |
-| | `create_custom_food` | C |
-| | `update_custom_food` | U |
-| | `delete_custom_food` | D |
-| | `list_food_groups` | R |
-| **Refeições** | `log_meal` | C |
-| | `get_meal` | R |
-| | `list_meals` | R |
-| | `update_meal` | U |
-| | `delete_meal` | D |
-| **Itens de refeição** | `add_meal_item` | C |
-| | `update_meal_item` | U |
-| | `delete_meal_item` | D |
-| **Resumo nutricional** | `get_nutrition_summary` | R |
-| | `get_nutrition_history` | R |
-| **Exercícios (catálogo)** | `search_exercise` | R |
-| | `list_exercises_by_muscle` | R |
-| | `create_custom_exercise` | C |
-| | `update_custom_exercise` | U |
-| | `delete_custom_exercise` | D |
-| **Planos de treino** | `create_workout_plan` | C |
-| | `get_workout_plan` | R |
-| | `list_workout_plans` | R |
-| | `update_workout_plan` | U |
-| | `delete_workout_plan` | D |
-| | `add_exercise_to_plan` | C |
-| | `update_plan_exercise` | U |
-| | `remove_exercise_from_plan` | D |
-| | `reorder_plan_exercises` | U |
-| **Sessões de treino** | `start_workout` | C |
-| | `get_workout_session` | R |
-| | `list_workout_sessions` | R |
-| | `update_workout_session` | U |
-| | `finish_workout` | U |
-| | `delete_workout_session` | D |
-| **Séries** | `log_set` | C |
-| | `update_set` | U |
-| | `delete_set` | D |
-| | `get_last_set_for_exercise` | R |
-| | `get_personal_record` | R |
-| **Peso corporal** | `log_weight` | C |
-| | `update_weight_log` | U |
-| | `delete_weight_log` | D |
-| | `list_weight_logs` | R |
-| **Passos** | `log_steps` | C |
-| | `update_step_log` | U |
-| | `delete_step_log` | D |
-| | `list_step_logs` | R |
-| | `get_steps_for_date` | R |
-| | `get_steps_history` | R |
-| **Progresso** | `get_weight_progress` | R |
-| | `get_strength_progress` | R |
-| | `get_volume_progress` | R |
-| | `get_cardio_progress` | R |
-| | `get_steps_progress` | R |
-| **Dashboard** | `get_today_summary` | R |
-| | `get_week_summary` | R |
+| Categoria                 | Tool                        | Operação |
+| ------------------------- | --------------------------- | -------- |
+| **Perfil**                | `get_me`                    | R        |
+|                           | `update_me`                 | U        |
+|                           | `update_timezone`           | U        |
+| **Metas**                 | `get_nutrition_goals`       | R        |
+|                           | `set_nutrition_goals`       | C/U      |
+| **Alimentos (catálogo)**  | `search_food`               | R        |
+|                           | `get_food`                  | R        |
+|                           | `create_custom_food`        | C        |
+|                           | `update_custom_food`        | U        |
+|                           | `delete_custom_food`        | D        |
+|                           | `list_food_groups`          | R        |
+| **Refeições**             | `log_meal`                  | C        |
+|                           | `get_meal`                  | R        |
+|                           | `list_meals`                | R        |
+|                           | `update_meal`               | U        |
+|                           | `delete_meal`               | D        |
+| **Itens de refeição**     | `add_meal_item`             | C        |
+|                           | `update_meal_item`          | U        |
+|                           | `delete_meal_item`          | D        |
+| **Resumo nutricional**    | `get_nutrition_summary`     | R        |
+|                           | `get_nutrition_history`     | R        |
+| **Exercícios (catálogo)** | `search_exercise`           | R        |
+|                           | `list_exercises_by_muscle`  | R        |
+|                           | `create_custom_exercise`    | C        |
+|                           | `update_custom_exercise`    | U        |
+|                           | `delete_custom_exercise`    | D        |
+| **Planos de treino**      | `create_workout_plan`       | C        |
+|                           | `get_workout_plan`          | R        |
+|                           | `list_workout_plans`        | R        |
+|                           | `update_workout_plan`       | U        |
+|                           | `delete_workout_plan`       | D        |
+|                           | `add_exercise_to_plan`      | C        |
+|                           | `update_plan_exercise`      | U        |
+|                           | `remove_exercise_from_plan` | D        |
+|                           | `reorder_plan_exercises`    | U        |
+| **Sessões de treino**     | `start_workout`             | C        |
+|                           | `get_workout_session`       | R        |
+|                           | `list_workout_sessions`     | R        |
+|                           | `update_workout_session`    | U        |
+|                           | `finish_workout`            | U        |
+|                           | `delete_workout_session`    | D        |
+| **Séries**                | `log_set`                   | C        |
+|                           | `update_set`                | U        |
+|                           | `delete_set`                | D        |
+|                           | `get_last_set_for_exercise` | R        |
+|                           | `get_personal_record`       | R        |
+| **Peso corporal**         | `log_weight`                | C        |
+|                           | `update_weight_log`         | U        |
+|                           | `delete_weight_log`         | D        |
+|                           | `list_weight_logs`          | R        |
+| **Passos**                | `log_steps`                 | C        |
+|                           | `update_step_log`           | U        |
+|                           | `delete_step_log`           | D        |
+|                           | `list_step_logs`            | R        |
+|                           | `get_steps_for_date`        | R        |
+|                           | `get_steps_history`         | R        |
+| **Progresso**             | `get_weight_progress`       | R        |
+|                           | `get_strength_progress`     | R        |
+|                           | `get_volume_progress`       | R        |
+|                           | `get_cardio_progress`       | R        |
+|                           | `get_steps_progress`        | R        |
+| **Dashboard**             | `get_today_summary`         | R        |
+|                           | `get_week_summary`          | R        |
 
 Total: ~52 tools (após remoção das 2 tools de gerenciamento de token MCP). Cada uma documentada abaixo.
 
@@ -160,26 +171,30 @@ Total: ~52 tools (após remoção das 2 tools de gerenciamento de token MCP). Ca
 ## Perfil
 
 ### `get_me`
+
 Retorna dados do usuário logado.
 
 **Input:** _(nenhum)_
 
 **Output:**
+
 ```typescript
 {
   id: string;
   email: string;
   name: string;
   timezone: string;
-  role: "USER" | "ADMIN";
+  role: 'USER' | 'ADMIN';
   createdAt: string;
 }
 ```
 
 ### `update_me`
+
 Atualiza nome ou email do próprio usuário.
 
 **Input:**
+
 ```typescript
 {
   name?: string;
@@ -192,11 +207,15 @@ Atualiza nome ou email do próprio usuário.
 **Erros:** `CONFLICT` se email já em uso.
 
 ### `update_timezone`
+
 Atualiza fuso horário do usuário. Afeta interpretação de "hoje" em todas as outras tools.
 
 **Input:**
+
 ```typescript
-{ timezone: string }  // ex: "America/Sao_Paulo"
+{
+  timezone: string;
+} // ex: "America/Sao_Paulo"
 ```
 
 **Output:** `{ timezone: string }`
@@ -208,9 +227,11 @@ Atualiza fuso horário do usuário. Afeta interpretação de "hoje" em todas as 
 > Embora o nome legado seja "nutrition_goals" pela compatibilidade com a v0 do design, o objeto contém metas de nutrição **e** atividade (treinos por semana, passos por dia).
 
 ### `get_nutrition_goals`
+
 Retorna metas atuais. Se o usuário nunca definiu, retorna `null`.
 
 **Output:**
+
 ```typescript
 {
   kcalMin: number; kcalMax: number;
@@ -224,15 +245,21 @@ Retorna metas atuais. Se o usuário nunca definiu, retorna `null`.
 ```
 
 ### `set_nutrition_goals`
+
 Cria ou atualiza metas (upsert). Range com min ≤ max.
 
 **Input:**
+
 ```typescript
 {
-  kcalMin: number; kcalMax: number;
-  proteinMinG: number; proteinMaxG: number;
-  carbsMinG: number; carbsMaxG: number;
-  fatMinG: number; fatMaxG: number;
+  kcalMin: number;
+  kcalMax: number;
+  proteinMinG: number;
+  proteinMaxG: number;
+  carbsMinG: number;
+  carbsMaxG: number;
+  fatMinG: number;
+  fatMaxG: number;
   weeklyWorkouts: number;
   dailyStepsTarget: number;
 }
@@ -247,9 +274,11 @@ Cria ou atualiza metas (upsert). Range com min ≤ max.
 ## Alimentos (catálogo)
 
 ### `search_food`
+
 Busca em TACO + alimentos custom do usuário.
 
 **Input:**
+
 ```typescript
 {
   query: string;       // 2+ chars
@@ -259,12 +288,13 @@ Busca em TACO + alimentos custom do usuário.
 ```
 
 **Output:**
+
 ```typescript
 {
   foods: Array<{
     id: number;
     name: string;
-    source: "TACO" | "USDA" | "CUSTOM";
+    source: 'TACO' | 'USDA' | 'CUSTOM';
     group: string | null;
     kcalPer100g: number;
     proteinPer100g: number;
@@ -275,13 +305,16 @@ Busca em TACO + alimentos custom do usuário.
 ```
 
 ### `get_food`
+
 **Input:** `{ foodId: number }`  
 **Output:** mesmo formato de um item de `search_food`.
 
 ### `create_custom_food`
+
 Cria um alimento privado do usuário. Útil pra produtos industrializados ou receitas frequentes ("minha shake matinal").
 
 **Input:**
+
 ```typescript
 {
   name: string;
@@ -298,9 +331,11 @@ Cria um alimento privado do usuário. Útil pra produtos industrializados ou rec
 > **Nota:** custom foods são associados ao criador. Outros usuários não veem. Internamente, isso é modelado adicionando `createdByUserId` opcional em `Food` quando `source = CUSTOM`.
 
 ### `update_custom_food`
+
 Atualiza alimento custom próprio. Não pode editar TACO (`source = TACO`).
 
 **Input:**
+
 ```typescript
 {
   foodId: number;
@@ -318,12 +353,14 @@ Atualiza alimento custom próprio. Não pode editar TACO (`source = TACO`).
 **Erros:** `NOT_FOUND` se não pertence ao usuário ou se é TACO.
 
 ### `delete_custom_food`
+
 Deleta alimento custom. Refeições que usaram esse alimento mantêm o snapshot via `MealItem.foodName` (ver ADR sobre snapshot).
 
 **Input:** `{ foodId: number }`  
 **Output:** `{ deleted: true }`
 
 ### `list_food_groups`
+
 **Input:** _(nenhum)_  
 **Output:** `{ groups: Array<{ id: number; name: string }> }`
 
@@ -332,9 +369,11 @@ Deleta alimento custom. Refeições que usaram esse alimento mantêm o snapshot 
 ## Refeições
 
 ### `log_meal`
+
 Cria uma refeição com seus itens em uma única chamada. Tool principal usada pelo Claude após análise de foto/texto.
 
 **Input:**
+
 ```typescript
 {
   mealType: "BREAKFAST" | "LUNCH" | "DINNER" | "SNACK";
@@ -362,6 +401,7 @@ Cria uma refeição com seus itens em uma única chamada. Tool principal usada p
 ```
 
 **Output:**
+
 ```typescript
 {
   mealId: string;
@@ -370,13 +410,15 @@ Cria uma refeição com seus itens em uma única chamada. Tool principal usada p
     proteinG: number;
     carbsG: number;
     fatG: number;
-  };
+  }
 }
 ```
 
 ### `get_meal`
+
 **Input:** `{ mealId: string }`  
 **Output:**
+
 ```typescript
 {
   id: string;
@@ -394,14 +436,21 @@ Cria uma refeição com seus itens em uma única chamada. Tool principal usada p
     fatG: number;
     group: string | null;
   }>;
-  totals: { kcal: number; proteinG: number; carbsG: number; fatG: number };
+  totals: {
+    kcal: number;
+    proteinG: number;
+    carbsG: number;
+    fatG: number;
+  }
 }
 ```
 
 ### `list_meals`
+
 Lista refeições por filtro de data.
 
 **Input:**
+
 ```typescript
 {
   date?: string;          // ISO date — atalho para from=date 00:00, to=date 23:59
@@ -416,9 +465,11 @@ Lista refeições por filtro de data.
 **Output:** `{ meals: [...], nextCursor?: string }` onde cada `meal` tem o mesmo formato de `get_meal`.
 
 ### `update_meal`
+
 Atualiza metadados da refeição (não os itens — use as tools de itens).
 
 **Input:**
+
 ```typescript
 {
   mealId: string;
@@ -431,6 +482,7 @@ Atualiza metadados da refeição (não os itens — use as tools de itens).
 **Output:** refeição atualizada.
 
 ### `delete_meal`
+
 Deleta refeição e todos os seus itens (cascade).
 
 **Input:** `{ mealId: string }`  
@@ -441,9 +493,11 @@ Deleta refeição e todos os seus itens (cascade).
 ## Itens de refeição
 
 ### `add_meal_item`
+
 Adiciona um item a uma refeição existente.
 
 **Input:** mesmo shape do array `items[]` em `log_meal`, mais `mealId`.
+
 ```typescript
 {
   mealId: string;
@@ -452,17 +506,25 @@ Adiciona um item a uma refeição existente.
 ```
 
 **Output:**
+
 ```typescript
 {
   itemId: string;
-  mealTotals: { kcal: number; proteinG: number; carbsG: number; fatG: number };
+  mealTotals: {
+    kcal: number;
+    proteinG: number;
+    carbsG: number;
+    fatG: number;
+  }
 }
 ```
 
 ### `update_meal_item`
+
 Corrige um item já logado. **Caso de uso central:** "na verdade era 200g, não 150g".
 
 **Input:**
+
 ```typescript
 {
   itemId: string;
@@ -482,12 +544,19 @@ Corrige um item já logado. **Caso de uso central:** "na verdade era 200g, não 
 **Output:** item atualizado + totais da refeição.
 
 ### `delete_meal_item`
+
 **Input:** `{ itemId: string }`  
 **Output:**
+
 ```typescript
 {
   deleted: true;
-  mealTotals: { kcal: number; proteinG: number; carbsG: number; fatG: number };
+  mealTotals: {
+    kcal: number;
+    proteinG: number;
+    carbsG: number;
+    fatG: number;
+  }
 }
 ```
 
@@ -496,9 +565,11 @@ Corrige um item já logado. **Caso de uso central:** "na verdade era 200g, não 
 ## Resumo nutricional
 
 ### `get_nutrition_summary`
+
 Resumo de um dia (consumo vs. metas).
 
 **Input:**
+
 ```typescript
 {
   date?: string;   // default hoje
@@ -506,6 +577,7 @@ Resumo de um dia (consumo vs. metas).
 ```
 
 **Output:**
+
 ```typescript
 {
   date: string;
@@ -522,9 +594,11 @@ Resumo de um dia (consumo vs. metas).
 ```
 
 ### `get_nutrition_history`
+
 Resumo agregado por dia em um período.
 
 **Input:**
+
 ```typescript
 {
   days: 7 | 14 | 30 | 90;
@@ -532,6 +606,7 @@ Resumo agregado por dia em um período.
 ```
 
 **Output:**
+
 ```typescript
 {
   days: Array<{
@@ -540,14 +615,14 @@ Resumo agregado por dia em um período.
     proteinG: number;
     carbsG: number;
     fatG: number;
-    metGoals: boolean | null;   // true se ficou no range, null se sem metas
+    metGoals: boolean | null; // true se ficou no range, null se sem metas
   }>;
   averages: {
     kcal: number;
     proteinG: number;
     carbsG: number;
     fatG: number;
-  };
+  }
 }
 ```
 
@@ -556,7 +631,9 @@ Resumo agregado por dia em um período.
 ## Exercícios (catálogo)
 
 ### `search_exercise`
+
 **Input:**
+
 ```typescript
 {
   query: string;
@@ -566,6 +643,7 @@ Resumo agregado por dia em um período.
 ```
 
 **Output:**
+
 ```typescript
 {
   exercises: Array<{
@@ -578,13 +656,16 @@ Resumo agregado por dia em um período.
 ```
 
 ### `list_exercises_by_muscle`
+
 **Input:** `{ muscleGroup: string }`  
 **Output:** mesmo shape de `search_exercise`.
 
 ### `create_custom_exercise`
+
 Cria exercício custom do usuário (não polui o catálogo global).
 
 **Input:**
+
 ```typescript
 {
   name: string;
@@ -595,7 +676,9 @@ Cria exercício custom do usuário (não polui o catálogo global).
 **Output:** `{ exerciseId: number }`
 
 ### `update_custom_exercise`
+
 **Input:**
+
 ```typescript
 {
   exerciseId: number;
@@ -607,6 +690,7 @@ Cria exercício custom do usuário (não polui o catálogo global).
 **Erros:** `NOT_FOUND` se não é custom do usuário.
 
 ### `delete_custom_exercise`
+
 **Input:** `{ exerciseId: number }`
 
 **Erros:** `CONFLICT` se exercício está referenciado em sets/planos. Cliente deve usar `force: true` pra deletar mesmo assim (orphan'ará histórico — sets ainda existem mas perdem a FK; alternativa: bloquear delete e mandar arquivar).
@@ -618,53 +702,61 @@ Cria exercício custom do usuário (não polui o catálogo global).
 ## Planos de treino
 
 ### `create_workout_plan`
+
 Cria um plano vazio.
 
 **Input:**
+
 ```typescript
 {
-  name: string;            // "Push", "Pull A", "Leg Heavy"
+  name: string; // "Push", "Pull A", "Leg Heavy"
 }
 ```
 
 **Output:** `{ planId: string }`
 
 ### `get_workout_plan`
+
 **Input:** `{ planId: string }`  
 **Output:**
+
 ```typescript
 {
   id: string;
   name: string;
   exercises: Array<{
-    id: string;            // id do PlanExercise (não do Exercise)
+    id: string; // id do PlanExercise (não do Exercise)
     exerciseId: number;
     exerciseName: string;
     muscleGroup: string;
     order: number;
     targetSets: number;
-    targetReps: string;    // "8-12", "5", "AMRAP"
+    targetReps: string; // "8-12", "5", "AMRAP"
   }>;
   createdAt: string;
 }
 ```
 
 ### `list_workout_plans`
+
 **Input:** _(nenhum)_  
 **Output:**
+
 ```typescript
 {
   plans: Array<{
     id: string;
     name: string;
     exerciseCount: number;
-    lastUsedAt: string | null;   // quando foi a última sessão
+    lastUsedAt: string | null; // quando foi a última sessão
   }>;
 }
 ```
 
 ### `update_workout_plan`
+
 **Input:**
+
 ```typescript
 {
   planId: string;
@@ -673,13 +765,16 @@ Cria um plano vazio.
 ```
 
 ### `delete_workout_plan`
+
 **Input:** `{ planId: string }`  
 **Output:** `{ deleted: true }`
 
 > **Nota:** sessões já realizadas com esse plano mantêm `planId` (não cascateia). Sessões futuras perdem a referência.
 
 ### `add_exercise_to_plan`
+
 **Input:**
+
 ```typescript
 {
   planId: string;
@@ -693,9 +788,11 @@ Cria um plano vazio.
 **Output:** `{ planExerciseId: string }`
 
 ### `update_plan_exercise`
+
 Edita um item dentro do plano.
 
 **Input:**
+
 ```typescript
 {
   planExerciseId: string;
@@ -706,12 +803,15 @@ Edita um item dentro do plano.
 ```
 
 ### `remove_exercise_from_plan`
+
 **Input:** `{ planExerciseId: string }`
 
 ### `reorder_plan_exercises`
+
 Reordena tudo de uma vez (mais previsível que ajustar `order` um a um).
 
 **Input:**
+
 ```typescript
 {
   planId: string;
@@ -726,9 +826,11 @@ Reordena tudo de uma vez (mais previsível que ajustar `order` um a um).
 ## Sessões de treino
 
 ### `start_workout`
+
 Inicia uma sessão. Pode ser livre ou baseada em plano.
 
 **Input:**
+
 ```typescript
 {
   planId?: string;
@@ -738,6 +840,7 @@ Inicia uma sessão. Pode ser livre ou baseada em plano.
 ```
 
 **Output:**
+
 ```typescript
 {
   sessionId: string;
@@ -757,8 +860,10 @@ Inicia uma sessão. Pode ser livre ou baseada em plano.
 > **Decisão chave:** retornar `prefilledExercises` com `lastSet` no `start_workout` é o que torna a UX "mostrar previous" trivial. Cliente não precisa fazer N chamadas.
 
 ### `get_workout_session`
+
 **Input:** `{ sessionId: string }`  
 **Output:**
+
 ```typescript
 {
   id: string;
@@ -777,13 +882,15 @@ Inicia uma sessão. Pode ser livre ou baseada em plano.
     notes: string | null;
   }>;
   // Agregados úteis
-  totalVolumeKg: number;       // soma de weight*reps
+  totalVolumeKg: number; // soma de weight*reps
   exerciseCount: number;
 }
 ```
 
 ### `list_workout_sessions`
+
 **Input:**
+
 ```typescript
 {
   from?: string;
@@ -796,7 +903,9 @@ Inicia uma sessão. Pode ser livre ou baseada em plano.
 **Output:** `{ sessions: [...], nextCursor?: string }` com formato resumido de cada sessão.
 
 ### `update_workout_session`
+
 **Input:**
+
 ```typescript
 {
   sessionId: string;
@@ -806,9 +915,11 @@ Inicia uma sessão. Pode ser livre ou baseada em plano.
 ```
 
 ### `finish_workout`
+
 Marca sessão como concluída. Idempotente — chamar de novo só atualiza notes/completedAt.
 
 **Input:**
+
 ```typescript
 {
   sessionId: string;
@@ -818,6 +929,7 @@ Marca sessão como concluída. Idempotente — chamar de novo só atualiza notes
 ```
 
 **Output:**
+
 ```typescript
 {
   sessionId: string;
@@ -827,11 +939,12 @@ Marca sessão como concluída. Idempotente — chamar de novo só atualiza notes
     totalVolumeKg: number;
     durationMinutes: number;
     exercisesCompleted: number;
-  };
+  }
 }
 ```
 
 ### `delete_workout_session`
+
 Deleta sessão e todos os sets.
 
 **Input:** `{ sessionId: string }`  
@@ -844,9 +957,11 @@ Deleta sessão e todos os sets.
 > `SessionSet` cobre tanto séries de força (peso × reps) quanto entradas de cardio (duração × distância). O tipo é determinado pelo `muscleGroup` do `Exercise`. Service valida que campos corretos foram fornecidos.
 
 ### `log_set`
+
 Registra uma série dentro de uma sessão ativa (ou já finalizada — útil pra correção tardia).
 
 **Input — força:**
+
 ```typescript
 {
   sessionId: string;
@@ -860,6 +975,7 @@ Registra uma série dentro de uma sessão ativa (ou já finalizada — útil pra
 ```
 
 **Input — cardio:**
+
 ```typescript
 {
   sessionId: string;
@@ -874,21 +990,25 @@ Registra uma série dentro de uma sessão ativa (ou já finalizada — útil pra
 ```
 
 **Output:**
+
 ```typescript
 {
   setId: string;
   setNumber: number;
-  isPersonalRecord: boolean;   // PR de carga (força) ou PR de duração/distância (cardio)
+  isPersonalRecord: boolean; // PR de carga (força) ou PR de duração/distância (cardio)
 }
 ```
 
 **Erros:**
+
 - `INVALID_INPUT` se exercise é de força e faltou `weightKg` ou `reps`
 - `INVALID_INPUT` se exercise é cardio e faltou `durationSeconds`
 - `INVALID_INPUT` se misturou campos de força e cardio na mesma chamada
 
 ### `update_set`
+
 **Input:**
+
 ```typescript
 {
   setId: string;
@@ -908,12 +1028,15 @@ Registra uma série dentro de uma sessão ativa (ou já finalizada — útil pra
 ```
 
 ### `delete_set`
+
 **Input:** `{ setId: string }`
 
 ### `get_last_set_for_exercise`
+
 Última série logada para um exercício, em qualquer sessão.
 
 **Input:**
+
 ```typescript
 {
   exerciseId: number;
@@ -922,6 +1045,7 @@ Registra uma série dentro de uma sessão ativa (ou já finalizada — útil pra
 ```
 
 **Output:**
+
 ```typescript
 {
   set: {
@@ -940,9 +1064,11 @@ Registra uma série dentro de uma sessão ativa (ou já finalizada — útil pra
 ```
 
 ### `get_personal_record`
+
 Recorde pessoal de um exercício. Métrica varia conforme tipo.
 
 **Input:**
+
 ```typescript
 {
   exerciseId: number;
@@ -953,6 +1079,7 @@ Recorde pessoal de um exercício. Métrica varia conforme tipo.
 ```
 
 **Output (força):**
+
 ```typescript
 {
   pr: {
@@ -967,6 +1094,7 @@ Recorde pessoal de um exercício. Métrica varia conforme tipo.
 ```
 
 **Output (cardio):**
+
 ```typescript
 {
   pr: {
@@ -985,7 +1113,9 @@ Recorde pessoal de um exercício. Métrica varia conforme tipo.
 ## Peso corporal
 
 ### `log_weight`
+
 **Input:**
+
 ```typescript
 {
   weightKg: number;
@@ -997,7 +1127,9 @@ Recorde pessoal de um exercício. Métrica varia conforme tipo.
 **Output:** `{ weightLogId: string }`
 
 ### `update_weight_log`
+
 **Input:**
+
 ```typescript
 {
   weightLogId: string;
@@ -1008,10 +1140,13 @@ Recorde pessoal de um exercício. Métrica varia conforme tipo.
 ```
 
 ### `delete_weight_log`
+
 **Input:** `{ weightLogId: string }`
 
 ### `list_weight_logs`
+
 **Input:**
+
 ```typescript
 {
   from?: string;
@@ -1022,6 +1157,7 @@ Recorde pessoal de um exercício. Métrica varia conforme tipo.
 ```
 
 **Output:**
+
 ```typescript
 {
   logs: Array<{
@@ -1041,9 +1177,11 @@ Recorde pessoal de um exercício. Métrica varia conforme tipo.
 > Múltiplos logs por dia são permitidos. Isso é deliberado — abre caminho pra integrações futuras (Google Fit, Health Connect, etc) sem migration breaking. Para "passos do dia X", o servidor retorna o **maior valor** entre os logs daquele dia, com fallback no mais recente em caso de empate. Comportamento documentado em `getStepsForDate` no service.
 
 ### `log_steps`
+
 Registra uma contagem de passos para um dia. Pode ser chamada múltiplas vezes — substitui não, adiciona um novo log. Caso de uso v1: usuário fala pro Claude no fim do dia "fiz 9500 passos hoje".
 
 **Input:**
+
 ```typescript
 {
   date?: string;        // ISO date YYYY-MM-DD; default: hoje no fuso do user
@@ -1055,18 +1193,21 @@ Registra uma contagem de passos para um dia. Pode ser chamada múltiplas vezes �
 ```
 
 **Output:**
+
 ```typescript
 {
   stepLogId: string;
-  effectiveStepsForDate: number;   // valor atual considerado "do dia" após esse log
-  goalReached: boolean | null;     // null se sem dailyStepsTarget
+  effectiveStepsForDate: number; // valor atual considerado "do dia" após esse log
+  goalReached: boolean | null; // null se sem dailyStepsTarget
 }
 ```
 
 ### `update_step_log`
+
 Corrige um log específico. Para sobrescrever o valor do dia, prefira `log_steps` com novo valor — múltiplos logs são esperados.
 
 **Input:**
+
 ```typescript
 {
   stepLogId: string;
@@ -1077,12 +1218,15 @@ Corrige um log específico. Para sobrescrever o valor do dia, prefira `log_steps
 ```
 
 ### `delete_step_log`
+
 **Input:** `{ stepLogId: string }`
 
 ### `list_step_logs`
+
 Lista logs em um período. Útil pra auditoria/correção. Retorna **todos** os logs, não o efetivo por dia.
 
 **Input:**
+
 ```typescript
 {
   from?: string;       // ISO date
@@ -1093,6 +1237,7 @@ Lista logs em um período. Útil pra auditoria/correção. Retorna **todos** os 
 ```
 
 **Output:**
+
 ```typescript
 {
   logs: Array<{
@@ -1108,9 +1253,11 @@ Lista logs em um período. Útil pra auditoria/correção. Retorna **todos** os 
 ```
 
 ### `get_steps_for_date`
+
 Retorna o valor "efetivo" de passos para um dia específico (após resolução por política do servidor).
 
 **Input:**
+
 ```typescript
 {
   date?: string;       // default: hoje
@@ -1118,6 +1265,7 @@ Retorna o valor "efetivo" de passos para um dia específico (após resolução p
 ```
 
 **Output:**
+
 ```typescript
 {
   date: string;
@@ -1130,9 +1278,11 @@ Retorna o valor "efetivo" de passos para um dia específico (após resolução p
 ```
 
 ### `get_steps_history`
+
 Série temporal por dia, pra gráfico de progresso.
 
 **Input:**
+
 ```typescript
 {
   days: 7 | 14 | 30 | 90 | 180;
@@ -1140,11 +1290,12 @@ Série temporal por dia, pra gráfico de progresso.
 ```
 
 **Output:**
+
 ```typescript
 {
   days: Array<{
     date: string;
-    steps: number;        // 0 se nenhum log naquele dia
+    steps: number; // 0 se nenhum log naquele dia
     goalReached: boolean | null;
   }>;
   averageDaily: number;
@@ -1158,9 +1309,11 @@ Série temporal por dia, pra gráfico de progresso.
 ## Progresso
 
 ### `get_weight_progress`
+
 Série temporal de peso + médias semanais + delta.
 
 **Input:**
+
 ```typescript
 {
   days: 14 | 30 | 90 | 180 | 365;
@@ -1168,19 +1321,22 @@ Série temporal de peso + médias semanais + delta.
 ```
 
 **Output:**
+
 ```typescript
 {
   points: Array<{ date: string; weightKg: number }>;
   weeklyAverages: Array<{ weekStart: string; avgKg: number; deltaKg: number | null }>;
-  totalDeltaKg: number;          // peso final - peso inicial no período
+  totalDeltaKg: number; // peso final - peso inicial no período
   currentWeightKg: number | null;
 }
 ```
 
 ### `get_strength_progress`
+
 Evolução de carga em um exercício específico.
 
 **Input:**
+
 ```typescript
 {
   exerciseId: number;
@@ -1190,14 +1346,18 @@ Evolução de carga em um exercício específico.
 ```
 
 **Output:**
+
 ```typescript
 {
-  exercise: { id: number; name: string };
+  exercise: {
+    id: number;
+    name: string;
+  }
   metric: string;
   points: Array<{
     sessionDate: string;
     sessionId: string;
-    value: number;             // o número da métrica escolhida
+    value: number; // o número da métrica escolhida
     bestSet: { weightKg: number; reps: number };
   }>;
   startValue: number | null;
@@ -1207,9 +1367,11 @@ Evolução de carga em um exercício específico.
 ```
 
 ### `get_volume_progress`
-Volume de treino total (sum weight*reps) por semana, opcionalmente filtrado por grupo muscular. Considera apenas séries de força.
+
+Volume de treino total (sum weight\*reps) por semana, opcionalmente filtrado por grupo muscular. Considera apenas séries de força.
 
 **Input:**
+
 ```typescript
 {
   days: 30 | 90 | 180;
@@ -1218,6 +1380,7 @@ Volume de treino total (sum weight*reps) por semana, opcionalmente filtrado por 
 ```
 
 **Output:**
+
 ```typescript
 {
   weeks: Array<{
@@ -1230,9 +1393,11 @@ Volume de treino total (sum weight*reps) por semana, opcionalmente filtrado por 
 ```
 
 ### `get_cardio_progress`
+
 Evolução de cardio em um exercício específico (ex: esteira). Retorna métrica escolhida ao longo das sessões.
 
 **Input:**
+
 ```typescript
 {
   exerciseId: number;
@@ -1242,6 +1407,7 @@ Evolução de cardio em um exercício específico (ex: esteira). Retorna métric
 ```
 
 **Output:**
+
 ```typescript
 {
   exercise: { id: number; name: string };
@@ -1264,9 +1430,11 @@ Evolução de cardio em um exercício específico (ex: esteira). Retorna métric
 ```
 
 ### `get_steps_progress`
+
 Wrapper de `get_steps_history` no formato consistente com as outras tools de progresso. Útil pra gráficos no PWA.
 
 **Input:**
+
 ```typescript
 {
   days: 14 | 30 | 90 | 180;
@@ -1274,6 +1442,7 @@ Wrapper de `get_steps_history` no formato consistente com as outras tools de pro
 ```
 
 **Output:**
+
 ```typescript
 {
   points: Array<{ date: string; steps: number; goalReached: boolean | null }>;
@@ -1291,11 +1460,13 @@ Wrapper de `get_steps_history` no formato consistente com as outras tools de pro
 ## Dashboard
 
 ### `get_today_summary`
+
 Resumo agregado pro Claude responder "como estou hoje?".
 
 **Input:** _(nenhum)_
 
 **Output:**
+
 ```typescript
 {
   date: string;
@@ -1329,11 +1500,13 @@ Resumo agregado pro Claude responder "como estou hoje?".
 ```
 
 ### `get_week_summary`
+
 Resumo da semana corrente.
 
 **Input:** _(nenhum)_
 
 **Output:**
+
 ```typescript
 {
   weekStart: string;
@@ -1342,28 +1515,28 @@ Resumo da semana corrente.
     avgKcal: number;
     avgProteinG: number;
     daysOnTrack: number;
-  };
+  }
   workouts: {
     completed: number;
     target: number;
     sessions: Array<{ date: string; planName: string | null; volumeKg: number }>;
-  };
+  }
   cardio: {
     sessionCount: number;
     totalDurationSeconds: number;
     totalDistanceMeters: number;
-  };
+  }
   steps: {
     totalSteps: number;
     avgDaily: number;
     daysWithGoalReached: number;
     target: number | null;
-  };
+  }
   weight: {
     startKg: number | null;
     currentKg: number | null;
     deltaKg: number | null;
-  };
+  }
 }
 ```
 
@@ -1532,6 +1705,7 @@ Tudo abaixo de 500ms p99 com índices definidos no schema.
 ## Rate limit
 
 Por token:
+
 - 60 req/min em tools de leitura
 - 30 req/min em tools de escrita
 - Burst de 10 req em 1s permitido
@@ -1541,6 +1715,7 @@ Excesso retorna `RATE_LIMITED` com `Retry-After`.
 ## Observabilidade
 
 Cada chamada loga:
+
 - Tool name
 - userId (não o token)
 - duration_ms

@@ -11,6 +11,7 @@ A ADR 003 propunha auth dupla: JWT próprio para o PWA + Bearer token estático 
 Quando foi a hora de conectar o servidor MCP ao Claude (web e mobile), bateu na realidade: **conectores remotos no Claude exigem OAuth 2.1 com Dynamic Client Registration, PKCE e Resource Indicators**. Bearer token estático colado pelo usuário não é suportado nessas interfaces. Apenas o Claude Desktop aceita config local com bearer, mas perde-se mobile, que era o caso de uso central (foto da comida).
 
 Implementar OAuth 2.1 conforme spec MCP do zero em NestJS exigiria:
+
 - Endpoints `/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource`
 - Authorization code flow com PKCE (RFC 7636)
 - Dynamic Client Registration (RFC 7591)
@@ -46,6 +47,7 @@ Custo operacional do projeto deve ser zero por bom tempo. Auth0/Clerk free tiers
 ## Consequências
 
 ### Positivas
+
 - Conexão com Claude funciona conforme spec MCP, sem implementar OAuth manualmente
 - Login único entre PWA e Claude
 - Refresh tokens, rotação, revogação — tudo automático pelo Logto
@@ -55,6 +57,7 @@ Custo operacional do projeto deve ser zero por bom tempo. Auth0/Clerk free tiers
 - Schema mais limpo: `passwordHash` e `McpToken` somem
 
 ### Negativas
+
 - Mais um serviço em produção (Logto + DB)
 - Dependência forte: se Logto cai, PWA e MCP saem juntos
 - Curva de aprendizado de Logto (config inicial)
@@ -62,12 +65,14 @@ Custo operacional do projeto deve ser zero por bom tempo. Auth0/Clerk free tiers
 - Logto consome RAM extra (200-400MB)
 
 ### Neutras
+
 - `User` no banco continua existindo, mas agora referenciado por `logtoSub` (sub claim do JWT) em vez de `email/passwordHash`
 - Primeiro login de cada usuário cria `User` automaticamente (provisioning lazy)
 
 ## Implicações concretas
 
 ### Schema
+
 - Remover `User.passwordHash`
 - Remover model `McpToken` inteiro
 - Adicionar `User.logtoSub @unique` — mapeia o `sub` do JWT do Logto pro registro local
@@ -75,6 +80,7 @@ Custo operacional do projeto deve ser zero por bom tempo. Auth0/Clerk free tiers
 - `User.name` idem
 
 ### API (NestJS)
+
 - Some o módulo de auth manual (`AuthService`, signup, login, JWT signing, argon2)
 - Novo módulo de auth: valida JWT do Logto via JWKS, verifica `iss`, `aud`, `exp`
 - Guard `JwtAuthGuard` lê `Authorization: Bearer <jwt-do-logto>`
@@ -82,18 +88,21 @@ Custo operacional do projeto deve ser zero por bom tempo. Auth0/Clerk free tiers
 - Endpoint `/auth/me` continua existindo, retorna `User` local
 
 ### MCP
+
 - Tools `list_my_tokens` e `revoke_token` **removidas** (gerenciamento via Logto)
 - Endpoint `/mcp` valida JWT do Logto, mesma lógica do REST
 - `/.well-known/oauth-protected-resource` aponta pro Logto como auth server
 - `/.well-known/oauth-authorization-server` é servido pelo Logto, não por nós
 
 ### PWA
+
 - Tela `/login` deixa de ter form. Botão "Entrar" redireciona pro Logto
 - SDK `@logto/next` cuida de cookie, refresh, callback
 - Tela `/profile` perde a parte de gerenciar tokens MCP (some)
 - Provisioning visível: usuário admin cria conta no console do Logto, manda link de primeiro login
 
 ### Infra
+
 - Adicionar serviço `logto` ao `docker-compose.yml`
 - Logto usa Postgres — escolhemos **mesmo Postgres, database separada** (`fatia` e `logto`)
 - Subdomínio próprio: `auth.fatia.dominio`
@@ -102,6 +111,7 @@ Custo operacional do projeto deve ser zero por bom tempo. Auth0/Clerk free tiers
 ## Reversibilidade
 
 Migração é unidirecional na prática. Voltar pra auth manual exigiria:
+
 1. Adicionar `passwordHash` de volta
 2. Forçar todos os usuários a recadastrar (senha não é exportável do Logto sem comprometer segurança)
 3. Reimplementar todo o flow OAuth pra MCP

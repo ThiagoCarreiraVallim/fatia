@@ -30,18 +30,21 @@ O PWA é a interface secundária — uma camada de visualização que **espelha*
 ## Consequências
 
 ### Positivas
+
 - Usuário tem flexibilidade total: pode rodar tudo pelo Claude, não precisa abrir o PWA pra tarefas pontuais
 - Reduz pressão sobre prioridade do PWA — features visuais podem entrar gradualmente
 - Forçamos arquitetura limpa: services são a única fonte de verdade da lógica
 - Casos avançados (massa de dados, scripts) ficam triviais — Claude vira automação
 
 ### Negativas
+
 - Mais superfície de API para manter (~50 tools vs. ~20 no design original)
 - Cada tool nova é um contrato público — mudanças breaking afetam usuários do Claude
 - Necessidade de documentação MCP rigorosa, atualizada com cada feature
 - Rate limits e auditoria precisam ser robustos desde a v1
 
 ### Neutras
+
 - Volume extra de testes (cada service crítico testado uma vez serve as duas camadas)
 - Dois schemas Zod por feature: um para input MCP, outro DTO REST. Aceitável.
 
@@ -56,6 +59,7 @@ O PWA é a interface secundária — uma camada de visualização que **espelha*
 ## Não-decisão (deliberada)
 
 **O que NÃO está no MCP** está documentado em `docs/MCP.md` na seção "Tools intencionalmente NÃO expostas". Atualizar essa lista é tão importante quanto adicionar tools novas. Resumo:
+
 - Criação de usuários (admin via PWA)
 - Emissão de tokens MCP (PWA mostra uma vez)
 - Troca de senha
