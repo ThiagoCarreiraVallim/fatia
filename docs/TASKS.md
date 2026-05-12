@@ -191,68 +191,68 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 
 ### F2.2 — Services de treino 🔴 ⏱️ 10h
 
-- [ ] `ExerciseService.search(query, muscleGroup?, userId)` — públicos + customs
-- [ ] `ExerciseService.listByMuscle(group, userId)`
-- [ ] `ExerciseService.createCustom(dto, userId)`
-- [ ] `ExerciseService.updateCustom(id, dto, userId)`
-- [ ] `ExerciseService.deleteCustom(id, userId, force?)` — bloqueia se referenciado
-- [ ] `WorkoutPlanService.create(dto, userId)`
-- [ ] `WorkoutPlanService.findById(id, userId)` — com exercícios populados
-- [ ] `WorkoutPlanService.list(userId)` — com `lastUsedAt`
-- [ ] `WorkoutPlanService.update(id, dto, userId)`
-- [ ] `WorkoutPlanService.delete(id, userId)` — não cascateia em sessões passadas
-- [ ] `WorkoutPlanService.addExercise(planId, dto, userId)`
-- [ ] `WorkoutPlanService.updatePlanExercise(peId, dto, userId)`
-- [ ] `WorkoutPlanService.removeExercise(peId, userId)`
-- [ ] `WorkoutPlanService.reorderExercises(planId, order[], userId)` — transaction
-- [ ] `WorkoutSessionService.start(planId?, dto, userId)` — retorna prefilled
-- [ ] `WorkoutSessionService.findById(id, userId)` — com sets + agregados (volume força + duração cardio)
-- [ ] `WorkoutSessionService.list(filter, userId)` — paginado
-- [ ] `WorkoutSessionService.update(id, dto, userId)`
-- [ ] `WorkoutSessionService.finish(id, dto, userId)` — idempotente
-- [ ] `WorkoutSessionService.delete(id, userId)`
-- [ ] **`SessionSetService.create(sessionId, dto, userId)` — valida conforme tipo do exercício:**
+- [x] `ExerciseService.search(query, muscleGroup?, userId)` — públicos + customs
+- [x] `ExerciseService.listByMuscle(group, userId)`
+- [x] `ExerciseService.createCustom(dto, userId)`
+- [x] `ExerciseService.updateCustom(id, dto, userId)`
+- [x] `ExerciseService.deleteCustom(id, userId, force?)` — bloqueia se referenciado
+- [x] `WorkoutPlanService.create(dto, userId)`
+- [x] `WorkoutPlanService.findById(id, userId)` — com exercícios populados
+- [x] `WorkoutPlanService.list(userId)` — com `lastUsedAt`
+- [x] `WorkoutPlanService.update(id, dto, userId)`
+- [x] `WorkoutPlanService.delete(id, userId)` — não cascateia em sessões passadas
+- [x] `WorkoutPlanService.addExercise(planId, dto, userId)`
+- [x] `WorkoutPlanService.updatePlanExercise(peId, dto, userId)`
+- [x] `WorkoutPlanService.removeExercise(peId, userId)`
+- [x] `WorkoutPlanService.reorderExercises(planId, order[], userId)` — transaction
+- [x] `WorkoutSessionService.start(planId?, dto, userId)` — retorna prefilled
+- [x] `WorkoutSessionService.findById(id, userId)` — com sets + agregados (volume força + duração cardio)
+- [x] `WorkoutSessionService.list(filter, userId)` — paginado
+- [x] `WorkoutSessionService.update(id, dto, userId)`
+- [x] `WorkoutSessionService.finish(id, dto, userId)` — idempotente
+- [x] `WorkoutSessionService.delete(id, userId)`
+- [x] **`SessionSetService.create(sessionId, dto, userId)` — valida conforme tipo do exercício:**
   - Força: exige `weightKg + reps`, rejeita campos de cardio
   - Cardio: exige `durationSeconds`, rejeita campos de força
   - Auto setNumber, detecta PR
-- [ ] `SessionSetService.update(id, dto, userId)` — mesma validação
-- [ ] `SessionSetService.delete(id, userId)`
-- [ ] `SessionSetService.getLastForExercise(exerciseId, userId, before?)` — retorna campos relevantes
-- [ ] `SessionSetService.getPersonalRecord(exerciseId, userId, metric)` — métrica varia por tipo
-- [ ] Helper `estimate1RM(weight, reps)` (Epley) testado
-- [ ] Helper `calculatePace(durationSeconds, distanceMeters)` testado
-- [ ] Helper `isCardioExercise(exercise)` — `muscleGroup === 'cardio'`
-- [ ] Tests: `getLastForExercise` força e cardio, `getPersonalRecord` ambos, validação por tipo, treino híbrido
+- [x] `SessionSetService.update(id, dto, userId)` — mesma validação
+- [x] `SessionSetService.delete(id, userId)`
+- [x] `SessionSetService.getLastForExercise(exerciseId, userId, before?)` — retorna campos relevantes
+- [x] `SessionSetService.getPersonalRecord(exerciseId, userId, metric)` — métrica varia por tipo
+- [x] Helper `estimate1RM(weight, reps)` (Epley) testado
+- [x] Helper `calculatePace(durationSeconds, distanceMeters)` testado
+- [x] Helper `isCardioExercise(exercise)` — `muscleGroup === 'cardio'`
+- [x] Tests: `getLastForExercise` força e cardio, `getPersonalRecord` ambos, validação por tipo, treino híbrido
 
 ### F2.3 — Endpoints REST treino 🟡 ⏱️ 4h
 
-- [ ] CRUD `/workout-plans` e `/workout-plans/:id/exercises`
-- [ ] `POST /workout-plans/:id/reorder`
-- [ ] `POST /workout-sessions` (start), `POST /workout-sessions/:id/finish`
-- [ ] `GET /workout-sessions`, `GET /workout-sessions/:id`
-- [ ] `PATCH/DELETE /workout-sessions/:id`
-- [ ] `POST /workout-sessions/:id/sets` (aceita força ou cardio)
-- [ ] `PATCH/DELETE /sets/:id`
-- [ ] `GET /exercises/search`, `GET /exercises/by-muscle/:group`
-- [ ] CRUD `/custom-exercises`
-- [ ] `GET /exercises/:id/last-set`, `GET /exercises/:id/pr`
+- [x] CRUD `/workout-plans` e `/workout-plans/:id/exercises`
+- [x] `POST /workout-plans/:id/reorder`
+- [x] `POST /workout-sessions` (start), `POST /workout-sessions/:id/finish`
+- [x] `GET /workout-sessions`, `GET /workout-sessions/:id`
+- [x] `PATCH/DELETE /workout-sessions/:id`
+- [x] `POST /workout-sessions/:id/sets` (aceita força ou cardio)
+- [x] `PATCH/DELETE /sets/:id`
+- [x] `GET /exercises/search`, `GET /exercises/by-muscle/:group`
+- [x] CRUD `/custom-exercises`
+- [x] `GET /exercises/:id/last-set`, `GET /exercises/:id/pr`
 
 ### F2.4 — Tools MCP de treino 🔴 ⏱️ 7h
 
-- [ ] `search_exercise` `list_exercises_by_muscle`
-- [ ] `create_custom_exercise` `update_custom_exercise` `delete_custom_exercise`
-- [ ] `create_workout_plan` `get_workout_plan` `list_workout_plans`
-- [ ] `update_workout_plan` `delete_workout_plan`
-- [ ] `add_exercise_to_plan` `update_plan_exercise` `remove_exercise_from_plan`
-- [ ] `reorder_plan_exercises`
-- [ ] `start_workout` (com prefilled — testar bem)
-- [ ] `get_workout_session` `list_workout_sessions`
-- [ ] `update_workout_session` `finish_workout` `delete_workout_session`
-- [ ] **`log_set` com schema Zod discriminado por tipo (força vs cardio)**
-- [ ] **`update_set` com mesmo discriminador**
-- [ ] `delete_set`
-- [ ] `get_last_set_for_exercise` `get_personal_record`
-- [ ] Validação Zod robusta em todas
+- [x] `search_exercise` `list_exercises_by_muscle`
+- [x] `create_custom_exercise` `update_custom_exercise` `delete_custom_exercise`
+- [x] `create_workout_plan` `get_workout_plan` `list_workout_plans`
+- [x] `update_workout_plan` `delete_workout_plan`
+- [x] `add_exercise_to_plan` `update_plan_exercise` `remove_exercise_from_plan`
+- [x] `reorder_plan_exercises`
+- [x] `start_workout` (com prefilled — testar bem)
+- [x] `get_workout_session` `list_workout_sessions`
+- [x] `update_workout_session` `finish_workout` `delete_workout_session`
+- [x] **`log_set` com schema Zod discriminado por tipo (força vs cardio)**
+- [x] **`update_set` com mesmo discriminador**
+- [x] `delete_set`
+- [x] `get_last_set_for_exercise` `get_personal_record`
+- [x] Validação Zod robusta em todas
 
 ### F2.5 — PWA Treino 🟡 ⏱️ 16h
 
