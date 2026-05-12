@@ -5,8 +5,8 @@ import { addDaysIso, todayInTz, weekStartInTz } from './helpers/date-tz';
 import { calculatePace } from '../workout/helpers/calculate-pace';
 import { estimate1RM } from '../workout/helpers/estimate-1rm';
 
-type StrengthMetric = 'max_weight' | 'estimated_1rm' | 'total_volume';
-type CardioMetric = 'duration' | 'distance' | 'pace' | 'kcal';
+export type StrengthMetric = 'max_weight' | 'estimated_1rm' | 'total_volume';
+export type CardioMetric = 'duration' | 'distance' | 'pace' | 'kcal';
 
 interface UserCtx {
   userId: string;
