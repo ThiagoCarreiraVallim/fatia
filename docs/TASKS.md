@@ -254,20 +254,20 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [x] `get_last_set_for_exercise` `get_personal_record`
 - [x] Validação Zod robusta em todas
 
-### F2.5 — PWA Treino 🟡 ⏱️ 16h
+### F2.5 — PWA Treino ✅ ⏱️ 16h
 
-- [ ] Página `/workout` — plano de hoje (ou seletor)
-- [ ] **Componente `<ExerciseCard />` que decide entre força e cardio pelo `muscleGroup`**
-- [ ] **Componente `<StrengthSetRow />` editável com inputs Kg, Reps, RPE**
-- [ ] **Componente `<CardioEntryRow />` editável com Duração (mm:ss), Distância (km), FC, Kcal**
-- [ ] Coluna "Previous" puxa via `lastSet` do `start_workout` — formato adapta por tipo
-- [ ] Botão "Add Set" / "Add Entry" conforme tipo
-- [ ] Header sticky com progresso "X/Y exercises" e botão "Finish"
-- [ ] Modal de confirmação ao Finish (mostra resumo: volume força + tempo cardio)
-- [ ] Página `/workout/plans` (CRUD)
-- [ ] Página `/workout/plans/:id/edit` com drag-to-reorder e suporte a cardio
-- [ ] Página `/workout/history` (lista por semana)
-- [ ] Página de detalhe de sessão passada (read-only) — exibe ambos os tipos
+- [x] Página `/workout` — plano de hoje (ou seletor)
+- [x] **Componente `<ExerciseCard />` que decide entre força e cardio pelo `muscleGroup`**
+- [x] **Componente `<StrengthSetRow />` editável com inputs Kg, Reps, RPE**
+- [x] **Componente `<CardioEntryRow />` editável com Duração (mm:ss), Distância (km), FC, Kcal**
+- [x] Coluna "Previous" puxa via `lastSet` do `start_workout` — formato adapta por tipo
+- [x] Botão "Add Set" / "Add Entry" conforme tipo
+- [x] Header sticky com progresso "X/Y exercises" e botão "Finish"
+- [x] Modal de confirmação ao Finish (mostra resumo: volume força + tempo cardio)
+- [x] Página `/workout/plans` (CRUD)
+- [x] Página `/workout/plans/:id/edit` com drag-to-reorder e suporte a cardio
+- [x] Página `/workout/history` (lista por semana)
+- [x] Página de detalhe de sessão passada (read-only) — exibe ambos os tipos
 
 ---
 
