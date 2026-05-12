@@ -183,11 +183,11 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 
 ## Fase 2 — Treino core
 
-### F2.1 — Seed de exercícios 🔴 ⏱️ 2h
+### F2.1 — Seed de exercícios ✅ ⏱️ 2h
 
-- [ ] Lista (já presente no `seed-exercises.ts`) com ~60 exercícios incluindo cardio expandido
-- [ ] Validar upsert idempotente após mudança de chave composta
-- [ ] Cobrir: peito, costas, ombro, braço, pernas, core, **cardio (esteira, bike, natação, corrida, caminhada, HIIT, escada, elíptico, remo, corda)**
+- [x] Lista (já presente no `seed-exercises.ts`) com ~60 exercícios incluindo cardio expandido
+- [x] Validar upsert idempotente após mudança de chave composta
+- [x] Cobrir: peito, costas, ombro, braço, pernas, core, **cardio (esteira, bike, natação, corrida, caminhada, HIIT, escada, elíptico, remo, corda)**
 
 ### F2.2 — Services de treino 🔴 ⏱️ 10h
 
