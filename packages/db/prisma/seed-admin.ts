@@ -23,9 +23,7 @@ export async function runSeedAdmin() {
   const adminEmail = process.env.ADMIN_EMAIL;
 
   if (!logtoEndpoint) {
-    console.warn(
-      '  ⚠ LOGTO_ENDPOINT não definido. Configure o Logto antes de rodar a aplicação.',
-    );
+    console.warn('  ⚠ LOGTO_ENDPOINT não definido. Configure o Logto antes de rodar a aplicação.');
     return;
   }
 

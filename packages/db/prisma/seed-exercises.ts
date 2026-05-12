@@ -14,6 +14,7 @@ const EXERCISES: Array<{ name: string; muscleGroup: string }> = [
   { name: 'Crucifixo com halteres', muscleGroup: 'peito' },
   { name: 'Crossover na polia', muscleGroup: 'peito' },
   { name: 'Flexão de braço', muscleGroup: 'peito' },
+  { name: 'Flexão diamante', muscleGroup: 'peito' },
 
   // Costas
   { name: 'Barra fixa', muscleGroup: 'costas' },
@@ -42,6 +43,7 @@ const EXERCISES: Array<{ name: string; muscleGroup: string }> = [
   { name: 'Tríceps francês', muscleGroup: 'braço' },
   { name: 'Mergulho em paralelas', muscleGroup: 'braço' },
   { name: 'Tríceps testa', muscleGroup: 'braço' },
+  { name: 'Rosca concentrada', muscleGroup: 'braço' },
 
   // Pernas — quadríceps
   { name: 'Agachamento livre', muscleGroup: 'pernas' },
@@ -56,6 +58,8 @@ const EXERCISES: Array<{ name: string; muscleGroup: string }> = [
   { name: 'Mesa flexora', muscleGroup: 'pernas' },
   { name: 'Cadeira flexora', muscleGroup: 'pernas' },
   { name: 'Elevação pélvica', muscleGroup: 'pernas' },
+  { name: 'Agachamento sumô', muscleGroup: 'pernas' },
+  { name: 'Afundo búlgaro', muscleGroup: 'pernas' },
 
   // Pernas — panturrilha
   { name: 'Panturrilha em pé', muscleGroup: 'pernas' },
@@ -68,6 +72,8 @@ const EXERCISES: Array<{ name: string; muscleGroup: string }> = [
   { name: 'Abdominal oblíquo', muscleGroup: 'core' },
   { name: 'Dead bug', muscleGroup: 'core' },
   { name: 'Hollow body hold', muscleGroup: 'core' },
+  { name: 'Russian twist', muscleGroup: 'core' },
+  { name: 'Abdominal na polia', muscleGroup: 'core' },
 
   // Cardio
   { name: 'Esteira', muscleGroup: 'cardio' },

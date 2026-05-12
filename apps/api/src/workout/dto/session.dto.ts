@@ -2,6 +2,7 @@ import { IsISO8601, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min } from '
 import { Type } from 'class-transformer';
 
 export class StartSessionDto {
+  @IsOptional() @IsUUID() planId?: string;
   @IsOptional() @IsISO8601() startedAt?: string;
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
 }
