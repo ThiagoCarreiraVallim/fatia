@@ -9,5 +9,5 @@ export const logtoConfig: LogtoNextConfig = {
     process.env.LOGTO_COOKIE_SECRET ?? 'replace_with_32_byte_random_string_for_dev_only',
   cookieSecure: process.env.NODE_ENV === 'production',
   resources: process.env.LOGTO_AUDIENCE ? [process.env.LOGTO_AUDIENCE] : [],
-  scopes: ['email', 'profile', 'roles'],
+  scopes: ['email', 'profile', 'roles', 'offline_access'],
 };
