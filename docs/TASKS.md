@@ -273,26 +273,26 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 
 ## Fase 3 — Progresso e atividade
 
-### F3.1 — Services de progresso 🔴 ⏱️ 8h
+### F3.1 — Services de progresso ✅ ⏱️ 8h
 
-- [ ] `WeightLogService.create(dto, userId)`
-- [ ] `WeightLogService.update(id, dto, userId)`
-- [ ] `WeightLogService.delete(id, userId)`
-- [ ] `WeightLogService.list(filter, userId)` — paginado
-- [ ] `StepLogService.create(dto, userId)` — múltiplos por dia OK
-- [ ] `StepLogService.update(id, dto, userId)`
-- [ ] `StepLogService.delete(id, userId)`
-- [ ] `StepLogService.list(filter, userId)` — paginado
-- [ ] **`StepLogService.getStepsForDate(date, userId)`** — política: maior valor entre os logs do dia (ver ADR 007)
-- [ ] **`StepLogService.getHistory(days, userId)`** — preenche dias sem log com 0
-- [ ] `ProgressService.weightProgress(days, userId)` — pontos + médias semanais + delta
-- [ ] `ProgressService.strengthProgress(exerciseId, days, metric, userId)` — agrupa por sessão (apenas força)
-- [ ] `ProgressService.cardioProgress(exerciseId, days, metric, userId)` — agrupa por sessão (apenas cardio); valida que exercise é cardio
-- [ ] `ProgressService.volumeProgress(days, muscleGroup?, userId)` — semanal, ignora cardio
-- [ ] `ProgressService.stepsProgress(days, userId)` — pontos + médias semanais + dias batidos
-- [ ] Helper de "início de semana" no fuso do user
-- [ ] Helper "data no fuso do user" — recebe Date, retorna string YYYY-MM-DD
-- [ ] Tests: cálculo de delta, médias semanais, política de "valor do dia" em passos, cálculo de streak
+- [x] `WeightLogService.create(dto, userId)`
+- [x] `WeightLogService.update(id, dto, userId)`
+- [x] `WeightLogService.delete(id, userId)`
+- [x] `WeightLogService.list(filter, userId)` — paginado
+- [x] `StepLogService.create(dto, userId)` — múltiplos por dia OK
+- [x] `StepLogService.update(id, dto, userId)`
+- [x] `StepLogService.delete(id, userId)`
+- [x] `StepLogService.list(filter, userId)` — paginado
+- [x] **`StepLogService.getStepsForDate(date, userId)`** — política: maior valor entre os logs do dia (ver ADR 007)
+- [x] **`StepLogService.getHistory(days, userId)`** — preenche dias sem log com 0
+- [x] `ProgressService.weightProgress(days, userId)` — pontos + médias semanais + delta
+- [x] `ProgressService.strengthProgress(exerciseId, days, metric, userId)` — agrupa por sessão (apenas força)
+- [x] `ProgressService.cardioProgress(exerciseId, days, metric, userId)` — agrupa por sessão (apenas cardio); valida que exercise é cardio
+- [x] `ProgressService.volumeProgress(days, muscleGroup?, userId)` — semanal, ignora cardio
+- [x] `ProgressService.stepsProgress(days, userId)` — pontos + médias semanais + dias batidos
+- [x] Helper de "início de semana" no fuso do user
+- [x] Helper "data no fuso do user" — recebe Date, retorna string YYYY-MM-DD
+- [x] Tests: cálculo de delta, médias semanais, política de "valor do dia" em passos, cálculo de streak
 
 ### F3.2 — Endpoints REST progresso 🟡 ⏱️ 3h
 
