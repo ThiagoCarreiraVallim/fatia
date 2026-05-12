@@ -99,6 +99,57 @@ export default function TokensPage() {
           <li className="p-6 text-center text-sm text-muted-foreground">Nenhum token ativo.</li>
         )}
       </ul>
+
+      {/* Claude configuration instructions */}
+      <div className="rounded-lg border bg-card p-4 space-y-3">
+        <h2 className="font-semibold text-base">Como usar com o Claude</h2>
+        <ol className="space-y-2 text-sm">
+          <li className="flex gap-2">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
+              1
+            </span>
+            <span>Crie um token MCP acima e copie-o.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
+              2
+            </span>
+            <span>
+              Abra o <strong>Claude.ai</strong> → Configurações → Integrações → Adicionar servidor
+              MCP.
+            </span>
+          </li>
+          <li className="flex gap-2">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
+              3
+            </span>
+            <div className="space-y-1">
+              <p>URL do servidor:</p>
+              <code className="block rounded bg-muted px-2 py-1 text-xs">
+                https://seu-dominio.com/mcp/sse
+              </code>
+              <p className="text-xs text-muted-foreground">
+                (use <code className="rounded bg-muted px-1">http://localhost:3000/mcp/sse</code>{' '}
+                para desenvolvimento local)
+              </p>
+            </div>
+          </li>
+          <li className="flex gap-2">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
+              4
+            </span>
+            <span>
+              Autenticação: <strong>Bearer token</strong> → cole seu token MCP.
+            </span>
+          </li>
+          <li className="flex gap-2">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
+              5
+            </span>
+            <span>Salve e inicie uma conversa com Claude! 🎉</span>
+          </li>
+        </ol>
+      </div>
     </div>
   );
 }

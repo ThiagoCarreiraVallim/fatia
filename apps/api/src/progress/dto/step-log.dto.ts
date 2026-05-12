@@ -1,4 +1,5 @@
 import { IsEnum, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 import { StepSource } from '@prisma/client';
 
 export class CreateStepLogDto {
@@ -37,11 +38,13 @@ export class ListStepLogsDto {
   cursor?: string;
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   limit?: number;
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   days?: number;

@@ -5,12 +5,12 @@ import type { PrismaService } from '../common/prisma.service';
 
 type MockPrisma = {
   food: { findFirst: jest.Mock };
-  meal: { findUnique: jest.Mock; findFirst: jest.Mock };
+  meal: { findUnique: jest.Mock; findFirst: jest.Mock; findMany: jest.Mock };
 };
 
 const makePrisma = (): MockPrisma => ({
   food: { findFirst: jest.fn() },
-  meal: { findUnique: jest.fn(), findFirst: jest.fn() },
+  meal: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn() },
 });
 
 describe('MealService.resolveItems', () => {
@@ -145,5 +145,17 @@ describe('MealService.findById', () => {
       where: { id: 'meal-x', userId: 'user-A' },
       include: { items: true },
     });
+  });
+});
+
+describe('MealService.list', () => {
+  it('list does not return meals from other users', async () => {
+    const prisma = makePrisma();
+    prisma.meal.findMany.mockResolvedValue([]);
+    const service = new MealService(prisma as unknown as PrismaService);
+    await service.list('user-A', {});
+    expect(prisma.meal.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ userId: 'user-A' }) }),
+    );
   });
 });

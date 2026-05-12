@@ -11,6 +11,7 @@ import { NutritionModule } from './nutrition/nutrition.module';
 import { WorkoutModule } from './workout/workout.module';
 import { McpModule } from './mcp/mcp.module';
 import { ProgressModule } from './progress/progress.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { ProgressModule } from './progress/progress.module';
     WorkoutModule,
     McpModule,
     ProgressModule,
+    DashboardModule,
   ],
 })
 export class AppModule {}

@@ -296,55 +296,55 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 
 ### F3.2 — Endpoints REST progresso 🟡 ⏱️ 3h
 
-- [ ] CRUD `/weight-logs`
-- [ ] CRUD `/step-logs`
-- [ ] `GET /step-logs/by-date/:date` (retorna efetivo do dia)
-- [ ] `GET /progress/weight?days=`
-- [ ] `GET /progress/strength?exerciseId=&days=&metric=`
-- [ ] `GET /progress/cardio?exerciseId=&days=&metric=`
-- [ ] `GET /progress/volume?days=&muscleGroup=`
-- [ ] `GET /progress/steps?days=`
+- [x] CRUD `/weight-logs`
+- [x] CRUD `/step-logs`
+- [x] `GET /step-logs/by-date/:date` (retorna efetivo do dia)
+- [x] `GET /progress/weight?days=`
+- [x] `GET /progress/strength?exerciseId=&days=&metric=`
+- [x] `GET /progress/cardio?exerciseId=&days=&metric=`
+- [x] `GET /progress/volume?days=&muscleGroup=`
+- [x] `GET /progress/steps?days=`
 
 ### F3.3 — Tools MCP de progresso 🟡 ⏱️ 5h
 
-- [ ] `log_weight` `update_weight_log` `delete_weight_log` `list_weight_logs`
-- [ ] `log_steps` `update_step_log` `delete_step_log` `list_step_logs`
-- [ ] `get_steps_for_date` `get_steps_history`
-- [ ] `get_weight_progress`
-- [ ] `get_strength_progress`
-- [ ] `get_cardio_progress`
-- [ ] `get_volume_progress`
-- [ ] `get_steps_progress`
+- [x] `log_weight` `update_weight_log` `delete_weight_log` `list_weight_logs`
+- [x] `log_steps` `update_step_log` `delete_step_log` `list_step_logs`
+- [x] `get_steps_for_date` `get_steps_history`
+- [x] `get_weight_progress`
+- [x] `get_strength_progress`
+- [x] `get_cardio_progress`
+- [x] `get_volume_progress`
+- [x] `get_steps_progress`
 
 ### F3.4 — Services e tools de Dashboard 🟡 ⏱️ 5h
 
 > Endpoints agregadores que reduzem ida-e-volta. Importantes pro Claude responder "como tô hoje" em uma única chamada.
 
-- [ ] `DashboardService.today(userId)` — combina nutrition + workout + weight + **steps** + streak (incluindo streak de passos)
-- [ ] `DashboardService.week(userId)` — agregado semanal incluindo cardio total e passos da semana
-- [ ] Endpoint REST `GET /dashboard/today` `GET /dashboard/week`
-- [ ] Tool MCP `get_today_summary` (com bloco `steps`)
-- [ ] Tool MCP `get_week_summary` (com blocos `cardio` e `steps`)
+- [x] `DashboardService.today(userId)` — combina nutrition + workout + weight + **steps** + streak (incluindo streak de passos)
+- [x] `DashboardService.week(userId)` — agregado semanal incluindo cardio total e passos da semana
+- [x] Endpoint REST `GET /dashboard/today` `GET /dashboard/week`
+- [x] Tool MCP `get_today_summary` (com bloco `steps`)
+- [x] Tool MCP `get_week_summary` (com blocos `cardio` e `steps`)
 
 ### F3.5 — PWA Progresso 🟡 ⏱️ 12h
 
-- [ ] Página `/progress` com tabs **Peso | Força | Cardio | Passos**
-- [ ] Filtros 14/30/90/180 dias
-- [ ] `<WeightChart />` com Recharts (área + linha)
-- [ ] `<StrengthChart />` com seletor de exercício e métrica
-- [ ] `<CardioChart />` com seletor de exercício de cardio e métrica (duração/distância/pace/kcal)
-- [ ] `<StepsChart />` gráfico de barras com linha de meta
-- [ ] Modal "Logar peso" (chama `log_weight`)
-- [ ] Modal "Logar passos" (chama `log_steps`)
+- [x] Página `/progress` com tabs **Peso | Força | Cardio | Passos**
+- [x] Filtros 14/30/90/180 dias
+- [x] `<WeightChart />` com Recharts (área + linha)
+- [x] `<StrengthChart />` com seletor de exercício e métrica
+- [x] `<CardioChart />` com seletor de exercício de cardio e métrica (duração/distância/pace/kcal)
+- [x] `<StepsChart />` gráfico de barras com linha de meta
+- [x] Modal "Logar peso" (chama `log_weight`)
+- [x] Modal "Logar passos" (chama `log_steps`)
 - [ ] Tabela de médias semanais
 - [ ] Lista editável de pesos logados (correção)
 - [ ] Lista editável de logs de passos (correção)
 
 ### F3.6 — Card de passos no Dashboard 🟡 ⏱️ 3h
 
-- [ ] `<StepsCard />` — passos atuais + meta + barra
-- [ ] Integração no dashboard chamando `get_today_summary`
-- [ ] Botão de log rápido inline
+- [x] `<StepsCard />` — passos atuais + meta + barra
+- [x] Integração no dashboard chamando `get_today_summary`
+- [x] Botão de log rápido inline
 
 ---
 
@@ -352,8 +352,8 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 
 ### F4.1 — PWA installable 🟡 ⏱️ 3h
 
-- [ ] Manifest completo com ícones
-- [ ] Service worker com cache de assets estáticos
+- [x] Manifest completo com ícones
+- [x] Service worker com cache de assets estáticos
 - [ ] Ícones 192/512/maskable
 - [ ] Testar instalação no iOS e Android
 
@@ -361,24 +361,24 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 
 > Crítico para onboarding de usuário no Claude. Sem isso, ninguém consegue usar o MCP.
 
-- [ ] Página `/profile`
-- [ ] Listar tokens com label, criado em, último uso
-- [ ] Modal "Criar token" → input de label → POST → mostra UMA VEZ com copy
-- [ ] Aviso "salve agora, não mostraremos de novo"
-- [ ] Botão revogar com confirmação
-- [ ] Instruções de como configurar no Claude (texto + screenshot)
+- [x] Página `/profile`
+- [x] Listar tokens com label, criado em, último uso
+- [x] Modal "Criar token" → input de label → POST → mostra UMA VEZ com copy
+- [x] Aviso "salve agora, não mostraremos de novo"
+- [x] Botão revogar com confirmação
+- [x] Instruções de como configurar no Claude (texto + screenshot)
 
 ### F4.3 — Dashboard 🟢 ⏱️ 4h
 
-- [ ] Página `/dashboard` com saudação por horário
-- [ ] Checklist do dia (peso, refeições, treino) — via `get_today_summary`
-- [ ] Atalhos para ações rápidas
+- [x] Página `/dashboard` com saudação por horário
+- [x] Checklist do dia (peso, refeições, treino) — via `get_today_summary`
+- [x] Atalhos para ações rápidas
 
 ### F4.4 — Logout e segurança 🟡 ⏱️ 2h
 
-- [ ] Logout funcional com limpeza de cookie
-- [ ] Re-login automático ao expirar JWT
-- [ ] Mensagens de erro de auth claras
+- [x] Logout funcional com limpeza de cookie
+- [x] Re-login automático ao expirar JWT
+- [x] Mensagens de erro de auth claras
 
 ### F4.5 — Backup automático 🟡 ⏱️ 2h
 
@@ -399,10 +399,10 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 
 ### T.2 — Testes mínimos 🟡
 
-- [ ] Tests unitários: cálculo de totais nutricionais
-- [ ] Tests unitários: `getLastWeight`
-- [ ] Tests integration: guards de auth
-- [ ] Tests integration: isolamento user A não vê dados de user B
+- [x] Tests unitários: cálculo de totais nutricionais
+- [x] Tests unitários: `getLastWeight`
+- [x] Tests integration: guards de auth
+- [x] Tests integration: isolamento user A não vê dados de user B
 
 ### T.3 — Setup do servidor de produção 🟡 (~Fase 4)
 
