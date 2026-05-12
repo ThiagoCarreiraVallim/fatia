@@ -1,5 +1,7 @@
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { Reflector } from '@nestjs/core';
+import type { JwtValidationService } from './jwt-validation.service';
+import type { UserProvisioningService } from './user-provisioning.service';
 
 describe('JwtAuthGuard', () => {
   let guard: JwtAuthGuard;
@@ -7,7 +9,9 @@ describe('JwtAuthGuard', () => {
 
   beforeEach(() => {
     reflector = { getAllAndOverride: jest.fn() } as unknown as jest.Mocked<Reflector>;
-    guard = new JwtAuthGuard(reflector);
+    const validation = {} as unknown as JwtValidationService;
+    const provisioning = {} as unknown as UserProvisioningService;
+    guard = new JwtAuthGuard(reflector, validation, provisioning);
   });
 
   it('should be defined', () => {

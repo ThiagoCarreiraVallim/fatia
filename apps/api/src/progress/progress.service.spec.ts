@@ -1,6 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ProgressService } from './progress.service';
 import type { PrismaService } from '../common/prisma.service';
+import type { StepLogService } from './step-log.service';
 
 type MockPrisma = {
   weightLog: { findMany: jest.Mock };
@@ -9,6 +10,10 @@ type MockPrisma = {
   stepLog: { groupBy: jest.Mock };
   userGoals: { findUnique: jest.Mock };
   exercise: { findFirst: jest.Mock };
+};
+
+type MockStepLogs = {
+  getHistory: jest.Mock;
 };
 
 const makePrisma = (): MockPrisma => ({
@@ -20,58 +25,68 @@ const makePrisma = (): MockPrisma => ({
   exercise: { findFirst: jest.fn() },
 });
 
+const makeStepLogs = (): MockStepLogs => ({
+  getHistory: jest.fn(),
+});
+
 const TZ = 'UTC';
 
 describe('ProgressService', () => {
   let prisma: MockPrisma;
+  let stepLogs: MockStepLogs;
   let service: ProgressService;
   const userId = 'user-1';
+  const ctx = { userId, timezone: TZ };
 
   beforeEach(() => {
     prisma = makePrisma();
-    service = new ProgressService(prisma as unknown as PrismaService);
+    stepLogs = makeStepLogs();
+    service = new ProgressService(
+      prisma as unknown as PrismaService,
+      stepLogs as unknown as StepLogService,
+    );
   });
 
   // ── weightProgress ───────────────────────────────────────────────────────
 
   describe('weightProgress', () => {
-    it('retorna delta entre primeiro e último ponto', async () => {
+    it('retorna totalDeltaKg entre primeiro e último ponto', async () => {
       prisma.weightLog.findMany.mockResolvedValue([
         { id: 'a', loggedAt: new Date('2026-01-01T10:00:00Z'), weightKg: 80 },
         { id: 'b', loggedAt: new Date('2026-01-05T10:00:00Z'), weightKg: 78.5 },
       ]);
-      const result = await service.weightProgress(userId, 30, TZ);
-      expect(result.delta).toBe(-1.5);
+      const result = await service.weightProgress(30, ctx);
+      expect(result.totalDeltaKg).toBeCloseTo(-1.5);
     });
 
-    it('retorna delta null com menos de 2 pontos', async () => {
+    it('retorna totalDeltaKg 0 com menos de 2 pontos', async () => {
       prisma.weightLog.findMany.mockResolvedValue([
         { id: 'a', loggedAt: new Date('2026-01-01T10:00:00Z'), weightKg: 80 },
       ]);
-      const result = await service.weightProgress(userId, 30, TZ);
-      expect(result.delta).toBeNull();
+      const result = await service.weightProgress(30, ctx);
+      expect(result.totalDeltaKg).toBe(0);
     });
 
-    it('retorna pontos com campo date e weeklyAvg', async () => {
+    it('retorna pontos com campo date e weeklyAverages', async () => {
       prisma.weightLog.findMany.mockResolvedValue([
         { id: 'a', loggedAt: new Date('2026-01-05T10:00:00Z'), weightKg: 80 },
         { id: 'b', loggedAt: new Date('2026-01-06T10:00:00Z'), weightKg: 79 },
       ]);
-      const result = await service.weightProgress(userId, 7, TZ);
+      const result = await service.weightProgress(7, ctx);
       expect(result.points).toHaveLength(2);
       expect(result.points[0].date).toBe('2026-01-05');
-      expect(result.weeklyAvg).toHaveLength(1);
-      expect(result.weeklyAvg[0].avg).toBe(79.5);
+      expect(result.weeklyAverages).toHaveLength(1);
+      expect(result.weeklyAverages[0].avgKg).toBeCloseTo(79.5);
     });
 
-    it('weekly avg arredonda corretamente', async () => {
+    it('weekly avgKg arredonda corretamente', async () => {
       prisma.weightLog.findMany.mockResolvedValue([
         { id: 'a', loggedAt: new Date('2026-01-05T10:00:00Z'), weightKg: 80.1 },
         { id: 'b', loggedAt: new Date('2026-01-06T10:00:00Z'), weightKg: 80.2 },
         { id: 'c', loggedAt: new Date('2026-01-07T10:00:00Z'), weightKg: 80.3 },
       ]);
-      const result = await service.weightProgress(userId, 7, TZ);
-      expect(result.weeklyAvg[0].avg).toBe(80.2); // (80.1+80.2+80.3)/3 = 80.2
+      const result = await service.weightProgress(7, ctx);
+      expect(result.weeklyAverages[0].avgKg).toBeCloseTo(80.2);
     });
   });
 
@@ -84,14 +99,14 @@ describe('ProgressService', () => {
         muscleGroup: 'cardio',
         createdByUserId: null,
       });
-      await expect(service.strengthProgress(userId, 1, 30, '1rm', TZ)).rejects.toBeInstanceOf(
+      await expect(service.strengthProgress(1, 30, 'estimated_1rm', ctx)).rejects.toBeInstanceOf(
         BadRequestException,
       );
     });
 
     it('lança NotFoundException para exercício inexistente', async () => {
       prisma.exercise.findFirst.mockResolvedValue(null);
-      await expect(service.strengthProgress(userId, 99, 30, '1rm', TZ)).rejects.toBeInstanceOf(
+      await expect(service.strengthProgress(99, 30, 'estimated_1rm', ctx)).rejects.toBeInstanceOf(
         NotFoundException,
       );
     });
@@ -107,7 +122,7 @@ describe('ProgressService', () => {
         { session, exerciseId: 1, setNumber: 1, weightKg: 100, reps: 5 },
         { session, exerciseId: 1, setNumber: 2, weightKg: 90, reps: 10 },
       ]);
-      const result = await service.strengthProgress(userId, 1, 30, '1rm', TZ);
+      const result = await service.strengthProgress(1, 30, 'estimated_1rm', ctx);
       // 100*(1+5/30)=116.67 vs 90*(1+10/30)=120 → max must be 120
       expect(result.points[0].value).toBe(120);
     });
@@ -123,7 +138,7 @@ describe('ProgressService', () => {
         { session, exerciseId: 1, setNumber: 1, weightKg: 100, reps: 5 },
         { session, exerciseId: 1, setNumber: 2, weightKg: 80, reps: 8 },
       ]);
-      const result = await service.strengthProgress(userId, 1, 30, 'volume', TZ);
+      const result = await service.strengthProgress(1, 30, 'total_volume', ctx);
       expect(result.points[0].value).toBe(1140); // 100*5 + 80*8 = 500+640
     });
 
@@ -138,7 +153,7 @@ describe('ProgressService', () => {
         { session, exerciseId: 1, setNumber: 1, weightKg: 100, reps: 5 },
         { session, exerciseId: 1, setNumber: 2, weightKg: 120, reps: 3 },
       ]);
-      const result = await service.strengthProgress(userId, 1, 30, 'weight', TZ);
+      const result = await service.strengthProgress(1, 30, 'max_weight', ctx);
       expect(result.points[0].value).toBe(120);
     });
   });
@@ -152,7 +167,7 @@ describe('ProgressService', () => {
         muscleGroup: 'chest',
         createdByUserId: null,
       });
-      await expect(service.cardioProgress(userId, 2, 30, 'distance', TZ)).rejects.toBeInstanceOf(
+      await expect(service.cardioProgress(2, 30, 'distance', ctx)).rejects.toBeInstanceOf(
         BadRequestException,
       );
     });
@@ -174,7 +189,7 @@ describe('ProgressService', () => {
           kcalBurned: 300,
         },
       ]);
-      const result = await service.cardioProgress(userId, 2, 30, 'pace', TZ);
+      const result = await service.cardioProgress(2, 30, 'pace', ctx);
       // pace = (1800/5000)*1000 = 360 s/km
       expect(result.points[0].value).toBe(360);
     });
@@ -196,7 +211,7 @@ describe('ProgressService', () => {
           kcalBurned: 100,
         },
       ]);
-      const result = await service.cardioProgress(userId, 2, 30, 'pace', TZ);
+      const result = await service.cardioProgress(2, 30, 'pace', ctx);
       expect(result.points[0].value).toBe(0);
     });
   });
@@ -205,39 +220,39 @@ describe('ProgressService', () => {
 
   describe('stepsProgress', () => {
     it('usa política de max por dia (ADR 007)', async () => {
-      // stepLog.groupBy already returns max per date at DB level
-      prisma.stepLog.groupBy.mockResolvedValue([{ date: '2026-01-05', _max: { steps: 9000 } }]);
+      stepLogs.getHistory.mockResolvedValue([{ date: '2026-01-05', steps: 9000 }]);
       prisma.userGoals.findUnique.mockResolvedValue({ dailyStepsTarget: 8000 });
-      const result = await service.stepsProgress(userId, 1, TZ);
-      // The only day in range should have steps=9000 (from groupBy already returning max)
-      // If the date generated matches, check steps; otherwise just verify shape
+      const result = await service.stepsProgress(1, ctx);
       expect(result.points.length).toBeGreaterThanOrEqual(1);
       expect(result.points.every((p) => typeof p.steps === 'number')).toBe(true);
     });
 
     it('dias sem log retornam 0 steps', async () => {
-      prisma.stepLog.groupBy.mockResolvedValue([]); // no logs
+      stepLogs.getHistory.mockResolvedValue([
+        { date: '2026-01-05', steps: 0 },
+        { date: '2026-01-06', steps: 0 },
+        { date: '2026-01-07', steps: 0 },
+      ]);
       prisma.userGoals.findUnique.mockResolvedValue(null);
-      const result = await service.stepsProgress(userId, 3, TZ);
+      const result = await service.stepsProgress(3, ctx);
       expect(result.points.every((p) => p.steps === 0)).toBe(true);
       expect(result.points).toHaveLength(3);
     });
 
-    it('daysHitGoal conta corretamente', async () => {
-      // days=1, today only
+    it('daysWithGoalReached conta corretamente', async () => {
       const today = new Date().toISOString().slice(0, 10);
-      prisma.stepLog.groupBy.mockResolvedValue([{ date: today, _max: { steps: 10000 } }]);
+      stepLogs.getHistory.mockResolvedValue([{ date: today, steps: 10000 }]);
       prisma.userGoals.findUnique.mockResolvedValue({ dailyStepsTarget: 8000 });
-      const result = await service.stepsProgress(userId, 1, TZ);
-      expect(result.daysHitGoal).toBe(1);
-      expect(result.dailyTarget).toBe(8000);
+      const result = await service.stepsProgress(1, ctx);
+      expect(result.daysWithGoalReached).toBe(1);
+      expect(result.goalTarget).toBe(8000);
     });
 
-    it('usa default dailyTarget=8000 quando userGoals é null', async () => {
-      prisma.stepLog.groupBy.mockResolvedValue([]);
+    it('usa goalTarget null quando userGoals é null', async () => {
+      stepLogs.getHistory.mockResolvedValue([]);
       prisma.userGoals.findUnique.mockResolvedValue(null);
-      const result = await service.stepsProgress(userId, 1, TZ);
-      expect(result.dailyTarget).toBe(8000);
+      const result = await service.stepsProgress(1, ctx);
+      expect(result.goalTarget).toBeNull();
     });
   });
 });
