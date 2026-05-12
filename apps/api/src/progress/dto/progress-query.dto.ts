@@ -21,8 +21,8 @@ export class StrengthProgressQueryDto extends ProgressQueryDto {
   exerciseId!: number;
 
   @IsOptional()
-  @IsEnum(['1rm', 'volume', 'weight'])
-  metric?: StrengthMetric = '1rm';
+  @IsEnum(['estimated_1rm', 'total_volume', 'max_weight'])
+  metric?: StrengthMetric = 'estimated_1rm';
 }
 
 export class CardioProgressQueryDto extends ProgressQueryDto {

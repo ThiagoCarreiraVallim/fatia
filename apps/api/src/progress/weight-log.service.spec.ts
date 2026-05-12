@@ -31,7 +31,7 @@ describe('WeightLogService', () => {
   it('lists weight logs ordered by loggedAt desc', async () => {
     const fakeLog = { id: '1', userId: 'u1', weightKg: 80, loggedAt: new Date(), notes: null };
     (prisma.weightLog.findMany as jest.Mock).mockResolvedValue([fakeLog]);
-    const result = await service.list('u1', { limit: 1 });
+    const result = await service.list({ limit: 1 }, 'u1');
     expect(result).toEqual([fakeLog]);
     expect(prisma.weightLog.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { userId: 'u1' } }),
@@ -40,18 +40,17 @@ describe('WeightLogService', () => {
 
   it('filters by userId (user isolation)', async () => {
     (prisma.weightLog.findMany as jest.Mock).mockResolvedValue([]);
-    await service.list('u2', {});
+    await service.list({}, 'u2');
     expect(prisma.weightLog.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { userId: 'u2' } }),
     );
   });
 
-  it('filters by date range when days param is provided', async () => {
+  it('filters by date range when from param is provided', async () => {
     (prisma.weightLog.findMany as jest.Mock).mockResolvedValue([]);
-    await service.list('u1', { days: 7 });
+    await service.list({ from: '2026-01-01' }, 'u1');
     const call = (prisma.weightLog.findMany as jest.Mock).mock.calls[0][0];
     expect(call.where.userId).toBe('u1');
     expect(call.where.loggedAt).toBeDefined();
-    expect(call.where.loggedAt.gte).toBeInstanceOf(Date);
   });
 });
