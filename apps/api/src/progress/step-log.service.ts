@@ -1,102 +1,109 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import type { StepLog } from '@prisma/client';
+import { Prisma, StepSource } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
-import { addDaysToDateStr, lastNDates } from './helpers/date-utils';
 import type { CreateStepLogDto, ListStepLogsDto, UpdateStepLogDto } from './dto/step-log.dto';
+import { addDaysIso, todayInTz } from './helpers/date-tz';
+
+const DEFAULT_LIMIT = 50;
+const MAX_LIMIT = 100;
 
 @Injectable()
 export class StepLogService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(userId: string, dto: CreateStepLogDto): Promise<StepLog> {
+  async create(dto: CreateStepLogDto, userId: string, timezone: string) {
+    const date = dto.date ?? todayInTz(timezone);
     return this.prisma.stepLog.create({
       data: {
         userId,
-        date: dto.date,
+        date,
         steps: dto.steps,
-        source: dto.source,
-        notes: dto.notes,
-        loggedAt: new Date(),
+        source: dto.source ?? StepSource.MANUAL,
+        notes: dto.notes ?? null,
       },
     });
   }
 
-  async update(userId: string, id: string, dto: UpdateStepLogDto): Promise<StepLog> {
-    await this.assertOwner(userId, id);
+  async findById(id: string, userId: string) {
+    const log = await this.prisma.stepLog.findUnique({ where: { id } });
+    if (!log || log.userId !== userId) throw new NotFoundException('Step log not found');
+    return log;
+  }
+
+  async update(id: string, dto: UpdateStepLogDto, userId: string) {
+    await this.findById(id, userId);
     return this.prisma.stepLog.update({
       where: { id },
       data: {
-        steps: dto.steps,
-        notes: dto.notes,
+        ...(dto.steps !== undefined && { steps: dto.steps }),
+        ...(dto.date && { date: dto.date }),
+        ...(dto.notes !== undefined && { notes: dto.notes }),
       },
     });
   }
 
-  async delete(userId: string, id: string): Promise<void> {
-    await this.assertOwner(userId, id);
-    await this.prisma.stepLog.delete({ where: { id } });
-  }
-
-  async list(userId: string, params: ListStepLogsDto): Promise<StepLog[]> {
-    const limit = Math.min(params.limit ?? 20, 100);
-    const where = params.days
-      ? {
-          userId,
-          date: { gte: addDaysToDateStr(todayUTC(), -(params.days - 1)) },
-        }
-      : { userId };
-
-    return this.prisma.stepLog.findMany({
-      where,
-      orderBy: [{ date: 'desc' }, { loggedAt: 'desc' }, { id: 'desc' }],
-      take: limit,
-      ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
-    });
-  }
-
-  /**
-   * Retorna o maior valor de steps entre todos os logs do dia (ADR 007).
-   * Retorna 0 se não houver logs.
-   */
-  async getStepsForDate(userId: string, date: string): Promise<number> {
-    const agg = await this.prisma.stepLog.aggregate({
-      where: { userId, date },
-      _max: { steps: true },
-    });
-    return agg._max.steps ?? 0;
-  }
-
-  /**
-   * Retorna histórico diário de passos dos últimos `days` dias no fuso do usuário.
-   * Usa política de maior valor (ADR 007). Preenche 0 para dias sem log.
-   */
-  async getHistory(
-    userId: string,
-    days: number,
-    timezone: string,
-  ): Promise<{ date: string; steps: number }[]> {
-    const dates = lastNDates(days, timezone);
-    const startDate = dates[0];
-    const endDate = dates[dates.length - 1];
-
-    const logs = await this.prisma.stepLog.groupBy({
-      by: ['date'],
-      where: { userId, date: { gte: startDate, lte: endDate } },
-      _max: { steps: true },
-    });
-
-    const byDate = new Map<string, number>(logs.map((r) => [r.date, r._max.steps ?? 0]));
-
-    return dates.map((d) => ({ date: d, steps: byDate.get(d) ?? 0 }));
-  }
-
-  private async assertOwner(userId: string, id: string): Promise<void> {
-    const log = await this.prisma.stepLog.findUnique({ where: { id }, select: { userId: true } });
-    if (!log) throw new NotFoundException('StepLog not found');
+  async delete(id: string, userId: string) {
+    const log = await this.prisma.stepLog.findUnique({ where: { id } });
+    if (!log) throw new NotFoundException('Step log not found');
     if (log.userId !== userId) throw new ForbiddenException();
+    await this.prisma.stepLog.delete({ where: { id } });
+    return { deleted: true as const };
   }
-}
 
-function todayUTC(): string {
-  return new Date().toISOString().slice(0, 10);
+  async list(filter: ListStepLogsDto, userId: string) {
+    const limit = Math.min(filter.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
+    const where: Prisma.StepLogWhereInput = { userId };
+    if (filter.from || filter.to) {
+      where.date = {};
+      if (filter.from) where.date.gte = filter.from;
+      if (filter.to) where.date.lte = filter.to;
+    }
+    const items = await this.prisma.stepLog.findMany({
+      where,
+      orderBy: [{ date: 'desc' }, { loggedAt: 'desc' }],
+      take: limit + 1,
+      ...(filter.cursor && { cursor: { id: filter.cursor }, skip: 1 }),
+    });
+    const nextCursor = items.length > limit ? items[limit - 1].id : undefined;
+    return { logs: items.slice(0, limit), nextCursor };
+  }
+
+  /**
+   * Política ADR 007: maior valor entre os logs do dia.
+   */
+  async getStepsForDate(date: string, userId: string) {
+    const logs = await this.prisma.stepLog.findMany({
+      where: { userId, date },
+      orderBy: { loggedAt: 'desc' },
+    });
+    if (logs.length === 0) {
+      return { date, steps: 0, logCount: 0, sources: [] as StepSource[] };
+    }
+    const max = logs.reduce((acc, l) => (l.steps > acc ? l.steps : acc), 0);
+    const sources = Array.from(new Set(logs.map((l) => l.source)));
+    return { date, steps: max, logCount: logs.length, sources };
+  }
+
+  /**
+   * Histórico preenchendo dias sem log com 0.
+   */
+  async getHistory(days: number, userId: string, timezone: string) {
+    const today = todayInTz(timezone);
+    const from = addDaysIso(today, -(days - 1));
+    const logs = await this.prisma.stepLog.findMany({
+      where: { userId, date: { gte: from, lte: today } },
+      orderBy: [{ date: 'asc' }, { loggedAt: 'asc' }],
+    });
+    const byDate = new Map<string, number>();
+    for (const l of logs) {
+      const cur = byDate.get(l.date) ?? 0;
+      if (l.steps > cur) byDate.set(l.date, l.steps);
+    }
+    const series: Array<{ date: string; steps: number }> = [];
+    for (let i = 0; i < days; i++) {
+      const d = addDaysIso(from, i);
+      series.push({ date: d, steps: byDate.get(d) ?? 0 });
+    }
+    return series;
+  }
 }

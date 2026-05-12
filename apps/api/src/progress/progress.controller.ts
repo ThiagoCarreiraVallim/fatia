@@ -1,126 +1,152 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { CurrentUser, type CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { WeightLogService } from './weight-log.service';
 import { StepLogService } from './step-log.service';
 import { ProgressService } from './progress.service';
+import { DashboardService } from './dashboard.service';
 import { CreateWeightLogDto, ListWeightLogsDto, UpdateWeightLogDto } from './dto/weight-log.dto';
 import { CreateStepLogDto, ListStepLogsDto, UpdateStepLogDto } from './dto/step-log.dto';
-import {
-  CardioProgressQueryDto,
-  ProgressQueryDto,
-  StrengthProgressQueryDto,
-  VolumeProgressQueryDto,
-} from './dto/progress-query.dto';
 
-@Controller('weight-logs')
-export class WeightLogsController {
-  constructor(private readonly weightLogs: WeightLogService) {}
+@Controller()
+export class ProgressController {
+  constructor(
+    private readonly weights: WeightLogService,
+    private readonly steps: StepLogService,
+    private readonly progress: ProgressService,
+    private readonly dashboard: DashboardService,
+  ) {}
 
-  @Post()
-  create(@CurrentUser() user: CurrentUserPayload, @Body() dto: CreateWeightLogDto) {
-    return this.weightLogs.create(user.id, dto);
+  // -------- Weight logs --------
+  @Post('weight-logs')
+  createWeight(@CurrentUser() user: CurrentUserPayload, @Body() dto: CreateWeightLogDto) {
+    return this.weights.create(dto, user.id);
   }
 
-  @Get()
-  list(@CurrentUser() user: CurrentUserPayload, @Query() query: ListWeightLogsDto) {
-    return this.weightLogs.list(user.id, query);
+  @Get('weight-logs')
+  listWeights(@CurrentUser() user: CurrentUserPayload, @Query() q: ListWeightLogsDto) {
+    return this.weights.list(q, user.id);
   }
 
-  @Patch(':id')
-  update(
+  @Patch('weight-logs/:id')
+  updateWeight(
     @CurrentUser() user: CurrentUserPayload,
     @Param('id') id: string,
     @Body() dto: UpdateWeightLogDto,
   ) {
-    return this.weightLogs.update(user.id, id, dto);
+    return this.weights.update(id, dto, user.id);
   }
 
-  @Delete(':id')
-  @HttpCode(204)
-  delete(@CurrentUser() user: CurrentUserPayload, @Param('id') id: string) {
-    return this.weightLogs.delete(user.id, id);
-  }
-}
-
-@Controller('step-logs')
-export class StepLogsController {
-  constructor(private readonly stepLogs: StepLogService) {}
-
-  @Post()
-  create(@CurrentUser() user: CurrentUserPayload, @Body() dto: CreateStepLogDto) {
-    return this.stepLogs.create(user.id, dto);
+  @Delete('weight-logs/:id')
+  deleteWeight(@CurrentUser() user: CurrentUserPayload, @Param('id') id: string) {
+    return this.weights.delete(id, user.id);
   }
 
-  @Get()
-  list(@CurrentUser() user: CurrentUserPayload, @Query() query: ListStepLogsDto) {
-    return this.stepLogs.list(user.id, query);
+  // -------- Step logs --------
+  @Post('step-logs')
+  createStep(@CurrentUser() user: CurrentUserPayload, @Body() dto: CreateStepLogDto) {
+    return this.steps.create(dto, user.id, user.timezone);
   }
 
-  @Patch(':id')
-  update(
+  @Get('step-logs')
+  listSteps(@CurrentUser() user: CurrentUserPayload, @Query() q: ListStepLogsDto) {
+    return this.steps.list(q, user.id);
+  }
+
+  @Get('step-logs/by-date/:date')
+  stepsForDate(@CurrentUser() user: CurrentUserPayload, @Param('date') date: string) {
+    return this.steps.getStepsForDate(date, user.id);
+  }
+
+  @Patch('step-logs/:id')
+  updateStep(
     @CurrentUser() user: CurrentUserPayload,
     @Param('id') id: string,
     @Body() dto: UpdateStepLogDto,
   ) {
-    return this.stepLogs.update(user.id, id, dto);
+    return this.steps.update(id, dto, user.id);
   }
 
-  @Delete(':id')
-  @HttpCode(204)
-  delete(@CurrentUser() user: CurrentUserPayload, @Param('id') id: string) {
-    return this.stepLogs.delete(user.id, id);
+  @Delete('step-logs/:id')
+  deleteStep(@CurrentUser() user: CurrentUserPayload, @Param('id') id: string) {
+    return this.steps.delete(id, user.id);
   }
 
-  @Get('by-date/:date')
-  async getByDate(@CurrentUser() user: CurrentUserPayload, @Param('date') date: string) {
-    const steps = await this.stepLogs.getStepsForDate(user.id, date);
-    return { date, steps };
-  }
-}
-
-@Controller('progress')
-export class ProgressAnalyticsController {
-  constructor(private readonly progress: ProgressService) {}
-
-  @Get('weight')
-  weight(@CurrentUser() user: CurrentUserPayload, @Query() query: ProgressQueryDto) {
-    return this.progress.weightProgress(user.id, query.days ?? 30, query.timezone ?? 'UTC');
+  // -------- Progress queries --------
+  @Get('progress/weight')
+  weightProgress(
+    @CurrentUser() user: CurrentUserPayload,
+    @Query('days', new ParseIntPipe({ optional: true })) days?: number,
+  ) {
+    return this.progress.weightProgress(days ?? 30, { userId: user.id, timezone: user.timezone });
   }
 
-  @Get('strength')
-  strength(@CurrentUser() user: CurrentUserPayload, @Query() query: StrengthProgressQueryDto) {
-    return this.progress.strengthProgress(
-      user.id,
-      query.exerciseId,
-      query.days ?? 30,
-      query.metric ?? '1rm',
-      query.timezone ?? 'UTC',
-    );
+  @Get('progress/strength')
+  strengthProgress(
+    @CurrentUser() user: CurrentUserPayload,
+    @Query('exerciseId', ParseIntPipe) exerciseId: number,
+    @Query('days', new ParseIntPipe({ optional: true })) days?: number,
+    @Query('metric') metric?: 'max_weight' | 'estimated_1rm' | 'total_volume',
+  ) {
+    return this.progress.strengthProgress(exerciseId, days ?? 90, metric ?? 'max_weight', {
+      userId: user.id,
+      timezone: user.timezone,
+    });
   }
 
-  @Get('cardio')
-  cardio(@CurrentUser() user: CurrentUserPayload, @Query() query: CardioProgressQueryDto) {
-    return this.progress.cardioProgress(
-      user.id,
-      query.exerciseId,
-      query.days ?? 30,
-      query.metric ?? 'duration',
-      query.timezone ?? 'UTC',
-    );
+  @Get('progress/cardio')
+  cardioProgress(
+    @CurrentUser() user: CurrentUserPayload,
+    @Query('exerciseId', ParseIntPipe) exerciseId: number,
+    @Query('days', new ParseIntPipe({ optional: true })) days?: number,
+    @Query('metric') metric?: 'duration' | 'distance' | 'pace' | 'kcal',
+  ) {
+    return this.progress.cardioProgress(exerciseId, days ?? 90, metric ?? 'duration', {
+      userId: user.id,
+      timezone: user.timezone,
+    });
   }
 
-  @Get('volume')
-  volume(@CurrentUser() user: CurrentUserPayload, @Query() query: VolumeProgressQueryDto) {
-    return this.progress.volumeProgress(
-      user.id,
-      query.days ?? 30,
-      query.timezone ?? 'UTC',
-      query.muscleGroup,
-    );
+  @Get('progress/volume')
+  volumeProgress(
+    @CurrentUser() user: CurrentUserPayload,
+    @Query('days', new ParseIntPipe({ optional: true })) days?: number,
+    @Query('muscleGroup') muscleGroup?: string,
+  ) {
+    return this.progress.volumeProgress(days ?? 90, muscleGroup, {
+      userId: user.id,
+      timezone: user.timezone,
+    });
   }
 
-  @Get('steps')
-  steps(@CurrentUser() user: CurrentUserPayload, @Query() query: ProgressQueryDto) {
-    return this.progress.stepsProgress(user.id, query.days ?? 30, query.timezone ?? 'UTC');
+  @Get('progress/steps')
+  stepsProgress(
+    @CurrentUser() user: CurrentUserPayload,
+    @Query('days', new ParseIntPipe({ optional: true })) days?: number,
+  ) {
+    return this.progress.stepsProgress(days ?? 30, {
+      userId: user.id,
+      timezone: user.timezone,
+    });
+  }
+
+  // -------- Dashboard --------
+  @Get('dashboard/today')
+  today(@CurrentUser() user: CurrentUserPayload) {
+    return this.dashboard.today({ userId: user.id, timezone: user.timezone });
+  }
+
+  @Get('dashboard/week')
+  week(@CurrentUser() user: CurrentUserPayload) {
+    return this.dashboard.week({ userId: user.id, timezone: user.timezone });
   }
 }

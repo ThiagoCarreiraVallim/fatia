@@ -9,11 +9,125 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - 🟢 Nice-to-have — pode esperar
 - ⏱️ Estimativa em horas (h)
 
+> **Status atual:** Fases 0, 1 e 2 foram implementadas com auth manual (JWT + bearer MCP). Após descobrir que conectores remotos no Claude exigem OAuth 2.1, decidimos migrar pra Logto (ver ADR 008). A **Fase FX** abaixo lista o que precisa ser descartado/adaptado do que já foi feito.
+
+---
+
+## Fase FX — Migração para Logto (ADR 008)
+
+> Executar **antes** de prosseguir com Fase 3. Drop-and-recreate é OK porque só há dados de teste do dev.
+
+### FX.1 — Backup do estado atual 🟡 ⏱️ 30min
+
+- [ ] `git commit` do estado atual (mesmo que já esteja sujo) com tag `pre-logto`
+- [ ] Documentar no commit message qual versão da auth manual estava implementada (referência pra arqueologia futura)
+
+### FX.2 — Descartar implementação atual de auth 🔴 ⏱️ 2h
+
+- [ ] Remover módulo `AuthModule` antigo da API (signup, login, JWT signing, argon2)
+- [ ] Remover endpoints `/auth/login`, `/auth/signup`, `/auth/logout`
+- [ ] Remover `JwtAuthGuard` antigo (vai ser reescrito)
+- [ ] Remover `McpAuthGuard` (substituído por novo guard que valida JWT do Logto)
+- [ ] Remover endpoints `/mcp-tokens` (CRUD de tokens MCP)
+- [ ] Remover do PWA: form de login, página de signup (se tiver), página de gerenciamento de tokens MCP
+- [ ] Remover deps não usadas: `@nestjs/jwt`, `@nestjs/passport`, `passport`, `passport-jwt`, `argon2`
+- [ ] **Não** removeu o `JwtAuthGuard` enquanto não tem o novo — comentar usos temporariamente
+
+### FX.3 — Schema migration 🔴 ⏱️ 1h
+
+- [ ] `User.passwordHash` removido do schema (já feito no schema de referência)
+- [ ] Model `McpToken` removido (já feito)
+- [ ] `User.logtoSub` adicionado (já feito)
+- [ ] Drop database e recreate: `pnpm db:push --force-reset` (OK em dev)
+- [ ] OU: criar migration explícita `prisma migrate dev --name logto-migration`
+- [ ] Rodar `pnpm db:seed` — admin não é mais criado, apenas exercícios e TACO
+
+### FX.4 — Subir Logto 🔴 ⏱️ 3h
+
+- [ ] Conferir `infra/docker-compose.yml` com serviço `logto` e `postgres-init/`
+- [ ] Conferir `.env.example` com variáveis de Logto
+- [ ] Configurar Dokploy: subdomínio `auth.fatia.dominio` apontando pra porta 3002 do container Logto
+- [ ] Subir: `docker compose up -d postgres logto`
+- [ ] Esperar primeira inicialização (~30s) — Logto roda migrations próprias na database `logto`
+- [ ] Acessar console em `auth.fatia.dominio/console` (porta 3003 em dev)
+- [ ] Criar conta de admin do **Logto** (diferente do admin do app — é quem administra o IDP)
+
+### FX.5 — Configurar tenant no Logto 🔴 ⏱️ 2h
+
+- [ ] No console do Logto:
+  - [ ] Criar **Application** "Fatia PWA" tipo `Traditional Web` (Next.js)
+    - Redirect URI: `https://app.fatia.dominio/api/logto/callback`
+    - Post-logout URI: `https://app.fatia.dominio/`
+    - Anotar `App ID` e `App Secret` → preencher `LOGTO_APP_ID` e `LOGTO_APP_SECRET`
+  - [ ] Criar **API Resource** "Fatia API"
+    - Identifier: `https://api.fatia.dominio` → preencher `LOGTO_AUDIENCE`
+    - Definir scopes básicos: `read`, `write` (começar simples)
+  - [ ] Habilitar **Dynamic Client Registration** nas configurações do tenant (necessário pra MCP)
+  - [ ] Criar **Roles** `user` (default) e `admin`
+  - [ ] Criar usuário de teste no console (você mesmo) com role `user` ou `admin`
+- [ ] Tema dark da tela de login (opcional na FX, pode adiar)
+
+### FX.6 — Reimplementar auth na API como resource server 🔴 ⏱️ 6h
+
+- [ ] `pnpm add jose` em `apps/api`
+- [ ] Remover deps antigas (ver FX.2)
+- [ ] Criar `AuthModule` novo com:
+  - [ ] `JwtValidationService` — valida JWT do Logto via JWKS (cache de chaves)
+  - [ ] `JwtAuthGuard` global — extrai bearer, valida, popula `req.user`
+  - [ ] `UserProvisioningService` — cria `User` local on-first-login a partir do `sub` + claims
+  - [ ] `@Public()` decorator pra rotas que não precisam auth (`/health`, `/.well-known/*`)
+  - [ ] `@CurrentUser()` decorator (mantém igual, mas agora retorna user provisioned)
+- [ ] Validações no JWT: assinatura, `iss`, `aud`, `exp`, `sub` presente
+- [ ] Mapeamento de role: claim `roles` do Logto → `User.role` local na primeira vez
+- [ ] Tests:
+  - [ ] JWT válido passa
+  - [ ] JWT expirado é rejeitado
+  - [ ] JWT com `aud` errado é rejeitado
+  - [ ] Provisioning lazy cria User na primeira request
+  - [ ] User existente é reusado nas próximas requests
+  - [ ] Usuário A não acessa dados do usuário B (continua valendo)
+
+### FX.7 — Endpoint discovery do MCP 🔴 ⏱️ 1h
+
+- [ ] `GET /.well-known/oauth-protected-resource` retornando metadata MCP-compliant apontando pro Logto
+- [ ] Marcar essa rota como `@Public()`
+- [ ] Testar com `curl` — payload deve seguir spec MCP
+
+### FX.8 — PWA com @logto/next 🔴 ⏱️ 4h
+
+- [ ] `pnpm add @logto/next` em `apps/web`
+- [ ] Configurar Logto provider no `app/layout.tsx` (server component)
+- [ ] Route handlers em `app/api/logto/[action]/route.ts` (callback, sign-in, sign-out)
+- [ ] Substituir tela `/login` por botão "Entrar com Logto"
+- [ ] Middleware do Next protegendo rotas `(app)/*`
+- [ ] Cookie de sessão httpOnly via SDK
+- [ ] Helper `getApiToken()` no server pra adicionar `Authorization: Bearer <jwt>` nas chamadas REST à API
+- [ ] Tela `/profile` reescrita: mostra dados do user, instruções pra Claude, link pro Logto, logout
+
+### FX.9 — Configurar Claude e validar fluxo end-to-end 🔴 ⏱️ 2h
+
+- [ ] No Claude (web), adicionar conector apontando pra `https://api.fatia.dominio/mcp`
+- [ ] Validar redirect pro Logto, login, retorno pro Claude
+- [ ] Testar tool simples (`get_me`) — deve retornar usuário correto
+- [ ] Repetir teste no Claude mobile
+- [ ] Documentar problemas encontrados e ajustes feitos
+
+### FX.10 — Limpeza final 🟡 ⏱️ 1h
+
+- [ ] Remover comentários temporários deixados durante migração
+- [ ] Remover código de auth manual que sobrou
+- [ ] Atualizar README local se houver instruções obsoletas
+- [ ] `git commit` final tagueado como `post-logto`
+
+**Tempo estimado total da Fase FX: ~22-25h** (3-4 dias focados)
+
 ---
 
 ## Fase 0 — Setup do projeto
 
-### F0.1 — Inicialização do monorepo 🔴 ⏱️ 2h
+> ✅ **Concluída.** Auth manual implementada (será substituída na Fase FX).
+
+### F0.1 — Inicialização do monorepo 🔴 ⏱️ 2h ✅
 
 - [x] `pnpm init` na raiz
 - [x] Configurar `pnpm-workspace.yaml` com `apps/*` e `packages/*`
@@ -27,7 +141,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 ### F0.2 — Docker Compose base 🔴 ⏱️ 1h
 
 - [x] `infra/docker-compose.yml` com Postgres 16
-- [x] Volume nomeado `fatia_pg_data`
+- [x] Volume nomeado `fittrack_pg_data`
 - [x] Healthcheck no Postgres
 - [x] `.env.example` na raiz com variáveis necessárias
 - [x] Comando documentado no README
@@ -47,7 +161,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 
 - [x] `nest new api` em `apps/`
 - [x] Configurar para usar pnpm workspace
-- [x] Adicionar `@fatia/db` como dep workspace
+- [x] Adicionar `@fittrack/db` como dep workspace
 - [x] `nestjs-pino` para logs
 - [x] Configurar `ConfigModule` com validação de env
 - [x] `helmet`, CORS configurado
@@ -58,34 +172,28 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 
 - [x] `npx create-next-app@latest web` em `apps/`
 - [x] App Router, TypeScript, Tailwind, src dir
+- [x] Adicionar shadcn/ui (`npx shadcn@latest init`)
 - [x] Setup tema dark only
-- [x] Configurar manifest PWA (manifest.json)
-- [x] Layout root com bottom nav (Nutrição, Treino, Progresso, Perfil)
+- [x] Configurar `next-pwa` (manifest + sw básico)
+- [x] Layout root com bottom nav placeholder
 - [x] Testar `pnpm --filter web dev` sobe na 3001
 
-### F0.6 — Auth básica 🔴 ⏱️ 6h
+### F0.6 — ~~Auth básica~~ ❌ DESCARTADA na Fase FX
 
-- [x] `AuthModule` no Nest
-- [x] `POST /auth/login` (email + senha → JWT)
-- [x] `POST /auth/signup` (apenas admin pode criar — endpoint protegido por role)
-- [x] `POST /auth/logout` (limpa cookie)
-- [x] `JwtAuthGuard` aplicado globalmente, com `@Public()` decorator para exceções
-- [x] `@CurrentUser()` decorator
-- [x] Hash de senha com argon2
-- [x] Tela `/login` no PWA conectada
-- [x] Cookie httpOnly, secure em prod
-- [x] Seed manual do primeiro admin via script (`pnpm db:seed:admin`)
+> Implementação original com JWT + argon2. Substituída por Logto (ADR 008). Ver Fase FX.6.
 
 ### F0.7 — Linting e formatação 🟡 ⏱️ 1h
 
 - [x] ESLint config compartilhada na raiz
 - [x] Prettier config
-- [x] `lint-staged` + `husky`
+- [x] `lint-staged` + `husky` (opcional, ⏱️ +30min)
 - [x] Scripts `lint`, `format`, `typecheck` rodando em todos os pacotes
 
 ---
 
 ## Fase 1 — Nutrição core
+
+> ✅ **Concluída.** A tool MCP infra (F1.4) usou `McpToken` que será removida na Fase FX. Tools de nutrição em si permanecem válidas — só o guard de auth muda.
 
 > **Princípio MCP-first (ver ADR 006):** MCP cobre CRUD completo. PWA cobre o essencial pra v1 (visualização do dia, edição básica). Operações faltantes no PWA podem ser feitas via Claude.
 
@@ -135,22 +243,20 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [x] `GET /user-goals` `PUT /user-goals`
 - [x] Todos com `JwtAuthGuard` + `@CurrentUser()`
 
-### F1.4 — MCP infraestrutura 🔴 ⏱️ 6h
+### F1.4 — MCP infraestrutura ⚠️ PARCIALMENTE DESCARTADA
+
+> Implementação original incluía CRUD de `McpToken` e `McpAuthGuard` próprio. Essas partes serão removidas na Fase FX. As tools em si (search_food, log_meal, etc) permanecem — só o guard de auth muda na Fase FX.6.
 
 - [x] `pnpm add @modelcontextprotocol/sdk` em `apps/api`
 - [x] `McpModule` com server HTTP (Streamable HTTP transport)
-- [x] `McpAuthGuard` valida bearer, popula `req.user`, atualiza `lastUsedAt`
-- [x] Hashing de tokens com argon2 + comparação constante
-- [x] Endpoint REST `POST /mcp-tokens` (autenticado via JWT) — gera + retorna ÚNICA vez
-- [x] Endpoint REST `GET /mcp-tokens` `DELETE /mcp-tokens/:id`
-- [x] Tool `list_my_tokens` (MCP) — só leitura, lista
-- [x] Tool `revoke_token` (MCP)
-- [x] Tool `get_me` `update_me` `update_timezone`
-- [x] Logging estruturado por tool (name, userId, duration, success)
-- [x] Rate limit por token (`@nestjs/throttler` customizado)
+- [x] ~~`McpAuthGuard` valida bearer~~ → será substituído na FX
+- [x] ~~Endpoints `/mcp-tokens`~~ → serão removidos na FX
+- [x] Tools de nutrição (search_food, log_meal, etc) — permanecem
+- [x] Logging estruturado por tool
+- [x] Rate limit por token — será adaptado pra rate limit por `sub` na FX
 - [x] Testar localmente com MCP Inspector
 
-### F1.5 — Tools MCP de nutrição 🔴 ⏱️ 8h
+### F1.5 — Tools MCP de nutrição 🔴 ⏱️ 8h ✅
 
 > Cada tool é um wrapper fino sobre o Service correspondente. Validação Zod no input.
 
@@ -171,19 +277,21 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [x] Página `/` (Hoje) — fetch summary do dia
 - [x] Componente `<DateNavigator />`
 - [x] Componente `<MacroBar />` com cores corretas (range)
-- [x] Componente `<MealList />` (substitui MealGroup; lista por tipo de refeição)
-- [x] `<MealList />` com botões de editar/remover por item (alternativa ao swipe-to-delete)
-- [x] `<FoodSearchDrawer />` para adicionar item (drawer shadcn/vaul + busca debounced)
-- [x] `<EditMealItemDrawer />` para editar gramas
+- [x] Componente `<MealGroup />` colapsável por tipo
+- [x] Componente `<MealItemRow />` com swipe-to-delete
+- [x] Modal `<FoodSearch />` para adicionar item (chama `search_food` + `add_meal_item`)
+- [x] Modal de edição de item
 - [x] Página `/nutrition/goals` com form de ranges (kcal, macros, treinos/sem, **passos/dia**)
-- [x] Loading states (skeleton) e empty states
-- [x] Testar em viewport mobile (manual)
+- [x] Loading states e empty states
+- [x] Testar em viewport mobile
 
 ---
 
 ## Fase 2 — Treino core
 
-### F2.1 — Seed de exercícios ✅ ⏱️ 2h
+> ✅ **Concluída.**
+
+### F2.1 — Seed de exercícios 🔴 ⏱️ 2h
 
 - [x] Lista (já presente no `seed-exercises.ts`) com ~60 exercícios incluindo cardio expandido
 - [x] Validar upsert idempotente após mudança de chave composta
@@ -254,7 +362,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [x] `get_last_set_for_exercise` `get_personal_record`
 - [x] Validação Zod robusta em todas
 
-### F2.5 — PWA Treino ✅ ⏱️ 16h
+### F2.5 — PWA Treino 🟡 ⏱️ 16h
 
 - [x] Página `/workout` — plano de hoje (ou seletor)
 - [x] **Componente `<ExerciseCard />` que decide entre força e cardio pelo `muscleGroup`**
@@ -273,7 +381,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 
 ## Fase 3 — Progresso e atividade
 
-### F3.1 — Services de progresso ✅ ⏱️ 8h
+### F3.1 — Services de progresso 🔴 ⏱️ 8h
 
 - [x] `WeightLogService.create(dto, userId)`
 - [x] `WeightLogService.update(id, dto, userId)`
@@ -292,7 +400,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [x] `ProgressService.stepsProgress(days, userId)` — pontos + médias semanais + dias batidos
 - [x] Helper de "início de semana" no fuso do user
 - [x] Helper "data no fuso do user" — recebe Date, retorna string YYYY-MM-DD
-- [x] Tests: cálculo de delta, médias semanais, política de "valor do dia" em passos, cálculo de streak
+- [x] Tests: helpers de fuso (date-tz.spec)
 
 ### F3.2 — Endpoints REST progresso 🟡 ⏱️ 3h
 
@@ -336,9 +444,9 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [x] `<StepsChart />` gráfico de barras com linha de meta
 - [x] Modal "Logar peso" (chama `log_weight`)
 - [x] Modal "Logar passos" (chama `log_steps`)
-- [ ] Tabela de médias semanais
-- [ ] Lista editável de pesos logados (correção)
-- [ ] Lista editável de logs de passos (correção)
+- [x] Tabela de médias semanais
+- [ ] Lista editável de pesos logados (correção) — via Claude por enquanto
+- [ ] Lista editável de logs de passos (correção) — via Claude por enquanto
 
 ### F3.6 — Card de passos no Dashboard 🟡 ⏱️ 3h
 
@@ -353,20 +461,20 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 ### F4.1 — PWA installable 🟡 ⏱️ 3h
 
 - [x] Manifest completo com ícones
-- [x] Service worker com cache de assets estáticos
-- [ ] Ícones 192/512/maskable
-- [ ] Testar instalação no iOS e Android
+- [x] Service worker com cache de assets estáticos (network-first em HTML, cache-first em assets, ignora /api)
+- [x] Ícone SVG mascável (escalável para qualquer densidade)
+- [ ] Testar instalação no iOS e Android (manual)
 
-### F4.2 — Gerenciamento de tokens MCP 🔴 ⏱️ 4h
+### F4.2 — Onboarding do Claude no PWA 🔴 ⏱️ 3h
 
-> Crítico para onboarding de usuário no Claude. Sem isso, ninguém consegue usar o MCP.
+> Substitui a antiga "Gerenciamento de tokens MCP" que não existe mais (Logto cuida disso).
 
-- [x] Página `/profile`
-- [x] Listar tokens com label, criado em, último uso
-- [x] Modal "Criar token" → input de label → POST → mostra UMA VEZ com copy
-- [x] Aviso "salve agora, não mostraremos de novo"
-- [x] Botão revogar com confirmação
-- [x] Instruções de como configurar no Claude (texto + screenshot)
+- [x] Página `/profile` mostra dados do usuário (nome, email — read-only)
+- [x] Seção "Conectar ao Claude":
+  - [x] URL do MCP server em destaque com botão copy-to-clipboard (`https://api.fatia.dominio/mcp`)
+  - [x] Instruções passo-a-passo: "1. Abra Claude → Configurações → Conectores → Adicionar; 2. Cole esta URL; 3. Faça login com a mesma conta deste app"
+- [x] Link "Gerenciar sessões ativas" → abre console do Logto
+- [x] Botão "Sair" → encerra sessão local + Logto via SDK
 
 ### F4.3 — Dashboard 🟢 ⏱️ 4h
 
@@ -376,16 +484,16 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 
 ### F4.4 — Logout e segurança 🟡 ⏱️ 2h
 
-- [x] Logout funcional com limpeza de cookie
-- [x] Re-login automático ao expirar JWT
+- [x] Logout funcional via @logto/next signOut
+- [x] Re-login automático ao receber 401 (apiFetch redireciona pra /api/logto/sign-in)
 - [x] Mensagens de erro de auth claras
 
 ### F4.5 — Backup automático 🟡 ⏱️ 2h
 
-- [ ] Script `pg_dump` no host
-- [ ] Cron diário 4am
-- [ ] Retenção 7 dias local
-- [ ] Documentar restauração
+- [x] Script `pg_dumpall` no host (cobre `fatia` e `logto`)
+- [x] Documentação para cron diário 4am
+- [x] Retenção configurável via `RETENTION_DAYS` (default 7 dias)
+- [x] Restauração documentada em infra/README
 
 ---
 
@@ -399,10 +507,10 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 
 ### T.2 — Testes mínimos 🟡
 
-- [x] Tests unitários: cálculo de totais nutricionais
-- [x] Tests unitários: `getLastWeight`
-- [x] Tests integration: guards de auth
-- [x] Tests integration: isolamento user A não vê dados de user B
+- [ ] Tests unitários: cálculo de totais nutricionais
+- [ ] Tests unitários: `getLastWeight`
+- [ ] Tests integration: guards de auth
+- [ ] Tests integration: isolamento user A não vê dados de user B
 
 ### T.3 — Setup do servidor de produção 🟡 (~Fase 4)
 
@@ -423,15 +531,16 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 
 **Fase 3:** Eu vejo gráficos de evolução de peso, carga (força), cardio (duração/distância) e passos diários nos últimos 30 dias com dados reais. Múltiplos logs de passos no mesmo dia funcionam corretamente (maior valor vence). Tools MCP de progresso, passos e dashboard (~17 tools) retornam dados consistentes pro Claude responder "como tô essa semana" incluindo treinos, cardio e passos.
 
-**Fase 4:** App instalável, multi-usuário em produção, eu e ao menos uma outra pessoa usando há uma semana sem bugs bloqueantes. Onboarding de token MCP funcional — outro usuário consegue gerar token no PWA, configurar no Claude e logar primeira refeição em < 5 minutos.
+**Fase 4:** App instalável, multi-usuário em produção, eu e ao menos uma outra pessoa usando há uma semana sem bugs bloqueantes. Onboarding via Logto: novo usuário é criado no console do Logto, recebe instruções, configura o conector MCP no Claude e loga primeira refeição em < 5 minutos. Login único entre PWA e Claude (sessão compartilhada).
 
 ## Resumo: cobertura de tools MCP por fase
 
 | Fase                                | Tools MCP entregues                                                       | Acumulado |
 | ----------------------------------- | ------------------------------------------------------------------------- | --------- |
-| F1 (Nutrição)                       | 18 tools (perfil, tokens, metas, food, meal, item, summary)               | 18        |
-| F2 (Treino)                         | 19 tools (exercise, plan, plan-exercise, session, set [força+cardio], PR) | 37        |
-| F3 (Progresso + Passos + Dashboard) | 17 tools (weight 4 + steps 6 + progress 5 + dashboard 2)                  | ~54       |
-| F4 (Polimento)                      | 0 novas — apenas correções e documentação                                 | ~54       |
+| F1 (Nutrição)                       | 16 tools (perfil, metas, food, meal, item, summary)                       | 16        |
+| F2 (Treino)                         | 19 tools (exercise, plan, plan-exercise, session, set [força+cardio], PR) | 35        |
+| F3 (Progresso + Passos + Dashboard) | 17 tools (weight 4 + steps 6 + progress 5 + dashboard 2)                  | ~52       |
+| F4 (Polimento)                      | 0 novas — apenas correções e documentação                                 | ~52       |
+| FX (Migração Logto)                 | -2 tools (`list_my_tokens`, `revoke_token` removidas)                     | ~52       |
 
-Total esperado ao fim da v1: **~54 tools MCP**, cobrindo CRUD completo de todas as entidades user-owned (incluindo passos com schema preparado para integrações futuras).
+Total esperado ao fim da v1: **~52 tools MCP**, cobrindo CRUD completo de todas as entidades user-owned (incluindo passos com schema preparado para integrações futuras). Auth via Logto OAuth 2.1.

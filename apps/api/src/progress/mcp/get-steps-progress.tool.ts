@@ -11,16 +11,12 @@ import {
 @McpTool()
 export class GetStepsProgressTool implements McpToolDef {
   constructor(private readonly progress: ProgressService) {}
-
   readonly name = 'get_steps_progress';
-  readonly description =
-    'Returns step progress including daily points, weekly averages, days hitting goal, and daily target.';
+  readonly description = 'Pontos diários de passos + médias semanais + dias batidos.';
   readonly inputSchema = {
-    days: z.number().int().positive().optional().default(30),
-    timezone: z.string().optional(),
+    days: z.union([z.literal(14), z.literal(30), z.literal(90), z.literal(180)]),
   } as const;
-
-  execute(input: { days?: number; timezone?: string }, { userId }: McpToolContext) {
-    return this.progress.stepsProgress(userId, input.days ?? 30, input.timezone ?? 'UTC');
+  execute(input: { days: number }, { userId, timezone }: McpToolContext) {
+    return this.progress.stepsProgress(input.days, { userId, timezone });
   }
 }

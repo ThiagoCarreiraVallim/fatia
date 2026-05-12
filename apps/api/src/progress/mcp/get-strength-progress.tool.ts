@@ -11,32 +11,29 @@ import {
 @McpTool()
 export class GetStrengthProgressTool implements McpToolDef {
   constructor(private readonly progress: ProgressService) {}
-
   readonly name = 'get_strength_progress';
-  readonly description =
-    "Returns strength progress for a specific exercise. Metric can be '1rm' (estimated 1-rep max), 'volume' (total kg*reps), or 'weight' (max weight lifted).";
+  readonly description = 'Evolução de carga em um exercício de força (max_weight, 1RM ou volume).';
   readonly inputSchema = {
-    exerciseId: z.number().int().positive(),
-    days: z.number().int().positive().optional().default(30),
-    metric: z.enum(['1rm', 'volume', 'weight']).optional().default('1rm'),
-    timezone: z.string().optional(),
+    exerciseId: z.number().int(),
+    days: z.union([z.literal(30), z.literal(90), z.literal(180), z.literal(365)]),
+    metric: z
+      .enum(['max_weight', 'estimated_1rm', 'total_volume'])
+      .optional()
+      .default('max_weight'),
   } as const;
-
   execute(
     input: {
       exerciseId: number;
-      days?: number;
-      metric?: '1rm' | 'volume' | 'weight';
-      timezone?: string;
+      days: number;
+      metric?: 'max_weight' | 'estimated_1rm' | 'total_volume';
     },
-    { userId }: McpToolContext,
+    { userId, timezone }: McpToolContext,
   ) {
     return this.progress.strengthProgress(
-      userId,
       input.exerciseId,
-      input.days ?? 30,
-      input.metric ?? '1rm',
-      input.timezone ?? 'UTC',
+      input.days,
+      input.metric ?? 'max_weight',
+      { userId, timezone },
     );
   }
 }

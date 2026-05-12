@@ -1,67 +1,78 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import type { WeightLog } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
-import { dayStartUTC, lastNDates } from './helpers/date-utils';
 import type {
   CreateWeightLogDto,
   ListWeightLogsDto,
   UpdateWeightLogDto,
 } from './dto/weight-log.dto';
 
+const DEFAULT_LIMIT = 50;
+const MAX_LIMIT = 100;
+
 @Injectable()
 export class WeightLogService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(userId: string, dto: CreateWeightLogDto): Promise<WeightLog> {
+  async create(dto: CreateWeightLogDto, userId: string) {
     return this.prisma.weightLog.create({
       data: {
         userId,
         weightKg: dto.weightKg,
-        loggedAt: new Date(dto.loggedAt),
-        notes: dto.notes,
+        loggedAt: dto.loggedAt ? new Date(dto.loggedAt) : new Date(),
+        notes: dto.notes ?? null,
       },
     });
   }
 
-  async update(userId: string, id: string, dto: UpdateWeightLogDto): Promise<WeightLog> {
-    await this.assertOwner(userId, id);
+  async findById(id: string, userId: string) {
+    const log = await this.prisma.weightLog.findUnique({ where: { id } });
+    if (!log || log.userId !== userId) throw new NotFoundException('Weight log not found');
+    return log;
+  }
+
+  async update(id: string, dto: UpdateWeightLogDto, userId: string) {
+    await this.findById(id, userId);
     return this.prisma.weightLog.update({
       where: { id },
       data: {
-        weightKg: dto.weightKg,
-        loggedAt: dto.loggedAt ? new Date(dto.loggedAt) : undefined,
-        notes: dto.notes,
+        ...(dto.weightKg !== undefined && { weightKg: dto.weightKg }),
+        ...(dto.loggedAt && { loggedAt: new Date(dto.loggedAt) }),
+        ...(dto.notes !== undefined && { notes: dto.notes }),
       },
     });
   }
 
-  async delete(userId: string, id: string): Promise<void> {
-    await this.assertOwner(userId, id);
-    await this.prisma.weightLog.delete({ where: { id } });
-  }
-
-  async list(userId: string, params: ListWeightLogsDto): Promise<WeightLog[]> {
-    const limit = Math.min(params.limit ?? 20, 100);
-    const where = params.days
-      ? {
-          userId,
-          loggedAt: {
-            gte: dayStartUTC(lastNDates(params.days, 'UTC')[0]),
-          },
-        }
-      : { userId };
-
-    return this.prisma.weightLog.findMany({
-      where,
-      orderBy: [{ loggedAt: 'desc' }, { id: 'desc' }],
-      take: limit,
-      ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
-    });
-  }
-
-  private async assertOwner(userId: string, id: string): Promise<void> {
-    const log = await this.prisma.weightLog.findUnique({ where: { id }, select: { userId: true } });
-    if (!log) throw new NotFoundException('WeightLog not found');
+  async delete(id: string, userId: string) {
+    const log = await this.prisma.weightLog.findUnique({ where: { id } });
+    if (!log) throw new NotFoundException('Weight log not found');
     if (log.userId !== userId) throw new ForbiddenException();
+    await this.prisma.weightLog.delete({ where: { id } });
+    return { deleted: true as const };
+  }
+
+  async list(filter: ListWeightLogsDto, userId: string) {
+    const limit = Math.min(filter.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
+    const where: Prisma.WeightLogWhereInput = { userId };
+    if (filter.from || filter.to) {
+      where.loggedAt = {};
+      if (filter.from) where.loggedAt.gte = new Date(filter.from);
+      if (filter.to) where.loggedAt.lte = new Date(filter.to);
+    }
+    const items = await this.prisma.weightLog.findMany({
+      where,
+      orderBy: { loggedAt: 'desc' },
+      take: limit + 1,
+      ...(filter.cursor && { cursor: { id: filter.cursor }, skip: 1 }),
+    });
+    const nextCursor = items.length > limit ? items[limit - 1].id : undefined;
+    return { logs: items.slice(0, limit), nextCursor };
+  }
+
+  async getLatest(userId: string) {
+    return this.prisma.weightLog.findFirst({
+      where: { userId },
+      orderBy: { loggedAt: 'desc' },
+    });
   }
 }

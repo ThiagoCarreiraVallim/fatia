@@ -11,25 +11,14 @@ import {
 @McpTool()
 export class GetVolumeProgressTool implements McpToolDef {
   constructor(private readonly progress: ProgressService) {}
-
   readonly name = 'get_volume_progress';
   readonly description =
-    'Returns weekly training volume (kg*reps) over recent weeks, optionally filtered by muscle group.';
+    'Volume total de força por semana, opcionalmente filtrado por grupo muscular.';
   readonly inputSchema = {
-    days: z.number().int().positive().optional().default(30),
+    days: z.union([z.literal(30), z.literal(90), z.literal(180)]),
     muscleGroup: z.string().optional(),
-    timezone: z.string().optional(),
   } as const;
-
-  execute(
-    input: { days?: number; muscleGroup?: string; timezone?: string },
-    { userId }: McpToolContext,
-  ) {
-    return this.progress.volumeProgress(
-      userId,
-      input.days ?? 30,
-      input.timezone ?? 'UTC',
-      input.muscleGroup,
-    );
+  execute(input: { days: number; muscleGroup?: string }, { userId, timezone }: McpToolContext) {
+    return this.progress.volumeProgress(input.days, input.muscleGroup, { userId, timezone });
   }
 }

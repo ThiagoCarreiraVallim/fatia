@@ -1,26 +1,34 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
-
+/**
+ * Cliente-side: chama o proxy do Next, que adiciona Bearer token (Logto) no
+ * server-side antes de encaminhar pra API NestJS. Cookie de sessão do Logto
+ * autentica o proxy.
+ */
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const proxyPath = path.startsWith('/api/') ? `/api/proxy${path.slice('/api'.length)}` : path;
+  const headers = new Headers(init?.headers);
+  if (!headers.has('Content-Type') && init?.body) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  const res = await fetch(proxyPath, {
     ...init,
+    headers,
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
   });
 
   if (res.status === 401) {
+    // Sessão Logto expirou ou inválida — manda re-login.
     if (typeof window !== 'undefined') {
-      window.location.href = '/login';
+      window.location.href = '/api/logto/sign-in';
     }
-    throw new Error('Sessão expirada. Redirecionando para login…');
+    throw new Error('Sessão expirada');
   }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    const message = (body.message as string) ?? `Erro ${res.status}`;
-    throw new Error(message);
+    throw new Error(body.message ?? `HTTP ${res.status}`);
   }
 
   if (res.status === 204) return undefined as T;
-
   return res.json() as Promise<T>;
 }

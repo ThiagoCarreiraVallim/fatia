@@ -1,391 +1,172 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import * as Tabs from '@radix-ui/react-tabs';
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ReferenceLine,
-} from 'recharts';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { useQuery } from '@tanstack/react-query';
+import { Plus } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
 import { progressApi } from '@/lib/api/progress';
+import { WeightChart } from '@/components/progress/weight-chart';
+import { StepsChart } from '@/components/progress/steps-chart';
+import { LogWeightDrawer } from '@/components/progress/log-weight-drawer';
+import { LogStepsDrawer } from '@/components/progress/log-steps-drawer';
 
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
+const RANGES = [14, 30, 90, 180] as const;
 
-function fmtDate(d: string) {
-  return format(new Date(d + 'T12:00:00'), 'dd/MM', { locale: ptBR });
-}
-
-const DAY_OPTIONS = [14, 30, 90] as const;
-
-function DayRangeButtons({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <div className="flex gap-1">
-      {DAY_OPTIONS.map((d) => (
-        <button
-          key={d}
-          type="button"
-          onClick={() => onChange(d)}
-          className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
-            value === d
-              ? 'bg-blue-600 text-white'
-              : 'bg-secondary text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          {d}d
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function Skeleton() {
-  return <div className="h-48 animate-pulse rounded bg-muted" />;
-}
-
-/* ── Peso tab ─────────────────────────────────────────────────────────────── */
-function WeightTab({ days }: { days: number }) {
-  const qc = useQueryClient();
-  const { data, isLoading } = useQuery({
-    queryKey: ['progress', 'weight', days],
-    queryFn: () => progressApi.weightProgress(days),
-  });
-
-  const [showForm, setShowForm] = useState(false);
-  const [weightInput, setWeightInput] = useState('');
-
-  const logWeight = useMutation({
-    mutationFn: (kg: number) =>
-      progressApi.logWeight({ weightKg: kg, loggedAt: new Date().toISOString() }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['progress', 'weight'] });
-      setShowForm(false);
-      setWeightInput('');
-    },
-  });
-
-  const chartData = data?.points.map((p) => ({ date: fmtDate(p.date), kg: p.weightKg })) ?? [];
-
-  return (
-    <div className="space-y-4">
-      {data?.delta != null && (
-        <p className="text-sm text-muted-foreground">
-          {data.delta > 0 ? '+' : ''}
-          {data.delta.toFixed(1)} kg nos últimos {days} dias
-        </p>
-      )}
-
-      {isLoading && <Skeleton />}
-
-      {!isLoading && chartData.length === 0 && (
-        <p className="py-12 text-center text-sm text-muted-foreground">
-          Nenhum registro de peso encontrado.
-        </p>
-      )}
-
-      {!isLoading && chartData.length > 0 && (
-        <ResponsiveContainer width="100%" height={220}>
-          <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 4, left: -16 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-            <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#71717a' }} />
-            <YAxis tick={{ fontSize: 10, fill: '#71717a' }} domain={['auto', 'auto']} />
-            <Tooltip
-              contentStyle={{ background: '#18181b', border: '1px solid #3f3f46', fontSize: 12 }}
-              formatter={(v: number) => [`${v} kg`, 'Peso']}
-            />
-            <Line
-              type="monotone"
-              dataKey="kg"
-              stroke="#3b82f6"
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 4 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      )}
-
-      {!showForm ? (
-        <button
-          type="button"
-          onClick={() => setShowForm(true)}
-          className="w-full rounded-md border border-dashed border-blue-500/50 py-2 text-sm text-blue-400 hover:border-blue-500 hover:text-blue-300"
-        >
-          + Registrar peso
-        </button>
-      ) : (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            const kg = parseFloat(weightInput);
-            if (!isNaN(kg) && kg > 0) logWeight.mutate(kg);
-          }}
-          className="flex items-center gap-2 rounded-md border bg-card p-3"
-        >
-          <input
-            type="number"
-            step="0.1"
-            min="20"
-            max="300"
-            value={weightInput}
-            onChange={(e) => setWeightInput(e.target.value)}
-            placeholder="Ex.: 78.5"
-            className="flex-1 rounded bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500"
-            autoFocus
-          />
-          <span className="text-sm text-muted-foreground">kg</span>
-          <button
-            type="submit"
-            disabled={logWeight.isPending}
-            className="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
-          >
-            Salvar
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowForm(false)}
-            className="rounded px-2 py-2 text-sm text-muted-foreground hover:text-foreground"
-          >
-            ✕
-          </button>
-        </form>
-      )}
-
-      {logWeight.error && (
-        <p className="text-xs text-rose-500">{(logWeight.error as Error).message}</p>
-      )}
-    </div>
-  );
-}
-
-/* ── Força tab ────────────────────────────────────────────────────────────── */
-function StrengthTab({ days }: { days: number }) {
-  const { data, isLoading } = useQuery({
-    queryKey: ['progress', 'volume', days],
-    queryFn: () => progressApi.volumeProgress(days),
-  });
-
-  const chartData =
-    data?.weeks.map((w) => ({ week: fmtDate(w.weekStart), volume: Math.round(w.volume) })) ?? [];
-
-  return (
-    <div className="space-y-4">
-      <p className="text-xs text-muted-foreground">Volume semanal de treino (kg)</p>
-
-      {isLoading && <Skeleton />}
-
-      {!isLoading && chartData.length === 0 && (
-        <p className="py-12 text-center text-sm text-muted-foreground">
-          Nenhum dado de treino encontrado.
-        </p>
-      )}
-
-      {!isLoading && chartData.length > 0 && (
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 4, left: -16 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-            <XAxis dataKey="week" tick={{ fontSize: 10, fill: '#71717a' }} />
-            <YAxis tick={{ fontSize: 10, fill: '#71717a' }} />
-            <Tooltip
-              contentStyle={{ background: '#18181b', border: '1px solid #3f3f46', fontSize: 12 }}
-              formatter={(v: number) => [`${v} kg`, 'Volume']}
-            />
-            <Bar dataKey="volume" fill="#3b82f6" radius={[3, 3, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      )}
-    </div>
-  );
-}
-
-/* ── Cardio tab ───────────────────────────────────────────────────────────── */
-function CardioTab() {
-  return (
-    <div className="space-y-4">
-      <div className="rounded-lg border border-dashed border-muted p-8 text-center text-sm text-muted-foreground">
-        <p className="font-medium">Progresso de cardio</p>
-        <p className="mt-1 text-xs">
-          Selecione um exercício de cardio para visualizar o progresso.
-        </p>
-        <p className="mt-3 text-xs opacity-70">
-          💡 Dica: Use o Claude para analisar seu progresso de cardio com linguagem natural.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/* ── Passos tab ───────────────────────────────────────────────────────────── */
-function StepsTab({ days }: { days: number }) {
-  const qc = useQueryClient();
-  const { data, isLoading } = useQuery({
-    queryKey: ['progress', 'steps', days],
-    queryFn: () => progressApi.stepsProgress(days),
-  });
-
-  const [showForm, setShowForm] = useState(false);
-  const [stepsInput, setStepsInput] = useState('');
-
-  const logSteps = useMutation({
-    mutationFn: (steps: number) => progressApi.logSteps({ date: todayIso(), steps }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['progress', 'steps'] });
-      setShowForm(false);
-      setStepsInput('');
-    },
-  });
-
-  const chartData = data?.points.map((p) => ({ date: fmtDate(p.date), steps: p.steps })) ?? [];
-  const goal = data?.dailyTarget ?? 0;
-
-  return (
-    <div className="space-y-4">
-      {data && (
-        <p className="text-sm text-muted-foreground">
-          {data.daysHitGoal} dia{data.daysHitGoal !== 1 ? 's' : ''} com meta batida
-          {days <= 30 ? ` nos últimos ${days} dias` : ''}
-        </p>
-      )}
-
-      {isLoading && <Skeleton />}
-
-      {!isLoading && chartData.length === 0 && (
-        <p className="py-12 text-center text-sm text-muted-foreground">
-          Nenhum registro de passos encontrado.
-        </p>
-      )}
-
-      {!isLoading && chartData.length > 0 && (
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 4, left: -16 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-            <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#71717a' }} />
-            <YAxis tick={{ fontSize: 10, fill: '#71717a' }} />
-            <Tooltip
-              contentStyle={{ background: '#18181b', border: '1px solid #3f3f46', fontSize: 12 }}
-              formatter={(v: number) => [v.toLocaleString('pt-BR'), 'Passos']}
-            />
-            {goal > 0 && (
-              <ReferenceLine
-                y={goal}
-                stroke="#f59e0b"
-                strokeDasharray="4 2"
-                label={{ value: 'Meta', position: 'insideTopRight', fontSize: 10, fill: '#f59e0b' }}
-              />
-            )}
-            <Bar dataKey="steps" fill="#3b82f6" radius={[3, 3, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      )}
-
-      {!showForm ? (
-        <button
-          type="button"
-          onClick={() => setShowForm(true)}
-          className="w-full rounded-md border border-dashed border-blue-500/50 py-2 text-sm text-blue-400 hover:border-blue-500 hover:text-blue-300"
-        >
-          + Registrar passos de hoje
-        </button>
-      ) : (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            const s = parseInt(stepsInput, 10);
-            if (!isNaN(s) && s > 0) logSteps.mutate(s);
-          }}
-          className="flex items-center gap-2 rounded-md border bg-card p-3"
-        >
-          <input
-            type="number"
-            step="1"
-            min="0"
-            value={stepsInput}
-            onChange={(e) => setStepsInput(e.target.value)}
-            placeholder="Ex.: 8500"
-            className="flex-1 rounded bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500"
-            autoFocus
-          />
-          <span className="text-sm text-muted-foreground">passos</span>
-          <button
-            type="submit"
-            disabled={logSteps.isPending}
-            className="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
-          >
-            Salvar
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowForm(false)}
-            className="rounded px-2 py-2 text-sm text-muted-foreground hover:text-foreground"
-          >
-            ✕
-          </button>
-        </form>
-      )}
-
-      {logSteps.error && (
-        <p className="text-xs text-rose-500">{(logSteps.error as Error).message}</p>
-      )}
-    </div>
-  );
-}
-
-/* ── Page ─────────────────────────────────────────────────────────────────── */
 export default function ProgressPage() {
-  const [days, setDays] = useState<number>(30);
+  const [days, setDays] = useState<(typeof RANGES)[number]>(30);
+  const [logWeightOpen, setLogWeightOpen] = useState(false);
+  const [logStepsOpen, setLogStepsOpen] = useState(false);
+
+  const weight = useQuery({
+    queryKey: ['progress', 'weight', days],
+    queryFn: () => progressApi.weight(days),
+  });
+  const steps = useQuery({
+    queryKey: ['progress', 'steps', days],
+    queryFn: () => progressApi.steps(days),
+  });
 
   return (
     <div className="space-y-4 p-4">
       <header className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Progresso</h1>
-        <DayRangeButtons value={days} onChange={setDays} />
+        <div className="flex gap-1">
+          {RANGES.map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => setDays(r)}
+              className={`rounded-md px-2 py-1 text-xs ${
+                days === r
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-accent'
+              }`}
+            >
+              {r}d
+            </button>
+          ))}
+        </div>
       </header>
 
-      <Tabs.Root defaultValue="weight" className="space-y-4">
-        <Tabs.List className="flex gap-1 rounded-lg bg-secondary p-1">
-          {[
-            { value: 'weight', label: 'Peso' },
-            { value: 'strength', label: 'Força' },
-            { value: 'cardio', label: 'Cardio' },
-            { value: 'steps', label: 'Passos' },
-          ].map((tab) => (
-            <Tabs.Trigger
-              key={tab.value}
-              value={tab.value}
-              className="flex-1 rounded-md py-1.5 text-xs font-medium text-muted-foreground transition-colors data-[state=active]:bg-background data-[state=active]:text-foreground"
-            >
-              {tab.label}
-            </Tabs.Trigger>
-          ))}
-        </Tabs.List>
+      <Tabs defaultValue="weight" className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="weight">Peso</TabsTrigger>
+          <TabsTrigger value="strength">Força</TabsTrigger>
+          <TabsTrigger value="cardio">Cardio</TabsTrigger>
+          <TabsTrigger value="steps">Passos</TabsTrigger>
+        </TabsList>
 
-        <Tabs.Content value="weight">
-          <WeightTab days={days} />
-        </Tabs.Content>
+        <TabsContent value="weight" className="space-y-3">
+          <Button onClick={() => setLogWeightOpen(true)} className="w-full" variant="outline">
+            <Plus size={16} /> Logar peso
+          </Button>
+          {weight.isLoading && <p className="text-sm text-muted-foreground">Carregando…</p>}
+          {weight.data && (
+            <>
+              <WeightChart data={weight.data} />
+              {weight.data.currentWeightKg !== null && (
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="rounded-md border bg-card p-3">
+                    <p className="text-xs text-muted-foreground">Atual</p>
+                    <p className="text-lg font-semibold">
+                      {weight.data.currentWeightKg.toFixed(1)} kg
+                    </p>
+                  </div>
+                  <div className="rounded-md border bg-card p-3">
+                    <p className="text-xs text-muted-foreground">Δ período</p>
+                    <p className="text-lg font-semibold">
+                      {weight.data.totalDeltaKg > 0 ? '+' : ''}
+                      {weight.data.totalDeltaKg.toFixed(1)} kg
+                    </p>
+                  </div>
+                </div>
+              )}
+              {weight.data.weeklyAverages.length > 0 && (
+                <div className="rounded-md border bg-card">
+                  <div className="border-b p-3 text-sm font-medium">Médias semanais</div>
+                  <ul className="divide-y text-sm">
+                    {weight.data.weeklyAverages.map((w) => (
+                      <li key={w.weekStart} className="flex justify-between p-3">
+                        <span className="text-muted-foreground">
+                          Semana de {w.weekStart.slice(5)}
+                        </span>
+                        <span className="tabular-nums">
+                          {w.avgKg.toFixed(1)} kg
+                          {w.deltaKg !== null && (
+                            <span
+                              className={`ml-2 text-xs ${
+                                w.deltaKg < 0 ? 'text-emerald-500' : 'text-amber-500'
+                              }`}
+                            >
+                              {w.deltaKg > 0 ? '+' : ''}
+                              {w.deltaKg.toFixed(2)}
+                            </span>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          )}
+        </TabsContent>
 
-        <Tabs.Content value="strength">
-          <StrengthTab days={days} />
-        </Tabs.Content>
+        <TabsContent value="strength">
+          <p className="text-sm text-muted-foreground">
+            Selecione um exercício pra visualizar evolução. Use o Claude com{' '}
+            <code className="rounded bg-muted px-1">get_strength_progress</code> ou navegue pelo
+            histórico de treino para ver detalhes.
+          </p>
+        </TabsContent>
 
-        <Tabs.Content value="cardio">
-          <CardioTab />
-        </Tabs.Content>
+        <TabsContent value="cardio">
+          <p className="text-sm text-muted-foreground">
+            Selecione um exercício de cardio para ver evolução de duração, distância ou pace.
+          </p>
+        </TabsContent>
 
-        <Tabs.Content value="steps">
-          <StepsTab days={days} />
-        </Tabs.Content>
-      </Tabs.Root>
+        <TabsContent value="steps" className="space-y-3">
+          <Button onClick={() => setLogStepsOpen(true)} className="w-full" variant="outline">
+            <Plus size={16} /> Logar passos
+          </Button>
+          {steps.isLoading && <p className="text-sm text-muted-foreground">Carregando…</p>}
+          {steps.data && (
+            <>
+              <StepsChart data={steps.data} />
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="rounded-md border bg-card p-3">
+                  <p className="text-xs text-muted-foreground">Média/dia</p>
+                  <p className="text-lg font-semibold tabular-nums">
+                    {Math.round(steps.data.averageDaily).toLocaleString('pt-BR')}
+                  </p>
+                </div>
+                <div className="rounded-md border bg-card p-3">
+                  <p className="text-xs text-muted-foreground">Dias na meta</p>
+                  <p className="text-lg font-semibold tabular-nums">
+                    {steps.data.daysWithGoalReached}/{steps.data.points.length}
+                  </p>
+                </div>
+              </div>
+              {steps.data.bestDay && (
+                <div className="rounded-md border bg-card p-3 text-sm">
+                  <p className="text-xs text-muted-foreground">Melhor dia</p>
+                  <p>
+                    {steps.data.bestDay.date}:{' '}
+                    <span className="font-semibold tabular-nums">
+                      {steps.data.bestDay.steps.toLocaleString('pt-BR')}
+                    </span>
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      <LogWeightDrawer open={logWeightOpen} onClose={() => setLogWeightOpen(false)} />
+      <LogStepsDrawer open={logStepsOpen} onClose={() => setLogStepsOpen(false)} />
     </div>
   );
 }

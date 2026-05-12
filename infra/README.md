@@ -18,25 +18,38 @@ pnpm infra:logs
 pnpm infra:down
 ```
 
-## Uso em produção
+## Uso em produção (Dokploy)
 
-```bash
-# No servidor, primeira vez
-git clone <repo>
-cd fatia
-cp .env.example .env
-# Editar .env com secrets reais (JWT_SECRET, POSTGRES_PASSWORD, etc)
-docker compose -f infra/docker-compose.yml --profile full up -d --build
-docker compose exec api pnpm db:migrate:deploy
-docker compose exec api pnpm db:seed
-```
+Stack de produção fica em `infra/docker-compose.prod.yml` e usa Traefik via
+`dokploy-network` (rede externa do Dokploy). Postgres roda fora do compose,
+como "Database" do próprio Dokploy.
+
+Passo a passo completo: [`infra/dokploy/README.md`](./dokploy/README.md).
+
+Resumo:
+
+1. Criar Postgres (Database do Dokploy) com databases `fatia` e `logto`.
+2. Criar Compose service apontando pra `infra/docker-compose.prod.yml`.
+3. Configurar variáveis no painel (ver `.env.production.example`).
+4. Deploy → o `api` aplica migrations no boot.
+5. Configurar tenant do Logto e preencher `LOGTO_APP_ID` / `LOGTO_APP_SECRET` →
+   redeploy.
 
 ## Backup
 
-`backup.sh` (TODO em F4.5) faz `pg_dump` para `/var/backups/fatia/` com retenção de 7 dias.
+`backup.sh` faz `pg_dumpall` (cobre `fatia` e `logto`), compactado em `gzip`,
+com retenção configurável (default 7 dias).
+
+```bash
+# Cron diário às 4h, agendar no host:
+0 4 * * * /opt/fatia/infra/backup.sh >> /var/log/fatia-backup.log 2>&1
+```
+
+Variáveis úteis: `BACKUP_DIR`, `RETENTION_DAYS`, `CONTAINER`, `POSTGRES_USER`.
 
 ## Restauração
 
 ```bash
-docker compose exec -T postgres psql -U fatia fatia < /caminho/do/backup.sql
+gunzip -c /opt/fatia/backups/fatia-YYYYMMDD-HHMMSS.sql.gz \
+  | docker exec -i fatia-postgres psql -U fatia
 ```

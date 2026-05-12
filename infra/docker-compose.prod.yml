@@ -1,0 +1,171 @@
+# Compose de produção para Dokploy.
+#
+# Pressupostos:
+#   - Postgres roda fora deste compose (criado como "Database" no painel do
+#     Dokploy). DATABASE_URL e LOGTO_DB_URL devem apontar pra ele.
+#   - Dokploy provê a rede externa `dokploy-network` com Traefik na frente.
+#     Traefik faz roteamento HTTPS automático (Let's Encrypt) por subdomínio.
+#   - Variáveis ficam todas no painel do Dokploy (env do projeto). Este compose
+#     só referencia ${VAR}; .env.production.example documenta os nomes.
+#   - Três serviços: web (PWA), api (NestJS+MCP), auth (Logto). Cada um tem
+#     subdomínio próprio. App = app.${DOMAIN}, API = api.${DOMAIN},
+#     Auth = auth.${DOMAIN}.
+
+services:
+  # ============================================================
+  # Backend (NestJS REST + MCP)
+  # ============================================================
+  api:
+    image: ${API_IMAGE:-fatia-api:latest}
+    build:
+      context: ..
+      dockerfile: infra/api.Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: ${DATABASE_URL}
+      LOGTO_ENDPOINT: https://auth.${DOMAIN}
+      LOGTO_AUDIENCE: ${LOGTO_AUDIENCE:-https://api.${DOMAIN}}
+      WEB_ORIGIN: https://app.${DOMAIN}
+      LOGTO_MCP_APP_ID: ${LOGTO_MCP_APP_ID}
+      LOGTO_MCP_APP_SECRET: ${LOGTO_MCP_APP_SECRET}
+    expose:
+      - "3000"
+    networks:
+      - dokploy-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      # HTTP → redirect 301 para HTTPS
+      - traefik.http.routers.fatia-api-http.rule=Host(`api.${DOMAIN}`)
+      - traefik.http.routers.fatia-api-http.entrypoints=web
+      - traefik.http.routers.fatia-api-http.middlewares=fatia-api-redirect
+      - traefik.http.middlewares.fatia-api-redirect.redirectscheme.scheme=https
+      - traefik.http.middlewares.fatia-api-redirect.redirectscheme.permanent=true
+      # HTTPS
+      - traefik.http.routers.fatia-api.rule=Host(`api.${DOMAIN}`)
+      - traefik.http.routers.fatia-api.entrypoints=websecure
+      - traefik.http.routers.fatia-api.tls=true
+      - traefik.http.routers.fatia-api.tls.certresolver=letsencrypt
+      - traefik.http.services.fatia-api.loadbalancer.server.port=3000
+      # Habilita CORS pré-flight no Traefik (a API também faz CORS, redundância proposital)
+      - traefik.http.routers.fatia-api.middlewares=fatia-api-headers
+      - traefik.http.middlewares.fatia-api-headers.headers.accesscontrolallowmethods=GET,POST,PATCH,PUT,DELETE,OPTIONS
+      - traefik.http.middlewares.fatia-api-headers.headers.accesscontrolallowheaders=Authorization,Content-Type
+      - traefik.http.middlewares.fatia-api-headers.headers.accesscontrolalloworiginlist=https://app.${DOMAIN}
+      - traefik.http.middlewares.fatia-api-headers.headers.accesscontrolallowcredentials=true
+      - traefik.http.middlewares.fatia-api-headers.headers.accesscontrolmaxage=600
+
+  # ============================================================
+  # Frontend (Next.js PWA)
+  # ============================================================
+  web:
+    image: ${WEB_IMAGE:-fatia-web:latest}
+    build:
+      context: ..
+      dockerfile: infra/web.Dockerfile
+      args:
+        # NEXT_PUBLIC_* são embedados no bundle, precisam estar disponíveis no build.
+        NEXT_PUBLIC_API_URL: https://api.${DOMAIN}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      HOSTNAME: 0.0.0.0
+      # Logto SDK do Next.js (server actions + route handlers)
+      LOGTO_ENDPOINT: https://auth.${DOMAIN}
+      LOGTO_APP_ID: ${LOGTO_APP_ID}
+      LOGTO_APP_SECRET: ${LOGTO_APP_SECRET}
+      LOGTO_COOKIE_SECRET: ${LOGTO_COOKIE_SECRET}
+      LOGTO_BASE_URL: https://app.${DOMAIN}
+      LOGTO_AUDIENCE: ${LOGTO_AUDIENCE:-https://api.${DOMAIN}}
+      NEXT_PUBLIC_API_URL: https://api.${DOMAIN}
+    expose:
+      - "3001"
+    depends_on:
+      - api
+      - auth
+    networks:
+      - dokploy-network
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.routers.fatia-web-http.rule=Host(`app.${DOMAIN}`)
+      - traefik.http.routers.fatia-web-http.entrypoints=web
+      - traefik.http.routers.fatia-web-http.middlewares=fatia-web-redirect
+      - traefik.http.middlewares.fatia-web-redirect.redirectscheme.scheme=https
+      - traefik.http.middlewares.fatia-web-redirect.redirectscheme.permanent=true
+      - traefik.http.routers.fatia-web.rule=Host(`app.${DOMAIN}`)
+      - traefik.http.routers.fatia-web.entrypoints=websecure
+      - traefik.http.routers.fatia-web.tls=true
+      - traefik.http.routers.fatia-web.tls.certresolver=letsencrypt
+      - traefik.http.services.fatia-web.loadbalancer.server.port=3001
+
+  # ============================================================
+  # Identity Provider (Logto self-hosted)
+  # ============================================================
+  auth:
+    image: svhd/logto:${LOGTO_VERSION:-1.30}
+    restart: unless-stopped
+    environment:
+      DB_URL: ${LOGTO_DB_URL}
+      ENDPOINT: https://auth.${DOMAIN}
+      # O admin SPA do Logto sempre serve em / na porta ADMIN_PORT.
+      # Roteamento por path (/admin) não funciona — usa subdomínio separado.
+      ADMIN_ENDPOINT: https://logto-admin.${DOMAIN}
+      TRUST_PROXY_HEADER: 1
+      PORT: 3001
+      ADMIN_PORT: 3002
+    expose:
+      - "3001"
+      - "3002"
+    networks:
+      - dokploy-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    # Logto roda migrations próprias na primeira execução (~30s).
+    # Usa entrypoint (não command) pois a imagem svhd/logto tem ENTRYPOINT próprio
+    # que interceptaria o command, causando "npm error Missing script: sh".
+    entrypoint: ["sh", "-c", "npm run cli db seed -- --swe && npm start"]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      # Endpoint público do Logto (login, /oidc, /.well-known) — porta 3001
+      - traefik.http.routers.fatia-auth-http.rule=Host(`auth.${DOMAIN}`)
+      - traefik.http.routers.fatia-auth-http.entrypoints=web
+      - traefik.http.routers.fatia-auth-http.middlewares=fatia-auth-redirect
+      - traefik.http.middlewares.fatia-auth-redirect.redirectscheme.scheme=https
+      - traefik.http.middlewares.fatia-auth-redirect.redirectscheme.permanent=true
+      - traefik.http.routers.fatia-auth.rule=Host(`auth.${DOMAIN}`)
+      - traefik.http.routers.fatia-auth.entrypoints=websecure
+      - traefik.http.routers.fatia-auth.tls=true
+      - traefik.http.routers.fatia-auth.tls.certresolver=letsencrypt
+      - traefik.http.routers.fatia-auth.service=fatia-auth
+      - traefik.http.services.fatia-auth.loadbalancer.server.port=3001
+      # Console admin do Logto — subdomínio separado, porta 3002
+      - traefik.http.routers.fatia-auth-admin-http.rule=Host(`logto-admin.${DOMAIN}`)
+      - traefik.http.routers.fatia-auth-admin-http.entrypoints=web
+      - traefik.http.routers.fatia-auth-admin-http.middlewares=fatia-auth-admin-redirect
+      - traefik.http.middlewares.fatia-auth-admin-redirect.redirectscheme.scheme=https
+      - traefik.http.middlewares.fatia-auth-admin-redirect.redirectscheme.permanent=true
+      - traefik.http.routers.fatia-auth-admin.rule=Host(`logto-admin.${DOMAIN}`)
+      - traefik.http.routers.fatia-auth-admin.entrypoints=websecure
+      - traefik.http.routers.fatia-auth-admin.tls=true
+      - traefik.http.routers.fatia-auth-admin.tls.certresolver=letsencrypt
+      - traefik.http.routers.fatia-auth-admin.service=fatia-auth-admin
+      - traefik.http.services.fatia-auth-admin.loadbalancer.server.port=3002
+
+networks:
+  dokploy-network:
+    external: true

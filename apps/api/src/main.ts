@@ -32,7 +32,18 @@ async function bootstrap() {
     }),
   );
 
-  app.setGlobalPrefix('api', { exclude: ['/health', '/mcp'] });
+  app.setGlobalPrefix('api', {
+    exclude: [
+      '/health',
+      '/mcp',
+      '/.well-known/oauth-protected-resource',
+      '/.well-known/oauth-authorization-server',
+      '/oauth/register',
+      '/oauth/authorize',
+      '/oauth/callback',
+      '/oauth/token',
+    ],
+  });
 
   await app.listen(port);
 

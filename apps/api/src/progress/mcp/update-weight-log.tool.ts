@@ -10,25 +10,20 @@ import {
 @Injectable()
 @McpTool()
 export class UpdateWeightLogTool implements McpToolDef {
-  constructor(private readonly weightLogs: WeightLogService) {}
-
+  constructor(private readonly weights: WeightLogService) {}
   readonly name = 'update_weight_log';
-  readonly description = 'Updates an existing weight log entry by ID.';
+  readonly description = 'Atualiza um log de peso existente.';
   readonly inputSchema = {
-    id: z.string(),
+    weightLogId: z.string().uuid(),
     weightKg: z.number().positive().optional(),
     loggedAt: z.string().optional(),
     notes: z.string().max(500).optional(),
   } as const;
-
   execute(
-    input: { id: string; weightKg?: number; loggedAt?: string; notes?: string },
+    input: { weightLogId: string; weightKg?: number; loggedAt?: string; notes?: string },
     { userId }: McpToolContext,
   ) {
-    return this.weightLogs.update(userId, input.id, {
-      weightKg: input.weightKg,
-      loggedAt: input.loggedAt,
-      notes: input.notes,
-    });
+    const { weightLogId, ...patch } = input;
+    return this.weights.update(weightLogId, patch, userId);
   }
 }

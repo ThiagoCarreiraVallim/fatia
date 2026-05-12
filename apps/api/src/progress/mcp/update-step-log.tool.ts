@@ -10,17 +10,20 @@ import {
 @Injectable()
 @McpTool()
 export class UpdateStepLogTool implements McpToolDef {
-  constructor(private readonly stepLogs: StepLogService) {}
-
+  constructor(private readonly steps: StepLogService) {}
   readonly name = 'update_step_log';
-  readonly description = 'Updates an existing step log entry by ID.';
+  readonly description = 'Atualiza um log de passos específico (corrige valor, data ou notas).';
   readonly inputSchema = {
-    id: z.string(),
+    stepLogId: z.string().uuid(),
     steps: z.number().int().min(0).optional(),
+    date: z.string().optional(),
     notes: z.string().max(500).optional(),
   } as const;
-
-  execute(input: { id: string; steps?: number; notes?: string }, { userId }: McpToolContext) {
-    return this.stepLogs.update(userId, input.id, { steps: input.steps, notes: input.notes });
+  execute(
+    input: { stepLogId: string; steps?: number; date?: string; notes?: string },
+    { userId }: McpToolContext,
+  ) {
+    const { stepLogId, ...patch } = input;
+    return this.steps.update(stepLogId, patch, userId);
   }
 }

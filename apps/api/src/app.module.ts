@@ -9,9 +9,8 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { NutritionModule } from './nutrition/nutrition.module';
 import { WorkoutModule } from './workout/workout.module';
-import { McpModule } from './mcp/mcp.module';
 import { ProgressModule } from './progress/progress.module';
-import { DashboardModule } from './dashboard/dashboard.module';
+import { McpModule } from './mcp/mcp.module';
 
 @Module({
   imports: [
@@ -37,9 +36,8 @@ import { DashboardModule } from './dashboard/dashboard.module';
     UsersModule,
     NutritionModule,
     WorkoutModule,
-    McpModule,
     ProgressModule,
-    DashboardModule,
+    McpModule,
   ],
 })
 export class AppModule {}

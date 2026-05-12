@@ -10,15 +10,11 @@ import {
 @Injectable()
 @McpTool()
 export class DeleteWeightLogTool implements McpToolDef {
-  constructor(private readonly weightLogs: WeightLogService) {}
-
+  constructor(private readonly weights: WeightLogService) {}
   readonly name = 'delete_weight_log';
-  readonly description = 'Deletes a weight log entry by ID.';
-  readonly inputSchema = {
-    id: z.string(),
-  } as const;
-
-  execute(input: { id: string }, { userId }: McpToolContext) {
-    return this.weightLogs.delete(userId, input.id);
+  readonly description = 'Deleta um log de peso.';
+  readonly inputSchema = { weightLogId: z.string().uuid() } as const;
+  execute(input: { weightLogId: string }, { userId }: McpToolContext) {
+    return this.weights.delete(input.weightLogId, userId);
   }
 }

@@ -1,10 +1,10 @@
 import { IsEnum, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
-import { Type } from 'class-transformer';
 import { StepSource } from '@prisma/client';
 
 export class CreateStepLogDto {
+  @IsOptional()
   @IsString()
-  date!: string; // YYYY-MM-DD no fuso do usuário
+  date?: string;
 
   @IsInt()
   @Min(0)
@@ -28,6 +28,10 @@ export class UpdateStepLogDto {
 
   @IsOptional()
   @IsString()
+  date?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(500)
   notes?: string;
 }
@@ -35,17 +39,17 @@ export class UpdateStepLogDto {
 export class ListStepLogsDto {
   @IsOptional()
   @IsString()
+  from?: string;
+
+  @IsOptional()
+  @IsString()
+  to?: string;
+
+  @IsOptional()
+  @IsString()
   cursor?: string;
 
   @IsOptional()
-  @Type(() => Number)
   @IsInt()
-  @Min(1)
   limit?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  days?: number;
 }

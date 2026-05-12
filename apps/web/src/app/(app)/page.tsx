@@ -2,159 +2,104 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { dashboardApi } from '@/lib/api/dashboard';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Apple, Dumbbell, Scale } from 'lucide-react';
+import { progressApi } from '@/lib/api/progress';
+import { StepsCard } from '@/components/dashboard/steps-card';
 
-function greeting() {
+function greeting(): string {
   const h = new Date().getHours();
-  if (h < 12) return 'Bom dia 🌅';
-  if (h < 18) return 'Boa tarde ☀️';
-  return 'Boa noite 🌙';
-}
-
-function todayLabel() {
-  return format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR });
-}
-
-function CardSkeleton() {
-  return <div className="h-24 animate-pulse rounded-lg bg-muted" />;
+  if (h < 6) return 'Boa madrugada';
+  if (h < 12) return 'Bom dia';
+  if (h < 18) return 'Boa tarde';
+  return 'Boa noite';
 }
 
 export default function HomePage() {
-  const { data, isLoading } = useQuery({
-    queryKey: ['dashboard', 'today'],
-    queryFn: () => dashboardApi.today(),
-    staleTime: 60_000,
-  });
+  const today = useQuery({ queryKey: ['dashboard', 'today'], queryFn: () => progressApi.today() });
 
   return (
     <div className="space-y-4 p-4">
       <header>
         <h1 className="text-xl font-semibold">{greeting()}</h1>
-        <p className="text-sm capitalize text-muted-foreground">{todayLabel()}</p>
+        <p className="text-sm text-muted-foreground">
+          {today.data?.date ?? new Date().toISOString().slice(0, 10)}
+        </p>
       </header>
 
-      <div className="grid grid-cols-2 gap-3">
-        {/* Nutrição */}
-        {isLoading ? (
-          <CardSkeleton />
-        ) : (
-          <Link href="/nutrition">
-            <Card className="h-full transition-colors hover:bg-accent/50">
-              <CardHeader className="pb-1 pt-3">
-                <CardTitle className="text-xs font-medium text-muted-foreground">
-                  Nutrição hoje
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pb-3">
-                <p className="text-lg font-semibold tabular-nums">
-                  {data ? Math.round(data.nutrition.totals.kcal) : '—'}{' '}
-                  <span className="text-xs font-normal text-muted-foreground">kcal</span>
+      {today.isLoading && <p className="text-sm text-muted-foreground">Carregando…</p>}
+
+      {today.data && (
+        <>
+          <StepsCard data={today.data.steps} />
+
+          <div className="grid grid-cols-1 gap-3">
+            <Link
+              href="/nutrition"
+              className="flex items-center gap-3 rounded-lg border bg-card p-4 hover:bg-accent"
+            >
+              <Apple className="h-6 w-6 text-primary" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">Nutrição</p>
+                <p className="text-xs text-muted-foreground tabular-nums">
+                  {Math.round(today.data.nutrition.consumed.kcal)} kcal ·{' '}
+                  {today.data.nutrition.mealsLogged} refeições
                 </p>
-                {data && (
-                  <p className="text-xs text-muted-foreground">
-                    {data.nutrition.mealsCount} refeição
-                    {data.nutrition.mealsCount !== 1 ? 'ões' : ''}
-                    {data.nutrition.goals?.kcalMax ? ` / ${data.nutrition.goals.kcalMax} meta` : ''}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </Link>
-        )}
+              </div>
+            </Link>
 
-        {/* Treino */}
-        {isLoading ? (
-          <CardSkeleton />
-        ) : (
-          <Link href={data?.workout.hasSession ? `/workout/${data.workout.sessionId}` : '/workout'}>
-            <Card className="h-full transition-colors hover:bg-accent/50">
-              <CardHeader className="pb-1 pt-3">
-                <CardTitle className="text-xs font-medium text-muted-foreground">Treino</CardTitle>
-              </CardHeader>
-              <CardContent className="pb-3">
-                {data?.workout.hasSession ? (
-                  <>
-                    <p className="text-sm font-semibold text-emerald-400">Sessão ativa</p>
-                    <p className="text-xs text-muted-foreground">
-                      {data.workout.exercisesLogged} exercício
-                      {data.workout.exercisesLogged !== 1 ? 's' : ''} ·{' '}
-                      {Math.round(data.workout.volumeKg)} kg
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-sm font-medium text-muted-foreground">Sem treino hoje</p>
-                    <p className="text-xs text-blue-400">Iniciar sessão →</p>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          </Link>
-        )}
-
-        {/* Peso */}
-        {isLoading ? (
-          <CardSkeleton />
-        ) : (
-          <Link href="/progress">
-            <Card className="h-full transition-colors hover:bg-accent/50">
-              <CardHeader className="pb-1 pt-3">
-                <CardTitle className="text-xs font-medium text-muted-foreground">Peso</CardTitle>
-              </CardHeader>
-              <CardContent className="pb-3">
-                {data?.weight.today != null ? (
-                  <p className="text-lg font-semibold tabular-nums">
-                    {data.weight.today}{' '}
-                    <span className="text-xs font-normal text-muted-foreground">kg</span>
-                  </p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Não registrado</p>
-                )}
-                {data?.weight.lastLogDate && data.weight.today == null && (
-                  <p className="text-xs text-muted-foreground">
-                    Último: {format(new Date(data.weight.lastLogDate), 'dd/MM', { locale: ptBR })}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </Link>
-        )}
-
-        {/* Passos */}
-        {isLoading ? (
-          <CardSkeleton />
-        ) : (
-          <Link href="/progress">
-            <Card className="h-full transition-colors hover:bg-accent/50">
-              <CardHeader className="pb-1 pt-3">
-                <CardTitle className="text-xs font-medium text-muted-foreground">Passos</CardTitle>
-              </CardHeader>
-              <CardContent className="pb-3">
-                <p className="text-lg font-semibold tabular-nums">
-                  {data ? data.steps.today.toLocaleString('pt-BR') : '—'}
+            <Link
+              href="/workout"
+              className="flex items-center gap-3 rounded-lg border bg-card p-4 hover:bg-accent"
+            >
+              <Dumbbell className="h-6 w-6 text-primary" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">Treino</p>
+                <p className="text-xs text-muted-foreground">
+                  {today.data.workout.completedToday
+                    ? 'Concluído hoje'
+                    : today.data.workout.sessionInProgress
+                      ? 'Sessão em andamento'
+                      : 'Sem treino'}
                 </p>
-                {data && data.steps.goal > 0 && (
-                  <>
-                    <p className="text-xs text-muted-foreground">
-                      {Math.round(data.steps.percentGoal)}% da meta (
-                      {data.steps.goal.toLocaleString('pt-BR')})
-                    </p>
-                    <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-secondary">
-                      <div
-                        className="h-full rounded-full bg-blue-500"
-                        style={{ width: `${Math.min(100, data.steps.percentGoal)}%` }}
-                      />
-                    </div>
-                  </>
+              </div>
+            </Link>
+
+            <Link
+              href="/progress"
+              className="flex items-center gap-3 rounded-lg border bg-card p-4 hover:bg-accent"
+            >
+              <Scale className="h-6 w-6 text-primary" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">Peso</p>
+                <p className="text-xs text-muted-foreground">
+                  {today.data.weight.latest
+                    ? `${today.data.weight.latest.weightKg.toFixed(1)} kg`
+                    : 'Sem registros'}
+                </p>
+              </div>
+            </Link>
+          </div>
+
+          {(today.data.streak.nutritionDays > 0 ||
+            today.data.streak.stepsDays > 0 ||
+            today.data.streak.workoutWeeks > 0) && (
+            <div className="rounded-lg border bg-card p-4 text-sm">
+              <p className="mb-1 font-medium">Streaks</p>
+              <ul className="space-y-1 text-muted-foreground">
+                {today.data.streak.nutritionDays > 0 && (
+                  <li>🍽️ {today.data.streak.nutritionDays} dias logando refeições</li>
                 )}
-              </CardContent>
-            </Card>
-          </Link>
-        )}
-      </div>
+                {today.data.streak.stepsDays > 0 && (
+                  <li>👣 {today.data.streak.stepsDays} dias batendo meta de passos</li>
+                )}
+                {today.data.streak.workoutWeeks > 0 && (
+                  <li>🏋️ {today.data.streak.workoutWeeks} semanas treinando</li>
+                )}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

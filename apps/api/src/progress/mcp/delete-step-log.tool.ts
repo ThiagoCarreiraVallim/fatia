@@ -10,15 +10,11 @@ import {
 @Injectable()
 @McpTool()
 export class DeleteStepLogTool implements McpToolDef {
-  constructor(private readonly stepLogs: StepLogService) {}
-
+  constructor(private readonly steps: StepLogService) {}
   readonly name = 'delete_step_log';
-  readonly description = 'Deletes a step log entry by ID.';
-  readonly inputSchema = {
-    id: z.string(),
-  } as const;
-
-  execute(input: { id: string }, { userId }: McpToolContext) {
-    return this.stepLogs.delete(userId, input.id);
+  readonly description = 'Deleta um log de passos.';
+  readonly inputSchema = { stepLogId: z.string().uuid() } as const;
+  execute(input: { stepLogId: string }, { userId }: McpToolContext) {
+    return this.steps.delete(input.stepLogId, userId);
   }
 }

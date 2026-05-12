@@ -11,16 +11,12 @@ import {
 @McpTool()
 export class GetWeightProgressTool implements McpToolDef {
   constructor(private readonly progress: ProgressService) {}
-
   readonly name = 'get_weight_progress';
-  readonly description =
-    'Returns body weight progress over recent days including daily points, weekly averages, and net delta.';
+  readonly description = 'Série temporal de peso, médias semanais e delta total no período.';
   readonly inputSchema = {
-    days: z.number().int().positive().optional().default(30),
-    timezone: z.string().optional(),
+    days: z.union([z.literal(14), z.literal(30), z.literal(90), z.literal(180), z.literal(365)]),
   } as const;
-
-  execute(input: { days?: number; timezone?: string }, { userId }: McpToolContext) {
-    return this.progress.weightProgress(userId, input.days ?? 30, input.timezone ?? 'UTC');
+  execute(input: { days: number }, { userId, timezone }: McpToolContext) {
+    return this.progress.weightProgress(input.days, { userId, timezone });
   }
 }

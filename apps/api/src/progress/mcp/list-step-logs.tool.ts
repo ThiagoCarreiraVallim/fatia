@@ -10,17 +10,20 @@ import {
 @Injectable()
 @McpTool()
 export class ListStepLogsTool implements McpToolDef {
-  constructor(private readonly stepLogs: StepLogService) {}
-
+  constructor(private readonly steps: StepLogService) {}
   readonly name = 'list_step_logs';
-  readonly description = 'Lists step log entries for the user.';
+  readonly description =
+    'Lista logs de passos com filtros de período. Retorna todos os logs (não o efetivo do dia).';
   readonly inputSchema = {
-    days: z.number().int().positive().optional(),
+    from: z.string().optional(),
+    to: z.string().optional(),
+    limit: z.number().int().min(1).max(100).optional(),
     cursor: z.string().optional(),
-    limit: z.number().int().positive().max(100).optional(),
   } as const;
-
-  execute(input: { days?: number; cursor?: string; limit?: number }, { userId }: McpToolContext) {
-    return this.stepLogs.list(userId, input);
+  execute(
+    input: { from?: string; to?: string; limit?: number; cursor?: string },
+    { userId }: McpToolContext,
+  ) {
+    return this.steps.list(input, userId);
   }
 }

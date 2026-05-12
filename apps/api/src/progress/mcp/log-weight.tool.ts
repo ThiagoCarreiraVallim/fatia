@@ -10,21 +10,19 @@ import {
 @Injectable()
 @McpTool()
 export class LogWeightTool implements McpToolDef {
-  constructor(private readonly weightLogs: WeightLogService) {}
-
+  constructor(private readonly weights: WeightLogService) {}
   readonly name = 'log_weight';
-  readonly description =
-    'Logs a body weight measurement. Call this when the user reports their weight.';
+  readonly description = 'Registra uma medição de peso corporal.';
   readonly inputSchema = {
     weightKg: z.number().positive(),
-    loggedAt: z.string().describe('ISO 8601 datetime'),
+    loggedAt: z.string().optional().describe('ISO datetime; default agora'),
     notes: z.string().max(500).optional(),
   } as const;
-
-  execute(
-    input: { weightKg: number; loggedAt: string; notes?: string },
+  async execute(
+    input: { weightKg: number; loggedAt?: string; notes?: string },
     { userId }: McpToolContext,
   ) {
-    return this.weightLogs.create(userId, input);
+    const log = await this.weights.create(input, userId);
+    return { weightLogId: log.id };
   }
 }

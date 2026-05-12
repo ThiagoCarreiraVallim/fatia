@@ -10,18 +10,19 @@ import {
 @Injectable()
 @McpTool()
 export class ListWeightLogsTool implements McpToolDef {
-  constructor(private readonly weightLogs: WeightLogService) {}
-
+  constructor(private readonly weights: WeightLogService) {}
   readonly name = 'list_weight_logs';
-  readonly description =
-    'Lists weight log entries for the user, optionally filtered by recent days.';
+  readonly description = 'Lista logs de peso, com filtro de período e cursor de paginação.';
   readonly inputSchema = {
-    days: z.number().int().positive().optional().default(30),
+    from: z.string().optional(),
+    to: z.string().optional(),
+    limit: z.number().int().min(1).max(100).optional(),
     cursor: z.string().optional(),
-    limit: z.number().int().positive().max(100).optional(),
   } as const;
-
-  execute(input: { days?: number; cursor?: string; limit?: number }, { userId }: McpToolContext) {
-    return this.weightLogs.list(userId, input);
+  execute(
+    input: { from?: string; to?: string; limit?: number; cursor?: string },
+    { userId }: McpToolContext,
+  ) {
+    return this.weights.list(input, userId);
   }
 }

@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
-import { PwaRegister } from '@/components/pwa-register';
+import { ServiceWorkerRegister } from '@/components/sw-register';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -14,6 +14,10 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: 'black-translucent',
     title: 'Fatia',
+  },
+  icons: {
+    icon: '/icons/icon.svg',
+    apple: '/icons/icon.svg',
   },
 };
 
@@ -29,7 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt-BR" className="dark">
       <body className={inter.className}>
         <Providers>{children}</Providers>
-        <PwaRegister />
+        <ServiceWorkerRegister />
       </body>
     </html>
   );

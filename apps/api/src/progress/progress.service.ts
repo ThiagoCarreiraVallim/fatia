@@ -1,296 +1,289 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
+import { StepLogService } from './step-log.service';
+import { addDaysIso, todayInTz, weekStartInTz } from './helpers/date-tz';
+import { calculatePace } from '../workout/helpers/calculate-pace';
 import { estimate1RM } from '../workout/helpers/estimate-1rm';
-import { isCardioExercise } from '../workout/helpers/is-cardio';
-import { lastNDates, startOfWeekInTz } from './helpers/date-utils';
 
-export type StrengthMetric = '1rm' | 'volume' | 'weight';
-export type CardioMetric = 'duration' | 'distance' | 'pace' | 'kcal';
+type StrengthMetric = 'max_weight' | 'estimated_1rm' | 'total_volume';
+type CardioMetric = 'duration' | 'distance' | 'pace' | 'kcal';
+
+interface UserCtx {
+  userId: string;
+  timezone: string;
+}
 
 @Injectable()
 export class ProgressService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly stepLogs: StepLogService,
+  ) {}
 
-  /**
-   * Evolução de peso corporal: pontos diários + médias semanais + delta (kg).
-   * `timezone` é usado apenas para agrupar semanas.
-   */
-  async weightProgress(userId: string, days: number, timezone: string) {
-    const startDate = new Date();
-    startDate.setUTCDate(startDate.getUTCDate() - (days - 1));
-    startDate.setUTCHours(0, 0, 0, 0);
-
+  async weightProgress(days: number, ctx: UserCtx) {
+    const today = todayInTz(ctx.timezone);
+    const fromIso = addDaysIso(today, -(days - 1));
     const logs = await this.prisma.weightLog.findMany({
-      where: { userId, loggedAt: { gte: startDate } },
+      where: { userId: ctx.userId, loggedAt: { gte: new Date(`${fromIso}T00:00:00Z`) } },
       orderBy: { loggedAt: 'asc' },
-      select: { id: true, loggedAt: true, weightKg: true },
     });
-
     const points = logs.map((l) => ({
-      id: l.id,
       date: l.loggedAt.toISOString().slice(0, 10),
       weightKg: l.weightKg,
     }));
-
-    const weeklyAvg = computeWeeklyAvg(
-      points.map((p) => ({
-        weekStart: startOfWeekInTz(new Date(`${p.date}T00:00:00Z`), timezone),
-        value: p.weightKg,
-      })),
-    );
-
-    const delta =
-      points.length >= 2 ? round2(points[points.length - 1].weightKg - points[0].weightKg) : null;
-
-    return { points, weeklyAvg, delta };
+    const weeklyAverages = this.weeklyAverages(points, ctx.timezone);
+    const totalDeltaKg =
+      points.length >= 2 ? points[points.length - 1].weightKg - points[0].weightKg : 0;
+    const currentWeightKg = points.length > 0 ? points[points.length - 1].weightKg : null;
+    return { points, weeklyAverages, totalDeltaKg, currentWeightKg };
   }
 
-  /**
-   * Evolução de força por exercício. Métrica: '1rm' | 'volume' | 'weight'.
-   * Agrupa por sessão (um ponto por sessão).
-   */
-  async strengthProgress(
-    userId: string,
-    exerciseId: number,
-    days: number,
-    metric: StrengthMetric,
+  private weeklyAverages(
+    points: Array<{ date: string; weightKg: number }>,
     timezone: string,
-  ) {
-    const exercise = await this.assertExerciseAccess(userId, exerciseId);
-    if (isCardioExercise(exercise)) {
-      throw new BadRequestException('Use cardioProgress for cardio exercises');
+  ): Array<{ weekStart: string; avgKg: number; deltaKg: number | null }> {
+    const buckets = new Map<string, number[]>();
+    for (const p of points) {
+      const ws = weekStartInTz(new Date(`${p.date}T12:00:00Z`), timezone);
+      const arr = buckets.get(ws) ?? [];
+      arr.push(p.weightKg);
+      buckets.set(ws, arr);
     }
-
-    const startDate = new Date();
-    startDate.setUTCDate(startDate.getUTCDate() - (days - 1));
-    startDate.setUTCHours(0, 0, 0, 0);
-
-    const sets = await this.prisma.sessionSet.findMany({
-      where: { exerciseId, session: { userId, startedAt: { gte: startDate } } },
-      include: { session: { select: { id: true, startedAt: true } } },
-      orderBy: [{ session: { startedAt: 'asc' } }, { setNumber: 'asc' }],
-    });
-
-    // Group sets by sessionId
-    const bySession = new Map<string, { date: string; sets: typeof sets }>();
-    for (const s of sets) {
-      const sessionId = s.session.id;
-      if (!bySession.has(sessionId)) {
-        bySession.set(sessionId, {
-          date: s.session.startedAt.toISOString().slice(0, 10),
-          sets: [],
-        });
-      }
-      bySession.get(sessionId)!.sets.push(s);
+    const sorted = [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b));
+    const result: Array<{ weekStart: string; avgKg: number; deltaKg: number | null }> = [];
+    let prev: number | null = null;
+    for (const [weekStart, vals] of sorted) {
+      const avgKg = vals.reduce((a, b) => a + b, 0) / vals.length;
+      result.push({ weekStart, avgKg, deltaKg: prev === null ? null : avgKg - prev });
+      prev = avgKg;
     }
-
-    const points: { sessionId: string; date: string; value: number }[] = [];
-    for (const [sessionId, { date, sets: sessionSets }] of bySession) {
-      let value = 0;
-      if (metric === '1rm') {
-        for (const s of sessionSets) {
-          if (s.weightKg != null && s.reps != null) {
-            value = Math.max(value, estimate1RM(s.weightKg, s.reps));
-          }
-        }
-      } else if (metric === 'volume') {
-        for (const s of sessionSets) {
-          if (s.weightKg != null && s.reps != null) {
-            value = round2(value + s.weightKg * s.reps);
-          }
-        }
-      } else {
-        // weight = max weightKg in session
-        for (const s of sessionSets) {
-          if (s.weightKg != null) {
-            value = Math.max(value, s.weightKg);
-          }
-        }
-      }
-      points.push({ sessionId, date, value });
-    }
-
-    const weeklyAvg = computeWeeklyAvg(
-      points.map((p) => ({
-        weekStart: startOfWeekInTz(new Date(`${p.date}T00:00:00Z`), timezone),
-        value: p.value,
-      })),
-    );
-
-    return { exerciseId, metric, points, weeklyAvg };
+    return result;
   }
 
-  /**
-   * Evolução de cardio por exercício. Métrica: 'duration' | 'distance' | 'pace' | 'kcal'.
-   * Agrupa por sessão.
-   */
-  async cardioProgress(
-    userId: string,
-    exerciseId: number,
-    days: number,
-    metric: CardioMetric,
-    timezone: string,
-  ) {
-    const exercise = await this.assertExerciseAccess(userId, exerciseId);
-    if (!isCardioExercise(exercise)) {
-      throw new BadRequestException('Use strengthProgress for strength exercises');
+  async strengthProgress(exerciseId: number, days: number, metric: StrengthMetric, ctx: UserCtx) {
+    const exercise = await this.prisma.exercise.findUnique({ where: { id: exerciseId } });
+    if (!exercise) throw new NotFoundException('Exercise not found');
+    if (exercise.muscleGroup === 'cardio') {
+      throw new BadRequestException('Use cardio progress for cardio exercises');
     }
 
-    const startDate = new Date();
-    startDate.setUTCDate(startDate.getUTCDate() - (days - 1));
-    startDate.setUTCHours(0, 0, 0, 0);
-
+    const fromIso = addDaysIso(todayInTz(ctx.timezone), -(days - 1));
     const sets = await this.prisma.sessionSet.findMany({
-      where: { exerciseId, session: { userId, startedAt: { gte: startDate } } },
+      where: {
+        exerciseId,
+        weightKg: { not: null },
+        reps: { not: null },
+        session: { userId: ctx.userId, startedAt: { gte: new Date(`${fromIso}T00:00:00Z`) } },
+      },
       include: { session: { select: { id: true, startedAt: true } } },
-      orderBy: [{ session: { startedAt: 'asc' } }, { setNumber: 'asc' }],
     });
 
     const bySession = new Map<
       string,
-      { date: string; totalDuration: number; totalDistance: number; totalKcal: number }
+      { sessionId: string; sessionDate: string; weightKg: number; reps: number; volume: number }
     >();
     for (const s of sets) {
-      const sessionId = s.session.id;
-      if (!bySession.has(sessionId)) {
-        bySession.set(sessionId, {
-          date: s.session.startedAt.toISOString().slice(0, 10),
-          totalDuration: 0,
-          totalDistance: 0,
-          totalKcal: 0,
-        });
-      }
-      const slot = bySession.get(sessionId)!;
-      slot.totalDuration += s.durationSeconds ?? 0;
-      slot.totalDistance += s.distanceMeters ?? 0;
-      slot.totalKcal += s.kcalBurned ?? 0;
-    }
-
-    const points: { sessionId: string; date: string; value: number }[] = [];
-    for (const [sessionId, slot] of bySession) {
-      let value = 0;
-      if (metric === 'duration') value = slot.totalDuration;
-      else if (metric === 'distance') value = round2(slot.totalDistance);
-      else if (metric === 'kcal') value = slot.totalKcal;
-      else if (metric === 'pace') {
-        // seconds per km; 0 if no distance
-        value =
-          slot.totalDistance > 0 ? round2((slot.totalDuration / slot.totalDistance) * 1000) : 0;
-      }
-      points.push({ sessionId, date: slot.date, value });
-    }
-
-    const weeklyAvg = computeWeeklyAvg(
-      points.map((p) => ({
-        weekStart: startOfWeekInTz(new Date(`${p.date}T00:00:00Z`), timezone),
-        value: p.value,
-      })),
-    );
-
-    return { exerciseId, metric, points, weeklyAvg };
-  }
-
-  /**
-   * Volume de treino de força por semana (kg * reps totais).
-   * Exclui exercícios de cardio. Opcionalmente filtra por muscleGroup.
-   */
-  async volumeProgress(userId: string, days: number, timezone: string, muscleGroup?: string) {
-    const startDate = new Date();
-    startDate.setUTCDate(startDate.getUTCDate() - (days - 1));
-    startDate.setUTCHours(0, 0, 0, 0);
-
-    const sessions = await this.prisma.workoutSession.findMany({
-      where: { userId, startedAt: { gte: startDate } },
-      include: {
-        sets: {
-          where: muscleGroup ? { exercise: { muscleGroup } } : undefined,
-          include: { exercise: { select: { muscleGroup: true } } },
-        },
-      },
-      orderBy: { startedAt: 'asc' },
-    });
-
-    // Group volume by week start (excluding cardio sets)
-    const byWeek = new Map<string, number>();
-    for (const session of sessions) {
-      const sessionDate = session.startedAt.toISOString().slice(0, 10);
-      const weekStart = startOfWeekInTz(new Date(`${sessionDate}T00:00:00Z`), timezone);
-      let weekVolume = byWeek.get(weekStart) ?? 0;
-      for (const s of session.sets) {
-        if (!isCardioExercise(s.exercise) && s.weightKg != null && s.reps != null) {
-          weekVolume = round2(weekVolume + s.weightKg * s.reps);
+      const date = s.session.startedAt.toISOString().slice(0, 10);
+      const cur = bySession.get(s.session.id);
+      const volume = (s.weightKg ?? 0) * (s.reps ?? 0);
+      const candidate = {
+        sessionId: s.session.id,
+        sessionDate: date,
+        weightKg: s.weightKg ?? 0,
+        reps: s.reps ?? 0,
+        volume,
+      };
+      if (!cur) {
+        bySession.set(s.session.id, candidate);
+      } else {
+        if (metric === 'max_weight' || metric === 'estimated_1rm') {
+          if (candidate.weightKg > cur.weightKg) bySession.set(s.session.id, candidate);
+        } else if (metric === 'total_volume') {
+          cur.volume += volume; // accumulate
         }
       }
-      byWeek.set(weekStart, weekVolume);
+    }
+    const points = [...bySession.values()]
+      .sort((a, b) => a.sessionDate.localeCompare(b.sessionDate))
+      .map((p) => {
+        let value: number;
+        if (metric === 'max_weight') value = p.weightKg;
+        else if (metric === 'estimated_1rm') value = estimate1RM(p.weightKg, p.reps);
+        else value = p.volume;
+        return {
+          sessionDate: p.sessionDate,
+          sessionId: p.sessionId,
+          value,
+          bestSet: { weightKg: p.weightKg, reps: p.reps },
+        };
+      });
+
+    const startValue = points[0]?.value ?? null;
+    const currentValue = points[points.length - 1]?.value ?? null;
+    const deltaPercent =
+      startValue && currentValue ? ((currentValue - startValue) / startValue) * 100 : null;
+
+    return {
+      exercise: { id: exercise.id, name: exercise.name },
+      metric,
+      points,
+      startValue,
+      currentValue,
+      deltaPercent,
+    };
+  }
+
+  async cardioProgress(exerciseId: number, days: number, metric: CardioMetric, ctx: UserCtx) {
+    const exercise = await this.prisma.exercise.findUnique({ where: { id: exerciseId } });
+    if (!exercise) throw new NotFoundException('Exercise not found');
+    if (exercise.muscleGroup !== 'cardio') {
+      throw new BadRequestException('Exercise is not cardio');
     }
 
-    const weeks = Array.from(byWeek.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([weekStart, volume]) => ({ weekStart, volume }));
-
-    return { weeks, muscleGroup: muscleGroup ?? null };
-  }
-
-  /**
-   * Progresso de passos: pontos diários (max policy) + médias semanais + dias batendo meta.
-   */
-  async stepsProgress(userId: string, days: number, timezone: string) {
-    const dates = lastNDates(days, timezone);
-    const startDate = dates[0];
-    const endDate = dates[dates.length - 1];
-
-    const logs = await this.prisma.stepLog.groupBy({
-      by: ['date'],
-      where: { userId, date: { gte: startDate, lte: endDate } },
-      _max: { steps: true },
-    });
-
-    const goals = await this.prisma.userGoals.findUnique({ where: { userId } });
-    const dailyTarget = goals?.dailyStepsTarget ?? 8000;
-
-    const byDate = new Map<string, number>(logs.map((r) => [r.date, r._max.steps ?? 0]));
-
-    const points = dates.map((d) => ({ date: d, steps: byDate.get(d) ?? 0 }));
-    const daysHitGoal = points.filter((p) => p.steps >= dailyTarget).length;
-
-    const weeklyAvg = computeWeeklyAvg(
-      points.map((p) => ({
-        weekStart: startOfWeekInTz(new Date(`${p.date}T00:00:00Z`), timezone),
-        value: p.steps,
-      })),
-    );
-
-    return { points, weeklyAvg, daysHitGoal, dailyTarget };
-  }
-
-  private async assertExerciseAccess(userId: string, exerciseId: number) {
-    const exercise = await this.prisma.exercise.findFirst({
+    const fromIso = addDaysIso(todayInTz(ctx.timezone), -(days - 1));
+    const sets = await this.prisma.sessionSet.findMany({
       where: {
-        id: exerciseId,
-        OR: [{ createdByUserId: null }, { createdByUserId: userId }],
+        exerciseId,
+        durationSeconds: { not: null },
+        session: { userId: ctx.userId, startedAt: { gte: new Date(`${fromIso}T00:00:00Z`) } },
       },
+      include: { session: { select: { id: true, startedAt: true } } },
+      orderBy: [{ session: { startedAt: 'asc' } }],
     });
-    if (!exercise) throw new NotFoundException('Exercise not found');
-    return exercise;
-  }
-}
 
-/** Agrupa pontos {weekStart, value} e retorna médias por semana. */
-function computeWeeklyAvg(
-  points: { weekStart: string; value: number }[],
-): { weekStart: string; avg: number }[] {
-  const byWeek = new Map<string, { sum: number; count: number }>();
-  for (const p of points) {
-    const slot = byWeek.get(p.weekStart) ?? { sum: 0, count: 0 };
-    slot.sum = round2(slot.sum + p.value);
-    slot.count += 1;
-    byWeek.set(p.weekStart, slot);
-  }
-  return Array.from(byWeek.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([weekStart, { sum, count }]) => ({ weekStart, avg: round2(sum / count) }));
-}
+    const bySession = new Map<
+      string,
+      {
+        sessionId: string;
+        sessionDate: string;
+        durationSeconds: number;
+        distanceMeters: number | null;
+        kcalBurned: number | null;
+      }
+    >();
+    for (const s of sets) {
+      const cur = bySession.get(s.session.id);
+      const candidate = {
+        sessionId: s.session.id,
+        sessionDate: s.session.startedAt.toISOString().slice(0, 10),
+        durationSeconds: (cur?.durationSeconds ?? 0) + (s.durationSeconds ?? 0),
+        distanceMeters:
+          (cur?.distanceMeters ?? 0) + (s.distanceMeters ?? 0) || cur?.distanceMeters || null,
+        kcalBurned: (cur?.kcalBurned ?? 0) + (s.kcalBurned ?? 0) || cur?.kcalBurned || null,
+      };
+      bySession.set(s.session.id, candidate);
+    }
+    const points = [...bySession.values()].map((p) => {
+      const paceSecondsPerKm = calculatePace(p.durationSeconds, p.distanceMeters ?? 0);
+      let value: number;
+      if (metric === 'duration') value = p.durationSeconds;
+      else if (metric === 'distance') value = p.distanceMeters ?? 0;
+      else if (metric === 'pace') value = paceSecondsPerKm ?? 0;
+      else value = p.kcalBurned ?? 0;
+      return {
+        sessionDate: p.sessionDate,
+        sessionId: p.sessionId,
+        durationSeconds: p.durationSeconds,
+        distanceMeters: p.distanceMeters,
+        paceSecondsPerKm,
+        kcalBurned: p.kcalBurned,
+        value,
+      };
+    });
 
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
+    const bestSession = points.length
+      ? points.reduce((best, p) => (p.value > best.value ? p : best), points[0])
+      : null;
+
+    return {
+      exercise: { id: exercise.id, name: exercise.name },
+      metric,
+      points,
+      bestSession: bestSession
+        ? {
+            sessionId: bestSession.sessionId,
+            sessionDate: bestSession.sessionDate,
+            value: bestSession.value,
+          }
+        : null,
+    };
+  }
+
+  async volumeProgress(days: number, muscleGroup: string | undefined, ctx: UserCtx) {
+    const fromIso = addDaysIso(todayInTz(ctx.timezone), -(days - 1));
+    const sets = await this.prisma.sessionSet.findMany({
+      where: {
+        weightKg: { not: null },
+        reps: { not: null },
+        session: { userId: ctx.userId, startedAt: { gte: new Date(`${fromIso}T00:00:00Z`) } },
+        ...(muscleGroup && { exercise: { muscleGroup } }),
+      },
+      include: { session: { select: { id: true, startedAt: true } } },
+    });
+
+    const byWeek = new Map<string, { volume: number; sessions: Set<string> }>();
+    for (const s of sets) {
+      const ws = weekStartInTz(s.session.startedAt, ctx.timezone);
+      const cur = byWeek.get(ws) ?? { volume: 0, sessions: new Set<string>() };
+      cur.volume += (s.weightKg ?? 0) * (s.reps ?? 0);
+      cur.sessions.add(s.session.id);
+      byWeek.set(ws, cur);
+    }
+
+    const weeks = [...byWeek.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([weekStart, v]) => ({
+        weekStart,
+        totalVolumeKg: v.volume,
+        sessionCount: v.sessions.size,
+      }));
+    const averageWeeklyVolumeKg = weeks.length
+      ? weeks.reduce((a, w) => a + w.totalVolumeKg, 0) / weeks.length
+      : 0;
+    return { weeks, averageWeeklyVolumeKg };
+  }
+
+  async stepsProgress(days: number, ctx: UserCtx) {
+    const series = await this.stepLogs.getHistory(days, ctx.userId, ctx.timezone);
+    const goals = await this.prisma.userGoals.findUnique({ where: { userId: ctx.userId } });
+    const target = goals?.dailyStepsTarget ?? null;
+
+    const points = series.map((p) => ({
+      ...p,
+      goalReached: target !== null ? p.steps >= target : null,
+    }));
+
+    const byWeek = new Map<string, number[]>();
+    for (const p of points) {
+      const ws = weekStartInTz(new Date(`${p.date}T12:00:00Z`), ctx.timezone);
+      const arr = byWeek.get(ws) ?? [];
+      arr.push(p.steps);
+      byWeek.set(ws, arr);
+    }
+    const weeklyAverages = [...byWeek.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([weekStart, vals]) => ({
+        weekStart,
+        avgSteps: vals.reduce((a, b) => a + b, 0) / vals.length,
+      }));
+    const totalSteps = points.reduce((a, p) => a + p.steps, 0);
+    const daysWithGoalReached =
+      target !== null ? points.filter((p) => p.steps >= target).length : 0;
+    const averageDaily = points.length ? totalSteps / points.length : 0;
+    const bestDay = points.reduce<{ date: string; steps: number } | null>((best, p) => {
+      if (p.steps === 0) return best;
+      if (!best || p.steps > best.steps) return { date: p.date, steps: p.steps };
+      return best;
+    }, null);
+
+    return {
+      points,
+      weeklyAverages,
+      totalSteps,
+      averageDaily,
+      bestDay,
+      goalTarget: target,
+      daysWithGoalReached,
+    };
+  }
 }

@@ -1,21 +1,20 @@
 import {
-  IsDateString,
-  IsInt,
   IsNumber,
   IsOptional,
+  IsPositive,
   IsString,
+  IsDateString,
   MaxLength,
-  Min,
 } from 'class-validator';
-import { Type } from 'class-transformer';
 
 export class CreateWeightLogDto {
   @IsNumber()
-  @Min(1)
+  @IsPositive()
   weightKg!: number;
 
+  @IsOptional()
   @IsDateString()
-  loggedAt!: string;
+  loggedAt?: string;
 
   @IsOptional()
   @IsString()
@@ -26,7 +25,7 @@ export class CreateWeightLogDto {
 export class UpdateWeightLogDto {
   @IsOptional()
   @IsNumber()
-  @Min(1)
+  @IsPositive()
   weightKg?: number;
 
   @IsOptional()
@@ -41,18 +40,18 @@ export class UpdateWeightLogDto {
 
 export class ListWeightLogsDto {
   @IsOptional()
+  @IsDateString()
+  from?: string;
+
+  @IsOptional()
+  @IsDateString()
+  to?: string;
+
+  @IsOptional()
   @IsString()
   cursor?: string;
 
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
+  @IsNumber()
   limit?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  days?: number;
 }
