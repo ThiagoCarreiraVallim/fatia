@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ExerciseService } from './exercise.service';
+import { WorkoutPlanService } from './workout-plan.service';
 import { WorkoutSessionService } from './workout-session.service';
 import { SessionSetService } from './session-set.service';
 import { SearchExerciseTool } from './mcp/search-exercise.tool';
@@ -27,6 +28,7 @@ import { UpdateWorkoutPlanTool } from './mcp/update-workout-plan.tool';
 @Module({
   providers: [
     ExerciseService,
+    WorkoutPlanService,
     WorkoutSessionService,
     SessionSetService,
 
@@ -53,6 +55,6 @@ import { UpdateWorkoutPlanTool } from './mcp/update-workout-plan.tool';
     UpdateSetTool,
     UpdateWorkoutPlanTool,
   ],
-  exports: [ExerciseService, WorkoutSessionService, SessionSetService],
+  exports: [ExerciseService, WorkoutPlanService, WorkoutSessionService, SessionSetService],
 })
 export class WorkoutModule {}
