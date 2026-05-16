@@ -1,0 +1,163 @@
+# Declarative label configuration for the Fatia repository.
+#
+# Single source of truth. Synced to GitHub by `.github/workflows/labels.yml`
+# on every push to `main` that touches this file.
+#
+# Format consumed by EndBug/label-sync@v2.
+# Docs: https://github.com/EndBug/label-sync
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Type — what kind of change is this?
+# ──────────────────────────────────────────────────────────────────────────────
+- name: "type: bug"
+  color: "d73a4a"
+  description: Something is broken or behaves incorrectly.
+- name: "type: feature"
+  color: "0e8a16"
+  description: New user-facing functionality.
+- name: "type: docs"
+  color: "0075ca"
+  description: Documentation only.
+- name: "type: refactor"
+  color: "fbca04"
+  description: Code change that neither fixes a bug nor adds a feature.
+- name: "type: perf"
+  color: "ff9f1c"
+  description: Performance improvement.
+- name: "type: test"
+  color: "bfd4f2"
+  description: Adding or updating tests.
+- name: "type: chore"
+  color: "cccccc"
+  description: Build, tooling, dependencies, configs.
+- name: "type: security"
+  color: "b60205"
+  description: Security-related change.
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Area — which part of the codebase?
+# ──────────────────────────────────────────────────────────────────────────────
+- name: "area: api"
+  color: "1d76db"
+  description: apps/api (NestJS).
+- name: "area: web"
+  color: "1d76db"
+  description: apps/web (Next.js PWA).
+- name: "area: mcp"
+  color: "1d76db"
+  description: MCP server and tools.
+- name: "area: db"
+  color: "1d76db"
+  description: packages/db (Prisma schema, migrations).
+- name: "area: infra"
+  color: "1d76db"
+  description: Docker, deploy, CI infrastructure.
+- name: "area: docs"
+  color: "1d76db"
+  description: Documentation in /docs or root.
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Status — where is this in the workflow?
+# ──────────────────────────────────────────────────────────────────────────────
+- name: "status: needs triage"
+  color: "ededed"
+  description: Awaiting maintainer review and prioritization.
+- name: "status: in progress"
+  color: "c2e0c6"
+  description: Actively being worked on.
+- name: "status: blocked"
+  color: "e99695"
+  description: Blocked by another issue, decision, or dependency.
+- name: "status: needs review"
+  color: "fbca04"
+  description: Ready for code review.
+- name: "status: needs info"
+  color: "d4c5f9"
+  description: Awaiting more information from reporter.
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Priority — how urgent?
+# ──────────────────────────────────────────────────────────────────────────────
+- name: "priority: critical"
+  color: "b60205"
+  description: Production breakage, security issue, or data loss.
+- name: "priority: high"
+  color: "d93f0b"
+  description: Significant impact, fix soon.
+- name: "priority: medium"
+  color: "fbca04"
+  description: Default priority.
+- name: "priority: low"
+  color: "0e8a16"
+  description: Nice to have, no rush.
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Release — drives semver bump and changelog generation.
+# Applied to merged PRs.
+# ──────────────────────────────────────────────────────────────────────────────
+- name: "release: major"
+  color: "b60205"
+  description: Breaking change. Bumps MAJOR version.
+- name: "release: minor"
+  color: "0e8a16"
+  description: Backwards-compatible feature. Bumps MINOR version.
+- name: "release: patch"
+  color: "5319e7"
+  description: Backwards-compatible fix. Bumps PATCH version.
+- name: "release: skip"
+  color: "ededed"
+  description: Do not include in changelog or trigger a release.
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Deploy — controls what the deploy pipeline does for a PR/issue.
+# ──────────────────────────────────────────────────────────────────────────────
+- name: "deploy: staging"
+  color: "fef2c0"
+  description: Deploy this PR to the staging environment on merge.
+- name: "deploy: production"
+  color: "ff9f1c"
+  description: Promote to production after merge.
+- name: "deploy: hotfix"
+  color: "b60205"
+  description: Urgent fix for production. Fast-track through CI.
+- name: "deploy: skip-ci"
+  color: "ededed"
+  description: Skip the deploy pipeline (docs-only or trivial changes).
+- name: "deploy: needs-migration"
+  color: "d93f0b"
+  description: Requires running database migrations on deploy.
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Community — newcomer-friendly and contribution signals.
+# ──────────────────────────────────────────────────────────────────────────────
+- name: "good first issue"
+  color: "7057ff"
+  description: Good for newcomers.
+- name: "help wanted"
+  color: "008672"
+  description: Extra attention or external contributors welcome.
+- name: "question"
+  color: "d876e3"
+  description: A question or request for clarification.
+- name: "discussion"
+  color: "d4c5f9"
+  description: Needs discussion before action can be taken.
+- name: "duplicate"
+  color: "cfd3d7"
+  description: This issue or PR already exists.
+- name: "wontfix"
+  color: "ffffff"
+  description: This will not be worked on.
+- name: "invalid"
+  color: "e4e669"
+  description: Not a valid issue or PR.
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Automation
+# ──────────────────────────────────────────────────────────────────────────────
+- name: "dependencies"
+  color: "0366d6"
+  description: Updates to dependencies (Dependabot/Renovate).
+- name: "automated"
+  color: "ededed"
+  description: Opened by automation.
