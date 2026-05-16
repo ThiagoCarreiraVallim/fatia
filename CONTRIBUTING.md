@@ -200,43 +200,41 @@ To propose a new label, open a PR editing `.github/labels.yml`.
 
 Labels are namespaced by purpose. Most PRs and issues get at least one **type** + one **area** label. Maintainers add the rest.
 
-| Group       | Purpose                                                  | Examples                                                                                                |
-| ----------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `type:`     | What kind of change.                                     | `type: bug`, `type: feature`, `type: docs`, `type: security`                                            |
-| `area:`     | Which part of the codebase.                              | `area: api`, `area: web`, `area: mcp`, `area: db`, `area: infra`                                        |
-| `status:`   | Where it sits in the workflow.                           | `status: needs triage`, `status: in progress`, `status: blocked`                                        |
-| `priority:` | How urgent.                                              | `priority: critical`, `priority: high`, `priority: medium`, `priority: low`                             |
-| `release:`  | Drives semver bump and changelog. Applied to merged PRs. | `release: major`, `release: minor`, `release: patch`, `release: skip`                                   |
-| `deploy:`   | Controls what the deploy pipeline does for the PR.       | `deploy: staging`, `deploy: production`, `deploy: hotfix`, `deploy: skip-ci`, `deploy: needs-migration` |
-| Community   | Newcomer-friendly and contribution signals.              | `good first issue`, `help wanted`, `question`, `duplicate`, `wontfix`                                   |
+| Group       | Purpose                                                                                                | Examples                                                                    |
+| ----------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `type:`     | What kind of change.                                                                                   | `type: bug`, `type: feature`, `type: docs`, `type: security`                |
+| `area:`     | Which part of the codebase.                                                                            | `area: api`, `area: web`, `area: mcp`, `area: db`, `area: infra`            |
+| `status:`   | Where it sits in the workflow.                                                                         | `status: needs triage`, `status: in progress`, `status: blocked`            |
+| `priority:` | How urgent.                                                                                            | `priority: critical`, `priority: high`, `priority: medium`, `priority: low` |
+| `release:`  | Drives semver bump and changelog → becomes a Git tag → triggers Dokploy deploy. Applied to merged PRs. | `release: major`, `release: minor`, `release: patch`, `release: skip`       |
+| Community   | Newcomer-friendly and contribution signals.                                                            | `good first issue`, `help wanted`, `question`, `duplicate`, `wontfix`       |
 
-### How `release:` labels work
+### How `release:` labels drive deploys
 
-When a PR is merged into `main`, the `release:` label tells release tooling (`release-please` / `semantic-release` — to be wired up) how to bump the version and whether to include the PR in the changelog:
+Production is hosted on **Dokploy**, configured to redeploy whenever a new Git tag is pushed (`Trigger Type: On Tag` against `main`, compose at `infra/docker-compose.prod.yml`). The `release:` label on a merged PR is what eventually produces that tag:
+
+1. PR is merged into `main` with a `release:` label.
+2. Release tooling (`release-please` — to be wired up) aggregates PRs since the last tag and opens a "release PR".
+3. When that release PR is merged, the tag is created (`v0.x.y`) and pushed.
+4. Dokploy detects the new tag, pulls `main`, builds the compose, and deploys.
+
+Mapping of label → semver bump:
 
 - `release: major` — breaking change, bumps `X.0.0`.
 - `release: minor` — new backwards-compatible feature, bumps `0.X.0`.
 - `release: patch` — backwards-compatible fix, bumps `0.0.X`.
-- `release: skip` — internal change that should not appear in release notes (e.g. CI tweaks).
+- `release: skip` — internal change that should not appear in release notes or trigger a deploy (e.g. CI tweaks, internal docs).
 
-If no `release:` label is set, the type label drives the default (`type: feature` → minor, `type: bug`/`type: perf` → patch, `type: docs`/`type: chore`/`type: refactor`/`type: test` → skip).
+If no `release:` label is set, the `type:` label drives the default: `type: feature` → minor, `type: bug`/`type: perf` → patch, `type: docs`/`type: chore`/`type: refactor`/`type: test` → skip.
 
-### How `deploy:` labels work
-
-The deploy pipeline (to be wired up) reads `deploy:` labels on merged PRs:
-
-- `deploy: staging` — deploy to the staging environment on merge to `main`.
-- `deploy: production` — promote to production after successful staging deploy.
-- `deploy: hotfix` — urgent fix for production. Fast-tracked: smaller test matrix, deploys straight to prod after CI passes. Use sparingly.
-- `deploy: needs-migration` — runs `pnpm db:migrate:deploy` as part of the deploy. **Required** whenever the PR touches `packages/db/prisma/`.
-- `deploy: skip-ci` — skip the deploy pipeline entirely (docs-only or trivial changes).
+> **Database migrations** run automatically inside the API container's entrypoint (`prisma migrate deploy`, see `infra/api.Dockerfile`). No extra label or manual step is required when a PR changes the Prisma schema — the deploy will apply pending migrations before the new server starts.
 
 ### Triage flow
 
 1. New issue → maintainer applies `type:`, `area:`, `priority:` and removes `status: needs triage`.
 2. PR opened → contributor or maintainer applies `type:` and `area:`. CI runs on every PR regardless of labels.
-3. Before merge → maintainer ensures `release:` is set (or relies on the default mapping above). If the PR touches the schema, applies `deploy: needs-migration`.
-4. On merge → deploy pipeline reads `deploy:` labels and acts accordingly.
+3. Before merge → maintainer ensures `release:` is set (or relies on the default mapping above).
+4. On merge → release PR is updated by `release-please`. Merging the release PR creates the tag → Dokploy deploys.
 
 ## Project structure
 

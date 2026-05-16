@@ -109,25 +109,6 @@
   description: Do not include in changelog or trigger a release.
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Deploy — controls what the deploy pipeline does for a PR/issue.
-# ──────────────────────────────────────────────────────────────────────────────
-- name: "deploy: staging"
-  color: "fef2c0"
-  description: Deploy this PR to the staging environment on merge.
-- name: "deploy: production"
-  color: "ff9f1c"
-  description: Promote to production after merge.
-- name: "deploy: hotfix"
-  color: "b60205"
-  description: Urgent fix for production. Fast-track through CI.
-- name: "deploy: skip-ci"
-  color: "ededed"
-  description: Skip the deploy pipeline (docs-only or trivial changes).
-- name: "deploy: needs-migration"
-  color: "d93f0b"
-  description: Requires running database migrations on deploy.
-
-# ──────────────────────────────────────────────────────────────────────────────
 # Community — newcomer-friendly and contribution signals.
 # ──────────────────────────────────────────────────────────────────────────────
 - name: "good first issue"
