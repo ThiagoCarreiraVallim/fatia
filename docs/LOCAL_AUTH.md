@@ -68,7 +68,7 @@ The NestJS API validates JWTs by `aud` claim. That `aud` is the **identifier** o
 This is the OIDC client the Next.js app uses.
 
 1. Go to **Applications → Create application → Traditional Web** → name it `Fatia Web`.
-2. **Redirect URIs:** `http://localhost:3030/api/logto/sign-in-callback`
+2. **Redirect URIs:** `http://localhost:3030/api/logto/callback`
 3. **Post sign-out redirect URIs:** `http://localhost:3030`
 4. Save.
 5. From the app's **Settings** tab, copy:
