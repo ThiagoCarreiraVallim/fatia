@@ -7,7 +7,7 @@
 # /app/node_modules/.prisma/client — caminho previsível para COPY.
 
 # ---------- Base ----------
-FROM node:20-alpine AS base
+FROM node:26-alpine AS base
 RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 RUN apk add --no-cache openssl libc6-compat
 WORKDIR /app
