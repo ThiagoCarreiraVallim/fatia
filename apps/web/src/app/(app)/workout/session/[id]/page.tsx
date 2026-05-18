@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';
 import { workoutApi, type SessionSet } from '@/lib/api/workout';
+import { isCardioExercise } from '@/lib/workout/is-cardio';
 import { ExerciseCard } from '@/components/workout/exercise-card';
 
 function groupByExercise(sets: SessionSet[]) {
@@ -17,7 +18,7 @@ function groupByExercise(sets: SessionSet[]) {
       map.set(s.exerciseId, {
         exerciseId: s.exerciseId,
         exerciseName: s.exercise.name,
-        isCardio: s.exercise.muscleGroup === 'CARDIO',
+        isCardio: isCardioExercise(s.exercise),
         sets: [],
       });
     }

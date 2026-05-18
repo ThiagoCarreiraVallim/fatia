@@ -6,6 +6,7 @@ import {
   type McpToolDef,
 } from '../../common/decorators/tool.decorator';
 import { ExerciseService } from '../exercise.service';
+import { muscleGroupSchema } from '../helpers/muscle-group';
 
 @Injectable()
 @McpTool()
@@ -14,14 +15,21 @@ export class SearchExerciseTool implements McpToolDef {
 
   readonly name = 'search_exercise';
   readonly description =
-    'Busca exercícios por nome ou grupo muscular (peito, costas, pernas, ombro, braço, core, cardio).';
+    'Search for exercises by name or muscle group (chest, back, legs, shoulders, arms, core, cardio).';
   readonly inputSchema = {
-    q: z.string().optional().describe('Termo de busca (nome do exercício)'),
-    muscleGroup: z
-      .string()
+    q: z.string().optional().describe('Search term (exercise name)'),
+    muscleGroup: muscleGroupSchema
       .optional()
-      .describe('Filtrar por grupo: peito | costas | pernas | ombro | braço | core | cardio'),
-    limit: z.number().int().min(1).max(50).optional().describe('Máximo de resultados (default 20)'),
+      .describe(
+        'Filter by muscle group. Common: chest | back | legs | shoulder | arm | core | cardio',
+      ),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(50)
+      .optional()
+      .describe('Maximum number of results (default 20)'),
   } as const;
 
   execute(input: { q?: string; muscleGroup?: string; limit?: number }, { userId }: McpToolContext) {
