@@ -10,7 +10,7 @@ export const AppEnvSchema = z.object({
   // OAuth facade pro MCP — app dedicado no Logto (tipo Traditional Web).
   LOGTO_MCP_APP_ID: z.string().min(1),
   LOGTO_MCP_APP_SECRET: z.string().min(1),
-  WEB_ORIGIN: z.string().url().default('http://localhost:3001'),
+  WEB_ORIGIN: z.string().url().default('http://localhost:3030'),
 });
 
 export type AppEnv = z.infer<typeof AppEnvSchema>;

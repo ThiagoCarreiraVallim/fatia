@@ -15,11 +15,11 @@ Pré-requisitos: Node 20+ (`nvm use`), Docker, e `corepack enable` (para o pnpm 
 ```bash
 git clone https://github.com/ThiagoCarreiraVallim/fatia.git
 cd fatia
-pnpm setup   # corepack + install + postgres up + migrate + seed
-pnpm dev     # API + Web com hot reload
+pnpm bootstrap   # uma vez: corepack + install + migrate + seed
+pnpm dev         # diário: sobe postgres + logto + API + Web com hot reload
 ```
 
-API em `http://localhost:3000`, Web em `http://localhost:3001`, MCP em `http://localhost:3000/mcp`.
+API em `http://localhost:3000`, Web em `http://localhost:3030`, MCP em `http://localhost:3000/mcp`.
 
 Próximos passos:
 

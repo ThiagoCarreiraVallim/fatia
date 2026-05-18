@@ -20,7 +20,11 @@ services:
       retries: 10
 
   logto:
-    image: svhd/logto:latest
+    # Pinned: :latest pulls cloud-tracking builds that can ship breaking auth-console changes.
+    # 1.39.0 tem bug conhecido em OSS: admin criado pelo signup não recebe o role
+    # `Logto Management API access` no tenant default → console abre mas todas as
+    # chamadas a /api/* retornam 401. 1.36.0 é estável.
+    image: svhd/logto:1.36.0
     container_name: fatia-logto
     restart: unless-stopped
     depends_on:
@@ -29,17 +33,19 @@ services:
     environment:
       # Conexão à database dedicada do Logto (criada pelo postgres-init/01-create-logto-db.sh)
       DB_URL: postgresql://${POSTGRES_USER:-fatia}:${POSTGRES_PASSWORD:-fatia_dev}@postgres:5432/logto
-      # URL pública do Logto (Dokploy / Traefik faz o roteamento)
-      ENDPOINT: ${LOGTO_ENDPOINT:-http://localhost:3002}
-      ADMIN_ENDPOINT: ${LOGTO_ADMIN_ENDPOINT:-http://localhost:3003}
-      # Trust proxy = true porque Dokploy/Traefik fica na frente
-      TRUST_PROXY_HEADER: 1
+      # URLs públicas. Em local mantemos os defaults do Logto (3001 OIDC, 3002 admin)
+      # pra evitar mismatch entre o admin SPA e a Management API. Em prod o Dokploy
+      # injeta os subdomínios reais e TRUST_PROXY_HEADER=1 (override via env).
+      ENDPOINT: ${LOGTO_ENDPOINT:-http://localhost:3001}
+      ADMIN_ENDPOINT: ${LOGTO_ADMIN_ENDPOINT:-http://localhost:3002}
+      TRUST_PROXY_HEADER: ${LOGTO_TRUST_PROXY:-0}
     ports:
-      # 3002 = endpoint público (login, /oidc, /.well-known)
-      # 3003 = console admin (gerenciar users, apps, roles)
-      - "${LOGTO_PORT:-3002}:3001"
-      - "${LOGTO_ADMIN_PORT:-3003}:3002"
-    # Logto roda migrations automaticamente no boot. Primeira execução demora ~30s.
+      # Defaults do Logto: 3001 OIDC público, 3002 console admin. NÃO desloque
+      # (o admin SPA tem URLs codificadas com esses ports internos).
+      - "${LOGTO_PORT:-3001}:3001"
+      - "${LOGTO_ADMIN_PORT:-3002}:3002"
+    # `db seed --swe` (idempotente) cria schema + seed software-engineer (necessário
+    # pros admin roles serem assinados corretamente). Primeira execução ~30s.
     entrypoint: ["sh", "-c", "npm run cli db seed -- --swe && npm start"]
 
   api:
@@ -59,7 +65,7 @@ services:
       # Auth via Logto (ADR 008)
       LOGTO_ENDPOINT: ${LOGTO_ENDPOINT}
       LOGTO_AUDIENCE: ${LOGTO_AUDIENCE}
-      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3001}
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3030}
       PORT: 3000
     ports:
       - "${API_PORT:-3000}:3000"
@@ -82,10 +88,10 @@ services:
       LOGTO_APP_ID: ${LOGTO_APP_ID}
       LOGTO_APP_SECRET: ${LOGTO_APP_SECRET}
       LOGTO_COOKIE_SECRET: ${LOGTO_COOKIE_SECRET}
-      LOGTO_BASE_URL: ${LOGTO_BASE_URL:-http://localhost:3001}
-      PORT: 3001
+      LOGTO_BASE_URL: ${LOGTO_BASE_URL:-http://localhost:3030}
+      PORT: 3030
     ports:
-      - "${WEB_PORT:-3001}:3001"
+      - "${WEB_PORT:-3030}:3030"
     profiles: ["full"]
 
 volumes:

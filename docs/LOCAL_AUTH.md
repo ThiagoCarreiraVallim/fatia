@@ -2,7 +2,7 @@
 
 Fatia uses [Logto](https://logto.io) self-hosted as the identity provider — both for the PWA and for the MCP server (see [ADR 008](ADR/008-logto-auth.md) for the rationale). To run the app locally with real users you need a local Logto instance + a handful of `.env` values.
 
-This page walks through the one-time setup. Re-running `pnpm setup` or `pnpm reset:db` does **not** reset Logto's own DB unless you also drop the volume — see [Resetting Logto](#resetting-logto) below.
+This page walks through the one-time setup. Re-running `pnpm bootstrap` or `pnpm reset:db` does **not** reset Logto's own DB unless you also drop the volume — see [Resetting Logto](#resetting-logto) below.
 
 > Time budget: ~10 minutes the first time. Zero on subsequent runs.
 
@@ -38,14 +38,14 @@ docker compose -f infra/docker-compose.yml logs -f logto
 
 URLs once it's up:
 
-- Public OIDC endpoint: <http://localhost:3002>
-- Admin console: <http://localhost:3003>
+- Public OIDC endpoint: <http://localhost:3001>
+- Admin console: <http://localhost:3002>
 
 ---
 
 ## 2. Create your admin account
 
-1. Open <http://localhost:3003>.
+1. Open <http://localhost:3002>.
 2. Click **Create account** on the first-run screen and pick an email + password. This is the **Logto admin** — not a user of Fatia.
 3. You'll land on the Logto dashboard.
 
@@ -68,8 +68,8 @@ The NestJS API validates JWTs by `aud` claim. That `aud` is the **identifier** o
 This is the OIDC client the Next.js app uses.
 
 1. Go to **Applications → Create application → Traditional Web** → name it `Fatia Web`.
-2. **Redirect URIs:** `http://localhost:3001/api/logto/sign-in-callback`
-3. **Post sign-out redirect URIs:** `http://localhost:3001`
+2. **Redirect URIs:** `http://localhost:3030/api/logto/sign-in-callback`
+3. **Post sign-out redirect URIs:** `http://localhost:3030`
 4. Save.
 5. From the app's **Settings** tab, copy:
    - **App ID** → `LOGTO_APP_ID` in `.env`
@@ -107,10 +107,10 @@ If you skip this step the API will reject every token with `aud mismatch`.
 
 ## 7. Finish the `.env`
 
-Open `.env` (created by `pnpm setup`) and fill in:
+Open `.env` (created by `pnpm bootstrap`) and fill in:
 
 ```dotenv
-LOGTO_ENDPOINT=http://localhost:3002
+LOGTO_ENDPOINT=http://localhost:3001
 LOGTO_AUDIENCE=https://api.fatia.local
 
 LOGTO_APP_ID=<from step 4>
@@ -133,7 +133,7 @@ You also need a **user** (the human who'll log in), separate from the admin from
 
 1. In the Logto admin console, **User management → Add user**.
 2. Set a username + password.
-3. Sign into <http://localhost:3001> with that user — the API will lazily provision a matching row in the `User` table (see `UserProvisioningService`).
+3. Sign into <http://localhost:3030> with that user — the API will lazily provision a matching row in the `User` table (see `UserProvisioningService`).
 
 You're done. Authenticated endpoints should now return data instead of 401.
 
@@ -144,7 +144,7 @@ You're done. Authenticated endpoints should now return data instead of 401.
 For scripts and curl, you can grab a Logto access token without going through the PWA. The simplest path is the **password grant**, which Logto exposes for first-party apps:
 
 ```bash
-TOKEN=$(curl -sS -X POST http://localhost:3002/oidc/token \
+TOKEN=$(curl -sS -X POST http://localhost:3001/oidc/token \
   -u "$LOGTO_APP_ID:$LOGTO_APP_SECRET" \
   -d 'grant_type=password' \
   -d "username=$USERNAME" \
