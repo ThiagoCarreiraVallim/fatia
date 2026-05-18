@@ -8,6 +8,9 @@
     "node": ">=20.0.0"
   },
   "scripts": {
+    "setup": "bash scripts/setup.sh",
+    "reset:db": "bash scripts/reset-db.sh",
+    "mcp:smoke": "bash scripts/mcp-smoke.sh",
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
@@ -23,6 +26,7 @@
     "db:seed:taco": "dotenv -e .env -- pnpm --filter @fatia/db seed:taco",
     "db:seed:exercises": "dotenv -e .env -- pnpm --filter @fatia/db seed:exercises",
     "infra:up": "docker compose -f infra/docker-compose.yml up -d postgres",
+    "infra:up:full": "docker compose -f infra/docker-compose.yml --profile full up -d",
     "infra:down": "docker compose -f infra/docker-compose.yml down",
     "infra:logs": "docker compose -f infra/docker-compose.yml logs -f",
     "prepare": "husky"
