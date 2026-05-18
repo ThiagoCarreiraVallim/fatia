@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { workoutApi, type Exercise } from '@/lib/api/workout';
+import { isCardioExercise } from '@/lib/workout/is-cardio';
 
 interface Props {
   open: boolean;
@@ -48,7 +49,7 @@ export function ExerciseSearchDrawer({ open, onOpenChange, sessionId }: Props) {
     mutationFn: (exercise: Exercise) =>
       workoutApi.logSet(sessionId, {
         exerciseId: exercise.id,
-        ...(exercise.muscleGroup === 'CARDIO' ? { durationSeconds: 60 } : { reps: 1 }),
+        ...(isCardioExercise(exercise) ? { durationSeconds: 60 } : { reps: 1 }),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['workout', 'active'] });

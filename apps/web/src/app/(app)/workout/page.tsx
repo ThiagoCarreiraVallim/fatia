@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { History, Dumbbell, Plus } from 'lucide-react';
 import { workoutApi, type WorkoutSession, type SessionSet } from '@/lib/api/workout';
+import { isCardioExercise } from '@/lib/workout/is-cardio';
 import { Button } from '@/components/ui/button';
 import { ExerciseCard } from '@/components/workout/exercise-card';
 import { ExerciseSearchDrawer } from '@/components/workout/exercise-search-drawer';
@@ -20,7 +21,7 @@ function groupByExercise(sets: SessionSet[]) {
       map.set(s.exerciseId, {
         exerciseId: s.exerciseId,
         exerciseName: s.exercise.name,
-        isCardio: s.exercise.muscleGroup === 'CARDIO',
+        isCardio: isCardioExercise(s.exercise),
         sets: [],
       });
     }
