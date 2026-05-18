@@ -41,6 +41,15 @@ export interface SessionSet {
   exercise: Exercise;
 }
 
+export interface PlannedExercise {
+  exerciseId: number;
+  exerciseName: string;
+  muscleGroup: MuscleGroup;
+  order: number;
+  targetSets: number;
+  targetReps: string;
+}
+
 export interface WorkoutSession {
   id: string;
   userId: string;
@@ -49,6 +58,7 @@ export interface WorkoutSession {
   completedAt: string | null;
   notes: string | null;
   sets?: SessionSet[];
+  plannedExercises?: PlannedExercise[];
 }
 
 export interface WorkoutPlanExercise {

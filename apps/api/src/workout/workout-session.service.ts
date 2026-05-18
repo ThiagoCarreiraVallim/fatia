@@ -8,12 +8,31 @@ import type {
   UpdateSessionDto,
 } from './dto/session.dto';
 
-const SESSION_INCLUDE: Prisma.WorkoutSessionInclude = {
+const SESSION_INCLUDE = {
   sets: {
     include: { exercise: true },
     orderBy: [{ exerciseId: 'asc' }, { setNumber: 'asc' }],
   },
-};
+  plan: {
+    include: {
+      exercises: {
+        include: { exercise: true },
+        orderBy: { order: 'asc' },
+      },
+    },
+  },
+} satisfies Prisma.WorkoutSessionInclude;
+
+type SessionWithRelations = Prisma.WorkoutSessionGetPayload<{ include: typeof SESSION_INCLUDE }>;
+
+export interface PlannedExerciseView {
+  exerciseId: number;
+  exerciseName: string;
+  muscleGroup: string;
+  order: number;
+  targetSets: number;
+  targetReps: string;
+}
 
 @Injectable()
 export class WorkoutSessionService {
@@ -36,15 +55,16 @@ export class WorkoutSessionService {
       include: SESSION_INCLUDE,
     });
     if (!session) throw new NotFoundException('Session not found');
-    return session;
+    return this.shapeSession(session);
   }
 
   async findActive(userId: string) {
-    return this.prisma.workoutSession.findFirst({
+    const session = await this.prisma.workoutSession.findFirst({
       where: { userId, completedAt: null },
       include: SESSION_INCLUDE,
       orderBy: { startedAt: 'desc' },
     });
+    return session ? this.shapeSession(session) : null;
   }
 
   async list(userId: string, params: ListSessionsDto) {
@@ -83,6 +103,21 @@ export class WorkoutSessionService {
   async delete(userId: string, id: string): Promise<void> {
     await this.assertOwner(userId, id);
     await this.prisma.workoutSession.delete({ where: { id } });
+  }
+
+  private shapeSession(session: SessionWithRelations) {
+    const { plan, ...rest } = session;
+    const plannedExercises: PlannedExerciseView[] = plan
+      ? plan.exercises.map((pe) => ({
+          exerciseId: pe.exerciseId,
+          exerciseName: pe.exercise.name,
+          muscleGroup: pe.exercise.muscleGroup,
+          order: pe.order,
+          targetSets: pe.targetSets,
+          targetReps: pe.targetReps,
+        }))
+      : [];
+    return { ...rest, plannedExercises };
   }
 
   private async assertOwner(userId: string, id: string) {
