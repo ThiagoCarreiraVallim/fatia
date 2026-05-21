@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { StepLogService } from './step-log.service';
 import { WeightLogService } from './weight-log.service';
-import { addDaysIso, todayInTz, weekStartInTz } from './helpers/date-tz';
+import { addDaysIso, dayBoundsInTz, todayInTz, weekStartInTz } from './helpers/date-tz';
 
 interface UserCtx {
   userId: string;
@@ -19,8 +19,7 @@ export class DashboardService {
 
   async today(ctx: UserCtx) {
     const date = todayInTz(ctx.timezone);
-    const dayStart = new Date(`${date}T00:00:00Z`);
-    const dayEnd = new Date(`${date}T23:59:59Z`);
+    const { start: dayStart, end: dayEnd } = dayBoundsInTz(date, ctx.timezone);
 
     const [meals, goals, sessionInProgress, completedSession, latestWeight, stepsToday] =
       await Promise.all([
@@ -210,8 +209,7 @@ export class DashboardService {
     let streak = 0;
     for (let i = 0; i < 60; i++) {
       const d = addDaysIso(today, -i);
-      const start = new Date(`${d}T00:00:00Z`);
-      const end = new Date(`${d}T23:59:59Z`);
+      const { start, end } = dayBoundsInTz(d, ctx.timezone);
       const hasMeal = await this.prisma.meal.count({
         where: { userId: ctx.userId, eatenAt: { gte: start, lte: end } },
       });

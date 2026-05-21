@@ -10,11 +10,11 @@ function shift(iso: string, days: number): string {
 }
 
 function fmt(iso: string): string {
-  return new Date(`${iso}T00:00:00.000Z`).toLocaleDateString('pt-BR', {
+  // iso é YYYY-MM-DD no fuso do usuário; interpreta como meia-noite local para exibição
+  return new Date(`${iso}T12:00:00`).toLocaleDateString('pt-BR', {
     weekday: 'short',
     day: '2-digit',
     month: '2-digit',
-    timeZone: 'UTC',
   });
 }
 
