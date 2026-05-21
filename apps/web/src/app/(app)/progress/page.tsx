@@ -2,9 +2,8 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { Dumbbell, Flame, Footprints, Plus, Scale, TrendingDown, TrendingUp } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
 import { progressApi } from '@/lib/api/progress';
 import { WeightChart } from '@/components/progress/weight-chart';
 import { StepsChart } from '@/components/progress/steps-chart';
@@ -12,6 +11,62 @@ import { LogWeightDrawer } from '@/components/progress/log-weight-drawer';
 import { LogStepsDrawer } from '@/components/progress/log-steps-drawer';
 
 const RANGES = [14, 30, 90, 180] as const;
+
+function StatCard({
+  label,
+  value,
+  trend,
+  sub,
+  className,
+}: {
+  label: string;
+  value: string;
+  trend?: number;
+  sub?: string;
+  className?: string;
+}) {
+  return (
+    <div className={`rounded-xl border border-white/5 bg-card p-4 ${className ?? ''}`}>
+      <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <div className="mt-1 flex items-end gap-1.5">
+        <p className="text-[20px] font-bold text-foreground tabular-nums leading-none">{value}</p>
+        {trend !== undefined &&
+          trend !== 0 &&
+          (trend < 0 ? (
+            <TrendingDown size={16} className="mb-0.5 text-primary" />
+          ) : (
+            <TrendingUp size={16} className="mb-0.5 text-amber-400" />
+          ))}
+      </div>
+      {sub && <p className="mt-1.5 text-[11px] text-muted-foreground">{sub}</p>}
+    </div>
+  );
+}
+
+function LoadingSkeleton() {
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="h-20 animate-pulse rounded-xl bg-card" />
+        <div className="h-20 animate-pulse rounded-xl bg-card" />
+      </div>
+      <div className="h-52 animate-pulse rounded-xl bg-card" />
+    </div>
+  );
+}
+
+function LogButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 py-3 text-[13px] font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+    >
+      <Plus size={16} />
+      {label}
+    </button>
+  );
+}
 
 export default function ProgressPage() {
   const [days, setDays] = useState<(typeof RANGES)[number]>(30);
@@ -28,19 +83,19 @@ export default function ProgressPage() {
   });
 
   return (
-    <div className="space-y-4 p-4">
+    <div className="space-y-5 px-5 pt-4 pb-4">
       <header className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Progresso</h1>
-        <div className="flex gap-1">
+        <h1 className="text-[18px] font-semibold text-foreground">Progresso</h1>
+        <div className="flex items-center gap-1">
           {RANGES.map((r) => (
             <button
               key={r}
               type="button"
               onClick={() => setDays(r)}
-              className={`rounded-md px-2 py-1 text-xs ${
+              className={`rounded-full px-3 py-1 text-[12px] font-bold transition-colors ${
                 days === r
                   ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-accent'
+                  : 'bg-muted text-muted-foreground hover:text-foreground'
               }`}
             >
               {r}d
@@ -50,53 +105,79 @@ export default function ProgressPage() {
       </header>
 
       <Tabs defaultValue="weight" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="weight">Peso</TabsTrigger>
-          <TabsTrigger value="strength">Força</TabsTrigger>
-          <TabsTrigger value="cardio">Cardio</TabsTrigger>
-          <TabsTrigger value="steps">Passos</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-4 rounded-xl bg-muted p-1">
+          <TabsTrigger
+            value="weight"
+            className="rounded-lg text-[11px] data-[state=active]:bg-card data-[state=active]:font-bold data-[state=active]:text-primary"
+          >
+            <Scale size={13} className="mr-1" />
+            Peso
+          </TabsTrigger>
+          <TabsTrigger
+            value="steps"
+            className="rounded-lg text-[11px] data-[state=active]:bg-card data-[state=active]:font-bold data-[state=active]:text-primary"
+          >
+            <Footprints size={13} className="mr-1" />
+            Passos
+          </TabsTrigger>
+          <TabsTrigger
+            value="strength"
+            className="rounded-lg text-[11px] data-[state=active]:bg-card data-[state=active]:font-bold data-[state=active]:text-primary"
+          >
+            <Dumbbell size={13} className="mr-1" />
+            Força
+          </TabsTrigger>
+          <TabsTrigger
+            value="cardio"
+            className="rounded-lg text-[11px] data-[state=active]:bg-card data-[state=active]:font-bold data-[state=active]:text-primary"
+          >
+            <Flame size={13} className="mr-1" />
+            Cardio
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="weight" className="space-y-3">
-          <Button onClick={() => setLogWeightOpen(true)} className="w-full" variant="outline">
-            <Plus size={16} /> Logar peso
-          </Button>
-          {weight.isLoading && <p className="text-sm text-muted-foreground">Carregando…</p>}
+        {/* ── PESO ─────────────────────────────────────────────── */}
+        <TabsContent value="weight" className="mt-4 space-y-4">
+          {weight.isLoading && <LoadingSkeleton />}
           {weight.data && (
             <>
+              <div className="grid grid-cols-2 gap-3">
+                <StatCard
+                  label="Peso atual"
+                  value={
+                    weight.data.currentWeightKg !== null
+                      ? `${weight.data.currentWeightKg.toFixed(1)} kg`
+                      : '—'
+                  }
+                />
+                <StatCard
+                  label={`Variação (${days}d)`}
+                  value={
+                    weight.data.currentWeightKg !== null
+                      ? `${weight.data.totalDeltaKg > 0 ? '+' : ''}${weight.data.totalDeltaKg.toFixed(1)} kg`
+                      : '—'
+                  }
+                  trend={weight.data.totalDeltaKg}
+                />
+              </div>
               <WeightChart data={weight.data} />
-              {weight.data.currentWeightKg !== null && (
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="rounded-md border bg-card p-3">
-                    <p className="text-xs text-muted-foreground">Atual</p>
-                    <p className="text-lg font-semibold">
-                      {weight.data.currentWeightKg.toFixed(1)} kg
-                    </p>
-                  </div>
-                  <div className="rounded-md border bg-card p-3">
-                    <p className="text-xs text-muted-foreground">Δ período</p>
-                    <p className="text-lg font-semibold">
-                      {weight.data.totalDeltaKg > 0 ? '+' : ''}
-                      {weight.data.totalDeltaKg.toFixed(1)} kg
-                    </p>
-                  </div>
-                </div>
-              )}
               {weight.data.weeklyAverages.length > 0 && (
-                <div className="rounded-md border bg-card">
-                  <div className="border-b p-3 text-sm font-medium">Médias semanais</div>
-                  <ul className="divide-y text-sm">
+                <div className="rounded-xl border border-white/5 bg-card overflow-hidden">
+                  <div className="px-4 py-3 text-[12px] font-bold uppercase tracking-wide text-muted-foreground border-b border-white/5">
+                    Médias semanais
+                  </div>
+                  <ul className="divide-y divide-white/5">
                     {weight.data.weeklyAverages.map((w) => (
-                      <li key={w.weekStart} className="flex justify-between p-3">
+                      <li key={w.weekStart} className="flex justify-between px-4 py-3 text-[13px]">
                         <span className="text-muted-foreground">
-                          Semana de {w.weekStart.slice(5)}
+                          Sem. de {w.weekStart.slice(5)}
                         </span>
-                        <span className="tabular-nums">
+                        <span className="tabular-nums text-foreground">
                           {w.avgKg.toFixed(1)} kg
                           {w.deltaKg !== null && (
                             <span
-                              className={`ml-2 text-xs ${
-                                w.deltaKg < 0 ? 'text-emerald-500' : 'text-amber-500'
+                              className={`ml-2 text-[11px] ${
+                                w.deltaKg < 0 ? 'text-primary' : 'text-amber-400'
                               }`}
                             >
                               {w.deltaKg > 0 ? '+' : ''}
@@ -111,57 +192,62 @@ export default function ProgressPage() {
               )}
             </>
           )}
+          <LogButton label="Logar peso" onClick={() => setLogWeightOpen(true)} />
         </TabsContent>
 
-        <TabsContent value="strength">
-          <p className="text-sm text-muted-foreground">
-            Selecione um exercício pra visualizar evolução. Use o Claude com{' '}
-            <code className="rounded bg-muted px-1">get_strength_progress</code> ou navegue pelo
-            histórico de treino para ver detalhes.
-          </p>
-        </TabsContent>
-
-        <TabsContent value="cardio">
-          <p className="text-sm text-muted-foreground">
-            Selecione um exercício de cardio para ver evolução de duração, distância ou pace.
-          </p>
-        </TabsContent>
-
-        <TabsContent value="steps" className="space-y-3">
-          <Button onClick={() => setLogStepsOpen(true)} className="w-full" variant="outline">
-            <Plus size={16} /> Logar passos
-          </Button>
-          {steps.isLoading && <p className="text-sm text-muted-foreground">Carregando…</p>}
+        {/* ── PASSOS ───────────────────────────────────────────── */}
+        <TabsContent value="steps" className="mt-4 space-y-4">
+          {steps.isLoading && <LoadingSkeleton />}
           {steps.data && (
             <>
-              <StepsChart data={steps.data} />
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="rounded-md border bg-card p-3">
-                  <p className="text-xs text-muted-foreground">Média/dia</p>
-                  <p className="text-lg font-semibold tabular-nums">
-                    {Math.round(steps.data.averageDaily).toLocaleString('pt-BR')}
-                  </p>
-                </div>
-                <div className="rounded-md border bg-card p-3">
-                  <p className="text-xs text-muted-foreground">Dias na meta</p>
-                  <p className="text-lg font-semibold tabular-nums">
-                    {steps.data.daysWithGoalReached}/{steps.data.points.length}
-                  </p>
-                </div>
+              <div className="grid grid-cols-2 gap-3">
+                <StatCard
+                  label="Média/dia"
+                  value={Math.round(steps.data.averageDaily).toLocaleString('pt-BR')}
+                />
+                <StatCard
+                  label="Dias na meta"
+                  value={`${steps.data.daysWithGoalReached}/${steps.data.points.length}`}
+                />
               </div>
               {steps.data.bestDay && (
-                <div className="rounded-md border bg-card p-3 text-sm">
-                  <p className="text-xs text-muted-foreground">Melhor dia</p>
-                  <p>
-                    {steps.data.bestDay.date}:{' '}
-                    <span className="font-semibold tabular-nums">
-                      {steps.data.bestDay.steps.toLocaleString('pt-BR')}
-                    </span>
-                  </p>
-                </div>
+                <StatCard
+                  label="Melhor dia"
+                  value={`${steps.data.bestDay.steps.toLocaleString('pt-BR')} passos`}
+                  sub={steps.data.bestDay.date}
+                  className="col-span-2"
+                />
               )}
+              <StepsChart data={steps.data} />
             </>
           )}
+          <LogButton label="Logar passos" onClick={() => setLogStepsOpen(true)} />
+        </TabsContent>
+
+        {/* ── FORÇA ────────────────────────────────────────────── */}
+        <TabsContent value="strength" className="mt-4">
+          <div className="space-y-3 rounded-xl border border-white/5 bg-card p-8 text-center">
+            <Dumbbell size={32} className="mx-auto text-muted-foreground" />
+            <p className="text-[14px] font-semibold text-foreground">Evolução de força</p>
+            <p className="text-[12px] leading-relaxed text-muted-foreground">
+              Use o assistente com{' '}
+              <code className="rounded bg-muted px-1.5 py-0.5 text-primary">
+                get_strength_progress
+              </code>{' '}
+              ou navegue pelo histórico de treino para ver detalhes.
+            </p>
+          </div>
+        </TabsContent>
+
+        {/* ── CARDIO ───────────────────────────────────────────── */}
+        <TabsContent value="cardio" className="mt-4">
+          <div className="space-y-3 rounded-xl border border-white/5 bg-card p-8 text-center">
+            <Flame size={32} className="mx-auto text-muted-foreground" />
+            <p className="text-[14px] font-semibold text-foreground">Evolução de cardio</p>
+            <p className="text-[12px] leading-relaxed text-muted-foreground">
+              Selecione um exercício de cardio para ver evolução de duração, distância ou pace.
+            </p>
+          </div>
         </TabsContent>
       </Tabs>
 
