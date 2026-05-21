@@ -8,10 +8,11 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "setup": "bash scripts/setup.sh",
+    "bootstrap": "bash scripts/setup.sh",
     "reset:db": "bash scripts/reset-db.sh",
     "mcp:smoke": "bash scripts/mcp-smoke.sh",
-    "dev": "turbo run dev",
+    "dev": "bash scripts/dev.sh",
+    "dev:apps": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
@@ -25,10 +26,11 @@
     "db:seed:admin": "dotenv -e .env -- pnpm --filter @fatia/db seed:admin",
     "db:seed:taco": "dotenv -e .env -- pnpm --filter @fatia/db seed:taco",
     "db:seed:exercises": "dotenv -e .env -- pnpm --filter @fatia/db seed:exercises",
-    "infra:up": "docker compose -f infra/docker-compose.yml up -d postgres",
-    "infra:up:full": "docker compose -f infra/docker-compose.yml --profile full up -d",
-    "infra:down": "docker compose -f infra/docker-compose.yml down",
-    "infra:logs": "docker compose -f infra/docker-compose.yml logs -f",
+    "infra:up": "docker compose --env-file .env -f infra/docker-compose.yml up -d postgres logto",
+    "infra:up:db": "docker compose --env-file .env -f infra/docker-compose.yml up -d postgres",
+    "infra:up:full": "docker compose --env-file .env -f infra/docker-compose.yml --profile full up -d",
+    "infra:down": "docker compose --env-file .env -f infra/docker-compose.yml down",
+    "infra:logs": "docker compose --env-file .env -f infra/docker-compose.yml logs -f",
     "prepare": "husky"
   },
   "devDependencies": {

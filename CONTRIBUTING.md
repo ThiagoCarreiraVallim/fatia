@@ -69,7 +69,7 @@ pnpm db:seed
 pnpm dev
 ```
 
-The API runs on `http://localhost:3000`, the Web app on `http://localhost:3001`, and the MCP server on `http://localhost:3000/mcp`.
+The API runs on `http://localhost:3000`, the Web app on `http://localhost:3030`, and the MCP server on `http://localhost:3000/mcp`.
 
 ---
 
