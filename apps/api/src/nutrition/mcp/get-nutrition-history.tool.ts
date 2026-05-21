@@ -14,7 +14,7 @@ export class GetNutritionHistoryTool implements McpToolDef {
   readonly name = 'get_nutrition_history';
   readonly description = 'Histórico dos últimos N dias com médias.';
   readonly inputSchema = { days: z.number().int().min(1).max(90).default(7) } as const;
-  execute({ days }: { days: number }, { userId }: McpToolContext) {
-    return this.summary.getHistory(userId, days);
+  execute({ days }: { days: number }, { userId, timezone }: McpToolContext) {
+    return this.summary.getHistory(userId, days, timezone);
   }
 }

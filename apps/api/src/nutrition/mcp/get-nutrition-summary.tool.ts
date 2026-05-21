@@ -14,7 +14,7 @@ export class GetNutritionSummaryTool implements McpToolDef {
   readonly name = 'get_nutrition_summary';
   readonly description = 'Resumo nutricional do dia (totais + refeições).';
   readonly inputSchema = { date: z.string().describe('YYYY-MM-DD') } as const;
-  execute({ date }: { date: string }, { userId }: McpToolContext) {
-    return this.summary.getDay(userId, date);
+  execute({ date }: { date: string }, { userId, timezone }: McpToolContext) {
+    return this.summary.getDay(userId, date, timezone);
   }
 }
