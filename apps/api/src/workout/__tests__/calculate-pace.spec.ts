@@ -1,4 +1,4 @@
-import { calculatePace } from './calculate-pace';
+import { calculatePace } from '../helpers/calculate-pace';
 
 describe('calculatePace', () => {
   it('returns seconds per km (1800s / 5000m = 360 s/km)', () => {

@@ -1,4 +1,4 @@
-import { isCardioExercise } from './is-cardio';
+import { isCardioExercise } from '../helpers/is-cardio';
 
 describe('isCardioExercise', () => {
   it('returns true for cardio muscleGroup', () => {

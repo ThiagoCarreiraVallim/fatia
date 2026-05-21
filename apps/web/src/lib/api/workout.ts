@@ -1,17 +1,15 @@
 import { apiFetch } from '../api';
 
 export type MuscleGroup =
-  | 'CHEST'
-  | 'BACK'
-  | 'SHOULDERS'
-  | 'BICEPS'
-  | 'TRICEPS'
-  | 'LEGS'
-  | 'GLUTES'
-  | 'CORE'
-  | 'CARDIO'
-  | 'FULL_BODY'
-  | 'OTHER';
+  | 'peito'
+  | 'costas'
+  | 'pernas'
+  | 'ombro'
+  | 'braço'
+  | 'core'
+  | 'cardio'
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  | (string & {});
 
 export type ExerciseSource = 'SEED' | 'CUSTOM';
 
@@ -28,11 +26,9 @@ export interface SessionSet {
   sessionId: string;
   exerciseId: number;
   setNumber: number;
-  // strength
   weightKg: number | null;
   reps: number | null;
   rpe: number | null;
-  // cardio
   durationSeconds: number | null;
   distanceMeters: number | null;
   avgHeartRate: number | null;
@@ -79,7 +75,6 @@ export interface WorkoutPlan {
 }
 
 export const workoutApi = {
-  // Sessions
   getActiveSession: () => apiFetch<WorkoutSession | null>('/api/workout/sessions/active'),
   getSession: (id: string) => apiFetch<WorkoutSession>(`/api/workout/sessions/${id}`),
   listSessions: (params?: { date?: string; cursor?: string; limit?: number }) => {
@@ -103,7 +98,6 @@ export const workoutApi = {
   deleteSession: (id: string) =>
     apiFetch<void>(`/api/workout/sessions/${id}`, { method: 'DELETE' }),
 
-  // Sets
   logSet: (
     sessionId: string,
     body: {
@@ -143,7 +137,6 @@ export const workoutApi = {
   deleteSet: (sessionId: string, id: string) =>
     apiFetch<void>(`/api/workout/sessions/${sessionId}/sets/${id}`, { method: 'DELETE' }),
 
-  // Plans
   listPlans: () => apiFetch<WorkoutPlan[]>('/api/workout/plans'),
   getPlan: (id: string) => apiFetch<WorkoutPlan>(`/api/workout/plans/${id}`),
   createPlan: (body: { name: string }) =>
@@ -158,7 +151,6 @@ export const workoutApi = {
     }),
   deletePlan: (id: string) => apiFetch<void>(`/api/workout/plans/${id}`, { method: 'DELETE' }),
 
-  // Plan exercises
   addPlanExercise: (
     planId: string,
     body: { exerciseId: number; order: number; targetSets: number; targetReps: string },
@@ -179,7 +171,6 @@ export const workoutApi = {
   removePlanExercise: (planId: string, id: string) =>
     apiFetch<void>(`/api/workout/plans/${planId}/exercises/${id}`, { method: 'DELETE' }),
 
-  // Exercises
   searchExercises: (q?: string, muscleGroup?: MuscleGroup) => {
     const qs = new URLSearchParams();
     if (q) qs.set('q', q);

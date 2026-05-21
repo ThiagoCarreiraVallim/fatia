@@ -6,6 +6,7 @@ import {
   type McpToolDef,
 } from '../../common/decorators/tool.decorator';
 import { ExerciseService } from '../exercise.service';
+import { muscleGroupSchema } from '../helpers/muscle-group';
 
 @Injectable()
 @McpTool()
@@ -13,10 +14,13 @@ export class CreateCustomExerciseTool implements McpToolDef {
   constructor(private readonly exercises: ExerciseService) {}
 
   readonly name = 'create_custom_exercise';
-  readonly description = 'Cria um exercício personalizado para o usuário.';
+  readonly description = 'Creates a custom exercise for the user.';
   readonly inputSchema = {
-    name: z.string().max(200).describe('Nome do exercício'),
-    muscleGroup: z.enum(['peito', 'costas', 'pernas', 'ombro', 'braço', 'core', 'cardio']),
+    name: z.string().max(200).describe('Name of the exercise'),
+    muscleGroup: muscleGroupSchema.describe(
+      'Muscle group. Common: chest, back, legs, shoulder, arm, core, cardio. ' +
+        'Accepts other names (up to 50 chars, letters/spaces/hyphens) — normalized to lowercase.',
+    ),
   } as const;
 
   execute(input: { name: string; muscleGroup: string }, { userId }: McpToolContext) {
