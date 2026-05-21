@@ -88,5 +88,5 @@ export function dayBoundsInTz(dateYmd: string, timezone: string): { start: Date;
   // Corrige fuso à frente de UTC+12 onde meio-dia UTC já é o dia seguinte local
   if (localDate > dateYmd) tzMidnightMs -= 86_400_000;
 
-  return { start: new Date(tzMidnightMs), end: new Date(tzMidnightMs + 86_400_000 - 1) };
+  return { start: new Date(tzMidnightMs), end: new Date(tzMidnightMs + 86_400_000) };
 }
