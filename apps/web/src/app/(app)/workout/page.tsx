@@ -4,36 +4,17 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { History, Dumbbell, Plus } from 'lucide-react';
-import { workoutApi, type WorkoutSession, type SessionSet } from '@/lib/api/workout';
-import { isCardioExercise } from '@/lib/workout/is-cardio';
+import { workoutApi, type WorkoutSession } from '@/lib/api/workout';
 import { Button } from '@/components/ui/button';
 import { ExerciseCard } from '@/components/workout/exercise-card';
 import { ExerciseSearchDrawer } from '@/components/workout/exercise-search-drawer';
 import { FinishSessionModal } from '@/components/workout/finish-session-modal';
-
-function groupByExercise(sets: SessionSet[]) {
-  const map = new Map<
-    number,
-    { exerciseId: number; exerciseName: string; isCardio: boolean; sets: SessionSet[] }
-  >();
-  for (const s of sets) {
-    if (!map.has(s.exerciseId)) {
-      map.set(s.exerciseId, {
-        exerciseId: s.exerciseId,
-        exerciseName: s.exercise.name,
-        isCardio: isCardioExercise(s.exercise),
-        sets: [],
-      });
-    }
-    map.get(s.exerciseId)!.sets.push(s);
-  }
-  return Array.from(map.values());
-}
+import { buildExerciseGroups } from '@/lib/workout-session-view';
 
 function ActiveSession({ session }: { session: WorkoutSession }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [finishOpen, setFinishOpen] = useState(false);
-  const groups = groupByExercise(session.sets ?? []);
+  const groups = buildExerciseGroups(session.plannedExercises, session.sets);
 
   return (
     <div className="space-y-4">
@@ -66,6 +47,8 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
             isCardio={g.isCardio}
             sets={g.sets}
             sessionId={session.id}
+            targetSets={g.targetSets}
+            targetReps={g.targetReps}
             active
           />
         ))}

@@ -4,28 +4,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';
-import { workoutApi, type SessionSet } from '@/lib/api/workout';
-import { isCardioExercise } from '@/lib/workout/is-cardio';
+import { workoutApi } from '@/lib/api/workout';
 import { ExerciseCard } from '@/components/workout/exercise-card';
-
-function groupByExercise(sets: SessionSet[]) {
-  const map = new Map<
-    number,
-    { exerciseId: number; exerciseName: string; isCardio: boolean; sets: SessionSet[] }
-  >();
-  for (const s of sets) {
-    if (!map.has(s.exerciseId)) {
-      map.set(s.exerciseId, {
-        exerciseId: s.exerciseId,
-        exerciseName: s.exercise.name,
-        isCardio: isCardioExercise(s.exercise),
-        sets: [],
-      });
-    }
-    map.get(s.exerciseId)!.sets.push(s);
-  }
-  return Array.from(map.values());
-}
+import { buildExerciseGroups } from '@/lib/workout-session-view';
 
 function formatDuration(start: string, end: string): string {
   const ms = new Date(end).getTime() - new Date(start).getTime();
@@ -63,7 +44,7 @@ export default function SessionDetailPage() {
     );
   }
 
-  const groups = groupByExercise(session.sets ?? []);
+  const groups = buildExerciseGroups(session.plannedExercises, session.sets);
   const totalSets = session.sets?.length ?? 0;
   const totalVolume =
     session.sets?.reduce((acc, s) => {
@@ -126,6 +107,8 @@ export default function SessionDetailPage() {
             isCardio={g.isCardio}
             sets={g.sets}
             sessionId={session.id}
+            targetSets={g.targetSets}
+            targetReps={g.targetReps}
           />
         ))}
       </div>
