@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Check, Plus } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { workoutApi, type SessionSet } from '@/lib/api/workout';
 import { StrengthSetRow } from './strength-set-row';
@@ -15,6 +15,8 @@ interface Props {
   sessionId: string;
   /** when provided, shows the "add set" quick-form */
   active?: boolean;
+  targetSets?: number;
+  targetReps?: string;
 }
 
 export function ExerciseCard({
@@ -24,6 +26,8 @@ export function ExerciseCard({
   sets,
   sessionId,
   active,
+  targetSets,
+  targetReps,
 }: Props) {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
@@ -80,20 +84,38 @@ export function ExerciseCard({
     },
   });
 
+  const hasTarget = targetSets != null && targetSets > 0;
+  const completed = hasTarget && sets.length >= (targetSets as number);
+
   return (
-    <div className="rounded-lg border bg-card p-3">
-      <div className="flex items-center justify-between">
-        <h3 className="font-medium">{exerciseName}</h3>
-        {active && (
-          <button
-            type="button"
-            onClick={() => setShowForm((v) => !v)}
-            className="rounded p-1 text-muted-foreground hover:text-foreground"
-            aria-label="Adicionar série"
-          >
-            <Plus size={16} />
-          </button>
-        )}
+    <div
+      className={`rounded-lg border bg-card p-3 ${completed ? 'border-primary/40' : ''}`}
+      data-completed={completed ? 'true' : undefined}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <h3 className="truncate font-medium">{exerciseName}</h3>
+          {completed && (
+            <Check size={14} className="shrink-0 text-primary" aria-label="Exercício completo" />
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {hasTarget && (
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {sets.length}/{targetSets} séries{targetReps ? ` · ${targetReps} reps` : ''}
+            </span>
+          )}
+          {active && (
+            <button
+              type="button"
+              onClick={() => setShowForm((v) => !v)}
+              className="rounded p-1 text-muted-foreground hover:text-foreground"
+              aria-label="Adicionar série"
+            >
+              <Plus size={16} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* column headers */}
@@ -118,9 +140,9 @@ export function ExerciseCard({
       <div className="divide-y">
         {sets.map((s) =>
           isCardio ? (
-            <CardioEntryRow key={s.id} set={s} sessionId={sessionId} />
+            <CardioEntryRow key={s.id} set={s} sessionId={sessionId} active={active} />
           ) : (
-            <StrengthSetRow key={s.id} set={s} sessionId={sessionId} />
+            <StrengthSetRow key={s.id} set={s} sessionId={sessionId} active={active} />
           ),
         )}
       </div>

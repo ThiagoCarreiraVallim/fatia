@@ -53,3 +53,43 @@ export function lastNDates(days: number, timezone: string): string[] {
   }
   return list;
 }
+
+/**
+ * Retorna os limites UTC (start/end) de um dia YYYY-MM-DD no fuso do usuário.
+ * Garante que refeições e eventos registrados em qualquer hora daquele dia local
+ * sejam corretamente incluídos nas queries, independente do offset UTC.
+ */
+export function dayBoundsInTz(dateYmd: string, timezone: string): { start: Date; end: Date } {
+  const [y, m, d] = dateYmd.split('-').map(Number);
+  // Usa meio-dia UTC como referência segura (evita ambiguidades de DST)
+  const noonUTC = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+    .formatToParts(noonUTC)
+    .reduce<Record<string, string>>((acc, p) => {
+      acc[p.type] = p.value;
+      return acc;
+    }, {});
+
+  const localHour = parseInt(parts.hour, 10);
+  const localMin = parseInt(parts.minute, 10);
+  const localSec = parseInt(parts.second, 10);
+  const localDate = `${parts.year}-${parts.month}-${parts.day}`;
+
+  // Meia-noite local = meio-dia UTC menos o tempo local desde meia-noite
+  let tzMidnightMs = noonUTC.getTime() - (localHour * 3600 + localMin * 60 + localSec) * 1000;
+
+  // Corrige fuso à frente de UTC+12 onde meio-dia UTC já é o dia seguinte local
+  if (localDate > dateYmd) tzMidnightMs -= 86_400_000;
+
+  return { start: new Date(tzMidnightMs), end: new Date(tzMidnightMs + 86_400_000) };
+}

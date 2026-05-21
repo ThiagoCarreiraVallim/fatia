@@ -76,7 +76,7 @@ export class NutritionController {
   // -------- Meals --------
   @Get('meals')
   listMeals(@CurrentUser() user: CurrentUserPayload, @Query() q: ListMealsDto) {
-    return this.meals.list(user.id, q);
+    return this.meals.list(user.id, q, user.timezone);
   }
 
   @Post('meals')
@@ -132,13 +132,13 @@ export class NutritionController {
   // -------- Summary & Goals --------
   @Get('summary')
   daySummary(@CurrentUser() user: CurrentUserPayload, @Query('date') date: string) {
-    return this.summary.getDay(user.id, date);
+    return this.summary.getDay(user.id, date, user.timezone);
   }
 
   @Get('history')
   history(@CurrentUser() user: CurrentUserPayload, @Query('days') daysStr?: string) {
     const days = Math.max(1, Math.min(90, Number(daysStr ?? 7)));
-    return this.summary.getHistory(user.id, days);
+    return this.summary.getHistory(user.id, days, user.timezone);
   }
 
   @Get('goals')

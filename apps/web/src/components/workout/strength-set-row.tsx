@@ -1,21 +1,36 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Pencil, Trash2, X } from 'lucide-react';
+import { Check, Copy, Pencil, Trash2, X } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { workoutApi, type SessionSet } from '@/lib/api/workout';
 
 interface Props {
   set: SessionSet;
   sessionId: string;
+  active?: boolean;
 }
 
-export function StrengthSetRow({ set, sessionId }: Props) {
+export function StrengthSetRow({ set, sessionId, active }: Props) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [kg, setKg] = useState(String(set.weightKg ?? ''));
   const [reps, setReps] = useState(String(set.reps ?? ''));
   const [rpe, setRpe] = useState(String(set.rpe ?? ''));
+
+  const duplicate = useMutation({
+    mutationFn: () =>
+      workoutApi.logSet(sessionId, {
+        exerciseId: set.exerciseId,
+        weightKg: set.weightKg ?? undefined,
+        reps: set.reps ?? undefined,
+        rpe: set.rpe ?? undefined,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['workout', 'session', sessionId] });
+      qc.invalidateQueries({ queryKey: ['workout', 'active'] });
+    },
+  });
 
   const update = useMutation({
     mutationFn: () =>
@@ -102,10 +117,25 @@ export function StrengthSetRow({ set, sessionId }: Props) {
       <span className="w-12 text-center tabular-nums text-muted-foreground">
         {set.rpe != null ? `@${set.rpe}` : ''}
       </span>
+      {active && (
+        <button
+          type="button"
+          onClick={() => duplicate.mutate()}
+          disabled={duplicate.isPending}
+          className="ml-auto rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-40"
+          aria-label="Duplicar série"
+        >
+          <Copy size={14} />
+        </button>
+      )}
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="ml-auto rounded p-1 text-muted-foreground hover:text-foreground"
+        className={
+          active
+            ? 'rounded p-1 text-muted-foreground hover:text-foreground'
+            : 'ml-auto rounded p-1 text-muted-foreground hover:text-foreground'
+        }
         aria-label="Editar série"
       >
         <Pencil size={14} />

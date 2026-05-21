@@ -27,6 +27,12 @@ Próximos passos:
 - **Subir o auth (Logto) local** → [`docs/LOCAL_AUTH.md`](docs/LOCAL_AUTH.md)
 - **Testar MCP tools com Claude / clientes open-source** → [`docs/MCP_LOCAL.md`](docs/MCP_LOCAL.md)
 
+Próximos passos:
+
+- **Rodar e contribuir** → [`docs/ONBOARDING.md`](docs/ONBOARDING.md)
+- **Subir o auth (Logto) local** → [`docs/LOCAL_AUTH.md`](docs/LOCAL_AUTH.md)
+- **Testar MCP tools com Claude / clientes open-source** → [`docs/MCP_LOCAL.md`](docs/MCP_LOCAL.md)
+
 ## Documentação
 
 | Arquivo                                        | Conteúdo                                                                           |

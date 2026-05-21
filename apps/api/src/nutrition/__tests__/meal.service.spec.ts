@@ -190,7 +190,7 @@ describe('MealService', () => {
     it('always filters by userId (isolation boundary)', async () => {
       prisma.meal.findMany.mockResolvedValue([]);
 
-      await service.list(userId, {});
+      await service.list(userId, {}, 'UTC');
 
       expect(prisma.meal.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: expect.objectContaining({ userId }) }),
@@ -200,7 +200,7 @@ describe('MealService', () => {
     it('applies a UTC day window when date is provided', async () => {
       prisma.meal.findMany.mockResolvedValue([]);
 
-      await service.list(userId, { date: '2026-01-15' });
+      await service.list(userId, { date: '2026-01-15' }, 'UTC');
 
       const where = prisma.meal.findMany.mock.calls[0][0].where;
       expect(where.eatenAt.gte).toEqual(new Date('2026-01-15T00:00:00.000Z'));
@@ -210,7 +210,7 @@ describe('MealService', () => {
     it('caps limit at 50', async () => {
       prisma.meal.findMany.mockResolvedValue([]);
 
-      await service.list(userId, { limit: 9999 });
+      await service.list(userId, { limit: 9999 }, 'UTC');
 
       expect(prisma.meal.findMany.mock.calls[0][0].take).toBe(50);
     });
@@ -218,7 +218,7 @@ describe('MealService', () => {
     it('forwards cursor pagination and skips the cursor row', async () => {
       prisma.meal.findMany.mockResolvedValue([]);
 
-      await service.list(userId, { cursor: 'meal-50' });
+      await service.list(userId, { cursor: 'meal-50' }, 'UTC');
 
       const callArg = prisma.meal.findMany.mock.calls[0][0];
       expect(callArg.cursor).toEqual({ id: 'meal-50' });

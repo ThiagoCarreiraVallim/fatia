@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
+import { dayBoundsInTz } from '../progress/helpers/date-tz';
 import type { CreateMealDto, ListMealsDto, MealItemInputDto, UpdateMealDto } from './dto/meal.dto';
 import { calcMacrosFromFood, type ItemMacros } from './helpers/calc-macros';
 
@@ -40,15 +41,13 @@ export class MealService {
 
   /**
    * Lista refeições do usuário. Cursor pagination: cursor é o id da última.
-   * Se `date` for fornecido, filtra ao dia (UTC, baseado em eatenAt).
+   * Se `date` for fornecido, filtra ao dia no fuso do usuário (baseado em eatenAt).
    */
-  async list(userId: string, params: ListMealsDto) {
+  async list(userId: string, params: ListMealsDto, timezone: string) {
     const limit = Math.min(params.limit ?? 20, 50);
     const where: Prisma.MealWhereInput = { userId };
     if (params.date) {
-      const start = new Date(`${params.date}T00:00:00.000Z`);
-      const end = new Date(start);
-      end.setUTCDate(end.getUTCDate() + 1);
+      const { start, end } = dayBoundsInTz(params.date, timezone);
       where.eatenAt = { gte: start, lt: end };
     }
     return this.prisma.meal.findMany({

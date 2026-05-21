@@ -18,7 +18,10 @@ export class ListMealsTool implements McpToolDef {
     cursor: z.string().optional(),
     limit: z.number().int().min(1).max(50).optional(),
   } as const;
-  execute(input: { date?: string; cursor?: string; limit?: number }, { userId }: McpToolContext) {
-    return this.meals.list(userId, input);
+  execute(
+    input: { date?: string; cursor?: string; limit?: number },
+    { userId, timezone }: McpToolContext,
+  ) {
+    return this.meals.list(userId, input, timezone);
   }
 }

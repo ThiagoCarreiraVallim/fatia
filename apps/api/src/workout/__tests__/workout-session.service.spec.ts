@@ -67,7 +67,7 @@ describe('WorkoutSessionService', () => {
 
   describe('findById', () => {
     it('scopes the lookup by userId', async () => {
-      prisma.workoutSession.findFirst.mockResolvedValue({ id: 'sess-1', sets: [] });
+      prisma.workoutSession.findFirst.mockResolvedValue({ id: 'sess-1', sets: [], plan: null });
 
       await service.findById(userId, 'sess-1');
 
@@ -81,11 +81,77 @@ describe('WorkoutSessionService', () => {
 
       await expect(service.findById(userId, 'sess-x')).rejects.toThrow(NotFoundException);
     });
+
+    it('returns an empty plannedExercises array when the session is free training', async () => {
+      prisma.workoutSession.findFirst.mockResolvedValue({
+        id: 'sess-1',
+        planId: null,
+        sets: [],
+        plan: null,
+      });
+
+      const result = await service.findById(userId, 'sess-1');
+
+      expect(result.plannedExercises).toEqual([]);
+      expect(result).not.toHaveProperty('plan');
+    });
+
+    it('projects plan exercises into plannedExercises in plan order', async () => {
+      prisma.workoutSession.findFirst.mockResolvedValue({
+        id: 'sess-1',
+        planId: 'plan-1',
+        sets: [],
+        plan: {
+          id: 'plan-1',
+          exercises: [
+            {
+              exerciseId: 10,
+              order: 1,
+              targetSets: 4,
+              targetReps: '8-12',
+              exercise: { id: 10, name: 'Supino', muscleGroup: 'CHEST' },
+            },
+            {
+              exerciseId: 11,
+              order: 2,
+              targetSets: 3,
+              targetReps: '10',
+              exercise: { id: 11, name: 'Esteira', muscleGroup: 'CARDIO' },
+            },
+          ],
+        },
+      });
+
+      const result = await service.findById(userId, 'sess-1');
+
+      expect(result.plannedExercises).toEqual([
+        {
+          exerciseId: 10,
+          exerciseName: 'Supino',
+          muscleGroup: 'CHEST',
+          order: 1,
+          targetSets: 4,
+          targetReps: '8-12',
+        },
+        {
+          exerciseId: 11,
+          exerciseName: 'Esteira',
+          muscleGroup: 'CARDIO',
+          order: 2,
+          targetSets: 3,
+          targetReps: '10',
+        },
+      ]);
+    });
   });
 
   describe('findActive', () => {
     it('returns the most recent uncompleted session for the user', async () => {
-      prisma.workoutSession.findFirst.mockResolvedValue({ id: 'sess-active' });
+      prisma.workoutSession.findFirst.mockResolvedValue({
+        id: 'sess-active',
+        sets: [],
+        plan: null,
+      });
 
       await service.findActive(userId);
 
@@ -95,6 +161,47 @@ describe('WorkoutSessionService', () => {
           orderBy: { startedAt: 'desc' },
         }),
       );
+    });
+
+    it('returns null when there is no active session', async () => {
+      prisma.workoutSession.findFirst.mockResolvedValue(null);
+
+      const result = await service.findActive(userId);
+
+      expect(result).toBeNull();
+    });
+
+    it('includes plannedExercises for plan-backed active sessions', async () => {
+      prisma.workoutSession.findFirst.mockResolvedValue({
+        id: 'sess-active',
+        planId: 'plan-1',
+        sets: [],
+        plan: {
+          id: 'plan-1',
+          exercises: [
+            {
+              exerciseId: 7,
+              order: 1,
+              targetSets: 3,
+              targetReps: '5',
+              exercise: { id: 7, name: 'Agachamento', muscleGroup: 'LEGS' },
+            },
+          ],
+        },
+      });
+
+      const result = await service.findActive(userId);
+
+      expect(result?.plannedExercises).toEqual([
+        {
+          exerciseId: 7,
+          exerciseName: 'Agachamento',
+          muscleGroup: 'LEGS',
+          order: 1,
+          targetSets: 3,
+          targetReps: '5',
+        },
+      ]);
     });
   });
 
