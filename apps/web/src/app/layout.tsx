@@ -21,8 +21,8 @@ export const metadata: Metadata = {
     title: 'Fatia',
   },
   icons: {
-    icon: '/icons/icon.svg',
-    apple: '/icons/icon.svg',
+    icon: '/icons/icon.png',
+    apple: '/icons/icon.png',
   },
 };
 

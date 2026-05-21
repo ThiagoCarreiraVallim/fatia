@@ -2,7 +2,7 @@
 // Não cacheia requests à API (/api/*) pra evitar dados nutricionais defasados.
 
 const CACHE = 'fatia-static-v1';
-const PRECACHE = ['/', '/manifest.json', '/icons/icon.svg'];
+const PRECACHE = ['/', '/manifest.json', '/icons/icon.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)));

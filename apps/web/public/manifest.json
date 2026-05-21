@@ -12,9 +12,9 @@
   "lang": "pt-BR",
   "icons": [
     {
-      "src": "/icons/icon.svg",
+      "src": "/icons/icon.png",
       "sizes": "any",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ]
