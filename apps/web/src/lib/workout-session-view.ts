@@ -1,5 +1,4 @@
 import type { PlannedExercise, SessionSet } from './api/workout';
-import { isCardioExercise } from './workout/is-cardio';
 
 export interface ExerciseGroup {
   exerciseId: number;
@@ -31,7 +30,7 @@ export function buildExerciseGroups(
     groups.push({
       exerciseId: pe.exerciseId,
       exerciseName: pe.exerciseName,
-      isCardio: isCardioExercise(pe),
+      isCardio: pe.muscleGroup === 'CARDIO',
       sets: setsByExercise.get(pe.exerciseId) ?? [],
       targetSets: pe.targetSets,
       targetReps: pe.targetReps,
@@ -45,7 +44,7 @@ export function buildExerciseGroups(
     groups.push({
       exerciseId: s.exerciseId,
       exerciseName: s.exercise.name,
-      isCardio: isCardioExercise(s.exercise),
+      isCardio: s.exercise.muscleGroup === 'CARDIO',
       sets: setsByExercise.get(s.exerciseId) ?? [],
       isPlanned: false,
     });
