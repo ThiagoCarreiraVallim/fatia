@@ -78,6 +78,7 @@ export class WorkoutSessionService {
     }
     return this.prisma.workoutSession.findMany({
       where,
+      include: SESSION_INCLUDE,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       take: limit,
       ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
