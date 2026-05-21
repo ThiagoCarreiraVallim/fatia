@@ -140,9 +140,9 @@ export function ExerciseCard({
       <div className="divide-y">
         {sets.map((s) =>
           isCardio ? (
-            <CardioEntryRow key={s.id} set={s} sessionId={sessionId} />
+            <CardioEntryRow key={s.id} set={s} sessionId={sessionId} active={active} />
           ) : (
-            <StrengthSetRow key={s.id} set={s} sessionId={sessionId} />
+            <StrengthSetRow key={s.id} set={s} sessionId={sessionId} active={active} />
           ),
         )}
       </div>

@@ -12,7 +12,12 @@ import { MealList, NewMealButton } from '@/components/nutrition/meal-list';
 import { FoodSearchDrawer } from '@/components/nutrition/food-search-drawer';
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  }).format(new Date());
 }
 
 export default function NutritionPage() {

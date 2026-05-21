@@ -1,13 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Pencil, Trash2, X } from 'lucide-react';
+import { Check, Copy, Pencil, Trash2, X } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { workoutApi, type SessionSet } from '@/lib/api/workout';
 
 interface Props {
   set: SessionSet;
   sessionId: string;
+  active?: boolean;
 }
 
 function secondsToMmss(s: number | null): string {
@@ -28,7 +29,7 @@ function mmssToSeconds(v: string): number | undefined {
   return isNaN(n) ? undefined : n;
 }
 
-export function CardioEntryRow({ set, sessionId }: Props) {
+export function CardioEntryRow({ set, sessionId, active }: Props) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [duration, setDuration] = useState(secondsToMmss(set.durationSeconds));
@@ -37,6 +38,21 @@ export function CardioEntryRow({ set, sessionId }: Props) {
   );
   const [hr, setHr] = useState(set.avgHeartRate != null ? String(set.avgHeartRate) : '');
   const [kcal, setKcal] = useState(set.kcalBurned != null ? String(set.kcalBurned) : '');
+
+  const duplicate = useMutation({
+    mutationFn: () =>
+      workoutApi.logSet(sessionId, {
+        exerciseId: set.exerciseId,
+        durationSeconds: set.durationSeconds ?? undefined,
+        distanceMeters: set.distanceMeters ?? undefined,
+        avgHeartRate: set.avgHeartRate ?? undefined,
+        kcalBurned: set.kcalBurned ?? undefined,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['workout', 'session', sessionId] });
+      qc.invalidateQueries({ queryKey: ['workout', 'active'] });
+    },
+  });
 
   const update = useMutation({
     mutationFn: () =>
@@ -130,10 +146,21 @@ export function CardioEntryRow({ set, sessionId }: Props) {
       {set.kcalBurned != null && (
         <span className="text-xs text-muted-foreground">{set.kcalBurned}kcal</span>
       )}
+      {active && (
+        <button
+          type="button"
+          onClick={() => duplicate.mutate()}
+          disabled={duplicate.isPending}
+          className="ml-auto rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-40"
+          aria-label="Duplicar entrada"
+        >
+          <Copy size={14} />
+        </button>
+      )}
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="ml-auto rounded p-1 text-muted-foreground hover:text-foreground"
+        className={active ? 'rounded p-1 text-muted-foreground hover:text-foreground' : 'ml-auto rounded p-1 text-muted-foreground hover:text-foreground'}
         aria-label="Editar entrada"
       >
         <Pencil size={14} />

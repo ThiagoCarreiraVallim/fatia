@@ -116,6 +116,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fatia_prisma
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fatia_prisma
+      SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fatia_prisma_shadow
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -143,4 +162,5 @@ jobs:
           pnpm --filter @fatia/db exec prisma migrate diff \
             --from-migrations ./prisma/migrations \
             --to-schema-datamodel ./prisma/schema.prisma \
+            --shadow-database-url $SHADOW_DATABASE_URL \
             --exit-code

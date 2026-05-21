@@ -10,10 +10,12 @@ import { ExerciseCard } from '@/components/workout/exercise-card';
 import { ExerciseSearchDrawer } from '@/components/workout/exercise-search-drawer';
 import { FinishSessionModal } from '@/components/workout/finish-session-modal';
 import { buildExerciseGroups } from '@/lib/workout-session-view';
+import { CancelSessionModal } from '@/components/workout/cancel-session-modal';
 
 function ActiveSession({ session }: { session: WorkoutSession }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [finishOpen, setFinishOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const groups = buildExerciseGroups(session.plannedExercises, session.sets);
 
   return (
@@ -29,9 +31,14 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
             })}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setFinishOpen(true)}>
-          Finalizar
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setCancelOpen(true)}>
+            Cancelar
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setFinishOpen(true)}>
+            Finalizar
+          </Button>
+        </div>
       </div>
 
       {groups.length === 0 && (
@@ -66,6 +73,7 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
       <ExerciseSearchDrawer open={searchOpen} onOpenChange={setSearchOpen} sessionId={session.id} />
 
       <FinishSessionModal open={finishOpen} onOpenChange={setFinishOpen} session={session} />
+      <CancelSessionModal open={cancelOpen} onOpenChange={setCancelOpen} session={session} />
     </div>
   );
 }

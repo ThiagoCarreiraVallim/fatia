@@ -18,6 +18,10 @@ jest.mock('../helpers/date-tz', () => ({
     utc.setUTCDate(utc.getUTCDate() + offset);
     return utc.toISOString().slice(0, 10);
   }),
+  dayBoundsInTz: jest.fn((ymd: string) => {
+    const start = new Date(`${ymd}T00:00:00.000Z`);
+    return { start, end: new Date(start.getTime() + 86_400_000) };
+  }),
 }));
 
 type MockPrisma = {

@@ -30,10 +30,10 @@ describe('NutritionSummaryService', () => {
   });
 
   describe('getDay', () => {
-    it('queries meals within the UTC day window [00:00, next-day-00:00)', async () => {
+    it('queries meals within the day window [00:00, next-day-00:00) in the given timezone', async () => {
       prisma.meal.findMany.mockResolvedValue([]);
 
-      await service.getDay(userId, '2026-01-15');
+      await service.getDay(userId, '2026-01-15', 'UTC');
 
       const where = prisma.meal.findMany.mock.calls[0][0].where;
       expect(where.userId).toBe(userId);
@@ -50,7 +50,7 @@ describe('NutritionSummaryService', () => {
         makeMeal('2026-01-15', [{ kcal: 300, proteinG: 20, carbsG: 40, fatG: 10 }]),
       ]);
 
-      const result = await service.getDay(userId, '2026-01-15');
+      const result = await service.getDay(userId, '2026-01-15', 'UTC');
 
       expect(result.date).toBe('2026-01-15');
       expect(result.mealsCount).toBe(2);
@@ -60,7 +60,7 @@ describe('NutritionSummaryService', () => {
     it('returns zeroed totals when there are no meals for the day', async () => {
       prisma.meal.findMany.mockResolvedValue([]);
 
-      const result = await service.getDay(userId, '2026-01-15');
+      const result = await service.getDay(userId, '2026-01-15', 'UTC');
 
       expect(result.totals).toEqual({ kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 });
       expect(result.mealsCount).toBe(0);
@@ -79,7 +79,7 @@ describe('NutritionSummaryService', () => {
     it('returns a series of N days even when there are no meals (zero-fill)', async () => {
       prisma.meal.findMany.mockResolvedValue([]);
 
-      const result = await service.getHistory(userId, 7);
+      const result = await service.getHistory(userId, 7, 'UTC');
 
       expect(result.days).toBe(7);
       expect(result.series).toHaveLength(7);
@@ -95,7 +95,7 @@ describe('NutritionSummaryService', () => {
         makeMeal('2026-01-15', [{ kcal: 800, proteinG: 50, carbsG: 100, fatG: 20 }]),
       ]);
 
-      const result = await service.getHistory(userId, 7);
+      const result = await service.getHistory(userId, 7, 'UTC');
 
       const jan13 = result.series.find((d) => d.date === '2026-01-13');
       const jan15 = result.series.find((d) => d.date === '2026-01-15');
@@ -108,7 +108,7 @@ describe('NutritionSummaryService', () => {
         makeMeal('2026-01-13', [{ kcal: 1400, proteinG: 70, carbsG: 175, fatG: 50 }]),
       ]);
 
-      const result = await service.getHistory(userId, 7);
+      const result = await service.getHistory(userId, 7, 'UTC');
 
       expect(result.averages.kcal).toBeCloseTo(200);
       expect(result.averages.proteinG).toBeCloseTo(10);
@@ -119,7 +119,7 @@ describe('NutritionSummaryService', () => {
         makeMeal('2025-12-01', [{ kcal: 9999, proteinG: 0, carbsG: 0, fatG: 0 }]),
       ]);
 
-      const result = await service.getHistory(userId, 7);
+      const result = await service.getHistory(userId, 7, 'UTC');
 
       expect(result.series.every((d) => d.kcal === 0)).toBe(true);
     });
