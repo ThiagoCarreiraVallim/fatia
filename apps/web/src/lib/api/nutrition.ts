@@ -113,4 +113,17 @@ export const nutritionApi = {
       method: 'PUT',
       body: JSON.stringify(body),
     }),
+  history: (days: number) =>
+    apiFetch<{
+      days: number;
+      series: Array<{
+        date: string;
+        meals: number;
+        kcal: number;
+        proteinG: number;
+        carbsG: number;
+        fatG: number;
+      }>;
+      averages: { kcal: number; proteinG: number; carbsG: number; fatG: number };
+    }>(`/api/nutrition/history?days=${days}`),
 };

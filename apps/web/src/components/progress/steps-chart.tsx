@@ -15,14 +15,14 @@ import type { StepsProgress } from '@/lib/api/progress';
 export function StepsChart({ data }: { data: StepsProgress }) {
   if (!data.points.length) {
     return (
-      <div className="rounded-md border bg-card p-6 text-center text-sm text-muted-foreground">
+      <div className="rounded-xl border border-white/5 bg-card p-6 text-center text-sm text-muted-foreground">
         Sem dados no período.
       </div>
     );
   }
 
   return (
-    <div className="rounded-md border bg-card p-3">
+    <div className="rounded-xl border border-white/5 bg-card p-4">
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={data.points} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />

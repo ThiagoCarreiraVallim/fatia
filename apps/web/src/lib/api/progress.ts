@@ -66,7 +66,17 @@ export interface TodaySummary {
   date: string;
   nutrition: {
     consumed: { kcal: number; proteinG: number; carbsG: number; fatG: number };
-    goals: { kcalMin: number; kcalMax: number; dailyStepsTarget: number } | null;
+    goals: {
+      kcalMin: number;
+      kcalMax: number;
+      proteinMinG: number;
+      proteinMaxG: number;
+      carbsMinG: number;
+      carbsMaxG: number;
+      fatMinG: number;
+      fatMaxG: number;
+      dailyStepsTarget: number;
+    } | null;
     mealsLogged: number;
     onTrack: boolean | null;
   };

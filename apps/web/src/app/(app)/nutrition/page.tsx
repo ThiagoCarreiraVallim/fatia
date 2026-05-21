@@ -1,14 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Settings } from 'lucide-react';
 import { nutritionApi, type MealType } from '@/lib/api/nutrition';
 import { DateNavigator } from '@/components/nutrition/date-navigator';
-import { MacroBar } from '@/components/nutrition/macro-bar';
-import { MealList, NewMealButton } from '@/components/nutrition/meal-list';
+import { CaloriesRingCard } from '@/components/nutrition/calories-ring-card';
+import { MacroBentoGrid } from '@/components/nutrition/macro-bento-grid';
+import { MealTimeline } from '@/components/nutrition/meal-timeline';
+import { WeeklyTrendChart } from '@/components/nutrition/weekly-trend-chart';
 import { FoodSearchDrawer } from '@/components/nutrition/food-search-drawer';
 
 function todayIso(): string {
@@ -20,7 +22,7 @@ function todayIso(): string {
   }).format(new Date());
 }
 
-export default function NutritionPage() {
+function NutritionPageContent() {
   const params = useSearchParams();
   const date = params.get('date') ?? todayIso();
   const [newMealType, setNewMealType] = useState<MealType | null>(null);
@@ -35,12 +37,12 @@ export default function NutritionPage() {
   });
 
   return (
-    <div className="space-y-4 p-4">
+    <div className="space-y-5 px-5 pt-4 pb-4">
       <header className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Nutrição</h1>
+        <h1 className="text-[18px] font-semibold text-foreground">Nutrição</h1>
         <Link
           href="/nutrition/goals"
-          className="rounded p-2 text-muted-foreground hover:text-foreground"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
           aria-label="Metas"
         >
           <Settings size={18} />
@@ -49,67 +51,26 @@ export default function NutritionPage() {
 
       <DateNavigator date={date} />
 
-      {summary.isLoading && (
-        <div className="space-y-2">
-          <div className="h-2 animate-pulse rounded bg-muted" />
-          <div className="h-2 animate-pulse rounded bg-muted" />
-          <div className="h-2 animate-pulse rounded bg-muted" />
-          <div className="h-2 animate-pulse rounded bg-muted" />
+      {(summary.isLoading || goals.isLoading) && (
+        <div className="space-y-4">
+          <div className="h-80 animate-pulse rounded-xl bg-card" />
+          <div className="h-28 animate-pulse rounded-xl bg-card" />
+          <div className="h-48 animate-pulse rounded-xl bg-card" />
         </div>
       )}
 
       {summary.data && (
-        <section className="space-y-2 rounded-lg border bg-card p-4">
-          {goals.data ? (
-            <>
-              <MacroBar
-                label="Calorias"
-                value={summary.data.totals.kcal}
-                min={goals.data.kcalMin}
-                max={goals.data.kcalMax}
-                unit=""
-              />
-              <MacroBar
-                label="Proteína"
-                value={summary.data.totals.proteinG}
-                min={goals.data.proteinMinG}
-                max={goals.data.proteinMaxG}
-              />
-              <MacroBar
-                label="Carboidratos"
-                value={summary.data.totals.carbsG}
-                min={goals.data.carbsMinG}
-                max={goals.data.carbsMaxG}
-              />
-              <MacroBar
-                label="Gordura"
-                value={summary.data.totals.fatG}
-                min={goals.data.fatMinG}
-                max={goals.data.fatMaxG}
-              />
-            </>
-          ) : (
-            <div className="text-sm">
-              <p className="tabular-nums">
-                {Math.round(summary.data.totals.kcal)} kcal · P
-                {Math.round(summary.data.totals.proteinG)} · C
-                {Math.round(summary.data.totals.carbsG)} · G{Math.round(summary.data.totals.fatG)}
-              </p>
-              <p className="mt-2 text-muted-foreground">
-                Defina suas{' '}
-                <Link href="/nutrition/goals" className="underline">
-                  metas
-                </Link>{' '}
-                para ver as faixas.
-              </p>
-            </div>
-          )}
-        </section>
+        <>
+          <CaloriesRingCard totals={summary.data.totals} goals={goals.data ?? null} />
+          <MacroBentoGrid totals={summary.data.totals} goals={goals.data ?? null} />
+          <MealTimeline
+            meals={summary.data.meals}
+            date={date}
+            onAddMeal={(mt) => setNewMealType(mt)}
+          />
+          <WeeklyTrendChart today={todayIso()} />
+        </>
       )}
-
-      {summary.data && <MealList meals={summary.data.meals} date={date} />}
-
-      {summary.data && <NewMealButton date={date} onClick={(mt) => setNewMealType(mt)} />}
 
       <FoodSearchDrawer
         open={newMealType !== null}
@@ -124,5 +85,13 @@ export default function NutritionPage() {
         </p>
       )}
     </div>
+  );
+}
+
+export default function NutritionPage() {
+  return (
+    <Suspense>
+      <NutritionPageContent />
+    </Suspense>
   );
 }

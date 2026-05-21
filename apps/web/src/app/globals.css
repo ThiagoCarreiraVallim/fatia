@@ -4,26 +4,36 @@
 
 @layer base {
   :root {
-    --background: 224 71% 4%;
-    --foreground: 213 31% 91%;
-    --card: 224 71% 6%;
-    --card-foreground: 213 31% 91%;
-    --popover: 224 71% 4%;
-    --popover-foreground: 215 20.2% 65.1%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 1.2%;
-    --secondary: 222.2 47.4% 11.2%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 223 47% 11%;
-    --muted-foreground: 215.4 16.3% 56.9%;
-    --accent: 216 34% 17%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 216 34% 17%;
-    --input: 216 34% 17%;
-    --ring: 216 34% 17%;
-    --radius: 0.5rem;
+    /* Fatia dark palette — derived from Figma design */
+    --background: 0 0% 7.5%; /* #131313 */
+    --foreground: 15 7% 89%; /* #e5e2e1 */
+
+    --card: 0 0% 16.5%; /* #2a2a2a */
+    --card-foreground: 15 7% 89%; /* #e5e2e1 */
+
+    --popover: 0 0% 10%;
+    --popover-foreground: 15 7% 89%;
+
+    --primary: 108 100% 45%; /* #2ce500 — brand green */
+    --primary-foreground: 0 0% 7.5%; /* #131313 */
+
+    --secondary: 0 0% 20%;
+    --secondary-foreground: 15 7% 89%;
+
+    --muted: 0 0% 12%; /* #201f1f */
+    --muted-foreground: 97 22% 74%; /* #baccaf */
+
+    --accent: 101 17% 25%; /* #3c4b35 */
+    --accent-foreground: 15 7% 89%;
+
+    --destructive: 356 100% 29%; /* #93000a */
+    --destructive-foreground: 15 7% 89%;
+
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 108 100% 45%;
+
+    --radius: 0.75rem; /* 12px (Figma cards) */
   }
 
   * {

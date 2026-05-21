@@ -14,14 +14,14 @@ import type { WeightProgress } from '@/lib/api/progress';
 export function WeightChart({ data }: { data: WeightProgress }) {
   if (!data.points.length) {
     return (
-      <div className="rounded-md border bg-card p-6 text-center text-sm text-muted-foreground">
+      <div className="rounded-xl border border-white/5 bg-card p-6 text-center text-sm text-muted-foreground">
         Sem registros no período. Loga um peso pra começar.
       </div>
     );
   }
 
   return (
-    <div className="rounded-md border bg-card p-3">
+    <div className="rounded-xl border border-white/5 bg-card p-4">
       <ResponsiveContainer width="100%" height={220}>
         <AreaChart data={data.points} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
