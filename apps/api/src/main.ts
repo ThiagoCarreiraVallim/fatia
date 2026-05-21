@@ -11,7 +11,7 @@ async function bootstrap() {
 
   const config = app.get(ConfigService);
   const port = config.get<number>('API_PORT', 3000);
-  const webOrigin = config.get<string>('WEB_ORIGIN', 'http://localhost:3001');
+  const webOrigin = config.get<string>('WEB_ORIGIN', 'http://localhost:3030');
   const nodeEnv = config.get<string>('NODE_ENV', 'development');
 
   app.useLogger(app.get(Logger));

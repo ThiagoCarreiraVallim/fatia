@@ -160,7 +160,11 @@ export function CardioEntryRow({ set, sessionId, active }: Props) {
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className={active ? 'rounded p-1 text-muted-foreground hover:text-foreground' : 'ml-auto rounded p-1 text-muted-foreground hover:text-foreground'}
+        className={
+          active
+            ? 'rounded p-1 text-muted-foreground hover:text-foreground'
+            : 'ml-auto rounded p-1 text-muted-foreground hover:text-foreground'
+        }
         aria-label="Editar entrada"
       >
         <Pencil size={14} />

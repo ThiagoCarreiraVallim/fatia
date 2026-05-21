@@ -25,7 +25,7 @@ if [ -t 0 ] && [ "${YES:-}" != "1" ]; then
 fi
 
 say "Stopping containers and removing volumes"
-docker compose -f infra/docker-compose.yml down -v
+docker compose --env-file .env -f infra/docker-compose.yml down -v
 
 say "Starting Postgres again"
 pnpm infra:up

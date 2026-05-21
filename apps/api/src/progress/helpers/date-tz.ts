@@ -75,7 +75,10 @@ export function dayBoundsInTz(dateYmd: string, timezone: string): { start: Date;
     hour12: false,
   })
     .formatToParts(noonUTC)
-    .reduce<Record<string, string>>((acc, p) => { acc[p.type] = p.value; return acc; }, {});
+    .reduce<Record<string, string>>((acc, p) => {
+      acc[p.type] = p.value;
+      return acc;
+    }, {});
 
   const localHour = parseInt(parts.hour, 10);
   const localMin = parseInt(parts.minute, 10);
