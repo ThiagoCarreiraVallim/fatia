@@ -2,41 +2,29 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import Link from 'next/link';
-import {
-  Calendar,
-  Trophy,
-  Dumbbell,
-  Footprints,
-  Flame,
-  Scale,
-  ChevronRight,
-  Plus,
-  TrendingDown,
-  TrendingUp,
-} from 'lucide-react';
+import { Scale, Plus, TrendingDown, TrendingUp } from 'lucide-react';
 import { progressApi } from '@/lib/api/progress';
 import { WeightChart } from '@/components/progress/weight-chart';
 import { StepsChart } from '@/components/progress/steps-chart';
+import { StrengthChart } from '@/components/progress/strength-chart';
+import { CardioChart } from '@/components/progress/cardio-chart';
+import { PersonalRecords } from '@/components/progress/personal-records';
+import { TrainingIntensity } from '@/components/progress/training-intensity';
+import { ConsistencyCard } from '@/components/progress/consistency-card';
 import { LogWeightDrawer } from '@/components/progress/log-weight-drawer';
 import { LogStepsDrawer } from '@/components/progress/log-steps-drawer';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const RANGES = [14, 30, 90, 180] as const;
-const DAYS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
-
-function HeatmapCell({ intensity }: { intensity: number }) {
-  // 0 = empty, 1-4 = increasing intensity
-  const styles = ['bg-muted/40', 'bg-primary/20', 'bg-primary/40', 'bg-primary/70', 'bg-primary'];
-  return (
-    <div
-      className={`aspect-square rounded-md ${styles[intensity]} ${intensity >= 3 ? 'shadow-[0_0_8px_hsl(var(--primary)/0.4)]' : ''}`}
-    />
-  );
-}
 
 function WeightBarMini({ values }: { values: number[] }) {
-  if (values.length === 0) return null;
+  if (values.length < 2) {
+    return (
+      <p className="py-2 text-xs text-muted-foreground">
+        Logue pelo menos dois pesos para ver a evolução.
+      </p>
+    );
+  }
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
@@ -48,7 +36,9 @@ function WeightBarMini({ values }: { values: number[] }) {
         return (
           <div key={i} className="flex flex-1 flex-col items-center gap-1">
             <div
-              className={`w-full rounded-sm ${isLast ? 'bg-primary shadow-[0_0_10px_hsl(var(--primary)/0.6)]' : 'bg-muted/80'}`}
+              className={`w-full rounded-sm ${
+                isLast ? 'bg-primary shadow-[0_0_10px_hsl(var(--primary)/0.6)]' : 'bg-muted/80'
+              }`}
               style={{ height: `${h}%`, minHeight: '8px' }}
             />
             {isLast && (
@@ -59,49 +49,6 @@ function WeightBarMini({ values }: { values: number[] }) {
       })}
     </div>
   );
-}
-
-interface PR {
-  id: string;
-  exercise: string;
-  category: string;
-  value: string;
-  unit: string;
-  type: 'strength' | 'cardio';
-  icon: 'dumbbell' | 'run';
-}
-
-const personalRecords: PR[] = [
-  {
-    id: '1',
-    exercise: 'Supino Reto',
-    category: 'Força • Barra Livre',
-    value: '110',
-    unit: 'kg',
-    type: 'strength',
-    icon: 'dumbbell',
-  },
-  {
-    id: '2',
-    exercise: '5km Corrida',
-    category: 'Cardio • Esteira',
-    value: '22:45',
-    unit: 'TEMPO',
-    type: 'cardio',
-    icon: 'run',
-  },
-];
-
-function buildHeatmap(): number[][] {
-  // 2 rows × 7 cols mock heatmap based on image
-  return [
-    [0, 2, 3, 4, 0, 2, 3],
-    [0, 2, 4, 0, 0, 0, 0],
-  ];
-}
-
-function buildWeightSeries(): number[] {
-  return [80.2, 79.6, 79.8, 79.0, 78.7, 78.5];
 }
 
 export default function ProgressPage() {
@@ -119,13 +66,9 @@ export default function ProgressPage() {
   });
 
   const realWeightPoints = weight.data?.points ?? [];
-  const weightSeries =
-    realWeightPoints.length >= 2
-      ? realWeightPoints.slice(-6).map((p) => p.weightKg)
-      : buildWeightSeries();
-  const currentWeight = weight.data?.currentWeightKg ?? 78.5;
-  const weightDelta = weight.data?.totalDeltaKg ?? -1.2;
-  const heatmap = buildHeatmap();
+  const weightSeries = realWeightPoints.slice(-6).map((p) => p.weightKg);
+  const currentWeight = weight.data?.currentWeightKg;
+  const weightDelta = weight.data?.totalDeltaKg ?? 0;
 
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
@@ -162,15 +105,22 @@ export default function ProgressPage() {
                 </p>
                 <div className="mt-1 flex items-baseline gap-2">
                   <p className="text-3xl font-extrabold text-foreground tabular-nums">
-                    {currentWeight.toFixed(1)} <span className="text-base font-bold">kg</span>
+                    {currentWeight !== null && currentWeight !== undefined
+                      ? currentWeight.toFixed(1)
+                      : '—'}{' '}
+                    <span className="text-base font-bold">kg</span>
                   </p>
-                  <span
-                    className={`flex items-center gap-0.5 text-xs font-bold ${weightDelta < 0 ? 'text-primary' : 'text-amber-400'}`}
-                  >
-                    {weightDelta < 0 ? <TrendingDown size={12} /> : <TrendingUp size={12} />}
-                    {weightDelta > 0 ? '+' : ''}
-                    {weightDelta.toFixed(1)} kg
-                  </span>
+                  {weight.data && realWeightPoints.length >= 2 && (
+                    <span
+                      className={`flex items-center gap-0.5 text-xs font-bold ${
+                        weightDelta < 0 ? 'text-primary' : 'text-amber-400'
+                      }`}
+                    >
+                      {weightDelta < 0 ? <TrendingDown size={12} /> : <TrendingUp size={12} />}
+                      {weightDelta > 0 ? '+' : ''}
+                      {weightDelta.toFixed(1)} kg
+                    </span>
+                  )}
                 </div>
               </div>
               <button
@@ -188,109 +138,11 @@ export default function ProgressPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-white/5 bg-card p-4">
-              <p className="text-[10px] font-bold tracking-wide text-muted-foreground">
-                MASSA MAGRA
-              </p>
-              <p className="mt-1 text-xl font-extrabold text-foreground tabular-nums">+0.8%</p>
-              <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                <div className="h-full w-1/2 bg-blue-500" />
-              </div>
-            </div>
-            <div className="rounded-2xl border border-white/5 bg-card p-4">
-              <p className="text-[10px] font-bold tracking-wide text-muted-foreground">
-                CONSTÂNCIA
-              </p>
-              <p className="mt-1 text-xl font-extrabold text-foreground tabular-nums">
-                24 <span className="text-xs font-bold text-muted-foreground">/30 dias</span>
-              </p>
-              <div className="mt-3 grid grid-cols-4 gap-1">
-                <div className="h-2.5 rounded-sm bg-primary" />
-                <div className="h-2.5 rounded-sm bg-primary" />
-                <div className="h-2.5 rounded-sm bg-primary/40" />
-                <div className="h-2.5 rounded-sm bg-primary" />
-              </div>
-            </div>
-          </div>
+          <ConsistencyCard />
 
-          {/* INTENSIDADE HEATMAP */}
-          <div className="rounded-2xl border border-white/5 bg-card p-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-foreground">Intensidade do Treino</h3>
-              <Calendar size={16} className="text-muted-foreground" />
-            </div>
+          <TrainingIntensity />
 
-            <div className="mt-3 grid grid-cols-7 gap-1.5">
-              {DAYS.map((d, i) => (
-                <p
-                  key={`day-${i}`}
-                  className="text-center text-[10px] font-bold text-muted-foreground"
-                >
-                  {d}
-                </p>
-              ))}
-              {heatmap.flat().map((v, i) => (
-                <HeatmapCell key={i} intensity={v} />
-              ))}
-            </div>
-
-            <div className="mt-3 flex items-center justify-between text-[10px] font-bold text-muted-foreground">
-              <span>Leve</span>
-              <div className="flex gap-1">
-                <div className="h-2 w-3 rounded-sm bg-primary/20" />
-                <div className="h-2 w-3 rounded-sm bg-primary/40" />
-                <div className="h-2 w-3 rounded-sm bg-primary/70" />
-                <div className="h-2 w-3 rounded-sm bg-primary" />
-              </div>
-              <span>Intenso</span>
-            </div>
-          </div>
-
-          {/* RECORDES PESSOAIS */}
-          <div className="space-y-2">
-            <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
-              <Trophy size={16} className="text-blue-400" />
-              Recordes Pessoais
-            </h3>
-            {personalRecords.map((pr) => (
-              <div
-                key={pr.id}
-                className="flex items-center gap-3 rounded-2xl border border-white/5 bg-card p-3"
-              >
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                  {pr.icon === 'dumbbell' ? (
-                    <Dumbbell size={18} className="text-primary" />
-                  ) : (
-                    <Footprints size={18} className="text-blue-400" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-foreground">{pr.exercise}</p>
-                  <p className="text-xs text-muted-foreground">{pr.category}</p>
-                </div>
-                <div className="text-right">
-                  <p
-                    className={`text-lg font-extrabold tabular-nums ${
-                      pr.type === 'strength' ? 'text-primary' : 'text-blue-400'
-                    }`}
-                  >
-                    {pr.value} {pr.unit !== 'TEMPO' && <span className="text-sm">{pr.unit}</span>}
-                  </p>
-                  <p className="text-[10px] font-bold tracking-wide text-muted-foreground">
-                    {pr.unit === 'kg' ? '1RM' : pr.unit}
-                  </p>
-                </div>
-              </div>
-            ))}
-            <Link
-              href="/workout/history"
-              className="flex items-center justify-center gap-1.5 rounded-2xl border border-white/5 bg-card py-3 text-sm font-bold text-foreground"
-            >
-              Ver todos os recordes
-              <ChevronRight size={14} />
-            </Link>
-          </div>
+          <PersonalRecords />
         </TabsContent>
 
         <TabsContent value="charts" className="mt-4 space-y-4">
@@ -314,6 +166,9 @@ export default function ProgressPage() {
           {weight.data && <WeightChart data={weight.data} />}
           {steps.data && <StepsChart data={steps.data} />}
 
+          <StrengthChart days={days} />
+          <CardioChart days={days} />
+
           <button
             type="button"
             onClick={() => setLogWeightOpen(true)}
@@ -330,13 +185,6 @@ export default function ProgressPage() {
             <Plus size={16} />
             Logar passos
           </button>
-
-          <div className="rounded-2xl border border-white/5 bg-card p-4 text-center">
-            <Flame size={20} className="mx-auto text-muted-foreground" />
-            <p className="mt-2 text-xs text-muted-foreground">
-              Para evolução de força e cardio, abra o histórico de treino.
-            </p>
-          </div>
         </TabsContent>
       </Tabs>
 
