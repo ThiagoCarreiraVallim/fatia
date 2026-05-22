@@ -10,6 +10,7 @@ import { UsersModule } from './users/users.module';
 import { NutritionModule } from './nutrition/nutrition.module';
 import { WorkoutModule } from './workout/workout.module';
 import { ProgressModule } from './progress/progress.module';
+import { GoalsModule } from './goals/goals.module';
 import { McpModule } from './mcp/mcp.module';
 
 @Module({
@@ -37,6 +38,7 @@ import { McpModule } from './mcp/mcp.module';
     NutritionModule,
     WorkoutModule,
     ProgressModule,
+    GoalsModule,
     McpModule,
   ],
 })
