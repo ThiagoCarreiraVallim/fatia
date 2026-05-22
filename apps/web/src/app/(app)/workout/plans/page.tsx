@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, Trash2, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Trash2, Plus, Dumbbell } from 'lucide-react';
 import { workoutApi } from '@/lib/api/workout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,17 +35,17 @@ export default function PlansPage() {
   });
 
   return (
-    <div className="space-y-4 p-4">
-      <div className="flex items-center gap-2">
+    <div className="space-y-5 px-5 pt-4 pb-4">
+      <header className="flex items-center gap-3">
         <Link
           href="/workout"
-          className="rounded p-1 text-muted-foreground hover:text-foreground"
           aria-label="Voltar"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground"
         >
-          <ChevronLeft size={20} />
+          <ChevronLeft size={18} />
         </Link>
-        <h1 className="text-xl font-semibold">Planos de treino</h1>
-      </div>
+        <h1 className="text-3xl font-extrabold text-foreground">Planos de treino</h1>
+      </header>
 
       {showForm ? (
         <div className="flex gap-2">
@@ -71,7 +71,11 @@ export default function PlansPage() {
           </Button>
         </div>
       ) : (
-        <Button variant="outline" className="w-full gap-2" onClick={() => setShowForm(true)}>
+        <Button
+          variant="outline"
+          className="w-full gap-2 rounded-2xl"
+          onClick={() => setShowForm(true)}
+        >
           <Plus size={16} />
           Novo plano
         </Button>
@@ -80,7 +84,7 @@ export default function PlansPage() {
       {plans.isLoading && (
         <div className="space-y-2">
           {[1, 2].map((i) => (
-            <div key={i} className="h-14 animate-pulse rounded-lg bg-muted" />
+            <div key={i} className="h-20 animate-pulse rounded-2xl bg-muted" />
           ))}
         </div>
       )}
@@ -93,25 +97,28 @@ export default function PlansPage() {
         {plans.data?.map((plan) => (
           <div
             key={plan.id}
-            className="flex items-center justify-between rounded-lg border bg-card px-4 py-3"
+            className="flex items-center gap-3 rounded-2xl border border-white/5 bg-card p-4"
           >
             <Link
-              href={`/workout/plans/${plan.id}/edit`}
-              className="flex flex-1 items-center justify-between hover:text-foreground"
+              href={`/workout/plans/${plan.id}`}
+              className="flex flex-1 items-center gap-3 min-w-0"
             >
-              <div>
-                <p className="text-sm font-medium">{plan.name}</p>
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
+                <Dumbbell size={20} className="text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="truncate text-base font-bold text-foreground">{plan.name}</p>
                 <p className="text-xs text-muted-foreground">
                   {plan.exercises?.length ?? 0} exercício
                   {(plan.exercises?.length ?? 0) !== 1 ? 's' : ''}
                 </p>
               </div>
-              <ChevronRight size={16} className="text-muted-foreground" />
+              <ChevronRight size={16} className="shrink-0 text-muted-foreground" />
             </Link>
             <button
               type="button"
               onClick={() => remove.mutate(plan.id)}
-              className="ml-3 rounded p-1 text-muted-foreground hover:text-rose-500"
+              className="rounded p-1 text-muted-foreground hover:text-rose-500"
               aria-label="Excluir plano"
             >
               <Trash2 size={16} />

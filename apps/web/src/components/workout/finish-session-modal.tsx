@@ -42,8 +42,16 @@ export function FinishSessionModal({ open, onOpenChange, session }: Props) {
     }, 0) ?? 0;
 
   const finish = useMutation({
-    mutationFn: () => workoutApi.finishSession(session.id, { notes: notes || undefined }),
+    mutationFn: async () => {
+      try {
+        await workoutApi.finishSession(session.id, { notes: notes || undefined });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : '';
+        if (!/not found/i.test(msg)) throw err;
+      }
+    },
     onSuccess: () => {
+      qc.setQueryData(['workout', 'active'], null);
       qc.invalidateQueries({ queryKey: ['workout', 'active'] });
       qc.invalidateQueries({ queryKey: ['workout', 'sessions'] });
       onOpenChange(false);
@@ -92,7 +100,10 @@ export function FinishSessionModal({ open, onOpenChange, session }: Props) {
           </div>
 
           {finish.error && (
-            <p className="text-sm text-rose-500">Erro ao finalizar treino. Tente novamente.</p>
+            <p className="text-sm text-rose-500">
+              Erro ao finalizar treino:{' '}
+              {finish.error instanceof Error ? finish.error.message : 'Tente novamente.'}
+            </p>
           )}
 
           <Button className="w-full" onClick={() => finish.mutate()} disabled={finish.isPending}>

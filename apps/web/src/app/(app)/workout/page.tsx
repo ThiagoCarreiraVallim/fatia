@@ -1,67 +1,34 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { Plus, Star, Search, Clock, ListChecks, ChevronDown } from 'lucide-react';
+import { Plus, History, ListChecks, ChevronRight, Dumbbell } from 'lucide-react';
 import { workoutApi, type WorkoutSession } from '@/lib/api/workout';
 import { Button } from '@/components/ui/button';
-import { ExerciseCard } from '@/components/workout/exercise-card';
 import { ExerciseSearchDrawer } from '@/components/workout/exercise-search-drawer';
 import { FinishSessionModal } from '@/components/workout/finish-session-modal';
 import { buildExerciseGroups } from '@/lib/workout-session-view';
 import { CancelSessionModal } from '@/components/workout/cancel-session-modal';
-
-interface QuickWorkout {
-  id: string;
-  title: string;
-  level: string;
-  duration: string;
-  location: string;
-  gradient: string;
-}
-
-const QUICK_WORKOUTS: QuickWorkout[] = [
-  {
-    id: 'peito-triceps',
-    title: 'Construtor de Peito e Tríceps em Casa',
-    level: 'Intermediário',
-    duration: '50 min',
-    location: 'Academia Pequena',
-    gradient: 'from-rose-900/70 via-stone-800/80 to-stone-900',
-  },
-  {
-    id: 'costas-biceps',
-    title: 'Costas e Bíceps Avançado',
-    level: 'Avançado',
-    duration: '65 min',
-    location: 'Academia Completa',
-    gradient: 'from-slate-800/70 via-stone-800/80 to-stone-900',
-  },
-];
-
-interface MuscleEntry {
-  key: string;
-  label: string;
-  count: number;
-  icon: 'power' | 'dollar';
-  glow: 'green' | 'amber';
-}
-
-const MUSCLES: MuscleEntry[] = [
-  { key: 'peito', label: 'Peito', count: 36, icon: 'power', glow: 'green' },
-  { key: 'costas', label: 'Costas', count: 38, icon: 'dollar', glow: 'amber' },
-  { key: 'pernas', label: 'Pernas', count: 42, icon: 'power', glow: 'green' },
-  { key: 'ombro', label: 'Ombro', count: 24, icon: 'power', glow: 'green' },
-  { key: 'braço', label: 'Braço', count: 28, icon: 'dollar', glow: 'amber' },
-  { key: 'core', label: 'Core', count: 20, icon: 'power', glow: 'green' },
-];
+import { ActiveExerciseCard } from '@/components/workout/active-exercise-card';
+import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
+import { QUICK_TEMPLATES } from '@/lib/workout/quick-templates';
 
 function ActiveSession({ session }: { session: WorkoutSession }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [finishOpen, setFinishOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [skippedExerciseIds, setSkippedExerciseIds] = useState<Set<number>>(new Set());
   const groups = buildExerciseGroups(session.plannedExercises, session.sets);
+
+  const focused = groups.find((g) => {
+    if (skippedExerciseIds.has(g.exerciseId)) return false;
+    if (g.isCardio) return g.sets.length === 0;
+    const target = g.targetSets ?? 0;
+    return target === 0 || g.sets.length < target;
+  });
+
+  const others = groups.filter((g) => g.exerciseId !== focused?.exerciseId);
 
   return (
     <div className="space-y-4 px-5 pt-4 pb-4">
@@ -90,21 +57,44 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
         <p className="text-sm text-muted-foreground">Nenhum exercício registrado ainda.</p>
       )}
 
-      <div className="space-y-3">
-        {groups.map((g) => (
-          <ExerciseCard
-            key={g.exerciseId}
-            exerciseId={g.exerciseId}
-            exerciseName={g.exerciseName}
-            isCardio={g.isCardio}
-            sets={g.sets}
-            sessionId={session.id}
-            targetSets={g.targetSets}
-            targetReps={g.targetReps}
-            active
-          />
-        ))}
-      </div>
+      {focused && !focused.isCardio && (
+        <ActiveExerciseCard
+          sessionId={session.id}
+          group={focused}
+          onFinishExercise={() =>
+            setSkippedExerciseIds((prev) => new Set(prev).add(focused.exerciseId))
+          }
+        />
+      )}
+
+      {(focused?.isCardio ? groups : others).length > 0 && (
+        <div className="space-y-3">
+          {(focused?.isCardio ? groups : others).map((g) => {
+            const muscle = g.sets[0]?.exercise?.muscleGroup ?? 'outros';
+            return (
+              <ExerciseDetailCard
+                key={g.exerciseId}
+                mode="readonly"
+                isCardio={g.isCardio}
+                sessionId={session.id}
+                item={{
+                  id: String(g.exerciseId),
+                  exercise: {
+                    id: g.exerciseId,
+                    name: g.exerciseName,
+                    muscleGroup: muscle,
+                    source: 'SEED',
+                    createdByUserId: null,
+                  },
+                  targetSets: g.targetSets ?? g.sets.length,
+                  targetReps: g.targetReps ?? '—',
+                }}
+                loggedSets={g.sets}
+              />
+            );
+          })}
+        </div>
+      )}
 
       <button
         type="button"
@@ -122,26 +112,8 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
   );
 }
 
-function MuscleIcon({ entry }: { entry: MuscleEntry }) {
-  const glow =
-    entry.glow === 'green'
-      ? 'text-primary drop-shadow-[0_0_6px_hsl(var(--primary)/0.7)]'
-      : 'text-amber-400 drop-shadow-[0_0_6px_rgba(251,191,36,0.7)]';
-  return (
-    <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg bg-muted">
-      <div className="absolute inset-0 bg-gradient-to-br from-card to-muted/80" />
-      <span className={`relative text-xl font-extrabold ${glow}`}>
-        {entry.icon === 'power' ? '⏻' : '$'}
-      </span>
-    </div>
-  );
-}
-
 function NoSession() {
   const qc = useQueryClient();
-  const [muscleFilter, setMuscleFilter] = useState<'POR MÚSCULO' | 'EQUIPAMENTOS' | 'FAVORITOS'>(
-    'POR MÚSCULO',
-  );
 
   const plans = useQuery({
     queryKey: ['workout', 'plans'],
@@ -158,18 +130,16 @@ function NoSession() {
     },
   });
 
-  const currentPlan = useMemo(() => plans.data?.[0], [plans.data]);
-
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
       <header className="flex items-center justify-between">
         <h1 className="text-3xl font-extrabold text-foreground">Treinos</h1>
         <Link
           href="/workout/history"
-          aria-label="Favoritos"
+          aria-label="Histórico"
           className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground"
         >
-          <Star size={16} />
+          <History size={16} />
         </Link>
       </header>
 
@@ -188,17 +158,14 @@ function NoSession() {
               personalizado
             </p>
           </Link>
-          <Link
-            href={currentPlan ? `/workout/plans/${currentPlan.id}` : '/workout/plans'}
-            className="rounded-2xl border border-white/5 bg-card p-4"
-          >
+          <Link href="/workout/plans" className="rounded-2xl border border-white/5 bg-card p-4">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
               <ListChecks size={16} className="text-foreground" />
             </div>
             <p className="mt-3 text-sm font-bold leading-tight text-foreground">
-              Meu plano de
+              Meus planos de
               <br />
-              treino atual
+              treino
             </p>
           </Link>
         </div>
@@ -207,31 +174,18 @@ function NoSession() {
       <section>
         <div className="flex items-center justify-between">
           <p className="text-[11px] font-extrabold tracking-wide text-muted-foreground">
-            TREINOS RÁPIDOS PARA{' '}
-            <span className="inline-flex items-center gap-0.5 text-foreground underline underline-offset-2">
-              INTERMEDIÁRIO
-              <ChevronDown size={10} />
-            </span>
+            TREINOS RÁPIDOS
           </p>
-          <Link href="/workout/plans" className="text-[11px] font-extrabold text-primary">
-            Ver tudo
-          </Link>
         </div>
 
         <div className="-mx-5 mt-2 overflow-x-auto px-5">
           <div className="flex gap-3">
-            {QUICK_WORKOUTS.map((q) => (
-              <div
+            {QUICK_TEMPLATES.map((q) => (
+              <Link
                 key={q.id}
+                href={`/workout/quick/${q.id}`}
                 className={`relative h-44 w-72 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br ${q.gradient}`}
               >
-                <button
-                  type="button"
-                  className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-foreground backdrop-blur-sm"
-                  aria-label="Favoritar"
-                >
-                  <Star size={14} />
-                </button>
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-4">
                   <p className="text-[10px] font-bold text-white/70">{q.level}</p>
                   <h3 className="mt-1 text-base font-extrabold leading-tight text-white">
@@ -241,7 +195,7 @@ function NoSession() {
                     {q.duration} • {q.location}
                   </p>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
@@ -252,62 +206,58 @@ function NoSession() {
         onClick={() => start.mutate()}
         disabled={start.isPending}
       >
-        {start.isPending ? 'INICIANDO...' : 'INICIAR TREINO'}
+        {start.isPending ? 'INICIANDO...' : 'INICIAR TREINO LIVRE'}
       </Button>
 
       <section>
         <div className="flex items-center justify-between">
           <p className="text-[11px] font-extrabold tracking-wide text-muted-foreground">
-            EXERCÍCIOS POR MÚSCULO
+            MEUS PLANOS
           </p>
-          <button type="button" aria-label="Buscar" className="text-muted-foreground">
-            <Search size={14} />
-          </button>
+          <Link href="/workout/plans" className="text-[11px] font-extrabold text-primary">
+            Ver tudo
+          </Link>
         </div>
 
-        <div className="-mx-5 mt-3 overflow-x-auto px-5">
-          <div className="flex gap-2">
-            {(['POR MÚSCULO', 'EQUIPAMENTOS', 'FAVORITOS'] as const).map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setMuscleFilter(tab)}
-                className={`shrink-0 rounded-full px-4 py-2 text-[11px] font-extrabold tracking-wide transition-colors ${
-                  muscleFilter === tab ? 'bg-blue-500 text-white' : 'bg-muted text-foreground'
-                }`}
-              >
-                {tab}
-              </button>
+        {plans.isLoading && (
+          <div className="mt-3 space-y-2">
+            {[1, 2].map((i) => (
+              <div key={i} className="h-16 animate-pulse rounded-2xl bg-muted" />
             ))}
           </div>
-        </div>
+        )}
+
+        {plans.data && plans.data.length === 0 && (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Nenhum plano criado ainda.{' '}
+            <Link href="/workout/plans" className="font-bold text-primary underline">
+              Criar agora
+            </Link>
+          </p>
+        )}
 
         <div className="mt-3 space-y-2">
-          {MUSCLES.map((m) => (
+          {plans.data?.map((plan) => (
             <Link
-              key={m.key}
-              href={`/workout/plans?muscle=${m.key}`}
+              key={plan.id}
+              href={`/workout/plans/${plan.id}`}
               className="flex items-center gap-3 rounded-2xl border border-white/5 bg-card p-3"
             >
-              <MuscleIcon entry={m} />
-              <div className="flex-1">
-                <p className="text-base font-bold text-foreground">{m.label}</p>
-                <p className="text-xs text-muted-foreground">{m.count} exercícios</p>
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
+                <Dumbbell size={20} className="text-primary" />
               </div>
+              <div className="flex-1 min-w-0">
+                <p className="truncate text-base font-bold text-foreground">{plan.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {plan.exercises?.length ?? 0} exercício
+                  {(plan.exercises?.length ?? 0) !== 1 ? 's' : ''}
+                </p>
+              </div>
+              <ChevronRight size={16} className="shrink-0 text-muted-foreground" />
             </Link>
           ))}
         </div>
       </section>
-
-      <div className="flex justify-end">
-        <Link
-          href="/workout/history"
-          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
-        >
-          <Clock size={14} />
-          Histórico
-        </Link>
-      </div>
     </div>
   );
 }
@@ -317,6 +267,9 @@ export default function WorkoutPage() {
     queryKey: ['workout', 'active'],
     queryFn: () => workoutApi.getActiveSession(),
     retry: false,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   if (active.isLoading) {

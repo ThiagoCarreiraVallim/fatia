@@ -3,9 +3,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Clock, Dumbbell } from 'lucide-react';
 import { workoutApi } from '@/lib/api/workout';
-import { ExerciseCard } from '@/components/workout/exercise-card';
+import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { buildExerciseGroups } from '@/lib/workout-session-view';
 
 function formatDuration(start: string, end: string): string {
@@ -29,19 +29,16 @@ export default function SessionDetailPage() {
 
   if (query.isLoading) {
     return (
-      <div className="space-y-3 p-4">
-        <div className="h-5 w-32 animate-pulse rounded bg-muted" />
-        <div className="h-24 animate-pulse rounded-lg bg-muted" />
+      <div className="space-y-3 px-5 pt-4">
+        <div className="h-6 w-32 animate-pulse rounded bg-muted" />
+        <div className="h-44 animate-pulse rounded-2xl bg-muted" />
+        <div className="h-32 animate-pulse rounded-2xl bg-muted" />
       </div>
     );
   }
 
   if (!session) {
-    return (
-      <div className="p-4">
-        <p className="text-sm text-muted-foreground">Sessão não encontrada.</p>
-      </div>
-    );
+    return <p className="px-5 pt-4 text-sm text-muted-foreground">Sessão não encontrada.</p>;
   }
 
   const groups = buildExerciseGroups(session.plannedExercises, session.sets);
@@ -53,64 +50,108 @@ export default function SessionDetailPage() {
     }, 0) ?? 0;
 
   const dateLabel = new Date(session.startedAt).toLocaleDateString('pt-BR', {
-    weekday: 'short',
+    weekday: 'long',
     day: 'numeric',
     month: 'short',
   });
 
+  const durationLabel = session.completedAt
+    ? formatDuration(session.startedAt, session.completedAt)
+    : 'Em andamento';
+
   return (
-    <div className="space-y-4 p-4">
-      <div className="flex items-center gap-2">
+    <div className="pb-4">
+      <header className="sticky top-0 z-10 flex h-14 items-center justify-between bg-background/90 px-4 backdrop-blur">
         <Link
           href="/workout/history"
-          className="rounded p-1 text-muted-foreground hover:text-foreground"
           aria-label="Voltar"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-foreground"
         >
           <ChevronLeft size={20} />
         </Link>
-        <div>
-          <h1 className="text-lg font-semibold capitalize">{dateLabel}</h1>
-          {session.completedAt && (
-            <p className="text-xs text-muted-foreground">
-              Duração: {formatDuration(session.startedAt, session.completedAt)}
-            </p>
-          )}
-        </div>
-      </div>
+        <h1 className="text-base font-bold capitalize text-foreground">{dateLabel}</h1>
+        <div className="w-9" />
+      </header>
 
-      <div className="grid grid-cols-2 gap-2 text-center">
-        <div className="rounded-lg border bg-card p-3">
-          <p className="text-2xl font-bold tabular-nums">{totalSets}</p>
-          <p className="text-xs text-muted-foreground">séries</p>
+      <div className="space-y-4 px-5 pt-2">
+        <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-card">
+          <div className="relative h-44 w-full overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-700 via-stone-800 to-stone-900" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
+            <div className="absolute left-4 right-4 top-4 flex gap-2">
+              <span className="rounded-md bg-primary px-2 py-0.5 text-[10px] font-extrabold text-primary-foreground">
+                CONCLUÍDO
+              </span>
+            </div>
+            <div className="absolute inset-x-0 bottom-0 p-4">
+              <h2 className="text-2xl font-extrabold capitalize text-white">{dateLabel}</h2>
+              <p className="mt-1 text-xs text-white/70">
+                {groups.length} exercício{groups.length !== 1 ? 's' : ''} • {totalSets} série
+                {totalSets !== 1 ? 's' : ''}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-6 border-t border-white/5 px-5 py-3">
+            <div className="flex items-center gap-2">
+              <Clock size={14} className="text-primary" />
+              <div>
+                <p className="text-[10px] font-bold tracking-wide text-muted-foreground">Duração</p>
+                <p className="text-sm font-extrabold text-foreground tabular-nums">
+                  {durationLabel}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Dumbbell size={14} className="text-primary" />
+              <div>
+                <p className="text-[10px] font-bold tracking-wide text-muted-foreground">Volume</p>
+                <p className="text-sm font-extrabold text-foreground tabular-nums">
+                  {totalVolume > 0 ? `${Math.round(totalVolume)} kg` : '—'}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="rounded-lg border bg-card p-3">
-          <p className="text-2xl font-bold tabular-nums">
-            {totalVolume > 0 ? Math.round(totalVolume) : '—'}
-          </p>
-          <p className="text-xs text-muted-foreground">vol. kg</p>
-        </div>
-      </div>
 
-      {session.notes && (
-        <div className="rounded-lg border bg-card px-4 py-3">
-          <p className="text-xs font-medium text-muted-foreground">Observações</p>
-          <p className="mt-1 text-sm">{session.notes}</p>
-        </div>
-      )}
+        {session.notes && (
+          <div className="rounded-2xl border border-white/5 bg-card px-4 py-3">
+            <p className="text-[10px] font-bold tracking-wide text-muted-foreground">OBSERVAÇÕES</p>
+            <p className="mt-1 text-sm">{session.notes}</p>
+          </div>
+        )}
 
-      <div className="space-y-3">
-        {groups.map((g) => (
-          <ExerciseCard
-            key={g.exerciseId}
-            exerciseId={g.exerciseId}
-            exerciseName={g.exerciseName}
-            isCardio={g.isCardio}
-            sets={g.sets}
-            sessionId={session.id}
-            targetSets={g.targetSets}
-            targetReps={g.targetReps}
-          />
-        ))}
+        <h3 className="text-base font-extrabold text-foreground">
+          Exercícios{' '}
+          <span className="text-sm font-bold text-muted-foreground">({groups.length})</span>
+        </h3>
+
+        <div className="space-y-3">
+          {groups.map((g) => {
+            const muscle = g.sets[0]?.exercise?.muscleGroup ?? 'outros';
+            return (
+              <ExerciseDetailCard
+                key={g.exerciseId}
+                mode="readonly"
+                isCardio={g.isCardio}
+                sessionId={session.id}
+                canDeleteSet={false}
+                item={{
+                  id: String(g.exerciseId),
+                  exercise: {
+                    id: g.exerciseId,
+                    name: g.exerciseName,
+                    muscleGroup: muscle,
+                    source: 'SEED',
+                    createdByUserId: null,
+                  },
+                  targetSets: g.targetSets ?? g.sets.length,
+                  targetReps: g.targetReps ?? '—',
+                }}
+                loggedSets={g.sets}
+              />
+            );
+          })}
+        </div>
       </div>
     </div>
   );

@@ -24,8 +24,16 @@ export function CancelSessionModal({ open, onOpenChange, session }: Props) {
   const router = useRouter();
 
   const cancel = useMutation({
-    mutationFn: () => workoutApi.deleteSession(session.id),
+    mutationFn: async () => {
+      try {
+        await workoutApi.deleteSession(session.id);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : '';
+        if (!/not found/i.test(msg)) throw err;
+      }
+    },
     onSuccess: () => {
+      qc.setQueryData(['workout', 'active'], null);
       qc.invalidateQueries({ queryKey: ['workout', 'active'] });
       qc.invalidateQueries({ queryKey: ['workout', 'sessions'] });
       onOpenChange(false);
@@ -46,7 +54,10 @@ export function CancelSessionModal({ open, onOpenChange, session }: Props) {
 
         <div className="mt-4 space-y-2">
           {cancel.error && (
-            <p className="text-sm text-rose-500">Erro ao cancelar treino. Tente novamente.</p>
+            <p className="text-sm text-rose-500">
+              Erro ao cancelar treino:{' '}
+              {cancel.error instanceof Error ? cancel.error.message : 'Tente novamente.'}
+            </p>
           )}
 
           <Button
