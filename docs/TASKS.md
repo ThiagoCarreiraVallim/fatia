@@ -9,7 +9,7 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - 🟢 Nice-to-have — pode esperar
 - ⏱️ Estimativa em horas (h)
 
-> **Status atual:** Fases 0 e 1 concluídas. Fase FX (Logto) parcialmente concluída — código implementado, falta configurar tenant e validar com Claude. Fase 2 (Treino) parcialmente concluída — services de exercício e sessão prontos, WorkoutPlanService ausente, sem controller REST, apenas 5 das 19 MCP tools. Fase 3 (Progresso) quase concluída — Força e Cardio no PWA são placeholders. Fases 2 e 3 precisam ser finalizadas.
+> **Status atual:** Fases 0 e 1 concluídas. Fase FX (Logto) parcialmente concluída — código implementado, falta configurar tenant e validar com Claude. Fase 2 (Treino) parcialmente concluída — services de exercício e sessão prontos, WorkoutPlanService ausente, sem controller REST, apenas 5 das 19 MCP tools. Fase 3 (Progresso) **concluída no PWA** — Força e Cardio plugados, PRs/Heatmap/Constância reais. Fase G (Metas pessoais) implementada de ponta a ponta. Backlog principal: F2 (treino) + FX.5/FX.9 (Logto tenant) + T.2/T.3 (testes e produção).
 
 ---
 
@@ -414,17 +414,20 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [x] Tool MCP `get_today_summary`
 - [x] Tool MCP `get_week_summary`
 
-### F3.5 — PWA Progresso 🟡 ⏱️ 12h
+### F3.5 — PWA Progresso 🟡 ⏱️ 12h ✅
 
 - [x] Página `/progress` com tabs **Peso | Força | Cardio | Passos**
 - [x] Filtros 14/30/90/180 dias
 - [x] `<WeightChart />` com Recharts (área + linha)
-- [ ] `<StrengthChart />` com seletor de exercício e métrica — tab é placeholder atualmente
-- [ ] `<CardioChart />` com seletor de exercício de cardio e métrica — tab é placeholder atualmente
+- [x] `<StrengthChart />` com seletor de exercício e métrica (max_weight, 1RM, volume)
+- [x] `<CardioChart />` com seletor de cardio e métrica (duração, distância, pace, kcal)
 - [x] `<StepsChart />` gráfico de barras com linha de meta
 - [x] Modal "Logar peso"
 - [x] Modal "Logar passos"
 - [x] Tabela de médias semanais
+- [x] `<PersonalRecords />` deriva PRs reais dos exercícios mais usados
+- [x] `<TrainingIntensity />` heatmap de 14 dias agregado por sessão
+- [x] `<ConsistencyCard />` dias-com-treino na janela de 30 dias
 - [ ] Lista editável de pesos logados (correção) — via Claude por enquanto
 - [ ] Lista editável de logs de passos (correção) — via Claude por enquanto
 
@@ -433,6 +436,65 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 - [x] `<StepsCard />` — passos atuais + meta + barra
 - [x] Integração no dashboard chamando `get_today_summary`
 - [x] Botão de log rápido inline
+
+---
+
+## Fase G — Metas pessoais dinâmicas
+
+> ✅ **Concluída.** Metas definíveis pelo usuário (PWA ou MCP). Distintas das metas de nutrição (`UserGoals` 1:1).
+
+### G.1 — Schema 🔴 ⏱️ 30min ✅
+
+- [x] Model `Goal` (`id`, `userId`, `kind`, `title`, `description`, `startValue`, `targetValue`, `unit`, `lastReportedValue`, `deadline`, `status`, `createdAt`, `completedAt`)
+- [x] Enums `GoalKind` (weight, body_fat, workout_frequency, step_count, custom) e `GoalStatus` (active, completed, expired, archived)
+- [x] Campo `User.heightCm` opcional
+- [x] Migration `add_goals_and_user_height`
+
+### G.2 — `GoalsService` 🔴 ⏱️ 3h ✅
+
+- [x] `create` — deriva `startValue` quando kind tem fonte automática
+- [x] `findById` / `list` — retornam `currentValue` + `progressPercent` calculados
+- [x] `update` — campos editáveis + transição de status
+- [x] `complete` — atalho para `status=completed` + `completedAt`
+- [x] `delete`
+- [x] `deriveCurrentValue` — weight (último log), workout_frequency (sessions 7d), step_count (média 7d), body_fat/custom (lastReportedValue)
+- [x] `computeProgress` helper (handle metas crescentes ou decrescentes)
+
+### G.3 — REST controller 🟡 ⏱️ 1h ✅
+
+- [x] CRUD `/api/goals`
+- [x] `POST /api/goals/:id/complete`
+- [x] DTOs com `class-validator`
+
+### G.4 — MCP tools 🔴 ⏱️ 2h ✅
+
+- [x] `create_goal`, `list_goals`, `get_goal`
+- [x] `update_goal` (com `lastReportedValue` para body_fat/custom)
+- [x] `complete_goal`, `delete_goal`
+
+### G.5 — PWA `/goals` 🟡 ⏱️ 4h ✅
+
+- [x] `goalsApi` client
+- [x] Página consome metas reais; primeira ativa vira meta principal com círculo de progresso
+- [x] Cards secundários com bar de progresso, concluir/remover inline
+- [x] Lista "Metas Recentes" (concluídas + expiradas)
+- [x] `<NewGoalDrawer />` com 5 tipos e validação
+
+### G.6 — Estatura no User + drawer 🟡 ⏱️ 2h ✅
+
+- [x] `User.heightCm` no schema (migration G.1)
+- [x] `PATCH /api/users/me` aceita `heightCm`
+- [x] `update_me` MCP tool
+- [x] `usersApi.me/updateMe` client
+- [x] `<EditHeightDrawer />` no `/profile`
+
+### G.7 — Limpeza dos mocks no PWA 🟡 ⏱️ 2h ✅
+
+- [x] Remove `personalRecords` hardcoded em `/progress`
+- [x] Remove `buildHeatmap`, `buildWeightSeries` fallbacks
+- [x] Remove cards "Massa Magra +0.8%" e placeholder texto força/cardio
+- [x] `/profile`: peso atual vem de `dashboard.today`; remove avatar edit, badge plano, suporte, v1.0.4
+- [x] Renomeia "Configurações" → "Metas de nutrição"
 
 ---
 
@@ -534,21 +596,9 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
    - Etapa 5c (4h): Página `/workout/plans` + `/workout/plans/:id/edit`
    - Etapa 5d (4h): `/workout/history` + detalhe de sessão
 
-### Prioridade 2 — Fechar gráficos de progresso (F3.5) ⏱️ ~4h
+### Prioridade 2 — ~~Fechar gráficos de progresso (F3.5)~~ ✅ CONCLUÍDA
 
-**Objetivo:** Tabs Força e Cardio no `/progress` mostram gráficos reais.
-
-1. **`<StrengthChart />`** — ⏱️ 2h
-   - Seletor de exercício (busca via `search_exercise`, filtra tipo `strength`)
-   - Seletor de métrica (`weightKg`, `reps`, `estimated1RM`)
-   - Chama `GET /progress/strength?exerciseId=&days=&metric=`
-   - Recharts LineChart com tooltip
-
-2. **`<CardioChart />`** — ⏱️ 2h
-   - Seletor de exercício (filtra `muscleGroup === 'cardio'`)
-   - Seletor de métrica (`durationSeconds`, `distanceMeters`, `pace`, `kcal`)
-   - Chama `GET /progress/cardio?exerciseId=&days=&metric=`
-   - Recharts LineChart/AreaChart
+StrengthChart e CardioChart implementados com seletor de exercício + métricas. PRs, heatmap e constância derivam de `listSessions` real.
 
 ### Prioridade 3 — Configurar Logto e validar end-to-end (FX.5 + FX.9) ⏱️ ~4h
 
@@ -574,11 +624,12 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 | Controller REST treino          | 3h         | 1          |
 | Tests F2.2                      | 2h         | 1          |
 | PWA Treino (F2.5)               | 16h        | 1          |
-| StrengthChart + CardioChart     | 4h         | 2          |
+| ~~StrengthChart + CardioChart~~ | ✅         | —          |
+| ~~Fase G — Metas pessoais~~     | ✅         | —          |
 | FX.5 Logto tenant + FX.9 Claude | 4h         | 3          |
 | Tests guards + isolamento       | 2h         | 4          |
 | Setup produção                  | 4h         | 4          |
-| **Total**                       | **~46h**   |            |
+| **Total**                       | **~42h**   |            |
 
 ---
 
@@ -599,7 +650,9 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 | F1 (Nutrição)                       | 16 tools (perfil, metas, food, meal, item, summary)          | 16        |
 | F2 (Treino)                         | 5 implementadas / 19 previstas (exercise search/CRUD custom) | 21 atual  |
 | F3 (Progresso + Passos + Dashboard) | 17 tools (weight 4 + steps 6 + progress 5 + dashboard 2)     | +17       |
-| **Total atual**                     | **38 tools funcionais**                                      | **38**    |
-| **Faltando (F2)**                   | 14 tools (plan, session, set, PR)                            | → **52**  |
+| FG (Metas pessoais)                 | 6 tools (create/list/get/update/complete/delete_goal)        | +6        |
+| Meta (update_me)                    | 1 tool                                                       | +1        |
+| **Total atual**                     | **45 tools funcionais**                                      | **45**    |
+| **Faltando (F2)**                   | 14 tools (plan, session, set, PR)                            | → **59**  |
 
-Total esperado ao fim da v1: **~52 tools MCP**. Auth via Logto OAuth 2.1.
+Total esperado ao fim da v1: **~59 tools MCP**. Auth via Logto OAuth 2.1.
