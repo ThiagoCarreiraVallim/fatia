@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { workoutApi, type Exercise } from '@/lib/api/workout';
+import { isCardioExercise } from '@/lib/workout/is-cardio';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -58,11 +59,12 @@ export function AddExerciseDrawer({
   const add = useMutation({
     mutationFn: (exercise: Exercise) => {
       if (!planId) throw new Error('planId required for API mode');
+      const cardio = isCardioExercise(exercise);
       return workoutApi.addPlanExercise(planId, {
         exerciseId: exercise.id,
         order: nextOrder ?? 1,
-        targetSets: 3,
-        targetReps: '8-12',
+        targetSets: cardio ? 1 : 3,
+        targetReps: cardio ? '—' : '8-12',
       });
     },
     onSuccess: () => {

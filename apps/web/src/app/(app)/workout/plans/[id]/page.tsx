@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, Play, Clock, Dumbbell, Lightbulb, Plus, Trash2, Check } from 'lucide-react';
 import { workoutApi } from '@/lib/api/workout';
+import { isCardioExercise } from '@/lib/workout/is-cardio';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
@@ -239,6 +240,7 @@ export default function PlanDetailPage() {
               key={ex.id}
               mode="plan"
               item={ex}
+              isCardio={isCardioExercise(ex.exercise)}
               isFirst={idx === 0}
               isLast={idx === exercises.length - 1}
               onChangeSets={(n) =>

@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, Play, Clock, Dumbbell, Plus } from 'lucide-react';
 import { workoutApi, type Exercise } from '@/lib/api/workout';
+import { isCardioExercise } from '@/lib/workout/is-cardio';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
@@ -234,6 +235,7 @@ export default function QuickTemplatePage() {
             <ExerciseDetailCard
               key={it.localId}
               mode="plan"
+              isCardio={isCardioExercise(it.exercise)}
               item={{
                 id: it.localId,
                 exercise: it.exercise,

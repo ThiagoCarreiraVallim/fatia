@@ -11,6 +11,7 @@ import { FinishSessionModal } from '@/components/workout/finish-session-modal';
 import { buildExerciseGroups } from '@/lib/workout-session-view';
 import { CancelSessionModal } from '@/components/workout/cancel-session-modal';
 import { ActiveExerciseCard } from '@/components/workout/active-exercise-card';
+import { ActiveCardioCard } from '@/components/workout/active-cardio-card';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { QUICK_TEMPLATES } from '@/lib/workout/quick-templates';
 
@@ -67,9 +68,19 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
         />
       )}
 
-      {(focused?.isCardio ? groups : others).length > 0 && (
+      {focused && focused.isCardio && (
+        <ActiveCardioCard
+          sessionId={session.id}
+          group={focused}
+          onFinishExercise={() =>
+            setSkippedExerciseIds((prev) => new Set(prev).add(focused.exerciseId))
+          }
+        />
+      )}
+
+      {others.length > 0 && (
         <div className="space-y-3">
-          {(focused?.isCardio ? groups : others).map((g) => {
+          {others.map((g) => {
             const muscle = g.sets[0]?.exercise?.muscleGroup ?? 'outros';
             return (
               <ExerciseDetailCard
