@@ -17,6 +17,7 @@ interface PlanItemLike {
 interface PlanCardProps {
   mode: 'plan';
   item: PlanItemLike;
+  isCardio?: boolean;
   isFirst?: boolean;
   isLast?: boolean;
   onChangeSets?: (value: number) => void;
@@ -39,7 +40,7 @@ interface SessionCardProps {
 
 type Props = PlanCardProps | SessionCardProps;
 
-function Header({ item }: { item: PlanItemLike }) {
+function Header({ item, isCardio }: { item: PlanItemLike; isCardio?: boolean }) {
   return (
     <div className="flex gap-3">
       <div className="relative flex h-20 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted">
@@ -52,12 +53,20 @@ function Header({ item }: { item: PlanItemLike }) {
         </h3>
         <p className="mt-0.5 text-xs text-muted-foreground">{item.exercise.muscleGroup}</p>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] font-bold text-foreground">
-            {item.targetSets} Séries
-          </span>
-          <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] font-bold text-foreground">
-            {item.targetReps} Reps
-          </span>
+          {isCardio ? (
+            <span className="rounded-md bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-400">
+              CARDIO
+            </span>
+          ) : (
+            <>
+              <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] font-bold text-foreground">
+                {item.targetSets} Séries
+              </span>
+              <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] font-bold text-foreground">
+                {item.targetReps} Reps
+              </span>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -86,7 +95,7 @@ function SessionModeCard({
 
   return (
     <div className="rounded-2xl border border-white/5 bg-card p-4">
-      <Header item={item} />
+      <Header item={item} isCardio={isCardio} />
       {loggedSets.length > 0 && (
         <div className="mt-4 space-y-1.5">
           <div
@@ -126,6 +135,7 @@ function SessionModeCard({
 
 function PlanModeCard({
   item,
+  isCardio,
   isFirst,
   isLast,
   onChangeSets,
@@ -171,7 +181,7 @@ function PlanModeCard({
 
   return (
     <div className="rounded-2xl border border-white/5 bg-card p-4">
-      <Header item={item} />
+      <Header item={item} isCardio={isCardio} />
 
       {prLabel && (
         <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-bold text-primary">
@@ -181,28 +191,36 @@ function PlanModeCard({
       )}
 
       <div className="mt-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <label className="text-[10px] font-bold tracking-wide text-muted-foreground">
-            SÉRIES
-          </label>
-          <Input
-            value={sets}
-            onChange={(e) => setSets(e.target.value)}
-            onBlur={commitSets}
-            inputMode="numeric"
-            className="h-8 w-14 px-1 text-center text-sm"
-            aria-label="Séries"
-          />
-          <span className="text-xs text-muted-foreground">×</span>
-          <label className="text-[10px] font-bold tracking-wide text-muted-foreground">REPS</label>
-          <Input
-            value={reps}
-            onChange={(e) => setReps(e.target.value)}
-            onBlur={commitReps}
-            className="h-8 w-20 px-1 text-center text-sm"
-            aria-label="Repetições"
-          />
-        </div>
+        {isCardio ? (
+          <p className="text-[11px] text-muted-foreground">
+            Duração e distância são logadas durante a sessão.
+          </p>
+        ) : (
+          <div className="flex items-center gap-2">
+            <label className="text-[10px] font-bold tracking-wide text-muted-foreground">
+              SÉRIES
+            </label>
+            <Input
+              value={sets}
+              onChange={(e) => setSets(e.target.value)}
+              onBlur={commitSets}
+              inputMode="numeric"
+              className="h-8 w-14 px-1 text-center text-sm"
+              aria-label="Séries"
+            />
+            <span className="text-xs text-muted-foreground">×</span>
+            <label className="text-[10px] font-bold tracking-wide text-muted-foreground">
+              REPS
+            </label>
+            <Input
+              value={reps}
+              onChange={(e) => setReps(e.target.value)}
+              onBlur={commitReps}
+              className="h-8 w-20 px-1 text-center text-sm"
+              aria-label="Repetições"
+            />
+          </div>
+        )}
 
         <div className="flex items-center gap-1">
           {onMoveUp && (

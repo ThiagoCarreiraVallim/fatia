@@ -190,7 +190,7 @@ export function ActiveExerciseCard({
               key={s.id}
               set={s}
               index={idx}
-              isCardio={false}
+              isCardio={group.isCardio}
               sessionId={sessionId}
               showDelete
             />

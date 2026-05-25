@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
   Plus,
@@ -9,83 +11,37 @@ import {
   CheckCircle2,
   History,
   ChevronRight,
+  Footprints,
+  Scale,
+  Sparkles,
+  Trash2,
+  Check,
+  type LucideIcon,
 } from 'lucide-react';
+import { goalsApi, type Goal, type GoalKind } from '@/lib/api/goals';
+import { NewGoalDrawer } from '@/components/goals/new-goal-drawer';
 
-interface SecondaryGoal {
-  id: string;
-  title: string;
-  subtitle: string;
-  current: number;
-  target: number;
-  unit: string;
-  badge: string;
-  icon: 'hourglass' | 'dumbbell';
-  color: 'blue' | 'pink';
-}
-
-interface RecentGoal {
-  id: string;
-  title: string;
-  subtitle: string;
-  status: 'CONCLUÍDO' | 'EXPIRADO';
-}
-
-const mainGoal = {
-  title: 'Redução BF',
-  description: 'Baixar gordura corporal para 12%',
-  currentLabel: 'ATUAL',
-  current: '14.5%',
-  targetLabel: 'ALVO',
-  target: '12.0%',
-  progress: 60,
+const KIND_ICON: Record<GoalKind, LucideIcon> = {
+  weight: Scale,
+  body_fat: Flame,
+  workout_frequency: Dumbbell,
+  step_count: Footprints,
+  custom: Sparkles,
 };
 
-const secondaryGoals: SecondaryGoal[] = [
-  {
-    id: 'peso',
-    title: 'Peso Corporal',
-    subtitle: 'Ganho de massa magra',
-    current: 82,
-    target: 85,
-    unit: 'kg',
-    badge: '30 DIAS',
-    icon: 'hourglass',
-    color: 'blue',
-  },
-  {
-    id: 'freq',
-    title: 'Frequência',
-    subtitle: 'Treinos por semana',
-    current: 4,
-    target: 6,
-    unit: 'treinos',
-    badge: 'SEMANAL',
-    icon: 'dumbbell',
-    color: 'pink',
-  },
-];
+function formatValue(v: number | null | undefined, unit: string): string {
+  if (v === null || v === undefined) return '—';
+  const rounded = Math.abs(v) < 10 ? v.toFixed(1) : Math.round(v).toString();
+  return unit === '%' ? `${rounded}%` : rounded;
+}
 
-const recentGoals: RecentGoal[] = [
-  {
-    id: 'agua',
-    title: 'Consumo de Água',
-    subtitle: '3L por dia durante 30 dias',
-    status: 'CONCLUÍDO',
-  },
-  {
-    id: 'corrida',
-    title: 'Corrida 5km',
-    subtitle: 'Abaixo de 25 minutos',
-    status: 'EXPIRADO',
-  },
-];
-
-function MainGoalCard() {
+function MainGoalCard({ goal }: { goal: Goal }) {
   const stroke = 10;
   const size = 140;
   const radius = (size - stroke) / 2;
   const circ = 2 * Math.PI * radius;
-  const offset = circ - (mainGoal.progress / 100) * circ;
+  const pct = goal.progressPercent ?? 0;
+  const offset = circ - (pct / 100) * circ;
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-card p-5">
@@ -96,24 +52,28 @@ function MainGoalCard() {
         META PRINCIPAL
       </span>
 
-      <h2 className="relative mt-3 text-2xl font-extrabold text-foreground">{mainGoal.title}</h2>
-      <p className="relative text-sm text-muted-foreground">{mainGoal.description}</p>
+      <h2 className="relative mt-3 text-2xl font-extrabold text-foreground">{goal.title}</h2>
+      {goal.description && (
+        <p className="relative text-sm text-muted-foreground">{goal.description}</p>
+      )}
 
       <div className="relative mt-4 grid grid-cols-2 gap-3">
         <div className="rounded-xl bg-muted/60 px-4 py-3">
-          <p className="text-[10px] font-bold tracking-wide text-muted-foreground">
-            {mainGoal.currentLabel}
-          </p>
+          <p className="text-[10px] font-bold tracking-wide text-muted-foreground">ATUAL</p>
           <p className="mt-0.5 text-xl font-extrabold text-primary tabular-nums">
-            {mainGoal.current}
+            {formatValue(goal.currentValue, goal.unit)}
+            {goal.unit !== '%' && (
+              <span className="ml-1 text-xs text-muted-foreground">{goal.unit}</span>
+            )}
           </p>
         </div>
         <div className="rounded-xl bg-muted/60 px-4 py-3">
-          <p className="text-[10px] font-bold tracking-wide text-muted-foreground">
-            {mainGoal.targetLabel}
-          </p>
+          <p className="text-[10px] font-bold tracking-wide text-muted-foreground">ALVO</p>
           <p className="mt-0.5 text-xl font-extrabold text-foreground tabular-nums">
-            {mainGoal.target}
+            {formatValue(goal.targetValue, goal.unit)}
+            {goal.unit !== '%' && (
+              <span className="ml-1 text-xs text-muted-foreground">{goal.unit}</span>
+            )}
           </p>
         </div>
       </div>
@@ -144,7 +104,7 @@ function MainGoalCard() {
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <p className="text-3xl font-extrabold text-foreground tabular-nums">
-              {mainGoal.progress}
+              {pct}
               <span className="text-base font-bold">%</span>
             </p>
             <p className="text-[10px] font-bold tracking-wide text-muted-foreground">CONCLUÍDO</p>
@@ -155,48 +115,77 @@ function MainGoalCard() {
   );
 }
 
-function SecondaryGoalCard({ goal }: { goal: SecondaryGoal }) {
-  const pct = Math.min(100, Math.round((goal.current / goal.target) * 100));
-  const Icon = goal.icon === 'hourglass' ? Hourglass : Dumbbell;
-  const iconBg = goal.color === 'blue' ? 'bg-blue-500/15' : 'bg-pink-500/15';
-  const iconColor = goal.color === 'blue' ? 'text-blue-400' : 'text-pink-400';
-  const barColor = goal.color === 'blue' ? 'bg-blue-500' : 'bg-pink-400';
-  const targetColor = goal.color === 'blue' ? 'text-blue-400' : 'text-pink-300';
+function SecondaryGoalCard({
+  goal,
+  onComplete,
+  onDelete,
+}: {
+  goal: Goal;
+  onComplete: () => void;
+  onDelete: () => void;
+}) {
+  const pct = goal.progressPercent ?? 0;
+  const Icon = KIND_ICON[goal.kind];
+  const deadline = goal.deadline ? new Date(goal.deadline) : null;
+  const daysLeft = deadline
+    ? Math.max(0, Math.ceil((deadline.getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+    : null;
+  const badge = daysLeft !== null ? `${daysLeft}D` : goal.kind.toUpperCase();
 
   return (
     <div className="rounded-2xl border border-white/5 bg-card p-4">
       <div className="flex items-start justify-between">
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${iconBg}`}>
-          <Icon size={18} className={iconColor} />
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
+          <Icon size={18} className="text-primary" />
         </div>
         <span className="rounded-full bg-muted px-3 py-1 text-[10px] font-bold text-foreground">
-          {goal.badge}
+          {badge}
         </span>
       </div>
 
       <h3 className="mt-3 text-base font-bold text-foreground">{goal.title}</h3>
-      <p className="text-xs text-muted-foreground">{goal.subtitle}</p>
+      {goal.description && (
+        <p className="line-clamp-2 text-xs text-muted-foreground">{goal.description}</p>
+      )}
 
       <div className="mt-3 flex items-baseline justify-between">
         <p className="text-lg font-extrabold text-foreground tabular-nums">
-          {goal.current}{' '}
+          {formatValue(goal.currentValue, goal.unit)}{' '}
           <span className="text-xs font-medium text-muted-foreground">{goal.unit}</span>
         </p>
-        <p className={`text-[11px] font-bold ${targetColor} tabular-nums`}>
-          Alvo: {goal.target}
-          {goal.unit === 'kg' ? 'kg' : ''}
+        <p className="text-[11px] font-bold text-primary tabular-nums">
+          Alvo: {formatValue(goal.targetValue, goal.unit)}
         </p>
       </div>
 
       <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-        <div className={`h-full ${barColor}`} style={{ width: `${pct}%` }} />
+        <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
+      </div>
+
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          onClick={onComplete}
+          className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-primary/10 px-2 py-1.5 text-[11px] font-bold text-primary hover:bg-primary/20"
+        >
+          <Check size={12} />
+          Concluir
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label="Remover meta"
+          className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+        >
+          <Trash2 size={12} />
+        </button>
       </div>
     </div>
   );
 }
 
-function RecentGoalRow({ goal }: { goal: RecentGoal }) {
-  const done = goal.status === 'CONCLUÍDO';
+function RecentGoalRow({ goal }: { goal: Goal }) {
+  const done = goal.status === 'completed';
   return (
     <div className="flex items-center gap-3 rounded-xl bg-muted/40 px-3 py-3">
       <div
@@ -207,19 +196,53 @@ function RecentGoalRow({ goal }: { goal: RecentGoal }) {
         {done ? <CheckCircle2 size={18} /> : <History size={16} />}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-bold text-foreground">{goal.title}</p>
-        <p className="text-xs text-muted-foreground">{goal.subtitle}</p>
+        <p className="truncate text-sm font-bold text-foreground">{goal.title}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          Alvo: {formatValue(goal.targetValue, goal.unit)} {goal.unit}
+        </p>
       </div>
       <span
         className={`text-[10px] font-extrabold ${done ? 'text-primary' : 'text-muted-foreground'}`}
       >
-        {goal.status}
+        {done ? 'CONCLUÍDO' : 'EXPIRADO'}
       </span>
     </div>
   );
 }
 
 export default function GoalsPage() {
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const qc = useQueryClient();
+
+  const active = useQuery({
+    queryKey: ['goals', 'active'],
+    queryFn: () => goalsApi.list({ status: 'active' }),
+  });
+
+  const completed = useQuery({
+    queryKey: ['goals', 'completed'],
+    queryFn: () => goalsApi.list({ status: 'completed' }),
+  });
+
+  const expired = useQuery({
+    queryKey: ['goals', 'expired'],
+    queryFn: () => goalsApi.list({ status: 'expired' }),
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: (id: string) => goalsApi.complete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['goals'] }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => goalsApi.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['goals'] }),
+  });
+
+  const activeGoals = active.data ?? [];
+  const [mainGoal, ...secondaryGoals] = activeGoals;
+  const recents = [...(completed.data ?? []), ...(expired.data ?? [])].slice(0, 5);
+
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
       <header>
@@ -230,37 +253,62 @@ export default function GoalsPage() {
           </div>
           <button
             type="button"
+            onClick={() => setDrawerOpen(true)}
             className="flex items-center gap-1.5 rounded-xl bg-primary px-4 py-3 text-[11px] font-extrabold text-primary-foreground"
           >
             <Plus size={14} strokeWidth={3} />
-            NOVA
-            <br />
-            META
+            NOVA META
           </button>
         </div>
       </header>
 
-      <MainGoalCard />
+      {active.isLoading && (
+        <>
+          <div className="h-[280px] animate-pulse rounded-2xl bg-card" />
+          <div className="grid grid-cols-1 gap-3">
+            <div className="h-[160px] animate-pulse rounded-2xl bg-card" />
+            <div className="h-[160px] animate-pulse rounded-2xl bg-card" />
+          </div>
+        </>
+      )}
 
-      <div className="space-y-3">
-        {secondaryGoals.map((g) => (
-          <SecondaryGoalCard key={g.id} goal={g} />
-        ))}
-      </div>
-
-      <section className="rounded-2xl border border-white/5 bg-card p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-foreground">Metas Recentes</h3>
-          <Link href="#" className="text-[11px] font-extrabold text-primary">
-            VER TODAS
-          </Link>
+      {!active.isLoading && activeGoals.length === 0 && (
+        <div className="rounded-2xl border border-dashed border-white/10 bg-card/30 p-6 text-center">
+          <Hourglass size={20} className="mx-auto text-muted-foreground" />
+          <p className="mt-3 text-sm font-bold text-foreground">Nenhuma meta ativa</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Crie uma meta pelo botão acima ou peça ao Claude.
+          </p>
         </div>
-        <div className="space-y-2">
-          {recentGoals.map((g) => (
-            <RecentGoalRow key={g.id} goal={g} />
+      )}
+
+      {mainGoal && <MainGoalCard goal={mainGoal} />}
+
+      {secondaryGoals.length > 0 && (
+        <div className="space-y-3">
+          {secondaryGoals.map((g) => (
+            <SecondaryGoalCard
+              key={g.id}
+              goal={g}
+              onComplete={() => completeMutation.mutate(g.id)}
+              onDelete={() => deleteMutation.mutate(g.id)}
+            />
           ))}
         </div>
-      </section>
+      )}
+
+      {recents.length > 0 && (
+        <section className="rounded-2xl border border-white/5 bg-card p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-bold text-foreground">Metas Recentes</h3>
+          </div>
+          <div className="space-y-2">
+            {recents.map((g) => (
+              <RecentGoalRow key={g.id} goal={g} />
+            ))}
+          </div>
+        </section>
+      )}
 
       <Link
         href="/profile"
@@ -269,6 +317,8 @@ export default function GoalsPage() {
         Voltar ao perfil
         <ChevronRight size={16} />
       </Link>
+
+      <NewGoalDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </div>
   );
 }

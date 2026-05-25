@@ -18,7 +18,7 @@ export class GetMeTool implements McpToolDef {
   execute(_input: z.infer<z.ZodObject<typeof this.inputSchema>>, { userId }: McpToolContext) {
     return this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, name: true, role: true, timezone: true },
+      select: { id: true, email: true, name: true, role: true, timezone: true, heightCm: true },
     });
   }
 }

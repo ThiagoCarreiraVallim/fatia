@@ -23,10 +23,12 @@ model User {
   name      String
   role      Role     @default(USER)
   timezone  String   @default("America/Sao_Paulo")
+  heightCm  Float?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   goals           UserGoals?
+  personalGoals   Goal[]
   meals           Meal[]
   workoutPlans    WorkoutPlan[]
   workoutSessions WorkoutSession[]
@@ -325,4 +327,50 @@ model WeightLog {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, loggedAt])
+}
+
+// ============================================================
+// PERSONAL GOALS
+// ============================================================
+
+// Metas dinâmicas definíveis pelo usuário (via PWA ou Claude/MCP).
+// Distintas de `UserGoals` (que cobre só macros nutricionais).
+// `currentValue` é derivado em tempo de leitura quando `kind` tem fonte
+// (weight, workout_frequency, step_count). Para `body_fat` e `custom`,
+// o Claude reporta valores via `lastReportedValue`.
+model Goal {
+  id                String     @id @default(uuid())
+  userId            String
+  kind              GoalKind
+  title             String
+  description       String?
+  startValue        Float
+  targetValue       Float
+  unit              String
+  // Reportado pelo Claude para metas sem fonte automática (body_fat, custom).
+  lastReportedValue Float?
+  deadline          DateTime?
+  status            GoalStatus @default(active)
+  createdAt         DateTime   @default(now())
+  completedAt       DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([userId, kind])
+}
+
+enum GoalKind {
+  weight
+  body_fat
+  workout_frequency
+  step_count
+  custom
+}
+
+enum GoalStatus {
+  active
+  completed
+  expired
+  archived
 }
