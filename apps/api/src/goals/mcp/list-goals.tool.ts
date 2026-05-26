@@ -8,9 +8,6 @@ import {
   type McpToolDef,
 } from '../../common/decorators/tool.decorator';
 
-const KIND_VALUES = Object.values(GoalKind) as [GoalKind, ...GoalKind[]];
-const STATUS_VALUES = Object.values(GoalStatus) as [GoalStatus, ...GoalStatus[]];
-
 @Injectable()
 @McpTool()
 export class ListGoalsTool implements McpToolDef {
@@ -19,8 +16,8 @@ export class ListGoalsTool implements McpToolDef {
   readonly description =
     'Lista metas pessoais do usuário com progresso calculado. Filtros opcionais por status e tipo.';
   readonly inputSchema = {
-    status: z.enum(STATUS_VALUES).optional(),
-    kind: z.enum(KIND_VALUES).optional(),
+    status: z.nativeEnum(GoalStatus).optional(),
+    kind: z.nativeEnum(GoalKind).optional(),
   } as const;
   async execute(
     input: { status?: GoalStatus; kind?: GoalKind },

@@ -8,8 +8,6 @@ import {
   type McpToolDef,
 } from '../../common/decorators/tool.decorator';
 
-const STATUS_VALUES = Object.values(GoalStatus) as [GoalStatus, ...GoalStatus[]];
-
 @Injectable()
 @McpTool()
 export class UpdateGoalTool implements McpToolDef {
@@ -25,7 +23,7 @@ export class UpdateGoalTool implements McpToolDef {
     unit: z.string().min(1).max(30).optional(),
     deadline: z.string().optional().describe('ISO datetime; vazio para remover'),
     lastReportedValue: z.number().optional(),
-    status: z.enum(STATUS_VALUES).optional(),
+    status: z.nativeEnum(GoalStatus).optional(),
   } as const;
   async execute(
     input: {
