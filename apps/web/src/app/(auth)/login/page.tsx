@@ -12,8 +12,12 @@ export default function LoginPage() {
         </CardHeader>
 
         <CardContent className="space-y-3">
+          {/* prefetch={false} obrigatório: handler /api/logto/sign-in inicia
+              o flow OAuth via redirect, prefetch poderia disparar antes do clique. */}
           <Button asChild className="w-full">
-            <Link href="/api/logto/sign-in">Entrar</Link>
+            <Link href="/api/logto/sign-in" prefetch={false}>
+              Entrar
+            </Link>
           </Button>
           <p className="text-center text-xs text-muted-foreground">
             A mesma conta funciona no Claude pelo conector MCP.

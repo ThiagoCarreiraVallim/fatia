@@ -72,8 +72,12 @@ export default async function ProfilePage() {
         />
       </nav>
 
+      {/* prefetch={false} obrigatório: sem isso o Next prefetcha o handler
+          /api/logto/sign-out (mesma origem), que retorna Set-Cookie limpando
+          a sessão antes do clique. */}
       <Link
         href="/api/logto/sign-out"
+        prefetch={false}
         className="flex w-full items-center justify-center gap-2 rounded-2xl border border-destructive/50 bg-transparent px-4 py-4 text-base font-bold text-destructive transition-colors hover:bg-destructive/10"
       >
         <LogOut size={18} />
