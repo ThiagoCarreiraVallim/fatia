@@ -72,13 +72,16 @@ export default async function ProfilePage() {
         />
       </nav>
 
-      <Link
+      {/* Plain <a> intencional: Next.js Link faz prefetch que executaria o
+          handler /api/logto/sign-out e limparia a sessão antes do clique. */}
+      {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+      <a
         href="/api/logto/sign-out"
         className="flex w-full items-center justify-center gap-2 rounded-2xl border border-destructive/50 bg-transparent px-4 py-4 text-base font-bold text-destructive transition-colors hover:bg-destructive/10"
       >
         <LogOut size={18} />
         Sair da conta
-      </Link>
+      </a>
 
       <details className="rounded-2xl border border-white/5 bg-card/50 px-4 py-3 text-sm text-muted-foreground">
         <summary className="cursor-pointer font-bold text-foreground">Conectar ao Claude</summary>
