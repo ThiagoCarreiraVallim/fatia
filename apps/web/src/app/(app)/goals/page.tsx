@@ -214,19 +214,12 @@ export default function GoalsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const qc = useQueryClient();
 
-  const active = useQuery({
-    queryKey: ['goals', 'active'],
-    queryFn: () => goalsApi.list({ status: 'active' }),
-  });
-
-  const completed = useQuery({
-    queryKey: ['goals', 'completed'],
-    queryFn: () => goalsApi.list({ status: 'completed' }),
-  });
-
-  const expired = useQuery({
-    queryKey: ['goals', 'expired'],
-    queryFn: () => goalsApi.list({ status: 'expired' }),
+  // Uma única query traz todas as metas (sem filtro de status). Bucketizamos
+  // no client. Evita 3 chamadas paralelas — Logto SDK pode dar race em
+  // getAccessToken concorrente.
+  const allGoals = useQuery({
+    queryKey: ['goals', 'all'],
+    queryFn: () => goalsApi.list(),
   });
 
   const completeMutation = useMutation({
@@ -239,9 +232,12 @@ export default function GoalsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['goals'] }),
   });
 
-  const activeGoals = active.data ?? [];
+  const goals = allGoals.data ?? [];
+  const activeGoals = goals.filter((g) => g.status === 'active');
   const [mainGoal, ...secondaryGoals] = activeGoals;
-  const recents = [...(completed.data ?? []), ...(expired.data ?? [])].slice(0, 5);
+  const recents = goals
+    .filter((g) => g.status === 'completed' || g.status === 'expired')
+    .slice(0, 5);
 
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
@@ -262,7 +258,7 @@ export default function GoalsPage() {
         </div>
       </header>
 
-      {active.isLoading && (
+      {allGoals.isLoading && (
         <>
           <div className="h-[280px] animate-pulse rounded-2xl bg-card" />
           <div className="grid grid-cols-1 gap-3">
@@ -272,7 +268,7 @@ export default function GoalsPage() {
         </>
       )}
 
-      {!active.isLoading && activeGoals.length === 0 && (
+      {!allGoals.isLoading && activeGoals.length === 0 && (
         <div className="rounded-2xl border border-dashed border-white/10 bg-card/30 p-6 text-center">
           <Hourglass size={20} className="mx-auto text-muted-foreground" />
           <p className="mt-3 text-sm font-bold text-foreground">Nenhuma meta ativa</p>
