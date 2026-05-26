@@ -26,9 +26,16 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   }
 
   if (res.status === 401) {
-    // Sessão Logto expirou ou inválida — manda re-login.
+    // Sessão Logto expirou, ou sessão não tem access token para a API resource.
+    // Vai por sign-out para forçar nova sessão — sign-in sozinho reaproveita a
+    // sessão atual e perpetua o problema (loop de login).
     if (typeof window !== 'undefined') {
-      window.location.href = '/api/logto/sign-in';
+      const body = await res
+        .clone()
+        .json()
+        .catch(() => ({}));
+      console.error('[apiFetch] 401', { path: proxyPath, body });
+      window.location.href = '/api/logto/sign-out';
     }
     throw new Error('Sessão expirada');
   }

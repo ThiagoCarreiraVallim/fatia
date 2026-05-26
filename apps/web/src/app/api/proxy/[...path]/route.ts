@@ -8,7 +8,13 @@ type RouteContext = { params: Promise<{ path: string[] }> };
 async function proxy(request: NextRequest, ctx: RouteContext) {
   const { path } = await ctx.params;
   const token = await getApiAccessToken();
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!token) {
+    console.error(
+      `[proxy] 401: sem access token para ${request.method} /api/${path.join('/')} ` +
+        '— verifique LOGTO_AUDIENCE e refaça login (sign-out + sign-in).',
+    );
+    return NextResponse.json({ error: 'Unauthorized', source: 'proxy-no-token' }, { status: 401 });
+  }
 
   const url = new URL(`${API_BASE}/api/${path.join('/')}`);
   request.nextUrl.searchParams.forEach((v, k) => url.searchParams.set(k, v));

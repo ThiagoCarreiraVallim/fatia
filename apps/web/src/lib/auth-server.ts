@@ -15,10 +15,19 @@ export async function getCurrentUser() {
 
 export async function getApiAccessToken(): Promise<string | null> {
   const audience = process.env.LOGTO_AUDIENCE;
-  if (!audience) return null;
+  if (!audience) {
+    console.error(
+      '[auth-server] getApiAccessToken: LOGTO_AUDIENCE não definido — proxy retornará 401.',
+    );
+    return null;
+  }
   try {
     return await getAccessToken(logtoConfig, audience);
-  } catch {
+  } catch (err) {
+    console.error(
+      `[auth-server] getApiAccessToken failed para audience=${audience}:`,
+      err instanceof Error ? err.message : err,
+    );
     return null;
   }
 }
