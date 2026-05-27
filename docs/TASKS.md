@@ -498,6 +498,49 @@ Checklist completo de implementação. Marca conforme avança. Tarefas filhas (`
 
 ---
 
+## Fase H — Hidratação
+
+> ✅ **Concluída.** Log de consumo de água com meta diária, MCP-first.
+> Política SUM por dia (cada copo é um evento independente).
+
+### H.1 — Schema 🔴 ⏱️ 30min ✅
+
+- [x] Model `WaterLog` (`id`, `userId`, `date`, `ml`, `loggedAt`, `notes`)
+- [x] Índices `(userId, date)` e `(userId, loggedAt)`
+- [x] Campo `UserGoals.dailyWaterTargetMl` (default 2500)
+- [x] Migration `add_water_logs`
+
+### H.2 — `WaterLogService` 🔴 ⏱️ 1h ✅
+
+- [x] `create`, `update`, `delete`, `findById`, `list`
+- [x] `getForDate(date, userId)` → **SOMA** dos logs do dia
+- [x] `getHistory(days, userId, tz)` → série diária com 0 nos vazios
+
+### H.3 — REST controller 🟡 ⏱️ 30min ✅
+
+- [x] CRUD `/api/water-logs`
+- [x] `GET /api/water-logs/by-date/:date`
+- [x] `GET /api/progress/water?days=N`
+- [x] `ProgressService.waterProgress()` com stats + meta
+- [x] `DashboardService.today()` retorna bloco `water`
+- [x] `set_nutrition_goals` aceita `dailyWaterTargetMl`
+
+### H.4 — MCP tools 🔴 ⏱️ 2h ✅
+
+- [x] `log_water` (retorna totalMl + goalReached)
+- [x] `update_water_log`, `delete_water_log`
+- [x] `list_water_logs`
+- [x] `get_water_for_date`, `get_water_history`, `get_water_progress`
+
+### H.5 — PWA 🟡 ⏱️ 2h ✅
+
+- [x] `progressApi` com waterApi (CRUD + waterForDate + water progress)
+- [x] `<WaterCard />` no dashboard com quick-add inline (250/500/750 mL)
+- [x] `<LogWaterDrawer />` com presets + custom mL
+- [x] `TodaySummary.water` no client
+
+---
+
 ## Fase 4 — Polimento
 
 ### F4.1 — PWA installable 🟡 ⏱️ 3h
@@ -651,8 +694,9 @@ StrengthChart e CardioChart implementados com seletor de exercício + métricas.
 | F2 (Treino)                         | 5 implementadas / 19 previstas (exercise search/CRUD custom) | 21 atual  |
 | F3 (Progresso + Passos + Dashboard) | 17 tools (weight 4 + steps 6 + progress 5 + dashboard 2)     | +17       |
 | FG (Metas pessoais)                 | 6 tools (create/list/get/update/complete/delete_goal)        | +6        |
+| FH (Hidratação)                     | 7 tools (log/update/delete/list/for_date/history/progress)   | +7        |
 | Meta (update_me)                    | 1 tool                                                       | +1        |
-| **Total atual**                     | **45 tools funcionais**                                      | **45**    |
-| **Faltando (F2)**                   | 14 tools (plan, session, set, PR)                            | → **59**  |
+| **Total atual**                     | **52 tools funcionais**                                      | **52**    |
+| **Faltando (F2)**                   | 14 tools (plan, session, set, PR)                            | → **66**  |
 
-Total esperado ao fim da v1: **~59 tools MCP**. Auth via Logto OAuth 2.1.
+Total esperado ao fim da v1: **~66 tools MCP**. Auth via Logto OAuth 2.1.

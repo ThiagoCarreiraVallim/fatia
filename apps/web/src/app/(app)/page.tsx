@@ -6,6 +6,7 @@ import { NutritionMacroCard } from '@/components/dashboard/nutrition-macro-card'
 import { NextWorkoutCard } from '@/components/dashboard/next-workout-card';
 import { QuickLogActions } from '@/components/dashboard/quick-log-actions';
 import { StepsCard } from '@/components/dashboard/steps-card';
+import { WaterCard } from '@/components/dashboard/water-card';
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -41,6 +42,7 @@ export default function HomePage() {
         <>
           <NutritionMacroCard nutrition={data.nutrition} />
           <NextWorkoutCard workout={data.workout} />
+          <WaterCard data={data.water} />
           <StepsCard data={data.steps} />
           <QuickLogActions />
         </>
