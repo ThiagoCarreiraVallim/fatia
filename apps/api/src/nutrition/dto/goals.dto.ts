@@ -12,4 +12,5 @@ export class UpsertGoalsDto {
 
   @IsOptional() @IsInt() @Min(0) weeklyWorkouts?: number;
   @IsOptional() @IsInt() @Min(0) dailyStepsTarget?: number;
+  @IsOptional() @IsInt() @Min(0) dailyWaterTargetMl?: number;
 }

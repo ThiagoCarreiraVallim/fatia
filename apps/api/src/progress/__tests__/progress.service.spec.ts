@@ -2,6 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ProgressService } from '../progress.service';
 import type { PrismaService } from '../../common/prisma.service';
 import type { StepLogService } from '../step-log.service';
+import type { WaterLogService } from '../water-log.service';
 
 jest.mock('../helpers/date-tz', () => ({
   todayInTz: jest.fn(() => '2026-01-15'),
@@ -31,6 +32,10 @@ type MockStepLogs = {
   getHistory: jest.Mock;
 };
 
+type MockWaterLogs = {
+  getHistory: jest.Mock;
+};
+
 const makePrisma = (): MockPrisma => ({
   weightLog: { findMany: jest.fn() },
   sessionSet: { findMany: jest.fn() },
@@ -39,6 +44,10 @@ const makePrisma = (): MockPrisma => ({
 });
 
 const makeStepLogs = (): MockStepLogs => ({
+  getHistory: jest.fn(),
+});
+
+const makeWaterLogs = (): MockWaterLogs => ({
   getHistory: jest.fn(),
 });
 
@@ -78,6 +87,7 @@ const makeCardioSet = (overrides: Partial<Record<string, unknown>> = {}) => ({
 describe('ProgressService', () => {
   let prisma: MockPrisma;
   let stepLogs: MockStepLogs;
+  let waterLogs: MockWaterLogs;
   let service: ProgressService;
   const userId = 'user-A';
   const ctx = { userId, timezone: 'UTC' };
@@ -85,9 +95,11 @@ describe('ProgressService', () => {
   beforeEach(() => {
     prisma = makePrisma();
     stepLogs = makeStepLogs();
+    waterLogs = makeWaterLogs();
     service = new ProgressService(
       prisma as unknown as PrismaService,
       stepLogs as unknown as StepLogService,
+      waterLogs as unknown as WaterLogService,
     );
   });
 

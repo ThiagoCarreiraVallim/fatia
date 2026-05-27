@@ -12,16 +12,19 @@ import {
 import { CurrentUser, type CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { WeightLogService } from './weight-log.service';
 import { StepLogService } from './step-log.service';
+import { WaterLogService } from './water-log.service';
 import { ProgressService } from './progress.service';
 import { DashboardService } from './dashboard.service';
 import { CreateWeightLogDto, ListWeightLogsDto, UpdateWeightLogDto } from './dto/weight-log.dto';
 import { CreateStepLogDto, ListStepLogsDto, UpdateStepLogDto } from './dto/step-log.dto';
+import { CreateWaterLogDto, ListWaterLogsDto, UpdateWaterLogDto } from './dto/water-log.dto';
 
 @Controller()
 export class ProgressController {
   constructor(
     private readonly weights: WeightLogService,
     private readonly steps: StepLogService,
+    private readonly waters: WaterLogService,
     private readonly progress: ProgressService,
     private readonly dashboard: DashboardService,
   ) {}
@@ -81,6 +84,36 @@ export class ProgressController {
     return this.steps.delete(id, user.id);
   }
 
+  // -------- Water logs --------
+  @Post('water-logs')
+  createWater(@CurrentUser() user: CurrentUserPayload, @Body() dto: CreateWaterLogDto) {
+    return this.waters.create(dto, user.id, user.timezone);
+  }
+
+  @Get('water-logs')
+  listWater(@CurrentUser() user: CurrentUserPayload, @Query() q: ListWaterLogsDto) {
+    return this.waters.list(q, user.id);
+  }
+
+  @Get('water-logs/by-date/:date')
+  waterForDate(@CurrentUser() user: CurrentUserPayload, @Param('date') date: string) {
+    return this.waters.getForDate(date, user.id);
+  }
+
+  @Patch('water-logs/:id')
+  updateWater(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') id: string,
+    @Body() dto: UpdateWaterLogDto,
+  ) {
+    return this.waters.update(id, dto, user.id);
+  }
+
+  @Delete('water-logs/:id')
+  deleteWater(@CurrentUser() user: CurrentUserPayload, @Param('id') id: string) {
+    return this.waters.delete(id, user.id);
+  }
+
   // -------- Progress queries --------
   @Get('progress/weight')
   weightProgress(
@@ -134,6 +167,17 @@ export class ProgressController {
     @Query('days', new ParseIntPipe({ optional: true })) days?: number,
   ) {
     return this.progress.stepsProgress(days ?? 30, {
+      userId: user.id,
+      timezone: user.timezone,
+    });
+  }
+
+  @Get('progress/water')
+  waterProgress(
+    @CurrentUser() user: CurrentUserPayload,
+    @Query('days', new ParseIntPipe({ optional: true })) days?: number,
+  ) {
+    return this.progress.waterProgress(days ?? 30, {
       userId: user.id,
       timezone: user.timezone,
     });

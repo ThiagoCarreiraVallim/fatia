@@ -24,6 +24,12 @@ export class SetNutritionGoalsTool implements McpToolDef {
     fatMaxG: z.number().int().min(0),
     weeklyWorkouts: z.number().int().min(0).optional(),
     dailyStepsTarget: z.number().int().min(0).optional(),
+    dailyWaterTargetMl: z
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .describe('Meta diária de hidratação em mL (default 2500)'),
   } as const;
   execute(
     input: {
@@ -37,6 +43,7 @@ export class SetNutritionGoalsTool implements McpToolDef {
       fatMaxG: number;
       weeklyWorkouts?: number;
       dailyStepsTarget?: number;
+      dailyWaterTargetMl?: number;
     },
     { userId }: McpToolContext,
   ) {

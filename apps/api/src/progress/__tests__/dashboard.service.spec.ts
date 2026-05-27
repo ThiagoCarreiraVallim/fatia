@@ -2,6 +2,7 @@ import { DashboardService } from '../dashboard.service';
 import type { PrismaService } from '../../common/prisma.service';
 import type { StepLogService } from '../step-log.service';
 import type { WeightLogService } from '../weight-log.service';
+import type { WaterLogService } from '../water-log.service';
 
 jest.mock('../helpers/date-tz', () => ({
   todayInTz: jest.fn(() => '2026-01-15'),
@@ -39,6 +40,10 @@ type MockWeightLogs = {
   getLatest: jest.Mock;
 };
 
+type MockWaterLogs = {
+  getForDate: jest.Mock;
+};
+
 const makePrisma = (): MockPrisma => ({
   meal: { findMany: jest.fn(), count: jest.fn() },
   userGoals: { findUnique: jest.fn() },
@@ -48,6 +53,7 @@ const makePrisma = (): MockPrisma => ({
 
 const makeStepLogs = (): MockStepLogs => ({ getStepsForDate: jest.fn() });
 const makeWeightLogs = (): MockWeightLogs => ({ getLatest: jest.fn() });
+const makeWaterLogs = (): MockWaterLogs => ({ getForDate: jest.fn() });
 
 const makeItem = (overrides: Partial<Record<string, number>> = {}) => ({
   kcal: 500,
@@ -79,6 +85,7 @@ describe('DashboardService', () => {
   let prisma: MockPrisma;
   let stepLogs: MockStepLogs;
   let weightLogs: MockWeightLogs;
+  let waterLogs: MockWaterLogs;
   let service: DashboardService;
   const ctx = { userId: 'user-A', timezone: 'UTC' };
 
@@ -86,10 +93,14 @@ describe('DashboardService', () => {
     prisma = makePrisma();
     stepLogs = makeStepLogs();
     weightLogs = makeWeightLogs();
+    waterLogs = makeWaterLogs();
+    // Default: zero água logada — testes que precisam override fazem manualmente.
+    waterLogs.getForDate.mockResolvedValue({ date: '2026-01-15', totalMl: 0, logCount: 0 });
     service = new DashboardService(
       prisma as unknown as PrismaService,
       stepLogs as unknown as StepLogService,
       weightLogs as unknown as WeightLogService,
+      waterLogs as unknown as WaterLogService,
     );
   });
 

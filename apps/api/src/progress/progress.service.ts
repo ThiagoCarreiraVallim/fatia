@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { StepLogService } from './step-log.service';
+import { WaterLogService } from './water-log.service';
 import { addDaysIso, todayInTz, weekStartInTz } from './helpers/date-tz';
 import { calculatePace } from '../workout/helpers/calculate-pace';
 import { estimate1RM } from '../workout/helpers/estimate-1rm';
@@ -18,6 +19,7 @@ export class ProgressService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly stepLogs: StepLogService,
+    private readonly waterLogs: WaterLogService,
   ) {}
 
   async weightProgress(days: number, ctx: UserCtx) {
@@ -283,6 +285,36 @@ export class ProgressService {
       averageDaily,
       bestDay,
       goalTarget: target,
+      daysWithGoalReached,
+    };
+  }
+
+  async waterProgress(days: number, ctx: UserCtx) {
+    const series = await this.waterLogs.getHistory(days, ctx.userId, ctx.timezone);
+    const goals = await this.prisma.userGoals.findUnique({ where: { userId: ctx.userId } });
+    const targetMl = goals?.dailyWaterTargetMl ?? null;
+
+    const points = series.map((p) => ({
+      ...p,
+      goalReached: targetMl !== null ? p.totalMl >= targetMl : null,
+    }));
+
+    const totalMl = points.reduce((a, p) => a + p.totalMl, 0);
+    const averageDailyMl = points.length ? totalMl / points.length : 0;
+    const daysWithGoalReached =
+      targetMl !== null ? points.filter((p) => p.totalMl >= targetMl).length : 0;
+    const bestDay = points.reduce<{ date: string; totalMl: number } | null>((best, p) => {
+      if (p.totalMl === 0) return best;
+      if (!best || p.totalMl > best.totalMl) return { date: p.date, totalMl: p.totalMl };
+      return best;
+    }, null);
+
+    return {
+      points,
+      totalMl,
+      averageDailyMl,
+      bestDay,
+      goalTargetMl: targetMl,
       daysWithGoalReached,
     };
   }

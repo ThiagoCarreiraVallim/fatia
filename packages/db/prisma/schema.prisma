@@ -34,6 +34,7 @@ model User {
   workoutSessions WorkoutSession[]
   weightLogs      WeightLog[]
   stepLogs        StepLog[]
+  waterLogs       WaterLog[]
   customFoods     Food[]     @relation("UserCustomFoods")
   customExercises Exercise[] @relation("UserCustomExercises")
 
@@ -88,18 +89,19 @@ model McpOAuthAuthorization {
 }
 
 model UserGoals {
-  userId           String   @id
-  kcalMin          Int
-  kcalMax          Int
-  proteinMinG      Int
-  proteinMaxG      Int
-  carbsMinG        Int
-  carbsMaxG        Int
-  fatMinG          Int
-  fatMaxG          Int
-  weeklyWorkouts   Int      @default(3)
-  dailyStepsTarget Int      @default(8000)
-  updatedAt        DateTime @updatedAt
+  userId             String   @id
+  kcalMin            Int
+  kcalMax            Int
+  proteinMinG        Int
+  proteinMaxG        Int
+  carbsMinG          Int
+  carbsMaxG          Int
+  fatMinG            Int
+  fatMaxG            Int
+  weeklyWorkouts     Int      @default(3)
+  dailyStepsTarget   Int      @default(8000)
+  dailyWaterTargetMl Int      @default(2500)
+  updatedAt          DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -326,6 +328,23 @@ model WeightLog {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId, loggedAt])
+}
+
+// Hidratação. Múltiplos logs por dia esperados (cada copo é um log).
+// Política do "valor do dia" = SOMA (diferente de StepLog, que é MAX).
+model WaterLog {
+  id       String   @id @default(uuid())
+  userId   String
+  // YYYY-MM-DD no fuso do usuário.
+  date     String
+  ml       Int
+  loggedAt DateTime @default(now())
+  notes    String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
   @@index([userId, loggedAt])
 }
 
