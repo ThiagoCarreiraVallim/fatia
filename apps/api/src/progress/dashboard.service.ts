@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { StepLogService } from './step-log.service';
 import { WeightLogService } from './weight-log.service';
+import { WaterLogService } from './water-log.service';
 import { addDaysIso, dayBoundsInTz, todayInTz, weekStartInTz } from './helpers/date-tz';
 
 interface UserCtx {
@@ -15,33 +16,42 @@ export class DashboardService {
     private readonly prisma: PrismaService,
     private readonly stepLogs: StepLogService,
     private readonly weightLogs: WeightLogService,
+    private readonly waterLogs: WaterLogService,
   ) {}
 
   async today(ctx: UserCtx) {
     const date = todayInTz(ctx.timezone);
     const { start: dayStart, end: dayEnd } = dayBoundsInTz(date, ctx.timezone);
 
-    const [meals, goals, sessionInProgress, completedSession, latestWeight, stepsToday] =
-      await Promise.all([
-        this.prisma.meal.findMany({
-          where: { userId: ctx.userId, eatenAt: { gte: dayStart, lte: dayEnd } },
-          include: { items: true },
-        }),
-        this.prisma.userGoals.findUnique({ where: { userId: ctx.userId } }),
-        this.prisma.workoutSession.findFirst({
-          where: { userId: ctx.userId, completedAt: null, startedAt: { gte: dayStart } },
-          select: { id: true, startedAt: true },
-          orderBy: { startedAt: 'desc' },
-        }),
-        this.prisma.workoutSession.findFirst({
-          where: {
-            userId: ctx.userId,
-            completedAt: { gte: dayStart, lte: dayEnd },
-          },
-        }),
-        this.weightLogs.getLatest(ctx.userId),
-        this.stepLogs.getStepsForDate(date, ctx.userId),
-      ]);
+    const [
+      meals,
+      goals,
+      sessionInProgress,
+      completedSession,
+      latestWeight,
+      stepsToday,
+      waterToday,
+    ] = await Promise.all([
+      this.prisma.meal.findMany({
+        where: { userId: ctx.userId, eatenAt: { gte: dayStart, lte: dayEnd } },
+        include: { items: true },
+      }),
+      this.prisma.userGoals.findUnique({ where: { userId: ctx.userId } }),
+      this.prisma.workoutSession.findFirst({
+        where: { userId: ctx.userId, completedAt: null, startedAt: { gte: dayStart } },
+        select: { id: true, startedAt: true },
+        orderBy: { startedAt: 'desc' },
+      }),
+      this.prisma.workoutSession.findFirst({
+        where: {
+          userId: ctx.userId,
+          completedAt: { gte: dayStart, lte: dayEnd },
+        },
+      }),
+      this.weightLogs.getLatest(ctx.userId),
+      this.stepLogs.getStepsForDate(date, ctx.userId),
+      this.waterLogs.getForDate(date, ctx.userId),
+    ]);
 
     const consumed = meals
       .flatMap((m) => m.items)
@@ -59,6 +69,9 @@ export class DashboardService {
 
     const stepsTarget = goals?.dailyStepsTarget ?? null;
     const stepsGoalReached = stepsTarget !== null ? stepsToday.steps >= stepsTarget : null;
+
+    const waterTargetMl = goals?.dailyWaterTargetMl ?? null;
+    const waterGoalReached = waterTargetMl !== null ? waterToday.totalMl >= waterTargetMl : null;
 
     const latestWeightToday =
       latestWeight && latestWeight.loggedAt >= dayStart && latestWeight.loggedAt <= dayEnd;
@@ -93,6 +106,12 @@ export class DashboardService {
         target: stepsTarget,
         goalReached: stepsGoalReached,
         logged: stepsToday.logCount > 0,
+      },
+      water: {
+        todayMl: waterToday.totalMl,
+        targetMl: waterTargetMl,
+        goalReached: waterGoalReached,
+        logged: waterToday.logCount > 0,
       },
       streak: {
         nutritionDays: nutritionStreak,

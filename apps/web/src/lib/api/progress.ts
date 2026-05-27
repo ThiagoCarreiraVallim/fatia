@@ -62,6 +62,23 @@ export interface StepsProgress {
   daysWithGoalReached: number;
 }
 
+export interface WaterLog {
+  id: string;
+  date: string;
+  ml: number;
+  loggedAt: string;
+  notes: string | null;
+}
+
+export interface WaterProgress {
+  points: Array<{ date: string; totalMl: number; goalReached: boolean | null }>;
+  totalMl: number;
+  averageDailyMl: number;
+  bestDay: { date: string; totalMl: number } | null;
+  goalTargetMl: number | null;
+  daysWithGoalReached: number;
+}
+
 export interface TodaySummary {
   date: string;
   nutrition: {
@@ -87,6 +104,12 @@ export interface TodaySummary {
   };
   weight: { latest: { weightKg: number; loggedAt: string } | null; loggedToday: boolean };
   steps: { today: number; target: number | null; goalReached: boolean | null; logged: boolean };
+  water: {
+    todayMl: number;
+    targetMl: number | null;
+    goalReached: boolean | null;
+    logged: boolean;
+  };
   streak: { nutritionDays: number; workoutWeeks: number; stepsDays: number };
 }
 
@@ -121,6 +144,25 @@ export const progressApi = {
     apiFetch<StepLog>(`/api/step-logs/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteStep: (id: string) => apiFetch<void>(`/api/step-logs/${id}`, { method: 'DELETE' }),
 
+  // Water logs
+  listWater: (params: { from?: string; to?: string } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    return apiFetch<{ logs: WaterLog[]; nextCursor?: string }>(
+      `/api/water-logs${qs.toString() ? `?${qs.toString()}` : ''}`,
+    );
+  },
+  createWater: (body: { ml: number; date?: string; notes?: string }) =>
+    apiFetch<WaterLog>('/api/water-logs', { method: 'POST', body: JSON.stringify(body) }),
+  updateWater: (id: string, body: { ml?: number; date?: string; notes?: string }) =>
+    apiFetch<WaterLog>(`/api/water-logs/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteWater: (id: string) => apiFetch<void>(`/api/water-logs/${id}`, { method: 'DELETE' }),
+  waterForDate: (date: string) =>
+    apiFetch<{ date: string; totalMl: number; logCount: number }>(
+      `/api/water-logs/by-date/${date}`,
+    ),
+
   // Progress queries
   weight: (days: number) => apiFetch<WeightProgress>(`/api/progress/weight?days=${days}`),
   strength: (exerciseId: number, days: number, metric: string) =>
@@ -132,6 +174,7 @@ export const progressApi = {
       `/api/progress/cardio?exerciseId=${exerciseId}&days=${days}&metric=${metric}`,
     ),
   steps: (days: number) => apiFetch<StepsProgress>(`/api/progress/steps?days=${days}`),
+  water: (days: number) => apiFetch<WaterProgress>(`/api/progress/water?days=${days}`),
 
   // Dashboard
   today: () => apiFetch<TodaySummary>('/api/dashboard/today'),
