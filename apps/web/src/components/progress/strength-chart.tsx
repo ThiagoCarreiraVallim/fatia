@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   CartesianGrid,
@@ -14,7 +14,7 @@ import {
 import { Search } from 'lucide-react';
 import { progressApi, type StrengthProgress } from '@/lib/api/progress';
 import { ExercisePickerDrawer } from './exercise-picker-drawer';
-import type { Exercise } from '@/lib/api/workout';
+import { workoutApi, type Exercise } from '@/lib/api/workout';
 
 type StrengthMetric = 'max_weight' | 'estimated_1rm' | 'total_volume';
 
@@ -28,6 +28,26 @@ export function StrengthChart({ days }: { days: number }) {
   const [exercise, setExercise] = useState<Exercise | null>(null);
   const [metric, setMetric] = useState<StrengthMetric>('max_weight');
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Pré-seleciona automaticamente o exercício de força treinado mais recentemente,
+  // para o gráfico não nascer vazio. O usuário pode trocar pelo seletor.
+  const records = useQuery({
+    queryKey: ['workout', 'records'],
+    queryFn: () => workoutApi.listPersonalRecords(),
+  });
+  useEffect(() => {
+    if (exercise || !records.data) return;
+    const top = records.data.find((r) => r.type === 'strength');
+    if (top) {
+      setExercise({
+        id: top.exerciseId,
+        name: top.exerciseName,
+        muscleGroup: top.muscleGroup,
+        source: 'SEED',
+        createdByUserId: null,
+      });
+    }
+  }, [records.data, exercise]);
 
   const progress = useQuery<StrengthProgress>({
     queryKey: ['progress', 'strength', exercise?.id, days, metric],
