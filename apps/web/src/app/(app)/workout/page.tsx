@@ -14,6 +14,7 @@ import { ActiveExerciseCard } from '@/components/workout/active-exercise-card';
 import { ActiveCardioCard } from '@/components/workout/active-cardio-card';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { QUICK_TEMPLATES } from '@/lib/workout/quick-templates';
+import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel';
 
 function ActiveSession({ session }: { session: WorkoutSession }) {
   const [searchOpen, setSearchOpen] = useState(false);
@@ -189,27 +190,35 @@ function NoSession() {
           </p>
         </div>
 
-        <div className="-mx-5 mt-2 overflow-x-auto px-5">
-          <div className="flex gap-3">
+        <Carousel opts={{ align: 'start', dragFree: true }} className="mt-2">
+          <CarouselContent>
             {QUICK_TEMPLATES.map((q) => (
-              <Link
-                key={q.id}
-                href={`/workout/quick/${q.id}`}
-                className={`relative h-44 w-72 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br ${q.gradient}`}
-              >
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-4">
-                  <p className="text-[10px] font-bold text-white/70">{q.level}</p>
-                  <h3 className="mt-1 text-base font-extrabold leading-tight text-white">
-                    {q.title}
-                  </h3>
-                  <p className="mt-1 text-[11px] text-white/70">
-                    {q.duration} • {q.location}
-                  </p>
-                </div>
-              </Link>
+              <CarouselItem key={q.id} className="basis-[72%] sm:basis-1/2">
+                <Link
+                  href={`/workout/quick/${q.id}`}
+                  className={`relative block h-44 w-full overflow-hidden rounded-2xl bg-gradient-to-br ${q.gradient}`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={q.image}
+                    alt=""
+                    aria-hidden
+                    className="absolute inset-0 h-full w-full object-cover opacity-80"
+                  />
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-4">
+                    <p className="text-[10px] font-bold text-white/70">{q.level}</p>
+                    <h3 className="mt-1 text-base font-extrabold leading-tight text-white">
+                      {q.title}
+                    </h3>
+                    <p className="mt-1 text-[11px] text-white/70">
+                      {q.duration} • {q.location}
+                    </p>
+                  </div>
+                </Link>
+              </CarouselItem>
             ))}
-          </div>
-        </div>
+          </CarouselContent>
+        </Carousel>
       </section>
 
       <Button

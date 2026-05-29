@@ -103,13 +103,22 @@ export function PersonalRecords() {
         })}
 
       {!loading && topExercises.length > 0 && (
-        <Link
-          href="/workout/history"
-          className="flex items-center justify-center gap-1.5 rounded-2xl border border-white/5 bg-card py-3 text-sm font-bold text-foreground"
-        >
-          Ver histórico de treino
-          <ChevronRight size={14} />
-        </Link>
+        <div className="grid grid-cols-2 gap-2">
+          <Link
+            href="/progress/records"
+            className="flex items-center justify-center gap-1.5 rounded-2xl border border-white/5 bg-card py-3 text-sm font-bold text-foreground"
+          >
+            Todos os recordes
+            <ChevronRight size={14} />
+          </Link>
+          <Link
+            href="/workout/history"
+            className="flex items-center justify-center gap-1.5 rounded-2xl border border-white/5 bg-card py-3 text-sm font-bold text-foreground"
+          >
+            Histórico
+            <ChevronRight size={14} />
+          </Link>
+        </div>
       )}
     </div>
   );

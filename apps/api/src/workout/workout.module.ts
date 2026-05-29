@@ -18,6 +18,7 @@ import { GetPersonalRecordTool } from './mcp/get-personal-record.tool';
 import { GetWorkoutPlanTool } from './mcp/get-workout-plan.tool';
 import { GetWorkoutSessionTool } from './mcp/get-workout-session.tool';
 import { ListExercisesByMuscleTool } from './mcp/list-exercises-by-muscle.tool';
+import { ListPersonalRecordsTool } from './mcp/list-personal-records.tool';
 import { ListWorkoutPlansTool } from './mcp/list-workout-plans.tool';
 import { ListWorkoutSessionsTool } from './mcp/list-workout-sessions.tool';
 import { LogSetTool } from './mcp/log-set.tool';
@@ -53,6 +54,7 @@ import { UpdateWorkoutPlanTool } from './mcp/update-workout-plan.tool';
     GetWorkoutPlanTool,
     GetWorkoutSessionTool,
     ListExercisesByMuscleTool,
+    ListPersonalRecordsTool,
     ListWorkoutPlansTool,
     ListWorkoutSessionsTool,
     LogSetTool,

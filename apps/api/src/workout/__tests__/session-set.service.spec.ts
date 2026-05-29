@@ -11,6 +11,7 @@ type MockPrisma = {
     update: jest.Mock;
     delete: jest.Mock;
     findFirst: jest.Mock;
+    findMany: jest.Mock;
     groupBy: jest.Mock;
   };
 };
@@ -24,6 +25,7 @@ const makePrisma = (): MockPrisma => ({
     update: jest.fn(),
     delete: jest.fn(),
     findFirst: jest.fn(),
+    findMany: jest.fn(),
     groupBy: jest.fn(),
   },
 });
@@ -282,6 +284,118 @@ describe('SessionSetService', () => {
       const pr = await service.getPersonalRecord(userId, 2);
 
       expect(pr).toBeNull();
+    });
+  });
+
+  describe('listPersonalRecords', () => {
+    const d1 = new Date('2026-01-10T10:00:00Z');
+    const d2 = new Date('2026-02-20T10:00:00Z');
+
+    it('aggregates strength PR (max weight, reps at max, best estimated 1RM) per exercise', async () => {
+      prisma.sessionSet.findMany.mockResolvedValue([
+        {
+          exerciseId: 1,
+          weightKg: 80,
+          reps: 5,
+          distanceMeters: null,
+          durationSeconds: null,
+          exercise: strengthExercise,
+          session: { startedAt: d1 },
+        },
+        {
+          exerciseId: 1,
+          weightKg: 100,
+          reps: 3,
+          distanceMeters: null,
+          durationSeconds: null,
+          exercise: strengthExercise,
+          session: { startedAt: d2 },
+        },
+        {
+          exerciseId: 1,
+          weightKg: 100,
+          reps: 5,
+          distanceMeters: null,
+          durationSeconds: null,
+          exercise: strengthExercise,
+          session: { startedAt: d2 },
+        },
+      ]);
+
+      const [pr] = await service.listPersonalRecords(userId);
+
+      expect(pr.type).toBe('strength');
+      expect(pr.maxWeightKg).toBe(100);
+      expect(pr.repsAtMax).toBe(5); // desempate por reps na carga máxima
+      expect(pr.totalSets).toBe(3);
+      // melhor 1RM estimado entre todas as séries (100kg x 5 = 116.67 > 80x5, 100x3)
+      expect(pr.estimated1RM).toBeCloseTo(116.67, 1);
+      expect(pr.achievedAt).toBe(d2.toISOString());
+    });
+
+    it('aggregates cardio PR by max distance and keeps that session duration', async () => {
+      prisma.sessionSet.findMany.mockResolvedValue([
+        {
+          exerciseId: 2,
+          weightKg: null,
+          reps: null,
+          distanceMeters: 5000,
+          durationSeconds: 1800,
+          exercise: cardioExercise,
+          session: { startedAt: d1 },
+        },
+        {
+          exerciseId: 2,
+          weightKg: null,
+          reps: null,
+          distanceMeters: 10000,
+          durationSeconds: 3600,
+          exercise: cardioExercise,
+          session: { startedAt: d2 },
+        },
+      ]);
+
+      const [pr] = await service.listPersonalRecords(userId);
+
+      expect(pr.type).toBe('cardio');
+      expect(pr.maxDistanceMeters).toBe(10000);
+      expect(pr.bestDurationSeconds).toBe(3600);
+      expect(pr.maxWeightKg).toBeNull();
+    });
+
+    it('sorts entries by most recently performed', async () => {
+      prisma.sessionSet.findMany.mockResolvedValue([
+        {
+          exerciseId: 1,
+          weightKg: 50,
+          reps: 5,
+          distanceMeters: null,
+          durationSeconds: null,
+          exercise: strengthExercise,
+          session: { startedAt: d1 },
+        },
+        {
+          exerciseId: 2,
+          weightKg: null,
+          reps: null,
+          distanceMeters: 3000,
+          durationSeconds: 900,
+          exercise: cardioExercise,
+          session: { startedAt: d2 },
+        },
+      ]);
+
+      const result = await service.listPersonalRecords(userId);
+
+      expect(result.map((r) => r.exerciseId)).toEqual([2, 1]); // d2 (cardio) antes de d1
+    });
+
+    it('scopes the query to the user (isolation)', async () => {
+      prisma.sessionSet.findMany.mockResolvedValue([]);
+
+      await service.listPersonalRecords(userId);
+
+      expect(prisma.sessionSet.findMany.mock.calls[0][0].where).toEqual({ session: { userId } });
     });
   });
 });

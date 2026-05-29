@@ -229,9 +229,17 @@ export default function PlanDetailPage() {
         </div>
 
         {exercises.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-white/10 bg-card p-6 text-center text-sm text-muted-foreground">
-            Sem exercícios no plano ainda.
-          </div>
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className="flex w-full flex-col items-center gap-2 rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-6 text-center text-sm text-muted-foreground hover:bg-primary/10"
+          >
+            <Plus size={20} className="text-primary" />
+            <span>
+              Plano criado! Agora{' '}
+              <span className="font-bold text-primary">adicione seu primeiro exercício</span>.
+            </span>
+          </button>
         )}
 
         <div className="space-y-3">
