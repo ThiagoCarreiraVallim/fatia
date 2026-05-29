@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Trash2, Plus, Dumbbell } from 'lucide-react';
 import { workoutApi } from '@/lib/api/workout';
 import { Button } from '@/components/ui/button';
@@ -10,6 +11,7 @@ import { Input } from '@/components/ui/input';
 
 export default function PlansPage() {
   const qc = useQueryClient();
+  const router = useRouter();
   const [newName, setNewName] = useState('');
   const [showForm, setShowForm] = useState(false);
 
@@ -20,10 +22,14 @@ export default function PlansPage() {
 
   const create = useMutation({
     mutationFn: () => workoutApi.createPlan({ name: newName.trim() }),
-    onSuccess: () => {
+    onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ['workout', 'plans'] });
       setNewName('');
       setShowForm(false);
+      // Leva direto para o plano recém-criado para adicionar exercícios —
+      // criar um plano "vazio" e ficar na lista passava a sensação de que
+      // nada tinha sido criado.
+      if (created?.id) router.push(`/workout/plans/${created.id}`);
     },
   });
 
