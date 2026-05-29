@@ -6,6 +6,25 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { isCardioExercise } from './helpers/is-cardio';
+import { estimate1RM } from './helpers/estimate-1rm';
+
+export interface PersonalRecordEntry {
+  exerciseId: number;
+  exerciseName: string;
+  muscleGroup: string;
+  type: 'strength' | 'cardio';
+  // Força
+  maxWeightKg: number | null;
+  repsAtMax: number | null;
+  estimated1RM: number | null;
+  // Cardio
+  maxDistanceMeters: number | null;
+  bestDurationSeconds: number | null;
+  // Comum
+  achievedAt: string | null;
+  lastPerformedAt: string | null;
+  totalSets: number;
+}
 
 interface CreateSetInput {
   sessionId: string;
@@ -156,6 +175,84 @@ export class SessionSetService {
       reps: top.reps,
       sessionDate: top.session.startedAt,
     };
+  }
+
+  /**
+   * Lista o recorde pessoal de cada exercício que o usuário já treinou.
+   * Força: maior carga (desempate por reps) + 1RM estimado.
+   * Cardio: maior distância (com a duração daquela sessão).
+   * Agrega em memória — escala pessoal (poucos milhares de séries) torna isso suficiente.
+   */
+  async listPersonalRecords(userId: string): Promise<PersonalRecordEntry[]> {
+    const sets = await this.prisma.sessionSet.findMany({
+      where: { session: { userId } },
+      select: {
+        exerciseId: true,
+        weightKg: true,
+        reps: true,
+        distanceMeters: true,
+        durationSeconds: true,
+        exercise: { select: { id: true, name: true, muscleGroup: true } },
+        session: { select: { startedAt: true } },
+      },
+    });
+
+    const byExercise = new Map<number, PersonalRecordEntry>();
+    for (const s of sets) {
+      const ex = s.exercise;
+      const date = s.session.startedAt.toISOString();
+      let entry = byExercise.get(ex.id);
+      if (!entry) {
+        entry = {
+          exerciseId: ex.id,
+          exerciseName: ex.name,
+          muscleGroup: ex.muscleGroup,
+          type: isCardioExercise(ex) ? 'cardio' : 'strength',
+          maxWeightKg: null,
+          repsAtMax: null,
+          estimated1RM: null,
+          maxDistanceMeters: null,
+          bestDurationSeconds: null,
+          achievedAt: null,
+          lastPerformedAt: null,
+          totalSets: 0,
+        };
+        byExercise.set(ex.id, entry);
+      }
+
+      entry.totalSets += 1;
+      if (!entry.lastPerformedAt || date > entry.lastPerformedAt) entry.lastPerformedAt = date;
+
+      if (entry.type === 'cardio') {
+        if (
+          s.distanceMeters != null &&
+          (entry.maxDistanceMeters == null || s.distanceMeters > entry.maxDistanceMeters)
+        ) {
+          entry.maxDistanceMeters = s.distanceMeters;
+          entry.bestDurationSeconds = s.durationSeconds ?? null;
+          entry.achievedAt = date;
+        }
+      } else if (s.weightKg != null) {
+        const better =
+          entry.maxWeightKg == null ||
+          s.weightKg > entry.maxWeightKg ||
+          (s.weightKg === entry.maxWeightKg && (s.reps ?? 0) > (entry.repsAtMax ?? 0));
+        if (better) {
+          entry.maxWeightKg = s.weightKg;
+          entry.repsAtMax = s.reps ?? null;
+          entry.achievedAt = date;
+        }
+        if (s.reps != null) {
+          const e1rm = estimate1RM(s.weightKg, s.reps);
+          if (entry.estimated1RM == null || e1rm > entry.estimated1RM) entry.estimated1RM = e1rm;
+        }
+      }
+    }
+
+    // Mais recentes primeiro.
+    return [...byExercise.values()].sort((a, b) =>
+      (b.lastPerformedAt ?? '').localeCompare(a.lastPerformedAt ?? ''),
+    );
   }
 
   private async assertOwnerSet(userId: string, id: string) {

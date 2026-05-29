@@ -190,4 +190,20 @@ export const workoutApi = {
         }
       | null
     >(`/api/workout/exercises/${exerciseId}/pr`),
+  listPersonalRecords: () => apiFetch<PersonalRecordEntry[]>('/api/workout/records'),
 };
+
+export interface PersonalRecordEntry {
+  exerciseId: number;
+  exerciseName: string;
+  muscleGroup: MuscleGroup;
+  type: 'strength' | 'cardio';
+  maxWeightKg: number | null;
+  repsAtMax: number | null;
+  estimated1RM: number | null;
+  maxDistanceMeters: number | null;
+  bestDurationSeconds: number | null;
+  achievedAt: string | null;
+  lastPerformedAt: string | null;
+  totalSets: number;
+}
