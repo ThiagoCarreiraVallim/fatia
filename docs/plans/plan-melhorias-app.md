@@ -367,8 +367,9 @@ ao logar refeições, informa `nutrients:{ sodium_mg: ... }`; consulta com `get_
 
 **Esforço:** 🔴 ⏱️ 14–20h (schema + service + 6 tools + telas + ADR + testes). PR isolado.
 
-**Riscos/decisões em aberto (pra confirmar antes de codar):**
-- (a) `nutrients` como Json vs. colunas fixas (proposta: Json). 
+**Riscos/decisões (atualizado):**
+- (a) ✅ **DECIDIDO:** `nutrients` como **Json flexível** (`MealItem.nutrients Json?` + `NutrientTarget`
+  genérico), não colunas fixas. Aberto a qualquer nutriente; segue YAGNI > DRY.
 - (b) Lista inicial de nutrientes "comuns" oferecidos na UI.
 - (c) Período só diário na v1 (semanal depois).
 - (d) Como popular sódio do TACO (seed parcial vs. 100% estimado pelo Claude).
