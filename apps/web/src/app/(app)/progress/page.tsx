@@ -27,26 +27,22 @@ function WeightBarMini({ values }: { values: number[] }) {
   }
   const min = Math.min(...values);
   const max = Math.max(...values);
-  const range = max - min;
+  const range = max - min || 1;
   return (
     <div className="flex h-16 items-end gap-1">
       {values.map((v, i) => {
         const isLast = i === values.length - 1;
-        // Variações de peso costumam ser pequenas; com escala 0–100% quase todas as
-        // barras caíam no minHeight e o gráfico parecia vazio. Mapeamos a variação
-        // para uma faixa visível (45%–100%) preservando a diferença relativa. Sem
-        // variação (range 0), todas ficam cheias.
-        const norm = range === 0 ? 1 : (v - min) / range;
-        const h = 45 + norm * 55;
+        // Variações de peso são pequenas; com escala 0–100% quase todas as barras
+        // caíam no minHeight e o gráfico parecia vazio. Mapeamos a variação para
+        // uma faixa visível (40%–100%) preservando a diferença relativa.
+        const h = 40 + ((v - min) / range) * 60;
         return (
           <div key={i} className="flex flex-1 flex-col items-center gap-1">
             <div
               className={`w-full rounded-sm ${
-                isLast
-                  ? 'bg-primary shadow-[0_0_10px_hsl(var(--primary)/0.6)]'
-                  : 'bg-muted-foreground/40'
+                isLast ? 'bg-primary shadow-[0_0_10px_hsl(var(--primary)/0.6)]' : 'bg-muted/80'
               }`}
-              style={{ height: `${h}%` }}
+              style={{ height: `${h}%`, minHeight: '8px' }}
             />
             {isLast && (
               <span className="text-[9px] font-extrabold text-primary tracking-wide">HOJE</span>

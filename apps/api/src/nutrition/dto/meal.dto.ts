@@ -83,6 +83,7 @@ export class ListMealsDto {
   cursor?: string;
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   limit?: number;

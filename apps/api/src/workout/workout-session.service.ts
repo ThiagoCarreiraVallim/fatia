@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import type {
   FinishSessionDto,
@@ -102,22 +102,26 @@ export class WorkoutSessionService {
   }
 
   async delete(userId: string, id: string): Promise<void> {
-    // Idempotente e transacional. Cancelar um treino dispara este delete enquanto
-    // ainda pode haver escritas de SessionSet em voo (ex.: auto-save de RPE). Sem
-    // isolamento, a cascata colidia com a escrita concorrente — ou um segundo
-    // disparo encontrava a sessão já removida — e o primeiro DELETE retornava 500
-    // (Prisma P2025), só funcionando na segunda tentativa. Aqui tratamos
-    // "já não existe" como no-op e removemos os filhos explicitamente.
-    await this.prisma.$transaction(async (tx) => {
-      const session = await tx.workoutSession.findUnique({
-        where: { id },
-        select: { userId: true },
-      });
-      if (!session) return; // idempotente: nada a fazer
-      if (session.userId !== userId) throw new ForbiddenException();
-      await tx.sessionSet.deleteMany({ where: { sessionId: id } });
-      await tx.workoutSession.delete({ where: { id } });
+    // Idempotente. Cancelar um treino podia disparar o DELETE duas vezes (duplo
+    // clique / re-render) ou correr com a sessão já removida: o segundo delete
+    // batia em Prisma P2025 ("Record to delete does not exist") e virava HTTP 500,
+    // só funcionando no retry. Aqui validamos posse e tratamos "já não existe"
+    // como no-op. Os SessionSet somem por cascade (onDelete: Cascade no schema).
+    // Não usamos transação interativa de propósito: em produção atrás de pgbouncer
+    // (transaction pooling) ela falha de forma consistente.
+    const session = await this.prisma.workoutSession.findUnique({
+      where: { id },
+      select: { userId: true },
     });
+    if (!session) return; // idempotente: nada a fazer
+    if (session.userId !== userId) throw new ForbiddenException();
+    try {
+      await this.prisma.workoutSession.delete({ where: { id } });
+    } catch (err) {
+      // P2025: removida concorrentemente entre o findUnique e o delete → no-op.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') return;
+      throw err;
+    }
   }
 
   private shapeSession(session: SessionWithRelations) {
