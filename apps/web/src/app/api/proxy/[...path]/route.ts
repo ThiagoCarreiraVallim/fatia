@@ -33,6 +33,15 @@ async function proxy(request: NextRequest, ctx: RouteContext) {
   }
 
   const upstream = await fetch(url.toString(), init);
+
+  // 204 (No Content) e 304 (Not Modified) NÃO podem ter body — o construtor de
+  // Response lança "Invalid response status code 204" se passarmos um body, e o
+  // handler vira 500. Isso quebrava TODOS os DELETEs (cancelar treino, remover
+  // refeição/item/série/plano...), que respondem 204. Repassamos sem body.
+  if (upstream.status === 204 || upstream.status === 304) {
+    return new NextResponse(null, { status: upstream.status });
+  }
+
   const body = await upstream.arrayBuffer();
   return new NextResponse(body, {
     status: upstream.status,
