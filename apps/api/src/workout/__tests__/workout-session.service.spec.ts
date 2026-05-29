@@ -11,18 +11,31 @@ type MockPrisma = {
     update: jest.Mock;
     delete: jest.Mock;
   };
+  sessionSet: {
+    deleteMany: jest.Mock;
+  };
+  $transaction: jest.Mock;
 };
 
-const makePrisma = (): MockPrisma => ({
-  workoutSession: {
-    create: jest.fn(),
-    findFirst: jest.fn(),
-    findMany: jest.fn(),
-    findUnique: jest.fn(),
-    update: jest.fn(),
-    delete: jest.fn(),
-  },
-});
+const makePrisma = (): MockPrisma => {
+  const prisma: MockPrisma = {
+    workoutSession: {
+      create: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    },
+    sessionSet: {
+      deleteMany: jest.fn(),
+    },
+    $transaction: jest.fn(),
+  };
+  // Executa o callback transacional com o próprio mock como client (tx).
+  prisma.$transaction.mockImplementation((cb: (tx: MockPrisma) => unknown) => cb(prisma));
+  return prisma;
+};
 
 describe('WorkoutSessionService', () => {
   let prisma: MockPrisma;
@@ -315,19 +328,33 @@ describe('WorkoutSessionService', () => {
   });
 
   describe('delete', () => {
-    it('deletes the session when the user owns it', async () => {
-      prisma.workoutSession.findUnique.mockResolvedValue({ id: 'sess-1', userId });
+    it('removes the sets then the session, inside a transaction, when the user owns it', async () => {
+      prisma.workoutSession.findUnique.mockResolvedValue({ userId });
+      prisma.sessionSet.deleteMany.mockResolvedValue({ count: 3 });
       prisma.workoutSession.delete.mockResolvedValue({});
 
       await service.delete(userId, 'sess-1');
 
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(prisma.sessionSet.deleteMany).toHaveBeenCalledWith({
+        where: { sessionId: 'sess-1' },
+      });
       expect(prisma.workoutSession.delete).toHaveBeenCalledWith({ where: { id: 'sess-1' } });
     });
 
+    it('is idempotent: no-op (no 500) when the session no longer exists', async () => {
+      prisma.workoutSession.findUnique.mockResolvedValue(null);
+
+      await expect(service.delete(userId, 'sess-gone')).resolves.toBeUndefined();
+      expect(prisma.sessionSet.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.workoutSession.delete).not.toHaveBeenCalled();
+    });
+
     it('throws ForbiddenException when the session belongs to another user', async () => {
-      prisma.workoutSession.findUnique.mockResolvedValue({ id: 'sess-1', userId: 'user-B' });
+      prisma.workoutSession.findUnique.mockResolvedValue({ userId: 'user-B' });
 
       await expect(service.delete(userId, 'sess-1')).rejects.toThrow(ForbiddenException);
+      expect(prisma.sessionSet.deleteMany).not.toHaveBeenCalled();
       expect(prisma.workoutSession.delete).not.toHaveBeenCalled();
     });
   });

@@ -122,7 +122,7 @@ export function ActiveExerciseCard({
         <Stepper
           label="CARGA (KG)"
           value={weight}
-          step={2.5}
+          step={1}
           onChange={(n) => {
             setTouched(true);
             setWeight(Math.max(0, n));
@@ -240,6 +240,20 @@ function Stepper({
   format: (n: number) => string;
   previous?: string;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  function startEditing() {
+    setDraft(format(value));
+    setEditing(true);
+  }
+
+  function commit() {
+    const n = Number(draft.replace(',', '.'));
+    if (Number.isFinite(n)) onChange(n);
+    setEditing(false);
+  }
+
   return (
     <div className="rounded-xl bg-muted/40 px-3 py-2">
       <p className="text-center text-[10px] font-bold tracking-wide text-muted-foreground">
@@ -254,9 +268,32 @@ function Stepper({
         >
           <Minus size={14} />
         </button>
-        <span className="text-2xl font-extrabold text-foreground tabular-nums">
-          {format(value)}
-        </span>
+        {editing ? (
+          <input
+            autoFocus
+            type="text"
+            inputMode="decimal"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onFocus={(e) => e.target.select()}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+              if (e.key === 'Escape') setEditing(false);
+            }}
+            className="w-16 bg-transparent text-center text-2xl font-extrabold text-foreground tabular-nums outline-none"
+            aria-label={label}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={startEditing}
+            className="min-w-16 text-2xl font-extrabold text-foreground tabular-nums"
+            aria-label={`Editar ${label}`}
+          >
+            {format(value)}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => onChange(value + step)}

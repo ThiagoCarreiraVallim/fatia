@@ -357,6 +357,8 @@ function ManualForm({ values, onChange, onSubmit, onBack, isSubmitting, error }:
     onChange({ ...values, [key]: e.target.value });
 
   const canSubmit = values.name.trim().length > 0 && parsePositive(values.grams) !== null;
+  const kcalValue = parseNonNegative(values.kcal);
+  const noKcal = canSubmit && (kcalValue === undefined || kcalValue === 0);
 
   return (
     <div className="my-3 space-y-3">
@@ -398,6 +400,11 @@ function ManualForm({ values, onChange, onSubmit, onBack, isSubmitting, error }:
         <ManualMacro id="manual-c" label="C (g)" value={values.carbsG} onChange={set('carbsG')} />
         <ManualMacro id="manual-g" label="G (g)" value={values.fatG} onChange={set('fatG')} />
       </div>
+      {noKcal && (
+        <p className="text-xs text-amber-500">
+          Sem calorias informadas — o item será salvo, mas não afetará seu resumo de kcal.
+        </p>
+      )}
       {error && <p className="text-sm text-rose-500">{error}</p>}
       <div className="flex gap-2">
         <Button variant="outline" className="flex-1" onClick={onBack}>
