@@ -1,4 +1,5 @@
 import { IsInt, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class SearchFoodDto {
   @IsOptional()
@@ -7,10 +8,12 @@ export class SearchFoodDto {
   q?: string;
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   groupId?: number;
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   limit?: number;
