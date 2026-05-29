@@ -63,6 +63,7 @@ export interface UserGoals {
   fatMaxG: number;
   weeklyWorkouts: number;
   dailyStepsTarget: number;
+  dailyWaterTargetMl: number;
 }
 
 export interface FoodGroup {
@@ -94,7 +95,18 @@ export const nutritionApi = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  addItem: (mealId: string, item: { foodId?: number; foodName?: string; grams: number }) =>
+  addItem: (
+    mealId: string,
+    item: {
+      foodId?: number;
+      foodName?: string;
+      grams: number;
+      kcal?: number;
+      proteinG?: number;
+      carbsG?: number;
+      fatG?: number;
+    },
+  ) =>
     apiFetch<MealItem>(`/api/nutrition/meals/${mealId}/items`, {
       method: 'POST',
       body: JSON.stringify(item),

@@ -22,6 +22,7 @@ const empty: FormState = {
   fatMaxG: 80,
   weeklyWorkouts: 3,
   dailyStepsTarget: 8000,
+  dailyWaterTargetMl: 2500,
 };
 
 export default function GoalsPage() {
@@ -97,6 +98,11 @@ export default function GoalsPage() {
         <legend className="col-span-2 text-sm font-medium">Atividade</legend>
         {field('weeklyWorkouts', 'Treinos/semana')}
         {field('dailyStepsTarget', 'Passos/dia')}
+      </fieldset>
+
+      <fieldset className="grid grid-cols-2 gap-3">
+        <legend className="col-span-2 text-sm font-medium">Hidratação</legend>
+        {field('dailyWaterTargetMl', 'Água/dia (ml)')}
       </fieldset>
 
       <Button type="submit" disabled={save.isPending} className="w-full">
