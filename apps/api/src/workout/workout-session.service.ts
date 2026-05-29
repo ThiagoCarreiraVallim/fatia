@@ -102,8 +102,22 @@ export class WorkoutSessionService {
   }
 
   async delete(userId: string, id: string): Promise<void> {
-    await this.assertOwner(userId, id);
-    await this.prisma.workoutSession.delete({ where: { id } });
+    // Idempotente e transacional. Cancelar um treino dispara este delete enquanto
+    // ainda pode haver escritas de SessionSet em voo (ex.: auto-save de RPE). Sem
+    // isolamento, a cascata colidia com a escrita concorrente — ou um segundo
+    // disparo encontrava a sessão já removida — e o primeiro DELETE retornava 500
+    // (Prisma P2025), só funcionando na segunda tentativa. Aqui tratamos
+    // "já não existe" como no-op e removemos os filhos explicitamente.
+    await this.prisma.$transaction(async (tx) => {
+      const session = await tx.workoutSession.findUnique({
+        where: { id },
+        select: { userId: true },
+      });
+      if (!session) return; // idempotente: nada a fazer
+      if (session.userId !== userId) throw new ForbiddenException();
+      await tx.sessionSet.deleteMany({ where: { sessionId: id } });
+      await tx.workoutSession.delete({ where: { id } });
+    });
   }
 
   private shapeSession(session: SessionWithRelations) {
