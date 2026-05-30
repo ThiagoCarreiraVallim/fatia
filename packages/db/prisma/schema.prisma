@@ -37,6 +37,7 @@ model User {
   waterLogs       WaterLog[]
   customFoods     Food[]     @relation("UserCustomFoods")
   customExercises Exercise[] @relation("UserCustomExercises")
+  nutrientTargets NutrientTarget[]
 
   @@index([logtoSub])
 }
@@ -181,6 +182,10 @@ model MealItem {
   proteinG Float
   carbsG   Float
   fatG     Float
+  // Micronutrientes opcionais (snapshot), mapa flexível: { "sodium_mg": 412, "sugar_g": 9 }.
+  // Json em vez de colunas fixas: nutrientes são open-ended e a TACO não cobre todos
+  // (ADR 009). Ausente = não rastreado para aquele item.
+  nutrients Json?
 
   meal  Meal       @relation(fields: [mealId], references: [id], onDelete: Cascade)
   food  Food?      @relation(fields: [foodId], references: [id])
@@ -385,6 +390,27 @@ enum GoalKind {
   workout_frequency
   step_count
   custom
+}
+
+// Metas de nutrientes personalizadas (ex.: limitar sódio, açúcar; atingir fibra).
+// Distintas de `UserGoals` (macros fixos). Min/max em range (ADR 006/D6). O valor
+// do dia é agregado de `MealItem.nutrients[nutrientKey]`. Ver ADR 009.
+model NutrientTarget {
+  id          String   @id @default(uuid())
+  userId      String
+  nutrientKey String // "sodium_mg", "sugar_g", "fiber_g", "caffeine_mg", ...
+  label       String // "Sódio", "Açúcar"
+  unit        String // "mg", "g"
+  min         Float?
+  max         Float?
+  period      String   @default("daily") // v1: apenas "daily"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, nutrientKey])
+  @@index([userId])
 }
 
 enum GoalStatus {
