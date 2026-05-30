@@ -11,6 +11,7 @@ import { CaloriesRingCard } from '@/components/nutrition/calories-ring-card';
 import { MacroBentoGrid } from '@/components/nutrition/macro-bento-grid';
 import { MealTimeline } from '@/components/nutrition/meal-timeline';
 import { WeeklyTrendChart } from '@/components/nutrition/weekly-trend-chart';
+import { NutrientTargetsCard } from '@/components/nutrition/nutrient-targets-card';
 import { FoodSearchDrawer } from '@/components/nutrition/food-search-drawer';
 
 function todayIso(): string {
@@ -63,6 +64,7 @@ function NutritionPageContent() {
         <>
           <CaloriesRingCard totals={summary.data.totals} goals={goals.data ?? null} />
           <MacroBentoGrid totals={summary.data.totals} goals={goals.data ?? null} />
+          <NutrientTargetsCard date={date} />
           <MealTimeline
             meals={summary.data.meals}
             date={date}

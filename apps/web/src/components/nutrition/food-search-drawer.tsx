@@ -34,6 +34,7 @@ interface ItemPayload {
   proteinG?: number;
   carbsG?: number;
   fatG?: number;
+  nutrients?: Record<string, number>;
 }
 
 const INITIAL_MANUAL = { name: '', grams: '100', kcal: '', proteinG: '', carbsG: '', fatG: '' };
@@ -56,7 +57,15 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
   const [selected, setSelected] = useState<Food | null>(null);
   const [grams, setGrams] = useState<string>('100');
   const [manual, setManual] = useState(INITIAL_MANUAL);
+  const [manualNutrients, setManualNutrients] = useState<Record<string, string>>({});
   const qc = useQueryClient();
+
+  // Metas de nutrientes ativas: o item manual pode informar esses nutrientes (ADR 009).
+  const targets = useQuery({
+    queryKey: ['nutrition', 'nutrient-targets'],
+    queryFn: () => nutritionApi.nutrientTargets(),
+    enabled: open,
+  });
 
   useEffect(() => {
     if (!open) {
@@ -66,6 +75,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
       setSelected(null);
       setGrams('100');
       setManual(INITIAL_MANUAL);
+      setManualNutrients({});
     }
   }, [open]);
 
@@ -121,6 +131,11 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
     const name = manual.name.trim();
     const g = parsePositive(manual.grams);
     if (!name || g === null) return;
+    const nutrients: Record<string, number> = {};
+    for (const [key, raw] of Object.entries(manualNutrients)) {
+      const n = parseNonNegative(raw);
+      if (n !== undefined) nutrients[key] = n;
+    }
     addItem.mutate({
       foodName: name,
       grams: g,
@@ -128,6 +143,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
       proteinG: parseNonNegative(manual.proteinG),
       carbsG: parseNonNegative(manual.carbsG),
       fatG: parseNonNegative(manual.fatG),
+      nutrients: Object.keys(nutrients).length > 0 ? nutrients : undefined,
     });
   };
 
@@ -149,6 +165,13 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
           <ManualForm
             values={manual}
             onChange={setManual}
+            nutrientTargets={(targets.data ?? []).map((t) => ({
+              key: t.nutrientKey,
+              label: t.label,
+              unit: t.unit,
+            }))}
+            nutrientValues={manualNutrients}
+            onNutrientChange={(key, v) => setManualNutrients((prev) => ({ ...prev, [key]: v }))}
             onSubmit={submitManual}
             onBack={() => {
               setMode('search');
@@ -343,16 +366,35 @@ function SelectedFoodPanel({
 
 type ManualValues = typeof INITIAL_MANUAL;
 
+interface NutrientField {
+  key: string;
+  label: string;
+  unit: string;
+}
+
 interface ManualFormProps {
   values: ManualValues;
   onChange: (values: ManualValues) => void;
+  nutrientTargets: NutrientField[];
+  nutrientValues: Record<string, string>;
+  onNutrientChange: (key: string, value: string) => void;
   onSubmit: () => void;
   onBack: () => void;
   isSubmitting: boolean;
   error: string | undefined;
 }
 
-function ManualForm({ values, onChange, onSubmit, onBack, isSubmitting, error }: ManualFormProps) {
+function ManualForm({
+  values,
+  onChange,
+  nutrientTargets,
+  nutrientValues,
+  onNutrientChange,
+  onSubmit,
+  onBack,
+  isSubmitting,
+  error,
+}: ManualFormProps) {
   const set = (key: keyof ManualValues) => (e: React.ChangeEvent<HTMLInputElement>) =>
     onChange({ ...values, [key]: e.target.value });
 
@@ -405,6 +447,34 @@ function ManualForm({ values, onChange, onSubmit, onBack, isSubmitting, error }:
           Sem calorias informadas — o item será salvo, mas não afetará seu resumo de kcal.
         </p>
       )}
+
+      {nutrientTargets.length > 0 && (
+        <div className="space-y-2 rounded-lg border border-white/5 bg-muted/30 p-3">
+          <p className="text-xs font-bold text-muted-foreground">Metas personalizadas (opcional)</p>
+          <div className="grid grid-cols-3 gap-2">
+            {nutrientTargets.map((n) => (
+              <div key={n.key} className="space-y-1">
+                <label
+                  htmlFor={`nut-${n.key}`}
+                  className="text-[11px] font-medium text-muted-foreground"
+                >
+                  {n.label} ({n.unit})
+                </label>
+                <Input
+                  id={`nut-${n.key}`}
+                  type="number"
+                  inputMode="decimal"
+                  value={nutrientValues[n.key] ?? ''}
+                  onChange={(e) => onNutrientChange(n.key, e.target.value)}
+                  min={0}
+                  step={1}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {error && <p className="text-sm text-rose-500">{error}</p>}
       <div className="flex gap-2">
         <Button variant="outline" className="flex-1" onClick={onBack}>
