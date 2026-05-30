@@ -71,6 +71,29 @@ export interface FoodGroup {
   name: string;
 }
 
+export interface NutrientTarget {
+  id: string;
+  userId: string;
+  nutrientKey: string;
+  label: string;
+  unit: string;
+  min: number | null;
+  max: number | null;
+  period: string;
+}
+
+export type NutrientStatus = 'under' | 'ok' | 'over' | 'none';
+
+export interface NutrientProgress {
+  nutrientKey: string;
+  label: string;
+  unit: string;
+  min: number | null;
+  max: number | null;
+  total: number;
+  status: NutrientStatus;
+}
+
 export const nutritionApi = {
   summary: (date: string) => apiFetch<DaySummary>(`/api/nutrition/summary?date=${date}`),
   meals: (date?: string) => apiFetch<Meal[]>(`/api/nutrition/meals${date ? `?date=${date}` : ''}`),
@@ -89,6 +112,7 @@ export const nutritionApi = {
       proteinG?: number;
       carbsG?: number;
       fatG?: number;
+      nutrients?: Record<string, number>;
     }>;
   }) =>
     apiFetch<Meal>('/api/nutrition/meals', {
@@ -105,6 +129,7 @@ export const nutritionApi = {
       proteinG?: number;
       carbsG?: number;
       fatG?: number;
+      nutrients?: Record<string, number>;
     },
   ) =>
     apiFetch<MealItem>(`/api/nutrition/meals/${mealId}/items`, {
@@ -138,4 +163,26 @@ export const nutritionApi = {
       }>;
       averages: { kcal: number; proteinG: number; carbsG: number; fatG: number };
     }>(`/api/nutrition/history?days=${days}`),
+
+  // Metas de nutrientes personalizadas (ADR 009)
+  nutrientTargets: () => apiFetch<NutrientTarget[]>('/api/nutrition/nutrient-targets'),
+  upsertNutrientTarget: (body: {
+    nutrientKey: string;
+    label: string;
+    unit: string;
+    min?: number;
+    max?: number;
+  }) =>
+    apiFetch<NutrientTarget>('/api/nutrition/nutrient-targets', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  deleteNutrientTarget: (key: string) =>
+    apiFetch<{ deleted: true }>(`/api/nutrition/nutrient-targets/${encodeURIComponent(key)}`, {
+      method: 'DELETE',
+    }),
+  nutrientSummary: (date: string) =>
+    apiFetch<{ date: string; nutrients: NutrientProgress[] }>(
+      `/api/nutrition/nutrient-summary?date=${date}`,
+    ),
 };
