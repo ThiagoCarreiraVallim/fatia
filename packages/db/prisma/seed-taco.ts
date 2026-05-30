@@ -25,17 +25,36 @@ interface TacoFood {
   proteinPer100g: number;
   carbsPer100g: number;
   fatPer100g: number;
+  // Micronutrientes por 100g (chaves alinhadas com NutrientTarget / ADR 009).
+  nutrients: Record<string, number>;
 }
 
-// Índices das colunas no CSV TACO (0-based)
+// Índices das colunas no CSV TACO (0-based). Macros já usados + micros do backfill.
 const COL = {
   id: 0,
   description: 1,
   kcal: 3,
   protein: 5,
   fat: 6,
+  cholesterol: 7,
   carbs: 8,
+  fiber: 9,
+  calcium: 11,
+  iron: 16,
+  sodium: 17,
+  potassium: 18,
 };
+
+// nutrientKey -> coluna. Enxuto: cobre os presets (sódio, fibra, potássio,
+// colesterol) + dois micros comuns (cálcio, ferro). Só grava valores > 0.
+const MICRO_COLS: Array<{ key: string; col: number }> = [
+  { key: 'sodium_mg', col: COL.sodium },
+  { key: 'fiber_g', col: COL.fiber },
+  { key: 'potassium_mg', col: COL.potassium },
+  { key: 'cholesterol_mg', col: COL.cholesterol },
+  { key: 'calcium_mg', col: COL.calcium },
+  { key: 'iron_mg', col: COL.iron },
+];
 
 /** CSV parser minimalista com suporte a campos entre aspas. */
 function parseCsv(text: string): string[][] {
@@ -119,6 +138,12 @@ function readTacoFoods(csvPath: string): TacoFood[] {
     const name = row[COL.description].trim();
     if (!name) continue;
 
+    const nutrients: Record<string, number> = {};
+    for (const { key, col } of MICRO_COLS) {
+      const v = round2(parseNumeric(row[col]));
+      if (v > 0) nutrients[key] = v; // omite NA/Tr/0 (sem medição confiável)
+    }
+
     foods.push({
       name,
       group: currentGroup,
@@ -126,6 +151,7 @@ function readTacoFoods(csvPath: string): TacoFood[] {
       proteinPer100g: round2(parseNumeric(row[COL.protein])),
       carbsPer100g: round2(parseNumeric(row[COL.carbs])),
       fatPer100g: round2(parseNumeric(row[COL.fat])),
+      nutrients,
     });
   }
   return foods;
@@ -172,6 +198,7 @@ export async function runSeedTaco() {
           proteinPer100g: food.proteinPer100g,
           carbsPer100g: food.carbsPer100g,
           fatPer100g: food.fatPer100g,
+          nutrients: food.nutrients,
           groupId,
         },
       });
@@ -186,6 +213,7 @@ export async function runSeedTaco() {
           proteinPer100g: food.proteinPer100g,
           carbsPer100g: food.carbsPer100g,
           fatPer100g: food.fatPer100g,
+          nutrients: food.nutrients,
         },
       });
       created++;

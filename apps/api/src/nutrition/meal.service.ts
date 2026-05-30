@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { dayBoundsInTz } from '../progress/helpers/date-tz';
 import type { CreateMealDto, ListMealsDto, MealItemInputDto, UpdateMealDto } from './dto/meal.dto';
-import { calcMacrosFromFood, type ItemMacros } from './helpers/calc-macros';
+import { calcMacrosFromFood, calcNutrientsFromFood, type ItemMacros } from './helpers/calc-macros';
 
 interface ResolvedItem extends ItemMacros {
   foodId: number | null;
@@ -112,13 +112,18 @@ export class MealService {
         });
         if (!food) throw new NotFoundException(`Food ${item.foodId} not found`);
         const macros = calcMacrosFromFood(food, item.grams);
+        // Micros explícitos (estimativa do Claude/correção) vencem; senão deriva do
+        // catálogo por regra de 3 — assim logar um alimento da TACO já preenche sódio
+        // & cia. sem digitação (ADR 009).
+        const nutrients =
+          sanitizeNutrients(item.nutrients) ?? calcNutrientsFromFood(food.nutrients, item.grams);
         result.push({
           foodId: food.id,
           foodName: item.foodName ?? food.name,
           groupId: item.groupId ?? food.groupId,
           grams: item.grams,
           ...macros,
-          nutrients: sanitizeNutrients(item.nutrients),
+          nutrients,
         });
       } else {
         if (!item.foodName) {

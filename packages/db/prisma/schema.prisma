@@ -130,6 +130,9 @@ model Food {
   proteinPer100g Float
   carbsPer100g   Float
   fatPer100g     Float
+  // Micronutrientes por 100g (catálogo), mapa flexível: { "sodium_mg": 1.2, "fiber_g": 2.7 }.
+  // Derivado por regra de 3 para MealItem.nutrients ao logar (ADR 009).
+  nutrients      Json?
   createdAt      DateTime   @default(now())
 
   group         FoodGroup? @relation(fields: [groupId], references: [id])

@@ -42,8 +42,12 @@ Modelo **genérico de nutrientes**, MCP-first:
 - **(b) Lista inicial sugerida na UI:** sódio (mg), açúcar (g), fibra (g), gordura
   saturada (g), cafeína (mg), colesterol (mg), potássio (mg) — além de custom.
 - **(c) Período só `daily` na v1.** Semanal fica preparado no campo, implementado depois.
-- **(d) TACO sem micronutrientes na v1.** O valor por item é informado pelo Claude (no
-  log) ou manualmente. Backfill da TACO com sódio/etc. é um seed futuro, não-bloqueante.
+- **(d) Backfill da TACO (implementado).** `Food.nutrients` (por 100g) é populado pela
+  seed a partir das colunas que já existem no `taco.csv` (sódio, fibra, potássio,
+  colesterol, cálcio, ferro). Ao logar um alimento do catálogo, `MealItem.nutrients` é
+  derivado por regra de 3 (helper `calcNutrientsFromFood`) — sem digitação. Para itens
+  livres, o valor segue vindo do Claude/manual. Saturados e outros micros fora do CSV
+  ficam como extensão futura.
 
 ## Consequências
 
