@@ -16,6 +16,7 @@ const itemSchema = z.object({
   proteinG: z.number().min(0).optional(),
   carbsG: z.number().min(0).optional(),
   fatG: z.number().min(0).optional(),
+  nutrients: z.record(z.number()).optional(),
   groupId: z.number().int().optional(),
 });
 

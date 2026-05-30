@@ -6,6 +6,7 @@ import {
   IsEnum,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   MaxLength,
@@ -33,6 +34,9 @@ export class MealItemInputDto {
   @IsOptional() @IsNumber() @Min(0) proteinG?: number;
   @IsOptional() @IsNumber() @Min(0) carbsG?: number;
   @IsOptional() @IsNumber() @Min(0) fatG?: number;
+
+  // Micronutrientes opcionais (ADR 009): { "sodium_mg": 412, "sugar_g": 9 }.
+  @IsOptional() @IsObject() nutrients?: Record<string, number>;
 
   @IsOptional()
   @IsInt()
@@ -99,4 +103,5 @@ export class UpdateMealItemDto {
   @IsOptional() @IsNumber() @Min(0) proteinG?: number;
   @IsOptional() @IsNumber() @Min(0) carbsG?: number;
   @IsOptional() @IsNumber() @Min(0) fatG?: number;
+  @IsOptional() @IsObject() nutrients?: Record<string, number>;
 }

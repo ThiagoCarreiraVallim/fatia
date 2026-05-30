@@ -1,4 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import type { MealItemInputDto, UpdateMealItemDto } from './dto/meal.dto';
 import { MealService } from './meal.service';
@@ -46,10 +47,16 @@ export class MealItemService {
     if (dto.carbsG !== undefined) carbsG = dto.carbsG;
     if (dto.fatG !== undefined) fatG = dto.fatG;
 
-    return this.prisma.mealItem.update({
-      where: { id: itemId },
-      data: { grams, kcal, proteinG, carbsG, fatG },
-    });
+    const data: Prisma.MealItemUpdateInput = { grams, kcal, proteinG, carbsG, fatG };
+    if (dto.nutrients !== undefined) {
+      const clean: Record<string, number> = {};
+      for (const [k, v] of Object.entries(dto.nutrients)) {
+        if (typeof v === 'number' && Number.isFinite(v)) clean[k] = v;
+      }
+      data.nutrients = Object.keys(clean).length > 0 ? clean : Prisma.JsonNull;
+    }
+
+    return this.prisma.mealItem.update({ where: { id: itemId }, data });
   }
 
   async delete(userId: string, itemId: string): Promise<void> {

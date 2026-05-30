@@ -5,6 +5,7 @@ import { MealService } from './meal.service';
 import { MealItemService } from './meal-item.service';
 import { NutritionSummaryService } from './nutrition-summary.service';
 import { UserGoalsService } from './user-goals.service';
+import { NutrientTargetService } from './nutrient-target.service';
 import { SearchFoodTool } from './mcp/search-food.tool';
 import { GetFoodTool } from './mcp/get-food.tool';
 import { ListFoodGroupsTool } from './mcp/list-food-groups.tool';
@@ -23,6 +24,10 @@ import { GetNutritionSummaryTool } from './mcp/get-nutrition-summary.tool';
 import { GetNutritionHistoryTool } from './mcp/get-nutrition-history.tool';
 import { GetNutritionGoalsTool } from './mcp/get-nutrition-goals.tool';
 import { SetNutritionGoalsTool } from './mcp/set-nutrition-goals.tool';
+import { ListNutrientTargetsTool } from './mcp/list-nutrient-targets.tool';
+import { SetNutrientTargetTool } from './mcp/set-nutrient-target.tool';
+import { DeleteNutrientTargetTool } from './mcp/delete-nutrient-target.tool';
+import { GetNutrientSummaryTool } from './mcp/get-nutrient-summary.tool';
 
 @Module({
   controllers: [NutritionController],
@@ -32,6 +37,7 @@ import { SetNutritionGoalsTool } from './mcp/set-nutrition-goals.tool';
     MealItemService,
     NutritionSummaryService,
     UserGoalsService,
+    NutrientTargetService,
     // MCP tools (auto-discovered by McpToolRegistry)
     SearchFoodTool,
     GetFoodTool,
@@ -51,7 +57,18 @@ import { SetNutritionGoalsTool } from './mcp/set-nutrition-goals.tool';
     GetNutritionHistoryTool,
     GetNutritionGoalsTool,
     SetNutritionGoalsTool,
+    ListNutrientTargetsTool,
+    SetNutrientTargetTool,
+    DeleteNutrientTargetTool,
+    GetNutrientSummaryTool,
   ],
-  exports: [FoodService, MealService, MealItemService, NutritionSummaryService, UserGoalsService],
+  exports: [
+    FoodService,
+    MealService,
+    MealItemService,
+    NutritionSummaryService,
+    UserGoalsService,
+    NutrientTargetService,
+  ],
 })
 export class NutritionModule {}

@@ -10,6 +10,19 @@ interface ResolvedItem extends ItemMacros {
   foodName: string;
   groupId: number | null;
   grams: number;
+  nutrients?: Prisma.InputJsonValue;
+}
+
+/** Mantém só pares chave→número finito (ignora lixo) ou undefined se vazio. */
+function sanitizeNutrients(
+  raw: Record<string, number> | undefined,
+): Prisma.InputJsonValue | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const clean: Record<string, number> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === 'number' && Number.isFinite(value)) clean[key] = value;
+  }
+  return Object.keys(clean).length > 0 ? clean : undefined;
 }
 
 @Injectable()
@@ -105,6 +118,7 @@ export class MealService {
           groupId: item.groupId ?? food.groupId,
           grams: item.grams,
           ...macros,
+          nutrients: sanitizeNutrients(item.nutrients),
         });
       } else {
         if (!item.foodName) {
@@ -119,6 +133,7 @@ export class MealService {
           proteinG: item.proteinG ?? 0,
           carbsG: item.carbsG ?? 0,
           fatG: item.fatG ?? 0,
+          nutrients: sanitizeNutrients(item.nutrients),
         });
       }
     }

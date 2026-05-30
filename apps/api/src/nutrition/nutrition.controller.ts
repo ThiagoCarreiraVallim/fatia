@@ -17,6 +17,7 @@ import { MealService } from './meal.service';
 import { MealItemService } from './meal-item.service';
 import { NutritionSummaryService } from './nutrition-summary.service';
 import { UserGoalsService } from './user-goals.service';
+import { NutrientTargetService } from './nutrient-target.service';
 import { CreateCustomFoodDto, SearchFoodDto, UpdateCustomFoodDto } from './dto/food.dto';
 import {
   CreateMealDto,
@@ -26,6 +27,7 @@ import {
   UpdateMealItemDto,
 } from './dto/meal.dto';
 import { UpsertGoalsDto } from './dto/goals.dto';
+import { UpsertNutrientTargetDto } from './dto/nutrient-target.dto';
 
 @Controller('nutrition')
 export class NutritionController {
@@ -35,6 +37,7 @@ export class NutritionController {
     private readonly mealItems: MealItemService,
     private readonly summary: NutritionSummaryService,
     private readonly goals: UserGoalsService,
+    private readonly nutrientTargets: NutrientTargetService,
   ) {}
 
   // -------- Foods --------
@@ -149,5 +152,29 @@ export class NutritionController {
   @Put('goals')
   upsertGoals(@CurrentUser() user: CurrentUserPayload, @Body() dto: UpsertGoalsDto) {
     return this.goals.upsert(user.id, dto);
+  }
+
+  // -------- Nutrient targets (metas personalizadas, ADR 009) --------
+  @Get('nutrient-targets')
+  listNutrientTargets(@CurrentUser() user: CurrentUserPayload) {
+    return this.nutrientTargets.list(user.id);
+  }
+
+  @Put('nutrient-targets')
+  upsertNutrientTarget(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: UpsertNutrientTargetDto,
+  ) {
+    return this.nutrientTargets.upsert(user.id, dto);
+  }
+
+  @Delete('nutrient-targets/:key')
+  deleteNutrientTarget(@CurrentUser() user: CurrentUserPayload, @Param('key') key: string) {
+    return this.nutrientTargets.delete(user.id, key);
+  }
+
+  @Get('nutrient-summary')
+  nutrientSummary(@CurrentUser() user: CurrentUserPayload, @Query('date') date: string) {
+    return this.nutrientTargets.getNutrientSummary(user.id, date, user.timezone);
   }
 }
