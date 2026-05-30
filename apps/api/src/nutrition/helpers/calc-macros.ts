@@ -14,6 +14,28 @@ export interface ItemMacros {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/**
+ * Deriva os micronutrientes do item a partir do catálogo (Food.nutrients, por 100g)
+ * pela mesma regra de 3 dos macros. Aceita o Json cru do Prisma; ignora valores não
+ * numéricos. Retorna undefined se não houver nada utilizável (ADR 009).
+ */
+export function calcNutrientsFromFood(
+  foodNutrients: unknown,
+  grams: number,
+): Record<string, number> | undefined {
+  if (!foodNutrients || typeof foodNutrients !== 'object' || Array.isArray(foodNutrients)) {
+    return undefined;
+  }
+  const ratio = grams / 100;
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(foodNutrients as Record<string, unknown>)) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      out[key] = round2(value * ratio);
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 export function calcMacrosFromFood(food: FoodMacros, grams: number): ItemMacros {
   const ratio = grams / 100;
   return {
