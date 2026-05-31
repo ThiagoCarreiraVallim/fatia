@@ -36,6 +36,27 @@ equipment, primaryMuscles, secondaryMuscles, instructions, category, images`.
 - **Hosting:** nenhum (JSON estático; podemos versionar/seed).
 - **Risco:** mínimo. Domínio público elimina o problema de redistribuição via conector.
 
+### 1b. Tradução PT-BR já existe — `joao-gugel/exercicios-bd-ptbr`
+
+Fork do free-exercise-db já traduzido, em **3 versões**:
+
+- `exercises-ptbr-minimal.json` — só `id`, `name`, `instructions`.
+- **`exercises-ptbr-partial-translation.json` — ✅ a que queremos:** `name` + `instructions` em
+  PT, mas **enums técnicos em inglês** (`primaryMuscles`, `secondaryMuscles`, `equipment`,
+  `level`, `mechanic`, `force`, `category`). Mantém o alinhamento com a SVG e a taxonomia, e já
+  resolve a tradução das instruções.
+- `exercises-ptbr-full-translation.json` — traduz **até os enums** (`primaryMuscles: ["abdominais"]`,
+  `equipment: "peso-do-corpo"`). **Não usar** — quebraria o casamento com os `<g>` e com qualquer
+  outro dataset.
+
+**Ressalva de licença:** o fork **não tem arquivo LICENSE**. A base upstream é Unlicense (domínio
+público), então o **dado de exercício em si não tem copyright**; mas a tradução, como obra
+derivada, não vem com concessão explícita. **Mitigação (risco zero):** nosso seed tem só ~60
+exercícios (não 800) — usamos a Versão 2 como _referência_ e fazemos/validamos a tradução desses
+~60 a partir da base inglesa (domínio público) nós mesmos (assistido por Claude), passando a
+**possuir** essas traduções. Alternativa: pedir ao autor para adicionar uma licença (ex.: Unlicense)
+e aí consumir direto.
+
 ### 2. `bootstrapping-lab/exercisedb-api` — ❌ rejeitada (licença dos dados/assets indefinida)
 
 - **Licença:** código **AGPL-3.0**; **dados/GIFs sem licença explícita** no README (só um badge
@@ -91,16 +112,16 @@ Isso resolve o item "decisão de fonte" e **elimina o risco de licença** do con
 
 ## Esquema resultante (mapa free-exercise-db → `Exercise` do #43)
 
-| Campo #43            | Origem free-exercise-db | Observação                    |
-| -------------------- | ----------------------- | ----------------------------- |
-| `primaryMuscles[]`   | `primaryMuscles`        | direto                        |
-| `secondaryMuscles[]` | `secondaryMuscles`      | direto                        |
-| `equipment`          | `equipment`             | normalizar p/ PT na UI        |
-| `level`              | `level`                 | beginner/intermediate/expert  |
-| `mechanic`           | `mechanic`              | compound/isolation            |
-| `instructions[]`     | `instructions`          | traduzir p/ PT (curadoria/IA) |
-| `commonMistakes[]`   | — (autorar)             | Claude/manual                 |
-| `youtubeVideoId(Pt)` | — (curar)               | manual, top exercícios        |
+| Campo #43            | Origem free-exercise-db | Observação                   |
+| -------------------- | ----------------------- | ---------------------------- |
+| `primaryMuscles[]`   | `primaryMuscles`        | direto                       |
+| `secondaryMuscles[]` | `secondaryMuscles`      | direto                       |
+| `equipment`          | `equipment`             | normalizar p/ PT na UI       |
+| `level`              | `level`                 | beginner/intermediate/expert |
+| `mechanic`           | `mechanic`              | compound/isolation           |
+| `instructions[]`     | `instructions`          | **já em PT** (fork V2)       |
+| `commonMistakes[]`   | — (autorar)             | Claude/manual                |
+| `youtubeVideoId(Pt)` | — (curar)               | manual, top exercícios       |
 
 Bônus disponíveis no dataset: `force` (pull/push/static) e `category` (strength/cardio/…), úteis
 para o coach e filtros.
@@ -135,8 +156,10 @@ representar na ilustração; opcional.
 
 ## Lacunas e como cobrir
 
-- **PT-BR:** instruções/nomes do dataset são em inglês → traduzir na curadoria (Claude ajuda),
-  mantendo `primaryMuscles` em inglês (chave técnica) e exibindo rótulos PT na UI.
+- **PT-BR:** ~~traduzir~~ **já resolvido** — partir da Versão 2 (`partial-translation`) do fork
+  PT, que traz `name` + `instructions` em PT e mantém os enums em inglês. Para o seed (~60
+  exercícios) validamos/regeramos as traduções a partir da base em domínio público (ver 1b),
+  ficando donos delas.
 - **`commonMistakes` e vídeos:** não vêm prontos → autorar/curar incrementalmente (top exercícios
   primeiro), deixando nulos degradarem na UI.
 - **Cobertura:** ~800 exercícios cobrem com folga os ~60 do nosso seed; casar por nome/aliases.
@@ -150,6 +173,7 @@ representar na ilustração; opcional.
 ## Fontes
 
 - [yuhonas/free-exercise-db (GitHub)](https://github.com/yuhonas/free-exercise-db) — Unlicense; `schema.json` enums.
+- [joao-gugel/exercicios-bd-ptbr (GitHub)](https://github.com/joao-gugel/exercicios-bd-ptbr) — fork PT-BR (3 versões); sem LICENSE explícito.
 - [bootstrapping-lab/exercisedb-api (GitHub)](https://github.com/bootstrapping-lab/exercisedb-api) — AGPL-3.0 código; licença de dados/assets indefinida.
 - [wger-project/wger (GitHub)](https://github.com/wger-project/wger) — código AGPL-3+; dados CC-BY-SA 4.0.
   </content>
