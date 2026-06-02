@@ -5,6 +5,8 @@ import { WorkoutSessionService } from './workout-session.service';
 import { SessionSetService } from './session-set.service';
 import { WorkoutController } from './workout.controller';
 import { AddExerciseToPlanTool } from './mcp/add-exercise-to-plan.tool';
+import { ExplainFormTool } from './mcp/explain-form.tool';
+import { GetExerciseDetailsTool } from './mcp/get-exercise-details.tool';
 import { CreateCustomExerciseTool } from './mcp/create-custom-exercise.tool';
 import { CreateWorkoutPlanTool } from './mcp/create-workout-plan.tool';
 import { DeleteCustomExerciseTool } from './mcp/delete-custom-exercise.tool';
@@ -41,6 +43,8 @@ import { UpdateWorkoutPlanTool } from './mcp/update-workout-plan.tool';
 
     // MCP tools
     AddExerciseToPlanTool,
+    ExplainFormTool,
+    GetExerciseDetailsTool,
     CreateCustomExerciseTool,
     CreateWorkoutPlanTool,
     DeleteCustomExerciseTool,

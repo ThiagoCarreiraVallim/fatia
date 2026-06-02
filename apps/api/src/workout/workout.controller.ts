@@ -50,6 +50,11 @@ export class WorkoutController {
     return this.exercises.search(user.id, q);
   }
 
+  @Get('exercises/:id')
+  getExercise(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseIntPipe) id: number) {
+    return this.exercises.get(user.id, id);
+  }
+
   @Post('exercises')
   createExercise(@CurrentUser() user: CurrentUserPayload, @Body() dto: CreateCustomExerciseDto) {
     return this.exercises.createCustom(user.id, dto);

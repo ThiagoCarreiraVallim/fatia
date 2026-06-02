@@ -47,6 +47,19 @@ export class ExerciseService {
     return ex;
   }
 
+  async findByName(userId: string, name: string) {
+    const results = await this.prisma.exercise.findMany({
+      where: {
+        ...this.accessFilter(userId),
+        name: { contains: name, mode: 'insensitive' },
+      },
+      orderBy: { name: 'asc' },
+      take: 5,
+    });
+    if (results.length === 0) throw new NotFoundException(`Exercise not found: ${name}`);
+    return results;
+  }
+
   async createCustom(userId: string, dto: CreateCustomExerciseDto) {
     try {
       return await this.prisma.exercise.create({
