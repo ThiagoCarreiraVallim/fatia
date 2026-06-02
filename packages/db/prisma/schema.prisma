@@ -202,12 +202,20 @@ model MealItem {
 // ============================================================
 
 model Exercise {
-  id              Int      @id @default(autoincrement())
-  name            String
-  muscleGroup     String // "peito", "costas", "pernas", "ombro", "braço", "core", "cardio"
+  id               Int      @id @default(autoincrement())
+  name             String
+  muscleGroup      String   // "peito", "costas", "pernas", "ombro", "braço", "core", "cardio"
+  primaryMuscles   String[]
+  secondaryMuscles String[]
+  equipment        String?
+  level            String?  // "beginner" | "intermediate" | "advanced"
+  mechanic         String?  // "compound" | "isolation"
+  instructions     String[]
+  youtubeVideoId   String?
+  youtubeVideoIdPt String?
   // Para exercícios custom: dono. Null = catálogo público.
-  createdByUserId String?
-  createdAt       DateTime @default(now())
+  createdByUserId  String?
+  createdAt        DateTime @default(now())
 
   createdBy     User?                 @relation("UserCustomExercises", fields: [createdByUserId], references: [id], onDelete: Cascade)
   planExercises WorkoutPlanExercise[]

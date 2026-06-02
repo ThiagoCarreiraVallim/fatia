@@ -19,6 +19,14 @@ export interface Exercise {
   muscleGroup: MuscleGroup;
   source: ExerciseSource;
   createdByUserId: string | null;
+  primaryMuscles: string[];
+  secondaryMuscles: string[];
+  equipment: string | null;
+  level: string | null;
+  mechanic: string | null;
+  instructions: string[];
+  youtubeVideoId: string | null;
+  youtubeVideoIdPt: string | null;
 }
 
 export interface SessionSet {
