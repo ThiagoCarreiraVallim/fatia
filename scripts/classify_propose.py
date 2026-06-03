@@ -17,12 +17,12 @@ def classify_front(p):
     is_arm = arm>0.35 or cx<30 or cx>70
     if is_arm:
         if cy>=47 or (far>0.6 and cy>43): return None  # mao
-        if cy<28: return "shoulders"           # deltoide
-        if cy<40: return "biceps"
-        return "forearms"
+        if cy<26: return "shoulders"           # deltoide (so a capa)
+        if cy<35: return "biceps"              # braco superior
+        return "forearms"                       # antebraco (cotovelo->pulso)
     if cy<17: return "neck"
-    if cy<30: return "chest"
-    if cy<49: return "abdominals"
+    if cy<29: return "chest"                    # peitorais
+    if cy<48: return "abdominals"               # abdomen (reto+obliquos)
     if cy<60: return "adductors" if 40<cx<60 else "quadriceps"
     if cy<76: return "quadriceps"
     return "calves"
@@ -91,7 +91,7 @@ def isolate_grid(side):
     for mus in muscles:
         tr=ET.parse(path); rt=tr.getroot(); e2=targets(rt)
         for i,el in enumerate(e2):
-            el.set("fill", "#ef4444" if labels[i]==mus else "#cfcfcf")
+            if labels[i]==mus: el.set("fill", "#ef4444")  # resto fica na cor original (como o app)
         png=cairosvg.svg2png(bytestring=ET.tostring(rt),output_width=200)
         im=Image.open(io.BytesIO(png)).convert("RGBA")
         bg=Image.new("RGBA",im.size,"white"); bg.alpha_composite(im)
