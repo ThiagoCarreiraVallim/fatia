@@ -45,6 +45,14 @@ export function StrengthChart({ days }: { days: number }) {
         muscleGroup: top.muscleGroup,
         source: 'SEED',
         createdByUserId: null,
+        primaryMuscles: [],
+        secondaryMuscles: [],
+        equipment: null,
+        level: null,
+        mechanic: null,
+        instructions: [],
+        youtubeVideoId: null,
+        youtubeVideoIdPt: null,
       });
     }
   }, [records.data, exercise]);
