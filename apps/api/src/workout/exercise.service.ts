@@ -76,8 +76,19 @@ export class ExerciseService {
   async updateCustom(userId: string, id: number, dto: UpdateCustomExerciseDto) {
     const ex = await this.prisma.exercise.findUnique({ where: { id } });
     if (!ex) throw new NotFoundException('Exercise not found');
-    if (ex.createdByUserId !== userId) throw new ForbiddenException();
-    return this.prisma.exercise.update({ where: { id }, data: dto });
+    // Permite enriquecer/editar: exercício custom do próprio usuário OU exercício
+    // do catálogo (createdByUserId === null). Bloqueia só o custom de OUTRO usuário.
+    if (ex.createdByUserId !== null && ex.createdByUserId !== userId) {
+      throw new ForbiddenException();
+    }
+    try {
+      return await this.prisma.exercise.update({ where: { id }, data: dto });
+    } catch (err: unknown) {
+      if ((err as { code?: string })?.code === 'P2002') {
+        throw new ConflictException('Exercise name already in use');
+      }
+      throw err;
+    }
   }
 
   async deleteCustom(userId: string, id: number): Promise<void> {

@@ -168,12 +168,28 @@ describe('ExerciseService', () => {
       );
     });
 
-    it('throws ForbiddenException when trying to update a built-in (public) exercise', async () => {
-      // Public exercises have createdByUserId === null, which !== userId.
+    it('allows enriching a built-in (public) catalog exercise', async () => {
+      // Catalog exercises (createdByUserId === null) podem ser enriquecidos/traduzidos.
       prisma.exercise.findUnique.mockResolvedValue(makeExercise({ createdByUserId: null }));
+      prisma.exercise.update.mockResolvedValue(makeExercise({ name: 'Supino reto com barra' }));
 
-      await expect(service.updateCustom(userId, 1, { name: 'X' })).rejects.toThrow(
-        ForbiddenException,
+      await service.updateCustom(userId, 1, {
+        name: 'Supino reto com barra',
+        primaryMuscles: ['chest'],
+      });
+
+      expect(prisma.exercise.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: { name: 'Supino reto com barra', primaryMuscles: ['chest'] },
+      });
+    });
+
+    it('throws ConflictException when renaming to a name already in use', async () => {
+      prisma.exercise.findUnique.mockResolvedValue(makeExercise({ createdByUserId: userId }));
+      prisma.exercise.update.mockRejectedValue({ code: 'P2002' });
+
+      await expect(service.updateCustom(userId, 1, { name: 'Dup' })).rejects.toThrow(
+        ConflictException,
       );
     });
   });
