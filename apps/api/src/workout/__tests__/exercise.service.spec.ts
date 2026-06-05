@@ -168,19 +168,32 @@ describe('ExerciseService', () => {
       );
     });
 
-    it('allows enriching a built-in (public) catalog exercise', async () => {
-      // Catalog exercises (createdByUserId === null) podem ser enriquecidos/traduzidos.
+    it('throws ForbiddenException for a base (public) exercise — base é só-leitura', async () => {
       prisma.exercise.findUnique.mockResolvedValue(makeExercise({ createdByUserId: null }));
-      prisma.exercise.update.mockResolvedValue(makeExercise({ name: 'Supino reto com barra' }));
+
+      await expect(service.updateCustom(userId, 1, { name: 'X' })).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(prisma.exercise.update).not.toHaveBeenCalled();
+    });
+
+    it('fully edits the own custom exercise (enrichment fields)', async () => {
+      prisma.exercise.findUnique.mockResolvedValue(makeExercise({ createdByUserId: userId }));
+      prisma.exercise.update.mockResolvedValue(makeExercise({ createdByUserId: userId }));
 
       await service.updateCustom(userId, 1, {
-        name: 'Supino reto com barra',
+        name: 'Supino reto',
         primaryMuscles: ['chest'],
+        instructions: ['Deite no banco', 'Empurre a barra'],
       });
 
       expect(prisma.exercise.update).toHaveBeenCalledWith({
         where: { id: 1 },
-        data: { name: 'Supino reto com barra', primaryMuscles: ['chest'] },
+        data: {
+          name: 'Supino reto',
+          primaryMuscles: ['chest'],
+          instructions: ['Deite no banco', 'Empurre a barra'],
+        },
       });
     });
 
@@ -190,6 +203,63 @@ describe('ExerciseService', () => {
 
       await expect(service.updateCustom(userId, 1, { name: 'Dup' })).rejects.toThrow(
         ConflictException,
+      );
+    });
+  });
+
+  describe('cloneForEdit', () => {
+    it('creates an editable copy of a base exercise (owned by user, clonedFromId set)', async () => {
+      prisma.exercise.findFirst
+        .mockResolvedValueOnce(
+          makeExercise({ id: 5, createdByUserId: null, primaryMuscles: ['chest'] }),
+        ) // base
+        .mockResolvedValueOnce(null); // sem cópia ainda
+      prisma.exercise.create.mockResolvedValue(
+        makeExercise({ id: 9, createdByUserId: userId, clonedFromId: 5 }),
+      );
+
+      await service.cloneForEdit(userId, 5, { name: 'Meu supino' });
+
+      const arg = prisma.exercise.create.mock.calls[0][0];
+      expect(arg.data).toMatchObject({
+        createdByUserId: userId,
+        clonedFromId: 5,
+        name: 'Meu supino',
+        primaryMuscles: ['chest'],
+      });
+      expect(arg.data.id).toBeUndefined();
+    });
+
+    it('returns the existing copy if the user already cloned that base', async () => {
+      prisma.exercise.findFirst
+        .mockResolvedValueOnce(makeExercise({ id: 5, createdByUserId: null })) // base
+        .mockResolvedValueOnce(makeExercise({ id: 9, createdByUserId: userId, clonedFromId: 5 })); // cópia
+
+      const result = await service.cloneForEdit(userId, 5);
+
+      expect(result).toMatchObject({ id: 9 });
+      expect(prisma.exercise.create).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when the base does not exist / not visible', async () => {
+      prisma.exercise.findFirst.mockResolvedValueOnce(null);
+
+      await expect(service.cloneForEdit(userId, 999)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('search shadowing', () => {
+    it('hides base exercises the user has already cloned (relation filter)', async () => {
+      prisma.exercise.findMany.mockResolvedValue([]);
+
+      await service.search(userId, {});
+
+      expect(prisma.exercise.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            NOT: { clones: { some: { createdByUserId: userId } } },
+          }),
+        }),
       );
     });
   });

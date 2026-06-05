@@ -7,6 +7,7 @@ import { WorkoutController } from './workout.controller';
 import { AddExerciseToPlanTool } from './mcp/add-exercise-to-plan.tool';
 import { ExplainFormTool } from './mcp/explain-form.tool';
 import { GetExerciseDetailsTool } from './mcp/get-exercise-details.tool';
+import { CloneExerciseTool } from './mcp/clone-exercise.tool';
 import { CreateCustomExerciseTool } from './mcp/create-custom-exercise.tool';
 import { CreateWorkoutPlanTool } from './mcp/create-workout-plan.tool';
 import { DeleteCustomExerciseTool } from './mcp/delete-custom-exercise.tool';
@@ -45,6 +46,7 @@ import { UpdateWorkoutPlanTool } from './mcp/update-workout-plan.tool';
     AddExerciseToPlanTool,
     ExplainFormTool,
     GetExerciseDetailsTool,
+    CloneExerciseTool,
     CreateCustomExerciseTool,
     CreateWorkoutPlanTool,
     DeleteCustomExerciseTool,
