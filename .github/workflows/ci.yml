@@ -157,6 +157,11 @@ jobs:
       - name: Prisma validate
         run: pnpm --filter @fatia/db exec prisma validate
 
+      - name: Create Prisma shadow database
+        # migrate diff usa o shadow DB como scratch e exige que ele exista
+        # (o serviço postgres só cria fatia_prisma via POSTGRES_DB).
+        run: PGPASSWORD=postgres psql -h localhost -U postgres -d postgres -c 'CREATE DATABASE fatia_prisma_shadow;'
+
       - name: Prisma migrate diff (detect schema drift)
         run: |
           pnpm --filter @fatia/db exec prisma migrate diff \
