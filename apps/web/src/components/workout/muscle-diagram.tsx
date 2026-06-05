@@ -22,26 +22,28 @@ export function MuscleDiagram({
       const doc = obj.contentDocument;
       if (!doc) return;
 
-      // Reset all muscle groups to dimmed
-      doc.querySelectorAll('g[data-muscle]').forEach((el) => {
-        (el as SVGElement).style.opacity = '0.2';
-        (el as SVGElement).style.fill = '';
-      });
+      // Os paths do SVG têm fill próprio (presentation attribute), que vence o
+      // fill herdado do <g>. Por isso pintamos/limpamos o fill em cada path
+      // descendente (inline style sobrescreve o attribute).
+      const paint = (group: Element, color: string | null) => {
+        (group as SVGElement).style.opacity = color ? '1' : '0.2';
+        group.querySelectorAll('path, polygon, rect, circle, ellipse').forEach((shape) => {
+          if (color) (shape as SVGElement).style.fill = color;
+          else (shape as SVGElement).style.removeProperty('fill');
+        });
+      };
 
-      // Highlight secondary muscles
+      // Reset: todos os grupos esmaecidos e sem cor
+      doc.querySelectorAll('g[data-muscle]').forEach((el) => paint(el, null));
+
+      // Secundários (laranja)
       secondaryMuscles.forEach((muscle) => {
-        doc.querySelectorAll(`g[data-muscle="${muscle}"]`).forEach((el) => {
-          (el as SVGElement).style.opacity = '1';
-          (el as SVGElement).style.fill = '#f97316';
-        });
+        doc.querySelectorAll(`g[data-muscle="${muscle}"]`).forEach((el) => paint(el, '#f97316'));
       });
 
-      // Highlight primary muscles (overwrites secondary if same)
+      // Primários (vermelho) — sobrescreve secundários no mesmo grupo
       primaryMuscles.forEach((muscle) => {
-        doc.querySelectorAll(`g[data-muscle="${muscle}"]`).forEach((el) => {
-          (el as SVGElement).style.opacity = '1';
-          (el as SVGElement).style.fill = '#ef4444';
-        });
+        doc.querySelectorAll(`g[data-muscle="${muscle}"]`).forEach((el) => paint(el, '#ef4444'));
       });
     };
 
