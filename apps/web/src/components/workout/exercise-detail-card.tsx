@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { workoutApi, type SessionSet, type WorkoutPlanExercise } from '@/lib/api/workout';
 import { SetRow } from './set-row';
+import { ExerciseDetailDrawer } from './exercise-detail-drawer';
 
 interface PlanItemLike {
   id: string;
@@ -41,12 +42,33 @@ interface SessionCardProps {
 type Props = PlanCardProps | SessionCardProps;
 
 function Header({ item, isCardio }: { item: PlanItemLike; isCardio?: boolean }) {
+  const [open, setOpen] = useState(false);
+  // Busca o exercício completo (com primaryMuscles, vídeo, instruções) só ao abrir,
+  // pois em telas de sessão o item.exercise pode vir como stub sem esses campos.
+  const detail = useQuery({
+    queryKey: ['workout', 'exercise', item.exercise.id],
+    queryFn: () => workoutApi.getExercise(item.exercise.id),
+    enabled: open,
+  });
+
   return (
     <div className="flex gap-3">
-      <div className="relative flex h-20 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted">
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={`Ver detalhes de ${item.exercise.name}`}
+        className="relative flex h-20 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted transition hover:opacity-90"
+      >
         <div className="absolute inset-0 bg-gradient-to-br from-black/50 to-transparent" />
         <Play size={20} fill="white" className="relative text-white" />
-      </div>
+      </button>
+      <ExerciseDetailDrawer
+        exercise={detail.data ?? null}
+        open={open && !!detail.data}
+        onOpenChange={(o) => {
+          if (!o) setOpen(false);
+        }}
+      />
       <div className="flex-1 min-w-0">
         <h3 className="text-base font-extrabold leading-tight text-foreground">
           {item.exercise.name}

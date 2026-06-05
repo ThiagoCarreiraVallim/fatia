@@ -186,6 +186,7 @@ export const workoutApi = {
     const query = qs.toString();
     return apiFetch<Exercise[]>(`/api/workout/exercises${query ? `?${query}` : ''}`);
   },
+  getExercise: (id: number) => apiFetch<Exercise>(`/api/workout/exercises/${id}`),
   getLastSet: (exerciseId: number) =>
     apiFetch<SessionSet | null>(`/api/workout/exercises/${exerciseId}/last-set`),
   getPersonalRecord: (exerciseId: number) =>
