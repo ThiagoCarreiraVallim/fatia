@@ -19,14 +19,6 @@ import * as path from 'path';
 
 const prisma = new PrismaClient();
 
-const ALLOWED_CATEGORIES = new Set([
-  'strength',
-  'powerlifting',
-  'olympic weightlifting',
-  'plyometrics',
-]);
-const MAX_EXERCISES = 300;
-
 const EQUIPMENT_PT: Record<string, string> = {
   'body only': 'peso corporal',
   barbell: 'barra',
@@ -42,7 +34,8 @@ const EQUIPMENT_PT: Record<string, string> = {
   other: 'outro',
 };
 
-function toMuscleGroup(primaryMuscles: string[]): string {
+function toMuscleGroup(primaryMuscles: string[], category: string): string {
+  if (category === 'cardio') return 'cardio';
   const m = (primaryMuscles[0] ?? '').toLowerCase();
   if (m === 'chest') return 'peito';
   if (['lats', 'middle back', 'lower back', 'traps'].includes(m)) return 'costas';
@@ -67,10 +60,8 @@ interface PtExercise {
 
 export async function runSeedExercises() {
   const dataPath = path.join(__dirname, 'data', 'exercises-ptbr.json');
-  const raw: PtExercise[] = JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
-  const items = raw
-    .filter((e) => ALLOWED_CATEGORIES.has(e.category) && e.equipment != null)
-    .slice(0, MAX_EXERCISES);
+  // Usa TODOS os exercícios, de TODAS as categorias.
+  const items: PtExercise[] = JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
 
   let created = 0;
   let updated = 0;
@@ -79,7 +70,7 @@ export async function runSeedExercises() {
   for (const ex of items) {
     keepNames.add(ex.name);
     const data = {
-      muscleGroup: toMuscleGroup(ex.primaryMuscles),
+      muscleGroup: toMuscleGroup(ex.primaryMuscles, ex.category),
       primaryMuscles: ex.primaryMuscles,
       secondaryMuscles: ex.secondaryMuscles,
       equipment: ex.equipment ? (EQUIPMENT_PT[ex.equipment] ?? ex.equipment) : null,
