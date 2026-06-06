@@ -29,6 +29,21 @@ export interface Exercise {
   youtubeVideoIdPt: string | null;
 }
 
+// Campos editáveis de um exercício (custom ou cópia). Músculos devem usar as chaves
+// em inglês do diagrama (chest, abdominals, ...).
+export type ExerciseEditInput = Partial<{
+  name: string;
+  muscleGroup: MuscleGroup;
+  primaryMuscles: string[];
+  secondaryMuscles: string[];
+  equipment: string;
+  level: string;
+  mechanic: string;
+  instructions: string[];
+  youtubeVideoId: string;
+  youtubeVideoIdPt: string;
+}>;
+
 export interface SessionSet {
   id: string;
   sessionId: string;
@@ -187,6 +202,17 @@ export const workoutApi = {
     return apiFetch<Exercise[]>(`/api/workout/exercises${query ? `?${query}` : ''}`);
   },
   getExercise: (id: number) => apiFetch<Exercise>(`/api/workout/exercises/${id}`),
+  updateExercise: (id: number, body: ExerciseEditInput) =>
+    apiFetch<Exercise>(`/api/workout/exercises/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  // Cria (ou reaproveita) a cópia editável de um exercício base. Retorna a cópia (custom).
+  cloneExercise: (id: number, body?: ExerciseEditInput) =>
+    apiFetch<Exercise>(`/api/workout/exercises/${id}/clone`, {
+      method: 'POST',
+      body: JSON.stringify(body ?? {}),
+    }),
   getLastSet: (exerciseId: number) =>
     apiFetch<SessionSet | null>(`/api/workout/exercises/${exerciseId}/last-set`),
   getPersonalRecord: (exerciseId: number) =>

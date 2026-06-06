@@ -69,6 +69,17 @@ export class WorkoutController {
     return this.exercises.updateCustom(user.id, id, dto);
   }
 
+  // Cria (ou reaproveita) uma cópia editável de um exercício base. Aceita overrides
+  // opcionais no body (editar já no clone). A base some das listagens do usuário.
+  @Post('exercises/:id/clone')
+  cloneExercise(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateCustomExerciseDto,
+  ) {
+    return this.exercises.cloneForEdit(user.id, id, dto);
+  }
+
   @Delete('exercises/:id')
   @HttpCode(204)
   deleteExercise(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseIntPipe) id: number) {

@@ -215,9 +215,14 @@ model Exercise {
   youtubeVideoIdPt String?
   // Para exercícios custom: dono. Null = catálogo público.
   createdByUserId  String?
+  // Se esta é uma cópia editável de um exercício base, aponta para o base de origem.
+  // A base correspondente é escondida das listagens do usuário (a cópia a substitui).
+  clonedFromId     Int?
   createdAt        DateTime @default(now())
 
   createdBy     User?                 @relation("UserCustomExercises", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  clonedFrom    Exercise?             @relation("ExerciseClones", fields: [clonedFromId], references: [id], onDelete: SetNull)
+  clones        Exercise[]            @relation("ExerciseClones")
   planExercises WorkoutPlanExercise[]
   sessionSets   SessionSet[]
 
@@ -225,6 +230,7 @@ model Exercise {
   @@index([name])
   @@index([muscleGroup])
   @@index([createdByUserId])
+  @@index([clonedFromId])
 }
 
 model WorkoutPlan {
