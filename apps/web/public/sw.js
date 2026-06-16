@@ -1,8 +1,15 @@
 // Service worker básico — cache de assets estáticos.
 // Não cacheia requests à API (/api/*) pra evitar dados nutricionais defasados.
 
-const CACHE = 'fatia-static-v1';
-const PRECACHE = ['/', '/manifest.json', '/icons/icon.png'];
+const CACHE = 'fatia-static-v2';
+const PRECACHE = [
+  '/',
+  '/manifest.json',
+  '/icons/icon.png',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/icon-maskable-512.png',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)));
