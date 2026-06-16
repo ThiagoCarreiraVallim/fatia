@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { BottomNav } from '@/components/layout/bottom-nav';
 import { TopBar } from '@/components/layout/top-bar';
+import { PwaInstallPrompt } from '@/components/pwa-install-prompt';
 import { getCurrentUser } from '@/lib/auth-server';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -12,6 +13,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <TopBar />
       <main className="flex-1 pt-16 pb-24">{children}</main>
       <BottomNav />
+      <PwaInstallPrompt />
     </div>
   );
 }
