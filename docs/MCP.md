@@ -104,6 +104,8 @@ Listagens com potencial de crescer usam cursor-based:
 | **Perfil**                | `get_me`                     | R        |
 |                           | `update_me`                  | U        |
 |                           | `update_timezone`            | U        |
+| **Conta (LGPD)**          | `export_my_data`             | R        |
+|                           | `delete_my_account`          | D        |
 | **Metas (macros)**        | `get_nutrition_goals`        | R        |
 |                           | `set_nutrition_goals`        | C/U      |
 | **Metas pessoais**        | `create_goal`                | C        |
@@ -187,7 +189,7 @@ Listagens com potencial de crescer usam cursor-based:
 | **Dashboard**             | `get_today_summary`          | R        |
 |                           | `get_week_summary`           | R        |
 
-Total: **85 tools**. Cada uma documentada abaixo.
+Total: **87 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -247,6 +249,87 @@ Atualiza fuso horário do usuário. Afeta interpretação de "hoje" em todas as 
 ```
 
 **Output:** `{ timezone: string }`
+
+---
+
+## Conta e dados (LGPD)
+
+Portabilidade e eliminação, expostos como tools para o usuário exercer os dois direitos
+conversando com o Claude. Também disponíveis via REST: `GET /users/me/export` e
+`DELETE /users/me`.
+
+### `export_my_data`
+
+Exporta **todos** os dados do usuário em JSON: perfil, metas (macros, nutrientes e pessoais),
+refeições com itens, treinos com séries, peso, passos, hidratação, e os alimentos e exercícios
+custom que ele criou.
+
+O catálogo público (TACO e exercícios base) **não** vai no export: não é dado pessoal e
+inflaria o payload sem informação sobre o usuário.
+
+**Input:** `{}`
+
+**Output:**
+
+```typescript
+{
+  exportedAt: string;        // gerado no servidor
+  format: 'fatia-export-v1';
+  user: { id, email, name, role, timezone, heightCm, createdAt, updatedAt };
+  nutritionGoals: UserGoals | null;
+  nutrientTargets: NutrientTarget[];
+  personalGoals: Goal[];
+  meals: Array<Meal & { items: MealItem[] }>;
+  customFoods: Food[];
+  customExercises: Exercise[];
+  workoutPlans: Array<WorkoutPlan & { exercises: [...] }>;
+  workoutSessions: Array<WorkoutSession & { sets: [...] }>;
+  weightLogs: WeightLog[];
+  stepLogs: StepLog[];
+  waterLogs: WaterLog[];
+  counts: { meals: number; weightLogs: number; /* ... */ };
+}
+```
+
+> `counts` existe para o cliente resumir ("você tem 412 refeições registradas") sem varrer o
+> payload inteiro. `logtoSub` **não** é exportado — é identificador de infraestrutura de auth,
+> não dado do usuário.
+
+### `delete_my_account`
+
+Apaga permanentemente a conta e **todos** os dados. Irreversível.
+
+**Input:**
+
+```typescript
+{
+  confirmation: 'DELETAR MINHA CONTA'; // exato, incluindo caixa
+}
+```
+
+**Output:**
+
+```typescript
+{
+  deleted: true;
+  logtoIdentityDeleted: boolean;
+  message: string;
+}
+```
+
+**Erros:** `INVALID_INPUT` se a `confirmation` não for exata — é a trava contra deleção
+acidental, e caixa e espaços importam.
+
+> **Protocolo esperado do cliente:** confirmar em texto claro com o usuário, oferecer
+> `export_my_data` antes, e só então chamar. A tool nunca deve ser disparada a partir de uma
+> frase ambígua.
+>
+> A deleção no Postgres é garantida pelos `onDelete: Cascade` a partir de `User`. A identidade
+> no Logto é apagada **antes** do registro local: se fosse depois e o Logto falhasse, a
+> identidade órfã reprovisionaria uma conta vazia no próximo login em vez de mostrar um erro.
+> Quando as credenciais da Management API do Logto não estão configuradas,
+> `logtoIdentityDeleted` volta `false` — os dados locais são apagados normalmente e a
+> identidade remanescente não dá acesso a nada.
 
 ---
 

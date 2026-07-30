@@ -6,6 +6,7 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { OAuthDiscoveryController } from './oauth-discovery.controller';
 import { OAuthFacadeController } from './oauth-facade.controller';
 import { OAuthFacadeService } from './oauth-facade.service';
+import { LogtoManagementService } from './logto-management.service';
 
 @Module({
   controllers: [OAuthDiscoveryController, OAuthFacadeController],
@@ -14,11 +15,12 @@ import { OAuthFacadeService } from './oauth-facade.service';
     UserProvisioningService,
     JwtAuthGuard,
     OAuthFacadeService,
+    LogtoManagementService,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
     },
   ],
-  exports: [JwtValidationService, UserProvisioningService, JwtAuthGuard],
+  exports: [JwtValidationService, UserProvisioningService, JwtAuthGuard, LogtoManagementService],
 })
 export class AuthModule {}
