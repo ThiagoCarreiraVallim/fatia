@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { WorkoutSessionService } from '../workout-session.service';
 import type { PrismaService } from '../../common/prisma.service';
@@ -288,7 +288,7 @@ describe('WorkoutSessionService', () => {
         completedAt: null,
       });
 
-      await expect(service.finish(userId, 'sess-1', {})).rejects.toThrow(ForbiddenException);
+      await expect(service.finish(userId, 'sess-1', {})).rejects.toThrow(NotFoundException);
       expect(prisma.workoutSession.update).not.toHaveBeenCalled();
     });
   });
@@ -344,10 +344,13 @@ describe('WorkoutSessionService', () => {
       await expect(service.delete(userId, 'sess-1')).resolves.toBeUndefined();
     });
 
-    it('throws ForbiddenException when the session belongs to another user', async () => {
+    // O delete é idempotente: "já não existe" é sucesso vazio. Sessão de outro
+    // usuário responde igual, para não revelar que o id existe em outra conta.
+    // O que garante o isolamento é o delete nunca ser chamado.
+    it('no-op silencioso quando a sessão pertence a outro usuário', async () => {
       prisma.workoutSession.findUnique.mockResolvedValue({ userId: 'user-B' });
 
-      await expect(service.delete(userId, 'sess-1')).rejects.toThrow(ForbiddenException);
+      await expect(service.delete(userId, 'sess-1')).resolves.toBeUndefined();
       expect(prisma.workoutSession.delete).not.toHaveBeenCalled();
     });
   });

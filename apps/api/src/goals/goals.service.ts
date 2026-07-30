@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Goal, GoalKind, GoalStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { WeightLogService } from '../progress/weight-log.service';
@@ -88,8 +88,8 @@ export class GoalsService {
 
   private async assertOwned(id: string, userId: string) {
     const goal = await this.prisma.goal.findUnique({ where: { id } });
-    if (!goal) throw new NotFoundException('Goal not found');
-    if (goal.userId !== userId) throw new ForbiddenException();
+    // Mesma resposta para "não existe" e "não é sua" (§IDs de docs/MCP.md).
+    if (!goal || goal.userId !== userId) throw new NotFoundException('Goal not found');
     return goal;
   }
 

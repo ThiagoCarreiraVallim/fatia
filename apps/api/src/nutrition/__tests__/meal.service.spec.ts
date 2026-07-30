@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { MealType } from '@prisma/client';
 import { MealService } from '../meal.service';
 import type { PrismaService } from '../../common/prisma.service';
@@ -107,9 +107,11 @@ describe('MealService', () => {
       expect(item).toMatchObject({ kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 });
     });
 
-    it('throws ForbiddenException when a free-form item is missing foodName', async () => {
+    // Falta de foodName é erro de input, não de autorização: precisa cair em
+    // INVALID_INPUT no mapeamento MCP, não em UNAUTHORIZED.
+    it('throws BadRequestException when a free-form item is missing foodName', async () => {
       await expect(service.resolveItems(userId, [{ grams: 50 }])).rejects.toThrow(
-        ForbiddenException,
+        BadRequestException,
       );
     });
 
@@ -378,11 +380,11 @@ describe('MealService', () => {
       );
     });
 
-    it('throws ForbiddenException when user A tries to edit user B meal', async () => {
+    it('throws NotFoundException when user A tries to edit user B meal', async () => {
       prisma.meal.findUnique.mockResolvedValue({ userId: 'user-B' });
 
       await expect(service.update(userId, 'meal-1', { mealType: MealType.LUNCH })).rejects.toThrow(
-        ForbiddenException,
+        NotFoundException,
       );
       expect(prisma.meal.update).not.toHaveBeenCalled();
     });
@@ -406,10 +408,10 @@ describe('MealService', () => {
       expect(prisma.meal.delete).toHaveBeenCalledWith({ where: { id: 'meal-1' } });
     });
 
-    it('throws ForbiddenException when the meal belongs to another user', async () => {
+    it('throws NotFoundException when the meal belongs to another user', async () => {
       prisma.meal.findUnique.mockResolvedValue({ userId: 'user-B' });
 
-      await expect(service.delete(userId, 'meal-1')).rejects.toThrow(ForbiddenException);
+      await expect(service.delete(userId, 'meal-1')).rejects.toThrow(NotFoundException);
       expect(prisma.meal.delete).not.toHaveBeenCalled();
     });
 

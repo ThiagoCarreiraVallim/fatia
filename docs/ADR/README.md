@@ -14,6 +14,8 @@ Decisões arquiteturais relevantes do projeto. Cada ADR é imutável depois de a
 | [006](./006-mcp-first.md)                           | MCP como interface primária e completa                   | Accepted             |
 | [007](./007-passos-manuais-com-schema-preparado.md) | Passos manuais na v1, integrações preparadas mas adiadas | Accepted             |
 | [008](./008-logto-oidc-provider.md)                 | Logto como provider OIDC, substituindo auth manual       | Accepted             |
+| [009](./009-metas-nutricionais-personalizadas.md)   | Metas de nutrição personalizadas (nutrientes via Json)   | Accepted             |
+| [010](./010-row-level-security.md)                  | Row-Level Security no Postgres: não agora                | Accepted             |
 
 ## Template
 

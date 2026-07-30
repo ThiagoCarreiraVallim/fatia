@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, StepSource } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import type { CreateStepLogDto, ListStepLogsDto, UpdateStepLogDto } from './dto/step-log.dto';
@@ -44,8 +44,8 @@ export class StepLogService {
 
   async delete(id: string, userId: string) {
     const log = await this.prisma.stepLog.findUnique({ where: { id } });
-    if (!log) throw new NotFoundException('Step log not found');
-    if (log.userId !== userId) throw new ForbiddenException();
+    // Mesma resposta para "não existe" e "não é seu" (§IDs de docs/MCP.md).
+    if (!log || log.userId !== userId) throw new NotFoundException('Step log not found');
     await this.prisma.stepLog.delete({ where: { id } });
     return { deleted: true as const };
   }

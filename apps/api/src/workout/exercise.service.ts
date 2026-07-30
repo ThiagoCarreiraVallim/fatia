@@ -1,9 +1,4 @@
-import {
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import type {
   CreateCustomExerciseDto,
@@ -90,8 +85,17 @@ export class ExerciseService {
     const ex = await this.prisma.exercise.findUnique({ where: { id } });
     if (!ex) throw new NotFoundException('Exercise not found');
     // Exercícios base (createdByUserId === null) são SÓ-LEITURA: para editar um base,
-    // o usuário deve cloná-lo (cloneForEdit) e editar a cópia. Aqui só edita o próprio custom.
-    if (ex.createdByUserId !== userId) throw new ForbiddenException();
+    // o usuário deve cloná-lo (cloneForEdit) e editar a cópia. A mensagem é
+    // explícita porque o catálogo base é público — não há existência a esconder,
+    // e dizer o caminho evita o cliente ficar tentando.
+    if (ex.createdByUserId === null) {
+      throw new ConflictException(
+        'Exercício do catálogo base é somente leitura. Use clone_exercise para criar uma cópia editável e edite a cópia.',
+      );
+    }
+    // Custom de outro usuário responde como inexistente: os IDs de Exercise são
+    // inteiros sequenciais, então distinguir vazaria a existência (#92).
+    if (ex.createdByUserId !== userId) throw new NotFoundException('Exercise not found');
     try {
       return await this.prisma.exercise.update({ where: { id }, data: dto });
     } catch (err: unknown) {
@@ -151,7 +155,14 @@ export class ExerciseService {
   async deleteCustom(userId: string, id: number): Promise<void> {
     const ex = await this.prisma.exercise.findUnique({ where: { id } });
     if (!ex) throw new NotFoundException('Exercise not found');
-    if (ex.createdByUserId !== userId) throw new ForbiddenException();
+    // Ver updateCustom: base é público e a mensagem pode ser explícita; custom de
+    // outro usuário responde como inexistente.
+    if (ex.createdByUserId === null) {
+      throw new ConflictException(
+        'Exercício do catálogo base não pode ser removido. Ele é compartilhado entre todos os usuários.',
+      );
+    }
+    if (ex.createdByUserId !== userId) throw new NotFoundException('Exercise not found');
     const uses = await this.prisma.sessionSet.count({ where: { exerciseId: id } });
     if (uses > 0) throw new ConflictException('Exercise is in use by existing session sets');
     await this.prisma.exercise.delete({ where: { id } });

@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { FoodSource, type Food } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import type { CreateCustomFoodDto, SearchFoodDto, UpdateCustomFoodDto } from './dto/food.dto';
@@ -51,18 +51,20 @@ export class FoodService {
 
   async updateCustom(userId: string, id: number, dto: UpdateCustomFoodDto): Promise<Food> {
     const food = await this.prisma.food.findUnique({ where: { id } });
-    if (!food) throw new NotFoundException('Food not found');
-    if (food.source !== FoodSource.CUSTOM || food.createdByUserId !== userId) {
-      throw new ForbiddenException('Cannot edit this food');
+    // Alimento de outro usuário responde igual a inexistente. Os IDs de Food são
+    // inteiros sequenciais, então distinguir "existe mas não é seu" de "não
+    // existe" permitiria enumerar o catálogo privado alheio (#92).
+    if (!food || food.source !== FoodSource.CUSTOM || food.createdByUserId !== userId) {
+      throw new NotFoundException('Food not found');
     }
     return this.prisma.food.update({ where: { id }, data: dto });
   }
 
   async deleteCustom(userId: string, id: number): Promise<void> {
     const food = await this.prisma.food.findUnique({ where: { id } });
-    if (!food) throw new NotFoundException('Food not found');
-    if (food.source !== FoodSource.CUSTOM || food.createdByUserId !== userId) {
-      throw new ForbiddenException('Cannot delete this food');
+    // Ver updateCustom: resposta indistinguível para não permitir enumeração.
+    if (!food || food.source !== FoodSource.CUSTOM || food.createdByUserId !== userId) {
+      throw new NotFoundException('Food not found');
     }
     await this.prisma.food.delete({ where: { id } });
   }
