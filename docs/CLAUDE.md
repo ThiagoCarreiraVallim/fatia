@@ -10,24 +10,27 @@ Fatia é um app pessoal multi-usuário para tracking de nutrição e treino. Bac
 
 1. Leia `docs/PRD.md` para entender escopo e **não-escopo** (a lista negativa é importante)
 2. Leia `docs/ARCHITECTURE.md` para decisões técnicas já tomadas
-3. Confira `docs/TASKS.md` para ver onde a tarefa se encaixa
+3. Confira as [Issues](https://github.com/ThiagoCarreiraVallim/fatia/issues) para ver onde a tarefa se encaixa (`docs/TASKS.md` tem o mapa das épicas)
 4. Se vai mudar schema, leia `packages/db/prisma/schema.prisma` inteiro primeiro
 
 ## Princípios de código
 
 ### Geral
+
 - **YAGNI > DRY > Performance** nessa ordem para a v1
 - Não criar abstrações antes da segunda repetição real
 - Comentar o "porquê", nunca o "o quê"
 - Funções pequenas, propósito único
 
 ### TypeScript
+
 - `strict: true` sempre
 - Sem `any`. Se precisar, use `unknown` e narrow
 - Tipos explícitos em fronteiras (controllers, services públicos)
 - Inferência OK em locais
 
 ### NestJS
+
 - Um módulo por domínio (`AuthModule`, `NutritionModule`, `WorkoutModule`, `ProgressModule`, `McpModule`)
 - Controller → Service → Repository (Prisma)
 - DTOs com `class-validator` para REST, Zod para MCP
@@ -35,12 +38,14 @@ Fatia é um app pessoal multi-usuário para tracking de nutrição e treino. Bac
 - Services puros: recebem dados, retornam dados, não dependem de request
 
 ### Prisma
+
 - Migrations sempre via `prisma migrate dev` em desenvolvimento
 - Em produção: `prisma migrate deploy`
 - Migrations destrutivas exigem ADR (`docs/ADR/`)
 - Index nas colunas frequentemente filtradas (qualquer `[userId, X]`)
 
 ### Next.js
+
 - App Router com Server Components por padrão
 - Client Components só quando precisa de state/eventos
 - Forms com `react-hook-form` + Zod
@@ -48,7 +53,9 @@ Fatia é um app pessoal multi-usuário para tracking de nutrição e treino. Bac
 - Sem `localStorage` para dados de sessão (só preferências de UI)
 
 ### Estilo de commit
+
 Conventional Commits:
+
 ```
 feat(nutrition): add log_meal MCP tool
 fix(auth): expire JWT correctly on logout
@@ -58,7 +65,7 @@ docs(mcp): clarify search_food schema
 
 ## O que NÃO fazer
 
-- ❌ Adicionar features que não estão em `TASKS.md` sem discutir
+- ❌ Adicionar features que não têm issue aberta sem discutir
 - ❌ Criar tabelas novas sem atualizar `schema.prisma` + ADR se for grande
 - ❌ Hardcodar `userId` ou pular guards "temporariamente"
 - ❌ Commitar `.env`, secrets, ou tokens
@@ -135,11 +142,13 @@ apps/web/src/
 ## Política de testes
 
 **v1 (mínimo viável):**
+
 - Unit tests para services com lógica não-trivial (cálculo de macros, agregações)
 - Integration tests para guards (auth, isolamento por user)
 - Sem E2E, sem snapshot, sem coverage report
 
 **Teste obrigatório quando:**
+
 - Mexer em qualquer guard de autorização
 - Mudar lógica de cálculo de macros/totais
 - Adicionar tool MCP nova
@@ -152,7 +161,7 @@ Não é prioridade na v1. Não otimizar antes de medir. Postgres + índices em `
 
 Se você é o usuário pedindo ajuda ao Claude para implementar algo:
 
-1. Cite a task em `TASKS.md` por número
+1. Cite a issue por número
 2. Mostre arquivos relevantes (não cole o repo inteiro)
 3. Diga o que tentou e por que não funcionou
 4. Pergunte uma coisa por vez

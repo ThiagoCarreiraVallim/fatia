@@ -62,4 +62,4 @@ src/
 └── main.ts
 ```
 
-Veja `docs/TASKS.md` Fase 0.4 em diante para a ordem de implementação.
+A ordem de implementação vive nas [Issues](https://github.com/ThiagoCarreiraVallim/fatia/issues), organizadas por épica — veja `docs/TASKS.md` para o mapa.
