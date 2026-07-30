@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import type {
@@ -45,8 +45,8 @@ export class WeightLogService {
 
   async delete(id: string, userId: string) {
     const log = await this.prisma.weightLog.findUnique({ where: { id } });
-    if (!log) throw new NotFoundException('Weight log not found');
-    if (log.userId !== userId) throw new ForbiddenException();
+    // Mesma resposta para "não existe" e "não é seu" (§IDs de docs/MCP.md).
+    if (!log || log.userId !== userId) throw new NotFoundException('Weight log not found');
     await this.prisma.weightLog.delete({ where: { id } });
     return { deleted: true as const };
   }

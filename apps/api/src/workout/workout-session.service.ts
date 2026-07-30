@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import type {
@@ -113,8 +113,9 @@ export class WorkoutSessionService {
       where: { id },
       select: { userId: true },
     });
-    if (!session) return; // idempotente: nada a fazer
-    if (session.userId !== userId) throw new ForbiddenException();
+    // Sessão de outro usuário é tratada como inexistente — resposta idêntica ao
+    // "já não existe" para não revelar que o id existe em outra conta (#92).
+    if (!session || session.userId !== userId) return; // idempotente: nada a fazer
     try {
       await this.prisma.workoutSession.delete({ where: { id } });
     } catch (err) {
@@ -141,8 +142,8 @@ export class WorkoutSessionService {
 
   private async assertOwner(userId: string, id: string) {
     const session = await this.prisma.workoutSession.findUnique({ where: { id } });
-    if (!session) throw new NotFoundException('Session not found');
-    if (session.userId !== userId) throw new ForbiddenException();
+    // Mesma resposta para "não existe" e "não é sua" (§IDs de docs/MCP.md).
+    if (!session || session.userId !== userId) throw new NotFoundException('Session not found');
     return session;
   }
 }

@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { FoodSource } from '@prisma/client';
 import { FoodService } from '../food.service';
 import type { PrismaService } from '../../common/prisma.service';
@@ -157,7 +157,7 @@ describe('FoodService', () => {
       prisma.food.findUnique.mockResolvedValue(makeFood({ source: FoodSource.TACO }));
 
       await expect(service.updateCustom(userId, 1, { name: 'X' })).rejects.toThrow(
-        ForbiddenException,
+        NotFoundException,
       );
     });
 
@@ -167,7 +167,7 @@ describe('FoodService', () => {
       );
 
       await expect(service.updateCustom(userId, 1, { name: 'X' })).rejects.toThrow(
-        ForbiddenException,
+        NotFoundException,
       );
     });
   });
@@ -187,7 +187,7 @@ describe('FoodService', () => {
     it('refuses to delete public catalog foods', async () => {
       prisma.food.findUnique.mockResolvedValue(makeFood({ source: FoodSource.TACO }));
 
-      await expect(service.deleteCustom(userId, 1)).rejects.toThrow(ForbiddenException);
+      await expect(service.deleteCustom(userId, 1)).rejects.toThrow(NotFoundException);
       expect(prisma.food.delete).not.toHaveBeenCalled();
     });
   });

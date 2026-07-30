@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ExerciseService } from '../exercise.service';
 import type { PrismaService } from '../../common/prisma.service';
 
@@ -160,19 +160,24 @@ describe('ExerciseService', () => {
       );
     });
 
-    it('throws ForbiddenException when the exercise belongs to another user', async () => {
+    it('throws NotFoundException when the exercise belongs to another user', async () => {
       prisma.exercise.findUnique.mockResolvedValue(makeExercise({ createdByUserId: 'user-B' }));
 
       await expect(service.updateCustom(userId, 1, { name: 'X' })).rejects.toThrow(
-        ForbiddenException,
+        NotFoundException,
       );
     });
 
-    it('throws ForbiddenException for a base (public) exercise — base é só-leitura', async () => {
+    // Base é catálogo público: não há existência a esconder, e apontar o
+    // clone_exercise evita o cliente insistir num caminho que nunca vai funcionar.
+    it('throws ConflictException for a base (public) exercise — base é só-leitura', async () => {
       prisma.exercise.findUnique.mockResolvedValue(makeExercise({ createdByUserId: null }));
 
       await expect(service.updateCustom(userId, 1, { name: 'X' })).rejects.toThrow(
-        ForbiddenException,
+        ConflictException,
+      );
+      await expect(service.updateCustom(userId, 1, { name: 'X' })).rejects.toThrow(
+        /clone_exercise/,
       );
       expect(prisma.exercise.update).not.toHaveBeenCalled();
     });
@@ -281,10 +286,17 @@ describe('ExerciseService', () => {
       await expect(service.deleteCustom(userId, 999)).rejects.toThrow(NotFoundException);
     });
 
-    it('throws ForbiddenException when the exercise belongs to another user', async () => {
+    it('throws NotFoundException when the exercise belongs to another user', async () => {
       prisma.exercise.findUnique.mockResolvedValue(makeExercise({ createdByUserId: 'user-B' }));
 
-      await expect(service.deleteCustom(userId, 1)).rejects.toThrow(ForbiddenException);
+      await expect(service.deleteCustom(userId, 1)).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws ConflictException for a base (public) exercise — é compartilhado', async () => {
+      prisma.exercise.findUnique.mockResolvedValue(makeExercise({ createdByUserId: null }));
+
+      await expect(service.deleteCustom(userId, 1)).rejects.toThrow(ConflictException);
+      expect(prisma.exercise.delete).not.toHaveBeenCalled();
     });
 
     it('throws ConflictException when session sets reference the exercise', async () => {

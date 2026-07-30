@@ -1,9 +1,4 @@
-import {
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import type {
   AddPlanExerciseDto,
@@ -119,8 +114,8 @@ export class WorkoutPlanService {
 
   private async assertOwner(userId: string, planId: string) {
     const plan = await this.prisma.workoutPlan.findUnique({ where: { id: planId } });
-    if (!plan) throw new NotFoundException('Plan not found');
-    if (plan.userId !== userId) throw new ForbiddenException();
+    // Mesma resposta para "não existe" e "não é seu" (§IDs de docs/MCP.md).
+    if (!plan || plan.userId !== userId) throw new NotFoundException('Plan not found');
     return plan;
   }
 }

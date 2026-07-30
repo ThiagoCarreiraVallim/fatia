@@ -61,7 +61,8 @@ Toda tool resolve `userId` implicitamente pelo token. **Nunca** aceitar `userId`
 
 - IDs de entidades user-owned (`Meal`, `WorkoutSession`, etc): UUID string
 - IDs de catálogos compartilhados (`Food`, `Exercise`, `FoodGroup`): integer
-- Validação: tool retorna `NOT_FOUND` se ID não existe **ou** não pertence ao usuário (mesma resposta para não vazar info)
+- Validação: tool retorna `NOT_FOUND` se ID não existe **ou** não pertence ao usuário (mesma resposta para não vazar info). Vale para leitura **e** escrita — devolver `403` só no segundo caso permitiria enumerar IDs alheios, o que era um furo real corrigido pela #92. Ver [`docs/THREAT_MODEL.md`](./THREAT_MODEL.md).
+- Exceção deliberada: exercícios do **catálogo base** respondem `CONFLICT` com mensagem apontando `clone_exercise`. O catálogo base é público e igual para todos — não há existência a esconder, e a mensagem evita o cliente insistir num caminho impossível.
 
 ### Datas e timestamps
 

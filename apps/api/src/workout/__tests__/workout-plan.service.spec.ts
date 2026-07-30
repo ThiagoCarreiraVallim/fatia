@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { WorkoutPlanService } from '../workout-plan.service';
 import type { PrismaService } from '../../common/prisma.service';
 
@@ -118,11 +118,11 @@ describe('WorkoutPlanService', () => {
       );
     });
 
-    it('throws ForbiddenException when the plan belongs to another user', async () => {
+    it('throws NotFoundException when the plan belongs to another user', async () => {
       prisma.workoutPlan.findUnique.mockResolvedValue({ id: 'plan-1', userId: 'user-B' });
 
       await expect(service.update(userId, 'plan-1', { name: 'X' })).rejects.toThrow(
-        ForbiddenException,
+        NotFoundException,
       );
       expect(prisma.workoutPlan.update).not.toHaveBeenCalled();
     });
@@ -141,7 +141,7 @@ describe('WorkoutPlanService', () => {
     it('refuses to delete a plan that belongs to another user', async () => {
       prisma.workoutPlan.findUnique.mockResolvedValue({ id: 'plan-1', userId: 'user-B' });
 
-      await expect(service.delete(userId, 'plan-1')).rejects.toThrow(ForbiddenException);
+      await expect(service.delete(userId, 'plan-1')).rejects.toThrow(NotFoundException);
       expect(prisma.workoutPlan.delete).not.toHaveBeenCalled();
     });
   });
@@ -210,7 +210,7 @@ describe('WorkoutPlanService', () => {
           targetSets: 3,
           targetReps: '8-12',
         }),
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -283,7 +283,7 @@ describe('WorkoutPlanService', () => {
       prisma.workoutPlan.findUnique.mockResolvedValue({ id: 'plan-1', userId: 'user-B' });
 
       await expect(service.reorderExercises(userId, 'plan-1', { exercises: [] })).rejects.toThrow(
-        ForbiddenException,
+        NotFoundException,
       );
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });

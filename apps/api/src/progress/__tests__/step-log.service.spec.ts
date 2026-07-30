@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { StepSource } from '@prisma/client';
 import { StepLogService } from '../step-log.service';
 import type { PrismaService } from '../../common/prisma.service';
@@ -186,16 +186,16 @@ describe('StepLogService', () => {
       await expect(service.delete('log-inexistente', userId)).rejects.toThrow(NotFoundException);
     });
 
-    it('returns ForbiddenException when the record belongs to another user', async () => {
+    it('returns NotFoundException when the record belongs to another user', async () => {
       prisma.stepLog.findUnique.mockResolvedValue(makeLog({ userId: 'user-B' }));
 
-      await expect(service.delete('log-1', userId)).rejects.toThrow(ForbiddenException);
+      await expect(service.delete('log-1', userId)).rejects.toThrow(NotFoundException);
     });
 
     it('does not call prisma.delete when the record belongs to another user', async () => {
       prisma.stepLog.findUnique.mockResolvedValue(makeLog({ userId: 'user-B' }));
 
-      await expect(service.delete('log-1', userId)).rejects.toThrow(ForbiddenException);
+      await expect(service.delete('log-1', userId)).rejects.toThrow(NotFoundException);
       expect(prisma.stepLog.delete).not.toHaveBeenCalled();
     });
   });

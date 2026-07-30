@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import type { MealItemInputDto, UpdateMealItemDto } from './dto/meal.dto';
@@ -25,8 +25,8 @@ export class MealItemService {
       where: { id: itemId },
       include: { meal: { select: { userId: true } }, food: true },
     });
-    if (!item) throw new NotFoundException('MealItem not found');
-    if (item.meal.userId !== userId) throw new ForbiddenException();
+    // Mesma resposta para "não existe" e "não é seu" (§IDs de docs/MCP.md).
+    if (!item || item.meal.userId !== userId) throw new NotFoundException('MealItem not found');
 
     let kcal = item.kcal;
     let proteinG = item.proteinG;
@@ -64,8 +64,8 @@ export class MealItemService {
       where: { id: itemId },
       include: { meal: { select: { userId: true } } },
     });
-    if (!item) throw new NotFoundException('MealItem not found');
-    if (item.meal.userId !== userId) throw new ForbiddenException();
+    // Mesma resposta para "não existe" e "não é seu" (§IDs de docs/MCP.md).
+    if (!item || item.meal.userId !== userId) throw new NotFoundException('MealItem not found');
     await this.prisma.mealItem.delete({ where: { id: itemId } });
   }
 
@@ -74,7 +74,7 @@ export class MealItemService {
       where: { id: mealId },
       select: { userId: true },
     });
-    if (!meal) throw new NotFoundException('Meal not found');
-    if (meal.userId !== userId) throw new ForbiddenException();
+    // Mesma resposta para "não existe" e "não é sua" (§IDs de docs/MCP.md).
+    if (!meal || meal.userId !== userId) throw new NotFoundException('Meal not found');
   }
 }

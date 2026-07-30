@@ -1,6 +1,6 @@
 import {
+  BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -149,8 +149,8 @@ export class MealService {
 
   private async assertOwner(userId: string, id: string) {
     const meal = await this.prisma.meal.findUnique({ where: { id }, select: { userId: true } });
-    if (!meal) throw new NotFoundException('Meal not found');
-    if (meal.userId !== userId) throw new ForbiddenException();
+    // Mesma resposta para "não existe" e "não é sua" (§IDs de docs/MCP.md).
+    if (!meal || meal.userId !== userId) throw new NotFoundException('Meal not found');
   }
 
   /**
@@ -184,7 +184,8 @@ export class MealService {
         });
       } else {
         if (!item.foodName) {
-          throw new ForbiddenException('Item livre requer foodName');
+          // Validação de input, não de autorização — mapeia para INVALID_INPUT.
+          throw new BadRequestException('Item livre requer foodName');
         }
         result.push({
           foodId: null,

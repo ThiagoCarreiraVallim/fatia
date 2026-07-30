@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { SessionSetService } from '../session-set.service';
 import type { PrismaService } from '../../common/prisma.service';
 
@@ -169,12 +169,10 @@ describe('SessionSetService', () => {
       await expect(service.update(userId, 'set-x', { reps: 5 })).rejects.toThrow(NotFoundException);
     });
 
-    it('throws ForbiddenException when the set belongs to another user', async () => {
+    it('throws NotFoundException when the set belongs to another user', async () => {
       prisma.sessionSet.findFirst.mockResolvedValue({ ...ownedSet, session: { userId: 'user-B' } });
 
-      await expect(service.update(userId, 'set-1', { reps: 5 })).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(service.update(userId, 'set-1', { reps: 5 })).rejects.toThrow(NotFoundException);
     });
 
     it('rejects strength fields on a cardio set', async () => {
@@ -197,13 +195,13 @@ describe('SessionSetService', () => {
       expect(prisma.sessionSet.delete).toHaveBeenCalledWith({ where: { id: 'set-1' } });
     });
 
-    it('throws ForbiddenException when the set belongs to another user', async () => {
+    it('throws NotFoundException when the set belongs to another user', async () => {
       prisma.sessionSet.findFirst.mockResolvedValue({
         id: 'set-1',
         session: { userId: 'user-B' },
       });
 
-      await expect(service.delete(userId, 'set-1')).rejects.toThrow(ForbiddenException);
+      await expect(service.delete(userId, 'set-1')).rejects.toThrow(NotFoundException);
       expect(prisma.sessionSet.delete).not.toHaveBeenCalled();
     });
   });

@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { isCardioExercise } from './helpers/is-cardio';
 import { estimate1RM } from './helpers/estimate-1rm';
@@ -260,8 +255,8 @@ export class SessionSetService {
       where: { id },
       include: { session: { select: { userId: true } } },
     });
-    if (!set) throw new NotFoundException('Set not found');
-    if (set.session.userId !== userId) throw new ForbiddenException();
+    // Mesma resposta para "não existe" e "não é sua" (§IDs de docs/MCP.md).
+    if (!set || set.session.userId !== userId) throw new NotFoundException('Set not found');
     return set;
   }
 }
