@@ -8,12 +8,12 @@ import type { Config } from 'tailwindcss';
  */
 const config: Config = {
   darkMode: ['class'],
-  content: ['./src/**/*.{js,ts,jsx,tsx,mdx}'],
+  content: ['./src/**/*.{astro,html,js,ts,md}'],
   theme: {
     extend: {
       fontFamily: {
-        sans: ['var(--font-inter)', 'sans-serif'],
-        display: ['var(--font-jakarta)', 'sans-serif'],
+        sans: ['Inter Variable', 'system-ui', 'sans-serif'],
+        display: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
       },
       colors: {
         background: 'hsl(var(--background))',

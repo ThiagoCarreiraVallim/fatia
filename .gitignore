@@ -7,8 +7,8 @@ dist/
 build/
 .next/
 .turbo/
-# Export estático do apps/site (next build com output: 'export')
-out/
+# Tipos gerados pelo Astro (apps/site)
+.astro/
 
 # Artefatos gerados pelo Next/tsc a cada build — sujam o working tree sem
 # agregar nada ao histórico (mesma lista do create-next-app).

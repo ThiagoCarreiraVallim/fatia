@@ -121,8 +121,8 @@ services:
       context: ..
       dockerfile: infra/site.Dockerfile
       args:
-        # Estático: o domínio é embedado no bundle em build time.
-        NEXT_PUBLIC_DOMAIN: ${DOMAIN}
+        # Estático: o domínio entra no HTML durante o build.
+        PUBLIC_DOMAIN: ${DOMAIN}
     restart: unless-stopped
     expose:
       - "80"

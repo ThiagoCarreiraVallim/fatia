@@ -1,0 +1,25 @@
+---
+import { site } from '../lib/site';
+---
+
+<header
+  class="sticky top-0 z-10 border-b border-border/60 bg-background/85 backdrop-blur"
+>
+  <div class="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+    <a href="/" class="font-display text-xl font-extrabold tracking-tight">Fatia</a>
+    <nav class="flex items-center gap-6 text-sm">
+      <a
+        href="/claude-connect/"
+        class="text-muted-foreground transition-colors hover:text-foreground"
+      >
+        Conectar no Claude
+      </a>
+      <a
+        href={site.appUrl}
+        class="rounded-lg bg-primary px-4 py-2 font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+      >
+        Entrar
+      </a>
+    </nav>
+  </div>
+</header>
