@@ -16,8 +16,17 @@ export class ListWaterLogsTool implements McpToolDef {
   readonly inputSchema = {
     from: z.string().optional().describe('YYYY-MM-DD inicial'),
     to: z.string().optional().describe('YYYY-MM-DD final'),
-    limit: z.number().int().positive().max(100).optional(),
-    cursor: z.string().optional(),
+    limit: z
+      .number()
+      .int()
+      .positive()
+      .max(100)
+      .optional()
+      .describe('Quantos registros retornar (default 20, máx 100)'),
+    cursor: z
+      .string()
+      .optional()
+      .describe('ID do último registro da página anterior, para paginar'),
   } as const;
   async execute(
     input: { from?: string; to?: string; limit?: number; cursor?: string },

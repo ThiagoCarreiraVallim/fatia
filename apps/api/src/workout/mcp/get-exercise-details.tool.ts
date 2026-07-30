@@ -14,9 +14,13 @@ export class GetExerciseDetailsTool implements McpToolDef {
 
   readonly name = 'get_exercise_details';
   readonly description =
-    'Returns full details for an exercise: name, primary/secondary muscles, equipment, level, mechanic, and step-by-step instructions.';
+    'Retorna os detalhes completos de um exercício: nome, músculos primários e secundários, equipamento, nível, mecânica e passos de execução. Use quando já tiver o ID; para buscar por nome, use search_exercise ou explain_form.';
   readonly inputSchema = {
-    exerciseId: z.number().int().positive().describe('Numeric ID of the exercise'),
+    exerciseId: z
+      .number()
+      .int()
+      .positive()
+      .describe('ID numérico do exercício, obtido via search_exercise'),
   } as const;
 
   execute(input: { exerciseId: number }, { userId }: McpToolContext) {

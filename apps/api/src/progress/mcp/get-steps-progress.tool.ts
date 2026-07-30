@@ -14,7 +14,9 @@ export class GetStepsProgressTool implements McpToolDef {
   readonly name = 'get_steps_progress';
   readonly description = 'Pontos diários de passos + médias semanais + dias batidos.';
   readonly inputSchema = {
-    days: z.union([z.literal(14), z.literal(30), z.literal(90), z.literal(180)]),
+    days: z
+      .union([z.literal(14), z.literal(30), z.literal(90), z.literal(180)])
+      .describe('Janela de análise em dias — um de 14, 30, 90 ou 180'),
   } as const;
   execute(input: { days: number }, { userId, timezone }: McpToolContext) {
     return this.progress.stepsProgress(input.days, { userId, timezone });

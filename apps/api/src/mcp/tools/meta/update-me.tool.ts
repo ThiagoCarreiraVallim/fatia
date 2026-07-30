@@ -15,9 +15,18 @@ export class UpdateMeTool implements McpToolDef {
   readonly name = 'update_me';
   readonly description = 'Atualiza o perfil do usuário (nome, estatura, fuso horário).';
   readonly inputSchema = {
-    name: z.string().min(1).max(120).optional(),
-    heightCm: z.number().positive().optional(),
-    timezone: z.string().min(3).max(60).optional(),
+    name: z.string().min(1).max(120).optional().describe('Novo nome de exibição do usuário'),
+    heightCm: z
+      .number()
+      .positive()
+      .optional()
+      .describe('Altura em centímetros (ex.: 178) — usada para calcular IMC'),
+    timezone: z
+      .string()
+      .min(3)
+      .max(60)
+      .optional()
+      .describe('Fuso horário IANA (ex.: "America/Sao_Paulo") — define o corte dos dias'),
   } as const;
   execute(
     input: { name?: string; heightCm?: number; timezone?: string },

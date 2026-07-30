@@ -14,7 +14,10 @@ export class DeleteNutrientTargetTool implements McpToolDef {
   readonly name = 'delete_nutrient_target';
   readonly description = 'Remove uma meta de nutriente personalizada pelo nutrientKey.';
   readonly inputSchema = {
-    nutrientKey: z.string().max(40),
+    nutrientKey: z
+      .string()
+      .max(40)
+      .describe('Chave do nutriente a deixar de acompanhar (ex.: "sodium_mg")'),
   } as const;
   execute(input: { nutrientKey: string }, { userId }: McpToolContext) {
     return this.targets.delete(userId, input.nutrientKey);

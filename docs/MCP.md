@@ -98,73 +98,100 @@ Listagens com potencial de crescer usam cursor-based:
 
 ## Catálogo de tools (resumo)
 
-| Categoria                 | Tool                        | Operação |
-| ------------------------- | --------------------------- | -------- |
-| **Perfil**                | `get_me`                    | R        |
-|                           | `update_me`                 | U        |
-|                           | `update_timezone`           | U        |
-| **Metas**                 | `get_nutrition_goals`       | R        |
-|                           | `set_nutrition_goals`       | C/U      |
-| **Alimentos (catálogo)**  | `search_food`               | R        |
-|                           | `get_food`                  | R        |
-|                           | `create_custom_food`        | C        |
-|                           | `update_custom_food`        | U        |
-|                           | `delete_custom_food`        | D        |
-|                           | `list_food_groups`          | R        |
-| **Refeições**             | `log_meal`                  | C        |
-|                           | `get_meal`                  | R        |
-|                           | `list_meals`                | R        |
-|                           | `update_meal`               | U        |
-|                           | `delete_meal`               | D        |
-| **Itens de refeição**     | `add_meal_item`             | C        |
-|                           | `update_meal_item`          | U        |
-|                           | `delete_meal_item`          | D        |
-| **Resumo nutricional**    | `get_nutrition_summary`     | R        |
-|                           | `get_nutrition_history`     | R        |
-| **Exercícios (catálogo)** | `search_exercise`           | R        |
-|                           | `list_exercises_by_muscle`  | R        |
-|                           | `create_custom_exercise`    | C        |
-|                           | `update_custom_exercise`    | U        |
-|                           | `delete_custom_exercise`    | D        |
-| **Planos de treino**      | `create_workout_plan`       | C        |
-|                           | `get_workout_plan`          | R        |
-|                           | `list_workout_plans`        | R        |
-|                           | `update_workout_plan`       | U        |
-|                           | `delete_workout_plan`       | D        |
-|                           | `add_exercise_to_plan`      | C        |
-|                           | `update_plan_exercise`      | U        |
-|                           | `remove_exercise_from_plan` | D        |
-|                           | `reorder_plan_exercises`    | U        |
-| **Sessões de treino**     | `start_workout`             | C        |
-|                           | `get_workout_session`       | R        |
-|                           | `list_workout_sessions`     | R        |
-|                           | `update_workout_session`    | U        |
-|                           | `finish_workout`            | U        |
-|                           | `delete_workout_session`    | D        |
-| **Séries**                | `log_set`                   | C        |
-|                           | `update_set`                | U        |
-|                           | `delete_set`                | D        |
-|                           | `get_last_set_for_exercise` | R        |
-|                           | `get_personal_record`       | R        |
-| **Peso corporal**         | `log_weight`                | C        |
-|                           | `update_weight_log`         | U        |
-|                           | `delete_weight_log`         | D        |
-|                           | `list_weight_logs`          | R        |
-| **Passos**                | `log_steps`                 | C        |
-|                           | `update_step_log`           | U        |
-|                           | `delete_step_log`           | D        |
-|                           | `list_step_logs`            | R        |
-|                           | `get_steps_for_date`        | R        |
-|                           | `get_steps_history`         | R        |
-| **Progresso**             | `get_weight_progress`       | R        |
-|                           | `get_strength_progress`     | R        |
-|                           | `get_volume_progress`       | R        |
-|                           | `get_cardio_progress`       | R        |
-|                           | `get_steps_progress`        | R        |
-| **Dashboard**             | `get_today_summary`         | R        |
-|                           | `get_week_summary`          | R        |
+| Categoria                 | Tool                         | Operação |
+| ------------------------- | ---------------------------- | -------- |
+| **Perfil**                | `get_me`                     | R        |
+|                           | `update_me`                  | U        |
+|                           | `update_timezone`            | U        |
+| **Metas (macros)**        | `get_nutrition_goals`        | R        |
+|                           | `set_nutrition_goals`        | C/U      |
+| **Metas pessoais**        | `create_goal`                | C        |
+|                           | `get_goal`                   | R        |
+|                           | `list_goals`                 | R        |
+|                           | `update_goal`                | U        |
+|                           | `complete_goal`              | U        |
+|                           | `delete_goal`                | D        |
+| **Metas de nutrientes**   | `set_nutrient_target`        | C/U      |
+|                           | `list_nutrient_targets`      | R        |
+|                           | `delete_nutrient_target`     | D        |
+|                           | `get_nutrient_summary`       | R        |
+| **Alimentos (catálogo)**  | `search_food`                | R        |
+|                           | `get_food`                   | R        |
+|                           | `create_custom_food`         | C        |
+|                           | `update_custom_food`         | U        |
+|                           | `delete_custom_food`         | D        |
+|                           | `list_food_groups`           | R        |
+| **Refeições**             | `log_meal`                   | C        |
+|                           | `get_meal`                   | R        |
+|                           | `list_meals`                 | R        |
+|                           | `update_meal`                | U        |
+|                           | `delete_meal`                | D        |
+| **Itens de refeição**     | `add_meal_item`              | C        |
+|                           | `update_meal_item`           | U        |
+|                           | `delete_meal_item`           | D        |
+| **Resumo nutricional**    | `get_nutrition_summary`      | R        |
+|                           | `get_nutrition_history`      | R        |
+| **Exercícios (catálogo)** | `search_exercise`            | R        |
+|                           | `list_exercises_by_muscle`   | R        |
+|                           | `get_exercise_details`       | R        |
+|                           | `explain_form`               | R        |
+|                           | `create_custom_exercise`     | C        |
+|                           | `clone_exercise`             | C        |
+|                           | `update_custom_exercise`     | U        |
+|                           | `delete_custom_exercise`     | D        |
+| **Planos de treino**      | `create_workout_plan`        | C        |
+|                           | `get_workout_plan`           | R        |
+|                           | `list_workout_plans`         | R        |
+|                           | `update_workout_plan`        | U        |
+|                           | `delete_workout_plan`        | D        |
+|                           | `add_exercise_to_plan`       | C        |
+|                           | `update_plan_exercise`       | U        |
+|                           | `remove_exercise_from_plan`  | D        |
+|                           | `reorder_plan_exercises`     | U        |
+| **Sessões de treino**     | `start_workout_session`      | C        |
+|                           | `get_workout_session`        | R        |
+|                           | `get_active_workout_session` | R        |
+|                           | `list_workout_sessions`      | R        |
+|                           | `update_workout_session`     | U        |
+|                           | `finish_workout_session`     | U        |
+|                           | `delete_workout_session`     | D        |
+| **Séries**                | `log_set`                    | C        |
+|                           | `update_set`                 | U        |
+|                           | `delete_set`                 | D        |
+|                           | `get_last_set_for_exercise`  | R        |
+|                           | `get_personal_record`        | R        |
+|                           | `list_personal_records`      | R        |
+| **Peso corporal**         | `log_weight`                 | C        |
+|                           | `update_weight_log`          | U        |
+|                           | `delete_weight_log`          | D        |
+|                           | `list_weight_logs`           | R        |
+| **Passos**                | `log_steps`                  | C        |
+|                           | `update_step_log`            | U        |
+|                           | `delete_step_log`            | D        |
+|                           | `list_step_logs`             | R        |
+|                           | `get_steps_for_date`         | R        |
+|                           | `get_steps_history`          | R        |
+| **Hidratação**            | `log_water`                  | C        |
+|                           | `update_water_log`           | U        |
+|                           | `delete_water_log`           | D        |
+|                           | `list_water_logs`            | R        |
+|                           | `get_water_for_date`         | R        |
+|                           | `get_water_history`          | R        |
+|                           | `get_water_progress`         | R        |
+| **Progresso**             | `get_weight_progress`        | R        |
+|                           | `get_strength_progress`      | R        |
+|                           | `get_volume_progress`        | R        |
+|                           | `get_cardio_progress`        | R        |
+|                           | `get_steps_progress`         | R        |
+| **Dashboard**             | `get_today_summary`          | R        |
+|                           | `get_week_summary`           | R        |
 
-Total: ~52 tools (após remoção das 2 tools de gerenciamento de token MCP). Cada uma documentada abaixo.
+Total: **85 tools**. Cada uma documentada abaixo.
+
+> Este catálogo é verificado automaticamente contra o código por
+> `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
+> atualizar esta doc quebra o CI. A revisão de consolidação da superfície está em
+> [`docs/MCP_TOOL_SURFACE.md`](./MCP_TOOL_SURFACE.md).
 
 ---
 
@@ -413,6 +440,14 @@ Cria uma refeição com seus itens em uma única chamada. Tool principal usada p
   }
 }
 ```
+
+**Idempotência.** A chave natural é `userId + eatenAt + mealType + itens` (conjunto de
+alimento + gramas, ordem irrelevante; `notes` fora da chave). Reenviar a mesma refeição —
+um retry depois de timeout, por exemplo — retorna `CONFLICT` citando o id da refeição já
+existente, em vez de duplicar em silêncio.
+
+Se o usuário realmente comeu a mesma coisa duas vezes, ajuste `eatenAt` para o horário da
+segunda refeição.
 
 ### `get_meal`
 
@@ -697,6 +732,48 @@ Cria exercício custom do usuário (não polui o catálogo global).
 
 > **Decisão pendente:** se vamos permitir delete cascateado ou apenas "archive". Por padrão na v1: bloqueia delete se há sets, force-flag pra cascade.
 
+### `clone_exercise`
+
+Cria (ou reaproveita) uma **cópia editável** de um exercício base. Exercícios do catálogo público são só-leitura; para personalizar um, o usuário precisa de uma cópia própria. Depois do clone, a base desaparece das listagens do usuário e a cópia a substitui.
+
+Aceita overrides opcionais para já editar no mesmo passo, evitando um `clone_exercise` seguido de `update_custom_exercise`.
+
+**Input:**
+
+```typescript
+{
+  id: number;                      // exercício base a copiar
+  name?: string;                   // default: nome do base
+  muscleGroup?: string;            // pt: peito, costas, pernas, ombro, braço, core, cardio
+  primaryMuscles?: string[];       // em inglês — são as chaves das cores do diagrama
+  secondaryMuscles?: string[];     // em inglês
+  equipment?: string;              // pt: barra, halteres, máquina, peso corporal
+  level?: string;                  // beginner | intermediate | advanced
+  mechanic?: string;               // compound | isolation
+  instructions?: string[];
+  youtubeVideoId?: string;
+  youtubeVideoIdPt?: string;
+}
+```
+
+**Output:** o exercício custom criado, com `clonedFromId` apontando para a base.
+
+> **Idempotente:** se já existe uma cópia daquela base para o usuário, ela é reaproveitada em vez de duplicar.
+
+### `get_exercise_details`
+
+Detalhes completos de um exercício por ID: músculos primários/secundários, equipamento, nível, mecânica e passos de execução. Use quando já tiver o ID — para buscar por nome, use `search_exercise` ou `explain_form`.
+
+**Input:** `{ exerciseId: number }`
+
+### `explain_form`
+
+Passos de execução e detalhes de técnica de um exercício buscado **por nome** (busca parcial). É a tool para "como faz agachamento?" ou "tô sentindo no lombar, minha forma tá certa?".
+
+**Input:** `{ exerciseName: string }`
+
+**Output:** exercício com `instructions[]` — o insumo para o Claude explicar a execução.
+
 ---
 
 ## Planos de treino
@@ -825,7 +902,7 @@ Reordena tudo de uma vez (mais previsível que ajustar `order` um a um).
 
 ## Sessões de treino
 
-### `start_workout`
+### `start_workout_session`
 
 Inicia uma sessão. Pode ser livre ou baseada em plano.
 
@@ -857,7 +934,14 @@ Inicia uma sessão. Pode ser livre ou baseada em plano.
 }
 ```
 
-> **Decisão chave:** retornar `prefilledExercises` com `lastSet` no `start_workout` é o que torna a UX "mostrar previous" trivial. Cliente não precisa fazer N chamadas.
+> **Decisão chave:** retornar `prefilledExercises` com `lastSet` no `start_workout_session` é o que torna a UX "mostrar previous" trivial. Cliente não precisa fazer N chamadas.
+
+### `get_active_workout_session`
+
+Retorna a sessão de treino ativa (iniciada e ainda não finalizada), se houver. É o atalho para "continuar de onde parei" sem precisar listar sessões e filtrar.
+
+**Input:** `{}`  
+**Output:** mesma forma de `get_workout_session`, ou `null` se não há sessão aberta.
 
 ### `get_workout_session`
 
@@ -904,17 +988,18 @@ Inicia uma sessão. Pode ser livre ou baseada em plano.
 
 ### `update_workout_session`
 
+Atualiza as notas de uma sessão, finalizada ou em andamento. Para corrigir séries use `update_set`.
+
 **Input:**
 
 ```typescript
 {
   sessionId: string;
   notes?: string;
-  startedAt?: string;     // permite corrigir "esqueci de iniciar"
 }
 ```
 
-### `finish_workout`
+### `finish_workout_session`
 
 Marca sessão como concluída. Idempotente — chamar de novo só atualiza notes/completedAt.
 
@@ -923,7 +1008,6 @@ Marca sessão como concluída. Idempotente — chamar de novo só atualiza notes
 ```typescript
 {
   sessionId: string;
-  completedAt?: string;   // default: now
   notes?: string;
 }
 ```
@@ -1107,6 +1191,14 @@ Recorde pessoal de um exercício. Métrica varia conforme tipo.
   } | null;
 }
 ```
+
+### `list_personal_records`
+
+Recorde pessoal de **todos** os exercícios já treinados, num só retorno. Use para "quais são meus PRs?" em vez de chamar `get_personal_record` N vezes.
+
+Força: maior carga, reps na carga máxima e 1RM estimado. Cardio: maior distância e a duração dessa sessão. Cada entrada traz a data do recorde, a última vez treinado e o total de séries. Ordenado do recorde mais recente para o mais antigo.
+
+**Input:** `{}`
 
 ---
 
@@ -1303,6 +1395,165 @@ Série temporal por dia, pra gráfico de progresso.
   totalDaysLogged: number;
 }
 ```
+
+---
+
+## Hidratação
+
+Vários logs por dia são o caso normal — cada copo ou garrafa é um log. A política do "valor do dia" é **soma**, ao contrário de `StepLog`, onde é o **maior** valor do dia (ADR 007).
+
+### `log_water`
+
+Registra consumo de água em mL.
+
+**Input:**
+
+```typescript
+{
+  ml: number;          // 250 = copo, 500 = garrafa
+  date?: string;       // YYYY-MM-DD; default hoje no fuso do usuário
+  notes?: string;
+}
+```
+
+### `update_water_log`
+
+Corrige um log existente.
+
+**Input:** `{ id: string; ml?: number; date?: string; notes?: string }`
+
+### `delete_water_log`
+
+**Input:** `{ id: string }`
+
+### `list_water_logs`
+
+Lista os logs individuais, paginados (cursor).
+
+**Input:** `{ from?: string; to?: string; limit?: number; cursor?: string }`
+
+### `get_water_for_date`
+
+Total consumido num dia — a **soma** de todos os logs daquele dia.
+
+**Input:** `{ date?: string }` — default hoje no fuso do usuário.
+
+### `get_water_history`
+
+Histórico diário, preenchendo com `0` os dias sem log (não omite dias).
+
+**Input:** `{ days: number }` — máx 365.
+
+### `get_water_progress`
+
+Estatísticas de hidratação: série diária, média, melhor dia e quantos dias bateram a meta (`UserGoals.dailyWaterTargetMl`).
+
+**Input:** `{ days?: number }` — default 30, máx 365.
+
+---
+
+## Metas pessoais
+
+Metas dinâmicas definidas pelo usuário, distintas de `get_nutrition_goals`/`set_nutrition_goals` (que cobrem apenas macros).
+
+`currentValue` é derivado na leitura quando o `kind` tem fonte automática (`weight`, `workout_frequency`, `step_count`). Para `body_fat` e `custom` não há fonte — o valor vem de `lastReportedValue`, que o Claude atualiza via `update_goal`.
+
+### `create_goal`
+
+**Input:**
+
+```typescript
+{
+  kind: "weight" | "body_fat" | "workout_frequency" | "step_count" | "custom";
+  title: string;
+  description?: string;
+  startValue?: number;          // derivado do estado atual quando o kind tem fonte
+  targetValue: number;
+  unit: string;                 // "kg", "%", "treinos/semana", "passos"
+  deadline?: string;            // ISO datetime
+  lastReportedValue?: number;   // para kind=body_fat ou custom
+}
+```
+
+### `get_goal`
+
+Uma meta por ID, com progresso calculado.
+
+**Input:** `{ goalId: string }`
+
+### `list_goals`
+
+Metas do usuário com progresso calculado.
+
+**Input:** `{ status?: "active" | "completed" | "expired" | "archived"; kind?: GoalKind }`
+
+### `update_goal`
+
+Use `lastReportedValue` para reportar progresso manual em metas `body_fat` ou `custom`.
+
+**Input:**
+
+```typescript
+{
+  goalId: string;
+  title?: string;
+  description?: string;
+  targetValue?: number;
+  unit?: string;
+  deadline?: string;            // vazio para remover
+  lastReportedValue?: number;
+  status?: GoalStatus;
+}
+```
+
+### `complete_goal`
+
+Atalho para marcar como concluída, em vez de `update_goal({ status: "completed" })`.
+
+**Input:** `{ goalId: string }`
+
+### `delete_goal`
+
+Remove permanentemente.
+
+**Input:** `{ goalId: string }`
+
+---
+
+## Metas de nutrientes
+
+Metas de micronutrientes personalizadas (limitar sódio, açúcar; atingir fibra). Distintas de `set_nutrition_goals`, que cobre os macros fixos. O valor do dia é agregado de `MealItem.nutrients[nutrientKey]` — ver ADR 009.
+
+### `set_nutrient_target`
+
+Upsert por `nutrientKey`. Informe `max` para limite, `min` para meta mínima, ou os dois para uma faixa.
+
+**Input:**
+
+```typescript
+{
+  nutrientKey: string;   // "sodium_mg", "sugar_g", "fiber_g", "caffeine_mg"
+  label: string;         // "Sódio"
+  unit: string;          // "mg", "g"
+  min?: number;
+  max?: number;
+  period?: "daily";      // v1: só daily
+}
+```
+
+### `list_nutrient_targets`
+
+**Input:** `{}`
+
+### `delete_nutrient_target`
+
+**Input:** `{ nutrientKey: string }`
+
+### `get_nutrient_summary`
+
+Resumo do dia contra as metas: total consumido por nutriente e status `under` / `ok` / `over` em relação a min/max.
+
+**Input:** `{ date: string }` — YYYY-MM-DD.
 
 ---
 
@@ -1593,11 +1844,11 @@ Estes exemplos ilustram como o Claude orquestra múltiplas tools para resolver p
 ```
 1. get_today_summary()
    → vê plannedToday: { planId, name: "Pull" }
-2. start_workout({ planId })
+2. start_workout_session({ planId })
    → retorna prefilledExercises com last set de cada
 3. (durante treino, pra cada série)
    log_set({ sessionId, exerciseId, weightKg: 80, reps: 10, rpe: 8 })
-4. finish_workout({ sessionId })
+4. finish_workout_session({ sessionId })
    → resumo da sessão
 ```
 
@@ -1637,7 +1888,7 @@ Estes exemplos ilustram como o Claude orquestra múltiplas tools para resolver p
 ```
 1. search_exercise({ query: "esteira" })
    → exerciseId
-2. start_workout({})           // sessão livre, sem plano
+2. start_workout_session({})           // sessão livre, sem plano
    → sessionId
 3. log_set({
      sessionId,
@@ -1645,13 +1896,13 @@ Estes exemplos ilustram como o Claude orquestra múltiplas tools para resolver p
      durationSeconds: 1800,
      distanceMeters: 5000
    })
-4. finish_workout({ sessionId })
+4. finish_workout_session({ sessionId })
 ```
 
 Alternativa quando o cardio é parte de um treino híbrido:
 
 ```
-1. start_workout({ planId: "push" })   // plano de força normal
+1. start_workout_session({ planId: "push" })   // plano de força normal
    → sessionId, prefilledExercises (peito, ombro, tríceps)
 2. log_set({ sessionId, exerciseId: 12 /* supino */, weightKg: 80, reps: 10 })
    ... outras séries de força
@@ -1661,7 +1912,7 @@ Alternativa quando o cardio é parte de um treino híbrido:
      durationSeconds: 600,
      distanceMeters: 1500
    })
-4. finish_workout({ sessionId })
+4. finish_workout_session({ sessionId })
 ```
 
 ### Fluxo 8: "Andei 9500 passos hoje"

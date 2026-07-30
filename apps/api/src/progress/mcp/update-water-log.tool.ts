@@ -14,10 +14,10 @@ export class UpdateWaterLogTool implements McpToolDef {
   readonly name = 'update_water_log';
   readonly description = 'Atualiza um log de água existente (correção).';
   readonly inputSchema = {
-    id: z.string(),
-    ml: z.number().int().positive().optional(),
-    date: z.string().optional(),
-    notes: z.string().max(500).optional(),
+    id: z.string().describe('ID do registro de hidratação a atualizar'),
+    ml: z.number().int().positive().optional().describe('Novo volume em mL'),
+    date: z.string().optional().describe('Nova data do registro, em YYYY-MM-DD'),
+    notes: z.string().max(500).optional().describe('Novas observações do registro'),
   } as const;
   async execute(
     input: { id: string; ml?: number; date?: string; notes?: string },

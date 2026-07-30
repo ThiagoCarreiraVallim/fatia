@@ -14,9 +14,22 @@ export class SearchFoodTool implements McpToolDef {
   readonly name = 'search_food';
   readonly description = 'Busca alimentos no catálogo TACO + customs do usuário.';
   readonly inputSchema = {
-    q: z.string().optional(),
-    groupId: z.number().int().optional(),
-    limit: z.number().int().min(1).max(50).optional(),
+    q: z
+      .string()
+      .optional()
+      .describe('Termo de busca pelo nome do alimento (ex.: "arroz integral"). Omita para listar'),
+    groupId: z
+      .number()
+      .int()
+      .optional()
+      .describe('Filtra por grupo alimentar. Use list_food_groups para obter os IDs'),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(50)
+      .optional()
+      .describe('Quantos resultados retornar (default 20, máx 50)'),
   } as const;
   execute(params: { q?: string; groupId?: number; limit?: number }, { userId }: McpToolContext) {
     return this.foods.search(userId, params);

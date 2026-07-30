@@ -13,7 +13,9 @@ export class GetFoodTool implements McpToolDef {
   constructor(private readonly foods: FoodService) {}
   readonly name = 'get_food';
   readonly description = 'Detalhe de um alimento por id.';
-  readonly inputSchema = { id: z.number().int() } as const;
+  readonly inputSchema = {
+    id: z.number().int().describe('ID do alimento no catálogo, obtido via search_food'),
+  } as const;
   execute({ id }: { id: number }, { userId }: McpToolContext) {
     return this.foods.get(userId, id);
   }

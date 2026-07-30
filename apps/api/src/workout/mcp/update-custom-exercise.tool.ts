@@ -20,7 +20,7 @@ export class UpdateCustomExerciseTool implements McpToolDef {
     'details (level, mechanic, video). IMPORTANT: primaryMuscles/secondaryMuscles MUST stay ' +
     'in English — they are the keys that drive the muscle-diagram colors.';
   readonly inputSchema = {
-    id: z.number().int().describe('ID of the exercise'),
+    id: z.number().int().describe('ID do exercício custom a atualizar (só os seus)'),
     name: z.string().max(200).optional().describe('Nome (pode/deve ser em português)'),
     muscleGroup: muscleGroupSchema
       .optional()
@@ -38,8 +38,8 @@ export class UpdateCustomExerciseTool implements McpToolDef {
       .array(z.string().max(2000))
       .optional()
       .describe('Passos de execução (pode/deve ser em português)'),
-    youtubeVideoId: z.string().max(40).optional(),
-    youtubeVideoIdPt: z.string().max(40).optional(),
+    youtubeVideoId: z.string().max(40).optional().describe('ID do vídeo do YouTube em inglês'),
+    youtubeVideoIdPt: z.string().max(40).optional().describe('ID do vídeo do YouTube em português'),
   } as const;
 
   execute({ id, ...dto }: { id: number } & Record<string, unknown>, { userId }: McpToolContext) {

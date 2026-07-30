@@ -21,9 +21,12 @@ export class LogStepsTool implements McpToolDef {
     'Registra uma contagem de passos para um dia. Múltiplos logs por dia são permitidos — o servidor considera o maior valor (ADR 007).';
   readonly inputSchema = {
     date: z.string().optional().describe('YYYY-MM-DD; default hoje no fuso do user'),
-    steps: z.number().int().min(0),
-    source: z.nativeEnum(StepSource).optional(),
-    notes: z.string().max(500).optional(),
+    steps: z.number().int().min(0).describe('Total de passos do dia'),
+    source: z
+      .nativeEnum(StepSource)
+      .optional()
+      .describe('Origem do dado (default MANUAL). Ex.: GOOGLE_FIT, APPLE_HEALTH, STRAVA'),
+    notes: z.string().max(500).optional().describe('Observações do registro'),
   } as const;
   async execute(
     input: { date?: string; steps: number; source?: StepSource; notes?: string },

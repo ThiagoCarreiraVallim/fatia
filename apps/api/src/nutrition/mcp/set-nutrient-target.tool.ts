@@ -18,9 +18,20 @@ export class SetNutrientTargetTool implements McpToolDef {
     nutrientKey: z.string().max(40).describe('Ex.: "sodium_mg", "sugar_g", "fiber_g"'),
     label: z.string().max(40).describe('Ex.: "Sódio"'),
     unit: z.string().max(12).describe('Ex.: "mg", "g"'),
-    min: z.number().min(0).optional(),
-    max: z.number().min(0).optional(),
-    period: z.literal('daily').optional(),
+    min: z
+      .number()
+      .min(0)
+      .optional()
+      .describe('Piso da meta (ex.: fibra mínima). Omita para meta só de teto'),
+    max: z
+      .number()
+      .min(0)
+      .optional()
+      .describe('Teto da meta (ex.: sódio máximo). Omita para meta só de piso'),
+    period: z
+      .literal('daily')
+      .optional()
+      .describe('Janela de agregação. Na v1 só "daily" é suportado'),
   } as const;
   execute(
     input: {

@@ -1,4 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { dayBoundsInTz } from '../progress/helpers/date-tz';
@@ -25,22 +30,74 @@ function sanitizeNutrients(
   return Object.keys(clean).length > 0 ? clean : undefined;
 }
 
+/**
+ * Assinatura estável do conjunto de itens: identifica cada item por alimento e
+ * gramas, independente da ordem em que vieram. Macros ficam fora porque são
+ * derivados do alimento — dois envios iguais produzem os mesmos macros.
+ */
+function fingerprintItems(
+  items: Array<{ foodId: number | null; foodName: string; grams: number }>,
+) {
+  return items
+    .map((item) => `${item.foodId ?? item.foodName.trim().toLowerCase()}:${item.grams}`)
+    .sort()
+    .join('|');
+}
+
 @Injectable()
 export class MealService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(userId: string, dto: CreateMealDto) {
     const items = await this.resolveItems(userId, dto.items);
+    const eatenAt = new Date(dto.eatenAt);
+
+    const duplicate = await this.findDuplicate(userId, eatenAt, dto.mealType, items);
+    if (duplicate) {
+      throw new ConflictException(
+        `Refeição idêntica já registrada (id ${duplicate.id}): mesmo tipo, mesmo horário e mesmos itens. ` +
+          'Se foi uma repetição não intencional, nada a fazer. Se o usuário realmente comeu isso duas vezes, ' +
+          'ajuste eatenAt para o horário correto da segunda refeição.',
+      );
+    }
+
     return this.prisma.meal.create({
       data: {
         userId,
         mealType: dto.mealType,
-        eatenAt: new Date(dto.eatenAt),
+        eatenAt,
         notes: dto.notes,
         items: { create: items },
       },
       include: { items: true },
     });
+  }
+
+  /**
+   * Detecta reenvio da mesma refeição (issue #94).
+   *
+   * Chave natural: `userId + eatenAt + mealType + itens`. Um cliente MCP que dá
+   * timeout e repete a chamada manda payload idêntico — inclusive o `eatenAt` —,
+   * então igualdade exata de timestamp isola justamente o caso de retry sem
+   * bloquear quem de fato comeu a mesma coisa em outro horário.
+   *
+   * `notes` fica fora da chave de propósito: mudar só a observação não faz da
+   * refeição outra refeição.
+   */
+  private async findDuplicate(
+    userId: string,
+    eatenAt: Date,
+    mealType: CreateMealDto['mealType'],
+    items: ResolvedItem[],
+  ) {
+    const candidates = await this.prisma.meal.findMany({
+      where: { userId, eatenAt, mealType },
+      include: { items: true },
+    });
+    if (candidates.length === 0) return null;
+
+    const target = fingerprintItems(items);
+    return candidates.find((meal) => fingerprintItems(meal.items) === target) ?? null;
   }
 
   async findById(userId: string, id: string) {

@@ -13,7 +13,9 @@ export class DeleteWaterLogTool implements McpToolDef {
   constructor(private readonly waters: WaterLogService) {}
   readonly name = 'delete_water_log';
   readonly description = 'Remove um log de água.';
-  readonly inputSchema = { id: z.string() } as const;
+  readonly inputSchema = {
+    id: z.string().describe('ID do registro de hidratação a remover'),
+  } as const;
   async execute({ id }: { id: string }, { userId }: McpToolContext) {
     return this.waters.delete(id, userId);
   }

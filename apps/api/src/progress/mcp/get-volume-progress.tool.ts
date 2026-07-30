@@ -15,8 +15,15 @@ export class GetVolumeProgressTool implements McpToolDef {
   readonly description =
     'Volume total de força por semana, opcionalmente filtrado por grupo muscular.';
   readonly inputSchema = {
-    days: z.union([z.literal(30), z.literal(90), z.literal(180)]),
-    muscleGroup: z.string().optional(),
+    days: z
+      .union([z.literal(30), z.literal(90), z.literal(180)])
+      .describe('Janela de análise em dias — um de 30, 90 ou 180'),
+    muscleGroup: z
+      .string()
+      .optional()
+      .describe(
+        'Filtra por grupo muscular (peito, costas, pernas, ombro, braço, core, cardio). Omita para o volume total',
+      ),
   } as const;
   execute(input: { days: number; muscleGroup?: string }, { userId, timezone }: McpToolContext) {
     return this.progress.volumeProgress(input.days, input.muscleGroup, { userId, timezone });

@@ -14,10 +14,10 @@ export class UpdateWeightLogTool implements McpToolDef {
   readonly name = 'update_weight_log';
   readonly description = 'Atualiza um log de peso existente.';
   readonly inputSchema = {
-    weightLogId: z.string().uuid(),
-    weightKg: z.number().positive().optional(),
-    loggedAt: z.string().optional(),
-    notes: z.string().max(500).optional(),
+    weightLogId: z.string().uuid().describe('ID do registro de peso a atualizar'),
+    weightKg: z.number().positive().optional().describe('Novo peso corporal em kg'),
+    loggedAt: z.string().optional().describe('Novo horário da pesagem, em ISO 8601'),
+    notes: z.string().max(500).optional().describe('Novas observações da pesagem'),
   } as const;
   execute(
     input: { weightLogId: string; weightKg?: number; loggedAt?: string; notes?: string },

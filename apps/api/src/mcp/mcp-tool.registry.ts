@@ -7,11 +7,17 @@ import {
   type McpToolContext,
   type McpToolDef,
 } from '../common/decorators/tool.decorator';
+import { formatToolError } from './mcp-error';
 
-type ToolResult = { content: Array<{ type: 'text'; text: string }> };
+type ToolResult = { content: Array<{ type: 'text'; text: string }>; isError?: boolean };
 
 const ok = (data: unknown): ToolResult => ({
   content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
+});
+
+const fail = (text: string): ToolResult => ({
+  content: [{ type: 'text', text }],
+  isError: true,
 });
 
 @Injectable()
@@ -57,14 +63,21 @@ export class McpToolRegistry implements OnModuleInit {
             });
             return ok(data);
           } catch (err) {
+            const { category, text } = formatToolError(err);
             this.logger.error({
               tool: tool.name,
               userId: ctx.userId,
               durationMs: Date.now() - start,
               success: false,
+              category,
               error: err instanceof Error ? err.message : String(err),
             });
-            throw err;
+            // Erro de execução volta como resultado `isError`, não como erro de
+            // protocolo: o Claude precisa ler a categoria e a dica para se
+            // recuperar sozinho. INTERNAL é a exceção — não há o que corrigir do
+            // lado do cliente, então propagamos.
+            if (category === 'INTERNAL') throw err;
+            return fail(text);
           }
         },
       );
