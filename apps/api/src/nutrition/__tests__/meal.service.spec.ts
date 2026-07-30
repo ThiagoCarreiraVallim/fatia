@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { MealType } from '@prisma/client';
 import { MealService } from '../meal.service';
 import type { PrismaService } from '../../common/prisma.service';
@@ -135,6 +135,7 @@ describe('MealService', () => {
   describe('create', () => {
     it('resolves items, then creates the meal with nested items', async () => {
       prisma.food.findFirst.mockResolvedValue(makeFood());
+      prisma.meal.findMany.mockResolvedValue([]);
       const createdMeal = {
         id: 'meal-1',
         userId,
@@ -162,6 +163,142 @@ describe('MealService', () => {
       );
       const createdItems = prisma.meal.create.mock.calls[0][0].data.items.create;
       expect(createdItems[0].kcal).toBe(130);
+    });
+
+    // Idempotência (issue #94): logar a mesma refeição 2× não deve duplicar em silêncio.
+    describe('deduplicação por chave natural', () => {
+      const lunchAtNoon = {
+        mealType: MealType.LUNCH,
+        eatenAt: '2026-01-15T12:00:00Z',
+        items: [{ foodId: 1, grams: 100 }],
+      };
+
+      const existingMeal = (items: Array<Record<string, unknown>>) => ({
+        id: 'meal-existente',
+        userId,
+        mealType: MealType.LUNCH,
+        eatenAt: new Date('2026-01-15T12:00:00Z'),
+        items,
+      });
+
+      it('rejeita com CONFLICT quando tipo, horário e itens são idênticos', async () => {
+        prisma.food.findFirst.mockResolvedValue(makeFood());
+        prisma.meal.findMany.mockResolvedValue([
+          existingMeal([{ foodId: 1, foodName: 'Rice', grams: 100 }]),
+        ]);
+
+        await expect(service.create(userId, lunchAtNoon)).rejects.toThrow(ConflictException);
+        expect(prisma.meal.create).not.toHaveBeenCalled();
+      });
+
+      it('cita o id da refeição existente para o cliente poder decidir', async () => {
+        prisma.food.findFirst.mockResolvedValue(makeFood());
+        prisma.meal.findMany.mockResolvedValue([
+          existingMeal([{ foodId: 1, foodName: 'Rice', grams: 100 }]),
+        ]);
+
+        await expect(service.create(userId, lunchAtNoon)).rejects.toThrow(/meal-existente/);
+      });
+
+      it('escopa a busca de duplicata ao próprio usuário', async () => {
+        prisma.food.findFirst.mockResolvedValue(makeFood());
+        prisma.meal.findMany.mockResolvedValue([]);
+        prisma.meal.create.mockResolvedValue({ id: 'meal-nova' });
+
+        await service.create(userId, lunchAtNoon);
+
+        expect(prisma.meal.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({ userId, mealType: MealType.LUNCH }),
+          }),
+        );
+      });
+
+      it('permite quando as gramas diferem', async () => {
+        prisma.food.findFirst.mockResolvedValue(makeFood());
+        prisma.meal.findMany.mockResolvedValue([
+          existingMeal([{ foodId: 1, foodName: 'Rice', grams: 250 }]),
+        ]);
+        prisma.meal.create.mockResolvedValue({ id: 'meal-nova' });
+
+        await expect(service.create(userId, lunchAtNoon)).resolves.toBeDefined();
+      });
+
+      it('permite quando a refeição existente tem itens a mais', async () => {
+        prisma.food.findFirst.mockResolvedValue(makeFood());
+        prisma.meal.findMany.mockResolvedValue([
+          existingMeal([
+            { foodId: 1, foodName: 'Rice', grams: 100 },
+            { foodId: 2, foodName: 'Beans', grams: 80 },
+          ]),
+        ]);
+        prisma.meal.create.mockResolvedValue({ id: 'meal-nova' });
+
+        await expect(service.create(userId, lunchAtNoon)).resolves.toBeDefined();
+      });
+
+      it('detecta duplicata mesmo com os itens em ordem diferente', async () => {
+        prisma.food.findFirst
+          .mockResolvedValueOnce(makeFood())
+          .mockResolvedValueOnce(makeFood({ id: 2, name: 'Beans' }));
+        prisma.meal.findMany.mockResolvedValue([
+          existingMeal([
+            { foodId: 2, foodName: 'Beans', grams: 80 },
+            { foodId: 1, foodName: 'Rice', grams: 100 },
+          ]),
+        ]);
+
+        await expect(
+          service.create(userId, {
+            mealType: MealType.LUNCH,
+            eatenAt: '2026-01-15T12:00:00Z',
+            items: [
+              { foodId: 1, grams: 100 },
+              { foodId: 2, grams: 80 },
+            ],
+          }),
+        ).rejects.toThrow(ConflictException);
+      });
+
+      it('ignora notes na chave natural — só a observação mudar não cria refeição nova', async () => {
+        prisma.food.findFirst.mockResolvedValue(makeFood());
+        prisma.meal.findMany.mockResolvedValue([
+          existingMeal([{ foodId: 1, foodName: 'Rice', grams: 100 }]),
+        ]);
+
+        await expect(
+          service.create(userId, { ...lunchAtNoon, notes: 'comi com pressa' }),
+        ).rejects.toThrow(ConflictException);
+      });
+
+      it('permite itens livres com nomes diferentes no mesmo horário', async () => {
+        prisma.meal.findMany.mockResolvedValue([
+          existingMeal([{ foodId: null, foodName: 'Pão de queijo', grams: 80 }]),
+        ]);
+        prisma.meal.create.mockResolvedValue({ id: 'meal-nova' });
+
+        await expect(
+          service.create(userId, {
+            mealType: MealType.LUNCH,
+            eatenAt: '2026-01-15T12:00:00Z',
+            items: [{ foodName: 'Coxinha', grams: 80, kcal: 300 }],
+          }),
+        ).resolves.toBeDefined();
+      });
+
+      it('trata item livre como duplicata ignorando caixa e espaços do nome', async () => {
+        prisma.meal.findMany.mockResolvedValue([
+          existingMeal([{ foodId: null, foodName: 'Pão de queijo', grams: 80 }]),
+        ]);
+
+        await expect(
+          service.create(userId, {
+            mealType: MealType.LUNCH,
+            eatenAt: '2026-01-15T12:00:00Z',
+            items: [{ foodName: '  PÃO DE QUEIJO ', grams: 80, kcal: 300 }],
+          }),
+        ).rejects.toThrow(ConflictException);
+      });
     });
   });
 

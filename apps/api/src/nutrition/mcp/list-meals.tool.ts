@@ -15,8 +15,17 @@ export class ListMealsTool implements McpToolDef {
   readonly description = 'Lista refeições do usuário (cursor pagination).';
   readonly inputSchema = {
     date: z.string().optional().describe('YYYY-MM-DD para filtrar pelo dia'),
-    cursor: z.string().optional(),
-    limit: z.number().int().min(1).max(50).optional(),
+    cursor: z
+      .string()
+      .optional()
+      .describe('ID da última refeição da página anterior, para paginar'),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(50)
+      .optional()
+      .describe('Quantas refeições retornar (default 20, máx 50)'),
   } as const;
   execute(
     input: { date?: string; cursor?: string; limit?: number },

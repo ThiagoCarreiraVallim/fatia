@@ -14,12 +14,16 @@ export class CreateCustomFoodTool implements McpToolDef {
   readonly name = 'create_custom_food';
   readonly description = 'Cria um alimento custom para o usuário.';
   readonly inputSchema = {
-    name: z.string().min(1).max(160),
-    groupId: z.number().int().optional(),
-    kcalPer100g: z.number().min(0),
-    proteinPer100g: z.number().min(0),
-    carbsPer100g: z.number().min(0),
-    fatPer100g: z.number().min(0),
+    name: z.string().min(1).max(160).describe('Nome do alimento (ex.: "Whey chocolate marca X")'),
+    groupId: z
+      .number()
+      .int()
+      .optional()
+      .describe('ID do grupo alimentar. Use list_food_groups para obter os IDs'),
+    kcalPer100g: z.number().min(0).describe('Calorias por 100 g'),
+    proteinPer100g: z.number().min(0).describe('Proteína em gramas por 100 g'),
+    carbsPer100g: z.number().min(0).describe('Carboidratos em gramas por 100 g'),
+    fatPer100g: z.number().min(0).describe('Gordura em gramas por 100 g'),
   } as const;
   execute(
     input: {

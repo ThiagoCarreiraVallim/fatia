@@ -14,7 +14,13 @@ export class UpdateTimezoneTool implements McpToolDef {
   constructor(private readonly prisma: PrismaService) {}
   readonly name = 'update_timezone';
   readonly description = 'Atualiza o fuso horário do usuário (IANA, ex.: "America/Sao_Paulo").';
-  readonly inputSchema = { timezone: z.string().min(3).max(60) } as const;
+  readonly inputSchema = {
+    timezone: z
+      .string()
+      .min(3)
+      .max(60)
+      .describe('Fuso horário IANA (ex.: "America/Sao_Paulo") — define o corte dos dias'),
+  } as const;
   execute({ timezone }: { timezone: string }, { userId }: McpToolContext) {
     return this.prisma.user.update({
       where: { id: userId },

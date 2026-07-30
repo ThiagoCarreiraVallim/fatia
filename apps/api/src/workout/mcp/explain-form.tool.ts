@@ -14,9 +14,12 @@ export class ExplainFormTool implements McpToolDef {
 
   readonly name = 'explain_form';
   readonly description =
-    'Returns step-by-step instructions and technique details for an exercise by name. Use the returned instructions to explain proper form to the user.';
+    'Retorna os passos de execução e detalhes de técnica de um exercício buscado por nome. Use quando o usuário perguntar "como faz" ou pedir ajuda com a forma — as instruções retornadas são o insumo para explicar a execução correta.';
   readonly inputSchema = {
-    exerciseName: z.string().min(2).describe('Name of the exercise (partial match supported)'),
+    exerciseName: z
+      .string()
+      .min(2)
+      .describe('Nome do exercício — busca parcial é suportada (ex.: "supino")'),
   } as const;
 
   async execute(input: { exerciseName: string }, { userId }: McpToolContext) {

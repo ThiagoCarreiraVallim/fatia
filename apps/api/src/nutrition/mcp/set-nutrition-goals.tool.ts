@@ -14,16 +14,26 @@ export class SetNutritionGoalsTool implements McpToolDef {
   readonly name = 'set_nutrition_goals';
   readonly description = 'Cria/atualiza as metas nutricionais do usuário.';
   readonly inputSchema = {
-    kcalMin: z.number().int().min(0),
-    kcalMax: z.number().int().min(0),
-    proteinMinG: z.number().int().min(0),
-    proteinMaxG: z.number().int().min(0),
-    carbsMinG: z.number().int().min(0),
-    carbsMaxG: z.number().int().min(0),
-    fatMinG: z.number().int().min(0),
-    fatMaxG: z.number().int().min(0),
-    weeklyWorkouts: z.number().int().min(0).optional(),
-    dailyStepsTarget: z.number().int().min(0).optional(),
+    kcalMin: z.number().int().min(0).describe('Piso da faixa diária de calorias'),
+    kcalMax: z.number().int().min(0).describe('Teto da faixa diária de calorias'),
+    proteinMinG: z.number().int().min(0).describe('Piso da faixa diária de proteína, em gramas'),
+    proteinMaxG: z.number().int().min(0).describe('Teto da faixa diária de proteína, em gramas'),
+    carbsMinG: z.number().int().min(0).describe('Piso da faixa diária de carboidratos, em gramas'),
+    carbsMaxG: z.number().int().min(0).describe('Teto da faixa diária de carboidratos, em gramas'),
+    fatMinG: z.number().int().min(0).describe('Piso da faixa diária de gordura, em gramas'),
+    fatMaxG: z.number().int().min(0).describe('Teto da faixa diária de gordura, em gramas'),
+    weeklyWorkouts: z
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .describe('Meta de treinos por semana (default 3)'),
+    dailyStepsTarget: z
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .describe('Meta diária de passos (default 8000)'),
     dailyWaterTargetMl: z
       .number()
       .int()

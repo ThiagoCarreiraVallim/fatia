@@ -33,6 +33,7 @@ import { UpdateCustomExerciseTool } from './mcp/update-custom-exercise.tool';
 import { UpdatePlanExerciseTool } from './mcp/update-plan-exercise.tool';
 import { UpdateSetTool } from './mcp/update-set.tool';
 import { UpdateWorkoutPlanTool } from './mcp/update-workout-plan.tool';
+import { UpdateWorkoutSessionTool } from './mcp/update-workout-session.tool';
 
 @Module({
   controllers: [WorkoutController],
@@ -72,6 +73,7 @@ import { UpdateWorkoutPlanTool } from './mcp/update-workout-plan.tool';
     UpdatePlanExerciseTool,
     UpdateSetTool,
     UpdateWorkoutPlanTool,
+    UpdateWorkoutSessionTool,
   ],
   exports: [ExerciseService, WorkoutPlanService, WorkoutSessionService, SessionSetService],
 })

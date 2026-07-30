@@ -13,7 +13,9 @@ export class GetMealTool implements McpToolDef {
   constructor(private readonly meals: MealService) {}
   readonly name = 'get_meal';
   readonly description = 'Detalha uma refeição.';
-  readonly inputSchema = { id: z.string().uuid() } as const;
+  readonly inputSchema = {
+    id: z.string().uuid().describe('ID da refeição a detalhar'),
+  } as const;
   execute({ id }: { id: string }, { userId }: McpToolContext) {
     return this.meals.findById(userId, id);
   }

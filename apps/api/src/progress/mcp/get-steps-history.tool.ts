@@ -18,7 +18,9 @@ export class GetStepsHistoryTool implements McpToolDef {
   readonly name = 'get_steps_history';
   readonly description = 'Série temporal de passos por dia (preenche dias vazios com 0).';
   readonly inputSchema = {
-    days: z.union([z.literal(7), z.literal(14), z.literal(30), z.literal(90), z.literal(180)]),
+    days: z
+      .union([z.literal(7), z.literal(14), z.literal(30), z.literal(90), z.literal(180)])
+      .describe('Janela do histórico em dias — um de 7, 14, 30, 90 ou 180'),
   } as const;
   async execute(input: { days: number }, { userId, timezone }: McpToolContext) {
     const series = await this.steps.getHistory(input.days, userId, timezone);

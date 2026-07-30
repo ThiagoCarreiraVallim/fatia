@@ -13,7 +13,9 @@ export class DeleteMealItemTool implements McpToolDef {
   constructor(private readonly mealItems: MealItemService) {}
   readonly name = 'delete_meal_item';
   readonly description = 'Remove um item de refeição.';
-  readonly inputSchema = { id: z.string().uuid() } as const;
+  readonly inputSchema = {
+    id: z.string().uuid().describe('ID do item de refeição a remover'),
+  } as const;
   async execute({ id }: { id: string }, { userId }: McpToolContext) {
     await this.mealItems.delete(userId, id);
     return { deleted: id };

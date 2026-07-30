@@ -13,7 +13,9 @@ export class CompleteGoalTool implements McpToolDef {
   constructor(private readonly goals: GoalsService) {}
   readonly name = 'complete_goal';
   readonly description = 'Marca uma meta como concluída.';
-  readonly inputSchema = { goalId: z.string() } as const;
+  readonly inputSchema = {
+    goalId: z.string().describe('ID da meta a marcar como concluída'),
+  } as const;
   async execute({ goalId }: { goalId: string }, { userId, timezone }: McpToolContext) {
     return this.goals.complete(goalId, userId, timezone);
   }

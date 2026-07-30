@@ -16,14 +16,20 @@ export class UpdateGoalTool implements McpToolDef {
   readonly description =
     'Atualiza uma meta pessoal. Use `lastReportedValue` para reportar progresso manual em metas de tipo `body_fat` ou `custom`.';
   readonly inputSchema = {
-    goalId: z.string(),
-    title: z.string().min(1).max(120).optional(),
-    description: z.string().max(500).optional(),
-    targetValue: z.number().optional(),
-    unit: z.string().min(1).max(30).optional(),
+    goalId: z.string().describe('ID da meta a atualizar'),
+    title: z.string().min(1).max(120).optional().describe('Novo título da meta'),
+    description: z.string().max(500).optional().describe('Novo detalhamento da meta'),
+    targetValue: z.number().optional().describe('Novo valor alvo, na unidade da meta'),
+    unit: z.string().min(1).max(30).optional().describe('Nova unidade (ex.: "kg", "%", "passos")'),
     deadline: z.string().optional().describe('ISO datetime; vazio para remover'),
-    lastReportedValue: z.number().optional(),
-    status: z.nativeEnum(GoalStatus).optional(),
+    lastReportedValue: z
+      .number()
+      .optional()
+      .describe('Valor atual reportado — use para metas sem fonte automática (body_fat, custom)'),
+    status: z
+      .nativeEnum(GoalStatus)
+      .optional()
+      .describe('Nova situação: active, completed, expired ou archived'),
   } as const;
   async execute(
     input: {

@@ -13,7 +13,9 @@ export class DeleteGoalTool implements McpToolDef {
   constructor(private readonly goals: GoalsService) {}
   readonly name = 'delete_goal';
   readonly description = 'Remove permanentemente uma meta pessoal.';
-  readonly inputSchema = { goalId: z.string() } as const;
+  readonly inputSchema = {
+    goalId: z.string().describe('ID da meta a remover'),
+  } as const;
   async execute({ goalId }: { goalId: string }, { userId }: McpToolContext) {
     return this.goals.delete(goalId, userId);
   }

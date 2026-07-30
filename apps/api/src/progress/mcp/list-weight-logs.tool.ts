@@ -14,10 +14,19 @@ export class ListWeightLogsTool implements McpToolDef {
   readonly name = 'list_weight_logs';
   readonly description = 'Lista logs de peso, com filtro de período e cursor de paginação.';
   readonly inputSchema = {
-    from: z.string().optional(),
-    to: z.string().optional(),
-    limit: z.number().int().min(1).max(100).optional(),
-    cursor: z.string().optional(),
+    from: z.string().optional().describe('Data inicial do intervalo, em YYYY-MM-DD'),
+    to: z.string().optional().describe('Data final do intervalo, em YYYY-MM-DD'),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .optional()
+      .describe('Quantos registros retornar (default 20, máx 100)'),
+    cursor: z
+      .string()
+      .optional()
+      .describe('ID do último registro da página anterior, para paginar'),
   } as const;
   execute(
     input: { from?: string; to?: string; limit?: number; cursor?: string },

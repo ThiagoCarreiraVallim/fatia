@@ -15,9 +15,20 @@ export class GetCardioProgressTool implements McpToolDef {
   readonly description =
     'Evolução de cardio em um exercício (duration, distance, pace ou kcal). Exercise deve ter muscleGroup=cardio.';
   readonly inputSchema = {
-    exerciseId: z.number().int(),
-    days: z.union([z.literal(30), z.literal(90), z.literal(180), z.literal(365)]),
-    metric: z.enum(['duration', 'distance', 'pace', 'kcal']).optional().default('duration'),
+    exerciseId: z
+      .number()
+      .int()
+      .describe('ID do exercício de cardio a analisar, obtido via search_exercise'),
+    days: z
+      .union([z.literal(30), z.literal(90), z.literal(180), z.literal(365)])
+      .describe('Janela de análise em dias — um de 30, 90, 180 ou 365'),
+    metric: z
+      .enum(['duration', 'distance', 'pace', 'kcal'])
+      .optional()
+      .default('duration')
+      .describe(
+        'Métrica a acompanhar: duration (tempo), distance (distância), pace (ritmo) ou kcal (calorias). Default duration',
+      ),
   } as const;
   execute(
     input: { exerciseId: number; days: number; metric?: 'duration' | 'distance' | 'pace' | 'kcal' },

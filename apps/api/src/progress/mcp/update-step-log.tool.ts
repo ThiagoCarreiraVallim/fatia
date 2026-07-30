@@ -14,10 +14,10 @@ export class UpdateStepLogTool implements McpToolDef {
   readonly name = 'update_step_log';
   readonly description = 'Atualiza um log de passos específico (corrige valor, data ou notas).';
   readonly inputSchema = {
-    stepLogId: z.string().uuid(),
-    steps: z.number().int().min(0).optional(),
-    date: z.string().optional(),
-    notes: z.string().max(500).optional(),
+    stepLogId: z.string().uuid().describe('ID do registro de passos a atualizar'),
+    steps: z.number().int().min(0).optional().describe('Novo total de passos'),
+    date: z.string().optional().describe('Nova data do registro, em YYYY-MM-DD'),
+    notes: z.string().max(500).optional().describe('Novas observações do registro'),
   } as const;
   execute(
     input: { stepLogId: string; steps?: number; date?: string; notes?: string },

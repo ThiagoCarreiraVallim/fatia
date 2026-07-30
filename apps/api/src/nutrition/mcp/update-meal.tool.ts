@@ -15,10 +15,13 @@ export class UpdateMealTool implements McpToolDef {
   readonly name = 'update_meal';
   readonly description = 'Atualiza metadados da refeição (mealType/eatenAt/notes).';
   readonly inputSchema = {
-    id: z.string().uuid(),
-    mealType: z.nativeEnum(MealType).optional(),
-    eatenAt: z.string().optional(),
-    notes: z.string().max(500).optional(),
+    id: z.string().uuid().describe('ID da refeição a atualizar'),
+    mealType: z
+      .nativeEnum(MealType)
+      .optional()
+      .describe('Novo tipo: BREAKFAST, LUNCH, DINNER ou SNACK'),
+    eatenAt: z.string().optional().describe('Novo horário de consumo, em ISO 8601'),
+    notes: z.string().max(500).optional().describe('Novas observações da refeição'),
   } as const;
   execute({ id, ...rest }: { id: string } & Record<string, unknown>, { userId }: McpToolContext) {
     return this.meals.update(userId, id, rest);

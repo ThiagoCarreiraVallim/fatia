@@ -13,7 +13,15 @@ export class GetNutritionHistoryTool implements McpToolDef {
   constructor(private readonly summary: NutritionSummaryService) {}
   readonly name = 'get_nutrition_history';
   readonly description = 'Histórico dos últimos N dias com médias.';
-  readonly inputSchema = { days: z.number().int().min(1).max(90).default(7) } as const;
+  readonly inputSchema = {
+    days: z
+      .number()
+      .int()
+      .min(1)
+      .max(90)
+      .default(7)
+      .describe('Quantos dias para trás incluir no histórico (default 7, máx 90)'),
+  } as const;
   execute({ days }: { days: number }, { userId, timezone }: McpToolContext) {
     return this.summary.getHistory(userId, days, timezone);
   }

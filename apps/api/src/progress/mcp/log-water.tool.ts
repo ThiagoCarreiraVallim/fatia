@@ -21,7 +21,7 @@ export class LogWaterTool implements McpToolDef {
   readonly inputSchema = {
     ml: z.number().int().positive().describe('Volume em mL (ex.: 250 = copo, 500 = garrafa)'),
     date: z.string().optional().describe('YYYY-MM-DD; default hoje no fuso do user'),
-    notes: z.string().max(500).optional(),
+    notes: z.string().max(500).optional().describe('Observações do registro'),
   } as const;
   async execute(
     input: { ml: number; date?: string; notes?: string },
