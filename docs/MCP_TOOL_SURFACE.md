@@ -13,12 +13,13 @@
 | Nutrition (alimentos, refeições, itens, metas de nutriente) |     22 | `apps/api/src/nutrition/mcp/`  |
 | Goals (metas pessoais)                                      |      6 | `apps/api/src/goals/mcp/`      |
 | Meta (perfil)                                               |      3 | `apps/api/src/mcp/tools/meta/` |
-| **Total**                                                   | **85** |                                |
+| Conta (export e deleção — LGPD)                             |      2 | `apps/api/src/users/mcp/`      |
+| **Total**                                                   | **87** |                                |
 
 A contagem é verificada por `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`, que também
 garante que `docs/MCP.md` bate com o registro real.
 
-## Por que 85 e não ~30
+## Por que 87 e não ~30
 
 O Fatia é **MCP-first** por decisão de arquitetura (ADR 006): tudo que o PWA faz, o Claude
 faz. Isso produz um CRUD completo por entidade — e é o que dá ao conector sua proposta de

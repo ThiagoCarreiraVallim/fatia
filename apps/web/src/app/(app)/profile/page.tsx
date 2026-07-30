@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Flag, Watch, Settings, LogOut, ChevronRight } from 'lucide-react';
+import { Flag, Watch, Settings, Shield, LogOut, ChevronRight } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth-server';
 import { CopyMcpUrl } from '@/components/profile/copy-mcp-url';
 import { ProfileMetrics } from '@/components/profile/profile-metrics';
@@ -69,6 +69,12 @@ export default async function ProfilePage() {
           icon={<Watch size={18} className="text-primary" />}
           title="Dispositivos"
           subtitle="Integração com Apple Health e Garmin"
+        />
+        <MenuItem
+          href="/privacy"
+          icon={<Shield size={18} className="text-primary" />}
+          title="Privacidade e dados"
+          subtitle="O que guardamos, e como exportar ou apagar"
         />
       </nav>
 
