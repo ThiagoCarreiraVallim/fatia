@@ -93,6 +93,8 @@ export class OAuthFacadeService {
       throw new BadRequestException('code_challenge is required (PKCE)');
     }
 
+    await this.pruneExpiredAuthorizations();
+
     const state = randomBytes(24).toString('hex');
     const logtoCodeVerifier = randomBytes(48).toString('base64url');
     const logtoCodeChallenge = createHash('sha256').update(logtoCodeVerifier).digest('base64url');
@@ -122,6 +124,32 @@ export class OAuthFacadeService {
     url.searchParams.set('scope', Array.from(scopes).filter(Boolean).join(' '));
     url.searchParams.set('resource', this.resolveResource(params.resource));
     return { logtoAuthorizeUrl: url.toString() };
+  }
+
+  /**
+   * Apaga authorizations vencidas (issue #91).
+   *
+   * Elas nunca dão acesso a nada — `exchangeCode` checa `expiresAt` e
+   * `consumedAt` — mas acumulavam indefinidamente, guardando `code`,
+   * `clientCodeChallenge` e `logtoCodeVerifier` de todo login já feito. Menos
+   * material parado é menos superfície num eventual vazamento de banco.
+   *
+   * A limpeza é oportunista, em vez de um cron: acontece no início de cada
+   * authorize, é indexada por `expiresAt`, e dispensa somar @nestjs/schedule ao
+   * projeto por causa de uma tabela efêmera. Se falhar, não pode derrubar o
+   * login — o catch registra e segue.
+   */
+  private async pruneExpiredAuthorizations(): Promise<void> {
+    try {
+      const { count } = await this.prisma.mcpOAuthAuthorization.deleteMany({
+        where: { expiresAt: { lt: new Date() } },
+      });
+      if (count > 0) this.logger.log(`Limpou ${count} authorization(s) expirada(s)`);
+    } catch (err) {
+      this.logger.warn(
+        `Falha ao limpar authorizations expiradas: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   async handleCallback(state: string, logtoCode: string) {

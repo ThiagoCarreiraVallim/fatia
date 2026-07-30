@@ -14,6 +14,10 @@ Transport: **Streamable HTTP** (recomendação atual do MCP, suporta unidirecion
 
 **Atualizado pela ADR 008.** O MCP do Fatia usa OAuth 2.1 conforme spec MCP, com identity provider externo (Logto self-hosted). Bearer tokens estáticos foram descontinuados.
 
+> O fluxo ponta a ponta, o mapeamento exato de cada endpoint para o Logto, os env vars
+> necessários e a decisão sobre revogação (RFC 7009) estão em
+> [`docs/MCP_OAUTH.md`](./MCP_OAUTH.md).
+
 ### Fluxo de conexão no Claude
 
 1. Usuário no Claude (web ou app) adiciona conector apontando para `https://api.fatia.dominio/mcp`
