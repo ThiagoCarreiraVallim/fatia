@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Mesma paleta de apps/web/src/app/globals.css. */
+    --background: 0 0% 7.5%; /* #131313 */
+    --foreground: 15 7% 89%; /* #e5e2e1 */
+    --card: 0 0% 16.5%; /* #2a2a2a */
+    --primary: 108 100% 45%; /* #2ce500 — verde da marca */
+    --primary-foreground: 0 0% 7.5%;
+    --muted: 0 0% 12%;
+    --muted-foreground: 97 22% 74%; /* #baccaf */
+    --accent: 101 17% 25%;
+    --border: 0 0% 20%;
+    --radius: 0.75rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1;
+  }
+}

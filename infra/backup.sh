@@ -33,6 +33,16 @@
 
 set -euo pipefail
 
+# Carrega .env.backup ao lado do script, se existir. O cron não herda ambiente,
+# então sem isto seria preciso repetir todas as variáveis na crontab — e
+# credencial em crontab fica legível por qualquer um que rode `crontab -l`.
+# Variáveis já exportadas no ambiente têm precedência (útil para testar).
+ENV_FILE="$(dirname "$(readlink -f "$0")")/.env.backup"
+if [ -f "$ENV_FILE" ]; then
+  # shellcheck disable=SC1090
+  set -a && . "$ENV_FILE" && set +a
+fi
+
 BACKUP_DIR="${BACKUP_DIR:-/opt/fatia/backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-7}"
 CONTAINER="${CONTAINER:-fatia-postgres}"
