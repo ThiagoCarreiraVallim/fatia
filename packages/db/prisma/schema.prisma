@@ -205,12 +205,15 @@ model Exercise {
   id               Int      @id @default(autoincrement())
   name             String
   muscleGroup      String   // "peito", "costas", "pernas", "ombro", "braço", "core", "cardio"
-  primaryMuscles   String[]
-  secondaryMuscles String[]
+  // Defaults `[]` espelham o `DEFAULT '{}'` criado em
+  // migrations/20260602120000_add_exercise_enrichment. Sem eles o datamodel
+  // divergia do banco e o job `Prisma Checks` do CI acusava drift.
+  primaryMuscles   String[] @default([])
+  secondaryMuscles String[] @default([])
   equipment        String?
   level            String?  // "beginner" | "intermediate" | "advanced"
   mechanic         String?  // "compound" | "isolation"
-  instructions     String[]
+  instructions     String[] @default([])
   youtubeVideoId   String?
   youtubeVideoIdPt String?
   // Para exercícios custom: dono. Null = catálogo público.
