@@ -1,0 +1,54 @@
+---
+import { Icon } from 'astro-icon/components';
+import Base from '../layouts/Base.astro';
+import { site } from '../lib/site';
+
+/**
+ * Home institucional — PLACEHOLDER INTENCIONAL.
+ *
+ * O conteúdo definitivo vem do Thiago. Esta versão existe só para o domínio raiz
+ * não responder 404 e para dar um caminho claro até /claude-connect, que é a
+ * página que realmente converte hoje (issue #96).
+ *
+ * Ao substituir: mantenha o link para /claude-connect em destaque — é para lá
+ * que vai quem chega pelo diretório de conectores do Claude.
+ */
+---
+
+<Base
+  title="Fatia — nutrição e treino, sem planilha"
+  description="O Fatia registra o que você come e treina, com a tabela TACO brasileira. Use pelo app ou conversando com o Claude."
+  canonical="/"
+>
+  <section class="mx-auto flex max-w-5xl flex-col items-start px-6 py-24 sm:py-32">
+    <h1
+      class="font-display max-w-3xl text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-6xl"
+    >
+      Nutrição e treino, <span class="text-primary">sem planilha</span>.
+    </h1>
+    <p class="mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground">
+      O Fatia registra o que você come e treina, com a tabela TACO brasileira. Use pelo app ou
+      conversando com o Claude.
+    </p>
+
+    <div class="mt-10 flex flex-wrap items-center gap-4">
+      <a
+        href={site.appUrl}
+        class="font-display rounded-xl bg-primary px-6 py-3.5 font-bold text-primary-foreground transition-opacity hover:opacity-90"
+      >
+        Criar conta grátis
+      </a>
+      <a
+        href="/claude-connect/"
+        class="group inline-flex items-center gap-2 rounded-xl border border-border px-6 py-3.5 font-semibold transition-colors hover:bg-muted"
+      >
+        Usar com o Claude
+        <Icon
+          name="lucide:arrow-right"
+          class="h-4 w-4 transition-transform group-hover:translate-x-0.5"
+          aria-hidden="true"
+        />
+      </a>
+    </div>
+  </section>
+</Base>

@@ -9,15 +9,15 @@
 
 ## Topologia
 
-| Componente     | Onde                                       | Notas                                       |
-| -------------- | ------------------------------------------ | ------------------------------------------- |
-| Site + landing | container nginx, mesmo compose             | Estático (`apps/site`), sem Node em runtime |
-| API (NestJS)   | container, `infra/docker-compose.prod.yml` | Aplica migrations no boot                   |
-| PWA (Next.js)  | container, mesmo compose                   | —                                           |
-| Logto          | container, mesmo compose                   | IdP (ADR 008)                               |
-| Postgres       | "Database" do Dokploy, **fora** do compose | Databases `fatia` e `logto`                 |
-| Traefik        | gerenciado pelo Dokploy                    | TLS via Let's Encrypt, `dokploy-network`    |
-| Backups        | `infra/backup.sh` via cron no host         | Local + offsite opcional                    |
+| Componente     | Onde                                       | Notas                                         |
+| -------------- | ------------------------------------------ | --------------------------------------------- |
+| Site + landing | container nginx, mesmo compose             | Astro estático (`apps/site`), sem Node nem JS |
+| API (NestJS)   | container, `infra/docker-compose.prod.yml` | Aplica migrations no boot                     |
+| PWA (Next.js)  | container, mesmo compose                   | —                                             |
+| Logto          | container, mesmo compose                   | IdP (ADR 008)                                 |
+| Postgres       | "Database" do Dokploy, **fora** do compose | Databases `fatia` e `logto`                   |
+| Traefik        | gerenciado pelo Dokploy                    | TLS via Let's Encrypt, `dokploy-network`      |
+| Backups        | `infra/backup.sh` via cron no host         | Local + offsite opcional                      |
 
 | Host             | Serviço                                |
 | ---------------- | -------------------------------------- |

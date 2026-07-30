@@ -1,0 +1,225 @@
+---
+import { Icon } from 'astro-icon/components';
+import Base from '../layouts/Base.astro';
+import { site } from '../lib/site';
+
+/**
+ * Landing para quem chega pelo Claude (issue #96).
+ *
+ * O público é o usuário final que ouviu falar do Fatia num conector — não o dev
+ * que chega pelo GitHub. Por isso a página abre com o que dá para PEDIR ao
+ * Claude, não com a stack.
+ */
+
+const PROMPTS = [
+  {
+    icon: 'lucide:apple',
+    label: 'Nutrição',
+    examples: [
+      '"Comi 200 g de frango grelhado e uma xícara de arroz no almoço"',
+      '"Quantas calorias eu comi hoje?"',
+      '"Estou batendo minha meta de proteína essa semana?"',
+    ],
+  },
+  {
+    icon: 'lucide:dumbbell',
+    label: 'Treino',
+    examples: [
+      '"Começando o treino de push"',
+      '"Supino 4 séries de 8 com 70 kg"',
+      '"Qual foi minha última carga no agachamento?"',
+    ],
+  },
+  {
+    icon: 'lucide:chart-line',
+    label: 'Progresso',
+    examples: [
+      '"Quanto eu progredi no supino nos últimos 3 meses?"',
+      '"Pesei 78,4 kg hoje"',
+      '"Como está minha média de passos esse mês?"',
+    ],
+  },
+];
+
+const TRUST = [
+  {
+    icon: 'lucide:lock',
+    title: 'Seus dados são seus',
+    body: 'Exporte tudo em JSON ou apague a conta quando quiser — pedindo ao próprio Claude. Sem formulário, sem espera.',
+  },
+  {
+    icon: 'lucide:shield-check',
+    title: 'Nada é vendido nem rastreado',
+    body: 'Sem analytics, sem pixel, sem anúncio. O único cookie é o de sessão.',
+  },
+  {
+    icon: 'lucide:sparkles',
+    title: 'Sem custo de IA',
+    body: 'O Fatia não tem chave de API de LLM. O processamento roda na sua assinatura do Claude — não cobramos por isso e não repassamos seus dados a nenhum provedor de IA.',
+  },
+];
+---
+
+<Base
+  title="Conectar no Claude — Fatia"
+  description="Conecte o Fatia ao Claude e registre refeições e treinos conversando. Sem configuração, sem custo de IA extra."
+  canonical="/claude-connect/"
+>
+  <!-- Hero -->
+  <section class="mx-auto max-w-5xl px-6 pb-12 pt-16 sm:pt-24">
+    <p class="font-display text-sm font-bold uppercase tracking-widest text-primary">
+      Conector para o Claude
+    </p>
+    <h1
+      class="font-display mt-4 max-w-3xl text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-6xl"
+    >
+      Registre o que você come e treina <span class="text-primary">conversando</span>.
+    </h1>
+    <p class="mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground">
+      O Fatia dá ao Claude acesso ao seu diário de nutrição e treino. Você fala, ele registra — e
+      responde sobre o seu histórico. Com a tabela TACO, feita para comida brasileira.
+    </p>
+    <div class="mt-10 flex flex-wrap items-center gap-4">
+      <a
+        href={site.appUrl}
+        class="font-display rounded-xl bg-primary px-6 py-3.5 font-bold text-primary-foreground transition-opacity hover:opacity-90"
+      >
+        Criar conta grátis
+      </a>
+      <a
+        href="#como-conectar"
+        class="rounded-xl border border-border px-6 py-3.5 font-semibold transition-colors hover:bg-muted"
+      >
+        Como conectar
+      </a>
+    </div>
+  </section>
+
+  <!-- O que dá para pedir -->
+  <section class="mx-auto max-w-5xl px-6 py-12">
+    <h2 class="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
+      O que você pode pedir
+    </h2>
+    <div class="mt-8 grid gap-5 md:grid-cols-3">
+      {
+        PROMPTS.map(({ icon, label, examples }) => (
+          <div class="rounded-2xl border border-border/60 bg-card/40 p-6">
+            <div class="flex items-center gap-2.5">
+              <Icon name={icon} class="h-[18px] w-[18px] text-primary" aria-hidden="true" />
+              <h3 class="font-display font-bold">{label}</h3>
+            </div>
+            <ul class="mt-4 space-y-3 text-sm leading-relaxed text-muted-foreground">
+              {examples.map((example) => (
+                <li>{example}</li>
+              ))}
+            </ul>
+          </div>
+        ))
+      }
+    </div>
+    <p class="mt-6 text-sm text-muted-foreground">
+      São 87 ações disponíveis ao Claude — tudo que o app faz, ele faz.
+    </p>
+  </section>
+
+  <!-- Como conectar -->
+  <section id="como-conectar" class="mx-auto max-w-5xl scroll-mt-20 px-6 py-12">
+    <h2 class="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">Como conectar</h2>
+    <p class="mt-3 text-muted-foreground">Quatro passos, nenhum terminal.</p>
+    <ol class="mt-8 space-y-6">
+      <li class="flex gap-5">
+        <span
+          class="font-display flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 font-bold text-primary"
+          aria-hidden="true">1</span
+        >
+        <div class="pt-1">
+          <h3 class="font-semibold">Crie sua conta no Fatia</h3>
+          <div class="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+            Leva menos de um minuto em <a
+              href={site.appUrl}
+              class="text-foreground underline underline-offset-4"
+              >{site.appUrl.replace('https://', '')}</a
+            >. É a mesma conta que o Claude vai usar.
+          </div>
+        </div>
+      </li>
+      <li class="flex gap-5">
+        <span
+          class="font-display flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 font-bold text-primary"
+          aria-hidden="true">2</span
+        >
+        <div class="pt-1">
+          <h3 class="font-semibold">No Claude, abra Settings → Connectors</h3>
+          <div class="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+            Clique em “Add custom connector”.
+          </div>
+        </div>
+      </li>
+      <li class="flex gap-5">
+        <span
+          class="font-display flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 font-bold text-primary"
+          aria-hidden="true">3</span
+        >
+        <div class="pt-1">
+          <h3 class="font-semibold">Cole o endereço do servidor</h3>
+          <div class="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+            <code class="mt-2 inline-block rounded bg-muted px-2 py-1 font-mono text-sm"
+              >{site.mcpUrl}</code
+            >
+            <span class="mt-2 block"
+              >Só isso. Sem client ID, sem secret, sem token para copiar.</span
+            >
+          </div>
+        </div>
+      </li>
+      <li class="flex gap-5">
+        <span
+          class="font-display flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 font-bold text-primary"
+          aria-hidden="true">4</span
+        >
+        <div class="pt-1">
+          <h3 class="font-semibold">Autorize</h3>
+          <div class="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+            O Claude abre a tela de login do Fatia. Você entra, autoriza, e volta para a conversa
+            já conectado.
+          </div>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- Confiança -->
+  <section class="mx-auto max-w-5xl px-6 py-12">
+    <div class="grid gap-5 md:grid-cols-3">
+      {
+        TRUST.map(({ icon, title, body }) => (
+          <div class="rounded-2xl border border-border/60 p-6">
+            <Icon name={icon} class="h-[18px] w-[18px] text-primary" aria-hidden="true" />
+            <h3 class="font-display mt-3 font-bold">{title}</h3>
+            <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- Auto-hospedagem -->
+  <section class="mx-auto max-w-5xl px-6 pb-20 pt-12">
+    <div class="rounded-2xl border border-border/60 bg-card/40 p-8">
+      <h2 class="font-display text-xl font-extrabold tracking-tight">
+        Prefere rodar no seu servidor?
+      </h2>
+      <p class="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+        O Fatia é software livre. A instância pública é uma conveniência, não uma amarra — o
+        código, o schema e as instruções de deploy estão todos abertos, e auto-hospedar é um
+        caminho de primeira classe.
+      </p>
+      <a
+        href={site.repoUrl}
+        class="mt-6 inline-block rounded-xl border border-border px-5 py-3 text-sm font-semibold transition-colors hover:bg-muted"
+      >
+        Ver no GitHub
+      </a>
+    </div>
+  </section>
+</Base>

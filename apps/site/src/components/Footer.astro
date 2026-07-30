@@ -1,0 +1,26 @@
+---
+import { site } from '../lib/site';
+
+const links = [
+  { href: site.privacyUrl, label: 'Privacidade' },
+  { href: site.termsUrl, label: 'Termos' },
+  { href: site.repoUrl, label: 'GitHub' },
+];
+---
+
+<footer class="border-t border-border/60">
+  <div
+    class="mx-auto flex max-w-5xl flex-col gap-4 px-6 py-8 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between"
+  >
+    <p>Fatia — software livre.</p>
+    <nav class="flex flex-wrap gap-5">
+      {
+        links.map(({ href, label }) => (
+          <a href={href} class="transition-colors hover:text-foreground">
+            {label}
+          </a>
+        ))
+      }
+    </nav>
+  </div>
+</footer>

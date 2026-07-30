@@ -2,27 +2,28 @@
   "name": "@fatia/site",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "next dev -p 3040",
-    "build": "next build",
-    "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "dev": "astro dev --port 3040",
+    "build": "astro build",
+    "preview": "astro preview --port 3040",
+    "lint": "eslint . --ext .js,.ts,.astro",
+    "typecheck": "astro check"
   },
   "dependencies": {
-    "lucide-react": "^0.441.0",
-    "next": "^15.0.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "@astrojs/check": "^0.9.4",
+    "@astrojs/tailwind": "^5.1.5",
+    "@fontsource-variable/inter": "^5.1.1",
+    "@fontsource/plus-jakarta-sans": "^5.1.1",
+    "astro": "^5.1.0",
+    "astro-icon": "^1.1.5",
+    "tailwindcss": "^3.4.12"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@types/react": "^18.3.5",
-    "@types/react-dom": "^18.3.0",
-    "autoprefixer": "^10.5.2",
+    "@iconify-json/lucide": "^1.2.20",
+    "@typescript-eslint/parser": "^8.0.0",
     "eslint": "^8.57.0",
-    "eslint-config-next": "^15.0.0",
-    "postcss": "^8.5.16",
-    "tailwindcss": "^3.4.12",
+    "eslint-plugin-astro": "^1.3.1",
     "typescript": "^5.5.0"
   }
 }
