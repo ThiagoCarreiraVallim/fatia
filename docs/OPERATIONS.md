@@ -9,45 +9,107 @@
 
 ## Topologia
 
-| Componente    | Onde                                       | Notas                                    |
-| ------------- | ------------------------------------------ | ---------------------------------------- |
-| API (NestJS)  | container, `infra/docker-compose.prod.yml` | Aplica migrations no boot                |
-| PWA (Next.js) | container, mesmo compose                   | —                                        |
-| Logto         | container, mesmo compose                   | IdP (ADR 008)                            |
-| Postgres      | "Database" do Dokploy, **fora** do compose | Databases `fatia` e `logto`              |
-| Traefik       | gerenciado pelo Dokploy                    | TLS via Let's Encrypt, `dokploy-network` |
-| Backups       | `infra/backup.sh` via cron no host         | Local + offsite opcional                 |
+| Componente     | Onde                                       | Notas                                       |
+| -------------- | ------------------------------------------ | ------------------------------------------- |
+| Site + landing | container nginx, mesmo compose             | Estático (`apps/site`), sem Node em runtime |
+| API (NestJS)   | container, `infra/docker-compose.prod.yml` | Aplica migrations no boot                   |
+| PWA (Next.js)  | container, mesmo compose                   | —                                           |
+| Logto          | container, mesmo compose                   | IdP (ADR 008)                               |
+| Postgres       | "Database" do Dokploy, **fora** do compose | Databases `fatia` e `logto`                 |
+| Traefik        | gerenciado pelo Dokploy                    | TLS via Let's Encrypt, `dokploy-network`    |
+| Backups        | `infra/backup.sh` via cron no host         | Local + offsite opcional                    |
 
-Subdomínios: `api.`, `app.`, `auth.` — com redirect HTTP→HTTPS.
+| Host             | Serviço                                |
+| ---------------- | -------------------------------------- |
+| `fat.ia.br`      | site institucional + `/claude-connect` |
+| `www.fat.ia.br`  | redireciona para o apex                |
+| `app.fat.ia.br`  | PWA                                    |
+| `api.fat.ia.br`  | API + endpoint MCP em `/mcp`           |
+| `auth.fat.ia.br` | Logto                                  |
 
-## Backup
+Todos com redirect HTTP→HTTPS.
 
-### Configurar
+## Backup — setup do zero
 
-Cron no host:
+Tudo abaixo roda **no host**, via SSH. Leva ~15 minutos, quase todo em criar o bucket.
+
+### 1. Criar o bucket
+
+No **Backblaze B2** (mais barato para este volume) ou **Cloudflare R2** (sem taxa de egresso):
+
+- crie um bucket **privado** chamado `fatia-backups`
+- gere uma chave de aplicação com acesso **só a esse bucket**
+- anote `keyID`, `applicationKey` e o **endpoint S3** do bucket
+
+### 2. Instalar as dependências no host
 
 ```bash
+# Debian/Ubuntu
+sudo apt-get update && sudo apt-get install -y gnupg awscli
+```
+
+### 3. Gerar a passphrase
+
+```bash
+openssl rand -base64 32
+```
+
+> ⚠️ **Guarde esta passphrase no seu gerenciador de senhas ANTES de continuar.**
+> Se ela existir apenas no VPS e o VPS morrer, os backups offsite viram lixo cifrado —
+> você terá todas as cópias e não conseguirá abrir nenhuma. É o erro mais fácil de
+> cometer e o mais caro de descobrir tarde.
+
+### 4. Configurar
+
+```bash
+cd /opt/fatia
+cp infra/.env.backup.example infra/.env.backup
+nano infra/.env.backup          # preencher passphrase, bucket, chaves, webhook
+chmod 600 infra/.env.backup     # credenciais: só o dono lê
+chmod +x infra/backup.sh
+```
+
+Descubra o nome real do container do Postgres e ajuste `CONTAINER=`:
+
+```bash
+docker ps --format '{{.Names}}' | grep -i postgres
+```
+
+O `backup.sh` carrega o `.env.backup` sozinho — não é preciso repetir variável nenhuma
+na crontab (e credencial em crontab ficaria legível por qualquer `crontab -l`).
+
+### 5. Rodar uma vez na mão
+
+```bash
+/opt/fatia/infra/backup.sh
+```
+
+Esperado: `Dump OK`, `Cifrando com AES-256`, `Offsite OK`, `Concluído`. Se algum passo
+falhar, o script sai com código 1 e dispara o `ALERT_WEBHOOK`.
+
+### 6. Agendar
+
+```bash
+crontab -e
+```
+
+```cron
 0 4 * * * /opt/fatia/infra/backup.sh >> /var/log/fatia-backup.log 2>&1
 ```
 
-Variáveis (em `/etc/environment`, no crontab, ou num wrapper):
+### 7. Confirmar que o alerta funciona
+
+Vale testar antes de precisar. Rode apontando para um container inexistente:
 
 ```bash
-BACKUP_PASSPHRASE=<segredo forte>       # obrigatório para offsite
-S3_BUCKET=s3://fatia-backups
-S3_ENDPOINT=https://s3.us-west-004.backblazeb2.com   # Backblaze B2, Cloudflare R2, etc.
-AWS_ACCESS_KEY_ID=<...>
-AWS_SECRET_ACCESS_KEY=<...>
-S3_RETENTION_DAYS=30
-ALERT_WEBHOOK=<url que recebe POST em caso de falha>
+CONTAINER=nao-existe /opt/fatia/infra/backup.sh; echo "exit=$?"
 ```
 
-Requer `gpg` (cifra) e `aws` cli (offsite) instalados no host.
+Deve sair `exit=1` e o webhook deve receber a notificação.
 
-> **A `BACKUP_PASSPHRASE` NÃO pode viver só no VPS.** Se o servidor morrer e a passphrase morrer
-> com ele, os backups offsite são lixo cifrado. Guarde-a num gerenciador de senhas fora da
-> infraestrutura. Este é o modo de falha mais fácil de cometer e o mais difícil de perceber antes
-> da hora.
+### 8. Executar o primeiro drill de restore
+
+Seção seguinte. **Enquanto isso não acontecer, você não tem backup — tem esperança.**
 
 ### Garantias do script
 
@@ -109,8 +171,8 @@ gunzip -c /opt/fatia/backups/fatia-YYYYMMDD-HHMMSS.sql.gz \
 Tempo estimado: **1 a 2 horas**, dominado por propagação de DNS e emissão de certificado.
 
 1. **Provisionar host novo** com Docker e Dokploy. Ver `infra/dokploy/README.md`.
-2. **Apontar o DNS** dos três subdomínios (`api.`, `app.`, `auth.`) para o novo IP. Faça isto
-   cedo — a propagação corre em paralelo com o resto.
+2. **Apontar o DNS** do apex (`fat.ia.br`) e dos subdomínios (`api.`, `app.`, `auth.`, `www.`)
+   para o novo IP. Faça isto cedo — a propagação corre em paralelo com o resto.
 3. **Criar o Postgres** como Database do Dokploy, com as databases `fatia` e `logto`.
 4. **Restaurar o dump** mais recente do offsite (passos 2 e 3 do drill, mirando o Postgres novo).
    O `pg_dumpall` cobre `fatia` **e** `logto`, então as contas de usuário voltam junto — ninguém
@@ -126,8 +188,9 @@ Tempo estimado: **1 a 2 horas**, dominado por propagação de DNS e emissão de 
    atenção ao rate limit do Let's Encrypt.
 9. **Reinstalar o cron de backup** e rodar `backup.sh` na mão uma vez.
 10. **Smoke test:**
-    - `curl https://api.<domínio>/health`
-    - `curl https://api.<domínio>/.well-known/oauth-authorization-server`
+    - `curl https://api.fat.ia.br/health`
+    - `curl https://api.fat.ia.br/.well-known/oauth-authorization-server`
+    - `curl -I https://fat.ia.br/claude-connect/`
     - Login no PWA
     - Conectar o Fatia no Claude e pedir uma leitura (ver [`MCP_OAUTH.md`](./MCP_OAUTH.md))
 

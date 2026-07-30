@@ -28,7 +28,9 @@ automático.
 ## Pré-requisitos
 
 - Servidor com Dokploy instalado e acessível
-- DNS apontando `*.${DOMAIN}` (ou pelo menos `api.`, `app.`, `auth.`) pro IP do servidor
+- DNS apontando o **apex** (`fat.ia.br`, para o site) mais `api.`, `app.`, `auth.` e `www.`
+  pro IP do servidor. Um registro `A` para cada — ou um `A` no apex e um `CNAME` de cada
+  subdomínio para ele.
 - Email válido configurado em "Dokploy → Settings → Server → Let's Encrypt"
 
 ## Passo 1 — Criar a Database (Postgres)
@@ -61,7 +63,7 @@ Em **Compose → Environment**, cole **uma vez** baseado em
 `.env.production.example`. Mínimo obrigatório:
 
 ```env
-DOMAIN=fatia.app.br
+DOMAIN=fat.ia.br
 
 DATABASE_URL=postgresql://fatia:SENHA@fatia-postgres:5432/fatia
 LOGTO_DB_URL=postgresql://fatia:SENHA@fatia-postgres:5432/logto

@@ -7,14 +7,24 @@ dist/
 build/
 .next/
 .turbo/
+# Export estático do apps/site (next build com output: 'export')
+out/
+
+# Artefatos gerados pelo Next/tsc a cada build — sujam o working tree sem
+# agregar nada ao histórico (mesma lista do create-next-app).
+*.tsbuildinfo
+next-env.d.ts
 
 # Env
 .env
 .env.local
 .env.*.local
 .env.production
+# Credenciais do backup (passphrase + chaves S3), preenchidas no host.
+.env.backup
 !.env.example
 !.env.production.example
+!.env.backup.example
 
 # Logs
 *.log

@@ -111,6 +111,53 @@ services:
       - traefik.http.services.fatia-web.loadbalancer.server.port=3001
 
   # ============================================================
+  # Site institucional + landing do conector (estático)
+  # Ocupa o domínio RAIZ, que estava livre — o app vive em app.${DOMAIN}.
+  # Assim a landing não mexe em rota, start_url do PWA nem manifest.
+  # ============================================================
+  site:
+    image: ${SITE_IMAGE:-fatia-site:latest}
+    build:
+      context: ..
+      dockerfile: infra/site.Dockerfile
+      args:
+        # Estático: o domínio é embedado no bundle em build time.
+        NEXT_PUBLIC_DOMAIN: ${DOMAIN}
+    restart: unless-stopped
+    expose:
+      - "80"
+    networks:
+      - dokploy-network
+    deploy:
+      resources:
+        limits:
+          # Só nginx servindo arquivo — não precisa de mais que isso.
+          memory: 64M
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.routers.fatia-site-http.rule=Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`)
+      - traefik.http.routers.fatia-site-http.entrypoints=web
+      - traefik.http.routers.fatia-site-http.middlewares=fatia-site-redirect
+      - traefik.http.middlewares.fatia-site-redirect.redirectscheme.scheme=https
+      - traefik.http.middlewares.fatia-site-redirect.redirectscheme.permanent=true
+      - traefik.http.routers.fatia-site.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.fatia-site.entrypoints=websecure
+      - traefik.http.routers.fatia-site.tls=true
+      - traefik.http.routers.fatia-site.tls.certresolver=letsencrypt
+      - traefik.http.services.fatia-site.loadbalancer.server.port=80
+      # www.${DOMAIN} redireciona para o apex, para não haver conteúdo duplicado.
+      - traefik.http.routers.fatia-site-www.rule=Host(`www.${DOMAIN}`)
+      - traefik.http.routers.fatia-site-www.entrypoints=websecure
+      - traefik.http.routers.fatia-site-www.tls=true
+      - traefik.http.routers.fatia-site-www.tls.certresolver=letsencrypt
+      - traefik.http.routers.fatia-site-www.middlewares=fatia-site-www-redirect
+      - traefik.http.routers.fatia-site-www.service=fatia-site
+      - traefik.http.middlewares.fatia-site-www-redirect.redirectregex.regex=^https://www\.(.*)
+      - traefik.http.middlewares.fatia-site-www-redirect.redirectregex.replacement=https://$${1}
+      - traefik.http.middlewares.fatia-site-www-redirect.redirectregex.permanent=true
+
+  # ============================================================
   # Identity Provider (Logto self-hosted)
   # ============================================================
   auth:
