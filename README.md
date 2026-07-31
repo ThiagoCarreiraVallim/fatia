@@ -45,7 +45,7 @@ Próximos passos:
 | [`docs/DESIGN.md`](docs/DESIGN.md)             | UX, telas do PWA, fluxos                                                           |
 | [`docs/MCP.md`](docs/MCP.md)                   | Especificação das tools MCP expostas                                               |
 | [`docs/CLAUDE.md`](docs/CLAUDE.md)             | Instruções para o Claude trabalhando no código                                     |
-| [`docs/TASKS.md`](docs/TASKS.md)               | Checklist completo de implementação                                                |
+| [`docs/TASKS.md`](docs/TASKS.md)               | Ponteiro para o planejamento, que vive nas Issues                                  |
 | [`docs/ADR/`](docs/ADR/)                       | Architecture Decision Records                                                      |
 
 ## Estrutura
