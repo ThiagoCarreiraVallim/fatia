@@ -13,19 +13,31 @@
 
 ## Sumário
 
-| Bloco                                        | Itens | Situação                          |
-| -------------------------------------------- | ----: | --------------------------------- |
-| A. Lacunas sem issue (novas)                 |     9 | nenhuma trakeada                  |
-| B. Trakeado e ainda aberto                   |     6 | #91, #93, #96, #97, #113, #114    |
-| C. Escopo que a doc atual dispensa           |     3 | pode sair do caminho crítico      |
+| Bloco                                        | Itens | Situação                                    |
+| -------------------------------------------- | ----: | ------------------------------------------- |
+| A. Lacunas encontradas na auditoria          |     9 | trakeadas em #169, #170, #171 e #97         |
+| B. Trakeado antes desta auditoria            |     6 | #91, #93, #96, #97, #113, #114              |
+| C. Escopo que a doc atual dispensa           |     3 | pode sair do caminho crítico                |
 
-O caminho crítico é **A1 → A2 → B(#114, #93) → A3–A7 → A9 → #97**.
+Mapa das lacunas para issues:
+
+| Item                                            | Issue                          |
+| ----------------------------------------------- | ------------------------------ |
+| A1 — anotações das 87 tools                     | #169                           |
+| A2 — org Team/Enterprise                        | ✅ resolvido (Team ativo)       |
+| A3–A6 — hardening do OAuth para o diretório     | #170                           |
+| A7 — validação funcional + conta de teste       | #171                           |
+| A8–A9 — compliance e conteúdo da listagem       | #97                            |
+
+O caminho crítico é **#169 → B(#114, #93) → #170 → #171 → #97**.
 
 ---
 
-## A. Lacunas que nenhuma issue cobre hoje
+## A. Lacunas encontradas na auditoria
 
-### A1. Anotações das tools — bloqueador duro 🔴
+> Nenhuma delas estava trakeada quando esta auditoria rodou. Todas ganharam issue depois — ver o mapa acima.
+
+### A1. Anotações das tools — bloqueador duro 🔴 (#169)
 
 Requisito 2 da submissão e item obrigatório do review: **toda tool precisa de `title` e
 do hint aplicável** (`readOnlyHint: true` para leitura, `destructiveHint: true` para
@@ -57,20 +69,20 @@ Trabalho:
 - [ ] Estender `apps/api/src/mcp/__tests__/tool-catalog.spec.ts` para falhar se qualquer
       tool registrada estiver sem `title` ou sem hint — mesma trava anti-drift já usada no catálogo.
 
-### A2. Organização Team/Enterprise no claude.ai 🔴
+### A2. Organização Team/Enterprise no claude.ai ✅
 
-O portal de submissão vive em **admin settings** e não existe em plano individual. Requisitos:
+O portal de submissão vive em **admin settings** e não existe em plano individual.
 
-- [ ] Ter uma organização **Team ou Enterprise** no claude.ai.
-- [ ] Submeter como **Owner/Primary owner** (ou, no Enterprise, criar um custom role com
+- [x] Ter uma organização **Team ou Enterprise** no claude.ai — **Team já ativo**.
+- [x] Submeter como **Owner/Primary owner** (ou, no Enterprise, criar um custom role com
       a permissão **Directory management** e atribuí-lo). No Team isso fica só com Owners.
-- [ ] Atualizar a #97 e o comentário da #38: o
+- [x] Atualizar a #97 e o comentário da #38: o
       [Google Form](https://docs.google.com/forms/d/e/1FAIpQLSeafJF2NDI7oYx1r8o0ycivCSVLNq92Mpc1FPxMKSw1CzDkqA/viewform)
       registrado lá **não é mais o caminho** para remote servers — ele cobre desktop
       extensions (MCPB). O nosso é o
       [portal](https://claude.ai/admin-settings/directory/submissions/new).
 
-### A3. `resource` do protected-resource metadata × URL que o usuário digita 🟠
+### A3. `resource` do protected-resource metadata × URL que o usuário digita 🟠 (#170)
 
 A doc é explícita: o campo `resource` do documento de metadata **deve casar exatamente
 com a URL do servidor MCP como o usuário a digita no Claude, incluindo o path**.
@@ -91,7 +103,7 @@ O `WWW-Authenticate: Bearer resource_metadata=…` no 401 **já está implementa
 (`apps/api/src/auth/jwt-auth.guard.ts:50-52`), que é o caminho mais confiável de
 descoberta — esse ponto está OK.
 
-### A4. Erros RFC 6749 no `/token` 🟠
+### A4. Erros RFC 6749 no `/token` 🟠 (#170)
 
 A doc pede códigos de erro compatíveis com RFC 6749 (`invalid_grant`, não `invalid_request`
 nem código próprio) quando um refresh token deixa de valer — é o que o Claude usa para
@@ -109,7 +121,7 @@ serializa como `{ statusCode, message }` — não `{ "error": "invalid_grant" }`
       dois parsers por default, mas vale um teste explícito) e que `/oauth/register`
       continua aceitando `application/json`.
 
-### A5. Rate limit e latência × infraestrutura da Anthropic 🟠
+### A5. Rate limit e latência × infraestrutura da Anthropic 🟠 (#170)
 
 O tráfego da Anthropic sai de **`160.79.104.0/21`** — uma faixa compartilhada por
 *todos* os usuários do conector.
@@ -130,7 +142,7 @@ Trabalho:
 - [ ] Manter o `/mcp` em 60/min por usuário (`mcp-throttler.guard.ts` já chaveia por
       `user.id`) — suficiente para o teste funcional do reviewer.
 
-### A6. Decisão DCR × CIMD 🟡
+### A6. Decisão DCR × CIMD 🟡 (#170)
 
 Para servidores que esperam tráfego do diretório, a doc recomenda **CIMD ou credenciais
 mantidas pela Anthropic em vez de DCR**: com DCR o Claude registra um cliente novo a cada
@@ -144,7 +156,7 @@ O Claude só escolhe CIMD se o metadata trouxer **também**
       (por e-mail para `mcp-review@anthropic.com`). Registrar em ADR.
 - [ ] Se ficar em DCR: definir TTL/limpeza de clientes registrados e órfãos.
 
-### A7. Exercitar as 87 tools de ponta a ponta 🟠
+### A7. Exercitar as 87 tools de ponta a ponta 🟠 (#171)
 
 Requisito explícito do "before you submit", e o passo **Test & launch** do portal pede
 confirmação de que você rodou **cada** tool. Reviewers fazem teste funcional por tool, e
@@ -156,7 +168,7 @@ erro genérico ("Internal Server Error", "Bad Request" sem detalhe) reprova.
       passos, água, metas) e escrever o passo a passo de acesso para o reviewer —
       cada link, credencial e etapa.
 
-### A8. Respostas de data handling e compliance 🟡
+### A8. Respostas de data handling e compliance 🟡 (#97)
 
 - [ ] **Dado de saúde pessoal**: o portal pergunta explicitamente. Peso, medidas e
       alimentação são dado sensível (Art. 5º II da LGPD, já reconhecido na #112) —
@@ -170,7 +182,7 @@ erro genérico ("Internal Server Error", "Bad Request" sem detalhe) reprova.
       ou arquivos do usuário ✅ — confirmar na revisão final.
 - [ ] Aceitar os **7 acknowledgments** do passo Compliance (todos obrigatórios).
 
-### A9. Conteúdo da listagem, com os limites do portal 🟡
+### A9. Conteúdo da listagem, com os limites do portal 🟡 (#97)
 
 Ter pronto **antes** de abrir o portal (o progresso salva no browser, mas só na sessão):
 
@@ -186,7 +198,7 @@ Ter pronto **antes** de abrir o portal (o progresso salva no browser, mas só na
 
 ---
 
-## B. Trakeado e ainda aberto
+## B. Trakeado antes desta auditoria
 
 | Issue | O que falta                                                                     | Bloqueia a submissão?                       |
 | ----- | ------------------------------------------------------------------------------- | ------------------------------------------- |
@@ -228,14 +240,15 @@ para *verified* é avaliada automaticamente pela Anthropic.
 
 ## Ordem sugerida
 
-1. **A1** (anotações das 87 tools) — é o único bloqueador puramente de código e o portal
-   trava nele.
-2. **A2** (org Team/Enterprise) — sem isso não há portal para abrir; independe do código,
-   então pode correr em paralelo.
-3. **#114 + #93** (Logto em produção, DNS, bucket, drill) — destravam a validação real.
-4. **A3, A4, A5** (metadata, erros OAuth, throttle e latência) — o que o reviewer
-   encontra ao conectar.
-5. **A6** (DCR × CIMD) — decisão registrada; não precisa estar implementada para submeter.
-6. **#91 + A7** (validar no Claude, MCP Inspector nas 87 tools, conta de teste populada).
-7. **A9 + A8 + #113** (conteúdo da listagem, respostas de compliance, documentação pública).
-8. **#97** — abrir o portal e submeter.
+1. **#169** (anotações das 87 tools) — único bloqueador puramente de código, e o passo
+   Tools do portal trava nele.
+2. **#114 + #93** (Logto em produção, DNS, bucket, drill de restore) — destravam a
+   validação real do conector.
+3. **#170** (metadata, erros OAuth, throttle e latência) — o que o reviewer encontra ao
+   conectar. A decisão DCR × CIMD pode ficar registrada em ADR sem estar implementada.
+4. **#91 + #171** (validar o fluxo no Claude; exercitar as 87 tools no Inspector e no
+   Claude; conta de teste populada).
+5. **#97 + #113** (conteúdo da listagem, respostas de compliance, documentação pública).
+6. **#97** — abrir o portal e submeter.
+
+> A2 (org Team) está resolvido e não entra mais na fila.
