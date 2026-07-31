@@ -12,6 +12,8 @@ import {
 export class DeleteMealTool implements McpToolDef {
   constructor(private readonly meals: MealService) {}
   readonly name = 'delete_meal';
+  readonly title = 'Excluir refeição';
+  readonly annotations = { destructiveHint: true };
   readonly description = 'Remove uma refeição.';
   readonly inputSchema = {
     id: z.string().uuid().describe('ID da refeição a remover — apaga os itens em cascata'),

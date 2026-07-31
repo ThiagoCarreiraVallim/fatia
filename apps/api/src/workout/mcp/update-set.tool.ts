@@ -13,6 +13,10 @@ export class UpdateSetTool implements McpToolDef {
   constructor(private readonly sets: SessionSetService) {}
 
   readonly name = 'update_set';
+
+  readonly title = 'Atualizar série';
+
+  readonly annotations = { destructiveHint: false };
   readonly description = 'Corrige os dados de uma série já registrada.';
   readonly inputSchema = {
     setId: z.string().uuid().describe('ID da série'),

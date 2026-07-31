@@ -7,6 +7,8 @@ import { McpTool, type McpToolDef } from '../../common/decorators/tool.decorator
 export class ListFoodGroupsTool implements McpToolDef {
   constructor(private readonly foods: FoodService) {}
   readonly name = 'list_food_groups';
+  readonly title = 'Listar grupos de alimentos';
+  readonly annotations = { readOnlyHint: true };
   readonly description = 'Lista todos os grupos de alimentos.';
   readonly inputSchema = {} as const;
   execute() {

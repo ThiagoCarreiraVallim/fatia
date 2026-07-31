@@ -12,6 +12,10 @@ export class GetActiveWorkoutSessionTool implements McpToolDef {
   constructor(private readonly sessions: WorkoutSessionService) {}
 
   readonly name = 'get_active_workout_session';
+
+  readonly title = 'Ver treino em andamento';
+
+  readonly annotations = { readOnlyHint: true };
   readonly description = 'Retorna a sessão de treino ativa (ainda não finalizada), se houver.';
   readonly inputSchema = {} as const;
 

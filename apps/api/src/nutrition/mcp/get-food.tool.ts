@@ -12,6 +12,8 @@ import {
 export class GetFoodTool implements McpToolDef {
   constructor(private readonly foods: FoodService) {}
   readonly name = 'get_food';
+  readonly title = 'Ver alimento';
+  readonly annotations = { readOnlyHint: true };
   readonly description = 'Detalhe de um alimento por id.';
   readonly inputSchema = {
     id: z.number().int().describe('ID do alimento no catálogo, obtido via search_food'),

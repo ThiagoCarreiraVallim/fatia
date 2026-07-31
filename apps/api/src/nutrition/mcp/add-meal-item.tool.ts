@@ -12,6 +12,8 @@ import {
 export class AddMealItemTool implements McpToolDef {
   constructor(private readonly mealItems: MealItemService) {}
   readonly name = 'add_meal_item';
+  readonly title = 'Adicionar item à refeição';
+  readonly annotations = { destructiveHint: false };
   readonly description =
     'Adiciona um item a uma refeição existente. `nutrients` aceita micronutrientes opcionais por chave (ex.: { "sodium_mg": 412, "sugar_g": 9 }) para metas personalizadas.';
   readonly inputSchema = {

@@ -13,6 +13,10 @@ export class DeleteWorkoutSessionTool implements McpToolDef {
   constructor(private readonly sessions: WorkoutSessionService) {}
 
   readonly name = 'delete_workout_session';
+
+  readonly title = 'Excluir sessão de treino';
+
+  readonly annotations = { destructiveHint: true };
   readonly description = 'Exclui uma sessão de treino e todas as séries registradas nela.';
   readonly inputSchema = {
     sessionId: z.string().uuid().describe('ID da sessão a excluir'),

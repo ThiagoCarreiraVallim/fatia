@@ -17,6 +17,8 @@ export class GetWaterForDateTool implements McpToolDef {
     private readonly prisma: PrismaService,
   ) {}
   readonly name = 'get_water_for_date';
+  readonly title = 'Água de um dia';
+  readonly annotations = { readOnlyHint: true };
   readonly description = 'Retorna o total de água consumida em um dia (soma de todos os logs).';
   readonly inputSchema = {
     date: z.string().optional().describe('YYYY-MM-DD; default hoje'),

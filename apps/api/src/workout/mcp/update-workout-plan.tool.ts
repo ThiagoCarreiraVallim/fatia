@@ -13,6 +13,10 @@ export class UpdateWorkoutPlanTool implements McpToolDef {
   constructor(private readonly plans: WorkoutPlanService) {}
 
   readonly name = 'update_workout_plan';
+
+  readonly title = 'Atualizar plano de treino';
+
+  readonly annotations = { destructiveHint: false };
   readonly description = 'Atualiza o nome de um plano de treino.';
   readonly inputSchema = {
     planId: z.string().uuid().describe('ID do plano'),

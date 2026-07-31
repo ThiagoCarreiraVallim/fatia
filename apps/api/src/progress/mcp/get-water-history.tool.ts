@@ -12,6 +12,8 @@ import {
 export class GetWaterHistoryTool implements McpToolDef {
   constructor(private readonly waters: WaterLogService) {}
   readonly name = 'get_water_history';
+  readonly title = 'Histórico de água';
+  readonly annotations = { readOnlyHint: true };
   readonly description = 'Histórico diário de consumo de água, preenchendo dias sem log com 0.';
   readonly inputSchema = {
     days: z.number().int().positive().max(365).describe('Quantidade de dias retroativos'),

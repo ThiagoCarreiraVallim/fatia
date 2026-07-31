@@ -12,6 +12,8 @@ import {
 export class GetVolumeProgressTool implements McpToolDef {
   constructor(private readonly progress: ProgressService) {}
   readonly name = 'get_volume_progress';
+  readonly title = 'Evolução do volume de treino';
+  readonly annotations = { readOnlyHint: true };
   readonly description =
     'Volume total de força por semana, opcionalmente filtrado por grupo muscular.';
   readonly inputSchema = {

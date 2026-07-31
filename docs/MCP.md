@@ -61,6 +61,29 @@ O Logto expõe (em `auth.fatia.dominio`):
 
 Toda tool resolve `userId` implicitamente pelo token. **Nunca** aceitar `userId` como parâmetro de input — vazaria escopo entre usuários.
 
+### Anotações
+
+Toda tool declara `title` (nome de exibição legível) e o hint aplicável. É requisito do
+diretório de conectores da Anthropic, e é o que define quando o Claude pede confirmação
+ao usuário antes de executar.
+
+| Grupo         | Prefixos                                      | Anotação                 | Efeito no Claude   |
+| ------------- | --------------------------------------------- | ------------------------ | ------------------ |
+| Leitura       | `get_` `list_` `search_` `explain_` `export_` | `readOnlyHint: true`     | roda sem confirmar |
+| Destrutiva    | `delete_` + `remove_exercise_from_plan`       | `destructiveHint: true`  | sempre confirma    |
+| Escrita comum | os demais                                     | `destructiveHint: false` | roda sem confirmar |
+
+⚠️ O `destructiveHint: false` das escritas comuns é **explícito de propósito**. Na spec MCP
+o default é `true` quando `readOnlyHint` é falso — omitir faria o Claude pedir confirmação
+a cada refeição ou série registrada, o que inviabiliza o uso conversacional.
+
+`remove_exercise_from_plan` é destrutiva apesar do prefixo: desfaz o vínculo e perde as
+séries e repetições configuradas para aquele exercício no plano.
+
+Isso é verificado por `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`, que falha se uma
+tool declarar hint incoerente com o prefixo ou usar o próprio nome como título. `title`
+ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
+
 ### IDs
 
 - IDs de entidades user-owned (`Meal`, `WorkoutSession`, etc): UUID string

@@ -12,6 +12,8 @@ import {
 export class SetNutritionGoalsTool implements McpToolDef {
   constructor(private readonly goals: UserGoalsService) {}
   readonly name = 'set_nutrition_goals';
+  readonly title = 'Definir metas nutricionais';
+  readonly annotations = { destructiveHint: false };
   readonly description = 'Cria/atualiza as metas nutricionais do usuário.';
   readonly inputSchema = {
     kcalMin: z.number().int().min(0).describe('Piso da faixa diária de calorias'),

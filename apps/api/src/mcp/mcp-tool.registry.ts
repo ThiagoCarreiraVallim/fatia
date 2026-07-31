@@ -49,7 +49,12 @@ export class McpToolRegistry implements OnModuleInit {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (server as any).registerTool(
         tool.name,
-        { description: tool.description, inputSchema: tool.inputSchema },
+        {
+          title: tool.title,
+          description: tool.description,
+          annotations: { title: tool.title, ...tool.annotations },
+          inputSchema: tool.inputSchema,
+        },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         async (input: any) => {
           const start = Date.now();

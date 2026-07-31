@@ -17,6 +17,8 @@ export class GetStepsForDateTool implements McpToolDef {
     private readonly prisma: PrismaService,
   ) {}
   readonly name = 'get_steps_for_date';
+  readonly title = 'Passos de um dia';
+  readonly annotations = { readOnlyHint: true };
   readonly description = 'Retorna o valor efetivo de passos para um dia (max entre os logs).';
   readonly inputSchema = {
     date: z.string().optional().describe('YYYY-MM-DD; default hoje'),

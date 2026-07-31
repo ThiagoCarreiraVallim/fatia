@@ -13,6 +13,10 @@ export class UpdateWorkoutSessionTool implements McpToolDef {
   constructor(private readonly sessions: WorkoutSessionService) {}
 
   readonly name = 'update_workout_session';
+
+  readonly title = 'Atualizar sessão de treino';
+
+  readonly annotations = { destructiveHint: false };
   readonly description =
     'Atualiza as notas de uma sessão de treino, finalizada ou em andamento. Use quando o usuário quiser complementar ou corrigir o registro de um treino sem mexer nas séries — para as séries, use update_set.';
   readonly inputSchema = {

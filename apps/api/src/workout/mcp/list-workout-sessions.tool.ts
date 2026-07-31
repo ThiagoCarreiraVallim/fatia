@@ -13,6 +13,10 @@ export class ListWorkoutSessionsTool implements McpToolDef {
   constructor(private readonly sessions: WorkoutSessionService) {}
 
   readonly name = 'list_workout_sessions';
+
+  readonly title = 'Listar sessões de treino';
+
+  readonly annotations = { readOnlyHint: true };
   readonly description = 'Lista as sessões de treino do usuário com paginação por cursor.';
   readonly inputSchema = {
     date: z.string().optional().describe('Filtrar por data no formato YYYY-MM-DD (UTC)'),
