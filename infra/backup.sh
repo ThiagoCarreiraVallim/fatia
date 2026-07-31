@@ -14,9 +14,11 @@
 #   RETENTION_DAYS   Retenção local em dias         (default 7)
 #
 #   PG_INSTANCES     Instâncias a dumpar, separadas por espaço, no formato
-#                    `rotulo:container:usuario`. Uma entrada por CLUSTER
+#                    `rotulo:prefixo-do-container:usuario`. Uma entrada por CLUSTER
 #                    Postgres — não por database.
-#                      ex.: "fatia:fatia-db-abc:postgres logto:fatia-logto-xyz:postgres"
+#                      ex.: "fatia:fatia-postgres:postgres logto:fatia-logto:postgres"
+#                    O container é resolvido por PREFIXO (o nome no Swarm muda
+#                    a cada redeploy); casar com 0 ou 2+ é erro.
 #                    Se qualquer uma falhar, o backup inteiro falha: cobertura
 #                    parcial silenciosa é o modo de falha que este script existe
 #                    para evitar.
@@ -47,7 +49,6 @@ set -euo pipefail
 # Carrega .env.backup ao lado do script, se existir. O cron não herda ambiente,
 # então sem isto seria preciso repetir todas as variáveis na crontab — e
 # credencial em crontab fica legível por qualquer um que rode `crontab -l`.
-# Variáveis já exportadas no ambiente têm precedência (útil para testar).
 ENV_FILE="$(dirname "$(readlink -f "$0")")/.env.backup"
 
 # O ambiente tem precedência sobre o arquivo. Isso não sai de graça: `. arquivo`
@@ -103,6 +104,34 @@ fail() {
 # Qualquer comando que falhe cai aqui com a linha, em vez de morrer em silêncio.
 trap 'fail "falha na linha $LINENO"' ERR
 
+# Resolve o container por PREFIXO do nome.
+#
+# No Docker Swarm (que é como o Dokploy roda os bancos) o nome inclui o id da
+# task — `fatia-postgres-uydgkg.1.ouh0a0vzzyh146o2jrnjqfvp5` — e esse sufixo
+# MUDA a cada redeploy. Fixar o nome completo daria um backup que quebra sozinho
+# no dia em que o banco for reimplantado.
+#
+# Nome exato tem precedência. Casar com mais de um é erro, não escolha: pegar o
+# primeiro poderia dumpar o cluster errado em silêncio.
+#
+# Devolve em $RESOLVED em vez de stdout de propósito: dentro de `$(...)` o
+# `exit 1` do fail() mataria só o subshell, o alerta sairia duas vezes e a
+# segunda mensagem seria genérica.
+RESOLVED=""
+resolve_container() {
+  local pattern="$1" matches n
+  if docker inspect --type container "$pattern" >/dev/null 2>&1; then
+    RESOLVED="$pattern"; return 0
+  fi
+  matches=$(docker ps --format '{{.Names}}' | awk -v p="$pattern" 'index($0, p) == 1')
+  n=$(printf '%s' "$matches" | grep -c . || true)
+  case "$n" in
+    0) fail "nenhum container casa com o prefixo '$pattern' (o banco está no ar?)" ;;
+    1) RESOLVED="$matches" ;;
+    *) fail "prefixo '$pattern' casa com $n containers — ambíguo: $(printf '%s ' $matches)" ;;
+  esac
+}
+
 mkdir -p "$BACKUP_DIR"
 
 TS=$(date +%Y%m%d-%H%M%S)
@@ -140,10 +169,11 @@ for instance in $PG_INSTANCES; do
     fail "PG_INSTANCES malformada em '$instance' (esperado rotulo:container:usuario)"
   fi
 
+  resolve_container "$container"
   OUT="$BACKUP_DIR/fatia-$label-$TS.sql.gz"
 
-  log "[$label] Dump → $OUT"
-  docker exec "$container" pg_dumpall -U "$pg_user" --clean --if-exists | gzip > "$OUT"
+  log "[$label] Dump de $RESOLVED → $OUT"
+  docker exec "$RESOLVED" pg_dumpall -U "$pg_user" --clean --if-exists | gzip > "$OUT"
 
   # Dump vazio ou truncado é pior que dump ausente: passa desapercebido até a
   # hora do restore. 1 KB é generoso — um dump real do Fatia passa de centenas de KB.
