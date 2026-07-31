@@ -199,7 +199,12 @@ for instance in $PG_INSTANCES; do
   # --- Replica offsite ---
   if [ -n "${S3_BUCKET:-}" ]; then
     log "[$label] Enviando para $S3_BUCKET"
-    aws "${ENDPOINT_ARG[@]}" s3 cp "$OUT" "$S3_BUCKET/$(basename "$OUT")" --only-show-errors
+    # Sem o `||`, uma falha aqui cairia no trap genérico e o alerta diria só
+    # "falha na linha N" — inútil para quem recebe a notificação às 4 da manhã.
+    # O caso mais comum é token com permissão só de leitura: o `s3 ls` da
+    # validação inicial passa e o PutObject é negado.
+    aws "${ENDPOINT_ARG[@]}" s3 cp "$OUT" "$S3_BUCKET/$(basename "$OUT")" --only-show-errors \
+      || fail "[$label] upload recusado por $S3_BUCKET (o token tem permissão de ESCRITA no bucket?)"
 
     # Confirma que o objeto existe do outro lado. `cp` bem-sucedido não é prova
     # suficiente quando o endpoint é S3-compatível de terceiro.
