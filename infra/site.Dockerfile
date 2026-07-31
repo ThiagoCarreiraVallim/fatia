@@ -37,7 +37,13 @@ FROM nginx:1.27-alpine AS runner
 COPY infra/site.nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/apps/site/dist /usr/share/nginx/html
 
+# `127.0.0.1`, nunca `localhost`. O entrypoint do nginx só acrescenta
+# `listen [::]:80` quando o default.conf bate com o checksum do pacote — como
+# substituímos o arquivo, ele pula esse passo e o nginx fica só em IPv4. O
+# /etc/hosts do container resolve `localhost` para `::1` também, e o wget do
+# BusyBox tenta IPv6 primeiro e falha sem cair para IPv4. Resultado: o site
+# servia normalmente e o healthcheck reprovava.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget -qO- http://localhost/ >/dev/null || exit 1
+  CMD wget -qO- http://127.0.0.1/ >/dev/null || exit 1
 
 EXPOSE 80
