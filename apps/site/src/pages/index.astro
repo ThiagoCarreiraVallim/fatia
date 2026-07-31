@@ -4,15 +4,58 @@ import Base from '../layouts/Base.astro';
 import { site } from '../lib/site';
 
 /**
- * Home institucional — PLACEHOLDER INTENCIONAL.
+ * Home institucional (issue #96).
  *
- * O conteúdo definitivo vem do Thiago. Esta versão existe só para o domínio raiz
- * não responder 404 e para dar um caminho claro até /claude-connect, que é a
- * página que realmente converte hoje (issue #96).
+ * Conteúdo genérico e verificável, escrito para a revisão do diretório de
+ * conectores da Anthropic: o que o produto é, o que ele faz, quem responde por
+ * ele e como falar com o suporte. Nada aqui é aspiracional — cada afirmação
+ * corresponde a algo que já existe no código hoje.
  *
- * Ao substituir: mantenha o link para /claude-connect em destaque — é para lá
- * que vai quem chega pelo diretório de conectores do Claude.
+ * Divisão de papéis entre as duas páginas: esta responde "o que é o Fatia?";
+ * /claude-connect responde "como uso pelo Claude?" e é para onde vai quem chega
+ * pelo diretório. Não repita o passo a passo de conexão aqui.
  */
+
+const FEATURES = [
+  {
+    icon: 'lucide:apple',
+    title: 'Nutrição',
+    body: 'Refeições, itens e macros com a tabela TACO, feita para comida brasileira. Metas de calorias, macronutrientes e micronutrientes, com resumo do dia e da semana.',
+  },
+  {
+    icon: 'lucide:dumbbell',
+    title: 'Treino',
+    body: 'Planos, biblioteca de exercícios e sessões guiadas. Registro de séries, cargas e repetições para musculação, e de tempo, distância e frequência cardíaca para cardio.',
+  },
+  {
+    icon: 'lucide:chart-line',
+    title: 'Progresso',
+    body: 'Evolução de força por exercício, recordes pessoais, consistência de treino, peso, passos e água — com histórico e gráficos.',
+  },
+  {
+    icon: 'lucide:target',
+    title: 'Metas',
+    body: 'Metas de peso, composição corporal e frequência, com acompanhamento do quanto falta e do que já foi concluído.',
+  },
+];
+
+const PRINCIPLES = [
+  {
+    icon: 'lucide:shield-check',
+    title: 'Sem rastreamento',
+    body: 'Sem analytics, sem pixel de anúncio, sem perfilamento. O único cookie é o de sessão, necessário para manter você logado.',
+  },
+  {
+    icon: 'lucide:download',
+    title: 'Seus dados saem quando você quiser',
+    body: 'Exportação completa em JSON e exclusão definitiva da conta, ambas disponíveis dentro do app — sem formulário e sem espera.',
+  },
+  {
+    icon: 'lucide:code',
+    title: 'Código aberto',
+    body: 'O Fatia é software livre sob licença MIT. Auto-hospedar é um caminho de primeira classe, não um plano B.',
+  },
+];
 ---
 
 <Base
@@ -20,7 +63,8 @@ import { site } from '../lib/site';
   description="O Fatia registra o que você come e treina, com a tabela TACO brasileira. Use pelo app ou conversando com o Claude."
   canonical="/"
 >
-  <section class="mx-auto flex max-w-5xl flex-col items-start px-6 py-24 sm:py-32">
+  <!-- Hero -->
+  <section class="mx-auto flex max-w-5xl flex-col items-start px-6 pb-16 pt-24 sm:pt-32">
     <h1
       class="font-display max-w-3xl text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-6xl"
     >
@@ -49,6 +93,118 @@ import { site } from '../lib/site';
           aria-hidden="true"
         />
       </a>
+    </div>
+  </section>
+
+  <!-- O que o Fatia faz -->
+  <section class="mx-auto max-w-5xl px-6 py-12">
+    <h2 class="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
+      O que o Fatia faz
+    </h2>
+    <div class="mt-8 grid gap-5 sm:grid-cols-2">
+      {
+        FEATURES.map(({ icon, title, body }) => (
+          <div class="rounded-2xl border border-border/60 bg-card/40 p-6">
+            <Icon name={icon} class="h-[18px] w-[18px] text-primary" aria-hidden="true" />
+            <h3 class="font-display mt-3 font-bold">{title}</h3>
+            <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- Duas formas de usar -->
+  <section class="mx-auto max-w-5xl px-6 py-12">
+    <h2 class="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
+      Duas formas de usar
+    </h2>
+    <p class="mt-3 max-w-2xl text-muted-foreground">
+      As duas mexem nos mesmos dados, na mesma conta. Use uma, a outra, ou as duas no mesmo dia.
+    </p>
+    <div class="mt-8 grid gap-5 md:grid-cols-2">
+      <div class="rounded-2xl border border-border/60 p-6">
+        <Icon name="lucide:smartphone" class="h-[18px] w-[18px] text-primary" aria-hidden="true" />
+        <h3 class="font-display mt-3 font-bold">Pelo aplicativo</h3>
+        <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
+          Aplicativo web instalável no celular, pensado para uso com uma mão — inclusive no meio da
+          série, entre um exercício e outro.
+        </p>
+        <a
+          href={site.appUrl}
+          class="mt-5 inline-block text-sm font-semibold text-primary underline underline-offset-4"
+        >
+          Abrir o app
+        </a>
+      </div>
+      <div class="rounded-2xl border border-border/60 p-6">
+        <Icon
+          name="lucide:message-circle"
+          class="h-[18px] w-[18px] text-primary"
+          aria-hidden="true"
+        />
+        <h3 class="font-display mt-3 font-bold">Conversando com o Claude</h3>
+        <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
+          Conecte o Fatia ao Claude e registre falando: “comi 200 g de frango no almoço”, “supino 4
+          × 8 com 70 kg”. Ele também responde sobre o seu histórico.
+        </p>
+        <a
+          href="/claude-connect/"
+          class="mt-5 inline-block text-sm font-semibold text-primary underline underline-offset-4"
+        >
+          Como conectar
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Princípios -->
+  <section class="mx-auto max-w-5xl px-6 py-12">
+    <h2 class="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
+      Como tratamos seus dados
+    </h2>
+    <div class="mt-8 grid gap-5 md:grid-cols-3">
+      {
+        PRINCIPLES.map(({ icon, title, body }) => (
+          <div class="rounded-2xl border border-border/60 p-6">
+            <Icon name={icon} class="h-[18px] w-[18px] text-primary" aria-hidden="true" />
+            <h3 class="font-display mt-3 font-bold">{title}</h3>
+            <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
+          </div>
+        ))
+      }
+    </div>
+    <p class="mt-6 text-sm text-muted-foreground">
+      Detalhes na <a href={site.privacyUrl} class="text-foreground underline underline-offset-4"
+        >Política de Privacidade</a
+      > e nos <a href={site.termsUrl} class="text-foreground underline underline-offset-4"
+        >Termos de Serviço</a
+      >.
+    </p>
+  </section>
+
+  <!-- Suporte -->
+  <section class="mx-auto max-w-5xl px-6 pb-20 pt-12">
+    <div class="rounded-2xl border border-border/60 bg-card/40 p-8">
+      <h2 class="font-display text-xl font-extrabold tracking-tight">Suporte e contato</h2>
+      <p class="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+        O Fatia é mantido de forma aberta. Dúvidas, problemas e sugestões vão para as issues do
+        repositório, onde ficam públicas e rastreáveis — inclusive a resposta.
+      </p>
+      <div class="mt-6 flex flex-wrap gap-4">
+        <a
+          href={`${site.repoUrl}/issues`}
+          class="rounded-xl border border-border px-5 py-3 text-sm font-semibold transition-colors hover:bg-muted"
+        >
+          Abrir uma issue
+        </a>
+        <a
+          href={site.repoUrl}
+          class="rounded-xl border border-border px-5 py-3 text-sm font-semibold transition-colors hover:bg-muted"
+        >
+          Ver o código
+        </a>
+      </div>
     </div>
   </section>
 </Base>
