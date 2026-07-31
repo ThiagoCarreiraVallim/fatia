@@ -12,8 +12,17 @@
 #
 #   BACKUP_DIR       Onde guardar localmente        (default /opt/fatia/backups)
 #   RETENTION_DAYS   Retenção local em dias         (default 7)
-#   CONTAINER        Nome do container do Postgres  (default fatia-postgres)
-#   POSTGRES_USER    Usuário do dump                (default fatia)
+#
+#   PG_INSTANCES     Instâncias a dumpar, separadas por espaço, no formato
+#                    `rotulo:container:usuario`. Uma entrada por CLUSTER
+#                    Postgres — não por database.
+#                      ex.: "fatia:fatia-db-abc:postgres logto:fatia-logto-xyz:postgres"
+#                    Se qualquer uma falhar, o backup inteiro falha: cobertura
+#                    parcial silenciosa é o modo de falha que este script existe
+#                    para evitar.
+#
+#   CONTAINER        (legado) usado só se PG_INSTANCES não estiver definida
+#   POSTGRES_USER    (legado) idem
 #
 #   BACKUP_PASSPHRASE   Se definida, cifra o dump com AES-256 (gpg simétrico).
 #                       SEM ela o dump vai em claro — nunca envie offsite assim.
@@ -23,6 +32,8 @@
 #   S3_ENDPOINT           ex.: https://s3.us-west-004.backblazeb2.com
 #   AWS_ACCESS_KEY_ID     credencial
 #   AWS_SECRET_ACCESS_KEY credencial
+#   AWS_DEFAULT_REGION    obrigatória para R2 (`auto`); o aws cli recusa
+#                         qualquer chamada sem região, mesmo com endpoint próprio
 #   S3_RETENTION_DAYS     Retenção offsite em dias  (default 30)
 #
 #   ALERT_WEBHOOK    URL que recebe POST JSON em caso de falha (opcional).
@@ -38,16 +49,40 @@ set -euo pipefail
 # credencial em crontab fica legível por qualquer um que rode `crontab -l`.
 # Variáveis já exportadas no ambiente têm precedência (útil para testar).
 ENV_FILE="$(dirname "$(readlink -f "$0")")/.env.backup"
+
+# O ambiente tem precedência sobre o arquivo. Isso não sai de graça: `. arquivo`
+# SOBRESCREVE variável já exportada, então `CONTAINER=x backup.sh` seria
+# silenciosamente ignorado — e é exatamente assim que docs/OPERATIONS.md manda
+# testar o alerta de falha. Sem isto, o teste do alerta rodaria um backup normal
+# e você concluiria que o alerta funciona.
+_OVERRIDES=()
+for _v in PG_INSTANCES CONTAINER POSTGRES_USER BACKUP_DIR RETENTION_DAYS \
+          BACKUP_PASSPHRASE S3_BUCKET S3_ENDPOINT S3_RETENTION_DAYS \
+          AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION ALERT_WEBHOOK; do
+  # `+set` e não `:-`: precisa distinguir "não definida" de "definida vazia",
+  # senão não dá para desligar a cifra ou o offsite pela linha de comando.
+  [ -n "${!_v+set}" ] && _OVERRIDES+=("$_v=${!_v}")
+done
+
 if [ -f "$ENV_FILE" ]; then
   # shellcheck disable=SC1090
   set -a && . "$ENV_FILE" && set +a
 fi
 
+for _kv in ${_OVERRIDES+"${_OVERRIDES[@]}"}; do export "${_kv?}"; done
+
 BACKUP_DIR="${BACKUP_DIR:-/opt/fatia/backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-7}"
-CONTAINER="${CONTAINER:-fatia-postgres}"
-PG_USER="${POSTGRES_USER:-fatia}"
 S3_RETENTION_DAYS="${S3_RETENTION_DAYS:-30}"
+
+# O Fatia roda DOIS clusters Postgres separados: um da aplicação e um do Logto.
+# `pg_dumpall` cobre todos os databases de UM cluster, não os dois — dumpar só
+# um traria os dados sem as contas, ou o contrário, e isso só apareceria na hora
+# do restore.
+PG_INSTANCES="${PG_INSTANCES:-}"
+if [ -z "$PG_INSTANCES" ]; then
+  PG_INSTANCES="fatia:${CONTAINER:-fatia-postgres}:${POSTGRES_USER:-fatia}"
+fi
 
 log() { echo "[$(date -Iseconds)] $*"; }
 
@@ -71,62 +106,90 @@ trap 'fail "falha na linha $LINENO"' ERR
 mkdir -p "$BACKUP_DIR"
 
 TS=$(date +%Y%m%d-%H%M%S)
-OUT="$BACKUP_DIR/fatia-$TS.sql.gz"
 EXT="sql.gz"
+[ -n "${BACKUP_PASSPHRASE:-}" ] && EXT="sql.gz.gpg"
 
-log "Dump → $OUT"
-docker exec "$CONTAINER" pg_dumpall -U "$PG_USER" --clean --if-exists | gzip > "$OUT"
-
-# Dump vazio ou truncado é pior que dump ausente: passa desapercebido até a hora
-# do restore. 1 KB é generoso — um dump real do Fatia passa de centenas de KB.
-SIZE=$(stat -c %s "$OUT" 2>/dev/null || stat -f %z "$OUT")
-if [ "$SIZE" -lt 1024 ]; then
-  fail "dump suspeito: apenas ${SIZE} bytes em $OUT"
-fi
-if ! gzip -t "$OUT" 2>/dev/null; then
-  fail "gzip corrompido em $OUT"
-fi
-log "Dump OK ($(du -h "$OUT" | cut -f1))"
-
-# --- Cifra, se houver passphrase ---
+# Validações que valem para todas as instâncias, feitas ANTES do primeiro dump.
+# Descobrir que falta o gpg depois de dumpar dois clusters é desperdício, e
+# descobrir na terceira instância deixaria as duas primeiras em claro no disco.
 if [ -n "${BACKUP_PASSPHRASE:-}" ]; then
   command -v gpg >/dev/null 2>&1 || fail 'BACKUP_PASSPHRASE definida mas gpg não está instalado'
-  log "Cifrando com AES-256"
-  printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --yes --quiet \
-    --passphrase-fd 0 --symmetric --cipher-algo AES256 \
-    --output "$OUT.gpg" "$OUT"
-  rm -f "$OUT"
-  OUT="$OUT.gpg"
-  EXT="sql.gz.gpg"
 fi
-
-# --- Replica offsite ---
+ENDPOINT_ARG=()
 if [ -n "${S3_BUCKET:-}" ]; then
   command -v aws >/dev/null 2>&1 || fail 'S3_BUCKET definido mas o aws cli não está instalado'
-
   if [ -z "${BACKUP_PASSPHRASE:-}" ]; then
     fail 'recusando enviar backup NÃO CIFRADO para offsite. Defina BACKUP_PASSPHRASE.'
   fi
-
-  ENDPOINT_ARG=()
+  # O aws cli recusa qualquer chamada sem região, mesmo com --endpoint-url
+  # próprio. No R2 o valor correto é `auto`.
+  if [ -z "${AWS_DEFAULT_REGION:-}" ]; then
+    fail 'AWS_DEFAULT_REGION não definida (use `auto` no Cloudflare R2)'
+  fi
   [ -n "${S3_ENDPOINT:-}" ] && ENDPOINT_ARG=(--endpoint-url "$S3_ENDPOINT")
+fi
 
-  log "Enviando para $S3_BUCKET"
-  aws "${ENDPOINT_ARG[@]}" s3 cp "$OUT" "$S3_BUCKET/$(basename "$OUT")" --only-show-errors
+# --- Uma passada por cluster ---
+for instance in $PG_INSTANCES; do
+  label="${instance%%:*}"
+  rest="${instance#*:}"
+  container="${rest%%:*}"
+  pg_user="${rest#*:}"
 
-  # Confirma que o objeto existe do outro lado. `cp` bem-sucedido não é prova
-  # suficiente quando o endpoint é S3-compatível de terceiro.
-  aws "${ENDPOINT_ARG[@]}" s3 ls "$S3_BUCKET/$(basename "$OUT")" >/dev/null \
-    || fail "upload não verificável: objeto ausente em $S3_BUCKET"
-  log "Offsite OK"
+  if [ -z "$label" ] || [ -z "$container" ] || [ -z "$pg_user" ] || [ "$rest" = "$container" ]; then
+    fail "PG_INSTANCES malformada em '$instance' (esperado rotulo:container:usuario)"
+  fi
 
-  # Retenção offsite. Comparação por data no nome do arquivo (fatia-YYYYMMDD-...),
-  # que é o que temos sem depender de lifecycle policy do provedor.
+  OUT="$BACKUP_DIR/fatia-$label-$TS.sql.gz"
+
+  log "[$label] Dump → $OUT"
+  docker exec "$container" pg_dumpall -U "$pg_user" --clean --if-exists | gzip > "$OUT"
+
+  # Dump vazio ou truncado é pior que dump ausente: passa desapercebido até a
+  # hora do restore. 1 KB é generoso — um dump real do Fatia passa de centenas de KB.
+  SIZE=$(stat -c %s "$OUT" 2>/dev/null || stat -f %z "$OUT")
+  if [ "$SIZE" -lt 1024 ]; then
+    fail "[$label] dump suspeito: apenas ${SIZE} bytes em $OUT"
+  fi
+  if ! gzip -t "$OUT" 2>/dev/null; then
+    fail "[$label] gzip corrompido em $OUT"
+  fi
+  log "[$label] Dump OK ($(du -h "$OUT" | cut -f1))"
+
+  # --- Cifra, se houver passphrase ---
+  if [ -n "${BACKUP_PASSPHRASE:-}" ]; then
+    log "[$label] Cifrando com AES-256"
+    printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --yes --quiet \
+      --passphrase-fd 0 --symmetric --cipher-algo AES256 \
+      --output "$OUT.gpg" "$OUT"
+    rm -f "$OUT"
+    OUT="$OUT.gpg"
+  fi
+
+  # --- Replica offsite ---
+  if [ -n "${S3_BUCKET:-}" ]; then
+    log "[$label] Enviando para $S3_BUCKET"
+    aws "${ENDPOINT_ARG[@]}" s3 cp "$OUT" "$S3_BUCKET/$(basename "$OUT")" --only-show-errors
+
+    # Confirma que o objeto existe do outro lado. `cp` bem-sucedido não é prova
+    # suficiente quando o endpoint é S3-compatível de terceiro.
+    aws "${ENDPOINT_ARG[@]}" s3 ls "$S3_BUCKET/$(basename "$OUT")" >/dev/null \
+      || fail "[$label] upload não verificável: objeto ausente em $S3_BUCKET"
+    log "[$label] Offsite OK"
+  fi
+done
+
+# --- Retenção offsite (uma vez, cobre todos os rótulos) ---
+if [ -n "${S3_BUCKET:-}" ]; then
+
+  # Retenção offsite. Comparação por data no nome do arquivo
+  # (fatia-<rotulo>-YYYYMMDD-HHMMSS), que é o que temos sem depender de
+  # lifecycle policy do provedor.
   CUTOFF=$(date -d "-${S3_RETENTION_DAYS} days" +%Y%m%d 2>/dev/null \
            || date -v "-${S3_RETENTION_DAYS}d" +%Y%m%d)
   aws "${ENDPOINT_ARG[@]}" s3 ls "$S3_BUCKET/" | awk '{print $4}' | while read -r key; do
     [ -z "$key" ] && continue
-    keydate=$(echo "$key" | sed -n 's/^fatia-\([0-9]\{8\}\)-.*/\1/p')
+    keydate=$(echo "$key" | sed -n 's/^fatia-[^-]*-\([0-9]\{8\}\)-.*/\1/p')
     [ -z "$keydate" ] && continue
     if [ "$keydate" -lt "$CUTOFF" ]; then
       log "Removendo offsite antigo: $key"
@@ -142,4 +205,5 @@ fi
 find "$BACKUP_DIR" -name "fatia-*.${EXT}" -mtime +"$RETENTION_DAYS" -delete
 find "$BACKUP_DIR" -name 'fatia-*.sql.gz' -mtime +"$RETENTION_DAYS" -delete 2>/dev/null || true
 
-log "Concluído: $OUT"
+COUNT=$(printf '%s\n' $PG_INSTANCES | wc -l | tr -d ' ')
+log "Concluído: $COUNT cluster(s) em $BACKUP_DIR (fatia-*-$TS.$EXT)"

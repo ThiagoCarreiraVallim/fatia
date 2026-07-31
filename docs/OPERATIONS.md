@@ -15,7 +15,7 @@
 | API (NestJS)   | container, `infra/docker-compose.prod.yml` | Aplica migrations no boot                     |
 | PWA (Next.js)  | container, mesmo compose                   | —                                             |
 | Logto          | container, mesmo compose                   | IdP (ADR 008)                                 |
-| Postgres       | "Database" do Dokploy, **fora** do compose | Databases `fatia` e `logto`                   |
+| Postgres       | "Database" do Dokploy, **fora** do compose | **Dois** clusters: `fatia` e `logto`          |
 | Traefik        | gerenciado pelo Dokploy                    | TLS via Let's Encrypt, `dokploy-network`      |
 | Backups        | `infra/backup.sh` via cron no host         | Local + offsite opcional                      |
 
@@ -69,11 +69,20 @@ chmod 600 infra/.env.backup     # credenciais: só o dono lê
 chmod +x infra/backup.sh
 ```
 
-Descubra o nome real do container do Postgres e ajuste `CONTAINER=`:
+⚠️ O Fatia roda **dois clusters Postgres separados**: um da aplicação e um do Logto (contas
+de usuário). `pg_dumpall` cobre todos os databases de **um** cluster — não os dois. Descubra os
+dois nomes e preencha `PG_INSTANCES`:
 
 ```bash
-docker ps --format '{{.Names}}' | grep -i postgres
+docker ps --format '{{.Names}}' | grep -iE 'postgres|logto'
 ```
+
+```bash
+PG_INSTANCES="fatia:<container-da-app>:postgres logto:<container-do-logto>:postgres"
+```
+
+Dumpar só um traria os dados sem as contas (ou o contrário), e isso só apareceria na hora do
+restore. Se qualquer instância falhar, o backup inteiro falha.
 
 O `backup.sh` carrega o `.env.backup` sozinho — não é preciso repetir variável nenhuma
 na crontab (e credencial em crontab ficaria legível por qualquer `crontab -l`).
@@ -102,8 +111,13 @@ crontab -e
 Vale testar antes de precisar. Rode apontando para um container inexistente:
 
 ```bash
-CONTAINER=nao-existe /opt/fatia/infra/backup.sh; echo "exit=$?"
+PG_INSTANCES="fatia:nao-existe:postgres" /opt/fatia/infra/backup.sh; echo "exit=$?"
 ```
+
+Variável passada na linha de comando tem precedência sobre o `.env.backup` — o script guarda os
+valores vindos do ambiente e os reaplica depois de carregar o arquivo. Sem esse cuidado o
+`. arquivo` sobrescreveria o que você passou, e este teste rodaria um backup **normal**: você
+concluiria que o alerta funciona sem nunca tê-lo exercitado.
 
 Deve sair `exit=1` e o webhook deve receber a notificação.
 
@@ -135,13 +149,14 @@ docker run -d --rm --name fatia-restore-test \
   -p 55432:5432 postgres:16-alpine
 sleep 5
 
-# 2. Baixar o backup do offsite
+# 2. Baixar o backup do offsite. São DOIS arquivos por execução, um por cluster:
+#    fatia-fatia-<TS> (aplicação) e fatia-logto-<TS> (contas). Restaure os dois.
 aws --endpoint-url "$S3_ENDPOINT" s3 cp \
-  "$S3_BUCKET/fatia-YYYYMMDD-HHMMSS.sql.gz.gpg" /tmp/restore-test.sql.gz.gpg
+  "$S3_BUCKET/fatia-fatia-YYYYMMDD-HHMMSS.sql.gz.gpg" /tmp/restore-app.sql.gz.gpg
 
 # 3. Decifrar, descomprimir e restaurar
 printf '%s' "$BACKUP_PASSPHRASE" \
-  | gpg --batch --quiet --passphrase-fd 0 --decrypt /tmp/restore-test.sql.gz.gpg \
+  | gpg --batch --quiet --passphrase-fd 0 --decrypt /tmp/restore-app.sql.gz.gpg \
   | gunzip \
   | docker exec -i fatia-restore-test psql -U fatia
 
@@ -173,10 +188,12 @@ Tempo estimado: **1 a 2 horas**, dominado por propagação de DNS e emissão de 
 1. **Provisionar host novo** com Docker e Dokploy. Ver `infra/dokploy/README.md`.
 2. **Apontar o DNS** do apex (`fat.ia.br`) e dos subdomínios (`api.`, `app.`, `auth.`, `www.`)
    para o novo IP. Faça isto cedo — a propagação corre em paralelo com o resto.
-3. **Criar o Postgres** como Database do Dokploy, com as databases `fatia` e `logto`.
-4. **Restaurar o dump** mais recente do offsite (passos 2 e 3 do drill, mirando o Postgres novo).
-   O `pg_dumpall` cobre `fatia` **e** `logto`, então as contas de usuário voltam junto — ninguém
-   precisa se recadastrar.
+3. **Criar o Postgres** como Database do Dokploy, com os dois clusters: um para `fatia` e um para `logto`.
+4. **Restaurar os dois dumps** mais recentes do offsite (passos 2 e 3 do drill, mirando os
+   Postgres novos). São arquivos separados — `fatia-fatia-<TS>` para a aplicação e
+   `fatia-logto-<TS>` para as contas — porque são **dois clusters distintos**.
+   ⚠️ Restaurar só o da aplicação devolve os dados sem nenhuma conta: todo mundo perde o acesso
+   ao próprio histórico. Restaurar só o do Logto devolve as contas vazias. Os dois, sempre.
 5. **Recriar o Compose service** apontando para `infra/docker-compose.prod.yml`.
 6. **Repor as variáveis de ambiente** no painel do Dokploy (ver `.env.production.example`).
    Precisam ser as **mesmas** de antes, em especial `LOGTO_COOKIE_SECRET` — trocá-la invalida as
