@@ -97,14 +97,14 @@ Nenhum placeholder restante no código.
 | —                        | `workout/session/rest-timer`            | ➕  | cronômetro de descanso                                                       |
 | —                        | `workout/session/session-header`        | ➕  | header fixo com "X/Y exercícios"                                             |
 
-### Progresso — 11 de 11
+### Progresso — 12 de 12
 
 | PWA                              | App nativo                        |     | Observação                                         |
 | -------------------------------- | --------------------------------- | :-: | -------------------------------------------------- |
 | `cardio-chart`                   | `progress/cardio-chart`           | ✅  |                                                    |
 | `consistency-card`               | `progress/consistency-card`       | ✅  |                                                    |
 | `exercise-picker-drawer`         | `progress/exercise-picker-drawer` | ✅  |                                                    |
-| `log-steps-drawer`               | `progress/log-steps-drawer`       | ✅  | **ganha editar e apagar** (#116)                   |
+| `log-steps-drawer`               | `progress/log-steps-drawer`       | ✅  | editar e apagar nos dois (#116)                    |
 | `log-water-drawer`               | `progress/log-water-drawer`       | ✅  | idem                                               |
 | `log-weight-drawer`              | `progress/log-weight-drawer`      | ✅  | idem                                               |
 | `personal-records`               | `progress/personal-records`       | ✅  |                                                    |
@@ -113,7 +113,7 @@ Nenhum placeholder restante no código.
 | `training-intensity`             | `progress/training-intensity`     | ✅  |                                                    |
 | `weight-chart`                   | `progress/weight-chart`           | ✅  |                                                    |
 | `WeightBarMini` (dentro da page) | `progress/weight-mini-bars`       | ✅  | extraído para arquivo próprio                      |
-| —                                | `progress/log-history`            | ➕  | lista de registros recentes, base do editar/apagar |
+| `log-history`                    | `progress/log-history`            | ✅  | lista de registros recentes, base do editar/apagar |
 
 ### Metas e perfil — 4 de 4
 
@@ -165,7 +165,6 @@ exigência de loja.
 
 | Ganho                                             | Origem                                                                                 |
 | ------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Editar e apagar registro de peso, passos e água   | #116 — a API já suportava; no PWA só o Claude fazia                                    |
 | Reordenar exercício do plano                      | #115 — existe na API e no MCP, não no PWA                                              |
 | Exportar meus dados                               | LGPD art. 18, V — endpoint existia sem interface                                       |
 | Apagar minha conta                                | LGPD art. 18, VI + Apple e Google **rejeitam** app que cria conta e não deixa apagá-la |
@@ -177,6 +176,13 @@ exigência de loja.
 
 **Correção que volta para o PWA:** o botão "Log Água" do dashboard, com ícone de
 gota e rótulo de água, abria o drawer de **passos**. Corrigido nos dois.
+
+**Ganho que voltou para o PWA:** editar e apagar registro de peso, passos e água
+(#116) nasceu aqui e foi portado de volta na direção inversa da habitual. O
+`log-history` do web é o mesmo componente traduzido para DOM, com uma diferença:
+a confirmação de exclusão é inline na própria linha, não um diálogo do sistema —
+`ui/` não tem `alert-dialog`, e um `window.confirm` sobre um sheet do vaul rouba
+o foco e, no iOS instalado como PWA, aparece com o nome do domínio.
 
 ---
 
