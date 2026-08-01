@@ -8,7 +8,10 @@ export type MuscleGroup =
   | 'braço'
   | 'core'
   | 'cardio'
-  // eslint-disable-next-line @typescript-eslint/ban-types
+  // `string & {}` mantém o autocomplete das opções acima sem fechar o tipo — o
+  // catálogo aceita grupo muscular fora da lista. A regra que reclamava disto era
+  // `ban-types`, removida no typescript-eslint v8 e sucedida por esta.
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   | (string & {});
 
 export type ExerciseSource = 'SEED' | 'CUSTOM';

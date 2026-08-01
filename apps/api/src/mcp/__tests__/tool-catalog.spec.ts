@@ -42,7 +42,7 @@ function loadTools(): Array<{ file: string; tool: McpToolDef }> {
   for (const file of findToolFiles()) {
     // Require dinâmico: o caminho vem da varredura do filesystem, então não há
     // como declarar esses imports estaticamente.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const mod = require(file) as Record<string, unknown>;
 
     for (const exported of Object.values(mod)) {
