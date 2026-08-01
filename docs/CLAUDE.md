@@ -8,7 +8,10 @@ Fatia é um app pessoal multi-usuário para tracking de nutrição e treino. Bac
 
 ## Antes de começar qualquer task
 
-1. Leia `docs/PRD.md` para entender escopo e **não-escopo** (a lista negativa é importante)
+1. Leia `docs/PRD.md` para entender escopo e **não-escopo**. Atenção à regra de precedência da
+   [ADR 013](./ADR/013-roadmap-supera-escopo-negativo-v1.md): a lista negativa do §4 vale para
+   trabalho de **v1**; para trabalho de **roadmap pós-MVP**, a épica manda e o PRD registra a
+   exceção. Item com issue aberta e priorizada não é fora de escopo, mesmo que a lista o cite.
 2. Leia `docs/ARCHITECTURE.md` para decisões técnicas já tomadas
 3. Confira as [Issues](https://github.com/ThiagoCarreiraVallim/fatia/issues) para ver onde a tarefa se encaixa (`docs/TASKS.md` tem o mapa das épicas)
 4. Se vai mudar schema, leia `packages/db/prisma/schema.prisma` inteiro primeiro
@@ -70,13 +73,14 @@ docs(mcp): clarify search_food schema
 - ❌ Hardcodar `userId` ou pular guards "temporariamente"
 - ❌ Commitar `.env`, secrets, ou tokens
 - ❌ Criar dependências para coisas triviais (ex: lodash para 1 função)
-- ❌ Sobrepor decisões do PRD/ARCHITECTURE sem ADR
+- ❌ Sobrepor decisões do PRD/ARCHITECTURE sem ADR (exceção prevista: ADR 013, para roadmap)
 - ❌ Adicionar testes E2E na v1 (testes unitários em services críticos é suficiente)
 - ❌ Refatorar código que não está sendo tocado pela task atual
 
 ## Quando em dúvida
 
-1. Em dúvida sobre escopo: assume que está fora. PRD lista o que está dentro.
+1. Em dúvida sobre escopo: **procure a issue primeiro**. Se existe issue aberta e priorizada, está
+   dentro — ver ADR 013. Se não existe, assume que está fora.
 2. Em dúvida sobre arquitetura: lê ARCHITECTURE.md, se não tem resposta, pergunta antes de codar.
 3. Em dúvida sobre estilo: copia do código existente mais próximo.
 4. Em dúvida sobre dependência nova: prefere a opção que já está no projeto.
