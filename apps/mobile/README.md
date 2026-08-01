@@ -34,6 +34,16 @@ mesma rede.
 Sem emulador, sem Xcode, sem Android Studio. Todos os módulos nativos que o app
 usa já vêm no Expo Go.
 
+> **O Expo Go precisa estar atualizado.** Ele suporta **um** SDK por vez — o mais
+> recente. Este projeto está no SDK 57, que exige Expo Go **57.0.2+** no Android e
+> **57.0.5+** no iOS. Uma versão mais antiga recusa com
+> `Project is incompatible with this version of Expo Go` e manda atualizar pela
+> loja. Para conferir qual SDK a versão publicada suporta hoje:
+>
+> ```bash
+> curl -s https://api.expo.dev/v2/versions/latest | jq '.data.sdkVersions | keys'
+> ```
+
 ---
 
 ## O que depende de você
@@ -110,21 +120,53 @@ pnpm infra:up
 pnpm dev
 ```
 
-Depois, em `apps/mobile/.env`, troque `localhost` pelo **IP da sua máquina na
-rede local** — o celular não enxerga o `localhost` do computador:
+Em `apps/mobile/.env`, troque `localhost` pelo **IP da sua máquina na rede
+local** — o celular não enxerga o `localhost` do computador. Descubra o seu:
+
+```bash
+# Linux
+ip -4 -o addr show scope global | awk '{print $2, $4}'
+# macOS
+ipconfig getifaddr en0
+# Windows
+ipconfig
+```
+
+Depois monte o `.env` com esse valor. Este comando faz a substituição sozinho,
+para não sobrar número de exemplo copiado sem querer:
+
+```bash
+IP=$(ip -4 -o addr show scope global | grep -v ' docker\| br-' | awk 'NR==1{split($4,a,"/"); print a[1]}')
+sed -i "s|http://localhost:|http://$IP:|g" apps/mobile/.env
+grep EXPO_PUBLIC apps/mobile/.env
+```
+
+O resultado deve ficar assim, com o **seu** IP no lugar de `SEU_IP`:
 
 ```
-EXPO_PUBLIC_API_URL=http://192.168.0.10:3000
-EXPO_PUBLIC_LOGTO_ENDPOINT=http://192.168.0.10:3001
-EXPO_PUBLIC_LOGTO_AUDIENCE=http://localhost:3000
+EXPO_PUBLIC_API_URL=http://SEU_IP:3000
+EXPO_PUBLIC_LOGTO_ENDPOINT=http://SEU_IP:3001
+EXPO_PUBLIC_LOGTO_AUDIENCE=https://api.fatia.local
 ```
 
-Repare que `EXPO_PUBLIC_LOGTO_AUDIENCE` **continua com `localhost`**: ele não é
-uma URL a ser acessada, é o identificador do recurso registrado no Logto, e o
-match é exato. Trocar para o IP faz o Logto recusar com `invalid_target`.
+Repare que `EXPO_PUBLIC_LOGTO_AUDIENCE` **não é um endereço**: é o identificador
+do recurso registrado no Logto, o mesmo valor de `LOGTO_AUDIENCE` na raiz. O
+match é exato — trocá-lo pelo IP faz o Logto recusar com `invalid_target`.
 
-Descubra seu IP com `ip addr` (Linux), `ipconfig getifaddr en0` (macOS) ou
-`ipconfig` (Windows).
+### Firewall
+
+Se o celular não conectar e o terminal do Metro ficar mudo, é o firewall da
+máquina. O celular precisa alcançar três portas:
+
+```bash
+# ufw, liberando só para a sua sub-rede — é máquina de desenvolvimento
+sudo ufw allow from 192.168.0.0/16 to any port 8081 proto tcp   # Metro
+sudo ufw allow from 192.168.0.0/16 to any port 3000 proto tcp   # API
+sudo ufw allow from 192.168.0.0/16 to any port 3001 proto tcp   # Logto
+```
+
+Teste rápido antes de mexer em regra: abra `http://SEU_IP:8081` no navegador do
+celular. Se não carregar, é rede ou firewall; se carregar, o problema é outro.
 
 ---
 
@@ -180,7 +222,10 @@ de renderização — a verificação de interface é a
 
 | Sintoma                                                   | Causa provável                                                                                                 |
 | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `Project is incompatible with this version of Expo Go`    | Expo Go desatualizado. O SDK 57 exige 57.0.2+ no Android e 57.0.5+ no iOS — atualize pela loja                 |
+| Tela azul "Something went wrong", terminal do Metro mudo  | o celular não alcançou o Metro: firewall na porta 8081, ou aparelho em outra rede. Veja "Firewall" acima       |
 | Tela de login diz "Configuração incompleta"               | falta `.env`, ou o Metro não foi reiniciado depois de editá-lo                                                 |
+| App abre mas toda chamada dá timeout                      | `.env` aponta para `localhost` ou para um IP que não é o seu. Rode o comando da seção "backend local"          |
 | Login abre o navegador e volta com `invalid_redirect_uri` | o redirect não está cadastrado no Logto. Veja a linha `[auth] redirect_uri:` no terminal do Metro e cadastre-a |
 | Login volta, mas toda tela dá erro de sessão              | `EXPO_PUBLIC_LOGTO_AUDIENCE` diferente do `LOGTO_AUDIENCE` da API — o match é exato, inclusive barra final     |
 | QR Code não conecta                                       | celular e computador em redes diferentes, ou firewall bloqueando a porta 8081                                  |
