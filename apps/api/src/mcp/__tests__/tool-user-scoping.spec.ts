@@ -29,7 +29,7 @@ function loadTools(): McpToolDef[] {
   const tools: McpToolDef[] = [];
   for (const file of files) {
     // Require dinâmico: o caminho vem da varredura do filesystem.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const mod = require(file) as Record<string, unknown>;
     for (const exported of Object.values(mod)) {
       if (typeof exported !== 'function') continue;

@@ -7,7 +7,7 @@
     "dev": "astro dev --port 3040",
     "build": "astro build",
     "preview": "astro preview --port 3040",
-    "lint": "eslint . --ext .js,.ts,.astro",
+    "lint": "eslint .",
     "typecheck": "astro check"
   },
   "dependencies": {
@@ -21,9 +21,9 @@
   },
   "devDependencies": {
     "@iconify-json/lucide": "^1.2.20",
-    "@typescript-eslint/parser": "^8.0.0",
-    "eslint": "^8.57.0",
-    "eslint-plugin-astro": "^1.3.1",
+    "astro-eslint-parser": "^3",
+    "eslint-plugin-astro": "^3.0.1",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
     "typescript": "^5.5.0"
   }
 }

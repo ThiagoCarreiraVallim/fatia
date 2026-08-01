@@ -1,7 +1,10 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
-export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
+// Alias em vez de interface vazia: o nome existe para o consumidor importar o
+// tipo, não para acrescentar membro. `interface X extends Y {}` diz a mesma
+// coisa e dispara `no-empty-object-type`.
+export type InputProps = React.InputHTMLAttributes<HTMLInputElement>;
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, ...props }, ref) => {

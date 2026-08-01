@@ -84,7 +84,11 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
       signal: controller.signal,
     });
   } catch (err) {
-    if (controller.signal.aborted) throw new Error('Tempo de resposta excedido');
+    // `cause` preserva o AbortError original. Sem ela, o stack para aqui e o
+    // relatório de erro perde de onde a requisição saiu.
+    if (controller.signal.aborted) {
+      throw new Error('Tempo de resposta excedido', { cause: err });
+    }
     throw err;
   } finally {
     clearTimeout(timeoutId);
