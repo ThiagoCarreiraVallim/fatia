@@ -35,8 +35,8 @@ model User {
   weightLogs      WeightLog[]
   stepLogs        StepLog[]
   waterLogs       WaterLog[]
-  customFoods     Food[]     @relation("UserCustomFoods")
-  customExercises Exercise[] @relation("UserCustomExercises")
+  customFoods     Food[]           @relation("UserCustomFoods")
+  customExercises Exercise[]       @relation("UserCustomExercises")
   nutrientTargets NutrientTarget[]
 
   @@index([logtoSub])
@@ -50,11 +50,11 @@ enum Role {
 // OAuth facade pro MCP: Logto não expõe DCR público, então a API age
 // como AS público (DCR + authorize/token) e federa pro Logto internamente.
 model McpOAuthClient {
-  id           String   @id @default(uuid())
-  clientId     String   @unique
+  id           String    @id @default(uuid())
+  clientId     String    @unique
   clientName   String?
   redirectUris String[]
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
   lastUsedAt   DateTime?
 
   authorizations McpOAuthAuthorization[]
@@ -120,28 +120,34 @@ model FoodGroup {
 }
 
 model Food {
-  id             Int        @id @default(autoincrement())
-  name           String
-  source         FoodSource
-  groupId        Int?
+  id              Int        @id @default(autoincrement())
+  name            String
+  source          FoodSource
+  groupId         Int?
   // Para CUSTOM foods: dono. Null para TACO/USDA (catálogo público).
   createdByUserId String?
-  kcalPer100g    Float
-  proteinPer100g Float
-  carbsPer100g   Float
-  fatPer100g     Float
+  kcalPer100g     Float
+  proteinPer100g  Float
+  carbsPer100g    Float
+  fatPer100g      Float
   // Micronutrientes por 100g (catálogo), mapa flexível: { "sodium_mg": 1.2, "fiber_g": 2.7 }.
   // Derivado por regra de 3 para MealItem.nutrients ao logar (ADR 009).
-  nutrients      Json?
-  createdAt      DateTime   @default(now())
+  nutrients       Json?
+  // Nome reduzido à forma comparável (minúsculo, sem acento, sem pontuação).
+  // Existe porque `contains` no `name` não acha "feijao" para "Feijão" — e no
+  // teclado do celular ninguém acentua. Mantido por `FoodService`; ver
+  // `apps/api/src/common/search-text.ts`.
+  searchName      String     @default("")
+  createdAt       DateTime   @default(now())
 
-  group         FoodGroup? @relation(fields: [groupId], references: [id])
-  createdBy     User?      @relation("UserCustomFoods", fields: [createdByUserId], references: [id], onDelete: Cascade)
-  mealItems     MealItem[]
+  group     FoodGroup? @relation(fields: [groupId], references: [id])
+  createdBy User?      @relation("UserCustomFoods", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  mealItems MealItem[]
 
   // Unicidade por (nome, source) só para públicos. Customs podem repetir nomes
   // entre usuários — unicidade real é (nome, source, createdByUserId).
   @@unique([name, source, createdByUserId])
+  @@index([searchName])
   @@index([name])
   @@index([source])
   @@index([createdByUserId])
@@ -175,16 +181,16 @@ model Meal {
 }
 
 model MealItem {
-  id       String  @id @default(uuid())
-  mealId   String
-  foodId   Int? // null = item livre estimado pelo Claude
-  groupId  Int? // copiado do food, ou inferido pelo Claude
-  foodName String // snapshot — sempre preenchido
-  grams    Float
-  kcal     Float
-  proteinG Float
-  carbsG   Float
-  fatG     Float
+  id        String @id @default(uuid())
+  mealId    String
+  foodId    Int? // null = item livre estimado pelo Claude
+  groupId   Int? // copiado do food, ou inferido pelo Claude
+  foodName  String // snapshot — sempre preenchido
+  grams     Float
+  kcal      Float
+  proteinG  Float
+  carbsG    Float
+  fatG      Float
   // Micronutrientes opcionais (snapshot), mapa flexível: { "sodium_mg": 412, "sugar_g": 9 }.
   // Json em vez de colunas fixas: nutrientes são open-ended e a TACO não cobre todos
   // (ADR 009). Ausente = não rastreado para aquele item.
@@ -204,15 +210,17 @@ model MealItem {
 model Exercise {
   id               Int      @id @default(autoincrement())
   name             String
-  muscleGroup      String   // "peito", "costas", "pernas", "ombro", "braço", "core", "cardio"
+  // Ver `Food.searchName` — mesma razão, mantido por `ExerciseService`.
+  searchName       String   @default("")
+  muscleGroup      String // "peito", "costas", "pernas", "ombro", "braço", "core", "cardio"
   // Defaults `[]` espelham o `DEFAULT '{}'` criado em
   // migrations/20260602120000_add_exercise_enrichment. Sem eles o datamodel
   // divergia do banco e o job `Prisma Checks` do CI acusava drift.
   primaryMuscles   String[] @default([])
   secondaryMuscles String[] @default([])
   equipment        String?
-  level            String?  // "beginner" | "intermediate" | "advanced"
-  mechanic         String?  // "compound" | "isolation"
+  level            String? // "beginner" | "intermediate" | "advanced"
+  mechanic         String? // "compound" | "isolation"
   instructions     String[] @default([])
   youtubeVideoId   String?
   youtubeVideoIdPt String?
@@ -231,6 +239,7 @@ model Exercise {
 
   @@unique([name, createdByUserId])
   @@index([name])
+  @@index([searchName])
   @@index([muscleGroup])
   @@index([createdByUserId])
   @@index([clonedFromId])

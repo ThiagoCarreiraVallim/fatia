@@ -62,13 +62,37 @@ describe('FoodService', () => {
       });
     });
 
-    it('adds case-insensitive name search when q is provided', async () => {
+    it('busca sobre searchName normalizado, não sobre o nome cru', async () => {
+      // Antes era `name: { contains, mode: insensitive }`, e quem digitava
+      // "feijao" não achava "Feijão". Ver common/search-text.ts.
       prisma.food.findMany.mockResolvedValue([]);
 
-      await service.search(userId, { q: 'Arroz' });
+      await service.search(userId, { q: 'Feijão' });
 
       const where = prisma.food.findMany.mock.calls[0][0].where;
-      expect(where.AND[1]).toEqual({ name: { contains: 'Arroz', mode: 'insensitive' } });
+      expect(where.AND[1]).toEqual({ searchName: { contains: 'feijao' } });
+    });
+
+    it('não corta no banco quando há termo — o corte é depois do ranqueamento', async () => {
+      prisma.food.findMany.mockResolvedValue([]);
+
+      await service.search(userId, { q: 'arroz', limit: 5 });
+
+      expect(prisma.food.findMany.mock.calls[0][0].take).toBeUndefined();
+    });
+
+    it('ordena por relevância: prefixo antes de contido', async () => {
+      prisma.food.findMany.mockResolvedValue([
+        { id: 1, name: 'Baião de dois, arroz e feijão-de-corda' },
+        { id: 2, name: 'Arroz, tipo 1, cozido' },
+      ]);
+
+      const result = await service.search(userId, { q: 'arroz' });
+
+      expect(result.map((f: { name: string }) => f.name)).toEqual([
+        'Arroz, tipo 1, cozido',
+        'Baião de dois, arroz e feijão-de-corda',
+      ]);
     });
 
     it('adds a groupId filter when provided', async () => {
@@ -141,7 +165,9 @@ describe('FoodService', () => {
 
       expect(prisma.food.update).toHaveBeenCalledWith({
         where: { id: 1 },
-        data: { name: 'Renamed' },
+        // `searchName` acompanha o nome, senão a busca continua achando o
+        // alimento pelo nome antigo.
+        data: { name: 'Renamed', searchName: 'renamed' },
       });
     });
 

@@ -59,13 +59,39 @@ describe('ExerciseService', () => {
       );
     });
 
-    it('searches by name with case-insensitive contains when q is provided', async () => {
+    it('busca sobre searchName normalizado, não sobre o nome cru', async () => {
+      // Antes era `name: { contains, mode: insensitive }`, que não achava
+      // "feijao" para "Feijão". Ver common/search-text.ts.
       prisma.exercise.findMany.mockResolvedValue([]);
 
-      await service.search(userId, { q: 'Squat' });
+      await service.search(userId, { q: 'Agachamento Búlgaro' });
 
       const where = prisma.exercise.findMany.mock.calls[0][0].where;
-      expect(where.name).toEqual({ contains: 'Squat', mode: 'insensitive' });
+      expect(where.name).toBeUndefined();
+      expect(where.searchName).toEqual({ contains: 'agachamento bulgaro' });
+    });
+
+    it('não corta no banco quando há termo — o corte é depois do ranqueamento', () => {
+      // Cortar antes traria os N primeiros em ordem alfabética, e o melhor
+      // resultado poderia ficar de fora.
+      prisma.exercise.findMany.mockResolvedValue([]);
+      return service.search(userId, { q: 'supino', limit: 5 }).then(() => {
+        expect(prisma.exercise.findMany.mock.calls[0][0].take).toBeUndefined();
+      });
+    });
+
+    it('ordena por relevância: o que começa com o termo vem antes do que só contém', async () => {
+      prisma.exercise.findMany.mockResolvedValue([
+        { id: 1, name: 'Arremesso Supino com Dois Braços' },
+        { id: 2, name: 'Supino Reto com Barra' },
+      ]);
+
+      const result = await service.search(userId, { q: 'supino' });
+
+      expect(result.map((e: { name: string }) => e.name)).toEqual([
+        'Supino Reto com Barra',
+        'Arremesso Supino com Dois Braços',
+      ]);
     });
 
     it('filters by muscleGroup when provided', async () => {
@@ -117,7 +143,12 @@ describe('ExerciseService', () => {
       await service.createCustom(userId, { name: 'Hex Bar DL', muscleGroup: 'back' });
 
       expect(prisma.exercise.create).toHaveBeenCalledWith({
-        data: { name: 'Hex Bar DL', muscleGroup: 'back', createdByUserId: userId },
+        data: {
+          name: 'Hex Bar DL',
+          searchName: 'hex bar dl',
+          muscleGroup: 'back',
+          createdByUserId: userId,
+        },
       });
     });
 
@@ -148,7 +179,9 @@ describe('ExerciseService', () => {
 
       expect(prisma.exercise.update).toHaveBeenCalledWith({
         where: { id: 1 },
-        data: { name: 'New Name' },
+        // `searchName` acompanha o nome; sem isso a busca continuaria achando
+        // o exercício pelo nome antigo.
+        data: { name: 'New Name', searchName: 'new name' },
       });
     });
 
@@ -196,6 +229,7 @@ describe('ExerciseService', () => {
         where: { id: 1 },
         data: {
           name: 'Supino reto',
+          searchName: 'supino reto',
           primaryMuscles: ['chest'],
           instructions: ['Deite no banco', 'Empurre a barra'],
         },

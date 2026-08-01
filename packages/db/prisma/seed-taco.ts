@@ -15,6 +15,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { PrismaClient, FoodSource } from '@prisma/client';
+import { normalizeSearchText } from '../src/search-text';
 
 const prisma = new PrismaClient();
 
@@ -207,6 +208,7 @@ export async function runSeedTaco() {
       await prisma.food.create({
         data: {
           name: food.name,
+          searchName: normalizeSearchText(food.name),
           source: FoodSource.TACO,
           groupId,
           kcalPer100g: food.kcalPer100g,

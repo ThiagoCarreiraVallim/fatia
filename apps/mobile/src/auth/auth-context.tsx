@@ -25,7 +25,19 @@ WebBrowser.maybeCompleteAuthSession();
  */
 const REDIRECT_PATH = 'auth/callback';
 
-const SCOPES = ['openid', 'profile', 'email', 'offline_access'];
+/**
+ * O mínimo que o app precisa, e nada além.
+ *
+ * `openid` traz o `sub`, que é como a API resolve a identidade; `offline_access`
+ * traz o refresh token. **`profile` e `email` ficam de fora de propósito**: o app
+ * nunca lê claim de ID token — o perfil vem de `usersApi.me()`, da nossa própria
+ * base — e a API provisiona a partir do `sub`, com fallback quando não há e-mail
+ * (`user-provisioning.service.ts`).
+ *
+ * Pedir escopo que não se usa é pedir ao usuário permissão para dado que não vai
+ * ser lido, e é uma tela de consentimento a mais sem contrapartida.
+ */
+const SCOPES = ['openid', 'offline_access'];
 
 export type AuthStatus = 'loading' | 'signedIn' | 'signedOut';
 

@@ -16,6 +16,7 @@
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
+import { normalizeSearchText } from '../src/search-text';
 
 const prisma = new PrismaClient();
 
@@ -86,7 +87,14 @@ export async function runSeedExercises() {
       await prisma.exercise.update({ where: { id: existing.id }, data });
       updated++;
     } else {
-      await prisma.exercise.create({ data: { name: ex.name, createdByUserId: null, ...data } });
+      await prisma.exercise.create({
+        data: {
+          name: ex.name,
+          searchName: normalizeSearchText(ex.name),
+          createdByUserId: null,
+          ...data,
+        },
+      });
       created++;
     }
   }

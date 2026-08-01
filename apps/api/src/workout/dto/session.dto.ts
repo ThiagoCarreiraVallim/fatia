@@ -9,6 +9,11 @@ export class StartSessionDto {
 
 export class FinishSessionDto {
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
+  /**
+   * Quando o treino de fato terminou. Sem isto o fim era sempre "agora", e um
+   * treino de ontem relatado hoje ficava com duração de um dia.
+   */
+  @IsOptional() @IsISO8601() completedAt?: string;
 }
 
 export class UpdateSessionDto {

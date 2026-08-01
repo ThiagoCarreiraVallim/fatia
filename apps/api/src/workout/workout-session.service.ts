@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import type {
@@ -85,12 +86,43 @@ export class WorkoutSessionService {
     });
   }
 
+  /**
+   * Finaliza a sessão. `completedAt` é opcional e serve para registrar treino já
+   * ocorrido — "ontem treinei peito, supino 4x8 com 70 kg" — que antes só podia
+   * ser fechado com o horário de agora, produzindo uma sessão de um dia de
+   * duração.
+   *
+   * As duas validações existem porque o valor vem do cliente, e um horário
+   * incoerente contamina em silêncio todo agregado de duração e volume: um fim
+   * antes do início dá duração negativa, e um fim no futuro empurra a sessão
+   * para o topo do histórico e não sai de lá.
+   */
   async finish(userId: string, id: string, dto: FinishSessionDto) {
     const session = await this.assertOwner(userId, id);
+
+    let completedAt = session.completedAt ?? new Date();
+    if (dto.completedAt) {
+      const requested = new Date(dto.completedAt);
+      if (Number.isNaN(requested.getTime())) {
+        throw new BadRequestException('completedAt inválido — use ISO 8601.');
+      }
+      if (requested < session.startedAt) {
+        throw new BadRequestException(
+          'completedAt é anterior ao início do treino. Confirme a data com o usuário.',
+        );
+      }
+      // Uma folga pequena absorve relógio de aparelho adiantado; um treino que
+      // "termina" amanhã é erro de digitação, não fuso.
+      if (requested.getTime() > Date.now() + 5 * 60 * 1000) {
+        throw new BadRequestException('completedAt está no futuro.');
+      }
+      completedAt = requested;
+    }
+
     return this.prisma.workoutSession.update({
       where: { id },
       data: {
-        completedAt: session.completedAt ?? new Date(),
+        completedAt,
         ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
       },
     });
