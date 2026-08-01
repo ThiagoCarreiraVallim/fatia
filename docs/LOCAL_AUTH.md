@@ -92,20 +92,60 @@ The MCP server fronts a second OAuth app so Claude can drive it via standard OAu
 
 ---
 
-## 6. Grant the apps access to the API resource
+## 6. Create the mobile app (Native)
 
-By default a Logto app cannot mint tokens for any API resource — you have to attach them.
+The React Native app (`apps/mobile`) needs its own application. It **cannot** reuse
+the PWA's: a native app is a _public_ client — it ships to devices, so anything
+inside it is extractable, and it has no `client_secret`. That is exactly why the
+flow requires PKCE.
 
-For **both** apps (`Fatia Web` and `Fatia MCP`):
+1. **Applications → Create application → Native** → name it `Fatia Mobile`.
+2. **Redirect URIs:** `fatia://auth/callback`
+3. **Post sign-out redirect URIs:** `fatia://auth/callback`
+4. Save and copy the **App ID** → `EXPO_PUBLIC_LOGTO_APP_ID` in `apps/mobile/.env`.
+   There is no secret to copy, and that is not an oversight.
 
-1. Open the app's settings → **API resources** tab.
-2. Click **Assign API resources** → pick `Fatia API`.
-
-If you skip this step the API will reject every token with `aud mismatch`.
+> **Running through Expo Go?** Add a second redirect URI. Expo Go does not use
+> `fatia://` — it uses an `exp://` URL with your machine's IP, which changes with
+> the network. Tap **Entrar** in the app and copy the `[auth] redirect_uri: …`
+> line the Metro terminal prints. A development build uses `fatia://` for real
+> and needs no extra entry. Details in [`apps/mobile/README.md`](../apps/mobile/README.md).
 
 ---
 
-## 7. Finish the `.env`
+## 7. There is no step to "grant" apps access to the API resource
+
+Earlier versions of this guide told you to open the app's **API resources** tab
+and assign `Fatia API`. **That tab does not exist**, and no such association
+does either — verified against the admin API of the Logto this repo runs
+(1.36.0): the only things you can attach to an application are M2M roles and
+consent scopes.
+
+Here is what actually puts the right `aud` in the token:
+
+- the client sends `resource=<identifier>` in the authorization request;
+- Logto mints an access token whose `aud` is that identifier;
+- the API validates it against `LOGTO_AUDIENCE`.
+
+Nothing to click. Each client already sends it:
+
+| Client | Where                                                                                     |
+| ------ | ----------------------------------------------------------------------------------------- |
+| PWA    | `resources: [LOGTO_AUDIENCE]` in `apps/web/src/lib/logto.ts`                              |
+| MCP    | `resolveResource()` in `apps/api/src/auth/oauth-facade.service.ts`                        |
+| Mobile | `extraParams: { resource: env.logtoAudience }` in `apps/mobile/src/auth/auth-context.tsx` |
+
+**Assignment only exists for machine-to-machine apps**, which get API permissions
+through M2M roles. None of the three clients here is M2M.
+
+If you do get `aud mismatch`, the cause is a value mismatch, not a missing
+grant: `LOGTO_AUDIENCE`, the API identifier in Logto, and
+`EXPO_PUBLIC_LOGTO_AUDIENCE` must be byte-identical — Logto matches exactly, and
+a trailing slash is enough to break it with `invalid_target`.
+
+---
+
+## 8. Finish the `.env`
 
 Open `.env` (created by `pnpm bootstrap`) and fill in:
 
@@ -125,9 +165,24 @@ LOGTO_COOKIE_SECRET=$(openssl rand -base64 32)
 
 Restart `pnpm dev` after editing `.env`.
 
+For the native app, `apps/mobile/.env` is separate (copy from `.env.example`).
+Point it at your machine's LAN IP, not `localhost` — the phone cannot reach the
+computer's loopback:
+
+```dotenv
+EXPO_PUBLIC_API_URL=http://192.168.0.10:3000
+EXPO_PUBLIC_LOGTO_ENDPOINT=http://192.168.0.10:3001
+EXPO_PUBLIC_LOGTO_AUDIENCE=https://api.fatia.local
+EXPO_PUBLIC_LOGTO_APP_ID=<from step 6>
+```
+
+`EXPO_PUBLIC_LOGTO_AUDIENCE` keeps the **identifier**, not a reachable URL — it
+is the same string as `LOGTO_AUDIENCE`, and swapping it for the IP makes Logto
+reject the request with `invalid_target`.
+
 ---
 
-## 8. Create a user
+## 9. Create a user
 
 You also need a **user** (the human who'll log in), separate from the admin from step 2:
 
@@ -141,29 +196,58 @@ You're done. Authenticated endpoints should now return data instead of 401.
 
 ## Minting an access token by hand
 
-For scripts and curl, you can grab a Logto access token without going through the PWA. The simplest path is the **password grant**, which Logto exposes for first-party apps:
+For scripts and curl you need a token without going through the PWA.
+
+**The password grant does not work here.** An earlier version of this guide
+suggested it; ask this Logto what it supports and the list comes back without
+it:
+
+```bash
+curl -s http://localhost:3001/oidc/.well-known/openid-configuration \
+  | jq -r '.grant_types_supported[]'
+# implicit
+# authorization_code
+# refresh_token
+# client_credentials
+# urn:ietf:params:oauth:grant-type:token-exchange
+```
+
+Two paths that do work:
+
+**1. Log into the PWA and take the token from the proxy.** The browser never
+sees the access token — it lives in the server-side session — so reading a
+cookie will not give it to you. Log in at <http://localhost:3030>, then ask the
+API for something through the proxy and read the `Authorization` header from
+the API log; or add a temporary route that returns `getApiAccessToken()`.
+
+**2. Client credentials, with a machine-to-machine app.** This is the honest way
+for a script, and the _only_ place where "assign the API resource" is a real
+step:
+
+1. **Applications → Create application → Machine-to-machine** → `Fatia Scripts`.
+2. **Roles →** create a role with the permissions of `Fatia API` and assign it
+   to the app. Without a role the token comes back without the scopes.
+3. Then:
 
 ```bash
 TOKEN=$(curl -sS -X POST http://localhost:3001/oidc/token \
-  -u "$LOGTO_APP_ID:$LOGTO_APP_SECRET" \
-  -d 'grant_type=password' \
-  -d "username=$USERNAME" \
-  -d "password=$PASSWORD" \
+  -u "$M2M_APP_ID:$M2M_APP_SECRET" \
+  -d 'grant_type=client_credentials' \
   -d 'resource=https://api.fatia.local' \
-  -d 'scope=openid profile' \
   | jq -r '.access_token')
 
-# Smoke-test the MCP server
 TOKEN="$TOKEN" pnpm mcp:smoke
 ```
 
-If your tenant doesn't have password grant enabled, paste the access token Chrome stores after a normal login: open DevTools → Application → Cookies → `logtoAccessToken`.
+Note what this token is **not**: it has no `sub` of a human, so anything scoped
+by user returns empty. It is useful to prove the API accepts the token, not to
+exercise a user's data.
 
 ---
 
 ## Resetting Logto
 
-`pnpm reset:db` drops the Postgres volume, which also wipes Logto's database (it lives in the same Postgres). After a reset you have to re-do steps 2–6.
+`pnpm reset:db` drops the Postgres volume, which also wipes Logto's database (it lives in the same Postgres). After a reset you have to re-do steps 2–9.
 
 If you want to keep Logto state but reset Fatia data, run the SQL by hand inside the container:
 
@@ -183,3 +267,6 @@ docker exec -it fatia-postgres psql -U fatia -d fatia \
 | Logto admin console loads but the OIDC endpoint times out | Logto is still running its first-boot migration. Watch the logs for 30–60s.                                            |
 | `Failed to fetch JWKS`                                    | API can't reach Logto. Verify `LOGTO_ENDPOINT` matches the container's exposed port.                                   |
 | Login loop on the PWA                                     | `LOGTO_APP_ID` / `LOGTO_APP_SECRET` are still placeholders.                                                            |
+| `invalid_target` when requesting a token                  | The `resource` sent does not match the API identifier byte for byte. A trailing slash is enough.                       |
+| `invalid_redirect_uri` from the mobile app                | Through Expo Go the redirect is an `exp://` with your IP, not `fatia://`. Register the URI the Metro terminal prints.  |
+| Mobile app cannot reach the API, PWA can                  | `apps/mobile/.env` points at `localhost`. The phone needs your machine's LAN IP.                                       |
