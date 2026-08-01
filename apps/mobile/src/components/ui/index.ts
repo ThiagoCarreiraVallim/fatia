@@ -8,6 +8,7 @@ export {
   DrawerFlatList,
   DrawerFooter,
   DrawerHeader,
+  DrawerLayer,
   DrawerScrollView,
   DrawerTextInput,
   DrawerTitle,
