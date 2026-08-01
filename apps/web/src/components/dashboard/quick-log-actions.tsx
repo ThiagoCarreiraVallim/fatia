@@ -2,11 +2,11 @@
 
 import { useState } from 'react';
 import { Droplets, Scale } from 'lucide-react';
-import { LogStepsDrawer } from '@/components/progress/log-steps-drawer';
+import { LogWaterDrawer } from '@/components/progress/log-water-drawer';
 import { LogWeightDrawer } from '@/components/progress/log-weight-drawer';
 
 export function QuickLogActions() {
-  const [stepsOpen, setStepsOpen] = useState(false);
+  const [waterOpen, setWaterOpen] = useState(false);
   const [weightOpen, setWeightOpen] = useState(false);
 
   return (
@@ -14,7 +14,7 @@ export function QuickLogActions() {
       <div className="grid grid-cols-2 gap-4">
         <button
           type="button"
-          onClick={() => setStepsOpen(true)}
+          onClick={() => setWaterOpen(true)}
           className="flex flex-col items-center justify-center gap-2 rounded-xl border border-white/5 bg-card py-4 text-[12px] font-bold tracking-wide text-foreground uppercase hover:bg-card/80 transition-colors"
         >
           <Droplets size={20} className="text-[#4b8eff]" />
@@ -30,7 +30,7 @@ export function QuickLogActions() {
         </button>
       </div>
 
-      <LogStepsDrawer open={stepsOpen} onClose={() => setStepsOpen(false)} />
+      <LogWaterDrawer open={waterOpen} onClose={() => setWaterOpen(false)} />
       <LogWeightDrawer open={weightOpen} onClose={() => setWeightOpen(false)} />
     </>
   );

@@ -16,6 +16,7 @@ export function Screen({
   children,
   back = false,
   title,
+  onBack,
   onRefresh,
   refreshing = false,
   scroll = true,
@@ -23,6 +24,8 @@ export function Screen({
   children: ReactNode;
   back?: boolean;
   title?: string;
+  /** Intercepta a seta de voltar — ver `TopBar`. */
+  onBack?: () => void;
   onRefresh?: () => void;
   refreshing?: boolean;
   /** Desligue quando a tela tiver a própria lista rolável (FlatList). */
@@ -56,7 +59,7 @@ export function Screen({
   return (
     <View className="flex-1 bg-background">
       {body}
-      <TopBar back={back} title={title} />
+      <TopBar back={back} title={title} onBack={onBack} />
     </View>
   );
 }

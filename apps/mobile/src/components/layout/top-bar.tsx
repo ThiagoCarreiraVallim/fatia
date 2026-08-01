@@ -10,7 +10,21 @@ import { Bell, ChevronLeft } from 'lucide-react-native';
  * seta do próprio navegador; aqui as telas internas (plano, sessão, metas de
  * nutrição) ficariam sem saída no iOS, onde não há botão físico.
  */
-export function TopBar({ back = false, title }: { back?: boolean; title?: string }) {
+export function TopBar({
+  back = false,
+  title,
+  onBack,
+}: {
+  back?: boolean;
+  title?: string;
+  /**
+   * Intercepta a seta de voltar. Existe para a sessão de treino, que precisa
+   * avisar antes de sair — sem isto o botão físico do Android passaria pela
+   * guarda e a seta daqui não, o que é pior que não ter guarda nenhuma: o aviso
+   * aparece por um caminho e não pelo outro.
+   */
+  onBack?: () => void;
+}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -25,7 +39,9 @@ export function TopBar({ back = false, title }: { back?: boolean; title?: string
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Voltar"
-              onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+              onPress={() =>
+                onBack ? onBack() : router.canGoBack() ? router.back() : router.replace('/')
+              }
               className="-ml-2 h-11 w-11 items-center justify-center"
             >
               <ChevronLeft size={24} color="#e5e2e1" />
