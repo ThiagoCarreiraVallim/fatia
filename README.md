@@ -4,13 +4,13 @@ App pessoal multi-usuário para tracking de nutrição e treino, **MCP-first** c
 
 ## Visão geral
 
-Backend NestJS + Postgres expondo um servidor MCP completo (~50 tools cobrindo CRUD de toda a aplicação) + REST mínimo pra suportar o PWA. Foto de refeição é analisada pelo Claude e enviada como dados estruturados via MCP — o app não armazena imagens.
+Backend NestJS + Postgres expondo um servidor MCP completo (87 tools cobrindo CRUD de toda a aplicação) + REST mínimo pra suportar o PWA. Foto de refeição é analisada pelo Claude e enviada como dados estruturados via MCP — o app não armazena imagens.
 
 **Por que MCP-first?** Veja [`docs/ADR/006-mcp-first.md`](docs/ADR/006-mcp-first.md). Em resumo: o uso real do app é pelo Claude no celular, então toda funcionalidade está disponível por lá. O PWA é uma camada de visualização e edição pontual.
 
 ## Quick start
 
-Pré-requisitos: Node 20+ (`nvm use`), Docker, e `corepack enable` (para o pnpm 9 pinado em `packageManager`).
+Pré-requisitos: Node 24+ (`nvm use`), Docker, e `corepack enable` (para o pnpm 9 pinado em `packageManager`).
 
 ```bash
 git clone https://github.com/ThiagoCarreiraVallim/fatia.git
