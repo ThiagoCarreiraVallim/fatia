@@ -20,7 +20,8 @@ export class FinishWorkoutSessionTool implements McpToolDef {
   readonly description =
     'Finaliza uma sessão de treino, registrando o horário de conclusão. ' +
     'Para treino já ocorrido (ex.: "ontem eu treinei"), informe completedAt — ' +
-    'sem ele o fim é agora, e a sessão fica com a duração errada.';
+    'sem ele o fim é agora, e a sessão fica com a duração errada. ' +
+    'Exemplo: {"sessionId":"11111111-2222-4333-8444-555555555555","completedAt":"2026-07-31T20:15:00-03:00","notes":"treino completo"}';
   readonly inputSchema = {
     sessionId: z.string().uuid().describe('ID da sessão a finalizar'),
     notes: z.string().max(500).optional().describe('Notas finais do treino'),

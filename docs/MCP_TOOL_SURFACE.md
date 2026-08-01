@@ -28,6 +28,17 @@ valor, já que o usuário consegue operar o app inteiro conversando.
 Cortar a superfície pela metade significaria remover capacidade real, não redundância. As
 opções abaixo foram avaliadas com isso em mente.
 
+## Tamanho do catálogo servido
+
+O que pesa no contexto não é a contagem de tools, é o payload: nomes, descriptions e JSON
+Schemas somam **~53 k caracteres** (~15 k tokens), enviados em toda sessão que lista as
+tools.
+
+Dentro disso, os exemplos de invocação que a #111 acrescentou às 46 tools de escrita valem
+~4,9 k caracteres (~1,4 k tokens), ou ~9% do total. O formato e o motivo de o exemplo morar
+na `description` — e não em campo separado — estão na §Convenções de
+[`docs/MCP.md`](./MCP.md).
+
 ## Decisões
 
 ### Fica como está — CRUD por entidade

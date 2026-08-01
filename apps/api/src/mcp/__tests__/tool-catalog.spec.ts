@@ -42,7 +42,7 @@ function loadTools(): Array<{ file: string; tool: McpToolDef }> {
   for (const file of findToolFiles()) {
     // Require dinâmico: o caminho vem da varredura do filesystem, então não há
     // como declarar esses imports estaticamente.
-     
+
     const mod = require(file) as Record<string, unknown>;
 
     for (const exported of Object.values(mod)) {
@@ -57,6 +57,75 @@ function loadTools(): Array<{ file: string; tool: McpToolDef }> {
   }
 
   return loaded;
+}
+
+/**
+ * Formato do exemplo de invocação, fixado na §Convenções de `docs/MCP.md`:
+ * `Exemplo: {json}` no fim da description, com rótulo opcional entre parênteses
+ * quando a tool aceita mais de uma forma de chamada (`log_set` força × cardio).
+ */
+const EXAMPLE_PREFIX = /Exemplo(?: \([^)]*\))?: (?=\{)/g;
+
+/**
+ * Recorta o JSON de cada exemplo contando chaves balanceadas a partir do `{`
+ * que segue o prefixo. Um `/Exemplo: (\{.*\})/` erraria nos dois casos que
+ * existem hoje: description com dois exemplos e exemplo com objeto aninhado.
+ * As aspas são acompanhadas porque `}` dentro de string não fecha nada.
+ */
+function extractExamples(description: string): string[] {
+  const found: string[] = [];
+
+  for (const match of description.matchAll(EXAMPLE_PREFIX)) {
+    if (match.index === undefined) continue;
+    const start = match.index + match[0].length;
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let i = start; i < description.length; i++) {
+      const char = description[i];
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        inString = !inString;
+      } else if (!inString && char === '{') {
+        depth++;
+      } else if (!inString && char === '}') {
+        depth--;
+        if (depth === 0) {
+          found.push(description.slice(start, i + 1));
+          break;
+        }
+      }
+    }
+  }
+
+  return found;
+}
+
+/**
+ * Versão estrita do schema em TODA a árvore. O `.strict()` do Zod é raso, e o
+ * campo renomeado dentro de `items[]` do `log_meal` é justamente o caso em que
+ * o exemplo apodrece sem ninguém notar. Remontar o array perde restrições como
+ * `.min(1)` — por isso esta cópia serve só para achar chave desconhecida, e o
+ * parse do contrato completo continua sendo feito no schema original.
+ */
+function deepStrict(schema: ZodTypeAny): ZodTypeAny {
+  if (schema instanceof z.ZodObject) {
+    const shape = schema.shape as Record<string, ZodTypeAny>;
+    const strictShape = Object.fromEntries(
+      Object.entries(shape).map(([field, inner]) => [field, deepStrict(inner)]),
+    );
+    return z.object(strictShape).strict();
+  }
+  if (schema instanceof z.ZodArray) return z.array(deepStrict(schema.element as ZodTypeAny));
+  if (schema instanceof z.ZodOptional) return deepStrict(schema.unwrap() as ZodTypeAny).optional();
+  if (schema instanceof z.ZodNullable) return deepStrict(schema.unwrap() as ZodTypeAny).nullable();
+  // `z.record` fica de fora de propósito: `nutrients` aceita chave livre.
+  return schema;
 }
 
 const tools = loadTools();
@@ -232,5 +301,99 @@ describe('catálogo de tools MCP', () => {
     }
 
     expect(wrong.sort()).toEqual([]);
+  });
+
+  // --- Exemplos de invocação (issue #111) ---
+  //
+  // Toda tool de escrita termina a description com uma chamada concreta. O que
+  // dá valor ao exemplo não é ele existir, é continuar verdadeiro: exemplo que
+  // não passaria na validação induz o modelo ao erro, e nesse caso é PIOR que
+  // exemplo nenhum. Por isso o guarda faz o parse de verdade contra o schema,
+  // em vez de um `description.includes('Exemplo')`.
+
+  const writeTools = tools.filter(({ tool }) => tool.annotations?.readOnlyHint === false);
+
+  it('tem exemplo de invocação em toda tool de escrita', () => {
+    const missing = writeTools
+      .filter(({ tool }) => extractExamples(tool.description).length === 0)
+      .map(({ tool }) => tool.name)
+      .sort();
+
+    expect(missing).toEqual([]);
+  });
+
+  it('tem exemplo em JSON válido', () => {
+    // Separado do caso acima de propósito: "não tem exemplo" e "tem exemplo
+    // quebrado" são erros diferentes, e a mensagem tem de dizer qual é. A causa
+    // mais provável aqui é template literal multilinha, que injeta `\n` e
+    // indentação no meio do JSON.
+    const broken: string[] = [];
+
+    for (const { tool } of tools) {
+      for (const example of extractExamples(tool.description)) {
+        try {
+          JSON.parse(example);
+        } catch (err) {
+          broken.push(`${tool.name}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    }
+
+    expect(broken.sort()).toEqual([]);
+  });
+
+  it('tem exemplo que valida contra o inputSchema da própria tool', () => {
+    const invalid: string[] = [];
+
+    for (const { tool } of tools) {
+      const examples = extractExamples(tool.description);
+      if (examples.length === 0) continue;
+
+      // Cast localizado: `z.object` sobre o shape genérico estoura a
+      // instanciação de tipos (TS2589), mesmo motivo do cast do caso de `$ref`.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const object = z.object(tool.inputSchema as any) as any;
+      const contract = object.strict() as ZodTypeAny;
+      const keysOnly = deepStrict(object as ZodTypeAny);
+
+      for (const raw of examples) {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          continue; // já reportado pelo caso do JSON válido
+        }
+
+        // Duas passadas: o schema original valida tipo, enum, obrigatório e
+        // min/max; a cópia estrita pega chave que não existe mais, em qualquer
+        // nível. Renomear um campo e esquecer o exemplo cai na segunda.
+        for (const [rule, schema] of [
+          ['contrato', contract],
+          ['chave desconhecida', keysOnly],
+        ] as const) {
+          const result = schema.safeParse(parsed);
+          if (result.success) continue;
+          const issue = result.error.issues[0];
+          invalid.push(
+            `${tool.name} (${rule}): ${issue.path.join('.') || '(raiz)'} — ${issue.message}`,
+          );
+        }
+      }
+    }
+
+    expect(invalid.sort()).toEqual([]);
+  });
+
+  it('não exige exemplo em tool somente-leitura', () => {
+    // Guarda do guarda. Generalizar a exigência para as 87 tools custa token em
+    // toda sessão sem ganho equivalente: input de tool de leitura é curto e
+    // raramente ambíguo. Se um dia toda tool de leitura ganhar exemplo, este
+    // caso cai — e a decisão volta à mesa em vez de acontecer por inércia.
+    const readOnlyWithoutExample = tools.filter(
+      ({ tool }) =>
+        tool.annotations?.readOnlyHint === true && extractExamples(tool.description).length === 0,
+    );
+
+    expect(readOnlyWithoutExample.length).toBeGreaterThan(0);
   });
 });

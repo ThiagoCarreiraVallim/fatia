@@ -19,7 +19,8 @@ export class LogWaterTool implements McpToolDef {
   readonly title = 'Registrar água';
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
   readonly description =
-    'Registra consumo de água em mL para o dia. Múltiplos logs por dia são somados (cada copo/garrafa é um log).';
+    'Registra consumo de água em mL para o dia. Múltiplos logs por dia são somados (cada copo/garrafa é um log). ' +
+    'Exemplo: {"ml":500,"date":"2026-07-29"}';
   readonly inputSchema = {
     ml: z.number().int().positive().describe('Volume em mL (ex.: 250 = copo, 500 = garrafa)'),
     date: z.string().optional().describe('YYYY-MM-DD; default hoje no fuso do user'),

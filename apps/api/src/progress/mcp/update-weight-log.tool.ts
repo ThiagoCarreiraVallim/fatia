@@ -14,7 +14,9 @@ export class UpdateWeightLogTool implements McpToolDef {
   readonly name = 'update_weight_log';
   readonly title = 'Atualizar registro de peso';
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
-  readonly description = 'Atualiza um log de peso existente.';
+  readonly description =
+    'Atualiza um log de peso existente. ' +
+    'Exemplo: {"weightLogId":"11111111-2222-4333-8444-555555555555","weightKg":77.9}';
   readonly inputSchema = {
     weightLogId: z.string().uuid().describe('ID do registro de peso a atualizar'),
     weightKg: z.number().positive().optional().describe('Novo peso corporal em kg'),

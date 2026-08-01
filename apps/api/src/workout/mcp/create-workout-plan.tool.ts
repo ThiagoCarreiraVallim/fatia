@@ -17,7 +17,8 @@ export class CreateWorkoutPlanTool implements McpToolDef {
   readonly title = 'Criar plano de treino';
 
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
-  readonly description = 'Cria um novo plano de treino com nome.';
+  readonly description =
+    'Cria um novo plano de treino com nome. ' + 'Exemplo: {"name":"Treino A - peito e tríceps"}';
   readonly inputSchema = {
     name: z.string().min(1).max(100).describe('Nome do plano (ex: "Push", "Pull", "HIIT")'),
   } as const;

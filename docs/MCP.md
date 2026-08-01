@@ -101,6 +101,51 @@ Isso é verificado por `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`, que fa
 tool declarar hint incoerente com o prefixo ou usar o próprio nome como título. `title`
 ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 
+### Exemplo de invocação
+
+Toda tool de **escrita** (`readOnlyHint: false`) termina a `description` com uma chamada
+concreta. O `.describe()` de campo já explica _aquele_ campo; o que faltava era mostrar o
+**conjunto** de campos de uma chamada válida — o problema real de `log_set`, cujo schema é
+plano com tudo opcional, mas que na prática aceita dois conjuntos disjuntos.
+
+Formato, rígido de propósito para o teste conseguir extrair e validar:
+
+```
+Exemplo: {"json":"de uma linha só, no fim da description"}
+```
+
+```ts
+readonly description =
+  'Registra uma medição de peso corporal. ' +
+  'Exemplo: {"weightKg":78.4,"loggedAt":"2026-07-29T07:10:00-03:00"}';
+```
+
+Regras:
+
+- **Um exemplo por tool.** Dois só quando a tool aceita formas de chamada disjuntas — hoje
+  `log_set` (força × cardio) e `log_meal` (item do catálogo × item livre). Nesse caso o
+  prefixo leva um rótulo entre parênteses: `Exemplo (força):`, `Exemplo (cardio):`.
+- **JSON de uma linha, com concatenação de strings.** Template literal multilinha injeta
+  `\n` e indentação dentro do JSON e quebra o parse por espaço, não por conteúdo.
+- **Só os campos que importam.** Obrigatórios sempre; opcionais apenas quando o campo é o
+  ponto do exemplo (`loggedAt` em `log_weight`, `source` em `log_steps`).
+- **IDs são fictícios e óbvios** (`11111111-2222-4333-8444-555555555555`). O exemplo mostra
+  o formato do argumento, não um registro que existe — o ID real vem de um `search_`/`list_`.
+- **Tool somente-leitura é isenta.** Input curto, raramente ambíguo, e o custo em token é
+  cobrado em toda sessão.
+
+Verificado por `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`, que faz o `JSON.parse` e
+roda o exemplo contra o `inputSchema` Zod da própria tool — em duas passadas: o schema
+original valida tipo, enum, obrigatório e min/max; uma cópia estrita em toda a árvore pega
+chave que não existe mais, inclusive dentro de `items[]`. É essa segunda parte que importa:
+exemplo que não passaria na validação **induz o modelo ao erro** e é pior que exemplo
+nenhum — então ele não pode sobreviver calado a uma renomeação de campo.
+
+**Custo em token.** Os 46 exemplos somam ~4,9 k caracteres (~1,4 k tokens), contra ~53 k
+caracteres do catálogo servido inteiro (nomes + descriptions + JSON Schemas) — um acréscimo
+de ~9%, pago em toda sessão que lista as tools. Número registrado aqui para que uma futura
+discussão de tamanho de catálogo parta do dado, e não da impressão.
+
 ### IDs
 
 - IDs de entidades user-owned (`Meal`, `WorkoutSession`, etc): UUID string

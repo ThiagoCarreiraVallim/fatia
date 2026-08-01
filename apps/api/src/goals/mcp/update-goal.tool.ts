@@ -16,7 +16,8 @@ export class UpdateGoalTool implements McpToolDef {
   readonly title = 'Atualizar meta';
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
   readonly description =
-    'Atualiza uma meta pessoal. Use `lastReportedValue` para reportar progresso manual em metas de tipo `body_fat` ou `custom`.';
+    'Atualiza uma meta pessoal. Use `lastReportedValue` para reportar progresso manual em metas de tipo `body_fat` ou `custom`. ' +
+    'Exemplo: {"goalId":"11111111-2222-4333-8444-555555555555","targetValue":73,"deadline":"2027-03-31T23:59:59-03:00"}';
   readonly inputSchema = {
     goalId: z.string().describe('ID da meta a atualizar'),
     title: z.string().min(1).max(120).optional().describe('Novo título da meta'),

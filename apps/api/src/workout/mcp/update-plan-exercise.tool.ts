@@ -18,7 +18,8 @@ export class UpdatePlanExerciseTool implements McpToolDef {
 
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
   readonly description =
-    'Atualiza séries, reps ou notas de um exercício dentro de um plano de treino.';
+    'Atualiza séries, reps ou notas de um exercício dentro de um plano de treino. ' +
+    'Exemplo: {"planId":"11111111-2222-4333-8444-555555555555","planExerciseId":"66666666-7777-4888-8999-aaaaaaaaaaaa","targetSets":4,"targetReps":"6-8"}';
   readonly inputSchema = {
     planId: z.string().uuid().describe('ID do plano de treino'),
     planExerciseId: z.string().uuid().describe('ID da entrada do exercício no plano'),

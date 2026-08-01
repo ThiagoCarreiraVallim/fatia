@@ -17,7 +17,8 @@ export class DeleteSetTool implements McpToolDef {
   readonly title = 'Excluir série';
 
   readonly annotations = { readOnlyHint: false, destructiveHint: true };
-  readonly description = 'Remove uma série registrada.';
+  readonly description =
+    'Remove uma série registrada. ' + 'Exemplo: {"setId":"11111111-2222-4333-8444-555555555555"}';
   readonly inputSchema = {
     setId: z.string().uuid().describe('ID da série a remover'),
   } as const;

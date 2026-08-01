@@ -16,7 +16,8 @@ export class CreateGoalTool implements McpToolDef {
   readonly title = 'Criar meta';
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
   readonly description =
-    'Cria uma meta pessoal do usuário (peso, % gordura, frequência de treino, passos médios ou métrica livre). Se `startValue` não for informado, o backend deriva do estado atual quando possível (kind=weight, workout_frequency, step_count).';
+    'Cria uma meta pessoal do usuário (peso, % gordura, frequência de treino, passos médios ou métrica livre). Se `startValue` não for informado, o backend deriva do estado atual quando possível (kind=weight, workout_frequency, step_count). ' +
+    'Exemplo: {"kind":"weight","title":"Chegar a 75 kg","targetValue":75,"unit":"kg","deadline":"2026-12-31T23:59:59-03:00"}';
   readonly inputSchema = {
     kind: z.nativeEnum(GoalKind).describe('Tipo da meta'),
     title: z.string().min(1).max(120).describe('Título da meta (ex.: "Chegar a 75 kg")'),

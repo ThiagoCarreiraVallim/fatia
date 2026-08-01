@@ -14,7 +14,9 @@ export class DeleteGoalTool implements McpToolDef {
   readonly name = 'delete_goal';
   readonly title = 'Excluir meta';
   readonly annotations = { readOnlyHint: false, destructiveHint: true };
-  readonly description = 'Remove permanentemente uma meta pessoal.';
+  readonly description =
+    'Remove permanentemente uma meta pessoal. ' +
+    'Exemplo: {"goalId":"11111111-2222-4333-8444-555555555555"}';
   readonly inputSchema = {
     goalId: z.string().describe('ID da meta a remover'),
   } as const;

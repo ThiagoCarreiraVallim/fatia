@@ -14,7 +14,8 @@ export class DeleteWeightLogTool implements McpToolDef {
   readonly name = 'delete_weight_log';
   readonly title = 'Excluir registro de peso';
   readonly annotations = { readOnlyHint: false, destructiveHint: true };
-  readonly description = 'Deleta um log de peso.';
+  readonly description =
+    'Deleta um log de peso. ' + 'Exemplo: {"weightLogId":"11111111-2222-4333-8444-555555555555"}';
   readonly inputSchema = {
     weightLogId: z.string().uuid().describe('ID do registro de peso a remover'),
   } as const;

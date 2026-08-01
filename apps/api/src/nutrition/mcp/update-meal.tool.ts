@@ -15,7 +15,9 @@ export class UpdateMealTool implements McpToolDef {
   readonly name = 'update_meal';
   readonly title = 'Atualizar refeição';
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
-  readonly description = 'Atualiza metadados da refeição (mealType/eatenAt/notes).';
+  readonly description =
+    'Atualiza metadados da refeição (mealType/eatenAt/notes). ' +
+    'Exemplo: {"id":"11111111-2222-4333-8444-555555555555","mealType":"DINNER","eatenAt":"2026-07-29T20:15:00-03:00"}';
   readonly inputSchema = {
     id: z.string().uuid().describe('ID da refeição a atualizar'),
     mealType: z
