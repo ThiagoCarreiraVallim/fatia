@@ -7,8 +7,11 @@
 # /app/node_modules/.prisma/client — caminho previsível para COPY.
 
 # ---------- Base ----------
-FROM node:20-alpine AS base
-RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+FROM node:24-alpine AS base
+# `npm i -g` em vez de corepack: o corepack saiu da distribuição do Node a
+# partir da 25 e já está deprecado na 24. Assim o salto para a 26, quando ela
+# virar LTS, é só trocar o número da tag.
+RUN npm install -g pnpm@9.0.0
 RUN apk add --no-cache openssl libc6-compat
 WORKDIR /app
 

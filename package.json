@@ -5,7 +5,7 @@
   "description": "App pessoal de tracking de nutrição e treino com integração via MCP",
   "packageManager": "pnpm@9.0.0",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.0.0"
   },
   "scripts": {
     "bootstrap": "bash scripts/setup.sh",
