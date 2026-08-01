@@ -195,6 +195,23 @@ export const workoutApi = {
     }),
   removePlanExercise: (planId: string, id: string) =>
     apiFetch<void>(`/api/workout/plans/${planId}/exercises/${id}`, { method: 'DELETE' }),
+  /**
+   * Reordena exercícios do plano em **uma** escrita.
+   *
+   * Reordenar por `updatePlanExercise` exige um PATCH por exercício movido, e
+   * duas escritas para uma operação lógica não são atômicas: entre a primeira e
+   * a segunda a lista fica num estado que ninguém pediu. Aqui a API resolve
+   * tudo dentro de uma transação e devolve o plano inteiro já reordenado.
+   *
+   * Mande só os itens que mudaram de posição: o `order` de quem não se moveu
+   * não precisa ir junto, e mandá-lo sobrescreveria o que outro cliente tenha
+   * acabado de gravar.
+   */
+  reorderPlanExercises: (planId: string, exercises: Array<{ id: string; order: number }>) =>
+    apiFetch<WorkoutPlan>(`/api/workout/plans/${planId}/exercises/reorder`, {
+      method: 'PUT',
+      body: JSON.stringify({ exercises }),
+    }),
 
   searchExercises: (q?: string, muscleGroup?: MuscleGroup) => {
     const qs = new URLSearchParams();

@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, Play, Clock, Dumbbell, Lightbulb, Plus, Trash2, Check } from 'lucide-react';
-import { isCardioExercise, workoutApi } from '@fatia/api-client';
+import { isCardioExercise, workoutApi, type WorkoutPlanExercise } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
@@ -47,10 +47,25 @@ export default function PlanDetailPage() {
       body,
     }: {
       exerciseId: string;
-      body: { targetSets?: number; targetReps?: string; order?: number };
+      body: { targetSets?: number; targetReps?: string };
     }) => workoutApi.updatePlanExercise(id, exerciseId, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
+    },
+  });
+
+  // A troca vai numa requisição só: a API grava os dois `order` dentro de uma
+  // transação, então não existe instante em que a lista esteja pela metade.
+  const moveExercise = useMutation({
+    mutationFn: ({ a, b }: { a: WorkoutPlanExercise; b: WorkoutPlanExercise }) =>
+      workoutApi.reorderPlanExercises(id, [
+        { id: a.id, order: b.order },
+        { id: b.id, order: a.order },
+      ]),
+    onSuccess: (updated) => {
+      // A resposta já é o plano reordenado — escrever no cache evita o refetch
+      // que só confirmaria o que acabou de chegar.
+      qc.setQueryData(['workout', 'plan', id], updated);
     },
   });
 
@@ -108,20 +123,10 @@ export default function PlanDetailPage() {
     }
   }
 
-  function handleMoveUp(idx: number) {
-    if (idx === 0) return;
-    const a = exercises[idx];
-    const b = exercises[idx - 1];
-    updateExercise.mutate({ exerciseId: a.id, body: { order: b.order } });
-    updateExercise.mutate({ exerciseId: b.id, body: { order: a.order } });
-  }
-
-  function handleMoveDown(idx: number) {
-    if (idx === exercises.length - 1) return;
-    const a = exercises[idx];
-    const b = exercises[idx + 1];
-    updateExercise.mutate({ exerciseId: a.id, body: { order: b.order } });
-    updateExercise.mutate({ exerciseId: b.id, body: { order: a.order } });
+  function move(idx: number, delta: -1 | 1) {
+    const target = idx + delta;
+    if (target < 0 || target >= exercises.length) return;
+    moveExercise.mutate({ a: exercises[idx], b: exercises[target] });
   }
 
   function handleDelete() {
@@ -257,8 +262,8 @@ export default function PlanDetailPage() {
                 updateExercise.mutate({ exerciseId: ex.id, body: { targetReps: v } })
               }
               onRemove={() => removeExercise.mutate(ex.id)}
-              onMoveUp={() => handleMoveUp(idx)}
-              onMoveDown={() => handleMoveDown(idx)}
+              onMoveUp={() => move(idx, -1)}
+              onMoveDown={() => move(idx, 1)}
             />
           ))}
         </div>

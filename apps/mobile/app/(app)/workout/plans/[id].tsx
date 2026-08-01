@@ -15,10 +15,9 @@ import { estimatePlanStats, nextPlanOrder, pluralize } from '@/components/workou
 /**
  * Réplica de `apps/web/src/app/(app)/workout/plans/[id]/page.tsx`.
  *
- * A reordenação (issue #115) é onde o app nativo passa na frente do PWA: a API
- * aceita `order` desde sempre, mas só o MCP usava. São dois botões por
- * exercício, cada um com rótulo próprio. Arrastar seria mais bonito e
- * inacessível — com leitor de tela ligado, arrastar é o gesto que move o foco.
+ * A reordenação (issue #115) são dois botões por exercício, cada um com rótulo
+ * próprio. Arrastar seria mais bonito e inacessível — com leitor de tela
+ * ligado, arrastar é o gesto que move o foco.
  */
 
 function Stat({ icon: Icon, label, value }: { icon: typeof Clock; label: string; value: string }) {
@@ -69,7 +68,7 @@ export default function PlanDetailScreen() {
       body,
     }: {
       exerciseId: string;
-      body: { targetSets?: number; targetReps?: string; order?: number };
+      body: { targetSets?: number; targetReps?: string };
     }) => workoutApi.updatePlanExercise(id, exerciseId, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
@@ -83,16 +82,18 @@ export default function PlanDetailScreen() {
     },
   });
 
-  // A troca são dois PATCH de `order`. Sequenciais, não em paralelo: as duas
-  // escritas se cruzam na mesma lista, e em paralelo a ordem de gravação no
-  // servidor deixa de ser a ordem em que foram pedidas.
+  // A troca vai numa requisição só: a API grava os dois `order` dentro de uma
+  // transação, então não existe instante em que a lista esteja pela metade.
   const moveExercise = useMutation({
-    mutationFn: async ({ a, b }: { a: WorkoutPlanExercise; b: WorkoutPlanExercise }) => {
-      await workoutApi.updatePlanExercise(id, a.id, { order: b.order });
-      await workoutApi.updatePlanExercise(id, b.id, { order: a.order });
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
+    mutationFn: ({ a, b }: { a: WorkoutPlanExercise; b: WorkoutPlanExercise }) =>
+      workoutApi.reorderPlanExercises(id, [
+        { id: a.id, order: b.order },
+        { id: b.id, order: a.order },
+      ]),
+    onSuccess: (updated) => {
+      // A resposta já é o plano reordenado — escrever no cache evita o refetch
+      // que só confirmaria o que acabou de chegar.
+      qc.setQueryData(['workout', 'plan', id], updated);
     },
   });
 
