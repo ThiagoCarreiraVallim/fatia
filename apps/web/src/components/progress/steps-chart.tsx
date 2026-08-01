@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { StepsProgress } from '@/lib/api/progress';
+import type { StepsProgress } from '@fatia/api-client';
 
 export function StepsChart({ data }: { data: StepsProgress }) {
   if (!data.points.length) {

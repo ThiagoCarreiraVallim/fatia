@@ -18,8 +18,8 @@ vi.mock('@/components/ui/drawer', () => {
   };
 });
 
-vi.mock('@/lib/api/nutrition', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/api/nutrition')>('@/lib/api/nutrition');
+vi.mock('@fatia/api-client', async () => {
+  const actual = await vi.importActual<typeof import('@fatia/api-client')>('@fatia/api-client');
   return {
     ...actual,
     nutritionApi: {
@@ -30,7 +30,7 @@ vi.mock('@/lib/api/nutrition', async () => {
   };
 });
 
-import { nutritionApi } from '@/lib/api/nutrition';
+import { nutritionApi } from '@fatia/api-client';
 
 const searchFoods = vi.mocked(nutritionApi.searchFoods);
 const createMeal = vi.mocked(nutritionApi.createMeal);

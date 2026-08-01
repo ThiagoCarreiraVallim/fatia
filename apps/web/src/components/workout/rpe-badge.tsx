@@ -1,4 +1,4 @@
-import { getRpeInfo } from '@/lib/workout/rpe';
+import { getRpeInfo } from '@fatia/api-client';
 
 interface Props {
   value: number | null | undefined;

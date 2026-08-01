@@ -82,6 +82,43 @@ tem de vir com escopo explícito e teste.
 Os logs de tool registram `tool`, `userId`, `durationMs`, `success` e `category` do erro — não
 registram o input nem o output. Ver `docs/MCP.md` §Observabilidade.
 
+### 7. Token no aparelho — o app nativo
+
+O app React Native (`apps/mobile`) muda uma premissa que valia para os dois clientes
+anteriores.
+
+No PWA o access token **nunca chega ao navegador**: fica na sessão em cookie `httpOnly`, e o
+proxy do Next injeta o `Authorization` no servidor. No conector MCP o token vive no Claude,
+fora do nosso alcance. No app nativo **não existe servidor**: o token é guardado no aparelho.
+
+O que isso acrescenta ao modelo:
+
+| Vetor novo                     | Mitigação                                                                                                                           |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Leitura do token por outro app | Keychain (iOS) / Keystore (Android) via `expo-secure-store`. **Nunca `AsyncStorage`**, que é texto plano no sandbox                 |
+| Token em backup do aparelho    | `WHEN_UNLOCKED_THIS_DEVICE_ONLY` — o token não sai do aparelho nem por backup do iCloud                                             |
+| Leitura com a tela bloqueada   | mesma opção: o item só é legível com o aparelho destravado                                                                          |
+| Captura da senha pelo app      | login no navegador do sistema (`ASWebAuthenticationSession` / Custom Tabs). **Nunca WebView embutida**, onde o app leria o digitado |
+| Interceptação do `code`        | PKCE S256 obrigatório; cliente público, sem `client_secret` — que num app distribuído seria extraível de qualquer forma             |
+| Deep link sequestrado          | o `code` sozinho não vale nada sem o `code_verifier`, que nunca sai do processo                                                     |
+
+**Não mitigado:**
+
+- **Aparelho comprometido.** Em aparelho com root ou jailbreak, o cofre do sistema deixa de ser
+  barreira. Não há defesa de aplicação contra isso — detecção de root é contornável e daria
+  falsa sensação de garantia.
+- **App clonado / repackaging.** Alguém pode reempacotar o app com o mesmo `client_id` e o mesmo
+  `scheme` de deep link. O Logto não distingue, porque cliente público não tem segredo a
+  provar. O que limita o dano é que o token continua exigindo o login legítimo da pessoa. A
+  defesa real seria App Attest (iOS) / Play Integrity (Android), que ainda não está implantada.
+- **Sem `scheme` exclusivo verificado.** `fatia://` é registrado por convenção, não por
+  propriedade verificada de domínio. Universal Links (iOS) e App Links (Android) resolveriam,
+  ao custo de hospedar os arquivos de associação — fica como dívida da issue #131.
+
+Os limites do que sobrevive a um refresh estão em `apps/mobile/src/auth/session-manager.ts`:
+só `invalid_grant` encerra a sessão; falha de rede preserva o que está guardado. É deliberado —
+derrubar o login por conexão ruim empurraria a pessoa a autenticar de novo em rede hostil.
+
 ## Matriz de cobertura
 
 Onde o escopo é aplicado, por domínio. Verificado por

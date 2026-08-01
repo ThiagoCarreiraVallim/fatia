@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { goalsApi, type GoalKind } from '@/lib/api/goals';
+import { goalsApi, type GoalKind } from '@fatia/api-client';
 
 interface Props {
   open: boolean;

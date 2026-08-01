@@ -1,4 +1,4 @@
-import type { DayTotals, UserGoals } from '@/lib/api/nutrition';
+import type { DayTotals, UserGoals } from '@fatia/api-client';
 
 function MacroCard({
   label,

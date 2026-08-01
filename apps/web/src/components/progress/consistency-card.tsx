@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { workoutApi } from '@/lib/api/workout';
+import { workoutApi } from '@fatia/api-client';
 
 const WINDOW_DAYS = 30;
 

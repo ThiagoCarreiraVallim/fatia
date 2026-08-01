@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Trophy, Dumbbell, Footprints, ChevronRight } from 'lucide-react';
-import { workoutApi, type SessionSet } from '@/lib/api/workout';
+import { workoutApi, type SessionSet } from '@fatia/api-client';
 
 const TOP_N = 3;
 

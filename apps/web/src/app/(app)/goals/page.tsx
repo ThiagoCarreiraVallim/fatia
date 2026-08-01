@@ -18,7 +18,7 @@ import {
   Check,
   type LucideIcon,
 } from 'lucide-react';
-import { goalsApi, type Goal, type GoalKind } from '@/lib/api/goals';
+import { goalsApi, type Goal, type GoalKind } from '@fatia/api-client';
 import { NewGoalDrawer } from '@/components/goals/new-goal-drawer';
 
 const KIND_ICON: Record<GoalKind, LucideIcon> = {

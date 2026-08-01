@@ -14,7 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { MuscleDiagram } from './muscle-diagram';
 import { ExerciseEditDrawer } from './exercise-edit-drawer';
-import { workoutApi, type Exercise } from '@/lib/api/workout';
+import { workoutApi, type Exercise } from '@fatia/api-client';
 
 interface Props {
   exercise: Exercise | null;

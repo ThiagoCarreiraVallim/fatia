@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { SlidersHorizontal, ChevronRight } from 'lucide-react';
-import { nutritionApi, type NutrientProgress } from '@/lib/api/nutrition';
+import { nutritionApi, type NutrientProgress } from '@fatia/api-client';
 
 const STATUS_COLOR: Record<NutrientProgress['status'], string> = {
   over: 'bg-rose-500',

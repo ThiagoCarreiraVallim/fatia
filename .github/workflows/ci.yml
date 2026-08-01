@@ -63,6 +63,15 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # Nenhum destes precisa de banco — ficam aqui, e não no job `test`, para
+      # não subir um Postgres por causa de teste que roda em memória.
+      # `apps/mobile` inclui a guarda de paleta contra o PWA.
+      - name: Unit tests (pacotes e front)
+        run: |
+          pnpm --filter @fatia/api-client test
+          pnpm --filter @fatia/web test
+          pnpm --filter @fatia/mobile test
+
   test:
     name: Test
     runs-on: ubuntu-latest

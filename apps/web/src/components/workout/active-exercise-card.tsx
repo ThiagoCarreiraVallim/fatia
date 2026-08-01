@@ -3,9 +3,8 @@
 import { useEffect, useState } from 'react';
 import { Check, ChevronDown, Minus, Plus, Timer } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { workoutApi, type SessionSet } from '@/lib/api/workout';
+import { workoutApi, type ExerciseGroup, type SessionSet } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
-import type { ExerciseGroup } from '@/lib/workout-session-view';
 import { RpeModal } from './rpe-modal';
 import { SetRow } from './set-row';
 

@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Calendar } from 'lucide-react';
-import { workoutApi, type WorkoutSession } from '@/lib/api/workout';
+import { workoutApi, type WorkoutSession } from '@fatia/api-client';
 
 const DAYS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 

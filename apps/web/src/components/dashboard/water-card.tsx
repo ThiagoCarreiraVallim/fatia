@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Droplet, MoreHorizontal } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { progressApi, type TodaySummary } from '@/lib/api/progress';
+import { progressApi, type TodaySummary } from '@fatia/api-client';
 import { LogWaterDrawer } from '@/components/progress/log-water-drawer';
 
 const QUICK_ML = [250, 500, 750] as const;

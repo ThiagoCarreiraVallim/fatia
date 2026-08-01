@@ -12,10 +12,8 @@ import {
   YAxis,
 } from 'recharts';
 import { Search } from 'lucide-react';
-import { progressApi, type StrengthProgress } from '@/lib/api/progress';
+import { progressApi, workoutApi, type Exercise, type StrengthProgress } from '@fatia/api-client';
 import { ExercisePickerDrawer } from './exercise-picker-drawer';
-import { workoutApi, type Exercise } from '@/lib/api/workout';
-
 type StrengthMetric = 'max_weight' | 'estimated_1rm' | 'total_volume';
 
 const METRICS: Array<{ value: StrengthMetric; label: string; unit: string }> = [

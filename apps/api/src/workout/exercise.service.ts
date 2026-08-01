@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
+import { normalizeSearchText, rankByRelevance } from '../common/search-text';
 import type {
   CreateCustomExerciseDto,
   SearchExercisesDto,
@@ -22,18 +23,30 @@ export class ExerciseService {
     return { NOT: { clones: { some: { createdByUserId: userId } } } };
   }
 
+  /**
+   * Busca por nome, sobre `searchName` (sem acento, sem pontuação) e ordenada
+   * por relevância — ver `common/search-text.ts`.
+   *
+   * Com termo, o `take` do banco sai de propósito: cortar antes do ranqueamento
+   * devolveria os 20 primeiros **em ordem alfabética**, que foi como "supino"
+   * passou a trazer "Arremesso Supino" e esconder "Supino Reto".
+   */
   async search(userId: string, params: SearchExercisesDto) {
     const limit = Math.min(params.limit ?? 20, 50);
-    return this.prisma.exercise.findMany({
+    const term = params.q ? normalizeSearchText(params.q) : '';
+
+    const matches = await this.prisma.exercise.findMany({
       where: {
         ...this.accessFilter(userId),
         ...this.notClonedByUser(userId),
-        ...(params.q ? { name: { contains: params.q, mode: 'insensitive' as const } } : {}),
+        ...(term ? { searchName: { contains: term } } : {}),
         ...(params.muscleGroup ? { muscleGroup: params.muscleGroup } : {}),
       },
       orderBy: { name: 'asc' },
-      take: limit,
+      ...(term ? {} : { take: limit }),
     });
+
+    return term ? rankByRelevance(matches, term, (ex) => ex.name, limit) : matches;
   }
 
   async listByMuscle(userId: string, muscleGroup: string) {
@@ -59,19 +72,18 @@ export class ExerciseService {
     const results = await this.prisma.exercise.findMany({
       where: {
         ...this.accessFilter(userId),
-        name: { contains: name, mode: 'insensitive' },
+        searchName: { contains: normalizeSearchText(name) },
       },
       orderBy: { name: 'asc' },
-      take: 5,
     });
     if (results.length === 0) throw new NotFoundException(`Exercise not found: ${name}`);
-    return results;
+    return rankByRelevance(results, name, (ex) => ex.name, 5);
   }
 
   async createCustom(userId: string, dto: CreateCustomExerciseDto) {
     try {
       return await this.prisma.exercise.create({
-        data: { ...dto, createdByUserId: userId },
+        data: { ...dto, searchName: normalizeSearchText(dto.name), createdByUserId: userId },
       });
     } catch (err: unknown) {
       if ((err as { code?: string })?.code === 'P2002') {
@@ -97,7 +109,12 @@ export class ExerciseService {
     // inteiros sequenciais, então distinguir vazaria a existência (#92).
     if (ex.createdByUserId !== userId) throw new NotFoundException('Exercise not found');
     try {
-      return await this.prisma.exercise.update({ where: { id }, data: dto });
+      return await this.prisma.exercise.update({
+        where: { id },
+        // `searchName` acompanha o nome, senão a busca continua achando o
+        // exercício pelo nome antigo.
+        data: { ...dto, ...(dto.name ? { searchName: normalizeSearchText(dto.name) } : {}) },
+      });
     } catch (err: unknown) {
       if ((err as { code?: string })?.code === 'P2002') {
         throw new ConflictException('Exercise name already in use');
@@ -141,8 +158,15 @@ export class ExerciseService {
     void _owner;
     void _cf;
     try {
+      const name = overrides?.name ?? fields.name;
       return await this.prisma.exercise.create({
-        data: { ...fields, ...overrides, createdByUserId: userId, clonedFromId: baseId },
+        data: {
+          ...fields,
+          ...overrides,
+          searchName: normalizeSearchText(name),
+          createdByUserId: userId,
+          clonedFromId: baseId,
+        },
       });
     } catch (err: unknown) {
       if ((err as { code?: string })?.code === 'P2002') {

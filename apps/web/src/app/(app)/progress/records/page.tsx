@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { ChevronLeft, Trophy, Dumbbell, Footprints } from 'lucide-react';
-import { workoutApi, type PersonalRecordEntry } from '@/lib/api/workout';
+import { workoutApi, type PersonalRecordEntry } from '@fatia/api-client';
 
 type SortKey = 'recent' | 'weight';
 

@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, Dumbbell } from 'lucide-react';
-import { workoutApi, type WorkoutSession } from '@/lib/api/workout';
+import { workoutApi, type WorkoutSession } from '@fatia/api-client';
 
 function formatDuration(start: string, end?: string): string {
   if (!end) return '—';

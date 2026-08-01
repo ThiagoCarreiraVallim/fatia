@@ -252,6 +252,69 @@ A API valida JWT via JWKS com cache. Com o Logto fora:
 Não há fallback, e é uma dependência aceita conscientemente na ADR 008. Restaurar o Logto é a
 única saída: `docker compose logs logto` e confirmar que ele alcança a database `logto`.
 
+## Release do app nativo
+
+O app (`apps/mobile`) não vai junto do deploy do backend — a distribuição é pelas
+lojas, com ciclo próprio. O que segue é o runbook; o passo a passo de ambiente local
+está em [`apps/mobile/README.md`](../apps/mobile/README.md).
+
+### Pré-requisitos, uma vez só
+
+| O quê                       | Onde                                 | Custo           |
+| --------------------------- | ------------------------------------ | --------------- |
+| Conta Expo                  | expo.dev                             | grátis          |
+| `eas init` no projeto       | grava `projectId` em `app.config.ts` | —               |
+| Apple Developer Program     | developer.apple.com                  | US$ 99/ano      |
+| Google Play Console         | play.google.com/console              | US$ 25, uma vez |
+| Application Native no Logto | console do Logto                     | —               |
+
+**Nenhuma credencial de assinatura entra no repositório.** Certificados e keystores
+são geridos pelo EAS (`eas credentials`). O `eas.json` versionado tem só perfis de
+build e variáveis públicas (`EXPO_PUBLIC_*`), que vão inlinadas no bundle e são
+legíveis por qualquer pessoa que baixe o app de qualquer forma.
+
+### Perfis
+
+| Perfil        | Para quê                              | Distribuição      | Artefato Android |
+| ------------- | ------------------------------------- | ----------------- | ---------------- |
+| `development` | dev client, deep link `fatia://` real | interna           | `.apk`           |
+| `preview`     | testar antes de publicar              | interna           | `.apk`           |
+| `production`  | loja                                  | TestFlight / Play | `.aab`           |
+
+### Publicar
+
+```bash
+cd apps/mobile
+
+# 1. build
+eas build --profile production --platform all
+
+# 2. enviar para as lojas
+eas submit --profile production --platform ios      # → TestFlight
+eas submit --profile production --platform android  # → faixa interna do Play
+```
+
+`autoIncrement` no perfil de produção cuida do build number; a versão que a pessoa
+vê é a `version` do `app.config.ts`, e sobe junto do resto do monorepo.
+
+### Antes de apertar o botão
+
+- [ ] `pnpm --filter @fatia/mobile typecheck lint test build` passando
+- [ ] Redirect URI da Application Native do Logto conferido — errar aqui só aparece
+      no primeiro login em produção, depois do app já instalado
+- [ ] `EXPO_PUBLIC_LOGTO_AUDIENCE` idêntico ao `LOGTO_AUDIENCE` da API, inclusive
+      barra final: o Logto faz match exato e recusa com `invalid_target`
+- [ ] Apagar conta funciona de dentro do app — Apple e Google **rejeitam** app que
+      permite criar conta e não permite apagá-la
+- [ ] [Auditoria de paridade](./MOBILE_PARITY.md) sem linha pendente
+
+### Quando um build quebra e o backend não
+
+O app instalado continua falando com a API antiga. Mudança quebrando contrato na API
+derruba **todas as versões já instaladas**, que não atualizam sozinhas como o PWA. Na
+prática: a API não pode remover campo nem endpoint sem antes checar a versão mínima
+em circulação.
+
 ## Checklist trimestral
 
 - [ ] Drill de restore executado e anotado abaixo

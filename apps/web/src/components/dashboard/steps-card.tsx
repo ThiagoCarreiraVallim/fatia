@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { LogStepsDrawer } from '@/components/progress/log-steps-drawer';
-import type { TodaySummary } from '@/lib/api/progress';
+import type { TodaySummary } from '@fatia/api-client';
 
 export function StepsCard({ data }: { data: TodaySummary['steps'] }) {
   const [open, setOpen] = useState(false);

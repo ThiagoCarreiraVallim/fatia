@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { nutritionApi } from '@/lib/api/nutrition';
+import { nutritionApi } from '@fatia/api-client';
 
 const PT_DAY_INITIALS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 const BAR_MAX_HEIGHT = 80;

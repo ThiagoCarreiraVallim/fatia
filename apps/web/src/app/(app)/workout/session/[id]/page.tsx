@@ -4,10 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, Clock, Dumbbell } from 'lucide-react';
-import { workoutApi } from '@/lib/api/workout';
+import { buildExerciseGroups, workoutApi } from '@fatia/api-client';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
-import { buildExerciseGroups } from '@/lib/workout-session-view';
-
 function formatDuration(start: string, end: string): string {
   const ms = new Date(end).getTime() - new Date(start).getTime();
   const totalMinutes = Math.round(ms / 60000);

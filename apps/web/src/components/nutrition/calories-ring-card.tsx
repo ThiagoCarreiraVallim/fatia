@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { DayTotals, UserGoals } from '@/lib/api/nutrition';
+import type { DayTotals, UserGoals } from '@fatia/api-client';
 
 interface Props {
   totals: DayTotals;
