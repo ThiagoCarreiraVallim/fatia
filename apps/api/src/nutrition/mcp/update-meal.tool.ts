@@ -13,6 +13,8 @@ import {
 export class UpdateMealTool implements McpToolDef {
   constructor(private readonly meals: MealService) {}
   readonly name = 'update_meal';
+  readonly title = 'Atualizar refeição';
+  readonly annotations = { destructiveHint: false };
   readonly description = 'Atualiza metadados da refeição (mealType/eatenAt/notes).';
   readonly inputSchema = {
     id: z.string().uuid().describe('ID da refeição a atualizar'),

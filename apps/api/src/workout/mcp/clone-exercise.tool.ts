@@ -14,6 +14,10 @@ export class CloneExerciseTool implements McpToolDef {
   constructor(private readonly exercises: ExerciseService) {}
 
   readonly name = 'clone_exercise';
+
+  readonly title = 'Duplicar exercício';
+
+  readonly annotations = { destructiveHint: false };
   readonly description =
     'Cria (ou reaproveita) uma CÓPIA editável de um exercício base para o usuário, já que ' +
     'exercícios base são só-leitura. A partir daí a base some das listagens do usuário e ' +

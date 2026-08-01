@@ -13,6 +13,10 @@ export class ListExercisesByMuscleTool implements McpToolDef {
   constructor(private readonly exercises: ExerciseService) {}
 
   readonly name = 'list_exercises_by_muscle';
+
+  readonly title = 'Listar exercícios por músculo';
+
+  readonly annotations = { readOnlyHint: true };
   readonly description = 'Lists all exercises for a given muscle group.';
   readonly inputSchema = {
     muscleGroup: muscleGroupSchema.describe(

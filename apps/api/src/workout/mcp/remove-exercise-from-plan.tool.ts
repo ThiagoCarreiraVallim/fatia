@@ -13,6 +13,10 @@ export class RemoveExerciseFromPlanTool implements McpToolDef {
   constructor(private readonly plans: WorkoutPlanService) {}
 
   readonly name = 'remove_exercise_from_plan';
+
+  readonly title = 'Remover exercício do plano';
+
+  readonly annotations = { destructiveHint: true };
   readonly description = 'Remove um exercício de um plano de treino.';
   readonly inputSchema = {
     planId: z.string().uuid().describe('ID do plano de treino'),

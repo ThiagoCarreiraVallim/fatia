@@ -14,6 +14,10 @@ export class UpdateCustomExerciseTool implements McpToolDef {
   constructor(private readonly exercises: ExerciseService) {}
 
   readonly name = 'update_custom_exercise';
+
+  readonly title = 'Atualizar exercício personalizado';
+
+  readonly annotations = { destructiveHint: false };
   readonly description =
     "Updates/enriches an exercise (the user's custom one OR a catalog exercise). " +
     'Use it to translate content to Portuguese (name, equipment, instructions) and to add ' +

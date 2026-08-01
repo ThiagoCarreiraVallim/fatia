@@ -16,6 +16,8 @@ export class GetStepsHistoryTool implements McpToolDef {
     private readonly prisma: PrismaService,
   ) {}
   readonly name = 'get_steps_history';
+  readonly title = 'Histórico de passos';
+  readonly annotations = { readOnlyHint: true };
   readonly description = 'Série temporal de passos por dia (preenche dias vazios com 0).';
   readonly inputSchema = {
     days: z

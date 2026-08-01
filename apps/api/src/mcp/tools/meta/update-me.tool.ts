@@ -13,6 +13,8 @@ import {
 export class UpdateMeTool implements McpToolDef {
   constructor(private readonly prisma: PrismaService) {}
   readonly name = 'update_me';
+  readonly title = 'Atualizar meu perfil';
+  readonly annotations = { destructiveHint: false };
   readonly description = 'Atualiza o perfil do usuário (nome, estatura, fuso horário).';
   readonly inputSchema = {
     name: z.string().min(1).max(120).optional().describe('Novo nome de exibição do usuário'),

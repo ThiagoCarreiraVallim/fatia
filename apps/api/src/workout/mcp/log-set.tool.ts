@@ -13,6 +13,10 @@ export class LogSetTool implements McpToolDef {
   constructor(private readonly sets: SessionSetService) {}
 
   readonly name = 'log_set';
+
+  readonly title = 'Registrar série';
+
+  readonly annotations = { destructiveHint: false };
   readonly description =
     'Registra uma série em uma sessão de treino. Para força: informe weightKg e reps. Para cardio: informe durationSeconds.';
   readonly inputSchema = {

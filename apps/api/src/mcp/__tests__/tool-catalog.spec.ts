@@ -138,4 +138,65 @@ describe('catálogo de tools MCP', () => {
 
     expect(missing.sort()).toEqual([]);
   });
+
+  // --- Anotações MCP (issue #169) ---
+  //
+  // Requisito 2 da submissão ao diretório: toda tool precisa de `title` e do
+  // hint aplicável. O passo "Tools" do portal recusa quem não tem, e são 87
+  // tools — a chance de alguém adicionar a 88ª sem anotar é alta.
+
+  it('tem title legível em toda tool', () => {
+    const missing = tools
+      .filter(({ tool }) => !tool.title || tool.title.trim().length < 3)
+      .map(({ tool }) => tool.name)
+      .sort();
+
+    expect(missing).toEqual([]);
+  });
+
+  it('não repete o name como title', () => {
+    // `delete_set` como título de exibição não ajuda ninguém — é o que o
+    // catálogo já mostra. O title existe para ser lido por humano.
+    const lazy = tools
+      .filter(({ tool }) => tool.title?.trim().toLowerCase() === tool.name.replace(/_/g, ' '))
+      .map(({ tool }) => tool.name)
+      .sort();
+
+    expect(lazy).toEqual([]);
+  });
+
+  it('declara o hint coerente com o prefixo do nome', () => {
+    const READ = /^(get|list|search|explain|export)_/;
+    const DESTRUCTIVE = /^delete_/;
+    // Desfaz o vínculo e perde séries/reps configuradas naquele exercício.
+    const ALSO_DESTRUCTIVE = new Set(['remove_exercise_from_plan']);
+
+    const wrong: string[] = [];
+
+    for (const { tool } of tools) {
+      const a = tool.annotations ?? {};
+
+      if (READ.test(tool.name)) {
+        if (a.readOnlyHint !== true) wrong.push(`${tool.name}: esperado readOnlyHint`);
+        continue;
+      }
+
+      if (a.readOnlyHint === true) {
+        wrong.push(`${tool.name}: marcada readOnlyHint mas o nome indica escrita`);
+        continue;
+      }
+
+      const shouldBeDestructive = DESTRUCTIVE.test(tool.name) || ALSO_DESTRUCTIVE.has(tool.name);
+
+      // `destructiveHint` tem default TRUE na spec quando readOnlyHint é falso.
+      // Escrita comum precisa declarar `false` explicitamente, senão o Claude
+      // pede confirmação a cada refeição registrada — e o silêncio aqui é
+      // indistinguível de esquecimento.
+      if (a.destructiveHint !== shouldBeDestructive) {
+        wrong.push(`${tool.name}: esperado destructiveHint=${shouldBeDestructive}`);
+      }
+    }
+
+    expect(wrong.sort()).toEqual([]);
+  });
 });

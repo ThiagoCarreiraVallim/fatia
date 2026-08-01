@@ -13,6 +13,10 @@ export class ReorderPlanExercisesTool implements McpToolDef {
   constructor(private readonly plans: WorkoutPlanService) {}
 
   readonly name = 'reorder_plan_exercises';
+
+  readonly title = 'Reordenar exercícios do plano';
+
+  readonly annotations = { destructiveHint: false };
   readonly description =
     'Reordena os exercícios de um plano de treino. Envie a lista completa com as novas posições.';
   readonly inputSchema = {

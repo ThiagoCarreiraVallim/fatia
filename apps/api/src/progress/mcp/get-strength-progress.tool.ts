@@ -12,6 +12,8 @@ import {
 export class GetStrengthProgressTool implements McpToolDef {
   constructor(private readonly progress: ProgressService) {}
   readonly name = 'get_strength_progress';
+  readonly title = 'Evolução de força';
+  readonly annotations = { readOnlyHint: true };
   readonly description = 'Evolução de carga em um exercício de força (max_weight, 1RM ou volume).';
   readonly inputSchema = {
     exerciseId: z.number().int().describe('ID do exercício a analisar, obtido via search_exercise'),

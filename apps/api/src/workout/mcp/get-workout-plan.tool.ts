@@ -13,6 +13,10 @@ export class GetWorkoutPlanTool implements McpToolDef {
   constructor(private readonly plans: WorkoutPlanService) {}
 
   readonly name = 'get_workout_plan';
+
+  readonly title = 'Ver plano de treino';
+
+  readonly annotations = { readOnlyHint: true };
   readonly description = 'Retorna detalhes de um plano de treino (exercícios, séries e reps alvo).';
   readonly inputSchema = {
     planId: z.string().uuid().describe('ID do plano'),

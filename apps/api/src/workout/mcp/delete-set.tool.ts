@@ -13,6 +13,10 @@ export class DeleteSetTool implements McpToolDef {
   constructor(private readonly sets: SessionSetService) {}
 
   readonly name = 'delete_set';
+
+  readonly title = 'Excluir série';
+
+  readonly annotations = { destructiveHint: true };
   readonly description = 'Remove uma série registrada.';
   readonly inputSchema = {
     setId: z.string().uuid().describe('ID da série a remover'),

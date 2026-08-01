@@ -13,6 +13,10 @@ export class GetWorkoutSessionTool implements McpToolDef {
   constructor(private readonly sessions: WorkoutSessionService) {}
 
   readonly name = 'get_workout_session';
+
+  readonly title = 'Ver sessão de treino';
+
+  readonly annotations = { readOnlyHint: true };
   readonly description =
     'Retorna detalhes de uma sessão de treino com todas as séries registradas.';
   readonly inputSchema = {

@@ -13,6 +13,10 @@ export class FinishWorkoutSessionTool implements McpToolDef {
   constructor(private readonly sessions: WorkoutSessionService) {}
 
   readonly name = 'finish_workout_session';
+
+  readonly title = 'Finalizar treino';
+
+  readonly annotations = { destructiveHint: false };
   readonly description =
     'Finaliza uma sessão de treino em andamento, registrando o horário de conclusão.';
   readonly inputSchema = {

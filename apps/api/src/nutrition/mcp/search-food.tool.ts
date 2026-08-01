@@ -12,6 +12,8 @@ import {
 export class SearchFoodTool implements McpToolDef {
   constructor(private readonly foods: FoodService) {}
   readonly name = 'search_food';
+  readonly title = 'Buscar alimento';
+  readonly annotations = { readOnlyHint: true };
   readonly description = 'Busca alimentos no catálogo TACO + customs do usuário.';
   readonly inputSchema = {
     q: z

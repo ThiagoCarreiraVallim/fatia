@@ -13,6 +13,10 @@ export class CreateWorkoutPlanTool implements McpToolDef {
   constructor(private readonly plans: WorkoutPlanService) {}
 
   readonly name = 'create_workout_plan';
+
+  readonly title = 'Criar plano de treino';
+
+  readonly annotations = { destructiveHint: false };
   readonly description = 'Cria um novo plano de treino com nome.';
   readonly inputSchema = {
     name: z.string().min(1).max(100).describe('Nome do plano (ex: "Push", "Pull", "HIIT")'),

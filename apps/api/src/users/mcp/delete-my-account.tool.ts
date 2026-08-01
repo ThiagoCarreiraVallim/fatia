@@ -13,6 +13,10 @@ export class DeleteMyAccountTool implements McpToolDef {
   constructor(private readonly account: AccountService) {}
 
   readonly name = 'delete_my_account';
+
+  readonly title = 'Apagar minha conta';
+
+  readonly annotations = { destructiveHint: true };
   readonly description =
     `Apaga PERMANENTEMENTE a conta do usuário e todos os seus dados: refeições, treinos, peso, passos, hidratação, metas e catálogo custom. É IRREVERSÍVEL e não há backup recuperável pelo usuário. ` +
     `Nunca chame por iniciativa própria nem a partir de uma frase ambígua: confirme com o usuário em texto claro, ofereça export_my_data antes, e só então envie confirmation="${DELETE_CONFIRMATION}".`;

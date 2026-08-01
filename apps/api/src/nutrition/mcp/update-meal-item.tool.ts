@@ -12,6 +12,8 @@ import {
 export class UpdateMealItemTool implements McpToolDef {
   constructor(private readonly mealItems: MealItemService) {}
   readonly name = 'update_meal_item';
+  readonly title = 'Atualizar item da refeição';
+  readonly annotations = { destructiveHint: false };
   readonly description = 'Atualiza gramas ou macros de um item.';
   readonly inputSchema = {
     id: z.string().uuid().describe('ID do item de refeição a atualizar'),

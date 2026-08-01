@@ -13,6 +13,10 @@ export class GetPersonalRecordTool implements McpToolDef {
   constructor(private readonly sets: SessionSetService) {}
 
   readonly name = 'get_personal_record';
+
+  readonly title = 'Ver recorde pessoal';
+
+  readonly annotations = { readOnlyHint: true };
   readonly description =
     'Retorna o recorde pessoal para um exercício. Para força: maior peso × reps. Para cardio: maior distância em uma sessão.';
   readonly inputSchema = {

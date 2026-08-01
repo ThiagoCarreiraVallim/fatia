@@ -12,6 +12,8 @@ import {
 export class CompleteGoalTool implements McpToolDef {
   constructor(private readonly goals: GoalsService) {}
   readonly name = 'complete_goal';
+  readonly title = 'Concluir meta';
+  readonly annotations = { destructiveHint: false };
   readonly description = 'Marca uma meta como concluída.';
   readonly inputSchema = {
     goalId: z.string().describe('ID da meta a marcar como concluída'),

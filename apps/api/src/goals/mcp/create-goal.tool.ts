@@ -13,6 +13,8 @@ import {
 export class CreateGoalTool implements McpToolDef {
   constructor(private readonly goals: GoalsService) {}
   readonly name = 'create_goal';
+  readonly title = 'Criar meta';
+  readonly annotations = { destructiveHint: false };
   readonly description =
     'Cria uma meta pessoal do usuário (peso, % gordura, frequência de treino, passos médios ou métrica livre). Se `startValue` não for informado, o backend deriva do estado atual quando possível (kind=weight, workout_frequency, step_count).';
   readonly inputSchema = {

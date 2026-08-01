@@ -14,6 +14,10 @@ export class CreateCustomExerciseTool implements McpToolDef {
   constructor(private readonly exercises: ExerciseService) {}
 
   readonly name = 'create_custom_exercise';
+
+  readonly title = 'Criar exercício personalizado';
+
+  readonly annotations = { destructiveHint: false };
   readonly description = 'Creates a custom exercise for the user.';
   readonly inputSchema = {
     name: z.string().max(200).describe('Name of the exercise'),
