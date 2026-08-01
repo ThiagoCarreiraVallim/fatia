@@ -61,3 +61,6 @@ coverage/
 
 # Testes
 .nyc_output/
+
+# Worktrees dos subagentes do Claude Code — cópias efêmeras do próprio repo.
+.claude/worktrees/
