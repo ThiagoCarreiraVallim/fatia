@@ -86,7 +86,9 @@ describe('JwtAuthGuard', () => {
       expect(res.setHeader).toHaveBeenCalledWith(
         'WWW-Authenticate',
         expect.stringContaining(
-          'resource_metadata="https://api.example.com/.well-known/oauth-protected-resource"',
+          // Path-específico da RFC 9728: o recurso protegido é o /mcp, então o
+          // metadata canônico dele mora em .../oauth-protected-resource/mcp (#170).
+          'resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/mcp"',
         ),
       );
     });
