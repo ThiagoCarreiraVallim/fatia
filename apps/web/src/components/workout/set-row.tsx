@@ -4,8 +4,7 @@ import { useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
-import { workoutApi, type SessionSet } from '@/lib/api/workout';
-import { getRpeInfo } from '@/lib/workout/rpe';
+import { getRpeInfo, workoutApi, type SessionSet } from '@fatia/api-client';
 import { RpeBadge } from './rpe-badge';
 
 export function SetRow({

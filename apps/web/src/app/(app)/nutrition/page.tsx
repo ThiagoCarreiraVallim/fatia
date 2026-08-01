@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Settings } from 'lucide-react';
-import { nutritionApi, type MealType } from '@/lib/api/nutrition';
+import { nutritionApi, type MealType } from '@fatia/api-client';
 import { DateNavigator } from '@/components/nutrition/date-navigator';
 import { CaloriesRingCard } from '@/components/nutrition/calories-ring-card';
 import { MacroBentoGrid } from '@/components/nutrition/macro-bento-grid';

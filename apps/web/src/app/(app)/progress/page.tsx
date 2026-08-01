@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Scale, Plus, TrendingDown, TrendingUp } from 'lucide-react';
-import { progressApi } from '@/lib/api/progress';
+import { progressApi } from '@fatia/api-client';
 import { WeightChart } from '@/components/progress/weight-chart';
 import { StepsChart } from '@/components/progress/steps-chart';
 import { StrengthChart } from '@/components/progress/strength-chart';

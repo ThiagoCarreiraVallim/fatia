@@ -1,4 +1,4 @@
-import { apiFetch } from '../api';
+import { apiFetch } from './http';
 
 export type MealType = 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK';
 export type FoodSource = 'TACO' | 'USDA' | 'CUSTOM';

@@ -3,8 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Weight, Ruler, Pencil } from 'lucide-react';
-import { usersApi } from '@/lib/api/users';
-import { progressApi } from '@/lib/api/progress';
+import { progressApi, usersApi } from '@fatia/api-client';
 import { EditHeightDrawer } from './edit-height-drawer';
 
 export function ProfileMetrics() {

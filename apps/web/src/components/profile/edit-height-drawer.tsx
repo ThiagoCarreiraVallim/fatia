@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { usersApi } from '@/lib/api/users';
+import { usersApi } from '@fatia/api-client';
 
 interface Props {
   open: boolean;

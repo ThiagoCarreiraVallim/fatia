@@ -12,10 +12,8 @@ import {
   YAxis,
 } from 'recharts';
 import { Search } from 'lucide-react';
-import { progressApi, type CardioProgress } from '@/lib/api/progress';
+import { progressApi, type CardioProgress, type Exercise } from '@fatia/api-client';
 import { ExercisePickerDrawer } from './exercise-picker-drawer';
-import type { Exercise } from '@/lib/api/workout';
-
 type CardioMetric = 'duration' | 'distance' | 'pace' | 'kcal';
 
 const METRICS: Array<{ value: CardioMetric; label: string; unit: string }> = [

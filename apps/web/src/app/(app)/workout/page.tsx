@@ -4,16 +4,19 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Plus, History, ListChecks, ChevronRight, Dumbbell } from 'lucide-react';
-import { workoutApi, type WorkoutSession } from '@/lib/api/workout';
+import {
+  buildExerciseGroups,
+  QUICK_TEMPLATES,
+  workoutApi,
+  type WorkoutSession,
+} from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { ExerciseSearchDrawer } from '@/components/workout/exercise-search-drawer';
 import { FinishSessionModal } from '@/components/workout/finish-session-modal';
-import { buildExerciseGroups } from '@/lib/workout-session-view';
 import { CancelSessionModal } from '@/components/workout/cancel-session-modal';
 import { ActiveExerciseCard } from '@/components/workout/active-exercise-card';
 import { ActiveCardioCard } from '@/components/workout/active-cardio-card';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
-import { QUICK_TEMPLATES } from '@/lib/workout/quick-templates';
 import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel';
 
 function ActiveSession({ session }: { session: WorkoutSession }) {

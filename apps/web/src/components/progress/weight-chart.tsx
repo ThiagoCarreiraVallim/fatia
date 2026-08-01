@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { WeightProgress } from '@/lib/api/progress';
+import type { WeightProgress } from '@fatia/api-client';
 
 export function WeightChart({ data }: { data: WeightProgress }) {
   if (!data.points.length) {

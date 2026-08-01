@@ -10,7 +10,7 @@ import {
   DrawerTitle,
 } from '@/components/ui/drawer';
 import { Input } from '@/components/ui/input';
-import { workoutApi, type Exercise } from '@/lib/api/workout';
+import { workoutApi, type Exercise } from '@fatia/api-client';
 
 interface Props {
   open: boolean;

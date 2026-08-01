@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { progressApi } from '@/lib/api/progress';
+import { progressApi } from '@fatia/api-client';
 import { NutritionMacroCard } from '@/components/dashboard/nutrition-macro-card';
 import { NextWorkoutCard } from '@/components/dashboard/next-workout-card';
 import { QuickLogActions } from '@/components/dashboard/quick-log-actions';

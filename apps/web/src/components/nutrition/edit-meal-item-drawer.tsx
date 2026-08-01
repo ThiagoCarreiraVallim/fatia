@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { nutritionApi, type MealItem } from '@/lib/api/nutrition';
+import { nutritionApi, type MealItem } from '@fatia/api-client';
 
 interface Props {
   item: MealItem | null;

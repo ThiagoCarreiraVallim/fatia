@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
-import { nutritionApi, type Meal, type MealItem, type MealType } from '@/lib/api/nutrition';
+import { nutritionApi, type Meal, type MealItem, type MealType } from '@fatia/api-client';
 import { FoodSearchDrawer } from './food-search-drawer';
 import { EditMealItemDrawer } from './edit-meal-item-drawer';
 

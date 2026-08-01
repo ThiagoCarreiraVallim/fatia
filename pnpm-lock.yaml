@@ -178,6 +178,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@fatia/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
       '@hookform/resolvers':
         specifier: ^3.9.0
         version: 3.10.0(react-hook-form@7.83.0(react@18.3.1))
@@ -284,6 +287,15 @@ importers:
       tailwindcss:
         specifier: ^3.4.12
         version: 3.4.19(tsx@4.22.4)(yaml@2.8.4)
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.9
+        version: 4.1.9(@types/node@20.19.39)(@vitest/coverage-v8@4.1.9)(jsdom@29.1.1)(vite@8.0.13(@types/node@20.19.39)(esbuild@0.28.1)(jiti@1.21.7)(terser@5.46.2)(tsx@4.22.4)(yaml@2.8.4))
+
+  packages/api-client:
+    devDependencies:
       typescript:
         specifier: ^5.5.0
         version: 5.9.3

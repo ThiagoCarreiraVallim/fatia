@@ -10,9 +10,7 @@ import {
   DrawerDescription,
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
-import { workoutApi, type SessionSet } from '@/lib/api/workout';
-import { getRpeInfo } from '@/lib/workout/rpe';
-
+import { getRpeInfo, workoutApi, type SessionSet } from '@fatia/api-client';
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;

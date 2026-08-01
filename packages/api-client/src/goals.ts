@@ -1,4 +1,4 @@
-import { apiFetch } from '../api';
+import { apiFetch } from './http';
 
 export type GoalKind = 'weight' | 'body_fat' | 'workout_frequency' | 'step_count' | 'custom';
 export type GoalStatus = 'active' | 'completed' | 'expired' | 'archived';

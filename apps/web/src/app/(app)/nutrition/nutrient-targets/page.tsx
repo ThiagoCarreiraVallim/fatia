@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { ChevronLeft, Trash2, Plus } from 'lucide-react';
-import { nutritionApi, type NutrientTarget } from '@/lib/api/nutrition';
+import { nutritionApi, type NutrientTarget } from '@fatia/api-client';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';

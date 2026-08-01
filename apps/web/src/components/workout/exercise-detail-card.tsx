@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Play, Trash2, ChevronUp, ChevronDown, Trophy } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
-import { workoutApi, type SessionSet, type WorkoutPlanExercise } from '@/lib/api/workout';
+import { workoutApi, type SessionSet, type WorkoutPlanExercise } from '@fatia/api-client';
 import { SetRow } from './set-row';
 import { ExerciseDetailDrawer } from './exercise-detail-drawer';
 

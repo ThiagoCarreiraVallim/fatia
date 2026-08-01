@@ -13,6 +13,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@fatia/api-client": "workspace:*",
     "@hookform/resolvers": "^3.9.0",
     "@logto/next": "^3.6.0",
     "@radix-ui/react-dialog": "^1.1.23",

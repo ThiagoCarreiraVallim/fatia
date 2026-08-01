@@ -1,4 +1,4 @@
-import type { PlannedExercise, SessionSet } from './api/workout';
+import type { PlannedExercise, SessionSet } from './workout';
 import { isCardioExercise } from './workout/is-cardio';
 
 export interface ExerciseGroup {

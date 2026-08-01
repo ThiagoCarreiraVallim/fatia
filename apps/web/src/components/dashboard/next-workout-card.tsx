@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Play } from 'lucide-react';
-import type { TodaySummary } from '@/lib/api/progress';
+import type { TodaySummary } from '@fatia/api-client';
 
 interface Props {
   workout: TodaySummary['workout'];

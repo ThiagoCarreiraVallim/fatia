@@ -3,11 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Pause, Play, RotateCcw } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { workoutApi } from '@/lib/api/workout';
+import { workoutApi, type ExerciseGroup } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import type { ExerciseGroup } from '@/lib/workout-session-view';
-
 interface Props {
   sessionId: string;
   group: ExerciseGroup;

@@ -5,14 +5,11 @@ import { useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, Play, Clock, Dumbbell, Plus } from 'lucide-react';
-import { workoutApi, type Exercise } from '@/lib/api/workout';
-import { isCardioExercise } from '@/lib/workout/is-cardio';
+import { findQuickTemplate, isCardioExercise, workoutApi, type Exercise } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
-import { findQuickTemplate } from '@/lib/workout/quick-templates';
-
 interface LocalExercise {
   localId: string;
   exercise: Exercise;

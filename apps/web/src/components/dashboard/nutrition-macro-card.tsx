@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { TodaySummary } from '@/lib/api/progress';
+import type { TodaySummary } from '@fatia/api-client';
 
 interface MacroBarProps {
   label: string;

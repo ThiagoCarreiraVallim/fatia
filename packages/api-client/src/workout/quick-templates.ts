@@ -1,4 +1,4 @@
-import type { MuscleGroup } from '@/lib/api/workout';
+import type { MuscleGroup } from '../workout';
 
 export interface QuickTemplateExercise {
   nameQuery: string;
@@ -13,8 +13,14 @@ export interface QuickTemplate {
   level: string;
   duration: string;
   location: string;
+  /**
+   * Dica de apresentação usada **só pelo web** (classes de gradiente do
+   * Tailwind). O mobile tem visual próprio, indexado pelo `id`. Fica aqui em vez
+   * de num mapa paralelo porque template sem visual é template que ninguém
+   * lembra de estilizar quando um novo é acrescentado.
+   */
   gradient: string;
-  /** Imagem de capa (SVG em /public/quick). */
+  /** Imagem de capa do web (SVG em `apps/web/public/quick`). */
   image: string;
   exercises: QuickTemplateExercise[];
 }
