@@ -207,7 +207,7 @@ Ver `packages/db/prisma/schema.prisma` para o schema completo.
 **v1 mínimo:**
 
 - Logs estruturados JSON via `nestjs-pino`
-- `/health` endpoint com check de Postgres
+- `/health` endpoint com check de Postgres (`SELECT 1`); responde 503 se o banco não responder
 - Erros com stack trace em logs, não em response
 
 **Futuro:** OpenTelemetry, Grafana, alertas. Não na v1.
