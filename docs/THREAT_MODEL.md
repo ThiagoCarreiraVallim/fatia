@@ -122,8 +122,14 @@ derrubar o login por conexão ruim empurraria a pessoa a autenticar de novo em r
 ## Matriz de cobertura
 
 Onde o escopo é aplicado, por domínio. Verificado por
-`apps/api/src/common/__tests__/user-isolation.spec.ts` (50 casos contra Postgres real: semeia
+`apps/api/src/common/__tests__/user-isolation.spec.ts` (51 casos contra Postgres real: semeia
 como user-A, tenta ler/editar/apagar como user-B).
+
+**Atenção ao caso que faltava.** Até a correção do `reorderExercises`, todos os casos de escrita
+mandavam o recurso do user-A **na URL**, e o `assertOwner` barrava. Nenhum cobria a forma em que o
+atacante manda um recurso **próprio** na URL — legítimo, passa no `assertOwner` — e o id alheio no
+**corpo**. Endpoint que aceita id de recurso filho no payload precisa amarrá-lo ao pai da URL; ser
+dono do pai não autoriza escrever em qualquer filho.
 
 | Domínio             | Service                                       | Ponto de escopo                                                            |
 | ------------------- | --------------------------------------------- | -------------------------------------------------------------------------- |
