@@ -13,7 +13,7 @@ export class GetCardioProgressTool implements McpToolDef {
   constructor(private readonly progress: ProgressService) {}
   readonly name = 'get_cardio_progress';
   readonly title = 'Evolução no cardio';
-  readonly annotations = { readOnlyHint: true };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false };
   readonly description =
     'Evolução de cardio em um exercício (duration, distance, pace ou kcal). Exercise deve ter muscleGroup=cardio.';
   readonly inputSchema = {

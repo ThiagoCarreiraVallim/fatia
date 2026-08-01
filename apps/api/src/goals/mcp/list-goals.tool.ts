@@ -14,7 +14,7 @@ export class ListGoalsTool implements McpToolDef {
   constructor(private readonly goals: GoalsService) {}
   readonly name = 'list_goals';
   readonly title = 'Listar metas';
-  readonly annotations = { readOnlyHint: true };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false };
   readonly description =
     'Lista metas pessoais do usuário com progresso calculado. Filtros opcionais por status e tipo.';
   readonly inputSchema = {

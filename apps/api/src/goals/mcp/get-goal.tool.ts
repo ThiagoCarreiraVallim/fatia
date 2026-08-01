@@ -13,7 +13,7 @@ export class GetGoalTool implements McpToolDef {
   constructor(private readonly goals: GoalsService) {}
   readonly name = 'get_goal';
   readonly title = 'Ver meta';
-  readonly annotations = { readOnlyHint: true };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false };
   readonly description = 'Retorna uma meta pessoal por id, com progresso calculado.';
   readonly inputSchema = {
     goalId: z.string().describe('ID da meta a detalhar'),

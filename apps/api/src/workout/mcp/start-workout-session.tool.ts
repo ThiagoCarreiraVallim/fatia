@@ -16,7 +16,7 @@ export class StartWorkoutSessionTool implements McpToolDef {
 
   readonly title = 'Iniciar treino';
 
-  readonly annotations = { destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false };
   readonly description = 'Inicia uma sessão de treino (livre ou vinculada a um plano).';
   readonly inputSchema = {
     planId: z.string().uuid().optional().describe('ID do plano a seguir (opcional)'),

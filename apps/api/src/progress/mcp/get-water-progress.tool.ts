@@ -13,7 +13,7 @@ export class GetWaterProgressTool implements McpToolDef {
   constructor(private readonly progress: ProgressService) {}
   readonly name = 'get_water_progress';
   readonly title = 'Evolução da hidratação';
-  readonly annotations = { readOnlyHint: true };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false };
   readonly description =
     'Estatísticas de hidratação: série diária, média, melhor dia, dias batendo a meta.';
   readonly inputSchema = {

@@ -16,7 +16,7 @@ export class DeleteCustomExerciseTool implements McpToolDef {
 
   readonly title = 'Excluir exercício personalizado';
 
-  readonly annotations = { destructiveHint: true };
+  readonly annotations = { readOnlyHint: false, destructiveHint: true };
   readonly description =
     'Remove um exercício custom do usuário. Falha se há sets registrados com esse exercício.';
   readonly inputSchema = {

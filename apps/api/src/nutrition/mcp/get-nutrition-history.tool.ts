@@ -13,7 +13,7 @@ export class GetNutritionHistoryTool implements McpToolDef {
   constructor(private readonly summary: NutritionSummaryService) {}
   readonly name = 'get_nutrition_history';
   readonly title = 'Histórico de nutrição';
-  readonly annotations = { readOnlyHint: true };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false };
   readonly description = 'Histórico dos últimos N dias com médias.';
   readonly inputSchema = {
     days: z

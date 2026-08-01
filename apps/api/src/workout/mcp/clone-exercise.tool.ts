@@ -17,7 +17,7 @@ export class CloneExerciseTool implements McpToolDef {
 
   readonly title = 'Duplicar exercício';
 
-  readonly annotations = { destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false };
   readonly description =
     'Cria (ou reaproveita) uma CÓPIA editável de um exercício base para o usuário, já que ' +
     'exercícios base são só-leitura. A partir daí a base some das listagens do usuário e ' +
@@ -29,8 +29,8 @@ export class CloneExerciseTool implements McpToolDef {
     muscleGroup: muscleGroupSchema
       .optional()
       .describe('Grupo (pt): peito, costas, pernas, ombro, braço, core, cardio'),
-    primaryMuscles: muscleListSchema.optional(),
-    secondaryMuscles: muscleListSchema.optional(),
+    primaryMuscles: muscleListSchema().optional(),
+    secondaryMuscles: muscleListSchema().optional(),
     equipment: z
       .string()
       .max(100)

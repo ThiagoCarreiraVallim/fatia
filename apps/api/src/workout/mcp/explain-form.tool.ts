@@ -16,7 +16,7 @@ export class ExplainFormTool implements McpToolDef {
 
   readonly title = 'Explicar execução do exercício';
 
-  readonly annotations = { readOnlyHint: true };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false };
   readonly description =
     'Retorna os passos de execução e detalhes de técnica de um exercício buscado por nome. Use quando o usuário perguntar "como faz" ou pedir ajuda com a forma — as instruções retornadas são o insumo para explicar a execução correta.';
   readonly inputSchema = {

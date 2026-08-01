@@ -15,7 +15,7 @@ export class ListWorkoutPlansTool implements McpToolDef {
 
   readonly title = 'Listar planos de treino';
 
-  readonly annotations = { readOnlyHint: true };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false };
   readonly description =
     'Lista todos os planos de treino do usuário, incluindo os exercícios de cada plano.';
   readonly inputSchema = {} as const;

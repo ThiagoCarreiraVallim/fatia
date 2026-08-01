@@ -13,7 +13,7 @@ export class ListMealsTool implements McpToolDef {
   constructor(private readonly meals: MealService) {}
   readonly name = 'list_meals';
   readonly title = 'Listar refeições';
-  readonly annotations = { readOnlyHint: true };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false };
   readonly description = 'Lista refeições do usuário (cursor pagination).';
   readonly inputSchema = {
     date: z.string().optional().describe('YYYY-MM-DD para filtrar pelo dia'),

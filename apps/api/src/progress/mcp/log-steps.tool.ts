@@ -18,7 +18,7 @@ export class LogStepsTool implements McpToolDef {
   ) {}
   readonly name = 'log_steps';
   readonly title = 'Registrar passos';
-  readonly annotations = { destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false };
   readonly description =
     'Registra uma contagem de passos para um dia. Múltiplos logs por dia são permitidos — o servidor considera o maior valor (ADR 007).';
   readonly inputSchema = {

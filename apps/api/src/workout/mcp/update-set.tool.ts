@@ -16,7 +16,7 @@ export class UpdateSetTool implements McpToolDef {
 
   readonly title = 'Atualizar série';
 
-  readonly annotations = { destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false };
   readonly description = 'Corrige os dados de uma série já registrada.';
   readonly inputSchema = {
     setId: z.string().uuid().describe('ID da série'),

@@ -16,7 +16,7 @@ export class GetWorkoutPlanTool implements McpToolDef {
 
   readonly title = 'Ver plano de treino';
 
-  readonly annotations = { readOnlyHint: true };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false };
   readonly description = 'Retorna detalhes de um plano de treino (exercícios, séries e reps alvo).';
   readonly inputSchema = {
     planId: z.string().uuid().describe('ID do plano'),

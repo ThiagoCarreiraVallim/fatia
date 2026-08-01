@@ -13,7 +13,7 @@ export class UpdateWaterLogTool implements McpToolDef {
   constructor(private readonly waters: WaterLogService) {}
   readonly name = 'update_water_log';
   readonly title = 'Atualizar registro de água';
-  readonly annotations = { destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false };
   readonly description = 'Atualiza um log de água existente (correção).';
   readonly inputSchema = {
     id: z.string().describe('ID do registro de hidratação a atualizar'),

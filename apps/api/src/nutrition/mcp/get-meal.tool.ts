@@ -13,7 +13,7 @@ export class GetMealTool implements McpToolDef {
   constructor(private readonly meals: MealService) {}
   readonly name = 'get_meal';
   readonly title = 'Ver refeição';
-  readonly annotations = { readOnlyHint: true };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false };
   readonly description = 'Detalha uma refeição.';
   readonly inputSchema = {
     id: z.string().uuid().describe('ID da refeição a detalhar'),

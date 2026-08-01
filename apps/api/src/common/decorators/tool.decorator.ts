@@ -11,16 +11,20 @@ export interface McpToolContext {
  * tool declare `title` e o hint aplicável — é o requisito 2 da submissão, e o
  * passo "Tools" do portal recusa quem não tem.
  *
- * ⚠️ `destructiveHint` tem default **true** na spec quando `readOnlyHint` é
- * falso. Omitir numa tool de escrita comum faria o Claude pedir confirmação a
- * cada refeição registrada — por isso as escritas não destrutivas declaram
- * `destructiveHint: false` explicitamente, em vez de deixar implícito.
+ * Os dois campos são **obrigatórios**, não opcionais. Dois motivos:
+ *
+ * 1. `destructiveHint` tem default **true** na spec quando `readOnlyHint` é
+ *    falso. Omitir numa escrita comum faria o Claude pedir confirmação a cada
+ *    refeição registrada.
+ * 2. O validador do portal de submissão exige `readOnlyHint` presente em toda
+ *    tool, inclusive nas de escrita, onde o valor é `false`. Deixar implícito
+ *    é indistinguível de esquecimento — para o portal e para quem lê o código.
  */
 export interface McpToolAnnotations {
   /** Só lê; nunca altera estado. Dispensa confirmação por chamada. */
-  readOnlyHint?: boolean;
+  readOnlyHint: boolean;
   /** Apaga ou torna irrecuperável. O Claude sempre confirma antes. */
-  destructiveHint?: boolean;
+  destructiveHint: boolean;
 }
 
 export interface McpToolDef<S extends ZodRawShape = ZodRawShape> {

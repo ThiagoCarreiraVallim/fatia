@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import type { ZodTypeAny } from 'zod';
+import { z, type ZodTypeAny } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 import { MCP_TOOL_METADATA, type McpToolDef } from '../../common/decorators/tool.decorator';
 
 /**
@@ -165,6 +166,32 @@ describe('catálogo de tools MCP', () => {
     expect(lazy).toEqual([]);
   });
 
+  it('não emite $ref no JSON Schema de nenhuma tool', () => {
+    // Reusar a MESMA instância de schema Zod em dois campos do mesmo input faz o
+    // conversor deduplicar por identidade e emitir `$ref` no segundo:
+    //
+    //   primaryMuscles:   { type: 'array', items: {...} }
+    //   secondaryMuscles: { $ref: '#/properties/primaryMuscles' }
+    //
+    // É JSON Schema válido, mas cliente que não resolve `$ref` — o portal de
+    // submissão do diretório, entre outros — enxerga o campo SEM TIPO. A
+    // correção é usar fábrica em vez de constante compartilhada.
+    const offenders: string[] = [];
+
+    for (const { tool } of tools) {
+      // Cast localizado: `z.object` sobre o shape genérico estoura a
+      // instanciação de tipos (TS2589), mesmo motivo do cast em
+      // `mcp-tool.registry.ts`. Aqui só interessa a forma serializada.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const object = z.object(tool.inputSchema as any) as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const schema = zodToJsonSchema(object, { $refStrategy: 'root' }) as any;
+      if (JSON.stringify(schema).includes('$ref')) offenders.push(tool.name);
+    }
+
+    expect(offenders.sort()).toEqual([]);
+  });
+
   it('declara o hint coerente com o prefixo do nome', () => {
     const READ = /^(get|list|search|explain|export)_/;
     const DESTRUCTIVE = /^delete_/;
@@ -175,6 +202,13 @@ describe('catálogo de tools MCP', () => {
 
     for (const { tool } of tools) {
       const a = tool.annotations ?? {};
+
+      // Os dois hints têm de estar PRESENTES em toda tool: o validador do
+      // portal exige `readOnlyHint` inclusive nas de escrita, onde é `false`.
+      if (typeof a.readOnlyHint !== 'boolean' || typeof a.destructiveHint !== 'boolean') {
+        wrong.push(`${tool.name}: readOnlyHint e destructiveHint precisam ser declarados`);
+        continue;
+      }
 
       if (READ.test(tool.name)) {
         if (a.readOnlyHint !== true) wrong.push(`${tool.name}: esperado readOnlyHint`);

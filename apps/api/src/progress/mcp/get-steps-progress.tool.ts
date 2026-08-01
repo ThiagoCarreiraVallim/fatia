@@ -13,7 +13,7 @@ export class GetStepsProgressTool implements McpToolDef {
   constructor(private readonly progress: ProgressService) {}
   readonly name = 'get_steps_progress';
   readonly title = 'Evolução dos passos';
-  readonly annotations = { readOnlyHint: true };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false };
   readonly description = 'Pontos diários de passos + médias semanais + dias batidos.';
   readonly inputSchema = {
     days: z
