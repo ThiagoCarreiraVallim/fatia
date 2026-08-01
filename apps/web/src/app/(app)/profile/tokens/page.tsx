@@ -34,11 +34,11 @@ export default function TokensPage() {
             <div className="space-y-1">
               <p>URL do servidor:</p>
               <code className="block rounded bg-muted px-2 py-1 text-xs">
-                https://seu-dominio.com/mcp/sse
+                https://seu-dominio.com/mcp
               </code>
               <p className="text-xs text-muted-foreground">
-                (use <code className="rounded bg-muted px-1">http://localhost:3000/mcp/sse</code>{' '}
-                para desenvolvimento local)
+                (use <code className="rounded bg-muted px-1">http://localhost:3000/mcp</code> para
+                desenvolvimento local)
               </p>
             </div>
           </li>

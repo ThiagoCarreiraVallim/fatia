@@ -35,7 +35,7 @@ say "Enabling corepack (pins pnpm to the version in package.json)"
 if command -v corepack >/dev/null 2>&1; then
   corepack enable
 else
-  warn "corepack not found — falling back to global pnpm. Install Node >= 20."
+  warn "corepack not found — falling back to global pnpm. Install Node >= 24."
 fi
 
 say "Installing dependencies"
