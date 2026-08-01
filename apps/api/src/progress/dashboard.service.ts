@@ -33,7 +33,11 @@ export class DashboardService {
       waterToday,
     ] = await Promise.all([
       this.prisma.meal.findMany({
-        where: { userId: ctx.userId, eatenAt: { gte: dayStart, lte: dayEnd } },
+        // `lt`, não `lte`: o `end` do `dayBoundsInTz` é a meia-noite do dia SEGUINTE, então
+        // `lte` faz o instante da virada pertencer aos dois dias. O resto do produto já usa
+        // `lt` (nutrition-summary, nutrient-target, meal) — só o dashboard divergia, e por
+        // isso a mesma refeição podia somar em dois lugares com respostas diferentes.
+        where: { userId: ctx.userId, eatenAt: { gte: dayStart, lt: dayEnd } },
         include: { items: true },
       }),
       this.prisma.userGoals.findUnique({ where: { userId: ctx.userId } }),
@@ -45,7 +49,7 @@ export class DashboardService {
       this.prisma.workoutSession.findFirst({
         where: {
           userId: ctx.userId,
-          completedAt: { gte: dayStart, lte: dayEnd },
+          completedAt: { gte: dayStart, lt: dayEnd },
         },
       }),
       this.weightLogs.getLatest(ctx.userId),
@@ -230,7 +234,7 @@ export class DashboardService {
       const d = addDaysIso(today, -i);
       const { start, end } = dayBoundsInTz(d, ctx.timezone);
       const hasMeal = await this.prisma.meal.count({
-        where: { userId: ctx.userId, eatenAt: { gte: start, lte: end } },
+        where: { userId: ctx.userId, eatenAt: { gte: start, lt: end } },
       });
       if (hasMeal === 0) break;
       streak++;
@@ -245,10 +249,16 @@ export class DashboardService {
       const ref = addDaysIso(today, -7 * i);
       const ws = weekStartInTz(new Date(`${ref}T12:00:00Z`), ctx.timezone);
       const we = addDaysIso(ws, 6);
+      // A data de início da semana é calculada no fuso do usuário, mas os limites da consulta
+      // precisam ser instantes — e instante montado como `${ws}T00:00:00Z` é meia-noite UTC,
+      // não meia-noite local. Para quem está em UTC+9, isso jogava o treino de segunda de manhã
+      // para a semana anterior e zerava a sequência de quem não faltou.
+      const { start } = dayBoundsInTz(ws, ctx.timezone);
+      const { end } = dayBoundsInTz(we, ctx.timezone);
       const count = await this.prisma.workoutSession.count({
         where: {
           userId: ctx.userId,
-          completedAt: { gte: new Date(`${ws}T00:00:00Z`), lte: new Date(`${we}T23:59:59Z`) },
+          completedAt: { gte: start, lt: end },
         },
       });
       if (count === 0) break;
