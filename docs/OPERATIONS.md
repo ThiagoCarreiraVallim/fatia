@@ -64,7 +64,7 @@ openssl rand -base64 32
 ```bash
 cd /opt/fatia
 cp infra/.env.backup.example infra/.env.backup
-nano infra/.env.backup          # preencher passphrase, bucket, chaves, webhook
+nano infra/.env.backup          # preencher passphrase, bucket, chaves, webhook, ping
 chmod 600 infra/.env.backup     # credenciais: só o dono lê
 chmod +x infra/backup.sh
 ```
@@ -121,7 +121,87 @@ concluiria que o alerta funciona sem nunca tê-lo exercitado.
 
 Deve sair `exit=1` e o webhook deve receber a notificação.
 
-### 8. Executar o primeiro drill de restore
+### 8. Configurar o ping de sucesso — `BACKUP_PING_URL`
+
+#### Por que isto existe, se já tem o `ALERT_WEBHOOK`
+
+Porque os dois cobrem modos de falha diferentes, e o que o webhook **não** cobre é o pior.
+
+O `ALERT_WEBHOOK` só dispara quando o `backup.sh` roda, falha e chama `fail()`. Ele depende de
+haver uma execução para reportar. O modo de falha que ninguém percebe é o oposto: **o backup que
+nunca rodou.**
+
+- alguém editou a crontab e apagou a linha
+- o host reiniciou e o cron não voltou
+- o disco encheu antes do script começar
+- o arquivo perdeu o bit de execução num deploy
+
+Em todos esses casos não existe erro para reportar, porque não existiu execução. O `fail()` nunca
+roda, o canal do webhook fica calado — e um canal calado é indistinguível de "está tudo bem".
+É assim que se descobre, meses depois, que o último backup é de fevereiro.
+
+O `BACKUP_PING_URL` inverte a lógica. O script avisa **"rodei e deu certo"**, e é a **ausência**
+do aviso, do outro lado, que dispara o alerta. Um dead-man's switch. Ninguém precisa lembrar de
+conferir nada.
+
+Os dois são complementares, não alternativas. O webhook de falha carrega **a mensagem** (`nenhum
+container casa com o prefixo 'nao-existe'`), que é o que economiza tempo às 4 da manhã; o ping só
+sabe dizer que não chegou. Mantenha os dois preenchidos.
+
+#### Apontar para um Uptime Kuma auto-hospedado
+
+Sem conta externa, coerente com a decisão de observabilidade da #39:
+
+1. No Uptime Kuma, **Add New Monitor** → **Monitor Type: `Push`**.
+2. Nome: `fatia-backup`.
+3. **Heartbeat Interval**: `93600` segundos (26 h). O backup roda às 04:00, então a janela precisa
+   ser 24 h **mais folga** para a duração real do backup. Curto demais gera falso alarme, e falso
+   alarme repetido é treinamento para ignorar o canal.
+4. **Retries**: `0`. Não há o que retentar — ou o ping do dia chegou, ou não chegou.
+5. Configure a notificação do monitor (o mesmo canal do `ALERT_WEBHOOK` serve).
+6. Copie a **Push URL** que o Kuma mostra e cole no `.env.backup`:
+
+```bash
+BACKUP_PING_URL=https://kuma.seu-host/api/push/<token>
+```
+
+O script faz um `GET` simples. O Kuma aceita parâmetros opcionais (`?status=up&msg=...`) se você
+quiser um texto no painel, mas nada disso é necessário.
+
+Qualquer endpoint que aceite `GET` serve — é uma URL, não um SDK. Trocar depois para
+Healthchecks.io ou outro destino é editar esta linha, e só.
+
+#### Confirmar
+
+```bash
+/opt/fatia/infra/backup.sh
+```
+
+O monitor deve sair de **pending** para **up**. Se não sair, o log traz
+`AVISO: ping de sucesso não foi entregue` — o backup em si continua tendo dado certo, porque um
+ping que falha **não** derruba o backup (seria um alerta de falha para um backup correto).
+
+Agora prove que o ping **não** é enviado quando o backup falha:
+
+```bash
+PG_INSTANCES="fatia:nao-existe:postgres" /opt/fatia/infra/backup.sh; echo "exit=$?"
+```
+
+`exit=1`, o `ALERT_WEBHOOK` recebe a notificação de falha e o monitor do Kuma **não** recebe nada.
+O ping fica no fim do script, depois da verificação de tamanho e integridade de cada dump, do
+upload offsite e da retenção. Pingar antes de verificar seria anunciar sucesso de um dump
+possivelmente truncado — pior que não pingar, porque transforma o monitor em falso conforto.
+
+E o teste que realmente prova o valor, o único que não dá para pular: **desligue o cron e deixe a
+janela vencer.** Os testes acima só provam que a URL está certa. Só este prova que o dead-man's
+switch dispara sozinho.
+
+> ⚠️ **Lacuna declarada:** um Uptime Kuma rodando **no mesmo host** que o backup morre junto com
+> o VPS — perda total do host leva o monitor e o backup ao mesmo tempo, e ninguém é avisado.
+> Hospedar o Kuma em outra máquina, ou aceitar um serviço externo (Healthchecks.io), fecha essa
+> lacuna. Enquanto não fechar, ela está **declarada**, não suposta coberta.
+
+### 9. Executar o primeiro drill de restore
 
 Seção seguinte. **Enquanto isso não acontecer, você não tem backup — tem esperança.**
 
@@ -134,6 +214,8 @@ Seção seguinte. **Enquanto isso não acontecer, você não tem backup — tem 
   endpoint é S3-compatível de terceiro.
 - Sai com código 1 em qualquer falha e chama `ALERT_WEBHOOK`.
 - Sem `S3_BUCKET`, avisa em log que o backup só existe naquele host.
+- Pinga `BACKUP_PING_URL` **só no fim**, depois de tudo verificado — e um ping que falhe nunca
+  derruba um backup que deu certo. Com a variável vazia, o comportamento é no-op silencioso.
 
 ## Drill de restore
 
@@ -320,6 +402,8 @@ em circulação.
 - [ ] Drill de restore executado e anotado abaixo
 - [ ] `BACKUP_PASSPHRASE` confirmada fora do VPS
 - [ ] Log de backup sem falhas nos últimos 90 dias
+- [ ] Ping de sucesso recebido nos últimos 7 dias (monitor `fatia-backup` em **up**) — um monitor
+      parado em "pending" há semanas significa que o backup não roda desde então
 - [ ] Validade dos certificados TLS
 - [ ] Espaço em disco no host
 - [ ] Backups offsite presentes e dentro da retenção configurada

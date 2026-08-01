@@ -39,6 +39,16 @@
 #   S3_RETENTION_DAYS     Retenção offsite em dias  (default 30)
 #
 #   ALERT_WEBHOOK    URL que recebe POST JSON em caso de falha (opcional).
+#
+#   BACKUP_PING_URL  URL pingada (GET) SÓ quando o backup termina inteiro e
+#                    verificado — dead-man's switch. Complementa o
+#                    ALERT_WEBHOOK, não substitui: o webhook avisa que o backup
+#                    FALHOU, o ping avisa que o backup PAROU DE RODAR (cron
+#                    removido, host reiniciado sem o cron, disco cheio antes do
+#                    script começar). Nesses casos este script nem executa,
+#                    fail() nunca roda, e o silêncio é indistinguível de
+#                    sucesso. Destino recomendado: monitor do tipo Push de um
+#                    Uptime Kuma auto-hospedado. Vazia = no-op silencioso.
 # ---------------------------------------------------------------------------
 #
 # ATENÇÃO: backup não testado não conta. Ver o drill de restore em
@@ -59,7 +69,8 @@ ENV_FILE="$(dirname "$(readlink -f "$0")")/.env.backup"
 _OVERRIDES=()
 for _v in PG_INSTANCES CONTAINER POSTGRES_USER BACKUP_DIR RETENTION_DAYS \
           BACKUP_PASSPHRASE S3_BUCKET S3_ENDPOINT S3_RETENTION_DAYS \
-          AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION ALERT_WEBHOOK; do
+          AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION ALERT_WEBHOOK \
+          BACKUP_PING_URL; do
   # `+set` e não `:-`: precisa distinguir "não definida" de "definida vazia",
   # senão não dá para desligar a cifra ou o offsite pela linha de comando.
   [ -n "${!_v+set}" ] && _OVERRIDES+=("$_v=${!_v}")
@@ -242,3 +253,27 @@ find "$BACKUP_DIR" -name 'fatia-*.sql.gz' -mtime +"$RETENTION_DAYS" -delete 2>/d
 
 COUNT=$(printf '%s\n' $PG_INSTANCES | wc -l | tr -d ' ')
 log "Concluído: $COUNT cluster(s) em $BACKUP_DIR (fatia-*-$TS.$EXT)"
+
+# --- Ping de sucesso (dead-man's switch) ---
+#
+# Cobre o que o ALERT_WEBHOOK, por construção, NÃO cobre: cron removido, host
+# reiniciado sem o cron voltar, disco cheio antes do script começar. Nesses
+# casos não há erro para reportar porque não houve execução — fail() nunca
+# roda, e o silêncio é indistinguível de sucesso. Aqui a ausência do aviso é
+# que dispara o alerta, do outro lado.
+#
+# DEPOIS de tudo, de propósito: o loop já validou tamanho e integridade de cada
+# dump, o offsite já foi conferido e a retenção já rodou. Pingar dentro do loop
+# ou antes da verificação seria anunciar sucesso de um dump possivelmente
+# truncado — pior que não pingar, porque converte o monitor em falso conforto.
+#
+# O `||` na chamada é obrigatório: o script roda com `set -euo pipefail` e
+# `trap ... ERR`. Um curl que falhasse sem ele dispararia o trap e mandaria
+# "falha na linha N" — alerta de FALHA num backup que deu CERTO. O alerta
+# destruiria justamente o que veio monitorar.
+#
+# Vazia = no-op silencioso: quem não configurou não vê erro nem ruído.
+if [ -n "${BACKUP_PING_URL:-}" ]; then
+  curl -fsS -m 10 "$BACKUP_PING_URL" >/dev/null 2>&1 \
+    || log "AVISO: ping de sucesso não foi entregue (o backup em si está OK)"
+fi
