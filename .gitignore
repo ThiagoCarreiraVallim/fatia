@@ -48,6 +48,14 @@ Thumbs.db
 # Prisma
 packages/db/node_modules/.prisma/
 
+# Expo (apps/mobile)
+.expo/
+apps/mobile/expo-env.d.ts
+# Projetos nativos gerados por `expo prebuild` — o managed workflow os recria a
+# partir do app.config.ts, versioná-los faz o config divergir do que é buildado.
+apps/mobile/ios/
+apps/mobile/android/
+
 # Coverage
 coverage/
 
