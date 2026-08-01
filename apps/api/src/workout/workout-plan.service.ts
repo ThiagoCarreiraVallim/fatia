@@ -101,10 +101,24 @@ export class WorkoutPlanService {
 
   async reorderExercises(userId: string, planId: string, dto: ReorderExercisesDto) {
     await this.assertOwner(userId, planId);
+
+    // Ser dono do plano da URL não autoriza escrever em qualquer `WorkoutPlanExercise`: os ids
+    // vêm do corpo da requisição, e sem amarrá-los a este plano dava para reordenar o plano de
+    // outra pessoa mandando o id dela aqui. É o que `updatePlanExercise` e `removeExercise` já
+    // fazem logo acima, e o que faltava só aqui.
+    const ids = dto.exercises.map((e) => e.id);
+    const owned = await this.prisma.workoutPlanExercise.count({
+      where: { id: { in: ids }, planId },
+    });
+    // Mesma resposta para "não existe" e "não é deste plano" (§IDs de docs/MCP.md).
+    if (owned !== new Set(ids).size) throw new NotFoundException('Plan exercise not found');
+
     await this.prisma.$transaction(
       dto.exercises.map(({ id, order }) =>
-        this.prisma.workoutPlanExercise.update({
-          where: { id },
+        // `updateMany` com o `planId` no filtro: mesmo que a verificação acima passe a mentir um
+        // dia, a escrita continua sem alcançar linha de outro plano.
+        this.prisma.workoutPlanExercise.updateMany({
+          where: { id, planId },
           data: { order },
         }),
       ),

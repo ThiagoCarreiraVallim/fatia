@@ -15,7 +15,9 @@ type MockPrisma = {
     create: jest.Mock;
     findFirst: jest.Mock;
     update: jest.Mock;
+    updateMany: jest.Mock;
     delete: jest.Mock;
+    count: jest.Mock;
   };
   $transaction: jest.Mock;
 };
@@ -33,7 +35,9 @@ const makePrisma = (): MockPrisma => ({
     create: jest.fn(),
     findFirst: jest.fn(),
     update: jest.fn(),
+    updateMany: jest.fn(),
     delete: jest.fn(),
+    count: jest.fn(),
   },
   $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
 });
@@ -262,7 +266,8 @@ describe('WorkoutPlanService', () => {
     it('updates every plan-exercise inside a single transaction', async () => {
       prisma.workoutPlan.findUnique.mockResolvedValue({ id: 'plan-1', userId });
       prisma.workoutPlan.findFirst.mockResolvedValue({ id: 'plan-1', exercises: [] });
-      prisma.workoutPlanExercise.update.mockResolvedValue({});
+      prisma.workoutPlanExercise.count.mockResolvedValue(2);
+      prisma.workoutPlanExercise.updateMany.mockResolvedValue({ count: 1 });
 
       await service.reorderExercises(userId, 'plan-1', {
         exercises: [
@@ -272,9 +277,11 @@ describe('WorkoutPlanService', () => {
       });
 
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-      expect(prisma.workoutPlanExercise.update).toHaveBeenCalledTimes(2);
-      expect(prisma.workoutPlanExercise.update).toHaveBeenCalledWith({
-        where: { id: 'pe-1' },
+      expect(prisma.workoutPlanExercise.updateMany).toHaveBeenCalledTimes(2);
+      // O `planId` no filtro da escrita é o que impede alcançar linha de outro plano mesmo que a
+      // verificação prévia passe a mentir.
+      expect(prisma.workoutPlanExercise.updateMany).toHaveBeenCalledWith({
+        where: { id: 'pe-1', planId: 'plan-1' },
         data: { order: 2 },
       });
     });
@@ -286,6 +293,59 @@ describe('WorkoutPlanService', () => {
         NotFoundException,
       );
       expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('refuses an exercise id that belongs to someone else, even owning the plan of the URL', async () => {
+      // O buraco que existia: `assertOwner` valida o plano da URL, mas os ids do corpo iam direto
+      // para o `update`. Dono do plano P mandava o id de um `WorkoutPlanExercise` alheio e
+      // reordenava o plano da outra pessoa, com 200 na resposta.
+      prisma.workoutPlan.findUnique.mockResolvedValue({ id: 'plan-1', userId });
+      // Só 1 dos 2 ids pertence ao plano-1.
+      prisma.workoutPlanExercise.count.mockResolvedValue(1);
+
+      await expect(
+        service.reorderExercises(userId, 'plan-1', {
+          exercises: [
+            { id: 'pe-meu', order: 1 },
+            { id: 'pe-de-outro', order: 2 },
+          ],
+        }),
+      ).rejects.toThrow(NotFoundException);
+
+      // Nada escrito: a recusa acontece antes da transação, não no meio dela.
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.workoutPlanExercise.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('amarra a verificação ao plano da URL, não só aos ids', async () => {
+      prisma.workoutPlan.findUnique.mockResolvedValue({ id: 'plan-1', userId });
+      prisma.workoutPlan.findFirst.mockResolvedValue({ id: 'plan-1', exercises: [] });
+      prisma.workoutPlanExercise.count.mockResolvedValue(1);
+      prisma.workoutPlanExercise.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.reorderExercises(userId, 'plan-1', { exercises: [{ id: 'pe-1', order: 1 }] });
+
+      // Sem o `planId` aqui, a contagem aceitaria id de qualquer plano e o furo voltaria.
+      expect(prisma.workoutPlanExercise.count).toHaveBeenCalledWith({
+        where: { id: { in: ['pe-1'] }, planId: 'plan-1' },
+      });
+    });
+
+    it('id repetido no corpo não engana a contagem', async () => {
+      // `count` conta linhas distintas. Mandar ['pe-1','pe-1'] com um id alheio a mais faria
+      // 2 === 2 se a comparação usasse o comprimento do array em vez do conjunto.
+      prisma.workoutPlan.findUnique.mockResolvedValue({ id: 'plan-1', userId });
+      prisma.workoutPlanExercise.count.mockResolvedValue(1);
+
+      await expect(
+        service.reorderExercises(userId, 'plan-1', {
+          exercises: [
+            { id: 'pe-1', order: 1 },
+            { id: 'pe-1', order: 2 },
+            { id: 'pe-de-outro', order: 3 },
+          ],
+        }),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

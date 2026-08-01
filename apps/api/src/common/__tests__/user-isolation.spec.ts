@@ -63,6 +63,7 @@ describe('isolamento entre usuários', () => {
     stepLogId: '',
     waterLogId: '',
     planId: '',
+    planExerciseId: '',
     sessionId: '',
     setId: '',
     sharedExerciseId: 0,
@@ -169,6 +170,14 @@ describe('isolamento entre usuários', () => {
 
     const plan = await plans.create(owned.userA, { name: `${stamp}-plan` });
     owned.planId = plan.id;
+
+    const planExercise = await plans.addExercise(owned.userA, plan.id, {
+      exerciseId: shared.id,
+      order: 1,
+      targetSets: 3,
+      targetReps: '8-12',
+    });
+    owned.planExerciseId = planExercise.id;
 
     const session = await sessions.start(owned.userA, {});
     owned.sessionId = session.id;
@@ -379,6 +388,30 @@ describe('isolamento entre usuários', () => {
 
     it('delete_workout_plan recusa', async () => {
       await expect(plans.delete(owned.userB, owned.planId)).rejects.toThrow(NotFoundException);
+    });
+
+    it('reorder_plan_exercises recusa id alheio mesmo com plano próprio na URL', async () => {
+      // Este é o caso que os outros não pegam. Todos eles mandam o plano do user-A na URL, e o
+      // `assertOwner` barra. Aqui o user-B manda o plano DELE — legítimo, passa no assertOwner —
+      // e o id de um `WorkoutPlanExercise` do user-A no corpo. Sem amarrar o id ao plano, a
+      // escrita chegava na linha alheia e a resposta era 200.
+      //
+      // O plano do user-B nasce aqui, e não no seed, para não quebrar as asserções de que ele
+      // não enxerga nada — elas são invariante do arquivo inteiro.
+      const planB = await plans.create(owned.userB, { name: 'plano-do-b' });
+
+      await expect(
+        plans.reorderExercises(owned.userB, planB.id, {
+          exercises: [{ id: owned.planExerciseId, order: 99 }],
+        }),
+      ).rejects.toThrow(NotFoundException);
+
+      // Recusar não basta: o que importa é que nada foi escrito. Sem esta asserção, uma
+      // implementação que gravasse e só depois lançasse passaria.
+      const alvo = await prisma.workoutPlanExercise.findUnique({
+        where: { id: owned.planExerciseId },
+      });
+      expect(alvo?.order).toBe(1);
     });
 
     it('add_exercise_to_plan recusa num plano de outro', async () => {
