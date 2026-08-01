@@ -11,6 +11,7 @@ import {
   formatPreviousSet,
   parseDecimalInput,
   parseFirstRep,
+  prefillForNextSet,
   previousCells,
   targetSetsOf,
 } from './format';
@@ -27,9 +28,6 @@ import type { RestTimer as RestTimerState } from './use-rest-timer';
  *
  * O que muda em relação ao web:
  *
- * - a referência da vez anterior vem de `getLastSet` (a última vez que o
- *   exercício foi feito, em qualquer sessão), não só das séries desta sessão. É
- *   o dado que a pessoa procura antes de escolher a carga.
  * - o descanso é controlado pela tela (ver `use-rest-timer.ts`), para não zerar
  *   quando o foco passa para o próximo exercício.
  * - o RPE é pedido pela tela, num drawer montado fora do card — o bottom sheet
@@ -82,20 +80,19 @@ export function ActiveExerciseCard({
   const [reps, setReps] = useState(() => parseFirstRep(group.targetReps));
   const [touched, setTouched] = useState(false);
 
-  useEffect(() => {
-    if (sessionLastSet?.weightKg != null) setWeight(sessionLastSet.weightKg);
-    if (sessionLastSet?.reps != null) setReps(sessionLastSet.reps);
-  }, [sessionLastSet?.id, sessionLastSet?.weightKg, sessionLastSet?.reps]);
+  // A regra do palpite mora em `prefillForNextSet` (pura, testável sem
+  // aparelho). Calculada no render e não dentro do efeito para que as
+  // dependências sejam só os dois números: os objetos de série trocam de
+  // identidade a cada refetch do React Query e reescreveriam o campo por cima
+  // do que a pessoa está digitando.
+  const prefill = prefillForNextSet({ touched, sessionLastSet, previousSessionSet: reference });
+  const prefillWeight = prefill.weightKg;
+  const prefillReps = prefill.reps;
 
-  // Antes da primeira série da sessão o palpite vem da última vez que este
-  // exercício foi feito; só na falta dela é que o recorde entra.
   useEffect(() => {
-    if (touched || sessionLastSet) return;
-    if (reference?.weightKg != null) setWeight(reference.weightKg);
-    else if (prWeight != null) setWeight(prWeight);
-    if (reference?.reps != null) setReps(reference.reps);
-    else if (prReps != null) setReps(prReps);
-  }, [touched, sessionLastSet, reference, prWeight, prReps]);
+    if (prefillWeight != null) setWeight(prefillWeight);
+    if (prefillReps != null) setReps(prefillReps);
+  }, [prefillWeight, prefillReps]);
 
   const logSet = useMutation({
     mutationFn: () =>

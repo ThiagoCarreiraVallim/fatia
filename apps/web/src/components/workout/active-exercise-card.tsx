@@ -21,6 +21,51 @@ function parseFirstRep(targetReps?: string): number {
   return m ? parseInt(m[0], 10) : 10;
 }
 
+/** Palpite para os campos da próxima série. `null` num campo = não mexer nele. */
+interface SetPrefill {
+  weightKg: number | null;
+  reps: number | null;
+}
+
+/**
+ * De onde sai o palpite de carga e repetições da próxima série.
+ *
+ * Gêmea de `prefillForNextSet` em
+ * `apps/mobile/src/components/workout/session/format.ts` — a paridade web↔mobile
+ * da sessão de treino foi auditada na #130 e é para continuar valendo.
+ *
+ * A ordem é: série já registrada **nesta** sessão manda, inclusive por cima do
+ * que a pessoa digitou — acabou de levantar aquilo, é o sinal mais recente que
+ * existe. Sem série nesta sessão, e enquanto ninguém tiver mexido nos campos,
+ * vale a última série do exercício numa sessão **anterior**.
+ *
+ * O recorde pessoal ficou de fora de propósito (#190). Ele é a maior carga já
+ * levantada na vida: propô-la na série de abertura ancora a pessoa no teto
+ * justamente na série fria, e um clique em "Concluir Série" grava um PR que não
+ * aconteceu — que por sua vez vira o novo teto proposto e distorce o gráfico de
+ * progresso para sempre. Sem referência anterior o certo é não sugerir nada:
+ * campo vazio é uma pergunta, campo com o número errado é uma resposta errada.
+ * O recorde continua visível ao lado do campo, como referência.
+ */
+function prefillForNextSet({
+  touched,
+  sessionLastSet,
+  previousSessionSet,
+}: {
+  touched: boolean;
+  sessionLastSet?: SessionSet | null;
+  previousSessionSet?: SessionSet | null;
+}): SetPrefill {
+  if (sessionLastSet) {
+    return { weightKg: sessionLastSet.weightKg, reps: sessionLastSet.reps };
+  }
+  if (touched) return { weightKg: null, reps: null };
+  return {
+    weightKg: previousSessionSet?.weightKg ?? null,
+    reps: previousSessionSet?.reps ?? null,
+  };
+}
+
 export function ActiveExerciseCard({
   sessionId,
   group,
@@ -34,6 +79,19 @@ export function ActiveExerciseCard({
 
   const lastSet = group.sets[group.sets.length - 1];
 
+  // A referência da vez anterior é a última série deste exercício em qualquer
+  // sessão. O endpoint devolve a série mais recente **incluindo a desta
+  // sessão** e o cliente compartilhado não expõe o `before`, daí as duas
+  // medidas: buscar uma vez só (`staleTime: Infinity`) e descartar o que for
+  // desta sessão — senão, depois da primeira série, "anterior" viraria "o que
+  // acabei de fazer".
+  const previous = useQuery({
+    queryKey: ['workout', 'last-set', group.exerciseId],
+    queryFn: () => workoutApi.getLastSet(group.exerciseId),
+    staleTime: Infinity,
+  });
+  const reference = previous.data && previous.data.sessionId !== sessionId ? previous.data : null;
+
   const pr = useQuery({
     queryKey: ['workout', 'pr', group.exerciseId],
     queryFn: () => workoutApi.getPersonalRecord(group.exerciseId),
@@ -43,26 +101,28 @@ export function ActiveExerciseCard({
     pr.data && 'weightKg' in pr.data && pr.data.weightKg != null ? pr.data.weightKg : null;
   const prReps = pr.data && 'reps' in pr.data && pr.data.reps != null ? pr.data.reps : null;
 
-  const [weight, setWeight] = useState<number>(lastSet?.weightKg ?? prWeight ?? 0);
-  const [reps, setReps] = useState<number>(
-    lastSet?.reps ?? prReps ?? parseFirstRep(group.targetReps),
-  );
+  const [weight, setWeight] = useState<number>(lastSet?.weightKg ?? 0);
+  const [reps, setReps] = useState<number>(lastSet?.reps ?? parseFirstRep(group.targetReps));
   const [touched, setTouched] = useState(false);
   const [restRemaining, setRestRemaining] = useState<number | null>(null);
   const [rpeOpen, setRpeOpen] = useState(false);
   const [pendingSet, setPendingSet] = useState<SessionSet | null>(null);
 
-  useEffect(() => {
-    if (lastSet?.weightKg != null) setWeight(lastSet.weightKg);
-    if (lastSet?.reps != null) setReps(lastSet.reps);
-  }, [lastSet?.id, lastSet?.weightKg, lastSet?.reps]);
+  // Calculado no render e não dentro do efeito para que as dependências sejam
+  // só os dois números: os objetos de série trocam de identidade a cada refetch
+  // do React Query e reescreveriam o campo por cima do que a pessoa digita.
+  const prefill = prefillForNextSet({
+    touched,
+    sessionLastSet: lastSet,
+    previousSessionSet: reference,
+  });
+  const prefillWeight = prefill.weightKg;
+  const prefillReps = prefill.reps;
 
-  // Initialize from PR only when user hasn't touched and no sets logged yet in this session
   useEffect(() => {
-    if (touched || lastSet) return;
-    if (prWeight != null) setWeight(prWeight);
-    if (prReps != null) setReps(prReps);
-  }, [prWeight, prReps, touched, lastSet]);
+    if (prefillWeight != null) setWeight(prefillWeight);
+    if (prefillReps != null) setReps(prefillReps);
+  }, [prefillWeight, prefillReps]);
 
   useEffect(() => {
     if (restRemaining == null || restRemaining <= 0) return;
@@ -130,9 +190,11 @@ export function ActiveExerciseCard({
           previous={
             lastSet?.weightKg != null
               ? `Anterior: ${lastSet.weightKg}kg`
-              : prWeight != null
-                ? `🏆 Recorde: ${prWeight}kg`
-                : undefined
+              : reference?.weightKg != null
+                ? `Anterior: ${reference.weightKg}kg`
+                : prWeight != null
+                  ? `🏆 Recorde: ${prWeight}kg`
+                  : undefined
           }
         />
         <Stepper
@@ -147,9 +209,11 @@ export function ActiveExerciseCard({
           previous={
             lastSet?.reps != null
               ? `Anterior: ${lastSet.reps} reps`
-              : prReps != null
-                ? `🏆 Recorde: ${prReps} reps`
-                : undefined
+              : reference?.reps != null
+                ? `Anterior: ${reference.reps} reps`
+                : prReps != null
+                  ? `🏆 Recorde: ${prReps} reps`
+                  : undefined
           }
         />
       </div>
