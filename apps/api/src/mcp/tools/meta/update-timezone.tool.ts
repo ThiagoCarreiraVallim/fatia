@@ -14,7 +14,7 @@ export class UpdateTimezoneTool implements McpToolDef {
   constructor(private readonly prisma: PrismaService) {}
   readonly name = 'update_timezone';
   readonly title = 'Atualizar fuso horário';
-  readonly annotations = { destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false };
   readonly description = 'Atualiza o fuso horário do usuário (IANA, ex.: "America/Sao_Paulo").';
   readonly inputSchema = {
     timezone: z

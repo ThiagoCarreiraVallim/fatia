@@ -16,7 +16,7 @@ export class GetLastSetForExerciseTool implements McpToolDef {
 
   readonly title = 'Última série do exercício';
 
-  readonly annotations = { readOnlyHint: true };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false };
   readonly description =
     'Retorna a última série registrada para um exercício, útil para sugerir carga do próximo treino.';
   readonly inputSchema = {

@@ -15,7 +15,7 @@ export class ExportMyDataTool implements McpToolDef {
 
   readonly title = 'Exportar meus dados';
 
-  readonly annotations = { readOnlyHint: true };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false };
   readonly description =
     'Exporta TODOS os dados do usuário em JSON: perfil, metas, refeições e itens, treinos e séries, peso, passos, hidratação, e os alimentos e exercícios custom que ele criou. Use quando o usuário pedir uma cópia dos seus dados, quiser levá-los para outro app, ou antes de apagar a conta. O retorno pode ser grande — resuma para o usuário em vez de despejar o JSON inteiro.';
   readonly inputSchema = {} as const;

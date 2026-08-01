@@ -15,7 +15,7 @@ export class GetActiveWorkoutSessionTool implements McpToolDef {
 
   readonly title = 'Ver treino em andamento';
 
-  readonly annotations = { readOnlyHint: true };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false };
   readonly description = 'Retorna a sessão de treino ativa (ainda não finalizada), se houver.';
   readonly inputSchema = {} as const;
 

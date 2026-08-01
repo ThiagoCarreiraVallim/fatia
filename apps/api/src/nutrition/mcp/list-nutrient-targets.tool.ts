@@ -12,7 +12,7 @@ export class ListNutrientTargetsTool implements McpToolDef {
   constructor(private readonly targets: NutrientTargetService) {}
   readonly name = 'list_nutrient_targets';
   readonly title = 'Listar metas de nutrientes';
-  readonly annotations = { readOnlyHint: true };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false };
   readonly description = 'Lista as metas de nutrientes personalizadas do usuário.';
   readonly inputSchema = {} as const;
   execute(_input: Record<string, never>, { userId }: McpToolContext) {

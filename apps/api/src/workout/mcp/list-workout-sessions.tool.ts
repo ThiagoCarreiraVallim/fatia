@@ -16,7 +16,7 @@ export class ListWorkoutSessionsTool implements McpToolDef {
 
   readonly title = 'Listar sessões de treino';
 
-  readonly annotations = { readOnlyHint: true };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false };
   readonly description = 'Lista as sessões de treino do usuário com paginação por cursor.';
   readonly inputSchema = {
     date: z.string().optional().describe('Filtrar por data no formato YYYY-MM-DD (UTC)'),

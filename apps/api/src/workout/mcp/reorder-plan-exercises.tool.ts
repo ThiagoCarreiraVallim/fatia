@@ -16,7 +16,7 @@ export class ReorderPlanExercisesTool implements McpToolDef {
 
   readonly title = 'Reordenar exercícios do plano';
 
-  readonly annotations = { destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false };
   readonly description =
     'Reordena os exercícios de um plano de treino. Envie a lista completa com as novas posições.';
   readonly inputSchema = {

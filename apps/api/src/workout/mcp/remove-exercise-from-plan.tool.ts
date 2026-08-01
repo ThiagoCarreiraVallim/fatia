@@ -16,7 +16,7 @@ export class RemoveExerciseFromPlanTool implements McpToolDef {
 
   readonly title = 'Remover exercício do plano';
 
-  readonly annotations = { destructiveHint: true };
+  readonly annotations = { readOnlyHint: false, destructiveHint: true };
   readonly description = 'Remove um exercício de um plano de treino.';
   readonly inputSchema = {
     planId: z.string().uuid().describe('ID do plano de treino'),

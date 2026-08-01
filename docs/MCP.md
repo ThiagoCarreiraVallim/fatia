@@ -67,15 +67,32 @@ Toda tool declara `title` (nome de exibição legível) e o hint aplicável. É 
 diretório de conectores da Anthropic, e é o que define quando o Claude pede confirmação
 ao usuário antes de executar.
 
-| Grupo         | Prefixos                                      | Anotação                 | Efeito no Claude   |
-| ------------- | --------------------------------------------- | ------------------------ | ------------------ |
-| Leitura       | `get_` `list_` `search_` `explain_` `export_` | `readOnlyHint: true`     | roda sem confirmar |
-| Destrutiva    | `delete_` + `remove_exercise_from_plan`       | `destructiveHint: true`  | sempre confirma    |
-| Escrita comum | os demais                                     | `destructiveHint: false` | roda sem confirmar |
+| Grupo         | Prefixos                                      | `readOnlyHint` | `destructiveHint` | Efeito no Claude   |
+| ------------- | --------------------------------------------- | -------------- | ----------------- | ------------------ |
+| Leitura       | `get_` `list_` `search_` `explain_` `export_` | `true`         | `false`           | roda sem confirmar |
+| Destrutiva    | `delete_` + `remove_exercise_from_plan`       | `false`        | `true`            | sempre confirma    |
+| Escrita comum | os demais                                     | `false`        | `false`           | roda sem confirmar |
 
-⚠️ O `destructiveHint: false` das escritas comuns é **explícito de propósito**. Na spec MCP
-o default é `true` quando `readOnlyHint` é falso — omitir faria o Claude pedir confirmação
-a cada refeição ou série registrada, o que inviabiliza o uso conversacional.
+⚠️ Os dois hints são declarados **sempre**, nunca omitidos. Dois motivos:
+
+1. Na spec MCP, `destructiveHint` tem default `true` quando `readOnlyHint` é falso — omitir
+   numa escrita comum faria o Claude pedir confirmação a cada refeição registrada.
+2. O validador do portal de submissão exige `readOnlyHint` presente em toda tool, inclusive
+   nas de escrita, onde o valor é `false`.
+
+### Schemas de input não podem emitir `$ref`
+
+Reusar a **mesma instância** de schema Zod em dois campos do mesmo input faz o conversor
+deduplicar por identidade de objeto:
+
+```json
+"primaryMuscles":   { "type": "array", "items": { ... } },
+"secondaryMuscles": { "$ref": "#/properties/primaryMuscles" }
+```
+
+É JSON Schema válido, mas cliente que não resolve `$ref` enxerga o campo **sem tipo** — o
+portal de submissão reporta `Parameters missing type`. Quando um schema é compartilhado
+entre campos, exponha-o como **fábrica** (`muscleListSchema()`), não como constante.
 
 `remove_exercise_from_plan` é destrutiva apesar do prefixo: desfaz o vínculo e perde as
 séries e repetições configuradas para aquele exercício no plano.

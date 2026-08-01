@@ -16,7 +16,7 @@ export class FinishWorkoutSessionTool implements McpToolDef {
 
   readonly title = 'Finalizar treino';
 
-  readonly annotations = { destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false };
   readonly description =
     'Finaliza uma sessão de treino em andamento, registrando o horário de conclusão.';
   readonly inputSchema = {

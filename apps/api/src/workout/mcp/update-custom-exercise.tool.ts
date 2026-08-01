@@ -17,7 +17,7 @@ export class UpdateCustomExerciseTool implements McpToolDef {
 
   readonly title = 'Atualizar exercício personalizado';
 
-  readonly annotations = { destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false };
   readonly description =
     "Updates/enriches an exercise (the user's custom one OR a catalog exercise). " +
     'Use it to translate content to Portuguese (name, equipment, instructions) and to add ' +
@@ -29,8 +29,8 @@ export class UpdateCustomExerciseTool implements McpToolDef {
     muscleGroup: muscleGroupSchema
       .optional()
       .describe('Grupo (pt): peito, costas, pernas, ombro, braço, core, cardio.'),
-    primaryMuscles: muscleListSchema.optional(),
-    secondaryMuscles: muscleListSchema.optional(),
+    primaryMuscles: muscleListSchema().optional(),
+    secondaryMuscles: muscleListSchema().optional(),
     equipment: z
       .string()
       .max(100)

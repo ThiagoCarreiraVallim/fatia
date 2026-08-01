@@ -12,7 +12,7 @@ export class GetNutritionGoalsTool implements McpToolDef {
   constructor(private readonly goals: UserGoalsService) {}
   readonly name = 'get_nutrition_goals';
   readonly title = 'Ver metas nutricionais';
-  readonly annotations = { readOnlyHint: true };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false };
   readonly description = 'Retorna as metas nutricionais do usuário.';
   readonly inputSchema = {} as const;
   execute(_input: unknown, { userId }: McpToolContext) {

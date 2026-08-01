@@ -16,7 +16,7 @@ export class GetExerciseDetailsTool implements McpToolDef {
 
   readonly title = 'Ver detalhes do exercício';
 
-  readonly annotations = { readOnlyHint: true };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false };
   readonly description =
     'Retorna os detalhes completos de um exercício: nome, músculos primários e secundários, equipamento, nível, mecânica e passos de execução. Use quando já tiver o ID; para buscar por nome, use search_exercise ou explain_form.';
   readonly inputSchema = {

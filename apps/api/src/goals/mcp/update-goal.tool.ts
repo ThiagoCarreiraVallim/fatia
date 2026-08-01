@@ -14,7 +14,7 @@ export class UpdateGoalTool implements McpToolDef {
   constructor(private readonly goals: GoalsService) {}
   readonly name = 'update_goal';
   readonly title = 'Atualizar meta';
-  readonly annotations = { destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false };
   readonly description =
     'Atualiza uma meta pessoal. Use `lastReportedValue` para reportar progresso manual em metas de tipo `body_fat` ou `custom`.';
   readonly inputSchema = {

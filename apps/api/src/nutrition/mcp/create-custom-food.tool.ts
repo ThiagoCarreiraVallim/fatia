@@ -13,7 +13,7 @@ export class CreateCustomFoodTool implements McpToolDef {
   constructor(private readonly foods: FoodService) {}
   readonly name = 'create_custom_food';
   readonly title = 'Criar alimento personalizado';
-  readonly annotations = { destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false };
   readonly description = 'Cria um alimento custom para o usuário.';
   readonly inputSchema = {
     name: z.string().min(1).max(160).describe('Nome do alimento (ex.: "Whey chocolate marca X")'),

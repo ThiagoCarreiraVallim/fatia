@@ -16,7 +16,7 @@ export class UpdatePlanExerciseTool implements McpToolDef {
 
   readonly title = 'Atualizar exercício do plano';
 
-  readonly annotations = { destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false };
   readonly description =
     'Atualiza séries, reps ou notas de um exercício dentro de um plano de treino.';
   readonly inputSchema = {

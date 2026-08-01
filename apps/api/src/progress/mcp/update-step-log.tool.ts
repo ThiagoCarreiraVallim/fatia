@@ -13,7 +13,7 @@ export class UpdateStepLogTool implements McpToolDef {
   constructor(private readonly steps: StepLogService) {}
   readonly name = 'update_step_log';
   readonly title = 'Atualizar registro de passos';
-  readonly annotations = { destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false };
   readonly description = 'Atualiza um log de passos específico (corrige valor, data ou notas).';
   readonly inputSchema = {
     stepLogId: z.string().uuid().describe('ID do registro de passos a atualizar'),
