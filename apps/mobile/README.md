@@ -185,16 +185,82 @@ Com o Metro rodando, as teclas `a` e `i` fazem o mesmo.
 
 ## Development build
 
-Necessário quando você quiser o deep link `fatia://` de verdade, ou testar algo
-que o Expo Go não cobre:
+Necessário em três situações: quando o Expo Go da loja não alcança o SDK do
+projeto (acontece em Android mais antigo, onde a loja serve o último APK
+compatível com o aparelho), quando você quer o deep link `fatia://` de verdade,
+ou para testar algo que o Expo Go não cobre.
+
+O build vira o seu "Expo Go particular": instala uma vez e depois o ciclo é o
+mesmo, com `--dev-client`.
+
+### Local, sem conta em serviço nenhum
+
+Precisa de **JDK 17** e do SDK do Android. Não precisa do Android Studio inteiro
+— as ferramentas de linha de comando bastam, e nada disso exige root:
+
+```bash
+# JDK 17. O Java do sistema costuma ser mais novo, e o Gradle do React Native
+# não roda nele.
+mkdir -p ~/Android/toolchain && cd ~/Android/toolchain
+curl -fL -o jdk17.tar.gz \
+  "https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse"
+tar -xzf jdk17.tar.gz && rm jdk17.tar.gz
+
+# SDK do Android (~1 GB, contra ~8 GB do Android Studio)
+mkdir -p ~/Android/Sdk/cmdline-tools && cd ~/Android/Sdk/cmdline-tools
+curl -fsL -o cmdline.zip \
+  "https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip"
+unzip -q cmdline.zip && rm cmdline.zip && mv cmdline-tools latest
+```
+
+Depois, no seu shell (`~/.zshrc`, ou um arquivo em `~/.config/fish/conf.d/`):
+
+```bash
+export JAVA_HOME="$HOME/Android/toolchain/jdk-17.0.20+8"   # confira o nome exato
+export ANDROID_HOME="$HOME/Android/Sdk"
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+```
+
+Abra um terminal novo e instale os pacotes:
+
+```bash
+yes | sdkmanager --licenses
+sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+```
+
+O projeto usa `compileSdk 36` e `minSdk 24`. O Gradle baixa sozinho o que faltar
+na primeira compilação (build-tools 35 e CMake, entre outros).
+
+Então, com o celular conectado por USB e a **depuração USB** ligada:
+
+```bash
+adb devices                              # tem que listar o aparelho
+pnpm --filter @fatia/mobile android      # compila, instala e abre
+```
+
+A primeira compilação leva de 5 a 15 minutos. As seguintes são rápidas, e
+mudança só de JavaScript nem recompila — basta o Metro:
+
+```bash
+pnpm --filter @fatia/mobile start --dev-client
+```
+
+> **`adb devices` mostra `no permissions`?** Faltam as regras de udev. No Arch e
+> derivados: `sudo pacman -S android-udev`, depois `sudo usermod -aG adbusers $USER`
+> e reinicie a sessão. Em Debian/Ubuntu o pacote é `android-sdk-platform-tools-common`.
+> É o único passo deste caminho que precisa de root.
+
+### Pela EAS, na nuvem
+
+Se preferir não montar toolchain local. Exige conta Expo (gratuita) e `eas init`
+uma vez, que grava o `projectId`:
 
 ```bash
 pnpm --filter @fatia/mobile exec eas build --profile development --platform android
 ```
 
-Instale o `.apk` gerado e rode `pnpm --filter @fatia/mobile start --dev-client`.
-
-Exige conta Expo (gratuita) e `eas init` uma vez, que grava o `projectId`.
+Instale o `.apk` que sai e siga com `--dev-client`, igual.
 
 ---
 
