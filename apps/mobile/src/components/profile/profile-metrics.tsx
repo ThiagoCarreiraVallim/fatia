@@ -35,7 +35,9 @@ export function ProfileMetrics({ onEditHeight }: { onEditHeight: () => void }) {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Editar estatura"
-        accessibilityHint={height ? `Atualmente ${Math.round(height)} centímetros` : 'Não informada'}
+        accessibilityHint={
+          height ? `Atualmente ${Math.round(height)} centímetros` : 'Não informada'
+        }
         onPress={onEditHeight}
         className="min-h-[44px] flex-1 rounded-2xl border border-border bg-card p-4 active:opacity-80"
       >

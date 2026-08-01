@@ -110,7 +110,9 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
               ) : null}
 
               <View className="flex-row flex-wrap gap-2">
-                {exercise.level ? <Badge>{LEVEL_LABEL[exercise.level] ?? exercise.level}</Badge> : null}
+                {exercise.level ? (
+                  <Badge>{LEVEL_LABEL[exercise.level] ?? exercise.level}</Badge>
+                ) : null}
                 {exercise.mechanic ? (
                   <Badge>{MECHANIC_LABEL[exercise.mechanic] ?? exercise.mechanic}</Badge>
                 ) : null}

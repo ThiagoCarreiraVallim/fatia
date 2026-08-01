@@ -4,12 +4,7 @@ import { useMutation, useQueries, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Clock, Dumbbell, Play, Plus } from 'lucide-react-native';
-import {
-  findQuickTemplate,
-  isCardioExercise,
-  workoutApi,
-  type Exercise,
-} from '@fatia/api-client';
+import { findQuickTemplate, isCardioExercise, workoutApi, type Exercise } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { Button, EmptyState, Input, LoadingState } from '@/components/ui';
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';

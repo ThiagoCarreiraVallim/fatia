@@ -93,14 +93,14 @@ fora do nosso alcance. No app nativo **não existe servidor**: o token é guarda
 
 O que isso acrescenta ao modelo:
 
-| Vetor novo                     | Mitigação                                                                                                                        |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| Leitura do token por outro app | Keychain (iOS) / Keystore (Android) via `expo-secure-store`. **Nunca `AsyncStorage`**, que é texto plano no sandbox                |
-| Token em backup do aparelho    | `WHEN_UNLOCKED_THIS_DEVICE_ONLY` — o token não sai do aparelho nem por backup do iCloud                                            |
-| Leitura com a tela bloqueada   | mesma opção: o item só é legível com o aparelho destravado                                                                        |
+| Vetor novo                     | Mitigação                                                                                                                           |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Leitura do token por outro app | Keychain (iOS) / Keystore (Android) via `expo-secure-store`. **Nunca `AsyncStorage`**, que é texto plano no sandbox                 |
+| Token em backup do aparelho    | `WHEN_UNLOCKED_THIS_DEVICE_ONLY` — o token não sai do aparelho nem por backup do iCloud                                             |
+| Leitura com a tela bloqueada   | mesma opção: o item só é legível com o aparelho destravado                                                                          |
 | Captura da senha pelo app      | login no navegador do sistema (`ASWebAuthenticationSession` / Custom Tabs). **Nunca WebView embutida**, onde o app leria o digitado |
-| Interceptação do `code`        | PKCE S256 obrigatório; cliente público, sem `client_secret` — que num app distribuído seria extraível de qualquer forma            |
-| Deep link sequestrado          | o `code` sozinho não vale nada sem o `code_verifier`, que nunca sai do processo                                                    |
+| Interceptação do `code`        | PKCE S256 obrigatório; cliente público, sem `client_secret` — que num app distribuído seria extraível de qualquer forma             |
+| Deep link sequestrado          | o `code` sozinho não vale nada sem o `code_verifier`, que nunca sai do processo                                                     |
 
 **Não mitigado:**
 

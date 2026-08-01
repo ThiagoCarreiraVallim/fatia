@@ -171,10 +171,7 @@ export function NewGoalDrawer({ open, onClose }: { open: boolean; onClose: () =>
                   )}
                 >
                   <Text
-                    className={cn(
-                      'text-xs font-bold',
-                      active ? 'text-primary' : 'text-foreground',
-                    )}
+                    className={cn('text-xs font-bold', active ? 'text-primary' : 'text-foreground')}
                   >
                     {option.label}
                   </Text>

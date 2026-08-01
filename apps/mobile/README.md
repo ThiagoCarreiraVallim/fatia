@@ -65,7 +65,7 @@ No console do Logto (`https://logto-admin.fat.ia.br` em produção,
 > `fatia://` — ele usa um endereço `exp://` com o IP da sua máquina, que muda de
 > rede para rede. Ao tocar em "Entrar", o app imprime no terminal do Metro a
 > linha `[auth] redirect_uri: ...`. Copie exatamente esse valor e acrescente-o
-> aos Redirect URIs da Application. Um *development build* (abaixo) dispensa
+> aos Redirect URIs da Application. Um _development build_ (abaixo) dispensa
 > isso, porque aí o `fatia://` vale de verdade.
 
 ### 2. Contas de desenvolvedor, só para distribuir
@@ -80,12 +80,12 @@ Para rodar localmente, não.
 
 `apps/mobile/.env` (copiado de `.env.example`):
 
-| Variável                     | O que é                                | Padrão do exemplo            |
-| ---------------------------- | -------------------------------------- | ---------------------------- |
-| `EXPO_PUBLIC_API_URL`        | base da API                            | `https://api.fat.ia.br`      |
-| `EXPO_PUBLIC_LOGTO_ENDPOINT` | servidor OIDC                          | `https://auth.fat.ia.br`     |
-| `EXPO_PUBLIC_LOGTO_AUDIENCE` | identificador do recurso (audience)    | `https://api.fat.ia.br`      |
-| `EXPO_PUBLIC_LOGTO_APP_ID`   | App ID da Application Native           | **vazio — você preenche**    |
+| Variável                     | O que é                             | Padrão do exemplo         |
+| ---------------------------- | ----------------------------------- | ------------------------- |
+| `EXPO_PUBLIC_API_URL`        | base da API                         | `https://api.fat.ia.br`   |
+| `EXPO_PUBLIC_LOGTO_ENDPOINT` | servidor OIDC                       | `https://auth.fat.ia.br`  |
+| `EXPO_PUBLIC_LOGTO_AUDIENCE` | identificador do recurso (audience) | `https://api.fat.ia.br`   |
+| `EXPO_PUBLIC_LOGTO_APP_ID`   | App ID da Application Native        | **vazio — você preenche** |
 
 Tudo em `EXPO_PUBLIC_*` é inlinado no bundle e legível por quem baixar o app.
 **Nenhum segredo entra aí.** O App ID do Logto é público por desenho: cliente
@@ -178,14 +178,14 @@ de renderização — a verificação de interface é a
 
 ## Quando der errado
 
-| Sintoma                                              | Causa provável                                                                                              |
-| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Tela de login diz "Configuração incompleta"          | falta `.env`, ou o Metro não foi reiniciado depois de editá-lo                                              |
+| Sintoma                                                   | Causa provável                                                                                                 |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Tela de login diz "Configuração incompleta"               | falta `.env`, ou o Metro não foi reiniciado depois de editá-lo                                                 |
 | Login abre o navegador e volta com `invalid_redirect_uri` | o redirect não está cadastrado no Logto. Veja a linha `[auth] redirect_uri:` no terminal do Metro e cadastre-a |
-| Login volta, mas toda tela dá erro de sessão         | `EXPO_PUBLIC_LOGTO_AUDIENCE` diferente do `LOGTO_AUDIENCE` da API — o match é exato, inclusive barra final   |
-| QR Code não conecta                                  | celular e computador em redes diferentes, ou firewall bloqueando a porta 8081                               |
-| `Unable to resolve module` depois de trocar de branch | `pnpm install` e depois `pnpm --filter @fatia/mobile start --clear`                                          |
-| Estilo não aplica (tela sem cor)                     | cache do Metro. `pnpm --filter @fatia/mobile start --clear`                                                  |
+| Login volta, mas toda tela dá erro de sessão              | `EXPO_PUBLIC_LOGTO_AUDIENCE` diferente do `LOGTO_AUDIENCE` da API — o match é exato, inclusive barra final     |
+| QR Code não conecta                                       | celular e computador em redes diferentes, ou firewall bloqueando a porta 8081                                  |
+| `Unable to resolve module` depois de trocar de branch     | `pnpm install` e depois `pnpm --filter @fatia/mobile start --clear`                                            |
+| Estilo não aplica (tela sem cor)                          | cache do Metro. `pnpm --filter @fatia/mobile start --clear`                                                    |
 
 ---
 

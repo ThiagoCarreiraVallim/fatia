@@ -30,20 +30,20 @@ Próximos passos:
 
 ## Documentação
 
-| Arquivo                                        | Conteúdo                                                                           |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------- |
-| [`docs/ONBOARDING.md`](docs/ONBOARDING.md)     | Setup local, scripts, modos de desenvolvimento, troubleshooting                    |
-| [`docs/LOCAL_AUTH.md`](docs/LOCAL_AUTH.md)     | Logto local: tenant, apps, API resource, `.env`                                    |
-| [`docs/MCP_LOCAL.md`](docs/MCP_LOCAL.md)       | Registrar o MCP local no Claude Desktop / Code / clientes open-source + smoke test |
-| [`docs/PRD.md`](docs/PRD.md)                   | Product Requirements — o que é o produto, escopo, não-escopo                       |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Arquitetura técnica, stack, decisões                                               |
-| [`docs/DESIGN.md`](docs/DESIGN.md)             | UX, telas do PWA, fluxos                                                           |
-| [`apps/mobile/README.md`](apps/mobile/README.md) | Rodar o app nativo localmente, configuração, troubleshooting                     |
-| [`docs/MOBILE_PARITY.md`](docs/MOBILE_PARITY.md) | Paridade entre o app nativo e o PWA, rota a rota e componente a componente      |
-| [`docs/MCP.md`](docs/MCP.md)                   | Especificação das tools MCP expostas                                               |
-| [`docs/CLAUDE.md`](docs/CLAUDE.md)             | Instruções para o Claude trabalhando no código                                     |
-| [`docs/TASKS.md`](docs/TASKS.md)               | Ponteiro para o planejamento, que vive nas Issues                                  |
-| [`docs/ADR/`](docs/ADR/)                       | Architecture Decision Records                                                      |
+| Arquivo                                          | Conteúdo                                                                           |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| [`docs/ONBOARDING.md`](docs/ONBOARDING.md)       | Setup local, scripts, modos de desenvolvimento, troubleshooting                    |
+| [`docs/LOCAL_AUTH.md`](docs/LOCAL_AUTH.md)       | Logto local: tenant, apps, API resource, `.env`                                    |
+| [`docs/MCP_LOCAL.md`](docs/MCP_LOCAL.md)         | Registrar o MCP local no Claude Desktop / Code / clientes open-source + smoke test |
+| [`docs/PRD.md`](docs/PRD.md)                     | Product Requirements — o que é o produto, escopo, não-escopo                       |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)   | Arquitetura técnica, stack, decisões                                               |
+| [`docs/DESIGN.md`](docs/DESIGN.md)               | UX, telas do PWA, fluxos                                                           |
+| [`apps/mobile/README.md`](apps/mobile/README.md) | Rodar o app nativo localmente, configuração, troubleshooting                       |
+| [`docs/MOBILE_PARITY.md`](docs/MOBILE_PARITY.md) | Paridade entre o app nativo e o PWA, rota a rota e componente a componente         |
+| [`docs/MCP.md`](docs/MCP.md)                     | Especificação das tools MCP expostas                                               |
+| [`docs/CLAUDE.md`](docs/CLAUDE.md)               | Instruções para o Claude trabalhando no código                                     |
+| [`docs/TASKS.md`](docs/TASKS.md)                 | Ponteiro para o planejamento, que vive nas Issues                                  |
+| [`docs/ADR/`](docs/ADR/)                         | Architecture Decision Records                                                      |
 
 ## Estrutura
 

@@ -14,11 +14,7 @@ export function RecentGoalRow({ goal }: { goal: Goal }) {
           done ? 'bg-accent' : 'bg-secondary'
         }`}
       >
-        {done ? (
-          <CheckCircle2 size={18} color="#2ce500" />
-        ) : (
-          <History size={16} color="#baccaf" />
-        )}
+        {done ? <CheckCircle2 size={18} color="#2ce500" /> : <History size={16} color="#baccaf" />}
       </View>
       <View className="min-w-0 flex-1">
         <Text numberOfLines={1} className="text-sm font-bold text-foreground">

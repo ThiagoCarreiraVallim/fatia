@@ -260,13 +260,13 @@ está em [`apps/mobile/README.md`](../apps/mobile/README.md).
 
 ### Pré-requisitos, uma vez só
 
-| O quê                    | Onde                                  | Custo             |
-| ------------------------ | ------------------------------------- | ----------------- |
-| Conta Expo               | expo.dev                              | grátis            |
-| `eas init` no projeto    | grava `projectId` em `app.config.ts`  | —                 |
-| Apple Developer Program  | developer.apple.com                   | US$ 99/ano        |
-| Google Play Console      | play.google.com/console               | US$ 25, uma vez   |
-| Application Native no Logto | console do Logto                   | —                 |
+| O quê                       | Onde                                 | Custo           |
+| --------------------------- | ------------------------------------ | --------------- |
+| Conta Expo                  | expo.dev                             | grátis          |
+| `eas init` no projeto       | grava `projectId` em `app.config.ts` | —               |
+| Apple Developer Program     | developer.apple.com                  | US$ 99/ano      |
+| Google Play Console         | play.google.com/console              | US$ 25, uma vez |
+| Application Native no Logto | console do Logto                     | —               |
 
 **Nenhuma credencial de assinatura entra no repositório.** Certificados e keystores
 são geridos pelo EAS (`eas credentials`). O `eas.json` versionado tem só perfis de
@@ -275,11 +275,11 @@ legíveis por qualquer pessoa que baixe o app de qualquer forma.
 
 ### Perfis
 
-| Perfil        | Para quê                             | Distribuição            | Artefato Android |
-| ------------- | ------------------------------------ | ----------------------- | ---------------- |
-| `development` | dev client, deep link `fatia://` real | interna                 | `.apk`           |
-| `preview`     | testar antes de publicar             | interna                 | `.apk`           |
-| `production`  | loja                                 | TestFlight / Play       | `.aab`           |
+| Perfil        | Para quê                              | Distribuição      | Artefato Android |
+| ------------- | ------------------------------------- | ----------------- | ---------------- |
+| `development` | dev client, deep link `fatia://` real | interna           | `.apk`           |
+| `preview`     | testar antes de publicar              | interna           | `.apk`           |
+| `production`  | loja                                  | TestFlight / Play | `.aab`           |
 
 ### Publicar
 

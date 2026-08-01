@@ -167,7 +167,12 @@ export default function PlanDetailScreen() {
 
   return (
     <ExerciseDetailHost>
-      <Screen back title="Plano" refreshing={plan.isRefetching} onRefresh={() => void plan.refetch()}>
+      <Screen
+        back
+        title="Plano"
+        refreshing={plan.isRefetching}
+        onRefresh={() => void plan.refetch()}
+      >
         <View className="gap-4 px-5 pb-4 pt-2">
           <View className="flex-row items-center gap-2">
             {editingName ? (

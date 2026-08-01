@@ -70,7 +70,9 @@ export default function WorkoutHistoryScreen() {
         {sessions.data && sessions.data.length === 0 ? (
           <EmptyState title="Nenhum treino registrado ainda." />
         ) : null}
-        {sessions.data?.map((s) => <SessionRow key={s.id} session={s} />)}
+        {sessions.data?.map((s) => (
+          <SessionRow key={s.id} session={s} />
+        ))}
       </View>
     </Screen>
   );
