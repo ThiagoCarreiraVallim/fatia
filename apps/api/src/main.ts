@@ -32,11 +32,20 @@ async function bootstrap() {
     }),
   );
 
+  // ATENÇÃO: `exclude` casa a rota EXATA — não cobre sub-caminhos. Rota nova
+  // que precise viver fora do prefixo tem de entrar aqui explicitamente, senão
+  // sobe em `/api/...` e some do lugar onde o cliente procura. Já aconteceu com
+  // `/.well-known/oauth-protected-resource/mcp`, que o WWW-Authenticate anuncia:
+  // o cabeçalho apontava para uma URL que respondia 404.
   app.setGlobalPrefix('api', {
     exclude: [
       '/health',
       '/mcp',
+      '/favicon.ico',
       '/.well-known/oauth-protected-resource',
+      // Caminho path-específico da RFC 9728, para o recurso `/mcp`. É o que o
+      // WWW-Authenticate do 401 anuncia como resource_metadata.
+      '/.well-known/oauth-protected-resource/mcp',
       '/.well-known/oauth-authorization-server',
       '/oauth/register',
       '/oauth/authorize',
