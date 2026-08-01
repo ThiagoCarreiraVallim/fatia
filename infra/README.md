@@ -48,10 +48,14 @@ opcional para storage S3-compatível.
 
 Variáveis: `BACKUP_DIR`, `RETENTION_DAYS`, `CONTAINER`, `POSTGRES_USER`,
 `BACKUP_PASSPHRASE`, `S3_BUCKET`, `S3_ENDPOINT`, `S3_RETENTION_DAYS`,
-`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `ALERT_WEBHOOK`.
+`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `ALERT_WEBHOOK`, `BACKUP_PING_URL`.
 
 O script **recusa enviar backup não cifrado** para offsite, aborta se o dump sair
 truncado, e sai com código 1 em qualquer falha (para o cron acusar).
+
+`ALERT_WEBHOOK` avisa que o backup **falhou**; `BACKUP_PING_URL` avisa que ele
+**parou de rodar** (cron removido, host reiniciado sem o cron). São
+complementares — ver a §7 de [`../docs/OPERATIONS.md`](../docs/OPERATIONS.md).
 
 ## Restauração
 
