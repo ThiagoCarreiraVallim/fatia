@@ -30,7 +30,16 @@ import { McpModule } from './mcp/mcp.module';
         autoLogging: { ignore: (req) => req.url === '/health' },
       },
     }),
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
+    // O limite global chaveia por IP fora do /mcp. Todo o tráfego da Anthropic
+    // sai de 160.79.104.0/21 — uma faixa compartilhada por TODOS os usuários do
+    // conector — então discovery, /oauth/register e /oauth/token de todo mundo
+    // cairiam no mesmo balde de 100/min e devolveriam 429 em massa no dia em que
+    // o conector ganhasse tração. As rotas de OAuth usam o named limiter abaixo,
+    // e o discovery é isento (JSON estático, sem banco). Ver #170.
+    ThrottlerModule.forRoot([
+      { name: 'default', ttl: 60_000, limit: 100 },
+      { name: 'oauth', ttl: 60_000, limit: 600 },
+    ]),
     CommonModule,
     HealthModule,
     AuthModule,

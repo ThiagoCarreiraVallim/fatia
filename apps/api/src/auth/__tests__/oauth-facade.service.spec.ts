@@ -1,6 +1,6 @@
-import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { OAuthFacadeService } from '../oauth-facade.service';
+import { OAuthError } from '../oauth-error';
 import type { PrismaService } from '../../common/prisma.service';
 import type { ConfigService } from '@nestjs/config';
 
@@ -9,6 +9,7 @@ type MockPrisma = {
     create: jest.Mock;
     findUnique: jest.Mock;
     update: jest.Mock;
+    deleteMany: jest.Mock;
   };
   mcpOAuthAuthorization: {
     create: jest.Mock;
@@ -18,7 +19,13 @@ type MockPrisma = {
 };
 
 const makePrisma = (): MockPrisma => ({
-  mcpOAuthClient: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
+  mcpOAuthClient: {
+    create: jest.fn(),
+    findUnique: jest.fn(),
+    update: jest.fn(),
+    // `registerClient` poda clientes DCR abandonados (#170, ADR 011).
+    deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+  },
   mcpOAuthAuthorization: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
 });
 
@@ -52,14 +59,12 @@ describe('OAuthFacadeService', () => {
 
   describe('registerClient (Dynamic Client Registration)', () => {
     it('rejects when redirect_uris is empty', async () => {
-      await expect(service.registerClient({ redirectUris: [] })).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(service.registerClient({ redirectUris: [] })).rejects.toThrow(OAuthError);
     });
 
     it('rejects when any redirect_uri is not a valid URL', async () => {
       await expect(service.registerClient({ redirectUris: ['not-a-url'] })).rejects.toThrow(
-        BadRequestException,
+        OAuthError,
       );
     });
 
@@ -103,7 +108,7 @@ describe('OAuthFacadeService', () => {
           },
           'https://api.example.com/oauth/callback',
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow(OAuthError);
     });
 
     it('rejects when redirect_uri was not registered for this client', async () => {
@@ -121,7 +126,7 @@ describe('OAuthFacadeService', () => {
           },
           'https://api.example.com/oauth/callback',
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow(OAuthError);
     });
 
     it('rejects when code_challenge is missing (PKCE is mandatory)', async () => {
@@ -180,9 +185,7 @@ describe('OAuthFacadeService', () => {
     it('rejects unknown state', async () => {
       prisma.mcpOAuthAuthorization.findUnique.mockResolvedValue(null);
 
-      await expect(service.handleCallback('bogus', 'logto-code')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(service.handleCallback('bogus', 'logto-code')).rejects.toThrow(OAuthError);
     });
 
     it('rejects expired authorization requests', async () => {
@@ -258,7 +261,7 @@ describe('OAuthFacadeService', () => {
 
       await expect(
         service.exchangeCode(validParams, 'https://api.example.com/oauth/callback'),
-      ).rejects.toThrow(UnauthorizedException);
+      ).rejects.toThrow(OAuthError);
     });
 
     it('rejects already-used codes', async () => {
@@ -356,7 +359,7 @@ describe('OAuthFacadeService', () => {
       expect(prisma.mcpOAuthClient.update).toHaveBeenCalled();
     });
 
-    it('throws UnauthorizedException when Logto returns a non-ok response', async () => {
+    it('throws OAuthError when Logto returns a non-ok response', async () => {
       prisma.mcpOAuthAuthorization.findUnique.mockResolvedValue(validRow);
       fetchMock.mockResolvedValue({
         ok: false,

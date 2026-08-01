@@ -1,6 +1,6 @@
 import { Controller, Get, Req } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
+import { SkipThrottle } from '@nestjs/throttler';
 import { Public } from '../common/decorators/public.decorator';
 
 /**
@@ -8,17 +8,35 @@ import { Public } from '../common/decorators/public.decorator';
  * (com DCR) e federa pro Logto internamente. Claude (web/mobile) só
  * enxerga estes endpoints — o Logto fica invisível para o cliente.
  */
+// Isento do throttle: são dois JSONs estáticos, sem banco e sem custo. Limitar
+// por IP aqui só serviria para bloquear o discovery de todos os usuários do
+// conector de uma vez, já que o egress da Anthropic é uma faixa compartilhada.
+@SkipThrottle()
 @Controller('.well-known')
 export class OAuthDiscoveryController {
-  constructor(private readonly config: ConfigService) {}
-
+  /**
+   * Metadata do protected resource (RFC 9728).
+   *
+   * O campo `resource` tem de bater **exatamente** com a URL que a pessoa digita
+   * no Claude, path incluído — é exigência explícita da doc de conectores. Nosso
+   * recurso protegido é o `/mcp`, então é isso que vai aqui.
+   *
+   * ⚠️ Não confundir com `LOGTO_AUDIENCE`, que é o identifier do API Resource no
+   * Logto e vira o `aud` do JWT. Os dois são strings opacas diferentes: uma
+   * identifica o recurso para o cliente, a outra identifica a audiência para o
+   * IdP. Devolver o audience aqui — como fazíamos — publicava
+   * `https://api.fat.ia.br` enquanto o usuário digitava
+   * `https://api.fat.ia.br/mcp`, e a divergência reprova no review.
+   *
+   * Servido nos dois caminhos: o path-específico da RFC 9728 (que é o que o
+   * cliente deriva de `/mcp`) e a raiz, para clientes que só olham lá.
+   */
   @Public()
-  @Get('oauth-protected-resource')
+  @Get(['oauth-protected-resource', 'oauth-protected-resource/mcp'])
   oauthProtectedResource(@Req() req: Request) {
     const base = this.baseUrl(req);
-    const audience = this.config.getOrThrow<string>('LOGTO_AUDIENCE');
     return {
-      resource: audience,
+      resource: `${base}/mcp`,
       authorization_servers: [base],
       bearer_methods_supported: ['header'],
       scopes_supported: ['read', 'write'],

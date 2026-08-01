@@ -1,8 +1,8 @@
-import { UnauthorizedException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../../common/prisma.service';
 import { OAuthFacadeService } from '../oauth-facade.service';
+import { OAuthError } from '../oauth-error';
 
 /**
  * Happy path completo do OAuth facade (issue #91), contra Postgres real.
@@ -82,6 +82,67 @@ describe('fluxo OAuth ponta a ponta (DCR → authorize → callback → token)',
     createdClientIds.push(registration.client_id);
     return registration;
   }
+
+  describe('poda de clientes DCR abandonados (#170)', () => {
+    // Com DCR o Claude registra um cliente novo a cada conexão. Em 31/07/2026 a
+    // produção tinha 69 linhas em McpOAuthClient para um punhado de usuários — a
+    // maioria de tentativas que nunca completaram o fluxo. Ver ADR 011.
+
+    /** Cria um cliente com createdAt no passado, simulando um registro antigo. */
+    async function seedOldClient(hoursAgo: number, opts: { used?: boolean } = {}) {
+      const clientId = `mcp_${randomBytes(16).toString('hex')}`;
+      createdClientIds.push(clientId);
+      await prisma.mcpOAuthClient.create({
+        data: {
+          clientId,
+          redirectUris: [CLIENT_REDIRECT],
+          createdAt: new Date(Date.now() - hoursAgo * 60 * 60 * 1000),
+          lastUsedAt: opts.used ? new Date() : null,
+        },
+      });
+      return clientId;
+    }
+
+    const exists = async (clientId: string) =>
+      (await prisma.mcpOAuthClient.count({ where: { clientId } })) === 1;
+
+    it('remove cliente antigo que nunca chegou a autorizar', async () => {
+      const abandoned = await seedOldClient(48);
+      await registerClient();
+      expect(await exists(abandoned)).toBe(false);
+    });
+
+    it('preserva cliente recente, ainda no meio de um fluxo lento', async () => {
+      // Alguém que abriu o consentimento e voltou horas depois não pode ter o
+      // registro apagado embaixo dos pés.
+      const recent = await seedOldClient(2);
+      await registerClient();
+      expect(await exists(recent)).toBe(true);
+    });
+
+    it('preserva cliente antigo que já foi usado', async () => {
+      const used = await seedOldClient(72, { used: true });
+      await registerClient();
+      expect(await exists(used)).toBe(true);
+    });
+
+    it('preserva cliente antigo que tem authorization associada', async () => {
+      const withAuth = await seedOldClient(72);
+      await prisma.mcpOAuthAuthorization.create({
+        data: {
+          clientId: withAuth,
+          state: randomBytes(8).toString('hex'),
+          clientState: 'x',
+          redirectUri: CLIENT_REDIRECT,
+          clientCodeChallenge: s256('v'),
+          logtoCodeVerifier: 'v',
+          expiresAt: new Date(Date.now() + 60_000),
+        },
+      });
+      await registerClient();
+      expect(await exists(withAuth)).toBe(true);
+    });
+  });
 
   it('completa o fluxo inteiro e devolve os tokens do Logto', async () => {
     // --- 1. Dynamic Client Registration (RFC 7591) ---
@@ -223,7 +284,8 @@ describe('fluxo OAuth ponta a ponta (DCR → authorize → callback → token)',
 
     await expect(exchange()).resolves.toBeDefined();
     // Replay do mesmo code tem de morrer no `consumedAt` gravado no banco.
-    await expect(exchange()).rejects.toThrow(UnauthorizedException);
+    await expect(exchange()).rejects.toThrow(OAuthError);
+    await expect(exchange()).rejects.toMatchObject({ code: 'invalid_grant' });
     // E não pode nem chegar ao Logto na segunda vez.
     expect(fetchMock).toHaveBeenCalledTimes(1);
   }, 30_000);
@@ -257,7 +319,7 @@ describe('fluxo OAuth ponta a ponta (DCR → authorize → callback → token)',
         },
         CALLBACK_URL,
       ),
-    ).rejects.toThrow(UnauthorizedException);
+    ).rejects.toMatchObject({ code: 'invalid_grant' });
 
     // Interceptar o code sem o verifier não deve nem tocar o Logto.
     expect(fetchMock).not.toHaveBeenCalled();
@@ -293,7 +355,7 @@ describe('fluxo OAuth ponta a ponta (DCR → authorize → callback → token)',
         },
         CALLBACK_URL,
       ),
-    ).rejects.toThrow(UnauthorizedException);
+    ).rejects.toMatchObject({ code: 'invalid_grant' });
   }, 30_000);
 
   it('recusa o callback repetido para o mesmo state', async () => {

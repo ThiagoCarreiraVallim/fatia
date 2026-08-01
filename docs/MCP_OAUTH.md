@@ -122,6 +122,18 @@ Os tokens do Logto são repassados ao cliente **sem serem armazenados**.
 
 `grant_type=refresh_token` é repassado ao Logto. O facade não guarda refresh tokens.
 
+## Exigências do diretório de conectores
+
+Além da spec MCP genérica, a doc de [authentication](https://claude.com/docs/connectors/building/authentication)
+tem pedidos específicos do Claude. Endereçados na #170:
+
+| Exigência                                                             | Como fica                                                                                                                                                                                     |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `resource` do metadata igual à URL que o usuário digita, **com path** | `/.well-known/oauth-protected-resource` e `.../mcp` devolvem `https://api.<dominio>/mcp`. Não é o `LOGTO_AUDIENCE` — aquele é o `aud` do JWT, outro conceito.                                 |
+| Erros do `/token` no formato RFC 6749                                 | `OAuthError` serializa `{ error, error_description }`. O Claude decide pelo campo `error`: com `invalid_grant` refaz o consentimento; com formato desconhecido, repete em laço.               |
+| Rate limit compatível com o egress compartilhado                      | Discovery isento; `/oauth/*` com limite próprio de 600/min. Todo o tráfego da Anthropic sai de `160.79.104.0/21`, então o balde de 100/min por IP seria estourado pelo uso legítimo agregado. |
+| DCR × CIMD                                                            | Mantido DCR, com poda de clientes abandonados. Decisão e alternativas em [ADR 011](./ADR/011-dcr-vs-cimd.md).                                                                                 |
+
 ## Variáveis de ambiente
 
 | Variável                       | Obrigatória | Para quê                                                                                                                            |

@@ -46,7 +46,10 @@ export class JwtAuthGuard implements CanActivate {
       (req.headers['x-forwarded-proto'] as string)?.split(',')[0]?.trim() || req.protocol;
     const host = req.headers['x-forwarded-host'] ?? req.headers.host;
     if (!host) return;
-    const resourceMetadata = `${proto}://${host}/.well-known/oauth-protected-resource`;
+    // Path-específico da RFC 9728: para o recurso `/mcp`, o metadata vive em
+    // `/.well-known/oauth-protected-resource/mcp`. Apontar para a raiz funciona
+    // com clientes tolerantes, mas o caminho canônico é este.
+    const resourceMetadata = `${proto}://${host}/.well-known/oauth-protected-resource/mcp`;
     const parts = [`Bearer resource_metadata="${resourceMetadata}"`];
     if (error) parts.push(`error="${error}"`);
     res.setHeader('WWW-Authenticate', parts.join(', '));

@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { OAuthError } from './oauth-error';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes, createHash } from 'node:crypto';
 import { PrismaService } from '../common/prisma.service';
@@ -51,15 +52,17 @@ export class OAuthFacadeService {
 
   async registerClient(input: { redirectUris: string[]; clientName?: string }) {
     if (!Array.isArray(input.redirectUris) || input.redirectUris.length === 0) {
-      throw new BadRequestException('redirect_uris is required');
+      throw new OAuthError('invalid_request', 'redirect_uris is required');
     }
     for (const uri of input.redirectUris) {
       try {
         new URL(uri);
       } catch {
-        throw new BadRequestException(`Invalid redirect_uri: ${uri}`);
+        throw new OAuthError('invalid_request', `Invalid redirect_uri: ${uri}`);
       }
     }
+    await this.pruneAbandonedClients();
+
     const clientId = `mcp_${randomBytes(16).toString('hex')}`;
     const client = await this.prisma.mcpOAuthClient.create({
       data: {
@@ -85,12 +88,12 @@ export class OAuthFacadeService {
     const client = await this.prisma.mcpOAuthClient.findUnique({
       where: { clientId: params.clientId },
     });
-    if (!client) throw new BadRequestException('Unknown client_id');
+    if (!client) throw new OAuthError('invalid_client', 'Unknown client_id');
     if (!client.redirectUris.includes(params.redirectUri)) {
-      throw new BadRequestException('redirect_uri not registered for this client');
+      throw new OAuthError('invalid_request', 'redirect_uri not registered for this client');
     }
     if (!params.clientCodeChallenge) {
-      throw new BadRequestException('code_challenge is required (PKCE)');
+      throw new OAuthError('invalid_request', 'code_challenge is required (PKCE)');
     }
 
     await this.pruneExpiredAuthorizations();
@@ -139,6 +142,43 @@ export class OAuthFacadeService {
    * projeto por causa de uma tabela efêmera. Se falhar, não pode derrubar o
    * login — o catch registra e segue.
    */
+  /**
+   * Remove clientes DCR abandonados.
+   *
+   * Com DCR, o Claude registra um cliente NOVO a cada conexão nova — e a doc de
+   * conectores avisa que a tabela cresce sem teto. Não é hipótese: em 31/07/2026
+   * a produção já tinha 69 linhas em `McpOAuthClient` para um punhado de
+   * usuários, a maioria de tentativas de conexão que nunca completaram.
+   *
+   * Abandonado = registrado há mais de 24h, sem nenhuma authorization associada.
+   * Um cliente que completou o fluxo tem authorization; um que nunca passou do
+   * `register` não tem, e não vai ter — o Claude registra de novo se precisar.
+   *
+   * A janela de 24h existe para não apagar um registro no meio de um fluxo lento
+   * (usuário que abre o consentimento e só volta horas depois).
+   *
+   * Oportunista no `register`, mesmo padrão da poda de authorizations: é
+   * exatamente quando a tabela cresce, e falhar aqui não pode impedir alguém de
+   * conectar.
+   */
+  private async pruneAbandonedClients(): Promise<void> {
+    try {
+      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const { count } = await this.prisma.mcpOAuthClient.deleteMany({
+        where: {
+          createdAt: { lt: cutoff },
+          lastUsedAt: null,
+          authorizations: { none: {} },
+        },
+      });
+      if (count > 0) this.logger.log(`Limpou ${count} cliente(s) DCR abandonado(s)`);
+    } catch (err) {
+      this.logger.warn(
+        `Falha ao limpar clientes DCR abandonados: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   private async pruneExpiredAuthorizations(): Promise<void> {
     try {
       const { count } = await this.prisma.mcpOAuthAuthorization.deleteMany({
@@ -154,9 +194,10 @@ export class OAuthFacadeService {
 
   async handleCallback(state: string, logtoCode: string) {
     const row = await this.prisma.mcpOAuthAuthorization.findUnique({ where: { state } });
-    if (!row) throw new BadRequestException('Unknown state');
-    if (row.expiresAt < new Date()) throw new BadRequestException('Authorization request expired');
-    if (row.logtoCode) throw new BadRequestException('Callback already consumed');
+    if (!row) throw new OAuthError('invalid_grant', 'Unknown state');
+    if (row.expiresAt < new Date())
+      throw new OAuthError('invalid_grant', 'Authorization request expired');
+    if (row.logtoCode) throw new OAuthError('invalid_grant', 'Callback already consumed');
 
     const code = randomBytes(32).toString('base64url');
     await this.prisma.mcpOAuthAuthorization.update({
@@ -174,16 +215,17 @@ export class OAuthFacadeService {
     const row = await this.prisma.mcpOAuthAuthorization.findUnique({
       where: { code: params.code },
     });
-    if (!row || !row.logtoCode) throw new UnauthorizedException('Invalid code');
-    if (row.consumedAt) throw new UnauthorizedException('Code already used');
-    if (row.expiresAt < new Date()) throw new UnauthorizedException('Code expired');
-    if (row.clientId !== params.clientId) throw new UnauthorizedException('client_id mismatch');
+    if (!row || !row.logtoCode) throw new OAuthError('invalid_grant', 'Invalid code');
+    if (row.consumedAt) throw new OAuthError('invalid_grant', 'Code already used');
+    if (row.expiresAt < new Date()) throw new OAuthError('invalid_grant', 'Code expired');
+    if (row.clientId !== params.clientId)
+      throw new OAuthError('invalid_grant', 'client_id mismatch');
     if (row.redirectUri !== params.redirectUri) {
-      throw new UnauthorizedException('redirect_uri mismatch');
+      throw new OAuthError('invalid_grant', 'redirect_uri mismatch');
     }
     const challenge = createHash('sha256').update(params.codeVerifier).digest('base64url');
     if (challenge !== row.clientCodeChallenge) {
-      throw new UnauthorizedException('PKCE verification failed');
+      throw new OAuthError('invalid_grant', 'PKCE verification failed');
     }
 
     const tokenResp = await this.callLogtoToken({

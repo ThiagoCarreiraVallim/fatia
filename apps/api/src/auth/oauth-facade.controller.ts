@@ -1,18 +1,14 @@
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  Post,
-  Query,
-  Req,
-  Res,
-} from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Query, Req, Res } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import { OAuthError } from './oauth-error';
 import type { Request, Response } from 'express';
 import { Public } from '../common/decorators/public.decorator';
 import { OAuthFacadeService } from './oauth-facade.service';
 
+// Limite próprio e generoso: o egress da Anthropic é uma faixa de IP
+// compartilhada por todos os usuários do conector, então o balde padrão de
+// 100/min por IP seria estourado pelo tráfego legítimo agregado.
+@Throttle({ oauth: { ttl: 60_000, limit: 600 } })
 @Controller('oauth')
 export class OAuthFacadeController {
   constructor(private readonly facade: OAuthFacadeService) {}
@@ -44,11 +40,12 @@ export class OAuthFacadeController {
     @Query('code_challenge') codeChallenge: string,
     @Query('code_challenge_method') codeChallengeMethod: string,
   ) {
-    if (responseType !== 'code') throw new BadRequestException('Only response_type=code supported');
-    if (!clientId) throw new BadRequestException('client_id required');
-    if (!redirectUri) throw new BadRequestException('redirect_uri required');
+    if (responseType !== 'code')
+      throw new OAuthError('invalid_request', 'Only response_type=code supported');
+    if (!clientId) throw new OAuthError('invalid_request', 'client_id required');
+    if (!redirectUri) throw new OAuthError('invalid_request', 'redirect_uri required');
     if (codeChallengeMethod !== 'S256') {
-      throw new BadRequestException('Only code_challenge_method=S256 supported');
+      throw new OAuthError('invalid_request', 'Only code_challenge_method=S256 supported');
     }
     const callback = this.callbackUrl(req);
     const { logtoAuthorizeUrl } = await this.facade.startAuthorization(
@@ -75,9 +72,12 @@ export class OAuthFacadeController {
     @Query('error_description') errorDescription: string | undefined,
   ) {
     if (error) {
-      throw new BadRequestException(`Authorization failed: ${error} ${errorDescription ?? ''}`);
+      throw new OAuthError(
+        'invalid_grant',
+        `Authorization failed: ${error} ${errorDescription ?? ''}`,
+      );
     }
-    if (!code || !state) throw new BadRequestException('Missing code or state');
+    if (!code || !state) throw new OAuthError('invalid_grant', 'Missing code or state');
     const { redirectUrl } = await this.facade.handleCallback(state, code);
     res.redirect(302, redirectUrl);
   }
@@ -101,7 +101,7 @@ export class OAuthFacadeController {
   ) {
     if (body.grant_type === 'authorization_code') {
       if (!body.code || !body.redirect_uri || !body.client_id || !body.code_verifier) {
-        throw new BadRequestException('Missing parameters for authorization_code grant');
+        throw new OAuthError('invalid_request', 'Missing parameters for authorization_code grant');
       }
       return this.facade.exchangeCode(
         {
@@ -114,14 +114,17 @@ export class OAuthFacadeController {
       );
     }
     if (body.grant_type === 'refresh_token') {
-      if (!body.refresh_token) throw new BadRequestException('refresh_token required');
+      if (!body.refresh_token) throw new OAuthError('invalid_request', 'refresh_token required');
       return this.facade.refreshToken({
         refreshToken: body.refresh_token,
         resource: body.resource,
         scope: body.scope,
       });
     }
-    throw new BadRequestException('Unsupported grant_type');
+    throw new OAuthError(
+      'unsupported_grant_type',
+      `Unsupported grant_type: ${body.grant_type ?? '(ausente)'}`,
+    );
   }
 
   private callbackUrl(req: Request): string {
