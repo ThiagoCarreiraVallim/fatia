@@ -16,6 +16,8 @@ Decisões arquiteturais relevantes do projeto. Cada ADR é imutável depois de a
 | [008](./008-logto-oidc-provider.md)                 | Logto como provider OIDC, substituindo auth manual       | Accepted             |
 | [009](./009-metas-nutricionais-personalizadas.md)   | Metas de nutrição personalizadas (nutrientes via Json)   | Accepted             |
 | [010](./010-row-level-security.md)                  | Row-Level Security no Postgres: não agora                | Accepted             |
+| [011](./011-dcr-vs-cimd.md)                         | DCR com poda de clientes abandonados, em vez de CIMD     | Accepted             |
+| [012](./012-graficos-no-mobile.md)                  | Gráficos do app nativo com react-native-svg, sem Skia    | Accepted             |
 
 ## Template
 

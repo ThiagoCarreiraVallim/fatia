@@ -87,6 +87,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const discovery = await endpoints();
       const redirectUri = AuthSession.makeRedirectUri({ scheme: 'fatia', path: REDIRECT_PATH });
 
+      // No Expo Go o redirect NÃO é `fatia://auth/callback` — é um `exp://` com
+      // o IP da máquina, que muda de rede para rede. Se ele não estiver
+      // cadastrado no Logto, o login falha com `invalid_redirect_uri` e a
+      // mensagem não diz qual URI tentou. Imprimir aqui é o caminho mais curto
+      // entre o erro e a linha a colar no console do Logto.
+      if (__DEV__) console.log('[auth] redirect_uri:', redirectUri);
+
       const request = new AuthSession.AuthRequest({
         clientId: env.logtoAppId,
         redirectUri,
