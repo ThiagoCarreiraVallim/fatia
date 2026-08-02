@@ -104,7 +104,7 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **88 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **94 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -195,6 +195,7 @@ catálogo em ~20% e infla o percentual para ~7%.
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
 catálogo real: a versão anterior desta linha afirmava 66,7 k e seguiu afirmando depois de duas
 tools novas entrarem, porque nada a conferia.
+
 ### IDs
 
 - IDs de entidades user-owned (`Meal`, `WorkoutSession`, etc): UUID string
@@ -2138,6 +2139,7 @@ usuário desistir de vez em vez de voltar.
 
 Catálogo de conquistas. Devolve as **sete** chaves sempre, desbloqueadas ou não, para o Claude
 saber o que sugerir como próximo passo.
+
 ## Grupos (B2B)
 
 Academia, personal e nutricionista entram pela [ADR 014](./ADR/014-compartilhamento-b2b-copia-e-vinculo.md).
@@ -2187,17 +2189,18 @@ idempotente: o `@@unique([userId, key])` garante que reavaliar não duplica nem 
 **Input:** _(nenhum)_
 
 **Output:** o mesmo array de `list_achievements`, já com os desbloqueios desta chamada.
-  id: string;
-  type: 'SPONSORED' | 'SOCIAL';
-  name: string;
-  slug: string;
-  role: 'OWNER' | 'PROFESSIONAL' | 'CREATOR' | 'MEMBER';
-  status: 'INVITED' | 'ACTIVE';
-  membershipId: string;
-  joinedAt: string | null;
-  createdAt: string;
+id: string;
+type: 'SPONSORED' | 'SOCIAL';
+name: string;
+slug: string;
+role: 'OWNER' | 'PROFESSIONAL' | 'CREATOR' | 'MEMBER';
+status: 'INVITED' | 'ACTIVE';
+membershipId: string;
+joinedAt: string | null;
+createdAt: string;
 }>;
-```
+
+````
 
 ### `join_group`
 
@@ -2211,7 +2214,7 @@ consentimento de leitura e não pode ser autoatribuído.
 {
   slug: string;
 }
-```
+````
 
 **Erros:** `NOT_FOUND` se o slug não existe; `CONFLICT` se já é membro ou já existe pedido
 pendente.
