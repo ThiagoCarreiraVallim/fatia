@@ -64,6 +64,8 @@ describe('isolamento entre usuários', () => {
     groupId: '',
     /** Membership do user-A (o titular do dado) no grupo. */
     membershipA: '',
+    /** Membership do próprio `pro` no grupo. Usada para "demitir" o personal. */
+    membershipPro: '',
     /** Membership do user-B num grupo em que `pro` não tem nada a ver. */
     membershipForaId: '',
     mealId: '',
@@ -155,6 +157,7 @@ describe('isolamento entre usuários', () => {
     });
     owned.groupId = group.id;
     owned.membershipA = group.memberships.find((m) => m.userId === owned.userA)!.id;
+    owned.membershipPro = group.memberships.find((m) => m.userId === owned.pro)!.id;
 
     // Grupo à parte, do próprio `pro`, com o user-B dentro. Serve para provar
     // que um `membershipId` válido de OUTRO contexto não resolve — nem quando
@@ -672,6 +675,64 @@ describe('isolamento entre usuários', () => {
       await expect(
         access.assertReadable(owned.pro, owned.membershipA, ShareScope.WORKOUT, 'probe'),
       ).resolves.toBe(owned.userA);
+    });
+
+    it('personal DEMITIDO para de ler na hora, com o vínculo ainda sem revogar', async () => {
+      // A academia demite o personal: a `GroupMembership` dele vira REMOVED. O
+      // `ProfessionalLink` continua intacto, porque a revogação em massa é da
+      // #154 e nada a chama ainda. É o estado real de hoje — e sem a checagem
+      // do lado do profissional o ex-funcionário lê o histórico de saúde da
+      // aluna com um crachá que a academia já recolheu.
+      await links.grant({
+        subjectUserId: owned.userA,
+        professionalId: owned.pro,
+        groupId: owned.groupId,
+        scopes: [ShareScope.WORKOUT],
+      });
+
+      // Antes de demitir, ele lê — sem isto a recusa abaixo passaria de graça.
+      await expect(
+        access.assertReadable(owned.pro, owned.membershipA, ShareScope.WORKOUT, 'probe'),
+      ).resolves.toBe(owned.userA);
+
+      try {
+        await prisma.groupMembership.update({
+          where: { id: owned.membershipPro },
+          data: { status: MembershipStatus.REMOVED, leftAt: new Date() },
+        });
+
+        // O vínculo NÃO foi tocado: é exatamente o que torna o caso perigoso.
+        const vinculo = await prisma.professionalLink.findFirst({
+          where: { subjectUserId: owned.userA, professionalId: owned.pro },
+        });
+        expect(vinculo?.revokedAt).toBeNull();
+
+        expect(await tentar(ShareScope.WORKOUT)).toBe(await recusaDeEstranho(ShareScope.WORKOUT));
+      } finally {
+        // Recontratado: os outros casos contam com ele ativo.
+        await prisma.groupMembership.update({
+          where: { id: owned.membershipPro },
+          data: { status: MembershipStatus.ACTIVE, leftAt: null },
+        });
+      }
+    });
+
+    it('DONO do grupo não lê nem com vínculo concedido em nome dele', async () => {
+      // O user-B é OWNER da academia. Se alguém (ou um bug de #154) criar um
+      // vínculo com ele na ponta do profissional, o papel ainda barra: dono
+      // gere grupo, membros e cobrança e não lê dado de saúde (ADR 014). É
+      // também o que mantém os ~50 casos deste arquivo válidos, já que todos
+      // rodam com o user-B nessa posição.
+      await links.grant({
+        subjectUserId: owned.userA,
+        professionalId: owned.userB,
+        groupId: owned.groupId,
+        scopes: [ShareScope.WORKOUT],
+      });
+
+      await expect(
+        access.assertReadable(owned.userB, owned.membershipA, ShareScope.WORKOUT, 'probe'),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('o vínculo não abre nada nos services de domínio', async () => {

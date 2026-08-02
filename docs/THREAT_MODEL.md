@@ -134,13 +134,22 @@ Duas direções, dois mecanismos:
   só**: `ProfessionalAccessService.assertReadable`, que devolve o `userId` do titular. Todo
   service de domínio abaixo dele continua filtrando por `userId` e ignorando que grupo existe.
 
+A camada do vínculo é conferida **nos dois lados, e por conta própria**. Antes de procurar o
+`ProfessionalLink`, a porta exige que o aluno tenha membership `ACTIVE` no grupo e que o
+profissional tenha membership `ACTIVE` com papel `PROFESSIONAL` **no mesmo grupo**. Nenhuma das
+duas depende de a revogação em massa (`revokeAllForMember`) ter rodado: quem sai do grupo — em
+qualquer das duas pontas — para de ler e de ser lido no mesmo instante, mesmo com o vínculo ainda
+marcado como vigente. Fosse só o lado do aluno, o personal demitido continuaria lendo o histórico
+de saúde dela até alguém preencher `revokedAt` na mão.
+
 | Vetor                                                     | Mitigação                                                                                                                            |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Profissional lê aluno com quem não tem vínculo            | `ProfessionalLink` é a única fonte de autorização. Sem linha ativa, `NOT_FOUND` idêntico ao de um estranho                           |
 | Profissional continua lendo depois de revogado            | `revokedAt: null` no `where` da porta. Revogar nunca apaga a linha — a trilha de "quem teve acesso quando" sobrevive                 |
 | Consentir treino e o profissional ler o diário alimentar  | Consentimento por escopo, conferido com `scopes: { has: scope }`. A assinatura aceita **um** escopo; `hasSome` com `[]` casaria tudo |
-| Dono de academia (ou trainer) lê por ter papel no grupo   | Papel **não** autoriza leitura. `GroupRole` governa administração; leitura vem só do vínculo                                         |
+| Dono de academia (ou trainer) lê por ter papel no grupo   | Papel **não** autoriza leitura. `GroupRole` governa administração; leitura vem só do vínculo. Só `PROFESSIONAL` é papel elegível     |
 | Aluno sai do grupo e continua sendo lido                  | `status: ACTIVE` da membership conferido na porta, além da revogação em massa dos vínculos do grupo                                  |
+| Personal **demitido** continua lendo o aluno              | A porta exige membership `ACTIVE` com papel `PROFESSIONAL` **dos dois lados**, no grupo da linha. Não depende de `revokedAt` chegar  |
 | Identidade do aluno passada por input (`student_id`)      | A porta recebe `membershipId`, nunca `userId`. `tool-user-scoping.spec.ts` recusa `student_id`, `subject_id`, `on_behalf_of` e cia.  |
 | `membershipId` de outro contexto usado com vínculo válido | Titular e grupo saem da **linha de membership lida**, e o vínculo é procurado pelo trio. Id de input nunca autoriza sozinho (#204)   |
 
@@ -151,7 +160,7 @@ depois. Não há detecção de uso anômalo dentro do que foi consentido.
 ## Matriz de cobertura
 
 Onde o escopo é aplicado, por domínio. Verificado por
-`apps/api/src/common/__tests__/user-isolation.spec.ts` (59 casos contra Postgres real: semeia
+`apps/api/src/common/__tests__/user-isolation.spec.ts` (62 casos contra Postgres real: semeia
 como user-A, tenta ler/editar/apagar como user-B). Desde a #153 o user-B é também **dono da
 academia** em que o user-A é aluno — todos os casos de recusa passam a valer com ele nessa
 posição, sem uma linha a mais.
@@ -191,6 +200,14 @@ dono do pai não autoriza escrever em qualquer filho.
   tentativa de leitura entre contas — inclusive as **negadas**, que são o registro que denuncia
   profissional malicioso. Leitura do usuário sobre o próprio dado continua sem trilha, e não há
   intenção de criar uma: seriam milhões de linhas para responder "eu li o meu".
+- **Sondar `membershipId` inexistente é a única batida invisível na porta profissional.** Quando a
+  linha de `GroupMembership` não existe, `assertReadable` recusa **antes** de gravar, e de
+  propósito: `ProfessionalAccessLog.subjectUserId` é FK não-nula, então registrar exigiria inventar
+  um titular — e trilha apontando para a pessoa errada é pior que trilha ausente. A consequência
+  aceita é que enumerar ids não deixa rastro. Toda tentativa contra uma membership que **existe**
+  fica registrada, com `denied: true`, mesmo quando o profissional foi removido do grupo. Fechar
+  isto exigiria um `subjectUserId` opcional ou uma tabela de sondagem à parte; nenhuma das duas
+  tem issue aberta.
 - **Ordem de argumentos inconsistente** entre services (`userId` às vezes primeiro, às vezes
   último). Não é vulnerabilidade, mas é uma pegadinha: trocar a ordem numa chamada nova passa
   pelo TypeScript quando os dois são `string`. Padronizar é dívida técnica aberta.
