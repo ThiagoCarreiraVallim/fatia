@@ -60,6 +60,22 @@ describe('EditHeightDrawer', () => {
     expect(field().value).toBe('');
   });
 
+  it('preenche o campo quando a estatura chega com o drawer já aberto', () => {
+    // O drawer aberto enquanto `users/me` ainda carrega: `currentHeightCm` chega
+    // `null` e vira número depois, com `open` parado em `true`. É o único caso
+    // que exige a **segunda** dependência da comparação — só com `previous.open
+    // !== open` o campo ficaria vazio para sempre.
+    const { rerender } = renderDrawer({ open: true, currentHeightCm: null });
+    expect(field().value).toBe('');
+
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <EditHeightDrawer open onClose={() => undefined} currentHeightCm={182} />
+      </QueryClientProvider>,
+    );
+    expect(field().value).toBe('182');
+  });
+
   it('preenche o campo ao abrir depois de montado fechado', () => {
     const { rerender } = renderDrawer({ open: false, currentHeightCm: 175 });
     rerender(

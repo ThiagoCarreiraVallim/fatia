@@ -79,8 +79,11 @@ function makeGroup(partial: Partial<ExerciseGroup> = {}): ExerciseGroup {
   };
 }
 
-function renderCard(group: ExerciseGroup = makeGroup()) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function makeClient() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false } } });
+}
+
+function renderCard(group: ExerciseGroup = makeGroup(), client: QueryClient = makeClient()) {
   return render(
     <QueryClientProvider client={client}>
       <ActiveExerciseCard
@@ -129,6 +132,28 @@ describe('ActiveExerciseCard', () => {
     expect(await screen.findByText('🏆 Recorde: 100kg')).toBeInTheDocument();
     expect(weightValue()).toBe('0');
     expect(repsValue()).toBe('8');
+  });
+
+  it('aplica a referência que já está em cache na primeira pintura', () => {
+    // Sair da tela do treino e voltar dentro do `gcTime` (5 min, o padrão) traz
+    // o `last-set` do cache **antes** do primeiro render. Não há chegada
+    // assíncrona para disparar o palpite: a passagem de montagem é a única
+    // chance de aplicá-lo, e `weight` nasce de `lastSet?.weightKg ?? 0` = 0.
+    //
+    // É a armadilha da #187 no sítio mais caro do diff: semear o estado
+    // anterior do ajuste durante o render com o palpite atual — a forma natural
+    // de escrever a conversão — mata essa passagem, e o campo abre em 0 no lugar
+    // da carga da sessão passada. Sem `await` de propósito: o que se afirma aqui
+    // é o valor da **primeira** pintura.
+    const reference = makeSet({ id: 'antigo', weightKg: 62.5, reps: 10 });
+    getLastSet.mockResolvedValue(reference);
+    const client = makeClient();
+    client.setQueryData(['workout', 'last-set', 1, STARTED_AT], reference);
+
+    renderCard(makeGroup(), client);
+
+    expect(weightValue()).toBe('62.5');
+    expect(repsValue()).toBe('10');
   });
 
   it('recorta o histórico no início da sessão em vez de filtrar no cliente', async () => {
