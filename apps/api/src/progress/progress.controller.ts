@@ -15,6 +15,8 @@ import { StepLogService } from './step-log.service';
 import { WaterLogService } from './water-log.service';
 import { ProgressService } from './progress.service';
 import { DashboardService } from './dashboard.service';
+import { StreakService } from './streak.service';
+import { AchievementService } from './achievement.service';
 import { CreateWeightLogDto, ListWeightLogsDto, UpdateWeightLogDto } from './dto/weight-log.dto';
 import { CreateStepLogDto, ListStepLogsDto, UpdateStepLogDto } from './dto/step-log.dto';
 import { CreateWaterLogDto, ListWaterLogsDto, UpdateWaterLogDto } from './dto/water-log.dto';
@@ -27,6 +29,8 @@ export class ProgressController {
     private readonly waters: WaterLogService,
     private readonly progress: ProgressService,
     private readonly dashboard: DashboardService,
+    private readonly streaks: StreakService,
+    private readonly achievements: AchievementService,
   ) {}
 
   // -------- Weight logs --------
@@ -192,5 +196,16 @@ export class ProgressController {
   @Get('dashboard/week')
   week(@CurrentUser() user: CurrentUserPayload) {
     return this.dashboard.week({ userId: user.id, timezone: user.timezone });
+  }
+
+  // -------- Engajamento --------
+  @Get('streak')
+  streak(@CurrentUser() user: CurrentUserPayload) {
+    return this.streaks.compute({ userId: user.id, timezone: user.timezone });
+  }
+
+  @Get('achievements')
+  listAchievements(@CurrentUser() user: CurrentUserPayload) {
+    return this.achievements.list({ userId: user.id, timezone: user.timezone });
   }
 }

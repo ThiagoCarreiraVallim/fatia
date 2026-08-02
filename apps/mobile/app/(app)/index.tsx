@@ -10,6 +10,7 @@ import {
   NutritionMacroCard,
   QuickLogActions,
   StepsCard,
+  StreakCard,
   WaterCard,
   saudacao,
 } from '@/components/dashboard';
@@ -65,6 +66,7 @@ export default function DashboardScreen() {
               <NextWorkoutCard workout={dados.workout} />
               <WaterCard data={dados.water} onLogWater={() => setAguaAberto(true)} />
               <StepsCard data={dados.steps} onLogSteps={() => setPassosAberto(true)} />
+              <StreakCard streak={dados.streak} achievements={dados.achievements} />
               <QuickLogActions
                 onLogWater={() => setAguaAberto(true)}
                 onLogWeight={() => setPesoAberto(true)}

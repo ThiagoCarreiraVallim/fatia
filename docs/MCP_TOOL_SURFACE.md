@@ -9,17 +9,17 @@
 | Domínio                                                     |  Tools | Arquivos                       |
 | ----------------------------------------------------------- | -----: | ------------------------------ |
 | Workout (exercícios, planos, sessões, séries)               |     31 | `apps/api/src/workout/mcp/`    |
-| Progress (peso, passos, água, progresso, dashboard)         |     24 | `apps/api/src/progress/mcp/`   |
+| Progress (peso, passos, água, progresso, dashboard, streak) |     26 | `apps/api/src/progress/mcp/`   |
 | Nutrition (alimentos, refeições, itens, metas de nutriente) |     22 | `apps/api/src/nutrition/mcp/`  |
 | Goals (metas pessoais)                                      |      6 | `apps/api/src/goals/mcp/`      |
 | Meta (perfil)                                               |      3 | `apps/api/src/mcp/tools/meta/` |
 | Conta (export e deleção — LGPD)                             |      2 | `apps/api/src/users/mcp/`      |
-| **Total**                                                   | **88** |                                |
+| **Total**                                                   | **90** |                                |
 
 A contagem é verificada por `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`, que também
 garante que `docs/MCP.md` bate com o registro real.
 
-## Por que 88 e não ~30
+## Por que 90 e não ~30
 
 O Fatia é **MCP-first** por decisão de arquitetura (ADR 006): tudo que o PWA faz, o Claude
 faz. Isso produz um CRUD completo por entidade — e é o que dá ao conector sua proposta de
@@ -32,7 +32,7 @@ opções abaixo foram avaliadas com isso em mente.
 
 O que pesa no contexto não é a contagem de tools, é o payload. Medido no que o registry
 serve de fato — `name`, `title`, `description`, `annotations` e o JSON Schema do input das
-88 tools: **66,7 k caracteres**, enviados em toda sessão que lista as tools.
+90 tools: **66,7 k caracteres**, enviados em toda sessão que lista as tools.
 
 O denominador importa. Contar só `name + description + inputSchema` dá 50,7 k e subestima o
 catálogo em ~20% — `title` e `annotations` também vão no fio, em toda tool.

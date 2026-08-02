@@ -3,6 +3,8 @@ import type { PrismaService } from '../../common/prisma.service';
 import type { StepLogService } from '../step-log.service';
 import type { WeightLogService } from '../weight-log.service';
 import type { WaterLogService } from '../water-log.service';
+import type { StreakService, StreakSummary } from '../streak.service';
+import type { AchievementService } from '../achievement.service';
 
 jest.mock('../helpers/date-tz', () => ({
   todayInTz: jest.fn(() => '2026-01-15'),
@@ -30,6 +32,28 @@ type MockPrisma = {
   userGoals: { findUnique: jest.Mock };
   workoutSession: { findFirst: jest.Mock; findMany: jest.Mock; count: jest.Mock };
   weightLog: { findMany: jest.Mock };
+};
+
+/**
+ * As sequências saíram daqui para o `StreakService` — e os testes delas saíram para
+ * `streak.service.spec.ts`, que usa os helpers de fuso REAIS. Um teste de streak escrito neste
+ * arquivo herdaria o `jest.mock('../helpers/date-tz')` do topo e não poderia pegar bug de fuso,
+ * que é o defeito que streak mais tem.
+ */
+const STREAK_VAZIO = {
+  periodos: 0,
+  faltasUsadas: 0,
+  faltasPermitidas: 0,
+  periodoCorrenteEmAberto: false,
+  janelaEsgotada: false,
+};
+
+const RESUMO_DE_STREAK: StreakSummary = {
+  activeDays: STREAK_VAZIO,
+  nutritionDays: STREAK_VAZIO,
+  workoutWeeks: STREAK_VAZIO,
+  stepsDays: STREAK_VAZIO,
+  stepsTargetSet: false,
 };
 
 type MockStepLogs = {
@@ -86,6 +110,8 @@ describe('DashboardService', () => {
   let stepLogs: MockStepLogs;
   let weightLogs: MockWeightLogs;
   let waterLogs: MockWaterLogs;
+  let streaks: { compute: jest.Mock };
+  let achievements: { evaluate: jest.Mock; list: jest.Mock };
   let service: DashboardService;
   const ctx = { userId: 'user-A', timezone: 'UTC' };
 
@@ -96,18 +122,17 @@ describe('DashboardService', () => {
     waterLogs = makeWaterLogs();
     // Default: zero água logada — testes que precisam override fazem manualmente.
     waterLogs.getForDate.mockResolvedValue({ date: '2026-01-15', totalMl: 0, logCount: 0 });
+    streaks = { compute: jest.fn().mockResolvedValue(RESUMO_DE_STREAK) };
+    achievements = { evaluate: jest.fn().mockResolvedValue([]), list: jest.fn() };
     service = new DashboardService(
       prisma as unknown as PrismaService,
       stepLogs as unknown as StepLogService,
       weightLogs as unknown as WeightLogService,
       waterLogs as unknown as WaterLogService,
+      streaks as unknown as StreakService,
+      achievements as unknown as AchievementService,
     );
   });
-
-  const stubStreaksEmpty = () => {
-    prisma.meal.count.mockResolvedValue(0);
-    prisma.workoutSession.count.mockResolvedValue(0);
-  };
 
   describe('today', () => {
     it('aggregates meal items into total consumed macros', async () => {
@@ -122,7 +147,6 @@ describe('DashboardService', () => {
       prisma.workoutSession.findFirst.mockResolvedValue(null);
       weightLogs.getLatest.mockResolvedValue(null);
       stepLogs.getStepsForDate.mockResolvedValue({ steps: 0, logCount: 0, sources: [] });
-      stubStreaksEmpty();
 
       const result = await service.today(ctx);
 
@@ -141,7 +165,6 @@ describe('DashboardService', () => {
       prisma.workoutSession.findFirst.mockResolvedValue(null);
       weightLogs.getLatest.mockResolvedValue(null);
       stepLogs.getStepsForDate.mockResolvedValue({ steps: 0, logCount: 0, sources: [] });
-      stubStreaksEmpty();
 
       const result = await service.today(ctx);
 
@@ -154,7 +177,6 @@ describe('DashboardService', () => {
       prisma.workoutSession.findFirst.mockResolvedValue(null);
       weightLogs.getLatest.mockResolvedValue(null);
       stepLogs.getStepsForDate.mockResolvedValue({ steps: 0, logCount: 0, sources: [] });
-      stubStreaksEmpty();
 
       const result = await service.today(ctx);
 
@@ -167,7 +189,6 @@ describe('DashboardService', () => {
       prisma.workoutSession.findFirst.mockResolvedValue(null);
       weightLogs.getLatest.mockResolvedValue(null);
       stepLogs.getStepsForDate.mockResolvedValue({ steps: 0, logCount: 0, sources: [] });
-      stubStreaksEmpty();
 
       const result = await service.today(ctx);
 
@@ -180,7 +201,6 @@ describe('DashboardService', () => {
       prisma.workoutSession.findFirst.mockResolvedValue(null);
       weightLogs.getLatest.mockResolvedValue(null);
       stepLogs.getStepsForDate.mockResolvedValue({ steps: 8500, logCount: 1, sources: ['MANUAL'] });
-      stubStreaksEmpty();
 
       const result = await service.today(ctx);
 
@@ -196,7 +216,6 @@ describe('DashboardService', () => {
       prisma.workoutSession.findFirst.mockResolvedValue(null);
       weightLogs.getLatest.mockResolvedValue(null);
       stepLogs.getStepsForDate.mockResolvedValue({ steps: 5000, logCount: 1, sources: ['MANUAL'] });
-      stubStreaksEmpty();
 
       const result = await service.today(ctx);
 
@@ -212,7 +231,6 @@ describe('DashboardService', () => {
         .mockResolvedValueOnce({ id: 's1', completedAt: new Date('2026-01-15T18:00:00Z') });
       weightLogs.getLatest.mockResolvedValue(null);
       stepLogs.getStepsForDate.mockResolvedValue({ steps: 0, logCount: 0, sources: [] });
-      stubStreaksEmpty();
 
       const result = await service.today(ctx);
 
@@ -229,7 +247,6 @@ describe('DashboardService', () => {
         .mockResolvedValueOnce(null);
       weightLogs.getLatest.mockResolvedValue(null);
       stepLogs.getStepsForDate.mockResolvedValue({ steps: 0, logCount: 0, sources: [] });
-      stubStreaksEmpty();
 
       const result = await service.today(ctx);
 
@@ -245,7 +262,6 @@ describe('DashboardService', () => {
         loggedAt: new Date('2026-01-15T08:00:00Z'),
       });
       stepLogs.getStepsForDate.mockResolvedValue({ steps: 0, logCount: 0, sources: [] });
-      stubStreaksEmpty();
 
       const result = await service.today(ctx);
 
@@ -262,7 +278,6 @@ describe('DashboardService', () => {
         loggedAt: new Date('2026-01-10T08:00:00Z'),
       });
       stepLogs.getStepsForDate.mockResolvedValue({ steps: 0, logCount: 0, sources: [] });
-      stubStreaksEmpty();
 
       const result = await service.today(ctx);
 
@@ -270,70 +285,71 @@ describe('DashboardService', () => {
       expect(result.weight.latest?.weightKg).toBe(80);
     });
 
-    describe('streaks', () => {
+    describe('streaks e conquistas', () => {
       const baselineTodayMocks = () => {
         prisma.meal.findMany.mockResolvedValue([]);
+        prisma.userGoals.findUnique.mockResolvedValue(null);
         prisma.workoutSession.findFirst.mockResolvedValue(null);
         weightLogs.getLatest.mockResolvedValue(null);
         stepLogs.getStepsForDate.mockResolvedValue({ steps: 0, logCount: 0, sources: [] });
       };
 
-      it('counts consecutive days with at least one meal as nutrition streak', async () => {
+      it('entrega o resumo de sequências que o StreakService calculou', async () => {
         baselineTodayMocks();
-        prisma.userGoals.findUnique.mockResolvedValue(null);
-        prisma.meal.count
-          .mockResolvedValueOnce(1)
-          .mockResolvedValueOnce(2)
-          .mockResolvedValueOnce(1)
-          .mockResolvedValue(0);
-        prisma.workoutSession.count.mockResolvedValue(0);
+        streaks.compute.mockResolvedValue({
+          ...RESUMO_DE_STREAK,
+          activeDays: { ...STREAK_VAZIO, periodos: 12, faltasUsadas: 1, faltasPermitidas: 2 },
+        });
 
         const result = await service.today(ctx);
 
-        expect(result.streak.nutritionDays).toBe(3);
+        expect(result.streak.activeDays.periodos).toBe(12);
+        expect(result.streak.activeDays.faltasUsadas).toBe(1);
       });
 
-      it('counts consecutive weeks with workout sessions as workout streak', async () => {
+      it('não faz uma consulta por dia para calcular sequência', async () => {
+        // O laço antigo chamava `meal.count` até 60 vezes e `workoutSession.count` até 12, dentro
+        // do `today()`. Contar as chamadas aqui é o que impede o padrão de voltar por descuido.
         baselineTodayMocks();
-        prisma.userGoals.findUnique.mockResolvedValue(null);
-        prisma.meal.count.mockResolvedValue(0);
-        prisma.workoutSession.count
-          .mockResolvedValueOnce(3)
-          .mockResolvedValueOnce(2)
-          .mockResolvedValue(0);
 
-        const result = await service.today(ctx);
+        await service.today(ctx);
 
-        expect(result.streak.workoutWeeks).toBe(2);
+        expect(prisma.meal.count).not.toHaveBeenCalled();
+        expect(prisma.workoutSession.count).not.toHaveBeenCalled();
+        expect(stepLogs.getStepsForDate).toHaveBeenCalledTimes(1);
+        expect(streaks.compute).toHaveBeenCalledTimes(1);
       });
 
-      it('returns stepsDays=0 when there is no step target', async () => {
+      it('avalia as conquistas com a sequência já calculada, sem recalcular', async () => {
         baselineTodayMocks();
-        prisma.userGoals.findUnique.mockResolvedValue(makeGoals({ dailyStepsTarget: null }));
-        prisma.meal.count.mockResolvedValue(0);
-        prisma.workoutSession.count.mockResolvedValue(0);
+        const resumo = { ...RESUMO_DE_STREAK };
+        streaks.compute.mockResolvedValue(resumo);
+        achievements.evaluate.mockResolvedValue([
+          {
+            key: 'first_meal',
+            title: 'Primeira refeição',
+            description: '',
+            unlockedAt: null,
+            context: null,
+          },
+        ]);
 
         const result = await service.today(ctx);
 
-        expect(result.streak.stepsDays).toBe(0);
+        expect(achievements.evaluate).toHaveBeenCalledWith(ctx, resumo);
+        expect(result.achievements).toHaveLength(1);
       });
 
-      it('counts consecutive days hitting the step target as steps streak', async () => {
-        prisma.meal.findMany.mockResolvedValue([]);
-        prisma.userGoals.findUnique.mockResolvedValue(makeGoals({ dailyStepsTarget: 8000 }));
-        prisma.workoutSession.findFirst.mockResolvedValue(null);
-        weightLogs.getLatest.mockResolvedValue(null);
-        prisma.meal.count.mockResolvedValue(0);
-        prisma.workoutSession.count.mockResolvedValue(0);
-        stepLogs.getStepsForDate
-          .mockResolvedValueOnce({ steps: 9000, logCount: 1, sources: ['MANUAL'] })
-          .mockResolvedValueOnce({ steps: 9000, logCount: 1, sources: ['MANUAL'] })
-          .mockResolvedValueOnce({ steps: 8500, logCount: 1, sources: ['MANUAL'] })
-          .mockResolvedValue({ steps: 0, logCount: 0, sources: [] });
+      it('conquista que explode não derruba o dashboard', async () => {
+        // Conquista é enfeite; dashboard é o produto. Sem este caso, um erro na avaliação viraria
+        // 500 na cara de quem só queria ver as calorias do dia.
+        baselineTodayMocks();
+        achievements.evaluate.mockRejectedValue(new Error('banco fora do ar'));
 
         const result = await service.today(ctx);
 
-        expect(result.streak.stepsDays).toBe(2);
+        expect(result.achievements).toEqual([]);
+        expect(result.nutrition.mealsLogged).toBe(0);
       });
     });
   });

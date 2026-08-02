@@ -20,7 +20,7 @@ Se você quer instalar um app na loja e não pensar em servidor, o Fatia ainda n
 
 |                                           |                                                                                                                                                                                                          |
 | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **MCP-first, não "com integração de IA"** | As **88 tools** MCP cobrem o CRUD inteiro da aplicação. Não existe operação que o PWA faça e o MCP não faça. A tela é a camada opcional, e não o contrário.                                              |
+| **MCP-first, não "com integração de IA"** | As **90 tools** MCP cobrem o CRUD inteiro da aplicação. Não existe operação que o PWA faça e o MCP não faça. A tela é a camada opcional, e não o contrário.                                              |
 | **Os dados são seus**                     | Postgres seu, servidor seu, licença MIT. `export_my_data` devolve tudo, `delete_my_account` apaga tudo — as duas expostas como tool, para você exercer o direito sem pedir a ninguém.                    |
 | **Foto não vira arquivo**                 | O assistente analisa a imagem da refeição e manda **dados estruturados**. O Fatia nunca armazena a foto ([ADR 004](docs/ADR/004-sem-armazenamento-fotos.md)).                                            |
 | **Base nutricional brasileira**           | Os **597 alimentos da TACO** (NEPA/Unicamp) já vêm no seed, com macros e micronutrientes. Mais **873 exercícios** com músculos primários e secundários.                                                  |
@@ -31,7 +31,7 @@ Se você quer instalar um app na loja e não pensar em servidor, o Fatia ainda n
 
 ```mermaid
 flowchart TD
-    claude["Assistente de IA<br/>(MCP · 88 tools)"]
+    claude["Assistente de IA<br/>(MCP · 90 tools)"]
     pwa["PWA Next.js<br/>navegador"]
     mobile["App Expo<br/>iOS / Android"]
     logto["Logto<br/>Identity Provider<br/>OAuth 2.1 · DCR · PKCE"]

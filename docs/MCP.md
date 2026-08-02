@@ -158,7 +158,7 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 88 tools): **66,7 k caracteres**
+`description`, `annotations` e o JSON Schema do input das 90 tools): **66,7 k caracteres**
 hoje, dos quais **4.110 são os exemplos** — acréscimo de **6,7%** sobre os 61,6 k de antes,
 pago em toda sessão que lista as tools. Média de 91 caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
@@ -298,8 +298,10 @@ Listagens com potencial de crescer usam cursor-based:
 |                           | `get_steps_progress`         | R        |
 | **Dashboard**             | `get_today_summary`          | R        |
 |                           | `get_week_summary`           | R        |
+| **Engajamento**           | `get_streak`                 | R        |
+|                           | `list_achievements`          | R        |
 
-Total: **88 tools**. Cada uma documentada abaixo.
+Total: **90 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -2008,13 +2010,14 @@ Resumo agregado pro Claude responder "como estou hoje?".
     goalReached: boolean | null;
     logged: boolean;            // se há ao menos um log hoje
   };
-  streak: {
-    nutritionDays: number;
-    workoutWeeks: number;
-    stepsDays: number;          // dias consecutivos batendo meta de passos
-  };
+  streak: StreakSummary;        // ver `get_streak`
+  achievements: Achievement[];  // ver `list_achievements`; avaliadas aqui
 }
 ```
+
+O `get_today_summary` é o único ponto que **desbloqueia** conquistas: reavalia o catálogo a cada
+chamada e grava o que passou a valer. É idempotente — `@@unique([userId, key])` garante que
+reavaliar não duplica nem reescreve o `unlockedAt` de quem já tinha.
 
 ### `get_week_summary`
 
@@ -2056,6 +2059,66 @@ Resumo da semana corrente.
   }
 }
 ```
+
+---
+
+## Engajamento
+
+### `get_streak`
+
+Sequência atual do usuário, com a regra de tolerância a falha (issue #147). Serve para o Claude
+dizer "você está no seu 12º dia" sem carregar o dashboard inteiro.
+
+**Input:** _(nenhum)_
+
+**Output:**
+
+```typescript
+{
+  // Dia ativo = pelo menos uma refeição registrada OU uma sessão concluída OU a meta de
+  // passos batida. É o número grande da tela.
+  activeDays: StreakResult;
+  nutritionDays: StreakResult;
+  workoutWeeks: StreakResult; // em SEMANAS, não em dias
+  stepsDays: StreakResult;
+  stepsTargetSet: boolean; // false = sem `UserGoals`; passos ficam fora do dia ativo
+}
+
+type StreakResult = {
+  periodos: number; // tamanho, contando as faltas toleradas do meio
+  faltasUsadas: number;
+  faltasPermitidas: number;
+  periodoCorrenteEmAberto: boolean; // hoje ainda sem registro, mas o dia não acabou
+  janelaEsgotada: boolean; // encostou no teto varrido (365 dias / 53 semanas)
+};
+```
+
+**Tolerância:** a sequência começa com uma falta liberada e ganha mais uma a cada 7 períodos
+ativos, saturando em duas. Ela quebra na **segunda falta consecutiva** ou quando o orçamento
+acaba. Um dia perdido não zera meses de trabalho — streak que pune desproporcionalmente faz o
+usuário desistir de vez em vez de voltar.
+
+### `list_achievements`
+
+Catálogo de conquistas. Devolve as **sete** chaves sempre, desbloqueadas ou não, para o Claude
+saber o que sugerir como próximo passo.
+
+**Input:** _(nenhum)_
+
+**Output:**
+
+```typescript
+Array<{
+  key: string; // first_meal | first_workout | plan_created | first_pr
+  // | first_full_week | streak_7 | streak_30
+  title: string;
+  description: string;
+  unlockedAt: string | null; // ISO da data do EVENTO, não a de quando o app percebeu
+  context: unknown; // { weightKg, exerciseName } em first_pr, por exemplo
+}>;
+```
+
+Só lê (`readOnlyHint: true`). Quem desbloqueia é `get_today_summary`.
 
 ---
 

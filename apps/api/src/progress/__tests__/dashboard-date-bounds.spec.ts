@@ -4,6 +4,8 @@ import type { PrismaService } from '../../common/prisma.service';
 import type { StepLogService } from '../step-log.service';
 import type { WeightLogService } from '../weight-log.service';
 import type { WaterLogService } from '../water-log.service';
+import type { StreakService, StreakSummary } from '../streak.service';
+import type { AchievementService } from '../achievement.service';
 
 /**
  * Este spec vive num arquivo separado do `dashboard.service.spec.ts` por um motivo que é o
@@ -34,12 +36,30 @@ describe('DashboardService — fronteiras de dia e semana', () => {
     const stepLogs = { getStepsForDate: jest.fn().mockResolvedValue({ steps: 0 }) };
     const weightLogs = { getLatest: jest.fn().mockResolvedValue(null) };
     const waterLogs = { getForDate: jest.fn().mockResolvedValue({ totalMl: 0, logCount: 0 }) };
+    const vazio = {
+      periodos: 0,
+      faltasUsadas: 0,
+      faltasPermitidas: 0,
+      periodoCorrenteEmAberto: false,
+      janelaEsgotada: false,
+    };
+    const resumo: StreakSummary = {
+      activeDays: vazio,
+      nutritionDays: vazio,
+      workoutWeeks: vazio,
+      stepsDays: vazio,
+      stepsTargetSet: false,
+    };
+    const streaks = { compute: jest.fn().mockResolvedValue(resumo) };
+    const achievements = { evaluate: jest.fn().mockResolvedValue([]) };
 
     const service = new DashboardService(
       prisma as unknown as PrismaService,
       stepLogs as unknown as StepLogService,
       weightLogs as unknown as WeightLogService,
       waterLogs as unknown as WaterLogService,
+      streaks as unknown as StreakService,
+      achievements as unknown as AchievementService,
     );
 
     return { service, prisma };
@@ -79,54 +99,9 @@ describe('DashboardService — fronteiras de dia e semana', () => {
     });
   });
 
-  describe('a semana de treino respeita o fuso do usuário', () => {
-    it('começa na meia-noite local, não na meia-noite UTC', async () => {
-      // O bug: a data de início da semana era calculada no fuso do usuário, mas os limites da
-      // consulta eram montados como `new Date(`${ws}T00:00:00Z`)` — meia-noite UTC.
-      //
-      // Em Tóquio (UTC+9) isso desloca a janela em 9 horas. Quem treinou segunda às 07:00 local
-      // (= domingo 22:00 UTC) caía antes do `gte` e era contado na semana anterior. Resultado:
-      // a sequência de semanas zerava para quem não faltou.
-      const { service, prisma } = build();
-      prisma.workoutSession.count.mockResolvedValue(1);
-
-      await service.today({ userId: 'user-A', timezone: TOKYO });
-
-      const where = prisma.workoutSession.count.mock.calls[0][0].where;
-      const start: Date = where.completedAt.gte;
-
-      // Meia-noite em Tóquio é 15:00 UTC do dia anterior. Se o código ainda usasse
-      // `T00:00:00Z`, isto daria 0.
-      expect(start.getUTCHours()).toBe(15);
-    });
-
-    it('cobre a semana inteira: 7 dias exatos entre os limites', async () => {
-      // O código antigo usava `${we}T23:59:59Z` como fim, o que deixa o último segundo do dia
-      // de fora e ainda mistura fusos. A janela correta é [início do dia 1, início do dia 8).
-      const { service, prisma } = build();
-      prisma.workoutSession.count.mockResolvedValue(1);
-
-      await service.today({ userId: 'user-A', timezone: TOKYO });
-
-      const where = prisma.workoutSession.count.mock.calls[0][0].where;
-      expect(where.completedAt).toHaveProperty('lt');
-      expect(where.completedAt.lt.getTime() - where.completedAt.gte.getTime()).toBe(7 * 86_400_000);
-    });
-
-    it('um treino de segunda de manhã em Tóquio cai dentro da janela', async () => {
-      // O caso concreto que o bug quebrava, escrito como instante e não como abstração.
-      const { service, prisma } = build();
-      prisma.workoutSession.count.mockResolvedValue(1);
-
-      await service.today({ userId: 'user-A', timezone: TOKYO });
-
-      const { gte, lt } = prisma.workoutSession.count.mock.calls[0][0].where.completedAt;
-
-      // 07:00 de segunda em Tóquio, expresso em UTC.
-      const mondayMorningTokyo = new Date(gte.getTime() + 7 * 3600 * 1000);
-      expect(mondayMorningTokyo >= gte && mondayMorningTokyo < lt).toBe(true);
-    });
-  });
+  // A janela semanal de treino saiu daqui: quem a monta agora é o `StreakService`, e os casos
+  // (segunda 07:00 em Tóquio dentro da janela, `lt` no fim, sete dias exatos) vivem em
+  // `streak.service.spec.ts` — que também usa os helpers reais, pelo mesmo motivo deste arquivo.
 
   describe('o helper de limites', () => {
     it('devolve `end` como a meia-noite seguinte, e não o último instante do dia', () => {

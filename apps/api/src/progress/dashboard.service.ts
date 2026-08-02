@@ -1,8 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { StepLogService } from './step-log.service';
 import { WeightLogService } from './weight-log.service';
 import { WaterLogService } from './water-log.service';
+import { StreakService } from './streak.service';
+import { AchievementService, type AchievementEntry } from './achievement.service';
 import { addDaysIso, dayBoundsInTz, todayInTz, weekStartInTz } from './helpers/date-tz';
 
 interface UserCtx {
@@ -12,11 +14,15 @@ interface UserCtx {
 
 @Injectable()
 export class DashboardService {
+  private readonly logger = new Logger(DashboardService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly stepLogs: StepLogService,
     private readonly weightLogs: WeightLogService,
     private readonly waterLogs: WaterLogService,
+    private readonly streaks: StreakService,
+    private readonly achievements: AchievementService,
   ) {}
 
   async today(ctx: UserCtx) {
@@ -31,6 +37,7 @@ export class DashboardService {
       latestWeight,
       stepsToday,
       waterToday,
+      streak,
     ] = await Promise.all([
       this.prisma.meal.findMany({
         // `lt`, não `lte`: o `end` do `dayBoundsInTz` é a meia-noite do dia SEGUINTE, então
@@ -55,6 +62,7 @@ export class DashboardService {
       this.weightLogs.getLatest(ctx.userId),
       this.stepLogs.getStepsForDate(date, ctx.userId),
       this.waterLogs.getForDate(date, ctx.userId),
+      this.streaks.compute(ctx),
     ]);
 
     const consumed = meals
@@ -80,11 +88,17 @@ export class DashboardService {
     const latestWeightToday =
       latestWeight && latestWeight.loggedAt >= dayStart && latestWeight.loggedAt <= dayEnd;
 
-    const [nutritionStreak, workoutWeeks, stepsStreak] = await Promise.all([
-      this.computeNutritionStreak(ctx),
-      this.computeWorkoutWeeks(ctx),
-      this.computeStepsStreak(ctx, stepsTarget),
-    ]);
+    // Conquista é enfeite; dashboard é o produto. Se a avaliação falhar, a tela ainda abre —
+    // e o erro fica no log em vez de virar 500 na cara de quem só queria ver as calorias.
+    let achievements: AchievementEntry[] = [];
+    try {
+      achievements = await this.achievements.evaluate(ctx, streak);
+    } catch (err: unknown) {
+      this.logger.error({
+        event: 'achievement_evaluation_failed',
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
 
     return {
       date,
@@ -117,11 +131,8 @@ export class DashboardService {
         goalReached: waterGoalReached,
         logged: waterToday.logCount > 0,
       },
-      streak: {
-        nutritionDays: nutritionStreak,
-        workoutWeeks,
-        stepsDays: stepsStreak,
-      },
+      streak,
+      achievements,
     };
   }
 
@@ -225,58 +236,5 @@ export class DashboardService {
       steps: { totalSteps, avgDaily, daysWithGoalReached, target: stepsTarget },
       weight: { startKg, currentKg, deltaKg },
     };
-  }
-
-  private async computeNutritionStreak(ctx: UserCtx): Promise<number> {
-    const today = todayInTz(ctx.timezone);
-    let streak = 0;
-    for (let i = 0; i < 60; i++) {
-      const d = addDaysIso(today, -i);
-      const { start, end } = dayBoundsInTz(d, ctx.timezone);
-      const hasMeal = await this.prisma.meal.count({
-        where: { userId: ctx.userId, eatenAt: { gte: start, lt: end } },
-      });
-      if (hasMeal === 0) break;
-      streak++;
-    }
-    return streak;
-  }
-
-  private async computeWorkoutWeeks(ctx: UserCtx): Promise<number> {
-    const today = todayInTz(ctx.timezone);
-    let weeks = 0;
-    for (let i = 0; i < 12; i++) {
-      const ref = addDaysIso(today, -7 * i);
-      const ws = weekStartInTz(new Date(`${ref}T12:00:00Z`), ctx.timezone);
-      const we = addDaysIso(ws, 6);
-      // A data de início da semana é calculada no fuso do usuário, mas os limites da consulta
-      // precisam ser instantes — e instante montado como `${ws}T00:00:00Z` é meia-noite UTC,
-      // não meia-noite local. Para quem está em UTC+9, isso jogava o treino de segunda de manhã
-      // para a semana anterior e zerava a sequência de quem não faltou.
-      const { start } = dayBoundsInTz(ws, ctx.timezone);
-      const { end } = dayBoundsInTz(we, ctx.timezone);
-      const count = await this.prisma.workoutSession.count({
-        where: {
-          userId: ctx.userId,
-          completedAt: { gte: start, lt: end },
-        },
-      });
-      if (count === 0) break;
-      weeks++;
-    }
-    return weeks;
-  }
-
-  private async computeStepsStreak(ctx: UserCtx, target: number | null): Promise<number> {
-    if (target === null) return 0;
-    const today = todayInTz(ctx.timezone);
-    let streak = 0;
-    for (let i = 0; i < 60; i++) {
-      const d = addDaysIso(today, -i);
-      const { steps } = await this.stepLogs.getStepsForDate(d, ctx.userId);
-      if (steps < target) break;
-      streak++;
-    }
-    return streak;
   }
 }

@@ -51,7 +51,7 @@ Nenhum placeholder restante no código.
 
 ## Componentes
 
-### Dashboard — 5 de 5
+### Dashboard — 6 de 6
 
 | PWA                    | App nativo                       |     | Observação                                                        |
 | ---------------------- | -------------------------------- | :-: | ----------------------------------------------------------------- |
@@ -59,6 +59,7 @@ Nenhum placeholder restante no código.
 | `nutrition-macro-card` | `dashboard/nutrition-macro-card` | ✅  | gradiente vira véu chapado (sem `expo-linear-gradient`)           |
 | `quick-log-actions`    | `dashboard/quick-log-actions`    | ✅  | **corrigido**: o botão "Log Água" do PWA abria o drawer de passos |
 | `steps-card`           | `dashboard/steps-card`           | ✅  |                                                                   |
+| `streak-card`          | `dashboard/streak-card`          | ✅  | textos vêm do `@fatia/api-client` para os dois dizerem igual      |
 | `water-card`           | `dashboard/water-card`           | ✅  | erro do atalho é exibido; no PWA some                             |
 | —                      | `dashboard/macro-bar`            | ➕  | o alvo aqui é único, não faixa mín–máx como em nutrição           |
 
