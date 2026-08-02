@@ -83,13 +83,22 @@ tem de vir com escopo explícito e teste.
 Os logs de tool registram `tool`, `userId`, `durationMs`, `success` e `category` do erro — não
 registram o input nem o output. Ver `docs/MCP.md` §Observabilidade.
 
-**Corrigido na #39:** o serializador padrão do `pino-http` gravava **todos os cabeçalhos** da
+**Corrigido na #215:** o serializador padrão do `pino-http` gravava **todos os cabeçalhos** da
 requisição — `authorization` e `cookie` inclusive — e a URL com query string. Ou seja, o token de
 acesso de cada usuário estava indo para o log a cada requisição, contradizendo o parágrafo acima.
-Enquanto isso ficava só no `docker logs` já era ruim; com o envio para o Loki passaria a ser
-indexado e guardado num segundo lugar. Agora o log registra `method`, `path` **sem query** e
-`statusCode` — ver `apps/api/src/observability/pino-serializers.ts` e o teste
-`__tests__/pino-serializers.spec.ts`.
+O log passou a ser por **lista de permissão**: só saem `user-agent`, `content-type`,
+`content-length` e `referer`, mais `method`, `path` **sem query** e `statusCode`. Ver
+`apps/api/src/common/log-serializers.ts` e o teste `__tests__/log-serializers.spec.ts`, que abre
+com um controle negativo exercitando o serializador padrão do pino.
+
+**Ajuste da #39:** com o envio ao Loki o log deixa de morar só no `docker logs`. Duas
+consequências. A primeira é que o defeito acima ficaria pior — o token passaria a ser indexado e
+guardado num segundo lugar, com retenção própria; três trabalhos independentes encontraram o
+mesmo vazamento ao instrumentar. A segunda é o `remoteAddress`, que **saiu** do serializador:
+IP é dado pessoal, e atrás do Traefik o valor é o do proxy — igual em toda requisição, sem ganho
+diagnóstico que compense indexá-lo. É a mesma decisão que a redação de span já toma para
+`client.address` e `network.peer.address` (§6b); mantê-lo no log era redigir a mesma informação
+numa camada e publicá-la na outra.
 
 ### 6b. Telemetria — trace e métrica
 
