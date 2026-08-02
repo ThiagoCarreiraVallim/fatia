@@ -3,10 +3,13 @@ import { CopyLine } from './copy-line';
 /**
  * Os passos para conectar a IA do usuário ao Fatia (issue #164).
  *
- * O texto é o porte do que já está publicado em `apps/site/src/pages/claude-connect.astro` — os
- * mesmos quatro passos, na mesma ordem, com as mesmas palavras. Reescrever criaria a quinta
- * versão da mesma instrução: o app chegou a ter quatro superfícies de conexão com três textos
- * diferentes, e uma delas mandava colar um endereço que não existia.
+ * O texto é o porte do que já está publicado em `apps/site/src/pages/claude-connect.astro` — a
+ * mesma ordem e as mesmas palavras. Reescrever criaria mais uma versão da mesma instrução: o app
+ * chegou a ter quatro superfícies de conexão com três textos diferentes, e uma delas mandava
+ * colar um endereço que não existia.
+ *
+ * Duas diferenças, ambas porque aqui o leitor já tem conta: o passo "crie sua conta" da landing
+ * sai, e entra o passo 5 de verificação, que lá não faria sentido (não há diário para consultar).
  *
  * **Sem jargão.** Quem quer conectar não precisa saber o que é MCP, OAuth ou registro dinâmico de
  * cliente. A única exceção é o que está escrito na tela do Claude — "Settings", "Connectors",
@@ -14,7 +17,16 @@ import { CopyLine } from './copy-line';
  * português ele não acha o botão.
  */
 
-/** A pergunta que prova a conexão: passa por uma tool de leitura e devolve dado do próprio dia. */
+/**
+ * A pergunta que prova a conexão: passa por uma tool de leitura e devolve dado do próprio dia.
+ *
+ * A issue pede um **botão** de verificação no app. Ele fica pendente e o motivo não é de desenho:
+ * detectar do lado de cá que o Claude já chamou o servidor exige persistir o último uso por
+ * usuário, e a migration desta rodada é de outra trilha — inventar uma segunda aqui seria conflito
+ * garantido. O caminho manual não é só um paliativo: a resposta que o usuário lê é o próprio
+ * diário dele, o que verifica a conexão de ponta a ponta — inclusive se o modelo consegue mesmo
+ * chamar a tool, que um botão do lado do servidor não teria como confirmar.
+ */
 export const VERIFY_PROMPT = 'Qual é meu resumo de hoje?';
 
 function Step({
