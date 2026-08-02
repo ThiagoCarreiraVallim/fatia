@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { AppEnvSchema } from './common/env.validation';
+import { serializeRequest, serializeResponse } from './common/log-serializers';
 import { HealthModule } from './health/health.module';
 import { CommonModule } from './common/common.module';
 import { AuthModule } from './auth/auth.module';
@@ -29,6 +30,9 @@ import { McpModule } from './mcp/mcp.module';
             : undefined,
         level: process.env.NODE_ENV !== 'production' ? 'debug' : 'info',
         autoLogging: { ignore: (req) => req.url === '/health' },
+        // Sem isto o `pino-http` usa o serializador padrão, que grava `headers` inteiro —
+        // `authorization` incluído. Ver `common/log-serializers.ts`.
+        serializers: { req: serializeRequest, res: serializeResponse },
       },
     }),
     // O limite global chaveia por IP fora do /mcp. Todo o tráfego da Anthropic
