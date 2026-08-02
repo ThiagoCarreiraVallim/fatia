@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { Settings } from 'lucide-react-native';
+import { ScanBarcode, Settings } from 'lucide-react-native';
 import { nutritionApi, type MealItem, type MealType } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { ErrorState, LoadingState } from '@/components/ui';
@@ -65,6 +65,17 @@ export default function NutritionScreen() {
       >
         <View className="gap-5 px-5 pb-4 pt-4">
           <View className="flex-row items-center justify-end">
+            {/* Escanear entra no cabeçalho, e não dentro do drawer de busca: o
+                caso é "estou com a embalagem na mão", e enterrá-lo atrás de dois
+                toques faria a pessoa digitar o nome do produto assim mesmo. */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Escanear código de barras"
+              onPress={() => router.push(`/nutrition/scan?date=${data}`)}
+              className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
+            >
+              <ScanBarcode size={18} color="#baccaf" />
+            </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Metas"

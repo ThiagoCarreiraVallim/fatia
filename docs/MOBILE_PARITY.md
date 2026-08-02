@@ -32,6 +32,7 @@ Nenhum placeholder restante no código.
 | `(app)/nutrition`                  | `app/(app)/nutrition/index.tsx`            | ✅  |                                                                            |
 | `(app)/nutrition/goals`            | `app/(app)/nutrition/goals.tsx`            | ✅  |                                                                            |
 | `(app)/nutrition/nutrient-targets` | `app/(app)/nutrition/nutrient-targets.tsx` | ✅  |                                                                            |
+| —                                  | `app/(app)/nutrition/scan.tsx`             | ➕  | scanner de código de barras (#140); o PWA não tem, ver abaixo              |
 | `(app)/profile`                    | `app/(app)/profile/index.tsx`              | ✅  |                                                                            |
 | `(app)/profile/tokens`             | `app/(app)/profile/tokens.tsx`             | ✅  | mostra a URL real do MCP, não um exemplo fixo                              |
 | `(app)/progress`                   | `app/(app)/progress/index.tsx`             | ✅  |                                                                            |
@@ -61,20 +62,23 @@ Nenhum placeholder restante no código.
 | `water-card`           | `dashboard/water-card`           | ✅  | erro do atalho é exibido; no PWA some                             |
 | —                      | `dashboard/macro-bar`            | ➕  | o alvo aqui é único, não faixa mín–máx como em nutrição           |
 
-### Nutrição — 10 de 10
+### Nutrição — 10 de 10, mais 3 do scanner
 
-| PWA                     | App nativo                        |     | Observação                                                                          |
-| ----------------------- | --------------------------------- | :-: | ----------------------------------------------------------------------------------- |
-| `calories-ring-card`    | `nutrition/calories-ring-card`    | ✅  | anel em `react-native-svg`                                                          |
-| `date-navigator`        | `nutrition/date-navigator`        | ✅  | data em estado, não na URL — senão o voltar do Android percorreria o calendário     |
-| `edit-meal-item-drawer` | `nutrition/edit-meal-item-drawer` | ✅  |                                                                                     |
-| `food-search-drawer`    | `nutrition/food-search-drawer`    | ✅  | replica o que o teste do web documenta (debounce, formulário manual, 2+ caracteres) |
-| `macro-bar`             | `nutrition/macro-bar`             | ✅  |                                                                                     |
-| `macro-bento-grid`      | `nutrition/macro-bento-grid`      | ✅  |                                                                                     |
-| `meal-list`             | `nutrition/meal-list`             | ✅  | portado; nenhuma rota usa, igual ao web                                             |
-| `meal-timeline`         | `nutrition/meal-timeline`         | ✅  |                                                                                     |
-| `nutrient-targets-card` | `nutrition/nutrient-targets-card` | ✅  |                                                                                     |
-| `weekly-trend-chart`    | `nutrition/weekly-trend-chart`    | ✅  | barras em `react-native-svg`                                                        |
+| PWA                     | App nativo                         |     | Observação                                                                          |
+| ----------------------- | ---------------------------------- | :-: | ----------------------------------------------------------------------------------- |
+| `calories-ring-card`    | `nutrition/calories-ring-card`     | ✅  | anel em `react-native-svg`                                                          |
+| `date-navigator`        | `nutrition/date-navigator`         | ✅  | data em estado, não na URL — senão o voltar do Android percorreria o calendário     |
+| `edit-meal-item-drawer` | `nutrition/edit-meal-item-drawer`  | ✅  |                                                                                     |
+| `food-search-drawer`    | `nutrition/food-search-drawer`     | ✅  | replica o que o teste do web documenta (debounce, formulário manual, 2+ caracteres) |
+| `macro-bar`             | `nutrition/macro-bar`              | ✅  |                                                                                     |
+| `macro-bento-grid`      | `nutrition/macro-bento-grid`       | ✅  |                                                                                     |
+| `meal-list`             | `nutrition/meal-list`              | ✅  | portado; nenhuma rota usa, igual ao web                                             |
+| `meal-timeline`         | `nutrition/meal-timeline`          | ✅  |                                                                                     |
+| `nutrient-targets-card` | `nutrition/nutrient-targets-card`  | ✅  |                                                                                     |
+| `weekly-trend-chart`    | `nutrition/weekly-trend-chart`     | ✅  | barras em `react-native-svg`                                                        |
+| —                       | `nutrition/barcode-camera`         | ➕  | `expo-camera` (o `expo-barcode-scanner` foi descontinuado)                          |
+| —                       | `nutrition/scanned-product-drawer` | ➕  | produto do Open Food Facts + atribuição ODbL na própria tela (ADR 017)              |
+| —                       | `nutrition/barcode`                | ➕  | lógica pura do scanner: trava de leitura repetida, porção, ficha incompleta         |
 
 ### Treino — 13 de 13
 
@@ -172,6 +176,7 @@ exigência de loja.
 | Feedback tátil e cronômetro de descanso           | #126                                                                                   |
 | Confirmação antes de apagar                       | em tela de toque o alvo erra, e a API não desfaz                                       |
 | Estados de erro onde o web deixa a tela em branco | a auditoria pede estados equivalentes; "equivalente a nada" não serve                  |
+| Scanner de código de barras                       | #140 — e não é escolha: o PWA depende de `BarcodeDetector`, que o Safari não tem       |
 
 **Correção que volta para o PWA:** o botão "Log Água" do dashboard, com ícone de
 gota e rótulo de água, abria o drawer de **passos**. Corrigido nos dois.

@@ -42,6 +42,20 @@ const config: ExpoConfig = {
     'expo-secure-store',
     'expo-web-browser',
     [
+      // Scanner de código de barras (#140). O texto é o que a loja e o próprio
+      // sistema mostram no diálogo de permissão; genérico ("o app precisa da
+      // câmera") é motivo de recusa na revisão da App Store, e a pessoa também
+      // merece saber que nada é gravado.
+      'expo-camera',
+      {
+        cameraPermission:
+          'O Fatia usa a câmera para ler o código de barras de produtos embalados. Nenhuma foto é tirada ou armazenada.',
+        // O scanner não grava vídeo nem áudio; desligar aqui evita que o
+        // aplicativo peça microfone que nunca vai usar.
+        recordAudioAndroid: false,
+      },
+    ],
+    [
       'expo-splash-screen',
       {
         backgroundColor: '#131313',

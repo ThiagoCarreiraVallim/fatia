@@ -36,6 +36,41 @@ de carência.
 - **Meios de pagamento.** A instância pública é gratuita.
 - **Localização, contatos, agenda** ou qualquer dado do dispositivo.
 
+## Consulta ao Open Food Facts (scanner de código de barras)
+
+O scanner do app nativo consulta o [Open Food Facts](https://world.openfoodfacts.org) para descobrir
+o produto embalado a partir do código lido. É a **única transferência de dado para terceiro** no
+fluxo de nutrição, e por isso está descrita aqui item a item. Decisão em
+[ADR 017](./ADR/017-open-food-facts-para-industrializado.md).
+
+**O que sai daqui:** o número do código de barras, e nada mais.
+
+**O que explicitamente não sai:**
+
+- token, cookie ou cabeçalho `Authorization` — a requisição é anônima do lado do OFF;
+- `userId`, e-mail, nome ou qualquer identificador da pessoa;
+- corpo de requisição (é um `GET`);
+- o que foi comido, a refeição, o horário ou a quantidade — a consulta acontece **antes** de
+  qualquer registro, e o registro não é comunicado ao OFF.
+
+O único cabeçalho que identifica algo é o `User-Agent`, que identifica **o aplicativo** (exigido
+pelo OFF) e não a pessoa. A lista de cabeçalhos é fechada por teste
+(`apps/api/src/nutrition/__tests__/off-food.service.spec.ts`).
+
+| Dado                                | Onde                       | Retenção                         |
+| ----------------------------------- | -------------------------- | -------------------------------- |
+| Ficha do produto consultada         | Memória do processo da API | 6 h, ou até o processo reiniciar |
+| Código de barras escaneado          | **Não armazenado**         | —                                |
+| Vínculo entre usuário e código lido | **Não existe**             | —                                |
+
+O cache é do produto, não da pessoa: é chaveado só pelo código de barras, não guarda quem consultou
+e some no primeiro deploy. Nenhum registro da consulta vai para log — a mensagem de aviso de falha
+do OFF não inclui o código escaneado, pela mesma regra da seção de logging abaixo.
+
+**A imagem da câmera não sai do aparelho e não é gravada.** O `expo-camera` faz a decodificação
+localmente; o que o app envia à API é o número já lido. Não há foto, não há upload — o mesmo
+princípio da [ADR 004](./ADR/004-sem-armazenamento-fotos.md).
+
 ## Autenticação e OAuth
 
 | Dado                                                         | Onde                                                                 | Retenção                                                                           |

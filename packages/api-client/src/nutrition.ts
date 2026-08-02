@@ -15,6 +15,51 @@ export interface Food {
   createdByUserId: string | null;
 }
 
+/**
+ * Produto embalado lido por código de barras (#140).
+ *
+ * Não é um `Food`: nada é persistido na consulta ao Open Food Facts, e o item
+ * entra na refeição como item livre com os macros do rótulo. Ver ADR 017.
+ */
+export type BaseNutricional = '100g' | '100ml';
+
+export interface ScannedProduct {
+  barcode: string;
+  name: string;
+  brand: string | null;
+  /** `100ml` para bebida: os macros abaixo são por 100 ml, não por 100 g. */
+  basis: BaseNutricional;
+  kcalPer100g: number;
+  proteinPer100g: number;
+  carbsPer100g: number;
+  fatPer100g: number;
+  /** Porção do rótulo, na unidade do `basis`. `null` quando não dá para saber. */
+  servingSize: number | null;
+  servingLabel: string | null;
+}
+
+/** Ficha achada, porém sem algum macro. Serve para pré-preencher o cadastro. */
+export type PartialScannedProduct = Partial<Omit<ScannedProduct, 'barcode' | 'basis'>> & {
+  barcode: string;
+  basis: BaseNutricional;
+};
+
+/** Crédito exigido pela ODbL. Vem na resposta para a tela não ter como esquecer. */
+export interface OffAttribution {
+  source: string;
+  license: string;
+  url: string;
+}
+
+export type BarcodeLookup =
+  | { status: 'ok'; product: ScannedProduct; attribution: OffAttribution }
+  | {
+      status: 'incomplete';
+      missing: string[];
+      partial: PartialScannedProduct;
+      attribution: OffAttribution;
+    };
+
 export interface MealItem {
   id: string;
   mealId: string;
@@ -100,6 +145,14 @@ export const nutritionApi = {
   searchFoods: (q: string, limit = 20) =>
     apiFetch<Food[]>(`/api/nutrition/foods?q=${encodeURIComponent(q)}&limit=${limit}`),
   groups: () => apiFetch<FoodGroup[]>('/api/nutrition/foods/groups'),
+  /**
+   * Consulta um produto embalado pelo código de barras.
+   *
+   * `404` = o Open Food Facts não conhece o código (cadastro manual);
+   * `503` = o OFF não respondeu (também cai no manual, mas vale tentar de novo).
+   */
+  lookupBarcode: (code: string) =>
+    apiFetch<BarcodeLookup>(`/api/nutrition/foods/barcode/${encodeURIComponent(code)}`),
   createMeal: (body: {
     mealType: MealType;
     eatenAt: string;
