@@ -19,6 +19,16 @@ export function describePrescription(prescription: PrescribedSet): {
   const { weightKg, reps, restSeconds, basis, action, capped } = prescription;
   const label = `Sugestão: ${formatKg(weightKg)} kg × ${reps} · ${restSeconds}s`;
 
+  // `hold` com `capped` tem uma origem só (ver `prescribe-load.ts`): o sinal
+  // mandou **subir** carga e um teto comeu o salto inteiro, e só então a ação
+  // virou `hold`. Sem tratar esse par aqui, quem registrou RPE 6 nas três
+  // últimas sessões lê "RPE alto na última sessão" — a frase credita à pessoa
+  // um sinal oposto ao que ela registrou. O motivo verdadeiro é o teto, e o
+  // sinal que rodou continua sendo o de subir carga.
+  if (action === 'hold' && capped) {
+    return { label, reason: `${reasonFor(basis, 'increase_load')} · no teto — repete a carga` };
+  }
+
   return {
     label,
     reason: capped ? `${reasonFor(basis, action)} · no teto` : reasonFor(basis, action),

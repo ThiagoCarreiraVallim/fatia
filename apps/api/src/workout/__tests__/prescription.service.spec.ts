@@ -31,6 +31,26 @@ const twoSessions = (weightKg: number, reps: number, rpe: number | null) => [
   { startedAt: new Date(now - 10 * DAY), sets: [{ weightKg, reps, rpe }] },
 ];
 
+interface StoredSession {
+  startedAt: Date;
+  completedAt: Date | null;
+  sets: Array<{ weightKg: number; reps: number; rpe: number | null }>;
+}
+
+/**
+ * Mock que **obedece** ao `where`, em vez de devolver a lista pronta.
+ *
+ * Um mock que ignora o filtro não distingue "o service filtra" de "o service
+ * não filtra" — a sessão em andamento chegaria à regra nos dois casos, e o
+ * teste passaria com o defeito presente.
+ */
+const respectingCompletedFilter =
+  (stored: StoredSession[]) => (args: { where: Record<string, unknown> }) => {
+    const filter = args.where.completedAt as { not: null } | undefined;
+    const rows = filter?.not === null ? stored.filter((s) => s.completedAt !== null) : stored;
+    return Promise.resolve(rows.map(({ startedAt, sets }) => ({ startedAt, sets })));
+  };
+
 describe('PrescriptionService', () => {
   let prisma: MockPrisma;
   let sets: { getPersonalRecord: jest.Mock };
@@ -95,6 +115,57 @@ describe('PrescriptionService', () => {
     ]);
 
     await expect(service.forExercise(userId, 1)).resolves.toEqual({
+      status: 'insufficient_history',
+    });
+  });
+
+  it('não deixa a sessão em andamento virar a base da prescrição', async () => {
+    // A sessão de hoje ainda está aberta (`completedAt: null`) e é a mais
+    // recente. Sem o filtro ela vira `sessions[0]`, e a primeira série leve do
+    // dia — aquecimento, back-off, retomada — rebaixa a sugestão de quem treina
+    // a 100 kg para 52,5 kg, justamente no meio do treino.
+    prisma.workoutSession.findMany.mockImplementation(
+      respectingCompletedFilter([
+        { startedAt: new Date(now), completedAt: null, sets: [{ weightKg: 50, reps: 12, rpe: 6 }] },
+        {
+          startedAt: new Date(now - 3 * DAY),
+          completedAt: new Date(now - 3 * DAY),
+          sets: [{ weightKg: 100, reps: 8, rpe: 8 }],
+        },
+        {
+          startedAt: new Date(now - 6 * DAY),
+          completedAt: new Date(now - 6 * DAY),
+          sets: [{ weightKg: 100, reps: 8, rpe: 8 }],
+        },
+      ]),
+    );
+
+    await expect(service.forExercise(userId, 1, '8-12')).resolves.toMatchObject({
+      status: 'ok',
+      weightKg: 100,
+      reps: 9,
+    });
+    expect(prisma.workoutSession.findMany.mock.calls[0][0].where.completedAt).toEqual({
+      not: null,
+    });
+  });
+
+  it('não conta a sessão em andamento no mínimo de duas sessões', async () => {
+    // Com uma concluída só, a sessão aberta completava o par e a prescrição
+    // saía de um histórico de uma sessão — que é o chute que `MIN_SESSIONS`
+    // existe para recusar.
+    prisma.workoutSession.findMany.mockImplementation(
+      respectingCompletedFilter([
+        { startedAt: new Date(now), completedAt: null, sets: [{ weightKg: 60, reps: 12, rpe: 6 }] },
+        {
+          startedAt: new Date(now - 3 * DAY),
+          completedAt: new Date(now - 3 * DAY),
+          sets: [{ weightKg: 60, reps: 12, rpe: 6 }],
+        },
+      ]),
+    );
+
+    await expect(service.forExercise(userId, 1, '8-12')).resolves.toEqual({
       status: 'insufficient_history',
     });
   });

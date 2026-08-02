@@ -55,8 +55,18 @@ export class PrescriptionService {
 
     // Janela por **sessão** e não por dias: uma sessão antiga registrada
     // retroativamente hoje entraria numa janela por data e viraria a base.
+    //
+    // Só sessão **concluída** entra. `completedAt: null` é o que marca a sessão
+    // ativa, e como a ordem é por `startedAt: 'desc'` a sessão de hoje viraria
+    // `sessions[0]` — a base — assim que a primeira série do dia fosse
+    // registrada: uma série leve de aquecimento ou de retomada rebaixaria a
+    // sugestão da próxima série. É o mesmo recorte que o card já faz para a
+    // referência anterior (`getLastSet(..., sessionStartedAt)`), e ele tem de
+    // ser aqui: o cliente não tem como remover uma sessão que a prescrição já
+    // consumiu. De quebra, é o que faz o mínimo de duas sessões valer em
+    // sessões concluídas, e não em "uma concluída + a que está acontecendo".
     const sessions = await this.prisma.workoutSession.findMany({
-      where: { userId, sets: { some: validStrengthSet } },
+      where: { userId, completedAt: { not: null }, sets: { some: validStrengthSet } },
       orderBy: { startedAt: 'desc' },
       take: HISTORY_WINDOW,
       select: {

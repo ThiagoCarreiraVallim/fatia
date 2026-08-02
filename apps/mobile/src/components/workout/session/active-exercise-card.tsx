@@ -96,7 +96,11 @@ export function ActiveExerciseCard({
   // união — a anotação é o que faz `status: 'ok'` valer como discriminante.
   const prescribed: LoadPrescription | undefined = prescriptionQuery.data;
   const prescription = prescribed?.status === 'ok' ? prescribed : null;
-  const hint = prescription ? describePrescription(prescription) : null;
+  // A sugestão sai da tela assim que existe série **desta** sessão: o
+  // `prefillForNextSet` dá precedência a ela, e a prescrição parte da última
+  // sessão concluída. Manter o texto seria contradizer o campo — 70 kg × 8 no
+  // stepper e "Sugestão: 62,5 kg × 8" logo abaixo.
+  const hint = prescription && doneSets === 0 ? describePrescription(prescription) : null;
 
   const [weight, setWeight] = useState(0);
   const [reps, setReps] = useState(() => parseFirstRep(group.targetReps));

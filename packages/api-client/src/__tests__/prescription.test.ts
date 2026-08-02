@@ -47,6 +47,32 @@ describe('describePrescription', () => {
     expect(new Set(reasons).size).toBe(3);
   });
 
+  it('não credita RPE alto quando o teto travou um salto pedido por RPE baixo', () => {
+    // O caso concreto: 100 / 95 / 92 kg, os três com RPE 6. A regra decidiu
+    // subir carga, o teto semanal comeu o salto inteiro e só então a ação virou
+    // `hold` — o `basis` continua `rpe` e o RPE registrado foi baixo. Dizer
+    // "RPE alto na última sessão" credita à pessoa o sinal oposto ao que ela
+    // registrou, que é exatamente o que o `basis` existe para impedir.
+    const travado = describePrescription(make({ basis: 'rpe', action: 'hold', capped: true }));
+
+    expect(travado.reason).toBe(
+      'RPE baixo com as reps no topo da faixa · no teto — repete a carga',
+    );
+    expect(travado.reason).not.toContain('RPE alto');
+
+    // E o `hold` que veio mesmo do RPE alto continua dizendo isso: `capped` é o
+    // que separa os dois (ver `prescribe-load.ts`).
+    expect(describePrescription(make({ basis: 'rpe', action: 'hold', capped: false })).reason).toBe(
+      'RPE alto na última sessão',
+    );
+  });
+
+  it('não credita RPE nenhum ao teto quando não houve RPE', () => {
+    expect(describePrescription(make({ basis: 'reps', action: 'hold', capped: true })).reason).toBe(
+      'sem RPE — todas as séries fecharam a faixa · no teto — repete a carga',
+    );
+  });
+
   it('avisa quando o teto de progressão cortou o salto', () => {
     expect(describePrescription(make({ capped: true })).reason).toContain('no teto');
     expect(describePrescription(make({ capped: false })).reason).not.toContain('no teto');

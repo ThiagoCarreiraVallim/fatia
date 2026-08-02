@@ -120,6 +120,12 @@ export function prescribeLoad(input: PrescribeLoadInput): PrescriptionOutcome {
     } else {
       // O teto comeu o salto inteiro. Voltar as reps ao piso agora seria uma
       // regressão travestida de progressão — mesma carga com menos repetição.
+      //
+      // Este é o **único** caminho que produz `hold` com `capped: true`: fora
+      // daqui `capped` nunca é verdadeiro. É esse par que deixa o texto da
+      // sugestão (`describePrescription`) distinguir "o RPE mandou repetir" de
+      // "a regra mandou subir e o teto travou" — sem ele, quem registrou RPE 6
+      // lê "RPE alto na última sessão" na tela.
       action = 'hold';
       reps = base.reps;
     }
@@ -171,16 +177,24 @@ function applyCaps(
   sessions: PrescriptionSession[],
   personalRecordKg: number | null,
 ): { weightKg: number; capped: boolean } {
-  let increment = Math.min(step, baseKg * SESSION_CAP);
+  // Os 5% da sessão, com piso de uma anilha: abaixo de 10 kg os 5% dão menos
+  // que 0,5 kg, o `floorToPlate` devolve a própria carga base e a progressão
+  // trava para sempre — 6 kg de rosca com RPE 6 ficariam em 6 kg a vida
+  // inteira. Carga 0 é o extremo do mesmo caso: barra fixa e paralela são carga
+  // 0 (e o app trata 0 como carga, não como ausência dela), e 5% de 0 é 0. Teto
+  // mais fino que a menor anilha não é teto, é trava.
+  let increment = Math.min(step, Math.max(baseKg * SESSION_CAP, PLATE_KG));
 
-  if (personalRecordKg !== null) {
+  // Recorde 0 é ausência de carga externa, não recorde de carga: 1,05 × 0 = 0
+  // travaria a barra fixa em 0 kg para sempre, pelo mesmo motivo acima.
+  if (personalRecordKg !== null && personalRecordKg > 0) {
     increment = Math.min(increment, Math.max(0, personalRecordKg * PR_CAP - baseKg));
   }
 
   const weeklyCeiling = weeklyCeilingOf(sessions);
   // Estourou a semana → devolve a carga anterior. Cortar pela metade daria um
   // número que ninguém pediu; repetir a carga é uma resposta que se explica.
-  if (baseKg + increment > weeklyCeiling) increment = 0;
+  if (weeklyCeiling !== null && baseKg + increment > weeklyCeiling) increment = 0;
 
   const weightKg = Math.max(baseKg, floorToPlate(baseKg + increment));
   return { weightKg, capped: weightKg < baseKg + step };
@@ -191,14 +205,18 @@ function applyCaps(
  *
  * A janela é contada a partir da última sessão, e não de "hoje": quem parou um
  * mês volta com o teto medido no próprio retorno, não numa semana vazia.
+ *
+ * `null` quando a semana começou sem carga externa: 10% de 0 é 0, e o teto
+ * viraria trava em quem treina barra fixa ou paralela.
  */
-function weeklyCeilingOf(sessions: PrescriptionSession[]): number {
+function weeklyCeilingOf(sessions: PrescriptionSession[]): number | null {
   const last = sessions[0];
   const withinWeek = sessions.filter(
     (s) => last.startedAt.getTime() - s.startedAt.getTime() <= WEEK_MS,
   );
   const oldest = withinWeek[withinWeek.length - 1];
-  return bestSet(oldest.sets).weightKg * (1 + WEEKLY_CAP);
+  const oldestKg = bestSet(oldest.sets).weightKg;
+  return oldestKg > 0 ? oldestKg * (1 + WEEKLY_CAP) : null;
 }
 
 /**
@@ -231,11 +249,17 @@ function averageRpe(sets: PrescriptionSet[]): number | null {
   return values.reduce((sum, rpe) => sum + rpe, 0) / values.length;
 }
 
+/**
+ * Piso de 1 repetição: `targetReps` chega da query string sem passar por DTO
+ * (`?targetReps=0`, ou um "0-12" digitado no plano), e uma faixa que começa em
+ * zero prescreve `reps: 0` — que o card copia para o campo de repetições. Série
+ * de zero repetição não é série nenhuma.
+ */
 export function parseRepRange(targetReps?: string | null): RepRange {
   const numbers = targetReps?.match(/\d+/g);
   if (!numbers || numbers.length === 0) return DEFAULT_REP_RANGE;
-  const min = Number(numbers[0]);
-  const max = numbers.length > 1 ? Number(numbers[1]) : min;
+  const min = Math.max(1, Number(numbers[0]));
+  const max = numbers.length > 1 ? Math.max(1, Number(numbers[1])) : min;
   return { min: Math.min(min, max), max: Math.max(min, max) };
 }
 

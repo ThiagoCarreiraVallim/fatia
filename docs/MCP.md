@@ -158,7 +158,7 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 88 tools): **66,6 k caracteres**
+`description`, `annotations` e o JSON Schema do input das 88 tools): **66,7 k caracteres**
 hoje, dos quais **4.110 são os exemplos** — acréscimo de **6,7%** sobre os 61,6 k de antes,
 pago em toda sessão que lista as tools. Média de 91 caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
@@ -1432,14 +1432,16 @@ modelo, sem extrapolação de tendência.
   action: "increase_load" | "increase_reps" | "hold";
   capped: boolean;                                        // algum teto cortou o salto
 }
-| { status: "insufficient_history" }                      // menos de 2 sessões
+| { status: "insufficient_history" }                      // menos de 2 sessões concluídas
 | { status: "cardio_exercise" }                           // cardio não tem prescrição de carga
 ```
 
-A regra, em uma frase: parte da melhor série da última sessão (maior 1RM estimado) e sobe carga
-só quando as repetições fecharam o topo da faixa **e** o esforço permitiu.
+A regra, em uma frase: parte da melhor série da última sessão **concluída** (maior 1RM estimado) e
+sobe carga só quando as repetições fecharam o topo da faixa **e** o esforço permitiu. A sessão em
+andamento fica de fora: a primeira série leve do dia — aquecimento, back-off, retomada — não pode
+virar a base da sugestão no meio do próprio treino.
 
-| Sinal da última sessão                  | Ação                                                      |
+| Sinal da última sessão concluída        | Ação                                                      |
 | --------------------------------------- | --------------------------------------------------------- |
 | RPE médio ≤ 7 e reps no topo da faixa   | sobe a carga, reps voltam ao piso                         |
 | RPE médio entre 7 e 9                   | mantém a carga, sobe uma repetição                        |
@@ -1449,13 +1451,17 @@ só quando as repetições fecharam o topo da faixa **e** o esforço permitiu.
 Três tetos, todos verificados por teste:
 
 1. **Por sessão:** o salto nunca passa de 5% da carga base (nem do passo fixo — 2,5 kg em
-   composto, 1,25 kg em isolamento, arredondado para baixo em múltiplos de 0,5 kg).
+   composto, 1,25 kg em isolamento, arredondado para baixo em múltiplos de 0,5 kg), com piso de
+   uma anilha: abaixo de 10 kg os 5% valem menos que 0,5 kg e o teto travaria a progressão.
 2. **Por semana:** a carga não passa de 10% sobre a sessão mais antiga dentro de 7 dias da
    última. Estourou, devolve a carga anterior com `capped: true`.
 3. **Absoluto:** não acrescenta carga acima de 1,05 × o recorde de todos os tempos.
 
-`status: "insufficient_history"` é resposta, não erro: com menos de duas sessões registradas **não
-invente uma carga**. Sugerir o recorde pessoal na série de abertura é exatamente o bug #190.
+Os tetos 2 e 3 são percentuais e não valem sobre zero: barra fixa e paralela são registradas com
+carga 0, e 10% de 0 (ou 1,05 × recorde 0) prenderia esses exercícios em 0 kg para sempre.
+
+`status: "insufficient_history"` é resposta, não erro: com menos de duas sessões **concluídas**
+registradas **não invente uma carga**. Sugerir o recorde pessoal na série de abertura é exatamente o bug #190.
 
 Exercício clonado (`clonedFromId`) herda o histórico do exercício de origem — renomear um
 exercício não apaga a progressão.

@@ -232,6 +232,27 @@ describe('ActiveExerciseCard', () => {
     expect(screen.getByText('03:00')).toBeInTheDocument();
   });
 
+  it('esconde a sugestão depois de a pessoa registrar série nesta sessão', async () => {
+    getPrescription.mockResolvedValue({
+      status: 'ok',
+      weightKg: 62.5,
+      reps: 8,
+      restSeconds: 180,
+      basis: 'rpe',
+      action: 'increase_load',
+      capped: false,
+    });
+    renderCard(makeGroup({ sets: [makeSet({ id: 'de-hoje', weightKg: 70, reps: 8 })] }));
+
+    // Os 03:00 provam que a prescrição já chegou (o padrão da tela é 90s): sem
+    // essa âncora, a ausência do texto poderia ser só a resposta atrasada.
+    expect(await screen.findByText('03:00')).toBeInTheDocument();
+    // O campo copia a série de hoje, que tem precedência no `prefillForNextSet`.
+    // Manter "Sugestão: 62.5 kg × 8" logo abaixo contradiz o próprio campo.
+    expect(weightValue()).toBe('70');
+    expect(screen.queryByText(/Sugestão/)).not.toBeInTheDocument();
+  });
+
   it('não mostra sugestão nenhuma quando o histórico é curto demais', async () => {
     getLastSet.mockResolvedValue(makeSet({ id: 'antigo', weightKg: 60, reps: 12 }));
     getPrescription.mockResolvedValue({ status: 'insufficient_history' });

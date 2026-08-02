@@ -177,6 +177,14 @@ describe('prescribeLoad', () => {
       });
     });
 
+    it('ainda conta a sessão de exatamente 7 dias atrás na semana', () => {
+      // A fronteira do `<=`: os testes vizinhos usam 6 e 8 dias, e trocar o
+      // comparador por `<` passaria despercebido — a sessão de 7 dias sairia da
+      // janela e o teto semanal subiria de 19,8 para 22.
+      const sessions = [session(0, [set(20, 12, 6)]), session(7, [set(18, 12, 6)])];
+      expect(prescribe(sessions)).toMatchObject({ weightKg: 20, action: 'hold', capped: true });
+    });
+
     it('deixa a semana de fora quando a sessão anterior está a mais de 7 dias', () => {
       const sessions = [
         session(0, [set(20, 12, 6)]),
@@ -223,6 +231,39 @@ describe('prescribeLoad', () => {
     });
   });
 
+  describe('carga leve e carga 0 (peso corporal)', () => {
+    it('progride barra fixa, que é registrada com carga 0', () => {
+      // Carga 0 é carga no app (o card grava `weightKg: 0` de propósito, com
+      // `??` e não `||`). Com os tetos percentuais, 5% de 0 é 0, 1,05 × recorde
+      // 0 é 0 e 10% da semana em 0 é 0: os três zeram o salto e quem faz 12
+      // barras com RPE 6 recebe "repita 12" para sempre.
+      const result = prescribe(history([set(0, 12, 6)]), { personalRecordKg: 0 });
+      expect(result).toMatchObject({
+        status: 'ok',
+        weightKg: 0.5,
+        reps: 8,
+        action: 'increase_load',
+      });
+    });
+
+    it('não trava a carga leve em que 5% valem menos que a menor anilha', () => {
+      // 5% de 6 kg = 0,3 kg; o piso da anilha é 0,5 e o `floorToPlate` devolvia
+      // os mesmos 6 kg. Sem o piso, toda carga abaixo de 10 kg fica parada para
+      // sempre, por mais fácil que o RPE diga que ela está.
+      expect(prescribe(history([set(6, 12, 6)]), { mechanic: 'isolation' })).toMatchObject({
+        weightKg: 6.5,
+        reps: 8,
+        action: 'increase_load',
+      });
+    });
+
+    it('mantém os 5% como teto assim que eles passam de uma anilha', () => {
+      // Guarda do piso: em 20 kg os 5% valem 1 kg e continuam mandando, senão o
+      // piso viraria licença para o passo inteiro de 2,5 kg.
+      expect(prescribe(history([set(20, 12, 6)]))).toMatchObject({ weightKg: 21 });
+    });
+  });
+
   describe('passo por mecânica', () => {
     it('usa 2,5 kg em exercício composto', () => {
       expect(prescribe(history([set(100, 12, 6)]), { mechanic: 'compound' })).toMatchObject({
@@ -249,11 +290,54 @@ describe('prescribeLoad', () => {
       const sets = [set(100, 3, 8), set(90, 10, 8)];
       expect(prescribe(history(sets))).toMatchObject({ weightKg: 90, reps: 11 });
     });
+
+    it('desempata pela carga maior quando o 1RM estimado é o mesmo', () => {
+      // 90 × 10 e 100 × 6 estimam os mesmos 120 kg. Sem o desempate, o `reduce`
+      // fica com a primeira série da lista e a sugestão trocaria 6 repetições
+      // pesadas por 10 leves — que é o que o comentário da regra promete evitar.
+      const sets = [set(90, 10, 8), set(100, 6, 8)];
+      expect(prescribe(history(sets))).toMatchObject({ weightKg: 100, reps: 7 });
+    });
+  });
+
+  describe('faixa alvo inválida', () => {
+    it('nunca prescreve zero repetições', () => {
+      // `GET /workout/exercises/1/prescription?targetReps=0` chega até aqui como
+      // string crua; o número prescrito vai direto para o campo do card.
+      expect(prescribe(history([set(60, 10, 6)]), { targetReps: '0' })).toMatchObject({
+        weightKg: 62.5,
+        reps: 1,
+      });
+    });
+  });
+
+  describe('repetições abaixo do piso da faixa', () => {
+    it('sobe uma repetição por vez até entrar na faixa, sem pular para o piso', () => {
+      // Decisão, não descuido: 60 × 3 com RPE 7 quer dizer ~3 repetições em
+      // reserva, ou seja ~6 naquela carga — prescrever as 8 do piso da faixa
+      // pediria uma série que a última sessão não sustenta, que é o salto sem
+      // lastro que esta issue existe para não dar. A carga fica e as reps
+      // sobem; quem quer entrar na faixa de uma vez muda a carga.
+      expect(prescribe(history([set(60, 3, 7)]))).toMatchObject({
+        weightKg: 60,
+        reps: 4,
+        action: 'increase_reps',
+      });
+    });
   });
 
   describe('descanso', () => {
     it('dá 180s para composto pesado', () => {
       expect(prescribe(history([set(100, 5, 8)]), { targetReps: '5' })).toMatchObject({
+        restSeconds: 180,
+      });
+    });
+
+    it('ainda dá 180s com exatamente 6 repetições', () => {
+      // A fronteira do `reps <= 6`: o caso de 180s acima usa 5 reps e o de 90s
+      // usa 10, então trocar o limite por 5 passaria batido.
+      expect(prescribe(history([set(60, 5, 8)]), { targetReps: '6' })).toMatchObject({
+        reps: 6,
         restSeconds: 180,
       });
     });
@@ -290,6 +374,13 @@ describe('parseRepRange', () => {
 
   it('lê número único como faixa fechada', () => {
     expect(parseRepRange('5')).toEqual({ min: 5, max: 5 });
+  });
+
+  it('nunca devolve faixa que começa em zero', () => {
+    // `targetReps` vem da query string sem DTO: `?targetReps=0` prescrevia
+    // `reps: 0`, e o card copia esse número para o campo de repetições.
+    expect(parseRepRange('0')).toEqual({ min: 1, max: 1 });
+    expect(parseRepRange('0-12')).toEqual({ min: 1, max: 12 });
   });
 
   it('cai na faixa padrão em alvo sem número', () => {

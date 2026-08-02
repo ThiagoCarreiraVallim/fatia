@@ -18,7 +18,7 @@ export class GetLoadPrescriptionTool implements McpToolDef {
 
   readonly annotations = { readOnlyHint: true, destructiveHint: false };
   readonly description =
-    'Sugere carga, repetições e descanso da próxima sessão de um exercício de força, a partir do histórico e do RPE registrado. Devolve status "insufficient_history" quando há menos de 2 sessões — nesse caso não invente uma carga.';
+    'Sugere carga, repetições e descanso da próxima sessão de um exercício de força, a partir do histórico e do RPE registrado. Só considera sessões concluídas: a que está em andamento não entra. Devolve status "insufficient_history" quando há menos de 2 sessões concluídas — nesse caso não invente uma carga.';
   readonly inputSchema = {
     exerciseId: z.number().int().positive().describe('ID do exercício'),
     targetReps: z
