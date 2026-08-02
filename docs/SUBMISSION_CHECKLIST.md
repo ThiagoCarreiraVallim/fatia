@@ -23,7 +23,7 @@ Mapa das lacunas para issues:
 
 | Item                                        | Issue                     |
 | ------------------------------------------- | ------------------------- |
-| A1 — anotações das 87 tools                 | #169                      |
+| A1 — anotações das 88 tools                 | #169                      |
 | A2 — org Team/Enterprise                    | ✅ resolvido (Team ativo) |
 | A3–A6 — hardening do OAuth para o diretório | #170                      |
 | A7 — validação funcional + conta de teste   | #171                      |
@@ -56,13 +56,13 @@ Estado do código: **nenhuma anotação existe**. `grep -r "readOnlyHint\|destru
 
 Impacto: o passo **Tools** do portal sincroniza a superfície do servidor e sinaliza
 tools sem título ou anotação, pedindo correção **antes** de submeter. Sem isso a
-submissão não avança, e são **87 tools** afetadas.
+submissão não avança, e são **88 tools** afetadas.
 
 Trabalho:
 
 - [ ] Estender `McpToolDef` com `title: string` e `annotations: { readOnlyHint?: true; destructiveHint?: true }`.
 - [ ] Passar os dois no `registerTool` do registry.
-- [ ] Preencher nas 87 tools. A separação é mecânica pelo prefixo do nome:
+- [ ] Preencher nas 88 tools. A separação é mecânica pelo prefixo do nome:
       `get_*` / `list_*` / `search_*` / `explain_*` / `export_*` → `readOnlyHint`;
       `delete_*` (13 tools) e `delete_my_account` → `destructiveHint`;
       `log_*` / `create_*` / `update_*` / `set_*` / `add_*` / `remove_*` / `start_*` /
@@ -159,13 +159,13 @@ O Claude só escolhe CIMD se o metadata trouxer **também**
       (por e-mail para `mcp-review@anthropic.com`). Registrar em ADR.
 - [ ] Se ficar em DCR: definir TTL/limpeza de clientes registrados e órfãos.
 
-### A7. Exercitar as 87 tools de ponta a ponta 🟠 (#171)
+### A7. Exercitar as 88 tools de ponta a ponta 🟠 (#171)
 
 Requisito explícito do "before you submit", e o passo **Test & launch** do portal pede
 confirmação de que você rodou **cada** tool. Reviewers fazem teste funcional por tool, e
 erro genérico ("Internal Server Error", "Bad Request" sem detalhe) reprova.
 
-- [ ] Rodar as 87 tools no [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector).
+- [ ] Rodar as 88 tools no [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector).
 - [ ] Rodar as 87 como **custom connector** no Claude.
 - [ ] Criar a **conta de teste populada** (refeições, planos, sessões, séries, pesos,
       passos, água, metas) e escrever o passo a passo de acesso para o reviewer —
@@ -246,13 +246,13 @@ para _verified_ é avaliada automaticamente pela Anthropic.
 
 ## Ordem sugerida
 
-1. **#169** (anotações das 87 tools) — único bloqueador puramente de código, e o passo
+1. **#169** (anotações das 88 tools) — único bloqueador puramente de código, e o passo
    Tools do portal trava nele.
 2. **#114 + #93** (Logto em produção, DNS, bucket, drill de restore) — destravam a
    validação real do conector.
 3. **#170** (metadata, erros OAuth, throttle e latência) — o que o reviewer encontra ao
    conectar. A decisão DCR × CIMD pode ficar registrada em ADR sem estar implementada.
-4. **#91 + #171** (validar o fluxo no Claude; exercitar as 87 tools no Inspector e no
+4. **#91 + #171** (validar o fluxo no Claude; exercitar as 88 tools no Inspector e no
    Claude; conta de teste populada).
 5. **#97 + #113** (conteúdo da listagem, respostas de compliance, documentação pública).
 6. **#97** — abrir o portal e submeter.
