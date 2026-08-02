@@ -114,8 +114,9 @@ export default tseslint.config(
      * As regras da era do React Compiler que o `eslint-plugin-react-hooks` v7
      * trouxe: `set-state-in-effect`, `purity` e `refs`.
      *
-     * Entraram como aviso quando o ESLint 10 subiu, com 42 ocorrências, e ficam
-     * como **erro** desde que a fila foi zerada. É de propósito: a maioria era
+     * Entraram como aviso quando o ESLint 10 subiu, com 40 ocorrências (32 de
+     * `set-state-in-effect`, 6 de `purity`, 2 de `refs`), e ficam como **erro**
+     * desde que a fila foi zerada. É de propósito: a maioria era
      * estado derivado de prop copiado para dentro de um `useEffect`, e esse
      * padrão volta sozinho no próximo componente escrito se o lint só resmungar.
      *
