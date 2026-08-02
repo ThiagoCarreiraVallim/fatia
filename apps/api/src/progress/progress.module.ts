@@ -5,6 +5,8 @@ import { StepLogService } from './step-log.service';
 import { WaterLogService } from './water-log.service';
 import { ProgressService } from './progress.service';
 import { DashboardService } from './dashboard.service';
+import { StreakService } from './streak.service';
+import { AchievementService } from './achievement.service';
 import { ProgressController } from './progress.controller';
 import { LogWeightTool } from './mcp/log-weight.tool';
 import { UpdateWeightLogTool } from './mcp/update-weight-log.tool';
@@ -30,6 +32,9 @@ import { GetVolumeProgressTool } from './mcp/get-volume-progress.tool';
 import { GetStepsProgressTool } from './mcp/get-steps-progress.tool';
 import { GetTodaySummaryTool } from './mcp/get-today-summary.tool';
 import { GetWeekSummaryTool } from './mcp/get-week-summary.tool';
+import { GetStreakTool } from './mcp/get-streak.tool';
+import { ListAchievementsTool } from './mcp/list-achievements.tool';
+import { RefreshAchievementsTool } from './mcp/refresh-achievements.tool';
 
 @Module({
   imports: [CommonModule],
@@ -40,6 +45,8 @@ import { GetWeekSummaryTool } from './mcp/get-week-summary.tool';
     WaterLogService,
     ProgressService,
     DashboardService,
+    StreakService,
+    AchievementService,
     LogWeightTool,
     UpdateWeightLogTool,
     DeleteWeightLogTool,
@@ -64,7 +71,18 @@ import { GetWeekSummaryTool } from './mcp/get-week-summary.tool';
     GetStepsProgressTool,
     GetTodaySummaryTool,
     GetWeekSummaryTool,
+    GetStreakTool,
+    ListAchievementsTool,
+    RefreshAchievementsTool,
   ],
-  exports: [WeightLogService, StepLogService, WaterLogService, ProgressService, DashboardService],
+  exports: [
+    WeightLogService,
+    StepLogService,
+    WaterLogService,
+    ProgressService,
+    DashboardService,
+    StreakService,
+    AchievementService,
+  ],
 })
 export class ProgressModule {}

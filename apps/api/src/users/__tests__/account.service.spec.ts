@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { PrismaService } from '../../common/prisma.service';
 import type { LogtoManagementService } from '../../auth/logto-management.service';
@@ -16,7 +18,65 @@ const makePrisma = () => ({
   weightLog: { findMany: jest.fn().mockResolvedValue([]) },
   stepLog: { findMany: jest.fn().mockResolvedValue([]) },
   waterLog: { findMany: jest.fn().mockResolvedValue([]) },
+  userAchievement: { findMany: jest.fn().mockResolvedValue([]) },
 });
+
+const SCHEMA = resolve(__dirname, '../../../../../packages/db/prisma/schema.prisma');
+
+/**
+ * Relação do `User` no schema → chave no payload `fatia-export-v1`.
+ *
+ * O mapa é conferido CONTRA o schema logo abaixo, e é isso que o separa da lista à mão que
+ * existia aqui antes: aquela enumerava os modelos que o export já buscava, então uma tabela
+ * nova que ficasse de fora do export ficava de fora do teste junto e nada acusava. Foi assim
+ * que `UserAchievement` — inclusive o `context` de `first_pr`, com exercício e carga — passou
+ * despercebida pela portabilidade que o README promete como "devolve tudo".
+ */
+const CHAVE_NO_EXPORT: Record<string, string> = {
+  goals: 'nutritionGoals',
+  personalGoals: 'personalGoals',
+  meals: 'meals',
+  workoutPlans: 'workoutPlans',
+  workoutSessions: 'workoutSessions',
+  weightLogs: 'weightLogs',
+  stepLogs: 'stepLogs',
+  waterLogs: 'waterLogs',
+  customFoods: 'customFoods',
+  customExercises: 'customExercises',
+  nutrientTargets: 'nutrientTargets',
+  achievements: 'achievements',
+};
+
+/**
+ * Relações que NÃO entram no export, cada uma com o motivo. Ficar de fora é uma decisão
+ * legítima; ficar de fora em silêncio não é.
+ */
+const FORA_DO_EXPORT: Record<string, string> = {
+  ownedGroups: 'B2B (ADR 014): o grupo é do profissional, não dado pessoal de saúde do titular.',
+  memberships: 'B2B: vínculo administrativo, e exportá-lo revelaria a composição do grupo.',
+  linksAsSubject: 'B2B: quem tem acesso é consultado na tela de compartilhamento, não no export.',
+  linksAsProfessional: 'B2B: lista os PACIENTES do profissional — dado de terceiro.',
+  accessLogs: 'Trilha de auditoria do sistema, não conteúdo que o titular criou.',
+};
+
+/** Nomes de model do schema, para separar campo de relação de campo escalar. */
+function modelosDoSchema(schema: string): Set<string> {
+  return new Set(Array.from(schema.matchAll(/^model\s+(\w+)\s*\{/gm), (m) => m[1]));
+}
+
+/** Campos do `User` cujo tipo é outro model — ou seja, dado pendurado no titular. */
+function relacoesDoUser(schema: string): string[] {
+  const bloco = /^model\s+User\s*\{([\s\S]*?)^\}/m.exec(schema);
+  if (!bloco) throw new Error('model User não encontrado no schema.prisma');
+  const modelos = modelosDoSchema(schema);
+
+  return bloco[1]
+    .split('\n')
+    .map((linha) => /^\s*(\w+)\s+(\w+)(\[\])?\??/.exec(linha))
+    .filter((m): m is RegExpExecArray => m !== null)
+    .filter((m) => modelos.has(m[2]))
+    .map((m) => m[1]);
+}
 
 const makeLogto = () => ({
   isConfigured: jest.fn().mockReturnValue(true),
@@ -79,6 +139,60 @@ describe('AccountService', () => {
           expect.objectContaining({ where: { createdByUserId: 'user-A' } }),
         );
       }
+    });
+
+    it('devolve toda relação do User que não esteja declarada como fora', async () => {
+      // A guarda é derivada do `schema.prisma`, não de uma lista escrita aqui: tabela nova
+      // pendurada no `User` quebra este caso até alguém decidir, por escrito, se ela é dado do
+      // titular. "Devolve tudo" é o que o README promete e o que a LGPD cobra.
+      prisma.user.findUnique.mockResolvedValue(USER);
+      const schema = readFileSync(SCHEMA, 'utf8');
+      const relacoes = relacoesDoUser(schema);
+
+      // Sanidade: se o parse do schema quebrar, os `expect` abaixo passariam vazios.
+      expect(relacoes.length).toBeGreaterThan(10);
+
+      const naoDecididas = relacoes.filter((r) => !CHAVE_NO_EXPORT[r] && !FORA_DO_EXPORT[r]);
+      expect(naoDecididas).toEqual([]);
+
+      const result = (await service.exportData('user-A')) as unknown as Record<string, unknown>;
+
+      const ausentes = relacoes
+        .filter((r) => CHAVE_NO_EXPORT[r])
+        .filter((r) => !(CHAVE_NO_EXPORT[r] in result));
+      expect(ausentes).toEqual([]);
+
+      // Decisão que sumiu do schema vira permissão silenciosa para a próxima relação homônima.
+      const orfas = [...Object.keys(CHAVE_NO_EXPORT), ...Object.keys(FORA_DO_EXPORT)]
+        .filter((r) => !relacoes.includes(r))
+        .sort();
+      expect(orfas).toEqual([]);
+    });
+
+    it('exporta as conquistas com o contexto do desbloqueio', async () => {
+      // O `context` de `first_pr` carrega exercício e carga — dado de saúde, e o único lugar
+      // onde a conquista guarda algo que não dá para reconstruir a partir das outras tabelas.
+      prisma.user.findUnique.mockResolvedValue(USER);
+      prisma.userAchievement.findMany.mockResolvedValue([
+        {
+          key: 'first_pr',
+          unlockedAt: new Date('2026-01-10'),
+          context: { exerciseId: 7, exerciseName: 'Supino reto', weightKg: 80 },
+        },
+      ]);
+
+      const result = await service.exportData('user-A');
+
+      expect(prisma.userAchievement.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ userId: 'user-A' }) }),
+      );
+      expect(result.achievements).toEqual([
+        expect.objectContaining({
+          key: 'first_pr',
+          context: { exerciseId: 7, exerciseName: 'Supino reto', weightKg: 80 },
+        }),
+      ]);
+      expect(result.counts.achievements).toBe(1);
     });
 
     it('não seleciona logtoSub no export', async () => {

@@ -24,3 +24,4 @@ export * from './workout/set-prefill';
 export * from './workout/prescription';
 export * from './workout/quick-templates';
 export * from './session-view';
+export * from './streak-copy';

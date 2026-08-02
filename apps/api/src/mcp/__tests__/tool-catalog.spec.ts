@@ -64,7 +64,7 @@ const TOOL_COUNT_SLICES: ReadonlyArray<{ file: string; text: string; count: () =
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '45 tools de escrita',
+    text: '46 tools de escrita',
     // As de escrita que ganharam exemplo na #111 — `delete_my_account` é isenta,
     // e é por isso que o número não é o total de tools de escrita.
     count: () =>
@@ -77,6 +77,12 @@ const TOOL_COUNT_SLICES: ReadonlyArray<{ file: string; text: string; count: () =
 
 /** `verb_noun` em snake_case, conforme a convenção da §Catálogo de `docs/MCP.md`. */
 const TOOL_NAME_PATTERN = /^[a-z]+(_[a-z]+)+$/;
+
+/** `68,4 k` — como as docs escrevem tamanho de catálogo. */
+const emK = (n: number) => `${(n / 1000).toFixed(1).replace('.', ',')} k`;
+
+/** `4.074` — milhar com ponto, como as docs escrevem contagem de caracteres. */
+const emMilhar = (n: number) => n.toLocaleString('pt-BR');
 
 function findToolFiles(): string[] {
   return readdirSync(API_SRC, { recursive: true, encoding: 'utf8' })
@@ -236,6 +242,72 @@ function deepStrict(schema: ZodTypeAny, path: string): ZodTypeAny {
 const tools = loadTools();
 const doc = readFileSync(MCP_DOC, 'utf8');
 
+/**
+ * Tamanho do catálogo servido, medido no MESMO objeto que `McpToolRegistry.bindAll` entrega ao
+ * `registerTool` — `name`, `title`, `description`, `annotations` (com o `title` repetido, como o
+ * registry faz) e o JSON Schema do input.
+ *
+ * A medição mora aqui porque a prosa apodreceu: as docs seguiram afirmando "66,7 k caracteres"
+ * depois de tools novas entrarem, e o número não tinha guarda nenhuma — só o `N tools` tinha.
+ * Número medido que ninguém remede é chute com casa decimal.
+ */
+const payload = tools.reduce(
+  (acc, { tool }) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const inputSchema = zodToJsonSchema(z.object(tool.inputSchema as any) as any);
+    acc.cheio += JSON.stringify({
+      name: tool.name,
+      title: tool.title,
+      description: tool.description,
+      annotations: { title: tool.title, ...tool.annotations },
+      inputSchema,
+    }).length;
+    // Denominador estreito: o que se mede quando se esquece que `title` e `annotations` também
+    // vão no fio. Fica registrado para a comparação não ser refeita de cabeça.
+    acc.estreito += JSON.stringify({
+      name: tool.name,
+      description: tool.description,
+      inputSchema,
+    }).length;
+
+    const exemplos = extractExamples(tool.description);
+    if (exemplos.length > 0) {
+      // O custo do exemplo no fio é o trecho inteiro: o rótulo `Exemplo: ` mais o JSON.
+      for (const exemplo of exemplos) acc.exemplos += exemplo.length;
+      for (const rotulo of tool.description.matchAll(EXAMPLE_PREFIX)) {
+        acc.exemplos += rotulo[0].length;
+      }
+    }
+    return acc;
+  },
+  { cheio: 0, estreito: 0, exemplos: 0 },
+);
+
+/**
+ * Afirmações de tamanho em prosa. Cada uma declara o trecho literal da doc e de onde sai o
+ * número; o caso abaixo confere as duas pontas, então nem o texto some nem o número derrapa.
+ */
+const PAYLOAD_CLAIMS: ReadonlyArray<{ file: string; text: string; medido: () => string }> = [
+  { file: 'docs/MCP.md', text: '**68,4 k caracteres**', medido: () => emK(payload.cheio) },
+  { file: 'docs/MCP.md', text: '(57,0 k)', medido: () => emK(payload.estreito) },
+  {
+    file: 'docs/MCP.md',
+    text: '**4.074 são os exemplos**',
+    medido: () => emMilhar(payload.exemplos),
+  },
+  {
+    file: 'docs/MCP_TOOL_SURFACE.md',
+    text: '**68,4 k caracteres**',
+    medido: () => emK(payload.cheio),
+  },
+  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 57,0 k', medido: () => emK(payload.estreito) },
+  {
+    file: 'docs/MCP_TOOL_SURFACE.md',
+    text: '**4.074 caracteres**',
+    medido: () => emMilhar(payload.exemplos),
+  },
+];
+
 /** Seções `### \`tool_name\`` da doc — a fonte da verdade do que está documentado. */
 const documentedSections = new Set(
   Array.from(doc.matchAll(/^### `([a-z_]+)`/gm), (match) => match[1]),
@@ -334,6 +406,29 @@ describe('catálogo de tools MCP', () => {
     // caso verde por não achar nada — o mesmo verde de quando está tudo certo.
     const silent = TOOL_COUNT_DOCS.filter((relative) => !filesWithCount.includes(relative));
     expect(silent).toEqual([]);
+  });
+
+  it('cita o tamanho real do payload em toda doc que afirma um tamanho', () => {
+    // Irmão do caso do `N tools`, e pelo mesmo motivo: quem lê acredita no número. A diferença
+    // é que este aqui não existia, e por isso o "66,7 k caracteres" sobreviveu a duas tools
+    // novas — medido de verdade um dia, e falso desde então.
+    const errados: string[] = [];
+
+    for (const claim of PAYLOAD_CLAIMS) {
+      const conteudo = readFileSync(resolve(REPO_ROOT, claim.file), 'utf8');
+
+      // O texto tem de continuar na doc: afirmação apagada vira número sem guarda de novo.
+      if (!conteudo.includes(claim.text)) {
+        errados.push(`${claim.file}: sumiu o trecho "${claim.text}"`);
+        continue;
+      }
+      // E o número dentro dele tem de ser o medido agora.
+      if (!claim.text.includes(claim.medido())) {
+        errados.push(`${claim.file}: "${claim.text}" não bate com o medido (${claim.medido()})`);
+      }
+    }
+
+    expect(errados.sort()).toEqual([]);
   });
 
   it('não tem seções órfãs em docs/MCP.md', () => {

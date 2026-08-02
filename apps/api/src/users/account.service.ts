@@ -52,6 +52,7 @@ export class AccountService {
       weightLogs,
       stepLogs,
       waterLogs,
+      achievements,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
       this.prisma.nutrientTarget.findMany({ where: { userId }, orderBy: { label: 'asc' } }),
@@ -82,6 +83,13 @@ export class AccountService {
       this.prisma.weightLog.findMany({ where: { userId }, orderBy: { loggedAt: 'asc' } }),
       this.prisma.stepLog.findMany({ where: { userId }, orderBy: { date: 'asc' } }),
       this.prisma.waterLog.findMany({ where: { userId }, orderBy: { date: 'asc' } }),
+      // O `context` do desbloqueio (exercício e carga do primeiro recorde, por exemplo) é dado
+      // de saúde e não existe em nenhuma outra tabela — sem esta consulta a portabilidade
+      // devolveria menos do que "tudo".
+      this.prisma.userAchievement.findMany({
+        where: { userId },
+        orderBy: { unlockedAt: 'asc' },
+      }),
     ]);
 
     return {
@@ -101,7 +109,9 @@ export class AccountService {
       weightLogs,
       stepLogs,
       waterLogs,
+      achievements,
       counts: {
+        achievements: achievements.length,
         meals: meals.length,
         customFoods: customFoods.length,
         customExercises: customExercises.length,

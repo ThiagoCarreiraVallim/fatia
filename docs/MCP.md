@@ -158,13 +158,17 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 88 tools): **66,7 k caracteres**
-hoje, dos quais **4.110 são os exemplos** — acréscimo de **6,7%** sobre os 61,6 k de antes,
-pago em toda sessão que lista as tools. Média de 91 caracteres por tool; os maiores são
+`description`, `annotations` e o JSON Schema do input das 91 tools): **68,4 k caracteres**
+hoje, dos quais **4.074 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+pago em toda sessão que lista as tools. Média de 89 caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (50,7 k) subestima o
-catálogo em ~20% e infla o percentual para ~8%.
+atenção ao denominador: medir só `name + description + inputSchema` (57,0 k) subestima o
+catálogo em ~20% e infla o percentual para ~7%.
+
+A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
+catálogo real: a versão anterior desta linha afirmava 66,7 k e seguiu afirmando depois de duas
+tools novas entrarem, porque nada a conferia.
 
 ### IDs
 
@@ -298,8 +302,11 @@ Listagens com potencial de crescer usam cursor-based:
 |                           | `get_steps_progress`         | R        |
 | **Dashboard**             | `get_today_summary`          | R        |
 |                           | `get_week_summary`           | R        |
+| **Engajamento**           | `get_streak`                 | R        |
+|                           | `list_achievements`          | R        |
+|                           | `refresh_achievements`       | W        |
 
-Total: **88 tools**. Cada uma documentada abaixo.
+Total: **91 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -371,8 +378,8 @@ conversando com o Claude. Também disponíveis via REST: `GET /users/me/export` 
 ### `export_my_data`
 
 Exporta **todos** os dados do usuário em JSON: perfil, metas (macros, nutrientes e pessoais),
-refeições com itens, treinos com séries, peso, passos, hidratação, e os alimentos e exercícios
-custom que ele criou.
+refeições com itens, treinos com séries, peso, passos, hidratação, conquistas desbloqueadas, e
+os alimentos e exercícios custom que ele criou.
 
 O catálogo público (TACO e exercícios base) **não** vai no export: não é dado pessoal e
 inflaria o payload sem informação sobre o usuário.
@@ -397,7 +404,10 @@ inflaria o payload sem informação sobre o usuário.
   weightLogs: WeightLog[];
   stepLogs: StepLog[];
   waterLogs: WaterLog[];
-  counts: { meals: number; weightLogs: number; /* ... */ };
+  // Inclui o `context` do desbloqueio (`first_pr` guarda exercício e carga), que é dado de
+  // saúde e não existe em nenhuma outra tabela.
+  achievements: UserAchievement[];
+  counts: { meals: number; weightLogs: number; achievements: number; /* ... */ };
 }
 ```
 
@@ -2008,13 +2018,14 @@ Resumo agregado pro Claude responder "como estou hoje?".
     goalReached: boolean | null;
     logged: boolean;            // se há ao menos um log hoje
   };
-  streak: {
-    nutritionDays: number;
-    workoutWeeks: number;
-    stepsDays: number;          // dias consecutivos batendo meta de passos
-  };
+  streak: StreakSummary;        // ver `get_streak`
+  achievements: Achievement[];  // ver `list_achievements`; só LIDAS aqui
 }
 ```
+
+Esta tool **não desbloqueia** nada: ela declara `readOnlyHint: true`, o Claude a chama sem
+confirmar, e uma pergunta como "quanto comi hoje?" não pode gravar em `UserAchievement`. As
+conquistas vêm no estado em que estão. Quem desbloqueia é `refresh_achievements`.
 
 ### `get_week_summary`
 
@@ -2056,6 +2067,80 @@ Resumo da semana corrente.
   }
 }
 ```
+
+---
+
+## Engajamento
+
+### `get_streak`
+
+Sequência atual do usuário, com a regra de tolerância a falha (issue #147). Serve para o Claude
+dizer "você está no seu 12º dia" sem carregar o dashboard inteiro.
+
+**Input:** _(nenhum)_
+
+**Output:**
+
+```typescript
+{
+  // Dia ativo = pelo menos uma refeição registrada OU uma sessão concluída OU a meta de
+  // passos batida. É o número grande da tela.
+  activeDays: StreakResult;
+  nutritionDays: StreakResult;
+  workoutWeeks: StreakResult; // em SEMANAS, não em dias
+  stepsDays: StreakResult;
+  stepsTargetSet: boolean; // false = sem `UserGoals`; passos ficam fora do dia ativo
+}
+
+type StreakResult = {
+  periodos: number; // tamanho, contando as faltas toleradas do meio
+  faltasUsadas: number;
+  faltasPermitidas: number;
+  periodoCorrenteEmAberto: boolean; // hoje ainda sem registro, mas o dia não acabou
+  janelaEsgotada: boolean; // encostou no teto varrido (365 dias / 53 semanas)
+};
+```
+
+**Tolerância:** a sequência começa com uma falta liberada e ganha mais uma a cada 7 períodos
+ativos, saturando em duas. Ela quebra na **segunda falta consecutiva** ou quando o orçamento
+acaba. Um dia perdido não zera meses de trabalho — streak que pune desproporcionalmente faz o
+usuário desistir de vez em vez de voltar.
+
+### `list_achievements`
+
+Catálogo de conquistas. Devolve as **sete** chaves sempre, desbloqueadas ou não, para o Claude
+saber o que sugerir como próximo passo.
+
+**Input:** _(nenhum)_
+
+**Output:**
+
+```typescript
+Array<{
+  key: string; // first_meal | first_workout | plan_created | first_pr
+  // | first_full_week | streak_7 | streak_30
+  title: string;
+  description: string;
+  unlockedAt: string | null; // ISO da data do EVENTO, não a de quando o app percebeu
+  context: unknown; // { weightKg, exerciseName } em first_pr, por exemplo
+}>;
+```
+
+Só lê (`readOnlyHint: true`). Quem desbloqueia é `refresh_achievements`.
+
+### `refresh_achievements`
+
+Reavalia o catálogo e **grava** as conquistas que passaram a valer. É a única tool que escreve em
+`UserAchievement`, e por isso a única do grupo de engajamento anotada como escrita
+(`readOnlyHint: false`).
+
+Chamar depois de registrar refeição, treino ou plano é o que faz a conquista aparecer. É
+idempotente: o `@@unique([userId, key])` garante que reavaliar não duplica nem reescreve o
+`unlockedAt` de quem já tinha, então não há custo em chamar a cada abertura do app.
+
+**Input:** _(nenhum)_
+
+**Output:** o mesmo array de `list_achievements`, já com os desbloqueios desta chamada.
 
 ---
 

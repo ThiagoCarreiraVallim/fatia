@@ -38,6 +38,7 @@ model User {
   customFoods     Food[]           @relation("UserCustomFoods")
   customExercises Exercise[]       @relation("UserCustomExercises")
   nutrientTargets NutrientTarget[]
+  achievements    UserAchievement[]
 
   // B2B (ADR 014). Nenhuma destas relações dá acesso a dado de saúde por si só —
   // quem autoriza leitura é exclusivamente uma linha de `ProfessionalLink`.
@@ -388,6 +389,42 @@ model WaterLog {
 
   @@index([userId, date])
   @@index([userId, loggedAt])
+}
+
+// ============================================================
+// ENGAJAMENTO
+// ============================================================
+
+// Conquista desbloqueada. Guarda só o fato e a data — a definição (título,
+// critério, ícone) vive em código, em `achievement-catalog.ts`. Guardar a
+// definição no banco obrigaria migration a cada conquista nova e deixaria duas
+// versões da mesma conquista coexistindo.
+//
+// Streak NÃO tem tabela: continua derivado de Meal/WorkoutSession/StepLog. Uma
+// tabela criaria um segundo lugar onde a verdade mora — apagar uma refeição
+// teria de decrementar o contador, e errar isso é invisível.
+model UserAchievement {
+  id String @id @default(uuid())
+
+  userId String
+  // Chave do catálogo: "first_meal", "first_workout", "first_pr", ...
+  key    String
+
+  unlockedAt DateTime @default(now())
+
+  // Contexto do desbloqueio, para a tela contar a história:
+  // `{ "weightKg": 80 }`. Json porque cada conquista tem um contexto diferente
+  // — mesma razão de `MealItem.nutrients` (ADR 009).
+  context Json?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Uma vez só por usuário. É o que torna a reavaliação idempotente.
+  //
+  // Sem `@@index([userId])`: o unique composto já é um índice com `userId` à esquerda, e é ele
+  // que atende o `findMany where userId` da listagem. Um índice só de `userId` seria pago em
+  // toda escrita sem servir a nenhuma consulta que o composto não sirva.
+  @@unique([userId, key])
 }
 
 // ============================================================

@@ -79,6 +79,43 @@ export interface WaterProgress {
   daysWithGoalReached: number;
 }
 
+/**
+ * Uma sequência, já com a tolerância a falha aplicada (issue #147).
+ *
+ * O retorno não é um número solto de propósito: o app precisa poder dizer "você faltou ontem, a
+ * sequência segue". Esconder a regra é o que faz o usuário achar que o número é arbitrário.
+ */
+export interface StreakResult {
+  /** Tamanho da sequência, contando as faltas toleradas que ficaram no meio dela. */
+  periodos: number;
+  faltasUsadas: number;
+  faltasPermitidas: number;
+  /** O período corrente ainda não tem registro, mas não acabou — não conta como falta. */
+  periodoCorrenteEmAberto: boolean;
+  /** A sequência encostou no teto da janela varrida: o número real pode ser maior. */
+  janelaEsgotada: boolean;
+}
+
+export interface StreakSummary {
+  /** Dias com refeição OU treino concluído OU meta de passos batida. É o número grande da tela. */
+  activeDays: StreakResult;
+  nutritionDays: StreakResult;
+  /** Em SEMANAS, não em dias. */
+  workoutWeeks: StreakResult;
+  stepsDays: StreakResult;
+  /** `false` quando não há metas: passos ficam de fora do dia ativo. */
+  stepsTargetSet: boolean;
+}
+
+export interface Achievement {
+  key: string;
+  title: string;
+  description: string;
+  /** ISO quando desbloqueada, `null` quando ainda falta — o catálogo inteiro vem sempre. */
+  unlockedAt: string | null;
+  context: unknown;
+}
+
 export interface TodaySummary {
   date: string;
   nutrition: {
@@ -110,7 +147,8 @@ export interface TodaySummary {
     goalReached: boolean | null;
     logged: boolean;
   };
-  streak: { nutritionDays: number; workoutWeeks: number; stepsDays: number };
+  streak: StreakSummary;
+  achievements: Achievement[];
 }
 
 export const progressApi = {
@@ -178,4 +216,12 @@ export const progressApi = {
 
   // Dashboard
   today: () => apiFetch<TodaySummary>('/api/dashboard/today'),
+
+  // Engajamento
+  streak: () => apiFetch<StreakSummary>('/api/streak'),
+  listAchievements: () => apiFetch<Achievement[]>('/api/achievements'),
+  // Escreve: desbloqueia o que passou a valer. O `today()` só lê, então é esta chamada que faz a
+  // conquista nova aparecer. Idempotente, e por isso pode ser disparada a cada abertura do app.
+  refreshAchievements: () =>
+    apiFetch<Achievement[]>('/api/achievements/evaluate', { method: 'POST' }),
 };
