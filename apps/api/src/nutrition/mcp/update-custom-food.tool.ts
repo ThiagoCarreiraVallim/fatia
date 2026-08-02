@@ -14,6 +14,7 @@ export class UpdateCustomFoodTool implements McpToolDef {
   readonly name = 'update_custom_food';
   readonly title = 'Atualizar alimento personalizado';
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly hostedInference = false;
   readonly description =
     'Atualiza um alimento custom do usuário. ' + 'Exemplo: {"id":4217,"kcalPer100g":315}';
   readonly inputSchema = {

@@ -27,6 +27,7 @@ export class LogMealTool implements McpToolDef {
   readonly name = 'log_meal';
   readonly title = 'Registrar refeição';
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly hostedInference = false;
   readonly description =
     'Registra uma refeição com items. Cada item pode referenciar foodId (TACO/custom) ou ser livre (foodName + macros estimados). ' +
     'Exemplo (item do catálogo): {"mealType":"LUNCH","eatenAt":"2026-07-29T12:30:00-03:00","items":[{"foodId":312,"grams":150}]} ' +

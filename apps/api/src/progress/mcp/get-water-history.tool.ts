@@ -14,6 +14,7 @@ export class GetWaterHistoryTool implements McpToolDef {
   readonly name = 'get_water_history';
   readonly title = 'Histórico de água';
   readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly hostedInference = false;
   readonly description = 'Histórico diário de consumo de água, preenchendo dias sem log com 0.';
   readonly inputSchema = {
     days: z.number().int().positive().max(365).describe('Quantidade de dias retroativos'),

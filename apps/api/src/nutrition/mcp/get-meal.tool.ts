@@ -14,6 +14,7 @@ export class GetMealTool implements McpToolDef {
   readonly name = 'get_meal';
   readonly title = 'Ver refeição';
   readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly hostedInference = false;
   readonly description = 'Detalha uma refeição.';
   readonly inputSchema = {
     id: z.string().uuid().describe('ID da refeição a detalhar'),

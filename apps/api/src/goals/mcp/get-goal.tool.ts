@@ -14,6 +14,7 @@ export class GetGoalTool implements McpToolDef {
   readonly name = 'get_goal';
   readonly title = 'Ver meta';
   readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly hostedInference = false;
   readonly description = 'Retorna uma meta pessoal por id, com progresso calculado.';
   readonly inputSchema = {
     goalId: z.string().describe('ID da meta a detalhar'),

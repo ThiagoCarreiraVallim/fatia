@@ -14,6 +14,7 @@ export class LeaveGroupTool implements McpToolDef {
   readonly name = 'leave_group';
   readonly title = 'Sair de um grupo';
   readonly annotations = { readOnlyHint: false, destructiveHint: true };
+  readonly hostedInference = false;
   readonly description =
     'Sai de uma academia ou grupo. A saída não passa pelo dono e ele não pode impedi-la. ' +
     'Todo acesso que profissionais daquele grupo tinham aos dados do usuário é revogado na ' +

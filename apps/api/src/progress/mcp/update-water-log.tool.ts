@@ -14,6 +14,7 @@ export class UpdateWaterLogTool implements McpToolDef {
   readonly name = 'update_water_log';
   readonly title = 'Atualizar registro de água';
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly hostedInference = false;
   readonly description =
     'Atualiza um log de água existente (correção). ' +
     'Exemplo: {"id":"11111111-2222-4333-8444-555555555555","ml":750}';

@@ -101,6 +101,32 @@ Isso é verificado por `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`, que fa
 tool declarar hint incoerente com o prefixo ou usar o próprio nome como título. `title`
 ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 
+### Inferência hospedada
+
+Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
+pela Fatia** (visão, LLM, embedding). Hoje as **94 tools** declaram `false`, e é a resposta que
+se quer manter.
+
+O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
+dele: chamada MCP não passa por gateway de IA nosso, e custa **zero** de inferência à Fatia. Uma
+tool que chame IA hospedada por dentro inverte isso em silêncio — o usuário pede pelo Claude
+_dele_ e a conta cai aqui. Sem sintoma: a tool funciona, o log não muda, e o primeiro sinal é a
+fatura.
+
+Por isso o campo é **obrigatório** e não tem default: um default faria a tool cara nascer
+classificada como grátis, que é justamente o caso a impedir. O mesmo spec acima reprova qualquer
+tool que declare `true` sem estar na lista `HOSTED_INFERENCE_TOOLS` — vazia hoje, e acrescentar
+um nome ali é declarar que a Fatia aceita pagar aquela chamada.
+
+A política de quando isso é aceitável está na
+[ADR 018](./ADR/018-inferencia-hospedada-fora-do-mcp.md): o default é **não expor** pelo MCP; a
+forma aceita é o cliente trazer o resultado pronto, como `log_meal` já recebe macros calculados
+pelo Claude (ADR 004).
+
+O campo **não** vai no fio: ele fica fora de `annotations` de propósito — é política interna de
+custo, não anotação da spec, e não tem por que gastar contexto do cliente. Há caso de teste
+dedicado a impedir que ele volte para lá.
+
 ### Exemplo de invocação
 
 Toda tool de **escrita** (`readOnlyHint: false`) termina a `description` com uma chamada
@@ -169,6 +195,7 @@ catálogo em ~20% e infla o percentual para ~7%.
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
 catálogo real: a versão anterior desta linha afirmava 66,7 k e seguiu afirmando depois de duas
 tools novas entrarem, porque nada a conferia.
+
 ### IDs
 
 - IDs de entidades user-owned (`Meal`, `WorkoutSession`, etc): UUID string
@@ -2112,6 +2139,7 @@ usuário desistir de vez em vez de voltar.
 
 Catálogo de conquistas. Devolve as **sete** chaves sempre, desbloqueadas ou não, para o Claude
 saber o que sugerir como próximo passo.
+
 ## Grupos (B2B)
 
 Academia, personal e nutricionista entram pela [ADR 014](./ADR/014-compartilhamento-b2b-copia-e-vinculo.md).
@@ -2161,17 +2189,18 @@ idempotente: o `@@unique([userId, key])` garante que reavaliar não duplica nem 
 **Input:** _(nenhum)_
 
 **Output:** o mesmo array de `list_achievements`, já com os desbloqueios desta chamada.
-  id: string;
-  type: 'SPONSORED' | 'SOCIAL';
-  name: string;
-  slug: string;
-  role: 'OWNER' | 'PROFESSIONAL' | 'CREATOR' | 'MEMBER';
-  status: 'INVITED' | 'ACTIVE';
-  membershipId: string;
-  joinedAt: string | null;
-  createdAt: string;
+id: string;
+type: 'SPONSORED' | 'SOCIAL';
+name: string;
+slug: string;
+role: 'OWNER' | 'PROFESSIONAL' | 'CREATOR' | 'MEMBER';
+status: 'INVITED' | 'ACTIVE';
+membershipId: string;
+joinedAt: string | null;
+createdAt: string;
 }>;
-```
+
+````
 
 ### `join_group`
 
@@ -2185,7 +2214,7 @@ consentimento de leitura e não pode ser autoatribuído.
 {
   slug: string;
 }
-```
+````
 
 **Erros:** `NOT_FOUND` se o slug não existe; `CONFLICT` se já é membro ou já existe pedido
 pendente.

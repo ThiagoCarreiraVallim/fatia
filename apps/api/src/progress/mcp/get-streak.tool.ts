@@ -13,6 +13,7 @@ export class GetStreakTool implements McpToolDef {
   readonly name = 'get_streak';
   readonly title = 'Sequência atual';
   readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly hostedInference = false;
   readonly description =
     'Sequência atual de dias ativos (refeição registrada OU treino concluído OU meta de passos batida), ' +
     'mais as sequências de nutrição, treino (em semanas) e passos. Traz o orçamento de faltas: ' +

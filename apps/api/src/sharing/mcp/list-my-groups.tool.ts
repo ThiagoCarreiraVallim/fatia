@@ -13,6 +13,7 @@ export class ListMyGroupsTool implements McpToolDef {
   readonly name = 'list_my_groups';
   readonly title = 'Listar meus grupos';
   readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly hostedInference = false;
   readonly description =
     'Lista as academias e grupos de que o usuário participa, com o papel dele em cada um e a ' +
     'situação (aguardando aprovação ou ativo). Estar num grupo não dá a ninguém acesso aos ' +

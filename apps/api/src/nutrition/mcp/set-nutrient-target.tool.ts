@@ -14,6 +14,7 @@ export class SetNutrientTargetTool implements McpToolDef {
   readonly name = 'set_nutrient_target';
   readonly title = 'Definir meta de nutriente';
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly hostedInference = false;
   readonly description =
     'Cria/atualiza uma meta de nutriente personalizada (ex.: limitar sódio a 2000mg/dia). `nutrientKey` é a chave usada nos itens (ex.: "sodium_mg"). Informe `max` para limite e/ou `min` para meta mínima. Upsert por nutrientKey. ' +
     'Exemplo: {"nutrientKey":"sodium_mg","label":"Sódio","unit":"mg","max":2000,"period":"daily"}';

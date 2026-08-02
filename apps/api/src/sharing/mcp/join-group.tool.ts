@@ -14,6 +14,7 @@ export class JoinGroupTool implements McpToolDef {
   readonly name = 'join_group';
   readonly title = 'Pedir para entrar num grupo';
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly hostedInference = false;
   readonly description =
     'Pede para entrar numa academia ou grupo pelo identificador público (slug) do convite. ' +
     'O pedido fica aguardando a aprovação do dono, e quem entra é sempre o próprio usuário — ' +

@@ -13,6 +13,7 @@ export class ListAchievementsTool implements McpToolDef {
   readonly name = 'list_achievements';
   readonly title = 'Conquistas';
   readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly hostedInference = false;
   readonly description =
     'Catálogo de conquistas do usuário. Devolve as sete chaves sempre, cada uma com `unlockedAt` ' +
     '(ISO) quando já foi desbloqueada ou `null` quando ainda falta — inclusive as bloqueadas, ' +

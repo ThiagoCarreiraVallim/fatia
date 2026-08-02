@@ -13,6 +13,7 @@ export class GetTodaySummaryTool implements McpToolDef {
   readonly name = 'get_today_summary';
   readonly title = 'Resumo de hoje';
   readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly hostedInference = false;
   readonly description =
     'Resumo agregado de hoje: nutrição, treino, peso, passos e streaks. Reduz N chamadas a 1.';
   readonly inputSchema = {} as const;

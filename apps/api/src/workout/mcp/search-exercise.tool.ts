@@ -18,6 +18,8 @@ export class SearchExerciseTool implements McpToolDef {
   readonly title = 'Buscar exercício';
 
   readonly annotations = { readOnlyHint: true, destructiveHint: false };
+
+  readonly hostedInference = false;
   readonly description =
     'Search for exercises by name or muscle group (chest, back, legs, shoulders, arms, core, cardio).';
   readonly inputSchema = {

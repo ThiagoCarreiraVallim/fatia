@@ -1,7 +1,6 @@
 import Link from 'next/link';
-import { Flag, Watch, Settings, Shield, LogOut, ChevronRight } from 'lucide-react';
+import { Flag, Sparkles, Settings, Shield, LogOut, ChevronRight } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth-server';
-import { CopyMcpUrl } from '@/components/profile/copy-mcp-url';
 import { ProfileMetrics } from '@/components/profile/profile-metrics';
 
 interface MenuItemProps {
@@ -31,8 +30,6 @@ function MenuItem({ href, icon, title, subtitle }: MenuItemProps) {
 
 export default async function ProfilePage() {
   const user = await getCurrentUser();
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
-  const mcpUrl = `${apiUrl}/mcp`;
 
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
@@ -64,11 +61,14 @@ export default async function ProfilePage() {
           title="Metas de nutrição"
           subtitle="Calorias e macros diários"
         />
+        {/* O destino sempre foi a tela de conectar o Claude; o rótulo dizia "Dispositivos —
+            Apple Health e Garmin", integrações que não existem (#151). Ninguém procuraria
+            conexão de IA atrás de um ícone de relógio. */}
         <MenuItem
-          href="/profile/tokens"
-          icon={<Watch size={18} className="text-primary" />}
-          title="Dispositivos"
-          subtitle="Integração com Apple Health e Garmin"
+          href="/profile/connect"
+          icon={<Sparkles size={18} className="text-primary" />}
+          title="Conectar sua IA"
+          subtitle="Registre e consulte seu diário conversando com o Claude"
         />
         <MenuItem
           href="/privacy"
@@ -89,14 +89,6 @@ export default async function ProfilePage() {
         <LogOut size={18} />
         Sair da conta
       </Link>
-
-      <details className="rounded-2xl border border-white/5 bg-card/50 px-4 py-3 text-sm text-muted-foreground">
-        <summary className="cursor-pointer font-bold text-foreground">Conectar ao Claude</summary>
-        <div className="mt-3 space-y-3 text-xs">
-          <p>Configure o conector MCP no Claude com a URL abaixo.</p>
-          <CopyMcpUrl url={mcpUrl} />
-        </div>
-      </details>
     </div>
   );
 }

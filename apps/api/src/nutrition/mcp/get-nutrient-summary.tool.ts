@@ -14,6 +14,7 @@ export class GetNutrientSummaryTool implements McpToolDef {
   readonly name = 'get_nutrient_summary';
   readonly title = 'Resumo de nutrientes do dia';
   readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly hostedInference = false;
   readonly description =
     'Resumo do dia para as metas de nutrientes personalizadas: total consumido por nutriente e status (under/ok/over) vs. min/max.';
   readonly inputSchema = {

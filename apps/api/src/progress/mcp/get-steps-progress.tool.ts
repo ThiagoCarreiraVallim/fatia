@@ -14,6 +14,7 @@ export class GetStepsProgressTool implements McpToolDef {
   readonly name = 'get_steps_progress';
   readonly title = 'Evolução dos passos';
   readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly hostedInference = false;
   readonly description = 'Pontos diários de passos + médias semanais + dias batidos.';
   readonly inputSchema = {
     days: z

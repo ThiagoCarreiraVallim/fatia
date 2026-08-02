@@ -14,6 +14,7 @@ export class DeleteMealTool implements McpToolDef {
   readonly name = 'delete_meal';
   readonly title = 'Excluir refeição';
   readonly annotations = { readOnlyHint: false, destructiveHint: true };
+  readonly hostedInference = false;
   readonly description =
     'Remove uma refeição. ' + 'Exemplo: {"id":"11111111-2222-4333-8444-555555555555"}';
   readonly inputSchema = {

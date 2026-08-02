@@ -14,6 +14,7 @@ export class SearchFoodTool implements McpToolDef {
   readonly name = 'search_food';
   readonly title = 'Buscar alimento';
   readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly hostedInference = false;
   readonly description = 'Busca alimentos no catálogo TACO + customs do usuário.';
   readonly inputSchema = {
     q: z

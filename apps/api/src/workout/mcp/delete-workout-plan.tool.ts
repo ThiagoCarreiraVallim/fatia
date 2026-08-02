@@ -17,6 +17,8 @@ export class DeleteWorkoutPlanTool implements McpToolDef {
   readonly title = 'Excluir plano de treino';
 
   readonly annotations = { readOnlyHint: false, destructiveHint: true };
+
+  readonly hostedInference = false;
   readonly description =
     'Exclui um plano de treino e todos os seus exercícios vinculados. ' +
     'Exemplo: {"planId":"11111111-2222-4333-8444-555555555555"}';

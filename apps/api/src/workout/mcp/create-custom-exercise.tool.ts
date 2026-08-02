@@ -18,6 +18,8 @@ export class CreateCustomExerciseTool implements McpToolDef {
   readonly title = 'Criar exercício personalizado';
 
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
+
+  readonly hostedInference = false;
   readonly description =
     'Creates a custom exercise for the user. ' +
     'Exemplo: {"name":"Agachamento búlgaro com halteres","muscleGroup":"pernas"}';

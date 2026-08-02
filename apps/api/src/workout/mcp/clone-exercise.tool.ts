@@ -18,6 +18,8 @@ export class CloneExerciseTool implements McpToolDef {
   readonly title = 'Duplicar exercício';
 
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
+
+  readonly hostedInference = false;
   readonly description =
     'Cria (ou reaproveita) uma CÓPIA editável de um exercício base para o usuário, já que ' +
     'exercícios base são só-leitura. A partir daí a base some das listagens do usuário e ' +

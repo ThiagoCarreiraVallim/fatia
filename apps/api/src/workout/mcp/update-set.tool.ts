@@ -17,6 +17,8 @@ export class UpdateSetTool implements McpToolDef {
   readonly title = 'Atualizar série';
 
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
+
+  readonly hostedInference = false;
   readonly description =
     'Corrige os dados de uma série já registrada. ' +
     'Exemplo: {"setId":"11111111-2222-4333-8444-555555555555","weightKg":82.5,"reps":6}';
