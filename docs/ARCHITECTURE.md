@@ -83,6 +83,20 @@ Tudo roda no servidor próprio. Em produção, Dokploy (Traefik) faz roteamento 
 - **next-pwa** — service worker e manifest
 - **TanStack Query** — fetching/cache no client
 
+### Agente de IA (`apps/agent`)
+
+> O repositório **deixa de ser 100% TypeScript** a partir daqui. Ver [ADR 015](ADR/015-agente-python-langgraph-cliente-mcp.md).
+
+- **Python** com toolchain própria (`uv`, `ruff`, `mypy`, `pytest`), **fora do workspace pnpm** — `pnpm-workspace.yaml` exclui `apps/agent` explicitamente
+- **FastAPI** — superfície HTTP do serviço
+- **httpx** — cliente OpenAI-compatível único: LM Studio local em desenvolvimento, Cloudflare AI Gateway em produção. Trocar de provedor ou de modelo é trocar variável de ambiente, sem `if ambiente == 'prod'` no caminho de inferência
+- **LangGraph** entra com o primeiro grafo (#139), não antes
+
+Duas propriedades que valem por si:
+
+- **Sem credencial de banco e sem rota privilegiada.** O acesso a dado do usuário é pelo `/mcp`, com o Bearer do próprio usuário — o filtro por `userId` continua tendo um dono só, o NestJS.
+- **Degrada explicitamente.** Sem `AI_BASE_URL`, o serviço sobe, `/health` responde 200 e as capacidades respondem `AI_PROVIDER_NOT_CONFIGURED`. O produto inteiro continua funcionando sem IA hospedada.
+
 ### Compartilhado (`packages/db`)
 
 - Schema Prisma único compartilhado entre API e (eventualmente) scripts/seeds

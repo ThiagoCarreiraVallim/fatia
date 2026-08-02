@@ -1,0 +1,55 @@
+[project]
+name = "fatia-agent"
+version = "0.1.0"
+description = "Agente de IA da Fatia — abstração de provedor OpenAI-compatível (ADR 015)"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.121",
+  "httpx>=0.28",
+  "pydantic>=2.12",
+  "pydantic-settings>=2.12",
+  "uvicorn>=0.41",
+]
+
+[dependency-groups]
+dev = [
+  "mypy>=1.19",
+  "pytest>=9.0",
+  "pytest-asyncio>=1.3",
+  "ruff>=0.15",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fatia_agent"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ANN", "RUF"]
+# ANN401 proíbe `Any` explícito — é o equivalente Python da regra "sem `any`"
+# que o CLAUDE.md impõe ao TypeScript.
+
+[tool.ruff.lint.per-file-ignores]
+# Fixture e teste não precisam de anotação de retorno em toda função.
+"tests/**" = ["ANN201", "ANN001"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+packages = ["fatia_agent"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+  "smoke: exige um provedor de verdade no ar (LM Studio ou AI Gateway); fora do CI",
+]
+# `-m "not smoke"` é o default: o comando nu roda o que não precisa de rede.
+addopts = "-m 'not smoke'"
