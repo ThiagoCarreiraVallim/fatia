@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { format, parseISO } from 'date-fns';
 import { ApiError, type Food } from '@fatia/api-client';
 import {
   MENSAGEM_DE_CONFLITO,
@@ -6,7 +7,9 @@ import {
   caminhoDeBarra,
   deslocarDia,
   formatarDiaCurto,
+  hojeIso,
   inicialDoDia,
+  instanteNoDia,
   mensagemDeErro,
   parseNaoNegativo,
   parsePositivo,
@@ -44,6 +47,33 @@ describe('deslocarDia', () => {
     // meia-noite como referência, somar 1 dia pode cair no mesmo dia.
     expect(deslocarDia('2026-10-17', 1)).toBe('2026-10-18');
     expect(deslocarDia('2026-10-18', 1)).toBe('2026-10-19');
+  });
+});
+
+describe('instanteNoDia', () => {
+  /** O dia local do instante, que é como a API e a tela agrupam a refeição. */
+  const diaLocal = (iso: string) => format(parseISO(iso), 'yyyy-MM-dd');
+
+  it('grava no dia escolhido, não no de hoje, quando a tela está em outro dia', () => {
+    // A tela navega para ontem e registra: com `new Date()` a refeição caía em
+    // hoje enquanto a invalidação era de ontem — o item sumia da vista e a
+    // pessoa registrava de novo, agora duplicado.
+    expect(diaLocal(instanteNoDia('2026-05-19'))).toBe('2026-05-19');
+    expect(diaLocal(instanteNoDia('2026-01-01'))).toBe('2026-01-01');
+  });
+
+  it('atravessa a virada de horário de verão sem cair no dia anterior', () => {
+    expect(diaLocal(instanteNoDia('2026-10-18'))).toBe('2026-10-18');
+  });
+
+  it('no dia de hoje usa a hora de agora, que é o dado real', () => {
+    const antes = Date.now();
+    const instante = instanteNoDia(hojeIso());
+    const depois = Date.now();
+
+    const marca = parseISO(instante).getTime();
+    expect(marca).toBeGreaterThanOrEqual(antes);
+    expect(marca).toBeLessThanOrEqual(depois);
   });
 });
 

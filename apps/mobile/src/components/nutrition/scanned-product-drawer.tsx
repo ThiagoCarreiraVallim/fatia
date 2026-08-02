@@ -17,9 +17,10 @@ import {
   DrawerTitle,
 } from '@/components/ui';
 import { DrawerInput } from './drawer-input';
-import { NUMEROS_TABULARES, mensagemDeErro, parseNaoNegativo, parsePositivo } from './helpers';
+import { NUMEROS_TABULARES, instanteNoDia, mensagemDeErro, parsePositivo } from './helpers';
 import {
   formularioAPartirDaFicha,
+  itemDeRefeicaoDoFormulario,
   itemDeRefeicaoDoProduto,
   mensagemDeFichaIncompleta,
   nomeDoProduto,
@@ -37,7 +38,11 @@ import {
  * item sem alimento de catálogo.
  *
  * Quando a ficha vem incompleta, o drawer abre no formulário com o que veio e
- * os campos que faltam **em branco** — nunca zero.
+ * os campos que faltam **em branco** — nunca zero. Os quatro macros são por 100
+ * (a coluna do rótulo), a quantidade é separada e o total aparece calculado,
+ * como no painel do produto completo: campo cujo significado dependia da
+ * quantidade era o que fazia 50 g de açúcar entrarem com as 20 kcal da porção
+ * de 5 g.
  */
 
 type ItemDaRefeicao = Parameters<typeof nutritionApi.addItem>[1];
@@ -69,7 +74,9 @@ export function ScannedProductDrawer({
       if (mealId) return nutritionApi.addItem(mealId, payload);
       return nutritionApi.createMeal({
         mealType: mealType ?? 'SNACK',
-        eatenAt: new Date().toISOString(),
+        // O dia é o da tela, não o de hoje: a mesma `date` que invalida o cache
+        // abaixo. Ver `instanteNoDia`.
+        eatenAt: instanteNoDia(date),
         items: [payload],
       });
     },
@@ -236,8 +243,9 @@ function PainelIncompleto({
   const definir = (campo: keyof typeof valores) => (texto: string) =>
     setValores((anterior) => ({ ...anterior, [campo]: texto }));
 
-  const gramas = parsePositivo(valores.grams);
-  const podeEnviar = valores.name.trim().length > 0 && gramas !== null;
+  // Uma decisão só para habilitar o botão e para montar o payload: enquanto
+  // faltar campo, não há item — e não há como o branco virar zero na API.
+  const item = itemDeRefeicaoDoFormulario(valores);
 
   return (
     <DrawerScrollView
@@ -248,6 +256,12 @@ function PainelIncompleto({
       <Text accessibilityRole="alert" className="text-sm text-[#facc15]">
         {mensagemDeFichaIncompleta(resultado.missing)}
       </Text>
+
+      {resultado.partial.basis === '100ml' ? (
+        <Text className="text-xs text-[#facc15]">
+          O rótulo é por 100 ml. O registro é em gramas, contando 1 ml como 1 g.
+        </Text>
+      ) : null}
 
       <DrawerInput
         label="Nome"
@@ -262,6 +276,10 @@ function PainelIncompleto({
         value={valores.grams}
         onChangeText={definir('grams')}
       />
+
+      <Text className="text-xs text-muted-foreground">
+        Valores por 100 {unidade}, como na tabela do rótulo.
+      </Text>
 
       <View className="flex-row gap-2">
         {(
@@ -285,6 +303,17 @@ function PainelIncompleto({
         ))}
       </View>
 
+      {item ? (
+        <Text style={NUMEROS_TABULARES} className="text-sm text-muted-foreground">
+          Total para {item.grams} {unidade}: {item.kcal} kcal · P{item.proteinG} · C{item.carbsG} ·
+          G{item.fatG}
+        </Text>
+      ) : (
+        <Text className="text-sm text-muted-foreground">
+          Complete os quatro valores do rótulo para registrar.
+        </Text>
+      )}
+
       {erro ? (
         <Text accessibilityRole="alert" className="text-sm text-destructive">
           {erro}
@@ -292,18 +321,8 @@ function PainelIncompleto({
       ) : null}
 
       <Button
-        onPress={() => {
-          if (gramas === null) return;
-          onSubmit({
-            foodName: valores.name.trim(),
-            grams: gramas,
-            kcal: parseNaoNegativo(valores.kcal),
-            proteinG: parseNaoNegativo(valores.proteinG),
-            carbsG: parseNaoNegativo(valores.carbsG),
-            fatG: parseNaoNegativo(valores.fatG),
-          });
-        }}
-        disabled={!podeEnviar || enviando}
+        onPress={() => item !== null && onSubmit(item)}
+        disabled={item === null || enviando}
         loading={enviando}
       >
         Adicionar

@@ -7,7 +7,12 @@ import { Screen } from '@/components/layout/screen';
 import { Button, DrawerLayer, LoadingState } from '@/components/ui';
 import { BarcodeCamera } from '@/components/nutrition/barcode-camera';
 import { ScannedProductDrawer } from '@/components/nutrition/scanned-product-drawer';
-import { mensagemDeFalhaNaConsulta, podeProcessarLeitura } from '@/components/nutrition/barcode';
+import {
+  mensagemDeFalhaNaConsulta,
+  podeProcessarLeitura,
+  travaAposFechar,
+  type MotivoDoFechamento,
+} from '@/components/nutrition/barcode';
 import { hojeIso } from '@/components/nutrition/helpers';
 
 /**
@@ -30,6 +35,8 @@ export default function ScanScreen() {
 
   const [resultado, setResultado] = useState<BarcodeLookup | null>(null);
   const [falha, setFalha] = useState<string | null>(null);
+  /** Leitura fechada sem registrar. A trava do código continua valendo. */
+  const [descartada, setDescartada] = useState(false);
   /**
    * Último código já tratado. É `ref` e não `state` de propósito: a câmera
    * dispara antes de um `setState` chegar ao próximo render, e a trava tem que
@@ -52,11 +59,13 @@ export default function ScanScreen() {
   const aoLer = (codigo: string) => {
     if (!podeProcessarLeitura(codigo, ultimoCodigo.current)) return;
     ultimoCodigo.current = codigo;
+    setDescartada(false);
     consultar.mutate(codigo);
   };
 
-  const liberarParaNovaLeitura = () => {
-    ultimoCodigo.current = null;
+  const fechar = (motivo: MotivoDoFechamento) => {
+    ultimoCodigo.current = travaAposFechar(ultimoCodigo.current, motivo);
+    setDescartada(motivo === 'descartada');
     setResultado(null);
     setFalha(null);
     consultar.reset();
@@ -81,7 +90,11 @@ export default function ScanScreen() {
                   {falha}
                 </Text>
                 <View className="flex-row gap-2">
-                  <Button variant="outline" className="flex-1" onPress={liberarParaNovaLeitura}>
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onPress={() => fechar('nova-leitura')}
+                  >
                     Escanear de novo
                   </Button>
                   <Button
@@ -92,6 +105,19 @@ export default function ScanScreen() {
                     Cadastrar à mão
                   </Button>
                 </View>
+              </>
+            ) : descartada ? (
+              // O código descartado continua travado, senão a câmera o releria
+              // agora mesmo. Como a embalagem costuma seguir enquadrada, sem
+              // este botão a pessoa que cancelou por engano ficaria sem como
+              // reler o mesmo produto.
+              <>
+                <Text className="text-center text-xs text-muted-foreground">
+                  Leitura descartada. Aponte para outro produto ou toque abaixo.
+                </Text>
+                <Button variant="outline" onPress={() => fechar('nova-leitura')}>
+                  Escanear de novo
+                </Button>
               </>
             ) : (
               <Text className="text-center text-xs text-muted-foreground">
@@ -106,7 +132,7 @@ export default function ScanScreen() {
         {resultado ? (
           <ScannedProductDrawer
             open
-            onOpenChange={(aberto) => !aberto && liberarParaNovaLeitura()}
+            onOpenChange={(aberto) => !aberto && fechar('descartada')}
             resultado={resultado}
             mealId={mealId}
             mealType={mealType}

@@ -1,4 +1,4 @@
-import { OffFoodService, atribuicaoDoOff } from '../off-food.service';
+import { MAX_ENTRADAS, OffFoodService, atribuicaoDoOff } from '../off-food.service';
 import leiteCondensado from './fixtures/off-leite-condensado.json';
 import naoEncontrado from './fixtures/off-nao-encontrado.json';
 
@@ -28,6 +28,13 @@ describe('OffFoodService', () => {
     // O serviço loga aviso quando o OFF falha; sem isto o output do teste fica
     // poluído por falhas que são o próprio caso de teste.
     jest.spyOn(service['logger'], 'warn').mockImplementation(() => undefined);
+  });
+
+  // Sem isto o `jest.spyOn(Date, 'now')` do teste de expiração vaza: o
+  // `jest.config.js` não tem `restoreMocks`, e o próximo teste acrescentado ao
+  // arquivo nasceria com o relógio congelado em `agora + 7 h`.
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   describe('privacidade — o que sai daqui', () => {
@@ -203,6 +210,30 @@ describe('OffFoodService', () => {
       await service.lookup(CODIGO);
 
       expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('descarta a entrada mais antiga ao encher, em vez de crescer sem fim', async () => {
+      // O cache é por processo e serve todo mundo. Sem a evicção ele cresce com
+      // o número de produtos distintos escaneados por toda a instância — e
+      // apagar o `if` do teto deixava a suíte inteira verde.
+      fetchMock.mockResolvedValue(respostaJson(leiteCondensado));
+      const codigo = (i: number) => String(7891000000000 + i);
+
+      for (let i = 0; i < MAX_ENTRADAS; i += 1) await service.lookup(codigo(i));
+      expect(fetchMock).toHaveBeenCalledTimes(MAX_ENTRADAS);
+
+      // Com o cache cheio, tudo que entrou continua respondendo de memória.
+      await service.lookup(codigo(0));
+      expect(fetchMock).toHaveBeenCalledTimes(MAX_ENTRADAS);
+
+      // A entrada seguinte empurra a mais antiga — e só ela — para fora.
+      await service.lookup(codigo(MAX_ENTRADAS));
+      expect(fetchMock).toHaveBeenCalledTimes(MAX_ENTRADAS + 1);
+      await service.lookup(codigo(0));
+      expect(fetchMock).toHaveBeenCalledTimes(MAX_ENTRADAS + 2);
+      // A reinserção empurrou a próxima mais antiga; a seguinte continua viva.
+      await service.lookup(codigo(2));
+      expect(fetchMock).toHaveBeenCalledTimes(MAX_ENTRADAS + 2);
     });
   });
 });

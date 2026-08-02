@@ -1,4 +1,5 @@
 import { ApiError, type PartialScannedProduct, type ScannedProduct } from '@fatia/api-client';
+import { parseNaoNegativo, parsePositivo } from './helpers';
 
 /**
  * Lógica pura do scanner de código de barras (#140).
@@ -33,6 +34,28 @@ export function codigoDeBarrasValido(codigo: string): boolean {
  */
 export function podeProcessarLeitura(codigo: string, jaProcessado: string | null): boolean {
   return codigoDeBarrasValido(codigo) && codigo !== jaProcessado;
+}
+
+/** Por que o drawer do produto fechou. */
+export type MotivoDoFechamento = 'descartada' | 'nova-leitura';
+
+/**
+ * Trava de leitura depois que o drawer fecha.
+ *
+ * `descartada` é o "Cancelar": a trava **se mantém**. Zerá-la ali fazia a
+ * câmera — que continua apontada para a mesma embalagem — reler o código no
+ * mesmo instante, ser servida pelo cache em milissegundos e reabrir o drawer que
+ * a pessoa acabou de fechar. Como o único botão do drawer era esse "Cancelar",
+ * o laço não tinha saída a não ser o voltar da tela.
+ *
+ * `nova-leitura` é o "Escanear de novo": aí a liberação é o gesto pedido, e o
+ * mesmo código volta a valer.
+ */
+export function travaAposFechar(
+  codigoAtual: string | null,
+  motivo: MotivoDoFechamento,
+): string | null {
+  return motivo === 'descartada' ? codigoAtual : null;
 }
 
 export type UnidadeDaBase = 'g' | 'ml';
@@ -191,30 +214,98 @@ export function mensagemDeFalhaNaConsulta(erro: unknown): string {
   return 'Não foi possível consultar o produto. Tente de novo.';
 }
 
-/**
- * Valores iniciais do cadastro manual a partir do que o OFF trouxe.
- *
- * Campo ausente vira **string vazia**, nunca `'0'`: o zero pré-preenchido é
- * aceito sem ler, e aí o macro errado entra no histórico com cara de conferido.
- */
-export function formularioAPartirDaFicha(parcial: PartialScannedProduct): {
+export interface FormularioDaFicha {
   name: string;
+  /** Quantidade a registrar, na unidade da base. */
   grams: string;
+  /** Os quatro abaixo são **por 100**, como no rótulo — não totais da porção. */
   kcal: string;
   proteinG: string;
   carbsG: string;
   fatG: string;
-} {
-  const quantidade = parcial.servingSize ?? 100;
-  const porCem = (valor: number | undefined): string =>
-    valor === undefined ? '' : String(Math.round(valor * (quantidade / 100) * 10) / 10);
+}
+
+/**
+ * Valores iniciais do cadastro manual a partir do que o OFF trouxe.
+ *
+ * Duas regras, e as duas custaram caro:
+ *
+ * 1. Campo ausente vira **string vazia**, nunca `'0'`: o zero pré-preenchido é
+ *    aceito sem ler, e aí o macro errado entra no histórico com cara de
+ *    conferido.
+ * 2. Os macros ficam **por 100**, a unidade em que o OFF os entrega e a coluna
+ *    que todo rótulo brasileiro é obrigado a ter. A versão anterior convertia
+ *    para a porção do rótulo, o que dava um formulário em que `kcal` só valia
+ *    para a quantidade daquele instante: mudar `Quantidade` de 5 g para 50 g
+ *    mantinha as 20 kcal da porção de 5 g e gravava dez vezes menos. Campo cujo
+ *    significado depende de outro campo é armadilha; por 100 o significado é
+ *    fixo e a conversão acontece num lugar só, em `itemDeRefeicaoDoFormulario`.
+ */
+export function formularioAPartirDaFicha(parcial: PartialScannedProduct): FormularioDaFicha {
+  const porCem = (valor: number | undefined): string => (valor === undefined ? '' : String(valor));
 
   return {
     name: parcial.name ? nomeDoProduto({ name: parcial.name, brand: parcial.brand }) : '',
-    grams: String(quantidade),
+    grams: String(parcial.servingSize ?? 100),
     kcal: porCem(parcial.kcalPer100g),
     proteinG: porCem(parcial.proteinPer100g),
     carbsG: porCem(parcial.carbsPer100g),
     fatG: porCem(parcial.fatPer100g),
+  };
+}
+
+/**
+ * Item de refeição a partir do formulário da ficha incompleta — ou `null`
+ * enquanto faltar qualquer campo.
+ *
+ * `null` em vez de um payload com buraco é o que fecha o caminho do zero
+ * silencioso: `MealService` grava `kcal: item.kcal ?? 0` (idem os outros três),
+ * então macro em branco que chegue à API vira zero no histórico. O mapper barra
+ * esse zero na fronteira do OFF com todo o cuidado; não faria sentido o
+ * formulário reabrir a porta três telas depois.
+ *
+ * A mesma função monta o payload e decide se o botão habilita, de propósito: as
+ * duas regras eram separadas antes, e foi por aí que divergiram.
+ */
+export function itemDeRefeicaoDoFormulario(valores: FormularioDaFicha): {
+  foodName: string;
+  grams: number;
+  kcal: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+} | null {
+  const nome = valores.name.trim();
+  if (nome.length === 0) return null;
+
+  const quantidade = parsePositivo(valores.grams);
+  if (quantidade === null) return null;
+
+  const kcalPer100g = parseNaoNegativo(valores.kcal);
+  const proteinPer100g = parseNaoNegativo(valores.proteinG);
+  const carbsPer100g = parseNaoNegativo(valores.carbsG);
+  const fatPer100g = parseNaoNegativo(valores.fatG);
+  if (
+    kcalPer100g === undefined ||
+    proteinPer100g === undefined ||
+    carbsPer100g === undefined ||
+    fatPer100g === undefined
+  ) {
+    return null;
+  }
+
+  const previa = previaDoProduto(
+    { kcalPer100g, proteinPer100g, carbsPer100g, fatPer100g },
+    quantidade,
+  );
+  if (previa === null) return null;
+
+  return {
+    foodName: nome.length > MAX_NOME ? nome.slice(0, MAX_NOME).trimEnd() : nome,
+    grams: quantidade,
+    kcal: previa.kcal,
+    proteinG: previa.proteinG,
+    carbsG: previa.carbsG,
+    fatG: previa.fatG,
   };
 }

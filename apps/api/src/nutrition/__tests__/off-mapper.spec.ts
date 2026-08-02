@@ -165,6 +165,57 @@ describe('mapearProdutoDoOff', () => {
       expect(resultado.partial.kcalPer100g).toBeUndefined();
     });
 
+    it('descarta proteína, carboidrato e gordura acima de 100 g por 100 g', () => {
+      // O teto do kcal já tinha teste; o dos três macros não tinha, e apagá-lo
+      // deixava a suíte verde. 120 g de proteína em 100 g de produto é
+      // impossível, e passar adiante é registrar refeição inventada.
+      const resultado = mapearProdutoDoOff(
+        {
+          status: 1,
+          product: {
+            product_name: 'Suplemento',
+            nutriments: {
+              'energy-kcal_100g': 380,
+              proteins_100g: 120,
+              carbohydrates_100g: 150,
+              fat_100g: 101,
+            },
+          },
+        },
+        '7891000000000',
+      );
+
+      if (resultado.status !== 'incomplete') throw new Error('esperava incomplete');
+      expect(resultado.missing).toEqual(['proteinPer100g', 'carbsPer100g', 'fatPer100g']);
+      expect(resultado.partial.proteinPer100g).toBeUndefined();
+      expect(resultado.partial.carbsPer100g).toBeUndefined();
+      expect(resultado.partial.fatPer100g).toBeUndefined();
+      // O kcal, dentro da faixa, continua vindo: o corte é por campo.
+      expect(resultado.partial.kcalPer100g).toBe(380);
+    });
+
+    it('aceita exatamente 100 g por 100 g, que é o açúcar puro', () => {
+      // O limite é inclusivo de propósito: açúcar refinado declara 100 g de
+      // carboidrato por 100 g, e recusar isso quebraria um produto real.
+      const resultado = mapearProdutoDoOff(
+        {
+          status: 1,
+          product: {
+            product_name: 'Açúcar',
+            nutriments: {
+              'energy-kcal_100g': 400,
+              proteins_100g: 0,
+              carbohydrates_100g: 100,
+              fat_100g: 0,
+            },
+          },
+        },
+        '7891910000197',
+      );
+
+      expect(produtoOk(resultado).carbsPer100g).toBe(100);
+    });
+
     it('aceita macro em string, que o OFF devolve conforme quem preencheu', () => {
       const resultado = mapearProdutoDoOff(
         {
@@ -247,6 +298,23 @@ describe('extrairPorcao', () => {
 
   it('recusa porção absurda em vez de aceitar o número', () => {
     expect(extrairPorcao({ serving_size: '5000 g' }, '100g')).toBeNull();
+  });
+
+  it('recusa porção absurda também no campo estruturado', () => {
+    // O texto livre já tinha teste; o ramo estruturado não, e o teto podia
+    // sumir sem nenhuma suíte reclamar. Uma porção de 5 kg pré-selecionaria o
+    // botão "1 porção (5000 g)" na tela.
+    expect(
+      extrairPorcao({ serving_quantity: 5000, serving_quantity_unit: 'g' }, '100g'),
+    ).toBeNull();
+    expect(extrairPorcao({ serving_quantity: 2000, serving_quantity_unit: 'g' }, '100g')).toBe(
+      2000,
+    );
+  });
+
+  it('recusa porção zerada ou negativa no campo estruturado', () => {
+    expect(extrairPorcao({ serving_quantity: 0, serving_quantity_unit: 'g' }, '100g')).toBeNull();
+    expect(extrairPorcao({ serving_quantity: -30, serving_quantity_unit: 'g' }, '100g')).toBeNull();
   });
 
   it('devolve null quando não há porção no rótulo', () => {

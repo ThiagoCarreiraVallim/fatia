@@ -144,7 +144,7 @@ export function extrairPorcao(
   const esperada = UNIDADE_DA_BASE[base];
 
   const unidade = comoTexto(produto.serving_quantity_unit)?.toLowerCase();
-  if (unidade !== null && unidade !== undefined) {
+  if (unidade !== undefined) {
     // Unidade declarada e diferente da base encerra aqui: cair no texto livre
     // reintroduziria a conversão que este ramo acabou de recusar.
     if (unidade !== esperada) return null;

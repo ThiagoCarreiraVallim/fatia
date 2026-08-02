@@ -58,7 +58,8 @@ const TIMEOUT_MS = 5_000;
  * inofensivo: não há dado velho sobrevivendo a um deploy.
  */
 const TTL_MS = 6 * 60 * 60 * 1000;
-const MAX_ENTRADAS = 500;
+/** Exportado para o teste da evicção não repetir o número e sair de sincronia. */
+export const MAX_ENTRADAS = 500;
 
 /** Aceita EAN-8, EAN-13, UPC-A e GTIN-14. Só dígitos. */
 const CODIGO_VALIDO = /^\d{8,14}$/;

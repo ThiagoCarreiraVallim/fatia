@@ -6,6 +6,7 @@ import {
   TIPOS_DE_CODIGO,
   codigoDeBarrasValido,
   formularioAPartirDaFicha,
+  itemDeRefeicaoDoFormulario,
   itemDeRefeicaoDoProduto,
   mensagemDeFalhaNaConsulta,
   mensagemDeFichaIncompleta,
@@ -13,6 +14,7 @@ import {
   opcoesDePorcao,
   podeProcessarLeitura,
   previaDoProduto,
+  travaAposFechar,
   unidadeDaBase,
 } from '../barcode';
 
@@ -82,6 +84,31 @@ describe('podeProcessarLeitura', () => {
 
   it('ignora leitura inválida mesmo sendo a primeira', () => {
     expect(podeProcessarLeitura('nao-e-codigo', null)).toBe(false);
+  });
+});
+
+describe('travaAposFechar', () => {
+  it('cancelar mantém o código travado, senão o drawer reabre sozinho', () => {
+    // A embalagem continua enquadrada quando a pessoa toca em "Cancelar". Se a
+    // trava caísse aqui, a câmera releria o mesmo código no instante seguinte, o
+    // cache em memória responderia em milissegundos e o drawer voltaria — e o
+    // único botão dele é justamente o "Cancelar" que acabou de não funcionar.
+    const trava = travaAposFechar('7891000100103', 'descartada');
+
+    expect(trava).toBe('7891000100103');
+    expect(podeProcessarLeitura('7891000100103', trava)).toBe(false);
+  });
+
+  it('descartar não trava produto diferente', () => {
+    const trava = travaAposFechar('7891000100103', 'descartada');
+    expect(podeProcessarLeitura('7891910000197', trava)).toBe(true);
+  });
+
+  it('"Escanear de novo" libera o mesmo código', () => {
+    const trava = travaAposFechar('7891000100103', 'nova-leitura');
+
+    expect(trava).toBeNull();
+    expect(podeProcessarLeitura('7891000100103', trava)).toBe(true);
   });
 });
 
@@ -160,6 +187,18 @@ describe('nomeDoProduto', () => {
   it('não repete a marca quando ela já está no nome', () => {
     expect(nomeDoProduto({ name: 'Refrigerante Coca-Cola 2Lt', brand: 'Coca-Cola' })).toBe(
       'Refrigerante Coca-Cola 2Lt',
+    );
+  });
+
+  it('não repete a marca quando ela está no nome com outra caixa', () => {
+    // O OFF é campo livre: a mesma marca aparece "Coca-Cola", "COCA-COLA" e
+    // "coca cola" conforme quem preencheu. Comparação exata devolveria
+    // "Refrigerante COCA-COLA 2Lt (Coca-Cola)" no histórico.
+    expect(nomeDoProduto({ name: 'Refrigerante COCA-COLA 2Lt', brand: 'Coca-Cola' })).toBe(
+      'Refrigerante COCA-COLA 2Lt',
+    );
+    expect(nomeDoProduto({ name: 'Leite Condensado MOÇA', brand: 'moça' })).toBe(
+      'Leite Condensado MOÇA',
     );
   });
 
@@ -269,12 +308,16 @@ describe('formularioAPartirDaFicha', () => {
     expect(form.proteinG).not.toBe('0');
   });
 
-  it('converte o que veio para a porção do rótulo', () => {
+  it('traz os macros por 100, e a porção do rótulo só como quantidade', () => {
     const form = formularioAPartirDaFicha(acucar);
 
+    // Os macros ficam na unidade em que o rótulo os publica. Converter para a
+    // porção — como se fazia antes — criava campo cujo significado dependia do
+    // campo `grams`: mudar a quantidade não mexia neles e o registro saía
+    // errado. Ver o teste de 50 g abaixo.
     expect(form.grams).toBe('5');
-    expect(form.kcal).toBe('20');
-    expect(form.carbsG).toBe('5');
+    expect(form.kcal).toBe('400');
+    expect(form.carbsG).toBe('100');
   });
 
   it('cai em 100 quando não há porção conhecida', () => {
@@ -292,5 +335,88 @@ describe('formularioAPartirDaFicha', () => {
   it('sem nome, o campo fica vazio para a pessoa preencher', () => {
     const form = formularioAPartirDaFicha({ barcode: '789', basis: '100g', name: undefined });
     expect(form.name).toBe('');
+  });
+});
+
+describe('itemDeRefeicaoDoFormulario', () => {
+  const acucar = {
+    barcode: '7891910000197',
+    basis: '100g' as const,
+    name: 'União Refinado',
+    brand: 'Tio João',
+    kcalPer100g: 400,
+    carbsPer100g: 100,
+    servingSize: 5,
+    servingLabel: '5 g',
+  };
+
+  /** Ficha do açúcar já completada à mão: falta proteína e gordura no OFF. */
+  const completado = () => ({
+    ...formularioAPartirDaFicha(acucar),
+    proteinG: '0',
+    fatG: '0',
+  });
+
+  it('recusa o item enquanto falta macro — o branco viraria zero na API', () => {
+    // `MealService` grava `kcal: item.kcal ?? 0`, e o mesmo para os outros três.
+    // Campo em branco que chegue lá entra no histórico como zero conferido. O
+    // caminho eram dois toques: abrir o drawer e tocar em "Adicionar".
+    const form = formularioAPartirDaFicha(acucar);
+
+    expect(form.proteinG).toBe('');
+    expect(itemDeRefeicaoDoFormulario(form)).toBeNull();
+  });
+
+  it('aceita o zero que a pessoa digitou, que é dado e não ausência', () => {
+    const item = itemDeRefeicaoDoFormulario(completado());
+
+    expect(item).not.toBeNull();
+    expect(item?.proteinG).toBe(0);
+  });
+
+  it('50 g de açúcar registram 200 kcal, e não as 20 kcal da porção de 5 g', () => {
+    // O cenário do defeito: a pessoa lê "5" na quantidade, troca para 50 porque
+    // foi isso que comeu, e salva. Com os macros presos à porção do rótulo, iam
+    // 50 g com 20 kcal e 5 g de carboidrato — dez vezes menos.
+    const item = itemDeRefeicaoDoFormulario({ ...completado(), grams: '50' });
+
+    expect(item?.grams).toBe(50);
+    expect(item?.kcal).toBe(200);
+    expect(item?.carbsG).toBe(50);
+  });
+
+  it('a porção do rótulo, mantida, dá o total daquela porção', () => {
+    const item = itemDeRefeicaoDoFormulario(completado());
+
+    expect(item?.grams).toBe(5);
+    expect(item?.kcal).toBe(20);
+    expect(item?.carbsG).toBe(5);
+  });
+
+  it('recusa nome vazio ou só espaços', () => {
+    expect(itemDeRefeicaoDoFormulario({ ...completado(), name: '' })).toBeNull();
+    expect(itemDeRefeicaoDoFormulario({ ...completado(), name: '   ' })).toBeNull();
+  });
+
+  it('recusa quantidade não positiva ou não numérica', () => {
+    expect(itemDeRefeicaoDoFormulario({ ...completado(), grams: '0' })).toBeNull();
+    expect(itemDeRefeicaoDoFormulario({ ...completado(), grams: '-5' })).toBeNull();
+    expect(itemDeRefeicaoDoFormulario({ ...completado(), grams: 'abc' })).toBeNull();
+    expect(itemDeRefeicaoDoFormulario({ ...completado(), grams: '' })).toBeNull();
+  });
+
+  it('recusa macro negativo ou não numérico em vez de gravar NaN', () => {
+    expect(itemDeRefeicaoDoFormulario({ ...completado(), kcal: '-1' })).toBeNull();
+    expect(itemDeRefeicaoDoFormulario({ ...completado(), fatG: 'abc' })).toBeNull();
+  });
+
+  it('não manda foodId: é item livre, o produto não virou Food', () => {
+    const item = itemDeRefeicaoDoFormulario(completado());
+    expect(item !== null && 'foodId' in item).toBe(false);
+  });
+
+  it('corta o nome em 160 caracteres, o limite que a API aceita', () => {
+    const item = itemDeRefeicaoDoFormulario({ ...completado(), name: 'A'.repeat(200) });
+    expect(item?.foodName).toHaveLength(160);
   });
 });
