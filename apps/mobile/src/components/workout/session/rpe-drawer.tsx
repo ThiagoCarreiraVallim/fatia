@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
@@ -41,9 +41,20 @@ export function RpeDrawer({
   const qc = useQueryClient();
   const [selected, setSelected] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (open) setSelected(set?.rpe ?? null);
-  }, [open, set?.rpe]);
+  // Ajuste durante o render, e não num efeito (#187). A comparação é a mesma que
+  // estava no array de dependências, então a seleção é reespelhada nos mesmos
+  // momentos — só que antes de pintar. O estado anterior parte de "fechado, sem
+  // RPE" para reproduzir a passagem de montagem, em que o drawer pode já abrir
+  // com uma série selecionada.
+  const rpe = set?.rpe ?? null;
+  const [previous, setPrevious] = useState<{ open: boolean; rpe: number | null }>({
+    open: false,
+    rpe: null,
+  });
+  if (previous.open !== open || previous.rpe !== rpe) {
+    setPrevious({ open, rpe });
+    if (open) setSelected(rpe);
+  }
 
   const save = useMutation({
     mutationFn: (rpe: number) => {

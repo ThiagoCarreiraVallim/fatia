@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { progressApi, type WeightLog } from '@fatia/api-client';
@@ -29,9 +29,12 @@ export function LogWeightDrawer({ open, onClose }: { open: boolean; onClose: () 
   const [formError, setFormError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  const from = useMemo(
-    () => new Date(Date.now() - HISTORY_DAYS * 86_400_000).toISOString().slice(0, 10),
-    [],
+  // `useState` com inicializador preguiçoso, e não `useMemo(..., [])`: `useMemo`
+  // é dica de performance, não garantia — o React pode descartar o valor e
+  // recalcular. Aqui isso viraria uma data nova, chave de query nova e refetch.
+  // O inicializador roda uma vez por montagem, que é a semântica que se quer.
+  const [from] = useState(() =>
+    new Date(Date.now() - HISTORY_DAYS * 86_400_000).toISOString().slice(0, 10),
   );
 
   const logs = useQuery({

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react-native';
@@ -37,7 +37,7 @@ export function StrengthChart({
   days: number;
   openPicker: OpenExercisePicker;
 }) {
-  const [exercise, setExercise] = useState<Exercise | null>(null);
+  const [picked, setPicked] = useState<Exercise | null>(null);
   const [metric, setMetric] = useState<StrengthMetric>('max_weight');
 
   const records = useQuery({
@@ -47,11 +47,18 @@ export function StrengthChart({
 
   // Pré-seleciona o exercício de força treinado mais recentemente, para o
   // gráfico não nascer vazio. O usuário pode trocar pelo seletor.
-  useEffect(() => {
-    if (exercise || !records.data) return;
-    const top = records.data.find((record) => record.type === 'strength');
-    if (!top) return;
-    setExercise({
+  //
+  // Derivado, e não copiado para dentro de um `useState` por efeito (#187): a
+  // escolha automática é função pura dos recordes, e guardá-la em estado só
+  // criava uma cópia que podia divergir da fonte. O que **é** estado é a escolha
+  // explícita da pessoa, e ela ganha do automático. Efeito colateral assumido: se
+  // os recordes forem revalidados e a cabeça da lista mudar antes de qualquer
+  // escolha manual, o gráfico passa a mostrar o novo exercício mais recente — que
+  // é o que a pré-seleção promete. Antes, ficava travado no primeiro que chegou.
+  const auto = useMemo((): Exercise | null => {
+    const top = records.data?.find((record) => record.type === 'strength');
+    if (!top) return null;
+    return {
       id: top.exerciseId,
       name: top.exerciseName,
       muscleGroup: top.muscleGroup,
@@ -65,8 +72,10 @@ export function StrengthChart({
       instructions: [],
       youtubeVideoId: null,
       youtubeVideoIdPt: null,
-    });
-  }, [records.data, exercise]);
+    };
+  }, [records.data]);
+
+  const exercise = picked ?? auto;
 
   const progress = useQuery<StrengthProgress>({
     queryKey: ['progress', 'strength', exercise?.id, days, metric],
@@ -87,7 +96,7 @@ export function StrengthChart({
           accessibilityLabel={
             exercise ? `Trocar exercício, atual ${exercise.name}` : 'Escolher exercício'
           }
-          onPress={() => openPicker('strength', setExercise)}
+          onPress={() => openPicker('strength', setPicked)}
         >
           <View className="flex-row items-center gap-1.5">
             <Search size={12} color={chartColors.foreground} />

@@ -4,7 +4,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -54,17 +53,28 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/**
+ * Uma descoberta por execução do app: o documento OIDC não muda entre telas e
+ * cada leitura é uma ida à rede antes de qualquer coisa útil aparecer.
+ *
+ * O cache mora no módulo, e não num `useRef` dentro do provider, porque o
+ * endereço descoberto vem de `env.logtoEndpoint` — constante de módulo, sem nada
+ * de por-instância. Guardar em ref também fazia o `react-hooks/refs` v7 acusar
+ * leitura de ref durante o render: a regra não enxerga dentro do construtor do
+ * `SessionManager` e assume que ele poderia chamar `endpoints()` ali. Não chama
+ * (`session-manager.ts` só guarda as deps), mas tirar o ref resolve o aviso sem
+ * depender dessa aposta.
+ */
+let discovery: Promise<OidcEndpoints> | null = null;
+
+function endpoints(): Promise<OidcEndpoints> {
+  discovery ??= discover(env.logtoEndpoint);
+  return discovery;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [error, setError] = useState<string | null>(null);
-  const discoveryRef = useRef<Promise<OidcEndpoints> | null>(null);
-
-  const endpoints = useCallback(() => {
-    // Uma descoberta por execução do app: o documento OIDC não muda entre telas
-    // e cada leitura é uma ida à rede antes de qualquer coisa útil aparecer.
-    discoveryRef.current ??= discover(env.logtoEndpoint);
-    return discoveryRef.current;
-  }, []);
 
   const manager = useMemo(
     () =>
@@ -75,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         resource: env.logtoAudience,
         onSessionEnded: () => setStatus('signedOut'),
       }),
-    [endpoints],
+    [],
   );
 
   useEffect(() => {
@@ -148,7 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao autenticar');
     }
-  }, [endpoints, manager]);
+  }, [manager]);
 
   const signOut = useCallback(async () => {
     // Limpa o cofre primeiro. Se a chamada ao Logto falhar por rede, o token
@@ -170,7 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // Sessão local já está limpa; falhar aqui não muda o estado do app.
     }
-  }, [endpoints, manager]);
+  }, [manager]);
 
   const getAccessToken = useCallback(() => manager.getAccessToken(), [manager]);
 

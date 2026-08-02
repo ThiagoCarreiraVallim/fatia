@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
@@ -104,6 +104,39 @@ export function SetRow({
   );
 }
 
+/**
+ * Rascunho local de uma célula, reespelhado quando a prop comprometida muda.
+ *
+ * As três células abaixo faziam isto com `useEffect(() => setLocal(...), [value])`,
+ * o que pinta um quadro com o valor velho antes de corrigir e é o que o
+ * `react-hooks/set-state-in-effect` acusa (#187). O ajuste durante o render faz o
+ * React reprocessar o componente antes de pintar, e a comparação é exatamente a
+ * mesma que estava no array de dependências — mesmos momentos de reset, um quadro
+ * a menos. Não há passagem de montagem porque o `useState` já inicializa com
+ * `format(value)`: no efeito, a rodada de montagem era um no-op.
+ *
+ * `format` precisa ser pura — roda no render.
+ */
+function useMirroredDraft<T>(value: T, format: (value: T) => string) {
+  const [draft, setDraft] = useState(() => format(value));
+  const [previous, setPrevious] = useState(value);
+  if (!Object.is(value, previous)) {
+    setPrevious(value);
+    setDraft(format(value));
+  }
+  return [draft, setDraft] as const;
+}
+
+const asText = (n: number | null): string => (n != null ? String(n) : '');
+
+/** Segundos em `m:ss`. No escopo do módulo para poder ser passada ao hook acima. */
+function fmt(s: number | null): string {
+  if (s == null) return '';
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${String(sec).padStart(2, '0')}`;
+}
+
 function NumberCell({
   value,
   editable,
@@ -119,11 +152,7 @@ function NumberCell({
   suffix?: string;
   onChange: (n: number | undefined) => void;
 }) {
-  const [local, setLocal] = useState(value != null ? String(value) : '');
-
-  useEffect(() => {
-    setLocal(value != null ? String(value) : '');
-  }, [value]);
+  const [local, setLocal] = useMirroredDraft(value, asText);
 
   if (!editable) {
     return (
@@ -175,11 +204,7 @@ function RpeCell({
   editable: boolean;
   onChange: (n: number | undefined) => void;
 }) {
-  const [local, setLocal] = useState(value != null ? String(value) : '');
-
-  useEffect(() => {
-    setLocal(value != null ? String(value) : '');
-  }, [value]);
+  const [local, setLocal] = useMirroredDraft(value, asText);
 
   if (!editable) {
     return (
@@ -239,17 +264,7 @@ function DurationCell({
   editable: boolean;
   onChange: (n: number | undefined) => void;
 }) {
-  function fmt(s: number | null): string {
-    if (s == null) return '';
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${m}:${String(sec).padStart(2, '0')}`;
-  }
-  const [local, setLocal] = useState(fmt(seconds));
-
-  useEffect(() => {
-    setLocal(fmt(seconds));
-  }, [seconds]);
+  const [local, setLocal] = useMirroredDraft(seconds, fmt);
 
   if (!editable) {
     return <div className="text-foreground tabular-nums">{fmt(seconds) || '—'}</div>;

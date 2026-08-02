@@ -126,9 +126,13 @@ function SecondaryGoalCard({
 }) {
   const pct = goal.progressPercent ?? 0;
   const Icon = KIND_ICON[goal.kind];
+  // Relógio lido uma vez por montagem. Ler `Date.now()` no corpo do render fazia
+  // o selo depender de quando o React resolveu re-renderizar; numa contagem em
+  // dias, prender o instante não muda o que aparece e passa a ser determinístico.
+  const [nowMs] = useState(() => Date.now());
   const deadline = goal.deadline ? new Date(goal.deadline) : null;
   const daysLeft = deadline
-    ? Math.max(0, Math.ceil((deadline.getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+    ? Math.max(0, Math.ceil((deadline.getTime() - nowMs) / (24 * 60 * 60 * 1000)))
     : null;
   const badge = daysLeft !== null ? `${daysLeft}D` : goal.kind.toUpperCase();
 

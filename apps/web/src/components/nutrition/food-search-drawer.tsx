@@ -67,7 +67,14 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
     enabled: open,
   });
 
-  useEffect(() => {
+  // Ajuste durante o render, e não num efeito (#187). A comparação é a mesma que
+  // estava no array de dependências, então a limpeza acontece no mesmo fechamento
+  // — só que antes de pintar. Não há passagem de montagem porque cada `useState`
+  // acima já parte destes mesmos valores: no efeito, a rodada de montagem era um
+  // no-op.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
     if (!open) {
       setMode('search');
       setQ('');
@@ -77,7 +84,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
       setManual(INITIAL_MANUAL);
       setManualNutrients({});
     }
-  }, [open]);
+  }
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q), 300);

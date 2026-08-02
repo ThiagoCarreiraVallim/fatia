@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Drawer,
@@ -25,9 +25,16 @@ export function EditMealItemDrawer({ item, date, onClose }: Props) {
   const [grams, setGrams] = useState('');
   const qc = useQueryClient();
 
-  useEffect(() => {
+  // Ajuste durante o render, e não num efeito (#187). A comparação é a mesma que
+  // estava no array de dependências — identidade do objeto `item` — então o campo
+  // é reespelhado nos mesmos momentos, só que antes de pintar. `previousItem`
+  // parte de `null` para reproduzir a passagem de montagem: o drawer é montado
+  // já com `item`, e sem isso o campo nasceria vazio.
+  const [previousItem, setPreviousItem] = useState<MealItem | null>(null);
+  if (previousItem !== item) {
+    setPreviousItem(item);
     if (item) setGrams(String(item.grams));
-  }, [item]);
+  }
 
   const mutation = useMutation({
     mutationFn: () => {

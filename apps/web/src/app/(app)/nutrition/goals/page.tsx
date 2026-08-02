@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';
 import { nutritionApi, type UserGoals } from '@fatia/api-client';
@@ -30,13 +30,19 @@ export default function GoalsPage() {
   const goals = useQuery({ queryKey: ['nutrition', 'goals'], queryFn: () => nutritionApi.goals() });
   const [form, setForm] = useState<FormState>(empty);
 
-  useEffect(() => {
-    if (goals.data) {
-      const { userId: _userId, ...rest } = goals.data;
-      void _userId;
-      setForm(rest);
-    }
-  }, [goals.data]);
+  // Ajuste durante o render, e não num efeito (#187). A comparação é a mesma que
+  // estava no array de dependências — identidade do objeto do React Query, que
+  // só muda quando a resposta muda de verdade (structural sharing) — então o
+  // formulário é reespelhado nos mesmos momentos, só que antes de pintar.
+  // `previousData` parte de `undefined` para reproduzir a passagem de montagem,
+  // que é o caso normal: a resposta já em cache tem de preencher os campos.
+  const [previousData, setPreviousData] = useState<typeof goals.data>(undefined);
+  if (previousData !== goals.data && goals.data) {
+    setPreviousData(goals.data);
+    const { userId: _userId, ...rest } = goals.data;
+    void _userId;
+    setForm(rest);
+  }
 
   const save = useMutation({
     mutationFn: (body: FormState) => nutritionApi.putGoals(body),

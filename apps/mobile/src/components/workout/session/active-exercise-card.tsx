@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { AccessibilityInfo, Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
@@ -94,10 +94,24 @@ export function ActiveExerciseCard({
   const prefillWeight = prefill.weightKg;
   const prefillReps = prefill.reps;
 
-  useEffect(() => {
+  // Ajuste durante o render, e não num efeito (#187). A comparação é a **mesma**
+  // que o efeito fazia no array de dependências, então o palpite é aplicado
+  // exatamente nos mesmos momentos — só que antes de pintar, em vez de um quadro
+  // depois. O estado anterior começa em `null/null`, e não no palpite atual, para
+  // reproduzir também a passagem de montagem que o `useEffect` fazia: sem isso, o
+  // card montado já com série da sessão nasceria com os campos zerados.
+  const [prevPrefill, setPrevPrefill] = useState<{ weightKg: number | null; reps: number | null }>({
+    weightKg: null,
+    reps: null,
+  });
+  if (
+    !Object.is(prevPrefill.weightKg, prefillWeight) ||
+    !Object.is(prevPrefill.reps, prefillReps)
+  ) {
+    setPrevPrefill({ weightKg: prefillWeight, reps: prefillReps });
     if (prefillWeight != null) setWeight(prefillWeight);
     if (prefillReps != null) setReps(prefillReps);
-  }, [prefillWeight, prefillReps]);
+  }
 
   const logSet = useMutation({
     mutationFn: () =>

@@ -1,11 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, Play, Clock, Dumbbell, Plus } from 'lucide-react';
-import { findQuickTemplate, isCardioExercise, workoutApi, type Exercise } from '@fatia/api-client';
+import {
+  findQuickTemplate,
+  isCardioExercise,
+  workoutApi,
+  type Exercise,
+  type QuickTemplate,
+} from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
@@ -15,6 +21,32 @@ interface LocalExercise {
   exercise: Exercise;
   targetSets: number;
   targetReps: string;
+}
+
+/**
+ * Casa cada linha do modelo com o primeiro exercício ainda não usado da busca.
+ *
+ * Pura, e fora do componente, para poder ser chamada no render — ver o ajuste
+ * `if (!resolved && ...)` lá embaixo.
+ */
+function matchTemplate(
+  template: QuickTemplate,
+  results: ReadonlyArray<{ data?: Exercise[] }>,
+): LocalExercise[] {
+  const seen = new Set<number>();
+  const matched: LocalExercise[] = [];
+  template.exercises.forEach((tmpl, idx) => {
+    const match = (results[idx]?.data ?? []).find((e) => !seen.has(e.id));
+    if (!match) return;
+    seen.add(match.id);
+    matched.push({
+      localId: `${match.id}-${idx}`,
+      exercise: match,
+      targetSets: tmpl.targetSets,
+      targetReps: tmpl.targetReps,
+    });
+  });
+  return matched;
 }
 
 export default function QuickTemplatePage() {
@@ -35,28 +67,16 @@ export default function QuickTemplatePage() {
     })),
   });
 
-  useEffect(() => {
-    if (!template || resolved) return;
-    const allDone = lookups.every((q) => q.isSuccess || q.isError);
-    if (!allDone) return;
-    const seen = new Set<number>();
-    const next: LocalExercise[] = [];
-    template.exercises.forEach((tmpl, idx) => {
-      const result = lookups[idx]?.data ?? [];
-      const match = result.find((e) => !seen.has(e.id));
-      if (match) {
-        seen.add(match.id);
-        next.push({
-          localId: `${match.id}-${idx}`,
-          exercise: match,
-          targetSets: tmpl.targetSets,
-          targetReps: tmpl.targetReps,
-        });
-      }
-    });
-    setItems(next);
+  // Ajuste durante o render, e não num efeito (#187). Aqui a trava já era o
+  // próprio `resolved`, e não o array de dependências: a resolução acontece uma
+  // vez só, quando todas as buscas terminam, e a partir daí a lista é da pessoa —
+  // ela adiciona e remove exercícios. Por ser trava booleana não há risco de
+  // laço: a primeira passagem põe `resolved` em `true` e nenhuma outra entra.
+  // Fazer isso antes de pintar evita o quadro com a lista vazia.
+  if (!resolved && template && lookups.every((q) => q.isSuccess || q.isError)) {
     setResolved(true);
-  }, [template, lookups, resolved]);
+    setItems(matchTemplate(template, lookups));
+  }
 
   const start = useMutation({
     mutationFn: async () => {

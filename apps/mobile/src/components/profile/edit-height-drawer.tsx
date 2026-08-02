@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { usersApi } from '@fatia/api-client';
@@ -27,9 +27,19 @@ export function EditHeightDrawer({
   const [value, setValue] = useState('');
   const qc = useQueryClient();
 
-  useEffect(() => {
+  // Ajuste durante o render, e não num efeito (#187). A comparação é a mesma que
+  // estava no array de dependências, então o campo é reespelhado nos mesmos
+  // momentos — só que antes de pintar, sem o quadro com o valor velho. O estado
+  // anterior parte de "fechado, sem estatura" para reproduzir a passagem de
+  // montagem: montado já aberto, o campo precisa nascer preenchido.
+  const [previous, setPrevious] = useState<{ open: boolean; heightCm: number | null }>({
+    open: false,
+    heightCm: null,
+  });
+  if (previous.open !== open || previous.heightCm !== currentHeightCm) {
+    setPrevious({ open, heightCm: currentHeightCm });
     if (open) setValue(currentHeightCm?.toString() ?? '');
-  }, [open, currentHeightCm]);
+  }
 
   const mutation = useMutation({
     mutationFn: () => {

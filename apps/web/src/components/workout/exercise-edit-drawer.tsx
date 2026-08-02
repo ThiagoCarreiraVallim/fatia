@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Drawer,
@@ -29,13 +29,21 @@ export function ExerciseEditDrawer({ exercise, open, onOpenChange, onSaved }: Pr
   const [equipment, setEquipment] = useState('');
   const [instructions, setInstructions] = useState('');
 
-  // Sincroniza os campos quando abre / muda de exercício.
-  useEffect(() => {
-    if (!exercise) return;
-    setName(exercise.name ?? '');
-    setEquipment(exercise.equipment ?? '');
-    setInstructions((exercise.instructions ?? []).join('\n'));
-  }, [exercise]);
+  // Sincroniza os campos quando abre / muda de exercício. Ajuste durante o
+  // render, e não num efeito (#187): a comparação é a mesma que estava no array
+  // de dependências — identidade do objeto `exercise` — então os campos são
+  // reespelhados nos mesmos momentos, só que antes de pintar. `previousExercise`
+  // parte de `null` para reproduzir a passagem de montagem, em que o drawer já
+  // chega com o exercício escolhido.
+  const [previousExercise, setPreviousExercise] = useState<Exercise | null>(null);
+  if (previousExercise !== exercise) {
+    setPreviousExercise(exercise);
+    if (exercise) {
+      setName(exercise.name ?? '');
+      setEquipment(exercise.equipment ?? '');
+      setInstructions((exercise.instructions ?? []).join('\n'));
+    }
+  }
 
   const save = useMutation({
     mutationFn: () => {

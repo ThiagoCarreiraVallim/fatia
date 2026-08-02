@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { nutritionApi, type MealItem } from '@fatia/api-client';
@@ -34,9 +34,16 @@ export function EditMealItemDrawer({
   const [gramas, setGramas] = useState('');
   const qc = useQueryClient();
 
-  useEffect(() => {
+  // Ajuste durante o render, e não num efeito (#187). A comparação é a mesma que
+  // estava no array de dependências — identidade do objeto `item` — então o campo
+  // é reespelhado nos mesmos momentos, só que antes de pintar. `itemAnterior`
+  // parte de `null` para reproduzir a passagem de montagem: o drawer é montado
+  // já com `item`, e sem isso o campo nasceria vazio.
+  const [itemAnterior, setItemAnterior] = useState<MealItem | null>(null);
+  if (itemAnterior !== item) {
+    setItemAnterior(item);
     if (item) setGramas(String(item.grams));
-  }, [item]);
+  }
 
   const salvar = useMutation({
     mutationFn: () => {

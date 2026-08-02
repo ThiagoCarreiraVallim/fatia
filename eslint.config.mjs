@@ -111,24 +111,24 @@ export default tseslint.config(
 
   {
     /**
-     * As regras que o `eslint-plugin-react-hooks` v7 acrescentou entram como
-     * **aviso**, não erro.
+     * As regras da era do React Compiler que o `eslint-plugin-react-hooks` v7
+     * trouxe: `set-state-in-effect`, `purity` e `refs`.
      *
-     * A v7 é obrigatória para o ESLint 10, e trouxe junto o conjunto da era do
-     * React Compiler: `set-state-in-effect`, `purity` e `refs`. Elas apontam 42
-     * ocorrências reais no web e no mobile — a maioria é estado derivado de
-     * prop calculado dentro de `useEffect`, que a documentação do React
-     * desaconselha.
+     * Entraram como aviso quando o ESLint 10 subiu, com 42 ocorrências, e ficam
+     * como **erro** desde que a fila foi zerada. É de propósito: a maioria era
+     * estado derivado de prop copiado para dentro de um `useEffect`, e esse
+     * padrão volta sozinho no próximo componente escrito se o lint só resmungar.
      *
-     * São achados legítimos, e por isso ficam visíveis. Mas corrigir 42 sítios
-     * dentro de uma PR de dependência tornaria o diff irrevisável e misturaria
-     * "subir o ESLint" com "refatorar efeitos". Rastreado na #187.
+     * Os três casos que continuam com `eslint-disable-next-line` são leitura de
+     * sistema externo que não existe no render — embla, `navigator` antes de
+     * hidratar, e a instalação do transporte do app nativo. Cada um tem o motivo
+     * escrito ao lado. Silenciar sem motivo no código não passa na revisão.
      */
     files: ['apps/web/**/*.{ts,tsx}', 'apps/mobile/**/*.{ts,tsx}'],
     rules: {
-      'react-hooks/set-state-in-effect': 'warn',
-      'react-hooks/purity': 'warn',
-      'react-hooks/refs': 'warn',
+      'react-hooks/set-state-in-effect': 'error',
+      'react-hooks/purity': 'error',
+      'react-hooks/refs': 'error',
     },
   },
 
