@@ -3,6 +3,7 @@ import { ExerciseService } from './exercise.service';
 import { WorkoutPlanService } from './workout-plan.service';
 import { WorkoutSessionService } from './workout-session.service';
 import { SessionSetService } from './session-set.service';
+import { PrescriptionService } from './prescription.service';
 import { WorkoutController } from './workout.controller';
 import { AddExerciseToPlanTool } from './mcp/add-exercise-to-plan.tool';
 import { ExplainFormTool } from './mcp/explain-form.tool';
@@ -17,6 +18,7 @@ import { DeleteWorkoutSessionTool } from './mcp/delete-workout-session.tool';
 import { FinishWorkoutSessionTool } from './mcp/finish-workout-session.tool';
 import { GetActiveWorkoutSessionTool } from './mcp/get-active-workout-session.tool';
 import { GetLastSetForExerciseTool } from './mcp/get-last-set-for-exercise.tool';
+import { GetLoadPrescriptionTool } from './mcp/get-load-prescription.tool';
 import { GetPersonalRecordTool } from './mcp/get-personal-record.tool';
 import { GetWorkoutPlanTool } from './mcp/get-workout-plan.tool';
 import { GetWorkoutSessionTool } from './mcp/get-workout-session.tool';
@@ -42,6 +44,7 @@ import { UpdateWorkoutSessionTool } from './mcp/update-workout-session.tool';
     WorkoutPlanService,
     WorkoutSessionService,
     SessionSetService,
+    PrescriptionService,
 
     // MCP tools
     AddExerciseToPlanTool,
@@ -57,6 +60,7 @@ import { UpdateWorkoutSessionTool } from './mcp/update-workout-session.tool';
     FinishWorkoutSessionTool,
     GetActiveWorkoutSessionTool,
     GetLastSetForExerciseTool,
+    GetLoadPrescriptionTool,
     GetPersonalRecordTool,
     GetWorkoutPlanTool,
     GetWorkoutSessionTool,
@@ -75,6 +79,12 @@ import { UpdateWorkoutSessionTool } from './mcp/update-workout-session.tool';
     UpdateWorkoutPlanTool,
     UpdateWorkoutSessionTool,
   ],
-  exports: [ExerciseService, WorkoutPlanService, WorkoutSessionService, SessionSetService],
+  exports: [
+    ExerciseService,
+    WorkoutPlanService,
+    WorkoutSessionService,
+    SessionSetService,
+    PrescriptionService,
+  ],
 })
 export class WorkoutModule {}

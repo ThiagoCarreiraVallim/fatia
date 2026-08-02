@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ExerciseGroup, SessionSet } from '@fatia/api-client';
+import type { ExerciseGroup, LoadPrescription, SessionSet } from '@fatia/api-client';
 import { ActiveExerciseCard } from '../active-exercise-card';
 
 // O modal de RPE só aparece depois de registrar uma série e arrasta o vaul
@@ -17,6 +17,7 @@ vi.mock('@fatia/api-client', async () => {
       ...actual.workoutApi,
       getLastSet: vi.fn(),
       getPersonalRecord: vi.fn(),
+      getPrescription: vi.fn(),
       logSet: vi.fn(),
       updateSet: vi.fn(),
       deleteSet: vi.fn(),
@@ -28,6 +29,7 @@ import { workoutApi } from '@fatia/api-client';
 
 const getLastSet = vi.mocked(workoutApi.getLastSet);
 const getPersonalRecord = vi.mocked(workoutApi.getPersonalRecord);
+const getPrescription = vi.mocked(workoutApi.getPrescription);
 const logSet = vi.mocked(workoutApi.logSet);
 
 const SESSION_ID = 'sessao-de-hoje';
@@ -115,6 +117,7 @@ describe('ActiveExerciseCard', () => {
   beforeEach(() => {
     getLastSet.mockResolvedValue(null);
     getPersonalRecord.mockResolvedValue(null);
+    getPrescription.mockResolvedValue({ status: 'insufficient_history' });
   });
 
   it('não pré-preenche a primeira série com o recorde pessoal', async () => {
@@ -208,6 +211,108 @@ describe('ActiveExerciseCard', () => {
     await waitFor(() => expect(screen.getByText('Anterior: 62.5kg')).toBeInTheDocument());
     expect(weightValue()).toBe('70');
     expect(repsValue()).toBe('8');
+  });
+
+  it('parte da prescrição, e não da cópia da última série', async () => {
+    getLastSet.mockResolvedValue(makeSet({ id: 'antigo', weightKg: 60, reps: 12 }));
+    getPrescription.mockResolvedValue({
+      status: 'ok',
+      weightKg: 62.5,
+      reps: 8,
+      restSeconds: 90,
+      basis: 'rpe',
+      action: 'increase_load',
+      capped: false,
+    });
+    renderCard();
+
+    await waitFor(() => expect(weightValue()).toBe('62.5'));
+    expect(repsValue()).toBe('8');
+    // A referência da sessão anterior continua à vista: é dela que a prescrição
+    // parte, e é por ela que se confere que o campo não copiou os 60 kg.
+    expect(screen.getByText('Anterior: 60kg')).toBeInTheDocument();
+  });
+
+  it('pede a prescrição para a faixa de repetições do plano', async () => {
+    renderCard(makeGroup({ targetReps: '5' }));
+    await waitFor(() => expect(getPrescription).toHaveBeenCalledWith(1, '5'));
+  });
+
+  it('mostra a sugestão com a regra que a produziu', async () => {
+    getPrescription.mockResolvedValue({
+      status: 'ok',
+      weightKg: 62.5,
+      reps: 8,
+      restSeconds: 180,
+      basis: 'reps',
+      action: 'increase_load',
+      capped: false,
+    });
+    renderCard();
+
+    expect(await screen.findByText('Sugestão: 62.5 kg × 8 · 180s')).toBeInTheDocument();
+    // Sem RPE registrado, o texto não pode creditar o RPE.
+    expect(screen.getByText(/sem RPE — todas as séries fecharam a faixa/)).toBeInTheDocument();
+    // E o descanso prescrito vale mais que o padrão de 90s da tela.
+    expect(screen.getByText('03:00')).toBeInTheDocument();
+  });
+
+  it('esconde a sugestão depois de a pessoa registrar série nesta sessão', async () => {
+    getPrescription.mockResolvedValue({
+      status: 'ok',
+      weightKg: 62.5,
+      reps: 8,
+      restSeconds: 180,
+      basis: 'rpe',
+      action: 'increase_load',
+      capped: false,
+    });
+    renderCard(makeGroup({ sets: [makeSet({ id: 'de-hoje', weightKg: 70, reps: 8 })] }));
+
+    // Os 03:00 provam que a prescrição já chegou (o padrão da tela é 90s): sem
+    // essa âncora, a ausência do texto poderia ser só a resposta atrasada.
+    expect(await screen.findByText('03:00')).toBeInTheDocument();
+    // O campo copia a série de hoje, que tem precedência no `prefillForNextSet`.
+    // Manter "Sugestão: 62.5 kg × 8" logo abaixo contradiz o próprio campo.
+    expect(weightValue()).toBe('70');
+    expect(screen.queryByText(/Sugestão/)).not.toBeInTheDocument();
+  });
+
+  it('não mostra sugestão nenhuma quando o histórico é curto demais', async () => {
+    getLastSet.mockResolvedValue(makeSet({ id: 'antigo', weightKg: 60, reps: 12 }));
+    getPrescription.mockResolvedValue({ status: 'insufficient_history' });
+    renderCard();
+
+    // Volta a valer a série anterior — e nada é inventado na tela.
+    await waitFor(() => expect(weightValue()).toBe('60'));
+    expect(screen.queryByText(/Sugestão/)).not.toBeInTheDocument();
+  });
+
+  it('não deixa a prescrição sobrescrever o que a pessoa digitou', async () => {
+    let resolvePrescription: (p: LoadPrescription) => void = () => undefined;
+    getPrescription.mockReturnValue(
+      new Promise<LoadPrescription>((resolve) => {
+        resolvePrescription = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    renderCard();
+
+    await user.click(screen.getAllByRole('button', { name: 'Aumentar' })[0]);
+    expect(weightValue()).toBe('1');
+
+    resolvePrescription({
+      status: 'ok',
+      weightKg: 62.5,
+      reps: 8,
+      restSeconds: 90,
+      basis: 'rpe',
+      action: 'increase_load',
+      capped: false,
+    });
+
+    await waitFor(() => expect(screen.getByText(/Sugestão/)).toBeInTheDocument());
+    expect(weightValue()).toBe('1');
   });
 
   it('não sobrescreve o que a pessoa digitou quando a referência chega depois', async () => {

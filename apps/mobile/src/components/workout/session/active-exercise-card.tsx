@@ -4,9 +4,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { Check, Info, Minus, Plus } from 'lucide-react-native';
 import {
+  describePrescription,
   prefillForNextSet,
   workoutApi,
   type ExerciseGroup,
+  type LoadPrescription,
   type SessionSet,
 } from '@fatia/api-client';
 import { Button, Input } from '@/components/ui';
@@ -82,6 +84,24 @@ export function ActiveExerciseCard({
     pr.data && 'weightKg' in pr.data && pr.data.weightKg != null ? pr.data.weightKg : null;
   const prReps = pr.data && 'reps' in pr.data && pr.data.reps != null ? pr.data.reps : null;
 
+  // A prescrição depende da faixa alvo do exercício no plano, que esta tela já
+  // tem — por isso ela vai na chave do cache junto com o id.
+  const prescriptionQuery = useQuery({
+    queryKey: ['workout', 'prescription', group.exerciseId, group.targetReps],
+    queryFn: () => workoutApi.getPrescription(group.exerciseId, group.targetReps),
+    staleTime: 60_000,
+  });
+  // O tipo é anotado à mão: sem ele, o `data` chega ao teste de `status` como
+  // inferência ainda pendente do `useQuery` e o TypeScript não estreita a
+  // união — a anotação é o que faz `status: 'ok'` valer como discriminante.
+  const prescribed: LoadPrescription | undefined = prescriptionQuery.data;
+  const prescription = prescribed?.status === 'ok' ? prescribed : null;
+  // A sugestão sai da tela assim que existe série **desta** sessão: o
+  // `prefillForNextSet` dá precedência a ela, e a prescrição parte da última
+  // sessão concluída. Manter o texto seria contradizer o campo — 70 kg × 8 no
+  // stepper e "Sugestão: 62,5 kg × 8" logo abaixo.
+  const hint = prescription && doneSets === 0 ? describePrescription(prescription) : null;
+
   const [weight, setWeight] = useState(0);
   const [reps, setReps] = useState(() => parseFirstRep(group.targetReps));
   const [touched, setTouched] = useState(false);
@@ -90,7 +110,12 @@ export function ActiveExerciseCard({
   // Calculada no render e não dentro do efeito para que as dependências sejam
   // só os dois números: os objetos de série trocam de identidade a cada refetch
   // do React Query e reescreveriam o campo por cima do que a pessoa digita.
-  const prefill = prefillForNextSet({ touched, sessionLastSet, previousSessionSet: reference });
+  const prefill = prefillForNextSet({
+    touched,
+    sessionLastSet,
+    previousSessionSet: reference,
+    prescription,
+  });
   const prefillWeight = prefill.weightKg;
   const prefillReps = prefill.reps;
 
@@ -131,7 +156,9 @@ export function ActiveExerciseCard({
       );
       qc.invalidateQueries({ queryKey: ['workout', 'active'] });
       qc.invalidateQueries({ queryKey: ['workout', 'session', sessionId] });
-      rest.start();
+      // O descanso prescrito ganha do padrão da tela: 180s depois de uma tripla
+      // pesada e 60s depois de rosca direta não são a mesma pausa.
+      rest.start(prescription?.restSeconds);
       onAskRpe(created);
     },
   });
@@ -196,6 +223,13 @@ export function ActiveExerciseCard({
           }
         />
       </View>
+
+      {hint ? (
+        <View className="mt-2">
+          <Text className="text-center text-[10px] font-bold text-primary">{hint.label}</Text>
+          <Text className="text-center text-[10px] text-muted-foreground">{hint.reason}</Text>
+        </View>
+      ) : null}
 
       <RestTimer timer={rest} />
 

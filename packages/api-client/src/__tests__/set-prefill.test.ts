@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { prefillForNextSet } from '../workout/set-prefill';
-import type { SessionSet } from '../workout';
+import type { PrescribedSet, SessionSet } from '../workout';
+
+const prescription: PrescribedSet = {
+  status: 'ok',
+  weightKg: 65,
+  reps: 8,
+  restSeconds: 90,
+  basis: 'rpe',
+  action: 'increase_load',
+  capped: false,
+};
 
 function makeSet(partial: Partial<SessionSet> = {}): SessionSet {
   return {
@@ -86,6 +96,41 @@ describe('prefillForNextSet', () => {
     expect(prefillForNextSet({ touched: false, previousSessionSet: bodyweight })).toEqual({
       weightKg: 0,
       reps: 12,
+    });
+  });
+
+  it('prefere a prescrição à cópia da série anterior', () => {
+    // A prescrição parte da mesma sessão anterior, mas com o passo que o
+    // histórico justifica — copiar a série anterior é o palpite que nunca sobe.
+    expect(prefillForNextSet({ touched: false, previousSessionSet, prescription })).toEqual({
+      weightKg: 65,
+      reps: 8,
+    });
+  });
+
+  it('volta para a série anterior quando não há prescrição', () => {
+    // Menos de duas sessões: a API responde `insufficient_history` e a tela não
+    // passa prescrição nenhuma.
+    expect(prefillForNextSet({ touched: false, previousSessionSet, prescription: null })).toEqual({
+      weightKg: 62.5,
+      reps: 10,
+    });
+  });
+
+  it('não deixa a prescrição sobrescrever o que a pessoa digitou', () => {
+    expect(prefillForNextSet({ touched: true, previousSessionSet, prescription })).toEqual({
+      weightKg: null,
+      reps: null,
+    });
+  });
+
+  it('não deixa a prescrição sobrescrever série já feita nesta sessão', () => {
+    // Acabou de levantar 70 kg: o número mais recente ganha do prescrito de
+    // manhã, senão o campo andaria para trás no meio do exercício.
+    const sessionLastSet = makeSet({ id: 'set-2', weightKg: 70, reps: 8 });
+    expect(prefillForNextSet({ touched: false, sessionLastSet, prescription })).toEqual({
+      weightKg: 70,
+      reps: 8,
     });
   });
 

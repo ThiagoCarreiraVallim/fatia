@@ -247,6 +247,14 @@ export const workoutApi = {
     const qs = before ? `?before=${encodeURIComponent(before)}` : '';
     return apiFetch<SessionSet | null>(`/api/workout/exercises/${exerciseId}/last-set${qs}`);
   },
+  /**
+   * Prescrição da próxima série (#144). `targetReps` é a faixa do plano, que a
+   * tela já tem em mãos — sem ela a API assume 8-12.
+   */
+  getPrescription: (exerciseId: number, targetReps?: string) => {
+    const qs = targetReps ? `?targetReps=${encodeURIComponent(targetReps)}` : '';
+    return apiFetch<LoadPrescription>(`/api/workout/exercises/${exerciseId}/prescription${qs}`);
+  },
   getPersonalRecord: (exerciseId: number) =>
     apiFetch<
       | { weightKg: number | null; reps: number | null; sessionDate: string }
@@ -259,6 +267,31 @@ export const workoutApi = {
     >(`/api/workout/exercises/${exerciseId}/pr`),
   listPersonalRecords: () => apiFetch<PersonalRecordEntry[]>('/api/workout/records'),
 };
+
+/** Qual sinal decidiu a prescrição: o RPE registrado ou só as repetições. */
+export type PrescriptionBasis = 'rpe' | 'reps';
+
+export type PrescriptionAction = 'increase_load' | 'increase_reps' | 'hold';
+
+export interface PrescribedSet {
+  status: 'ok';
+  weightKg: number;
+  reps: number;
+  restSeconds: number;
+  basis: PrescriptionBasis;
+  action: PrescriptionAction;
+  /** `true` quando um teto de progressão cortou o salto proposto. */
+  capped: boolean;
+}
+
+/**
+ * `status` é discriminante de propósito: "não há sugestão" precisa dizer **por
+ * que**. Um `null` faria a tela tratar "histórico curto demais" e "exercício de
+ * cardio" como a mesma coisa, e a primeira é a que precisa ser explicada para a
+ * pessoa não achar que a sugestão quebrou.
+ */
+export type LoadPrescription =
+  PrescribedSet | { status: 'insufficient_history' } | { status: 'cardio_exercise' };
 
 export interface PersonalRecordEntry {
   exerciseId: number;
