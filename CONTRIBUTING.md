@@ -200,7 +200,11 @@ If your change touches the Prisma schema:
 1. Make sure CI passes locally: `pnpm lint`, `pnpm typecheck`, `pnpm build`, the test commands above, and `pnpm secrets:scan`.
 2. Push to your fork and open a PR against `main`.
 3. Fill in the [PR template](.github/pull_request_template.md) — especially the **Changes** section, which feeds into release notes.
-4. Link the related issue with `Closes #123`.
+4. Link the related issue with `Closes #123`. **The keyword must be in English**, even though the
+   rest of the repository — commits, comments, PR bodies — is written in Portuguese. GitHub only
+   recognises `close`/`closes`/`closed`, `fix`/`fixes`/`fixed` and `resolve`/`resolves`/`resolved`.
+   Writing `Fecha #123` is silently ignored: the PR merges green and the issue stays open forever.
+   Twenty issues in this repository ended up that way before anyone noticed.
 5. Mark as **Draft** if you're still iterating; mark **Ready for review** when CI is green.
 6. Be responsive to review comments. Push fixups as new commits — we squash on merge.
 
