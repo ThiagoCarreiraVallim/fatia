@@ -37,8 +37,14 @@ serve de fato — `name`, `title`, `description`, `annotations` e o JSON Schema 
 O denominador importa. Contar só `name + description + inputSchema` dá 58,7 k e subestima o
 catálogo em ~20% — `title` e `annotations` também vão no fio, em toda tool.
 
-Dentro dos 70,4 k, os exemplos de invocação que a #111 acrescentou às 48 tools de escrita
-valem **4.178 caracteres**, 6,3% sobre os 64,3 k de antes. Média de 89 caracteres por tool.
+Dentro desse total, os exemplos de invocação que a #111 acrescentou às 48 tools de escrita
+valem **4.178 caracteres** — média de **87** caracteres por tool, algo em torno de 6% do
+catálogo. Os dois números são medidos no código pelo `tool-catalog.spec.ts`, junto com a
+contagem: a versão anterior desta frase dizia "4.110 caracteres, média de 91" — estagnada na
+medição da #111, feita quando o catálogo tinha 45 delas, e ainda por cima incoerente, porque
+aquela divisão não dava 91. Custo de contexto que ninguém confere apodrece igual a contagem de
+tools — e apodreceu duas vezes: a média voltou a ficar errada neste mesmo rebase, quando as
+tools de grupo entraram e ninguém refez a conta. Agora o teste refaz.
 
 O formato, a isenção de `delete_my_account` e o motivo de o exemplo morar na `description` —
 e não em campo separado — estão na §Convenções de [`docs/MCP.md`](./MCP.md).

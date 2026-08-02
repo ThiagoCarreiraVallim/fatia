@@ -6,6 +6,17 @@ import { PrismaService } from '../common/prisma.service';
 /** Resposta única para grupo que não existe e para grupo de que não sou membro (#92). */
 const NOT_FOUND = 'Group not found';
 
+/**
+ * Status em que a associação ainda é viva — o que decide se o grupo aparece
+ * para quem pergunta.
+ *
+ * Constante compartilhada, e não um `if` por método: `listMine` escondia o
+ * grupo de quem saiu (`LEFT`) enquanto `findByIdForMember` barrava só `REMOVED`
+ * e continuava devolvendo nome e slug por id. Duas listas escritas à mão
+ * divergem; esta é a única.
+ */
+const STATUS_VIVOS = [MembershipStatus.INVITED, MembershipStatus.ACTIVE] as const;
+
 export interface CreateGroupInput {
   type: GroupType;
   name: string;
@@ -91,7 +102,7 @@ export class GroupService {
         userId,
         // Quem saiu ou foi removido não vê mais o grupo na própria lista; a
         // linha continua no banco para o histórico.
-        status: { in: [MembershipStatus.INVITED, MembershipStatus.ACTIVE] },
+        status: { in: [...STATUS_VIVOS] },
       },
       include: { group: true },
       orderBy: { createdAt: 'desc' },
@@ -116,6 +127,9 @@ export class GroupService {
    * Não-membro recebe o mesmo `NOT_FOUND` de grupo inexistente — devolver
    * "existe, mas você não está" transformaria a rota em oráculo de existência de
    * academia, e o slug é o único identificador público do produto.
+   *
+   * Quem saiu conta como não-membro: `STATUS_VIVOS` é o mesmo conjunto de
+   * `listMine`, senão o grupo some da lista e continua legível por id.
    */
   async findByIdForMember(userId: string, groupId: string): Promise<GroupSummary> {
     const membership = await this.prisma.groupMembership.findUnique({
@@ -123,7 +137,7 @@ export class GroupService {
       include: { group: true },
     });
 
-    if (!membership || membership.status === MembershipStatus.REMOVED) {
+    if (!membership || !STATUS_VIVOS.some((status) => status === membership.status)) {
       throw new NotFoundException(NOT_FOUND);
     }
 

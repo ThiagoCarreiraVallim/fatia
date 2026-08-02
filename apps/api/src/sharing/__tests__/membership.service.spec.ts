@@ -146,6 +146,25 @@ describe('MembershipService', () => {
         role: GroupRole.PROFESSIONAL,
       });
     });
+
+    // O alvo é um pedido VÁLIDO e o papel é OWNER: o único motivo de recusa
+    // possível é o status do dono. Com um alvo inválido o caso passaria mesmo
+    // sem a checagem, porque a recusa viria da linha de baixo.
+    it.each([MembershipStatus.LEFT, MembershipStatus.REMOVED])(
+      'dono com associação %s não administra mais',
+      async (status) => {
+        prisma.groupMembership.findUnique
+          .mockResolvedValueOnce({ id: 'm-dono', role: GroupRole.OWNER, status })
+          .mockResolvedValueOnce({
+            id: 'm2',
+            groupId: GROUP,
+            status: MembershipStatus.INVITED,
+          });
+
+        await expect(service.approve(DONO, GROUP, 'm2')).rejects.toThrow(NotFoundException);
+        expect(prisma.groupMembership.update).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('leave', () => {
@@ -334,6 +353,28 @@ describe('MembershipService', () => {
       prisma.groupMembership.findUnique.mockResolvedValue(null);
 
       await expect(service.listMembers('estranho', GROUP)).rejects.toThrow(NotFoundException);
+    });
+
+    // O filtro de status é o que impede ex-membro de continuar aparecendo na
+    // listagem — inclusive para o PROFESSIONAL, com nome. Vale para os dois
+    // papéis porque o `veTodos` monta dois `where` diferentes, e só um deles
+    // seria coberto por um caso só.
+    it.each([
+      ['dono', DONO, GroupRole.OWNER],
+      ['aluno', ALUNO, GroupRole.MEMBER],
+    ])('a listagem pedida pelo %s só busca associação viva', async (_papel, quem, role) => {
+      prisma.groupMembership.findUnique.mockResolvedValue({
+        id: 'm1',
+        role,
+        status: MembershipStatus.ACTIVE,
+      });
+      prisma.groupMembership.findMany.mockResolvedValue([]);
+
+      await service.listMembers(quem, GROUP);
+
+      expect(prisma.groupMembership.findMany.mock.calls[0][0].where.status).toEqual({
+        in: [MembershipStatus.INVITED, MembershipStatus.ACTIVE],
+      });
     });
   });
 });

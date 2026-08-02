@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/commo
 import { CurrentUser, type CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { GroupService } from './group.service';
 import { MembershipService } from './membership.service';
-import { ApproveMemberDto, CreateGroupDto, JoinGroupDto } from './dto/group.dto';
+import { ApproveMemberDto, CreateGroupDto, JoinGroupDto, PreviewGroupDto } from './dto/group.dto';
 
 /**
  * Superfície REST do B2B (ADR 014).
@@ -29,10 +29,15 @@ export class SharingController {
     return this.groups.listMine(user.id);
   }
 
-  /** Preview pelo slug, antes de pedir para entrar. Só metadado do grupo. */
+  /**
+   * Preview pelo slug, antes de pedir para entrar. Só metadado do grupo.
+   *
+   * `@Query()` com DTO, e não `@Query('slug')`: primitivo avulso escapa do
+   * `ValidationPipe` global e a chamada sem slug morria em 500 no Prisma.
+   */
   @Get('preview')
-  preview(@Query('slug') slug: string) {
-    return this.groups.previewBySlug(slug);
+  preview(@Query() q: PreviewGroupDto) {
+    return this.groups.previewBySlug(q.slug);
   }
 
   @Get(':groupId')

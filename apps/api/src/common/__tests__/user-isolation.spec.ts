@@ -991,6 +991,52 @@ describe('isolamento entre usuários', () => {
       await expect(plans.list(owned.pro)).resolves.toEqual([]);
     });
 
+    it('quem sai para de ver o grupo por id, e não só na listagem', async () => {
+      await expect(groups.findByIdForMember(owned.userA, owned.groupId)).resolves.toMatchObject({
+        id: owned.groupId,
+      });
+
+      await memberships.leave(owned.userA, owned.groupId);
+
+      // `listMine` já escondia o grupo de quem saiu; a busca por id barrava só
+      // `REMOVED` e continuava entregando nome, slug e papel a quem deu baixa.
+      expect(await groups.listMine(owned.userA)).toEqual(
+        expect.not.arrayContaining([expect.objectContaining({ id: owned.groupId })]),
+      );
+
+      const depoisDeSair = await groups
+        .findByIdForMember(owned.userA, owned.groupId)
+        .catch((err: Error) => err.message);
+      const inexistente = await groups
+        .findByIdForMember(owned.userA, '11111111-2222-4333-8444-666666666666')
+        .catch((err: Error) => err.message);
+
+      expect(depoisDeSair).toBe(inexistente);
+    });
+
+    it('ex-membro some da listagem de membros, para o dono e para o profissional', async () => {
+      // Antes: o nome está lá para os dois. Sem esta metade, as asserções de
+      // ausência abaixo passariam de graça.
+      expect(
+        (await memberships.listMembers(owned.userB, owned.groupId)).map((m) => m.name),
+      ).toEqual(expect.arrayContaining(['User A']));
+      expect((await memberships.listMembers(owned.pro, owned.groupId)).map((m) => m.name)).toEqual(
+        expect.arrayContaining(['User A']),
+      );
+
+      await memberships.removeMember(owned.userB, owned.groupId, owned.membershipA);
+
+      // Associação encerrada some da composição do grupo. O caso do
+      // PROFESSIONAL é o que mais importa: ali o nome vem acompanhado dos
+      // escopos, e ex-aluno listado é dado de pessoa que já não está lá.
+      for (const quem of [owned.userB, owned.pro]) {
+        const nomes = (await memberships.listMembers(quem, owned.groupId)).map((m) => m.name);
+        expect(nomes).not.toContain('User A');
+        // O grupo não ficou vazio por outro motivo: os demais continuam.
+        expect(nomes).toContain('Pro');
+      }
+    });
+
     it('membro comum não remove ninguém, e o alvo continua ativo', async () => {
       await expect(
         memberships.removeMember(owned.userA, owned.groupId, owned.membershipPro),

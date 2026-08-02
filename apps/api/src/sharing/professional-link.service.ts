@@ -76,29 +76,15 @@ export class ProfessionalLinkService {
 
   /**
    * Revoga em massa os vínculos de um grupo que envolvem um usuário — em
-   * qualquer das duas pontas. Chamado quando alguém sai ou é removido do grupo:
-   * o vínculo é sempre contextual a um `groupId`, então perder o contexto
-   * encerra a permissão.
-   */
-  async revokeAllForMember(
-    groupId: string,
-    userId: string,
-    reason: Extract<RevokeReason, 'left_group' | 'membership_removed'>,
-  ): Promise<number> {
-    const { count } = await this.revokeAllForMemberOp(groupId, userId, reason, new Date());
-    return count;
-  }
-
-  /**
-   * A mesma revogação em massa, **sem executar**: devolve a operação para quem
+   * qualquer das duas pontas —, **sem executar**: devolve a operação para quem
    * precisa dela dentro de um `$transaction([...])`.
    *
-   * Existe porque sair do grupo tem de mudar o status da membership e apagar a
-   * permissão no mesmo commit (#154). Duas escritas separadas abrem uma janela
-   * em que a associação já acabou e o vínculo ainda autoriza leitura de dado de
-   * saúde. `at` entra por parâmetro para que a membership e o vínculo fiquem
-   * com o mesmo instante — datas diferentes na mesma saída tornariam a trilha
-   * mais difícil de ler do que precisa.
+   * Existe só nesta forma porque sair do grupo tem de mudar o status da
+   * membership e apagar a permissão no mesmo commit (#154). Duas escritas
+   * separadas abrem uma janela em que a associação já acabou e o vínculo ainda
+   * autoriza leitura de dado de saúde — por isso não há variante que execute
+   * sozinha: ela só serviria para reabrir essa janela. `at` entra por parâmetro
+   * para que a membership e o vínculo fiquem com o mesmo instante.
    */
   revokeAllForMemberOp(
     groupId: string,

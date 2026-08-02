@@ -42,6 +42,21 @@ export class JoinGroupDto {
   slug!: string;
 }
 
+/**
+ * Slug do preview, em DTO e não em `@Query('slug')` solto.
+ *
+ * O `ValidationPipe` global não valida primitivo avulso: sem esta classe o
+ * `slug` chegava `undefined` no `findUnique`, o Prisma levantava
+ * `PrismaClientValidationError` e — não havendo `ExceptionFilter` global — a
+ * chamada sem query string virava **500** em vez de 400.
+ */
+export class PreviewGroupDto {
+  @IsString()
+  @MinLength(3)
+  @MaxLength(60)
+  slug!: string;
+}
+
 export class ApproveMemberDto {
   @IsOptional()
   @IsIn(PAPEIS_CONCEDIVEIS as readonly string[])

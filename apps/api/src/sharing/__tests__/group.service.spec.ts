@@ -78,17 +78,55 @@ describe('GroupService', () => {
       );
     });
 
-    it('quem foi removido não enxerga mais o grupo', async () => {
-      prisma.groupMembership.findUnique.mockResolvedValue({
-        id: 'm1',
-        status: MembershipStatus.REMOVED,
-        role: GroupRole.MEMBER,
-        joinedAt: null,
-        group: { id: 'g1', type: GroupType.SPONSORED, name: 'X', slug: 'x', createdAt: new Date() },
-      });
+    // Os DOIS status de associação encerrada, e não só `REMOVED`: barrar um e
+    // deixar o outro passar é o que fazia quem saiu (`LEFT`) continuar lendo
+    // nome, slug e papel por id, enquanto `listMine` já escondia o grupo.
+    it.each([MembershipStatus.LEFT, MembershipStatus.REMOVED])(
+      'associação %s não enxerga mais o grupo por id',
+      async (status) => {
+        prisma.groupMembership.findUnique.mockResolvedValue({
+          id: 'm1',
+          status,
+          role: GroupRole.MEMBER,
+          joinedAt: null,
+          group: {
+            id: 'g1',
+            type: GroupType.SPONSORED,
+            name: 'X',
+            slug: 'x',
+            createdAt: new Date(),
+          },
+        });
 
-      await expect(service.findByIdForMember(OUTRO, 'g1')).rejects.toThrow(NotFoundException);
-    });
+        await expect(service.findByIdForMember(OUTRO, 'g1')).rejects.toThrow(NotFoundException);
+      },
+    );
+
+    it.each([MembershipStatus.INVITED, MembershipStatus.ACTIVE])(
+      'associação %s continua enxergando',
+      async (status) => {
+        // Guarda do guarda: um `if` que recusasse todo mundo passaria nos casos
+        // acima. O conjunto vivo é o mesmo de `listMine`, nos dois sentidos.
+        prisma.groupMembership.findUnique.mockResolvedValue({
+          id: 'm1',
+          status,
+          role: GroupRole.MEMBER,
+          joinedAt: null,
+          group: {
+            id: 'g1',
+            type: GroupType.SPONSORED,
+            name: 'X',
+            slug: 'x',
+            createdAt: new Date(),
+          },
+        });
+
+        await expect(service.findByIdForMember(OUTRO, 'g1')).resolves.toMatchObject({
+          id: 'g1',
+          status,
+        });
+      },
+    );
   });
 
   describe('listMine', () => {

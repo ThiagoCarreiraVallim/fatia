@@ -140,8 +140,8 @@ const EXAMPLE_PREFIX = /Exemplo(?: \([^)]*\))?: (?=\{)/g;
  * existem hoje: description com dois exemplos e exemplo com objeto aninhado.
  * As aspas são acompanhadas porque `}` dentro de string não fecha nada.
  */
-function extractExamples(description: string): string[] {
-  const found: string[] = [];
+function extractExampleSpans(description: string): Array<{ json: string; full: string }> {
+  const found: Array<{ json: string; full: string }> = [];
 
   for (const match of description.matchAll(EXAMPLE_PREFIX)) {
     if (match.index === undefined) continue;
@@ -164,7 +164,12 @@ function extractExamples(description: string): string[] {
       } else if (!inString && char === '}') {
         depth--;
         if (depth === 0) {
-          found.push(description.slice(start, i + 1));
+          // `json` é o que valida contra o schema; `full` inclui o rótulo
+          // `Exemplo: `, que é o que de fato pesa no catálogo servido.
+          found.push({
+            json: description.slice(start, i + 1),
+            full: description.slice(match.index, i + 1),
+          });
           break;
         }
       }
@@ -172,6 +177,10 @@ function extractExamples(description: string): string[] {
   }
 
   return found;
+}
+
+function extractExamples(description: string): string[] {
+  return extractExampleSpans(description).map((span) => span.json);
 }
 
 /**
@@ -437,6 +446,32 @@ describe('catálogo de tools MCP', () => {
     }
 
     expect(errados.sort()).toEqual([]);
+  });
+
+  it('cita o custo real dos exemplos em docs/MCP_TOOL_SURFACE.md', () => {
+    // O número de tools já era conferido; o de CARACTERES não era, e apodreceu:
+    // a doc afirmava "4.110 caracteres … média de 91 por tool", medido na #111
+    // com 45 tools. Além de estagnado, era internamente incoerente — 4.110/47 dá
+    // 87, nunca 91. Quem lê um custo de contexto acredita no número.
+    const comExemplo = tools
+      .map(({ tool }) => extractExampleSpans(tool.description))
+      .filter((spans) => spans.length > 0);
+
+    const caracteres = comExemplo.flat().reduce((total, span) => total + span.full.length, 0);
+    const media = Math.round(caracteres / comExemplo.length);
+
+    const doc = readFileSync(resolve(REPO_ROOT, 'docs/MCP_TOOL_SURFACE.md'), 'utf8');
+    const afirmado = doc.match(/\*\*([\d.]+) caracteres\*\*/);
+    const afirmadaMedia = doc.match(/média de \*\*(\d+)\*\* caracteres por tool/);
+
+    // Frase que some é o mesmo verde de frase certa: sem estas duas linhas,
+    // apagar o custo da doc deixaria o caso passando.
+    expect([afirmado, afirmadaMedia].map((m) => m !== null)).toEqual([true, true]);
+
+    expect([Number(afirmado![1].replace(/\./g, '')), Number(afirmadaMedia![1])]).toEqual([
+      caracteres,
+      media,
+    ]);
   });
 
   it('não tem seções órfãs em docs/MCP.md', () => {
