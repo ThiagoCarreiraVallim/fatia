@@ -1,4 +1,4 @@
-import type { SessionSet } from '../workout';
+import type { PrescribedSet, SessionSet } from '../workout';
 
 /**
  * De onde sai o palpite de carga e repetições da próxima série.
@@ -20,20 +20,33 @@ import type { SessionSet } from '../workout';
  * progresso para sempre. Sem referência anterior o certo é não sugerir nada:
  * campo vazio é uma pergunta, campo com o número errado é uma resposta errada.
  * O recorde continua visível ao lado do campo, como referência.
+ *
+ * A prescrição (#144) entra **no lugar** da série anterior, não do recorde: ela
+ * também parte de uma sessão que a pessoa de fato completou, mas com teto por
+ * sessão, por semana e contra o recorde — nunca mais de 5% acima da carga base.
+ * Isso é o oposto do que a #190 corrigiu, e é a razão de ela poder preencher o
+ * campo: copiar a última série é o palpite que nunca progride, e a prescrição é
+ * o mesmo palpite com um passo que o histórico justifica. Quando não há
+ * prescrição — menos de duas sessões — a ordem antiga continua valendo.
  */
 export function prefillForNextSet({
   touched,
   sessionLastSet,
   previousSessionSet,
+  prescription,
 }: {
   touched: boolean;
   sessionLastSet?: SessionSet | null;
   previousSessionSet?: SessionSet | null;
+  prescription?: PrescribedSet | null;
 }): SetPrefill {
   if (sessionLastSet) {
     return { weightKg: sessionLastSet.weightKg, reps: sessionLastSet.reps };
   }
   if (touched) return { weightKg: null, reps: null };
+  if (prescription) {
+    return { weightKg: prescription.weightKg, reps: prescription.reps };
+  }
   return {
     weightKg: previousSessionSet?.weightKg ?? null,
     reps: previousSessionSet?.reps ?? null,

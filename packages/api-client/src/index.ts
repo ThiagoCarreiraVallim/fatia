@@ -21,5 +21,6 @@ export * from './workout';
 export * from './workout/is-cardio';
 export * from './workout/rpe';
 export * from './workout/set-prefill';
+export * from './workout/prescription';
 export * from './workout/quick-templates';
 export * from './session-view';

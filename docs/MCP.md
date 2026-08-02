@@ -158,7 +158,7 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 87 tools): **65,7 k caracteres**
+`description`, `annotations` e o JSON Schema do input das 88 tools): **66,6 k caracteres**
 hoje, dos quais **4.110 são os exemplos** — acréscimo de **6,7%** sobre os 61,6 k de antes,
 pago em toda sessão que lista as tools. Média de 91 caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
@@ -273,6 +273,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                           | `get_last_set_for_exercise`  | R        |
 |                           | `get_personal_record`        | R        |
 |                           | `list_personal_records`      | R        |
+|                           | `get_load_prescription`      | R        |
 | **Peso corporal**         | `log_weight`                 | C        |
 |                           | `update_weight_log`          | U        |
 |                           | `delete_weight_log`          | D        |
@@ -298,7 +299,7 @@ Listagens com potencial de crescer usam cursor-based:
 | **Dashboard**             | `get_today_summary`          | R        |
 |                           | `get_week_summary`           | R        |
 
-Total: **87 tools**. Cada uma documentada abaixo.
+Total: **88 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -1403,6 +1404,61 @@ Recorde pessoal de **todos** os exercícios já treinados, num só retorno. Use 
 Força: maior carga, reps na carga máxima e 1RM estimado. Cardio: maior distância e a duração dessa sessão. Cada entrada traz a data do recorde, a última vez treinado e o total de séries. Ordenado do recorde mais recente para o mais antigo.
 
 **Input:** `{}`
+
+### `get_load_prescription`
+
+Sugere carga, repetições e descanso da próxima sessão de um exercício de **força**, a partir do
+histórico do próprio usuário. Dupla progressão com autorregulação por RPE, determinística — sem
+modelo, sem extrapolação de tendência.
+
+**Input:**
+
+```typescript
+{
+  exerciseId: number;
+  targetReps?: string;   // faixa alvo do plano, "8-12" ou "5". Default: "8-12"
+}
+```
+
+**Output:**
+
+```typescript
+{
+  status: "ok";
+  weightKg: number;
+  reps: number;
+  restSeconds: number;
+  basis: "rpe" | "reps";                                  // qual sinal decidiu
+  action: "increase_load" | "increase_reps" | "hold";
+  capped: boolean;                                        // algum teto cortou o salto
+}
+| { status: "insufficient_history" }                      // menos de 2 sessões
+| { status: "cardio_exercise" }                           // cardio não tem prescrição de carga
+```
+
+A regra, em uma frase: parte da melhor série da última sessão (maior 1RM estimado) e sobe carga
+só quando as repetições fecharam o topo da faixa **e** o esforço permitiu.
+
+| Sinal da última sessão                  | Ação                                                      |
+| --------------------------------------- | --------------------------------------------------------- |
+| RPE médio ≤ 7 e reps no topo da faixa   | sobe a carga, reps voltam ao piso                         |
+| RPE médio entre 7 e 9                   | mantém a carga, sobe uma repetição                        |
+| RPE médio ≥ 9                           | repete carga e repetições                                 |
+| Nenhum RPE registrado (`basis: "reps"`) | dupla progressão pura: topo em **todas** as séries → sobe |
+
+Três tetos, todos verificados por teste:
+
+1. **Por sessão:** o salto nunca passa de 5% da carga base (nem do passo fixo — 2,5 kg em
+   composto, 1,25 kg em isolamento, arredondado para baixo em múltiplos de 0,5 kg).
+2. **Por semana:** a carga não passa de 10% sobre a sessão mais antiga dentro de 7 dias da
+   última. Estourou, devolve a carga anterior com `capped: true`.
+3. **Absoluto:** não acrescenta carga acima de 1,05 × o recorde de todos os tempos.
+
+`status: "insufficient_history"` é resposta, não erro: com menos de duas sessões registradas **não
+invente uma carga**. Sugerir o recorde pessoal na série de abertura é exatamente o bug #190.
+
+Exercício clonado (`clonedFromId`) herda o histórico do exercício de origem — renomear um
+exercício não apaga a progressão.
 
 ---
 

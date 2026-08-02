@@ -4,9 +4,11 @@ import { useEffect, useState } from 'react';
 import { Check, ChevronDown, Minus, Plus, Timer } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  describePrescription,
   prefillForNextSet,
   workoutApi,
   type ExerciseGroup,
+  type LoadPrescription,
   type SessionSet,
 } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
@@ -62,6 +64,23 @@ export function ActiveExerciseCard({
     pr.data && 'weightKg' in pr.data && pr.data.weightKg != null ? pr.data.weightKg : null;
   const prReps = pr.data && 'reps' in pr.data && pr.data.reps != null ? pr.data.reps : null;
 
+  // A prescrição depende da faixa alvo do exercício no plano, que esta tela já
+  // tem — por isso ela vai na chave do cache junto com o id.
+  const prescriptionQuery = useQuery({
+    queryKey: ['workout', 'prescription', group.exerciseId, group.targetReps],
+    queryFn: () => workoutApi.getPrescription(group.exerciseId, group.targetReps),
+    staleTime: 60_000,
+  });
+  // O tipo é anotado à mão: sem ele, o `data` chega ao teste de `status` como
+  // inferência ainda pendente do `useQuery` e o TypeScript não estreita a
+  // união — a anotação é o que faz `status: 'ok'` valer como discriminante.
+  const prescribed: LoadPrescription | undefined = prescriptionQuery.data;
+  const prescription = prescribed?.status === 'ok' ? prescribed : null;
+  const hint = prescription ? describePrescription(prescription) : null;
+  // O descanso prescrito ganha do padrão da tela: 180s depois de uma tripla
+  // pesada e 60s depois de rosca direta não são a mesma pausa.
+  const restTarget = prescription?.restSeconds ?? restSeconds;
+
   const [weight, setWeight] = useState<number>(lastSet?.weightKg ?? 0);
   const [reps, setReps] = useState<number>(lastSet?.reps ?? parseFirstRep(group.targetReps));
   const [touched, setTouched] = useState(false);
@@ -76,6 +95,7 @@ export function ActiveExerciseCard({
     touched,
     sessionLastSet: lastSet,
     previousSessionSet: reference,
+    prescription,
   });
   const prefillWeight = prefill.weightKg;
   const prefillReps = prefill.reps;
@@ -107,7 +127,7 @@ export function ActiveExerciseCard({
     onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ['workout', 'active'] });
       qc.invalidateQueries({ queryKey: ['workout', 'session', sessionId] });
-      setRestRemaining(restSeconds);
+      setRestRemaining(restTarget);
       setPendingSet(created);
       setRpeOpen(true);
     },
@@ -119,7 +139,7 @@ export function ActiveExerciseCard({
     return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   }
 
-  const restProgress = restRemaining != null ? Math.max(0, restRemaining) / restSeconds : 0;
+  const restProgress = restRemaining != null ? Math.max(0, restRemaining) / restTarget : 0;
 
   return (
     <div className="rounded-2xl border border-white/5 bg-card">
@@ -179,12 +199,19 @@ export function ActiveExerciseCard({
         />
       </div>
 
+      {hint && (
+        <p className="mx-4 mt-2 text-center text-[10px] text-muted-foreground">
+          <span className="font-bold text-primary">{hint.label}</span>
+          <span className="ml-1">— {hint.reason}</span>
+        </p>
+      )}
+
       <div className="mx-4 mt-4 rounded-xl bg-muted/40 px-4 py-3">
         <div className="flex items-center justify-center gap-2 text-primary">
           <Timer size={18} />
         </div>
         <p className="mt-1 text-center text-3xl font-extrabold text-primary tabular-nums">
-          {fmt(restRemaining ?? restSeconds)}
+          {fmt(restRemaining ?? restTarget)}
         </p>
         <p className="text-center text-[10px] font-bold tracking-wide text-muted-foreground">
           TEMPO DE DESCANSO

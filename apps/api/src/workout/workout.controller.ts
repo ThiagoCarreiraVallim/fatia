@@ -17,6 +17,7 @@ import { WorkoutPlanService } from './workout-plan.service';
 import { WorkoutSessionService } from './workout-session.service';
 import { SessionSetService } from './session-set.service';
 import { ExerciseService } from './exercise.service';
+import { PrescriptionService } from './prescription.service';
 import {
   AddPlanExerciseDto,
   CreatePlanDto,
@@ -41,6 +42,7 @@ export class WorkoutController {
     private readonly sessions: WorkoutSessionService,
     private readonly sets: SessionSetService,
     private readonly exercises: ExerciseService,
+    private readonly prescriptions: PrescriptionService,
   ) {}
 
   // -------- Exercises --------
@@ -245,6 +247,20 @@ export class WorkoutController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.sets.getPersonalRecord(user.id, id);
+  }
+
+  /**
+   * Prescrição da próxima série. `targetReps` vem do plano, que o app já tem em
+   * mãos — pedir de volta à API custaria uma consulta para descobrir algo que o
+   * chamador acabou de ler.
+   */
+  @Get('exercises/:id/prescription')
+  getPrescription(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseIntPipe) id: number,
+    @Query('targetReps') targetReps?: string,
+  ) {
+    return this.prescriptions.forExercise(user.id, id, targetReps);
   }
 
   @Get('records')
