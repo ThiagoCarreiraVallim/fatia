@@ -1,0 +1,157 @@
+{
+  "uid": "fatia-api",
+  "title": "Fatia — API",
+  "tags": ["fatia"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "rota",
+        "label": "Rota",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "fatia-prometheus" },
+        "query": "label_values(http_server_request_duration_seconds_count, http_route)",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Requisições por segundo, por rota",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "fatia-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (http_route) (rate(http_server_request_duration_seconds_count{job=\"fatia-api\", http_route=~\"$rota\"}[5m]))",
+          "legendFormat": "{{http_route}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Latência p95 por rota",
+      "description": "Histograma do OTel. p95 e não média: a média esconde exatamente a cauda que o usuário sente.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "fatia-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket{job=\"fatia-api\", http_route=~\"$rota\"}[5m])))",
+          "legendFormat": "{{http_route}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Taxa de erro 5xx",
+      "description": "Proporção de respostas 5xx. É o número que responde 'está no ar de verdade?' — /health responder 200 não basta.",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "fatia-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.01 },
+              { "color": "red", "value": 0.05 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{job=\"fatia-api\", http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_request_duration_seconds_count{job=\"fatia-api\"}[5m])), 0.001)",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Respostas por status",
+      "gridPos": { "h": 5, "w": 18, "x": 6, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "fatia-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count{job=\"fatia-api\"}[5m]))",
+          "legendFormat": "{{http_response_status_code}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Chamadas de tool MCP por minuto",
+      "description": "Responde a pergunta da issue #39: quais tools são realmente usadas. Sem userId no rótulo — ver apps/api/src/observability/mcp-metrics.service.ts.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "datasource": { "type": "prometheus", "uid": "fatia-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (tool) (rate(mcp_tool_calls_total{job=\"fatia-api\"}[5m])) * 60",
+          "legendFormat": "{{tool}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Tools MCP com falha, por categoria de erro",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "datasource": { "type": "prometheus", "uid": "fatia-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (tool, error_category) (rate(mcp_tool_calls_total{job=\"fatia-api\", success=\"false\"}[5m])) * 60",
+          "legendFormat": "{{tool}} — {{error_category}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "logs",
+      "title": "Erros da API (Loki) — clique em TraceID para abrir o trace",
+      "description": "Substitui o Sentry: o 500 aparece aqui com stack trace, e o campo TraceID abre a requisição inteira no Tempo.",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 21 },
+      "datasource": { "type": "loki", "uid": "fatia-loki" },
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service_name=\"fatia-api\"} | detected_level =~ \"error|warn\"",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "logs",
+      "title": "Todos os logs da API",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 31 },
+      "datasource": { "type": "loki", "uid": "fatia-loki" },
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending" },
+      "targets": [{ "refId": "A", "expr": "{service_name=\"fatia-api\"}", "queryType": "range" }]
+    }
+  ]
+}

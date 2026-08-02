@@ -65,6 +65,16 @@ describe('serializadores de log', () => {
       expect(JSON.stringify(saida)).not.toContain('87.4');
     });
 
+    it('corta no fragmento também, não só no `?`', () => {
+      // `req.url` é o request-target cru. O Node aceita `GET /api/nutrition/foods#whey` e o
+      // Express casa a rota pelo caminho antes do `#` — então cortar só no `?` deixaria uma
+      // segunda porta para a mesma classe de dado.
+      const saida = serializeRequest(fakeReq('/api/nutrition/foods#search=whey') as never);
+
+      expect(saida.path).toBe('/api/nutrition/foods');
+      expect(JSON.stringify(saida)).not.toContain('whey');
+    });
+
     it('é lista de permissão: header desconhecido não entra', () => {
       // O ponto do desenho. Com lista de bloqueio, um header novo que carregue segredo passa
       // até alguém lembrar de proibi-lo — e ninguém lembra.
@@ -77,6 +87,18 @@ describe('serializadores de log', () => {
       expect(saida).not.toContain('x-inventado-amanha');
     });
 
+    it('não grava o IP de origem', () => {
+      // Saiu na #39, quando o log passou a ser enviado ao Loki: IP é dado pessoal e ali fica
+      // indexado num segundo store. E o ganho diagnóstico não existe — atrás do Traefik o valor
+      // é o do proxy, igual em toda requisição. `telemetry-redaction.ts` já derruba
+      // `client.address`/`network.peer.address` do span pelo mesmo motivo; deixar o IP aqui era
+      // redigir a mesma informação numa camada e publicá-la na outra.
+      const saida = serializeRequest(fakeReq() as never);
+
+      expect(saida).not.toHaveProperty('remoteAddress');
+      expect(JSON.stringify(saida)).not.toContain('203.0.113.7');
+    });
+
     it('preserva o que serve para depurar', () => {
       const saida = serializeRequest(fakeReq() as never);
 
@@ -84,7 +106,6 @@ describe('serializadores de log', () => {
         id: 'req-1',
         method: 'GET',
         path: '/api/nutrition/foods',
-        remoteAddress: '203.0.113.7',
         headers: { 'user-agent': 'Claude/1.0', 'content-type': 'application/json' },
       });
     });

@@ -1,0 +1,60 @@
+# Datasources provisionados por arquivo. Criados pela UI, somem no `docker compose down -v`.
+#
+# A correlação dos três sinais mora aqui: os `uid` são fixos justamente para que os links
+# cruzados abaixo (log → trace, trace → log) continuem apontando para o lugar certo depois de
+# qualquer recriação.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: fatia-prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      timeInterval: 15s
+
+  - name: Loki
+    type: loki
+    uid: fatia-loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      derivedFields:
+        # `trace_id` chega como structured metadata da ingestão OTLP, não no texto da linha —
+        # por isso `matcherType: label` e não regex sobre o conteúdo. É este campo que
+        # transforma uma linha de log num botão que abre o trace.
+        - name: TraceID
+          matcherType: label
+          matcherRegex: trace_id
+          datasourceUid: fatia-tempo
+          url: '${__value.raw}'
+          urlDisplayLabel: Ver trace
+
+  - name: Tempo
+    type: tempo
+    uid: fatia-tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: fatia-loki
+        # Filtra pelo trace inteiro: de um span, todos os logs daquela requisição.
+        filterByTraceID: true
+        filterBySpanID: false
+        spanStartTimeShift: -5m
+        spanEndTimeShift: 5m
+      tracesToMetrics:
+        datasourceUid: fatia-prometheus
+        spanStartTimeShift: -5m
+        spanEndTimeShift: 5m
+        queries:
+          - name: Latência p95 da rota
+            query: histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{$$__tags}[5m])) by (le))
+        tags:
+          - key: http.route
+            value: http_route
+      nodeGraph:
+        enabled: true

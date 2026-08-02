@@ -212,13 +212,29 @@ Ver `packages/db/prisma/schema.prisma` para o schema completo.
 
 ## Observabilidade
 
-**v1 mínimo:**
-
-- Logs estruturados JSON via `nestjs-pino`
+- Logs estruturados JSON via `nestjs-pino`, com `trace_id` e `span_id` em cada linha
 - `/health` endpoint com check de Postgres (`SELECT 1`); responde 503 se o banco não responder
 - Erros com stack trace em logs, não em response
+- **OpenTelemetry** no `apps/api`: trace e métrica, exportados por OTLP para um collector
 
-**Futuro:** OpenTelemetry, Grafana, alertas. Não na v1.
+**Auto-hospedado, sem conta externa** (issue #39, invertendo o "Out of scope" que a issue
+originalmente declarava para tracing distribuído). Collector → Tempo (trace), Loki (log),
+Prometheus (métrica), Grafana (painel), tudo em `infra/docker-compose.observability.yml` —
+compose **separado**, para o `pnpm infra:up` do dia a dia continuar subindo só Postgres e Logto.
+
+Duas decisões que valem registro:
+
+- **Instrumentar sempre, exportar por configuração.** Sem `OTEL_EXPORTER_OTLP_ENDPOINT` nada é
+  registrado: nem patch de instrumentação, nem exportador, nem timer. Quem roda o Fatia
+  auto-hospedado não é obrigado a subir cinco containers.
+- **A API não expõe `/metrics`.** Ela empurra OTLP; o collector é quem apresenta as séries ao
+  Prometheus. Elimina a rota que poderia ser publicada na internet por engano.
+
+Dado sensível em telemetria: ver `docs/THREAT_MODEL.md` §"Telemetria". Runbook e custo medido em
+`docs/OPERATIONS.md` §Observabilidade.
+
+**Ainda não feito:** alertas (motor existe, nenhuma regra criada), instrumentação do Prisma e
+uptime externo ao host.
 
 ## Deploy
 

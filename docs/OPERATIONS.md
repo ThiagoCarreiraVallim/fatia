@@ -4,7 +4,7 @@
 > **não** é o mantenedor — se um passo exige conhecimento que só está na cabeça de uma pessoa, o
 > runbook falhou.
 >
-> Observabilidade e alertas vivem na issue #39. Retenção de dados em
+> Observabilidade: seção [Observabilidade](#observabilidade) (issue #39). Retenção de dados em
 > [`DATA_RETENTION.md`](./DATA_RETENTION.md).
 
 ## Topologia
@@ -28,6 +28,174 @@
 | `auth.fat.ia.br` | Logto                                  |
 
 Todos com redirect HTTP→HTTPS.
+
+## Observabilidade
+
+Auto-hospedado, sem nenhuma conta externa: OpenTelemetry na API, e Grafana + Tempo + Loki +
+Prometheus num compose separado. Entregue pela issue #39.
+
+### Onde vive cada coisa
+
+| Sinal   | Onde fica  | Retenção | Responde a                                          |
+| ------- | ---------- | -------- | --------------------------------------------------- |
+| Trace   | Tempo      | 3 dias   | "onde esta requisição gastou o tempo"               |
+| Log     | Loki       | 7 dias   | "o que aconteceu nesta requisição", com stack trace |
+| Métrica | Prometheus | 15 dias  | "como está o conjunto" — taxa, latência, erro       |
+| Painel  | Grafana    | —        | os três acima, com link cruzado                     |
+
+Retenções curtas de propósito: os três dividem disco com o Postgres, e **disco cheio derruba o
+banco e o `backup.sh` junto**. Prometheus tem, além do limite de tempo, um limite de 2 GB.
+
+**A API não expõe `/metrics`.** Ela empurra OTLP para o collector, e é o collector que apresenta
+as séries para o Prometheus raspar. Consequência boa: não existe rota de métrica para publicar
+na internet por engano ao copiar labels de Traefik de um serviço vizinho.
+
+### Como os três sinais se ligam
+
+Todo log emitido dentro de uma requisição carrega `trace_id` e `span_id`, injetados pelo
+`@opentelemetry/instrumentation-pino`. É por esse campo que se atravessa:
+
+1. **Achei um erro no painel de logs** → o campo `TraceID` da linha é um link → abre o trace no
+   Tempo.
+2. **Estou olhando um trace lento** → botão "Logs for this span" → volta ao Loki filtrado por
+   aquele `trace_id`.
+3. **A métrica mostra p95 alto numa rota** → o painel de latência tem link para a métrica da
+   rota; o trace da requisição concreta vem pelo caminho 1.
+
+### Subir localmente
+
+```bash
+docker compose -f infra/docker-compose.observability.yml up -d
+
+# a API só exporta quando a variável está preenchida
+echo 'OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318' >> .env
+pnpm --filter @fatia/api dev
+```
+
+Grafana em <http://localhost:3300> (`admin`/`admin`), dashboard **Fatia — API** na pasta
+`Fatia`. Datasources e dashboard vêm de arquivo — não há passo de clicar em nada.
+
+Para conferir que está entrando dado:
+
+```bash
+curl -s localhost:3000/api/nutrition/meals   # 401 serve: gera trace, log e métrica
+# no Grafana → Explore → Loki → {service_name="fatia-api"}
+```
+
+Derrubar sem apagar o histórico: `docker compose -f infra/docker-compose.observability.yml down`
+(com `-v` os volumes vão junto).
+
+### Subir no Dokploy
+
+Um **segundo Compose service** no mesmo projeto, separado da aplicação: o ciclo de deploy da
+observabilidade não deve derrubar a API, e vice-versa.
+
+1. **Criar o Compose service** no painel, apontando para o repositório, com os dois arquivos:
+
+   ```
+   infra/docker-compose.observability.yml
+   infra/docker-compose.observability.dokploy.yml
+   ```
+
+   A sobreposição `.dokploy.yml` faz três coisas: coloca collector e Grafana na
+   `dokploy-network`, publica o Grafana em `grafana.${DOMAIN}` com TLS, e **remove as portas
+   publicadas no host** — nada deste stack escuta na interface pública.
+
+2. **Variáveis de ambiente** do Compose service:
+
+   ```bash
+   DOMAIN=fat.ia.br
+   GRAFANA_USER=admin
+   GRAFANA_PASSWORD=<gerar com: openssl rand -base64 24>
+   ```
+
+   ⚠️ Trocar a senha do Grafana **antes** do primeiro deploy. Este Grafana lê log de produção;
+   com `admin/admin` num subdomínio público, o dado de saúde de todo mundo fica a um palpite.
+
+3. **Apontar o DNS** de `grafana.${DOMAIN}` para o mesmo IP e deployar. O Traefik pede o
+   certificado no primeiro acesso.
+
+4. **Ligar a exportação na API.** No Compose service da aplicação, acrescentar:
+
+   ```bash
+   OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+   OTEL_SERVICE_NAME=fatia-api
+   ```
+
+   O nome do host é o do serviço no compose da observabilidade — os dois estão na
+   `dokploy-network`. Se o Dokploy prefixar o nome do container, use o nome que aparece em
+   `docker ps`. Redeployar a API depois de acrescentar.
+
+5. **Conferir**, do host:
+
+   ```bash
+   # 1. a API está exportando?
+   docker logs <container-da-api> 2>&1 | grep -o 'trace_id":"[a-f0-9]*' | head -3
+   # 2. o log chegou ao Loki? (pelo Grafana → Explore → Loki)
+   #    {service_name="fatia-api"}
+   # 3. a métrica chegou ao Prometheus?
+   #    sum by (http_route) (rate(http_server_request_duration_seconds_count{job="fatia-api"}[5m]))
+   # 4. /metrics NÃO responde de fora — tem de dar 404:
+   curl -o /dev/null -w '%{http_code}\n' https://api.fat.ia.br/metrics
+   ```
+
+   Se o passo 1 não mostrar `trace_id`, a variável não chegou ao processo. É o modo de falha
+   mais comum, e é silencioso: a API funciona normalmente, só não exporta nada.
+
+### O que cada painel significa, e o que fazer
+
+| Painel                  | Quando incomodar                  | Primeira ação                                                  |
+| ----------------------- | --------------------------------- | -------------------------------------------------------------- |
+| Taxa de erro 5xx        | acima de 1%                       | painel de logs de erro, seguir o `TraceID` da primeira linha   |
+| Latência p95 por rota   | subiu e não voltou                | abrir um trace da rota; procurar o span que domina o tempo     |
+| Requisições por segundo | caiu a zero com o serviço "no ar" | Traefik ou DNS, não a API — `/health` de fora                  |
+| Chamadas de tool MCP    | uma tool com pico de falha        | painel de falhas por categoria; `NOT_FOUND` ≠ `INTERNAL`       |
+| Logs de erro            | qualquer `level=error` novo       | é o substituto do Sentry — o stack trace está na própria linha |
+
+### Lacunas declaradas — o que isto **não** cobre
+
+Escritas aqui de propósito. Lacuna suposta coberta é pior que lacuna conhecida.
+
+- **Não há alerta configurado.** O Grafana tem o motor de alerta, mas nenhuma regra nem contact
+  point foi criada nesta entrega: regra apontando para contact point vazio é o pior dos mundos,
+  porque parece coberto. Enquanto não houver, **o painel só avisa quem estiver olhando**. O
+  único aviso automático que existe hoje é o do backup (`ALERT_WEBHOOK` + `BACKUP_PING_URL`).
+- **Observabilidade no mesmo host que a aplicação.** Se o VPS morrer, o Grafana morre junto e
+  não sobra registro do que aconteceu nos minutos finais. Mesma lacuna do Uptime Kuma, descrita
+  na seção do `BACKUP_PING_URL`.
+- **Sem uptime externo.** Nada aqui detecta o host inteiro sumir — detectar isso sem conta
+  externa exige algo fora do host, e não existe.
+- **Prisma não está instrumentado.** Não há span de query no banco: ligar `@prisma/instrumentation`
+  exige mexer no `schema.prisma`, que estava fora do escopo desta entrega. Latência de banco
+  aparece hoje como tempo dentro do span do controller, sem detalhe da query.
+- **Só a API é instrumentada.** `apps/web`, `apps/mobile` e `apps/site` estão fora.
+
+### Custo de recursos, medido
+
+Medido nesta máquina com o stack completo e a API sob carga leve, depois de estabilizar:
+
+| Container      | Memória em uso | Limite  |
+| -------------- | -------------- | ------- |
+| otel-collector | 148 MiB        | 192 MiB |
+| tempo          | 186 MiB        | 256 MiB |
+| grafana        | 109 MiB        | 256 MiB |
+| loki           | 62 MiB         | 256 MiB |
+| prometheus     | 46 MiB         | 256 MiB |
+| **total**      | **~550 MiB**   | 1,2 GiB |
+
+Some ~2,4 GB de imagem em disco (o Grafana sozinho é 1,16 GB) e os volumes, que ficaram na casa
+de dezenas de MB nas primeiras horas.
+
+Todos os cinco são Go, e **o GC do Go não enxerga o limite do cgroup**: sem `GOMEMLIMIT` ele
+cresce até o dobro do heap vivo e o container morre pelo OOM killer, sem log de causa. Medido: o
+Tempo estacionava em 91% do limite sem a variável e em 72% com ela. Ela está definida no compose
+a ~75% de cada `limits.memory`.
+
+**Num VPS de 2 GB o stack não cabe** junto com API (512 MB), PWA (384 MB), Logto (512 MB) e
+Postgres. A partir de 4 GB cabe com folga. Se for preciso recortar, a ordem de corte é: primeiro
+o **Tempo** (o trace só passa a valer de verdade quando o `apps/agent` da ADR 015 subir e houver
+dois processos no caminho de uma requisição), depois o **Loki** — que economiza ~250 MiB e ainda
+deixa métrica, painel e o `docker logs` com rotação.
 
 ## Backup — setup do zero
 

@@ -1,0 +1,19 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # A API não expõe /metrics. Ela empurra OTLP para o collector, e é o collector que apresenta
+  # as séries em formato Prometheus. Ver o comentário no `otel-collector.yml`.
+  - job_name: otel-collector
+    # Sem isto, o `job` que o collector já anexa (`fatia-api`) é renomeado para `exported_job` e
+    # o `job` da série vira `otel-collector` — o que faria todas as queries do dashboard
+    # filtrarem pelo nome do coletor em vez do nome do serviço.
+    honor_labels: true
+    static_configs:
+      - targets: ['otel-collector:8889']
+
+  # Auto-monitoramento. Barato, e é o que responde "o Prometheus parou ou o serviço parou?"
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']

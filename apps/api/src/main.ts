@@ -1,3 +1,8 @@
+// PRIMEIRO import do processo, de propósito. A instrumentação automática do OpenTelemetry
+// funciona trocando o export de `http`, `express` e `@nestjs/core` na hora do `require`; se
+// qualquer um deles for carregado antes, o patch chega tarde e não sai span nenhum. Mover esta
+// linha para baixo quebra o trace **em silêncio**, sem erro e sem teste vermelho.
+import './observability/tracing';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
