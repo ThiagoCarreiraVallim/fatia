@@ -10,7 +10,7 @@ Get from `git clone` to a running API + Web + MCP stack in one command, and lear
 
 | Tool                        | Version | How to install                                                                                                                         |
 | --------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| **Node.js**                 | `>= 20` | We ship `.nvmrc` — run `nvm use` (or install Node 20+ any other way you like).                                                         |
+| **Node.js**                 | `>= 24` | We ship `.nvmrc` — run `nvm use` (or install Node 24+ any other way you like). The range is pinned by `engines` in `package.json`.     |
 | **pnpm**                    | `9`     | `corepack enable` — version is pinned by `packageManager` in `package.json`. Do not install pnpm globally with `npm i -g pnpm`.        |
 | **Docker** + Docker Compose | latest  | Docker Desktop on macOS / Windows, or the Docker engine + compose plugin on Linux. Used for Postgres (and optionally Logto, API, Web). |
 | **A POSIX shell**           | —       | macOS / Linux work out of the box. **Windows: use WSL2.**                                                                              |
@@ -18,7 +18,7 @@ Get from `git clone` to a running API + Web + MCP stack in one command, and lear
 Verify:
 
 ```bash
-node -v          # v20.x
+node -v          # v24.x
 corepack -v      # any version, just present
 docker --version
 docker compose version
@@ -100,24 +100,25 @@ Tear everything down with `pnpm infra:down`.
 
 ## Useful scripts
 
-| Command              | What it does                                                                                                                    |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm bootstrap`     | Run the full bootstrap (idempotent — safe to re-run). Named `bootstrap` (not `setup`) to avoid pnpm's built-in `setup` command. |
-| `pnpm reset:db`      | **Destructive.** Drop the Postgres volume and re-seed from scratch.                                                             |
-| `pnpm mcp:smoke`     | Curl the MCP discovery endpoint and (with a `TOKEN`) hit `tools/list` / `get_me`. See [`MCP_LOCAL.md`](MCP_LOCAL.md).           |
-| `pnpm dev`           | One-command dev: ensures Postgres + Logto are up, then runs API + Web with hot reload.                                          |
-| `pnpm dev:apps`      | Just `turbo run dev` (skip the infra check) — use when infra is already up.                                                     |
-| `pnpm infra:up`      | Start Postgres + Logto (the dependencies `pnpm dev` needs).                                                                     |
-| `pnpm infra:up:db`   | Start Postgres only (skip Logto — useful if you don't need auth).                                                               |
-| `pnpm infra:up:full` | Start the full stack in Docker (postgres + logto + api + web).                                                                  |
-| `pnpm infra:down`    | Stop all containers.                                                                                                            |
-| `pnpm infra:logs`    | Tail logs from the running containers.                                                                                          |
-| `pnpm db:migrate`    | Apply Prisma migrations in dev (`prisma migrate dev`).                                                                          |
-| `pnpm db:seed`       | Re-run the seeds (TACO foods + exercises).                                                                                      |
-| `pnpm db:studio`     | Open Prisma Studio.                                                                                                             |
-| `pnpm lint`          | ESLint across the monorepo.                                                                                                     |
-| `pnpm typecheck`     | `tsc --noEmit` across the monorepo.                                                                                             |
-| `pnpm test`          | Run tests in every package that defines them.                                                                                   |
+| Command                    | What it does                                                                                                                                                                                                         |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm bootstrap`           | Run the full bootstrap (idempotent — safe to re-run). Named `bootstrap` (not `setup`) to avoid pnpm's built-in `setup` command.                                                                                      |
+| `pnpm reset:db`            | **Destructive.** Drop the Postgres volume and re-seed from scratch.                                                                                                                                                  |
+| `pnpm mcp:smoke`           | Curl the MCP discovery endpoint and (with a `TOKEN`) hit `tools/list` / `get_me`. See [`MCP_LOCAL.md`](MCP_LOCAL.md).                                                                                                |
+| `pnpm dev`                 | One-command dev: ensures Postgres + Logto are up, then runs API + Web with hot reload.                                                                                                                               |
+| `pnpm dev:apps`            | Just `turbo run dev` (skip the infra check) — use when infra is already up.                                                                                                                                          |
+| `pnpm infra:up`            | Start Postgres + Logto (the dependencies `pnpm dev` needs).                                                                                                                                                          |
+| `pnpm infra:up:db`         | Start Postgres only (skip Logto — useful if you don't need auth).                                                                                                                                                    |
+| `pnpm infra:up:full`       | Start the full stack in Docker (postgres + logto + api + web).                                                                                                                                                       |
+| `pnpm infra:down`          | Stop all containers.                                                                                                                                                                                                 |
+| `pnpm infra:logs`          | Tail logs from the running containers.                                                                                                                                                                               |
+| `pnpm db:migrate`          | Apply Prisma migrations in dev (`prisma migrate dev`).                                                                                                                                                               |
+| `pnpm db:seed`             | Re-run the seeds (TACO foods + exercises).                                                                                                                                                                           |
+| `pnpm db:studio`           | Open Prisma Studio.                                                                                                                                                                                                  |
+| `pnpm lint`                | ESLint across the monorepo.                                                                                                                                                                                          |
+| `pnpm typecheck`           | `tsc --noEmit` across the monorepo.                                                                                                                                                                                  |
+| `pnpm --filter <pkg> test` | Tests run per package — there is no root `test` script, because half of the suites need Postgres and half don't. The exact commands are in [`CONTRIBUTING.md`](../CONTRIBUTING.md#running-tests-lint-and-typecheck). |
+| `pnpm secrets:scan`        | Run the same gitleaks sweep the CI runs (needs Docker).                                                                                                                                                              |
 
 ---
 

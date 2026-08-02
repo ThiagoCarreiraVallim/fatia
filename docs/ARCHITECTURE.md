@@ -14,7 +14,7 @@
 ┌─────────────────┐      ┌──────────────────┐
 │  Claude (app)   │      │   PWA (Next.js)  │
 │   via MCP       │      │   navegador      │
-│  ~52 tools      │      │  visualização    │
+│   87 tools      │      │  visualização    │
 └────────┬────────┘      └─────────┬────────┘
          │                         │
          │ OAuth 2.1 + DCR + PKCE  │ OAuth code flow + PKCE
@@ -64,7 +64,7 @@ Tudo roda no servidor próprio. Em produção, Dokploy (Traefik) faz roteamento 
 
 ### Backend (`apps/api`)
 
-- **NestJS 10+** — modularidade, DI, decorators, ecossistema maduro
+- **NestJS 11** — modularidade, DI, decorators, ecossistema maduro
 - **Prisma** — type-safe, migrations, ergonomia
 - **Postgres 16** — relacional simples e suficiente
 - **`jose`** — validação de JWT (assinatura via JWKS do Logto, audience, issuer, expiração)

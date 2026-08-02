@@ -44,6 +44,8 @@ In scope:
 
 - The Fatia API (`apps/api`), including the MCP server endpoints.
 - The Fatia Web PWA (`apps/web`).
+- The Fatia native app (`apps/mobile`), including how it stores the access token.
+- The shared API client (`packages/api-client`), used by both clients above.
 - The shared database layer (`packages/db`) and migrations.
 - Build and release infrastructure shipped in this repository (`infra/`, GitHub workflows).
 
@@ -53,6 +55,25 @@ Out of scope:
 - Vulnerabilities that require physical access to a user's device or already-compromised credentials.
 - Issues in dependencies that have no exploitable impact on Fatia — report those upstream.
 - Self-hosted deployments running modified code.
+
+## Secrets in this repository
+
+**No credential has ever been committed to this repository, and nothing has been rotated as a result of an audit.** That claim is checked, not asserted from memory.
+
+The audit run on 2026-08-02 (issue [#37](https://github.com/ThiagoCarreiraVallim/fatia/issues/37)) covered the full history and found nothing:
+
+- `git log --all -- .env` is empty — no `.env` was ever tracked. Only `.env.example`, `.env.production.example` and `infra/.env.backup.example` are versioned, all with placeholders.
+- Provider-pattern sweep across every commit (`sk-ant-`, `ghp_`, `github_pat_`, `AKIA…`, `xox*-`, `BEGIN … PRIVATE KEY`, `AIza…`) — zero hits.
+- `gitleaks v8.28.0` over the full history, merge commits included, with its default ruleset — `no leaks found`.
+
+A one-off sweep goes stale on the next commit, so the check is now a job:
+[`.github/workflows/secret-scan.yml`](.github/workflows/secret-scan.yml) runs gitleaks over the **entire history** on every push, every pull request, and weekly on a schedule (so that new detection rules get applied to old commits). Contributors run the identical command locally with `pnpm secrets:scan`.
+
+"Entire history" includes merge commits: gitleaks drives `git log -p`, which emits no diff for a merge unless you ask (`-m`), so a secret introduced while resolving a conflict would never be read. Here that is 60 of 283 commits.
+
+The job fails loudly rather than passing quietly: it asserts that gitleaks actually scanned a non-zero number of commits, because a shallow clone or a repository the container cannot read makes gitleaks report `no leaks found` over nothing and exit `0`. It also distinguishes a finding (exit `1`) from a scan that never ran (an unavailable image, a registry rate limit) — reporting infrastructure failure as a leak sends someone into incident response over a Docker Hub outage. Both cases fail the build, each with the correct diagnosis, and the sweep self-tests before it runs. Findings are printed redacted — this repository's CI logs are public.
+
+If a secret ever does land here, the response is: rotate first, then purge history, then record what was rotated and when in this section.
 
 ## Areas of particular concern
 

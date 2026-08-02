@@ -19,7 +19,61 @@ import { MCP_TOOL_METADATA, type McpToolDef } from '../../common/decorators/tool
  */
 
 const API_SRC = resolve(__dirname, '../..');
-const MCP_DOC = resolve(__dirname, '../../../../../docs/MCP.md');
+const REPO_ROOT = resolve(__dirname, '../../../../..');
+const MCP_DOC = resolve(REPO_ROOT, 'docs/MCP.md');
+
+/**
+ * Docs que afirmam o total de tools em texto corrido (issue #36).
+ *
+ * Os casos abaixo já impedem tool sem seção e seção sem tool, mas nenhum olhava
+ * o **número** escrito na prosa — e ele derivou: o `ARCHITECTURE.md` afirmava
+ * "~52 tools" com 87 registradas no código e 87 escritas no `MCP.md`, e ninguém
+ * notou porque a doc que o teste lia estava certa. Quem lê acredita no número;
+ * não conta as seções.
+ */
+const TOOL_COUNT_DOCS = [
+  'README.md',
+  'docs/MCP.md',
+  'docs/ARCHITECTURE.md',
+  'docs/MCP_TOOL_SURFACE.md',
+  'docs/SUBMISSION_CHECKLIST.md',
+] as const;
+
+/**
+ * `87 tools`, `**87 tools**`, `**87** tools`, `87 ferramentas`.
+ *
+ * O negrito e o sinônimo entram no padrão porque a versão anterior
+ * (`/(\d+) tools\b/`) passava verde sobre `**52** tools`: o `**` entre o número e
+ * o substantivo quebrava o casamento, e "não achei" é indistinguível de "está
+ * certo". Um guarda que só pega a grafia que o autor usou hoje não é guarda.
+ */
+const TOOL_COUNT_PATTERN = /\*{0,2}(\d+)\*{0,2}\s+(?:tools|ferramentas)\b/g;
+
+/**
+ * Recortes: "N tools" que legitimamente NÃO é o total do catálogo.
+ *
+ * Em vez de isentar o número — isenção não envelhece junto com o código —, cada
+ * recorte declara de onde sai a conta, e ela é conferida contra as tools
+ * carregadas. Contagem parcial apodrece igual à total.
+ */
+const TOOL_COUNT_SLICES: ReadonlyArray<{ file: string; text: string; count: () => number }> = [
+  {
+    file: 'docs/SUBMISSION_CHECKLIST.md',
+    text: '`delete_*` (13 tools)',
+    count: () => tools.filter(({ tool }) => tool.name.startsWith('delete_')).length,
+  },
+  {
+    file: 'docs/MCP_TOOL_SURFACE.md',
+    text: '45 tools de escrita',
+    // As de escrita que ganharam exemplo na #111 — `delete_my_account` é isenta,
+    // e é por isso que o número não é o total de tools de escrita.
+    count: () =>
+      tools.filter(
+        ({ tool }) =>
+          tool.annotations?.readOnlyHint === false && extractExamples(tool.description).length > 0,
+      ).length,
+  },
+];
 
 /** `verb_noun` em snake_case, conforme a convenção da §Catálogo de `docs/MCP.md`. */
 const TOOL_NAME_PATTERN = /^[a-z]+(_[a-z]+)+$/;
@@ -227,6 +281,59 @@ describe('catálogo de tools MCP', () => {
       .sort();
 
     expect(missingFromSummary).toEqual([]);
+  });
+
+  it('cita o total real de tools em toda doc que afirma um total', () => {
+    // Toda ocorrência é conferida, não só a primeira: `MCP.md` cita o total
+    // duas vezes (custo de contexto e cabeçalho do catálogo) e nada garante que
+    // um `sed` acerte as duas. O `expect` compara a lista inteira de uma vez
+    // para que a falha diga QUAL arquivo, QUAL linha e QUAL número está errado.
+    //
+    // A regra é deliberadamente rígida: qualquer "N tools" nesses arquivos tem
+    // de ser o total. Se um dia fizer sentido escrever um recorte ("23 tools de
+    // nutrição"), este caso quebra — e a exceção entra aqui de propósito, em vez
+    // de o total apodrecer no meio de contagens parciais sem ninguém notar.
+    const wrong: string[] = [];
+    const filesWithCount: string[] = [];
+
+    for (const relative of TOOL_COUNT_DOCS) {
+      const lines = readFileSync(resolve(REPO_ROOT, relative), 'utf8').split('\n');
+
+      lines.forEach((line, index) => {
+        for (const match of line.matchAll(TOOL_COUNT_PATTERN)) {
+          const slice = TOOL_COUNT_SLICES.find(
+            (candidate) =>
+              candidate.file === relative &&
+              line.includes(candidate.text) &&
+              candidate.text.includes(match[0]),
+          );
+
+          // Só o total conta para a guarda do silêncio abaixo: um arquivo que
+          // ficasse só com o recorte não estaria mais afirmando o total.
+          if (!slice) filesWithCount.push(relative);
+
+          const expected = slice ? slice.count() : tools.length;
+          if (Number(match[1]) !== expected) {
+            wrong.push(`${relative}:${index + 1} diz ${match[1]}, são ${expected}`);
+          }
+        }
+      });
+    }
+
+    expect(wrong.sort()).toEqual([]);
+
+    // Recorte que sumiu da doc vira permissão silenciosa para o próximo número
+    // parcial que aparecer com a mesma grafia.
+    const staleSlices = TOOL_COUNT_SLICES.filter(
+      (slice) => !readFileSync(resolve(REPO_ROOT, slice.file), 'utf8').includes(slice.text),
+    ).map((slice) => `${slice.file}: recorte "${slice.text}" não existe mais`);
+
+    expect(staleSlices.sort()).toEqual([]);
+
+    // Sem isto, apagar a frase (ou mudar "tools" para "ferramentas") deixaria o
+    // caso verde por não achar nada — o mesmo verde de quando está tudo certo.
+    const silent = TOOL_COUNT_DOCS.filter((relative) => !filesWithCount.includes(relative));
+    expect(silent).toEqual([]);
   });
 
   it('não tem seções órfãs em docs/MCP.md', () => {
