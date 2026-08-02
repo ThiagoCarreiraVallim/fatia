@@ -27,6 +27,11 @@ function stubClipboard(writeText: () => Promise<void>) {
   });
 }
 
+/** Contexto inseguro: o objeto inteiro não existe. Mesma ressalva de ordem do `stubClipboard`. */
+function removeClipboard() {
+  Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+}
+
 describe('CopyLine', () => {
   beforeEach(() => {
     vi.useRealTimers();
@@ -41,11 +46,33 @@ describe('CopyLine', () => {
     const user = userEvent.setup();
     stubClipboard(writeText);
 
-    render(<CopyLine value={VALUE} copyLabel="Copiar endereço do Fatia" />);
+    const { container } = render(<CopyLine value={VALUE} copyLabel="Copiar endereço do Fatia" />);
+    expect(container.querySelector('.lucide-check')).toBeNull();
+
     await user.click(screen.getByRole('button', { name: 'Copiar endereço do Fatia' }));
 
     expect(writeText).toHaveBeenCalledWith(VALUE);
+    // Copiar sem confirmar é indistinguível de um clique que não fez nada — o mesmo desfecho
+    // ambíguo que o caminho de falha existe para matar. O ✓ é o único sinal que o usuário
+    // recebe, então é ele que precisa ser conferido, não só a chamada ao navegador.
+    await waitFor(() => expect(container.querySelector('.lucide-check')).not.toBeNull());
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('avisa quando o navegador nem expõe a área de transferência', async () => {
+    const user = userEvent.setup();
+    // Este é o caminho comum, não o exótico: fora de contexto seguro (http em rede local, o
+    // normal num app self-hosted) `navigator.clipboard` não existe. O acesso estoura `TypeError`
+    // de forma **síncrona**, antes de existir promise — tratamento pendurado só num `.catch()`
+    // da promise deixa passar, e o clique volta a ser o no-op silencioso de sempre.
+    removeClipboard();
+
+    render(<CopyLine value={VALUE} copyLabel="Copiar endereço do Fatia" />);
+    await user.click(screen.getByRole('button', { name: 'Copiar endereço do Fatia' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(/Selecione o texto acima/);
+    });
   });
 
   it('avisa quando o navegador recusa, em vez de falhar calado', async () => {

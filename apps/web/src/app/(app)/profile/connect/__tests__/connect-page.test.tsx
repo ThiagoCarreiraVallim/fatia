@@ -69,10 +69,21 @@ describe('tela de conectar a IA', () => {
   it('não usa jargão de protocolo em lugar nenhum do texto visível', async () => {
     const { container } = render(await ConnectPage());
 
-    // O endereço em si contém `/mcp` e não tem como não conter — é o endereço. Só ele sai da
-    // conferência, e recortado com precisão: um `https?:\/\/\S+` engoliria também a palavra
-    // colada nele no `textContent` e poderia esconder jargão de verdade.
-    const visible = (container.textContent ?? '').replace(/https?:\/\/[^\s]*?\/mcp\b/g, '');
+    // O texto é montado nó a nó, não por `container.textContent`: a concatenação cola vizinhos
+    // sem separador (`…do Fatiahttp://…/mcpSó isso`) e fronteira de elemento não é fronteira de
+    // palavra — jargão encostado no nó ao lado escaparia do `\b`.
+    const trechos: string[] = [];
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    for (let no = walker.nextNode(); no !== null; no = walker.nextNode()) {
+      trechos.push(no.textContent ?? '');
+    }
+
+    // O endereço contém `/mcp` e não tem como não conter — é o endereço. Ele é o único isento, e
+    // a isenção é do nó: `expect` antes de filtrar porque isenção que nunca casa protege menos do
+    // que o comentário promete, e passa despercebida.
+    const url = mcpServerUrl();
+    expect(trechos).toContain(url);
+    const visible = trechos.filter((trecho) => trecho !== url).join('\n');
 
     for (const jargon of [/\bMCP\b/i, /\bOAuth\b/i, /\bDCR\b/i, /\bLogto\b/i, /\bBearer\b/i]) {
       expect(visible).not.toMatch(jargon);
