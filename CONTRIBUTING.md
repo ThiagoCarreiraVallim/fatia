@@ -176,7 +176,9 @@ Every push and PR runs [gitleaks](https://github.com/gitleaks/gitleaks) over the
 pnpm secrets:scan
 ```
 
-A finding fails the build. If it is a false positive, do not silence the job: annotate the line with a `gitleaks:allow` comment, or add it to `.gitleaksignore`, and explain the call in the PR.
+The sweep includes merge commits (`git log -p` skips them by default — 21% of this history). `pnpm secrets:scan:selftest` proves it still does, by scanning throwaway repositories whose result is known.
+
+A finding fails the build. If it is a false positive, do not silence the job: annotate the line with a `gitleaks:allow` comment, or add it to `.gitleaksignore` (which does not exist yet — the first entry creates it, and every entry needs a comment with the date and the reason it is safe), and explain the call in the PR.
 
 Related: anything prefixed `NEXT_PUBLIC_` (web) or `EXPO_PUBLIC_` (mobile) is **inlined into the client bundle** and readable by anyone. Secrets go in unprefixed variables, read server-side only. Both `.env.example` files spell this out.
 
