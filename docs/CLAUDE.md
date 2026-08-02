@@ -77,6 +77,26 @@ chore(deps): bump prisma to 5.20
 docs(mcp): clarify search_food schema
 ```
 
+### Fechar issue pela PR: a palavra-chave é em INGLÊS
+
+Tudo neste repositório é escrito em português — commits, comentários, corpo de PR. A palavra que
+fecha a issue é a exceção, e é uma armadilha justamente por isso:
+
+```
+Closes #123      ✅ o GitHub fecha a issue no merge
+Fecha #123       ❌ o GitHub ignora; a issue fica aberta para sempre
+```
+
+O GitHub só reconhece `close`/`closes`/`closed`, `fix`/`fixes`/`fixed` e
+`resolve`/`resolves`/`resolved`. Não há equivalente em português, e **nada avisa** — a PR mergeia
+verde, o board vai para Done, e a issue continua aberta.
+
+Aconteceu em série: **20 issues entregues e mergeadas ficaram abertas** porque os corpos das PRs
+diziam "Fecha #N". Só apareceu quando alguém foi conferir por que uma épica não fechava sozinha.
+
+Escreva a linha em inglês mesmo que o resto do corpo esteja em português. Se quiser, explique em
+português na frase seguinte.
+
 ## O que NÃO fazer
 
 - ❌ Adicionar features que não têm issue aberta sem discutir

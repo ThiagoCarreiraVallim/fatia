@@ -1,8 +1,12 @@
 ## Description
+
 <!-- Summarize what has been done. GitHub Copilot/Claude uses this to understand the overall context. -->
-<!-- What was done and why. Link the related issue: Closes #123 -->
+<!-- What was done and why. Link the related issue: Closes #123
+     ⚠️ A palavra-chave é em INGLÊS. "Fecha #123" é ignorado em silêncio pelo GitHub:
+     a PR mergeia verde, o board vai para Done, e a issue fica aberta para sempre. -->
 
 ## Changes
+
 <!-- This section will be used to generate release notes. Keep it concise. -->
 <!-- Suggested format:
   [FEAT] Added `log-meal` MCP tool to register meals via assistant
@@ -11,11 +15,14 @@
 -->
 
 ## How to Test / Points to Consider
+
 <!-- This helps the reviewer and Copilot/Claude know where to focus. -->
+
 1. Simple step-by-step instructions for testing (e.g., Call the `log-meal` MCP tool with a custom food and check the meal appears in `GET /nutrition/meals`).
 2. Indicate whether there were any changes to the database (e.g., "Requires running `npx prisma migrate dev`") or environment variables.
 
 ## Checklist
+
 - [ ] The code compiles/runs without any new errors.
 - [ ] I performed a self-review of my own code.
 - [ ] No leftover debug code (`console.log`, commented blocks) remains.
