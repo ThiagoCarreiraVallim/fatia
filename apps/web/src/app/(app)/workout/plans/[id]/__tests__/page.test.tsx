@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -61,6 +61,7 @@ import { workoutApi } from '@fatia/api-client';
 
 const getPlan = vi.mocked(workoutApi.getPlan);
 const reorderPlanExercises = vi.mocked(workoutApi.reorderPlanExercises);
+const removePlanExercise = vi.mocked(workoutApi.removePlanExercise);
 const getPersonalRecord = vi.mocked(workoutApi.getPersonalRecord);
 
 /** Promessa controlada pelo teste — segura a mutation "em voo". */
@@ -115,12 +116,15 @@ function plan(
   return { id: 'plan-1', userId: 'user-1', name: 'Peito', exercises };
 }
 
+/** O client da renderização corrente — só o teste do `cancelQueries` precisa. */
+let queryClient: QueryClient;
+
 function renderPage() {
-  const client = new QueryClient({
+  queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
-    <QueryClientProvider client={client}>
+    <QueryClientProvider client={queryClient}>
       <PlanDetailPage />
     </QueryClientProvider>,
   );
@@ -157,6 +161,15 @@ function planoTrocado(): WorkoutPlan {
   ]);
 }
 
+/**
+ * O mesmo movimento, mas com o Supino já removido em outro lugar. `pe-b` e
+ * `pe-c` continuam pertencendo ao plano, então a regra da #205 não dispara o
+ * 404: a API aceita a troca e devolve dois exercícios.
+ */
+function planoTrocadoSemSupino(): WorkoutPlan {
+  return plan([planExercise('pe-c', 'Crossover', 5), planExercise('pe-b', 'Crucifixo', 9)]);
+}
+
 describe('PlanDetailPage — reordenação', () => {
   it('reordena com uma requisição só, mandando o `order` do vizinho', async () => {
     const user = await renderLoadedPage();
@@ -191,18 +204,53 @@ describe('PlanDetailPage — reordenação', () => {
     await waitFor(() => expect(down).toBeEnabled());
   });
 
-  it('mostra a nova ordem sem refazer a busca do plano', async () => {
+  it('mostra a ordem que a resposta traz, sem refazer a busca do plano', async () => {
     const user = await renderLoadedPage();
     expect(getPlan).toHaveBeenCalledTimes(1);
-    reorderPlanExercises.mockResolvedValue(planoTrocado());
+    // A resposta diverge do palpite otimista de propósito. Devolvendo a mesma
+    // ordem que o `onMutate` já escreveu, este teste passaria mesmo sem o
+    // `setQueryData(updated)` do `onSuccess` — o DOM que ele observa viria do
+    // palpite, e não da resposta que ele diz estar medindo.
+    reorderPlanExercises.mockResolvedValue(
+      plan([
+        planExercise('pe-c', 'Crossover', 1),
+        planExercise('pe-a', 'Supino', 5),
+        planExercise('pe-b', 'Crucifixo', 9),
+      ]),
+    );
 
     await user.click(screen.getByRole('button', { name: /mover crucifixo para baixo/i }));
 
-    // Crucifixo caiu para o fim: o botão "para baixo" dele fica desabilitado.
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: /mover crucifixo para baixo/i })).toBeDisabled(),
-    );
+    await waitFor(() => expect(nomesNaOrdem()).toEqual(['Crossover', 'Supino', 'Crucifixo']));
     expect(getPlan).toHaveBeenCalledTimes(1);
+  });
+
+  it('descarta o refetch que já estava em voo quando o card se move', async () => {
+    const user = await renderLoadedPage();
+    const emVoo = deferred<WorkoutPlan>();
+    getPlan.mockReturnValueOnce(emVoo.promise);
+    const pending = deferred<WorkoutPlan>();
+    reorderPlanExercises.mockReturnValue(pending.promise);
+
+    // Refetch disparado antes do toque, ainda sem resposta.
+    const refetch = queryClient.refetchQueries({ queryKey: ['workout', 'plan', 'plan-1'] });
+    await waitFor(() => expect(getPlan).toHaveBeenCalledTimes(2));
+
+    await user.click(screen.getByRole('button', { name: /mover crucifixo para baixo/i }));
+    await waitFor(() => expect(nomesNaOrdem()).toEqual(['Supino', 'Crossover', 'Crucifixo']));
+
+    // A resposta atrasada traz a ordem antiga. Sem o `cancelQueries` do
+    // `onMutate` ela é escrita no cache depois do palpite e o card pula de
+    // volta sozinho, sem erro em lugar nenhum.
+    // Esperar o próprio refetch fecha a janela sem `sleep`: quando ele termina,
+    // ou o dado já foi escrito no cache, ou foi descartado pelo cancelamento.
+    await act(async () => {
+      emVoo.resolve(plan());
+      await refetch;
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(nomesNaOrdem()).toEqual(['Supino', 'Crossover', 'Crucifixo']);
   });
 
   it('traduz o 404 de id obsoleto e busca a lista de novo', async () => {
@@ -286,6 +334,45 @@ describe('PlanDetailPage — reordenação', () => {
     pending.resolve(planoTrocado());
 
     await waitFor(() => expect(status.textContent).toBe('Crucifixo movido para a posição 3 de 3'));
+  });
+
+  it('anuncia a posição que a resposta traz, não a que estava na tela no toque', async () => {
+    const user = await renderLoadedPage();
+    // Outro aparelho removeu o Supino durante a sessão desta tela.
+    reorderPlanExercises.mockResolvedValue(planoTrocadoSemSupino());
+
+    await user.click(screen.getByRole('button', { name: /mover crucifixo para baixo/i }));
+
+    // Contando pelo snapshot do clique sairia "posição 3 de 3" — os dois
+    // números errados, justamente para quem só tem a região viva.
+    const status = screen.getByRole('status');
+    await waitFor(() => expect(status.textContent).toBe('Crucifixo movido para a posição 2 de 2'));
+    expect(nomesNaOrdem()).toEqual(['Crossover', 'Crucifixo']);
+  });
+
+  it('não ressuscita, no rollback, o exercício apagado durante o voo', async () => {
+    const user = await renderLoadedPage();
+    const pending = deferred<WorkoutPlan>();
+    reorderPlanExercises.mockReturnValue(pending.promise);
+    removePlanExercise.mockResolvedValue(undefined);
+
+    await user.click(screen.getByRole('button', { name: /mover crucifixo para baixo/i }));
+    await waitFor(() => expect(nomesNaOrdem()).toEqual(['Supino', 'Crossover', 'Crucifixo']));
+
+    // A lixeira do card não é travada por `isMoving` — só as setas são.
+    getPlan.mockResolvedValue(
+      plan([planExercise('pe-b', 'Crucifixo', 5), planExercise('pe-c', 'Crossover', 9)]),
+    );
+    await user.click(screen.getByRole('button', { name: /remover supino do plano/i }));
+    await waitFor(() => expect(nomesNaOrdem()).toEqual(['Crucifixo', 'Crossover']));
+
+    pending.reject(new Error('Network error'));
+    await screen.findByRole('alert');
+
+    // O snapshot do `onMutate` ainda tem o Supino. Restaurá-lo sem confirmar
+    // com o servidor devolveria à tela um exercício já apagado, e o usuário
+    // veria o próprio delete se desfazer sozinho.
+    await waitFor(() => expect(nomesNaOrdem()).toEqual(['Crucifixo', 'Crossover']));
   });
 
   it('não deixa no ar o anúncio de um movimento que foi desfeito', async () => {

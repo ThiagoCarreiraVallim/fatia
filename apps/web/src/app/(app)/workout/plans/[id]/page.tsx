@@ -20,10 +20,6 @@ import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
 interface MoveVars {
   a: WorkoutPlanExercise;
   b: WorkoutPlanExercise;
-  /** Índice de destino de `a`, base 0 — o anúncio soma 1. Igual ao app nativo. */
-  targetIndex: number;
-  /** Tamanho da lista, para o "posição 2 de 5" do anúncio. */
-  total: number;
 }
 
 /**
@@ -108,28 +104,42 @@ export default function PlanDetailPage() {
       );
       return { previous };
     },
-    onSuccess: (updated, { a, targetIndex, total }) => {
+    onSuccess: (updated, { a }) => {
       // A resposta já é o plano reordenado — escrever no cache evita o refetch
       // que só confirmaria o que acabou de chegar.
       qc.setQueryData(['workout', 'plan', id], updated);
+      // Posição e total saem da resposta, não da lista que estava na tela no
+      // toque: outro aparelho pode ter removido um exercício enquanto isso, e a
+      // API aceita a troca do mesmo jeito quando os dois ids do corpo seguem no
+      // plano. Contando pelo snapshot do clique, quem depende da região viva
+      // ouviria "3 de 3" numa lista de 2.
+      const ordenados = [...updated.exercises].sort((x, y) => x.order - y.order);
+      const posicao = ordenados.findIndex((e) => e.id === a.id) + 1;
       // O anúncio só sai aqui, como no app nativo: dito no toque, ele afirmaria
       // um movimento que a rede ainda pode recusar. A lista muda embaixo do
       // foco e o rótulo do botão sozinho não conta que a troca aconteceu.
-      setAnnouncement(`${a.exercise.name} movido para a posição ${targetIndex + 1} de ${total}`);
+      // `posicao === 0` só sairia de uma resposta que não traz o exercício que
+      // ela acabou de mover; aí o honesto é ficar calado.
+      setAnnouncement(
+        posicao === 0
+          ? ''
+          : `${a.exercise.name} movido para a posição ${posicao} de ${ordenados.length}`,
+      );
     },
-    onError: (error, _vars, context) => {
+    onError: (_error, _vars, context) => {
       // Desfaz o otimismo. O aviso na lista (`role="alert"`) é quem fala da
       // falha; a região viva volta a ficar vazia para não deixar no ar um
       // "movido para a posição 2" que acabou de ser desfeito.
       if (context?.previous) qc.setQueryData(['workout', 'plan', id], context.previous);
       setAnnouncement('');
-      // 404 aqui não é "o plano sumiu": desde a #205 a API recusa a operação
-      // inteira quando algum id do corpo não pertence mais ao plano — exercício
-      // removido em outra aba, e esta tela ainda com o cache velho. A cura é
-      // buscar a lista de novo; a mensagem é escolhida no render.
-      if (error instanceof ApiError && error.isNotFound) {
-        void qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
-      }
+      // E busca de novo, sempre. O snapshot é do `onMutate` e pode ter
+      // envelhecido durante o voo: remover um exercício nesta mesma tela
+      // invalida a query, e o refetch responde com a lista já sem ele.
+      // Restaurar sem confirmar ressuscitaria na tela o que o servidor apagou.
+      // Vale também para o 404 da #205 (id do corpo que saiu do plano em outra
+      // aba), onde o cache velho é a própria causa; a mensagem é escolhida no
+      // render. O rollback dá o retorno imediato, o refetch dá a verdade.
+      void qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
     },
   });
 
@@ -198,12 +208,7 @@ export default function PlanDetailPage() {
     if (moveExercise.isPending) return;
     const target = idx + delta;
     if (target < 0 || target >= exercises.length) return;
-    moveExercise.mutate({
-      a: exercises[idx],
-      b: exercises[target],
-      targetIndex: target,
-      total: exercises.length,
-    });
+    moveExercise.mutate({ a: exercises[idx], b: exercises[target] });
   }
 
   function handleDelete() {
