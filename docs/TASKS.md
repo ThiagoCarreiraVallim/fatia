@@ -6,7 +6,7 @@ Este documento era um checklist de 700 linhas mantido à mão. Ele parou de ser 
 
 Um checklist que erra o estado é pior que nenhum: quem lê acredita.
 
-A migração para Issues é o que a [#37](https://github.com/ThiagoCarreiraVallim/fatia/issues/37) pede.
+A migração para Issues é o que a [#37](https://github.com/ThiagoCarreiraVallim/fatia/issues/37) pede, e está concluída: as pendências viraram issue (tabela abaixo), e os planos internos que restavam foram para [`_archive/`](./_archive) com um aviso de que não descrevem o estado atual.
 
 ## Onde cada coisa está agora
 
@@ -15,7 +15,7 @@ O trabalho é organizado em **épicas**, cada uma com sub-issues nativas do GitH
 | Épica                                                            | Assunto                                                                                      |
 | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
 | [#38](https://github.com/ThiagoCarreiraVallim/fatia/issues/38)   | Conector oficial do Claude — OAuth, isolamento, hardening, tools, LGPD, marketing, submissão |
-| [#132](https://github.com/ThiagoCarreiraVallim/fatia/issues/132) | Réplica do frontend em React Native                                                          |
+| [#132](https://github.com/ThiagoCarreiraVallim/fatia/issues/132) | Réplica do frontend em React Native — **concluída**                                          |
 | [#133](https://github.com/ThiagoCarreiraVallim/fatia/issues/133) | Fundação de IA — Cloudflare AI Gateway, custo e privacidade                                  |
 | [#137](https://github.com/ThiagoCarreiraVallim/fatia/issues/137) | Nutrição com IA — foto, código de barras, voz, porção                                        |
 | [#143](https://github.com/ThiagoCarreiraVallim/fatia/issues/143) | Treino inteligente — prescrição adaptativa e periodização                                    |

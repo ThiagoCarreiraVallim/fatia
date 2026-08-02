@@ -18,6 +18,7 @@ By participating in this project you agree to abide by our [Code of Conduct](.gi
 - [Reporting bugs / requesting features](#reporting-bugs--requesting-features)
 - [Labels](#labels)
 - [Project structure](#project-structure)
+- [AI-assisted contributions](#ai-assisted-contributions)
 
 ---
 
@@ -37,7 +38,7 @@ If you're planning a larger change, please open an issue first to discuss it —
 
 ### Prerequisites
 
-- **Node.js** `>= 20` (we ship a `.nvmrc` — run `nvm use`).
+- **Node.js** `>= 24` (we ship a `.nvmrc` — run `nvm use`; the range is pinned by `engines` in `package.json`).
 - **pnpm** `9` (enable via `corepack enable` — the version is pinned by `packageManager` in `package.json`).
 - **Docker** + **Docker Compose** (for Postgres).
 - A POSIX shell. Windows users: use WSL2.
@@ -78,7 +79,7 @@ The API runs on `http://localhost:3000`, the Web app on `http://localhost:3030`,
 1. Sync your fork: `git fetch upstream && git checkout main && git merge --ff-only upstream/main`.
 2. Create a topic branch from `main` (see [Branching model](#branching-model)): `git checkout -b feat/<short-description>`.
 3. Make your changes, keeping commits small and focused.
-4. Run `pnpm lint && pnpm typecheck && pnpm test` before pushing.
+4. Run `pnpm lint && pnpm typecheck` plus the test commands in [Running tests, lint and typecheck](#running-tests-lint-and-typecheck) before pushing.
 5. Push to your fork and open a Pull Request against `main`.
 
 ---
@@ -151,9 +152,33 @@ From the repo root (uses Turborepo, so commands run across all packages):
 ```bash
 pnpm lint        # ESLint across the monorepo
 pnpm typecheck   # tsc --noEmit across the monorepo
-pnpm test        # runs tests in each package that defines them
 pnpm format      # Prettier write
 ```
+
+Tests are **not** wired into a single root command, because half of them need a database and half don't. Run the same split CI runs:
+
+```bash
+# No database required
+pnpm --filter @fatia/api-client test
+pnpm --filter @fatia/web test
+pnpm --filter @fatia/mobile test
+
+# Needs Postgres up (`pnpm infra:up`) and DATABASE_URL pointing at a *test*
+# database — the suite writes and truncates. Never point it at your dev data.
+pnpm --filter @fatia/api test
+```
+
+### Secret scanning
+
+Every push and PR runs [gitleaks](https://github.com/gitleaks/gitleaks) over the **full git history** ([`.github/workflows/secret-scan.yml`](.github/workflows/secret-scan.yml)). Reproduce it locally before pushing — it needs Docker and takes a couple of seconds:
+
+```bash
+pnpm secrets:scan
+```
+
+A finding fails the build. If it is a false positive, do not silence the job: annotate the line with a `gitleaks:allow` comment, or add it to `.gitleaksignore`, and explain the call in the PR.
+
+Related: anything prefixed `NEXT_PUBLIC_` (web) or `EXPO_PUBLIC_` (mobile) is **inlined into the client bundle** and readable by anyone. Secrets go in unprefixed variables, read server-side only. Both `.env.example` files spell this out.
 
 A pre-commit hook (Husky + lint-staged) runs `eslint --fix` and `prettier --write` on staged files. Don't bypass it with `--no-verify` unless you have a good reason and explain it in the PR.
 
@@ -170,7 +195,7 @@ If your change touches the Prisma schema:
 
 ## Opening a Pull Request
 
-1. Make sure CI passes locally (`pnpm lint && pnpm typecheck && pnpm test && pnpm build`).
+1. Make sure CI passes locally: `pnpm lint`, `pnpm typecheck`, `pnpm build`, the test commands above, and `pnpm secrets:scan`.
 2. Push to your fork and open a PR against `main`.
 3. Fill in the [PR template](.github/pull_request_template.md) — especially the **Changes** section, which feeds into release notes.
 4. Link the related issue with `Closes #123`.
@@ -186,7 +211,7 @@ PRs should be **small and focused**. If you're touching more than one concern, s
 - **Bugs:** use the [bug report template](../../issues/new?template=bug_report.md). Include repro steps and environment info.
 - **Features:** use the [feature request template](../../issues/new?template=feature_request.md). Explain the problem first, then the proposed solution.
 - **Security issues:** **do not open a public issue.** See [SECURITY.md](SECURITY.md).
-- **Questions / ideas:** use [GitHub Discussions](../../discussions).
+- **Questions / ideas:** GitHub Discussions is not enabled on this repository — open an issue with the `question` label instead.
 
 ---
 
@@ -241,16 +266,30 @@ If no `release:` label is set, the `type:` label drives the default: `type: feat
 ```
 fatia/
 ├── apps/
-│   ├── api/           # NestJS (REST + MCP server)
-│   └── web/           # Next.js 15 PWA
+│   ├── api/           # NestJS 11 (REST + MCP server)
+│   ├── web/           # Next.js 15 PWA
+│   ├── mobile/        # Expo SDK 57 — native replica of the PWA
+│   └── site/          # Astro — public landing page
 ├── packages/
+│   ├── api-client/    # API client shared by web and mobile (consumed as source)
 │   └── db/            # Prisma schema + shared client
-├── infra/             # docker-compose, infra scripts
+├── infra/             # docker-compose, Dockerfiles, backup
+├── scripts/           # setup, dev, MCP smoke test, secret scan
 ├── docs/              # PRD, ARCHITECTURE, MCP spec, ADRs
 └── .github/           # Issue / PR templates, workflows
 ```
 
 For deeper context, read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/MCP.md`](docs/MCP.md), and the ADRs in [`docs/ADR/`](docs/ADR/).
+
+`packages/api-client` is consumed **as source** — it has no build step of its own. A change there is picked up by both `apps/web` and `apps/mobile` immediately, so typecheck both before pushing.
+
+## AI-assisted contributions
+
+They are welcome, under the same bar as anything else: you understand what you are submitting, the tests prove red without the fix, and the PR goes through the same review.
+
+- [`docs/CLAUDE.md`](docs/CLAUDE.md) holds the repository conventions in the format coding assistants load automatically. It is a machine-facing restatement of this guide plus the ADRs — **optional reading for humans**.
+- [`docs/_archive/`](docs/_archive) keeps finished agent-generated plans and specs as a historical record. Nothing in there describes the current state of the project.
+- `.claude/` is not versioned; it is the maintainer's personal tooling.
 
 ---
 

@@ -2,9 +2,20 @@
 
 Instruções para o Claude (e outros assistentes IA) trabalhando neste repositório.
 
+> **Leitura opcional para humanos.** Este arquivo existe para ser carregado
+> automaticamente por assistentes de código (Claude Code e afins) — é contexto de
+> ferramenta, não documentação do produto. Se você não usa assistente, pode pular:
+> tudo que vale como regra de contribuição está no
+> [`CONTRIBUTING.md`](../CONTRIBUTING.md), e tudo que vale como decisão técnica
+> está em [`ARCHITECTURE.md`](./ARCHITECTURE.md) e nos [ADRs](./ADR).
+>
+> Se você **usa** assistente: aponte-o para cá antes de abrir uma PR. As regras de
+> isolamento por usuário e de prova de teste vermelho valem para código gerado
+> exatamente como valem para código escrito à mão.
+
 ## Contexto rápido
 
-Fatia é um app pessoal multi-usuário para tracking de nutrição e treino. Backend NestJS + Postgres. Frontend Next.js PWA. Integração com IA via MCP. Detalhes em `docs/PRD.md` e `docs/ARCHITECTURE.md`.
+Fatia é um rastreador self-hosted de nutrição e treino, multiusuário. Backend NestJS + Postgres. Frontend Next.js PWA + app Expo. Integração com IA via MCP. Detalhes em `docs/PRD.md` e `docs/ARCHITECTURE.md`.
 
 ## Antes de começar qualquer task
 

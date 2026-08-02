@@ -14,19 +14,20 @@ Legenda de esforço: 🟢 < 2h · 🟡 2–6h · 🔴 6h+ · ⏱️ estimativa.
 
 ## Visão geral / ordem de execução sugerida
 
-| # | Tema | Tipo | Esforço | Bloqueia? |
-|---|------|------|---------|-----------|
-| 8 | Erro 500 ao cancelar treino | Bugfix | 🟡 | Não |
-| 7 | Stepper de carga (1 em 1 + editável) | Bugfix/UX | 🟢 | Não |
-| 4 | Log manual de refeição não funciona | Bugfix | 🟡 | Não |
-| 1 | Gráfico de peso (barras vazias) | Bugfix | 🟢 | Não |
-| 3 | Gráficos de força melhor organizados | UX/dados | 🟡 | Não |
-| 2 | Tela real de recordes (PRs) | Feature | 🟡 | Depende de #3 (compartilha endpoints) |
-| 6 | Criar treino personalizado (fluxo coeso) | UX | 🟡 | Não |
-| 5 | Mais cards de treino rápido + imagens + carrossel shadcn | UX | 🟡 | Não |
-| 9 | **Metas de nutrição personalizadas (ex: sal)** | Feature grande | 🔴 | Precisa ADR + migration |
+| #   | Tema                                                     | Tipo           | Esforço | Bloqueia?                             |
+| --- | -------------------------------------------------------- | -------------- | ------- | ------------------------------------- |
+| 8   | Erro 500 ao cancelar treino                              | Bugfix         | 🟡      | Não                                   |
+| 7   | Stepper de carga (1 em 1 + editável)                     | Bugfix/UX      | 🟢      | Não                                   |
+| 4   | Log manual de refeição não funciona                      | Bugfix         | 🟡      | Não                                   |
+| 1   | Gráfico de peso (barras vazias)                          | Bugfix         | 🟢      | Não                                   |
+| 3   | Gráficos de força melhor organizados                     | UX/dados       | 🟡      | Não                                   |
+| 2   | Tela real de recordes (PRs)                              | Feature        | 🟡      | Depende de #3 (compartilha endpoints) |
+| 6   | Criar treino personalizado (fluxo coeso)                 | UX             | 🟡      | Não                                   |
+| 5   | Mais cards de treino rápido + imagens + carrossel shadcn | UX             | 🟡      | Não                                   |
+| 9   | **Metas de nutrição personalizadas (ex: sal)**           | Feature grande | 🔴      | Precisa ADR + migration               |
 
 Recomendo agrupar em **3 PRs**:
+
 1. **Bugfixes** (#8, #7, #4, #1) — alto valor, baixo risco, sem schema.
 2. **Progresso & Treino UX** (#3, #2, #6, #5) — sem schema, melhora percebida.
 3. **Feature nova #9** (metas personalizadas) — schema + ADR + tools MCP. PR isolado.
@@ -39,6 +40,7 @@ Recomendo agrupar em **3 PRs**:
 ao clicar de novo, funciona. Determinístico (toda vez).
 
 **Onde está o código:**
+
 - Web: `apps/web/src/components/workout/cancel-session-modal.tsx` → `workoutApi.deleteSession(id)`.
   O `catch` só engole erros com "not found"; qualquer outro (incluindo 500) é re-lançado e exibido.
 - API: `apps/api/src/workout/workout.controller.ts:183` `@Delete('sessions/:id')` → `WorkoutSessionService.delete()`
@@ -47,6 +49,7 @@ ao clicar de novo, funciona. Determinístico (toda vez).
   cascata não deveria falhar.
 
 **Causa-raiz (hipóteses, ordem de probabilidade):**
+
 1. **Corrida com mutação de set em voo.** A tela ativa faz `log_set` → abre `RpeModal` que dispara
    `update_set` (RPE) de forma assíncrona, e há um timer de descanso re-renderizando. Se o usuário
    cancela enquanto um insert/update de `SessionSet` está em voo, o `delete` da sessão colide com a
@@ -60,6 +63,7 @@ ao clicar de novo, funciona. Determinístico (toda vez).
    provavelmente não é a causa do "500", mas deve ser endurecido junto).
 
 **Proposta (reproduce-first — usar skill `bugfix`):**
+
 1. **Reproduzir** com a API logando: capturar o stack real do 500 em `nestjs-pino`. Esse é o passo
    decisivo — as hipóteses acima são candidatas, o log confirma.
 2. Tornar `delete` **idempotente e transacional** no service:
@@ -93,6 +97,7 @@ isolamento por user). **Esforço:** 🟡 ⏱️ 3h.
 (linha ~228). A CARGA usa `step={2.5}` (linha 124) e o valor é um `<span>` (linha 257), não um input.
 
 **Proposta:**
+
 1. Trocar `step={2.5}` → `step={1}` na CARGA (REPETIÇÕES já é `step={1}`).
 2. Tornar o número **editável**: substituir o `<span>` por um `<input type="number" inputMode="decimal">`
    controlado, que dá `onChange` com parse seguro (cair pra valor anterior se inválido) e `onBlur`
@@ -112,11 +117,13 @@ isolamento por user). **Esforço:** 🟡 ⏱️ 3h.
 conclui.
 
 **Onde está:**
+
 - Web: `apps/web/src/components/nutrition/food-search-drawer.tsx` (`SearchPanel`, `ManualForm`,
   `submitManual`).
 - API: `apps/api/src/nutrition/meal.service.ts` → `resolveItems()` (linha 90) e `MealItemService.add`.
 
 **Causas-raiz (verificadas):**
+
 1. **Busca "presa" em Buscando...** `SearchPanel` mostra "Buscando..." enquanto `search.isFetching`.
    Se `searchFoods` falha silenciosamente ou demora (rede/proxy), o usuário não recebe feedback de
    erro claro e o atalho manual fica pouco visível. (No print, a busca por "Arro" não retorna.)
@@ -130,6 +137,7 @@ conclui.
    Sem isso, item entra com macros 0 e some no resumo — reforçando a sensação de "não funciona".
 
 **Proposta (melhorar a parte toda):**
+
 1. **Reproduzir** os dois caminhos (mealId presente vs novo meal) e corrigir o que 500a/silencia.
 2. **Estados claros** no `SearchPanel`: spinner com timeout, erro com retry (já existe parcialmente),
    e tornar "Não achei, inserir manualmente" um botão proeminente que aparece após ~1s sem resultado.
@@ -165,6 +173,7 @@ Além disso o container `h-16` com `items-end` faz barras curtas parecerem inexi
 Se há `< 2` pesos, mostra mensagem (ok); o caso ruim é com dados reais pouco variados.
 
 **Proposta:**
+
 1. **Escala com baseline não-zero porém visível:** mapear para um piso maior (ex.: 25%–100%) em vez
    de 0.1%–100%, ou usar `min - padding` como base do domínio (igual o `WeightChart` que usa
    `domain={['dataMin - 1','dataMax + 1']}`). Assim variações pequenas continuam visíveis.
@@ -188,6 +197,7 @@ API `progress.service.ts` (`strengthProgress`, `cardioProgress`, `volumeProgress
 `get_strength_progress`, `get_cardio_progress`, `get_volume_progress`.
 
 **Proposta:**
+
 1. **Pré-seleção inteligente:** ao abrir, escolher automaticamente o exercício de força **mais
    treinado recentemente** (mesma agregação que `personal-records.tsx` já faz com `listSessions`).
    Idem cardio. Some o estado vazio na maioria dos casos.
@@ -220,6 +230,7 @@ um exercício por vez.
 deriva top-3 no client agregando sessões.
 
 **Proposta:**
+
 1. **Backend (service + tool MCP):** novo método `ProgressService.listPersonalRecords(userId, { type? })`
    que percorre `SessionSet` do usuário e calcula, por exercício: melhor carga, melhor 1RM estimado,
    melhor volume de série, e (cardio) melhor distância/duração/pace — com data de quando bateu.
@@ -249,6 +260,7 @@ cria plano só com nome; `/workout/plans/[id]` permite editar nome, **adicionar 
 dele, então parece que "não criou nada". A ação não se parece com "montar um treino".
 
 **Proposta (transformar em fluxo guiado):**
+
 1. Ao salvar "Novo plano", **navegar direto** para `/workout/plans/[id]` (estado de edição) em vez
    de voltar pra lista. (1 linha: `router.push` no `onSuccess` do `create`.)
 2. **Estado vazio acionável** no detalhe: "Adicione seu primeiro exercício" com botão grande
@@ -276,6 +288,7 @@ dele, então parece que "não criou nada". A ação não se parece com "montar u
 `embla-carousel` instalado nem `components/ui/carousel.tsx`.
 
 **Proposta:**
+
 1. **Instalar carrossel shadcn:** `embla-carousel-react` + adicionar `components/ui/carousel.tsx`
    (componente oficial shadcn). Trocar a `div` scrollável pelo `<Carousel>` com snap, setas e dots.
 2. **Mais templates:** ampliar `QUICK_TEMPLATES` (ex.: Full Body, Push, Pull, Legs, Upper/Lower,
@@ -300,12 +313,14 @@ novo `components/workout/quick-template-card.tsx`, `apps/web/package.json` (embl
 > Desenhada MCP-first: a forma primária de configurar e consultar é via tool MCP; o PWA reflete.
 
 ### Problema
+
 Hoje a nutrição só rastreia **kcal, proteína, carbo, gordura** (`Food`, `MealItem`, `UserGoals`).
 Não há como o usuário dizer "quero controlar meu **sódio/sal** (ou açúcar, fibra, sódio, água,
 cafeína…)" e ver progresso contra uma meta. `UserGoals` é fixo (macros). O model dinâmico `Goal`
 (kinds: weight/body_fat/workout_frequency/step_count/custom) não deriva de refeições.
 
 ### Decisão de design (proposta para ADR 009)
+
 Adotar um modelo **genérico de nutrientes** em vez de colunas fixas por nutriente:
 
 1. **Snapshot de nutrientes no item** — adicionar `nutrients Json?` em `MealItem` (e opcionalmente em
@@ -335,7 +350,9 @@ Adotar um modelo **genérico de nutrientes** em vez de colunas fixas por nutrien
    estimado pelo Claude no log (coerente com o papel do MCP). Item sem o nutriente conta 0.
 
 ### Camada MCP (desenhada junto — prioridade)
+
 Novas tools (delegam a um `NutrientTargetService` + extensões do `NutritionSummaryService`):
+
 - `set_nutrient_target` — `{ nutrientKey, label, unit, min?, max?, period? }` (upsert por chave).
 - `list_nutrient_targets` — lista metas do usuário com progresso do dia.
 - `delete_nutrient_target` — `{ nutrientKey }`.
@@ -343,11 +360,12 @@ Novas tools (delegam a um `NutrientTargetService` + extensões do `NutritionSumm
 - **Estender** `add_meal_item` / `log_meal`: aceitar `nutrients?: Record<string, number>` por item.
 - **Estender** `get_nutrition_summary`: incluir bloco `nutrients` (totais do dia).
 
-Fluxo MCP exemplo (o que o usuário pediu): *"Quero controlar meu consumo de sal, máx 5g/dia"* →
+Fluxo MCP exemplo (o que o usuário pediu): _"Quero controlar meu consumo de sal, máx 5g/dia"_ →
 Claude chama `set_nutrient_target({ nutrientKey:"sodium_mg", label:"Sódio", unit:"mg", max:2000 })`;
 ao logar refeições, informa `nutrients:{ sodium_mg: ... }`; consulta com `get_nutrient_summary`.
 
 ### Camada PWA
+
 1. Em `nutrition/goals` (ou nova aba "Metas personalizadas"): CRUD de `NutrientTarget` (adicionar
    nutriente de uma lista comum — sódio, açúcar, fibra, sódio, cafeína, água — ou custom; definir
    min/max/unidade).
@@ -357,6 +375,7 @@ ao logar refeições, informa `nutrients:{ sodium_mg: ... }`; consulta com `get_
    rastreia (mostrar só os ativos, pra não poluir).
 
 ### Backend
+
 - `packages/db/prisma/schema.prisma`: `MealItem.nutrients Json?`, model `NutrientTarget`, relação em `User`.
 - Migration **append-only** (D9): adicionar coluna nullable + tabela nova (sem destrutivo).
 - Services: `NutrientTargetService` (CRUD + progresso), extensões em `NutritionSummaryService`,
@@ -368,6 +387,7 @@ ao logar refeições, informa `nutrients:{ sodium_mg: ... }`; consulta com `get_
 **Esforço:** 🔴 ⏱️ 14–20h (schema + service + 6 tools + telas + ADR + testes). PR isolado.
 
 **Riscos/decisões (atualizado):**
+
 - (a) ✅ **DECIDIDO:** `nutrients` como **Json flexível** (`MealItem.nutrients Json?` + `NutrientTarget`
   genérico), não colunas fixas. Aberto a qualquer nutriente; segue YAGNI > DRY.
 - (b) Lista inicial de nutrientes "comuns" oferecidos na UI.
@@ -378,17 +398,19 @@ ao logar refeições, informa `nutrients:{ sodium_mg: ... }`; consulta com `get_
 
 ## Resumo de impacto por camada
 
-| Camada | Itens que tocam |
-|--------|-----------------|
-| **Bugfix puro (sem schema)** | #1, #4 (parcial), #7, #8 |
-| **UX/PWA (sem schema)** | #3, #5, #6 |
-| **Service + tool MCP novos (sem schema)** | #2 |
-| **Schema + migration + ADR + tools** | #9 |
+| Camada                                    | Itens que tocam          |
+| ----------------------------------------- | ------------------------ |
+| **Bugfix puro (sem schema)**              | #1, #4 (parcial), #7, #8 |
+| **UX/PWA (sem schema)**                   | #3, #5, #6               |
+| **Service + tool MCP novos (sem schema)** | #2                       |
+| **Schema + migration + ADR + tools**      | #9                       |
 
 ## Próximos passos
+
 1. Validar as 4 decisões em aberto de #9 (Json vs colunas, lista de nutrientes, período, seed TACO).
 2. Abrir PR 1 (bugfixes) usando a skill `bugfix` para #8 e #4 (reproduce-first + log da API).
 3. PR 2 (UX progresso/treino).
 4. PR 3 (#9) após ADR 009 aprovado.
 </content>
+
 </invoke>

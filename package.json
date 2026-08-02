@@ -11,6 +11,7 @@
     "bootstrap": "bash scripts/setup.sh",
     "reset:db": "bash scripts/reset-db.sh",
     "mcp:smoke": "bash scripts/mcp-smoke.sh",
+    "secrets:scan": "bash scripts/secret-scan.sh",
     "dev": "bash scripts/dev.sh",
     "dev:apps": "turbo run dev",
     "build": "turbo run build",

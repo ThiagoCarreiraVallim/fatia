@@ -19,7 +19,22 @@ import { MCP_TOOL_METADATA, type McpToolDef } from '../../common/decorators/tool
  */
 
 const API_SRC = resolve(__dirname, '../..');
-const MCP_DOC = resolve(__dirname, '../../../../../docs/MCP.md');
+const REPO_ROOT = resolve(__dirname, '../../../../..');
+const MCP_DOC = resolve(REPO_ROOT, 'docs/MCP.md');
+
+/**
+ * Docs que afirmam o total de tools em texto corrido (issue #36).
+ *
+ * Os casos abaixo já impedem tool sem seção e seção sem tool, mas nenhum olhava
+ * o **número** escrito na prosa — e ele derivou: o `ARCHITECTURE.md` afirmava
+ * "~52 tools" com 87 registradas no código e 87 escritas no `MCP.md`, e ninguém
+ * notou porque a doc que o teste lia estava certa. Quem lê acredita no número;
+ * não conta as seções.
+ */
+const TOOL_COUNT_DOCS = ['README.md', 'docs/MCP.md', 'docs/ARCHITECTURE.md'] as const;
+
+/** `87 tools`, `**87 tools**`. Exige o dígito colado no substantivo. */
+const TOOL_COUNT_PATTERN = /(\d+) tools\b/g;
 
 /** `verb_noun` em snake_case, conforme a convenção da §Catálogo de `docs/MCP.md`. */
 const TOOL_NAME_PATTERN = /^[a-z]+(_[a-z]+)+$/;
@@ -227,6 +242,40 @@ describe('catálogo de tools MCP', () => {
       .sort();
 
     expect(missingFromSummary).toEqual([]);
+  });
+
+  it('cita o total real de tools em toda doc que afirma um total', () => {
+    // Toda ocorrência é conferida, não só a primeira: `MCP.md` cita o total
+    // duas vezes (custo de contexto e cabeçalho do catálogo) e nada garante que
+    // um `sed` acerte as duas. O `expect` compara a lista inteira de uma vez
+    // para que a falha diga QUAL arquivo, QUAL linha e QUAL número está errado.
+    //
+    // A regra é deliberadamente rígida: qualquer "N tools" nesses arquivos tem
+    // de ser o total. Se um dia fizer sentido escrever um recorte ("23 tools de
+    // nutrição"), este caso quebra — e a exceção entra aqui de propósito, em vez
+    // de o total apodrecer no meio de contagens parciais sem ninguém notar.
+    const wrong: string[] = [];
+    const filesWithCount: string[] = [];
+
+    for (const relative of TOOL_COUNT_DOCS) {
+      const lines = readFileSync(resolve(REPO_ROOT, relative), 'utf8').split('\n');
+
+      lines.forEach((line, index) => {
+        for (const match of line.matchAll(TOOL_COUNT_PATTERN)) {
+          filesWithCount.push(relative);
+          if (Number(match[1]) !== tools.length) {
+            wrong.push(`${relative}:${index + 1} diz ${match[1]}, são ${tools.length}`);
+          }
+        }
+      });
+    }
+
+    expect(wrong.sort()).toEqual([]);
+
+    // Sem isto, apagar a frase (ou mudar "tools" para "ferramentas") deixaria o
+    // caso verde por não achar nada — o mesmo verde de quando está tudo certo.
+    const silent = TOOL_COUNT_DOCS.filter((relative) => !filesWithCount.includes(relative));
+    expect(silent).toEqual([]);
   });
 
   it('não tem seções órfãs em docs/MCP.md', () => {
