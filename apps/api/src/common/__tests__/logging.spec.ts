@@ -95,12 +95,20 @@ describe('a linha que sai pelas opções do AppModule', () => {
     expect(linhas).toHaveLength(1);
     const linha = JSON.parse(linhas[0]);
     expect(linha.req.path).toBe('/api/nutrition/meals');
-    // `remoteAddress` só chega aqui porque o serializer aceita o objeto que o
-    // `wrapRequestSerializer` entrega (sem `socket`). Lido do `IncomingMessage` cru, seria
-    // `undefined` em produção e ninguém notaria pelo teste de unidade.
-    expect(linha.req.remoteAddress).toBe('127.0.0.1');
+    expect(linha.req.method).toBe('GET');
     // A query fica de fora — regra de #215, conferida aqui na linha real.
     expect(linhas[0]).not.toContain('2026-08-02');
+    // `remoteAddress` saiu na #39: o log deixou de morar só no `docker logs` e passou a ser
+    // indexado no Loki, e IP é dado pessoal. Atrás do Traefik o valor seria sempre o do proxy,
+    // então não havia ganho diagnóstico que compensasse.
+    //
+    // Esta asserção herda o propósito da que estava aqui antes. A original existia porque o
+    // serializer lia `req.socket.remoteAddress` e devolvia `undefined` em produção — o
+    // `wrapRequestSerializer` entrega o objeto já montado, sem `socket`, e o teste de unidade
+    // não via isso porque o objeto dele tinha uma forma que a realidade não tem. Agora o campo
+    // não deve existir de jeito nenhum, e é isso que se confere na linha real.
+    expect(linha.req).not.toHaveProperty('remoteAddress');
+    expect(linhas[0]).not.toContain('127.0.0.1');
   });
 
   it('mantém o healthcheck fora do log', async () => {
