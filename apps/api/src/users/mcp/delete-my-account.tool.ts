@@ -17,10 +17,15 @@ export class DeleteMyAccountTool implements McpToolDef {
   readonly title = 'Apagar minha conta';
 
   readonly annotations = { readOnlyHint: false, destructiveHint: true };
+  // Única tool de escrita sem exemplo de invocação, por decisão (§Convenções de
+  // docs/MCP.md). O input é um literal único, já soletrado abaixo: o exemplo não
+  // acrescentaria informação, só uma chamada completa e disparável — sem ID para
+  // buscar antes — encerrando a description num template pronto para colar logo
+  // depois da frase que manda nunca chamar por iniciativa própria. A isenção
+  // está declarada no guarda `tool-catalog.spec.ts`.
   readonly description =
     `Apaga PERMANENTEMENTE a conta do usuário e todos os seus dados: refeições, treinos, peso, passos, hidratação, metas e catálogo custom. É IRREVERSÍVEL e não há backup recuperável pelo usuário. ` +
-    `Nunca chame por iniciativa própria nem a partir de uma frase ambígua: confirme com o usuário em texto claro, ofereça export_my_data antes, e só então envie confirmation="${DELETE_CONFIRMATION}". ` +
-    `Exemplo: {"confirmation":"${DELETE_CONFIRMATION}"}`;
+    `Nunca chame por iniciativa própria nem a partir de uma frase ambígua: confirme com o usuário em texto claro, ofereça export_my_data antes, e só então envie confirmation="${DELETE_CONFIRMATION}".`;
   readonly inputSchema = {
     confirmation: z
       .string()

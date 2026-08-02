@@ -107,25 +107,76 @@ function extractExamples(description: string): string[] {
 }
 
 /**
- * Versão estrita do schema em TODA a árvore. O `.strict()` do Zod é raso, e o
+ * Tipos folha: não embrulham outro schema, então não há objeto escondido dentro
+ * e devolvê-los intactos não desliga checagem nenhuma.
+ */
+const LEAF_SCHEMAS: ReadonlyArray<abstract new (...args: never[]) => unknown> = [
+  z.ZodString,
+  z.ZodNumber,
+  z.ZodBoolean,
+  z.ZodBigInt,
+  z.ZodDate,
+  z.ZodEnum,
+  z.ZodNativeEnum,
+  z.ZodLiteral,
+];
+
+/**
+ * Cópia do schema com `.strict()` recursivo. O `.strict()` do Zod é raso, e o
  * campo renomeado dentro de `items[]` do `log_meal` é justamente o caso em que
  * o exemplo apodrece sem ninguém notar. Remontar o array perde restrições como
  * `.min(1)` — por isso esta cópia serve só para achar chave desconhecida, e o
  * parse do contrato completo continua sendo feito no schema original.
+ *
+ * **Container não previsto vira erro, nunca `return schema`.** Devolver o
+ * schema intocado deixaria a checagem de chave desligada sem nenhum sinal: um
+ * `.default({})` ou `.refine()` posto num objeto aninhado bastaria para o caso
+ * ficar verde sobre um exemplo mentiroso. Verificador que silencia é pior que
+ * verificador nenhum — então o preço de encontrar um tipo novo é o teste
+ * quebrar dizendo qual é e onde, não a checagem sumir de fininho.
  */
-function deepStrict(schema: ZodTypeAny): ZodTypeAny {
+function deepStrict(schema: ZodTypeAny, path: string): ZodTypeAny {
   if (schema instanceof z.ZodObject) {
     const shape = schema.shape as Record<string, ZodTypeAny>;
     const strictShape = Object.fromEntries(
-      Object.entries(shape).map(([field, inner]) => [field, deepStrict(inner)]),
+      Object.entries(shape).map(([field, inner]) => [
+        field,
+        deepStrict(inner, path ? `${path}.${field}` : field),
+      ]),
     );
     return z.object(strictShape).strict();
   }
-  if (schema instanceof z.ZodArray) return z.array(deepStrict(schema.element as ZodTypeAny));
-  if (schema instanceof z.ZodOptional) return deepStrict(schema.unwrap() as ZodTypeAny).optional();
-  if (schema instanceof z.ZodNullable) return deepStrict(schema.unwrap() as ZodTypeAny).nullable();
-  // `z.record` fica de fora de propósito: `nutrients` aceita chave livre.
-  return schema;
+  if (schema instanceof z.ZodArray) {
+    return z.array(deepStrict(schema.element as ZodTypeAny, `${path}[]`));
+  }
+  if (schema instanceof z.ZodOptional) {
+    return deepStrict(schema.unwrap() as ZodTypeAny, path).optional();
+  }
+  if (schema instanceof z.ZodNullable) {
+    return deepStrict(schema.unwrap() as ZodTypeAny, path).nullable();
+  }
+  if (schema instanceof z.ZodDefault) {
+    // O default some na cópia: campo com default é opcional na entrada, e o
+    // valor preenchido não é o que este parse está checando.
+    return deepStrict(schema.removeDefault() as ZodTypeAny, path).optional();
+  }
+  if (schema instanceof z.ZodEffects) {
+    // `.refine()`/`.preprocess()` somem: aqui só interessa o conjunto de
+    // chaves, e o schema original continua validando o resto.
+    return deepStrict(schema.innerType() as ZodTypeAny, path);
+  }
+  if (schema instanceof z.ZodRecord) {
+    // A chave do record é livre por definição (`nutrients`); o valor não é.
+    return z.record(deepStrict(schema.valueSchema as ZodTypeAny, `${path}[*]`));
+  }
+  if (LEAF_SCHEMAS.some((leaf) => schema instanceof leaf)) return schema;
+
+  const typeName = (schema._def as { typeName?: string }).typeName ?? schema.constructor.name;
+  throw new Error(
+    `${path || '(raiz)'}: ${typeName} não é tratado por deepStrict. ` +
+      'Trate o tipo ou declare-o como folha — devolvê-lo intacto desligaria a ' +
+      'checagem de chave desconhecida em silêncio.',
+  );
 }
 
 const tools = loadTools();
@@ -313,24 +364,55 @@ describe('catálogo de tools MCP', () => {
 
   const writeTools = tools.filter(({ tool }) => tool.annotations?.readOnlyHint === false);
 
+  /**
+   * Isenção única e declarada: `delete_my_account`.
+   *
+   * O input é um literal único, já soletrado duas vezes na própria description.
+   * Um exemplo ali não acrescentaria informação — acrescentaria uma chamada
+   * completa e disparável, sem ID para buscar antes, fechando a description num
+   * template pronto para colar logo depois da frase que manda nunca chamar por
+   * iniciativa própria. Todas as outras 13 tools destrutivas pedem um ID que o
+   * modelo não tem, e essa fricção é justamente o que se quer preservar aqui.
+   */
+  const EXAMPLE_EXEMPT = new Set(['delete_my_account']);
+
   it('tem exemplo de invocação em toda tool de escrita', () => {
     const missing = writeTools
+      .filter(({ tool }) => !EXAMPLE_EXEMPT.has(tool.name))
       .filter(({ tool }) => extractExamples(tool.description).length === 0)
       .map(({ tool }) => tool.name)
       .sort();
 
     expect(missing).toEqual([]);
+
+    // A isenção não pode sobreviver à tool: nome que saiu do catálogo vira
+    // permissão silenciosa para a próxima tool que se chamar assim.
+    const stale = [...EXAMPLE_EXEMPT]
+      .filter((name) => !writeTools.some(({ tool }) => tool.name === name))
+      .sort();
+
+    expect(stale).toEqual([]);
   });
 
-  it('tem exemplo em JSON válido', () => {
+  it('tem exemplo em JSON válido e de uma linha', () => {
     // Separado do caso acima de propósito: "não tem exemplo" e "tem exemplo
-    // quebrado" são erros diferentes, e a mensagem tem de dizer qual é. A causa
-    // mais provável aqui é template literal multilinha, que injeta `\n` e
-    // indentação no meio do JSON.
+    // quebrado" são erros diferentes, e a mensagem tem de dizer qual é.
+    //
+    // A checagem de linha única é à parte porque `JSON.parse` aceita `\n` sem
+    // reclamar — a regra não é sobre parse, é sobre o que vai no fio: template
+    // literal multilinha embute a indentação do source dentro da description
+    // servida ao cliente, gastando token à toa e deixando o exemplo à mercê de
+    // quem reflui ou trunca o texto do catálogo.
     const broken: string[] = [];
 
     for (const { tool } of tools) {
       for (const example of extractExamples(tool.description)) {
+        if (/[\n\r]/.test(example)) {
+          broken.push(
+            `${tool.name}: exemplo quebrado em mais de uma linha — use concatenação de strings, não template literal`,
+          );
+          continue;
+        }
         try {
           JSON.parse(example);
         } catch (err) {
@@ -354,7 +436,18 @@ describe('catálogo de tools MCP', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const object = z.object(tool.inputSchema as any) as any;
       const contract = object.strict() as ZodTypeAny;
-      const keysOnly = deepStrict(object as ZodTypeAny);
+
+      let keysOnly: ZodTypeAny;
+      try {
+        keysOnly = deepStrict(object as ZodTypeAny, '');
+      } catch (err) {
+        // Reportado junto com o resto em vez de derrubar o loop: o teste falha
+        // do mesmo jeito, e sem esconder o que as outras tools têm a dizer.
+        invalid.push(
+          `${tool.name} (deepStrict): ${err instanceof Error ? err.message : String(err)}`,
+        );
+        continue;
+      }
 
       for (const raw of examples) {
         let parsed: unknown;
