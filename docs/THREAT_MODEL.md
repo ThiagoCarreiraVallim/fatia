@@ -23,6 +23,7 @@ pagamento.
 | Resolução de identidade | `sub` do JWT → `User` local; provisioning lazy no primeiro login          | `apps/api/src/auth/user-provisioning.service.ts`           |
 | Injeção de identidade   | `@CurrentUser()` nos controllers; `McpToolContext.userId` nas tools       | `apps/api/src/common/decorators/current-user.decorator.ts` |
 | Escopo de query         | Todo service filtra por `userId`; posse verificada antes de mutar         | ver matriz abaixo                                          |
+| Leitura entre contas    | `ProfessionalLink` consentido pelo titular, resolvido por um método só    | `apps/api/src/sharing/professional-access.service.ts`      |
 | Integridade referencial | `onDelete: Cascade` de `User` para tudo que é dele; índices `[userId, X]` | `packages/db/prisma/schema.prisma`                         |
 | Rate limit              | 60 req/min por usuário no `/mcp`, chaveado por `user.id`                  | `apps/api/src/mcp/mcp-throttler.guard.ts`                  |
 | SQL injection           | Prisma parametriza tudo; não há SQL cru em nenhum service                 | —                                                          |
@@ -119,11 +120,41 @@ Os limites do que sobrevive a um refresh estão em `apps/mobile/src/auth/session
 só `invalid_grant` encerra a sessão; falha de rede preserva o que está guardado. É deliberado —
 derrubar o login por conexão ruim empurraria a pessoa a autenticar de novo em rede hostil.
 
+### 8. Acesso profissional — trainer malicioso e aluno que saiu do grupo
+
+O B2B (#152) quebra a premissa de que **nenhum** usuário lê dado de outro. A
+[ADR 014](./ADR/014-compartilhamento-b2b-copia-e-vinculo.md) escolheu o desenho que mantém o
+estrago contido, e a #153 entregou o modelo.
+
+Duas direções, dois mecanismos:
+
+- **Profissional → aluno** não é leitura: é oferta de plano, e o aceite materializa uma **cópia
+  sob o `userId` do aluno** (mesmo padrão de `clone_exercise`). Não há vínculo vivo a explorar.
+- **Aluno → profissional** é a única leitura entre contas do produto, e passa por **um método
+  só**: `ProfessionalAccessService.assertReadable`, que devolve o `userId` do titular. Todo
+  service de domínio abaixo dele continua filtrando por `userId` e ignorando que grupo existe.
+
+| Vetor                                                     | Mitigação                                                                                                                            |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Profissional lê aluno com quem não tem vínculo            | `ProfessionalLink` é a única fonte de autorização. Sem linha ativa, `NOT_FOUND` idêntico ao de um estranho                           |
+| Profissional continua lendo depois de revogado            | `revokedAt: null` no `where` da porta. Revogar nunca apaga a linha — a trilha de "quem teve acesso quando" sobrevive                 |
+| Consentir treino e o profissional ler o diário alimentar  | Consentimento por escopo, conferido com `scopes: { has: scope }`. A assinatura aceita **um** escopo; `hasSome` com `[]` casaria tudo |
+| Dono de academia (ou trainer) lê por ter papel no grupo   | Papel **não** autoriza leitura. `GroupRole` governa administração; leitura vem só do vínculo                                         |
+| Aluno sai do grupo e continua sendo lido                  | `status: ACTIVE` da membership conferido na porta, além da revogação em massa dos vínculos do grupo                                  |
+| Identidade do aluno passada por input (`student_id`)      | A porta recebe `membershipId`, nunca `userId`. `tool-user-scoping.spec.ts` recusa `student_id`, `subject_id`, `on_behalf_of` e cia.  |
+| `membershipId` de outro contexto usado com vínculo válido | Titular e grupo saem da **linha de membership lida**, e o vínculo é procurado pelo trio. Id de input nunca autoriza sozinho (#204)   |
+
+**Não mitigado:** um profissional com vínculo ativo e escopo consentido vê o dado — é o
+propósito. O controle é do titular (revogar), e a trilha em `ProfessionalAccessLog` responde
+depois. Não há detecção de uso anômalo dentro do que foi consentido.
+
 ## Matriz de cobertura
 
 Onde o escopo é aplicado, por domínio. Verificado por
-`apps/api/src/common/__tests__/user-isolation.spec.ts` (51 casos contra Postgres real: semeia
-como user-A, tenta ler/editar/apagar como user-B).
+`apps/api/src/common/__tests__/user-isolation.spec.ts` (59 casos contra Postgres real: semeia
+como user-A, tenta ler/editar/apagar como user-B). Desde a #153 o user-B é também **dono da
+academia** em que o user-A é aluno — todos os casos de recusa passam a valer com ele nessa
+posição, sem uma linha a mais.
 
 **Atenção ao caso que faltava.** Até a correção do `reorderExercises`, todos os casos de escrita
 mandavam o recurso do user-A **na URL**, e o `assertOwner` barrava. Nenhum cobria a forma em que o
@@ -131,23 +162,24 @@ atacante manda um recurso **próprio** na URL — legítimo, passa no `assertOwn
 **corpo**. Endpoint que aceita id de recurso filho no payload precisa amarrá-lo ao pai da URL; ser
 dono do pai não autoriza escrever em qualquer filho.
 
-| Domínio             | Service                                       | Ponto de escopo                                                            |
-| ------------------- | --------------------------------------------- | -------------------------------------------------------------------------- |
-| Refeições           | `meal.service.ts`                             | `where: { userId }` nas leituras; `assertOwner` nas escritas               |
-| Itens de refeição   | `meal-item.service.ts`                        | posse via `item.meal.userId` / `meal.userId`                               |
-| Alimentos custom    | `food.service.ts`                             | `OR: [createdByUserId: null, createdByUserId: userId]`; custom exige posse |
-| Metas de nutriente  | `nutrient-target.service.ts`                  | `where: { userId }`; unique `[userId, nutrientKey]`                        |
-| Metas de macros     | `user-goals.service.ts`                       | `UserGoals.userId` é a própria PK                                          |
-| Metas pessoais      | `goals.service.ts`                            | `where: { userId }`; `assertOwned` nas escritas                            |
-| Peso                | `weight-log.service.ts`                       | `where: { userId }`; posse no update/delete                                |
-| Passos              | `step-log.service.ts`                         | idem                                                                       |
-| Hidratação          | `water-log.service.ts`                        | idem                                                                       |
-| Exercícios          | `exercise.service.ts`                         | `accessFilter(userId)`; custom exige posse; base é só-leitura              |
-| Planos              | `workout-plan.service.ts`                     | `where: { userId }`; `assertOwner`                                         |
-| Sessões             | `workout-session.service.ts`                  | `where: { userId }`; `assertOwner`; delete idempotente                     |
-| Séries              | `session-set.service.ts`                      | posse via `set.session.userId`                                             |
-| Progresso/dashboard | `progress.service.ts`, `dashboard.service.ts` | agregam sobre queries já escopadas                                         |
-| Grupos de alimento  | `food.service.ts#listGroups`                  | **sem escopo, de propósito** — `FoodGroup` não tem dono                    |
+| Domínio              | Service                                       | Ponto de escopo                                                            |
+| -------------------- | --------------------------------------------- | -------------------------------------------------------------------------- |
+| Refeições            | `meal.service.ts`                             | `where: { userId }` nas leituras; `assertOwner` nas escritas               |
+| Itens de refeição    | `meal-item.service.ts`                        | posse via `item.meal.userId` / `meal.userId`                               |
+| Alimentos custom     | `food.service.ts`                             | `OR: [createdByUserId: null, createdByUserId: userId]`; custom exige posse |
+| Metas de nutriente   | `nutrient-target.service.ts`                  | `where: { userId }`; unique `[userId, nutrientKey]`                        |
+| Metas de macros      | `user-goals.service.ts`                       | `UserGoals.userId` é a própria PK                                          |
+| Metas pessoais       | `goals.service.ts`                            | `where: { userId }`; `assertOwned` nas escritas                            |
+| Peso                 | `weight-log.service.ts`                       | `where: { userId }`; posse no update/delete                                |
+| Passos               | `step-log.service.ts`                         | idem                                                                       |
+| Hidratação           | `water-log.service.ts`                        | idem                                                                       |
+| Exercícios           | `exercise.service.ts`                         | `accessFilter(userId)`; custom exige posse; base é só-leitura              |
+| Planos               | `workout-plan.service.ts`                     | `where: { userId }`; `assertOwner`                                         |
+| Sessões              | `workout-session.service.ts`                  | `where: { userId }`; `assertOwner`; delete idempotente                     |
+| Séries               | `session-set.service.ts`                      | posse via `set.session.userId`                                             |
+| Progresso/dashboard  | `progress.service.ts`, `dashboard.service.ts` | agregam sobre queries já escopadas                                         |
+| Grupos de alimento   | `food.service.ts#listGroups`                  | **sem escopo, de propósito** — `FoodGroup` não tem dono                    |
+| Leitura profissional | `sharing/professional-access.service.ts`      | `assertReadable` resolve o titular; a **única** leitura entre contas       |
 
 ## O que não está protegido
 
@@ -155,7 +187,10 @@ dono do pai não autoriza escrever em qualquer filho.
   que esqueça o `userId` vaza dado, e o banco não segura. Decisão registrada na
   [ADR 010](./ADR/010-row-level-security.md).
 - **Sem revogação de sessão do lado do Fatia** (ver vetor 1).
-- **Sem auditoria de acesso.** Não há trilha de "quem leu o quê" além dos logs de tool.
+- **Auditoria de acesso só no caminho profissional.** `ProfessionalAccessLog` registra toda
+  tentativa de leitura entre contas — inclusive as **negadas**, que são o registro que denuncia
+  profissional malicioso. Leitura do usuário sobre o próprio dado continua sem trilha, e não há
+  intenção de criar uma: seriam milhões de linhas para responder "eu li o meu".
 - **Ordem de argumentos inconsistente** entre services (`userId` às vezes primeiro, às vezes
   último). Não é vulnerabilidade, mas é uma pegadinha: trocar a ordem numa chamada nova passa
   pelo TypeScript quando os dois são `string`. Padronizar é dívida técnica aberta.
