@@ -30,6 +30,22 @@ export function dayMonth(iso: string | null | undefined): string {
   return `${iso.slice(8, 10)} ${MONTHS_SHORT[month - 1]}`;
 }
 
+/**
+ * "14:07" a partir do `loggedAt`.
+ *
+ * Ao contrário de `dayMonth`, aqui o fuso do navegador é o certo: a hora existe
+ * para separar dois copos de 500 mL do mesmo dia, e "às 14h" só quer dizer
+ * alguma coisa no relógio de quem registrou. O **dia** continua vindo do campo
+ * `date`, que o servidor calcula no fuso do perfil — então a linha não muda de
+ * dia por causa desta formatação.
+ */
+export function hourMinute(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return '—';
+  return parsed.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
 /** 12500 → "12.500". Separador de milhar de pt-BR. */
 export function formatInteger(value: number): string {
   if (!Number.isFinite(value)) return '—';

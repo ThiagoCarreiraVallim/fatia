@@ -38,9 +38,19 @@ const createWater = vi.mocked(progressApi.createWater);
 const updateWater = vi.mocked(progressApi.updateWater);
 const deleteWater = vi.mocked(progressApi.deleteWater);
 
+/**
+ * Três registros no mesmo dia, dois deles com o mesmo volume — o caso normal da
+ * água, e o que o mock de um log só escondia. As horas ficam a mais de três
+ * horas de distância para que os rótulos continuem distintos em qualquer fuso.
+ */
 const LOGS = [
   { id: 'a1', date: '2026-05-17', ml: 500, loggedAt: '2026-05-17T14:00:00.000Z', notes: null },
+  { id: 'a2', date: '2026-05-17', ml: 250, loggedAt: '2026-05-17T18:30:00.000Z', notes: null },
+  { id: 'a3', date: '2026-05-17', ml: 500, loggedAt: '2026-05-17T21:45:00.000Z', notes: null },
 ];
+
+const EDIT_250 = /^Editar registro de 250 mL, 17 mai/;
+const DELETE_250 = /^Apagar registro de 250 mL, 17 mai/;
 
 function renderDrawer() {
   const client = new QueryClient({
@@ -84,16 +94,34 @@ describe('LogWaterDrawer', () => {
     const user = userEvent.setup();
     const { onClose } = renderDrawer();
 
-    await user.click(await screen.findByRole('button', { name: 'Editar registro de 17 mai' }));
+    await user.click(await screen.findByRole('button', { name: EDIT_250 }));
     await user.clear(screen.getByLabelText(/Quantidade personalizada/));
     await user.type(screen.getByLabelText(/Quantidade personalizada/), '350');
     await user.click(screen.getByRole('button', { name: /salvar alteração/i }));
 
     await waitFor(() => expect(updateWater).toHaveBeenCalledTimes(1));
-    expect(updateWater).toHaveBeenCalledWith('a1', { ml: 350 });
+    expect(updateWater).toHaveBeenCalledWith('a2', { ml: 350 });
     expect(updateWater.mock.calls[0][1]).toEqual({ ml: 350 });
     expect(createWater).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Água é vários registros por dia por definição, e dois copos de 500 mL na
+   * mesma terça são rotina. Com a data sozinha no `aria-label` saíam botões
+   * "Apagar registro de 17 mai" idênticos, bem na ação irreversível.
+   */
+  it('gives every log of the same day a distinct accessible name', async () => {
+    renderDrawer();
+
+    await screen.findByRole('button', { name: EDIT_250 });
+    const names = screen
+      .getAllByRole('button')
+      .map((button) => button.getAttribute('aria-label'))
+      .filter((name): name is string => name !== null);
+
+    expect(names).toHaveLength(6);
+    expect(new Set(names).size).toBe(6);
   });
 
   // Os atalhos criam registro novo; durante uma correção eles só confundiriam.
@@ -101,7 +129,7 @@ describe('LogWaterDrawer', () => {
     const user = userEvent.setup();
     renderDrawer();
 
-    await user.click(await screen.findByRole('button', { name: 'Editar registro de 17 mai' }));
+    await user.click(await screen.findByRole('button', { name: EDIT_250 }));
 
     expect(screen.queryByRole('button', { name: '+500 mL' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Editar registro de água' })).toBeInTheDocument();
@@ -111,16 +139,48 @@ describe('LogWaterDrawer', () => {
     const user = userEvent.setup();
     const { invalidateQueries } = renderDrawer();
 
-    await user.click(await screen.findByRole('button', { name: 'Apagar registro de 17 mai' }));
+    await user.click(await screen.findByRole('button', { name: DELETE_250 }));
     expect(deleteWater).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: /^apagar$/i }));
 
-    await waitFor(() => expect(deleteWater).toHaveBeenCalledWith('a1'));
+    await waitFor(() => expect(deleteWater).toHaveBeenCalledWith('a2'));
     const keys = invalidateQueries.mock.calls.map((call) => call[0]?.queryKey);
     expect(keys).toContainEqual(['progress', 'water']);
     expect(keys).toContainEqual(['water-logs']);
     expect(keys).toContainEqual(['dashboard']);
+  });
+
+  /**
+   * Duas exclusões em sequência faziam o observer da mutação migrar para a
+   * segunda, e o erro da primeira nunca chegava à tela: a linha continuava
+   * listada, sem mensagem nenhuma, e quem apagou lia isso como "ainda não
+   * atualizou". A lista inteira congela enquanto uma exclusão está em voo.
+   */
+  it('does not let a second deletion start while the first is in flight', async () => {
+    let finish: () => void = () => undefined;
+    deleteWater.mockImplementation(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          finish = () => reject(new Error('Falha ao apagar'));
+        }),
+    );
+    const user = userEvent.setup();
+    renderDrawer();
+
+    await user.click(await screen.findByRole('button', { name: DELETE_250 }));
+    await user.click(screen.getByRole('button', { name: /^apagar$/i }));
+    await waitFor(() => expect(deleteWater).toHaveBeenCalledTimes(1));
+
+    for (const button of screen.getAllByRole('button', { name: /^Apagar registro/ })) {
+      expect(button).toBeDisabled();
+    }
+
+    finish();
+
+    // E a falha da primeira aparece, em vez de sumir engolida pela segunda.
+    expect(await screen.findByText('Falha ao apagar')).toBeInTheDocument();
+    expect(deleteWater).toHaveBeenCalledTimes(1);
   });
 
   // Sem mutação otimista: uma falha da API não pode deixar a lista contando uma
@@ -130,10 +190,10 @@ describe('LogWaterDrawer', () => {
     const user = userEvent.setup();
     renderDrawer();
 
-    await user.click(await screen.findByRole('button', { name: 'Apagar registro de 17 mai' }));
+    await user.click(await screen.findByRole('button', { name: DELETE_250 }));
     await user.click(screen.getByRole('button', { name: /^apagar$/i }));
 
     expect(await screen.findByText('Falha ao apagar')).toBeInTheDocument();
-    expect(screen.getByText('500 mL')).toBeInTheDocument();
+    expect(screen.getByText('250 mL')).toBeInTheDocument();
   });
 });

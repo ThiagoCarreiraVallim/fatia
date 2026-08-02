@@ -43,12 +43,15 @@ export function LogWeightDrawer({ open, onClose }: Props) {
   });
 
   function invalidate() {
-    // As três chaves, sempre. `['progress','weight']` alimenta o gráfico e
-    // `['dashboard']` alimenta o card do topo: invalidar só uma faz o gráfico
-    // corrigir e o número do dashboard continuar errado até o reload.
+    // Todos os consumidores, sempre. `['progress','weight']` alimenta o
+    // gráfico, `['dashboard']` alimenta o card do topo e `['goals']` alimenta o
+    // progresso da meta de peso, que o servidor deriva de `weights.getLatest()`
+    // (`goals.service.ts`). Invalidar só uma faz o gráfico corrigir e os outros
+    // números continuarem errados até o reload.
     qc.invalidateQueries({ queryKey: ['progress', 'weight'] });
     qc.invalidateQueries({ queryKey: ['weight-logs'] });
     qc.invalidateQueries({ queryKey: ['dashboard'] });
+    qc.invalidateQueries({ queryKey: ['goals'] });
   }
 
   function clearForm() {
@@ -161,10 +164,15 @@ export function LogWeightDrawer({ open, onClose }: Props) {
               setEditing(log);
               setWeight(String(log.weightKg));
               setFormError(null);
+              // Sem o `reset`, o erro da tentativa anterior fica colado na tela
+              // e passa a acusar uma linha que nunca falhou.
+              save.reset();
+              remove.reset();
               inputRef.current?.focus();
             }}
             onDelete={(entry) => remove.mutate(entry.id)}
             pendingId={remove.isPending ? (remove.variables ?? null) : null}
+            isDeleting={remove.isPending}
             emptyLabel="Nenhuma pesagem nos últimos 30 dias."
             confirmLabel="Apagar esta pesagem?"
           />

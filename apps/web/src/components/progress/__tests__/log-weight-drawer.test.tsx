@@ -105,7 +105,9 @@ describe('LogWeightDrawer', () => {
     const user = userEvent.setup();
     const { onClose } = renderDrawer();
 
-    await user.click(await screen.findByRole('button', { name: 'Editar registro de 19 mai' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Editar registro de 80,0 kg, 19 mai' }),
+    );
     const field = screen.getByLabelText(/Peso \(kg\)/);
     expect(field).toHaveValue(80);
 
@@ -126,7 +128,9 @@ describe('LogWeightDrawer', () => {
     const user = userEvent.setup();
     renderDrawer();
 
-    await user.click(await screen.findByRole('button', { name: 'Editar registro de 18 mai' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Editar registro de 79,4 kg, 18 mai' }),
+    );
     await user.clear(screen.getByLabelText(/Peso \(kg\)/));
     await user.type(screen.getByLabelText(/Peso \(kg\)/), '79');
     await user.click(screen.getByRole('button', { name: /salvar alteração/i }));
@@ -139,7 +143,9 @@ describe('LogWeightDrawer', () => {
     const user = userEvent.setup();
     const { invalidateQueries } = renderDrawer();
 
-    await user.click(await screen.findByRole('button', { name: 'Editar registro de 19 mai' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Editar registro de 80,0 kg, 19 mai' }),
+    );
     await user.click(screen.getByRole('button', { name: /salvar alteração/i }));
 
     await waitFor(() => expect(updateWeight).toHaveBeenCalledTimes(1));
@@ -147,13 +153,16 @@ describe('LogWeightDrawer', () => {
     expect(keys).toContainEqual(['progress', 'weight']);
     expect(keys).toContainEqual(['weight-logs']);
     expect(keys).toContainEqual(['dashboard']);
+    expect(keys).toContainEqual(['goals']);
   });
 
   it('deletes only after the confirmation, and invalidates the same three keys', async () => {
     const user = userEvent.setup();
     const { invalidateQueries } = renderDrawer();
 
-    await user.click(await screen.findByRole('button', { name: 'Apagar registro de 19 mai' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Apagar registro de 80,0 kg, 19 mai' }),
+    );
     expect(deleteWeight).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: /^apagar$/i }));
@@ -163,16 +172,19 @@ describe('LogWeightDrawer', () => {
     expect(keys).toContainEqual(['progress', 'weight']);
     expect(keys).toContainEqual(['weight-logs']);
     expect(keys).toContainEqual(['dashboard']);
+    expect(keys).toContainEqual(['goals']);
   });
 
   it('clears the form when the log being edited is deleted', async () => {
     const user = userEvent.setup();
     renderDrawer();
 
-    await user.click(await screen.findByRole('button', { name: 'Editar registro de 19 mai' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Editar registro de 80,0 kg, 19 mai' }),
+    );
     expect(screen.getByLabelText(/Peso \(kg\)/)).toHaveValue(80);
 
-    await user.click(screen.getByRole('button', { name: 'Apagar registro de 19 mai' }));
+    await user.click(screen.getByRole('button', { name: 'Apagar registro de 80,0 kg, 19 mai' }));
     await user.click(screen.getByRole('button', { name: /^apagar$/i }));
 
     await waitFor(() => expect(screen.getByLabelText(/Peso \(kg\)/)).toHaveValue(null));
@@ -186,7 +198,9 @@ describe('LogWeightDrawer', () => {
     const user = userEvent.setup();
     renderDrawer();
 
-    await user.click(await screen.findByRole('button', { name: 'Editar registro de 19 mai' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Editar registro de 80,0 kg, 19 mai' }),
+    );
     await user.clear(screen.getByLabelText(/Peso \(kg\)/));
     await user.type(screen.getByLabelText(/Peso \(kg\)/), '78.5');
     await user.click(screen.getByRole('button', { name: /salvar alteração/i }));
@@ -194,6 +208,24 @@ describe('LogWeightDrawer', () => {
     expect(await screen.findByText('Falha ao salvar')).toBeInTheDocument();
     expect(screen.getByText('80,0 kg')).toBeInTheDocument();
     expect(screen.queryByText('78,5 kg')).not.toBeInTheDocument();
+  });
+
+  // Erro que sobrevive à troca de linha passa a acusar um registro que nunca
+  // falhou.
+  it('drops the stale error when the user moves to another row', async () => {
+    updateWeight.mockRejectedValue(new Error('Falha ao salvar'));
+    const user = userEvent.setup();
+    renderDrawer();
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Editar registro de 80,0 kg, 19 mai' }),
+    );
+    await user.click(screen.getByRole('button', { name: /salvar alteração/i }));
+    expect(await screen.findByText('Falha ao salvar')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Editar registro de 79,4 kg, 18 mai' }));
+
+    expect(screen.queryByText('Falha ao salvar')).not.toBeInTheDocument();
   });
 
   it('rejects an invalid weight before touching the API', async () => {

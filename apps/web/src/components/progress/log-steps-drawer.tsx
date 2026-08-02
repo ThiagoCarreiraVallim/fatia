@@ -45,6 +45,9 @@ export function LogStepsDrawer({ open, onClose, date }: Props) {
     qc.invalidateQueries({ queryKey: ['progress', 'steps'] });
     qc.invalidateQueries({ queryKey: ['step-logs'] });
     qc.invalidateQueries({ queryKey: ['dashboard'] });
+    // A meta de passos é derivada da média de `steps.getHistory(7)`
+    // (`goals.service.ts`), então editar ou apagar também a move.
+    qc.invalidateQueries({ queryKey: ['goals'] });
   }
 
   function clearForm() {
@@ -84,8 +87,14 @@ export function LogStepsDrawer({ open, onClose, date }: Props) {
   });
 
   function submit() {
-    const value = Number(steps);
-    if (!Number.isFinite(value) || value < 0 || !Number.isInteger(value)) {
+    const raw = steps.trim();
+    const value = Number(raw);
+    // `raw` vazio antes de tudo: `Number('')` é `0`, e `0 < 0` é falso — sem
+    // esta guarda o campo em branco viraria um registro de 0 passos. No caminho
+    // de edição isso zerava o registro em silêncio, e como o servidor usa o
+    // MAX do dia (ADR 007) o card "Passos hoje" desabava junto. Zero digitado
+    // de propósito continua valendo: é um dia sem caminhada, e a API aceita.
+    if (!raw || !Number.isFinite(value) || value < 0 || !Number.isInteger(value)) {
       setFormError('Valor inválido');
       return;
     }
@@ -153,16 +162,20 @@ export function LogStepsDrawer({ open, onClose, date }: Props) {
               setEditing(log);
               setSteps(String(log.steps));
               setFormError(null);
+              // Ver `log-weight-drawer`: erro antigo não pode acusar linha nova.
+              save.reset();
+              remove.reset();
               inputRef.current?.focus();
             }}
             onDelete={(entry) => remove.mutate(entry.id)}
             pendingId={remove.isPending ? (remove.variables ?? null) : null}
+            isDeleting={remove.isPending}
             emptyLabel="Nenhum registro de passos nos últimos 30 dias."
             confirmLabel="Apagar este registro de passos?"
           />
 
           <div className="space-y-2">
-            <Button className="w-full" onClick={submit} disabled={save.isPending}>
+            <Button className="w-full" onClick={submit} disabled={save.isPending || !steps.trim()}>
               {save.isPending ? 'Salvando…' : editing ? 'Salvar alteração' : 'Salvar'}
             </Button>
             {editing && (

@@ -21,8 +21,19 @@ interface Props {
   editingId: string | null;
   onEdit: (entry: LogHistoryEntry) => void;
   onDelete: (entry: LogHistoryEntry) => void;
-  /** Registro com exclusão em voo: a linha fica inerte até a API responder. */
+  /** Registro com exclusão em voo: a linha some aos poucos até a API responder. */
   pendingId: string | null;
+  /**
+   * Há uma exclusão em voo — qualquer uma. Trava a lista inteira, e não só a
+   * linha de `pendingId`.
+   *
+   * Os drawers usam uma `useMutation` para a lista toda. Se uma segunda
+   * exclusão começar antes de a primeira responder, o observer migra para ela e
+   * o erro da primeira nunca chega à tela: a linha continua listada, sem
+   * mensagem nenhuma, e quem apagou lê isso como "ainda não atualizou". Falha
+   * silenciosa em ação destrutiva é pior que a espera de meio segundo.
+   */
+  isDeleting: boolean;
   emptyLabel: string;
   confirmLabel: string;
 }
@@ -48,6 +59,7 @@ export function LogHistory({
   onEdit,
   onDelete,
   pendingId,
+  isDeleting,
   emptyLabel,
   confirmLabel,
 }: Props) {
@@ -125,7 +137,7 @@ export function LogHistory({
                       // acidental herdado da mesma tecla — o clique do botão
                       // anterior já foi entregue antes deste existir.
                       ref={confirmButtonRef}
-                      disabled={isPending}
+                      disabled={isDeleting}
                       onClick={() => {
                         setConfirmingId(null);
                         onDelete(entry);
@@ -148,14 +160,19 @@ export function LogHistory({
                       <p className="truncate text-sm font-bold">{entry.title}</p>
                       <p className="truncate text-xs text-muted-foreground">{entry.subtitle}</p>
                     </div>
+                    {/* O rótulo carrega o valor, e não só a data. Água tem
+                        vários registros por dia por definição: com a data
+                        sozinha saíam N botões "Apagar registro de 17 mai"
+                        indistinguíveis no leitor de tela, bem na ação
+                        irreversível. */}
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
                       className="h-11 w-11 shrink-0"
-                      aria-label={`Editar registro de ${entry.subtitle}`}
+                      aria-label={`Editar registro de ${entry.title}, ${entry.subtitle}`}
                       aria-pressed={isEditing}
-                      disabled={isPending}
+                      disabled={isDeleting}
                       onClick={() => onEdit(entry)}
                     >
                       <Pencil className={cn(isEditing && 'text-primary')} />
@@ -165,8 +182,8 @@ export function LogHistory({
                       variant="ghost"
                       size="icon"
                       className="h-11 w-11 shrink-0 text-muted-foreground"
-                      aria-label={`Apagar registro de ${entry.subtitle}`}
-                      disabled={isPending}
+                      aria-label={`Apagar registro de ${entry.title}, ${entry.subtitle}`}
+                      disabled={isDeleting}
                       onClick={() => setConfirmingId(entry.id)}
                     >
                       <Trash2 />

@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { progressApi, type WaterLog } from '@fatia/api-client';
 import { LogHistory, type LogHistoryEntry } from './log-history';
-import { dayMonth, formatInteger } from './log-format';
+import { dayMonth, formatInteger, hourMinute } from './log-format';
 
 interface Props {
   open: boolean;
@@ -99,7 +99,10 @@ export function LogWaterDrawer({ open, onClose }: Props) {
   const entries: LogHistoryEntry[] = (logs.data?.logs ?? []).map((log) => ({
     id: log.id,
     title: `${formatInteger(log.ml)} mL`,
-    subtitle: dayMonth(log.date),
+    // Com a hora, e não só o dia: dois copos de 500 mL na mesma terça são o
+    // caso normal da água, e sem ela as duas linhas ficam idênticas — para
+    // quem enxerga e para quem ouve.
+    subtitle: `${dayMonth(log.date)} · ${hourMinute(log.loggedAt)}`,
   }));
 
   const error = formError ?? (save.error as Error | null)?.message ?? null;
@@ -178,10 +181,14 @@ export function LogWaterDrawer({ open, onClose }: Props) {
               setEditing(log);
               setMl(String(log.ml));
               setFormError(null);
+              // Ver `log-weight-drawer`: erro antigo não pode acusar linha nova.
+              save.reset();
+              remove.reset();
               inputRef.current?.focus();
             }}
             onDelete={(entry) => remove.mutate(entry.id)}
             pendingId={remove.isPending ? (remove.variables ?? null) : null}
+            isDeleting={remove.isPending}
             emptyLabel="Nenhum registro de água nos últimos 7 dias."
             confirmLabel="Apagar este registro de água?"
           />
