@@ -14,7 +14,8 @@ export class DeleteMealItemTool implements McpToolDef {
   readonly name = 'delete_meal_item';
   readonly title = 'Excluir item da refeição';
   readonly annotations = { readOnlyHint: false, destructiveHint: true };
-  readonly description = 'Remove um item de refeição.';
+  readonly description =
+    'Remove um item de refeição. ' + 'Exemplo: {"id":"11111111-2222-4333-8444-555555555555"}';
   readonly inputSchema = {
     id: z.string().uuid().describe('ID do item de refeição a remover'),
   } as const;

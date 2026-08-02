@@ -17,7 +17,9 @@ export class UpdateWorkoutPlanTool implements McpToolDef {
   readonly title = 'Atualizar plano de treino';
 
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
-  readonly description = 'Atualiza o nome de um plano de treino.';
+  readonly description =
+    'Atualiza o nome de um plano de treino. ' +
+    'Exemplo: {"planId":"11111111-2222-4333-8444-555555555555","name":"Treino A - peito e ombro"}';
   readonly inputSchema = {
     planId: z.string().uuid().describe('ID do plano'),
     name: z.string().min(1).max(100).describe('Novo nome do plano'),

@@ -18,7 +18,8 @@ export class ReorderPlanExercisesTool implements McpToolDef {
 
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
   readonly description =
-    'Reordena os exercícios de um plano de treino. Envie a lista completa com as novas posições.';
+    'Reordena os exercícios de um plano de treino. Envie a lista completa com as novas posições. ' +
+    'Exemplo: {"planId":"11111111-2222-4333-8444-555555555555","exercises":[{"id":"66666666-7777-4888-8999-aaaaaaaaaaaa","order":0},{"id":"bbbbbbbb-cccc-4ddd-8eee-ffffffffffff","order":1}]}';
   readonly inputSchema = {
     planId: z.string().uuid().describe('ID do plano de treino'),
     exercises: z

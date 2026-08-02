@@ -22,7 +22,8 @@ export class CloneExerciseTool implements McpToolDef {
     'Cria (ou reaproveita) uma CÓPIA editável de um exercício base para o usuário, já que ' +
     'exercícios base são só-leitura. A partir daí a base some das listagens do usuário e ' +
     'aparece a cópia. Aceita overrides opcionais para já editar no mesmo passo. ' +
-    'primaryMuscles/secondaryMuscles devem ficar em inglês (chaves das cores).';
+    'primaryMuscles/secondaryMuscles devem ficar em inglês (chaves das cores). ' +
+    'Exemplo: {"id":42,"name":"Supino reto com barra","muscleGroup":"peito","equipment":"barra","primaryMuscles":["chest"]}';
   readonly inputSchema = {
     id: z.number().int().describe('ID do exercício base a copiar'),
     name: z.string().max(200).optional().describe('Nome da cópia. Default: o nome do base'),

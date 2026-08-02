@@ -28,6 +28,20 @@ valor, já que o usuário consegue operar o app inteiro conversando.
 Cortar a superfície pela metade significaria remover capacidade real, não redundância. As
 opções abaixo foram avaliadas com isso em mente.
 
+## Tamanho do catálogo servido
+
+O que pesa no contexto não é a contagem de tools, é o payload. Medido no que o registry
+serve de fato — `name`, `title`, `description`, `annotations` e o JSON Schema do input das
+87 tools: **65,7 k caracteres**, enviados em toda sessão que lista as tools.
+
+O denominador importa. Contar só `name + description + inputSchema` dá 50,7 k e subestima o
+catálogo em ~20% — `title` e `annotations` também vão no fio, em toda tool.
+
+Dentro dos 65,7 k, os exemplos de invocação que a #111 acrescentou às 45 tools de escrita
+valem **4.110 caracteres**, 6,7% sobre os 61,6 k de antes. Média de 91 caracteres por tool.
+O formato, a isenção de `delete_my_account` e o motivo de o exemplo morar na `description` —
+e não em campo separado — estão na §Convenções de [`docs/MCP.md`](./MCP.md).
+
 ## Decisões
 
 ### Fica como está — CRUD por entidade

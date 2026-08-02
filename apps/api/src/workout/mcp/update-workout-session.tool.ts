@@ -18,7 +18,8 @@ export class UpdateWorkoutSessionTool implements McpToolDef {
 
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
   readonly description =
-    'Atualiza as notas de uma sessão de treino, finalizada ou em andamento. Use quando o usuário quiser complementar ou corrigir o registro de um treino sem mexer nas séries — para as séries, use update_set.';
+    'Atualiza as notas de uma sessão de treino, finalizada ou em andamento. Use quando o usuário quiser complementar ou corrigir o registro de um treino sem mexer nas séries — para as séries, use update_set. ' +
+    'Exemplo: {"sessionId":"11111111-2222-4333-8444-555555555555","notes":"treino cortado, ombro incomodando"}';
   readonly inputSchema = {
     sessionId: z.string().uuid().describe('ID da sessão a atualizar'),
     notes: z

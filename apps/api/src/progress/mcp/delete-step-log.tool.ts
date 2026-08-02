@@ -14,7 +14,8 @@ export class DeleteStepLogTool implements McpToolDef {
   readonly name = 'delete_step_log';
   readonly title = 'Excluir registro de passos';
   readonly annotations = { readOnlyHint: false, destructiveHint: true };
-  readonly description = 'Deleta um log de passos.';
+  readonly description =
+    'Deleta um log de passos. ' + 'Exemplo: {"stepLogId":"11111111-2222-4333-8444-555555555555"}';
   readonly inputSchema = {
     stepLogId: z.string().uuid().describe('ID do registro de passos a remover'),
   } as const;

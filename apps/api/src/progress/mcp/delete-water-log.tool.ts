@@ -14,7 +14,8 @@ export class DeleteWaterLogTool implements McpToolDef {
   readonly name = 'delete_water_log';
   readonly title = 'Excluir registro de água';
   readonly annotations = { readOnlyHint: false, destructiveHint: true };
-  readonly description = 'Remove um log de água.';
+  readonly description =
+    'Remove um log de água. ' + 'Exemplo: {"id":"11111111-2222-4333-8444-555555555555"}';
   readonly inputSchema = {
     id: z.string().describe('ID do registro de hidratação a remover'),
   } as const;

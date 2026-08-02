@@ -18,7 +18,8 @@ export class DeleteCustomExerciseTool implements McpToolDef {
 
   readonly annotations = { readOnlyHint: false, destructiveHint: true };
   readonly description =
-    'Remove um exercício custom do usuário. Falha se há sets registrados com esse exercício.';
+    'Remove um exercício custom do usuário. Falha se há sets registrados com esse exercício. ' +
+    'Exemplo: {"id":9001}';
   readonly inputSchema = {
     id: z.number().int().describe('ID do exercício custom a remover'),
   } as const;

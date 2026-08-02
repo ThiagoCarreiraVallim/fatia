@@ -101,6 +101,71 @@ Isso é verificado por `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`, que fa
 tool declarar hint incoerente com o prefixo ou usar o próprio nome como título. `title`
 ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 
+### Exemplo de invocação
+
+Toda tool de **escrita** (`readOnlyHint: false`) termina a `description` com uma chamada
+concreta — exceto `delete_my_account`, isenta pelo motivo listado abaixo. O `.describe()` de
+campo já explica _aquele_ campo; o que faltava era mostrar o
+**conjunto** de campos de uma chamada válida — o problema real de `log_set`, cujo schema é
+plano com tudo opcional, mas que na prática aceita dois conjuntos disjuntos.
+
+Formato, rígido de propósito para o teste conseguir extrair e validar:
+
+```
+Exemplo: {"json":"de uma linha só, no fim da description"}
+```
+
+```ts
+readonly description =
+  'Registra uma medição de peso corporal. ' +
+  'Exemplo: {"weightKg":78.4,"loggedAt":"2026-07-29T07:10:00-03:00"}';
+```
+
+Regras:
+
+- **Um exemplo por tool.** Dois só quando a tool aceita formas de chamada disjuntas — hoje
+  `log_set` (força × cardio) e `log_meal` (item do catálogo × item livre). Nesse caso o
+  prefixo leva um rótulo entre parênteses: `Exemplo (força):`, `Exemplo (cardio):`.
+- **JSON de uma linha, com concatenação de strings.** Não é sobre parse — `JSON.parse`
+  aceita `\n` sem reclamar. É sobre o que vai no fio: template literal multilinha embute a
+  indentação do source dentro da description servida, gasta token à toa e deixa o exemplo à
+  mercê de quem reflui ou trunca o texto do catálogo.
+- **Só os campos que importam.** Obrigatórios sempre; opcionais apenas quando o campo é o
+  ponto do exemplo (`loggedAt` em `log_weight`, `source` em `log_steps`).
+- **IDs são fictícios e óbvios** (`11111111-2222-4333-8444-555555555555`). O exemplo mostra
+  o formato do argumento, não um registro que existe — o ID real vem de um `search_`/`list_`.
+- **Tool somente-leitura é isenta.** Input curto, raramente ambíguo, e o custo em token é
+  cobrado em toda sessão.
+- **`delete_my_account` é a única tool de escrita isenta.** O input é um literal único, já
+  soletrado na própria description: o exemplo não acrescentaria informação, acrescentaria
+  uma chamada completa e disparável — sem ID para buscar antes — encerrando a description
+  num template pronto para colar, logo depois da frase que manda nunca chamar por iniciativa
+  própria. As outras 13 destrutivas pedem um ID que o modelo não tem, e essa fricção é o
+  ponto. Isenção declarada em `EXAMPLE_EXEMPT`, no guarda; nome que sair do catálogo derruba
+  o teste, para a isenção não virar permissão órfã.
+
+Verificado por `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`, que faz o `JSON.parse` e
+roda o exemplo contra o `inputSchema` Zod da própria tool — em duas passadas: o schema
+original valida tipo, enum, obrigatório e min/max; uma cópia com `.strict()` recursivo pega
+chave que não existe mais, inclusive dentro de `items[]`. É essa segunda parte que importa:
+exemplo que não passaria na validação **induz o modelo ao erro** e é pior que exemplo
+nenhum — então ele não pode sobreviver calado a uma renomeação de campo.
+
+A cópia recursiva trata `object`, `array`, `optional`, `nullable`, `default`, `effects`
+(`.refine`/`.preprocess`) e `record`. **Qualquer outro container derruba o teste**, nomeando
+o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` ou um
+`.default({})` num objeto aninhado desligaria a checagem de chave sem nenhum sinal, e
+verificador que silencia é pior que verificador nenhum.
+
+**Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
+`description`, `annotations` e o JSON Schema do input das 87 tools): **65,7 k caracteres**
+hoje, dos quais **4.110 são os exemplos** — acréscimo de **6,7%** sobre os 61,6 k de antes,
+pago em toda sessão que lista as tools. Média de 91 caracteres por tool; os maiores são
+`log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
+para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
+atenção ao denominador: medir só `name + description + inputSchema` (50,7 k) subestima o
+catálogo em ~20% e infla o percentual para ~8%.
+
 ### IDs
 
 - IDs de entidades user-owned (`Meal`, `WorkoutSession`, etc): UUID string

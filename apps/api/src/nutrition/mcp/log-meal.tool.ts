@@ -28,7 +28,9 @@ export class LogMealTool implements McpToolDef {
   readonly title = 'Registrar refeição';
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
   readonly description =
-    'Registra uma refeição com items. Cada item pode referenciar foodId (TACO/custom) ou ser livre (foodName + macros estimados).';
+    'Registra uma refeição com items. Cada item pode referenciar foodId (TACO/custom) ou ser livre (foodName + macros estimados). ' +
+    'Exemplo (item do catálogo): {"mealType":"LUNCH","eatenAt":"2026-07-29T12:30:00-03:00","items":[{"foodId":312,"grams":150}]} ' +
+    'Exemplo (item livre): {"mealType":"SNACK","eatenAt":"2026-07-29T16:00:00-03:00","items":[{"foodName":"Pão de queijo","grams":80,"kcal":264,"proteinG":6.8,"carbsG":27.2,"fatG":14.4}]}';
   readonly inputSchema = {
     mealType: z
       .nativeEnum(MealType)

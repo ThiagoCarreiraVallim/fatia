@@ -18,12 +18,17 @@ export class CreateCustomExerciseTool implements McpToolDef {
   readonly title = 'Criar exercício personalizado';
 
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
-  readonly description = 'Creates a custom exercise for the user.';
+  readonly description =
+    'Creates a custom exercise for the user. ' +
+    'Exemplo: {"name":"Agachamento búlgaro com halteres","muscleGroup":"pernas"}';
   readonly inputSchema = {
     name: z.string().max(200).describe('Name of the exercise'),
+    // Os canônicos são em português (`CANONICAL_MUSCLE_GROUPS`) — o texto em
+    // inglês que estava aqui contradizia o exemplo da description, que usa
+    // "pernas". Mesma redação do `clone_exercise`, que já estava certo.
     muscleGroup: muscleGroupSchema.describe(
-      'Muscle group. Common: chest, back, legs, shoulder, arm, core, cardio. ' +
-        'Accepts other names (up to 50 chars, letters/spaces/hyphens) — normalized to lowercase.',
+      'Grupo (pt): peito, costas, pernas, ombro, braço, core, cardio. ' +
+        'Aceita outros nomes (até 50 caracteres, letras/espaços/hifens) — normalizado para minúsculas.',
     ),
   } as const;
 

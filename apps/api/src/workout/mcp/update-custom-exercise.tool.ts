@@ -22,7 +22,8 @@ export class UpdateCustomExerciseTool implements McpToolDef {
     "Updates/enriches an exercise (the user's custom one OR a catalog exercise). " +
     'Use it to translate content to Portuguese (name, equipment, instructions) and to add ' +
     'details (level, mechanic, video). IMPORTANT: primaryMuscles/secondaryMuscles MUST stay ' +
-    'in English — they are the keys that drive the muscle-diagram colors.';
+    'in English — they are the keys that drive the muscle-diagram colors. ' +
+    'Exemplo: {"id":42,"name":"Remada curvada com barra","equipment":"barra","primaryMuscles":["middle back"],"level":"intermediate"}';
   readonly inputSchema = {
     id: z.number().int().describe('ID do exercício custom a atualizar (só os seus)'),
     name: z.string().max(200).optional().describe('Nome (pode/deve ser em português)'),
