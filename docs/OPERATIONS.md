@@ -205,6 +205,10 @@ switch dispara sozinho.
 
 Seção seguinte. **Enquanto isso não acontecer, você não tem backup — tem esperança.**
 
+O passo continua aqui porque vale para **todo host novo**: um drill feito no servidor antigo não
+diz nada sobre a restauração no novo. No host atual ele já foi executado em 01/08/2026, com os
+dados conferidos — ver [Histórico de drills](#histórico-de-drills).
+
 ### Garantias do script
 
 - Aborta se o dump sair com menos de 1 KB ou se o gzip não passar no teste de integridade — dump
@@ -412,6 +416,10 @@ em circulação.
 
 Preencher a cada execução. Uma linha vazia aqui significa que o backup **nunca foi testado**.
 
-| Data | Executado por | Backup usado | Tempo até restaurado | Resultado                                        |
-| ---- | ------------- | ------------ | -------------------- | ------------------------------------------------ |
-| —    | —             | —            | —                    | **Pendente: primeiro drill ainda não executado** |
+| Data       | Executado por | Backup usado                         | Tempo até restaurado | Resultado                                                           |
+| ---------- | ------------- | ------------------------------------ | -------------------- | ------------------------------------------------------------------- |
+| 01/08/2026 | Thiago        | dump do offsite (R2), do `backup.sh` | não cronometrado     | ✅ Restaurado e **dados conferidos** — primeiro drill, na Hostinger |
+
+> O tempo não foi cronometrado nesta execução. Anote-o nas próximas: é o único dado da tabela que
+> não dá para reconstruir depois, e é ele que diz quanto tempo o "Cenário 1 — perda total do VPS"
+> realmente leva. Sem esse número, o roteiro do cenário 1 tem passos mas não tem duração.
