@@ -135,6 +135,28 @@ async function renderLoadedPage() {
   return user;
 }
 
+/**
+ * Nomes na ordem em que os cards aparecem no DOM.
+ *
+ * Ler o `order` do cache provaria menos: o que quebra na mão do usuário é o
+ * card não sair do lugar. `getAllByRole` devolve na ordem do documento, e cada
+ * card tem exatamente um botão "Ver detalhes de <nome>".
+ */
+function nomesNaOrdem(): string[] {
+  return screen
+    .getAllByRole('button', { name: /^Ver detalhes de / })
+    .map((b) => (b.getAttribute('aria-label') ?? '').replace('Ver detalhes de ', ''));
+}
+
+/** Plano com Crucifixo e Crossover já trocados — o que a API devolveria. */
+function planoTrocado(): WorkoutPlan {
+  return plan([
+    planExercise('pe-a', 'Supino', 1),
+    planExercise('pe-c', 'Crossover', 5),
+    planExercise('pe-b', 'Crucifixo', 9),
+  ]);
+}
+
 describe('PlanDetailPage — reordenação', () => {
   it('reordena com uma requisição só, mandando o `order` do vizinho', async () => {
     const user = await renderLoadedPage();
@@ -172,13 +194,7 @@ describe('PlanDetailPage — reordenação', () => {
   it('mostra a nova ordem sem refazer a busca do plano', async () => {
     const user = await renderLoadedPage();
     expect(getPlan).toHaveBeenCalledTimes(1);
-    reorderPlanExercises.mockResolvedValue(
-      plan([
-        planExercise('pe-a', 'Supino', 1),
-        planExercise('pe-c', 'Crossover', 5),
-        planExercise('pe-b', 'Crucifixo', 9),
-      ]),
-    );
+    reorderPlanExercises.mockResolvedValue(planoTrocado());
 
     await user.click(screen.getByRole('button', { name: /mover crucifixo para baixo/i }));
 
@@ -216,6 +232,75 @@ describe('PlanDetailPage — reordenação', () => {
     expect(alert).toHaveTextContent(/plan not found/i);
     // Crucifixo continua no meio — o botão "para baixo" segue disponível.
     expect(screen.getByRole('button', { name: /mover crucifixo para baixo/i })).toBeEnabled();
+  });
+
+  it('reposiciona o card antes da resposta da API', async () => {
+    const user = await renderLoadedPage();
+    const pending = deferred<WorkoutPlan>();
+    reorderPlanExercises.mockReturnValue(pending.promise);
+    expect(nomesNaOrdem()).toEqual(['Supino', 'Crucifixo', 'Crossover']);
+
+    await user.click(screen.getByRole('button', { name: /mover crucifixo para baixo/i }));
+
+    // Ainda em voo: sem otimismo a lista só mudaria depois do `resolve`.
+    await waitFor(() => expect(nomesNaOrdem()).toEqual(['Supino', 'Crossover', 'Crucifixo']));
+    expect(reorderPlanExercises).toHaveBeenCalledTimes(1);
+
+    pending.resolve(planoTrocado());
+    await waitFor(() => expect(nomesNaOrdem()).toEqual(['Supino', 'Crossover', 'Crucifixo']));
+  });
+
+  it('desfaz o reposicionamento quando a API recusa', async () => {
+    const user = await renderLoadedPage();
+    const pending = deferred<WorkoutPlan>();
+    reorderPlanExercises.mockReturnValue(pending.promise);
+
+    await user.click(screen.getByRole('button', { name: /mover crucifixo para baixo/i }));
+    await waitFor(() => expect(nomesNaOrdem()).toEqual(['Supino', 'Crossover', 'Crucifixo']));
+
+    pending.reject(new Error('Network error'));
+
+    // Sem rollback a lista ficaria numa ordem que o servidor não tem, e o
+    // próximo movimento partiria dela.
+    await waitFor(() => expect(nomesNaOrdem()).toEqual(['Supino', 'Crucifixo', 'Crossover']));
+    await screen.findByRole('alert');
+  });
+
+  it('anuncia a nova posição só depois do sucesso, nunca no clique', async () => {
+    const user = await renderLoadedPage();
+    const pending = deferred<WorkoutPlan>();
+    reorderPlanExercises.mockReturnValue(pending.promise);
+
+    // A região viva já existe antes de qualquer movimento: montada junto com o
+    // texto, a primeira troca de todas não seria anunciada.
+    const status = screen.getByRole('status');
+    expect(status.textContent).toBe('');
+
+    await user.click(screen.getByRole('button', { name: /mover crucifixo para baixo/i }));
+
+    // O card já se moveu — o anúncio, não. Falar aqui afirmaria um movimento
+    // que a rede ainda pode recusar.
+    await waitFor(() => expect(nomesNaOrdem()).toEqual(['Supino', 'Crossover', 'Crucifixo']));
+    expect(status.textContent).toBe('');
+
+    pending.resolve(planoTrocado());
+
+    await waitFor(() => expect(status.textContent).toBe('Crucifixo movido para a posição 3 de 3'));
+  });
+
+  it('não deixa no ar o anúncio de um movimento que foi desfeito', async () => {
+    const user = await renderLoadedPage();
+    reorderPlanExercises.mockResolvedValue(planoTrocado());
+
+    await user.click(screen.getByRole('button', { name: /mover crucifixo para baixo/i }));
+    const status = screen.getByRole('status');
+    await waitFor(() => expect(status.textContent).toBe('Crucifixo movido para a posição 3 de 3'));
+
+    reorderPlanExercises.mockRejectedValue(new Error('Network error'));
+    await user.click(screen.getByRole('button', { name: /mover crossover para cima/i }));
+
+    await screen.findByRole('alert');
+    expect(status.textContent).toBe('');
   });
 
   it('mantém as bordas travadas: o primeiro não sobe e o último não desce', async () => {

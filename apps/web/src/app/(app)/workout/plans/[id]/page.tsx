@@ -9,12 +9,37 @@ import {
   ApiError,
   isCardioExercise,
   workoutApi,
+  type WorkoutPlan,
   type WorkoutPlanExercise,
 } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
+
+interface MoveVars {
+  a: WorkoutPlanExercise;
+  b: WorkoutPlanExercise;
+  /** Índice de destino de `a`, base 0 — o anúncio soma 1. Igual ao app nativo. */
+  targetIndex: number;
+  /** Tamanho da lista, para o "posição 2 de 5" do anúncio. */
+  total: number;
+}
+
+/**
+ * Troca só o campo `order` dos dois vizinhos, e não a posição no array.
+ *
+ * O cache continua com a mesma forma que a API devolve — quem lê ordena por
+ * `order`, como a própria tela faz. Mover os itens de lugar no array deixaria
+ * o cache com uma ordenação que nenhuma resposta da API tem.
+ */
+function swapOrders(a: WorkoutPlanExercise, b: WorkoutPlanExercise) {
+  return (e: WorkoutPlanExercise): WorkoutPlanExercise => {
+    if (e.id === a.id) return { ...e, order: b.order };
+    if (e.id === b.id) return { ...e, order: a.order };
+    return e;
+  };
+}
 
 export default function PlanDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -23,6 +48,7 @@ export default function PlanDetailPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameEdit, setNameEdit] = useState('');
+  const [announcement, setAnnouncement] = useState('');
 
   const plan = useQuery({
     queryKey: ['workout', 'plan', id],
@@ -62,7 +88,7 @@ export default function PlanDetailPage() {
   // A troca vai numa requisição só: a API grava os dois `order` dentro de uma
   // transação, então não existe instante em que a lista esteja pela metade.
   const moveExercise = useMutation({
-    mutationFn: ({ a, b }: { a: WorkoutPlanExercise; b: WorkoutPlanExercise }) =>
+    mutationFn: ({ a, b }: MoveVars) =>
       // O `order` enviado é o do vizinho, nunca o índice: `addPlanExercise` usa
       // `max + 1` e remover exercício não renumera, então a numeração tem
       // buracos (1, 5, 9) que `order: index` corromperia em silêncio.
@@ -70,12 +96,33 @@ export default function PlanDetailPage() {
         { id: a.id, order: b.order },
         { id: b.id, order: a.order },
       ]),
-    onSuccess: (updated) => {
+    // O card troca de lugar no toque, não na resposta: no 4G do vestiário a
+    // ida e volta some, e quem não vê nada acontecer toca de novo.
+    onMutate: async ({ a, b }) => {
+      // Sem cancelar, um refetch disparado antes do toque pode responder depois
+      // e reescrever o cache com a ordem antiga — o card pula de volta sozinho.
+      await qc.cancelQueries({ queryKey: ['workout', 'plan', id] });
+      const previous = qc.getQueryData<WorkoutPlan>(['workout', 'plan', id]);
+      qc.setQueryData<WorkoutPlan>(['workout', 'plan', id], (old) =>
+        old ? { ...old, exercises: old.exercises.map(swapOrders(a, b)) } : old,
+      );
+      return { previous };
+    },
+    onSuccess: (updated, { a, targetIndex, total }) => {
       // A resposta já é o plano reordenado — escrever no cache evita o refetch
       // que só confirmaria o que acabou de chegar.
       qc.setQueryData(['workout', 'plan', id], updated);
+      // O anúncio só sai aqui, como no app nativo: dito no toque, ele afirmaria
+      // um movimento que a rede ainda pode recusar. A lista muda embaixo do
+      // foco e o rótulo do botão sozinho não conta que a troca aconteceu.
+      setAnnouncement(`${a.exercise.name} movido para a posição ${targetIndex + 1} de ${total}`);
     },
-    onError: (error) => {
+    onError: (error, _vars, context) => {
+      // Desfaz o otimismo. O aviso na lista (`role="alert"`) é quem fala da
+      // falha; a região viva volta a ficar vazia para não deixar no ar um
+      // "movido para a posição 2" que acabou de ser desfeito.
+      if (context?.previous) qc.setQueryData(['workout', 'plan', id], context.previous);
+      setAnnouncement('');
       // 404 aqui não é "o plano sumiu": desde a #205 a API recusa a operação
       // inteira quando algum id do corpo não pertence mais ao plano — exercício
       // removido em outra aba, e esta tela ainda com o cache velho. A cura é
@@ -141,16 +188,22 @@ export default function PlanDetailPage() {
   }
 
   function move(idx: number, delta: -1 | 1) {
-    // Dois cliques rápidos leem o **mesmo** snapshot e compõem duas trocas que
-    // se sobrepõem: em [A(1), B(2), C(3)], "descer A" e depois "descer B"
-    // gravam A=2, B=3 e C=2 — dois exercícios com o mesmo `order`. Nada
-    // estoura (não há `@@unique([planId, order])`), a lista só passa a ordenar
-    // de forma indefinida. A transação garante que cada troca é inteira; não
+    // Uma troca por vez, mesmo com o otimismo em pé. O otimismo conserta o que
+    // o segundo clique **lê** (a lista já reposicionada), não o que a API
+    // **grava**: duas requisições em voo podem chegar em qualquer ordem e
+    // compor A=2 e C=2 — dois exercícios com o mesmo `order`. Nada estoura
+    // (não há `@@unique([planId, order])`), a lista só passa a ordenar de
+    // forma indefinida. A transação garante que cada troca é inteira; não
     // garante que duas trocas concorrentes componham.
     if (moveExercise.isPending) return;
     const target = idx + delta;
     if (target < 0 || target >= exercises.length) return;
-    moveExercise.mutate({ a: exercises[idx], b: exercises[target] });
+    moveExercise.mutate({
+      a: exercises[idx],
+      b: exercises[target],
+      targetIndex: target,
+      total: exercises.length,
+    });
   }
 
   function handleDelete() {
@@ -255,6 +308,13 @@ export default function PlanDetailPage() {
             <span className="text-sm font-bold text-muted-foreground">({exercises.length})</span>
           </h3>
         </div>
+
+        {/* Região viva montada sempre, e não junto com o texto: um `aria-live`
+            que nasce já preenchido costuma não ser anunciado — a primeira
+            troca de todas passaria calada. */}
+        <p role="status" aria-live="polite" className="sr-only">
+          {announcement}
+        </p>
 
         {/*
           O PWA não tem toast. O aviso fica na própria lista, que é para onde a

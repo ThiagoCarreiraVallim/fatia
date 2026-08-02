@@ -192,7 +192,12 @@ o foco e, no iOS instalado como PWA, aparece com o nome do domínio.
 ganho do mobile — "existe na API e no MCP, não no PWA". Era falso: o PWA
 reordena desde a #115. Reordenava pior, com dois PATCH concorrentes no mesmo
 tick, mas reordenava. Hoje os dois apps usam o mesmo
-`workoutApi.reorderPlanExercises`, numa escrita atômica só.
+`workoutApi.reorderPlanExercises`, numa escrita atômica só. A #115 fechou a
+última assimetria: o card troca de lugar no toque nos dois (otimismo com
+rollback), e a nova posição é anunciada nos dois — `announceForAccessibility` no
+nativo, uma região `role="status" aria-live="polite"` no PWA. O anúncio sai
+depois da resposta, nos dois: dito no toque, ele afirmaria um movimento que a
+rede ainda pode recusar.
 
 ---
 
