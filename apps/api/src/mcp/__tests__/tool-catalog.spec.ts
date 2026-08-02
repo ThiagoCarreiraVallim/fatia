@@ -37,17 +37,25 @@ const TOOL_COUNT_DOCS = [
   'docs/ARCHITECTURE.md',
   'docs/MCP_TOOL_SURFACE.md',
   'docs/SUBMISSION_CHECKLIST.md',
+  // A landing pública também afirma o total, e em "ações" — a palavra que o usuário entende. Ficou
+  // de fora do guarda por causa do sinônimo e derivou: dizia 87 com 88 registradas. É o número que
+  // mais gente lê, porque é o único que está fora do repositório.
+  'apps/site/src/pages/claude-connect.astro',
 ] as const;
 
 /**
- * `87 tools`, `**87 tools**`, `**87** tools`, `87 ferramentas`.
+ * `87 tools`, `**87 tools**`, `**87** tools`, `87 ferramentas`, `87 ações`.
  *
  * O negrito e o sinônimo entram no padrão porque a versão anterior
  * (`/(\d+) tools\b/`) passava verde sobre `**52** tools`: o `**` entre o número e
  * o substantivo quebrava o casamento, e "não achei" é indistinguível de "está
  * certo". Um guarda que só pega a grafia que o autor usou hoje não é guarda.
+ *
+ * `ações` entrou pelo mesmo motivo, e o custo de não ter entrado antes está
+ * medido: a landing dizia "São 87 ações disponíveis ao Claude" com 88
+ * registradas, e nada acusou — o guarda só conhecia a palavra do desenvolvedor.
  */
-const TOOL_COUNT_PATTERN = /\*{0,2}(\d+)\*{0,2}\s+(?:tools|ferramentas)\b/g;
+const TOOL_COUNT_PATTERN = /\*{0,2}(\d+)\*{0,2}\s+(?:tools|ferramentas|ações)\b/g;
 
 /**
  * Recortes: "N tools" que legitimamente NÃO é o total do catálogo.

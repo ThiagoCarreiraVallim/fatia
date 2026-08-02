@@ -25,27 +25,42 @@ Nenhum placeholder restante no código.
 
 ## Rotas
 
-| PWA                                | App nativo                                 |     | Observação                                                                 |
-| ---------------------------------- | ------------------------------------------ | :-: | -------------------------------------------------------------------------- |
-| `(app)/page.tsx`                   | `app/(app)/index.tsx`                      | ✅  | dashboard                                                                  |
-| `(app)/goals`                      | `app/(app)/goals.tsx`                      | ✅  |                                                                            |
-| `(app)/nutrition`                  | `app/(app)/nutrition/index.tsx`            | ✅  |                                                                            |
-| `(app)/nutrition/goals`            | `app/(app)/nutrition/goals.tsx`            | ✅  |                                                                            |
-| `(app)/nutrition/nutrient-targets` | `app/(app)/nutrition/nutrient-targets.tsx` | ✅  |                                                                            |
-| —                                  | `app/(app)/nutrition/scan.tsx`             | ➕  | scanner de código de barras (#140); o PWA não tem, ver abaixo              |
-| `(app)/profile`                    | `app/(app)/profile/index.tsx`              | ✅  |                                                                            |
-| `(app)/profile/tokens`             | `app/(app)/profile/tokens.tsx`             | ✅  | mostra a URL real do MCP, não um exemplo fixo                              |
-| `(app)/progress`                   | `app/(app)/progress/index.tsx`             | ✅  |                                                                            |
-| `(app)/progress/records`           | `app/(app)/progress/records.tsx`           | ✅  |                                                                            |
-| `(app)/workout`                    | `app/(app)/workout/index.tsx`              | ✅  | a sessão ativa vira aviso com "Continuar treino" em vez de tomar a tela    |
-| `(app)/workout/history`            | `app/(app)/workout/history.tsx`            | ✅  |                                                                            |
-| `(app)/workout/plans`              | `app/(app)/workout/plans/index.tsx`        | ✅  |                                                                            |
-| `(app)/workout/plans/[id]`         | `app/(app)/workout/plans/[id].tsx`         | ✅  |                                                                            |
-| `(app)/workout/quick/[templateId]` | `app/(app)/workout/quick/[templateId].tsx` | ✅  |                                                                            |
-| `(app)/workout/session/[id]`       | `app/(app)/workout/session/[id].tsx`       | ✅  | uma rota para sessão ativa e concluída — o treino termina durante a visita |
-| `(auth)/login`                     | `app/login.tsx`                            | ✅  | navegador do sistema em vez de redirect no servidor                        |
-| `(public)/privacy`                 | —                                          | ⛔  | abre no navegador; ver "Fora de propósito"                                 |
-| `(public)/terms`                   | —                                          | ⛔  | idem                                                                       |
+| PWA                                | App nativo                                 |     | Observação                                                                  |
+| ---------------------------------- | ------------------------------------------ | :-: | --------------------------------------------------------------------------- |
+| `(app)/page.tsx`                   | `app/(app)/index.tsx`                      | ✅  | dashboard                                                                   |
+| `(app)/goals`                      | `app/(app)/goals.tsx`                      | ✅  |                                                                             |
+| `(app)/nutrition`                  | `app/(app)/nutrition/index.tsx`            | ✅  |                                                                             |
+| `(app)/nutrition/goals`            | `app/(app)/nutrition/goals.tsx`            | ✅  |                                                                             |
+| `(app)/nutrition/nutrient-targets` | `app/(app)/nutrition/nutrient-targets.tsx` | ✅  |                                                                             |
+| —                                  | `app/(app)/nutrition/scan.tsx`             | ➕  | scanner de código de barras (#140); o PWA não tem, ver abaixo               |
+| `(app)/profile`                    | `app/(app)/profile/index.tsx`              | ✅  |                                                                             |
+| `(app)/profile/connect`            | `app/(app)/profile/tokens.tsx`             | ⚠️  | o PWA virou fluxo guiado (#164); o nativo ainda é a tela antiga, ver abaixo |
+| `(app)/progress`                   | `app/(app)/progress/index.tsx`             | ✅  |                                                                             |
+| `(app)/progress/records`           | `app/(app)/progress/records.tsx`           | ✅  |                                                                             |
+| `(app)/workout`                    | `app/(app)/workout/index.tsx`              | ✅  | a sessão ativa vira aviso com "Continuar treino" em vez de tomar a tela     |
+| `(app)/workout/history`            | `app/(app)/workout/history.tsx`            | ✅  |                                                                             |
+| `(app)/workout/plans`              | `app/(app)/workout/plans/index.tsx`        | ✅  |                                                                             |
+| `(app)/workout/plans/[id]`         | `app/(app)/workout/plans/[id].tsx`         | ✅  |                                                                             |
+| `(app)/workout/quick/[templateId]` | `app/(app)/workout/quick/[templateId].tsx` | ✅  |                                                                             |
+| `(app)/workout/session/[id]`       | `app/(app)/workout/session/[id].tsx`       | ✅  | uma rota para sessão ativa e concluída — o treino termina durante a visita  |
+| `(auth)/login`                     | `app/login.tsx`                            | ✅  | navegador do sistema em vez de redirect no servidor                         |
+| `(public)/privacy`                 | —                                          | ⛔  | abre no navegador; ver "Fora de propósito"                                  |
+| `(public)/terms`                   | —                                          | ⛔  | idem                                                                        |
+
+---
+
+## Pendência aberta — conectar a IA no app nativo
+
+A #164 reescreveu o fluxo do PWA: `(app)/profile/tokens` virou `(app)/profile/connect`, com passo
+a passo sem jargão, endereço montado de `NEXT_PUBLIC_API_URL` e diagnóstico dos três erros comuns.
+
+O nativo continua em `app/(app)/profile/tokens.tsx`, com o texto antigo — "Adicionar servidor MCP",
+"login Logto". Ele **não** tem o defeito que motivou a issue (usa `env.mcpUrl`, não um domínio de
+exemplo), então é divergência de linguagem, não instrução quebrada. `src/components/profile/mcp-section.tsx`
+está no mesmo caso.
+
+Alinhar os dois textos é trabalho de paridade e sai em issue própria: manter aqui uma linha ✅ que
+esconde a diferença é exatamente o que este documento existe para impedir.
 
 ---
 

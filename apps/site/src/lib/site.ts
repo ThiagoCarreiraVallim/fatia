@@ -17,6 +17,8 @@ export const site = {
   apiUrl: `https://api.${DOMAIN}`,
   /** É esta URL que a pessoa cola no Claude ao adicionar o conector. */
   mcpUrl: `https://api.${DOMAIN}/mcp`,
+  /** Fluxo guiado de conexão dentro do app (#164), para onde a landing empurra quem já tem conta. */
+  connectGuideUrl: `https://app.${DOMAIN}/profile/connect`,
   repoUrl: 'https://github.com/ThiagoCarreiraVallim/fatia',
   privacyUrl: `https://app.${DOMAIN}/privacy`,
   termsUrl: `https://app.${DOMAIN}/terms`,
