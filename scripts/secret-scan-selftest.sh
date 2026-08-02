@@ -30,6 +30,17 @@ command -v docker >/dev/null 2>&1 || {
   exit 1
 }
 
+SCAN="$REPO_ROOT/scripts/secret-scan.sh"
+
+# O job chama `./scripts/secret-scan.sh` direto, então o bit de execução faz
+# parte do contrato. Sem esta checagem, perder o modo 100755 aparece lá embaixo
+# como "segredo passou despercebido (exit 126)" — diagnóstico errado para um
+# problema trivial.
+[ -x "$SCAN" ] || {
+  printf '\033[1;31m✗ %s não está executável (git update-index --chmod=+x)\033[0m\n' "$SCAN" >&2
+  exit 1
+}
+
 # Token sintético no formato de PAT do GitHub, montado em duas partes: escrito
 # inteiro, esta linha viraria achado na varredura do próprio repositório — o
 # autoteste do detector não pode disparar o detector.
@@ -42,7 +53,7 @@ make_repo_with_evil_merge() {
   local dir="$1" resolution="$2"
 
   mkdir -p "$dir/scripts"
-  cp "$REPO_ROOT/scripts/secret-scan.sh" "$dir/scripts/secret-scan.sh"
+  cp "$SCAN" "$dir/scripts/secret-scan.sh"
 
   git -C "$dir" init -q -b main
   git -C "$dir" config user.email 'selftest@fatia.local'
