@@ -155,6 +155,7 @@ Ver `packages/db/prisma/schema.prisma` para o schema completo.
 - `Food`, `FoodGroup`, `Meal`, `MealItem`
 - `Exercise`, `WorkoutPlan`, `WorkoutPlanExercise`, `WorkoutSession`, `SessionSet` (cobre força e cardio)
 - `WeightLog`, `StepLog`
+- `Group`, `GroupMembership`, `ProfessionalLink`, `ProfessionalAccessLog` — B2B (ADR 014)
 
 > **Removido em ADR 008:** `McpToken`. Tokens MCP estáticos foram substituídos por JWTs do Logto (OAuth flow).
 
@@ -164,6 +165,10 @@ Ver `packages/db/prisma/schema.prisma` para o schema completo.
 - Toda query passa por um guard que injeta `userId` do JWT validado
 - `onDelete: Cascade` em tudo que pertence ao usuário (LGPD-friendly)
 - Provisioning lazy: primeiro JWT com `sub` desconhecido cria `User` automaticamente
+- **Papel de grupo não autoriza leitura de dado de saúde.** `GroupRole` governa administração;
+  a única leitura entre contas vem de `ProfessionalLink` e passa por
+  `sharing/professional-access.service.ts` (ADR 014). Os services de domínio não sabem que
+  grupo existe
 
 ## Segurança
 
@@ -186,6 +191,9 @@ Ver `packages/db/prisma/schema.prisma` para o schema completo.
 - Guard popula `req.user` com `{ id, role, logtoSub }` (resolve `User` local pelo `logtoSub`)
 - Services NUNCA aceitam `userId` como parâmetro do controller — sempre `@CurrentUser()`
 - Provisioning lazy: se `User` não existe pra um `logtoSub` válido, criar com role default `USER`
+- Leitura em nome de outra pessoa (B2B) entra por `membershipId`, nunca por id de usuário, e é
+  resolvida só em `SharingModule` (`sharing/professional-access.service.ts`). Recusa é
+  `NOT_FOUND` idêntico ao de um estranho — ver `docs/THREAT_MODEL.md` §8
 
 ### Headers e CORS
 

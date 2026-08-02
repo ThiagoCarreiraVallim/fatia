@@ -39,6 +39,14 @@ model User {
   customExercises Exercise[]       @relation("UserCustomExercises")
   nutrientTargets NutrientTarget[]
 
+  // B2B (ADR 014). Nenhuma destas relações dá acesso a dado de saúde por si só —
+  // quem autoriza leitura é exclusivamente uma linha de `ProfessionalLink`.
+  ownedGroups         Group[]                 @relation("GroupOwner")
+  memberships         GroupMembership[]
+  linksAsSubject      ProfessionalLink[]      @relation("LinkSubject")
+  linksAsProfessional ProfessionalLink[]      @relation("LinkProfessional")
+  accessLogs          ProfessionalAccessLog[] @relation("AccessLogSubject")
+
   @@index([logtoSub])
 }
 
@@ -447,4 +455,163 @@ enum GoalStatus {
   completed
   expired
   archived
+}
+
+// ============================================================
+// B2B — GRUPOS E VÍNCULO PROFISSIONAL (ADR 014)
+// ============================================================
+//
+// Regra que governa este bloco inteiro: **estar num grupo, em qualquer papel,
+// não dá acesso a nenhum dado de saúde de ninguém**. Papel governa administração
+// de grupo. Leitura entre contas vem exclusivamente de uma linha de
+// `ProfessionalLink` que o próprio titular criou, e passa por um único método
+// (`ProfessionalAccessService.assertReadable`). É o que mantém os services de
+// domínio — meal, workout, weight, steps, water, goals — inconscientes de que
+// grupo existe.
+
+enum GroupType {
+  /// Academia paga a IA dos alunos. Único tipo que gera cobrança (#158).
+  SPONSORED
+  /// Criador de conteúdo / influenciador. Ninguém paga IA.
+  SOCIAL
+}
+
+enum GroupRole {
+  /// Gere grupo, membros e cobrança. NÃO lê dado de saúde de ninguém.
+  OWNER
+  /// Pode receber vínculo de leitura e oferecer plano. Só isso.
+  PROFESSIONAL
+  /// Publica conteúdo no grupo social. Nunca lê dado individual.
+  CREATOR
+  /// Aluno/fã. O próprio dado, sempre.
+  MEMBER
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  LEFT
+  REMOVED
+}
+
+/// Categorias de dado que podem ser consentidas, independentes entre si.
+/// A ADR 014 nomeia treino, nutrição, peso e passos; a #155 pede também metas.
+/// O enum é o superconjunto — nenhuma delas implica outra.
+enum ShareScope {
+  WORKOUT
+  NUTRITION
+  /// Peso e medidas corporais.
+  BODY
+  /// Água e passos.
+  HABITS
+  GOALS
+}
+
+model Group {
+  id        String    @id @default(uuid())
+  type      GroupType
+  name      String
+  /// Usado no link de convite e na URL do painel. Público por natureza.
+  slug      String    @unique
+  ownerId   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Cascade e não Restrict de propósito: com Restrict, `delete_my_account` de um
+  // dono de academia falharia — um direito da LGPD travado por dívida comercial.
+  // Apagar a conta do dono apaga grupo, memberships e vínculos, e **nenhum dado
+  // de aluno é tocado**, porque nunca esteve sob o grupo. Fatura em aberto é
+  // problema da #158, não deste FK.
+  owner       User               @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  memberships GroupMembership[]
+  links       ProfessionalLink[]
+
+  @@index([ownerId])
+  @@index([type])
+}
+
+model GroupMembership {
+  id        String           @id @default(uuid())
+  groupId   String
+  userId    String
+  role      GroupRole
+  status    MembershipStatus @default(INVITED)
+  invitedAt DateTime         @default(now())
+  joinedAt  DateTime?
+  leftAt    DateTime?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Um papel por pessoa por grupo. É o que torna estruturalmente impossível
+  // o acúmulo de papéis que a #156 pede para evitar: não existe linha em que
+  // alguém seja OWNER e PROFESSIONAL do mesmo grupo.
+  @@unique([groupId, userId])
+  @@index([userId, status])
+  @@index([groupId, status])
+  @@index([groupId, role])
+}
+
+/// A ÚNICA autorização de leitura entre contas do produto (ADR 014).
+/// Tabela, e não colunas em `User`: duas colunas assumiriam para sempre no
+/// máximo um profissional por pessoa, e corrigir isso depois seria migration
+/// de dado sobre permissão de leitura de dado de saúde.
+model ProfessionalLink {
+  id             String       @id @default(uuid())
+  /// Titular do dado. Quem consente — e a única pessoa que pode consentir.
+  subjectUserId  String
+  /// Quem passa a poder ler. Nunca inferido de papel: sempre gravado aqui.
+  professionalId String
+  /// Contexto. Sair do grupo revoga todo vínculo com este `groupId`.
+  groupId        String
+  /// Consentimento por categoria. Vazio é estado válido e significa nada.
+  scopes         ShareScope[]
+  grantedAt      DateTime     @default(now())
+  /// Revogação NÃO apaga a linha — é o que responde "quem teve acesso a quê,
+  /// quando", que o THREAT_MODEL hoje lista como ausência conhecida.
+  revokedAt      DateTime?
+  /// "subject" | "group_owner" | "left_group" | "membership_removed" | "superseded"
+  revokedReason  String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  subject      User                    @relation("LinkSubject", fields: [subjectUserId], references: [id], onDelete: Cascade)
+  professional User                    @relation("LinkProfessional", fields: [professionalId], references: [id], onDelete: Cascade)
+  group        Group                   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  accessLogs   ProfessionalAccessLog[]
+
+  // Sem @@unique em (subject, professional, group): conceder de novo depois de
+  // revogar cria linha NOVA. Unicidade forçaria UPDATE e destruiria a trilha —
+  // é a "correção" errada mais provável numa revisão futura.
+  @@index([professionalId, revokedAt])
+  @@index([subjectUserId, revokedAt])
+  @@index([groupId, revokedAt])
+}
+
+/// Trilha de auditoria. Escrita em UM lugar só (`ProfessionalAccessService`),
+/// inclusive nas negativas — "tentou ver o que não podia" é o registro que mais
+/// importa.
+model ProfessionalAccessLog {
+  id             String     @id @default(uuid())
+  /// Nulo quando não havia vínculo (negativa) ou quando o vínculo sumiu junto
+  /// com a conta do profissional. A trilha do titular sobrevive aos dois casos.
+  linkId         String?
+  /// String pura, sem FK: se o profissional apagar a conta, o aluno continua
+  /// conseguindo responder "quem olhou meu dado".
+  professionalId String
+  subjectUserId  String
+  scope          ShareScope
+  /// Vocabulário do produto: "list_workout_sessions", "get_student_progress".
+  action         String
+  denied         Boolean    @default(false)
+  at             DateTime   @default(now())
+
+  link    ProfessionalLink? @relation(fields: [linkId], references: [id], onDelete: SetNull)
+  subject User              @relation("AccessLogSubject", fields: [subjectUserId], references: [id], onDelete: Cascade)
+
+  @@index([subjectUserId, at])
+  @@index([professionalId, at])
+  @@index([linkId, at])
 }

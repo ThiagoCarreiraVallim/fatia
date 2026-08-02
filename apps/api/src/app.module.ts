@@ -11,6 +11,7 @@ import { NutritionModule } from './nutrition/nutrition.module';
 import { WorkoutModule } from './workout/workout.module';
 import { ProgressModule } from './progress/progress.module';
 import { GoalsModule } from './goals/goals.module';
+import { SharingModule } from './sharing/sharing.module';
 import { McpModule } from './mcp/mcp.module';
 
 @Module({
@@ -48,6 +49,7 @@ import { McpModule } from './mcp/mcp.module';
     WorkoutModule,
     ProgressModule,
     GoalsModule,
+    SharingModule,
     McpModule,
   ],
 })

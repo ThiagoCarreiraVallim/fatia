@@ -1,6 +1,9 @@
 import { NotFoundException } from '@nestjs/common';
-import { MealType } from '@prisma/client';
+import { GroupRole, GroupType, MealType, MembershipStatus, ShareScope } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
+import { AccessAuditService } from '../../sharing/access-audit.service';
+import { ProfessionalAccessService } from '../../sharing/professional-access.service';
+import { ProfessionalLinkService } from '../../sharing/professional-link.service';
 import { GoalsService } from '../../goals/goals.service';
 import { FoodService } from '../../nutrition/food.service';
 import { MealItemService } from '../../nutrition/meal-item.service';
@@ -49,11 +52,22 @@ describe('isolamento entre usuários', () => {
   const plans = new WorkoutPlanService(prisma);
   const sessions = new WorkoutSessionService(prisma);
   const sets = new SessionSetService(prisma);
+  const links = new ProfessionalLinkService(prisma);
+  const access = new ProfessionalAccessService(prisma, new AccessAuditService(prisma));
 
   /** Dados do user-A. Preenchido no beforeAll e sondado como user-B. */
   const owned = {
     userA: '',
     userB: '',
+    /** Terceiro usuário: profissional da academia do user-A (ADR 014). */
+    pro: '',
+    groupId: '',
+    /** Membership do user-A (o titular do dado) no grupo. */
+    membershipA: '',
+    /** Membership do próprio `pro` no grupo. Usada para "demitir" o personal. */
+    membershipPro: '',
+    /** Membership do user-B num grupo em que `pro` não tem nada a ver. */
+    membershipForaId: '',
     mealId: '',
     mealItemId: '',
     customFoodId: 0,
@@ -83,7 +97,7 @@ describe('isolamento entre usuários', () => {
     await prisma.$connect();
 
     const stamp = `iso-${Date.now()}`;
-    const [userA, userB] = await Promise.all([
+    const [userA, userB, pro] = await Promise.all([
       prisma.user.create({
         data: {
           logtoSub: `${stamp}-a`,
@@ -100,15 +114,70 @@ describe('isolamento entre usuários', () => {
           timezone: TZ,
         },
       }),
+      prisma.user.create({
+        data: {
+          logtoSub: `${stamp}-pro`,
+          email: `${stamp}-pro@test.local`,
+          name: 'Pro',
+          timezone: TZ,
+        },
+      }),
     ]);
     owned.userA = userA.id;
     owned.userB = userB.id;
+    owned.pro = pro.id;
 
     // Exercício de catálogo público — usado nas séries. Não pertence a ninguém.
     const shared = await prisma.exercise.create({
       data: { name: `${stamp}-shared-ex`, muscleGroup: 'peito' },
     });
     owned.sharedExerciseId = shared.id;
+
+    // --- estrutura B2B (ADR 014) ---
+    //
+    // O grupo é do **user-B**, e o user-A é aluno dele. Isso é de propósito:
+    // todos os casos deste arquivo passam a rodar com o user-B na posição de
+    // dono da academia do user-A, e continuam exigindo recusa. Dono de grupo
+    // não lê dado de aluno — a garantia sai de graça em ~50 casos.
+    const group = await prisma.group.create({
+      data: {
+        type: GroupType.SPONSORED,
+        name: 'Academia B',
+        slug: `${stamp}-academia`,
+        ownerId: owned.userB,
+        memberships: {
+          create: [
+            { userId: owned.userB, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+            { userId: owned.userA, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+            { userId: owned.pro, role: GroupRole.PROFESSIONAL, status: MembershipStatus.ACTIVE },
+          ],
+        },
+      },
+      include: { memberships: true },
+    });
+    owned.groupId = group.id;
+    owned.membershipA = group.memberships.find((m) => m.userId === owned.userA)!.id;
+    owned.membershipPro = group.memberships.find((m) => m.userId === owned.pro)!.id;
+
+    // Grupo à parte, do próprio `pro`, com o user-B dentro. Serve para provar
+    // que um `membershipId` válido de OUTRO contexto não resolve — nem quando
+    // quem pergunta é o dono daquele grupo.
+    const outro = await prisma.group.create({
+      data: {
+        type: GroupType.SOCIAL,
+        name: 'Grupo do Pro',
+        slug: `${stamp}-pro-grupo`,
+        ownerId: owned.pro,
+        memberships: {
+          create: [
+            { userId: owned.pro, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
+            { userId: owned.userB, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
+          ],
+        },
+      },
+      include: { memberships: true },
+    });
+    owned.membershipForaId = outro.memberships.find((m) => m.userId === owned.userB)!.id;
 
     // --- semeia tudo como user-A ---
     const customFood = await foods.createCustom(owned.userA, {
@@ -194,7 +263,9 @@ describe('isolamento entre usuários', () => {
   afterAll(async () => {
     // Cascade limpa tudo que pende dos usuários; o exercício público é solto.
     await prisma.user
-      .deleteMany({ where: { id: { in: [owned.userA, owned.userB].filter(Boolean) } } })
+      .deleteMany({
+        where: { id: { in: [owned.userA, owned.userB, owned.pro].filter(Boolean) } },
+      })
       .catch(() => undefined);
     await prisma.exercise
       .deleteMany({ where: { id: owned.sharedExerciseId } })
@@ -208,6 +279,14 @@ describe('isolamento entre usuários', () => {
     expect(owned.userB).not.toBe(owned.userA);
     expect(owned.mealId).not.toBe('');
     expect(owned.setId).not.toBe('');
+  });
+
+  it('semeou a estrutura B2B', () => {
+    // Mesma razão: sem membership válida, os `NOT_FOUND` abaixo seriam triviais.
+    expect(owned.pro).not.toBe('');
+    expect(owned.groupId).not.toBe('');
+    expect(owned.membershipA).not.toBe('');
+    expect(owned.membershipForaId).not.toBe('');
   });
 
   describe('leituras por id não atravessam usuários', () => {
@@ -473,6 +552,234 @@ describe('isolamento entre usuários', () => {
       await expect(nutrientTargets.delete(owned.userB, 'sodium_mg')).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  /**
+   * Acesso profissional (ADR 014) — a única leitura entre contas do produto.
+   *
+   * O `NOT_FOUND` indistinguível deixou de ser universal quando esta porta
+   * abriu, então cada recusa aqui é conferida contra a recusa que um estranho
+   * recebe. O caminho feliz está junto de propósito: sem ele, as recusas
+   * passariam de graça se a leitura estivesse quebrada por qualquer outro
+   * motivo — mesma razão do `it('semeou os dados do user-A')`.
+   */
+  describe('acesso profissional entre contas (ADR 014)', () => {
+    /**
+     * Mensagem da recusa. Estoura se a leitura for **autorizada** — sem isso,
+     * comparar duas recusas que não aconteceram passaria de graça.
+     */
+    const mensagemDaRecusa = async (quem: string, membershipId: string, scope: ShareScope) => {
+      try {
+        await access.assertReadable(quem, membershipId, scope, 'probe');
+      } catch (err) {
+        return (err as Error).message;
+      }
+      throw new Error('esperava recusa, mas a leitura foi autorizada');
+    };
+
+    /** Recusa que um estranho qualquer recebe, para comparar byte a byte. */
+    const recusaDeEstranho = (scope: ShareScope) =>
+      mensagemDaRecusa(owned.userB, owned.membershipA, scope);
+
+    const tentar = (scope: ShareScope, membershipId = owned.membershipA) =>
+      mensagemDaRecusa(owned.pro, membershipId, scope);
+
+    afterEach(async () => {
+      // Cada caso monta o vínculo de que precisa; sem isto, o estado vaza.
+      // A trilha vai junto — o último caso conta as linhas que ele mesmo criou.
+      await prisma.professionalAccessLog.deleteMany({ where: { subjectUserId: owned.userA } });
+      await prisma.professionalLink.deleteMany({ where: { subjectUserId: owned.userA } });
+    });
+
+    it('profissional SEM vínculo recebe o mesmo NOT_FOUND de um estranho', async () => {
+      await expect(
+        access.assertReadable(owned.pro, owned.membershipA, ShareScope.WORKOUT, 'probe'),
+      ).rejects.toThrow(NotFoundException);
+
+      // Byte a byte: a mensagem não pode denunciar que o aluno existe.
+      expect(await tentar(ShareScope.WORKOUT)).toBe(await recusaDeEstranho(ShareScope.WORKOUT));
+    });
+
+    it('estar no grupo como PROFESSIONAL não é acesso', async () => {
+      // O `pro` é membro ativo com papel PROFESSIONAL e mesmo assim não lê nada:
+      // papel governa administração, vínculo governa leitura.
+      const membership = await prisma.groupMembership.findFirst({
+        where: { groupId: owned.groupId, userId: owned.pro },
+      });
+      expect(membership?.role).toBe(GroupRole.PROFESSIONAL);
+      expect(membership?.status).toBe(MembershipStatus.ACTIVE);
+
+      for (const scope of Object.values(ShareScope)) {
+        await expect(
+          access.assertReadable(owned.pro, owned.membershipA, scope, 'probe'),
+        ).rejects.toThrow(NotFoundException);
+      }
+    });
+
+    it('membershipId de outro grupo recusa, mesmo com vínculo válido em mãos', async () => {
+      // O caso do #204: o `pro` TEM um vínculo ativo (com o user-A, na academia
+      // do user-B) e usa esse crachá para pedir uma membership de outro
+      // contexto — em que ele por acaso é até dono. Se o `where` do vínculo não
+      // amarrar titular e grupo à linha lida, a chamada devolve o userId errado.
+      await links.grant({
+        subjectUserId: owned.userA,
+        professionalId: owned.pro,
+        groupId: owned.groupId,
+        scopes: [ShareScope.WORKOUT],
+      });
+
+      expect(await tentar(ShareScope.WORKOUT, owned.membershipForaId)).toBe(
+        await recusaDeEstranho(ShareScope.WORKOUT),
+      );
+    });
+
+    it('vínculo REVOGADO recusa igual a nunca ter existido', async () => {
+      const link = await links.grant({
+        subjectUserId: owned.userA,
+        professionalId: owned.pro,
+        groupId: owned.groupId,
+        scopes: [ShareScope.WORKOUT],
+      });
+      await links.revokeAsSubject(owned.userA, link.id);
+
+      // A linha continua no banco — revogar não apaga (é o que responde
+      // "quem teve acesso a quê, quando").
+      const persistido = await prisma.professionalLink.findUnique({ where: { id: link.id } });
+      expect(persistido?.revokedAt).toBeTruthy();
+
+      expect(await tentar(ShareScope.WORKOUT)).toBe(await recusaDeEstranho(ShareScope.WORKOUT));
+    });
+
+    it('escopo NÃO consentido é barrado mesmo com vínculo ativo', async () => {
+      await links.grant({
+        subjectUserId: owned.userA,
+        professionalId: owned.pro,
+        groupId: owned.groupId,
+        scopes: [ShareScope.WORKOUT],
+      });
+
+      // Consentir treino não abre o diário alimentar.
+      expect(await tentar(ShareScope.NUTRITION)).toBe(await recusaDeEstranho(ShareScope.NUTRITION));
+      expect(await tentar(ShareScope.BODY)).toBe(await recusaDeEstranho(ShareScope.BODY));
+    });
+
+    it('vínculo ativo no escopo consentido devolve o userId do titular', async () => {
+      await links.grant({
+        subjectUserId: owned.userA,
+        professionalId: owned.pro,
+        groupId: owned.groupId,
+        scopes: [ShareScope.WORKOUT],
+      });
+
+      await expect(
+        access.assertReadable(owned.pro, owned.membershipA, ShareScope.WORKOUT, 'probe'),
+      ).resolves.toBe(owned.userA);
+    });
+
+    it('personal DEMITIDO para de ler na hora, com o vínculo ainda sem revogar', async () => {
+      // A academia demite o personal: a `GroupMembership` dele vira REMOVED. O
+      // `ProfessionalLink` continua intacto, porque a revogação em massa é da
+      // #154 e nada a chama ainda. É o estado real de hoje — e sem a checagem
+      // do lado do profissional o ex-funcionário lê o histórico de saúde da
+      // aluna com um crachá que a academia já recolheu.
+      await links.grant({
+        subjectUserId: owned.userA,
+        professionalId: owned.pro,
+        groupId: owned.groupId,
+        scopes: [ShareScope.WORKOUT],
+      });
+
+      // Antes de demitir, ele lê — sem isto a recusa abaixo passaria de graça.
+      await expect(
+        access.assertReadable(owned.pro, owned.membershipA, ShareScope.WORKOUT, 'probe'),
+      ).resolves.toBe(owned.userA);
+
+      try {
+        await prisma.groupMembership.update({
+          where: { id: owned.membershipPro },
+          data: { status: MembershipStatus.REMOVED, leftAt: new Date() },
+        });
+
+        // O vínculo NÃO foi tocado: é exatamente o que torna o caso perigoso.
+        const vinculo = await prisma.professionalLink.findFirst({
+          where: { subjectUserId: owned.userA, professionalId: owned.pro },
+        });
+        expect(vinculo?.revokedAt).toBeNull();
+
+        expect(await tentar(ShareScope.WORKOUT)).toBe(await recusaDeEstranho(ShareScope.WORKOUT));
+      } finally {
+        // Recontratado: os outros casos contam com ele ativo.
+        await prisma.groupMembership.update({
+          where: { id: owned.membershipPro },
+          data: { status: MembershipStatus.ACTIVE, leftAt: null },
+        });
+      }
+    });
+
+    it('DONO do grupo não lê nem com vínculo concedido em nome dele', async () => {
+      // O user-B é OWNER da academia. Se alguém (ou um bug de #154) criar um
+      // vínculo com ele na ponta do profissional, o papel ainda barra: dono
+      // gere grupo, membros e cobrança e não lê dado de saúde (ADR 014). É
+      // também o que mantém os ~50 casos deste arquivo válidos, já que todos
+      // rodam com o user-B nessa posição.
+      await links.grant({
+        subjectUserId: owned.userA,
+        professionalId: owned.userB,
+        groupId: owned.groupId,
+        scopes: [ShareScope.WORKOUT],
+      });
+
+      await expect(
+        access.assertReadable(owned.userB, owned.membershipA, ShareScope.WORKOUT, 'probe'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('o vínculo não abre nada nos services de domínio', async () => {
+      // O que prova que a ADR 014 foi cumprida: com vínculo ativo de WORKOUT,
+      // os services continuam ignorando que grupo existe. A leitura em nome do
+      // aluno só acontece DEPOIS do `assertReadable`, com o userId dele.
+      await links.grant({
+        subjectUserId: owned.userA,
+        professionalId: owned.pro,
+        groupId: owned.groupId,
+        scopes: [ShareScope.WORKOUT],
+      });
+
+      await expect(plans.list(owned.pro)).resolves.toEqual([]);
+      await expect(sessions.list(owned.pro, {})).resolves.toEqual([]);
+      await expect(sessions.findById(owned.pro, owned.sessionId)).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(meals.findById(owned.pro, owned.mealId)).rejects.toThrow(NotFoundException);
+      await expect(meals.list(owned.pro, {}, TZ)).resolves.toEqual([]);
+    });
+
+    it('a trilha de auditoria grava sucesso e negativa', async () => {
+      // O `AccessAuditService` engole erro de escrita de propósito (a trilha não
+      // pode derrubar a requisição), então só um teste contra Postgres real
+      // percebe se a linha nunca chega ao banco.
+      const link = await links.grant({
+        subjectUserId: owned.userA,
+        professionalId: owned.pro,
+        groupId: owned.groupId,
+        scopes: [ShareScope.WORKOUT],
+      });
+
+      await access.assertReadable(owned.pro, owned.membershipA, ShareScope.WORKOUT, 'auditoria_ok');
+      await access
+        .assertReadable(owned.pro, owned.membershipA, ShareScope.NUTRITION, 'auditoria_negada')
+        .catch(() => undefined);
+
+      const trilha = await prisma.professionalAccessLog.findMany({
+        where: { subjectUserId: owned.userA, professionalId: owned.pro },
+        orderBy: { at: 'asc' },
+      });
+
+      expect(trilha).toEqual([
+        expect.objectContaining({ action: 'auditoria_ok', denied: false, linkId: link.id }),
+        expect.objectContaining({ action: 'auditoria_negada', denied: true, linkId: null }),
+      ]);
     });
   });
 
