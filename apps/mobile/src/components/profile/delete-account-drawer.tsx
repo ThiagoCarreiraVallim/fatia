@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Alert, Text, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { DELETE_ACCOUNT_CONFIRMATION, usersApi } from '@fatia/api-client';
@@ -27,9 +27,15 @@ export function DeleteAccountDrawer({ open, onClose }: { open: boolean; onClose:
   const { signOut } = useAuth();
   const qc = useQueryClient();
 
-  useEffect(() => {
+  // Ajuste durante o render, e não num efeito (#187). A comparação é a mesma que
+  // estava no array de dependências: a confirmação digitada some na mesma
+  // abertura de antes, só que antes de pintar. `wasOpen` parte de `false` para
+  // reproduzir também a passagem de montagem que o efeito fazia.
+  const [wasOpen, setWasOpen] = useState(false);
+  if (wasOpen !== open) {
+    setWasOpen(open);
     if (open) setConfirmation('');
-  }, [open]);
+  }
 
   const mutation = useMutation({
     mutationFn: () => usersApi.deleteMe(confirmation.trim()),

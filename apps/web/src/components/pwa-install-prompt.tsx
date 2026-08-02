@@ -75,9 +75,18 @@ export function PwaInstallPrompt() {
     window.addEventListener('appinstalled', onInstalled);
 
     // iOS não dispara beforeinstallprompt — mostramos instruções manuais.
+    //
+    // Silenciado, não corrigido (#187). Derivar isto no render é justamente o
+    // que não pode: `isIos()` lê `navigator.userAgent` e `document`, que no
+    // servidor não existem, e este componente é renderizado no servidor pelo
+    // Next. Decidir a visibilidade durante o render faria o HTML do servidor
+    // divergir do primeiro render do cliente e quebraria a hidratação. O valor
+    // só é conhecível depois de montar, que é o que o efeito faz.
     if (isIos()) {
+      /* eslint-disable react-hooks/set-state-in-effect */
       setIosMode(true);
       setVisible(true);
+      /* eslint-enable react-hooks/set-state-in-effect */
     }
 
     return () => {

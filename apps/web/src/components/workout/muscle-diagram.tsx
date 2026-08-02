@@ -61,7 +61,6 @@ export function MuscleDiagram({
   return (
     <div className="flex gap-2 justify-center">
       {(view === 'front' || view === 'both') && (
-        // eslint-disable-next-line react/no-unknown-property
         <object
           ref={frontRef}
           data="/muscle-front.svg"
@@ -71,7 +70,6 @@ export function MuscleDiagram({
         />
       )}
       {(view === 'back' || view === 'both') && (
-        // eslint-disable-next-line react/no-unknown-property
         <object
           ref={backRef}
           data="/muscle-back.svg"

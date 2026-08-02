@@ -67,8 +67,20 @@ export function SessionHeader({
 function useElapsed(startedAt: string): string {
   const [label, setLabel] = useState(() => elapsedLabel(startedAt));
 
-  useEffect(() => {
+  // O recálculo imediato na troca de sessão sai do efeito e vira ajuste durante o
+  // render (#187): a comparação é a mesma que estava nas dependências, então o
+  // rótulo muda no mesmo momento, só que sem pintar um quadro com o tempo da
+  // sessão anterior. Não há passagem de montagem porque o `useState` acima já
+  // inicializa com o mesmo cálculo — no efeito, essa primeira linha era um no-op.
+  // O intervalo continua no efeito: assinar um temporizador é justamente o que
+  // efeito serve para fazer.
+  const [previousStartedAt, setPreviousStartedAt] = useState(startedAt);
+  if (previousStartedAt !== startedAt) {
+    setPreviousStartedAt(startedAt);
     setLabel(elapsedLabel(startedAt));
+  }
+
+  useEffect(() => {
     const id = setInterval(() => setLabel(elapsedLabel(startedAt)), 15_000);
     return () => clearInterval(id);
   }, [startedAt]);

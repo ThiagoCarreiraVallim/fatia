@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { workoutApi } from '@fatia/api-client';
 
@@ -12,9 +12,16 @@ export function ConsistencyCard() {
     queryFn: () => workoutApi.listSessions({ limit: 100 }),
   });
 
+  // Uma única leitura do relógio, presa à montagem e declarada como dependência.
+  // Antes o memo lia a hora duas vezes (`Date.now()` e `new Date()`) em momentos
+  // diferentes e sem dependência nenhuma: a janela de 30 dias e os baldes de 7
+  // dias podiam sair de instantes distintos, e o resultado mudava sozinho se o
+  // React resolvesse recalcular o memo.
+  const [nowMs] = useState(() => Date.now());
+
   const stats = useMemo(() => {
     if (!sessions.data) return null;
-    const cutoff = Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000;
+    const cutoff = nowMs - WINDOW_DAYS * 24 * 60 * 60 * 1000;
     const daysWithSession = new Set<string>();
     for (const s of sessions.data) {
       const t = new Date(s.startedAt).getTime();
@@ -25,7 +32,7 @@ export function ConsistencyCard() {
 
     // 4 buckets de ~7 dias: % de dias com treino em cada semana
     const buckets = [0, 0, 0, 0];
-    const now = new Date();
+    const now = new Date(nowMs);
     for (let bucketIdx = 0; bucketIdx < 4; bucketIdx++) {
       const start = new Date(now);
       start.setDate(now.getDate() - (bucketIdx + 1) * 7 + 1);
@@ -39,7 +46,7 @@ export function ConsistencyCard() {
     }
 
     return { daysActive, buckets };
-  }, [sessions.data]);
+  }, [sessions.data, nowMs]);
 
   return (
     <div className="rounded-2xl border border-white/5 bg-card p-4">

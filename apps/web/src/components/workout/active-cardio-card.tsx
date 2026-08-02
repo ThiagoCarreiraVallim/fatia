@@ -91,9 +91,16 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [running]);
 
-  useEffect(() => {
+  // Ajuste durante o render, e não num efeito (#187). A comparação é a mesma que
+  // estava no array de dependências, então o mostrador é reescrito nos mesmos
+  // momentos — só que antes de pintar, o que aqui importa: com o efeito, cada
+  // tique do cronômetro pintava um quadro com o segundo anterior. Não há passagem
+  // de montagem porque o `useState` acima já inicializa com o mesmo `fmtClock`.
+  const [previous, setPrevious] = useState({ seconds, editingDuration });
+  if (previous.seconds !== seconds || previous.editingDuration !== editingDuration) {
+    setPrevious({ seconds, editingDuration });
     if (!editingDuration) setDurationInput(fmtClock(seconds));
-  }, [seconds, editingDuration]);
+  }
 
   function commitDurationInput() {
     const parsed = parseMmss(durationInput);

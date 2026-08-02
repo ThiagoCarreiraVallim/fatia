@@ -61,6 +61,31 @@ export async function discover(endpoint: string, fetchImpl = fetch): Promise<Oid
   };
 }
 
+/**
+ * Uma descoberta por execução do app, **sem memorizar a falha**.
+ *
+ * O documento OIDC não muda entre telas e cada leitura é uma ida à rede antes de
+ * qualquer coisa útil aparecer, então a promise fica guardada. Mas guardar a
+ * promise rejeitada seria pior que não guardar nada: rede caída no primeiro
+ * toque em "Entrar" deixaria toda tentativa seguinte devolvendo a **mesma**
+ * rejeição, e o login só voltaria fechando o app. Daí o `catch` que limpa o
+ * cache e relança — quem chamou continua vendo o erro, o próximo tenta de novo.
+ *
+ * Mora aqui, e não dentro do provider, porque não tem nada de por-instância: o
+ * endereço vem de `env.logtoEndpoint`, constante de módulo. Aqui também é
+ * testável sem simulador, que é o critério do resto deste arquivo.
+ */
+export function memoizeDiscovery(load: () => Promise<OidcEndpoints>): () => Promise<OidcEndpoints> {
+  let pending: Promise<OidcEndpoints> | null = null;
+  return () => {
+    pending ??= load().catch((err: unknown) => {
+      pending = null;
+      throw err;
+    });
+    return pending;
+  };
+}
+
 async function postToken(
   tokenEndpoint: string,
   body: Record<string, string>,

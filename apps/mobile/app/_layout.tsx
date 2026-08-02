@@ -53,6 +53,14 @@ function ApiBridge({ children }: { children: React.ReactNode }) {
         void signOut();
       },
     });
+    // Silenciado, não corrigido (#187). `installMobileApiTransport` escreve num
+    // singleton de módulo — efeito colateral que não pode acontecer no render,
+    // porque um render descartado deixaria o transporte instalado do mesmo
+    // jeito. E o `ready` não é estado derivado de nada: ele é só a resposta de
+    // "a instalação já rodou?", que é uma pergunta sobre o efeito e não pode ser
+    // respondida antes dele. O portão existe para que nenhuma tela filha dispare
+    // requisição sem token.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setReady(true);
   }, [getAccessToken, signOut]);
 

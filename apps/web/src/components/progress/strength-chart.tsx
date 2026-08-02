@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   CartesianGrid,
@@ -23,37 +23,46 @@ const METRICS: Array<{ value: StrengthMetric; label: string; unit: string }> = [
 ];
 
 export function StrengthChart({ days }: { days: number }) {
-  const [exercise, setExercise] = useState<Exercise | null>(null);
+  const [picked, setPicked] = useState<Exercise | null>(null);
   const [metric, setMetric] = useState<StrengthMetric>('max_weight');
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  // Pré-seleciona automaticamente o exercício de força treinado mais recentemente,
-  // para o gráfico não nascer vazio. O usuário pode trocar pelo seletor.
   const records = useQuery({
     queryKey: ['workout', 'records'],
     queryFn: () => workoutApi.listPersonalRecords(),
   });
-  useEffect(() => {
-    if (exercise || !records.data) return;
-    const top = records.data.find((r) => r.type === 'strength');
-    if (top) {
-      setExercise({
-        id: top.exerciseId,
-        name: top.exerciseName,
-        muscleGroup: top.muscleGroup,
-        source: 'SEED',
-        createdByUserId: null,
-        primaryMuscles: [],
-        secondaryMuscles: [],
-        equipment: null,
-        level: null,
-        mechanic: null,
-        instructions: [],
-        youtubeVideoId: null,
-        youtubeVideoIdPt: null,
-      });
-    }
-  }, [records.data, exercise]);
+
+  // Pré-seleciona automaticamente o exercício de força treinado mais recentemente,
+  // para o gráfico não nascer vazio. O usuário pode trocar pelo seletor.
+  //
+  // Derivado, e não copiado para dentro de um `useState` por efeito (#187): a
+  // escolha automática é função pura dos recordes, e guardá-la em estado só
+  // criava uma cópia que podia divergir da fonte. O que **é** estado é a escolha
+  // explícita da pessoa, e ela ganha do automático. Efeito colateral assumido: se
+  // os recordes forem revalidados e a cabeça da lista mudar antes de qualquer
+  // escolha manual, o gráfico passa a mostrar o novo exercício mais recente — que
+  // é o que a pré-seleção promete. Antes, ficava travado no primeiro que chegou.
+  const auto = useMemo((): Exercise | null => {
+    const top = records.data?.find((r) => r.type === 'strength');
+    if (!top) return null;
+    return {
+      id: top.exerciseId,
+      name: top.exerciseName,
+      muscleGroup: top.muscleGroup,
+      source: 'SEED',
+      createdByUserId: null,
+      primaryMuscles: [],
+      secondaryMuscles: [],
+      equipment: null,
+      level: null,
+      mechanic: null,
+      instructions: [],
+      youtubeVideoId: null,
+      youtubeVideoIdPt: null,
+    };
+  }, [records.data]);
+
+  const exercise = picked ?? auto;
 
   const progress = useQuery<StrengthProgress>({
     queryKey: ['progress', 'strength', exercise?.id, days, metric],
@@ -110,7 +119,7 @@ export function StrengthChart({ days }: { days: number }) {
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
         onPick={(ex) => {
-          setExercise(ex);
+          setPicked(ex);
           setPickerOpen(false);
         }}
         filter="strength"

@@ -32,12 +32,18 @@ export function ExerciseSearchDrawer({ open, onOpenChange, sessionId }: Props) {
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
 
-  useEffect(() => {
+  // Ajuste durante o render, e não num efeito (#187). A comparação é a mesma que
+  // estava no array de dependências, então a limpeza acontece no mesmo fechamento
+  // — só que antes de pintar. Não há passagem de montagem porque os campos já
+  // nascem vazios: no efeito, a rodada de montagem era um no-op.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
     if (!open) {
       setQ('');
       setDebounced('');
     }
-  }, [open]);
+  }
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q), 300);

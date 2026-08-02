@@ -65,6 +65,15 @@ const Carousel = React.forwardRef<
 
   React.useEffect(() => {
     if (!api) return;
+    // Silenciado, não corrigido (#187). O `canScrollPrev/Next` é leitura de um
+    // sistema externo: o embla só existe depois que o carrossel está no DOM, e
+    // quem sabe se dá para rolar é ele, não o React. Não há como derivar isso no
+    // render — a primeira leitura tem de vir depois do commit, exatamente como
+    // as leituras seguintes, que chegam pelos eventos `select` e `reInit`
+    // assinados nas duas linhas abaixo. É o caso que a própria documentação da
+    // regra chama de "subscribe for updates from some external system"; só a
+    // leitura inicial é síncrona, e ela não tem outro lugar para morar.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     onSelect(api);
     api.on('reInit', onSelect);
     api.on('select', onSelect);

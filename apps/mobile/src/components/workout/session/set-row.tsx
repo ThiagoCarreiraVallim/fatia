@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Alert, Pressable, Text, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
@@ -145,6 +145,33 @@ export function SetRow({ set, index, isCardio, sessionId, showDelete, onEditRpe 
   );
 }
 
+/**
+ * Rascunho local de uma célula, reespelhado quando a prop comprometida muda.
+ *
+ * As duas células abaixo faziam isto com `useEffect(() => setDraft(...), [value])`,
+ * o que pinta um quadro com o valor velho antes de corrigir e é o que o
+ * `react-hooks/set-state-in-effect` acusa (#187). O ajuste durante o render faz o
+ * React reprocessar o componente antes de pintar, e a comparação é exatamente a
+ * mesma que estava no array de dependências — mesmos momentos de reset, um quadro
+ * a menos. Não há passagem de montagem porque o `useState` já inicializa com
+ * `format(value)`: no efeito, a rodada de montagem era um no-op.
+ *
+ * `format` precisa ser pura — roda no render.
+ */
+function useMirroredDraft<T>(value: T, format: (value: T) => string) {
+  const [draft, setDraft] = useState(() => format(value));
+  const [previous, setPrevious] = useState(value);
+  if (!Object.is(value, previous)) {
+    setPrevious(value);
+    setDraft(format(value));
+  }
+  return [draft, setDraft] as const;
+}
+
+const asNumberText = (value: number | null): string => (value != null ? formatNumber(value) : '');
+const asClockText = (seconds: number | null): string =>
+  seconds != null ? formatClock(seconds) : '';
+
 function NumberCell({
   value,
   editable,
@@ -160,11 +187,7 @@ function NumberCell({
   integer?: boolean;
   onChange: (value: number | undefined) => void;
 }) {
-  const [draft, setDraft] = useState(value != null ? formatNumber(value) : '');
-
-  useEffect(() => {
-    setDraft(value != null ? formatNumber(value) : '');
-  }, [value]);
+  const [draft, setDraft] = useMirroredDraft(value, asNumberText);
 
   if (!editable) {
     return (
@@ -217,11 +240,7 @@ function ClockCell({
   label: string;
   onChange: (seconds: number | undefined) => void;
 }) {
-  const [draft, setDraft] = useState(seconds != null ? formatClock(seconds) : '');
-
-  useEffect(() => {
-    setDraft(seconds != null ? formatClock(seconds) : '');
-  }, [seconds]);
+  const [draft, setDraft] = useMirroredDraft(seconds, asClockText);
 
   if (!editable) {
     return (

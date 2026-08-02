@@ -55,8 +55,18 @@ export function ActiveCardioCard({
   );
   const [kcal, setKcal] = useState(existing?.kcalBurned != null ? String(existing.kcalBurned) : '');
 
+  // O cronômetro não pode depender de `seconds` — a dependência reiniciaria o
+  // intervalo a cada tique. Daí o ref, lido só no arranque para saber de onde
+  // continuar. A escrita fica num efeito e não no corpo do render: escrever em
+  // ref durante o render quebra sob render duplo do StrictMode e sob render
+  // concorrente descartado, porque a escrita acontece mesmo quando o render é
+  // jogado fora. O efeito abaixo é declarado antes do cronômetro, então num
+  // commit que muda `seconds` e `running` juntos o ref já está atualizado
+  // quando o intervalo arranca.
   const secondsRef = useRef(seconds);
-  secondsRef.current = seconds;
+  useEffect(() => {
+    secondsRef.current = seconds;
+  }, [seconds]);
 
   useEffect(() => {
     if (!running) return;

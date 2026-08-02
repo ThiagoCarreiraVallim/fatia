@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { nutritionApi, type UserGoals } from '@fatia/api-client';
@@ -37,14 +37,21 @@ export default function NutritionGoalsScreen() {
   const [formulario, setFormulario] = useState<Formulario>(VAZIO);
   const [salvo, setSalvo] = useState(false);
 
-  useEffect(() => {
-    if (metas.data) {
-      const { userId, ...resto } = metas.data;
-      // `userId` volta da API mas não é editável e não vai no PUT.
-      void userId;
-      setFormulario(resto);
-    }
-  }, [metas.data]);
+  // Ajuste durante o render, e não num efeito (#187). A comparação é a mesma que
+  // estava no array de dependências — identidade do objeto do React Query, que
+  // só muda quando a resposta muda de verdade (structural sharing) — então o
+  // formulário é reespelhado nos mesmos momentos, só que antes de pintar.
+  // `dadosAnteriores` parte de `undefined` para reproduzir a passagem de
+  // montagem, que é o caso normal: a resposta já em cache tem de preencher os
+  // campos.
+  const [dadosAnteriores, setDadosAnteriores] = useState<typeof metas.data>(undefined);
+  if (dadosAnteriores !== metas.data && metas.data) {
+    setDadosAnteriores(metas.data);
+    const { userId, ...resto } = metas.data;
+    // `userId` volta da API mas não é editável e não vai no PUT.
+    void userId;
+    setFormulario(resto);
+  }
 
   const salvar = useMutation({
     mutationFn: (corpo: Formulario) => nutritionApi.putGoals(corpo),
