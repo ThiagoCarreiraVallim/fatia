@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionSet, WorkoutSession } from '@fatia/api-client';
 import {
+  applyPlanMove,
   estimatePlanStats,
   formatSessionDuration,
   nextPlanOrder,
+  planMoveAnnouncement,
   planMoveDecision,
   pluralize,
   summarizeSession,
@@ -188,19 +190,79 @@ describe('planMoveDecision', () => {
     expect(planMoveDecision([], 0, 1, { moveInFlight: false })).toBeNull();
   });
 
-  it('descreve o destino para o anúncio de acessibilidade', () => {
+  it('diz quem trocou com quem', () => {
     const decision = planMoveDecision(list, 0, 1, { moveInFlight: false });
-    expect(decision).toMatchObject({
-      from: { id: 'pe-a' },
-      to: { id: 'pe-b' },
-      targetIndex: 1,
-      total: 3,
-    });
+    expect(decision).toMatchObject({ from: { id: 'pe-a' }, to: { id: 'pe-b' } });
+    // Posição e total não vêm daqui: o anúncio se conta pela resposta da API
+    // (`planMoveAnnouncement`), porque a lista pode ter mudado durante o voo.
+    expect(decision).not.toHaveProperty('targetIndex');
+    expect(decision).not.toHaveProperty('total');
   });
 
   it('não muda a lista original', () => {
     planMoveDecision(list, 1, 1, { moveInFlight: false });
     expect(list.map((e) => e.order)).toEqual([1, 5, 9]);
+  });
+});
+
+describe('applyPlanMove', () => {
+  const list = [
+    { id: 'pe-a', order: 1 },
+    { id: 'pe-b', order: 5 },
+    { id: 'pe-c', order: 9 },
+  ];
+
+  it('troca só o `order` dos dois vizinhos', () => {
+    const decision = planMoveDecision(list, 1, 1, { moveInFlight: false });
+    expect(decision).not.toBeNull();
+    // O cache continua com a forma que a API devolve — quem lê ordena por
+    // `order`, como a própria tela faz. Mexer na posição do array deixaria o
+    // cache numa ordenação que resposta nenhuma da API tem.
+    expect(applyPlanMove(list, decision!)).toEqual([
+      { id: 'pe-a', order: 1 },
+      { id: 'pe-b', order: 9 },
+      { id: 'pe-c', order: 5 },
+    ]);
+  });
+
+  it('não muda a lista original', () => {
+    const decision = planMoveDecision(list, 0, 1, { moveInFlight: false });
+    applyPlanMove(list, decision!);
+    expect(list.map((e) => e.order)).toEqual([1, 5, 9]);
+  });
+});
+
+describe('planMoveAnnouncement', () => {
+  it('conta a posição pela ordem, não pela posição no array', () => {
+    // A API devolve os exercícios em qualquer ordem; o `order` é que manda.
+    const resposta = [
+      { id: 'pe-c', order: 9 },
+      { id: 'pe-a', order: 1 },
+      { id: 'pe-b', order: 5 },
+    ];
+    expect(planMoveAnnouncement(resposta, 'pe-b', 'Crucifixo')).toBe(
+      'Crucifixo movido para a posição 2 de 3',
+    );
+  });
+
+  it('conta pela resposta, e não pelo que estava na tela no toque', () => {
+    // Outro aparelho removeu um exercício durante o voo. A API aceita a troca
+    // do mesmo jeito, porque os dois ids do corpo seguem no plano. Contando
+    // pelo snapshot do toque, quem só tem o leitor de tela ouviria "3 de 3"
+    // numa lista de 2.
+    const resposta = [
+      { id: 'pe-c', order: 5 },
+      { id: 'pe-b', order: 9 },
+    ];
+    expect(planMoveAnnouncement(resposta, 'pe-b', 'Crucifixo')).toBe(
+      'Crucifixo movido para a posição 2 de 2',
+    );
+  });
+
+  it('fica calado quando a resposta não traz o exercício movido', () => {
+    // Só sairia de uma resposta que não tem o que ela acabou de mover. Anunciar
+    // "posição 0 de 2" é pior do que não anunciar.
+    expect(planMoveAnnouncement([{ id: 'pe-c', order: 5 }], 'pe-b', 'Crucifixo')).toBeNull();
   });
 });
 

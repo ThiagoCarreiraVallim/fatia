@@ -67,13 +67,15 @@ export function swapAt<T>(list: T[], index: number, delta: -1 | 1): T[] {
   return next;
 }
 
+/**
+ * Não tem posição nem total de propósito, desde a #221: o anúncio se conta pela
+ * **resposta** da API (`planMoveAnnouncement`). Guardar aqui o índice de destino
+ * do toque seria deixar à mão justamente o número errado — a lista pode ter
+ * mudado em outro aparelho durante o voo.
+ */
 export interface PlanMove<T> {
   from: T;
   to: T;
-  /** Índice de destino, base 0 — o anúncio de acessibilidade soma 1. */
-  targetIndex: number;
-  /** Tamanho da lista, para o "posição 2 de 5" do anúncio. */
-  total: number;
   /** Corpo de `reorderPlanExercises`: cada um recebe o `order` do outro. */
   payload: Array<{ id: string; order: number }>;
 }
@@ -113,13 +115,53 @@ export function planMoveDecision<T extends { id: string; order: number }>(
   return {
     from,
     to,
-    targetIndex,
-    total: exercises.length,
     payload: [
       { id: from.id, order: to.order },
       { id: to.id, order: from.order },
     ],
   };
+}
+
+/**
+ * Aplica a troca no cache, para o card sair do lugar no toque (#221).
+ *
+ * Troca só o campo `order` dos dois vizinhos, e não a posição no array: o cache
+ * continua com a mesma forma que a API devolve, e quem lê ordena por `order`,
+ * como a própria tela faz. Mexer na posição do array deixaria o cache com uma
+ * ordenação que resposta nenhuma da API tem.
+ */
+export function applyPlanMove<T extends { id: string; order: number }>(
+  exercises: T[],
+  move: Pick<PlanMove<T>, 'from' | 'to'>,
+): T[] {
+  return exercises.map((e) => {
+    if (e.id === move.from.id) return { ...e, order: move.to.order };
+    if (e.id === move.to.id) return { ...e, order: move.from.order };
+    return e;
+  });
+}
+
+/**
+ * Frase do anúncio de acessibilidade, derivada da **resposta** da API.
+ *
+ * Posição e total não podem sair da lista que estava na tela no toque: outro
+ * aparelho pode ter removido um exercício enquanto isso, e a API aceita a troca
+ * do mesmo jeito quando os dois ids do corpo seguem no plano. Contando pelo
+ * snapshot do toque, quem depende do leitor de tela ouviria "3 de 3" numa lista
+ * de 2 — os dois números errados.
+ *
+ * `null` quando a resposta não traz o exercício movido: anunciar "posição 0" é
+ * pior do que ficar calado.
+ */
+export function planMoveAnnouncement(
+  exercises: { id: string; order: number }[],
+  movedId: string,
+  name: string,
+): string | null {
+  const ordenados = [...exercises].sort((a, b) => a.order - b.order);
+  const posicao = ordenados.findIndex((e) => e.id === movedId) + 1;
+  if (posicao === 0) return null;
+  return `${name} movido para a posição ${posicao} de ${ordenados.length}`;
 }
 
 /** Próxima posição livre de um plano — `order` começa em 1. */

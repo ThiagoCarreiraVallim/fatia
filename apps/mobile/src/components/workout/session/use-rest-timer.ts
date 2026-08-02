@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { expoRestNotifier } from './expo-rest-notifier';
+import { createRestNotifications, restWasInterrupted } from './rest-notification';
 
 /**
  * Cronômetro de descanso da sessão.
@@ -14,9 +16,11 @@ import * as Haptics from 'expo-haptics';
  * vai para segundo plano, e um contador acumularia atraso enquanto a pessoa
  * responde uma mensagem no meio da série.
  *
- * O aviso do fim é háptico e visual. Notificação local seria melhor com a tela
- * apagada, mas `expo-notifications` não é dependência do app — ver o relatório
- * da issue #126.
+ * O aviso do fim é háptico, visual e, desde a #182, também uma notificação
+ * local: com o app em segundo plano ou a tela apagada — que é o que a pessoa
+ * faz durante o descanso — o `setInterval` é estrangulado e o háptico só
+ * dispara quando o app volta, ou seja, tarde. A notificação é agendada pelo
+ * sistema, então chega na hora mesmo com o JS parado.
  */
 
 export const DEFAULT_REST_SECONDS = 90;
@@ -38,6 +42,25 @@ export function useRestTimer(defaultSeconds: number = DEFAULT_REST_SECONDS): Res
   const [total, setTotal] = useState(defaultSeconds);
   const [deadline, setDeadline] = useState<number | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
+
+  const notifications = useMemo(() => createRestNotifications(expoRestNotifier), []);
+
+  // O `deadline` é a única fonte da verdade do descanso, então a notificação
+  // acompanha ele e não os botões: iniciar, `+30s` e retomar reagendam; pausar
+  // e pular cancelam. Amarrar isso a cada handler deixaria de fora justamente o
+  // caminho que ninguém lembra — sair da sessão com o descanso correndo, que
+  // aqui é só o desmonte.
+  useEffect(() => {
+    if (deadline == null) return;
+    void notifications.schedule(deadline);
+    // A limpeza é quem cancela, e cobre os quatro jeitos de o descanso acabar
+    // antes da hora: pausar, pular, esticar com `+30s` (que reagenda) e sair da
+    // sessão com o descanso correndo. O que ela não pode fazer é cancelar o
+    // aviso do descanso que chegou ao fim — ver `restWasInterrupted`.
+    return () => {
+      if (restWasInterrupted(deadline, Date.now())) void notifications.cancel();
+    };
+  }, [deadline, notifications]);
 
   useEffect(() => {
     if (deadline == null) return;
