@@ -37,6 +37,8 @@ describe('AchievementService', () => {
     sessoes?: Array<{ id: string; startedAt: Date }>;
     weeklyWorkouts?: number | null;
     sessoesConcluidas?: Date[];
+    /** Dias da sequência que o `StreakService` devolve — `streak_7`/`streak_30` leem daqui. */
+    streakDias?: number;
   }) {
     const criadas: unknown[] = [];
     const prisma = {
@@ -83,7 +85,7 @@ describe('AchievementService', () => {
           ),
       },
     };
-    const streaks = { compute: jest.fn() };
+    const streaks = { compute: jest.fn().mockResolvedValue(streakDe(dados.streakDias ?? 0)) };
     const service = new AchievementService(
       prisma as unknown as PrismaService,
       streaks as unknown as StreakService,
@@ -96,7 +98,7 @@ describe('AchievementService', () => {
     // pessoa sem saber o que fazer a seguir.
     const { service } = build({});
 
-    const lista = await service.evaluate(ctx, streakDe(0));
+    const lista = await service.evaluate(ctx);
 
     expect(lista.map((a) => a.key)).toEqual([...ACHIEVEMENT_KEYS]);
     expect(lista.every((a) => a.unlockedAt === null)).toBe(true);
@@ -108,13 +110,13 @@ describe('AchievementService', () => {
     const primeira = new Date('2026-01-02T12:00:00.000Z');
     const { service, prisma, criadas } = build({ primeiraRefeicao: primeira });
 
-    await service.evaluate(ctx, streakDe(0));
+    await service.evaluate(ctx);
     expect(criadas).toHaveLength(1);
 
     prisma.userAchievement.findMany.mockResolvedValue([
       { key: 'first_meal', unlockedAt: primeira, context: null },
     ]);
-    const segunda = await service.evaluate(ctx, streakDe(0));
+    const segunda = await service.evaluate(ctx);
 
     expect(prisma.userAchievement.createMany).toHaveBeenCalledTimes(1);
     expect(segunda.find((a) => a.key === 'first_meal')?.unlockedAt).toBe(primeira.toISOString());
@@ -123,7 +125,7 @@ describe('AchievementService', () => {
   it('grava com skipDuplicates — duas abas abrindo o app ao mesmo tempo não estouram', async () => {
     const { service, prisma } = build({ primeiraRefeicao: new Date('2026-01-02T12:00:00.000Z') });
 
-    await service.evaluate(ctx, streakDe(0));
+    await service.evaluate(ctx);
 
     expect(prisma.userAchievement.createMany.mock.calls[0][0].skipDuplicates).toBe(true);
   });
@@ -135,7 +137,7 @@ describe('AchievementService', () => {
     const antigo = new Date('2025-03-11T10:00:00.000Z');
     const { service, criadas } = build({ primeiroTreino: antigo });
 
-    await service.evaluate(ctx, streakDe(0));
+    await service.evaluate(ctx);
 
     const treino = criadas.find((c) => (c as { key: string }).key === 'first_workout') as {
       unlockedAt: Date;
@@ -154,7 +156,7 @@ describe('AchievementService', () => {
       })),
     });
 
-    await service.evaluate(ctx, streakDe(99));
+    await service.evaluate(ctx);
 
     expect(prisma.sessionSet.groupBy).not.toHaveBeenCalled();
     expect(prisma.meal.findFirst).not.toHaveBeenCalled();
@@ -174,7 +176,7 @@ describe('AchievementService', () => {
         setsPorSessao: [{ sessionId: 's1', exerciseId: 7, _max: { weightKg: 80 } }],
       });
 
-      const lista = await service.evaluate(ctx, streakDe(0));
+      const lista = await service.evaluate(ctx);
 
       expect(lista.find((a) => a.key === 'first_pr')?.unlockedAt).toBeNull();
     });
@@ -188,7 +190,7 @@ describe('AchievementService', () => {
         ],
       });
 
-      const lista = await service.evaluate(ctx, streakDe(0));
+      const lista = await service.evaluate(ctx);
 
       expect(lista.find((a) => a.key === 'first_pr')?.unlockedAt).toBeNull();
     });
@@ -202,7 +204,7 @@ describe('AchievementService', () => {
         ],
       });
 
-      await service.evaluate(ctx, streakDe(0));
+      await service.evaluate(ctx);
       const pr = criadas.find((c) => (c as { key: string }).key === 'first_pr') as {
         unlockedAt: Date;
         context: { weightKg: number; exerciseName: string };
@@ -224,9 +226,46 @@ describe('AchievementService', () => {
         ],
       });
 
-      const lista = await service.evaluate(ctx, streakDe(0));
+      const lista = await service.evaluate(ctx);
 
       expect(lista.find((a) => a.key === 'first_pr')?.unlockedAt).toBeNull();
+    });
+
+    it('não busca sessão nenhuma para quem nunca levantou peso', async () => {
+      // `first_pr` é a conquista que mais demora a desbloquear, e para quem só registra refeição
+      // ela nunca desbloqueia: fica pendente para sempre e é reavaliada a cada abertura do app.
+      // Sem o corte, essa avaliação carregava TODAS as sessões do usuário para jogar fora.
+      const { service, prisma } = build({ setsPorSessao: [] });
+
+      await service.evaluate(ctx);
+
+      expect(prisma.sessionSet.groupBy).toHaveBeenCalledTimes(1);
+      const porRecorde = prisma.workoutSession.findMany.mock.calls.filter(
+        ([arg]: [{ select: Record<string, boolean> }]) => arg.select.startedAt,
+      );
+      expect(porRecorde).toEqual([]);
+    });
+
+    it('busca só as sessões que têm série com carga', async () => {
+      // O `where` sem `id` trazia sessão de cardio e sessão vazia, e crescia para sempre junto
+      // com o histórico. Os ids saem do próprio `groupBy`, então nada é descartado em memória.
+      const { service, prisma } = build({
+        sessoes,
+        setsPorSessao: [
+          { sessionId: 's1', exerciseId: 7, _max: { weightKg: 80 } },
+          { sessionId: 's1', exerciseId: 9, _max: { weightKg: 40 } },
+          { sessionId: 's2', exerciseId: 7, _max: { weightKg: 85 } },
+        ],
+      });
+
+      await service.evaluate(ctx);
+
+      const [porRecorde] = prisma.workoutSession.findMany.mock.calls.filter(
+        ([arg]: [{ select: Record<string, boolean> }]) => arg.select.startedAt,
+      );
+      // Sem duplicar `s1`, que aparece em duas linhas do `groupBy`.
+      expect(porRecorde[0].where.id).toEqual({ in: ['s1', 's2'] });
+      expect(porRecorde[0].where.userId).toBe('user-A');
     });
   });
 
@@ -241,7 +280,7 @@ describe('AchievementService', () => {
         ],
       });
 
-      await service.evaluate(ctx, streakDe(0));
+      await service.evaluate(ctx);
       const semana = criadas.find((c) => (c as { key: string }).key === 'first_full_week') as {
         context: { weekStart: string; target: number };
       };
@@ -260,7 +299,7 @@ describe('AchievementService', () => {
         ],
       });
 
-      const lista = await service.evaluate(ctx, streakDe(0));
+      const lista = await service.evaluate(ctx);
 
       expect(lista.find((a) => a.key === 'first_full_week')?.unlockedAt).toBeNull();
     });
@@ -276,42 +315,51 @@ describe('AchievementService', () => {
         ],
       });
 
-      const lista = await service.evaluate(ctx, streakDe(0));
+      const lista = await service.evaluate(ctx);
 
       expect(lista.find((a) => a.key === 'first_full_week')?.unlockedAt).toBeNull();
     });
   });
 
   describe('streak_7 e streak_30', () => {
-    it('usam a sequência com tolerância que o dashboard já calculou', async () => {
-      const { service, streaks } = build({});
+    it('usam a sequência com tolerância que o StreakService calcula', async () => {
+      const { service, streaks } = build({ streakDias: 30 });
 
-      const lista = await service.evaluate(ctx, streakDe(30));
+      const lista = await service.evaluate(ctx);
 
       expect(lista.find((a) => a.key === 'streak_7')?.unlockedAt).not.toBeNull();
       expect(lista.find((a) => a.key === 'streak_30')?.unlockedAt).not.toBeNull();
-      // Recebeu a sequência pronta: não recalcular é o que impede o dashboard de fazer as três
-      // consultas de streak duas vezes por abertura.
-      expect(streaks.compute).not.toHaveBeenCalled();
+      // Uma vez só, mesmo com duas conquistas pedindo o mesmo dado: é o `umaVez` compartilhando
+      // a promessa que impede as três consultas de streak de rodarem duas vezes.
+      expect(streaks.compute).toHaveBeenCalledTimes(1);
+      expect(streaks.compute).toHaveBeenCalledWith(ctx);
     });
 
     it('não desbloqueia streak_30 com 29 dias', async () => {
-      const { service } = build({});
+      const { service } = build({ streakDias: 29 });
 
-      const lista = await service.evaluate(ctx, streakDe(29));
+      const lista = await service.evaluate(ctx);
 
       expect(lista.find((a) => a.key === 'streak_7')?.unlockedAt).not.toBeNull();
       expect(lista.find((a) => a.key === 'streak_30')?.unlockedAt).toBeNull();
     });
 
-    it('calcula a sequência sozinho quando ninguém a entrega', async () => {
-      const { service, streaks } = build({});
-      streaks.compute.mockResolvedValue(streakDe(7));
+    it('não calcula a sequência quando as duas já estão desbloqueadas', async () => {
+      // O caminho preguiçoso: no estado estável de quem usa o app há um mês, avaliar não custa
+      // as três consultas de streak. Antes isso vinha de graça porque o dashboard entregava o
+      // resumo pronto; agora quem segura o custo é o filtro de pendentes.
+      const { service, streaks } = build({
+        streakDias: 30,
+        desbloqueadas: ['streak_7', 'streak_30'].map((key) => ({
+          key,
+          unlockedAt: new Date('2026-01-01T00:00:00.000Z'),
+          context: null,
+        })),
+      });
 
-      const lista = await service.evaluate(ctx);
+      await service.evaluate(ctx);
 
-      expect(streaks.compute).toHaveBeenCalledWith(ctx);
-      expect(lista.find((a) => a.key === 'streak_7')?.unlockedAt).not.toBeNull();
+      expect(streaks.compute).not.toHaveBeenCalled();
     });
   });
 
@@ -323,7 +371,7 @@ describe('AchievementService', () => {
         weeklyWorkouts: 3,
       });
 
-      await service.evaluate(ctx, streakDe(0));
+      await service.evaluate(ctx);
 
       expect(prisma.userAchievement.findMany.mock.calls[0][0].where.userId).toBe('user-A');
       expect(prisma.meal.findFirst.mock.calls[0][0].where.userId).toBe('user-A');

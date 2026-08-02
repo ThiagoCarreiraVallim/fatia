@@ -208,4 +208,17 @@ export class ProgressController {
   listAchievements(@CurrentUser() user: CurrentUserPayload) {
     return this.achievements.list({ userId: user.id, timezone: user.timezone });
   }
+
+  /**
+   * Reavalia o catálogo e grava o que passou a valer. É `POST` porque escreve — desbloquear
+   * dentro do `GET /dashboard/today` fazia uma leitura mudar o estado, e a tool MCP equivalente
+   * ficava anotada como `readOnlyHint: true` enquanto criava linhas.
+   *
+   * Idempotente pelo `@@unique([userId, key])`: chamar de novo não duplica nem reescreve o
+   * `unlockedAt` de quem já tinha, então o app pode chamar a cada abertura sem cuidado especial.
+   */
+  @Post('achievements/evaluate')
+  refreshAchievements(@CurrentUser() user: CurrentUserPayload) {
+    return this.achievements.evaluate({ userId: user.id, timezone: user.timezone });
+  }
 }

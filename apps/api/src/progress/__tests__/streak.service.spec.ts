@@ -269,19 +269,26 @@ describe('StreakService', () => {
       expect(refeicoes.gte.getUTCHours()).toBe(15);
     });
 
-    it('varre a janela declarada, não a antiga de 60 dias', async () => {
+    it('varre 365 dias e 53 semanas, não a janela antiga de 60 e 12', async () => {
       // A janela é um teto silencioso, e a tolerância faz bater nele muito mais: com faltas
       // toleradas as sequências vivem mais, e 60 dias limitaria justamente o usuário engajado.
+      //
+      // Os números são LITERAIS de propósito. Comparar contra `JANELA_DIAS`/`JANELA_SEMANAS`
+      // seria comparar a constante consigo mesma: baixá-las de volta para 60 e 12 deixava este
+      // caso verde, e a decisão de janela ficava sem nenhuma prova de vermelho.
       const { service, prisma } = build({});
 
       await service.compute({ userId: 'user-A', timezone: SP });
 
+      expect(JANELA_DIAS).toBe(365);
+      expect(JANELA_SEMANAS).toBe(53);
+
       const { gte, lt } = prisma.meal.findMany.mock.calls[0][0].where.eatenAt;
-      expect(Math.round((lt.getTime() - gte.getTime()) / 86_400_000)).toBe(JANELA_DIAS);
+      expect(Math.round((lt.getTime() - gte.getTime()) / 86_400_000)).toBe(365);
 
       const sessoes = prisma.workoutSession.findMany.mock.calls[0][0].where.completedAt;
       const semanas = (sessoes.lt.getTime() - sessoes.gte.getTime()) / (7 * 86_400_000);
-      expect(semanas).toBeGreaterThanOrEqual(JANELA_SEMANAS - 1);
+      expect(semanas).toBeGreaterThanOrEqual(52);
     });
   });
 });

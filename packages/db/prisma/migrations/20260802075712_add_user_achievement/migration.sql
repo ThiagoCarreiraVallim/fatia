@@ -10,9 +10,6 @@ CREATE TABLE "UserAchievement" (
 );
 
 -- CreateIndex
-CREATE INDEX "UserAchievement_userId_idx" ON "UserAchievement"("userId");
-
--- CreateIndex
 CREATE UNIQUE INDEX "UserAchievement_userId_key_key" ON "UserAchievement"("userId", "key");
 
 -- AddForeignKey

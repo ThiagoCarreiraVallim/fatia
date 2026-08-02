@@ -88,14 +88,18 @@ export class DashboardService {
     const latestWeightToday =
       latestWeight && latestWeight.loggedAt >= dayStart && latestWeight.loggedAt <= dayEnd;
 
-    // Conquista é enfeite; dashboard é o produto. Se a avaliação falhar, a tela ainda abre —
-    // e o erro fica no log em vez de virar 500 na cara de quem só queria ver as calorias.
+    // Só LÊ. Desbloquear aqui gravaria em `UserAchievement` no meio de um `GET` — a tool
+    // `get_today_summary` declara `readOnlyHint: true` e o Claude a chama sem confirmar, então
+    // "quanto comi hoje?" acabava criando até 7 linhas. Quem escreve é `refresh_achievements`.
+    //
+    // Conquista é enfeite; dashboard é o produto. Se a leitura falhar, a tela ainda abre — e o
+    // erro fica no log em vez de virar 500 na cara de quem só queria ver as calorias.
     let achievements: AchievementEntry[] = [];
     try {
-      achievements = await this.achievements.evaluate(ctx, streak);
+      achievements = await this.achievements.list(ctx);
     } catch (err: unknown) {
       this.logger.error({
-        event: 'achievement_evaluation_failed',
+        event: 'achievement_read_failed',
         error: err instanceof Error ? err.message : String(err),
       });
     }

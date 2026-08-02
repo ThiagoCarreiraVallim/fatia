@@ -108,6 +108,10 @@ export function computeStreak({
   let ativosVistos = 0;
   let faltasConsecutivas = 0;
   let faltasGastas = 0;
+  // Só as faltas que a sequência de fato pagou. A varredura anda para trás, então uma falta só
+  // se confirma como "dentro da sequência" quando ainda aparece um período ativo mais antigo
+  // depois dela: as faltas do fim do laço são o que QUEBROU a sequência anterior, não custo desta.
+  let faltasDentro = 0;
   let percorreuTudo = true;
 
   for (let i = 0; i < janela; i++) {
@@ -116,6 +120,7 @@ export function computeStreak({
     if (ativos.has(chave)) {
       faltasConsecutivas = 0;
       ativosVistos++;
+      faltasDentro = faltasGastas;
       if (indiceUltimoAtivo === -1) indiceUltimoAtivo = i;
       indicePrimeiroAtivo = i;
       continue;
@@ -139,14 +144,17 @@ export function computeStreak({
 
   if (indicePrimeiroAtivo === -1) return VAZIO;
 
-  // O tamanho é o intervalo entre o ativo mais antigo e o mais recente. Medir assim (em vez de
-  // contar passos do laço) devolve sozinho as faltas gastas depois do último período ativo:
-  // elas ficam fora do intervalo e não entram na conta.
+  // O tamanho é o intervalo entre o ativo mais antigo e o mais recente: quem faltou ontem e ainda
+  // não registrou hoje está no 7º dia, não no 8º.
   const periodos = indicePrimeiroAtivo - indiceUltimoAtivo + 1;
 
   return {
     periodos,
-    faltasUsadas: periodos - ativosVistos,
+    // NÃO é `periodos - ativosVistos`: aquilo contava só as faltas ENTRE o primeiro e o último
+    // ativo e ignorava a falta gasta depois do último — a de ontem, para quem ainda não registrou
+    // hoje. O card dizia "0 de 2 faltas usadas" com uma já consumida e a sequência a um dia vazio
+    // de quebrar por duas seguidas, prometendo uma folga que não existe.
+    faltasUsadas: faltasDentro,
     faltasPermitidas: orcamento(ativosVistos, tolerancia),
     periodoCorrenteEmAberto: indiceUltimoAtivo > 0,
     janelaEsgotada: percorreuTudo && indicePrimeiroAtivo === janela - 1,

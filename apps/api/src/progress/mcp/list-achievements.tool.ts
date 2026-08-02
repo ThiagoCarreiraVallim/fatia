@@ -19,8 +19,8 @@ export class ListAchievementsTool implements McpToolDef {
     'para o Claude saber o que sugerir como próximo passo.';
   readonly inputSchema = {} as const;
   execute(_input: Record<string, never>, { userId, timezone }: McpToolContext) {
-    // Só lê. O desbloqueio acontece em `get_today_summary`, que é o caminho que o app já usa —
-    // uma tool de leitura que grava seria uma surpresa desagradável para quem lê `readOnlyHint`.
+    // Só lê. Quem desbloqueia é `refresh_achievements`, que se declara escrita — uma tool de
+    // leitura que grava seria uma surpresa desagradável para quem lê `readOnlyHint`.
     return this.achievements.list({ userId, timezone });
   }
 }

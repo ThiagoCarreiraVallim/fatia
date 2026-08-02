@@ -112,11 +112,35 @@ describe('computeStreak', () => {
 
   it('o dia corrente em aberto não some do orçamento de faltas', () => {
     // Hoje sem registro E ontem sem registro: ontem é a primeira falta, e ela é tolerada.
+    // O que o caso fixa é que HOJE não vira uma segunda falta — se virasse, `faltasUsadas`
+    // seria 2 e a sequência já teria quebrado por duas seguidas.
     const r = diario([addDaysIso(HOJE, -2), addDaysIso(HOJE, -3)]);
 
     expect(r.periodos).toBe(2);
-    expect(r.faltasUsadas).toBe(0);
+    expect(r.faltasUsadas).toBe(1);
     expect(r.periodoCorrenteEmAberto).toBe(true);
+  });
+
+  it('a falta gasta entre o último dia ativo e hoje entra em faltasUsadas', () => {
+    // Ativo de D-2 a D-8, nada ontem, nada hoje ainda. A falta de ontem JÁ foi consumida:
+    // se hoje terminar vazio são duas seguidas e a sequência quebra. Contar só as faltas
+    // internas ao intervalo (D-8..D-2) devolvia `0 de 2` e vendia ao usuário uma folga que
+    // ele não tem — justamente no número que existe para explicar o número.
+    const r = diario([2, 3, 4, 5, 6, 7, 8].map((n) => addDaysIso(HOJE, -n)));
+
+    expect(r.periodos).toBe(7);
+    expect(r.faltasUsadas).toBe(1);
+    expect(r.faltasPermitidas).toBe(2);
+  });
+
+  it('a falta que QUEBROU a sequência não é cobrada de quem está dentro dela', () => {
+    // D-1 e D-2 ativos, D-3 e D-4 vazios: as duas faltas seguidas são o fim da sequência
+    // anterior, não faltas gastas por esta. Cobrá-las mostraria "2 de 1 faltas usadas".
+    const r = diario([addDaysIso(HOJE, -1), addDaysIso(HOJE, -2)]);
+
+    expect(r.periodos).toBe(2);
+    expect(r.faltasUsadas).toBe(0);
+    expect(r.faltasPermitidas).toBe(1);
   });
 
   it('a virada de ano é contígua', () => {

@@ -34,6 +34,7 @@ import { GetTodaySummaryTool } from './mcp/get-today-summary.tool';
 import { GetWeekSummaryTool } from './mcp/get-week-summary.tool';
 import { GetStreakTool } from './mcp/get-streak.tool';
 import { ListAchievementsTool } from './mcp/list-achievements.tool';
+import { RefreshAchievementsTool } from './mcp/refresh-achievements.tool';
 
 @Module({
   imports: [CommonModule],
@@ -72,6 +73,7 @@ import { ListAchievementsTool } from './mcp/list-achievements.tool';
     GetWeekSummaryTool,
     GetStreakTool,
     ListAchievementsTool,
+    RefreshAchievementsTool,
   ],
   exports: [
     WeightLogService,

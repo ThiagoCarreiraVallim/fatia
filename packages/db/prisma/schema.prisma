@@ -420,8 +420,11 @@ model UserAchievement {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Uma vez só por usuário. É o que torna a reavaliação idempotente.
+  //
+  // Sem `@@index([userId])`: o unique composto já é um índice com `userId` à esquerda, e é ele
+  // que atende o `findMany where userId` da listagem. Um índice só de `userId` seria pago em
+  // toda escrita sem servir a nenhuma consulta que o composto não sirva.
   @@unique([userId, key])
-  @@index([userId])
 }
 
 // ============================================================

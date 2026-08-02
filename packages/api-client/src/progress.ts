@@ -220,4 +220,8 @@ export const progressApi = {
   // Engajamento
   streak: () => apiFetch<StreakSummary>('/api/streak'),
   listAchievements: () => apiFetch<Achievement[]>('/api/achievements'),
+  // Escreve: desbloqueia o que passou a valer. O `today()` só lê, então é esta chamada que faz a
+  // conquista nova aparecer. Idempotente, e por isso pode ser disparada a cada abertura do app.
+  refreshAchievements: () =>
+    apiFetch<Achievement[]>('/api/achievements/evaluate', { method: 'POST' }),
 };

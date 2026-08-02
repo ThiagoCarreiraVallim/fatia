@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
-import { StreakService, type StreakSummary } from './streak.service';
+import { StreakService } from './streak.service';
 import { weekStartInTz } from './helpers/date-tz';
 import {
   ACHIEVEMENT_CATALOG,
@@ -32,10 +32,15 @@ function umaVez<T>(fn: () => Promise<T>): () => Promise<T> {
 /**
  * Conquistas: avaliação **sob demanda e idempotente** (issue #147).
  *
- * `evaluate` roda dentro de `DashboardService.today()`, que já é chamado a cada abertura do app.
- * A alternativa — disparar de dentro de `MealService.create`, `SessionSetService.create` e afins —
- * espalharia a regra por quatro services, exigiria tocar em todos a cada conquista nova e nunca
- * desbloquearia retroativamente para quem já bateu o critério antes do deploy.
+ * `evaluate` é chamada pelo `POST /api/achievements/evaluate` e pela tool `refresh_achievements`,
+ * que os dois apps disparam a cada abertura. A alternativa — disparar de dentro de
+ * `MealService.create`, `SessionSetService.create` e afins — espalharia a regra por quatro
+ * services, exigiria tocar em todos a cada conquista nova e nunca desbloquearia retroativamente
+ * para quem já bateu o critério antes do deploy.
+ *
+ * O que ela **não** pode ser é efeito colateral de leitura: rodava dentro de
+ * `DashboardService.today()`, e aí um `GET` gravava e a tool `get_today_summary`
+ * (`readOnlyHint: true`) criava linhas sem que ninguém confirmasse nada.
  *
  * O `@@unique([userId, key])` é o que torna reavaliar barato e seguro: `createMany` com
  * `skipDuplicates` não duplica nem reescreve o `unlockedAt` de quem já tinha.
@@ -60,7 +65,7 @@ export class AchievementService {
     return this.montar(new Map(desbloqueadas.map((a) => [a.key, a])));
   }
 
-  async evaluate(ctx: UserCtx, streak?: StreakSummary): Promise<AchievementEntry[]> {
+  async evaluate(ctx: UserCtx): Promise<AchievementEntry[]> {
     const desbloqueadas = await this.prisma.userAchievement.findMany({
       where: { userId: ctx.userId },
       select: { key: true, unlockedAt: true, context: true },
@@ -70,12 +75,16 @@ export class AchievementService {
     const pendentes = ACHIEVEMENT_CATALOG.filter((d) => !porChave.has(d.key));
     if (pendentes.length === 0) return this.montar(porChave);
 
-    const snapshot = this.snapshot(ctx, streak);
-    const novas: Array<{ key: string; unlock: AchievementUnlock }> = [];
-    for (const def of pendentes) {
-      const unlock = await def.evaluate(snapshot);
-      if (unlock) novas.push({ key: def.key, unlock });
-    }
+    const snapshot = this.snapshot(ctx);
+    // Em paralelo: os critérios são independentes, e o `umaVez` faz duas conquistas que pedem o
+    // mesmo dado compartilharem a MESMA promessa — então concorrência aqui não duplica consulta.
+    // Sequencial, sete pendentes viravam sete idas ao banco enfileiradas na primeira avaliação.
+    const avaliadas = await Promise.all(
+      pendentes.map(async (def) => ({ key: def.key, unlock: await def.evaluate(snapshot) })),
+    );
+    const novas = avaliadas.filter(
+      (r): r is { key: string; unlock: AchievementUnlock } => r.unlock !== null,
+    );
     if (novas.length === 0) return this.montar(porChave);
 
     await this.prisma.userAchievement.createMany({
@@ -113,7 +122,7 @@ export class AchievementService {
     });
   }
 
-  private snapshot(ctx: UserCtx, streak?: StreakSummary): AchievementSnapshot {
+  private snapshot(ctx: UserCtx): AchievementSnapshot {
     const { userId, timezone } = ctx;
 
     return {
@@ -152,17 +161,22 @@ export class AchievementService {
         // O `groupBy` por (sessão, exercício) existe para não carregar todas as séries do
         // usuário como `SessionSetService.listPersonalRecords` faz: aqui basta o melhor de cada
         // exercício em cada sessão, e a série individual não interessa.
-        const [porSessao, sessoes] = await Promise.all([
-          this.prisma.sessionSet.groupBy({
-            by: ['sessionId', 'exerciseId'],
-            where: { session: { userId }, weightKg: { not: null } },
-            _max: { weightKg: true },
-          }),
-          this.prisma.workoutSession.findMany({
-            where: { userId },
-            select: { id: true, startedAt: true },
-          }),
-        ]);
+        const porSessao = await this.prisma.sessionSet.groupBy({
+          by: ['sessionId', 'exerciseId'],
+          where: { session: { userId }, weightKg: { not: null } },
+          _max: { weightKg: true },
+        });
+        // Quem nunca levantou peso para aqui: sem série com carga não há recorde a superar, e
+        // esta é a conquista que mais demora a desbloquear — sem o corte, as duas consultas
+        // rodavam a cada avaliação, para sempre, para quem só registra refeição.
+        if (porSessao.length === 0) return null;
+
+        // Só as sessões que aparecem no `groupBy`. Buscar todas as do usuário trazia sessão sem
+        // série e sessão de cardio para descartar em memória, e crescia para sempre.
+        const sessoes = await this.prisma.workoutSession.findMany({
+          where: { userId, id: { in: [...new Set(porSessao.map((l) => l.sessionId))] } },
+          select: { id: true, startedAt: true },
+        });
 
         const inicio = new Map(sessoes.map((s) => [s.id, s.startedAt]));
         const porExercicio = new Map<number, Array<{ at: Date; weightKg: number }>>();
@@ -228,7 +242,9 @@ export class AchievementService {
       }),
 
       diasAtivosSeguidos: umaVez(async () => {
-        const resumo = streak ?? (await this.streaks.compute(ctx));
+        // Preguiçoso como os demais: some do caminho assim que `streak_7` e `streak_30` estão
+        // desbloqueadas, que é o estado estável de quem usa o app há um mês.
+        const resumo = await this.streaks.compute(ctx);
         return resumo.activeDays.periodos;
       }),
     };

@@ -23,6 +23,15 @@ export default function HomePage() {
     queryFn: () => progressApi.today(),
   });
 
+  // O `today()` só LÊ as conquistas — desbloquear dentro de um `GET` fazia a leitura gravar.
+  // Quem desbloqueia é esta chamada. É `useQuery` mesmo sendo `POST` porque a operação é
+  // idempotente e o que interessa é o estado que ela devolve; enquanto ela não chega, o card
+  // usa o que veio do dashboard para não piscar vazio.
+  const { data: conquistas } = useQuery({
+    queryKey: ['achievements', 'refresh'],
+    queryFn: () => progressApi.refreshAchievements(),
+  });
+
   return (
     <div className="space-y-5 px-5 pt-6 pb-4">
       {/* Welcome */}
@@ -45,7 +54,7 @@ export default function HomePage() {
           <NextWorkoutCard workout={data.workout} />
           <WaterCard data={data.water} />
           <StepsCard data={data.steps} />
-          <StreakCard streak={data.streak} achievements={data.achievements} />
+          <StreakCard streak={data.streak} achievements={conquistas ?? data.achievements} />
           <QuickLogActions />
         </>
       )}

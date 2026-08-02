@@ -123,7 +123,10 @@ describe('DashboardService', () => {
     // Default: zero água logada — testes que precisam override fazem manualmente.
     waterLogs.getForDate.mockResolvedValue({ date: '2026-01-15', totalMl: 0, logCount: 0 });
     streaks = { compute: jest.fn().mockResolvedValue(RESUMO_DE_STREAK) };
-    achievements = { evaluate: jest.fn().mockResolvedValue([]), list: jest.fn() };
+    achievements = {
+      evaluate: jest.fn().mockResolvedValue([]),
+      list: jest.fn().mockResolvedValue([]),
+    };
     service = new DashboardService(
       prisma as unknown as PrismaService,
       stepLogs as unknown as StepLogService,
@@ -320,11 +323,13 @@ describe('DashboardService', () => {
         expect(streaks.compute).toHaveBeenCalledTimes(1);
       });
 
-      it('avalia as conquistas com a sequência já calculada, sem recalcular', async () => {
+      it('LÊ as conquistas sem desbloquear nada', async () => {
+        // `GET /api/dashboard/today` e a tool `get_today_summary` (`readOnlyHint: true`) são
+        // caminho de leitura. Avaliar aqui gravava até 7 linhas em `UserAchievement` numa
+        // pergunta como "quanto comi hoje?" — a anotação passava a mentir e o GET deixava de
+        // ser seguro. Quem desbloqueia é `refresh_achievements`, que se declara escrita.
         baselineTodayMocks();
-        const resumo = { ...RESUMO_DE_STREAK };
-        streaks.compute.mockResolvedValue(resumo);
-        achievements.evaluate.mockResolvedValue([
+        achievements.list.mockResolvedValue([
           {
             key: 'first_meal',
             title: 'Primeira refeição',
@@ -336,15 +341,16 @@ describe('DashboardService', () => {
 
         const result = await service.today(ctx);
 
-        expect(achievements.evaluate).toHaveBeenCalledWith(ctx, resumo);
+        expect(achievements.evaluate).not.toHaveBeenCalled();
+        expect(achievements.list).toHaveBeenCalledWith(ctx);
         expect(result.achievements).toHaveLength(1);
       });
 
       it('conquista que explode não derruba o dashboard', async () => {
-        // Conquista é enfeite; dashboard é o produto. Sem este caso, um erro na avaliação viraria
+        // Conquista é enfeite; dashboard é o produto. Sem este caso, um erro na leitura viraria
         // 500 na cara de quem só queria ver as calorias do dia.
         baselineTodayMocks();
-        achievements.evaluate.mockRejectedValue(new Error('banco fora do ar'));
+        achievements.list.mockRejectedValue(new Error('banco fora do ar'));
 
         const result = await service.today(ctx);
 
