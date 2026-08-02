@@ -5,7 +5,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, Play, Clock, Dumbbell, Lightbulb, Plus, Trash2, Check } from 'lucide-react';
-import { isCardioExercise, workoutApi, type WorkoutPlanExercise } from '@fatia/api-client';
+import {
+  ApiError,
+  isCardioExercise,
+  workoutApi,
+  type WorkoutPlanExercise,
+} from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
@@ -69,6 +74,15 @@ export default function PlanDetailPage() {
       // A resposta já é o plano reordenado — escrever no cache evita o refetch
       // que só confirmaria o que acabou de chegar.
       qc.setQueryData(['workout', 'plan', id], updated);
+    },
+    onError: (error) => {
+      // 404 aqui não é "o plano sumiu": desde a #205 a API recusa a operação
+      // inteira quando algum id do corpo não pertence mais ao plano — exercício
+      // removido em outra aba, e esta tela ainda com o cache velho. A cura é
+      // buscar a lista de novo; a mensagem é escolhida no render.
+      if (error instanceof ApiError && error.isNotFound) {
+        void qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
+      }
     },
   });
 
@@ -253,9 +267,18 @@ export default function PlanDetailPage() {
             role="alert"
             className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-400"
           >
-            Não foi possível mover o exercício
-            {moveExercise.error instanceof Error ? `: ${moveExercise.error.message}` : '.'} A ordem
-            continua como estava.
+            {moveExercise.error instanceof ApiError && moveExercise.error.isNotFound ? (
+              // A mensagem crua da API é "Plan exercise not found", em inglês e
+              // sem dizer o que fazer. Aqui a causa é sempre a mesma: a lista
+              // desta tela está velha.
+              <>Este plano mudou em outro lugar. Atualizamos a lista — tente mover de novo.</>
+            ) : (
+              <>
+                Não foi possível mover o exercício
+                {moveExercise.error instanceof Error ? `: ${moveExercise.error.message}` : '.'} A
+                ordem continua como estava.
+              </>
+            )}
           </p>
         )}
 

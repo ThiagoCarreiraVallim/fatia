@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import type { WorkoutPlan, WorkoutPlanExercise } from '@fatia/api-client';
+import { ApiError, type WorkoutPlan, type WorkoutPlanExercise } from '@fatia/api-client';
 import PlanDetailPage from '../page';
 
 /**
@@ -187,6 +187,22 @@ describe('PlanDetailPage — reordenação', () => {
       expect(screen.getByRole('button', { name: /mover crucifixo para baixo/i })).toBeDisabled(),
     );
     expect(getPlan).toHaveBeenCalledTimes(1);
+  });
+
+  it('traduz o 404 de id obsoleto e busca a lista de novo', async () => {
+    const user = await renderLoadedPage();
+    // Desde a #205 a API recusa a operação inteira quando algum id do corpo não
+    // pertence mais ao plano — exercício removido em outra aba, cache velho
+    // aqui. A mensagem crua seria "Plan exercise not found".
+    reorderPlanExercises.mockRejectedValue(new ApiError('Plan exercise not found', 404));
+
+    await user.click(screen.getByRole('button', { name: /mover crucifixo para baixo/i }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/este plano mudou em outro lugar/i);
+    expect(alert).not.toHaveTextContent(/plan exercise not found/i);
+    // O cache velho é a causa: sem refetch a pessoa clicaria de novo no mesmo erro.
+    await waitFor(() => expect(getPlan).toHaveBeenCalledTimes(2));
   });
 
   it('avisa quando a API recusa o movimento, e a lista continua como estava', async () => {

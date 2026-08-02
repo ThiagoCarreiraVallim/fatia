@@ -4,7 +4,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Check, Clock, Dumbbell, Lightbulb, Play, Plus, Trash2 } from 'lucide-react-native';
-import { isCardioExercise, workoutApi, type WorkoutPlanExercise } from '@fatia/api-client';
+import {
+  ApiError,
+  isCardioExercise,
+  workoutApi,
+  type WorkoutPlanExercise,
+} from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { Button, EmptyState, ErrorState, Input, LoadingState } from '@/components/ui';
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
@@ -104,6 +109,19 @@ export default function PlanDetailScreen() {
       );
     },
     onError: (error) => {
+      // 404 aqui não é "o plano sumiu": desde a #205 a API recusa a operação
+      // inteira quando algum id do corpo não pertence mais ao plano —
+      // exercício removido em outro aparelho, e esta tela ainda com o cache
+      // velho. A mensagem crua seria "Plan exercise not found", em inglês e sem
+      // dizer o que fazer.
+      if (error instanceof ApiError && error.isNotFound) {
+        qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
+        Alert.alert(
+          'Este plano mudou',
+          'Um exercício saiu do plano em outro lugar. Atualizamos a lista — tente mover de novo.',
+        );
+        return;
+      }
       Alert.alert(
         'Não foi possível mover',
         error instanceof Error ? error.message : 'Tente novamente.',
