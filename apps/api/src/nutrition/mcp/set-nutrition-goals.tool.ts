@@ -14,6 +14,7 @@ export class SetNutritionGoalsTool implements McpToolDef {
   readonly name = 'set_nutrition_goals';
   readonly title = 'Definir metas nutricionais';
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly hostedInference = false;
   readonly description =
     'Cria/atualiza as metas nutricionais do usuário. ' +
     'Exemplo: {"kcalMin":2100,"kcalMax":2400,"proteinMinG":140,"proteinMaxG":180,"carbsMinG":220,"carbsMaxG":280,"fatMinG":60,"fatMaxG":80}';

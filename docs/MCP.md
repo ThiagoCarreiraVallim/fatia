@@ -101,6 +101,32 @@ Isso é verificado por `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`, que fa
 tool declarar hint incoerente com o prefixo ou usar o próprio nome como título. `title`
 ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 
+### Inferência hospedada
+
+Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
+pela Fatia** (visão, LLM, embedding). Hoje as **88 tools** declaram `false`, e é a resposta que
+se quer manter.
+
+O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
+dele: chamada MCP não passa por gateway de IA nosso, e custa **zero** de inferência à Fatia. Uma
+tool que chame IA hospedada por dentro inverte isso em silêncio — o usuário pede pelo Claude
+_dele_ e a conta cai aqui. Sem sintoma: a tool funciona, o log não muda, e o primeiro sinal é a
+fatura.
+
+Por isso o campo é **obrigatório** e não tem default: um default faria a tool cara nascer
+classificada como grátis, que é justamente o caso a impedir. O mesmo spec acima reprova qualquer
+tool que declare `true` sem estar na lista `HOSTED_INFERENCE_TOOLS` — vazia hoje, e acrescentar
+um nome ali é declarar que a Fatia aceita pagar aquela chamada.
+
+A política de quando isso é aceitável está na
+[ADR 018](./ADR/018-inferencia-hospedada-fora-do-mcp.md): o default é **não expor** pelo MCP; a
+forma aceita é o cliente trazer o resultado pronto, como `log_meal` já recebe macros calculados
+pelo Claude (ADR 004).
+
+O campo **não** vai no fio: ele fica fora de `annotations` de propósito — é política interna de
+custo, não anotação da spec, e não tem por que gastar contexto do cliente. Há caso de teste
+dedicado a impedir que ele volte para lá.
+
 ### Exemplo de invocação
 
 Toda tool de **escrita** (`readOnlyHint: false`) termina a `description` com uma chamada

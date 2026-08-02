@@ -18,6 +18,7 @@ export class LogWaterTool implements McpToolDef {
   readonly name = 'log_water';
   readonly title = 'Registrar água';
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly hostedInference = false;
   readonly description =
     'Registra consumo de água em mL para o dia. Múltiplos logs por dia são somados (cada copo/garrafa é um log). ' +
     'Exemplo: {"ml":500,"date":"2026-07-29"}';

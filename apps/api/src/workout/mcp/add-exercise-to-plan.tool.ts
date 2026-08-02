@@ -17,6 +17,8 @@ export class AddExerciseToPlanTool implements McpToolDef {
   readonly title = 'Adicionar exercício ao plano';
 
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
+
+  readonly hostedInference = false;
   readonly description =
     'Adiciona um exercício a um plano de treino, com séries e reps alvo opcionais. ' +
     'Exemplo: {"planId":"11111111-2222-4333-8444-555555555555","exerciseId":42,"order":1,"targetSets":4,"targetReps":"8-12"}';

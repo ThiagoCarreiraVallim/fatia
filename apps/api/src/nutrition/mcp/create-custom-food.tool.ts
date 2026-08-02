@@ -14,6 +14,7 @@ export class CreateCustomFoodTool implements McpToolDef {
   readonly name = 'create_custom_food';
   readonly title = 'Criar alimento personalizado';
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly hostedInference = false;
   readonly description =
     'Cria um alimento custom para o usuário. ' +
     'Exemplo: {"name":"Pão de queijo assado","kcalPer100g":330,"proteinPer100g":8.5,"carbsPer100g":34,"fatPer100g":18}';

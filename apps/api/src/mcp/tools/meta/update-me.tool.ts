@@ -15,6 +15,7 @@ export class UpdateMeTool implements McpToolDef {
   readonly name = 'update_me';
   readonly title = 'Atualizar meu perfil';
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly hostedInference = false;
   readonly description =
     'Atualiza o perfil do usuário (nome, estatura, fuso horário). ' +
     'Exemplo: {"name":"Ana Souza","heightCm":178,"timezone":"America/Sao_Paulo"}';

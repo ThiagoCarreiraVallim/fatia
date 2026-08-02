@@ -14,6 +14,7 @@ export class GetFoodTool implements McpToolDef {
   readonly name = 'get_food';
   readonly title = 'Ver alimento';
   readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly hostedInference = false;
   readonly description = 'Detalhe de um alimento por id.';
   readonly inputSchema = {
     id: z.number().int().describe('ID do alimento no catálogo, obtido via search_food'),

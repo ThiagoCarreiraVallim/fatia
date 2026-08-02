@@ -72,6 +72,14 @@ const TOOL_COUNT_SLICES: ReadonlyArray<{ file: string; text: string; count: () =
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
+    text: '**0** tools com inferência hospedada',
+    // O zero é a afirmação inteira daquela seção (#165). Isento do total, mas
+    // conferido contra o código: no dia em que uma tool for classificada como
+    // paga pela Fatia, a doc que diz "nenhuma" tem de cair junto.
+    count: () => tools.filter(({ tool }) => tool.hostedInference).length,
+  },
+  {
+    file: 'docs/MCP_TOOL_SURFACE.md',
     text: '48 tools de escrita',
     // As de escrita que ganharam exemplo na #111 — `delete_my_account` é isenta,
     // e é por isso que o número não é o total de tools de escrita.
@@ -602,6 +610,90 @@ describe('catálogo de tools MCP', () => {
     }
 
     expect(wrong.sort()).toEqual([]);
+  });
+
+  // --- Inferência hospedada (issue #165) ---
+  //
+  // Quem chama o `/mcp` é o modelo do usuário: a inferência é dele, e não passa
+  // pelo nosso gateway. Custo de IA para a Fatia numa chamada MCP é zero **por
+  // construção** — e é uma propriedade que se perde em silêncio. Basta uma tool
+  // que internamente chame IA hospedada (reconhecer foto de refeição é o
+  // exemplo óbvio) para o usuário pedir pelo Claude dele e a conta cair aqui.
+  //
+  // Não há sintoma: a tool funciona, o teste passa, o log não muda. O primeiro
+  // sinal é a fatura. Por isso a classificação é campo obrigatório e a exceção
+  // é uma lista explícita — a decisão tem de ser tomada de propósito, do jeito
+  // que a ADR 018 define, e não descoberta depois.
+
+  /**
+   * Tools autorizadas a valer `hostedInference: true`.
+   *
+   * **Vazia hoje, e é assim que tem de ser.** As 88 tools de hoje só leem e
+   * gravam dado — verificado: não há nenhuma integração com provedor de IA no
+   * repositório (ADR 015). O guarda nasce verde de propósito; o que ele protege
+   * é o dia em que alguém expuser a primeira capacidade de IA via MCP.
+   *
+   * Acrescentar um nome aqui **não** é formalidade: é declarar que a Fatia
+   * aceita pagar a inferência daquela chamada, com o caso registrado na ADR 018
+   * (cujo default é o oposto — capacidade que custa inferência não se expõe
+   * pelo MCP; o cliente traz o resultado pronto, como `log_meal` já faz).
+   */
+  const HOSTED_INFERENCE_TOOLS = new Set<string>();
+
+  it('classifica toda tool quanto a inferência hospedada', () => {
+    // Campo ausente é o modo de falha que interessa: tool nova entra sem
+    // ninguém pensar no assunto, e `undefined` não é `true` — passaria batido
+    // no caso seguinte. Aqui ele é erro, não omissão tolerada.
+    const missing = tools
+      .filter(({ tool }) => typeof tool.hostedInference !== 'boolean')
+      .map(({ tool }) => tool.name)
+      .sort();
+
+    expect(missing).toEqual([]);
+  });
+
+  it('não deixa tool disparar inferência paga pela Fatia sem decisão explícita', () => {
+    const undeclared = tools
+      .filter(({ tool }) => tool.hostedInference === true)
+      .map(({ tool }) => tool.name)
+      .filter((name) => !HOSTED_INFERENCE_TOOLS.has(name))
+      .sort();
+
+    expect(undeclared).toEqual([]);
+
+    // A exceção não pode sobreviver ao motivo dela. Nome que saiu do catálogo —
+    // ou tool que voltou a ser `false` — deixaria uma permissão pendurada,
+    // pronta para cobrir a próxima tool que se chamasse assim.
+    const stale = [...HOSTED_INFERENCE_TOOLS]
+      .filter((name) => !tools.some(({ tool }) => tool.name === name && tool.hostedInference))
+      .sort();
+
+    expect(stale).toEqual([]);
+  });
+
+  it('não serve a classificação de custo no fio, junto das anotações da spec', () => {
+    // `mcp-tool.registry.ts` faz `annotations: { title, ...tool.annotations }`:
+    // tudo que estiver em `annotations` vai para o cliente em TODA sessão que
+    // lista as tools. `hostedInference` é política interna de custo, não
+    // anotação da spec — mover o campo para lá o publicaria sem que nada mais
+    // no repositório reclamasse. Este caso é o que reclama.
+    const SPEC_KEYS = new Set([
+      'title',
+      'readOnlyHint',
+      'destructiveHint',
+      'idempotentHint',
+      'openWorldHint',
+    ]);
+
+    const leaked: string[] = [];
+
+    for (const { tool } of tools) {
+      for (const key of Object.keys(tool.annotations ?? {})) {
+        if (!SPEC_KEYS.has(key)) leaked.push(`${tool.name}.annotations.${key}`);
+      }
+    }
+
+    expect(leaked.sort()).toEqual([]);
   });
 
   // --- Exemplos de invocação (issue #111) ---

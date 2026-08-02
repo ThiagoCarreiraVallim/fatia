@@ -17,6 +17,8 @@ export class GetPersonalRecordTool implements McpToolDef {
   readonly title = 'Ver recorde pessoal';
 
   readonly annotations = { readOnlyHint: true, destructiveHint: false };
+
+  readonly hostedInference = false;
   readonly description =
     'Retorna o recorde pessoal para um exercício. Para força: maior peso × reps. Para cardio: maior distância em uma sessão.';
   readonly inputSchema = {

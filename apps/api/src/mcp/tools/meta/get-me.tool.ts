@@ -15,6 +15,7 @@ export class GetMeTool implements McpToolDef {
   readonly name = 'get_me';
   readonly title = 'Ver meu perfil';
   readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly hostedInference = false;
   readonly description = 'Retorna o perfil do usuário autenticado.';
   readonly inputSchema = {} as const;
   execute(_input: z.infer<z.ZodObject<typeof this.inputSchema>>, { userId }: McpToolContext) {

@@ -23,6 +23,7 @@ Decisões arquiteturais relevantes do projeto. Cada ADR é imutável depois de a
 | [015](./015-agente-python-langgraph-cliente-mcp.md)            | Agente de IA em Python/LangGraph, cliente do MCP         | Accepted             |
 | [016](./016-sem-expansao-internacional-da-base-nutricional.md) | Sem expansão internacional da base nutricional           | Accepted             |
 | [017](./017-open-food-facts-para-industrializado.md)           | Open Food Facts sob demanda para produto industrializado | Accepted             |
+| [018](./018-inferencia-hospedada-fora-do-mcp.md)               | Inferência paga pela Fatia não se expõe pelo MCP         | Accepted             |
 
 ## Template
 

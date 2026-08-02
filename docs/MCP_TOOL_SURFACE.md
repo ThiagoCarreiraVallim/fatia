@@ -49,6 +49,26 @@ tools de grupo entraram e ninguém refez a conta. Agora o teste refaz.
 O formato, a isenção de `delete_my_account` e o motivo de o exemplo morar na `description` —
 e não em campo separado — estão na §Convenções de [`docs/MCP.md`](./MCP.md).
 
+## Classificação por custo de inferência
+
+Além da contagem, cada tool declara `hostedInference` — se a execução dispara inferência **paga
+pela Fatia**. É recorte de custo, não de tamanho, e por isso mora aqui junto do resto.
+
+Hoje são **88** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
+**0** tools com inferência hospedada.
+
+O segundo número é o ponto inteiro. Chamada vinda do cliente MCP do usuário roda no
+modelo **dele**: não passa por gateway nosso e não nos custa inferência. Uma tool que chamasse IA
+hospedada por dentro inverteria isso sem sintoma — o usuário pede pelo Claude dele, a conta cai
+aqui, e o primeiro sinal é a fatura.
+
+`tool-catalog.spec.ts` reprova toda tool que declare `true` fora da lista `HOSTED_INFERENCE_TOOLS`,
+vazia hoje. A política — default é **não expor**; a forma aceita é o cliente trazer o resultado
+pronto, como `log_meal` já recebe macros calculados pelo Claude — está na
+[ADR 018](./ADR/018-inferencia-hospedada-fora-do-mcp.md).
+
+O campo é interno e não vai no fio, então o tamanho do catálogo servido, medido acima, não muda.
+
 ## Decisões
 
 ### Fica fora do MCP — administração de grupo (#154)

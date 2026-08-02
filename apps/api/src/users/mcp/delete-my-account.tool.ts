@@ -17,6 +17,8 @@ export class DeleteMyAccountTool implements McpToolDef {
   readonly title = 'Apagar minha conta';
 
   readonly annotations = { readOnlyHint: false, destructiveHint: true };
+
+  readonly hostedInference = false;
   // Única tool de escrita sem exemplo de invocação, por decisão (§Convenções de
   // docs/MCP.md). O input é um literal único, já soletrado abaixo: o exemplo não
   // acrescentaria informação, só uma chamada completa e disparável — sem ID para
