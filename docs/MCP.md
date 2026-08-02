@@ -158,18 +158,17 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 91 tools): **68,4 k caracteres**
-hoje, dos quais **4.074 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 94 tools): **70,4 k caracteres**
+hoje, dos quais **4.178 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de 89 caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (57,0 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (58,7 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
 catálogo real: a versão anterior desta linha afirmava 66,7 k e seguiu afirmando depois de duas
 tools novas entrarem, porque nada a conferia.
-
 ### IDs
 
 - IDs de entidades user-owned (`Meal`, `WorkoutSession`, etc): UUID string
@@ -305,8 +304,11 @@ Listagens com potencial de crescer usam cursor-based:
 | **Engajamento**           | `get_streak`                 | R        |
 |                           | `list_achievements`          | R        |
 |                           | `refresh_achievements`       | W        |
+| **Grupos (B2B)**          | `list_my_groups`             | R        |
+|                           | `join_group`                 | C        |
+|                           | `leave_group`                | D        |
 
-Total: **91 tools**. Cada uma documentada abaixo.
+Total: **94 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -2110,6 +2112,24 @@ usuário desistir de vez em vez de voltar.
 
 Catálogo de conquistas. Devolve as **sete** chaves sempre, desbloqueadas ou não, para o Claude
 saber o que sugerir como próximo passo.
+## Grupos (B2B)
+
+Academia, personal e nutricionista entram pela [ADR 014](./ADR/014-compartilhamento-b2b-copia-e-vinculo.md).
+Três coisas valem para todas as tools desta seção:
+
+1. **Estar num grupo não concede nada.** Quem lê dado de saúde do usuário é o profissional que
+   ele autorizou explicitamente, num ato separado (`ProfessionalLink`, #155). Não existe
+   "acesso da academia".
+2. **Ninguém coloca outra pessoa num grupo.** A identidade de quem entra sai sempre do token —
+   nenhuma tool aceita id de usuário.
+3. **Sair revoga na hora.** A saída encerra, na mesma transação, todo vínculo daquele grupo.
+
+Criar grupo, aprovar entrada e remover membro **não têm tool**: são só REST, no painel do dono.
+Ver [`docs/MCP_TOOL_SURFACE.md`](./MCP_TOOL_SURFACE.md).
+
+### `list_my_groups`
+
+Lista os grupos de que o usuário participa, com o papel dele e a situação da associação.
 
 **Input:** _(nenhum)_
 
@@ -2141,6 +2161,64 @@ idempotente: o `@@unique([userId, key])` garante que reavaliar não duplica nem 
 **Input:** _(nenhum)_
 
 **Output:** o mesmo array de `list_achievements`, já com os desbloqueios desta chamada.
+  id: string;
+  type: 'SPONSORED' | 'SOCIAL';
+  name: string;
+  slug: string;
+  role: 'OWNER' | 'PROFESSIONAL' | 'CREATOR' | 'MEMBER';
+  status: 'INVITED' | 'ACTIVE';
+  membershipId: string;
+  joinedAt: string | null;
+  createdAt: string;
+}>;
+```
+
+### `join_group`
+
+Pede para entrar num grupo pelo slug do convite. O pedido nasce `INVITED` e só vira `ACTIVE`
+quando o dono aprova — o papel também é dele, porque `PROFESSIONAL` é papel que pode receber
+consentimento de leitura e não pode ser autoatribuído.
+
+**Input:**
+
+```typescript
+{
+  slug: string;
+}
+```
+
+**Erros:** `NOT_FOUND` se o slug não existe; `CONFLICT` se já é membro ou já existe pedido
+pendente.
+
+### `leave_group`
+
+Sai do grupo. Não passa pelo dono, e nenhum papel pode impedir. Revoga todo `ProfessionalLink`
+daquele grupo na mesma transação, com `revokedAt` datado e `revokedReason: "left_group"` — as
+linhas continuam no banco, porque são elas que respondem "quem teve acesso a quê, quando".
+
+**Input:**
+
+```typescript
+{
+  groupId: string;
+}
+```
+
+**Output:**
+
+```typescript
+{
+  membershipId: string;
+  groupId: string;
+  status: 'LEFT';
+  role: string;
+  /** Vínculos revogados pela saída. Zero é resultado normal. */
+  revokedLinks: number;
+}
+```
+
+**Erros:** `NOT_FOUND` se não é membro do grupo; `CONFLICT` se é o dono — grupo sem dono fica
+órfão com cobrança viva, então o caminho é transferir a propriedade ou apagar o grupo.
 
 ---
 
@@ -2154,6 +2232,9 @@ Documentadas pra deixar claro o que NÃO fazemos via MCP:
 - **Promover usuário a admin:** apenas via console do Logto (atribuição de role).
 - **Bulk import (massivo) de comidas/treinos:** se precisar, vira ADR e endpoint admin separado.
 - **Acesso a dados de outros usuários:** mesmo admin não acessa via MCP.
+- **Criar grupo, aprovar entrada e remover membro (#154):** só REST. Painel de dono é superfície
+  B2B, não é o app do usuário — nenhuma tool passa a poder criar grupo ou colocar alguém dentro
+  de um. As tools de grupo são as três do lado do aluno.
 
 ---
 

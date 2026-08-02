@@ -1,7 +1,9 @@
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { GroupRole, GroupType, MealType, MembershipStatus, ShareScope } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import { AccessAuditService } from '../../sharing/access-audit.service';
+import { GroupService } from '../../sharing/group.service';
+import { MembershipService } from '../../sharing/membership.service';
 import { ProfessionalAccessService } from '../../sharing/professional-access.service';
 import { ProfessionalLinkService } from '../../sharing/professional-link.service';
 import { GoalsService } from '../../goals/goals.service';
@@ -54,6 +56,8 @@ describe('isolamento entre usuários', () => {
   const sets = new SessionSetService(prisma);
   const links = new ProfessionalLinkService(prisma);
   const access = new ProfessionalAccessService(prisma, new AccessAuditService(prisma));
+  const groups = new GroupService(prisma);
+  const memberships = new MembershipService(prisma, links);
 
   /** Dados do user-A. Preenchido no beforeAll e sondado como user-B. */
   const owned = {
@@ -61,11 +65,21 @@ describe('isolamento entre usuários', () => {
     userB: '',
     /** Terceiro usuário: profissional da academia do user-A (ADR 014). */
     pro: '',
+    /**
+     * Segundo profissional da MESMA academia. Existe para que a revogação em
+     * massa da saída seja conferida com dois vínculos vivos: um `updateMany`
+     * que filtrasse por profissional específico revogaria um e deixaria o outro
+     * lendo o histórico de quem já saiu.
+     */
+    pro2: '',
     groupId: '',
+    /** Grupo do `pro`, em que o user-A não está. Grupo alheio, para o #92. */
+    grupoDoProId: '',
     /** Membership do user-A (o titular do dado) no grupo. */
     membershipA: '',
     /** Membership do próprio `pro` no grupo. Usada para "demitir" o personal. */
     membershipPro: '',
+    membershipPro2: '',
     /** Membership do user-B num grupo em que `pro` não tem nada a ver. */
     membershipForaId: '',
     mealId: '',
@@ -97,7 +111,7 @@ describe('isolamento entre usuários', () => {
     await prisma.$connect();
 
     const stamp = `iso-${Date.now()}`;
-    const [userA, userB, pro] = await Promise.all([
+    const [userA, userB, pro, pro2] = await Promise.all([
       prisma.user.create({
         data: {
           logtoSub: `${stamp}-a`,
@@ -122,10 +136,19 @@ describe('isolamento entre usuários', () => {
           timezone: TZ,
         },
       }),
+      prisma.user.create({
+        data: {
+          logtoSub: `${stamp}-pro2`,
+          email: `${stamp}-pro2@test.local`,
+          name: 'Pro 2',
+          timezone: TZ,
+        },
+      }),
     ]);
     owned.userA = userA.id;
     owned.userB = userB.id;
     owned.pro = pro.id;
+    owned.pro2 = pro2.id;
 
     // Exercício de catálogo público — usado nas séries. Não pertence a ninguém.
     const shared = await prisma.exercise.create({
@@ -150,6 +173,7 @@ describe('isolamento entre usuários', () => {
             { userId: owned.userB, role: GroupRole.OWNER, status: MembershipStatus.ACTIVE },
             { userId: owned.userA, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
             { userId: owned.pro, role: GroupRole.PROFESSIONAL, status: MembershipStatus.ACTIVE },
+            { userId: owned.pro2, role: GroupRole.PROFESSIONAL, status: MembershipStatus.ACTIVE },
           ],
         },
       },
@@ -158,6 +182,7 @@ describe('isolamento entre usuários', () => {
     owned.groupId = group.id;
     owned.membershipA = group.memberships.find((m) => m.userId === owned.userA)!.id;
     owned.membershipPro = group.memberships.find((m) => m.userId === owned.pro)!.id;
+    owned.membershipPro2 = group.memberships.find((m) => m.userId === owned.pro2)!.id;
 
     // Grupo à parte, do próprio `pro`, com o user-B dentro. Serve para provar
     // que um `membershipId` válido de OUTRO contexto não resolve — nem quando
@@ -178,6 +203,7 @@ describe('isolamento entre usuários', () => {
       include: { memberships: true },
     });
     owned.membershipForaId = outro.memberships.find((m) => m.userId === owned.userB)!.id;
+    owned.grupoDoProId = outro.id;
 
     // --- semeia tudo como user-A ---
     const customFood = await foods.createCustom(owned.userA, {
@@ -264,7 +290,7 @@ describe('isolamento entre usuários', () => {
     // Cascade limpa tudo que pende dos usuários; o exercício público é solto.
     await prisma.user
       .deleteMany({
-        where: { id: { in: [owned.userA, owned.userB, owned.pro].filter(Boolean) } },
+        where: { id: { in: [owned.userA, owned.userB, owned.pro, owned.pro2].filter(Boolean) } },
       })
       .catch(() => undefined);
     await prisma.exercise
@@ -779,6 +805,310 @@ describe('isolamento entre usuários', () => {
       expect(trilha).toEqual([
         expect.objectContaining({ action: 'auditoria_ok', denied: false, linkId: link.id }),
         expect.objectContaining({ action: 'auditoria_negada', denied: true, linkId: null }),
+      ]);
+    });
+  });
+
+  /**
+   * Ciclo de vida do grupo e revogação em massa (#154).
+   *
+   * O que fecha o critério de pronto da issue: sair do grupo **de fato** para de
+   * liberar leitura. A revogação em massa é a primeira linha de defesa e a
+   * checagem dos dois lados dentro do `assertReadable` é a segunda — o primeiro
+   * caso abaixo exige as duas separadamente, porque uma escondendo a falha da
+   * outra é exatamente como esta garantia apodreceria em silêncio.
+   */
+  describe('gestão de grupo e revogação em massa (#154)', () => {
+    /** Mensagem da recusa. Estoura se a leitura for autorizada. */
+    const mensagemDaRecusa = async (quem: string, membershipId: string, scope: ShareScope) => {
+      try {
+        await access.assertReadable(quem, membershipId, scope, 'probe');
+      } catch (err) {
+        return (err as Error).message;
+      }
+      throw new Error('esperava recusa, mas a leitura foi autorizada');
+    };
+
+    /** Recusa que um estranho qualquer recebe, para comparar byte a byte. */
+    const recusaDeEstranho = () =>
+      mensagemDaRecusa(owned.userB, owned.membershipA, ShareScope.WORKOUT);
+
+    afterEach(async () => {
+      // Cada caso monta o que precisa e mexe em status de membership; sem isto,
+      // o estado vaza para os vizinhos.
+      await prisma.professionalAccessLog.deleteMany({ where: { subjectUserId: owned.userA } });
+      await prisma.professionalLink.deleteMany({ where: { subjectUserId: owned.userA } });
+      await prisma.groupMembership.updateMany({
+        where: { groupId: owned.groupId, userId: { in: [owned.userA, owned.pro, owned.pro2] } },
+        data: { status: MembershipStatus.ACTIVE, leftAt: null },
+      });
+    });
+
+    it('SAIR do grupo revoga todos os vínculos e a leitura para na hora', async () => {
+      for (const professionalId of [owned.pro, owned.pro2]) {
+        await links.grant({
+          subjectUserId: owned.userA,
+          professionalId,
+          groupId: owned.groupId,
+          scopes: [ShareScope.WORKOUT],
+        });
+      }
+
+      // Os DOIS leem antes. Sem isto, as recusas abaixo passariam de graça.
+      await expect(
+        access.assertReadable(owned.pro, owned.membershipA, ShareScope.WORKOUT, 'probe'),
+      ).resolves.toBe(owned.userA);
+      await expect(
+        access.assertReadable(owned.pro2, owned.membershipA, ShareScope.WORKOUT, 'probe'),
+      ).resolves.toBe(owned.userA);
+
+      const saida = await memberships.leave(owned.userA, owned.groupId);
+
+      // Dois vínculos, dois revogados: um `updateMany` que filtrasse por
+      // profissional específico revogaria um só e deixaria o outro lendo.
+      expect([saida.status, saida.revokedLinks]).toEqual([MembershipStatus.LEFT, 2]);
+
+      const vinculos = await prisma.professionalLink.findMany({
+        where: { subjectUserId: owned.userA, groupId: owned.groupId },
+        orderBy: { professionalId: 'asc' },
+      });
+      // Revogar NÃO apaga: são estas linhas que respondem "quem teve acesso a
+      // quê, quando".
+      expect(vinculos).toHaveLength(2);
+      expect(vinculos.map((v) => [v.revokedAt !== null, v.revokedReason])).toEqual([
+        [true, 'left_group'],
+        [true, 'left_group'],
+      ]);
+
+      expect(await mensagemDaRecusa(owned.pro, owned.membershipA, ShareScope.WORKOUT)).toBe(
+        await recusaDeEstranho(),
+      );
+      expect(await mensagemDaRecusa(owned.pro2, owned.membershipA, ShareScope.WORKOUT)).toBe(
+        await recusaDeEstranho(),
+      );
+
+      // Agora a parte que separa as duas linhas de defesa: a membership volta a
+      // ACTIVE na marra, satisfazendo a checagem do `assertReadable`. Se a
+      // recusa dependesse só do status, a leitura voltaria aqui — e a revogação
+      // em massa seria enfeite. Quem barra a partir deste ponto é o `revokedAt`.
+      await prisma.groupMembership.update({
+        where: { id: owned.membershipA },
+        data: { status: MembershipStatus.ACTIVE, leftAt: null },
+      });
+      expect(await mensagemDaRecusa(owned.pro, owned.membershipA, ShareScope.WORKOUT)).toBe(
+        await recusaDeEstranho(),
+      );
+      expect(await mensagemDaRecusa(owned.pro2, owned.membershipA, ShareScope.WORKOUT)).toBe(
+        await recusaDeEstranho(),
+      );
+    });
+
+    it('REMOVER pelo dono tem o mesmo efeito, com o motivo trocado', async () => {
+      await links.grant({
+        subjectUserId: owned.userA,
+        professionalId: owned.pro,
+        groupId: owned.groupId,
+        scopes: [ShareScope.WORKOUT],
+      });
+      await expect(
+        access.assertReadable(owned.pro, owned.membershipA, ShareScope.WORKOUT, 'probe'),
+      ).resolves.toBe(owned.userA);
+
+      const remocao = await memberships.removeMember(owned.userB, owned.groupId, owned.membershipA);
+
+      expect([remocao.status, remocao.revokedLinks]).toEqual([MembershipStatus.REMOVED, 1]);
+      const vinculo = await prisma.professionalLink.findFirst({
+        where: { subjectUserId: owned.userA, professionalId: owned.pro },
+      });
+      // "Saiu" e "foi removido" precisam ser distinguíveis na trilha.
+      expect([vinculo?.revokedAt !== null, vinculo?.revokedReason]).toEqual([
+        true,
+        'membership_removed',
+      ]);
+      expect(await mensagemDaRecusa(owned.pro, owned.membershipA, ShareScope.WORKOUT)).toBe(
+        await recusaDeEstranho(),
+      );
+    });
+
+    it('o PROFISSIONAL demitido é revogado pela outra ponta do vínculo', async () => {
+      await links.grant({
+        subjectUserId: owned.userA,
+        professionalId: owned.pro,
+        groupId: owned.groupId,
+        scopes: [ShareScope.WORKOUT],
+      });
+
+      // O titular do dado continua no grupo; quem saiu foi quem lia.
+      const remocao = await memberships.removeMember(
+        owned.userB,
+        owned.groupId,
+        owned.membershipPro,
+      );
+
+      expect(remocao.revokedLinks).toBe(1);
+      const vinculo = await prisma.professionalLink.findFirst({
+        where: { subjectUserId: owned.userA, professionalId: owned.pro },
+      });
+      expect(vinculo?.revokedReason).toBe('membership_removed');
+      expect(await mensagemDaRecusa(owned.pro, owned.membershipA, ShareScope.WORKOUT)).toBe(
+        await recusaDeEstranho(),
+      );
+    });
+
+    it('entrar no grupo, em qualquer papel, não cria vínculo nem abre leitura', async () => {
+      const grupo = await groups.create(owned.userB, {
+        type: GroupType.SPONSORED,
+        name: 'Academia Nova',
+      });
+
+      const pedidoAluno = await memberships.requestJoin(owned.userA, grupo.slug);
+      const pedidoPro = await memberships.requestJoin(owned.pro, grupo.slug);
+      // Quem pede entrada é sempre MEMBER e sempre aguardando: PROFESSIONAL é
+      // papel que pode receber consentimento, e não se autoatribui.
+      expect([pedidoAluno.status, pedidoAluno.role]).toEqual([
+        MembershipStatus.INVITED,
+        GroupRole.MEMBER,
+      ]);
+
+      const aluno = await memberships.approve(owned.userB, grupo.id, pedidoAluno.membershipId);
+      await memberships.approve(
+        owned.userB,
+        grupo.id,
+        pedidoPro.membershipId,
+        GroupRole.PROFESSIONAL,
+      );
+      expect(aluno.status).toBe(MembershipStatus.ACTIVE);
+
+      // Nenhuma linha de vínculo nasceu do aceite — nem com escopo vazio.
+      expect(await prisma.professionalLink.count({ where: { groupId: grupo.id } })).toBe(0);
+
+      // E nenhuma leitura abriu, em nenhum escopo.
+      for (const scope of Object.values(ShareScope)) {
+        await expect(
+          access.assertReadable(owned.pro, aluno.membershipId, scope, 'probe'),
+        ).rejects.toThrow(NotFoundException);
+      }
+      await expect(plans.list(owned.pro)).resolves.toEqual([]);
+    });
+
+    it('quem sai para de ver o grupo por id, e não só na listagem', async () => {
+      await expect(groups.findByIdForMember(owned.userA, owned.groupId)).resolves.toMatchObject({
+        id: owned.groupId,
+      });
+
+      await memberships.leave(owned.userA, owned.groupId);
+
+      // `listMine` já escondia o grupo de quem saiu; a busca por id barrava só
+      // `REMOVED` e continuava entregando nome, slug e papel a quem deu baixa.
+      expect(await groups.listMine(owned.userA)).toEqual(
+        expect.not.arrayContaining([expect.objectContaining({ id: owned.groupId })]),
+      );
+
+      const depoisDeSair = await groups
+        .findByIdForMember(owned.userA, owned.groupId)
+        .catch((err: Error) => err.message);
+      const inexistente = await groups
+        .findByIdForMember(owned.userA, '11111111-2222-4333-8444-666666666666')
+        .catch((err: Error) => err.message);
+
+      expect(depoisDeSair).toBe(inexistente);
+    });
+
+    it('ex-membro some da listagem de membros, para o dono e para o profissional', async () => {
+      // Antes: o nome está lá para os dois. Sem esta metade, as asserções de
+      // ausência abaixo passariam de graça.
+      expect(
+        (await memberships.listMembers(owned.userB, owned.groupId)).map((m) => m.name),
+      ).toEqual(expect.arrayContaining(['User A']));
+      expect((await memberships.listMembers(owned.pro, owned.groupId)).map((m) => m.name)).toEqual(
+        expect.arrayContaining(['User A']),
+      );
+
+      await memberships.removeMember(owned.userB, owned.groupId, owned.membershipA);
+
+      // Associação encerrada some da composição do grupo. O caso do
+      // PROFESSIONAL é o que mais importa: ali o nome vem acompanhado dos
+      // escopos, e ex-aluno listado é dado de pessoa que já não está lá.
+      for (const quem of [owned.userB, owned.pro]) {
+        const nomes = (await memberships.listMembers(quem, owned.groupId)).map((m) => m.name);
+        expect(nomes).not.toContain('User A');
+        // O grupo não ficou vazio por outro motivo: os demais continuam.
+        expect(nomes).toContain('Pro');
+      }
+    });
+
+    it('membro comum não remove ninguém, e o alvo continua ativo', async () => {
+      await expect(
+        memberships.removeMember(owned.userA, owned.groupId, owned.membershipPro),
+      ).rejects.toThrow(ForbiddenException);
+
+      const alvo = await prisma.groupMembership.findUnique({ where: { id: owned.membershipPro } });
+      expect(alvo?.status).toBe(MembershipStatus.ACTIVE);
+    });
+
+    it('grupo alheio responde NOT_FOUND idêntico a grupo inexistente', async () => {
+      const doPro = await groups
+        .findByIdForMember(owned.userA, owned.grupoDoProId)
+        .catch((err: Error) => err.message);
+      const inexistente = await groups
+        .findByIdForMember(owned.userA, '11111111-2222-4333-8444-555555555555')
+        .catch((err: Error) => err.message);
+
+      expect(doPro).toBe(inexistente);
+
+      // Lista vazia confirmaria que o grupo existe: a recusa tem de ser a mesma.
+      await expect(memberships.listMembers(owned.userA, owned.grupoDoProId)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('o dono não sai do próprio grupo e continua ativo', async () => {
+      await expect(memberships.leave(owned.userB, owned.groupId)).rejects.toThrow(
+        ConflictException,
+      );
+
+      const dono = await prisma.groupMembership.findUnique({
+        where: { groupId_userId: { groupId: owned.groupId, userId: owned.userB } },
+      });
+      expect(dono?.status).toBe(MembershipStatus.ACTIVE);
+    });
+
+    it('a listagem de membros respeita o papel de quem olha', async () => {
+      const peloDono = await memberships.listMembers(owned.userB, owned.groupId);
+      const peloAluno = await memberships.listMembers(owned.userA, owned.groupId);
+
+      // O dono administra e vê todo mundo (ele, o aluno e os dois profissionais).
+      expect(peloDono).toHaveLength(4);
+      // O aluno vê quem administra ou atende, e ele mesmo: a lista de alunos de
+      // uma academia é informação sobre pessoas, e não é do interesse de outro
+      // aluno. Com um único MEMBER no grupo, "vê só a si" e "vê todos os MEMBER"
+      // dariam o mesmo resultado — por isso o user-B entra como segundo aluno.
+      const segundoAluno = await prisma.groupMembership.create({
+        data: {
+          groupId: owned.grupoDoProId,
+          userId: owned.userA,
+          role: GroupRole.MEMBER,
+          status: MembershipStatus.ACTIVE,
+        },
+      });
+      const noGrupoDoPro = await memberships.listMembers(owned.userA, owned.grupoDoProId);
+      await prisma.groupMembership.delete({ where: { id: segundoAluno.id } });
+
+      expect(peloAluno.some((m) => m.role === GroupRole.OWNER)).toBe(true);
+      expect(peloAluno.filter((m) => m.role === GroupRole.MEMBER)).toHaveLength(1);
+      // No grupo do `pro` o user-B também é MEMBER e não pode aparecer.
+      expect(
+        noGrupoDoPro.filter((m) => m.role === GroupRole.MEMBER).map((m) => m.membershipId),
+      ).toEqual([segundoAluno.id]);
+
+      // Metadado de associação, nunca dado de saúde — e nunca o `userId` de
+      // outra pessoa: tudo que sai daqui é referenciado por `membershipId`.
+      expect(Object.keys(peloDono[0]).sort()).toEqual([
+        'joinedAt',
+        'membershipId',
+        'name',
+        'role',
+        'status',
       ]);
     });
   });

@@ -189,7 +189,7 @@ Duas direções, dois mecanismos:
 A camada do vínculo é conferida **nos dois lados, e por conta própria**. Antes de procurar o
 `ProfessionalLink`, a porta exige que o aluno tenha membership `ACTIVE` no grupo e que o
 profissional tenha membership `ACTIVE` com papel `PROFESSIONAL` **no mesmo grupo**. Nenhuma das
-duas depende de a revogação em massa (`revokeAllForMember`) ter rodado: quem sai do grupo — em
+duas depende de a revogação em massa (`revokeAllForMemberOp`) ter rodado: quem sai do grupo — em
 qualquer das duas pontas — para de ler e de ser lido no mesmo instante, mesmo com o vínculo ainda
 marcado como vigente. Fosse só o lado do aluno, o personal demitido continuaria lendo o histórico
 de saúde dela até alguém preencher `revokedAt` na mão.

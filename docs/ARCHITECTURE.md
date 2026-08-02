@@ -14,7 +14,7 @@
 ┌─────────────────┐      ┌──────────────────┐
 │  Claude (app)   │      │   PWA (Next.js)  │
 │   via MCP       │      │   navegador      │
-│   91 tools      │      │  visualização    │
+│   94 tools      │      │  visualização    │
 └────────┬────────┘      └─────────┬────────┘
          │                         │
          │ OAuth 2.1 + DCR + PKCE  │ OAuth code flow + PKCE

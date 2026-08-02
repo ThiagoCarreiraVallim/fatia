@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { ProfessionalLink, ShareScope } from '@fatia/db';
+import type { Prisma, ProfessionalLink, ShareScope } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 
 /** Motivos possíveis de revogação. Gravados em `ProfessionalLink.revokedReason`. */
@@ -76,24 +76,30 @@ export class ProfessionalLinkService {
 
   /**
    * Revoga em massa os vínculos de um grupo que envolvem um usuário — em
-   * qualquer das duas pontas. Chamado quando alguém sai ou é removido do grupo:
-   * o vínculo é sempre contextual a um `groupId`, então perder o contexto
-   * encerra a permissão.
+   * qualquer das duas pontas —, **sem executar**: devolve a operação para quem
+   * precisa dela dentro de um `$transaction([...])`.
+   *
+   * Existe só nesta forma porque sair do grupo tem de mudar o status da
+   * membership e apagar a permissão no mesmo commit (#154). Duas escritas
+   * separadas abrem uma janela em que a associação já acabou e o vínculo ainda
+   * autoriza leitura de dado de saúde — por isso não há variante que execute
+   * sozinha: ela só serviria para reabrir essa janela. `at` entra por parâmetro
+   * para que a membership e o vínculo fiquem com o mesmo instante.
    */
-  async revokeAllForMember(
+  revokeAllForMemberOp(
     groupId: string,
     userId: string,
     reason: Extract<RevokeReason, 'left_group' | 'membership_removed'>,
-  ): Promise<number> {
-    const { count } = await this.prisma.professionalLink.updateMany({
+    at: Date,
+  ): Prisma.PrismaPromise<{ count: number }> {
+    return this.prisma.professionalLink.updateMany({
       where: {
         groupId,
         revokedAt: null,
         OR: [{ subjectUserId: userId }, { professionalId: userId }],
       },
-      data: { revokedAt: new Date(), revokedReason: reason },
+      data: { revokedAt: at, revokedReason: reason },
     });
-    return count;
   }
 
   /** Vínculos ativos que o titular concedeu. Base do painel de consentimento (#155). */

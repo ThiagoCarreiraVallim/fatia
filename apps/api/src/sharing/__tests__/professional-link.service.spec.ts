@@ -97,16 +97,30 @@ describe('ProfessionalLinkService', () => {
     });
   });
 
-  describe('revokeAllForMember', () => {
+  describe('revokeAllForMemberOp', () => {
     it('alcança as duas pontas do vínculo dentro do grupo', async () => {
       prisma.professionalLink.updateMany.mockResolvedValue({ count: 3 });
 
-      await service.revokeAllForMember(GROUP, PRO, 'left_group');
+      service.revokeAllForMemberOp(GROUP, PRO, 'left_group', new Date());
 
       const where = prisma.professionalLink.updateMany.mock.calls[0][0].where;
       expect(where.groupId).toBe(GROUP);
       expect(where.revokedAt).toBeNull();
       expect(where.OR).toEqual([{ subjectUserId: PRO }, { professionalId: PRO }]);
+    });
+
+    it('grava o instante recebido, e não um novo', async () => {
+      prisma.professionalLink.updateMany.mockResolvedValue({ count: 1 });
+      const at = new Date('2026-01-02T03:04:05.000Z');
+
+      service.revokeAllForMemberOp(GROUP, PRO, 'membership_removed', at);
+
+      // Mesmo `at` da mudança de status da membership: datas diferentes na mesma
+      // saída tornariam a trilha mais difícil de ler do que precisa.
+      expect(prisma.professionalLink.updateMany.mock.calls[0][0].data).toEqual({
+        revokedAt: at,
+        revokedReason: 'membership_removed',
+      });
     });
   });
 });

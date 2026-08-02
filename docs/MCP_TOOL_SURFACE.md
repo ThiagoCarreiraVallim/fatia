@@ -14,6 +14,7 @@
 | Goals (metas pessoais)                                      |      6 | `apps/api/src/goals/mcp/`      |
 | Meta (perfil)                                               |      3 | `apps/api/src/mcp/tools/meta/` |
 | Conta (export e deleção — LGPD)                             |      2 | `apps/api/src/users/mcp/`      |
+| Sharing (grupos — lado do aluno)                            |      3 | `apps/api/src/sharing/mcp/`    |
 | **Total**                                                   | **91** |                                |
 
 A contagem é verificada por `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`, que também
@@ -32,17 +33,35 @@ opções abaixo foram avaliadas com isso em mente.
 
 O que pesa no contexto não é a contagem de tools, é o payload. Medido no que o registry
 serve de fato — `name`, `title`, `description`, `annotations` e o JSON Schema do input das
-91 tools: **68,4 k caracteres**, enviados em toda sessão que lista as tools.
-
-O denominador importa. Contar só `name + description + inputSchema` dá 57,0 k e subestima o
+94 tools: **70,4 k caracteres**, enviados em toda sessão que lista as tools.
+O denominador importa. Contar só `name + description + inputSchema` dá 58,7 k e subestima o
 catálogo em ~20% — `title` e `annotations` também vão no fio, em toda tool.
 
-Dentro dos 68,4 k, os exemplos de invocação que a #111 acrescentou às 46 tools de escrita
-valem **4.074 caracteres**, 6,3% sobre os 64,3 k de antes. Média de 89 caracteres por tool.
+Dentro desse total, os exemplos de invocação que a #111 acrescentou às 48 tools de escrita
+valem **4.178 caracteres** — média de **87** caracteres por tool, algo em torno de 6% do
+catálogo. Os dois números são medidos no código pelo `tool-catalog.spec.ts`, junto com a
+contagem: a versão anterior desta frase dizia "4.110 caracteres, média de 91" — estagnada na
+medição da #111, feita quando o catálogo tinha 45 delas, e ainda por cima incoerente, porque
+aquela divisão não dava 91. Custo de contexto que ninguém confere apodrece igual a contagem de
+tools — e apodreceu duas vezes: a média voltou a ficar errada neste mesmo rebase, quando as
+tools de grupo entraram e ninguém refez a conta. Agora o teste refaz.
+
 O formato, a isenção de `delete_my_account` e o motivo de o exemplo morar na `description` —
 e não em campo separado — estão na §Convenções de [`docs/MCP.md`](./MCP.md).
 
 ## Decisões
+
+### Fica fora do MCP — administração de grupo (#154)
+
+O domínio Sharing entra com **3 tools**, todas do lado do aluno: `list_my_groups`,
+`join_group` e `leave_group`. Criar grupo, aprovar entrada e remover membro ficam só em REST.
+
+A ADR 006 diz que tudo que o PWA faz o Claude faz, e a exceção é deliberada: o "PWA" em
+questão é o painel do dono da academia, superfície B2B que não é o app do usuário. Manter
+essas três operações fora do catálogo é o que garante que **nenhuma tool MCP pode criar um
+grupo ou colocar alguém dentro de um** — a superfície conversacional só opera sobre a própria
+associação de quem fala. Se o painel do dono virar produto, a decisão se reabre com o
+requisito na mão, e não por simetria.
 
 ### Fica como está — CRUD por entidade
 

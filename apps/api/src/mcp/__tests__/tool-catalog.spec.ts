@@ -64,7 +64,15 @@ const TOOL_COUNT_SLICES: ReadonlyArray<{ file: string; text: string; count: () =
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '46 tools de escrita',
+    // Contagem do domínio Sharing, que fica fora do MCP na parte administrativa
+    // (#154). Declarada como recorte, e não isenta: se uma tool de grupo nascer
+    // ou morrer, a frase que explica a decisão tem de acompanhar.
+    text: 'entra com **3 tools**',
+    count: () => tools.filter(({ file }) => file.includes('/sharing/mcp/')).length,
+  },
+  {
+    file: 'docs/MCP_TOOL_SURFACE.md',
+    text: '48 tools de escrita',
     // As de escrita que ganharam exemplo na #111 — `delete_my_account` é isenta,
     // e é por isso que o número não é o total de tools de escrita.
     count: () =>
@@ -132,8 +140,8 @@ const EXAMPLE_PREFIX = /Exemplo(?: \([^)]*\))?: (?=\{)/g;
  * existem hoje: description com dois exemplos e exemplo com objeto aninhado.
  * As aspas são acompanhadas porque `}` dentro de string não fecha nada.
  */
-function extractExamples(description: string): string[] {
-  const found: string[] = [];
+function extractExampleSpans(description: string): Array<{ json: string; full: string }> {
+  const found: Array<{ json: string; full: string }> = [];
 
   for (const match of description.matchAll(EXAMPLE_PREFIX)) {
     if (match.index === undefined) continue;
@@ -156,7 +164,12 @@ function extractExamples(description: string): string[] {
       } else if (!inString && char === '}') {
         depth--;
         if (depth === 0) {
-          found.push(description.slice(start, i + 1));
+          // `json` é o que valida contra o schema; `full` inclui o rótulo
+          // `Exemplo: `, que é o que de fato pesa no catálogo servido.
+          found.push({
+            json: description.slice(start, i + 1),
+            full: description.slice(match.index, i + 1),
+          });
           break;
         }
       }
@@ -164,6 +177,10 @@ function extractExamples(description: string): string[] {
   }
 
   return found;
+}
+
+function extractExamples(description: string): string[] {
+  return extractExampleSpans(description).map((span) => span.json);
 }
 
 /**
@@ -288,22 +305,22 @@ const payload = tools.reduce(
  * número; o caso abaixo confere as duas pontas, então nem o texto some nem o número derrapa.
  */
 const PAYLOAD_CLAIMS: ReadonlyArray<{ file: string; text: string; medido: () => string }> = [
-  { file: 'docs/MCP.md', text: '**68,4 k caracteres**', medido: () => emK(payload.cheio) },
-  { file: 'docs/MCP.md', text: '(57,0 k)', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP.md', text: '**70,4 k caracteres**', medido: () => emK(payload.cheio) },
+  { file: 'docs/MCP.md', text: '(58,7 k)', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP.md',
-    text: '**4.074 são os exemplos**',
+    text: '**4.178 são os exemplos**',
     medido: () => emMilhar(payload.exemplos),
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**68,4 k caracteres**',
+    text: '**70,4 k caracteres**',
     medido: () => emK(payload.cheio),
   },
-  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 57,0 k', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 58,7 k', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**4.074 caracteres**',
+    text: '**4.178 caracteres**',
     medido: () => emMilhar(payload.exemplos),
   },
 ];
@@ -431,6 +448,32 @@ describe('catálogo de tools MCP', () => {
     expect(errados.sort()).toEqual([]);
   });
 
+  it('cita o custo real dos exemplos em docs/MCP_TOOL_SURFACE.md', () => {
+    // O número de tools já era conferido; o de CARACTERES não era, e apodreceu:
+    // a doc afirmava "4.110 caracteres … média de 91 por tool", medido na #111
+    // com 45 tools. Além de estagnado, era internamente incoerente — 4.110/47 dá
+    // 87, nunca 91. Quem lê um custo de contexto acredita no número.
+    const comExemplo = tools
+      .map(({ tool }) => extractExampleSpans(tool.description))
+      .filter((spans) => spans.length > 0);
+
+    const caracteres = comExemplo.flat().reduce((total, span) => total + span.full.length, 0);
+    const media = Math.round(caracteres / comExemplo.length);
+
+    const doc = readFileSync(resolve(REPO_ROOT, 'docs/MCP_TOOL_SURFACE.md'), 'utf8');
+    const afirmado = doc.match(/\*\*([\d.]+) caracteres\*\*/);
+    const afirmadaMedia = doc.match(/média de \*\*(\d+)\*\* caracteres por tool/);
+
+    // Frase que some é o mesmo verde de frase certa: sem estas duas linhas,
+    // apagar o custo da doc deixaria o caso passando.
+    expect([afirmado, afirmadaMedia].map((m) => m !== null)).toEqual([true, true]);
+
+    expect([Number(afirmado![1].replace(/\./g, '')), Number(afirmadaMedia![1])]).toEqual([
+      caracteres,
+      media,
+    ]);
+  });
+
   it('não tem seções órfãs em docs/MCP.md', () => {
     const registered = new Set(tools.map(({ tool }) => tool.name));
     const orphans = [...documentedSections].filter((name) => !registered.has(name)).sort();
@@ -518,7 +561,12 @@ describe('catálogo de tools MCP', () => {
     const READ = /^(get|list|search|explain|export)_/;
     const DESTRUCTIVE = /^delete_/;
     // Desfaz o vínculo e perde séries/reps configuradas naquele exercício.
-    const ALSO_DESTRUCTIVE = new Set(['remove_exercise_from_plan']);
+    //
+    // `leave_group` entra pelo mesmo critério: sair revoga todo `ProfessionalLink`
+    // daquele grupo com `revokedAt` datado, e revogação não se desfaz — voltar
+    // exige pedir entrada de novo e consentir a cada profissional outra vez.
+    // Confirmar antes é o comportamento certo (#154).
+    const ALSO_DESTRUCTIVE = new Set(['remove_exercise_from_plan', 'leave_group']);
 
     const wrong: string[] = [];
 
