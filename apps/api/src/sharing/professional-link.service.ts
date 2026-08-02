@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { ProfessionalLink, ShareScope } from '@fatia/db';
+import type { Prisma, ProfessionalLink, ShareScope } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 
 /** Motivos possíveis de revogação. Gravados em `ProfessionalLink.revokedReason`. */
@@ -85,15 +85,35 @@ export class ProfessionalLinkService {
     userId: string,
     reason: Extract<RevokeReason, 'left_group' | 'membership_removed'>,
   ): Promise<number> {
-    const { count } = await this.prisma.professionalLink.updateMany({
+    const { count } = await this.revokeAllForMemberOp(groupId, userId, reason, new Date());
+    return count;
+  }
+
+  /**
+   * A mesma revogação em massa, **sem executar**: devolve a operação para quem
+   * precisa dela dentro de um `$transaction([...])`.
+   *
+   * Existe porque sair do grupo tem de mudar o status da membership e apagar a
+   * permissão no mesmo commit (#154). Duas escritas separadas abrem uma janela
+   * em que a associação já acabou e o vínculo ainda autoriza leitura de dado de
+   * saúde. `at` entra por parâmetro para que a membership e o vínculo fiquem
+   * com o mesmo instante — datas diferentes na mesma saída tornariam a trilha
+   * mais difícil de ler do que precisa.
+   */
+  revokeAllForMemberOp(
+    groupId: string,
+    userId: string,
+    reason: Extract<RevokeReason, 'left_group' | 'membership_removed'>,
+    at: Date,
+  ): Prisma.PrismaPromise<{ count: number }> {
+    return this.prisma.professionalLink.updateMany({
       where: {
         groupId,
         revokedAt: null,
         OR: [{ subjectUserId: userId }, { professionalId: userId }],
       },
-      data: { revokedAt: new Date(), revokedReason: reason },
+      data: { revokedAt: at, revokedReason: reason },
     });
-    return count;
   }
 
   /** Vínculos ativos que o titular concedeu. Base do painel de consentimento (#155). */

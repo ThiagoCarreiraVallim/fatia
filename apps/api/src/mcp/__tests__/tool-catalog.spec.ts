@@ -64,7 +64,15 @@ const TOOL_COUNT_SLICES: ReadonlyArray<{ file: string; text: string; count: () =
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '46 tools de escrita',
+    // Contagem do domínio Sharing, que fica fora do MCP na parte administrativa
+    // (#154). Declarada como recorte, e não isenta: se uma tool de grupo nascer
+    // ou morrer, a frase que explica a decisão tem de acompanhar.
+    text: 'entra com **3 tools**',
+    count: () => tools.filter(({ file }) => file.includes('/sharing/mcp/')).length,
+  },
+  {
+    file: 'docs/MCP_TOOL_SURFACE.md',
+    text: '48 tools de escrita',
     // As de escrita que ganharam exemplo na #111 — `delete_my_account` é isenta,
     // e é por isso que o número não é o total de tools de escrita.
     count: () =>
@@ -288,22 +296,22 @@ const payload = tools.reduce(
  * número; o caso abaixo confere as duas pontas, então nem o texto some nem o número derrapa.
  */
 const PAYLOAD_CLAIMS: ReadonlyArray<{ file: string; text: string; medido: () => string }> = [
-  { file: 'docs/MCP.md', text: '**68,4 k caracteres**', medido: () => emK(payload.cheio) },
-  { file: 'docs/MCP.md', text: '(57,0 k)', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP.md', text: '**70,4 k caracteres**', medido: () => emK(payload.cheio) },
+  { file: 'docs/MCP.md', text: '(58,7 k)', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP.md',
-    text: '**4.074 são os exemplos**',
+    text: '**4.178 são os exemplos**',
     medido: () => emMilhar(payload.exemplos),
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**68,4 k caracteres**',
+    text: '**70,4 k caracteres**',
     medido: () => emK(payload.cheio),
   },
-  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 57,0 k', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 58,7 k', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**4.074 caracteres**',
+    text: '**4.178 caracteres**',
     medido: () => emMilhar(payload.exemplos),
   },
 ];
@@ -518,7 +526,12 @@ describe('catálogo de tools MCP', () => {
     const READ = /^(get|list|search|explain|export)_/;
     const DESTRUCTIVE = /^delete_/;
     // Desfaz o vínculo e perde séries/reps configuradas naquele exercício.
-    const ALSO_DESTRUCTIVE = new Set(['remove_exercise_from_plan']);
+    //
+    // `leave_group` entra pelo mesmo critério: sair revoga todo `ProfessionalLink`
+    // daquele grupo com `revokedAt` datado, e revogação não se desfaz — voltar
+    // exige pedir entrada de novo e consentir a cada profissional outra vez.
+    // Confirmar antes é o comportamento certo (#154).
+    const ALSO_DESTRUCTIVE = new Set(['remove_exercise_from_plan', 'leave_group']);
 
     const wrong: string[] = [];
 
