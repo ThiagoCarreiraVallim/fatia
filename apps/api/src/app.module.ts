@@ -31,7 +31,9 @@ import { McpModule } from './mcp/mcp.module';
         level: process.env.NODE_ENV !== 'production' ? 'debug' : 'info',
         autoLogging: { ignore: (req) => req.url === '/health' },
         // Sem isto o `pino-http` usa o serializador padrão, que grava `headers` inteiro —
-        // `authorization` incluído. Ver `common/log-serializers.ts`.
+        // `authorization` incluído — e a URL com query string. A partir desta issue o log não
+        // fica mais só no `docker logs`: ele é enviado ao Loki e indexado lá. Ver
+        // `common/log-serializers.ts`.
         serializers: { req: serializeRequest, res: serializeResponse },
       },
     }),

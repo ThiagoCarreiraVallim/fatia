@@ -11,11 +11,22 @@
 #     subdomínio próprio. App = app.${DOMAIN}, API = api.${DOMAIN},
 #     Auth = auth.${DOMAIN}.
 
+# O default do driver `json-file` é **sem rotação nenhuma** — o arquivo cresce até o disco
+# acabar. Com Prometheus, Loki e Tempo dividindo o mesmo VPS, encher o disco deixa de ser
+# incômodo e passa a derrubar o Postgres *e* o `backup.sh` junto. 10 MB × 3 arquivos = teto de
+# 30 MB por container. Ver `docs/DATA_RETENTION.md` §"Retenção dos logs".
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: '3'
+
 services:
   # ============================================================
   # Backend (NestJS REST + MCP)
   # ============================================================
   api:
+    logging: *logging
     image: ${API_IMAGE:-fatia-api:latest}
     build:
       context: ..
@@ -30,6 +41,11 @@ services:
       WEB_ORIGIN: https://app.${DOMAIN}
       LOGTO_MCP_APP_ID: ${LOGTO_MCP_APP_ID}
       LOGTO_MCP_APP_SECRET: ${LOGTO_MCP_APP_SECRET}
+      # Observabilidade (#39). Vazio = instrumentação inerte, sem exportador e sem overhead:
+      # a API sobe igual mesmo sem o stack de observabilidade implantado. Para ligar, aponte
+      # para o collector na `dokploy-network` — ver `docs/OPERATIONS.md` §Observabilidade.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-fatia-api}
     expose:
       - "3000"
     networks:
@@ -65,6 +81,7 @@ services:
   # Frontend (Next.js PWA)
   # ============================================================
   web:
+    logging: *logging
     image: ${WEB_IMAGE:-fatia-web:latest}
     build:
       context: ..
@@ -116,6 +133,7 @@ services:
   # Assim a landing não mexe em rota, start_url do PWA nem manifest.
   # ============================================================
   site:
+    logging: *logging
     image: ${SITE_IMAGE:-fatia-site:latest}
     build:
       context: ..
@@ -161,6 +179,7 @@ services:
   # Identity Provider (Logto self-hosted)
   # ============================================================
   auth:
+    logging: *logging
     image: svhd/logto:${LOGTO_VERSION:-1.30}
     restart: unless-stopped
     environment:

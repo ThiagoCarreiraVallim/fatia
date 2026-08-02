@@ -78,10 +78,18 @@ acabou de ser eliminado.
 
 ### Retenção dos logs
 
-Governada pela configuração do Docker no host, não pela aplicação. O default do driver
-`json-file` é sem rotação — o que significa crescimento indefinido. Definir `max-size` e
-`max-file` (ou enviar para um coletor com retenção explícita) faz parte da issue #39
-(observabilidade).
+Resolvido na issue #39, em duas frentes:
+
+- **No host.** O `infra/docker-compose.prod.yml` define `max-size: 10m` e `max-file: "3"` em
+  todos os serviços — teto de 30 MB por container. O default do driver `json-file` é sem rotação
+  nenhuma, ou seja, crescimento indefinido até o disco acabar. Com Prometheus, Loki e Tempo
+  dividindo o mesmo VPS, encher o disco derruba o Postgres **e** o `backup.sh` junto.
+- **No coletor.** O log também é enviado por OTLP ao Loki, com retenção de **7 dias**, aplicada
+  pelo compactor (`infra/observability/loki.yml`). Trace: 3 dias no Tempo. Métrica: 15 dias no
+  Prometheus, com teto adicional de 2 GB.
+
+O conteúdo do log foi reduzido junto: cabeçalhos e query string deixaram de ser gravados — ver
+`docs/THREAT_MODEL.md` §"Vazamento por log".
 
 ## Backups
 

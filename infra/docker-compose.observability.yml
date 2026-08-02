@@ -1,0 +1,128 @@
+# Stack de observabilidade (issue #39) — OpenTelemetry + Grafana, tudo auto-hospedado.
+#
+# Compose SEPARADO de propósito. O `pnpm infra:up` do dia a dia sobe Postgres e Logto e mais
+# nada; cinco containers a mais no compose padrão transformariam `pnpm bootstrap` num problema
+# para quem só quer rodar o app.
+#
+#   docker compose -f infra/docker-compose.observability.yml up -d
+#   OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 pnpm --filter @fatia/api dev
+#   # Grafana em http://localhost:3300 (admin/admin)
+#
+# Caminho dos sinais:
+#   API --OTLP/HTTP--> collector --+--> Tempo       (traces)
+#                                  +--> Loki        (logs, via OTLP nativo do Loki 3)
+#                                  +--> :8889       (métricas, raspadas pelo Prometheus)
+#
+# Portas do host são parametrizadas para permitir uma segunda instância na mesma máquina
+# (útil ao testar duas versões do stack lado a lado).
+#
+# Imagens pinadas: `:latest` de Loki e Tempo já quebrou config de schema entre minor.
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.157.0
+    restart: unless-stopped
+    command: ['--config=/etc/otel/config.yml']
+    environment:
+      # Todos os serviços deste stack são Go, e o GC do Go **não enxerga o limite do cgroup**:
+      # ele cresce até o dobro do heap vivo e o container é morto pelo OOM killer sem aviso.
+      # `GOMEMLIMIT` a ~75% do `limits.memory` faz o GC apertar antes disso. Medido: o Tempo
+      # sem esta variável estacionava em 91% do limite.
+      GOMEMLIMIT: 144MiB
+    volumes:
+      - ./observability/otel-collector.yml:/etc/otel/config.yml:ro
+    ports:
+      # 127.0.0.1 e não 0.0.0.0: o endpoint OTLP não tem autenticação nenhuma. Publicado na
+      # interface pública, qualquer um injeta telemetria — ou lê o que trafega.
+      - '127.0.0.1:${OTEL_GRPC_PORT:-4317}:4317'
+      - '127.0.0.1:${OTEL_HTTP_PORT:-4318}:4318'
+    depends_on:
+      - tempo
+      - loki
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+
+  tempo:
+    image: grafana/tempo:2.9.4
+    restart: unless-stopped
+    command: ['-config.file=/etc/tempo/tempo.yml']
+    environment:
+      GOMEMLIMIT: 192MiB
+    volumes:
+      - ./observability/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo_data:/var/tempo
+    # Sem `user: root`, o container roda como 10001 e precisa do volume gravável — o
+    # named volume herda o dono no primeiro uso, então não é preciso mexer.
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  loki:
+    image: grafana/loki:3.7.4
+    restart: unless-stopped
+    command: ['-config.file=/etc/loki/loki.yml']
+    environment:
+      GOMEMLIMIT: 192MiB
+    volumes:
+      - ./observability/loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/loki
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  prometheus:
+    image: prom/prometheus:v3.13.2
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      # Retenção por tempo E por tamanho. Só por tempo, um pico de cardinalidade enche o disco
+      # do VPS — e disco cheio derruba o Postgres e o backup junto.
+      - '--storage.tsdb.retention.time=15d'
+      - '--storage.tsdb.retention.size=2GB'
+    environment:
+      GOMEMLIMIT: 192MiB
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  grafana:
+    image: grafana/grafana:12.4.6
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      # Sem cadastro público: este Grafana enxerga log de produção.
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+    volumes:
+      # Datasources e dashboards vêm de arquivo versionado. Criado pela UI, tudo se perde no
+      # próximo `docker compose down -v` — e ninguém descobre até precisar do painel.
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - '127.0.0.1:${GRAFANA_PORT:-3300}:3000'
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+volumes:
+  tempo_data:
+  loki_data:
+  prometheus_data:
+  grafana_data:

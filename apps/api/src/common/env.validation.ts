@@ -11,6 +11,12 @@ export const AppEnvSchema = z.object({
   LOGTO_MCP_APP_ID: z.string().min(1),
   LOGTO_MCP_APP_SECRET: z.string().min(1),
   WEB_ORIGIN: z.string().url().default('http://localhost:3030'),
+  // Observabilidade (issue #39). Vazio = instrumentação inerte: sem exportador, sem timer, sem
+  // container extra. Quem sobe o stack do `infra/docker-compose.observability.yml` preenche.
+  // Declarado aqui só para validar e documentar — o `tracing.ts` lê `process.env` direto,
+  // porque roda antes do Nest existir.
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional().or(z.literal('')),
+  OTEL_SERVICE_NAME: z.string().min(1).default('fatia-api'),
 });
 
 export type AppEnv = z.infer<typeof AppEnvSchema>;

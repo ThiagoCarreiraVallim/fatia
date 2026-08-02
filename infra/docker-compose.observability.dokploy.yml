@@ -1,0 +1,60 @@
+# Sobreposição para subir o stack de observabilidade no Dokploy.
+#
+#   docker compose -f infra/docker-compose.observability.yml \
+#                  -f infra/docker-compose.observability.dokploy.yml up -d
+#
+# O que muda em relação ao local:
+#   1. collector e grafana entram na `dokploy-network`, para a API alcançar o collector pelo
+#      nome do serviço e o Traefik alcançar o Grafana;
+#   2. o Grafana ganha subdomínio com TLS;
+#   3. as portas publicadas no host somem — nada deste stack escuta na interface pública.
+#
+# O que **não** muda: o endpoint OTLP continua sem autenticação, então ele só pode ser
+# alcançável pela rede interna. Publicá-lo com label de Traefik deixaria qualquer um injetar
+# telemetria — ou ler a que passa.
+
+services:
+  otel-collector:
+    ports: !reset []
+    networks:
+      - default
+      - dokploy-network
+
+  tempo:
+    networks:
+      - default
+
+  loki:
+    networks:
+      - default
+
+  prometheus:
+    networks:
+      - default
+
+  grafana:
+    ports: !reset []
+    environment:
+      # Sem isto o Grafana monta os links absolutos com `localhost` e o login por OAuth,
+      # os alertas e os "share" apontam para lugar nenhum.
+      GF_SERVER_ROOT_URL: https://grafana.${DOMAIN}
+    networks:
+      - default
+      - dokploy-network
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.routers.fatia-grafana-http.rule=Host(`grafana.${DOMAIN}`)
+      - traefik.http.routers.fatia-grafana-http.entrypoints=web
+      - traefik.http.routers.fatia-grafana-http.middlewares=fatia-grafana-redirect
+      - traefik.http.middlewares.fatia-grafana-redirect.redirectscheme.scheme=https
+      - traefik.http.middlewares.fatia-grafana-redirect.redirectscheme.permanent=true
+      - traefik.http.routers.fatia-grafana.rule=Host(`grafana.${DOMAIN}`)
+      - traefik.http.routers.fatia-grafana.entrypoints=websecure
+      - traefik.http.routers.fatia-grafana.tls=true
+      - traefik.http.routers.fatia-grafana.tls.certresolver=letsencrypt
+      - traefik.http.services.fatia-grafana.loadbalancer.server.port=3000
+
+networks:
+  dokploy-network:
+    external: true

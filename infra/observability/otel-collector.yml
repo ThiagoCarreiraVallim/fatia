@@ -1,0 +1,101 @@
+# Collector: único ponto de entrada dos três sinais e único ponto de saída para os backends.
+#
+# Ter o collector no meio (em vez da API falar direto com Tempo/Loki/Prometheus) paga em duas
+# coisas concretas: trocar de backend não exige redeploy da API, e a redação de atributo
+# sensível ganha uma segunda barreira, fora do processo da aplicação.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Primeiro na pipeline, sempre. Sem ele um pico de telemetria faz o collector estourar a
+  # memória do container e ser morto pelo OOM killer — junto com todo o resto no mesmo VPS.
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 150
+    spike_limit_mib: 40
+
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+
+  # Segunda barreira de redação. O `RedactingSpanProcessor` da API
+  # (`apps/api/src/observability/telemetry-redaction.ts`) já corta isto na origem; repetir aqui
+  # cobre o caso de outro serviço passar a exportar para este mesmo collector — o `apps/agent`
+  # em Python da ADR 015, por exemplo — sem carregar a mesma regra.
+  #
+  # Dado de saúde é categoria especial na LGPD: span registra a forma da operação, nunca o
+  # conteúdo (nome de alimento, peso, carga de treino).
+  attributes/redacao:
+    actions:
+      - key: url.query
+        action: delete
+      - key: db.statement
+        action: delete
+      - key: db.query.text
+        action: delete
+      - key: client.address
+        action: delete
+      - key: network.peer.address
+        action: delete
+      - key: enduser.id
+        action: delete
+      - key: user.id
+        action: delete
+
+  # `url.full` não pode ser apagado (o caminho é o que identifica a operação) nem tratado por
+  # `attributes`, que só faz operação de chave inteira. Aqui a query é cortada preservando o
+  # caminho — mesmo resultado do `stripQueryString` do lado da API.
+  #
+  # Isto não é redundância teórica: com a redação da API desligada de propósito num teste, foi
+  # exatamente por `url.full` que `?search=whey&peso=87.4&token=...` chegou ao Tempo. O
+  # processador `attributes` acima pegou `url.query` e deixou `url.full` passar.
+  transform/url:
+    error_mode: ignore
+    trace_statements:
+      - replace_pattern(span.attributes["url.full"], "\\?.*$", "")
+      - replace_pattern(span.attributes["http.url"], "\\?.*$", "")
+      - replace_pattern(span.attributes["http.target"], "\\?.*$", "")
+
+exporters:
+  otlp_grpc/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  # Loki 3 recebe OTLP nativo em /otlp/v1/logs; o exportador otlp_http acrescenta o /v1/logs.
+  # Assim o `trace_id` do registro chega como structured metadata e o Grafana consegue montar
+  # o link log → trace sem regex em cima do texto.
+  otlp_http/loki:
+    endpoint: http://loki:3100/otlp
+
+  # Métricas não são empurradas para o Prometheus: o collector as expõe e o Prometheus raspa.
+  # Consequência boa: a API não precisa de rota /metrics, então não há como publicá-la na
+  # internet por engano ao copiar labels de Traefik de um serviço vizinho.
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    send_timestamps: true
+    metric_expiration: 5m
+
+service:
+  telemetry:
+    logs:
+      level: warn
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/redacao, transform/url, batch]
+      exporters: [otlp_grpc/tempo]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp_http/loki]

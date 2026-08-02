@@ -1,0 +1,14 @@
+apiVersion: 1
+
+providers:
+  - name: fatia
+    orgId: 1
+    folder: Fatia
+    type: file
+    # `false` de propósito: editar pela UI e salvar não deve sobreviver, senão o arquivo
+    # versionado deixa de ser a verdade e ninguém percebe até o próximo `down -v`.
+    disableDeletion: false
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

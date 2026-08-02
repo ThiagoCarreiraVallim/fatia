@@ -83,6 +83,49 @@ tem de vir com escopo explícito e teste.
 Os logs de tool registram `tool`, `userId`, `durationMs`, `success` e `category` do erro — não
 registram o input nem o output. Ver `docs/MCP.md` §Observabilidade.
 
+**Corrigido na #39:** o serializador padrão do `pino-http` gravava **todos os cabeçalhos** da
+requisição — `authorization` e `cookie` inclusive — e a URL com query string. Ou seja, o token de
+acesso de cada usuário estava indo para o log a cada requisição, contradizendo o parágrafo acima.
+Enquanto isso ficava só no `docker logs` já era ruim; com o envio para o Loki passaria a ser
+indexado e guardado num segundo lugar. Agora o log registra `method`, `path` **sem query** e
+`statusCode` — ver `apps/api/src/observability/pino-serializers.ts` e o teste
+`__tests__/pino-serializers.spec.ts`.
+
+### 6b. Telemetria — trace e métrica
+
+Mesma regra do vetor 6, num store novo: registra-se **a forma** da operação, nunca o conteúdo.
+Nome de alimento, peso corporal, carga de treino e conteúdo de refeição não entram em span nem em
+métrica.
+
+O comportamento pronto de fábrica do OpenTelemetry é **errado para este produto**: a
+instrumentação de HTTP preenche `url.query` e `url.full` com a query string crua. Verificado
+desligando a redação de propósito: `?search=whey%20isolado&peso=87.4&token=...` chegou inteiro ao
+Tempo por `url.full`.
+
+| Camada               | O que faz                                                                     | Onde                                                               |
+| -------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Redação no processo  | remove `url.query`, cabeçalhos, `db.statement`, IP; corta query de `url.full` | `apps/api/src/observability/redacting-span-processor.ts`           |
+| Redação no collector | mesma lista, fora do processo — vale para qualquer serviço que exporte ali    | `infra/observability/otel-collector.yml`                           |
+| Guarda de rótulo     | teste falha se métrica ganhar rótulo fora da lista, ou com UUID/e-mail        | `apps/api/src/observability/__tests__/mcp-metrics.service.spec.ts` |
+
+**`userId` não entra em span nem em métrica. Decisão consciente**, não esquecimento:
+
+1. **O log já responde "quem".** O `mcp-tool.registry.ts` grava `userId` por chamada, e o log
+   carrega o `trace_id`. Do trace se chega ao log; duplicar a identidade no Tempo não acrescenta
+   resposta nenhuma.
+2. **Cardinalidade.** Em métrica, um rótulo por usuário não dá erro: cria uma série por valor e
+   faz o Prometheus crescer até morrer, semanas depois e longe da causa.
+3. **Superfície.** Tempo e Prometheus não têm a disciplina de retenção e eliminação que o
+   `docs/DATA_RETENTION.md` define para o banco. Dado ligado a pessoa ali é passivo, não
+   ferramenta.
+
+**Hash foi considerado e descartado:** um hash estável de `userId` continua sendo identificador
+pessoal pseudonimizado (LGPD art. 13) e reintroduz o problema 2 por inteiro.
+
+**Não mitigado:** o endpoint OTLP do collector não tem autenticação. Ele só é seguro porque não é
+alcançável de fora — sem porta publicada e sem label de Traefik. Publicá-lo por engano expõe toda
+a telemetria.
+
 ### 7. Token no aparelho — o app nativo
 
 O app React Native (`apps/mobile`) muda uma premissa que valia para os dois clientes

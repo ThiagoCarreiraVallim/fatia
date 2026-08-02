@@ -8,6 +8,7 @@ import {
   type McpToolDef,
 } from '../common/decorators/tool.decorator';
 import { formatToolError } from './mcp-error';
+import { McpMetricsService } from '../observability/mcp-metrics.service';
 
 type ToolResult = { content: Array<{ type: 'text'; text: string }>; isError?: boolean };
 
@@ -25,7 +26,10 @@ export class McpToolRegistry implements OnModuleInit {
   private readonly logger = new Logger(McpToolRegistry.name);
   private tools: McpToolDef[] = [];
 
-  constructor(private readonly discovery: DiscoveryService) {}
+  constructor(
+    private readonly discovery: DiscoveryService,
+    private readonly metrics: McpMetricsService,
+  ) {}
 
   onModuleInit() {
     const providers = this.discovery.getProviders();
@@ -60,22 +64,28 @@ export class McpToolRegistry implements OnModuleInit {
           const start = Date.now();
           try {
             const data = await tool.execute(input, ctx);
-            this.logger.log({
-              tool: tool.name,
-              userId: ctx.userId,
-              durationMs: Date.now() - start,
-              success: true,
-            });
+            const durationMs = Date.now() - start;
+            this.logger.log({ tool: tool.name, userId: ctx.userId, durationMs, success: true });
+            // A métrica repete o log de propósito, sem o `userId`: ela é o que sobrevive semanas
+            // agregada, e rótulo por usuário explodiria a cardinalidade do Prometheus.
+            this.metrics.record({ tool: tool.name, durationMs, success: true });
             return ok(data);
           } catch (err) {
             const { category, text } = formatToolError(err);
+            const durationMs = Date.now() - start;
             this.logger.error({
               tool: tool.name,
               userId: ctx.userId,
-              durationMs: Date.now() - start,
+              durationMs,
               success: false,
               category,
               error: err instanceof Error ? err.message : String(err),
+            });
+            this.metrics.record({
+              tool: tool.name,
+              durationMs,
+              success: false,
+              errorCategory: category,
             });
             // Erro de execução volta como resultado `isError`, não como erro de
             // protocolo: o Claude precisa ler a categoria e a dica para se

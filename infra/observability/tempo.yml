@@ -1,0 +1,34 @@
+# Tempo em modo monolítico, storage local. Um VPS, um processo.
+
+server:
+  http_listen_port: 3200
+  log_level: warn
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+
+ingester:
+  # Corta a latência entre a requisição acontecer e o trace ficar visível. Com o default
+  # (30 min) quem investiga um incidente olha para uma tela vazia e conclui que não funciona.
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    # 3 dias. Trace é o sinal mais volumoso dos três e o de menor valor retroativo — depois de
+    # três dias a pergunta já virou "qual a tendência", que é métrica, não trace.
+    block_retention: 72h
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/blocks
+    wal:
+      path: /var/tempo/wal
+
+# O metrics-generator do Tempo (RED metrics derivadas de span) fica DESLIGADO: é o componente
+# mais caro em memória do Tempo, e as mesmas métricas já vêm da própria API, medidas na fonte.
