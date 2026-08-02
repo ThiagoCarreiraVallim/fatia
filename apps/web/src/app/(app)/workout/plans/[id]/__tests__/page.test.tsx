@@ -390,6 +390,22 @@ describe('PlanDetailPage — reordenação', () => {
     expect(status.textContent).toBe('');
   });
 
+  it('devolve o foco ao card movido, e não ao começo do documento', async () => {
+    const user = await renderLoadedPage();
+    reorderPlanExercises.mockResolvedValue(planoTrocado());
+
+    await user.click(screen.getByRole('button', { name: /mover crucifixo para baixo/i }));
+
+    // O comportamento é do card (#221), mas quem o dispara é esta tela: é o
+    // `isPending` da mutation que desabilita a seta sob o foco. Crucifixo virou
+    // o último, então a seta que ele usou fica desabilitada e o foco cai na
+    // irmã — no mesmo card, e não no `<body>`.
+    await waitFor(() => expect(nomesNaOrdem()).toEqual(['Supino', 'Crossover', 'Crucifixo']));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /mover crucifixo para cima/i })).toHaveFocus(),
+    );
+  });
+
   it('mantém as bordas travadas: o primeiro não sobe e o último não desce', async () => {
     await renderLoadedPage();
 
