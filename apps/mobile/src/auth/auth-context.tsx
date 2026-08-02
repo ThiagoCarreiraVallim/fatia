@@ -10,7 +10,7 @@ import {
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { env } from '@/env';
-import { discover, exchangeCode, type OidcEndpoints } from './oidc';
+import { discover, exchangeCode, memoizeDiscovery } from './oidc';
 import { SessionManager, toStoredSession } from './session-manager';
 import { secureTokenStore } from './token-store';
 
@@ -54,23 +54,18 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 /**
- * Uma descoberta por execução do app: o documento OIDC não muda entre telas e
- * cada leitura é uma ida à rede antes de qualquer coisa útil aparecer.
+ * Uma descoberta por execução do app (o cache e a política de falha estão em
+ * `memoizeDiscovery`, no `oidc.ts`).
  *
- * O cache mora no módulo, e não num `useRef` dentro do provider, porque o
- * endereço descoberto vem de `env.logtoEndpoint` — constante de módulo, sem nada
- * de por-instância. Guardar em ref também fazia o `react-hooks/refs` v7 acusar
+ * Mora no módulo, e não num `useRef` dentro do provider, porque o endereço
+ * descoberto vem de `env.logtoEndpoint` — constante de módulo, sem nada de
+ * por-instância. Guardar em ref também fazia o `react-hooks/refs` v7 acusar
  * leitura de ref durante o render: a regra não enxerga dentro do construtor do
  * `SessionManager` e assume que ele poderia chamar `endpoints()` ali. Não chama
  * (`session-manager.ts` só guarda as deps), mas tirar o ref resolve o aviso sem
  * depender dessa aposta.
  */
-let discovery: Promise<OidcEndpoints> | null = null;
-
-function endpoints(): Promise<OidcEndpoints> {
-  discovery ??= discover(env.logtoEndpoint);
-  return discovery;
-}
+const endpoints = memoizeDiscovery(() => discover(env.logtoEndpoint));
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading');
