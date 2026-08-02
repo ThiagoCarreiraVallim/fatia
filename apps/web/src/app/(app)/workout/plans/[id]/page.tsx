@@ -5,7 +5,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, Play, Clock, Dumbbell, Lightbulb, Plus, Trash2, Check } from 'lucide-react';
-import { isCardioExercise, workoutApi } from '@fatia/api-client';
+import {
+  ApiError,
+  isCardioExercise,
+  workoutApi,
+  type WorkoutPlanExercise,
+} from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
@@ -47,10 +52,37 @@ export default function PlanDetailPage() {
       body,
     }: {
       exerciseId: string;
-      body: { targetSets?: number; targetReps?: string; order?: number };
+      body: { targetSets?: number; targetReps?: string };
     }) => workoutApi.updatePlanExercise(id, exerciseId, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
+    },
+  });
+
+  // A troca vai numa requisição só: a API grava os dois `order` dentro de uma
+  // transação, então não existe instante em que a lista esteja pela metade.
+  const moveExercise = useMutation({
+    mutationFn: ({ a, b }: { a: WorkoutPlanExercise; b: WorkoutPlanExercise }) =>
+      // O `order` enviado é o do vizinho, nunca o índice: `addPlanExercise` usa
+      // `max + 1` e remover exercício não renumera, então a numeração tem
+      // buracos (1, 5, 9) que `order: index` corromperia em silêncio.
+      workoutApi.reorderPlanExercises(id, [
+        { id: a.id, order: b.order },
+        { id: b.id, order: a.order },
+      ]),
+    onSuccess: (updated) => {
+      // A resposta já é o plano reordenado — escrever no cache evita o refetch
+      // que só confirmaria o que acabou de chegar.
+      qc.setQueryData(['workout', 'plan', id], updated);
+    },
+    onError: (error) => {
+      // 404 aqui não é "o plano sumiu": desde a #205 a API recusa a operação
+      // inteira quando algum id do corpo não pertence mais ao plano — exercício
+      // removido em outra aba, e esta tela ainda com o cache velho. A cura é
+      // buscar a lista de novo; a mensagem é escolhida no render.
+      if (error instanceof ApiError && error.isNotFound) {
+        void qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
+      }
     },
   });
 
@@ -108,20 +140,17 @@ export default function PlanDetailPage() {
     }
   }
 
-  function handleMoveUp(idx: number) {
-    if (idx === 0) return;
-    const a = exercises[idx];
-    const b = exercises[idx - 1];
-    updateExercise.mutate({ exerciseId: a.id, body: { order: b.order } });
-    updateExercise.mutate({ exerciseId: b.id, body: { order: a.order } });
-  }
-
-  function handleMoveDown(idx: number) {
-    if (idx === exercises.length - 1) return;
-    const a = exercises[idx];
-    const b = exercises[idx + 1];
-    updateExercise.mutate({ exerciseId: a.id, body: { order: b.order } });
-    updateExercise.mutate({ exerciseId: b.id, body: { order: a.order } });
+  function move(idx: number, delta: -1 | 1) {
+    // Dois cliques rápidos leem o **mesmo** snapshot e compõem duas trocas que
+    // se sobrepõem: em [A(1), B(2), C(3)], "descer A" e depois "descer B"
+    // gravam A=2, B=3 e C=2 — dois exercícios com o mesmo `order`. Nada
+    // estoura (não há `@@unique([planId, order])`), a lista só passa a ordenar
+    // de forma indefinida. A transação garante que cada troca é inteira; não
+    // garante que duas trocas concorrentes componham.
+    if (moveExercise.isPending) return;
+    const target = idx + delta;
+    if (target < 0 || target >= exercises.length) return;
+    moveExercise.mutate({ a: exercises[idx], b: exercises[target] });
   }
 
   function handleDelete() {
@@ -227,6 +256,32 @@ export default function PlanDetailPage() {
           </h3>
         </div>
 
+        {/*
+          O PWA não tem toast. O aviso fica na própria lista, que é para onde a
+          pessoa está olhando quando o exercício não sai do lugar — e vem do
+          estado da mutation, não de um `onError`, porque some sozinho no
+          próximo movimento que der certo.
+        */}
+        {moveExercise.isError && (
+          <p
+            role="alert"
+            className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-400"
+          >
+            {moveExercise.error instanceof ApiError && moveExercise.error.isNotFound ? (
+              // A mensagem crua da API é "Plan exercise not found", em inglês e
+              // sem dizer o que fazer. Aqui a causa é sempre a mesma: a lista
+              // desta tela está velha.
+              <>Este plano mudou em outro lugar. Atualizamos a lista — tente mover de novo.</>
+            ) : (
+              <>
+                Não foi possível mover o exercício
+                {moveExercise.error instanceof Error ? `: ${moveExercise.error.message}` : '.'} A
+                ordem continua como estava.
+              </>
+            )}
+          </p>
+        )}
+
         {exercises.length === 0 && (
           <button
             type="button"
@@ -250,6 +305,7 @@ export default function PlanDetailPage() {
               isCardio={isCardioExercise(ex.exercise)}
               isFirst={idx === 0}
               isLast={idx === exercises.length - 1}
+              isMoving={moveExercise.isPending}
               onChangeSets={(n) =>
                 updateExercise.mutate({ exerciseId: ex.id, body: { targetSets: n } })
               }
@@ -257,8 +313,8 @@ export default function PlanDetailPage() {
                 updateExercise.mutate({ exerciseId: ex.id, body: { targetReps: v } })
               }
               onRemove={() => removeExercise.mutate(ex.id)}
-              onMoveUp={() => handleMoveUp(idx)}
-              onMoveDown={() => handleMoveDown(idx)}
+              onMoveUp={() => move(idx, -1)}
+              onMoveDown={() => move(idx, 1)}
             />
           ))}
         </div>

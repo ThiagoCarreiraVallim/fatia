@@ -4,21 +4,31 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Check, Clock, Dumbbell, Lightbulb, Play, Plus, Trash2 } from 'lucide-react-native';
-import { isCardioExercise, workoutApi, type WorkoutPlanExercise } from '@fatia/api-client';
+import {
+  ApiError,
+  isCardioExercise,
+  workoutApi,
+  type WorkoutPlanExercise,
+} from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { Button, EmptyState, ErrorState, Input, LoadingState } from '@/components/ui';
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { ExerciseDetailHost } from '@/components/workout/exercise-detail-host';
-import { estimatePlanStats, nextPlanOrder, pluralize } from '@/components/workout/workout-stats';
+import {
+  estimatePlanStats,
+  nextPlanOrder,
+  planMoveDecision,
+  pluralize,
+  type PlanMove,
+} from '@/components/workout/workout-stats';
 
 /**
  * Réplica de `apps/web/src/app/(app)/workout/plans/[id]/page.tsx`.
  *
- * A reordenação (issue #115) é onde o app nativo passa na frente do PWA: a API
- * aceita `order` desde sempre, mas só o MCP usava. São dois botões por
- * exercício, cada um com rótulo próprio. Arrastar seria mais bonito e
- * inacessível — com leitor de tela ligado, arrastar é o gesto que move o foco.
+ * A reordenação (issue #115) são dois botões por exercício, cada um com rótulo
+ * próprio. Arrastar seria mais bonito e inacessível — com leitor de tela
+ * ligado, arrastar é o gesto que move o foco.
  */
 
 function Stat({ icon: Icon, label, value }: { icon: typeof Clock; label: string; value: string }) {
@@ -69,7 +79,7 @@ export default function PlanDetailScreen() {
       body,
     }: {
       exerciseId: string;
-      body: { targetSets?: number; targetReps?: string; order?: number };
+      body: { targetSets?: number; targetReps?: string };
     }) => workoutApi.updatePlanExercise(id, exerciseId, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
@@ -83,16 +93,39 @@ export default function PlanDetailScreen() {
     },
   });
 
-  // A troca são dois PATCH de `order`. Sequenciais, não em paralelo: as duas
-  // escritas se cruzam na mesma lista, e em paralelo a ordem de gravação no
-  // servidor deixa de ser a ordem em que foram pedidas.
+  // A troca vai numa requisição só: a API grava os dois `order` dentro de uma
+  // transação, então não existe instante em que a lista esteja pela metade.
   const moveExercise = useMutation({
-    mutationFn: async ({ a, b }: { a: WorkoutPlanExercise; b: WorkoutPlanExercise }) => {
-      await workoutApi.updatePlanExercise(id, a.id, { order: b.order });
-      await workoutApi.updatePlanExercise(id, b.id, { order: a.order });
+    mutationFn: (decision: PlanMove<WorkoutPlanExercise>) =>
+      workoutApi.reorderPlanExercises(id, decision.payload),
+    onSuccess: (updated, decision) => {
+      // A resposta já é o plano reordenado — escrever no cache evita o refetch
+      // que só confirmaria o que acabou de chegar.
+      qc.setQueryData(['workout', 'plan', id], updated);
+      // O anúncio só sai aqui. Saía junto com o toque, antes da resposta: com a
+      // rede caída o leitor de tela afirmava um movimento que não aconteceu.
+      AccessibilityInfo.announceForAccessibility(
+        `${decision.from.exercise.name} movido para a posição ${decision.targetIndex + 1} de ${decision.total}`,
+      );
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
+    onError: (error) => {
+      // 404 aqui não é "o plano sumiu": desde a #205 a API recusa a operação
+      // inteira quando algum id do corpo não pertence mais ao plano —
+      // exercício removido em outro aparelho, e esta tela ainda com o cache
+      // velho. A mensagem crua seria "Plan exercise not found", em inglês e sem
+      // dizer o que fazer.
+      if (error instanceof ApiError && error.isNotFound) {
+        qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
+        Alert.alert(
+          'Este plano mudou',
+          'Um exercício saiu do plano em outro lugar. Atualizamos a lista — tente mover de novo.',
+        );
+        return;
+      }
+      Alert.alert(
+        'Não foi possível mover',
+        error instanceof Error ? error.message : 'Tente novamente.',
+      );
     },
   });
 
@@ -145,17 +178,15 @@ export default function PlanDetailScreen() {
   }
 
   function move(index: number, delta: -1 | 1) {
-    const target = index + delta;
-    if (target < 0 || target >= exercises.length) return;
-    const a = exercises[index];
-    const b = exercises[target];
+    // A trava de "uma troca por vez" está aqui, além do `disabled` do botão,
+    // porque só aqui ela impede o feedback tátil de um toque que não vai virar
+    // requisição nenhuma.
+    const decision = planMoveDecision(exercises, index, delta, {
+      moveInFlight: moveExercise.isPending,
+    });
+    if (!decision) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // O card só troca de lugar quando a API responde. Sem o aviso, quem usa
-    // leitor de tela não tem como saber que o movimento aconteceu.
-    AccessibilityInfo.announceForAccessibility(
-      `${a.exercise.name} movido para a posição ${target + 1} de ${exercises.length}`,
-    );
-    moveExercise.mutate({ a, b });
+    moveExercise.mutate(decision);
   }
 
   function confirmDelete() {
@@ -267,6 +298,7 @@ export default function PlanDetailScreen() {
                 isCardio={isCardioExercise(ex.exercise)}
                 isFirst={index === 0}
                 isLast={index === exercises.length - 1}
+                isMoving={moveExercise.isPending}
                 onChangeSets={(n) =>
                   updateExercise.mutate({ exerciseId: ex.id, body: { targetSets: n } })
                 }

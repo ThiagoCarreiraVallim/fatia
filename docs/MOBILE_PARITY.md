@@ -165,7 +165,6 @@ exigência de loja.
 
 | Ganho                                             | Origem                                                                                 |
 | ------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Reordenar exercício do plano                      | #115 — existe na API e no MCP, não no PWA                                              |
 | Exportar meus dados                               | LGPD art. 18, V — endpoint existia sem interface                                       |
 | Apagar minha conta                                | LGPD art. 18, VI + Apple e Google **rejeitam** app que cria conta e não deixa apagá-la |
 | Pull-to-refresh                                   | expectativa nativa, pedida pela #123                                                   |
@@ -183,6 +182,12 @@ gota e rótulo de água, abria o drawer de **passos**. Corrigido nos dois.
 a confirmação de exclusão é inline na própria linha, não um diálogo do sistema —
 `ui/` não tem `alert-dialog`, e um `window.confirm` sobre um sheet do vaul rouba
 o foco e, no iOS instalado como PWA, aparece com o nome do domínio.
+
+**Reordenar exercício do plano saiu desta tabela (#183).** Estava listada como
+ganho do mobile — "existe na API e no MCP, não no PWA". Era falso: o PWA
+reordena desde a #115. Reordenava pior, com dois PATCH concorrentes no mesmo
+tick, mas reordenava. Hoje os dois apps usam o mesmo
+`workoutApi.reorderPlanExercises`, numa escrita atômica só.
 
 ---
 
