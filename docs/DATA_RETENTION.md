@@ -36,6 +36,57 @@ de carência.
 - **Meios de pagamento.** A instância pública é gratuita.
 - **Localização, contatos, agenda** ou qualquer dado do dispositivo.
 
+## Consulta ao Open Food Facts (scanner de código de barras)
+
+O scanner do app nativo consulta o [Open Food Facts](https://world.openfoodfacts.org) para descobrir
+o produto embalado a partir do código lido. É a **única transferência de dado para terceiro** no
+fluxo de nutrição, e por isso está descrita aqui item a item. Decisão em
+[ADR 017](./ADR/017-open-food-facts-para-industrializado.md).
+
+**O que sai daqui:** o número do código de barras, e nada mais.
+
+**O que explicitamente não sai:**
+
+- token, cookie ou cabeçalho `Authorization` — a requisição é anônima do lado do OFF;
+- `userId`, e-mail, nome ou qualquer identificador da pessoa;
+- corpo de requisição (é um `GET`);
+- o que foi comido, a refeição, o horário ou a quantidade — a consulta acontece **antes** de
+  qualquer registro, e o registro não é comunicado ao OFF.
+
+O único cabeçalho que identifica algo é o `User-Agent`, que identifica **o aplicativo** (exigido
+pelo OFF) e não a pessoa. A lista de cabeçalhos é fechada por teste
+(`apps/api/src/nutrition/__tests__/off-food.service.spec.ts`).
+
+| Dado                                | Onde                       | Retenção                         |
+| ----------------------------------- | -------------------------- | -------------------------------- |
+| Ficha do produto consultada         | Memória do processo da API | 6 h, ou até o processo reiniciar |
+| Código de barras escaneado          | **Não armazenado**         | —                                |
+| Vínculo entre usuário e código lido | **Não existe**             | —                                |
+
+O cache é do produto, não da pessoa: é chaveado só pelo código de barras, não guarda quem consultou
+e some no primeiro deploy.
+
+**Nem a consulta nem o código escaneado aparecem em log.** Isso não é consequência automática de
+não escrever `logger.info`: o access log do `pino-http` serializa `url` e `headers` no mesmo objeto,
+então a configuração padrão gravaria o código lido **na mesma linha** que o cookie de sessão de quem
+leu — exatamente o vínculo que a tabela acima diz não existir. Duas regras em
+`apps/api/src/common/logging.ts` fecham isso, e as duas têm teste
+(`apps/api/src/common/__tests__/logging.spec.ts`, que sobe um servidor e confere a linha que sai):
+
+1. a rota `GET /api/nutrition/foods/barcode/:code` fica fora do access log;
+2. o serializer de requisição troca o `:code` por `***` em qualquer linha, o que cobre também o
+   caminho de erro de socket, que o `pino-http` registra mesmo em rota ignorada.
+
+A segunda regra continua necessária mesmo com a lista de permissão do access log geral (ver
+"Access log", mais abaixo): aquela descarta a query string inteira, mas preserva o caminho — e o
+código escaneado é um **segmento do caminho**, não um parâmetro de query.
+
+A mensagem de aviso de falha do OFF (`off-food.service.ts`) também não inclui o código.
+
+**A imagem da câmera não sai do aparelho e não é gravada.** O `expo-camera` faz a decodificação
+localmente; o que o app envia à API é o número já lido. Não há foto, não há upload — o mesmo
+princípio da [ADR 004](./ADR/004-sem-armazenamento-fotos.md).
+
 ## Autenticação e OAuth
 
 | Dado                                                         | Onde                                                                 | Retenção                                                                           |
@@ -75,6 +126,29 @@ genéricas (`"Meal not found"`, `"Session not found"`) por essa razão.
 No log de deleção de conta (`account.service.ts`) só vão `userId` e se a identidade do Logto foi
 apagada — deliberadamente sem e-mail nem nome, porque um log não deve sobreviver ao dado que
 acabou de ser eliminado.
+
+**Access log** (`nestjs-pino`, configurado em `apps/api/src/common/logging.ts`). É outra coisa que a
+lista acima, que vale para o log de tool MCP: o `pino-http` registra método, caminho, status e
+duração. O que **não** entra na linha é o mais importante, e vale a pena dizer por quê — o
+comportamento pronto de fábrica era o oposto:
+
+- **cabeçalhos por lista de permissão** (`apps/api/src/common/log-serializers.ts`): saem apenas
+  `user-agent`, `content-type`, `content-length` e `referer`. `Authorization` e `Cookie` não saem, e
+  header novo também não — lista de bloqueio precisaria crescer sozinha a cada header inventado, e
+  não cresce. O serializer padrão do `pino-http` gravava `headers` inteiro, ou seja, o **Bearer do
+  usuário em texto puro**;
+- **query string descartada inteira**: só o caminho vai para o log, porque é na query que vivem os
+  termos de busca (`?search=whey`) e os filtros — dado de saúde;
+- **cabeçalhos de resposta**: também fora, que é por onde sairia o `set-cookie`;
+- **`/health` e a consulta por código de barras** não geram linha nenhuma, e o `:code` ainda é
+  trocado por `***` porque ele está no **caminho**, que o item anterior preserva (ver a seção do
+  Open Food Facts).
+
+Nenhum corpo de requisição ou resposta é registrado, então continua valendo que nada do que a pessoa
+comeu, pesou ou treinou vai para log.
+
+> **Pendência conhecida:** o stdout do container não tem rotação, então essas linhas vivem para
+> sempre — issue #39.
 
 ### Retenção dos logs
 

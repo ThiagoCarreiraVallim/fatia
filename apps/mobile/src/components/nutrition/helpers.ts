@@ -42,6 +42,19 @@ export function hojeIso(): string {
   return format(new Date(), 'yyyy-MM-dd');
 }
 
+/**
+ * Instante a gravar em `eatenAt` para o dia selecionado na tela.
+ *
+ * No dia de hoje vale a hora de agora, que é o dado real. Em dia passado não
+ * existe "agora": gravar `new Date()` põe a refeição em **hoje**, enquanto a
+ * tela invalida e lê o dia selecionado — o item some da vista e a pessoa
+ * registra de novo, agora duplicado. Meio-dia local pelo mesmo motivo de
+ * `aoMeioDia`: meia-noite cai no dia anterior em fuso com horário de verão.
+ */
+export function instanteNoDia(iso: string): string {
+  return iso === hojeIso() ? new Date().toISOString() : aoMeioDia(iso).toISOString();
+}
+
 export function deslocarDia(iso: string, dias: number): string {
   return format(addDays(aoMeioDia(iso), dias), 'yyyy-MM-dd');
 }

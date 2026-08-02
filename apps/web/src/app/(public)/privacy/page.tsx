@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 };
 
 /** Atualizar sempre que o conteúdo mudar de forma material. */
-const LAST_UPDATED = '30 de julho de 2026';
+const LAST_UPDATED = '2 de agosto de 2026';
 
 export default function PrivacyPage() {
   return (
@@ -119,6 +119,13 @@ export default function PrivacyPage() {
           <li>
             <strong>Provedor de infraestrutura</strong> — hospeda o servidor e o banco.
           </li>
+          <li>
+            <strong>Open Food Facts</strong> — consultado quando você escaneia o código de barras de
+            um produto no aplicativo. Recebe <strong>apenas o número do código de barras</strong>:
+            sem token, sem cookie, sem identificador seu e sem nada do que você registrou. Do lado
+            deles a consulta é indistinguível de uma anônima, e a imagem da câmera nunca sai do seu
+            aparelho.
+          </li>
         </ul>
         <p>
           Não vendemos, alugamos nem cedemos dados. Só entregamos algo a autoridade pública mediante
@@ -137,6 +144,23 @@ export default function PrivacyPage() {
             docs/DATA_RETENTION.md
           </a>
           .
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Créditos de dados de terceiros">
+        <p>
+          Os dados de produtos embalados lidos pelo scanner de código de barras vêm do{' '}
+          <a href="https://world.openfoodfacts.org">Open Food Facts</a>, uma base colaborativa e
+          aberta, disponibilizada sob a licença{' '}
+          <a href="https://opendatacommons.org/licenses/odbl/1-0/">
+            Open Database License (ODbL) 1.0
+          </a>
+          . A ficha de cada produto também é creditada na tela onde ela aparece, com link para a
+          origem — que é por onde qualquer pessoa pode corrigir um rótulo errado.
+        </p>
+        <p>
+          A tabela de alimentos in natura é a TACO (Unicamp). Nenhuma das duas bases recebe dados
+          seus.
         </p>
       </LegalSection>
 

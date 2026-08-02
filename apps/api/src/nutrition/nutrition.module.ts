@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { NutritionController } from './nutrition.controller';
 import { FoodService } from './food.service';
+import { OffFoodService } from './off-food.service';
 import { MealService } from './meal.service';
 import { MealItemService } from './meal-item.service';
 import { NutritionSummaryService } from './nutrition-summary.service';
@@ -33,6 +34,7 @@ import { GetNutrientSummaryTool } from './mcp/get-nutrient-summary.tool';
   controllers: [NutritionController],
   providers: [
     FoodService,
+    OffFoodService,
     MealService,
     MealItemService,
     NutritionSummaryService,

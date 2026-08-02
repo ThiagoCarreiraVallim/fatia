@@ -118,24 +118,66 @@ describe('serializadores de log', () => {
     });
   });
 
-  describe('a fiação no módulo', () => {
-    it('o LoggerModule usa estes serializadores', () => {
-      // Os casos acima provam que a função está certa; nenhum deles prova que ela é **usada**.
-      // Apagar a linha `serializers:` do `app.module.ts` devolve o default do pino e volta a
-      // vazar o token — com os sete testes acima passando verde. Este caso é o que quebra.
-      //
-      // A busca é recortada ao bloco `pinoHttp` de propósito. A primeira versão deste teste
-      // procurava `serializeRequest` no arquivo inteiro e passava mesmo com a fiação removida,
-      // porque casava com a linha de `import`. Asserção que não distingue o certo do errado é
-      // pior que teste nenhum, e esta quase entrou assim.
-      const modulo = readFileSync(resolve(__dirname, '..', '..', 'app.module.ts'), 'utf8');
+  describe('a fiação', () => {
+    // Os casos acima provam que a função está certa; nenhum deles prova que ela é **usada**.
+    // Apagar a linha `serializers:` devolve o default do pino e volta a vazar o token — com os
+    // sete testes acima passando verde. Estes dois casos são o que quebra.
+    //
+    // A configuração saiu do `app.module.ts` e foi para `common/logging.ts` (#140), porque a
+    // parte dela que existe por privacidade precisa ser exercitada por teste. A fiação virou
+    // dois elos, e os dois são testados: o módulo tem de chamar `opcoesDoPinoHttp`, e
+    // `opcoesDoPinoHttp` tem de instalar estes serializadores.
+    //
+    // A busca é recortada ao bloco de propósito. A primeira versão deste teste procurava
+    // `serializeRequest` no arquivo inteiro e passava mesmo com a fiação removida, porque
+    // casava com a linha de `import`. Asserção que não distingue o certo do errado é pior que
+    // teste nenhum, e esta quase entrou assim.
+    function ler(...caminho: string[]) {
+      return readFileSync(resolve(__dirname, '..', '..', ...caminho), 'utf8');
+    }
+
+    it('o LoggerModule monta o pinoHttp por opcoesDoPinoHttp', () => {
+      const modulo = ler('app.module.ts');
       const inicio = modulo.indexOf('pinoHttp:');
       const bloco = modulo.slice(inicio, modulo.indexOf('}),', inicio));
 
       expect(inicio).toBeGreaterThan(-1);
+      expect(bloco).toMatch(/opcoesDoPinoHttp\(/);
+    });
+
+    it('opcoesDoPinoHttp instala estes serializadores', () => {
+      const logging = ler('common', 'logging.ts');
+      const inicio = logging.indexOf('export function opcoesDoPinoHttp');
+      const bloco = logging.slice(inicio);
+
+      expect(inicio).toBeGreaterThan(-1);
       expect(bloco).toMatch(/serializers:\s*\{/);
-      expect(bloco).toMatch(/req:\s*serializeRequest/);
+      // `req` passa por `serializarRequisicao`, que é `serializeRequest` mais a máscara do
+      // código de barras (ver `logging.ts`); `res` é usado direto.
+      expect(bloco).toMatch(/req:\s*serializarRequisicao/);
       expect(bloco).toMatch(/res:\s*serializeResponse/);
+    });
+
+    it('a lista de permissão existe num arquivo só', async () => {
+      // O risco de ter dois arquivos: alguém reescreve o filtro de cabeçalhos em `logging.ts` e
+      // as duas listas passam a divergir — a que divergir por último é a que vaza.
+      //
+      // Os comentários são removidos antes da checagem de propósito: a primeira versão deste
+      // caso rodava `.not.toMatch(/authorization/)` sobre o fonte inteiro e ficava vermelha por
+      // causa do **comentário** que cita o header — justamente o comentário que se quer ter.
+      const logging = ler('common', 'logging.ts');
+      const codigo = logging.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+
+      expect(codigo).toMatch(/serializeRequest\(req\)/);
+      expect(codigo).not.toMatch(/authorization|cookie|user-agent|content-type/i);
+
+      // E o resultado é o mesmo objeto de cabeçalhos que `serializeRequest` produz.
+      const { serializarRequisicao } = await import('../logging');
+      const req = fakeReq('/api/nutrition/foods/barcode/7891000100103');
+
+      expect(serializarRequisicao(req as never).headers).toEqual(
+        serializeRequest(req as never).headers,
+      );
     });
   });
 

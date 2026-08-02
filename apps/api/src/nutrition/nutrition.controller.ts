@@ -1,18 +1,22 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
   HttpCode,
+  NotFoundException,
   Param,
   ParseIntPipe,
   Patch,
   Post,
   Put,
   Query,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { CurrentUser, type CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { FoodService } from './food.service';
+import { OffFoodService, atribuicaoDoOff } from './off-food.service';
 import { MealService } from './meal.service';
 import { MealItemService } from './meal-item.service';
 import { NutritionSummaryService } from './nutrition-summary.service';
@@ -33,6 +37,7 @@ import { UpsertNutrientTargetDto } from './dto/nutrient-target.dto';
 export class NutritionController {
   constructor(
     private readonly foods: FoodService,
+    private readonly off: OffFoodService,
     private readonly meals: MealService,
     private readonly mealItems: MealItemService,
     private readonly summary: NutritionSummaryService,
@@ -49,6 +54,35 @@ export class NutritionController {
   @Get('foods/groups')
   listGroups() {
     return this.foods.listGroups();
+  }
+
+  /**
+   * Consulta um produto embalado pelo código de barras (#140, ADR 017).
+   *
+   * Sem `@CurrentUser()` de propósito — e não por descuido: a consulta não lê
+   * nem escreve nada do usuário, e a rota continua atrás do guard global de
+   * autenticação. O que vai para o Open Food Facts é só o código escaneado.
+   *
+   * O resultado **não é persistido**: o cache em `Food` que a issue previa
+   * depende de colunas novas em `schema.prisma`, congelado nesta rodada. A
+   * proposta está no corpo da PR.
+   */
+  @Get('foods/barcode/:code')
+  async lookupBarcode(@Param('code') code: string) {
+    const resultado = await this.off.lookup(code);
+
+    switch (resultado.status) {
+      case 'invalid_barcode':
+        throw new BadRequestException('Invalid barcode');
+      case 'not_found':
+        throw new NotFoundException('Barcode not found');
+      case 'unavailable':
+        // 503 e não 404: "não respondeu" convida a tentar de novo, "não existe"
+        // manda cadastrar à mão um produto que o OFF talvez conheça.
+        throw new ServiceUnavailableException('Open Food Facts unavailable');
+      default:
+        return { ...resultado, attribution: atribuicaoDoOff(code) };
+    }
   }
 
   @Get('foods/:id')

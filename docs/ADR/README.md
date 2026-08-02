@@ -22,6 +22,7 @@ Decisões arquiteturais relevantes do projeto. Cada ADR é imutável depois de a
 | [014](./014-compartilhamento-b2b-copia-e-vinculo.md)           | B2B: cópia na ida, vínculo consentido na volta           | Accepted             |
 | [015](./015-agente-python-langgraph-cliente-mcp.md)            | Agente de IA em Python/LangGraph, cliente do MCP         | Accepted             |
 | [016](./016-sem-expansao-internacional-da-base-nutricional.md) | Sem expansão internacional da base nutricional           | Accepted             |
+| [017](./017-open-food-facts-para-industrializado.md)           | Open Food Facts sob demanda para produto industrializado | Accepted             |
 
 ## Template
 

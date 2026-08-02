@@ -3,7 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { AppEnvSchema } from './common/env.validation';
-import { serializeRequest, serializeResponse } from './common/log-serializers';
+import { opcoesDoPinoHttp } from './common/logging';
 import { HealthModule } from './health/health.module';
 import { CommonModule } from './common/common.module';
 import { AuthModule } from './auth/auth.module';
@@ -22,21 +22,13 @@ import { McpModule } from './mcp/mcp.module';
       envFilePath: ['.env', '../../.env'],
       validate: (config) => AppEnvSchema.parse(config),
     }),
-    LoggerModule.forRoot({
-      pinoHttp: {
-        transport:
-          process.env.NODE_ENV !== 'production'
-            ? { target: 'pino-pretty', options: { singleLine: true } }
-            : undefined,
-        level: process.env.NODE_ENV !== 'production' ? 'debug' : 'info',
-        autoLogging: { ignore: (req) => req.url === '/health' },
-        // Sem isto o `pino-http` usa o serializador padrão, que grava `headers` inteiro —
-        // `authorization` incluído — e a URL com query string. A partir desta issue o log não
-        // fica mais só no `docker logs`: ele é enviado ao Loki e indexado lá. Ver
-        // `common/log-serializers.ts`.
-        serializers: { req: serializeRequest, res: serializeResponse },
-      },
-    }),
+    // A configuração mora em `common/logging.ts`, e não inline aqui, porque ela
+    // existe por privacidade e precisa de teste: os serializadores por lista de
+    // permissão (#215 — `authorization` ia em texto puro para o log) e a máscara
+    // do código de barras escaneado (#140), que não pode sair na mesma linha que
+    // o cookie de sessão de quem escaneou. Ler a configuração e acreditar nela
+    // foi o que deixou os dois vazamentos passarem; agora ela é exercitada.
+    LoggerModule.forRoot({ pinoHttp: opcoesDoPinoHttp(process.env.NODE_ENV) }),
     // O limite global chaveia por IP fora do /mcp. Todo o tráfego da Anthropic
     // sai de 160.79.104.0/21 — uma faixa compartilhada por TODOS os usuários do
     // conector — então discovery, /oauth/register e /oauth/token de todo mundo

@@ -46,12 +46,25 @@ function caminhoSemQuery(url: string): string {
   return corte === -1 ? url : url.slice(0, corte);
 }
 
-export function serializeRequest(req: IncomingMessage & { id?: unknown; url?: string }) {
+/**
+ * O `pino-http` envolve todo serializer customizado com `wrapRequestSerializer` (`logger.js`),
+ * então o que chega aqui em produção **não** é o `IncomingMessage` cru: é o objeto que o
+ * `pino-std-serializers` já montou, sem `socket`. Na chamada direta (teste) vem o
+ * `IncomingMessage`. Os dois casos são aceitos — e a diferença não é acadêmica: a primeira versão
+ * disto lia `req.socket.remoteAddress` e devolvia `undefined` em produção, com o teste de unidade
+ * verde, porque o objeto do teste tinha uma forma que a realidade não tem.
+ */
+type RequisicaoParaLog = Partial<IncomingMessage> & {
+  id?: unknown;
+  url?: string;
+};
+
+export function serializeRequest(req: RequisicaoParaLog) {
   return {
     id: req.id,
     method: req.method,
     path: caminhoSemQuery(req.url ?? ''),
-    headers: headersPermitidos(req.headers),
+    headers: headersPermitidos(req.headers ?? {}),
     // Sem `remoteAddress`. Ele saiu na #39, quando o log deixou de morar só no `docker logs` e
     // passou a ser enviado ao Loki: IP é dado pessoal, e ali fica indexado num segundo store,
     // com retenção própria. O ganho diagnóstico que compensaria isso não existe — em produção a
