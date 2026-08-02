@@ -10,7 +10,13 @@ import { Button, EmptyState, ErrorState, Input, LoadingState } from '@/component
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { ExerciseDetailHost } from '@/components/workout/exercise-detail-host';
-import { estimatePlanStats, nextPlanOrder, pluralize } from '@/components/workout/workout-stats';
+import {
+  estimatePlanStats,
+  nextPlanOrder,
+  planMoveDecision,
+  pluralize,
+  type PlanMove,
+} from '@/components/workout/workout-stats';
 
 /**
  * Réplica de `apps/web/src/app/(app)/workout/plans/[id]/page.tsx`.
@@ -85,15 +91,23 @@ export default function PlanDetailScreen() {
   // A troca vai numa requisição só: a API grava os dois `order` dentro de uma
   // transação, então não existe instante em que a lista esteja pela metade.
   const moveExercise = useMutation({
-    mutationFn: ({ a, b }: { a: WorkoutPlanExercise; b: WorkoutPlanExercise }) =>
-      workoutApi.reorderPlanExercises(id, [
-        { id: a.id, order: b.order },
-        { id: b.id, order: a.order },
-      ]),
-    onSuccess: (updated) => {
+    mutationFn: (decision: PlanMove<WorkoutPlanExercise>) =>
+      workoutApi.reorderPlanExercises(id, decision.payload),
+    onSuccess: (updated, decision) => {
       // A resposta já é o plano reordenado — escrever no cache evita o refetch
       // que só confirmaria o que acabou de chegar.
       qc.setQueryData(['workout', 'plan', id], updated);
+      // O anúncio só sai aqui. Saía junto com o toque, antes da resposta: com a
+      // rede caída o leitor de tela afirmava um movimento que não aconteceu.
+      AccessibilityInfo.announceForAccessibility(
+        `${decision.from.exercise.name} movido para a posição ${decision.targetIndex + 1} de ${decision.total}`,
+      );
+    },
+    onError: (error) => {
+      Alert.alert(
+        'Não foi possível mover',
+        error instanceof Error ? error.message : 'Tente novamente.',
+      );
     },
   });
 
@@ -146,17 +160,15 @@ export default function PlanDetailScreen() {
   }
 
   function move(index: number, delta: -1 | 1) {
-    const target = index + delta;
-    if (target < 0 || target >= exercises.length) return;
-    const a = exercises[index];
-    const b = exercises[target];
+    // A trava de "uma troca por vez" está aqui, além do `disabled` do botão,
+    // porque só aqui ela impede o feedback tátil de um toque que não vai virar
+    // requisição nenhuma.
+    const decision = planMoveDecision(exercises, index, delta, {
+      moveInFlight: moveExercise.isPending,
+    });
+    if (!decision) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // O card só troca de lugar quando a API responde. Sem o aviso, quem usa
-    // leitor de tela não tem como saber que o movimento aconteceu.
-    AccessibilityInfo.announceForAccessibility(
-      `${a.exercise.name} movido para a posição ${target + 1} de ${exercises.length}`,
-    );
-    moveExercise.mutate({ a, b });
+    moveExercise.mutate(decision);
   }
 
   function confirmDelete() {
@@ -268,6 +280,7 @@ export default function PlanDetailScreen() {
                 isCardio={isCardioExercise(ex.exercise)}
                 isFirst={index === 0}
                 isLast={index === exercises.length - 1}
+                isMoving={moveExercise.isPending}
                 onChangeSets={(n) =>
                   updateExercise.mutate({ exerciseId: ex.id, body: { targetSets: n } })
                 }

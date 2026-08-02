@@ -21,6 +21,8 @@ interface PlanCardProps {
   isCardio?: boolean;
   isFirst?: boolean;
   isLast?: boolean;
+  /** Troca em voo: trava os dois botões até a API responder. */
+  isMoving?: boolean;
   onChangeSets?: (value: number) => void;
   onChangeReps?: (value: string) => void;
   onRemove?: () => void;
@@ -160,6 +162,7 @@ function PlanModeCard({
   isCardio,
   isFirst,
   isLast,
+  isMoving,
   onChangeSets,
   onChangeReps,
   onRemove,
@@ -244,14 +247,19 @@ function PlanModeCard({
           </div>
         )}
 
+        {/*
+          O rótulo nomeia o exercício, como já era no app nativo. Numa lista de
+          N exercícios, N botões "Mover para cima" idênticos não dizem a quem
+          usa leitor de tela qual deles está sob o foco.
+        */}
         <div className="flex items-center gap-1">
           {onMoveUp && (
             <button
               type="button"
               onClick={onMoveUp}
-              disabled={isFirst}
+              disabled={isFirst || isMoving}
               className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-20"
-              aria-label="Mover para cima"
+              aria-label={`Mover ${item.exercise.name} para cima`}
             >
               <ChevronUp size={16} />
             </button>
@@ -260,9 +268,9 @@ function PlanModeCard({
             <button
               type="button"
               onClick={onMoveDown}
-              disabled={isLast}
+              disabled={isLast || isMoving}
               className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-20"
-              aria-label="Mover para baixo"
+              aria-label={`Mover ${item.exercise.name} para baixo`}
             >
               <ChevronDown size={16} />
             </button>
@@ -272,7 +280,7 @@ function PlanModeCard({
               type="button"
               onClick={onRemove}
               className="rounded p-1 text-muted-foreground hover:text-rose-500"
-              aria-label="Remover exercício"
+              aria-label={`Remover ${item.exercise.name} do plano`}
             >
               <Trash2 size={16} />
             </button>

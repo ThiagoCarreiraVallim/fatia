@@ -1078,18 +1078,29 @@ Edita um item dentro do plano.
 
 ### `reorder_plan_exercises`
 
-Reordena tudo de uma vez (mais previsível que ajustar `order` um a um).
+Reordena numa transação só — mais previsível que ajustar `order` um a um por
+`update_plan_exercise`, que deixa a lista num estado intermediário entre uma
+escrita e a outra.
+
+Grava `order` **exatamente nos ids enviados** e não toca em mais nada do plano.
+Envie só quem mudou de posição: incluir quem ficou parado sobrescreve o `order`
+que o app pode ter acabado de gravar. Mesmo contrato do
+`workoutApi.reorderPlanExercises` que o PWA e o app nativo usam.
 
 **Input:**
 
 ```typescript
 {
   planId: string;
-  exerciseOrder: string[];   // array de planExerciseId na ordem desejada
+  exercises: Array<{
+    id: string; // planExerciseId (não o exerciseId do catálogo)
+    order: number; // nova posição
+  }>;
 }
 ```
 
-**Output:** `{ updated: true }`
+**Output:** o `WorkoutPlan` completo, já reordenado (mesmo shape de
+`get_workout_plan`).
 
 ---
 

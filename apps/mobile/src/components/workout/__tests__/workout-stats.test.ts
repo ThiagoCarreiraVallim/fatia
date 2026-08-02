@@ -4,6 +4,7 @@ import {
   estimatePlanStats,
   formatSessionDuration,
   nextPlanOrder,
+  planMoveDecision,
   pluralize,
   summarizeSession,
   swapAt,
@@ -147,6 +148,59 @@ describe('swapAt', () => {
     const list = ['a', 'b'];
     swapAt(list, 0, 1);
     expect(list).toEqual(['a', 'b']);
+  });
+});
+
+describe('planMoveDecision', () => {
+  // `order` com buracos de propósito: `addPlanExercise` usa `max + 1` e remover
+  // não renumera, então plano real tem buraco.
+  const list = [
+    { id: 'pe-a', order: 1 },
+    { id: 'pe-b', order: 5 },
+    { id: 'pe-c', order: 9 },
+  ];
+
+  it('manda o `order` do vizinho, não o índice', () => {
+    expect(planMoveDecision(list, 1, 1, { moveInFlight: false })?.payload).toEqual([
+      { id: 'pe-b', order: 9 },
+      { id: 'pe-c', order: 5 },
+    ]);
+    expect(planMoveDecision(list, 1, -1, { moveInFlight: false })?.payload).toEqual([
+      { id: 'pe-b', order: 1 },
+      { id: 'pe-a', order: 5 },
+    ]);
+  });
+
+  it('recusa enquanto há troca em voo', () => {
+    // Sem isto, dois toques rápidos leem o mesmo snapshot: "descer A" e depois
+    // "descer B" gravam A=5, B=9 e C=5 — dois exercícios com o mesmo `order`.
+    expect(planMoveDecision(list, 1, 1, { moveInFlight: true })).toBeNull();
+  });
+
+  it('recusa nas bordas', () => {
+    expect(planMoveDecision(list, 0, -1, { moveInFlight: false })).toBeNull();
+    expect(planMoveDecision(list, 2, 1, { moveInFlight: false })).toBeNull();
+  });
+
+  it('recusa índice fora da lista', () => {
+    expect(planMoveDecision(list, -1, 1, { moveInFlight: false })).toBeNull();
+    expect(planMoveDecision(list, 3, -1, { moveInFlight: false })).toBeNull();
+    expect(planMoveDecision([], 0, 1, { moveInFlight: false })).toBeNull();
+  });
+
+  it('descreve o destino para o anúncio de acessibilidade', () => {
+    const decision = planMoveDecision(list, 0, 1, { moveInFlight: false });
+    expect(decision).toMatchObject({
+      from: { id: 'pe-a' },
+      to: { id: 'pe-b' },
+      targetIndex: 1,
+      total: 3,
+    });
+  });
+
+  it('não muda a lista original', () => {
+    planMoveDecision(list, 1, 1, { moveInFlight: false });
+    expect(list.map((e) => e.order)).toEqual([1, 5, 9]);
   });
 });
 

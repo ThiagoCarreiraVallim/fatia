@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { configureApiClient, resetApiClient } from '../http';
+import { ApiError, configureApiClient, resetApiClient } from '../http';
 import { workoutApi } from '../workout';
+
+/**
+ * Aqui ficam só verbo, caminho, envelope do corpo e forma da resposta — o que
+ * quebraria em silêncio se alguém mexesse no método. A regressão de "duas
+ * escritas para uma reordenação" mora nas telas, e o teste dela é
+ * `apps/web/src/app/(app)/workout/plans/[id]/__tests__/page.test.tsx`: contar
+ * `fetch` aqui seria tautológico, porque `apiFetch` chama `fetch` uma vez por
+ * construção.
+ */
 
 function jsonResponse(body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -50,13 +59,21 @@ describe('workoutApi.reorderPlanExercises', () => {
     });
   });
 
-  it('gasta uma requisição só — é a regressão que o método existe para evitar', async () => {
-    await workoutApi.reorderPlanExercises('plan-1', [
-      { id: 'pe-1', order: 2 },
-      { id: 'pe-2', order: 1 },
-    ]);
+  it('propaga o erro da API com o status, para a tela poder distinguir os casos', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ message: 'Plan not found' }), {
+        status: 404,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const err = await workoutApi
+      .reorderPlanExercises('plan-1', [{ id: 'pe-1', order: 2 }])
+      .catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).status).toBe(404);
+    expect((err as ApiError).isNotFound).toBe(true);
   });
 
   it('devolve o plano completo, não a lista de exercícios', async () => {

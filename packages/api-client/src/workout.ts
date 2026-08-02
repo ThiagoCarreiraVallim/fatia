@@ -9,8 +9,10 @@ export type MuscleGroup =
   | 'core'
   | 'cardio'
   // `string & {}` mantém o autocomplete das opções acima sem fechar o tipo — o
-  // catálogo aceita grupo muscular fora da lista. A regra que reclamava disto era
-  // `ban-types`, removida no typescript-eslint v8 e sucedida por esta.
+  // catálogo aceita grupo muscular fora da lista. A regra que reclamava disto
+  // era `ban-types`, removida no typescript-eslint v8; a sucessora
+  // (`no-empty-object-type`) não reclama deste caso, por isso não há diretiva
+  // de exceção aqui — e o `eslint --fix` do pre-commit apaga a que houver.
   | (string & {});
 
 export type ExerciseSource = 'SEED' | 'CUSTOM';
@@ -203,9 +205,13 @@ export const workoutApi = {
    * a segunda a lista fica num estado que ninguém pediu. Aqui a API resolve
    * tudo dentro de uma transação e devolve o plano inteiro já reordenado.
    *
-   * Mande só os itens que mudaram de posição: o `order` de quem não se moveu
-   * não precisa ir junto, e mandá-lo sobrescreveria o que outro cliente tenha
-   * acabado de gravar.
+   * Contrato: a API grava `order` **exatamente nos ids enviados** e não toca em
+   * mais nada do plano. Por isso mande só quem mudou de posição — incluir quem
+   * ficou parado sobrescreveria o `order` que outro cliente (o Claude, via
+   * `reorder_plan_exercises`) pode ter acabado de gravar.
+   *
+   * A mesma frase está na descrição do tool MCP e em `docs/MCP.md`; os três
+   * consomem este endpoint e precisam dizer a mesma coisa.
    */
   reorderPlanExercises: (planId: string, exercises: Array<{ id: string; order: number }>) =>
     apiFetch<WorkoutPlan>(`/api/workout/plans/${planId}/exercises/reorder`, {

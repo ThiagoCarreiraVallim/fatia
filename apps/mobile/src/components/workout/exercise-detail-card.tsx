@@ -36,6 +36,8 @@ interface PlanCardProps {
   isCardio?: boolean;
   isFirst?: boolean;
   isLast?: boolean;
+  /** Troca em voo: trava os dois botões até a API responder. */
+  isMoving?: boolean;
   onChangeSets?: (value: number) => void;
   onChangeReps?: (value: string) => void;
   onRemove?: () => void;
@@ -236,6 +238,7 @@ function PlanModeCard({
   isCardio,
   isFirst,
   isLast,
+  isMoving,
   onChangeSets,
   onChangeReps,
   onRemove,
@@ -322,19 +325,19 @@ function PlanModeCard({
           {onMoveUp ? (
             <IconAction
               label={`Mover ${item.exercise.name} para cima`}
-              disabled={isFirst}
+              disabled={isFirst || isMoving}
               onPress={onMoveUp}
             >
-              <ChevronUp size={18} color={isFirst ? '#333333' : '#baccaf'} />
+              <ChevronUp size={18} color={isFirst || isMoving ? '#333333' : '#baccaf'} />
             </IconAction>
           ) : null}
           {onMoveDown ? (
             <IconAction
               label={`Mover ${item.exercise.name} para baixo`}
-              disabled={isLast}
+              disabled={isLast || isMoving}
               onPress={onMoveDown}
             >
-              <ChevronDown size={18} color={isLast ? '#333333' : '#baccaf'} />
+              <ChevronDown size={18} color={isLast || isMoving ? '#333333' : '#baccaf'} />
             </IconAction>
           ) : null}
           {onRemove ? (

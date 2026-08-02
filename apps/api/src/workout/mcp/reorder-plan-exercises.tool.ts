@@ -17,8 +17,12 @@ export class ReorderPlanExercisesTool implements McpToolDef {
   readonly title = 'Reordenar exercícios do plano';
 
   readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  // O contrato ("só os ids enviados") é o mesmo do JSDoc de
+  // `workoutApi.reorderPlanExercises` e de `docs/MCP.md`. Antes esta descrição
+  // pedia a lista completa, e o efeito era o Claude reescrever o `order` de
+  // exercícios parados — apagando a troca que o app tinha acabado de gravar.
   readonly description =
-    'Reordena os exercícios de um plano de treino. Envie a lista completa com as novas posições. ' +
+    'Reordena os exercícios de um plano de treino. Envie apenas os exercícios que mudaram de posição: o `order` dos que não forem enviados fica como está. Devolve o plano completo já reordenado. ' +
     'Exemplo: {"planId":"11111111-2222-4333-8444-555555555555","exercises":[{"id":"66666666-7777-4888-8999-aaaaaaaaaaaa","order":0},{"id":"bbbbbbbb-cccc-4ddd-8eee-ffffffffffff","order":1}]}';
   readonly inputSchema = {
     planId: z.string().uuid().describe('ID do plano de treino'),
@@ -30,7 +34,7 @@ export class ReorderPlanExercisesTool implements McpToolDef {
         }),
       )
       .min(1)
-      .describe('Lista com o novo ordenamento'),
+      .describe('Somente os exercícios que mudaram de posição, com o novo `order` de cada um'),
   } as const;
 
   execute(

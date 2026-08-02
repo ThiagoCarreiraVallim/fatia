@@ -58,6 +58,9 @@ export default function PlanDetailPage() {
   // transação, então não existe instante em que a lista esteja pela metade.
   const moveExercise = useMutation({
     mutationFn: ({ a, b }: { a: WorkoutPlanExercise; b: WorkoutPlanExercise }) =>
+      // O `order` enviado é o do vizinho, nunca o índice: `addPlanExercise` usa
+      // `max + 1` e remover exercício não renumera, então a numeração tem
+      // buracos (1, 5, 9) que `order: index` corromperia em silêncio.
       workoutApi.reorderPlanExercises(id, [
         { id: a.id, order: b.order },
         { id: b.id, order: a.order },
@@ -124,6 +127,13 @@ export default function PlanDetailPage() {
   }
 
   function move(idx: number, delta: -1 | 1) {
+    // Dois cliques rápidos leem o **mesmo** snapshot e compõem duas trocas que
+    // se sobrepõem: em [A(1), B(2), C(3)], "descer A" e depois "descer B"
+    // gravam A=2, B=3 e C=2 — dois exercícios com o mesmo `order`. Nada
+    // estoura (não há `@@unique([planId, order])`), a lista só passa a ordenar
+    // de forma indefinida. A transação garante que cada troca é inteira; não
+    // garante que duas trocas concorrentes componham.
+    if (moveExercise.isPending) return;
     const target = idx + delta;
     if (target < 0 || target >= exercises.length) return;
     moveExercise.mutate({ a: exercises[idx], b: exercises[target] });
@@ -232,6 +242,23 @@ export default function PlanDetailPage() {
           </h3>
         </div>
 
+        {/*
+          O PWA não tem toast. O aviso fica na própria lista, que é para onde a
+          pessoa está olhando quando o exercício não sai do lugar — e vem do
+          estado da mutation, não de um `onError`, porque some sozinho no
+          próximo movimento que der certo.
+        */}
+        {moveExercise.isError && (
+          <p
+            role="alert"
+            className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-400"
+          >
+            Não foi possível mover o exercício
+            {moveExercise.error instanceof Error ? `: ${moveExercise.error.message}` : '.'} A ordem
+            continua como estava.
+          </p>
+        )}
+
         {exercises.length === 0 && (
           <button
             type="button"
@@ -255,6 +282,7 @@ export default function PlanDetailPage() {
               isCardio={isCardioExercise(ex.exercise)}
               isFirst={idx === 0}
               isLast={idx === exercises.length - 1}
+              isMoving={moveExercise.isPending}
               onChangeSets={(n) =>
                 updateExercise.mutate({ exerciseId: ex.id, body: { targetSets: n } })
               }
