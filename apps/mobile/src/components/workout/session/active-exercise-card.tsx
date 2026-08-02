@@ -3,7 +3,12 @@ import { AccessibilityInfo, Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { Check, Info, Minus, Plus } from 'lucide-react-native';
-import { workoutApi, type ExerciseGroup, type SessionSet } from '@fatia/api-client';
+import {
+  prefillForNextSet,
+  workoutApi,
+  type ExerciseGroup,
+  type SessionSet,
+} from '@fatia/api-client';
 import { Button, Input } from '@/components/ui';
 import { useOpenExerciseDetail } from '@/components/workout/exercise-detail-host';
 import {
@@ -27,9 +32,6 @@ import type { RestTimer as RestTimerState } from './use-rest-timer';
  *
  * O que muda em relação ao web:
  *
- * - a referência da vez anterior vem de `getLastSet` (a última vez que o
- *   exercício foi feito, em qualquer sessão), não só das séries desta sessão. É
- *   o dado que a pessoa procura antes de escolher a carga.
  * - o descanso é controlado pela tela (ver `use-rest-timer.ts`), para não zerar
  *   quando o foco passa para o próximo exercício.
  * - o RPE é pedido pela tela, num drawer montado fora do card — o bottom sheet
@@ -38,12 +40,15 @@ import type { RestTimer as RestTimerState } from './use-rest-timer';
 
 export function ActiveExerciseCard({
   sessionId,
+  sessionStartedAt,
   group,
   rest,
   onFinishExercise,
   onAskRpe,
 }: {
   sessionId: string;
+  /** Início da sessão em ISO. Recorta o histórico no que veio **antes** dela. */
+  sessionStartedAt: string;
   group: ExerciseGroup;
   rest: RestTimerState;
   onFinishExercise: () => void;
@@ -57,17 +62,16 @@ export function ActiveExerciseCard({
   const isComplete = doneSets >= targetSets;
   const sessionLastSet = group.sets[doneSets - 1];
 
-  // `getLastSet` devolve a série mais recente **incluindo a desta sessão**, e o
-  // cliente compartilhado não expõe o `before` do endpoint. Daí as duas medidas:
-  // buscar uma vez só (`staleTime: Infinity`) e descartar o que for desta
-  // sessão — senão, depois da primeira série, "anterior" viraria "o que acabei
-  // de fazer", que é pior do que não mostrar nada.
+  // A referência é a última série deste exercício **antes** desta sessão. O
+  // recorte é do servidor, via `before`: filtrar no cliente exigiria manter a
+  // resposta em cache para sempre e, quando o cache expirasse no meio do treino,
+  // a única candidata seria a série de hoje — que o filtro descartaria, fazendo
+  // a referência sumir sozinha.
   const previous = useQuery({
-    queryKey: ['workout', 'last-set', group.exerciseId],
-    queryFn: () => workoutApi.getLastSet(group.exerciseId),
-    staleTime: Infinity,
+    queryKey: ['workout', 'last-set', group.exerciseId, sessionStartedAt],
+    queryFn: () => workoutApi.getLastSet(group.exerciseId, sessionStartedAt),
   });
-  const reference = previous.data && previous.data.sessionId !== sessionId ? previous.data : null;
+  const reference = previous.data ?? null;
 
   const pr = useQuery({
     queryKey: ['workout', 'pr', group.exerciseId],
@@ -82,26 +86,28 @@ export function ActiveExerciseCard({
   const [reps, setReps] = useState(() => parseFirstRep(group.targetReps));
   const [touched, setTouched] = useState(false);
 
-  useEffect(() => {
-    if (sessionLastSet?.weightKg != null) setWeight(sessionLastSet.weightKg);
-    if (sessionLastSet?.reps != null) setReps(sessionLastSet.reps);
-  }, [sessionLastSet?.id, sessionLastSet?.weightKg, sessionLastSet?.reps]);
+  // A regra do palpite mora no `@fatia/api-client`, compartilhada com o web.
+  // Calculada no render e não dentro do efeito para que as dependências sejam
+  // só os dois números: os objetos de série trocam de identidade a cada refetch
+  // do React Query e reescreveriam o campo por cima do que a pessoa digita.
+  const prefill = prefillForNextSet({ touched, sessionLastSet, previousSessionSet: reference });
+  const prefillWeight = prefill.weightKg;
+  const prefillReps = prefill.reps;
 
-  // Antes da primeira série da sessão o palpite vem da última vez que este
-  // exercício foi feito; só na falta dela é que o recorde entra.
   useEffect(() => {
-    if (touched || sessionLastSet) return;
-    if (reference?.weightKg != null) setWeight(reference.weightKg);
-    else if (prWeight != null) setWeight(prWeight);
-    if (reference?.reps != null) setReps(reference.reps);
-    else if (prReps != null) setReps(prReps);
-  }, [touched, sessionLastSet, reference, prWeight, prReps]);
+    if (prefillWeight != null) setWeight(prefillWeight);
+    if (prefillReps != null) setReps(prefillReps);
+  }, [prefillWeight, prefillReps]);
 
   const logSet = useMutation({
     mutationFn: () =>
       workoutApi.logSet(sessionId, {
         exerciseId: group.exerciseId,
-        weightKg: weight || undefined,
+        // `??` e não `||`: carga 0 é carga. Barra fixa, paralela e afins são
+        // peso corporal, e um `||` gravaria `null` — o exercício nunca teria
+        // histórico e a referência da próxima vez nunca apareceria. Reps 0 não
+        // tem essa leitura: é campo em branco, e segue sem ser enviado.
+        weightKg: weight ?? undefined,
         reps: reps || undefined,
       }),
     onSuccess: (created) => {

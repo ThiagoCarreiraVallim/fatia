@@ -3,13 +3,20 @@
 import { useEffect, useState } from 'react';
 import { Check, ChevronDown, Minus, Plus, Timer } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { workoutApi, type ExerciseGroup, type SessionSet } from '@fatia/api-client';
+import {
+  prefillForNextSet,
+  workoutApi,
+  type ExerciseGroup,
+  type SessionSet,
+} from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { RpeModal } from './rpe-modal';
 import { SetRow } from './set-row';
 
 interface Props {
   sessionId: string;
+  /** Início da sessão em ISO. Recorta o histórico no que veio **antes** dela. */
+  sessionStartedAt: string;
   group: ExerciseGroup;
   onFinishExercise: () => void;
   restSeconds?: number;
@@ -23,6 +30,7 @@ function parseFirstRep(targetReps?: string): number {
 
 export function ActiveExerciseCard({
   sessionId,
+  sessionStartedAt,
   group,
   onFinishExercise,
   restSeconds = 90,
@@ -34,6 +42,17 @@ export function ActiveExerciseCard({
 
   const lastSet = group.sets[group.sets.length - 1];
 
+  // A referência é a última série deste exercício **antes** desta sessão. O
+  // recorte é do servidor, via `before`: filtrar no cliente exigiria manter a
+  // resposta em cache para sempre e, quando o cache expirasse no meio do
+  // treino, a única candidata seria a série de hoje — que o filtro descartaria,
+  // fazendo a referência sumir sozinha.
+  const previous = useQuery({
+    queryKey: ['workout', 'last-set', group.exerciseId, sessionStartedAt],
+    queryFn: () => workoutApi.getLastSet(group.exerciseId, sessionStartedAt),
+  });
+  const reference = previous.data ?? null;
+
   const pr = useQuery({
     queryKey: ['workout', 'pr', group.exerciseId],
     queryFn: () => workoutApi.getPersonalRecord(group.exerciseId),
@@ -43,26 +62,28 @@ export function ActiveExerciseCard({
     pr.data && 'weightKg' in pr.data && pr.data.weightKg != null ? pr.data.weightKg : null;
   const prReps = pr.data && 'reps' in pr.data && pr.data.reps != null ? pr.data.reps : null;
 
-  const [weight, setWeight] = useState<number>(lastSet?.weightKg ?? prWeight ?? 0);
-  const [reps, setReps] = useState<number>(
-    lastSet?.reps ?? prReps ?? parseFirstRep(group.targetReps),
-  );
+  const [weight, setWeight] = useState<number>(lastSet?.weightKg ?? 0);
+  const [reps, setReps] = useState<number>(lastSet?.reps ?? parseFirstRep(group.targetReps));
   const [touched, setTouched] = useState(false);
   const [restRemaining, setRestRemaining] = useState<number | null>(null);
   const [rpeOpen, setRpeOpen] = useState(false);
   const [pendingSet, setPendingSet] = useState<SessionSet | null>(null);
 
-  useEffect(() => {
-    if (lastSet?.weightKg != null) setWeight(lastSet.weightKg);
-    if (lastSet?.reps != null) setReps(lastSet.reps);
-  }, [lastSet?.id, lastSet?.weightKg, lastSet?.reps]);
+  // Calculado no render e não dentro do efeito para que as dependências sejam
+  // só os dois números: os objetos de série trocam de identidade a cada refetch
+  // do React Query e reescreveriam o campo por cima do que a pessoa digita.
+  const prefill = prefillForNextSet({
+    touched,
+    sessionLastSet: lastSet,
+    previousSessionSet: reference,
+  });
+  const prefillWeight = prefill.weightKg;
+  const prefillReps = prefill.reps;
 
-  // Initialize from PR only when user hasn't touched and no sets logged yet in this session
   useEffect(() => {
-    if (touched || lastSet) return;
-    if (prWeight != null) setWeight(prWeight);
-    if (prReps != null) setReps(prReps);
-  }, [prWeight, prReps, touched, lastSet]);
+    if (prefillWeight != null) setWeight(prefillWeight);
+    if (prefillReps != null) setReps(prefillReps);
+  }, [prefillWeight, prefillReps]);
 
   useEffect(() => {
     if (restRemaining == null || restRemaining <= 0) return;
@@ -76,7 +97,11 @@ export function ActiveExerciseCard({
     mutationFn: () =>
       workoutApi.logSet(sessionId, {
         exerciseId: group.exerciseId,
-        weightKg: weight || undefined,
+        // `??` e não `||`: carga 0 é carga. Barra fixa, paralela e afins são
+        // peso corporal, e um `||` gravaria `null` — o exercício nunca teria
+        // histórico e a referência da próxima vez nunca apareceria. Reps 0 não
+        // tem essa leitura: é campo em branco, e segue sem ser enviado.
+        weightKg: weight ?? undefined,
         reps: reps || undefined,
       }),
     onSuccess: (created) => {
@@ -128,8 +153,8 @@ export function ActiveExerciseCard({
           }}
           format={(n) => (Number.isInteger(n) ? String(n) : n.toFixed(1))}
           previous={
-            lastSet?.weightKg != null
-              ? `Anterior: ${lastSet.weightKg}kg`
+            reference?.weightKg != null
+              ? `Anterior: ${reference.weightKg}kg`
               : prWeight != null
                 ? `🏆 Recorde: ${prWeight}kg`
                 : undefined
@@ -145,8 +170,8 @@ export function ActiveExerciseCard({
           }}
           format={(n) => String(n)}
           previous={
-            lastSet?.reps != null
-              ? `Anterior: ${lastSet.reps} reps`
+            reference?.reps != null
+              ? `Anterior: ${reference.reps} reps`
               : prReps != null
                 ? `🏆 Recorde: ${prReps} reps`
                 : undefined

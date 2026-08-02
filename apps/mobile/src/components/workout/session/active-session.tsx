@@ -109,6 +109,7 @@ export function ActiveSession({
               <ActiveExerciseCard
                 key={focused.exerciseId}
                 sessionId={session.id}
+                sessionStartedAt={session.startedAt}
                 group={focused}
                 rest={rest}
                 onFinishExercise={() => skipExercise(focused.exerciseId)}
