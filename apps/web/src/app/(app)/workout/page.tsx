@@ -63,8 +63,14 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
       )}
 
       {focused && !focused.isCardio && (
+        // `key` por exercício: sem ela o React reaproveita a instância ao trocar
+        // o foco, e a carga digitada no exercício anterior continuaria no campo
+        // do próximo — junto com o `touched`, que impediria o palpite da sessão
+        // anterior de rodar em todos os exercícios seguintes.
         <ActiveExerciseCard
+          key={focused.exerciseId}
           sessionId={session.id}
+          sessionStartedAt={session.startedAt}
           group={focused}
           onFinishExercise={() =>
             setSkippedExerciseIds((prev) => new Set(prev).add(focused.exerciseId))
@@ -74,6 +80,7 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
 
       {focused && focused.isCardio && (
         <ActiveCardioCard
+          key={focused.exerciseId}
           sessionId={session.id}
           group={focused}
           onFinishExercise={() =>

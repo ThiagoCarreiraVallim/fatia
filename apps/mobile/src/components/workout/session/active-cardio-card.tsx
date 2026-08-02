@@ -68,8 +68,10 @@ export function ActiveCardioCard({
     return () => clearInterval(id);
   }, [running]);
 
-  // Ver `active-exercise-card.tsx`: `getLastSet` inclui a série desta sessão, e
-  // o cliente compartilhado não expõe o `before` do endpoint.
+  // Sem `before` aqui de propósito: o card de cardio não recebe o início da
+  // sessão, e aqui a referência é só rótulo — não vira valor de campo nenhum.
+  // Daí bastar buscar uma vez e descartar o que for desta sessão. O card de
+  // força usa o `before` porque lá o dado é o palpite de carga (#190).
   const previous = useQuery({
     queryKey: ['workout', 'last-set', group.exerciseId],
     queryFn: () => workoutApi.getLastSet(group.exerciseId),

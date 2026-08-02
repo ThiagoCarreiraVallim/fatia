@@ -3,13 +3,20 @@
 import { useEffect, useState } from 'react';
 import { Check, ChevronDown, Minus, Plus, Timer } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { workoutApi, type ExerciseGroup, type SessionSet } from '@fatia/api-client';
+import {
+  prefillForNextSet,
+  workoutApi,
+  type ExerciseGroup,
+  type SessionSet,
+} from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { RpeModal } from './rpe-modal';
 import { SetRow } from './set-row';
 
 interface Props {
   sessionId: string;
+  /** Início da sessão em ISO. Recorta o histórico no que veio **antes** dela. */
+  sessionStartedAt: string;
   group: ExerciseGroup;
   onFinishExercise: () => void;
   restSeconds?: number;
@@ -21,53 +28,9 @@ function parseFirstRep(targetReps?: string): number {
   return m ? parseInt(m[0], 10) : 10;
 }
 
-/** Palpite para os campos da próxima série. `null` num campo = não mexer nele. */
-interface SetPrefill {
-  weightKg: number | null;
-  reps: number | null;
-}
-
-/**
- * De onde sai o palpite de carga e repetições da próxima série.
- *
- * Gêmea de `prefillForNextSet` em
- * `apps/mobile/src/components/workout/session/format.ts` — a paridade web↔mobile
- * da sessão de treino foi auditada na #130 e é para continuar valendo.
- *
- * A ordem é: série já registrada **nesta** sessão manda, inclusive por cima do
- * que a pessoa digitou — acabou de levantar aquilo, é o sinal mais recente que
- * existe. Sem série nesta sessão, e enquanto ninguém tiver mexido nos campos,
- * vale a última série do exercício numa sessão **anterior**.
- *
- * O recorde pessoal ficou de fora de propósito (#190). Ele é a maior carga já
- * levantada na vida: propô-la na série de abertura ancora a pessoa no teto
- * justamente na série fria, e um clique em "Concluir Série" grava um PR que não
- * aconteceu — que por sua vez vira o novo teto proposto e distorce o gráfico de
- * progresso para sempre. Sem referência anterior o certo é não sugerir nada:
- * campo vazio é uma pergunta, campo com o número errado é uma resposta errada.
- * O recorde continua visível ao lado do campo, como referência.
- */
-function prefillForNextSet({
-  touched,
-  sessionLastSet,
-  previousSessionSet,
-}: {
-  touched: boolean;
-  sessionLastSet?: SessionSet | null;
-  previousSessionSet?: SessionSet | null;
-}): SetPrefill {
-  if (sessionLastSet) {
-    return { weightKg: sessionLastSet.weightKg, reps: sessionLastSet.reps };
-  }
-  if (touched) return { weightKg: null, reps: null };
-  return {
-    weightKg: previousSessionSet?.weightKg ?? null,
-    reps: previousSessionSet?.reps ?? null,
-  };
-}
-
 export function ActiveExerciseCard({
   sessionId,
+  sessionStartedAt,
   group,
   onFinishExercise,
   restSeconds = 90,
@@ -79,18 +42,16 @@ export function ActiveExerciseCard({
 
   const lastSet = group.sets[group.sets.length - 1];
 
-  // A referência da vez anterior é a última série deste exercício em qualquer
-  // sessão. O endpoint devolve a série mais recente **incluindo a desta
-  // sessão** e o cliente compartilhado não expõe o `before`, daí as duas
-  // medidas: buscar uma vez só (`staleTime: Infinity`) e descartar o que for
-  // desta sessão — senão, depois da primeira série, "anterior" viraria "o que
-  // acabei de fazer".
+  // A referência é a última série deste exercício **antes** desta sessão. O
+  // recorte é do servidor, via `before`: filtrar no cliente exigiria manter a
+  // resposta em cache para sempre e, quando o cache expirasse no meio do
+  // treino, a única candidata seria a série de hoje — que o filtro descartaria,
+  // fazendo a referência sumir sozinha.
   const previous = useQuery({
-    queryKey: ['workout', 'last-set', group.exerciseId],
-    queryFn: () => workoutApi.getLastSet(group.exerciseId),
-    staleTime: Infinity,
+    queryKey: ['workout', 'last-set', group.exerciseId, sessionStartedAt],
+    queryFn: () => workoutApi.getLastSet(group.exerciseId, sessionStartedAt),
   });
-  const reference = previous.data && previous.data.sessionId !== sessionId ? previous.data : null;
+  const reference = previous.data ?? null;
 
   const pr = useQuery({
     queryKey: ['workout', 'pr', group.exerciseId],
@@ -136,7 +97,11 @@ export function ActiveExerciseCard({
     mutationFn: () =>
       workoutApi.logSet(sessionId, {
         exerciseId: group.exerciseId,
-        weightKg: weight || undefined,
+        // `??` e não `||`: carga 0 é carga. Barra fixa, paralela e afins são
+        // peso corporal, e um `||` gravaria `null` — o exercício nunca teria
+        // histórico e a referência da próxima vez nunca apareceria. Reps 0 não
+        // tem essa leitura: é campo em branco, e segue sem ser enviado.
+        weightKg: weight ?? undefined,
         reps: reps || undefined,
       }),
     onSuccess: (created) => {
@@ -188,13 +153,11 @@ export function ActiveExerciseCard({
           }}
           format={(n) => (Number.isInteger(n) ? String(n) : n.toFixed(1))}
           previous={
-            lastSet?.weightKg != null
-              ? `Anterior: ${lastSet.weightKg}kg`
-              : reference?.weightKg != null
-                ? `Anterior: ${reference.weightKg}kg`
-                : prWeight != null
-                  ? `🏆 Recorde: ${prWeight}kg`
-                  : undefined
+            reference?.weightKg != null
+              ? `Anterior: ${reference.weightKg}kg`
+              : prWeight != null
+                ? `🏆 Recorde: ${prWeight}kg`
+                : undefined
           }
         />
         <Stepper
@@ -207,13 +170,11 @@ export function ActiveExerciseCard({
           }}
           format={(n) => String(n)}
           previous={
-            lastSet?.reps != null
-              ? `Anterior: ${lastSet.reps} reps`
-              : reference?.reps != null
-                ? `Anterior: ${reference.reps} reps`
-                : prReps != null
-                  ? `🏆 Recorde: ${prReps} reps`
-                  : undefined
+            reference?.reps != null
+              ? `Anterior: ${reference.reps} reps`
+              : prReps != null
+                ? `🏆 Recorde: ${prReps} reps`
+                : undefined
           }
         />
       </div>

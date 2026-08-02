@@ -28,8 +28,10 @@ import { workoutApi } from '@fatia/api-client';
 
 const getLastSet = vi.mocked(workoutApi.getLastSet);
 const getPersonalRecord = vi.mocked(workoutApi.getPersonalRecord);
+const logSet = vi.mocked(workoutApi.logSet);
 
 const SESSION_ID = 'sessao-de-hoje';
+const STARTED_AT = '2026-08-01T18:00:00.000Z';
 
 function makeSet(partial: Partial<SessionSet> = {}): SessionSet {
   return {
@@ -81,19 +83,30 @@ function renderCard(group: ExerciseGroup = makeGroup()) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <ActiveExerciseCard sessionId={SESSION_ID} group={group} onFinishExercise={() => undefined} />
+      <ActiveExerciseCard
+        sessionId={SESSION_ID}
+        sessionStartedAt={STARTED_AT}
+        group={group}
+        onFinishExercise={() => undefined}
+      />
     </QueryClientProvider>,
   );
 }
 
-/** O valor do campo é o rótulo do botão que abre a edição. */
-function weightField() {
-  return screen.getByRole('button', { name: 'Editar CARGA (KG)' });
+/**
+ * Valor do campo, exato.
+ *
+ * Nada de `toHaveTextContent('0')` aqui: com string ele casa **substring**, e
+ * `'100'.includes('0')` é verdadeiro — a asserção passaria justamente no caso
+ * da #190, com o campo exibindo o recorde de 100 kg. Comparar o `textContent`
+ * com `toBe` é o que faz o teste ter opinião sobre o número.
+ */
+function fieldValue(label: string): string | null {
+  return screen.getByRole('button', { name: `Editar ${label}` }).textContent;
 }
 
-function repsField() {
-  return screen.getByRole('button', { name: 'Editar REPETIÇÕES' });
-}
+const weightValue = () => fieldValue('CARGA (KG)');
+const repsValue = () => fieldValue('REPETIÇÕES');
 
 describe('ActiveExerciseCard', () => {
   beforeEach(() => {
@@ -114,14 +127,17 @@ describe('ActiveExerciseCard', () => {
     // O recorde continua visível como referência — é por ele que se sabe que a
     // query já respondeu e que, mesmo assim, o campo não o adotou.
     expect(await screen.findByText('🏆 Recorde: 100kg')).toBeInTheDocument();
-    expect(weightField()).toHaveTextContent('0');
-    expect(repsField()).toHaveTextContent('8');
+    expect(weightValue()).toBe('0');
+    expect(repsValue()).toBe('8');
+  });
+
+  it('recorta o histórico no início da sessão em vez de filtrar no cliente', async () => {
+    renderCard();
+    await waitFor(() => expect(getLastSet).toHaveBeenCalledWith(1, STARTED_AT));
   });
 
   it('parte da última série do exercício na sessão anterior', async () => {
-    getLastSet.mockResolvedValue(
-      makeSet({ id: 'set-antigo', sessionId: 'sessao-passada', weightKg: 62.5, reps: 10 }),
-    );
+    getLastSet.mockResolvedValue(makeSet({ id: 'antigo', weightKg: 62.5, reps: 10 }));
     getPersonalRecord.mockResolvedValue({
       weightKg: 100,
       reps: 3,
@@ -129,22 +145,44 @@ describe('ActiveExerciseCard', () => {
     });
     renderCard();
 
-    await waitFor(() => expect(weightField()).toHaveTextContent('62.5'));
-    expect(repsField()).toHaveTextContent('10');
+    await waitFor(() => expect(weightValue()).toBe('62.5'));
+    expect(repsValue()).toBe('10');
     expect(screen.getByText('Anterior: 62.5kg')).toBeInTheDocument();
     expect(screen.queryByText(/Recorde/)).not.toBeInTheDocument();
   });
 
+  it('mantém carga 0 vinda de exercício de peso corporal', async () => {
+    getLastSet.mockResolvedValue(makeSet({ id: 'antigo', weightKg: 0, reps: 12 }));
+    renderCard();
+
+    await waitFor(() => expect(repsValue()).toBe('12'));
+    expect(weightValue()).toBe('0');
+    expect(screen.getByText('Anterior: 0kg')).toBeInTheDocument();
+  });
+
+  it('registra carga 0 em vez de engoli-la como campo vazio', async () => {
+    getLastSet.mockResolvedValue(makeSet({ id: 'antigo', weightKg: 0, reps: 12 }));
+    logSet.mockResolvedValue(makeSet({ weightKg: 0, reps: 12 }));
+    const user = userEvent.setup();
+    renderCard();
+
+    await waitFor(() => expect(repsValue()).toBe('12'));
+    await user.click(screen.getByRole('button', { name: /concluir série/i }));
+
+    await waitFor(() => expect(logSet).toHaveBeenCalledTimes(1));
+    expect(logSet.mock.calls[0][1]).toMatchObject({ exerciseId: 1, weightKg: 0, reps: 12 });
+  });
+
   it('herda a série anterior da própria sessão nas séries seguintes', async () => {
-    getLastSet.mockResolvedValue(
-      makeSet({ id: 'set-antigo', sessionId: 'sessao-passada', weightKg: 62.5, reps: 10 }),
-    );
+    getLastSet.mockResolvedValue(makeSet({ id: 'antigo', weightKg: 62.5, reps: 10 }));
     const group = makeGroup({ sets: [makeSet({ id: 'set-1', weightKg: 70, reps: 8 })] });
     renderCard(group);
 
-    await waitFor(() => expect(screen.getByText('Anterior: 70kg')).toBeInTheDocument());
-    expect(weightField()).toHaveTextContent('70');
-    expect(repsField()).toHaveTextContent('8');
+    // A referência da sessão anterior chega e é ignorada pelo campo: quem manda
+    // é a série já feita hoje.
+    await waitFor(() => expect(screen.getByText('Anterior: 62.5kg')).toBeInTheDocument());
+    expect(weightValue()).toBe('70');
+    expect(repsValue()).toBe('8');
   });
 
   it('não sobrescreve o que a pessoa digitou quando a referência chega depois', async () => {
@@ -158,13 +196,11 @@ describe('ActiveExerciseCard', () => {
     renderCard();
 
     await user.click(screen.getAllByRole('button', { name: 'Aumentar' })[0]);
-    expect(weightField()).toHaveTextContent('1');
+    expect(weightValue()).toBe('1');
 
-    resolveLastSet(
-      makeSet({ id: 'set-antigo', sessionId: 'sessao-passada', weightKg: 62.5, reps: 10 }),
-    );
+    resolveLastSet(makeSet({ id: 'antigo', weightKg: 62.5, reps: 10 }));
 
     await waitFor(() => expect(screen.getByText('Anterior: 62.5kg')).toBeInTheDocument());
-    expect(weightField()).toHaveTextContent('1');
+    expect(weightValue()).toBe('1');
   });
 });

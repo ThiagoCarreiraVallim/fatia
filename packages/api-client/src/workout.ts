@@ -11,7 +11,6 @@ export type MuscleGroup =
   // `string & {}` mantém o autocomplete das opções acima sem fechar o tipo — o
   // catálogo aceita grupo muscular fora da lista. A regra que reclamava disto era
   // `ban-types`, removida no typescript-eslint v8 e sucedida por esta.
-  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   | (string & {});
 
 export type ExerciseSource = 'SEED' | 'CUSTOM';
@@ -216,8 +215,15 @@ export const workoutApi = {
       method: 'POST',
       body: JSON.stringify(body ?? {}),
     }),
-  getLastSet: (exerciseId: number) =>
-    apiFetch<SessionSet | null>(`/api/workout/exercises/${exerciseId}/last-set`),
+  /**
+   * Última série registrada do exercício. Com `before` (ISO), só sessões
+   * iniciadas **antes** disso — é assim que a sessão em andamento fica de fora
+   * sem o chamador ter de filtrar o que já veio.
+   */
+  getLastSet: (exerciseId: number, before?: string) => {
+    const qs = before ? `?before=${encodeURIComponent(before)}` : '';
+    return apiFetch<SessionSet | null>(`/api/workout/exercises/${exerciseId}/last-set${qs}`);
+  },
   getPersonalRecord: (exerciseId: number) =>
     apiFetch<
       | { weightKg: number | null; reps: number | null; sessionDate: string }
