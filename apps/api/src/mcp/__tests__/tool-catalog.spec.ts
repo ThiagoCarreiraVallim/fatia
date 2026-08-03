@@ -75,7 +75,7 @@ const TOOL_COUNT_SLICES: ReadonlyArray<{ file: string; text: string; count: () =
     // Contagem do domínio Sharing, que fica fora do MCP na parte administrativa
     // (#154). Declarada como recorte, e não isenta: se uma tool de grupo nascer
     // ou morrer, a frase que explica a decisão tem de acompanhar.
-    text: 'entra com **3 tools**',
+    text: 'entra com **7 tools**',
     count: () => tools.filter(({ file }) => file.includes('/sharing/mcp/')).length,
   },
   {
@@ -88,7 +88,7 @@ const TOOL_COUNT_SLICES: ReadonlyArray<{ file: string; text: string; count: () =
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '50 tools de escrita',
+    text: '52 tools de escrita',
     // As de escrita que ganharam exemplo na #111 — `delete_my_account` é isenta,
     // e é por isso que o número não é o total de tools de escrita.
     count: () =>
@@ -321,22 +321,22 @@ const payload = tools.reduce(
  * número; o caso abaixo confere as duas pontas, então nem o texto some nem o número derrapa.
  */
 const PAYLOAD_CLAIMS: ReadonlyArray<{ file: string; text: string; medido: () => string }> = [
-  { file: 'docs/MCP.md', text: '**72,9 k caracteres**', medido: () => emK(payload.cheio) },
-  { file: 'docs/MCP.md', text: '(60,8 k)', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP.md', text: '**76,4 k caracteres**', medido: () => emK(payload.cheio) },
+  { file: 'docs/MCP.md', text: '(63,7 k)', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP.md',
-    text: '**4.336 são os exemplos**',
+    text: '**4.499 são os exemplos**',
     medido: () => emMilhar(payload.exemplos),
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**72,9 k caracteres**',
+    text: '**76,4 k caracteres**',
     medido: () => emK(payload.cheio),
   },
-  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 60,8 k', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 63,7 k', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**4.336 caracteres**',
+    text: '**4.499 caracteres**',
     medido: () => emMilhar(payload.exemplos),
   },
 ];
@@ -469,12 +469,19 @@ describe('catálogo de tools MCP', () => {
     // a doc afirmava "4.110 caracteres … média de 91 por tool", medido na #111
     // com 45 tools. Além de estagnado, era internamente incoerente — 4.110/47 dá
     // 87, nunca 91. Quem lê um custo de contexto acredita no número.
-    const comExemplo = tools
-      .map(({ tool }) => extractExampleSpans(tool.description))
-      .filter((spans) => spans.length > 0);
+    // O total vem de `payload.exemplos`, e não de uma segunda soma feita aqui.
+    //
+    // Até o rebase da #155 este caso somava `span.full.length` por conta própria, e o resultado
+    // divergia do que o `PAYLOAD_CLAIMS` media — 4.336 contra 4.499, para o mesmo número
+    // publicado na mesma doc. Duas contas para a mesma afirmação é o defeito que estes guardas
+    // existem para impedir: qual das duas está na doc vira sorte, e a outra só aparece quando um
+    // merge põe as duas frente a frente. Agora há uma medição só; a média é derivada dela.
+    const comExemplo = tools.filter(
+      ({ tool }) => extractExampleSpans(tool.description).length > 0,
+    ).length;
 
-    const caracteres = comExemplo.flat().reduce((total, span) => total + span.full.length, 0);
-    const media = Math.round(caracteres / comExemplo.length);
+    const caracteres = payload.exemplos;
+    const media = Math.round(caracteres / comExemplo);
 
     const doc = readFileSync(resolve(REPO_ROOT, 'docs/MCP_TOOL_SURFACE.md'), 'utf8');
     const afirmado = doc.match(/\*\*([\d.]+) caracteres\*\*/);

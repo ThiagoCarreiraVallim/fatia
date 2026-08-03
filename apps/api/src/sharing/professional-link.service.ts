@@ -102,6 +102,42 @@ export class ProfessionalLinkService {
     });
   }
 
+  /**
+   * Revoga o vínculo vigente entre este titular e este profissional naquele
+   * grupo, se houver. Devolve o vínculo revogado, ou `null` quando não havia
+   * nenhum vivo.
+   *
+   * Existe para o "consentiu lista vazia": zerar as categorias tem de **apagar**
+   * a permissão, não criar uma linha viva com zero escopos que ficaria no painel
+   * do titular para sempre. Não recebe `linkId` — o alvo sai do par (titular,
+   * profissional) já conferido, e nunca de input (#204).
+   *
+   * Sem vínculo vivo é no-op e não erro: quem nunca concedeu nada e manda `[]`
+   * está pedindo o estado em que já está.
+   */
+  async revokeLiveGrant(params: {
+    subjectUserId: string;
+    professionalId: string;
+    groupId: string;
+  }): Promise<ProfessionalLink | null> {
+    const { subjectUserId, professionalId, groupId } = params;
+
+    const vigente = await this.prisma.professionalLink.findFirst({
+      where: { subjectUserId, professionalId, groupId, revokedAt: null },
+    });
+    if (!vigente) return null;
+
+    // `updateMany` com o `revokedAt: null` de novo no `where`: se uma revogação
+    // concorrente chegou primeiro, esta não sobrescreve o instante nem o motivo
+    // dela — e o titular recebe o mesmo resultado dos dois jeitos.
+    await this.prisma.professionalLink.updateMany({
+      where: { id: vigente.id, subjectUserId, revokedAt: null },
+      data: { revokedAt: new Date(), revokedReason: 'subject' satisfies RevokeReason },
+    });
+
+    return this.prisma.professionalLink.findFirst({ where: { id: vigente.id, subjectUserId } });
+  }
+
   /** Vínculos ativos que o titular concedeu. Base do painel de consentimento (#155). */
   async listActiveGrantedBy(subjectUserId: string): Promise<ProfessionalLink[]> {
     return this.prisma.professionalLink.findMany({

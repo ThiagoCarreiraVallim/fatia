@@ -6,7 +6,7 @@ import type { LogtoManagementService } from '../../auth/logto-management.service
 import { AccountService, DELETE_CONFIRMATION } from '../account.service';
 
 const makePrisma = () => ({
-  user: { findUnique: jest.fn(), delete: jest.fn() },
+  user: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]), delete: jest.fn() },
   userGoals: { findUnique: jest.fn().mockResolvedValue(null) },
   nutrientTarget: { findMany: jest.fn().mockResolvedValue([]) },
   goal: { findMany: jest.fn().mockResolvedValue([]) },
@@ -20,6 +20,8 @@ const makePrisma = () => ({
   waterLog: { findMany: jest.fn().mockResolvedValue([]) },
   userAchievement: { findMany: jest.fn().mockResolvedValue([]) },
   trainingBlock: { findMany: jest.fn().mockResolvedValue([]) },
+  professionalLink: { findMany: jest.fn().mockResolvedValue([]) },
+  professionalAccessLog: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const SCHEMA = resolve(__dirname, '../../../../../packages/db/prisma/schema.prisma');
@@ -47,6 +49,11 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   nutrientTargets: 'nutrientTargets',
   achievements: 'achievements',
   trainingBlocks: 'trainingBlocks',
+  // B2B (#155): o consentimento é um ato do titular e a trilha é a resposta a "quem olhou meu
+  // dado". Os dois entram no export por LGPD art. 18 V — ficaram de fora na #153 com o argumento
+  // de que seriam consultados na tela de compartilhamento, e "está na tela" não é portabilidade.
+  linksAsSubject: 'professionalLinks',
+  accessLogs: 'accessLogs',
 };
 
 /**
@@ -56,9 +63,7 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
 const FORA_DO_EXPORT: Record<string, string> = {
   ownedGroups: 'B2B (ADR 014): o grupo é do profissional, não dado pessoal de saúde do titular.',
   memberships: 'B2B: vínculo administrativo, e exportá-lo revelaria a composição do grupo.',
-  linksAsSubject: 'B2B: quem tem acesso é consultado na tela de compartilhamento, não no export.',
   linksAsProfessional: 'B2B: lista os PACIENTES do profissional — dado de terceiro.',
-  accessLogs: 'Trilha de auditoria do sistema, não conteúdo que o titular criou.',
 };
 
 /** Nomes de model do schema, para separar campo de relação de campo escalar. */
@@ -209,6 +214,45 @@ describe('AccountService', () => {
       const { select } = prisma.user.findUnique.mock.calls[0][0];
       expect(select).not.toHaveProperty('logtoSub');
       expect(select).toMatchObject({ id: true, email: true, name: true });
+    });
+
+    it('exporta consentimento e trilha do titular, com nome em vez de id do profissional', async () => {
+      prisma.user.findUnique.mockResolvedValue(USER);
+      prisma.professionalLink.findMany.mockResolvedValue([
+        { id: 'link-1', scopes: ['WORKOUT'], professional: { name: 'Personal' } },
+      ]);
+      prisma.professionalAccessLog.findMany.mockResolvedValue([
+        {
+          at: new Date('2026-03-01'),
+          action: 'probe',
+          scope: 'WORKOUT',
+          denied: true,
+          professionalId: 'pro-1',
+        },
+      ]);
+      prisma.user.findMany.mockResolvedValue([{ id: 'pro-1', name: 'Personal' }]);
+
+      const result = await service.exportData('user-A');
+
+      // As duas consultas são escopadas pelo TITULAR, não por `userId` — a
+      // coluna se chama `subjectUserId`, e um `where: { userId }` copiado das
+      // vizinhas nem compilaria, mas um `where: {}` esquecido devolveria a
+      // trilha do produto inteiro dentro do export de uma pessoa.
+      for (const model of ['professionalLink', 'professionalAccessLog'] as const) {
+        expect(prisma[model].findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { subjectUserId: 'user-A' } }),
+        );
+      }
+
+      // O `professionalId` some do payload: o export é do titular, e o id interno
+      // de outra pessoa não acrescenta nada a ele. O nome, sim — sem ele "quem
+      // olhou meu dado" fica sem resposta, que é o motivo de a trilha existir.
+      expect(result.accessLogs).toEqual([
+        expect.objectContaining({ action: 'probe', denied: true, professionalName: 'Personal' }),
+      ]);
+      expect(result.accessLogs[0]).not.toHaveProperty('professionalId');
+      expect(result.counts.professionalLinks).toBe(1);
+      expect(result.counts.accessLogs).toBe(1);
     });
 
     it('inclui contagens para o cliente resumir sem varrer o payload', async () => {

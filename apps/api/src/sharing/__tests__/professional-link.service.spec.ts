@@ -97,6 +97,48 @@ describe('ProfessionalLinkService', () => {
     });
   });
 
+  describe('revokeLiveGrant', () => {
+    it('revoga o vigente do par, escopado pelo titular, sem criar linha', async () => {
+      prisma.professionalLink.findFirst
+        .mockResolvedValueOnce({ id: 'link-1' })
+        .mockResolvedValueOnce({ id: 'link-1', revokedAt: new Date() });
+      prisma.professionalLink.updateMany.mockResolvedValue({ count: 1 });
+
+      const link = await service.revokeLiveGrant({
+        subjectUserId: SUBJECT,
+        professionalId: PRO,
+        groupId: GROUP,
+      });
+
+      expect(prisma.professionalLink.findFirst.mock.calls[0][0].where).toEqual({
+        subjectUserId: SUBJECT,
+        professionalId: PRO,
+        groupId: GROUP,
+        revokedAt: null,
+      });
+      expect(prisma.professionalLink.updateMany.mock.calls[0][0]).toMatchObject({
+        where: { id: 'link-1', subjectUserId: SUBJECT, revokedAt: null },
+        data: { revokedReason: 'subject' },
+      });
+      // Zerar as categorias é revogar: uma linha nova aqui seria a concessão de
+      // zero escopos que o painel do titular listaria para sempre.
+      expect(prisma.professionalLink.create).not.toHaveBeenCalled();
+      expect(link).toMatchObject({ id: 'link-1' });
+    });
+
+    it('sem vínculo vivo é no-op: devolve null e não escreve', async () => {
+      prisma.professionalLink.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.revokeLiveGrant({ subjectUserId: SUBJECT, professionalId: PRO, groupId: GROUP }),
+      ).resolves.toBeNull();
+
+      // Quem nunca concedeu e manda `[]` está pedindo o estado em que já está —
+      // um 404 aqui faria a UI tratar "desmarquei o último toggle" como erro.
+      expect(prisma.professionalLink.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
   describe('revokeAllForMemberOp', () => {
     it('alcança as duas pontas do vínculo dentro do grupo', async () => {
       prisma.professionalLink.updateMany.mockResolvedValue({ count: 3 });

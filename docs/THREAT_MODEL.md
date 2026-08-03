@@ -15,18 +15,20 @@ pagamento.
 
 ## Camadas de defesa
 
-| Camada                  | O que faz                                                                 | Onde                                                       |
-| ----------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| Transporte              | HTTPS obrigatório, redirect HTTP→HTTPS, Let's Encrypt via Traefik         | `infra/docker-compose.prod.yml`                            |
-| Autenticação            | JWT do Logto validado por assinatura (JWKS), `iss`, `aud`, `exp`, `sub`   | `apps/api/src/auth/jwt-validation.service.ts`              |
-| Guard global            | `JwtAuthGuard` como `APP_GUARD` — rota sem opt-out explícito exige token  | `apps/api/src/auth/auth.module.ts`                         |
-| Resolução de identidade | `sub` do JWT → `User` local; provisioning lazy no primeiro login          | `apps/api/src/auth/user-provisioning.service.ts`           |
-| Injeção de identidade   | `@CurrentUser()` nos controllers; `McpToolContext.userId` nas tools       | `apps/api/src/common/decorators/current-user.decorator.ts` |
-| Escopo de query         | Todo service filtra por `userId`; posse verificada antes de mutar         | ver matriz abaixo                                          |
-| Leitura entre contas    | `ProfessionalLink` consentido pelo titular, resolvido por um método só    | `apps/api/src/sharing/professional-access.service.ts`      |
-| Integridade referencial | `onDelete: Cascade` de `User` para tudo que é dele; índices `[userId, X]` | `packages/db/prisma/schema.prisma`                         |
-| Rate limit              | 60 req/min por usuário no `/mcp`, chaveado por `user.id`                  | `apps/api/src/mcp/mcp-throttler.guard.ts`                  |
-| SQL injection           | Prisma parametriza tudo; não há SQL cru em nenhum service                 | —                                                          |
+| Camada                  | O que faz                                                                    | Onde                                                                |
+| ----------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Transporte              | HTTPS obrigatório, redirect HTTP→HTTPS, Let's Encrypt via Traefik            | `infra/docker-compose.prod.yml`                                     |
+| Autenticação            | JWT do Logto validado por assinatura (JWKS), `iss`, `aud`, `exp`, `sub`      | `apps/api/src/auth/jwt-validation.service.ts`                       |
+| Guard global            | `JwtAuthGuard` como `APP_GUARD` — rota sem opt-out explícito exige token     | `apps/api/src/auth/auth.module.ts`                                  |
+| Resolução de identidade | `sub` do JWT → `User` local; provisioning lazy no primeiro login             | `apps/api/src/auth/user-provisioning.service.ts`                    |
+| Injeção de identidade   | `@CurrentUser()` nos controllers; `McpToolContext.userId` nas tools          | `apps/api/src/common/decorators/current-user.decorator.ts`          |
+| Escopo de query         | Todo service filtra por `userId`; posse verificada antes de mutar            | ver matriz abaixo                                                   |
+| Leitura entre contas    | `ProfessionalLink` consentido pelo titular, resolvido por um método só       | `apps/api/src/sharing/professional-access.service.ts`               |
+| Papel de grupo          | Matriz fechada por ação; guarda de rota administrativa. **Não** lê dado      | `apps/api/src/sharing/permissions.ts`, `guards/group-role.guard.ts` |
+| Trilha de acesso        | Toda leitura entre contas registrada, negativas inclusive, antes da resposta | `apps/api/src/sharing/access-audit.service.ts`                      |
+| Integridade referencial | `onDelete: Cascade` de `User` para tudo que é dele; índices `[userId, X]`    | `packages/db/prisma/schema.prisma`                                  |
+| Rate limit              | 60 req/min por usuário no `/mcp`, chaveado por `user.id`                     | `apps/api/src/mcp/mcp-throttler.guard.ts`                           |
+| SQL injection           | Prisma parametriza tudo; não há SQL cru em nenhum service                    | —                                                                   |
 
 ## Vetores e mitigação
 
@@ -72,6 +74,14 @@ usar `@Param('userId')` / `@Query('userId')` / `@Body('userId')`.
 Existe `Role.ADMIN` no schema, mas **nenhum service consulta `role`** para ampliar escopo. Não
 há bypass administrativo. Se algum dia houver, precisa de ADR — é o tipo de atalho que anula o
 isolamento inteiro.
+
+**O B2B não abriu essa porta.** `Role.ADMIN` é papel de **plataforma** e não aparece em
+`apps/api/src/sharing/permissions.ts`, que só conhece os quatro `GroupRole`. E o `GroupRole` do
+grupo governa **administração** — aprovar entrada, remover membro, ver fatura —, nunca leitura de
+dado: quem autoriza ler é o `ProfessionalLink` que o titular criou, e `assertReadable` não consulta
+`Role` nenhum. Papel de grupo acumulado também não ajuda: `@@unique([groupId, userId])` garante um
+papel por pessoa por grupo. A matriz está em [`PERMISSIONS.md`](./PERMISSIONS.md) e é confrontada
+com o código por `apps/api/src/sharing/__tests__/permission-matrix.spec.ts`.
 
 ### 5. SQL injection
 
@@ -194,28 +204,37 @@ qualquer das duas pontas — para de ler e de ser lido no mesmo instante, mesmo 
 marcado como vigente. Fosse só o lado do aluno, o personal demitido continuaria lendo o histórico
 de saúde dela até alguém preencher `revokedAt` na mão.
 
-| Vetor                                                     | Mitigação                                                                                                                            |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Profissional lê aluno com quem não tem vínculo            | `ProfessionalLink` é a única fonte de autorização. Sem linha ativa, `NOT_FOUND` idêntico ao de um estranho                           |
-| Profissional continua lendo depois de revogado            | `revokedAt: null` no `where` da porta. Revogar nunca apaga a linha — a trilha de "quem teve acesso quando" sobrevive                 |
-| Consentir treino e o profissional ler o diário alimentar  | Consentimento por escopo, conferido com `scopes: { has: scope }`. A assinatura aceita **um** escopo; `hasSome` com `[]` casaria tudo |
-| Dono de academia (ou trainer) lê por ter papel no grupo   | Papel **não** autoriza leitura. `GroupRole` governa administração; leitura vem só do vínculo. Só `PROFESSIONAL` é papel elegível     |
-| Aluno sai do grupo e continua sendo lido                  | `status: ACTIVE` da membership conferido na porta, além da revogação em massa dos vínculos do grupo                                  |
-| Personal **demitido** continua lendo o aluno              | A porta exige membership `ACTIVE` com papel `PROFESSIONAL` **dos dois lados**, no grupo da linha. Não depende de `revokedAt` chegar  |
-| Identidade do aluno passada por input (`student_id`)      | A porta recebe `membershipId`, nunca `userId`. `tool-user-scoping.spec.ts` recusa `student_id`, `subject_id`, `on_behalf_of` e cia.  |
-| `membershipId` de outro contexto usado com vínculo válido | Titular e grupo saem da **linha de membership lida**, e o vínculo é procurado pelo trio. Id de input nunca autoriza sozinho (#204)   |
+| Vetor                                                         | Mitigação                                                                                                                                                                                  |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Profissional lê aluno com quem não tem vínculo                | `ProfessionalLink` é a única fonte de autorização. Sem linha ativa, `NOT_FOUND` idêntico ao de um estranho                                                                                 |
+| Profissional continua lendo depois de revogado                | `revokedAt: null` no `where` da porta. Revogar nunca apaga a linha — a trilha de "quem teve acesso quando" sobrevive                                                                       |
+| Consentir treino e o profissional ler o diário alimentar      | Consentimento por escopo, conferido com `scopes: { has: scope }`. A assinatura aceita **um** escopo; `hasSome` com `[]` casaria tudo                                                       |
+| Dono de academia (ou trainer) lê por ter papel no grupo       | Papel **não** autoriza leitura. `GroupRole` governa administração; leitura vem só do vínculo. Só `PROFESSIONAL` é papel elegível                                                           |
+| Aluno sai do grupo e continua sendo lido                      | `status: ACTIVE` da membership conferido na porta, além da revogação em massa dos vínculos do grupo                                                                                        |
+| Personal **demitido** continua lendo o aluno                  | A porta exige membership `ACTIVE` com papel `PROFESSIONAL` **dos dois lados**, no grupo da linha. Não depende de `revokedAt` chegar                                                        |
+| Identidade do aluno passada por input (`student_id`)          | A porta recebe `membershipId`, nunca `userId`. `tool-user-scoping.spec.ts` recusa `student_id`, `subject_id`, `on_behalf_of` e cia.                                                        |
+| `membershipId` de outro contexto usado com vínculo válido     | Titular e grupo saem da **linha de membership lida**, e o vínculo é procurado pelo trio. Id de input nunca autoriza sozinho (#204)                                                         |
+| Leitura acontece e a trilha não registra                      | `record` é **aguardado** antes de a resposta sair, e falha de escrita **derruba a leitura** (`503`). Ler sem registro é o pior resultado, e é o que a versão anterior permitia em silêncio |
+| Titular não sabe quem o vê, nem consegue cortar               | `list_data_sharing`, `grant_data_sharing`, `revoke_data_sharing` e `list_data_access_log` (#155). O consentimento é operável pelo próprio titular, categoria por categoria                 |
+| Alguém consente pelo aluno (dono da academia, o profissional) | `subjectUserId` sai sempre do contexto autenticado. `professionalLink.create` existe em **um** arquivo, verificado por teste estrutural                                                    |
 
 **Não mitigado:** um profissional com vínculo ativo e escopo consentido vê o dado — é o
 propósito. O controle é do titular (revogar), e a trilha em `ProfessionalAccessLog` responde
 depois. Não há detecção de uso anômalo dentro do que foi consentido.
 
+**A revogação vale a partir da requisição seguinte.** A checagem acontece no início da
+requisição, então revogar no meio de uma leitura em voo não cancela aquela resposta. A janela é de
+**uma** requisição, e é isso que `/privacy` promete — em vez de "instantâneo", que seria mentira.
+
 ## Matriz de cobertura
 
 Onde o escopo é aplicado, por domínio. Verificado por
-`apps/api/src/common/__tests__/user-isolation.spec.ts` (62 casos contra Postgres real: semeia
-como user-A, tenta ler/editar/apagar como user-B). Desde a #153 o user-B é também **dono da
-academia** em que o user-A é aluno — todos os casos de recusa passam a valer com ele nessa
-posição, sem uma linha a mais.
+`apps/api/src/common/__tests__/user-isolation.spec.ts`, contra Postgres real: o núcleo semeia
+como user-A e tenta ler/editar/apagar como user-B, e o resto cobre grupo, consentimento e papel.
+Desde a #153 o user-B é também **dono da academia** em que o user-A é aluno — todos os casos de
+recusa passam a valer com ele nessa posição, sem uma linha a mais. Desde a #156 a academia tem
+também um `CREATOR` e um segundo aluno, para que "papel não lê" seja verificado com o papel de
+fato criado no banco.
 
 **Atenção ao caso que faltava.** Até a correção do `reorderExercises`, todos os casos de escrita
 mandavam o recurso do user-A **na URL**, e o `assertOwner` barrava. Nenhum cobria a forma em que o
@@ -250,8 +269,10 @@ dono do pai não autoriza escrever em qualquer filho.
 - **Sem revogação de sessão do lado do Fatia** (ver vetor 1).
 - **Auditoria de acesso só no caminho profissional.** `ProfessionalAccessLog` registra toda
   tentativa de leitura entre contas — inclusive as **negadas**, que são o registro que denuncia
-  profissional malicioso. Leitura do usuário sobre o próprio dado continua sem trilha, e não há
-  intenção de criar uma: seriam milhões de linhas para responder "eu li o meu".
+  profissional malicioso. Desde a #155 o titular lê a própria trilha (`list_data_access_log`,
+  `GET /sharing/access-log`) e ela sai no export da LGPD. Leitura do usuário sobre o próprio dado
+  continua sem trilha, e não há intenção de criar uma: seriam milhões de linhas para responder "eu
+  li o meu".
 - **Sondar `membershipId` inexistente é a única batida invisível na porta profissional.** Quando a
   linha de `GroupMembership` não existe, `assertReadable` recusa **antes** de gravar, e de
   propósito: `ProfessionalAccessLog.subjectUserId` é FK não-nula, então registrar exigiria inventar
@@ -266,8 +287,12 @@ dono do pai não autoriza escrever em qualquer filho.
 
 ## Como manter
 
-Três testes sustentam este doc. Quebrar qualquer um deles é sinal de regressão de isolamento:
+Estes testes sustentam este doc. Quebrar qualquer um deles é sinal de regressão de isolamento:
 
 1. `apps/api/src/common/__tests__/user-isolation.spec.ts` — comportamento, contra Postgres real.
 2. `apps/api/src/mcp/__tests__/tool-user-scoping.spec.ts` — estrutura, sem banco.
-3. Os specs por service, que provam que o `where` é montado com `userId`.
+3. `apps/api/src/mcp/__tests__/tool-delegation.spec.ts` — classifica toda tool como `self`,
+   `delegated` ou `consent`, e reprova a que ler dado de outra pessoa fora da allowlist.
+4. `apps/api/src/sharing/__tests__/permission-matrix.spec.ts` — `PERMISSIONS.md` × `permissions.ts`,
+   nos dois sentidos.
+5. Os specs por service, que provam que o `where` é montado com `userId`.

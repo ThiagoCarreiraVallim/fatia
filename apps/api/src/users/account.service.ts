@@ -54,6 +54,8 @@ export class AccountService {
       waterLogs,
       achievements,
       trainingBlocks,
+      professionalLinks,
+      accessLogs,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
       this.prisma.nutrientTarget.findMany({ where: { userId }, orderBy: { label: 'asc' } }),
@@ -99,7 +101,53 @@ export class AccountService {
         include: { weeks: { orderBy: { weekNumber: 'asc' } } },
         orderBy: { createdAt: 'asc' },
       }),
+      // B2B (#155): consentimento que o titular concedeu, e a trilha de quem leu
+      // o dado dele. Os dois são dado do titular — o primeiro é um ato dele, o
+      // segundo é o que responde "quem olhou meu dado" —, e a LGPD art. 18 V
+      // cobra os dois no export. Ficaram de fora na #153 com o argumento de que
+      // seriam consultados na tela de compartilhamento; a tela existe agora, e
+      // "está na tela" nunca foi resposta para portabilidade.
+      //
+      // O que NÃO entra: `linksAsProfessional`. Ali o titular é o profissional,
+      // e a lista é de PACIENTES dele — dado de terceiro, e exportá-lo entregaria
+      // a composição da clientela a quem pedisse o próprio arquivo.
+      this.prisma.professionalLink.findMany({
+        where: { subjectUserId: userId },
+        select: {
+          id: true,
+          groupId: true,
+          group: { select: { name: true } },
+          // Nome, e não o `userId` do profissional: o export é do titular, e um
+          // identificador interno de outra pessoa não acrescenta nada a ele.
+          professional: { select: { name: true } },
+          scopes: true,
+          grantedAt: true,
+          revokedAt: true,
+          revokedReason: true,
+        },
+        orderBy: { grantedAt: 'asc' },
+      }),
+      this.prisma.professionalAccessLog.findMany({
+        where: { subjectUserId: userId },
+        select: { at: true, action: true, scope: true, denied: true, professionalId: true },
+        orderBy: { at: 'asc' },
+      }),
     ]);
+
+    // `ProfessionalAccessLog.professionalId` é string pura, sem FK — é o que faz
+    // a trilha do titular sobreviver ao profissional apagar a conta. O preço é
+    // resolver o nome à parte e aceitar que ele pode não existir mais.
+    const idsDeProfissional = [...new Set(accessLogs.map((l) => l.professionalId))];
+    const nomesDeProfissional = new Map(
+      idsDeProfissional.length === 0
+        ? []
+        : (
+            await this.prisma.user.findMany({
+              where: { id: { in: idsDeProfissional } },
+              select: { id: true, name: true },
+            })
+          ).map((u) => [u.id, u.name] as const),
+    );
 
     return {
       // `exportedAt` é gerado no servidor de propósito: o cliente não deve poder
@@ -120,8 +168,15 @@ export class AccountService {
       waterLogs,
       achievements,
       trainingBlocks,
+      professionalLinks,
+      accessLogs: accessLogs.map(({ professionalId, ...linha }) => ({
+        ...linha,
+        professionalName: nomesDeProfissional.get(professionalId) ?? null,
+      })),
       counts: {
         achievements: achievements.length,
+        professionalLinks: professionalLinks.length,
+        accessLogs: accessLogs.length,
         meals: meals.length,
         customFoods: customFoods.length,
         customExercises: customExercises.length,

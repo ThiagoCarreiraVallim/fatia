@@ -33,12 +33,16 @@ opções abaixo foram avaliadas com isso em mente.
 
 O que pesa no contexto não é a contagem de tools, é o payload. Medido no que o registry
 serve de fato — `name`, `title`, `description`, `annotations` e o JSON Schema do input das
-97 tools: **72,9 k caracteres**, enviados em toda sessão que lista as tools.
+101 tools: **72,9 k caracteres**, enviados em toda sessão que lista as tools.
 O denominador importa. Contar só `name + description + inputSchema` dá 60,8 k e subestima o
 catálogo em ~20% — `title` e `annotations` também vão no fio, em toda tool.
 
-Dentro desse total, os exemplos de invocação que a #111 acrescentou às 50 tools de escrita
-valem **4.336 caracteres** — média de **87** caracteres por tool, algo em torno de 6% do
+101 tools: **76,4 k caracteres**, enviados em toda sessão que lista as tools.
+O denominador importa. Contar só `name + description + inputSchema` dá 63,7 k e subestima o
+catálogo em ~20% — `title` e `annotations` também vão no fio, em toda tool.
+
+Dentro desse total, os exemplos de invocação que a #111 acrescentou às 52 tools de escrita
+valem **4.499 caracteres** — média de **87** caracteres por tool, algo em torno de 6% do
 catálogo. Os dois números são medidos no código pelo `tool-catalog.spec.ts`, junto com a
 contagem: a versão anterior desta frase dizia "4.110 caracteres, média de 91" — estagnada na
 medição da #111, feita quando o catálogo tinha 45 delas, e ainda por cima incoerente, porque
@@ -54,7 +58,8 @@ e não em campo separado — estão na §Convenções de [`docs/MCP.md`](./MCP.m
 Além da contagem, cada tool declara `hostedInference` — se a execução dispara inferência **paga
 pela Fatia**. É recorte de custo, não de tamanho, e por isso mora aqui junto do resto.
 
-Hoje são **97** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
+Hoje são **101** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
+Hoje são **101** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
 **0** tools com inferência hospedada.
 
 O segundo número é o ponto inteiro. Chamada vinda do cliente MCP do usuário roda no
@@ -71,10 +76,11 @@ O campo é interno e não vai no fio, então o tamanho do catálogo servido, med
 
 ## Decisões
 
-### Fica fora do MCP — administração de grupo (#154)
+### Fica fora do MCP — administração de grupo (#154, #155)
 
-O domínio Sharing entra com **3 tools**, todas do lado do aluno: `list_my_groups`,
-`join_group` e `leave_group`. Criar grupo, aprovar entrada e remover membro ficam só em REST.
+O domínio Sharing entra com **7 tools**, todas do lado do aluno: `list_my_groups`,
+`join_group`, `leave_group`, `list_data_sharing`, `grant_data_sharing`, `revoke_data_sharing` e
+`list_data_access_log`. Criar grupo, aprovar entrada e remover membro ficam só em REST.
 
 A ADR 006 diz que tudo que o PWA faz o Claude faz, e a exceção é deliberada: o "PWA" em
 questão é o painel do dono da academia, superfície B2B que não é o app do usuário. Manter
@@ -82,6 +88,14 @@ essas três operações fora do catálogo é o que garante que **nenhuma tool MC
 grupo ou colocar alguém dentro de um** — a superfície conversacional só opera sobre a própria
 associação de quem fala. Se o painel do dono virar produto, a decisão se reabre com o
 requisito na mão, e não por simetria.
+
+O corte é entre **administrar o grupo** e **decidir sobre o próprio dado**, e as quatro tools de
+consentimento da #155 caem do segundo lado — por isso entram, e entram justamente aqui: "Claude,
+o que a academia consegue ver de mim?" e "quem olhou meu dado?" são as perguntas que a conversa
+responde melhor que uma tela. Nenhuma delas lê dado de terceiro: `grant_data_sharing` aponta o
+destinatário pela **associação dele no grupo**, e quem amarra essa associação ao grupo do titular
+é o `ConsentService`. `tool-delegation.spec.ts` classifica toda tool do catálogo nesse eixo e
+reprova a que aceitar a associação de outra pessoa por fora dessa porta.
 
 ### Fica como está — CRUD por entidade
 
