@@ -32,6 +32,20 @@ class AIProviderTimeout(AIProviderError):
     code = "AI_PROVIDER_TIMEOUT"
 
 
+class AIProviderUnreachable(AIProviderError):
+    """A chamada não chegou a virar resposta: conexão recusada, DNS, TLS, ou o
+    servidor fechando a conexão no meio da resposta.
+
+    Não é timeout (o provedor não demorou, ele não atendeu) e não é recusa (não
+    há status para reportar). Sem código próprio, esse caso escapava como
+    exceção crua do `httpx` — o único caminho do serviço que não carregava um
+    `code`, quebrando o envelope `{"error": {"code", "message"}}` que o NestJS
+    traduz.
+    """
+
+    code = "AI_PROVIDER_UNREACHABLE"
+
+
 class AIProviderRefused(AIProviderError):
     """O provedor respondeu com status de erro (401, 429, 5xx...)."""
 

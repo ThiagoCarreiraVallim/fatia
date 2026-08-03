@@ -87,12 +87,21 @@ Todo erro carrega um `code` estável — é ele que atravessa o HTTP, não a men
 | ---------------------------- | -------------------------------------------------- | ---- |
 | `AI_PROVIDER_NOT_CONFIGURED` | Falta `AI_BASE_URL`, `AI_API_KEY` ou `AI_MODEL_*`. | 503  |
 | `AI_PROVIDER_TIMEOUT`        | O provedor não respondeu em `AI_TIMEOUT_S`.        | 504  |
+| `AI_PROVIDER_UNREACHABLE`    | Conexão recusada, DNS, TLS, conexão fechada.       | 502  |
 | `AI_PROVIDER_REFUSED`        | O provedor respondeu 401/403/429/5xx.              | 502  |
 | `AI_RESPONSE_UNPARSEABLE`    | Veio 200, mas o corpo não tem a forma esperada.    | 502  |
 | `AI_RESPONSE_TRUNCATED`      | O modelo parou por limite de tokens.               | 502  |
 
 `AI_RESPONSE_TRUNCATED` é separado de propósito: saída truncada é indistinguível de saída completa
 para quem só lê a string, e devolvê-la como sucesso é o tipo de falha que só aparece muito depois.
+
+`AI_PROVIDER_UNREACHABLE` também é separado de `AI_PROVIDER_TIMEOUT`: no timeout o provedor está no
+ar e demorou; aqui a chamada nem virou resposta (LM Studio desligado, DNS errado, gateway fechando a
+conexão no meio). São diagnósticos diferentes, e sem código próprio a exceção do `httpx` escapava
+crua — o único caminho sem `code`, que viraria 500 sem envelope na rota de #139.
+
+`/capabilities` devolve **só o host** do provedor (`provider_host`), não a `AI_BASE_URL` inteira: a
+rota é anônima e o path de um gateway carrega id de conta e nome do gateway.
 
 ## Estrutura
 

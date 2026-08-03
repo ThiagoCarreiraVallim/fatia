@@ -14,9 +14,11 @@ from typing import Any
 import httpx
 
 from .errors import (
+    AIProviderError,
     AIProviderNotConfigured,
     AIProviderRefused,
     AIProviderTimeout,
+    AIProviderUnreachable,
     AIResponseTruncated,
     AIResponseUnparseable,
 )
@@ -106,18 +108,31 @@ class OpenAICompatProvider:
             )
         # A ordem do array não é contratual; `index` é. Reordenar aqui evita
         # parear vetor com o texto errado sem nenhum sintoma.
-        vectors: list[list[float]] = [[] for _ in texts]
+        by_index: dict[int, list[float]] = {}
         for item in data:
             if not isinstance(item, dict):
                 raise AIResponseUnparseable("Item de '/embeddings' não é objeto.")
-            index = item.get("index", 0)
+            index = item.get("index")
             embedding = item.get("embedding")
-            if not isinstance(index, int) or not 0 <= index < len(texts):
+            # Sem default: `index` ausente já significou "posição 0", e três
+            # itens sem o campo devolviam `[[...], [], []]` — vetor vazio e
+            # pareamento errado, em silêncio, que é exatamente o que a
+            # reordenação existe para evitar. `bool` é `int` em Python, então
+            # `{"index": true}` passaria como posição 1.
+            if isinstance(index, bool) or not isinstance(index, int):
+                raise AIResponseUnparseable(
+                    f"'index' ausente ou não é inteiro em '/embeddings': {index!r}."
+                )
+            if not 0 <= index < len(texts):
                 raise AIResponseUnparseable(f"'index' fora da faixa em '/embeddings': {index!r}.")
+            if index in by_index:
+                raise AIResponseUnparseable(f"'/embeddings' repetiu o 'index' {index}.")
             if not isinstance(embedding, list):
                 raise AIResponseUnparseable("'embedding' ausente ou não é lista.")
-            vectors[index] = [float(value) for value in embedding]
-        return vectors
+            by_index[index] = _floats(embedding)
+        # `len(data) == len(texts)` (checado acima) + índices únicos dentro da
+        # faixa ⇒ toda posição foi preenchida. Nenhuma chave pode faltar aqui.
+        return [by_index[position] for position in range(len(texts))]
 
     async def list_models(self) -> list[str]:
         """Usado pelo teste de fumaça e pelo diagnóstico — não é capacidade."""
@@ -160,13 +175,23 @@ class OpenAICompatProvider:
     async def _request(
         self, method: str, path: str, json: dict[str, object] | None = None
     ) -> httpx.Response:
-        timeout_message = ""
+        pending: AIProviderError | None = None
         for attempt in range(self._max_retries + 1):
             try:
                 response = await self._client.request(method, path, json=json)
             except httpx.TimeoutException as exc:
-                timeout_message = (
+                pending = AIProviderTimeout(
                     f"O provedor não respondeu {method} {path} dentro de AI_TIMEOUT_S ({exc})."
+                )
+            # `TimeoutException` é só um ramo de `RequestError`: `ConnectError`,
+            # `ReadError` e `RemoteProtocolError` **não** herdam dele. Sem este
+            # ramo elas atravessavam o provedor cruas, sem `code` — provedor
+            # fora do ar virava 500 sem envelope em vez de erro nomeado. Vem
+            # depois do timeout de propósito: o ramo mais específico primeiro.
+            except httpx.RequestError as exc:
+                pending = AIProviderUnreachable(
+                    f"Falha de transporte em {method} {path}: {type(exc).__name__} ({exc}). "
+                    "Verifique AI_BASE_URL e se o provedor está no ar."
                 )
             else:
                 if response.status_code < 400:
@@ -179,13 +204,16 @@ class OpenAICompatProvider:
                     status_code=response.status_code,
                 )
 
+            # Falha de transporte é transiente por natureza (conexão recusada
+            # enquanto o provedor reinicia, gateway fechando no meio): repete
+            # com o mesmo backoff do timeout.
             if attempt >= self._max_retries:
-                raise AIProviderTimeout(timeout_message)
+                raise pending
             await self._backoff(attempt)
 
         # `range` sempre entra no corpo (max_retries >= 0), então este ponto é
         # inalcançável; fica para o type checker.
-        raise AIProviderTimeout(timeout_message)
+        raise AIProviderUnreachable(f"Nenhuma tentativa de {method} {path} foi executada.")
 
     async def _backoff(self, attempt: int) -> None:
         if self._retry_backoff_s > 0:
@@ -200,6 +228,18 @@ def _require_model(model: str, env_var: str, capability: str) -> str:
             "capacidades diferentes para modelos diferentes."
         )
     return model
+
+
+def _floats(embedding: list[Any]) -> list[float]:
+    """Converte o vetor, virando erro nomeado se algum elemento não for número.
+
+    `float("abc")` levanta `ValueError` e `float(None)` levanta `TypeError` —
+    nenhum dos dois carrega `code`, e é o mesmo buraco do transporte cru.
+    """
+    try:
+        return [float(value) for value in embedding]
+    except (TypeError, ValueError) as exc:
+        raise AIResponseUnparseable(f"'embedding' tem elemento não numérico: {exc}.") from exc
 
 
 def _json_body(response: httpx.Response) -> dict[str, Any]:

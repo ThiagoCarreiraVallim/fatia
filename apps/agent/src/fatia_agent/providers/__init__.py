@@ -14,6 +14,7 @@ from .errors import (
     AIProviderNotConfigured,
     AIProviderRefused,
     AIProviderTimeout,
+    AIProviderUnreachable,
     AIResponseTruncated,
     AIResponseUnparseable,
 )
@@ -24,6 +25,7 @@ __all__ = [
     "AIProviderNotConfigured",
     "AIProviderRefused",
     "AIProviderTimeout",
+    "AIProviderUnreachable",
     "AIResponseTruncated",
     "AIResponseUnparseable",
     "EmbeddingCapability",

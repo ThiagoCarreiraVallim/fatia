@@ -70,6 +70,30 @@ def test_capacidade_sem_modelo_aparece_como_ausente(settings_factory):
     assert corpo["capabilities"]["text"] == "ornith-1.0-9b"
 
 
+def test_capabilities_nao_ecoa_o_caminho_da_base_url(settings_factory):
+    """A rota é anônima e o compose publica a porta em `0.0.0.0`.
+
+    O path de um gateway carrega id de conta e nome do gateway; devolver a
+    `AI_BASE_URL` inteira entregava os dois a um `curl` sem credencial.
+    """
+    client = TestClient(
+        create_app(
+            settings_factory(
+                ai_base_url="https://gateway.ai.cloudflare.com/v1/f7a3c0de-conta/fatia-gw/openai",
+                ai_api_key="cf-token",
+            )
+        )
+    )
+
+    corpo = client.get("/capabilities").json()
+
+    assert corpo["provider_host"] == "gateway.ai.cloudflare.com"
+    # Nem a conta nem o nome do gateway aparecem em lugar nenhum da resposta.
+    bruto = client.get("/capabilities").text
+    assert "f7a3c0de-conta" not in bruto
+    assert "fatia-gw" not in bruto
+
+
 def test_nenhuma_rota_de_inferencia_esta_exposta(settings_factory):
     """Guarda de escopo, e de custo.
 

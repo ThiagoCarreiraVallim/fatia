@@ -53,6 +53,18 @@ def is_local_endpoint(base_url: str) -> bool:
     return host in LOCAL_HOSTS
 
 
+def endpoint_host(base_url: str) -> str:
+    """Só o host do endpoint — diagnóstico sem entregar o caminho.
+
+    `/capabilities` é anônima e o compose publica a porta em `0.0.0.0`. Uma
+    `AI_BASE_URL` de gateway carrega id de conta e nome do gateway no *path*
+    (`.../v1/<conta>/<gateway>/openai`), e devolvê-la inteira entrega isso a
+    quem der um `curl` sem credencial. O host responde "para qual provedor eu
+    aponto", que é a pergunta que a rota existe para responder.
+    """
+    return urlparse(base_url).hostname or ""
+
+
 def ai_unavailable_reason(settings: AgentSettings) -> str | None:
     """Mensagem acionável quando a inferência não pode acontecer; `None` quando pode.
 

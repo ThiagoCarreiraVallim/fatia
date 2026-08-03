@@ -18,7 +18,7 @@ from .providers.errors import (
     AIProviderRefused,
     AIProviderTimeout,
 )
-from .settings import AgentSettings, ai_unavailable_reason
+from .settings import AgentSettings, ai_unavailable_reason, endpoint_host
 
 # 503: falta configuração nossa. 504: o provedor demorou. 502: o provedor
 # respondeu, mas mal. Todos são "tente de novo ou registre manualmente".
@@ -68,7 +68,9 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
         """
         build_provider(resolved)
         return {
-            "base_url": resolved.ai_base_url,
+            # Só o host: a rota é anônima e o path de um gateway carrega id de
+            # conta e nome do gateway. Ver `settings.endpoint_host`.
+            "provider_host": endpoint_host(resolved.ai_base_url),
             "capabilities": {
                 "text": resolved.ai_model_text or None,
                 "vision": resolved.ai_model_vision or None,

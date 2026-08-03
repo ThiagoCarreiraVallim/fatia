@@ -26,9 +26,18 @@ def test_sem_base_url_levanta_erro_nomeado_e_acionavel(settings_factory):
 
 
 def test_base_url_so_com_espaco_conta_como_ausente(settings_factory):
-    """`AI_BASE_URL=` no `.env` com um espaço sobrando é o caso real de campo."""
-    with pytest.raises(AIProviderNotConfigured):
+    """`AI_BASE_URL=` no `.env` com um espaço sobrando é o caso real de campo.
+
+    Asserir só o tipo da exceção não distingue certo de errado aqui: a fixture
+    já vem com `ai_api_key=""`, então sem o `.strip()` o erro viria do *outro*
+    ramo (o da chave) e o teste passaria igual. É o nome da variável na
+    mensagem que prova por onde passou.
+    """
+    with pytest.raises(AIProviderNotConfigured) as excinfo:
         build_provider(settings_factory(ai_base_url="   "))
+
+    assert "AI_BASE_URL" in excinfo.value.message
+    assert "AI_API_KEY" not in excinfo.value.message
 
 
 def test_endpoint_local_dispensa_api_key(settings_factory):
