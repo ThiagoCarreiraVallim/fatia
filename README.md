@@ -135,6 +135,7 @@ Contribuição gerada por IA é aceita nas mesmas condições de qualquer outra:
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)   | Arquitetura técnica, stack, decisões                                               |
 | [`docs/DESIGN.md`](docs/DESIGN.md)               | UX, telas do PWA, fluxos                                                           |
 | [`apps/mobile/README.md`](apps/mobile/README.md) | Rodar o app nativo localmente, configuração, troubleshooting                       |
+| [`apps/agent/README.md`](apps/agent/README.md)   | Agente de IA em Python: rodar, lint, teste, configuração de provedor               |
 | [`docs/MOBILE_PARITY.md`](docs/MOBILE_PARITY.md) | Paridade entre o app nativo e o PWA, rota a rota e componente a componente         |
 | [`docs/MCP.md`](docs/MCP.md)                     | Especificação das tools MCP expostas                                               |
 | [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md)   | Modelo de ameaças e decisões de isolamento                                         |
@@ -150,7 +151,8 @@ fatia/
 │   ├── api/           # NestJS (REST + MCP)
 │   ├── web/           # Next.js PWA
 │   ├── mobile/        # React Native (Expo) — réplica nativa do PWA
-│   └── site/          # Astro — landing e documentação pública
+│   ├── site/          # Astro — landing e documentação pública
+│   └── agent/         # Python — agente de IA (ADR 015), fora do workspace pnpm
 ├── packages/
 │   ├── api-client/    # cliente de API compartilhado entre web e mobile
 │   └── db/            # Prisma schema + client compartilhado
@@ -167,6 +169,7 @@ fatia/
 - **Frontend:** Next.js 15, React 19, Tailwind, shadcn/ui, Recharts
 - **Mobile:** Expo SDK 57, Expo Router, NativeWind, react-native-svg
 - **Site:** Astro
+- **Agente de IA:** Python (FastAPI + `uv`), cliente OpenAI-compatível — LM Studio em dev, Cloudflare AI Gateway em produção
 - **Infra:** Docker Compose atrás do Traefik (Dokploy), no servidor próprio
 - **MCP:** `@modelcontextprotocol/sdk` exposto via HTTP no NestJS
 

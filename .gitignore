@@ -56,6 +56,14 @@ apps/mobile/expo-env.d.ts
 apps/mobile/ios/
 apps/mobile/android/
 
+# Python (apps/agent, ADR 015)
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
 # Coverage
 coverage/
 

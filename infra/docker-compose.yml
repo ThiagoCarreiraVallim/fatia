@@ -94,6 +94,30 @@ services:
       - "${WEB_PORT:-3030}:3030"
     profiles: ["full"]
 
+  # Agente de IA (ADR 015). Perfil próprio, e não `full`: ainda não há consumidor,
+  # e um `infra:up:full` não deve passar a subir um serviço a mais sem pedir.
+  #   docker compose --env-file .env -f infra/docker-compose.yml --profile agent up -d agent
+  agent:
+    build:
+      context: ..
+      dockerfile: infra/agent.Dockerfile
+    container_name: fatia-agent
+    restart: unless-stopped
+    environment:
+      # De dentro do container, o LM Studio do host é `host.docker.internal`.
+      # Vazio = o serviço sobe e degrada explicitamente; ver apps/agent/README.md.
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL_TEXT: ${AI_MODEL_TEXT:-}
+      AI_MODEL_VISION: ${AI_MODEL_VISION:-}
+      AI_MODEL_EMBEDDING: ${AI_MODEL_EMBEDDING:-}
+      AI_TIMEOUT_S: ${AI_TIMEOUT_S:-120}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${AGENT_PORT:-8100}:8100"
+    profiles: ["agent"]
+
 volumes:
   fatia_pg_data:
     name: fatia_pg_data

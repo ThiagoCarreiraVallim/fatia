@@ -31,6 +31,7 @@ export default tseslint.config(
       '**/build/**',
       '**/coverage/**',
       'apps/site/**', // tem config própria: apps/site/eslint.config.js
+      'apps/agent/**', // Python (ADR 015): lint é `ruff`, não ESLint
       'apps/mobile/android/**',
       'apps/mobile/ios/**',
     ],

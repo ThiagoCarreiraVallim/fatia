@@ -1,3 +1,7 @@
 packages:
   - "apps/*"
+  # `apps/agent` é Python (ADR 015), com toolchain própria (uv). Sem esta
+  # exclusão o pnpm tenta tratá-lo como pacote Node e o `--frozen-lockfile` do
+  # CI quebra com uma mensagem que não menciona Python nenhuma vez.
+  - "!apps/agent"
   - "packages/*"
