@@ -17,6 +17,7 @@ import { CancelSessionModal } from '@/components/workout/cancel-session-modal';
 import { ActiveExerciseCard } from '@/components/workout/active-exercise-card';
 import { ActiveCardioCard } from '@/components/workout/active-cardio-card';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
+import { BlockTimeline } from '@/components/workout/block-timeline';
 import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel';
 
 function ActiveSession({ session }: { session: WorkoutSession }) {
@@ -172,6 +173,15 @@ function NoSession() {
           <History size={16} />
         </Link>
       </header>
+
+      <section>
+        <p className="text-[11px] font-extrabold tracking-wide text-muted-foreground">
+          PERIODIZAÇÃO
+        </p>
+        <div className="mt-2">
+          <BlockTimeline />
+        </div>
+      </section>
 
       <section>
         <p className="text-[11px] font-extrabold tracking-wide text-muted-foreground">

@@ -6,6 +6,7 @@ import type { WeightLogService } from '../weight-log.service';
 import type { WaterLogService } from '../water-log.service';
 import type { StreakService, StreakSummary } from '../streak.service';
 import type { AchievementService } from '../achievement.service';
+import type { TrainingBlockService } from '../../workout/training-block.service';
 
 /**
  * Este spec vive num arquivo separado do `dashboard.service.spec.ts` por um motivo que é o
@@ -52,6 +53,7 @@ describe('DashboardService — fronteiras de dia e semana', () => {
     };
     const streaks = { compute: jest.fn().mockResolvedValue(resumo) };
     const achievements = { evaluate: jest.fn().mockResolvedValue([]) };
+    const trainingBlocks = { getActive: jest.fn().mockResolvedValue(null) };
 
     const service = new DashboardService(
       prisma as unknown as PrismaService,
@@ -60,6 +62,7 @@ describe('DashboardService — fronteiras de dia e semana', () => {
       waterLogs as unknown as WaterLogService,
       streaks as unknown as StreakService,
       achievements as unknown as AchievementService,
+      trainingBlocks as unknown as TrainingBlockService,
     );
 
     return { service, prisma };

@@ -96,11 +96,12 @@ esconde a diferença é exatamente o que este documento existe para impedir.
 | —                       | `nutrition/scanned-product-drawer` | ➕  | produto do Open Food Facts + atribuição ODbL na própria tela (ADR 017)              |
 | —                       | `nutrition/barcode`                | ➕  | lógica pura do scanner: trava de leitura repetida, porção, ficha incompleta         |
 
-### Treino — 13 de 13
+### Treino — 14 de 14
 
 | PWA                      | App nativo                              |     | Observação                                                                   |
 | ------------------------ | --------------------------------------- | :-: | ---------------------------------------------------------------------------- |
 | `add-exercise-drawer`    | `workout/add-exercise-drawer`           | ✅  |                                                                              |
+| `block-timeline`         | `workout/block-timeline`                | ✅  | bloco de periodização (#145); a frase explicativa vem pronta da API          |
 | `exercise-detail-card`   | `workout/exercise-detail-card`          | ✅  | aceita `renderSet` para receber a linha editável da sessão                   |
 | `exercise-detail-drawer` | `workout/exercise-detail-drawer`        | ✅  |                                                                              |
 | `exercise-edit-drawer`   | `workout/exercise-edit-drawer`          | ✅  |                                                                              |

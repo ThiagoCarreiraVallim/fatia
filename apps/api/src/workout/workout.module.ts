@@ -4,15 +4,18 @@ import { WorkoutPlanService } from './workout-plan.service';
 import { WorkoutSessionService } from './workout-session.service';
 import { SessionSetService } from './session-set.service';
 import { PrescriptionService } from './prescription.service';
+import { TrainingBlockService } from './training-block.service';
 import { WorkoutController } from './workout.controller';
 import { AddExerciseToPlanTool } from './mcp/add-exercise-to-plan.tool';
 import { ExplainFormTool } from './mcp/explain-form.tool';
 import { GetExerciseDetailsTool } from './mcp/get-exercise-details.tool';
 import { CloneExerciseTool } from './mcp/clone-exercise.tool';
 import { CreateCustomExerciseTool } from './mcp/create-custom-exercise.tool';
+import { CreateTrainingBlockTool } from './mcp/create-training-block.tool';
 import { CreateWorkoutPlanTool } from './mcp/create-workout-plan.tool';
 import { DeleteCustomExerciseTool } from './mcp/delete-custom-exercise.tool';
 import { DeleteSetTool } from './mcp/delete-set.tool';
+import { DeleteTrainingBlockTool } from './mcp/delete-training-block.tool';
 import { DeleteWorkoutPlanTool } from './mcp/delete-workout-plan.tool';
 import { DeleteWorkoutSessionTool } from './mcp/delete-workout-session.tool';
 import { FinishWorkoutSessionTool } from './mcp/finish-workout-session.tool';
@@ -20,6 +23,7 @@ import { GetActiveWorkoutSessionTool } from './mcp/get-active-workout-session.to
 import { GetLastSetForExerciseTool } from './mcp/get-last-set-for-exercise.tool';
 import { GetLoadPrescriptionTool } from './mcp/get-load-prescription.tool';
 import { GetPersonalRecordTool } from './mcp/get-personal-record.tool';
+import { GetTrainingBlockTool } from './mcp/get-training-block.tool';
 import { GetWorkoutPlanTool } from './mcp/get-workout-plan.tool';
 import { GetWorkoutSessionTool } from './mcp/get-workout-session.tool';
 import { ListExercisesByMuscleTool } from './mcp/list-exercises-by-muscle.tool';
@@ -45,6 +49,7 @@ import { UpdateWorkoutSessionTool } from './mcp/update-workout-session.tool';
     WorkoutSessionService,
     SessionSetService,
     PrescriptionService,
+    TrainingBlockService,
 
     // MCP tools
     AddExerciseToPlanTool,
@@ -52,9 +57,11 @@ import { UpdateWorkoutSessionTool } from './mcp/update-workout-session.tool';
     GetExerciseDetailsTool,
     CloneExerciseTool,
     CreateCustomExerciseTool,
+    CreateTrainingBlockTool,
     CreateWorkoutPlanTool,
     DeleteCustomExerciseTool,
     DeleteSetTool,
+    DeleteTrainingBlockTool,
     DeleteWorkoutPlanTool,
     DeleteWorkoutSessionTool,
     FinishWorkoutSessionTool,
@@ -62,6 +69,7 @@ import { UpdateWorkoutSessionTool } from './mcp/update-workout-session.tool';
     GetLastSetForExerciseTool,
     GetLoadPrescriptionTool,
     GetPersonalRecordTool,
+    GetTrainingBlockTool,
     GetWorkoutPlanTool,
     GetWorkoutSessionTool,
     ListExercisesByMuscleTool,
@@ -85,6 +93,7 @@ import { UpdateWorkoutSessionTool } from './mcp/update-workout-session.tool';
     WorkoutSessionService,
     SessionSetService,
     PrescriptionService,
+    TrainingBlockService,
   ],
 })
 export class WorkoutModule {}

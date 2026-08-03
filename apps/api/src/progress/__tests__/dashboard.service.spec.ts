@@ -5,6 +5,7 @@ import type { WeightLogService } from '../weight-log.service';
 import type { WaterLogService } from '../water-log.service';
 import type { StreakService, StreakSummary } from '../streak.service';
 import type { AchievementService } from '../achievement.service';
+import type { TrainingBlockService } from '../../workout/training-block.service';
 
 jest.mock('../helpers/date-tz', () => ({
   todayInTz: jest.fn(() => '2026-01-15'),
@@ -112,6 +113,7 @@ describe('DashboardService', () => {
   let waterLogs: MockWaterLogs;
   let streaks: { compute: jest.Mock };
   let achievements: { evaluate: jest.Mock; list: jest.Mock };
+  let trainingBlocks: { getActive: jest.Mock };
   let service: DashboardService;
   const ctx = { userId: 'user-A', timezone: 'UTC' };
 
@@ -127,6 +129,7 @@ describe('DashboardService', () => {
       evaluate: jest.fn().mockResolvedValue([]),
       list: jest.fn().mockResolvedValue([]),
     };
+    trainingBlocks = { getActive: jest.fn().mockResolvedValue(null) };
     service = new DashboardService(
       prisma as unknown as PrismaService,
       stepLogs as unknown as StepLogService,
@@ -134,6 +137,7 @@ describe('DashboardService', () => {
       waterLogs as unknown as WaterLogService,
       streaks as unknown as StreakService,
       achievements as unknown as AchievementService,
+      trainingBlocks as unknown as TrainingBlockService,
     );
   });
 
@@ -254,6 +258,50 @@ describe('DashboardService', () => {
       const result = await service.today(ctx);
 
       expect(result.workout.sessionInProgress).toEqual(sessionInProgress);
+    });
+
+    it('preenche plannedToday com o plano do bloco de periodização ativo', async () => {
+      // O campo era `null` fixo até a #145. Quem preenche é o bloco — e é por isso
+      // que ele passa pelo `getActive`, que já devolve `null` para bloco vencido:
+      // um card prometendo o treino de um mês atrás é pior que card nenhum.
+      prisma.meal.findMany.mockResolvedValue([]);
+      prisma.userGoals.findUnique.mockResolvedValue(null);
+      prisma.workoutSession.findFirst.mockResolvedValue(null);
+      weightLogs.getLatest.mockResolvedValue(null);
+      stepLogs.getStepsForDate.mockResolvedValue({ steps: 0, logCount: 0, sources: [] });
+      trainingBlocks.getActive.mockResolvedValue({ planId: 'plan-1', planName: 'Push' });
+
+      const result = await service.today(ctx);
+
+      expect(result.workout.plannedToday).toEqual({ planId: 'plan-1', name: 'Push' });
+      expect(trainingBlocks.getActive).toHaveBeenCalledWith(ctx);
+    });
+
+    it('mantém plannedToday nulo quando o bloco ativo periodiza treino livre', async () => {
+      // Bloco sem plano não tem nome de treino para prometer; prometer o do bloco
+      // mandaria a pessoa procurar uma tela que não existe.
+      prisma.meal.findMany.mockResolvedValue([]);
+      prisma.userGoals.findUnique.mockResolvedValue(null);
+      prisma.workoutSession.findFirst.mockResolvedValue(null);
+      weightLogs.getLatest.mockResolvedValue(null);
+      stepLogs.getStepsForDate.mockResolvedValue({ steps: 0, logCount: 0, sources: [] });
+      trainingBlocks.getActive.mockResolvedValue({ planId: null, planName: null });
+
+      const result = await service.today(ctx);
+
+      expect(result.workout.plannedToday).toBeNull();
+    });
+
+    it('mantém plannedToday nulo quando não há bloco ativo', async () => {
+      prisma.meal.findMany.mockResolvedValue([]);
+      prisma.userGoals.findUnique.mockResolvedValue(null);
+      prisma.workoutSession.findFirst.mockResolvedValue(null);
+      weightLogs.getLatest.mockResolvedValue(null);
+      stepLogs.getStepsForDate.mockResolvedValue({ steps: 0, logCount: 0, sources: [] });
+
+      const result = await service.today(ctx);
+
+      expect(result.workout.plannedToday).toBeNull();
     });
 
     it('marks weight.loggedToday=true when the latest log is within today (UTC)', async () => {

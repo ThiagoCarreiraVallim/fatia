@@ -5,6 +5,7 @@ import { ChevronRight, Dumbbell, History, ListChecks, Plus } from 'lucide-react-
 import { QUICK_TEMPLATES, workoutApi, type QuickTemplate } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { Button, Carousel, ErrorState, LoadingState } from '@/components/ui';
+import { BlockTimeline } from '@/components/workout/block-timeline';
 import { quickVisual } from '@/components/workout/quick-template-visual';
 import { pluralize } from '@/components/workout/workout-stats';
 
@@ -149,6 +150,11 @@ export default function WorkoutScreen() {
         {active.data ? (
           <ActiveSessionBanner sessionId={active.data.id} startedAt={active.data.startedAt} />
         ) : null}
+
+        <View className="gap-2">
+          <SectionLabel>PERIODIZAÇÃO</SectionLabel>
+          <BlockTimeline />
+        </View>
 
         <View className="gap-2">
           <SectionLabel>PERSONALIZAÇÃO</SectionLabel>

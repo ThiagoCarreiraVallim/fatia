@@ -104,7 +104,7 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **94 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **97 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 94 tools): **70,4 k caracteres**
-hoje, dos quais **4.178 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 97 tools): **72,9 k caracteres**
+hoje, dos quais **4.336 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de 89 caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (58,7 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (60,8 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -304,6 +304,9 @@ Listagens com potencial de crescer usam cursor-based:
 |                           | `get_personal_record`        | R        |
 |                           | `list_personal_records`      | R        |
 |                           | `get_load_prescription`      | R        |
+| **Periodização**          | `create_training_block`      | C        |
+|                           | `get_training_block`         | R        |
+|                           | `delete_training_block`      | D        |
 | **Peso corporal**         | `log_weight`                 | C        |
 |                           | `update_weight_log`          | U        |
 |                           | `delete_weight_log`          | D        |
@@ -335,7 +338,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                           | `join_group`                 | C        |
 |                           | `leave_group`                | D        |
 
-Total: **94 tools**. Cada uma documentada abaixo.
+Total: **97 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -1504,6 +1507,117 @@ registradas **não invente uma carga**. Sugerir o recorde pessoal na série de a
 
 Exercício clonado (`clonedFromId`) herda o histórico do exercício de origem — renomear um
 exercício não apaga a progressão.
+
+---
+
+## Periodização
+
+Bloco de 4 semanas sobre a prescrição de carga: 3 de acúmulo/pico e 1 de deload. Os fatores de cada
+semana **multiplicam** o `weightKg` e o volume que o `get_load_prescription` devolve — o bloco nunca
+prescreve carga absoluta, para os tetos daquela regra continuarem valendo aqui dentro.
+
+| Semana | Foco    | `intensityFactor` | `volumeFactor` |
+| ------ | ------- | ----------------- | -------------- |
+| 1      | acúmulo | 1,00              | 1,0            |
+| 2      | acúmulo | 1,025             | 1,2            |
+| 3      | pico    | 1,05              | 1,0            |
+| 4      | deload  | 0,85              | 0,5            |
+
+O que o banco guarda é a **intenção** (as 4 linhas acima, congeladas na criação); o andamento —
+semana corrente, sessões feitas, reancoragem por falta — é recalculado a cada leitura a partir das
+sessões concluídas. A decisão inteira está na
+[ADR 019](./ADR/019-periodizacao-intencao-materializada-andamento-derivado.md).
+
+### `create_training_block`
+
+Monta o bloco ancorado na segunda-feira desta semana, **no fuso do usuário**.
+
+**Input:**
+
+```typescript
+{
+  planId?: string;                          // plano periodizado. Ausente = treino livre
+  kind?: "strength" | "hypertrophy";        // 4-6 reps × 8-12 reps. Default: hypertrophy
+  sessionsPerWeek?: number;                 // 1..7. Ausente = a meta semanal já cadastrada
+}
+```
+
+**Output:** o mesmo objeto de `get_training_block`.
+
+Só existe **um bloco ativo por vez**: com um em andamento a chamada responde `409`. Um bloco que a
+reconciliação já dá por vencido é fechado automaticamente aqui — é a única hora em que o
+fechamento é gravado, porque a leitura é somente-leitura de verdade.
+
+### `get_training_block`
+
+**Input:** `{}`
+
+**Output:**
+
+```typescript
+{
+  id: string;
+  planId: string | null;
+  planName: string | null;
+  kind: "strength" | "hypertrophy";
+  kindLabel: string;                        // "força" | "hipertrofia"
+  repRange: string;                         // "4-6" | "8-12"
+  startDate: string;                        // YYYY-MM-DD, segunda-feira
+  weeksTotal: number;
+  status: "active" | "completed" | "abandoned";
+  currentWeek: BlockWeek | null;
+  nextWeek: BlockWeek | null;
+  weeks: BlockWeek[];
+  deload:
+    | { suggested: true; rpeDelta: number; loadDeltaKg: number }
+    | { suggested: false; reason: "insufficient_history" | "rpe_not_rising" | "load_rising" };
+  explanation: string;                      // a frase pronta para a tela
+}
+| null                                      // sem bloco ativo — não invente uma semana
+```
+
+`BlockWeek`:
+
+```typescript
+{
+  weekNumber: number;
+  focus: "accumulation" | "peak" | "deload";
+  intensityFactor: number;
+  volumeFactor: number;
+  weekStart: string;                        // segunda-feira PLANEJADA
+  effectiveWeekStart: string;               // onde a semana caiu depois das reancoragens
+  effectiveWeekEnd: string;
+  sessionsTarget: number;
+  sessionsDone: number;
+  shiftedWeeks: number;                     // vezes que ESTA semana foi perdida e reancorada
+  state: "done" | "partial" | "current" | "upcoming" | "missed";
+  summary?: string;                         // só em `currentWeek` e `nextWeek`
+}
+```
+
+Ajuste quando o usuário sai do plano — o caso comum, não a exceção:
+
+| Semana com a janela encerrada | O que acontece                                                        |
+| ----------------------------- | --------------------------------------------------------------------- |
+| Meta atingida                 | fecha e avança                                                        |
+| Alguma sessão, abaixo da meta | fecha e avança com o déficit registrado — **não** empurra o bloco     |
+| Nenhuma sessão                | ela e as seguintes andam 7 dias; a semana 2 continua sendo a semana 2 |
+| 3 seguidas sem nenhuma        | bloco abandonado, e some da resposta                                  |
+
+Só sessão **concluída** conta, pelo mesmo motivo do `get_load_prescription`: a semana não pode
+fechar no meio do treino de sábado.
+
+O deload também é antecipado por sinal real, e exige **as duas** condições juntas — RPE médio subindo
+≥1 ponto em 3 sessões **e** carga igual ou menor. RPE subindo com carga subindo é progresso, não
+fadiga. O sinal troca a semana corrente com a de deload já existente; nunca cria uma quinta semana.
+
+### `delete_training_block`
+
+**Input:** `{ blockId: string }`
+
+**Output:** `{ ok: true }`
+
+Encerra o bloco e libera a criação do próximo. Nenhum treino é apagado.
 
 ---
 

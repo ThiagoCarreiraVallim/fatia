@@ -266,7 +266,74 @@ export const workoutApi = {
       | null
     >(`/api/workout/exercises/${exerciseId}/pr`),
   listPersonalRecords: () => apiFetch<PersonalRecordEntry[]>('/api/workout/records'),
+
+  // -------- Periodização em blocos (#145) --------
+
+  getActiveBlock: () => apiFetch<TrainingBlock | null>('/api/workout/blocks/active'),
+  createBlock: (body: { planId?: string; kind?: TrainingBlockKind; sessionsPerWeek?: number }) =>
+    apiFetch<TrainingBlock>('/api/workout/blocks', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  deleteBlock: (id: string) => apiFetch<void>(`/api/workout/blocks/${id}`, { method: 'DELETE' }),
 };
+
+export type TrainingBlockKind = 'strength' | 'hypertrophy';
+
+export type BlockFocus = 'accumulation' | 'peak' | 'deload';
+
+/**
+ * `state` distingue as cinco situações que a linha do tempo do bloco desenha.
+ * `partial` e `done` são coisas diferentes de propósito: semana com uma sessão de
+ * três conta como cumprida, mas a tela não pode dizer que foi cumprida à risca.
+ */
+export type BlockWeekState = 'done' | 'partial' | 'current' | 'upcoming' | 'missed';
+
+export interface TrainingBlockWeek {
+  weekNumber: number;
+  focus: BlockFocus;
+  /** Multiplicador sobre a carga da prescrição (#144), nunca uma carga absoluta. */
+  intensityFactor: number;
+  volumeFactor: number;
+  /** Segunda-feira PLANEJADA, YYYY-MM-DD. */
+  weekStart: string;
+  /** Onde a semana caiu depois das reancoragens por falta. */
+  effectiveWeekStart: string;
+  effectiveWeekEnd: string;
+  sessionsTarget: number;
+  sessionsDone: number;
+  /** Vezes que ESTA semana foi perdida por inteiro e reancorada adiante. */
+  shiftedWeeks: number;
+  state: BlockWeekState;
+  /** Só vem preenchido em `currentWeek` e `nextWeek`. */
+  summary?: string;
+}
+
+/**
+ * `suggested` é discriminante: "sem deload" precisa dizer **por quê**. RPE que não
+ * subiu e carga que subiu junto são motivos diferentes, e o segundo é progresso.
+ */
+export type DeloadSignal =
+  | { suggested: true; rpeDelta: number; loadDeltaKg: number }
+  | { suggested: false; reason: 'insufficient_history' | 'rpe_not_rising' | 'load_rising' };
+
+export interface TrainingBlock {
+  id: string;
+  planId: string | null;
+  planName: string | null;
+  kind: TrainingBlockKind;
+  kindLabel: string;
+  repRange: string;
+  startDate: string;
+  weeksTotal: number;
+  status: 'active' | 'completed' | 'abandoned';
+  currentWeek: TrainingBlockWeek | null;
+  nextWeek: TrainingBlockWeek | null;
+  weeks: TrainingBlockWeek[];
+  deload: DeloadSignal;
+  /** A frase pronta para a tela. Vem da API para web e mobile dizerem o mesmo. */
+  explanation: string;
+}
 
 /** Qual sinal decidiu a prescrição: o RPE registrado ou só as repetições. */
 export type PrescriptionBasis = 'rpe' | 'reps';

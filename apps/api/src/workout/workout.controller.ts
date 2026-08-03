@@ -18,6 +18,8 @@ import { WorkoutSessionService } from './workout-session.service';
 import { SessionSetService } from './session-set.service';
 import { ExerciseService } from './exercise.service';
 import { PrescriptionService } from './prescription.service';
+import { TrainingBlockService } from './training-block.service';
+import { CreateTrainingBlockDto } from './dto/training-block.dto';
 import {
   AddPlanExerciseDto,
   CreatePlanDto,
@@ -43,7 +45,26 @@ export class WorkoutController {
     private readonly sets: SessionSetService,
     private readonly exercises: ExerciseService,
     private readonly prescriptions: PrescriptionService,
+    private readonly blocks: TrainingBlockService,
   ) {}
+
+  // -------- Blocos de periodização (#145) --------
+
+  @Post('blocks')
+  createBlock(@CurrentUser() user: CurrentUserPayload, @Body() dto: CreateTrainingBlockDto) {
+    return this.blocks.create({ userId: user.id, timezone: user.timezone }, dto);
+  }
+
+  @Get('blocks/active')
+  getActiveBlock(@CurrentUser() user: CurrentUserPayload) {
+    return this.blocks.getActive({ userId: user.id, timezone: user.timezone });
+  }
+
+  @Delete('blocks/:id')
+  @HttpCode(204)
+  deleteBlock(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseUUIDPipe) id: string) {
+    return this.blocks.abandon({ userId: user.id, timezone: user.timezone }, id);
+  }
 
   // -------- Exercises --------
 
