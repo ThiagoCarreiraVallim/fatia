@@ -75,6 +75,29 @@ export function can(role: GroupRole, action: GroupAction): boolean {
 }
 
 /**
+ * Ações que a associação ainda **pendente** (`INVITED`) já exerce.
+ *
+ * Pedir para entrar cria a associação em `INVITED`, e ela já aparece em
+ * `GET /groups` — é a tela "aguardando aprovação". Exigir `ACTIVE` para **toda**
+ * ação faria o grupo estar na lista e responder `NOT_FOUND` ao ser aberto por
+ * id: exatamente a incoerência que o `STATUS_VIVOS` de `group.service.ts` existe
+ * para eliminar, só que reintroduzida um andar acima, no guarda.
+ *
+ * O que a pendência **não** concede é administrar nem enxergar gente: aprovar,
+ * remover, listar membros, faturar e publicar exigem associação ativa. Quem
+ * ainda não foi aprovado vê o cartão do grupo e nada mais.
+ *
+ * A tabela legível está em `docs/PERMISSIONS.md` e é conferida nos dois
+ * sentidos por `permission-matrix.spec.ts`.
+ */
+export const PENDING_MEMBERSHIP_ACTIONS = ['group.read'] as const satisfies readonly GroupAction[];
+
+/** A ação já vale para quem está aguardando aprovação? */
+export function canWhilePending(action: GroupAction): boolean {
+  return (PENDING_MEMBERSHIP_ACTIONS as readonly GroupAction[]).includes(action);
+}
+
+/**
  * Papéis que podem **receber** um `ProfessionalLink`.
  *
  * "Pode receber" não é "tem": o vínculo só existe se o titular criar, e é ele

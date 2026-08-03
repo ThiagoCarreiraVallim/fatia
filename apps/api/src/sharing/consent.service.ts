@@ -20,13 +20,19 @@ const LOG_MAX_PAGE_SIZE = 200;
  * `professionalMembershipId` que se concede de novo.
  */
 export interface ConsentView {
-  linkId: string;
+  /**
+   * `null` só na resposta de uma concessão vazia: `[]` revoga, e depois dela não
+   * existe vínculo vivo a que se referir. Em `listMine` nunca é nulo — ali toda
+   * linha é um consentimento vigente.
+   */
+  linkId: string | null;
   groupId: string;
   groupName: string;
   professionalMembershipId: string;
   professionalName: string;
   scopes: ShareScope[];
-  grantedAt: Date;
+  /** `null` pelo mesmo motivo de `linkId`: não há concessão em vigor. */
+  grantedAt: Date | null;
 }
 
 /** Uma linha de "quem olhou meu dado". Inclui as tentativas negadas. */
@@ -74,9 +80,11 @@ export class ConsentService {
    * (#204). O que o input escolhe é um candidato; quem autoriza é a conferência
    * de que o titular está naquele mesmo grupo.
    *
-   * Lista vazia é entrada válida e significa "nada": equivale a revogar, e
-   * recusá-la faria a UI ter de tratar "desmarquei o último toggle" como um
-   * caso especial. Escopos repetidos são normalizados.
+   * Lista vazia é entrada válida e significa "nada": ela **revoga** o vínculo
+   * vigente e não cria linha nenhuma. Recusá-la faria a UI ter de tratar
+   * "desmarquei o último toggle" como caso especial; gravá-la como concessão de
+   * zero escopos faria o profissional ficar no painel de quem tem acesso sem
+   * ter acesso. Escopos repetidos são normalizados.
    */
   async grant(
     subjectUserId: string,
@@ -109,26 +117,42 @@ export class ConsentService {
       );
     }
 
-    const link = await this.links.grant({
+    const escopos = normalizarEscopos(scopes);
+    const vinculo = {
       subjectUserId,
       professionalId: alvo.userId,
       groupId: alvo.groupId,
-      scopes: normalizarEscopos(scopes),
-    });
+    };
+
+    // Lista vazia **revoga**, e não grava concessão de nada: é o que
+    // `grant_data_sharing` promete ("enviar [] equivale a revogar") e o que
+    // `list_data_sharing` promete do outro lado ("lista vazia significa que
+    // ninguém tem acesso"). Uma linha viva com zero escopos deixaria o
+    // profissional para sempre no painel de "quem tem acesso" sem acesso a
+    // nada — as duas promessas se contradizendo na cara do titular, que teria
+    // de revogar o que já zerou.
+    const link =
+      escopos.length === 0
+        ? await this.links.revokeLiveGrant(vinculo)
+        : await this.links.grant({ ...vinculo, scopes: escopos });
 
     const [grupo, profissional] = await Promise.all([
       this.prisma.group.findUnique({ where: { id: alvo.groupId }, select: { name: true } }),
       this.prisma.user.findUnique({ where: { id: alvo.userId }, select: { name: true } }),
     ]);
 
+    // O vínculo devolvido por `revokeLiveGrant` é o que **acabou de morrer**:
+    // ele não entra na resposta como se estivesse valendo.
+    const vigente = escopos.length === 0 ? null : link;
+
     return {
-      linkId: link.id,
-      groupId: link.groupId,
+      linkId: vigente?.id ?? null,
+      groupId: alvo.groupId,
       groupName: grupo?.name ?? '',
       professionalMembershipId: alvo.id,
       professionalName: profissional?.name ?? '',
-      scopes: link.scopes,
-      grantedAt: link.grantedAt,
+      scopes: escopos,
+      grantedAt: vigente?.grantedAt ?? null,
     };
   }
 

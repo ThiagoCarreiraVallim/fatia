@@ -1,7 +1,8 @@
 import { ForbiddenException, NotFoundException, type ExecutionContext } from '@nestjs/common';
 import type { Reflector } from '@nestjs/core';
-import { GroupRole, MembershipStatus } from '@fatia/db';
+import { GroupRole, GroupType, MembershipStatus } from '@fatia/db';
 import { GroupRoleGuard } from '../guards/group-role.guard';
+import { GroupService } from '../group.service';
 import type { PrismaService } from '../../common/prisma.service';
 
 const GROUP = 'grupo-1';
@@ -65,6 +66,18 @@ describe('GroupRoleGuard', () => {
     },
   );
 
+  it('deixa a associação pendente exercer a ação que a doc dá a ela', async () => {
+    reflector.get.mockReturnValue('group.read');
+    prisma.groupMembership.findUnique.mockResolvedValue({
+      role: GroupRole.MEMBER,
+      status: MembershipStatus.INVITED,
+    });
+
+    // Quem pediu para entrar já vê o grupo em `GET /groups`; fechar o `GET
+    // /groups/:id` faria o mesmo grupo estar na lista e dar 404 ao ser aberto.
+    await expect(guard.canActivate(makeContext(requisicao))).resolves.toBe(true);
+  });
+
   it.each([
     ['não é membro', null],
     ['saiu do grupo', { role: GroupRole.OWNER, status: MembershipStatus.LEFT }],
@@ -78,6 +91,48 @@ describe('GroupRoleGuard', () => {
     // grupo existe. E o papel guardado numa associação encerrada não vale nada —
     // conferir só `role` faria o ex-dono continuar administrando.
     await expect(guard.canActivate(makeContext(requisicao))).rejects.toThrow(NotFoundException);
+  });
+
+  describe('GET /groups/:groupId — guarda e service decidem a mesma coisa', () => {
+    /**
+     * A rota tem **duas** checagens de status: o guarda, antes, e o
+     * `findByIdForMember`, depois. Enquanto cada uma tinha o seu spec, as duas
+     * podiam afirmar o contrário uma da outra e ficar verdes — foi o que
+     * aconteceu: "`INVITED` continua enxergando" aqui, "`INVITED` leva
+     * `NOT_FOUND`" ali, e na prática 404 num grupo que `GET /groups` lista.
+     * Este caso é o único lugar em que as duas respondem à mesma pergunta.
+     */
+    const passou = (promessa: Promise<unknown>): Promise<boolean> =>
+      promessa.then(
+        () => true,
+        () => false,
+      );
+
+    it.each(Object.values(MembershipStatus))('status %s', async (status) => {
+      reflector.get.mockReturnValue('group.read');
+      prisma.groupMembership.findUnique.mockResolvedValue({
+        id: 'm1',
+        role: GroupRole.MEMBER,
+        status,
+        joinedAt: null,
+        group: {
+          id: GROUP,
+          type: GroupType.SPONSORED,
+          name: 'X',
+          slug: 'x',
+          createdAt: new Date(),
+        },
+      });
+      const service = new GroupService(prisma as unknown as PrismaService);
+
+      const noGuarda = await passou(guard.canActivate(makeContext(requisicao)));
+      const noService = await passou(service.findByIdForMember(USER, GROUP));
+
+      // O conjunto esperado fica escrito, e não só a igualdade entre os dois:
+      // "os dois recusam tudo" satisfaz uma comparação e nenhum usuário.
+      const vivo = status === MembershipStatus.ACTIVE || status === MembershipStatus.INVITED;
+      expect([status, noGuarda, noService]).toEqual([status, vivo, vivo]);
+    });
   });
 
   it('falha alto quando falta contexto, em vez de abrir a rota', async () => {

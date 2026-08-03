@@ -4,6 +4,7 @@ import { GroupRole, ShareScope } from '@prisma/client';
 import {
   can,
   canReceiveLink,
+  canWhilePending,
   GROUP_ACTIONS,
   GROUP_PERMISSIONS,
   ROLES_ELIGIBLE_FOR_LINK,
@@ -38,9 +39,9 @@ function celulas(linha: string): string[] {
     .map((celula) => celula.trim().replace(/`/g, ''));
 }
 
-/** Linhas de dados da tabela que vem logo depois do cabeçalho `## <titulo>`. */
+/** Linhas de dados da tabela que vem logo depois do cabeçalho `##`/`### <titulo>`. */
 function tabelaDaSecao(titulo: string): { header: string[]; rows: string[][] } {
-  const secao = doc.split(new RegExp(`^## ${titulo}$`, 'm'))[1];
+  const secao = doc.split(new RegExp(`^#{2,3} ${titulo}$`, 'm'))[1];
   if (secao === undefined) throw new Error(`seção "${titulo}" não existe em docs/PERMISSIONS.md`);
 
   const linhas = secao.split('\n');
@@ -60,6 +61,7 @@ function tabelaDaSecao(titulo: string): { header: string[]; rows: string[][] } {
 
 const administrativas = tabelaDaSecao('Ações administrativas \\(papel decide\\)');
 const leitura = tabelaDaSecao('Leitura de dado de titular \\(papel NÃO decide — vínculo decide\\)');
+const pendente = tabelaDaSecao('Status da associação \\(papel só vale com associação viva\\)');
 
 describe('matriz de papéis (docs/PERMISSIONS.md × permissions.ts)', () => {
   it('parseia as duas tabelas da doc', () => {
@@ -113,6 +115,16 @@ describe('matriz de papéis (docs/PERMISSIONS.md × permissions.ts)', () => {
         expect([acao, papel, can(papel, acao)]).toEqual([acao, papel, false]);
       }
     }
+  });
+
+  it('a tabela de associação pendente cobre todas as ações, sem sobrar nem faltar', () => {
+    expect(pendente.header).toEqual(['Ação', 'Pendente (INVITED)']);
+    expect(pendente.rows.map((row) => row[0]).sort()).toEqual([...GROUP_ACTIONS].sort());
+  });
+
+  it.each(pendente.rows)('%s com associação pendente = %s', (acao, celula) => {
+    expect(['sim', 'não']).toContain(celula);
+    expect([acao, canWhilePending(acao as GroupAction)]).toEqual([acao, celula === 'sim']);
   });
 
   it('cobre todo escopo do enum na tabela de leitura', () => {
@@ -203,6 +215,36 @@ describe('todo método de controller de sharing declara a camada em que vive', (
       .filter((entry) => /@RequireGroupAction\(/.test(readFileSync(join(API_SRC, entry), 'utf8')));
 
     expect(fora).toEqual([]);
+  });
+
+  it('todo arquivo que declara @RequireGroupAction registra o GroupRoleGuard', () => {
+    // O decorator sozinho **não faz nada**: ele só grava metadata, e quem lê é o
+    // guarda. Controller anotado sem `@UseGuards(GroupRoleGuard)` é rota aberta
+    // com aparência de rota protegida — e o caso acima, que confere o decorator,
+    // aprova os dois igualmente. Este é o outro lado do par.
+    //
+    // A varredura é do `src` inteiro, e não só de `sharing/`: a próxima ação da
+    // matriz sem rota (`insights.read`, `billing.*`) nasce noutro módulo, e é
+    // exatamente ali que o `@UseGuards` seria esquecido.
+    const API_SRC = resolve(SHARING_SRC, '..');
+    const arquivos = readdirSync(API_SRC, { recursive: true, encoding: 'utf8' })
+      .filter((entry) => entry.endsWith('.ts') && !entry.includes('__tests__'))
+      .map((entry) => ({ entry, conteudo: readFileSync(join(API_SRC, entry), 'utf8') }))
+      .filter(({ conteudo }) => conteudo.includes('@RequireGroupAction('));
+
+    // Sanidade: sem arquivo anotado encontrado, a lista vazia abaixo não prova
+    // nada — foi assim que este caso nasceu inútil na primeira versão.
+    expect(arquivos.map(({ entry }) => entry)).toContain('sharing/sharing.controller.ts');
+
+    // `@UseGuards(...)` com o guarda dentro dos parênteses, e não a menção solta
+    // ao identificador: procurar `GroupRoleGuard` no arquivo inteiro casaria com
+    // a linha de `import`, que continua lá depois de o `@UseGuards` ser apagado.
+    const REGISTRO = /@UseGuards\([^)]*\bGroupRoleGuard\b[^)]*\)/;
+    const semGuarda = arquivos
+      .filter(({ conteudo }) => !REGISTRO.test(conteudo))
+      .map(({ entry }) => entry);
+
+    expect(semGuarda).toEqual([]);
   });
 
   it('as chaves de metadata não colidem', () => {

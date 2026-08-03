@@ -8,7 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { MembershipStatus } from '@fatia/db';
 import { PrismaService } from '../../common/prisma.service';
-import { can, type GroupAction } from '../permissions';
+import { can, canWhilePending, type GroupAction } from '../permissions';
 import { GROUP_ACTION_KEY } from '../decorators/require-group-action.decorator';
 
 /** Mesma resposta para "grupo não existe" e "não sou membro dele" (#92). */
@@ -27,6 +27,11 @@ const NOT_FOUND = 'Group not found';
  * propósito: o guarda protege a rota HTTP, e o service continua protegido
  * quando chamado de outro lugar — de uma tool MCP, de um job, de outro service.
  * Trocar uma pela outra transformaria a segunda linha de defesa em nada.
+ *
+ * **Papel não é a única condição: status também.** Associação encerrada não
+ * exerce nada, e a pendente exerce só o que `PENDING_MEMBERSHIP_ACTIONS`
+ * declara — senão o grupo que `GET /groups` lista daria `NOT_FOUND` ao ser
+ * aberto por id.
  *
  * **E não confere consentimento.** Papel governa administração; leitura de dado
  * de saúde é `ProfessionalAccessService`, chamado explicitamente pelas poucas
@@ -67,10 +72,19 @@ export class GroupRoleGuard implements CanActivate {
       select: { role: true, status: true },
     });
 
+    // Associação encerrada (`LEFT`/`REMOVED`) não vale nada, e o papel guardado
+    // nela menos ainda: conferir só `role` faria o ex-dono continuar
+    // administrando. Associação **pendente** vale para as poucas ações de
+    // `PENDING_MEMBERSHIP_ACTIONS` — quem pediu para entrar vê o grupo que já
+    // aparece na lista dele, e não administra nada.
+    const statusVale =
+      membership?.status === MembershipStatus.ACTIVE ||
+      (membership?.status === MembershipStatus.INVITED && canWhilePending(action));
+
     // Não-membro recebe `NOT_FOUND`: ele não pode descobrir que o grupo existe.
     // Membro comum recebe `FORBIDDEN`, porque para ele não há existência a
     // esconder — ele já está lá dentro. É a mesma distinção do `assertOwner`.
-    if (!membership || membership.status !== MembershipStatus.ACTIVE) {
+    if (!membership || !statusVale) {
       throw new NotFoundException(NOT_FOUND);
     }
 

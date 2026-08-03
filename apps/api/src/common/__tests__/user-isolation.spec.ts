@@ -1188,6 +1188,18 @@ describe('isolamento entre usuários', () => {
     const recusaDeEstranho = (scope: ShareScope) =>
       mensagemDaRecusa(ESTRANHO, owned.membershipA, scope);
 
+    /**
+     * `linkId` de uma concessão não vazia.
+     *
+     * A resposta de `grant` traz `linkId: null` quando a lista veio vazia —
+     * ali não sobra vínculo vivo. Aqui a lista nunca é vazia, e o `throw`
+     * denuncia se um dia for, em vez de comparar `null` com `null` e passar.
+     */
+    const idDaConcessao = (view: { linkId: string | null }): string => {
+      if (view.linkId === null) throw new Error('concessão não vazia veio sem linkId');
+      return view.linkId;
+    };
+
     afterEach(async () => {
       await prisma.professionalAccessLog.deleteMany({ where: { subjectUserId: owned.userA } });
       await prisma.professionalLink.deleteMany({
@@ -1271,7 +1283,7 @@ describe('isolamento entre usuários', () => {
         access.assertReadable(owned.pro, owned.membershipA, ShareScope.WORKOUT, 'probe'),
       ).resolves.toBe(owned.userA);
 
-      await consent.revoke(owned.userA, consentimento.linkId);
+      await consent.revoke(owned.userA, idDaConcessao(consentimento));
 
       expect(await mensagemDaRecusa(owned.pro, owned.membershipA, ShareScope.WORKOUT)).toBe(
         await recusaDeEstranho(ShareScope.WORKOUT),
@@ -1281,7 +1293,7 @@ describe('isolamento entre usuários', () => {
       // este caso que pega — e o que se perde é a resposta a "quem teve acesso
       // a quê, quando".
       const linha = await prisma.professionalLink.findUnique({
-        where: { id: consentimento.linkId },
+        where: { id: idDaConcessao(consentimento) },
       });
       expect([linha !== null, linha?.revokedAt !== null, linha?.revokedReason]).toEqual([
         true,
@@ -1292,7 +1304,7 @@ describe('isolamento entre usuários', () => {
 
     it('conceder de novo depois de revogar cria linha NOVA', async () => {
       const primeiro = await consent.grant(owned.userA, owned.membershipPro, [ShareScope.WORKOUT]);
-      await consent.revoke(owned.userA, primeiro.linkId);
+      await consent.revoke(owned.userA, idDaConcessao(primeiro));
       const segundo = await consent.grant(owned.userA, owned.membershipPro, [ShareScope.BODY]);
 
       const linhas = await prisma.professionalLink.findMany({
@@ -1308,8 +1320,8 @@ describe('isolamento entre usuários', () => {
       // e destruiria a janela de vigência da primeira — é a "correção" errada
       // mais provável numa revisão futura.
       expect(linhas.map((l) => [l.id, l.revokedAt === null])).toEqual([
-        [primeiro.linkId, false],
-        [segundo.linkId, true],
+        [idDaConcessao(primeiro), false],
+        [idDaConcessao(segundo), true],
       ]);
     });
 
@@ -1334,8 +1346,8 @@ describe('isolamento entre usuários', () => {
       );
     });
 
-    it('lista vazia equivale a revogar, sem apagar a linha', async () => {
-      await consent.grant(owned.userA, owned.membershipPro, [ShareScope.WORKOUT]);
+    it('lista vazia equivale a revogar: some do painel, sem apagar a linha', async () => {
+      const concedido = await consent.grant(owned.userA, owned.membershipPro, [ShareScope.WORKOUT]);
       await expect(
         access.assertReadable(owned.pro, owned.membershipA, ShareScope.WORKOUT, 'probe'),
       ).resolves.toBe(owned.userA);
@@ -1346,6 +1358,26 @@ describe('isolamento entre usuários', () => {
       expect(await mensagemDaRecusa(owned.pro, owned.membershipA, ShareScope.WORKOUT)).toBe(
         await recusaDeEstranho(ShareScope.WORKOUT),
       );
+
+      // "Equivale a revogar" tem de valer também no painel: gravando concessão
+      // de zero escopos, `list_data_sharing` devolveria para sempre um
+      // profissional que não vê nada, contra a própria descrição da tool. E o
+      // titular não teria como sumir com ele — a resposta nem traz `linkId`.
+      expect(await consent.listMine(owned.userA)).toEqual([]);
+      expect(vazio.linkId).toBeNull();
+
+      // A linha de antes continua lá, revogada: é ela que responde "quem teve
+      // acesso a quê, quando". Nenhuma linha nova nasceu.
+      const linhas = await prisma.professionalLink.findMany({
+        where: {
+          subjectUserId: owned.userA,
+          professionalId: owned.pro,
+          groupId: owned.groupId,
+        },
+      });
+      expect(linhas.map((l) => [l.id, l.scopes, l.revokedAt !== null, l.revokedReason])).toEqual([
+        [idDaConcessao(concedido), [ShareScope.WORKOUT], true, 'subject'],
+      ]);
     });
 
     it('o painel do titular responde "quem vê o quê" e "quem olhou"', async () => {

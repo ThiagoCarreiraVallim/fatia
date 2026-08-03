@@ -74,6 +74,37 @@ futura:
 - **`content.moderate` é `OWNER` e `CREATOR`.** `PROFESSIONAL` não modera: não é papel de
   moderação, e acumular seria a mesma armadilha que o resto do documento evita.
 
+### Status da associação (papel só vale com associação viva)
+
+Papel é uma das duas condições; a outra é o **status** da associação. `LEFT` e `REMOVED` não
+exercem nada — o papel guardado numa associação encerrada faria o ex-dono continuar
+administrando. `ACTIVE` exerce o que a tabela acima permite. E a associação **pendente**
+(`INVITED`, criada por `POST /groups/join`) exerce só isto:
+
+| Ação               | Pendente (`INVITED`) |
+| ------------------ | -------------------- |
+| `group.read`       | sim                  |
+| `group.update`     | não                  |
+| `group.delete`     | não                  |
+| `invite.create`    | não                  |
+| `invite.revoke`    | não                  |
+| `member.list`      | não                  |
+| `member.approve`   | não                  |
+| `member.remove`    | não                  |
+| `billing.read`     | não                  |
+| `billing.manage`   | não                  |
+| `content.publish`  | não                  |
+| `content.moderate` | não                  |
+| `offer.create`     | não                  |
+| `insights.read`    | não                  |
+
+`group.read` é "sim" porque o grupo pendente **já aparece** em `GET /groups` (o `STATUS_VIVOS` de
+`group.service.ts` inclui `INVITED`): é a tela "aguardando aprovação". Fechá-lo no guarda faria o
+mesmo grupo estar na lista e responder `NOT_FOUND` ao ser aberto por id — a incoerência que
+`STATUS_VIVOS` existe para eliminar, reintroduzida um andar acima. O resto é "não" porque quem
+ainda não foi aprovado não administra e não enxerga gente: `member.list` inclusive, e o
+`MembershipService.listMembers` exige `ACTIVE` pela mesma razão.
+
 **Sair do grupo não está na tabela, de propósito.** `DELETE /groups/:groupId/members/me` não
 consulta papel: a autorização é a posse da própria associação, e nenhum papel pode impedir alguém
 de sair. O dono é a única exceção, e ela não é sobre permissão — grupo sem dono fica órfão com
@@ -103,6 +134,13 @@ chamada. `hasSome` com lista casaria com tudo, e consentir treino abriria a diet
   confronta com `permissions.ts` nos dois sentidos: linha na doc sem entrada no código falha, e
   entrada no código sem linha na doc falha também. Mudar uma célula de `sim` para `não` sem mexer
   no código quebra o CI.
+- A tabela de associação pendente é confrontada com `PENDING_MEMBERSHIP_ACTIONS` do mesmo jeito,
+  e `group-role.guard.spec.ts` põe o **guarda e o `GroupService`** para responderem a mesma
+  pergunta com a mesma entrada, status por status. Enquanto cada um tinha só o seu spec, os dois
+  podiam afirmar o contrário um do outro e ficar verdes — foi o que aconteceu com `INVITED`.
+- O `permission-matrix.spec.ts` exige ainda que **todo arquivo que usa `@RequireGroupAction` registre
+  `@UseGuards(GroupRoleGuard)`**. O decorator sozinho só grava metadata: controller anotado sem o
+  guarda é rota aberta com cara de rota protegida, e conferir só o decorator aprova as duas.
 - A segunda tabela é conferida contra o **enum** `ShareScope`: escopo novo no schema sem linha
   aqui quebra. É a mitigação do "escopo novo sem mapeamento" — o toggle nasceria na UI sem nada
   do outro lado.

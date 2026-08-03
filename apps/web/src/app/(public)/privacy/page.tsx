@@ -65,8 +65,8 @@ export default function PrivacyPage() {
           academia veja qualquer uma das duas. Nada é compartilhado por padrão — entrar num grupo
           não autoriza ninguém a ver nada, e o dono da academia não vê dado de saúde de aluno em
           nenhuma hipótese. Você pode ver quem tem acesso, mudar as categorias e cortar o acesso a
-          qualquer momento, pelo app ou pedindo ao Claude. Cortar vale a partir da próxima
-          requisição do profissional — não é &ldquo;instantâneo&rdquo;, é uma requisição.
+          qualquer momento, pedindo ao Claude. Cortar vale a partir da próxima requisição do
+          profissional — não é &ldquo;instantâneo&rdquo;, é uma requisição.
         </p>
         <p>
           Toda leitura dos seus dados por um profissional fica <strong>registrada</strong>,

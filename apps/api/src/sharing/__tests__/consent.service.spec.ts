@@ -29,6 +29,7 @@ const makeLinks = () => ({
     grantedAt: new Date('2026-03-01'),
   }),
   revokeAsSubject: jest.fn(),
+  revokeLiveGrant: jest.fn().mockResolvedValue(null),
   listActiveGrantedBy: jest.fn().mockResolvedValue([]),
 });
 
@@ -82,14 +83,41 @@ describe('ConsentService', () => {
       );
     });
 
-    it('aceita lista vazia como "nada compartilhado"', async () => {
+    it('lista vazia revoga o vínculo vigente e não cria concessão nenhuma', async () => {
       cenarioFeliz();
+      links.revokeLiveGrant.mockResolvedValue({
+        id: 'link-1',
+        groupId: GROUP,
+        scopes: [ShareScope.WORKOUT],
+        grantedAt: new Date('2026-03-01'),
+      });
 
-      await service.grant(SUBJECT, PRO_MEMBERSHIP, []);
+      const view = await service.grant(SUBJECT, PRO_MEMBERSHIP, []);
 
-      // Equivale a revogar, e recusar faria a UI tratar "desmarquei o último
-      // toggle" como caso especial — o tipo de caso especial que vira bug.
-      expect(links.grant).toHaveBeenCalledWith(expect.objectContaining({ scopes: [] }));
+      // "Equivale a revogar" é o que as duas tools prometem. Gravar concessão de
+      // zero escopos deixaria uma linha VIVA que `list_data_sharing` devolveria
+      // para sempre — um profissional na lista de "quem tem acesso" sem acesso a
+      // nada, e o titular revogando o que já zerou.
+      expect(links.revokeLiveGrant).toHaveBeenCalledWith({
+        subjectUserId: SUBJECT,
+        professionalId: PRO,
+        groupId: GROUP,
+      });
+      expect(links.grant).not.toHaveBeenCalled();
+      // O vínculo revogado não volta na resposta como se estivesse valendo: sem
+      // `linkId` não há o que revogar de novo, e sem `grantedAt` não há vigência.
+      expect(view).toMatchObject({ linkId: null, grantedAt: null, scopes: [] });
+    });
+
+    it('lista vazia de quem nunca concedeu nada é no-op, não erro', async () => {
+      cenarioFeliz();
+      links.revokeLiveGrant.mockResolvedValue(null);
+
+      await expect(service.grant(SUBJECT, PRO_MEMBERSHIP, [])).resolves.toMatchObject({
+        linkId: null,
+        scopes: [],
+        professionalMembershipId: PRO_MEMBERSHIP,
+      });
     });
 
     it('tira grupo e profissional da associação lida, nunca do input', async () => {
@@ -234,6 +262,29 @@ describe('superfície de escrita do vínculo', () => {
     // o consentimento do titular, escopado por `subjectUserId`. Não é leitura de
     // dado de terceiro — é o próprio ato do titular voltando para ele.
     expect(vazados).toEqual(['users/account.service.ts']);
+  });
+});
+
+describe('a política pública promete só a superfície que existe', () => {
+  const REPO_ROOT = resolve(__dirname, '../../../../..');
+  const PRIVACY = resolve(REPO_ROOT, 'apps/web/src/app/(public)/privacy/page.tsx');
+  const ROTAS_DO_APP = resolve(REPO_ROOT, 'apps/web/src/app/(app)');
+
+  it('não manda o usuário exercer o direito "pelo app" enquanto não houver tela', () => {
+    // `/privacy` é documento legal, e a LGPD art. 18 é sobre o direito ser
+    // **exercível**. Apontar para uma tela que não existe manda o titular
+    // procurar no PWA um lugar que ninguém construiu — e a promessa não
+    // apodrece sozinha: quando a #157 criar a tela, este caso deixa a frase
+    // voltar, em vez de depender de alguém lembrar.
+    const pagina = readFileSync(PRIVACY, 'utf8');
+    expect(pagina).toContain('pedindo ao Claude');
+
+    const telas = readdirSync(ROTAS_DO_APP, { recursive: true, encoding: 'utf8' }).filter((entry) =>
+      /(consent|sharing|grupo|group)/i.test(entry),
+    );
+    const promessa = pagina.includes('pelo app') ? ['/privacy diz "pelo app"'] : [];
+
+    expect(telas.length > 0 ? [] : promessa).toEqual([]);
   });
 });
 
