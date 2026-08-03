@@ -282,6 +282,30 @@ uma guarda que compara token a token a paleta do app com a do PWA. Não há test
 de renderização — a verificação de interface é a
 [auditoria de paridade](../../docs/MOBILE_PARITY.md), feita em aparelho.
 
+### Notificação do fim do descanso, só no aparelho
+
+A notificação local do fim do descanso (#182) **não é verificável em CI**. O que
+os testes cobrem é a contabilidade em volta dela — o instante calculado, o
+cancelamento ao pular e o agendamento que volta depois do pulo, em
+`src/components/workout/session/__tests__/rest-notification.test.ts`. O que
+depende de aparelho:
+
+1. Inicie um treino, registre uma série e toque em **Iniciar descanso**. O
+   diálogo de permissão aparece **agora**, e não na abertura do app.
+2. Aceite **demorando de propósito** uns 20 segundos no diálogo, bloqueie a tela
+   e espere o descanso acabar. O aviso chega junto com o fim do descanso, com som
+   e vibração: o tempo que o diálogo ficou na tela é descontado do atraso, e não
+   somado a ele.
+3. Repita recusando a permissão: o cronômetro continua funcionando na tela, sem
+   erro e sem novo diálogo no descanso seguinte.
+4. Inicie um descanso e toque em **Pular** ou em **Pausar**: nada deve chegar
+   quando o tempo original venceria.
+5. Com o app **aberto**, o aviso não vira tarja em cima da sessão — quem avisa
+   ali é o cronômetro, o háptico e o leitor de tela.
+
+Faça em **development build**. O Expo Go tem limitações próprias de notificação
+e não serve de prova de que a feature funciona no app instalado.
+
 ---
 
 ## Quando der errado

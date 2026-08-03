@@ -8,6 +8,7 @@ import {
   ApiError,
   isCardioExercise,
   workoutApi,
+  type WorkoutPlan,
   type WorkoutPlanExercise,
 } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
@@ -16,8 +17,10 @@ import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { ExerciseDetailHost } from '@/components/workout/exercise-detail-host';
 import {
+  applyPlanMove,
   estimatePlanStats,
   nextPlanOrder,
+  planMoveAnnouncement,
   planMoveDecision,
   pluralize,
   type PlanMove,
@@ -98,24 +101,49 @@ export default function PlanDetailScreen() {
   const moveExercise = useMutation({
     mutationFn: (decision: PlanMove<WorkoutPlanExercise>) =>
       workoutApi.reorderPlanExercises(id, decision.payload),
+    // O card troca de lugar no toque, não na resposta: no 4G do vestiário a ida
+    // e volta some, e quem não vê nada acontecer toca de novo. Chegou do PWA
+    // pela #221 — lá o otimismo é da #115, e a assimetria estava registrada no
+    // `docs/MOBILE_PARITY.md`.
+    onMutate: async (decision) => {
+      // Sem cancelar, um refetch disparado antes do toque pode responder depois
+      // e reescrever o cache com a ordem antiga — o card pula de volta sozinho.
+      await qc.cancelQueries({ queryKey: ['workout', 'plan', id] });
+      const previous = qc.getQueryData<WorkoutPlan>(['workout', 'plan', id]);
+      qc.setQueryData<WorkoutPlan>(['workout', 'plan', id], (old) =>
+        old ? { ...old, exercises: applyPlanMove(old.exercises, decision) } : old,
+      );
+      return { previous };
+    },
     onSuccess: (updated, decision) => {
       // A resposta já é o plano reordenado — escrever no cache evita o refetch
       // que só confirmaria o que acabou de chegar.
       qc.setQueryData(['workout', 'plan', id], updated);
       // O anúncio só sai aqui. Saía junto com o toque, antes da resposta: com a
       // rede caída o leitor de tela afirmava um movimento que não aconteceu.
-      AccessibilityInfo.announceForAccessibility(
-        `${decision.from.exercise.name} movido para a posição ${decision.targetIndex + 1} de ${decision.total}`,
+      // Posição e total saem da resposta, e não do snapshot do toque.
+      const anuncio = planMoveAnnouncement(
+        updated.exercises,
+        decision.from.id,
+        decision.from.exercise.name,
       );
+      if (anuncio) AccessibilityInfo.announceForAccessibility(anuncio);
     },
-    onError: (error) => {
+    onError: (error, _decision, context) => {
+      // Desfaz o otimismo e, logo depois, busca de novo — sempre. O snapshot é
+      // do `onMutate` e pode ter envelhecido durante o voo: remover um
+      // exercício nesta mesma tela invalida a query, e o refetch responde com a
+      // lista já sem ele. Restaurar sem confirmar ressuscitaria na tela o que o
+      // servidor apagou. O rollback dá o retorno imediato, o refetch dá a
+      // verdade.
+      if (context?.previous) qc.setQueryData(['workout', 'plan', id], context.previous);
+      qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
       // 404 aqui não é "o plano sumiu": desde a #205 a API recusa a operação
       // inteira quando algum id do corpo não pertence mais ao plano —
       // exercício removido em outro aparelho, e esta tela ainda com o cache
       // velho. A mensagem crua seria "Plan exercise not found", em inglês e sem
       // dizer o que fazer.
       if (error instanceof ApiError && error.isNotFound) {
-        qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
         Alert.alert(
           'Este plano mudou',
           'Um exercício saiu do plano em outro lugar. Atualizamos a lista — tente mover de novo.',

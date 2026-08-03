@@ -56,6 +56,16 @@ const config: ExpoConfig = {
       },
     ],
     [
+      // Notificação local do fim do descanso (#182). Só `color`, que é o tom da
+      // marca na bandeja do Android. O `icon` fica de fora porque o plugin pede
+      // um PNG 96x96 branco com transparência, e o que existe em `assets/` é
+      // colorido — entregue assim, o Android desenha um quadrado branco. Sem a
+      // chave, ele usa o ícone do app, que é o menos pior até alguém desenhar o
+      // monocromático.
+      'expo-notifications',
+      { color: '#2ce500' },
+    ],
+    [
       'expo-splash-screen',
       {
         backgroundColor: '#131313',

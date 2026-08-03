@@ -174,7 +174,7 @@ esconde a diferença é exatamente o que este documento existe para impedir.
 | `pwa-install-prompt`, `pwa-register`, `sw-register` | são o PWA se instalando e se atualizando. O app nativo já **é** instalado; a atualização vem da loja                                                                                      |
 | Rotas `/privacy` e `/terms`                         | abrem no navegador do sistema (`expo-linking`). Reimplementá-las criaria duas cópias do mesmo texto legal, que divergem no primeiro ajuste — e é justamente o texto que não pode divergir |
 | Paridade offline                                    | o PWA tem service worker; o app não tem equivalente nesta épica, por decisão da épica                                                                                                     |
-| Notificação local do fim do descanso                | `expo-notifications` não entrou. Com o app em segundo plano o háptico só dispara na volta ao primeiro plano. Vale issue própria                                                           |
+| ~~Notificação local do fim do descanso~~            | **Saiu daqui na #182**: `expo-notifications` entrou e o aviso do fim do descanso é agendado no sistema. Virou ganho do nativo, abaixo                                                     |
 
 ---
 
@@ -193,6 +193,7 @@ exigência de loja.
 | Confirmação antes de apagar                       | em tela de toque o alvo erra, e a API não desfaz                                       |
 | Estados de erro onde o web deixa a tela em branco | a auditoria pede estados equivalentes; "equivalente a nada" não serve                  |
 | Scanner de código de barras                       | #140 — e não é escolha: o PWA depende de `BarcodeDetector`, que o Safari não tem       |
+| Notificação local do fim do descanso              | #182 — o descanso é o momento em que o celular vai para o bolso                        |
 
 **Correção que volta para o PWA:** o botão "Log Água" do dashboard, com ícone de
 gota e rótulo de água, abria o drawer de **passos**. Corrigido nos dois.
@@ -214,13 +215,25 @@ também é anunciada nos dois — `announceForAccessibility` no nativo, uma regi
 resposta: dito no toque, ele afirmaria um movimento que a rede ainda pode
 recusar.
 
-**Ganho que hoje é do PWA: o otimismo da reordenação (#115).** No web o
-`onMutate` troca os dois `order` no cache e o `onError` desfaz, então o card sai
-do lugar no toque. O nativo não tem nada disso — `moveExercise` em
-`apps/mobile/app/(app)/workout/plans/[id].tsx` só tem `onSuccess` e `onError`, e
-o card fica parado até a resposta voltar. No 4G do vestiário, que é o cenário
-que motivou a #115, o comportamento dos dois apps é diferente. A assimetria não
-fechou: trocou de lado.
+**O otimismo da reordenação fechou nos dois (#221).** Foi ganho só do PWA entre
+a #115 e a #221: lá o `onMutate` trocava os dois `order` no cache e o `onError`
+desfazia, enquanto o `moveExercise` do nativo tinha só `onSuccess` e `onError` —
+o card ficava parado até a resposta voltar, justamente no 4G do vestiário que
+motivou a #115. Hoje os dois têm `onMutate` com `cancelQueries`, snapshot e
+rollback, e nos dois o `onError` **também invalida**: restaurar o snapshot sem
+confirmar ressuscitaria na tela um exercício apagado durante o voo. A conta do
+anúncio sai da resposta nos dois (`planMoveAnnouncement` no nativo), nunca da
+lista que estava na tela no toque.
+
+**Ganho que voltou para o PWA na #221: o foco não se perde ao reordenar.** Era
+defeito dos dois, medido no PWA — `isMoving` desabilita justamente o botão sob o
+foco, e o card muda de lugar no DOM, então o foco caía no `<body>` e quem navega
+por teclado voltava para o começo do documento a cada movimento. O
+`ExerciseDetailCard` do web devolve o foco à seta que moveu, ou à irmã quando o
+exercício para na borda. **No nativo não há o que consertar:** não existe foco
+de teclado percorrendo a lista, e o `Pressable` desabilitado não tira o foco do
+leitor de tela — o TalkBack e o VoiceOver anunciam a mudança pelo
+`announceForAccessibility` do `onSuccess`.
 
 ---
 

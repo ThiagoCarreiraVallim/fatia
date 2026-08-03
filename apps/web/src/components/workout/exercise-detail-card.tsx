@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Play, Trash2, ChevronUp, ChevronDown, Trophy } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
@@ -172,6 +172,39 @@ function PlanModeCard({
   const [sets, setSets] = useState(String(item.targetSets));
   const [reps, setReps] = useState(item.targetReps);
 
+  const upRef = useRef<HTMLButtonElement>(null);
+  const downRef = useRef<HTMLButtonElement>(null);
+  /** Seta acionada neste card. Só quem pediu a troca devolve o foco. */
+  const setaAcionada = useRef<'up' | 'down' | null>(null);
+
+  // Reordenar perdia o foco (#221). São dois efeitos somados: o nó do card
+  // muda de lugar no DOM e a seta que está sob o foco vira `disabled` até a
+  // API responder. O navegador manda o foco para o `<body>`, então quem navega
+  // por teclado ou switch volta para o começo do documento a cada movimento —
+  // justamente quem mais depende das setas, porque arrastar não é opção.
+  //
+  // Sem lista de dependências de propósito: com a resposta instantânea (cache
+  // quente, servidor na mesma rede) o `isPending` da mutation nasce e morre
+  // dentro do mesmo commit, e um efeito com `[isMoving]` nunca reexecutaria —
+  // mas o card já mudou de lugar e o foco já se perdeu. O corpo sai na primeira
+  // linha quando não há seta acionada, que é o caso de quase todo render.
+  useEffect(() => {
+    if (isMoving) return;
+    const acionada = setaAcionada.current;
+    setaAcionada.current = null;
+    if (!acionada) return;
+    // Se o foco não está no `<body>`, ele não se perdeu: a pessoa foi para
+    // outro controle durante o voo. Puxá-lo de volta seria trocar um defeito
+    // por um pior, o cursor pulando sozinho.
+    if (document.activeElement && document.activeElement !== document.body) return;
+    const usada = acionada === 'up' ? upRef.current : downRef.current;
+    const irma = acionada === 'up' ? downRef.current : upRef.current;
+    // Parar na borda desabilita justamente a seta usada. Insistir nela deixaria
+    // o foco no `<body>` do mesmo jeito; a irmã fica no mesmo card.
+    const alvo = usada && !usada.disabled ? usada : irma;
+    alvo?.focus();
+  });
+
   const pr = useQuery({
     queryKey: ['workout', 'pr', item.exercise.id],
     queryFn: () => workoutApi.getPersonalRecord(item.exercise.id),
@@ -256,7 +289,11 @@ function PlanModeCard({
           {onMoveUp && (
             <button
               type="button"
-              onClick={onMoveUp}
+              ref={upRef}
+              onClick={() => {
+                setaAcionada.current = 'up';
+                onMoveUp();
+              }}
               disabled={isFirst || isMoving}
               className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-20"
               aria-label={`Mover ${item.exercise.name} para cima`}
@@ -267,7 +304,11 @@ function PlanModeCard({
           {onMoveDown && (
             <button
               type="button"
-              onClick={onMoveDown}
+              ref={downRef}
+              onClick={() => {
+                setaAcionada.current = 'down';
+                onMoveDown();
+              }}
               disabled={isLast || isMoving}
               className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-20"
               aria-label={`Mover ${item.exercise.name} para baixo`}
