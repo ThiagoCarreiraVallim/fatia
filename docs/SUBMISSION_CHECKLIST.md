@@ -166,7 +166,7 @@ confirmação de que você rodou **cada** tool. Reviewers fazem teste funcional 
 erro genérico ("Internal Server Error", "Bad Request" sem detalhe) reprova.
 
 - [ ] Rodar as 97 tools no [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector).
-- [ ] Rodar as 87 como **custom connector** no Claude.
+- [ ] Rodar as 97 tools como **custom connector** no Claude.
 - [ ] Criar a **conta de teste populada** (refeições, planos, sessões, séries, pesos,
       passos, água, metas) e escrever o passo a passo de acesso para o reviewer —
       cada link, credencial e etapa.

@@ -99,8 +99,17 @@ transformaria toda semana boa em motivo de deload.
 O sinal é medido **só com sessões concluídas antes do início da semana corrente**. Essa janela fica
 congelada durante a semana inteira; medir com as sessões da própria semana faria a sugestão piscar a
 cada série registrada, e "por que a semana mudou de novo?" é exatamente a pergunta que esta issue
-existe para evitar. O sinal **antecipa** a semana de deload que já existe, trocando-a com a corrente;
-nunca cria uma quinta semana.
+existe para evitar. O sinal **antecipa** a semana de deload que já existe, trocando-a com a que
+sinalizou; nunca cria uma quinta semana.
+
+A antecipação também é **derivada**, e por isso é procurada desde a semana 1 em toda leitura, não só
+na semana corrente. Recalculando só com o sinal de hoje, a antecipação se esqueceria de si mesma: o
+deload já feito derruba o RPE que produziu o sinal, a semana 2 voltaria a acúmulo e a 4 voltaria a
+deload — dois deloads em quatro semanas, com a linha do tempo reescrevendo o que ela mesma
+prescreveu. Como a janela de cada semana é congelada no início dela, o sinal de uma semana passada é
+o mesmo em toda leitura: a antecipação fica estável **sem** coluna nova e sem gravar durante o
+`GET`. É o mesmo argumento da reancoragem — derivar de um histórico que não muda é o que torna a
+resposta idempotente.
 
 ## Consequências
 

@@ -18,6 +18,18 @@
 /** Sessões comparadas. Três porque é a mesma janela da prescrição (#144). */
 export const DELOAD_WINDOW = 3;
 
+/**
+ * Quantas sessões o caller precisa **buscar** para o filtro de RPE ausente ter o
+ * que pular.
+ *
+ * Entregar exatamente `DELOAD_WINDOW` faria o filtro abaixo nunca ignorar nada: ele
+ * só esvaziaria a janela, e uma única sessão sem RPE — `rpe` é opcional no registro
+ * de série — desligaria o sinal em silêncio. O número é limitado porque a janela
+ * também não pode ir buscar o treino do mês passado de quem nunca preenche RPE:
+ * três vezes a janela cobre uma sequência realista de sessões sem o campo.
+ */
+export const DELOAD_CANDIDATE_SESSIONS = DELOAD_WINDOW * 3;
+
 /** Subida de RPE que deixa de ser ruído de auto-avaliação. */
 const MIN_RPE_RISE = 1;
 

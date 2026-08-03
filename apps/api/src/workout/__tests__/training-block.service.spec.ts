@@ -121,12 +121,16 @@ function fakePrisma(options: {
   };
 
   const trainingBlock = {
+    // Campo ausente no `where` é filtro ausente, e não `undefined === valor`. Sem
+    // isto, tirar o `userId` da guarda do `abandon` continuaria devolvendo `null` —
+    // o mock defenderia o isolamento no lugar do código.
     findFirst: jest.fn(
-      async (args: { where: { userId: string; status?: string } }) =>
+      async (args: { where: { id?: string; userId?: string; status?: string } }) =>
         blocks.find(
           (b) =>
-            b.userId === args.where.userId &&
-            (!args.where.status || b.status === args.where.status),
+            (args.where.id === undefined || b.id === args.where.id) &&
+            (args.where.userId === undefined || b.userId === args.where.userId) &&
+            (args.where.status === undefined || b.status === args.where.status),
         ) ?? null,
     ),
     findMany: jest.fn(async (args: { where: { userId: string; status?: string } }) =>
@@ -224,6 +228,24 @@ function bloco(overrides: Partial<FakeBlock> = {}): FakeBlock {
   };
 }
 
+/**
+ * O bloco como ele ficaria no banco, montado a partir do que o `create` gravou.
+ *
+ * Ler de volta o que o próprio service escreveu é o que faz o teste enxergar o dia
+ * seguinte: um fixture escrito à mão traria a âncora que o autor do teste acha
+ * certa, não a que o código gravou.
+ */
+function blocoCriado(prisma: FakePrisma): FakeBlock {
+  const data = prisma.trainingBlock.create.mock.calls[0][0].data;
+  return bloco({
+    planId: data.planId,
+    kind: data.kind,
+    startDate: data.startDate,
+    weeksTotal: data.weeksTotal,
+    weeks: data.weeks.create,
+  });
+}
+
 const sessaoConcluida = (iso: string, sets: FakeSet[] = []): FakeSession => ({
   userId: 'user-A',
   startedAt: new Date(iso),
@@ -250,21 +272,53 @@ describe('TrainingBlockService', () => {
 
   describe('create', () => {
     it('ancora o bloco na segunda-feira do fuso do USUÁRIO, não do UTC', async () => {
-      // Domingo 23h em São Paulo já é segunda 02h em UTC. Ancorar pelo relógio do
-      // servidor jogaria o bloco inteiro uma semana para frente, e a pessoa veria
-      // a semana 1 começar só no dia seguinte.
-      congelaEm('2026-01-19T02:00:00Z');
+      // Segunda 22h em São Paulo já é terça 01h em UTC. Pelo relógio do servidor
+      // hoje não seria segunda, o bloco começaria só na segunda seguinte e a pessoa
+      // esperaria uma semana inteira pelo que montou agora.
+      congelaEm('2026-01-20T01:00:00Z');
       const prisma = fakePrisma({ weeklyWorkouts: 4 });
 
       const criado = await makeService(prisma).create(CTX, {});
 
-      expect(criado.startDate).toBe('2026-01-12');
+      expect(criado.startDate).toBe('2026-01-19');
       expect(criado.weeks.map((w) => w.weekStart)).toEqual([
-        '2026-01-12',
         '2026-01-19',
         '2026-01-26',
         '2026-02-02',
+        '2026-02-09',
       ]);
+    });
+
+    it('montado fora de segunda, começa na PRÓXIMA segunda e não nasce com uma semana perdida', async () => {
+      // Domingo 15h em São Paulo. Ancorar na segunda desta semana daria à semana 1
+      // uma janela que fecha no mesmo dia: na segunda seguinte ela já apareceria
+      // perdida, "o bloco esperou" — por uma semana que terminou antes de o bloco
+      // existir —, e essa falta fantasma consumiria uma das três que o encerram.
+      congelaEm('2026-01-11T18:00:00Z');
+      const prisma = fakePrisma({ weeklyWorkouts: 3 });
+
+      const criado = await makeService(prisma).create(CTX, {});
+      expect(criado.startDate).toBe('2026-01-12');
+
+      // Mesmo bloco, lido na segunda seguinte: nenhuma sessão feita ainda, e mesmo
+      // assim nada de perdido — a semana 1 está começando agora.
+      congelaEm('2026-01-12T15:00:00Z');
+      const emSeguida = fakePrisma({ blocks: [blocoCriado(prisma)], sessions: [] });
+
+      const view = await makeService(emSeguida).getActive(CTX);
+
+      expect(view?.currentWeek?.weekNumber).toBe(1);
+      expect(view?.currentWeek?.shiftedWeeks).toBe(0);
+      expect(view?.explanation).not.toContain('esperou');
+    });
+
+    it('avisa a data em que o bloco começa quando ele ainda não começou', async () => {
+      congelaEm('2026-01-11T18:00:00Z');
+      const prisma = fakePrisma({ weeklyWorkouts: 3 });
+
+      const criado = await makeService(prisma).create(CTX, {});
+
+      expect(criado.explanation).toContain('O bloco começa na segunda, 12/01.');
     });
 
     it('copia os fatores do template para as linhas e usa a meta semanal', async () => {
@@ -438,6 +492,44 @@ describe('TrainingBlockService', () => {
     });
   });
 
+  describe('abandon', () => {
+    it('não encerra o bloco de outra pessoa', async () => {
+      // Sem RLS (ADR 010) esta guarda **é** o isolamento de
+      // `DELETE /api/workout/blocks/:id` e da tool `delete_training_block`, que é
+      // marcada como destrutiva — o Claude a chama sem confirmar. E a resposta é a
+      // mesma de "não existe" (#92).
+      congelaEm('2026-01-14T15:00:00Z');
+      const prisma = fakePrisma({ blocks: [bloco({ userId: 'user-B' })] });
+
+      await expect(makeService(prisma).abandon(CTX, 'block-1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(prisma.trainingBlock.update).not.toHaveBeenCalled();
+    });
+
+    it('encerra o bloco do próprio dono', async () => {
+      congelaEm('2026-01-14T15:00:00Z');
+      const prisma = fakePrisma({ blocks: [bloco()] });
+
+      await makeService(prisma).abandon(CTX, 'block-1');
+
+      expect(prisma.trainingBlock.update).toHaveBeenCalledWith({
+        where: { id: 'block-1' },
+        data: { status: 'abandoned' },
+      });
+    });
+
+    it('responde NotFound para bloco inexistente, sem gravar nada', async () => {
+      congelaEm('2026-01-14T15:00:00Z');
+      const prisma = fakePrisma({ blocks: [bloco()] });
+
+      await expect(makeService(prisma).abandon(CTX, 'block-que-nao-existe')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(prisma.trainingBlock.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe('deload por sinal real', () => {
     /** Bloco cuja semana corrente é a 2 (a semana 1 fechou com 3 sessões). */
     const semanaUmCheia = [
@@ -498,6 +590,50 @@ describe('TrainingBlockService', () => {
       const view = await makeService(prisma).getActive(CTX);
 
       expect(view?.deload).toEqual({ suggested: true, rpeDelta: 2, loadDeltaKg: 0 });
+    });
+
+    it('não desliga o sinal quando a sessão mais recente está sem RPE', async () => {
+      // `rpe` é opcional na série: a sessão sem o campo é o caso comum, não o
+      // exótico. O helper foi escrito para PULAR essa sessão — mas ele só consegue
+      // pular se a busca trouxer candidata sobrando. Buscando exatamente a janela,
+      // uma única sessão sem RPE desligava em silêncio a feature-título da issue.
+      congelaEm('2026-01-14T15:00:00Z');
+      const prisma = fakePrisma({
+        blocks: [bloco()],
+        sessions: [...semanaUmCheia, sessaoConcluida('2026-01-11T12:00:00Z', [forca(60, null)])],
+      });
+
+      const view = await makeService(prisma).getActive(CTX);
+
+      expect(view?.deload).toEqual({ suggested: true, rpeDelta: 2, loadDeltaKg: 0 });
+      expect(view?.currentWeek?.focus).toBe('deload');
+    });
+
+    it('o deload antecipado continua na mesma semana na leitura seguinte', async () => {
+      // A antecipação é derivada, e derivada instável reescreve o que o bloco já
+      // prescreveu: a semana 2 saía como deload numa leitura e voltava a acúmulo na
+      // outra (o próprio deload derruba o RPE que produziu o sinal), com a semana 4
+      // voltando a ser deload — dois deloads em quatro semanas.
+      congelaEm('2026-01-21T15:00:00Z');
+      const prisma = fakePrisma({
+        blocks: [bloco()],
+        sessions: [
+          ...semanaUmCheia,
+          // Semana 2 já feita em regime de deload: carga e RPE lá embaixo.
+          sessaoConcluida('2026-01-13T12:00:00Z', [forca(50, 5)]),
+          sessaoConcluida('2026-01-15T12:00:00Z', [forca(50, 5)]),
+          sessaoConcluida('2026-01-17T12:00:00Z', [forca(50, 5)]),
+        ],
+      });
+
+      const view = await makeService(prisma).getActive(CTX);
+
+      expect(view?.currentWeek?.weekNumber).toBe(3);
+      expect(view?.weeks[1].focus).toBe('deload');
+      expect(view?.weeks[1].intensityFactor).toBe(0.85);
+      expect(view?.weeks[3].focus).toBe('accumulation');
+      // A frase do deload é da semana que ficou com ele, não da semana corrente.
+      expect(view?.explanation).not.toContain('O deload veio para cá');
     });
 
     it('restringe o sinal aos exercícios do plano do bloco', async () => {

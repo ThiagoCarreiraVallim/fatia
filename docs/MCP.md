@@ -1530,7 +1530,10 @@ sessões concluídas. A decisão inteira está na
 
 ### `create_training_block`
 
-Monta o bloco ancorado na segunda-feira desta semana, **no fuso do usuário**.
+Monta o bloco ancorado numa segunda-feira **no fuso do usuário**: a de hoje quando hoje é segunda, a
+próxima nos outros dias. Bloco montado numa quinta que começasse na segunda que já passou nasceria
+com a semana 1 quase vencida, e a leitura da segunda seguinte já a daria por perdida — gastando uma
+das três faltas que encerram o bloco com uma semana que terminou antes de ele existir.
 
 **Input:**
 
@@ -1609,7 +1612,12 @@ fechar no meio do treino de sábado.
 
 O deload também é antecipado por sinal real, e exige **as duas** condições juntas — RPE médio subindo
 ≥1 ponto em 3 sessões **e** carga igual ou menor. RPE subindo com carga subindo é progresso, não
-fadiga. O sinal troca a semana corrente com a de deload já existente; nunca cria uma quinta semana.
+fadiga. O sinal troca a semana que sinalizou com a de deload já existente; nunca cria uma quinta
+semana. Sessão sem RPE preenchido é **pulada**, não conta como RPE zero — por isso a busca traz mais
+candidatas do que o tamanho da janela. A antecipação é procurada desde a semana 1 a cada leitura, e
+não só na semana corrente: como a janela de cada semana é congelada no início dela, a semana que
+ficou com o deload continua sendo a mesma nas leituras seguintes, em vez de o deload voltar para a
+semana 4 e a pessoa fazer dois em quatro semanas.
 
 ### `delete_training_block`
 

@@ -17,6 +17,7 @@ import {
   type BlockKind,
 } from './helpers/block-template';
 import {
+  DELOAD_CANDIDATE_SESSIONS,
   DELOAD_WINDOW,
   detectDeloadSignal,
   type DeloadSignal,
@@ -45,9 +46,10 @@ export class TrainingBlockService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Cria o bloco de 4 semanas ancorado na segunda-feira desta semana, no fuso do
-   * usuário. Os fatores do template são **copiados** para as linhas: o bloco que a
-   * pessoa aceitou não pode mudar quando `block-template.ts` mudar.
+   * Cria o bloco de 4 semanas ancorado na segunda-feira em que a semana 1 de fato
+   * começa (ver `blockStartDate`), no fuso do usuário. Os fatores do template são
+   * **copiados** para as linhas: o bloco que a pessoa aceitou não pode mudar
+   * quando `block-template.ts` mudar.
    */
   async create(ctx: BlockUserCtx, dto: CreateTrainingBlockDto) {
     // O `planId` vem do corpo; ser dono da conta não autoriza apontar para o plano
@@ -70,7 +72,7 @@ export class TrainingBlockService {
     if (stillActive > 0) throw new ConflictException('Active training block already exists');
 
     const sessionsTarget = dto.sessionsPerWeek ?? (await this.weeklyWorkoutsGoal(ctx.userId));
-    const startDate = weekStartInTz(new Date(), ctx.timezone);
+    const startDate = blockStartDate(ctx.timezone);
 
     const block = await this.prisma.trainingBlock.create({
       data: {
@@ -168,15 +170,26 @@ export class TrainingBlockService {
 
     const current = reconciled.weeks.find((w) => w.weekNumber === reconciled.currentWeekNumber);
 
+    // Resolvido uma vez só: o sinal é medido para mais de uma semana logo abaixo, e
+    // cada medição repetiria a mesma consulta de exercícios do plano.
+    const exerciseIds = block.planId ? await this.planExerciseIds(block.planId) : null;
+
     // Janela congelada: só sessões concluídas ANTES da semana corrente entram no
     // sinal. Medir com as sessões da própria semana faria a sugestão piscar a cada
     // série registrada — e "por que a semana mudou de novo?" é exatamente a
     // pergunta que esta issue existe para evitar.
     const deload = current
-      ? await this.deloadSignal(ctx, block.planId, current.effectiveWeekStart)
+      ? await this.deloadSignal(ctx, exerciseIds, current.effectiveWeekStart)
       : ({ suggested: false, reason: 'insufficient_history' } as const);
 
-    const weeks = anticipateDeload(reconciled.weeks, current, deload);
+    const antecipada = await this.anticipatedDeloadWeek(
+      ctx,
+      exerciseIds,
+      reconciled.weeks,
+      current,
+      deload,
+    );
+    const weeks = swapDeloadInto(reconciled.weeks, antecipada);
     const currentView = weeks.find((w) => w.weekNumber === reconciled.currentWeekNumber) ?? null;
     const nextView =
       weeks.find((w) => w.weekNumber === (reconciled.currentWeekNumber ?? 0) + 1) ?? null;
@@ -198,8 +211,50 @@ export class TrainingBlockService {
       weeks,
       deload,
       /** A frase inteira, pronta para a tela — web e mobile mostram a mesma. */
-      explanation: explain(reconciled.status, currentView, deload),
+      explanation: explain(
+        reconciled.status,
+        currentView,
+        deload,
+        antecipada !== null && antecipada === reconciled.currentWeekNumber,
+      ),
     };
+  }
+
+  /**
+   * A semana que **ficou** com o deload antecipado — `null` quando nenhuma ficou.
+   *
+   * Procura desde a semana 1, e não só na corrente, porque a antecipação precisa
+   * sobreviver à leitura seguinte. Recalculando só com o sinal de hoje, a semana 2
+   * saía como deload numa leitura e voltava a acúmulo na outra (o deload já feito
+   * derruba o RPE que produziu o sinal), e a semana 4 voltava a ser deload: dois
+   * deloads em quatro semanas, e a linha do tempo reescrevendo o que ela mesma
+   * prescreveu. Como a janela de cada semana é congelada no início dela, o sinal de
+   * uma semana passada é o mesmo em toda leitura — a antecipação é derivada e ainda
+   * assim estável, sem coluna nova e sem gravar durante o `GET` (ADR 019).
+   *
+   * A primeira semana que sinaliza fica com o deload; as seguintes não repetem a
+   * troca, senão o bloco teria mais de uma semana leve.
+   */
+  private async anticipatedDeloadWeek(
+    ctx: BlockUserCtx,
+    exerciseIds: number[] | null,
+    weeks: ReconciledWeek[],
+    current: ReconciledWeek | undefined,
+    currentSignal: DeloadSignal,
+  ): Promise<number | null> {
+    if (!current) return null;
+
+    for (const week of weeks) {
+      if (week.weekNumber > current.weekNumber) break;
+      if (week.focus === 'deload') continue;
+
+      const sinal =
+        week.weekNumber === current.weekNumber
+          ? currentSignal
+          : await this.deloadSignal(ctx, exerciseIds, week.effectiveWeekStart);
+      if (sinal.suggested) return week.weekNumber;
+    }
+    return null;
   }
 
   /**
@@ -228,16 +283,9 @@ export class TrainingBlockService {
    */
   private async deloadSignal(
     ctx: BlockUserCtx,
-    planId: string | null,
+    exerciseIds: number[] | null,
     before: string,
   ): Promise<DeloadSignal> {
-    const exerciseIds = planId ? await this.planExerciseIds(planId) : null;
-    // Plano sem exercício nenhum: um `in: []` traria zero sessões e o sinal ficaria
-    // preso em "histórico insuficiente" sem ninguém entender por quê.
-    if (exerciseIds !== null && exerciseIds.length === 0) {
-      return { suggested: false, reason: 'insufficient_history' };
-    }
-
     const validStrengthSet = {
       weightKg: { not: null },
       reps: { not: null },
@@ -252,7 +300,10 @@ export class TrainingBlockService {
         sets: { some: validStrengthSet },
       },
       orderBy: { startedAt: 'desc' },
-      take: DELOAD_WINDOW,
+      // Mais que `DELOAD_WINDOW`: quem pula sessão sem RPE é o helper, e ele só tem
+      // o que pular se sobrar candidata. Buscando exatamente a janela, uma única
+      // sessão recente sem RPE preenchido zerava o sinal para sempre.
+      take: DELOAD_CANDIDATE_SESSIONS,
       select: { sets: { where: validStrengthSet, select: { weightKg: true, rpe: true } } },
     });
 
@@ -312,23 +363,39 @@ function toPlannedWeek(week: BlockRow['weeks'][number]) {
 }
 
 /**
+ * Segunda-feira em que a semana 1 começa, no fuso do usuário.
+ *
+ * Bloco montado numa quinta **não** pode começar na segunda que já passou: a semana
+ * 1 nasceria com a janela quase vencida e, sem nenhuma sessão feita sob o bloco, a
+ * primeira leitura da segunda seguinte já a daria por perdida — queimando uma das
+ * três faltas que encerram o bloco por ausência, por uma semana que terminou antes
+ * de o bloco existir. O simétrico é igualmente errado: contar os treinos de antes
+ * da criação entregaria a semana 1 cumprida sem nenhuma sessão feita sob o bloco.
+ * Ancorar na próxima segunda faz o combinado valer para o tempo que ainda existe.
+ */
+function blockStartDate(timezone: string): string {
+  const hoje = todayInTz(timezone);
+  const segundaDestaSemana = weekStartInTz(new Date(), timezone);
+  return hoje === segundaDestaSemana ? hoje : addDaysIso(segundaDestaSemana, 7);
+}
+
+/**
  * O sinal **antecipa** a semana de deload que já existe; nunca cria uma quinta.
  *
- * A troca é de fatores e foco entre a semana corrente e a de deload ainda à frente
- * — o bloco continua tendo 4 semanas, e a semana empurrada vira a última.
+ * A troca é de fatores e foco entre a semana que sinalizou e a de deload ainda à
+ * frente — o bloco continua tendo 4 semanas, e a semana empurrada vira a última.
  */
-function anticipateDeload(
-  weeks: ReconciledWeek[],
-  current: ReconciledWeek | undefined,
-  deload: DeloadSignal,
-): ReconciledWeek[] {
-  if (!deload.suggested || !current || current.focus === 'deload') return weeks;
+function swapDeloadInto(weeks: ReconciledWeek[], weekNumber: number | null): ReconciledWeek[] {
+  if (weekNumber === null) return weeks;
 
-  const alvo = weeks.find((w) => w.focus === 'deload' && w.weekNumber > current.weekNumber);
+  const origem = weeks.find((w) => w.weekNumber === weekNumber);
+  if (!origem) return weeks;
+
+  const alvo = weeks.find((w) => w.focus === 'deload' && w.weekNumber > origem.weekNumber);
   if (!alvo) return weeks;
 
   return weeks.map((week) => {
-    if (week.weekNumber === current.weekNumber) {
+    if (week.weekNumber === origem.weekNumber) {
       return {
         ...week,
         focus: alvo.focus,
@@ -339,9 +406,9 @@ function anticipateDeload(
     if (week.weekNumber === alvo.weekNumber) {
       return {
         ...week,
-        focus: current.focus,
-        intensityFactor: current.intensityFactor,
-        volumeFactor: current.volumeFactor,
+        focus: origem.focus,
+        intensityFactor: origem.intensityFactor,
+        volumeFactor: origem.volumeFactor,
       };
     }
     return week;
@@ -352,6 +419,8 @@ function explain(
   status: 'active' | 'completed' | 'abandoned',
   current: ReconciledWeek | null,
   deload: DeloadSignal,
+  /** O deload antecipado caiu na semana corrente — só aí a frase dele faz sentido. */
+  deloadAntecipadoAqui: boolean,
 ): string {
   if (status === 'completed') return 'Bloco concluído. Dá para começar o próximo.';
   if (status === 'abandoned') {
@@ -360,6 +429,11 @@ function explain(
   if (!current) return 'Bloco sem semana corrente.';
 
   const partes = [describeWeek(current)];
+  // Bloco montado no meio da semana começa na segunda seguinte: sem dizer a data, o
+  // card pareceria afirmar que a semana 1 já está correndo.
+  if (current.state === 'upcoming') {
+    partes.push(`O bloco começa na segunda, ${diaEMes(current.effectiveWeekStart)}.`);
+  }
   if (current.shiftedWeeks > 0) {
     partes.push(
       current.shiftedWeeks === 1
@@ -368,7 +442,7 @@ function explain(
         : `Você perdeu ${current.shiftedWeeks} semanas e o bloco esperou: esta continua sendo a semana ${current.weekNumber}.`,
     );
   }
-  if (deload.suggested) {
+  if (deload.suggested && deloadAntecipadoAqui) {
     partes.push(
       `O deload veio para cá: seu RPE subiu ${formatDelta(deload.rpeDelta)} ponto(s) com a mesma carga nas últimas ${DELOAD_WINDOW} sessões.`,
     );
@@ -380,4 +454,10 @@ const MAX_MISSED_LABEL = '3 semanas seguidas';
 
 function formatDelta(value: number): string {
   return value.toFixed(1).replace('.', ',');
+}
+
+/** `2026-01-12` → `12/01`. A data já vem no fuso do usuário. */
+function diaEMes(iso: string): string {
+  const [, mes, dia] = iso.split('-');
+  return `${dia}/${mes}`;
 }

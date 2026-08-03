@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -14,6 +14,7 @@ vi.mock('@fatia/api-client', async () => {
       getActiveBlock: vi.fn(),
       createBlock: vi.fn(),
       deleteBlock: vi.fn(),
+      listPlans: vi.fn(),
     },
   };
 });
@@ -22,6 +23,13 @@ import { workoutApi } from '@fatia/api-client';
 
 const getActiveBlock = vi.mocked(workoutApi.getActiveBlock);
 const createBlock = vi.mocked(workoutApi.createBlock);
+const deleteBlock = vi.mocked(workoutApi.deleteBlock);
+const listPlans = vi.mocked(workoutApi.listPlans);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  listPlans.mockResolvedValue([]);
+});
 
 function semana(partial: Partial<TrainingBlockWeek> & { weekNumber: number }): TrainingBlockWeek {
   return {
@@ -127,5 +135,51 @@ describe('BlockTimeline', () => {
     await userEvent.click(botao);
 
     await waitFor(() => expect(createBlock).toHaveBeenCalledWith({ planId: undefined }));
+  });
+
+  it('periodiza o plano escolhido na tela, e não só pelo MCP', async () => {
+    // Sem escolher o plano aqui, todo bloco montado pela tela nascia com
+    // `planId: null` — e o `plannedToday` do dashboard nunca saía de nulo para
+    // quem usa o app.
+    getActiveBlock.mockResolvedValue(null);
+    listPlans.mockResolvedValue([
+      { id: 'plan-1', userId: 'u1', name: 'Push', exercises: [] },
+      { id: 'plan-2', userId: 'u1', name: 'Pull', exercises: [] },
+    ]);
+    createBlock.mockResolvedValue(bloco());
+
+    renderTimeline();
+
+    const select = await screen.findByLabelText(/Plano do bloco/);
+    await userEvent.selectOptions(select, 'plan-2');
+    await userEvent.click(screen.getByRole('button', { name: /MONTAR BLOCO/ }));
+
+    await waitFor(() => expect(createBlock).toHaveBeenCalledWith({ planId: 'plan-2' }));
+  });
+
+  it('não encerra o bloco no primeiro clique', async () => {
+    // `delete_training_block` é `destructiveHint`, e aqui não há desfazer: o
+    // combinado das 4 semanas some.
+    getActiveBlock.mockResolvedValue(bloco());
+
+    renderTimeline();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Encerrar' }));
+    expect(deleteBlock).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
+    await waitFor(() => expect(deleteBlock).toHaveBeenCalledWith('bloco-1'));
+  });
+
+  it('desiste de encerrar quando o usuário mantém o bloco', async () => {
+    getActiveBlock.mockResolvedValue(bloco());
+
+    renderTimeline();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Encerrar' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Manter' }));
+
+    expect(screen.getByRole('button', { name: 'Encerrar' })).toBeInTheDocument();
+    expect(deleteBlock).not.toHaveBeenCalled();
   });
 });

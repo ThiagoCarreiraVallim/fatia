@@ -1,4 +1,8 @@
-import { DELOAD_WINDOW, detectDeloadSignal } from '../helpers/detect-deload-signal';
+import {
+  DELOAD_CANDIDATE_SESSIONS,
+  DELOAD_WINDOW,
+  detectDeloadSignal,
+} from '../helpers/detect-deload-signal';
 
 /** Pontos da MAIS RECENTE para a mais antiga, como o service entrega. */
 const pontos = (...valores: Array<[number | null, number]>) =>
@@ -50,6 +54,16 @@ describe('detectDeloadSignal', () => {
     const sinal = detectDeloadSignal(pontos([9, 60], [null, 60], [7, 60]));
 
     expect(sinal).toEqual({ suggested: false, reason: 'insufficient_history' });
+  });
+
+  it('pula a sessão sem RPE e completa a janela com as que têm', () => {
+    // A mais recente veio sem RPE. Com candidatas sobrando, ela é ignorada e a
+    // janela se fecha com as três que têm o número — que é o que o comentário do
+    // helper promete, e o motivo de o caller buscar mais que `DELOAD_WINDOW`.
+    const sinal = detectDeloadSignal(pontos([null, 60], [9, 60], [8, 60], [7, 60]));
+
+    expect(sinal).toEqual({ suggested: true, rpeDelta: 2, loadDeltaKg: 0 });
+    expect(DELOAD_CANDIDATE_SESSIONS).toBeGreaterThan(DELOAD_WINDOW);
   });
 
   it('compara as pontas da janela, não a sessão anterior', () => {

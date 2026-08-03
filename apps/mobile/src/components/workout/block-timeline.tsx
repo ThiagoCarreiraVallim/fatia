@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarRange } from 'lucide-react-native';
 import { workoutApi, type TrainingBlock, type TrainingBlockWeek } from '@fatia/api-client';
@@ -12,13 +13,22 @@ const FOCO_CURTO: Record<TrainingBlockWeek['focus'], string> = {
   deload: 'Deload',
 };
 
-export function BlockTimeline({ planId }: { planId?: string }) {
+export function BlockTimeline() {
   const qc = useQueryClient();
+  const [planId, setPlanId] = useState<string | undefined>(undefined);
 
   const block = useQuery({
     queryKey: ['workout', 'block'],
     queryFn: () => workoutApi.getActiveBlock(),
     retry: false,
+  });
+
+  // Mesma `queryKey` da tela de treino: a lista já está em cache, e é ela que
+  // permite periodizar um plano. Sem escolher plano aqui, todo bloco montado pela
+  // tela nascia sem `planId` — e o `plannedToday` do dashboard nunca saía de nulo.
+  const plans = useQuery({
+    queryKey: ['workout', 'plans'],
+    queryFn: () => workoutApi.listPlans(),
   });
 
   const criar = useMutation({
@@ -42,6 +52,32 @@ export function BlockTimeline({ planId }: { planId?: string }) {
           Quatro semanas com carga e volume planejados, terminando em deload. Se você perder uma
           semana inteira, o bloco espera por você.
         </Text>
+        {plans.data && plans.data.length > 0 ? (
+          <View className="gap-2">
+            <Text className="text-xs text-muted-foreground">Plano do bloco</Text>
+            <View className="flex-row flex-wrap gap-2">
+              {[{ id: undefined, name: 'Treino livre' }, ...plans.data].map((plan) => (
+                <Pressable
+                  key={plan.id ?? 'livre'}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: planId === plan.id }}
+                  onPress={() => setPlanId(plan.id)}
+                  className={`min-h-[44px] justify-center rounded-xl px-3 ${
+                    planId === plan.id ? 'bg-primary' : 'bg-muted'
+                  }`}
+                >
+                  <Text
+                    className={`text-xs font-bold ${
+                      planId === plan.id ? 'text-primary-foreground' : 'text-muted-foreground'
+                    }`}
+                  >
+                    {plan.name}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ) : null}
         <Button
           className="h-12 rounded-xl"
           loading={criar.isPending}
@@ -53,7 +89,15 @@ export function BlockTimeline({ planId }: { planId?: string }) {
     );
   }
 
-  return <BlockCard block={ativo} onEncerrar={() => encerrar.mutate(ativo.id)} />;
+  // Encerrar apaga o combinado das 4 semanas e não tem desfazer — o mesmo motivo
+  // pelo qual a tool equivalente é `destructiveHint`.
+  const confirmarEncerrar = () =>
+    Alert.alert('Encerrar o bloco?', 'As 4 semanas planejadas somem e não dá para voltar atrás.', [
+      { text: 'Manter', style: 'cancel' },
+      { text: 'Encerrar', style: 'destructive', onPress: () => encerrar.mutate(ativo.id) },
+    ]);
+
+  return <BlockCard block={ativo} onEncerrar={confirmarEncerrar} />;
 }
 
 function BlockCard({ block, onEncerrar }: { block: TrainingBlock; onEncerrar: () => void }) {

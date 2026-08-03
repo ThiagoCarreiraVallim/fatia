@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarRange } from 'lucide-react';
 import { workoutApi, type TrainingBlock, type TrainingBlockWeek } from '@fatia/api-client';
@@ -17,8 +18,9 @@ const FOCO_CURTO: Record<TrainingBlockWeek['focus'], string> = {
  * A frase explicativa vem pronta da API (`explanation`): web e mobile mostram a
  * mesma coisa, e a regra de periodização não é reescrita em dois clientes.
  */
-export function BlockTimeline({ planId }: { planId?: string }) {
+export function BlockTimeline() {
   const qc = useQueryClient();
+  const [planId, setPlanId] = useState('');
 
   const block = useQuery({
     queryKey: ['workout', 'block'],
@@ -26,8 +28,16 @@ export function BlockTimeline({ planId }: { planId?: string }) {
     retry: false,
   });
 
+  // Mesma `queryKey` da tela de treino: a lista já está em cache, e é ela que
+  // permite periodizar um plano. Sem escolher plano aqui, todo bloco montado pela
+  // tela nascia sem `planId` — e o `plannedToday` do dashboard nunca saía de nulo.
+  const plans = useQuery({
+    queryKey: ['workout', 'plans'],
+    queryFn: () => workoutApi.listPlans(),
+  });
+
   const criar = useMutation({
-    mutationFn: () => workoutApi.createBlock({ planId }),
+    mutationFn: () => workoutApi.createBlock({ planId: planId || undefined }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['workout', 'block'] }),
   });
 
@@ -48,6 +58,23 @@ export function BlockTimeline({ planId }: { planId?: string }) {
           Quatro semanas com carga e volume planejados, terminando em deload. Se você perder uma
           semana inteira, o bloco espera por você.
         </p>
+        {plans.data && plans.data.length > 0 && (
+          <label className="mt-3 block text-xs text-muted-foreground">
+            Plano do bloco
+            <select
+              value={planId}
+              onChange={(e) => setPlanId(e.target.value)}
+              className="mt-1 h-10 w-full rounded-xl bg-muted px-3 text-sm text-foreground"
+            >
+              <option value="">Treino livre</option>
+              {plans.data.map((plan) => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <Button
           className="mt-3 h-10 w-full rounded-xl text-sm font-extrabold"
           onClick={() => criar.mutate()}
@@ -63,6 +90,11 @@ export function BlockTimeline({ planId }: { planId?: string }) {
 }
 
 function BlockCard({ block, onEncerrar }: { block: TrainingBlock; onEncerrar: () => void }) {
+  // Encerrar apaga o bloco: as 4 semanas combinadas somem e não há como desfazer.
+  // Um clique só, num link discreto ao lado do título, é fácil demais de acertar
+  // sem querer.
+  const [confirmando, setConfirmando] = useState(false);
+
   return (
     <section className="rounded-2xl border border-white/5 bg-card p-4">
       <div className="flex items-start justify-between gap-3">
@@ -77,13 +109,32 @@ function BlockCard({ block, onEncerrar }: { block: TrainingBlock; onEncerrar: ()
             {block.planName && <p className="text-xs text-muted-foreground">{block.planName}</p>}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onEncerrar}
-          className="text-[11px] font-extrabold text-muted-foreground underline"
-        >
-          Encerrar
-        </button>
+        {confirmando ? (
+          <div className="flex shrink-0 items-center gap-3">
+            <button
+              type="button"
+              onClick={onEncerrar}
+              className="text-[11px] font-extrabold text-destructive underline"
+            >
+              Confirmar
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmando(false)}
+              className="text-[11px] font-extrabold text-muted-foreground underline"
+            >
+              Manter
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmando(true)}
+            className="text-[11px] font-extrabold text-muted-foreground underline"
+          >
+            Encerrar
+          </button>
+        )}
       </div>
 
       <p className="mt-3 text-sm text-foreground">{block.explanation}</p>
