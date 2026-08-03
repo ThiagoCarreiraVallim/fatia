@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: 'As regras de uso da instância pública do Fatia.',
 };
 
-const LAST_UPDATED = '30 de julho de 2026';
+const LAST_UPDATED = '3 de agosto de 2026';
 
 export default function TermsPage() {
   return (
@@ -89,6 +89,14 @@ export default function TermsPage() {
           cobrado de você: o processamento do Claude corre na sua própria assinatura.
         </p>
         <p>
+          Se a IA hospedada pelo Fatia for ativada na sua conta, quem paga a inferência é o projeto,
+          e não você. Por isso ela tem <strong>limite diário de uso</strong>. Ao atingir o limite, a
+          função de IA fica indisponível até o dia seguinte e o registro manual continua funcionando
+          normalmente —{' '}
+          <strong>em nenhuma hipótese isso vira cobrança ou oferta de plano pago</strong>. O limite
+          é uma contenção de custo do projeto, não um funil de vendas.
+        </p>
+        <p>
           Em contrapartida, e sendo direto: <strong>não há SLA.</strong> É um projeto mantido por
           uma pessoa. O serviço pode ficar indisponível, ter janelas de manutenção, ou — em último
           caso — ser descontinuado. Se isso acontecer, avisaremos no repositório com antecedência
@@ -121,6 +129,26 @@ export default function TermsPage() {
         <p>
           O Claude é um produto da Anthropic e não é operado por nós. O uso dele é regido pelos
           termos da Anthropic.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="IA hospedada pelo Fatia">
+        <p>
+          Diferente do item acima: aqui é o Fatia que chama um provedor de modelo, para reconhecer
+          uma foto ou um áudio sem exigir que você tenha assinatura de IA.{' '}
+          <strong>Esta função ainda não está disponível na instância pública.</strong>
+        </p>
+        <p>
+          Quando existir, será <strong>opcional</strong> e dependerá de consentimento específico
+          seu, separado do aceite destes termos — porque o caminho manual não usa IA nenhuma, e quem
+          não quiser usar não precisa consentir com nada. Você pode revogar quando quiser, sem
+          perder conta nem histórico. O que sai do seu aparelho, o que não sai e quem recebe estão
+          detalhados na <a href="/privacy">Política de Privacidade</a>.
+        </p>
+        <p>
+          Resultado de IA é <strong>estimativa</strong>. Um modelo pode identificar o alimento
+          errado ou errar a porção. Confira antes de registrar, e releia a seção{' '}
+          <strong>Isto não é orientação médica</strong> acima.
         </p>
       </LegalSection>
 

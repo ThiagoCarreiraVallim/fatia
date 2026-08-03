@@ -13,7 +13,14 @@ from typing import Any
 
 import httpx
 
+from ..allowed_models import (
+    CAPABILITY_ENV_VARS,
+    CAPABILITY_LABELS,
+    unreviewed_model_reason,
+)
+from ..settings import is_local_endpoint
 from .errors import (
+    AIModelNotAllowed,
     AIProviderError,
     AIProviderNotConfigured,
     AIProviderRefused,
@@ -50,6 +57,13 @@ class OpenAICompatProvider:
         self._max_retries = max_retries
         self._retry_backoff_s = retry_backoff_s
 
+        # Derivado da própria `base_url`, não recebido como parâmetro: um flag
+        # opcional nasceria com default, e o default erraria na direção de
+        # liberar — o mesmo motivo pelo qual `hostedInference` é obrigatório na
+        # ADR 018. Assim não existe forma de construir o provedor escapando da
+        # revisão de modelo, nem por engano nem em teste.
+        self._remote_endpoint = not is_local_endpoint(base_url)
+
         # Sem chave, nenhum header de autorização: o LM Studio recusa nada, mas
         # mandar `Bearer ` vazio para um gateway produz um 401 mais confuso do
         # que a ausência do header.
@@ -74,7 +88,7 @@ class OpenAICompatProvider:
     # --- capacidades -----------------------------------------------------
 
     async def complete(self, prompt: str, *, system: str | None = None) -> str:
-        model = _require_model(self._text_model, "AI_MODEL_TEXT", "texto")
+        model = self._require_model("text", self._text_model)
         messages: list[dict[str, Any]] = []
         if system is not None:
             messages.append({"role": "system", "content": system})
@@ -82,7 +96,7 @@ class OpenAICompatProvider:
         return await self._chat(model, messages)
 
     async def describe(self, image: bytes, *, prompt: str, media_type: str = "image/jpeg") -> str:
-        model = _require_model(self._vision_model, "AI_MODEL_VISION", "visão")
+        model = self._require_model("vision", self._vision_model)
         data_uri = f"data:{media_type};base64,{base64.b64encode(image).decode('ascii')}"
         messages: list[dict[str, Any]] = [
             {
@@ -96,7 +110,7 @@ class OpenAICompatProvider:
         return await self._chat(model, messages)
 
     async def embed(self, texts: Sequence[str]) -> list[list[float]]:
-        model = _require_model(self._embedding_model, "AI_MODEL_EMBEDDING", "embedding")
+        model = self._require_model("embedding", self._embedding_model)
         response = await self._request(
             "POST", "embeddings", json={"model": model, "input": list(texts)}
         )
@@ -141,6 +155,33 @@ class OpenAICompatProvider:
         if not isinstance(data, list):
             raise AIResponseUnparseable("'/models' não devolveu 'data'.")
         return [item["id"] for item in data if isinstance(item, dict) and "id" in item]
+
+    # --- modelo por capacidade -------------------------------------------
+
+    def _require_model(self, capability: str, model: str) -> str:
+        """Resolve o modelo da capacidade, ou recusa com erro nomeado.
+
+        Único ponto por onde toda inferência passa antes de a requisição existir
+        — é por isso que a revisão de privacidade da issue #136 mora aqui, e não
+        no `build_provider`. Recusar na montagem derrubaria as três capacidades
+        por causa de uma; recusar aqui derruba exatamente a que aponta para o
+        fornecedor não revisado, e antes de qualquer byte sair.
+        """
+        env_var = CAPABILITY_ENV_VARS.get(capability, "AI_MODEL_*")
+        label = CAPABILITY_LABELS.get(capability, capability)
+
+        if not model.strip():
+            raise AIProviderNotConfigured(
+                f"A capacidade de {label} não tem modelo configurado: defina {env_var}. "
+                "Os modelos são variáveis separadas de propósito — o gateway roteia "
+                "capacidades diferentes para modelos diferentes."
+            )
+
+        reason = unreviewed_model_reason(capability, model, remote=self._remote_endpoint)
+        if reason is not None:
+            raise AIModelNotAllowed(reason)
+
+        return model
 
     # --- transporte ------------------------------------------------------
 
@@ -218,16 +259,6 @@ class OpenAICompatProvider:
     async def _backoff(self, attempt: int) -> None:
         if self._retry_backoff_s > 0:
             await asyncio.sleep(self._retry_backoff_s * (2**attempt))
-
-
-def _require_model(model: str, env_var: str, capability: str) -> str:
-    if not model.strip():
-        raise AIProviderNotConfigured(
-            f"A capacidade de {capability} não tem modelo configurado: defina {env_var}. "
-            "Os modelos são variáveis separadas de propósito — o gateway roteia "
-            "capacidades diferentes para modelos diferentes."
-        )
-    return model
 
 
 def _floats(embedding: list[Any]) -> list[float]:

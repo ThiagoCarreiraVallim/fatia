@@ -26,6 +26,20 @@ class AIProviderNotConfigured(AIProviderError):
     code = "AI_PROVIDER_NOT_CONFIGURED"
 
 
+class AIModelNotAllowed(AIProviderError):
+    """O modelo configurado para a capacidade não passou por revisão de privacidade.
+
+    Separado de `AIProviderNotConfigured` de propósito, embora os dois sejam falha
+    de configuração e os dois virem 503: "esqueci de preencher" e "preenchi com um
+    fornecedor que ninguém revisou" pedem ações opostas de quem opera. O segundo
+    caso é o que a issue #136 existe para impedir — trocar `AI_MODEL_VISION` no
+    painel troca o subprocessador que a `/privacy` nomeia, sem passar por revisão
+    nenhuma. Ver `allowed_models.py`.
+    """
+
+    code = "AI_MODEL_NOT_ALLOWED"
+
+
 class AIProviderTimeout(AIProviderError):
     """O provedor não respondeu dentro de `AI_TIMEOUT_S`."""
 

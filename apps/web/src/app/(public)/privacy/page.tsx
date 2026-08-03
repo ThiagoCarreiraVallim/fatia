@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 };
 
 /** Atualizar sempre que o conteúdo mudar de forma material. */
-const LAST_UPDATED = '2 de agosto de 2026';
+const LAST_UPDATED = '3 de agosto de 2026';
 
 export default function PrivacyPage() {
   return (
@@ -78,8 +78,10 @@ export default function PrivacyPage() {
       <LegalSection title="O que NÃO coletamos">
         <ul>
           <li>
-            <strong>Fotos.</strong> Se você fotografa uma refeição para o Claude analisar, a imagem
-            nunca chega ao Fatia — só o texto do resultado. Não há armazenamento de imagens.
+            <strong>Fotos.</strong> Não guardamos imagem nenhuma: não há bucket, não há disco, não
+            há coluna de foto. Se você fotografa uma refeição para o <em>seu</em> Claude analisar, a
+            imagem nem chega ao Fatia. Veja a seção <strong>Inteligência artificial</strong> para o
+            caso em que ela passa por aqui sem ser guardada.
           </li>
           <li>
             <strong>Senhas.</strong> Ficam no provedor de identidade, não conosco.
@@ -114,13 +116,76 @@ export default function PrivacyPage() {
 
       <LegalSection title="Inteligência artificial">
         <p>
-          O Fatia se integra ao Claude via MCP, mas <strong>não</strong> envia seus dados para
-          nenhum provedor de IA por conta própria. Não há chave de API de LLM no servidor.
+          Existem <strong>dois caminhos</strong> de IA no Fatia, e eles tratam seus dados de formas
+          bem diferentes. Ler os dois é o único jeito de saber o que acontece com a sua foto.
         </p>
+
         <p>
-          Quando você conversa com o Claude sobre suas refeições ou treinos, é o <em>seu</em> Claude
-          — sua conta, sua assinatura — que chama as ferramentas do Fatia. O tratamento dessa
-          conversa é regido pela política de privacidade da Anthropic, não por esta.
+          <strong>1. A sua IA, pelo conector (é como o Fatia funciona hoje).</strong> Você liga o
+          Claude à sua conta do Fatia e conversa. Quem lê a foto do prato é o <em>seu</em> Claude —
+          sua conta, sua assinatura —, e o Fatia recebe só o resultado já em texto. A imagem{' '}
+          <strong>nunca chega até nós</strong>. Esse tratamento é regido pela política de
+          privacidade da Anthropic, não por esta.
+        </p>
+
+        <p>
+          <strong>2. A IA hospedada pelo Fatia.</strong> Reconhecer a foto ou o áudio sem você
+          precisar de uma assinatura de IA própria. Para isso o conteúdo precisa sair do seu
+          aparelho e chegar a um provedor de modelo, através do{' '}
+          <strong>Cloudflare AI Gateway</strong>.{' '}
+          <strong>
+            Esta segunda opção ainda não está disponível para nenhum usuário da instância pública.
+          </strong>{' '}
+          Ela só será ativada com consentimento específico seu, e este texto será atualizado com o
+          nome do provedor de modelo antes disso.
+        </p>
+
+        <p>Quando ela existir, valem as regras abaixo — todas verificáveis no código aberto:</p>
+        <ul>
+          <li>
+            <strong>Consentimento separado e específico.</strong> Não vem embutido no aceite geral
+            nem no cadastro. Quem nunca usar IA hospedada nunca precisa consentir com nada, porque o
+            registro manual não usa IA alguma. Você pode revogar depois, e a revogação vale para a
+            próxima chamada.
+          </li>
+          <li>
+            <strong>Nada é guardado no caminho.</strong> A imagem e o áudio existem em memória
+            durante a requisição e somem com ela. Não há bucket, não há disco, não há coluna — nem
+            no Fatia, nem no serviço de IA.
+          </li>
+          <li>
+            <strong>A localização é removida antes do envio.</strong> Fotos carregam EXIF, que pode
+            incluir as coordenadas de onde você estava. O aplicativo remove esses metadados no seu
+            aparelho, antes de a imagem sair.
+          </li>
+          <li>
+            <strong>Você não vai junto.</strong> O que sai é a imagem (ou o áudio) e a pergunta. Não
+            vai seu e-mail, seu nome, nem qualquer identificador seu — do lado do provedor, uma
+            chamada é indistinguível da seguinte.
+          </li>
+          <li>
+            <strong>Seus dados não são usados para treinar modelo.</strong> É condição para
+            contratar o provedor, e não uma expectativa: um fornecedor que não ofereça essa garantia
+            por escrito não entra.
+          </li>
+          <li>
+            <strong>Transferência internacional.</strong> Os servidores do gateway e do provedor de
+            modelo ficam fora do Brasil. A LGPD permite (art. 33), e é por isso que este item está
+            escrito aqui em vez de omitido.
+          </li>
+          <li>
+            <strong>Trocar de fornecedor exige mudar o código.</strong> A lista de modelos
+            autorizados fica no repositório, não numa configuração de servidor. Se alguém apontar o
+            sistema para um fornecedor que não está nesta política, a chamada é <em>recusada</em> em
+            vez de executada. É o mecanismo que impede este texto de ficar desatualizado sem ninguém
+            perceber.
+          </li>
+        </ul>
+
+        <p>
+          <strong>Se você auto-hospeda o Fatia</strong> com um modelo rodando na sua própria
+          máquina, nada disso se aplica: não há terceiro envolvido, porque o dado não sai de onde
+          você o instalou.
         </p>
       </LegalSection>
 
@@ -140,6 +205,13 @@ export default function PrivacyPage() {
             sem token, sem cookie, sem identificador seu e sem nada do que você registrou. Do lado
             deles a consulta é indistinguível de uma anônima, e a imagem da câmera nunca sai do seu
             aparelho.
+          </li>
+          <li>
+            <strong>Cloudflare AI Gateway e o provedor de modelo</strong> — somente se e quando você
+            ativar a IA hospedada, que ainda não está disponível. Recebem a imagem, o áudio ou o
+            texto da pergunta, sem nenhum identificador seu, e não guardam nada. O provedor de
+            modelo será nomeado aqui antes de a funcionalidade existir. Veja{' '}
+            <strong>Inteligência artificial</strong>.
           </li>
         </ul>
         <p>

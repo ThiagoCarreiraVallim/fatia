@@ -79,6 +79,29 @@ Todas as variáveis estão em `.env.example`. As que decidem o comportamento:
 e não há `if ambiente == 'prod'` no caminho de inferência: LM Studio e Cloudflare AI Gateway falam
 o mesmo protocolo.
 
+### Modelo revisado como subprocessador (issue #136)
+
+A frase acima vale **inteira contra provedor local** e ganha uma exceção contra provedor remoto.
+
+Trocar `AI_MODEL_VISION` num painel troca **quem recebe a foto do prato**. A `/privacy` nomeia esse
+terceiro, declara a transferência internacional e afirma que o dado não treina modelo — as três
+frases dependem de qual modelo está configurado. Sem nada no caminho, uma edição de painel torna as
+três falsas, sem diff, sem erro e sem sintoma.
+
+Por isso, quando `AI_BASE_URL` aponta para fora de `localhost`, o modelo precisa estar em
+`ALLOWED_MODELS` (`src/fatia_agent/allowed_models.py`). Fora da lista, a capacidade levanta
+`AI_MODEL_NOT_ALLOWED` **antes de montar a requisição** — nenhum byte sai. `/capabilities` passa a
+anunciar a capacidade como ausente, e `/health` diz o motivo, por capacidade.
+
+A lista nasce **vazia**: nenhuma funcionalidade de IA hospedada foi a produção (#139 e #141 seguem
+abertas), então nenhum modelo foi revisado nem declarado. Quem escolher o modelo de produção
+acrescenta o nome ali **na mesma PR** que atualiza a política. É o efeito pretendido — ver
+[ADR 020](../../docs/ADR/020-foto-e-audio-trafegam-sem-persistencia.md).
+
+Provedor local não cai na regra: o dado não sai da máquina, não há subprocessador a declarar, e a
+ergonomia de desenvolvimento continua intacta. Auto-hospedagem contra gateway próprio edita a lista
+— é uma linha, e quem opera instância própria responde pela política dela.
+
 ## Erros nomeados
 
 Todo erro carrega um `code` estável — é ele que atravessa o HTTP, não a mensagem em prosa.
@@ -86,6 +109,7 @@ Todo erro carrega um `code` estável — é ele que atravessa o HTTP, não a men
 | `code`                       | Quando                                             | HTTP |
 | ---------------------------- | -------------------------------------------------- | ---- |
 | `AI_PROVIDER_NOT_CONFIGURED` | Falta `AI_BASE_URL`, `AI_API_KEY` ou `AI_MODEL_*`. | 503  |
+| `AI_MODEL_NOT_ALLOWED`       | `AI_MODEL_*` remoto fora de `ALLOWED_MODELS`.      | 503  |
 | `AI_PROVIDER_TIMEOUT`        | O provedor não respondeu em `AI_TIMEOUT_S`.        | 504  |
 | `AI_PROVIDER_UNREACHABLE`    | Conexão recusada, DNS, TLS, conexão fechada.       | 502  |
 | `AI_PROVIDER_REFUSED`        | O provedor respondeu 401/403/429/5xx.              | 502  |
@@ -108,6 +132,7 @@ rota é anônima e o path de um gateway carrega id de conta e nome do gateway.
 ```
 src/fatia_agent/
   settings.py                 # env → configuração; nada aqui levanta exceção
+  allowed_models.py           # modelos revisados como subprocessador (#136)
   api.py                      # FastAPI: /health e /capabilities
   providers/
     base.py                   # capacidades (Protocol), separadas do fornecedor
@@ -118,6 +143,7 @@ tests/
   providers/                  # duplo do provedor, sem rede
   test_degradation.py         # o serviço sem IA
   test_api.py                 # saúde e contrato de erro
+  test_allowed_models.py      # a foto não sai para fornecedor não revisado
   smoke/                      # contra provedor de verdade; fora do CI
 ```
 
