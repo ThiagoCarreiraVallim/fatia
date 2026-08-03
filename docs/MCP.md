@@ -104,7 +104,8 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **97 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **101 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **101 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -184,12 +185,18 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 97 tools): **72,9 k caracteres**
+`description`, `annotations` e o JSON Schema do input das 101 tools): **72,9 k caracteres**
 hoje, dos quais **4.336 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de 89 caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
 atenção ao denominador: medir só `name + description + inputSchema` (60,8 k) subestima o
+`description`, `annotations` e o JSON Schema do input das 101 tools): **76,4 k caracteres**
+hoje, dos quais **4.499 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+pago em toda sessão que lista as tools. Média de 89 caracteres por tool; os maiores são
+`log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
+para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
+atenção ao denominador: medir só `name + description + inputSchema` (63,7 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -337,8 +344,13 @@ Listagens com potencial de crescer usam cursor-based:
 | **Grupos (B2B)**          | `list_my_groups`             | R        |
 |                           | `join_group`                 | C        |
 |                           | `leave_group`                | D        |
+| **Compartilhamento**      | `list_data_sharing`          | R        |
+|                           | `grant_data_sharing`         | C/U      |
+|                           | `revoke_data_sharing`        | U        |
+|                           | `list_data_access_log`       | R        |
 
-Total: **97 tools**. Cada uma documentada abaixo.
+Total: **101 tools**. Cada uma documentada abaixo.
+Total: **101 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -2262,25 +2274,6 @@ usuário desistir de vez em vez de voltar.
 Catálogo de conquistas. Devolve as **sete** chaves sempre, desbloqueadas ou não, para o Claude
 saber o que sugerir como próximo passo.
 
-## Grupos (B2B)
-
-Academia, personal e nutricionista entram pela [ADR 014](./ADR/014-compartilhamento-b2b-copia-e-vinculo.md).
-Três coisas valem para todas as tools desta seção:
-
-1. **Estar num grupo não concede nada.** Quem lê dado de saúde do usuário é o profissional que
-   ele autorizou explicitamente, num ato separado (`ProfessionalLink`, #155). Não existe
-   "acesso da academia".
-2. **Ninguém coloca outra pessoa num grupo.** A identidade de quem entra sai sempre do token —
-   nenhuma tool aceita id de usuário.
-3. **Sair revoga na hora.** A saída encerra, na mesma transação, todo vínculo daquele grupo.
-
-Criar grupo, aprovar entrada e remover membro **não têm tool**: são só REST, no painel do dono.
-Ver [`docs/MCP_TOOL_SURFACE.md`](./MCP_TOOL_SURFACE.md).
-
-### `list_my_groups`
-
-Lista os grupos de que o usuário participa, com o papel dele e a situação da associação.
-
 **Input:** _(nenhum)_
 
 **Output:**
@@ -2311,18 +2304,43 @@ idempotente: o `@@unique([userId, key])` garante que reavaliar não duplica nem 
 **Input:** _(nenhum)_
 
 **Output:** o mesmo array de `list_achievements`, já com os desbloqueios desta chamada.
-id: string;
-type: 'SPONSORED' | 'SOCIAL';
-name: string;
-slug: string;
-role: 'OWNER' | 'PROFESSIONAL' | 'CREATOR' | 'MEMBER';
-status: 'INVITED' | 'ACTIVE';
-membershipId: string;
-joinedAt: string | null;
-createdAt: string;
-}>;
 
-````
+## Grupos (B2B)
+
+Academia, personal e nutricionista entram pela [ADR 014](./ADR/014-compartilhamento-b2b-copia-e-vinculo.md).
+Três coisas valem para todas as tools desta seção:
+
+1. **Estar num grupo não concede nada.** Quem lê dado de saúde do usuário é o profissional que
+   ele autorizou explicitamente, num ato separado (`ProfessionalLink`, #155). Não existe
+   "acesso da academia".
+2. **Ninguém coloca outra pessoa num grupo.** A identidade de quem entra sai sempre do token —
+   nenhuma tool aceita id de usuário.
+3. **Sair revoga na hora.** A saída encerra, na mesma transação, todo vínculo daquele grupo.
+
+Criar grupo, aprovar entrada e remover membro **não têm tool**: são só REST, no painel do dono.
+Ver [`docs/MCP_TOOL_SURFACE.md`](./MCP_TOOL_SURFACE.md).
+
+### `list_my_groups`
+
+Lista os grupos de que o usuário participa, com o papel dele e a situação da associação.
+
+**Input:** _(nenhum)_
+
+**Output:**
+
+```typescript
+Array<{
+  id: string;
+  type: 'SPONSORED' | 'SOCIAL';
+  name: string;
+  slug: string;
+  role: 'OWNER' | 'PROFESSIONAL' | 'CREATOR' | 'MEMBER';
+  status: 'INVITED' | 'ACTIVE';
+  membershipId: string;
+  joinedAt: string | null;
+  createdAt: string;
+}>;
+```
 
 ### `join_group`
 
@@ -2336,7 +2354,7 @@ consentimento de leitura e não pode ser autoatribuído.
 {
   slug: string;
 }
-````
+```
 
 **Erros:** `NOT_FOUND` se o slug não existe; `CONFLICT` se já é membro ou já existe pedido
 pendente.
@@ -2370,6 +2388,133 @@ linhas continuam no banco, porque são elas que respondem "quem teve acesso a qu
 
 **Erros:** `NOT_FOUND` se não é membro do grupo; `CONFLICT` se é o dono — grupo sem dono fica
 órfão com cobrança viva, então o caminho é transferir a propriedade ou apagar o grupo.
+
+## Compartilhamento de dados (consentimento)
+
+O que a #155 entrega para o usuário é a resposta a duas perguntas, pelo Claude: **"o que a
+academia consegue ver de mim?"** e **"quem olhou meu dado?"**. Quatro regras valem para as
+quatro tools desta seção:
+
+1. **Consentimento é por profissional e por categoria**, nunca por grupo. Quem tem nutricionista
+   e personal na mesma academia autoriza alimentação a um sem autorizar ao outro.
+2. **O padrão é nada.** Não existe estado "compartilhado por omissão": sem uma autorização
+   explícita não há linha, e sem linha não há leitura.
+3. **Não existe "compartilhar tudo".** Um atalho que marcasse as cinco categorias de uma vez
+   recriaria o tudo-ou-nada que estas tools existem para evitar. Confirme categoria por
+   categoria com o usuário.
+4. **Só o titular autoriza.** Nenhum papel de grupo — nem o dono da academia — consente pelo
+   aluno. A identidade de quem autoriza sai do token.
+
+As categorias (`ShareScope`) são independentes entre si e nenhuma implica outra:
+
+| Escopo      | O que abre                         |
+| ----------- | ---------------------------------- |
+| `WORKOUT`   | Planos, sessões e séries de treino |
+| `NUTRITION` | Refeições, itens e metas de macros |
+| `BODY`      | Peso e medidas corporais           |
+| `HABITS`    | Água e passos                      |
+| `GOALS`     | Metas pessoais                     |
+
+A matriz completa de papéis está em [`docs/PERMISSIONS.md`](./PERMISSIONS.md).
+
+### `list_data_sharing`
+
+Quem está autorizado a ver o quê, agora. Lista vazia significa que ninguém tem acesso — o estado
+inicial de toda conta.
+
+**Input:** _(nenhum)_
+
+**Output:**
+
+```typescript
+Array<{
+  linkId: string; // usado por revoke_data_sharing
+  groupId: string;
+  groupName: string;
+  professionalMembershipId: string; // usado por grant_data_sharing
+  professionalName: string;
+  scopes: Array<'WORKOUT' | 'NUTRITION' | 'BODY' | 'HABITS' | 'GOALS'>;
+  grantedAt: string;
+}>;
+```
+
+### `grant_data_sharing`
+
+Autoriza **um** profissional a ler categorias específicas. A lista enviada **substitui** a
+anterior daquele profissional: enviar `["WORKOUT"]` para quem já tinha `["WORKOUT","NUTRITION"]`
+tira a nutrição. Enviar `[]` equivale a revogar.
+
+Substituir cria uma **linha nova** e marca a anterior com `revokedAt` e
+`revokedReason: "superseded"` — a janela de vigência do que valia antes continua legível.
+
+**Input:**
+
+```typescript
+{
+  /** A associação DO PROFISSIONAL no grupo — nunca o id de usuário dele. */
+  professionalMembershipId: string;
+  scopes: Array<'WORKOUT' | 'NUTRITION' | 'BODY' | 'HABITS' | 'GOALS'>;
+}
+```
+
+**Erros:** `NOT_FOUND` se a associação não existe **ou** se o usuário não faz parte daquele grupo
+— a mesma resposta nos dois casos, senão a tool viraria oráculo de composição de grupo alheio;
+`CONFLICT` se o alvo não é um `PROFESSIONAL` ativo (dono, criador de conteúdo e outros alunos não
+podem receber acesso) ou se o usuário tentou autorizar a si mesmo.
+
+### `revoke_data_sharing`
+
+Corta o acesso de um profissional, em todas as categorias de uma vez. Vale a partir da próxima
+requisição dele — a checagem acontece no início de cada requisição, então uma leitura já em voo
+não é cancelada. A janela é de **uma** requisição.
+
+A linha **não** é apagada: `revokedAt` é preenchido, e é ele que responde depois "quem teve
+acesso a quê, quando".
+
+Anotada com `destructiveHint: false` mesmo sendo escrita, e é decisão: revogar é o lado seguro
+desta gangorra, e pedir confirmação para cortar acesso poria fricção justamente no controle que o
+titular exerce sobre o próprio dado.
+
+**Input:**
+
+```typescript
+{
+  linkId: string; // de list_data_sharing
+}
+```
+
+**Erros:** `NOT_FOUND` se o vínculo não existe, já está revogado, ou é de outra pessoa — a mesma
+resposta nos três casos.
+
+### `list_data_access_log`
+
+"Quem olhou meu dado, quando." Uma linha por leitura, **incluindo as tentativas barradas** —
+`denied: true` é o registro que denuncia sondagem do que não foi consentido, e é justamente o que
+sumiria se a trilha fosse escrita só no caminho feliz.
+
+A trilha registra **que** houve leitura, nunca o conteúdo lido: guardar o conteúdo criaria uma
+segunda cópia do dado de saúde dentro da tabela cujo propósito é protegê-lo.
+
+**Input:**
+
+```typescript
+{
+  limit?: number; // 1..200, padrão 50, da mais recente para a mais antiga
+}
+```
+
+**Output:**
+
+```typescript
+Array<{
+  at: string;
+  action: string; // "list_workout_sessions", "get_student_progress"
+  scope: 'WORKOUT' | 'NUTRITION' | 'BODY' | 'HABITS' | 'GOALS';
+  denied: boolean;
+  /** null quando a conta do profissional já não existe — a trilha sobrevive a ele. */
+  professionalName: string | null;
+}>;
+```
 
 ---
 

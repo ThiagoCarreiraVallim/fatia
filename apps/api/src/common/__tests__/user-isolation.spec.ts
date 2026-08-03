@@ -2,6 +2,7 @@ import { ConflictException, ForbiddenException, NotFoundException } from '@nestj
 import { GroupRole, GroupType, MealType, MembershipStatus, ShareScope } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import { AccessAuditService } from '../../sharing/access-audit.service';
+import { ConsentService } from '../../sharing/consent.service';
 import { GroupService } from '../../sharing/group.service';
 import { MembershipService } from '../../sharing/membership.service';
 import { ProfessionalAccessService } from '../../sharing/professional-access.service';
@@ -58,6 +59,7 @@ describe('isolamento entre usuários', () => {
   const access = new ProfessionalAccessService(prisma, new AccessAuditService(prisma));
   const groups = new GroupService(prisma);
   const memberships = new MembershipService(prisma, links);
+  const consent = new ConsentService(prisma, links);
 
   /** Dados do user-A. Preenchido no beforeAll e sondado como user-B. */
   const owned = {
@@ -72,6 +74,14 @@ describe('isolamento entre usuários', () => {
      * lendo o histórico de quem já saiu.
      */
     pro2: '',
+    /**
+     * Papéis que NÃO podem ler dado de aluno, na mesma academia (#156). Existem
+     * para que "papel não lê" seja verificado com o papel de fato criado no
+     * banco, e não simulado trocando o `role` de um profissional na marra.
+     */
+    creator: '',
+    /** Outro aluno da MESMA academia. Colega não lê colega. */
+    colega: '',
     groupId: '',
     /** Grupo do `pro`, em que o user-A não está. Grupo alheio, para o #92. */
     grupoDoProId: '',
@@ -111,7 +121,7 @@ describe('isolamento entre usuários', () => {
     await prisma.$connect();
 
     const stamp = `iso-${Date.now()}`;
-    const [userA, userB, pro, pro2] = await Promise.all([
+    const [userA, userB, pro, pro2, creator, colega] = await Promise.all([
       prisma.user.create({
         data: {
           logtoSub: `${stamp}-a`,
@@ -144,11 +154,29 @@ describe('isolamento entre usuários', () => {
           timezone: TZ,
         },
       }),
+      prisma.user.create({
+        data: {
+          logtoSub: `${stamp}-creator`,
+          email: `${stamp}-creator@test.local`,
+          name: 'Creator',
+          timezone: TZ,
+        },
+      }),
+      prisma.user.create({
+        data: {
+          logtoSub: `${stamp}-colega`,
+          email: `${stamp}-colega@test.local`,
+          name: 'Colega',
+          timezone: TZ,
+        },
+      }),
     ]);
     owned.userA = userA.id;
     owned.userB = userB.id;
     owned.pro = pro.id;
     owned.pro2 = pro2.id;
+    owned.creator = creator.id;
+    owned.colega = colega.id;
 
     // Exercício de catálogo público — usado nas séries. Não pertence a ninguém.
     const shared = await prisma.exercise.create({
@@ -174,6 +202,8 @@ describe('isolamento entre usuários', () => {
             { userId: owned.userA, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
             { userId: owned.pro, role: GroupRole.PROFESSIONAL, status: MembershipStatus.ACTIVE },
             { userId: owned.pro2, role: GroupRole.PROFESSIONAL, status: MembershipStatus.ACTIVE },
+            { userId: owned.creator, role: GroupRole.CREATOR, status: MembershipStatus.ACTIVE },
+            { userId: owned.colega, role: GroupRole.MEMBER, status: MembershipStatus.ACTIVE },
           ],
         },
       },
@@ -290,7 +320,18 @@ describe('isolamento entre usuários', () => {
     // Cascade limpa tudo que pende dos usuários; o exercício público é solto.
     await prisma.user
       .deleteMany({
-        where: { id: { in: [owned.userA, owned.userB, owned.pro, owned.pro2].filter(Boolean) } },
+        where: {
+          id: {
+            in: [
+              owned.userA,
+              owned.userB,
+              owned.pro,
+              owned.pro2,
+              owned.creator,
+              owned.colega,
+            ].filter(Boolean),
+          },
+        },
       })
       .catch(() => undefined);
     await prisma.exercise
@@ -782,9 +823,9 @@ describe('isolamento entre usuários', () => {
     });
 
     it('a trilha de auditoria grava sucesso e negativa', async () => {
-      // O `AccessAuditService` engole erro de escrita de propósito (a trilha não
-      // pode derrubar a requisição), então só um teste contra Postgres real
-      // percebe se a linha nunca chega ao banco.
+      // Contra Postgres real porque o que se quer provar é que a linha CHEGA ao
+      // banco, com as duas pontas do vínculo resolvidas. Um mock do Prisma
+      // provaria só que o service foi chamado.
       const link = await links.grant({
         subjectUserId: owned.userA,
         professionalId: owned.pro,
@@ -1077,8 +1118,9 @@ describe('isolamento entre usuários', () => {
       const peloDono = await memberships.listMembers(owned.userB, owned.groupId);
       const peloAluno = await memberships.listMembers(owned.userA, owned.groupId);
 
-      // O dono administra e vê todo mundo (ele, o aluno e os dois profissionais).
-      expect(peloDono).toHaveLength(4);
+      // O dono administra e vê todo mundo: ele, os dois alunos, os dois
+      // profissionais e o criador de conteúdo.
+      expect(peloDono).toHaveLength(6);
       // O aluno vê quem administra ou atende, e ele mesmo: a lista de alunos de
       // uma academia é informação sobre pessoas, e não é do interesse de outro
       // aluno. Com um único MEMBER no grupo, "vê só a si" e "vê todos os MEMBER"
@@ -1110,6 +1152,377 @@ describe('isolamento entre usuários', () => {
         'role',
         'status',
       ]);
+    });
+  });
+
+  /**
+   * Consentimento granular (#155) e papéis (#156).
+   *
+   * As duas issues respondem perguntas diferentes e são verificadas juntas aqui
+   * de propósito: é o mesmo banco, o mesmo grupo e as mesmas pessoas, e o que
+   * elas provam em conjunto é que **nenhum dos dois mecanismos cobre o outro**.
+   * Papel não abre leitura em escopo nenhum; consentimento de um escopo não
+   * abre os outros quatro.
+   */
+  describe('consentimento por categoria e papéis (#155, #156)', () => {
+    const escopos = Object.values(ShareScope);
+
+    /** Mensagem da recusa. Estoura se a leitura for autorizada. */
+    const mensagemDaRecusa = async (quem: string, membershipId: string, scope: ShareScope) => {
+      try {
+        await access.assertReadable(quem, membershipId, scope, 'probe');
+      } catch (err) {
+        return (err as Error).message;
+      }
+      throw new Error('esperava recusa, mas a leitura foi autorizada');
+    };
+
+    /**
+     * Recusa que um estranho qualquer recebe, para comparar byte a byte.
+     *
+     * Alguém de fora do grupo, e não o dono dele: metade dos casos abaixo sonda
+     * justamente com o `owned.userB`, e comparar a recusa dele com a dele mesmo
+     * seria uma igualdade que passa sozinha.
+     */
+    const ESTRANHO = 'ninguem-com-este-id';
+    const recusaDeEstranho = (scope: ShareScope) =>
+      mensagemDaRecusa(ESTRANHO, owned.membershipA, scope);
+
+    afterEach(async () => {
+      await prisma.professionalAccessLog.deleteMany({ where: { subjectUserId: owned.userA } });
+      await prisma.professionalLink.deleteMany({
+        where: {
+          subjectUserId: { in: [owned.userA, owned.userB, owned.colega] },
+        },
+      });
+    });
+
+    // --- #155: o consentimento é por categoria, e a diagonal é a prova ---
+
+    const cruzamento = escopos.flatMap((concedido) =>
+      escopos.map((pedido) => ({ concedido, pedido })),
+    );
+
+    it.each(cruzamento)('consentiu $concedido, pediu $pedido', async ({ concedido, pedido }) => {
+      await links.grant({
+        subjectUserId: owned.userA,
+        professionalId: owned.pro,
+        groupId: owned.groupId,
+        scopes: [concedido],
+      });
+
+      if (concedido === pedido) {
+        await expect(
+          access.assertReadable(owned.pro, owned.membershipA, pedido, 'probe'),
+        ).resolves.toBe(owned.userA);
+        return;
+      }
+
+      // As 20 combinações fora da diagonal são o DoD literal da #155:
+      // compartilhar treino sem compartilhar alimentação. A recusa tem de ser
+      // idêntica à de um estranho — dizer "existe, mas você não consentiu"
+      // confirmaria que aquele aluno existe e que ele guarda aquele tipo de
+      // dado.
+      expect(await mensagemDaRecusa(owned.pro, owned.membershipA, pedido)).toBe(
+        await recusaDeEstranho(pedido),
+      );
+    });
+
+    it('dois profissionais na mesma academia, consentimentos diferentes', async () => {
+      // O caso que justifica a tabela de vínculo em vez de colunas em `User`:
+      // nutricionista e personal no mesmo grupo, cada um com o seu escopo.
+      await links.grant({
+        subjectUserId: owned.userA,
+        professionalId: owned.pro,
+        groupId: owned.groupId,
+        scopes: [ShareScope.NUTRITION],
+      });
+      await links.grant({
+        subjectUserId: owned.userA,
+        professionalId: owned.pro2,
+        groupId: owned.groupId,
+        scopes: [ShareScope.WORKOUT],
+      });
+
+      // Cada um lê o seu...
+      await expect(
+        access.assertReadable(owned.pro, owned.membershipA, ShareScope.NUTRITION, 'probe'),
+      ).resolves.toBe(owned.userA);
+      await expect(
+        access.assertReadable(owned.pro2, owned.membershipA, ShareScope.WORKOUT, 'probe'),
+      ).resolves.toBe(owned.userA);
+
+      // ...e nenhum lê o do outro. Um consentimento por GRUPO colapsaria os dois.
+      expect(await mensagemDaRecusa(owned.pro, owned.membershipA, ShareScope.WORKOUT)).toBe(
+        await recusaDeEstranho(ShareScope.WORKOUT),
+      );
+      expect(await mensagemDaRecusa(owned.pro2, owned.membershipA, ShareScope.NUTRITION)).toBe(
+        await recusaDeEstranho(ShareScope.NUTRITION),
+      );
+    });
+
+    it('revogar corta a leitura na mesma execução, sem restart e sem cache', async () => {
+      const consentimento = await consent.grant(owned.userA, owned.membershipPro, [
+        ShareScope.WORKOUT,
+      ]);
+
+      // Lê ANTES. Sem esta metade, a recusa abaixo passaria de graça.
+      await expect(
+        access.assertReadable(owned.pro, owned.membershipA, ShareScope.WORKOUT, 'probe'),
+      ).resolves.toBe(owned.userA);
+
+      await consent.revoke(owned.userA, consentimento.linkId);
+
+      expect(await mensagemDaRecusa(owned.pro, owned.membershipA, ShareScope.WORKOUT)).toBe(
+        await recusaDeEstranho(ShareScope.WORKOUT),
+      );
+
+      // Revogar NÃO apaga: se alguém trocar o `updateMany` por um `delete`, é
+      // este caso que pega — e o que se perde é a resposta a "quem teve acesso
+      // a quê, quando".
+      const linha = await prisma.professionalLink.findUnique({
+        where: { id: consentimento.linkId },
+      });
+      expect([linha !== null, linha?.revokedAt !== null, linha?.revokedReason]).toEqual([
+        true,
+        true,
+        'subject',
+      ]);
+    });
+
+    it('conceder de novo depois de revogar cria linha NOVA', async () => {
+      const primeiro = await consent.grant(owned.userA, owned.membershipPro, [ShareScope.WORKOUT]);
+      await consent.revoke(owned.userA, primeiro.linkId);
+      const segundo = await consent.grant(owned.userA, owned.membershipPro, [ShareScope.BODY]);
+
+      const linhas = await prisma.professionalLink.findMany({
+        where: {
+          subjectUserId: owned.userA,
+          professionalId: owned.pro,
+          groupId: owned.groupId,
+        },
+        orderBy: { grantedAt: 'asc' },
+      });
+
+      // Duas linhas, e só a segunda viva. Um `@@unique` no trio forçaria UPDATE
+      // e destruiria a janela de vigência da primeira — é a "correção" errada
+      // mais provável numa revisão futura.
+      expect(linhas.map((l) => [l.id, l.revokedAt === null])).toEqual([
+        [primeiro.linkId, false],
+        [segundo.linkId, true],
+      ]);
+    });
+
+    it('substituir o consentimento supersede o anterior e vale na hora', async () => {
+      await consent.grant(owned.userA, owned.membershipPro, [
+        ShareScope.WORKOUT,
+        ShareScope.NUTRITION,
+      ]);
+      await expect(
+        access.assertReadable(owned.pro, owned.membershipA, ShareScope.NUTRITION, 'probe'),
+      ).resolves.toBe(owned.userA);
+
+      // Tirar a nutrição é mandar a lista sem ela — a lista enviada é a lista
+      // inteira, e não um incremento.
+      await consent.grant(owned.userA, owned.membershipPro, [ShareScope.WORKOUT]);
+
+      await expect(
+        access.assertReadable(owned.pro, owned.membershipA, ShareScope.WORKOUT, 'probe'),
+      ).resolves.toBe(owned.userA);
+      expect(await mensagemDaRecusa(owned.pro, owned.membershipA, ShareScope.NUTRITION)).toBe(
+        await recusaDeEstranho(ShareScope.NUTRITION),
+      );
+    });
+
+    it('lista vazia equivale a revogar, sem apagar a linha', async () => {
+      await consent.grant(owned.userA, owned.membershipPro, [ShareScope.WORKOUT]);
+      await expect(
+        access.assertReadable(owned.pro, owned.membershipA, ShareScope.WORKOUT, 'probe'),
+      ).resolves.toBe(owned.userA);
+
+      const vazio = await consent.grant(owned.userA, owned.membershipPro, []);
+
+      expect(vazio.scopes).toEqual([]);
+      expect(await mensagemDaRecusa(owned.pro, owned.membershipA, ShareScope.WORKOUT)).toBe(
+        await recusaDeEstranho(ShareScope.WORKOUT),
+      );
+    });
+
+    it('o painel do titular responde "quem vê o quê" e "quem olhou"', async () => {
+      // Caminho feliz do #155 ponta a ponta. Sem ele, as recusas acima poderiam
+      // estar verdes porque a leitura está quebrada por outro motivo.
+      await consent.grant(owned.userA, owned.membershipPro, [ShareScope.WORKOUT]);
+
+      const painel = await consent.listMine(owned.userA);
+      expect(painel).toEqual([
+        expect.objectContaining({
+          groupId: owned.groupId,
+          groupName: 'Academia B',
+          professionalMembershipId: owned.membershipPro,
+          professionalName: 'Pro',
+          scopes: [ShareScope.WORKOUT],
+        }),
+      ]);
+      // Nem o `professionalId` nem qualquer outro `userId` saem daqui: a
+      // identidade de terceiro é referenciada só por `membershipId`.
+      expect(Object.keys(painel[0]).some((k) => /userid$/i.test(k))).toBe(false);
+
+      await access.assertReadable(owned.pro, owned.membershipA, ShareScope.WORKOUT, 'leu_treino');
+      await access
+        .assertReadable(owned.pro, owned.membershipA, ShareScope.NUTRITION, 'tentou_dieta')
+        .catch(() => undefined);
+
+      const trilha = await consent.listAccessLog(owned.userA);
+
+      // Mais recente primeiro, e a tentativa BARRADA aparece — é ela que
+      // denuncia quem está sondando o que não foi consentido.
+      expect(trilha.map((l) => [l.action, l.denied, l.professionalName])).toEqual([
+        ['tentou_dieta', true, 'Pro'],
+        ['leu_treino', false, 'Pro'],
+      ]);
+      // A trilha registra QUE houve leitura, nunca o conteúdo lido.
+      expect(Object.keys(trilha[0]).sort()).toEqual([
+        'action',
+        'at',
+        'denied',
+        'professionalName',
+        'scope',
+      ]);
+    });
+
+    it('a trilha de um titular não vaza para outro', async () => {
+      await consent.grant(owned.userA, owned.membershipPro, [ShareScope.WORKOUT]);
+      await access.assertReadable(owned.pro, owned.membershipA, ShareScope.WORKOUT, 'leu_treino');
+
+      // O colega é aluno da mesma academia e não tem nada a ver com a leitura.
+      expect(await consent.listAccessLog(owned.colega)).toEqual([]);
+      expect(await consent.listMine(owned.colega)).toEqual([]);
+    });
+
+    // --- #156: papel não lê, em nenhum escopo ---
+
+    const papeisQueNaoLeem = [
+      { papel: GroupRole.OWNER, quem: () => owned.userB },
+      { papel: GroupRole.CREATOR, quem: () => owned.creator },
+      { papel: GroupRole.MEMBER, quem: () => owned.colega },
+    ];
+
+    it.each(
+      papeisQueNaoLeem.flatMap(({ papel, quem }) =>
+        escopos.map((scope) => ({ papel, quem, scope })),
+      ),
+    )('$papel não lê $scope, mesmo sendo membro ativo do grupo', async ({ papel, quem, scope }) => {
+      // O papel está de fato no banco: sem esta conferência, um `role` errado no
+      // seed faria os 15 casos recusarem pelo motivo errado e passarem verdes.
+      const membership = await prisma.groupMembership.findUnique({
+        where: { groupId_userId: { groupId: owned.groupId, userId: quem() } },
+      });
+      expect([membership?.role, membership?.status]).toEqual([papel, MembershipStatus.ACTIVE]);
+
+      // E existe consentimento vivo no grupo, para o PROFESSIONAL: a recusa
+      // abaixo não é "ninguém lê nada", é "papel nenhum lê".
+      await links.grant({
+        subjectUserId: owned.userA,
+        professionalId: owned.pro,
+        groupId: owned.groupId,
+        scopes: [scope],
+      });
+      await expect(
+        access.assertReadable(owned.pro, owned.membershipA, scope, 'probe'),
+      ).resolves.toBe(owned.userA);
+
+      // O vínculo do papel errado é criado **na marra**, por baixo do
+      // `ConsentService` que o recusaria. Sem esta linha o caso recusaria por
+      // falta de vínculo e não pelo papel — e afrouxar a checagem de papel na
+      // porta manteria os 15 casos verdes, que é como esta garantia
+      // apodreceria em silêncio. A recusa do `ConsentService` é o caso
+      // seguinte: são duas linhas de defesa, e cada uma tem o seu teste.
+      await links.grant({
+        subjectUserId: owned.userA,
+        professionalId: quem(),
+        groupId: owned.groupId,
+        scopes: [scope],
+      });
+
+      expect(await mensagemDaRecusa(quem(), owned.membershipA, scope)).toBe(
+        await recusaDeEstranho(scope),
+      );
+    });
+
+    it.each(papeisQueNaoLeem)('o titular não consegue consentir a um $papel', async ({ quem }) => {
+      // A outra linha de defesa: o `ConsentService` nem cria o vínculo. Papel
+      // que não atende ninguém não pode figurar como destinatário, senão o
+      // painel do dono viraria caminho de aquisição de acesso.
+      const alvo = await prisma.groupMembership.findUnique({
+        where: { groupId_userId: { groupId: owned.groupId, userId: quem() } },
+      });
+      await expect(consent.grant(owned.userA, alvo!.id, [ShareScope.WORKOUT])).rejects.toThrow(
+        ConflictException,
+      );
+      expect(
+        await prisma.professionalLink.count({
+          where: { subjectUserId: owned.userA, professionalId: quem() },
+        }),
+      ).toBe(0);
+    });
+
+    it('o profissional não consegue conceder acesso a si mesmo', async () => {
+      // O `subjectUserId` sai do contexto: o que o profissional consegue montar
+      // é o vínculo INVERTIDO, apontando o aluno como destinatário — e um
+      // MEMBER não pode receber. A leitura dele continua fechada.
+      await expect(
+        consent.grant(owned.pro, owned.membershipA, [ShareScope.WORKOUT]),
+      ).rejects.toThrow(ConflictException);
+
+      expect(await mensagemDaRecusa(owned.pro, owned.membershipA, ShareScope.WORKOUT)).toBe(
+        await recusaDeEstranho(ShareScope.WORKOUT),
+      );
+    });
+
+    it('consentir num grupo não vale no outro', async () => {
+      // O `pro` é dono de outro grupo em que o user-B é MEMBER. Consentimento
+      // dado na academia não pode ser reaproveitado lá — e nem o contrário.
+      const membershipDoProNaAcademia = owned.membershipPro;
+      await consent.grant(owned.userA, membershipDoProNaAcademia, [ShareScope.WORKOUT]);
+
+      expect(await mensagemDaRecusa(owned.pro, owned.membershipForaId, ShareScope.WORKOUT)).toBe(
+        await recusaDeEstranho(ShareScope.WORKOUT),
+      );
+    });
+
+    it('quem não está no grupo não consegue nem sondar a associação de lá', async () => {
+      // O `colega` está na academia; o alvo é a associação do user-B no grupo do
+      // `pro`, de que o colega não faz parte. A recusa tem de ser idêntica à de
+      // uma associação inexistente, senão a rota vira oráculo de composição de
+      // grupo alheio.
+      const deGrupoAlheio = await consent
+        .grant(owned.colega, owned.membershipForaId, [ShareScope.WORKOUT])
+        .catch((err: Error) => err.message);
+      const inexistente = await consent
+        .grant(owned.colega, '11111111-2222-4333-8444-777777777777', [ShareScope.WORKOUT])
+        .catch((err: Error) => err.message);
+
+      expect(deGrupoAlheio).toBe(inexistente);
+    });
+
+    it('sair do grupo derruba o consentimento e o painel esvazia', async () => {
+      await consent.grant(owned.userA, owned.membershipPro, [ShareScope.WORKOUT]);
+      expect(await consent.listMine(owned.userA)).toHaveLength(1);
+
+      try {
+        await memberships.leave(owned.userA, owned.groupId);
+
+        // O painel do titular passa a mostrar o que é verdade: ninguém vê nada.
+        expect(await consent.listMine(owned.userA)).toEqual([]);
+        expect(await mensagemDaRecusa(owned.pro, owned.membershipA, ShareScope.WORKOUT)).toBe(
+          await recusaDeEstranho(ShareScope.WORKOUT),
+        );
+      } finally {
+        await prisma.groupMembership.update({
+          where: { id: owned.membershipA },
+          data: { status: MembershipStatus.ACTIVE, leftAt: null },
+        });
+      }
     });
   });
 

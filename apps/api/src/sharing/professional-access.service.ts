@@ -120,6 +120,11 @@ export class ProfessionalAccessService {
     // Antes do retorno e antes do throw: "tentou ver o que não podia" é o
     // registro que denuncia profissional malicioso, e some se o record só
     // rodar no caminho feliz.
+    //
+    // `await`, e não fire-and-forget: uma promessa não aguardada perdida num
+    // crash produz exatamente o log que faltava. E se a escrita falhar, o erro
+    // sobe e a leitura **não** acontece — ler sem deixar registro é o pior dos
+    // resultados possíveis (#155).
     await this.audit.record({
       linkId: link?.id ?? null,
       professionalId,

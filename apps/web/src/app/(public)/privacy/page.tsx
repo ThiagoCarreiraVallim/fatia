@@ -58,6 +58,21 @@ export default function PrivacyPage() {
           base legal para tratá-los é o seu <strong>consentimento</strong>, dado ao criar a conta e
           registrar informações — e revogável a qualquer momento apagando a conta.
         </p>
+        <p>
+          Se você entra numa academia dentro do Fatia, o consentimento passa a ter um segundo nível,
+          e ele é <strong>por categoria e por profissional</strong>: você autoriza este personal a
+          ver seu treino sem que ele veja sua alimentação, e sem que o nutricionista da mesma
+          academia veja qualquer uma das duas. Nada é compartilhado por padrão — entrar num grupo
+          não autoriza ninguém a ver nada, e o dono da academia não vê dado de saúde de aluno em
+          nenhuma hipótese. Você pode ver quem tem acesso, mudar as categorias e cortar o acesso a
+          qualquer momento, pelo app ou pedindo ao Claude. Cortar vale a partir da próxima
+          requisição do profissional — não é &ldquo;instantâneo&rdquo;, é uma requisição.
+        </p>
+        <p>
+          Toda leitura dos seus dados por um profissional fica <strong>registrada</strong>,
+          inclusive as tentativas <em>barradas</em>, e você lê esse registro quando quiser. O
+          registro guarda que houve leitura — data, categoria e quem — e nunca o conteúdo lido.
+        </p>
       </LegalSection>
 
       <LegalSection title="O que NÃO coletamos">
@@ -180,21 +195,27 @@ export default function PrivacyPage() {
             pedindo ao Claude. É irreversível e exige confirmação explícita.
           </li>
           <li>
-            <strong>Revogar o consentimento</strong> — apagar a conta é a forma direta de fazer
-            isso.
+            <strong>Revogar o consentimento</strong> — para um profissional de academia, cortando o
+            acesso dele sem apagar nada seu. Para o tratamento como um todo, apagar a conta é a
+            forma direta.
+          </li>
+          <li>
+            <strong>Saber quem acessou</strong> — a lista de quem pode ver o quê, e o registro de
+            cada leitura feita por um profissional, tentativas barradas incluídas.
           </li>
         </ul>
         <p>
-          Os dois primeiros e o terceiro estão disponíveis sem intermediário: você não precisa abrir
-          um pedido nem esperar resposta.
+          Todos estão disponíveis sem intermediário: você não precisa abrir um pedido nem esperar
+          resposta.
         </p>
       </LegalSection>
 
       <LegalSection title="Segurança">
         <p>
           Todo tráfego usa HTTPS. Toda requisição exige token válido, e cada consulta ao banco é
-          escopada ao seu usuário — nenhum usuário alcança dado de outro. O modelo de ameaças e as
-          camadas de defesa são públicos em{' '}
+          escopada ao seu usuário. A <em>única</em> exceção é o profissional que você autorizou, na
+          categoria que você autorizou — e ela passa por um único ponto do código, auditado e
+          registrado. O modelo de ameaças e as camadas de defesa são públicos em{' '}
           <a href="https://github.com/ThiagoCarreiraVallim/fatia/blob/main/docs/THREAT_MODEL.md">
             docs/THREAT_MODEL.md
           </a>

@@ -26,6 +26,37 @@ Ao apagar a conta, tudo acima vai embora imediatamente, pelos `onDelete: Cascade
 `User` em `packages/db/prisma/schema.prisma`. Não há soft delete, não há lixeira, não há período
 de carência.
 
+## Compartilhamento com profissional (B2B)
+
+Quem entra numa academia dentro do Fatia gera três coisas novas, e nenhuma delas é dado de saúde:
+a associação ao grupo, o **consentimento** que o titular concede a um profissional, e a **trilha**
+de quem leu o dado dele. Desenho em [ADR 014](./ADR/014-compartilhamento-b2b-copia-e-vinculo.md);
+quem pode o quê, em [PERMISSIONS.md](./PERMISSIONS.md).
+
+| Dado                                       | Onde               | Retenção                                                 |
+| ------------------------------------------ | ------------------ | -------------------------------------------------------- |
+| Associação ao grupo (`GroupMembership`)    | Postgres           | Enquanto a conta existir. Sair marca `status` e `leftAt` |
+| Consentimento (`ProfessionalLink`)         | Postgres           | Enquanto a conta existir — **revogar não apaga a linha** |
+| Trilha de acesso (`ProfessionalAccessLog`) | Postgres           | Enquanto a conta existir                                 |
+| O que o profissional leu                   | **Não armazenado** | —                                                        |
+
+**Revogar preenche `revokedAt`, nunca apaga.** É a linha revogada que responde "quem teve acesso a
+quê, e quando" — apagá-la destruiria exatamente a prova que o titular pode querer depois. O mesmo
+vale para conceder de novo: nasce uma linha nova, e a antiga fica com a sua janela de vigência.
+
+**A trilha registra que houve leitura, nunca o conteúdo lido.** Guardar o que foi lido criaria uma
+segunda cópia do dado de saúde dentro da tabela cujo propósito é protegê-lo. Ficam a data, a
+categoria, a operação, quem tentou e se foi barrado.
+
+`ProfessionalAccessLog.professionalId` é string **sem FK**, de propósito: se o profissional apagar a
+conta dele, o titular continua conseguindo responder "quem olhou meu dado" — o que se perde é só o
+nome, que passa a sair nulo. Na outra ponta, `subjectUserId` é FK com `onDelete: Cascade`: a trilha
+é do titular e some com ele no `delete_my_account`, como todo o resto. Não há retenção residual.
+
+Os dois — consentimento e trilha — saem no `export_my_data`, porque são dado do titular (LGPD art.
+18 V). O que **não** sai é a lista de pessoas que o titular atende, quando ele é o profissional:
+essa é a clientela dele, e é dado de terceiro.
+
 ## Dados que NÃO são armazenados
 
 - **Fotos de refeição.** Decisão registrada na [ADR 004](./ADR/004-sem-armazenamento-fotos.md).
@@ -178,12 +209,13 @@ O envio dos backups para storage offsite cifrado é acompanhado na issue #93.
 
 ## Como o usuário exerce os direitos
 
-| Direito (LGPD art. 18)     | Como                                                                        |
-| -------------------------- | --------------------------------------------------------------------------- |
-| Acesso e portabilidade     | `GET /users/me/export` ou a tool MCP `export_my_data`                       |
-| Correção                   | Qualquer tool de `update_*`, ou a própria UI                                |
-| Eliminação                 | `DELETE /users/me` ou a tool `delete_my_account`, com confirmação explícita |
-| Revogação do consentimento | Apagar a conta                                                              |
+| Direito (LGPD art. 18)     | Como                                                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Acesso e portabilidade     | `GET /users/me/export` ou a tool MCP `export_my_data`                                                                           |
+| Correção                   | Qualquer tool de `update_*`, ou a própria UI                                                                                    |
+| Eliminação                 | `DELETE /users/me` ou a tool `delete_my_account`, com confirmação explícita                                                     |
+| Revogação do consentimento | `revoke_data_sharing` / `DELETE /sharing/consents/:linkId` para cortar o acesso de um profissional; apagar a conta para o resto |
+| Saber quem acessou         | `list_data_sharing` (quem pode ver) e `list_data_access_log` (quem viu, e quem tentou)                                          |
 
 Nenhum deles depende de abrir um pedido ou esperar resposta humana — é o que a instrumentação
 via MCP permite: o usuário pede ao Claude e acontece.

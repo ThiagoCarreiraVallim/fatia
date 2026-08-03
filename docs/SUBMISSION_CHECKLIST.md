@@ -23,8 +23,7 @@ Mapa das lacunas para issues:
 
 | Item                                        | Issue                     |
 | ------------------------------------------- | ------------------------- |
-| A1 — anotações das 97 tools                 | #169                      |
-| A2 — org Team/Enterprise                    | ✅ resolvido (Team ativo) |
+| A1 — anotações das 101 tools                 | #169                      || A2 — org Team/Enterprise                    | ✅ resolvido (Team ativo) |
 | A3–A6 — hardening do OAuth para o diretório | #170                      |
 | A7 — validação funcional + conta de teste   | #171                      |
 | A8–A9 — compliance e conteúdo da listagem   | #97                       |
@@ -56,14 +55,12 @@ Estado do código: **nenhuma anotação existe**. `grep -r "readOnlyHint\|destru
 
 Impacto: o passo **Tools** do portal sincroniza a superfície do servidor e sinaliza
 tools sem título ou anotação, pedindo correção **antes** de submeter. Sem isso a
-submissão não avança, e são **97 tools** afetadas.
-
+submissão não avança, e são **101 tools** afetadas.
 Trabalho:
 
 - [ ] Estender `McpToolDef` com `title: string` e `annotations: { readOnlyHint?: true; destructiveHint?: true }`.
 - [ ] Passar os dois no `registerTool` do registry.
-- [ ] Preencher nas 97 tools. A separação é mecânica pelo prefixo do nome:
-      `get_*` / `list_*` / `search_*` / `explain_*` / `export_*` → `readOnlyHint`;
+- [ ] Preencher nas 101 tools. A separação é mecânica pelo prefixo do nome:      `get_*` / `list_*` / `search_*` / `explain_*` / `export_*` → `readOnlyHint`;
       `delete_*` (14 tools) e `delete_my_account` → `destructiveHint`;
       `log_*` / `create_*` / `update_*` / `set_*` / `add_*` / `remove_*` / `start_*` /
       `finish_*` / `complete_*` / `clone_*` / `reorder_*` → escrita não destrutiva
@@ -159,15 +156,13 @@ O Claude só escolhe CIMD se o metadata trouxer **também**
       (por e-mail para `mcp-review@anthropic.com`). Registrar em ADR.
 - [ ] Se ficar em DCR: definir TTL/limpeza de clientes registrados e órfãos.
 
-### A7. Exercitar as 97 tools de ponta a ponta 🟠 (#171)
-
+### A7. Exercitar as 101 tools de ponta a ponta 🟠 (#171)
 Requisito explícito do "before you submit", e o passo **Test & launch** do portal pede
 confirmação de que você rodou **cada** tool. Reviewers fazem teste funcional por tool, e
 erro genérico ("Internal Server Error", "Bad Request" sem detalhe) reprova.
 
-- [ ] Rodar as 97 tools no [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector).
-- [ ] Rodar as 97 tools como **custom connector** no Claude.
-- [ ] Criar a **conta de teste populada** (refeições, planos, sessões, séries, pesos,
+- [ ] Rodar as 101 tools no [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector).
+- [ ] Rodar as 101 tools como **custom connector** no Claude.- [ ] Criar a **conta de teste populada** (refeições, planos, sessões, séries, pesos,
       passos, água, metas) e escrever o passo a passo de acesso para o reviewer —
       cada link, credencial e etapa.
 
@@ -246,14 +241,12 @@ para _verified_ é avaliada automaticamente pela Anthropic.
 
 ## Ordem sugerida
 
-1. **#169** (anotações das 97 tools) — único bloqueador puramente de código, e o passo
-   Tools do portal trava nele.
+1. **#169** (anotações das 101 tools) — único bloqueador puramente de código, e o passo   Tools do portal trava nele.
 2. **#114 + #93** (Logto em produção, DNS, bucket, drill de restore) — destravam a
    validação real do conector.
 3. **#170** (metadata, erros OAuth, throttle e latência) — o que o reviewer encontra ao
    conectar. A decisão DCR × CIMD pode ficar registrada em ADR sem estar implementada.
-4. **#91 + #171** (validar o fluxo no Claude; exercitar as 97 tools no Inspector e no
-   Claude; conta de teste populada).
+4. **#91 + #171** (validar o fluxo no Claude; exercitar as 101 tools no Inspector e no   Claude; conta de teste populada).
 5. **#97 + #113** (conteúdo da listagem, respostas de compliance, documentação pública).
 6. **#97** — abrir o portal e submeter.
 
