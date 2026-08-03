@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
 import { CommonModule } from '../common/common.module';
+// `plannedToday` do dashboard vem do bloco de periodização (#145). O WorkoutModule
+// não importa o ProgressModule, então não há ciclo.
+import { WorkoutModule } from '../workout/workout.module';
 import { WeightLogService } from './weight-log.service';
 import { StepLogService } from './step-log.service';
 import { WaterLogService } from './water-log.service';
@@ -37,7 +40,7 @@ import { ListAchievementsTool } from './mcp/list-achievements.tool';
 import { RefreshAchievementsTool } from './mcp/refresh-achievements.tool';
 
 @Module({
-  imports: [CommonModule],
+  imports: [CommonModule, WorkoutModule],
   controllers: [ProgressController],
   providers: [
     WeightLogService,

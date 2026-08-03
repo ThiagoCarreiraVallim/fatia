@@ -19,6 +19,7 @@ const makePrisma = () => ({
   stepLog: { findMany: jest.fn().mockResolvedValue([]) },
   waterLog: { findMany: jest.fn().mockResolvedValue([]) },
   userAchievement: { findMany: jest.fn().mockResolvedValue([]) },
+  trainingBlock: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const SCHEMA = resolve(__dirname, '../../../../../packages/db/prisma/schema.prisma');
@@ -45,6 +46,7 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   customExercises: 'customExercises',
   nutrientTargets: 'nutrientTargets',
   achievements: 'achievements',
+  trainingBlocks: 'trainingBlocks',
 };
 
 /**

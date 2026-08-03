@@ -53,6 +53,7 @@ export class AccountService {
       stepLogs,
       waterLogs,
       achievements,
+      trainingBlocks,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
       this.prisma.nutrientTarget.findMany({ where: { userId }, orderBy: { label: 'asc' } }),
@@ -90,6 +91,14 @@ export class AccountService {
         where: { userId },
         orderBy: { unlockedAt: 'asc' },
       }),
+      // O bloco de periodização é plano que o titular aceitou, com os multiplicadores
+      // congelados naquele dia (ADR 019). Não dá para reconstruí-lo a partir das sessões:
+      // sem as semanas junto, o export devolveria o treino feito sem o treino combinado.
+      this.prisma.trainingBlock.findMany({
+        where: { userId },
+        include: { weeks: { orderBy: { weekNumber: 'asc' } } },
+        orderBy: { createdAt: 'asc' },
+      }),
     ]);
 
     return {
@@ -110,6 +119,7 @@ export class AccountService {
       stepLogs,
       waterLogs,
       achievements,
+      trainingBlocks,
       counts: {
         achievements: achievements.length,
         meals: meals.length,

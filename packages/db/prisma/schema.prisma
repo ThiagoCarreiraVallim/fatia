@@ -35,10 +35,11 @@ model User {
   weightLogs      WeightLog[]
   stepLogs        StepLog[]
   waterLogs       WaterLog[]
-  customFoods     Food[]           @relation("UserCustomFoods")
-  customExercises Exercise[]       @relation("UserCustomExercises")
+  customFoods     Food[]            @relation("UserCustomFoods")
+  customExercises Exercise[]        @relation("UserCustomExercises")
   nutrientTargets NutrientTarget[]
   achievements    UserAchievement[]
+  trainingBlocks  TrainingBlock[]
 
   // B2B (ADR 014). Nenhuma destas relações dá acesso a dado de saúde por si só —
   // quem autoriza leitura é exclusivamente uma linha de `ProfessionalLink`.
@@ -260,9 +261,10 @@ model WorkoutPlan {
   name      String // "Push", "Pull", "Leg"
   createdAt DateTime @default(now())
 
-  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  exercises WorkoutPlanExercise[]
-  sessions  WorkoutSession[]
+  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercises      WorkoutPlanExercise[]
+  sessions       WorkoutSession[]
+  trainingBlocks TrainingBlock[]
 
   @@index([userId])
 }
@@ -321,6 +323,82 @@ model SessionSet {
 
   @@index([sessionId])
   @@index([exerciseId])
+}
+
+// ============================================================
+// PERIODIZAÇÃO (#145 — ADR 019)
+// ============================================================
+
+/// Bloco de periodização: 4 semanas (3 de acúmulo/pico + 1 deload) sobre um plano.
+///
+/// O que estas tabelas guardam é **intenção**, e só ela: o bloco que o usuário
+/// aceitou, com os multiplicadores congelados no dia em que aceitou. Derivar a
+/// intenção do histórico faria a semana mudar sozinha no dia em que o template do
+/// código mudasse, e não haveria o que explicar a quem está no meio do bloco.
+///
+/// O que **não** mora aqui é o andamento — sessões feitas, semanas empurradas,
+/// bloco vencido ou abandonado por ausência. Isso é função pura do histórico de
+/// `WorkoutSession` e é recalculado em toda leitura (`helpers/reconcile-block.ts`).
+/// Guardar contador de andamento criaria uma cópia que mente sozinha quando uma
+/// sessão é apagada ou registrada retroativamente — e obrigaria a gravar durante
+/// um `GET`, que é o que `get_training_block` promete não fazer (`readOnlyHint`).
+model TrainingBlock {
+  id     String  @id @default(uuid())
+  userId String
+  planId String?
+
+  kind       TrainingBlockKind   @default(hypertrophy)
+  /// YYYY-MM-DD no fuso do usuário, mesma escolha de `StepLog.date`.
+  startDate  String
+  weeksTotal Int                 @default(4)
+  status     TrainingBlockStatus @default(active)
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  user  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan  WorkoutPlan?        @relation(fields: [planId], references: [id], onDelete: SetNull)
+  weeks TrainingBlockWeek[]
+
+  @@index([userId, status])
+}
+
+model TrainingBlockWeek {
+  id         String @id @default(uuid())
+  blockId    String
+  /// 1..weeksTotal
+  weekNumber Int
+  /// "accumulation" | "peak" | "deload"
+  focus      String
+
+  /// Multiplicadores gravados na linha, não lidos do template do código: um bloco
+  /// em curso não pode mudar debaixo do usuário quando o template mudar.
+  ///
+  /// Consequência para quem depura: ver 1.025 aqui e 1.05 em `block-template.ts`
+  /// **não** é bug — é um bloco criado antes da mudança do template.
+  intensityFactor Float
+  volumeFactor    Float
+
+  /// Segunda-feira **planejada** da semana, YYYY-MM-DD — o combinado, não o que
+  /// aconteceu. A reancoragem por semana perdida sai derivada na leitura
+  /// (`effectiveWeekStart`); esta coluna nunca é reescrita.
+  weekStart      String
+  sessionsTarget Int
+
+  block TrainingBlock @relation(fields: [blockId], references: [id], onDelete: Cascade)
+
+  @@unique([blockId, weekNumber])
+  @@index([blockId])
+}
+
+enum TrainingBlockKind {
+  strength
+  hypertrophy
+}
+
+enum TrainingBlockStatus {
+  active
+  completed
+  abandoned
 }
 
 // ============================================================

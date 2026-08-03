@@ -5,6 +5,7 @@ import { WeightLogService } from './weight-log.service';
 import { WaterLogService } from './water-log.service';
 import { StreakService } from './streak.service';
 import { AchievementService, type AchievementEntry } from './achievement.service';
+import { TrainingBlockService } from '../workout/training-block.service';
 import { addDaysIso, dayBoundsInTz, todayInTz, weekStartInTz } from './helpers/date-tz';
 
 interface UserCtx {
@@ -23,6 +24,7 @@ export class DashboardService {
     private readonly waterLogs: WaterLogService,
     private readonly streaks: StreakService,
     private readonly achievements: AchievementService,
+    private readonly trainingBlocks: TrainingBlockService,
   ) {}
 
   async today(ctx: UserCtx) {
@@ -38,6 +40,7 @@ export class DashboardService {
       stepsToday,
       waterToday,
       streak,
+      activeBlock,
     ] = await Promise.all([
       this.prisma.meal.findMany({
         // `lt`, não `lte`: o `end` do `dayBoundsInTz` é a meia-noite do dia SEGUINTE, então
@@ -63,6 +66,10 @@ export class DashboardService {
       this.stepLogs.getStepsForDate(date, ctx.userId),
       this.waterLogs.getForDate(date, ctx.userId),
       this.streaks.compute(ctx),
+      // Quem preenche `plannedToday` é o bloco de periodização (#145): sem bloco
+      // ativo — ou com um bloco já vencido, que o `getActive` devolve como `null` —
+      // o campo continua nulo e o card volta a dizer "treino livre".
+      this.trainingBlocks.getActive(ctx),
     ]);
 
     const consumed = meals
@@ -113,7 +120,13 @@ export class DashboardService {
         onTrack,
       },
       workout: {
-        plannedToday: null as { planId: string; name: string } | null,
+        // Bloco sem plano (`planId` nulo) periodiza treino livre: não há nome de
+        // plano para prometer, e prometer o do bloco levaria a pessoa a procurar
+        // uma tela que não existe.
+        plannedToday:
+          activeBlock?.planId && activeBlock.planName
+            ? { planId: activeBlock.planId, name: activeBlock.planName }
+            : null,
         sessionInProgress,
         completedToday: !!completedSession,
       },
