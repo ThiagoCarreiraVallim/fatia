@@ -15,6 +15,29 @@
 /** Canal do Android. Sem canal, o sistema entrega em silêncio e sem vibrar. */
 export const REST_CHANNEL_ID = 'workout-rest';
 
+/** Marca do aviso de descanso em `content.data`. Ver `isRestNotification`. */
+export const REST_NOTIFICATION_KIND = 'workout-rest';
+
+/**
+ * É o aviso do fim do descanso?
+ *
+ * Existe porque `setNotificationHandler` é global do app: quem responde ali
+ * responde por **toda** notificação em primeiro plano, inclusive as que a #148
+ * (push remoto) ainda vai trazer. Silenciar em bloco resolveria o caso daqui —
+ * com a sessão aberta quem avisa é o cronômetro, o háptico e o leitor de tela,
+ * e uma tarja cobriria o campo de carga sendo preenchido — mas deixaria o app
+ * inteiro mudo para o próximo tipo de aviso, sem nada apontando para o
+ * culpado num arquivo de sessão de treino.
+ */
+export function isRestNotification(data: unknown): boolean {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'kind' in data &&
+    data.kind === REST_NOTIFICATION_KIND
+  );
+}
+
 /** O que o adaptador precisa saber fazer. Nada aqui conhece o Expo. */
 export interface RestNotifier {
   /** `true` se dá para notificar. Pergunta ao sistema; não agenda nada. */
@@ -26,7 +49,7 @@ export interface RestNotifier {
 
 export interface RestNotifications {
   /** Agenda o aviso do fim do descanso, cancelando o anterior. */
-  schedule(deadline: number, now?: number): Promise<void>;
+  schedule(deadline: number): Promise<void>;
   /** Pular, pausar ou sair da sessão. */
   cancel(): Promise<void>;
 }
@@ -81,19 +104,29 @@ export function createRestNotifications(notifier: RestNotifier): RestNotificatio
     if (id) await notifier.cancel(id);
   }
 
-  async function agendar(deadline: number, now: number): Promise<void> {
+  async function agendar(deadline: number): Promise<void> {
     await cancelar();
     const minhaRodada = rodada;
 
-    const seconds = restDelaySeconds(deadline, now);
     // Nem pergunta a permissão: um descanso que já acabou não justifica pôr um
     // diálogo do sistema na frente de quem está treinando.
-    if (seconds == null) return;
+    if (restDelaySeconds(deadline, Date.now()) == null) return;
 
     permissao ??= notifier.ensurePermission();
     // Negada, o descanso continua na tela com háptico e leitor de tela. A
     // notificação é o extra de quem guarda o celular no bolso.
     if (!(await permissao)) return;
+
+    // O relógio é lido de novo, e só agora: o gatilho é um intervalo contado a
+    // partir da chamada de `schedule`, então tudo o que passou até aqui é
+    // atraso puro. E o que passa aqui é o diálogo de permissão do sistema, que
+    // no primeiro descanso fica na tela o tempo que a pessoa levar para ler —
+    // com a conta feita antes, um diálogo de 20s entrega o aviso 20s depois do
+    // fim do descanso, e nada o cancela (o descanso que acaba sozinho não é
+    // interrupção; ver `restWasInterrupted`).
+    const seconds = restDelaySeconds(deadline, Date.now());
+    // O descanso venceu com o diálogo aberto: já não há o que avisar.
+    if (seconds == null) return;
 
     const id = await notifier.schedule(seconds);
     if (rodada !== minhaRodada) {
@@ -104,9 +137,9 @@ export function createRestNotifications(notifier: RestNotifier): RestNotificatio
   }
 
   return {
-    async schedule(deadline: number, now: number = Date.now()): Promise<void> {
+    async schedule(deadline: number): Promise<void> {
       try {
-        await agendar(deadline, now);
+        await agendar(deadline);
       } catch {
         // Quem chama daqui é um `useEffect`, que não tem como tratar rejeição:
         // ela viraria erro não tratado — tela vermelha no development build —

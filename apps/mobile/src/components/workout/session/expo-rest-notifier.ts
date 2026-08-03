@@ -1,6 +1,11 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import { REST_CHANNEL_ID, type RestNotifier } from './rest-notification';
+import {
+  isRestNotification,
+  REST_CHANNEL_ID,
+  REST_NOTIFICATION_KIND,
+  type RestNotifier,
+} from './rest-notification';
 
 /**
  * A ponta que fala com o sistema operacional (#182).
@@ -13,19 +18,25 @@ import { REST_CHANNEL_ID, type RestNotifier } from './rest-notification';
  */
 
 /**
- * Com o app aberto o aviso já é o timer na tela, o háptico e o leitor de tela.
- * Uma tarja por cima da sessão em andamento cobriria justamente o campo de
- * carga que a pessoa está preenchendo. Este handler é global do app; quando a
- * #148 (push remoto) trouxer outros tipos de notificação, ele vai precisar
- * decidir por `content.data`, e não em bloco.
+ * Com o app aberto o aviso do descanso já é o timer na tela, o háptico e o
+ * leitor de tela — uma tarja por cima da sessão cobriria justamente o campo de
+ * carga que a pessoa está preenchendo.
+ *
+ * O handler é global do app e responde por toda notificação em primeiro plano,
+ * então ele decide por `content.data` e **não** em bloco: silenciar tudo daqui
+ * deixaria mudo, sem aviso nenhum, o push remoto da #148. O padrão é mostrar; o
+ * silêncio é a exceção do descanso.
  */
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: false,
-    shouldShowList: false,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async (notification) => {
+    const doDescanso = isRestNotification(notification.request.content.data);
+    return {
+      shouldShowBanner: !doDescanso,
+      shouldShowList: !doDescanso,
+      shouldPlaySound: !doDescanso,
+      shouldSetBadge: !doDescanso,
+    };
+  },
 });
 
 export const expoRestNotifier: RestNotifier = {
@@ -59,6 +70,8 @@ export const expoRestNotifier: RestNotifier = {
         title: 'Descanso terminado',
         body: 'Hora da próxima série.',
         sound: 'default',
+        // É o que o handler de primeiro plano lê para silenciar só este aviso.
+        data: { kind: REST_NOTIFICATION_KIND },
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,

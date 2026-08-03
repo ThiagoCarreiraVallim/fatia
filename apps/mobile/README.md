@@ -292,8 +292,10 @@ depende de aparelho:
 
 1. Inicie um treino, registre uma série e toque em **Iniciar descanso**. O
    diálogo de permissão aparece **agora**, e não na abertura do app.
-2. Aceite, bloqueie a tela e espere o descanso acabar. O aviso chega na hora,
-   com som e vibração.
+2. Aceite **demorando de propósito** uns 20 segundos no diálogo, bloqueie a tela
+   e espere o descanso acabar. O aviso chega junto com o fim do descanso, com som
+   e vibração: o tempo que o diálogo ficou na tela é descontado do atraso, e não
+   somado a ele.
 3. Repita recusando a permissão: o cronômetro continua funcionando na tela, sem
    erro e sem novo diálogo no descanso seguinte.
 4. Inicie um descanso e toque em **Pular** ou em **Pausar**: nada deve chegar
