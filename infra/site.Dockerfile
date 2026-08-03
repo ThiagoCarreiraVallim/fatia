@@ -35,7 +35,7 @@ ENV PUBLIC_DOMAIN=${PUBLIC_DOMAIN}
 RUN pnpm --filter @fatia/site build
 
 # ---------- Runner ----------
-FROM nginx:1.27-alpine AS runner
+FROM nginx:1.31-alpine AS runner
 
 COPY infra/site.nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/apps/site/dist /usr/share/nginx/html
