@@ -1,10 +1,17 @@
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { GroupRole, GroupType, MealType, MembershipStatus, ShareScope } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import { AccessAuditService } from '../../sharing/access-audit.service';
 import { ConsentService } from '../../sharing/consent.service';
 import { GroupService } from '../../sharing/group.service';
 import { MembershipService } from '../../sharing/membership.service';
+import { PlanMaterializerService } from '../../sharing/plan-materializer.service';
+import { buildPlanSnapshot, PLAN_SNAPSHOT_VERSION } from '../../sharing/plan-snapshot';
 import { ProfessionalAccessService } from '../../sharing/professional-access.service';
 import { ProfessionalLinkService } from '../../sharing/professional-link.service';
 import { StudentViewService } from '../../sharing/student-view.service';
@@ -1245,6 +1252,232 @@ describe('isolamento entre usuários', () => {
       // E o profissional continua sem plano nenhum na conta dele: ler o do aluno
       // não materializa cópia — isso só acontece no aceite de uma oferta.
       await expect(plans.list(owned.pro)).resolves.toEqual([]);
+    });
+  });
+
+  /**
+   * Plano pronto do criador virando plano do membro (#162), contra Postgres.
+   *
+   * É o critério de pronto da issue na forma literal: o criador publica, dois
+   * membros adotam, e a edição de um não toca no original nem na cópia do
+   * outro. O spec de unidade ao lado prova que o `where` foi montado certo;
+   * este prova que o banco de fato guardou duas cópias independentes — e é a
+   * única forma de pegar o `@@unique([planId, exerciseId])` e o
+   * `@@unique([name, createdByUserId])` mordendo na adoção.
+   *
+   * Os dois membros são usuários novos, sem grupo: a adoção não depende de
+   * associação **nesta fatia** porque a tabela de publicação ainda não existe
+   * (ver a proposta na PR), e pendurá-los na academia do user-A mudaria a lista
+   * de alunos que o bloco do #157 confere acima.
+   */
+  describe('plano pronto vira cópia do membro (#162)', () => {
+    const materializer = new PlanMaterializerService(prisma, exercises);
+
+    const pronto = {
+      /** O plano na conta do CRIADOR. Nada aqui vira dado de membro sozinho. */
+      planoDoCriador: '',
+      /** Exercício custom do criador — o que precisa virar cópia de quem adota. */
+      exercicioDoCriador: 0,
+      membro1: '',
+      membro2: '',
+      snapshot: {} as unknown,
+    };
+
+    beforeAll(async () => {
+      const stamp = `tpl-${Date.now()}`;
+
+      const [membro1, membro2] = await Promise.all([
+        prisma.user.create({
+          data: {
+            logtoSub: `${stamp}-m1`,
+            email: `${stamp}-m1@test.local`,
+            name: 'Membro 1',
+            timezone: TZ,
+          },
+        }),
+        prisma.user.create({
+          data: {
+            logtoSub: `${stamp}-m2`,
+            email: `${stamp}-m2@test.local`,
+            name: 'Membro 2',
+            timezone: TZ,
+          },
+        }),
+      ]);
+      pronto.membro1 = membro1.id;
+      pronto.membro2 = membro2.id;
+
+      // O criador monta o plano na conta DELE, com um exercício do catálogo
+      // público e um custom que só ele tem — a mistura é o ponto: um entra por
+      // referência, o outro tem de virar cópia.
+      const custom = await exercises.createCustom(owned.creator, {
+        name: `${stamp}-remada-do-criador`,
+        muscleGroup: 'costas',
+      });
+      await exercises.updateCustom(owned.creator, custom.id, {
+        equipment: 'polia',
+        instructions: ['Puxe até o abdômen', 'Não jogue o tronco'],
+        primaryMuscles: ['lats'],
+      });
+      pronto.exercicioDoCriador = custom.id;
+
+      const plano = await plans.create(owned.creator, { name: 'Full body do criador' });
+      pronto.planoDoCriador = plano.id;
+      await plans.addExercise(owned.creator, plano.id, {
+        exerciseId: owned.sharedExerciseId,
+        order: 1,
+        targetSets: 4,
+        targetReps: '8-12',
+      });
+      await plans.addExercise(owned.creator, plano.id, {
+        exerciseId: custom.id,
+        order: 2,
+        targetSets: 3,
+        targetReps: '12',
+      });
+
+      // Publicar congela o conteúdo. O que os membros adotam é ISTO, e não uma
+      // leitura do plano vivo do criador no momento do clique.
+      pronto.snapshot = buildPlanSnapshot(await plans.findById(owned.creator, plano.id));
+    }, 60_000);
+
+    afterAll(async () => {
+      await prisma.user
+        .deleteMany({ where: { id: { in: [pronto.membro1, pronto.membro2].filter(Boolean) } } })
+        .catch(() => undefined);
+    });
+
+    const original = () => plans.findById(owned.creator, pronto.planoDoCriador);
+
+    it('semeou o plano pronto do criador', async () => {
+      // Sem isto, "a cópia tem 2 exercícios" passaria sobre um original vazio.
+      const plano = await original();
+      expect(plano.exercises.map((e) => e.exerciseId)).toEqual([
+        owned.sharedExerciseId,
+        pronto.exercicioDoCriador,
+      ]);
+    });
+
+    it('o membro adota e o plano passa a ser dele, com o conteúdo prescrito pelo criador', async () => {
+      const copia = await materializer.materialize(pronto.membro1, pronto.snapshot);
+
+      const lido = await plans.findById(pronto.membro1, copia.id);
+      expect(lido.userId).toBe(pronto.membro1);
+      expect(lido.name).toBe('Full body do criador');
+      expect(lido.exercises.map((e) => [e.order, e.targetSets, e.targetReps])).toEqual([
+        [1, 4, '8-12'],
+        [2, 3, '12'],
+      ]);
+    });
+
+    it('o exercício do catálogo entra por referência e o custom do criador vira exercício DO MEMBRO', async () => {
+      const copia = await materializer.materialize(pronto.membro2, pronto.snapshot);
+      const lido = await plans.findById(pronto.membro2, copia.id);
+
+      // Catálogo público é o mesmo id para todo mundo — copiá-lo encheria o
+      // catálogo de lixo.
+      expect(lido.exercises[0].exerciseId).toBe(owned.sharedExerciseId);
+
+      // O custom é outra linha, do membro, com o conteúdo que o criador escreveu.
+      const doMembro = lido.exercises[1].exercise;
+      expect(doMembro.id).not.toBe(pronto.exercicioDoCriador);
+      expect(doMembro.createdByUserId).toBe(pronto.membro2);
+      expect(doMembro.instructions).toEqual(['Puxe até o abdômen', 'Não jogue o tronco']);
+      expect(doMembro.primaryMuscles).toEqual(['lats']);
+
+      // E o criador não aparece em canto nenhum do que o membro passa a ter.
+      expect(JSON.stringify(lido)).not.toContain(owned.creator);
+
+      // O exercício do criador continua sendo dele, e invisível para o membro —
+      // adotar o plano não é ganhar leitura da conta de quem publicou.
+      await expect(exercises.get(pronto.membro2, pronto.exercicioDoCriador)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('a edição do membro não afeta o original nem a cópia do outro membro', async () => {
+      // O critério de pronto da issue, literal.
+      const copia1 = await materializer.materialize(pronto.membro1, pronto.snapshot);
+      const copia2 = await materializer.materialize(pronto.membro2, pronto.snapshot);
+
+      await plans.update(pronto.membro1, copia1.id, { name: 'Meu treino, do meu jeito' });
+      const primeiroExercicio = (await plans.findById(pronto.membro1, copia1.id)).exercises[0];
+      await plans.removeExercise(pronto.membro1, copia1.id, primeiroExercicio.id);
+
+      const depoisDoMembro1 = await plans.findById(pronto.membro1, copia1.id);
+      expect([depoisDoMembro1.name, depoisDoMembro1.exercises.length]).toEqual([
+        'Meu treino, do meu jeito',
+        1,
+      ]);
+
+      const doCriador = await original();
+      expect([doCriador.name, doCriador.exercises.length]).toEqual(['Full body do criador', 2]);
+
+      const doMembro2 = await plans.findById(pronto.membro2, copia2.id);
+      expect([doMembro2.name, doMembro2.exercises.length]).toEqual(['Full body do criador', 2]);
+    });
+
+    it('quem publicou não lê a cópia de quem adotou', async () => {
+      const copia = await materializer.materialize(pronto.membro1, pronto.snapshot);
+
+      // Ter publicado o conteúdo não dá acesso ao que virou dado do membro —
+      // mesmo NOT_FOUND de plano inexistente (#92).
+      await expect(plans.findById(owned.creator, copia.id)).rejects.toThrow(NotFoundException);
+      await expect(plans.findById(pronto.membro2, copia.id)).rejects.toThrow(NotFoundException);
+    });
+
+    it('o criador editar o plano de origem depois NÃO muda quem já adotou', async () => {
+      const copia = await materializer.materialize(pronto.membro1, pronto.snapshot);
+
+      try {
+        await plans.update(owned.creator, pronto.planoDoCriador, { name: 'Versão 2 do criador' });
+
+        // Consequência aceita da ADR 014 virando teste: o dado é do membro.
+        const lido = await plans.findById(pronto.membro1, copia.id);
+        expect(lido.name).toBe('Full body do criador');
+      } finally {
+        await plans.update(owned.creator, pronto.planoDoCriador, { name: 'Full body do criador' });
+      }
+    });
+
+    it('snapshot forjado com o exercício custom de outra pessoa é recusado, e nada é criado', async () => {
+      // O `catalogExerciseId` vem de um `Json` que ninguém digitou na tela: um
+      // snapshot escrito à mão pode apontar a linha de qualquer um, e o id de
+      // `Exercise` é inteiro sequencial.
+      const forjado = {
+        version: PLAN_SNAPSHOT_VERSION,
+        name: 'Plano forjado',
+        exercises: [
+          {
+            source: 'catalog',
+            catalogExerciseId: pronto.exercicioDoCriador,
+            order: 1,
+            targetSets: 3,
+            targetReps: '10',
+          },
+        ],
+      };
+
+      const antes = await plans.list(pronto.membro2);
+      await expect(materializer.materialize(pronto.membro2, forjado)).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(plans.list(pronto.membro2)).resolves.toEqual(antes);
+    });
+
+    it('materializar duas vezes reaproveita o exercício custom em vez de estourar o unique', async () => {
+      // `@@unique([name, createdByUserId])`: a segunda adoção não pode criar um
+      // segundo "remada do criador" na conta do membro, e também não pode
+      // falhar. (Não criar um segundo PLANO depende da coluna de proveniência,
+      // que esta fatia não abre — está declarado na PR.)
+      const copia = await materializer.materialize(pronto.membro1, pronto.snapshot);
+      const lido = await plans.findById(pronto.membro1, copia.id);
+
+      const custons = await prisma.exercise.findMany({
+        where: { createdByUserId: pronto.membro1 },
+      });
+      expect(custons).toHaveLength(1);
+      expect(lido.exercises[1].exerciseId).toBe(custons[0].id);
     });
   });
 

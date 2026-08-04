@@ -8,6 +8,7 @@ import { AccessAuditService } from './access-audit.service';
 import { ConsentService } from './consent.service';
 import { GroupService } from './group.service';
 import { MembershipService } from './membership.service';
+import { PlanMaterializerService } from './plan-materializer.service';
 import { ProfessionalAccessService } from './professional-access.service';
 import { ProfessionalLinkService } from './professional-link.service';
 import { StudentViewService } from './student-view.service';
@@ -37,6 +38,12 @@ import { RevokeDataSharingTool } from './mcp/revoke-data-sharing.tool';
  * profissional → aluno da ADR 014 é oferta + aceite, não escrita em nome de
  * outro.
  *
+ * A direção contrária — profissional/criador → aluno — é **cópia**, e quem a faz
+ * é o `PlanMaterializerService` (#162), a única máquina de materialização do
+ * repositório. Oferta aceita (#157) e plano pronto adotado (#162) são a mesma
+ * cópia com portas de entrada diferentes; duas implementações divergiriam no
+ * primeiro campo novo de `WorkoutPlan`.
+ *
  * **Papel e consentimento são duas camadas, e ficam separadas de propósito**
  * (#156): `GroupRoleGuard` + `permissions.ts` governam administração de grupo;
  * `ProfessionalLink` + `ProfessionalAccessService` governam leitura de dado de
@@ -63,6 +70,7 @@ import { RevokeDataSharingTool } from './mcp/revoke-data-sharing.tool';
     ConsentService,
     GroupService,
     MembershipService,
+    PlanMaterializerService,
     GroupRoleGuard,
     ListMyGroupsTool,
     JoinGroupTool,
@@ -81,6 +89,7 @@ import { RevokeDataSharingTool } from './mcp/revoke-data-sharing.tool';
     GroupService,
     MembershipService,
     StudentViewService,
+    PlanMaterializerService,
   ],
 })
 export class SharingModule {}
