@@ -11,6 +11,7 @@
     "bootstrap": "bash scripts/setup.sh",
     "reset:db": "bash scripts/reset-db.sh",
     "mcp:smoke": "bash scripts/mcp-smoke.sh",
+    "billing:dry-run": "dotenv -e .env -- tsx apps/api/src/billing/billing-dry-run.ts",
     "secrets:scan": "bash scripts/secret-scan.sh",
     "secrets:scan:selftest": "bash scripts/secret-scan-selftest.sh",
     "dev": "bash scripts/dev.sh",
