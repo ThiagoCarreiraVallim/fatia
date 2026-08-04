@@ -182,6 +182,12 @@ Ver `packages/db/prisma/schema.prisma` para o schema completo.
   a única leitura entre contas vem de `ProfessionalLink` e passa por
   `sharing/professional-access.service.ts` (ADR 014). Os services de domínio não sabem que
   grupo existe
+- **Conteúdo que atravessa contas é cópia, e a cópia tem um lugar só.** O formato congelado é
+  `sharing/plan-snapshot.ts` e quem materializa é `sharing/plan-materializer.service.ts` — a
+  mesma máquina para o aceite de oferta do profissional (#157) e para a adoção de plano pronto
+  do grupo (#162). O snapshot é **autocontido**: exercício custom do autor viaja por valor e
+  vira exercício de quem adota; exercício do catálogo público viaja por id. Um segundo
+  materializador diverge do primeiro no próximo campo de `WorkoutPlan`
 
 ## Segurança
 
