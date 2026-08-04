@@ -15,6 +15,7 @@ export { ApiError, apiFetch, configureApiClient, resetApiClient } from './http';
 export * from './goals';
 export * from './nutrition';
 export * from './progress';
+export * from './sharing';
 export * from './users';
 export * from './workout';
 

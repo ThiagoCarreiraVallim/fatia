@@ -14,7 +14,7 @@
 ┌─────────────────┐      ┌──────────────────┐
 │  Claude (app)   │      │   PWA (Next.js)  │
 │   via MCP       │      │   navegador      │
-│   101 tools      │      │  visualização    │└────────┬────────┘      └─────────┬────────┘
+│   103 tools      │      │  visualização    │└────────┬────────┘      └─────────┬────────┘
          │                         │
          │ OAuth 2.1 + DCR + PKCE  │ OAuth code flow + PKCE
          │ (JWT do Logto)          │ (cookie de sessão)

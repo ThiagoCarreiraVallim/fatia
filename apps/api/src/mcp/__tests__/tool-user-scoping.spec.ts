@@ -111,9 +111,10 @@ describe('escopo por usuário nas tools MCP', () => {
     //   resolvida SÓ pelo `ProfessionalAccessService`. Uma tool que aceite
     //   `membership_id` e resolva o aluno por conta própria recria o furo.
     //
-    // A allowlist está vazia nesta issue (#153 entrega só o modelo). Ampliar
-    // exige diff visível — é o mesmo espírito de `PUBLIC_CATALOG_TOOLS`.
-    const DELEGATED_READ_TOOLS: string[] = [];
+    // A allowlist nasceu vazia (#153 entregou só o modelo) e ganhou a primeira
+    // entrada na #157, com o painel do profissional. Ampliar exige diff visível
+    // — é o mesmo espírito de `PUBLIC_CATALOG_TOOLS`.
+    const DELEGATED_READ_TOOLS: string[] = ['get_student_progress'];
 
     const declaram = loaded.filter(({ def }) =>
       Object.keys(def.inputSchema).some((field) => DELEGATED_FIELD.test(field)),

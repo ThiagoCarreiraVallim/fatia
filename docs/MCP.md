@@ -104,8 +104,8 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **101 tools** declaram `false`, e é a resposta que
-pela Fatia** (visão, LLM, embedding). Hoje as **101 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **103 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **103 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -185,18 +185,18 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 101 tools): **72,9 k caracteres**
+`description`, `annotations` e o JSON Schema do input das 103 tools): **72,9 k caracteres**
 hoje, dos quais **4.336 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de 89 caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
 atenção ao denominador: medir só `name + description + inputSchema` (60,8 k) subestima o
-`description`, `annotations` e o JSON Schema do input das 101 tools): **76,4 k caracteres**
+`description`, `annotations` e o JSON Schema do input das 103 tools): **78,4 k caracteres**
 hoje, dos quais **4.499 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de 89 caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (63,7 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (65,5 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -245,112 +245,114 @@ Listagens com potencial de crescer usam cursor-based:
 
 ## Catálogo de tools (resumo)
 
-| Categoria                 | Tool                         | Operação |
-| ------------------------- | ---------------------------- | -------- |
-| **Perfil**                | `get_me`                     | R        |
-|                           | `update_me`                  | U        |
-|                           | `update_timezone`            | U        |
-| **Conta (LGPD)**          | `export_my_data`             | R        |
-|                           | `delete_my_account`          | D        |
-| **Metas (macros)**        | `get_nutrition_goals`        | R        |
-|                           | `set_nutrition_goals`        | C/U      |
-| **Metas pessoais**        | `create_goal`                | C        |
-|                           | `get_goal`                   | R        |
-|                           | `list_goals`                 | R        |
-|                           | `update_goal`                | U        |
-|                           | `complete_goal`              | U        |
-|                           | `delete_goal`                | D        |
-| **Metas de nutrientes**   | `set_nutrient_target`        | C/U      |
-|                           | `list_nutrient_targets`      | R        |
-|                           | `delete_nutrient_target`     | D        |
-|                           | `get_nutrient_summary`       | R        |
-| **Alimentos (catálogo)**  | `search_food`                | R        |
-|                           | `get_food`                   | R        |
-|                           | `create_custom_food`         | C        |
-|                           | `update_custom_food`         | U        |
-|                           | `delete_custom_food`         | D        |
-|                           | `list_food_groups`           | R        |
-| **Refeições**             | `log_meal`                   | C        |
-|                           | `get_meal`                   | R        |
-|                           | `list_meals`                 | R        |
-|                           | `update_meal`                | U        |
-|                           | `delete_meal`                | D        |
-| **Itens de refeição**     | `add_meal_item`              | C        |
-|                           | `update_meal_item`           | U        |
-|                           | `delete_meal_item`           | D        |
-| **Resumo nutricional**    | `get_nutrition_summary`      | R        |
-|                           | `get_nutrition_history`      | R        |
-| **Exercícios (catálogo)** | `search_exercise`            | R        |
-|                           | `list_exercises_by_muscle`   | R        |
-|                           | `get_exercise_details`       | R        |
-|                           | `explain_form`               | R        |
-|                           | `create_custom_exercise`     | C        |
-|                           | `clone_exercise`             | C        |
-|                           | `update_custom_exercise`     | U        |
-|                           | `delete_custom_exercise`     | D        |
-| **Planos de treino**      | `create_workout_plan`        | C        |
-|                           | `get_workout_plan`           | R        |
-|                           | `list_workout_plans`         | R        |
-|                           | `update_workout_plan`        | U        |
-|                           | `delete_workout_plan`        | D        |
-|                           | `add_exercise_to_plan`       | C        |
-|                           | `update_plan_exercise`       | U        |
-|                           | `remove_exercise_from_plan`  | D        |
-|                           | `reorder_plan_exercises`     | U        |
-| **Sessões de treino**     | `start_workout_session`      | C        |
-|                           | `get_workout_session`        | R        |
-|                           | `get_active_workout_session` | R        |
-|                           | `list_workout_sessions`      | R        |
-|                           | `update_workout_session`     | U        |
-|                           | `finish_workout_session`     | U        |
-|                           | `delete_workout_session`     | D        |
-| **Séries**                | `log_set`                    | C        |
-|                           | `update_set`                 | U        |
-|                           | `delete_set`                 | D        |
-|                           | `get_last_set_for_exercise`  | R        |
-|                           | `get_personal_record`        | R        |
-|                           | `list_personal_records`      | R        |
-|                           | `get_load_prescription`      | R        |
-| **Periodização**          | `create_training_block`      | C        |
-|                           | `get_training_block`         | R        |
-|                           | `delete_training_block`      | D        |
-| **Peso corporal**         | `log_weight`                 | C        |
-|                           | `update_weight_log`          | U        |
-|                           | `delete_weight_log`          | D        |
-|                           | `list_weight_logs`           | R        |
-| **Passos**                | `log_steps`                  | C        |
-|                           | `update_step_log`            | U        |
-|                           | `delete_step_log`            | D        |
-|                           | `list_step_logs`             | R        |
-|                           | `get_steps_for_date`         | R        |
-|                           | `get_steps_history`          | R        |
-| **Hidratação**            | `log_water`                  | C        |
-|                           | `update_water_log`           | U        |
-|                           | `delete_water_log`           | D        |
-|                           | `list_water_logs`            | R        |
-|                           | `get_water_for_date`         | R        |
-|                           | `get_water_history`          | R        |
-|                           | `get_water_progress`         | R        |
-| **Progresso**             | `get_weight_progress`        | R        |
-|                           | `get_strength_progress`      | R        |
-|                           | `get_volume_progress`        | R        |
-|                           | `get_cardio_progress`        | R        |
-|                           | `get_steps_progress`         | R        |
-| **Dashboard**             | `get_today_summary`          | R        |
-|                           | `get_week_summary`           | R        |
-| **Engajamento**           | `get_streak`                 | R        |
-|                           | `list_achievements`          | R        |
-|                           | `refresh_achievements`       | W        |
-| **Grupos (B2B)**          | `list_my_groups`             | R        |
-|                           | `join_group`                 | C        |
-|                           | `leave_group`                | D        |
-| **Compartilhamento**      | `list_data_sharing`          | R        |
-|                           | `grant_data_sharing`         | C/U      |
-|                           | `revoke_data_sharing`        | U        |
-|                           | `list_data_access_log`       | R        |
+| Categoria                  | Tool                         | Operação |
+| -------------------------- | ---------------------------- | -------- |
+| **Perfil**                 | `get_me`                     | R        |
+|                            | `update_me`                  | U        |
+|                            | `update_timezone`            | U        |
+| **Conta (LGPD)**           | `export_my_data`             | R        |
+|                            | `delete_my_account`          | D        |
+| **Metas (macros)**         | `get_nutrition_goals`        | R        |
+|                            | `set_nutrition_goals`        | C/U      |
+| **Metas pessoais**         | `create_goal`                | C        |
+|                            | `get_goal`                   | R        |
+|                            | `list_goals`                 | R        |
+|                            | `update_goal`                | U        |
+|                            | `complete_goal`              | U        |
+|                            | `delete_goal`                | D        |
+| **Metas de nutrientes**    | `set_nutrient_target`        | C/U      |
+|                            | `list_nutrient_targets`      | R        |
+|                            | `delete_nutrient_target`     | D        |
+|                            | `get_nutrient_summary`       | R        |
+| **Alimentos (catálogo)**   | `search_food`                | R        |
+|                            | `get_food`                   | R        |
+|                            | `create_custom_food`         | C        |
+|                            | `update_custom_food`         | U        |
+|                            | `delete_custom_food`         | D        |
+|                            | `list_food_groups`           | R        |
+| **Refeições**              | `log_meal`                   | C        |
+|                            | `get_meal`                   | R        |
+|                            | `list_meals`                 | R        |
+|                            | `update_meal`                | U        |
+|                            | `delete_meal`                | D        |
+| **Itens de refeição**      | `add_meal_item`              | C        |
+|                            | `update_meal_item`           | U        |
+|                            | `delete_meal_item`           | D        |
+| **Resumo nutricional**     | `get_nutrition_summary`      | R        |
+|                            | `get_nutrition_history`      | R        |
+| **Exercícios (catálogo)**  | `search_exercise`            | R        |
+|                            | `list_exercises_by_muscle`   | R        |
+|                            | `get_exercise_details`       | R        |
+|                            | `explain_form`               | R        |
+|                            | `create_custom_exercise`     | C        |
+|                            | `clone_exercise`             | C        |
+|                            | `update_custom_exercise`     | U        |
+|                            | `delete_custom_exercise`     | D        |
+| **Planos de treino**       | `create_workout_plan`        | C        |
+|                            | `get_workout_plan`           | R        |
+|                            | `list_workout_plans`         | R        |
+|                            | `update_workout_plan`        | U        |
+|                            | `delete_workout_plan`        | D        |
+|                            | `add_exercise_to_plan`       | C        |
+|                            | `update_plan_exercise`       | U        |
+|                            | `remove_exercise_from_plan`  | D        |
+|                            | `reorder_plan_exercises`     | U        |
+| **Sessões de treino**      | `start_workout_session`      | C        |
+|                            | `get_workout_session`        | R        |
+|                            | `get_active_workout_session` | R        |
+|                            | `list_workout_sessions`      | R        |
+|                            | `update_workout_session`     | U        |
+|                            | `finish_workout_session`     | U        |
+|                            | `delete_workout_session`     | D        |
+| **Séries**                 | `log_set`                    | C        |
+|                            | `update_set`                 | U        |
+|                            | `delete_set`                 | D        |
+|                            | `get_last_set_for_exercise`  | R        |
+|                            | `get_personal_record`        | R        |
+|                            | `list_personal_records`      | R        |
+|                            | `get_load_prescription`      | R        |
+| **Periodização**           | `create_training_block`      | C        |
+|                            | `get_training_block`         | R        |
+|                            | `delete_training_block`      | D        |
+| **Peso corporal**          | `log_weight`                 | C        |
+|                            | `update_weight_log`          | U        |
+|                            | `delete_weight_log`          | D        |
+|                            | `list_weight_logs`           | R        |
+| **Passos**                 | `log_steps`                  | C        |
+|                            | `update_step_log`            | U        |
+|                            | `delete_step_log`            | D        |
+|                            | `list_step_logs`             | R        |
+|                            | `get_steps_for_date`         | R        |
+|                            | `get_steps_history`          | R        |
+| **Hidratação**             | `log_water`                  | C        |
+|                            | `update_water_log`           | U        |
+|                            | `delete_water_log`           | D        |
+|                            | `list_water_logs`            | R        |
+|                            | `get_water_for_date`         | R        |
+|                            | `get_water_history`          | R        |
+|                            | `get_water_progress`         | R        |
+| **Progresso**              | `get_weight_progress`        | R        |
+|                            | `get_strength_progress`      | R        |
+|                            | `get_volume_progress`        | R        |
+|                            | `get_cardio_progress`        | R        |
+|                            | `get_steps_progress`         | R        |
+| **Dashboard**              | `get_today_summary`          | R        |
+|                            | `get_week_summary`           | R        |
+| **Engajamento**            | `get_streak`                 | R        |
+|                            | `list_achievements`          | R        |
+|                            | `refresh_achievements`       | W        |
+| **Grupos (B2B)**           | `list_my_groups`             | R        |
+|                            | `join_group`                 | C        |
+|                            | `leave_group`                | D        |
+| **Compartilhamento**       | `list_data_sharing`          | R        |
+|                            | `grant_data_sharing`         | C/U      |
+|                            | `revoke_data_sharing`        | U        |
+|                            | `list_data_access_log`       | R        |
+| **Painel do profissional** | `list_my_students`           | R        |
+|                            | `get_student_progress`       | R        |
 
-Total: **101 tools**. Cada uma documentada abaixo.
-Total: **101 tools**. Cada uma documentada abaixo.
+Total: **103 tools**. Cada uma documentada abaixo.
+Total: **103 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -2515,6 +2517,88 @@ Array<{
   professionalName: string | null;
 }>;
 ```
+
+### `list_my_students`
+
+Os alunos que o profissional atende, em todas as academias em que ele é `PROFESSIONAL` ativo,
+com **o que cada um autorizou a ele**.
+
+Não devolve dado de saúde nenhum — é composição de grupo, a mesma informação que a lista de
+membros já dá. Por isso ela **não** passa pela porta de leitura: exigir consentimento para
+aparecer na lista esconderia justamente o aluno a quem o profissional precisa _pedir_ o
+consentimento. Só quem tem papel `MEMBER` entra: dono, criador de conteúdo e os outros
+profissionais da academia são colegas, não alunos.
+
+`scopesGrantedToMe: []` é o estado normal de quem ainda não autorizou nada. É o que a tela usa
+para mostrar "aguardando autorização" em vez de um botão que só devolveria `NOT_FOUND`.
+
+**Input:** _(nenhum)_
+
+**Output:**
+
+```typescript
+Array<{
+  membershipId: string; // é por ele que get_student_progress endereça o aluno
+  name: string;
+  groupId: string;
+  groupName: string;
+  joinedAt: string | null;
+  scopesGrantedToMe: Array<'WORKOUT' | 'NUTRITION' | 'BODY' | 'HABITS' | 'GOALS'>;
+}>;
+```
+
+### `get_student_progress`
+
+**A única tool do produto que lê dado de outra pessoa** (ADR 014). Lê **uma** categoria de **um**
+aluno que autorizou este profissional.
+
+O aluno entra por `membershipId`, nunca por identidade de usuário — `student_id`, `subject_id` e
+companhia são reprovados por `tool-user-scoping.spec.ts`, e esta tool era exatamente o desenho
+tentador. O id de input **encontra** um candidato; quem autoriza é o vínculo consentido,
+resolvido em `ProfessionalAccessService.assertReadable`.
+
+**Uma categoria por chamada, sempre.** Conferir uma vez e servir várias categorias faria o
+consentimento por categoria virar decoração, e a trilha do aluno — uma linha por chamada —
+passaria a mentir por omissão.
+
+As séries temporais são cortadas no fuso do **aluno**, não no de quem lê: um personal em Lisboa
+acompanhando aluna em São Paulo veria o dia começar oito horas antes do que ela viveu.
+
+Nunca escreve. Para entregar um plano ao aluno, o profissional monta na conta **dele** e oferece
+— só o aceite do aluno cria o plano na conta do aluno, e a partir daí o plano é dele.
+
+**Input:**
+
+```typescript
+{
+  membershipId: string; // de list_my_students
+  scope: 'WORKOUT' | 'NUTRITION' | 'BODY' | 'HABITS' | 'GOALS';
+  days?: number; // 7..365, padrão 30
+}
+```
+
+**Output:**
+
+```typescript
+{
+  membershipId: string;
+  timezone: string; // do ALUNO — é o fuso em que os dias abaixo foram cortados
+  reading:
+    | { scope: 'WORKOUT'; plans: Plan[]; sessions: Session[]; volume: VolumeProgress }
+    | { scope: 'NUTRITION'; history: NutritionHistory }
+    | { scope: 'BODY'; weight: WeightProgress }
+    | { scope: 'HABITS'; steps: StepsProgress; water: WaterProgress }
+    | { scope: 'GOALS'; goals: Goal[] };
+}
+```
+
+Nenhum `userId` sai daqui, em nível nenhum do payload: o painel referencia o aluno pela
+associação, e o identificador de usuário dele daria ao profissional a chave para correlacionar a
+mesma pessoa entre duas academias — algo que nem o consentimento dela cobre.
+
+**Erros:** `NOT_FOUND` sem vínculo, com vínculo revogado, com a categoria não consentida, com
+qualquer das duas pontas fora do grupo, ou com associação inexistente — a **mesma** resposta nos
+cinco casos. Toda tentativa, autorizada ou não, vira linha em `list_data_access_log` do aluno.
 
 ---
 

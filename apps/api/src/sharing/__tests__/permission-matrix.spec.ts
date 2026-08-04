@@ -10,7 +10,11 @@ import {
   ROLES_ELIGIBLE_FOR_LINK,
   type GroupAction,
 } from '../permissions';
-import { GROUP_ACTION_KEY, SELF_ONLY_KEY } from '../decorators/require-group-action.decorator';
+import {
+  CONSENT_GOVERNED_KEY,
+  GROUP_ACTION_KEY,
+  SELF_ONLY_KEY,
+} from '../decorators/require-group-action.decorator';
 
 /**
  * Guarda da matriz de papéis (issue #156).
@@ -155,8 +159,15 @@ describe('todo método de controller de sharing declara a camada em que vive', (
   /**
    * A matriz certa com o guard no lugar errado é falha silenciosa: `can()`
    * correto, controller sem o decorator, rota aberta. Aqui cada método público
-   * precisa declarar `@RequireGroupAction` **ou** `@SelfOnly` — sem terceiro
-   * estado, para que "esqueci" não seja indistinguível de "é do próprio dono".
+   * precisa declarar **uma** das três camadas — `@RequireGroupAction`,
+   * `@SelfOnly` ou `@ConsentGoverned` —, para que "esqueci" não seja
+   * indistinguível de "é do próprio dono".
+   *
+   * A terceira camada entrou com o painel do profissional (#157): a rota lê
+   * dado de outra pessoa, e quem autoriza não é papel nem posse, é o
+   * consentimento. Ela não afrouxa o "sem estado nenhum" — continua não
+   * existindo rota sem declaração; o que existe agora é uma declaração a mais,
+   * e ela tem cobrança própria no caso logo abaixo.
    */
   const controllers = readdirSync(SHARING_SRC, { recursive: true, encoding: 'utf8' })
     .filter((entry) => entry.endsWith('.controller.ts'))
@@ -174,7 +185,7 @@ describe('todo método de controller de sharing declara a camada em que vive', (
     // anotada, dependendo de onde a preguiça do quantificador parar.
     const linhas = readFileSync(file, 'utf8').split('\n');
     const VERBO = /^\s*@(?:Get|Post|Put|Patch|Delete)\(/;
-    const DECLARACAO = /^\s*@(?:RequireGroupAction\(|SelfOnly\()/;
+    const DECLARACAO = /^\s*@(?:RequireGroupAction\(|SelfOnly\(|ConsentGoverned\()/;
     /** Fim do bloco de decorators: a linha da assinatura do método. */
     const ASSINATURA = /^\s{2}(?:async\s+)?[\w]+\s*\(/;
 
@@ -192,6 +203,42 @@ describe('todo método de controller de sharing declara a camada em que vive', (
     // Sanidade: sem rota encontrada, a lista vazia acima não prova nada.
     expect(linhas.filter((linha) => VERBO.test(linha)).length).toBeGreaterThan(0);
     expect(semDeclaracao).toEqual([]);
+  });
+
+  it('rota governada por consentimento endereça o titular pela associação', () => {
+    // A declaração sozinha não protege nada — quem barra é `assertReadable`,
+    // dentro do service. O que este caso trava é o **endereçamento**: uma rota
+    // de leitura delegada tem de encontrar o titular por `:membershipId`. A
+    // variante que a ADR 014 proíbe é justamente a outra — resolver o aluno por
+    // um identificador de usuário vindo de fora —, e ela passaria despercebida
+    // aqui se bastasse ter o decorator.
+    //
+    // `tool-user-scoping.spec.ts` já reprova `@Param('userId')` em qualquer
+    // controller; esta é a metade positiva da mesma regra: não basta não aceitar
+    // `userId`, tem de aceitar a associação.
+    const semAssociacao: string[] = [];
+    let anotadas = 0;
+
+    for (const file of controllers) {
+      const linhas = readFileSync(file, 'utf8').split('\n');
+      linhas.forEach((linha, i) => {
+        if (!/^\s*@ConsentGoverned\(\)/.test(linha)) return;
+        anotadas++;
+
+        // O verbo pode vir antes ou depois do decorator no bloco; a busca é na
+        // vizinhança imediata, e não no arquivo inteiro — procurar
+        // `:membershipId` no arquivo casaria com a rota do vizinho.
+        const bloco = linhas.slice(Math.max(0, i - 3), i + 4).join('\n');
+        if (!/@(?:Get|Post|Put|Patch|Delete)\('[^']*:membershipId[^']*'\)/.test(bloco)) {
+          semAssociacao.push(`${file}:${i + 1}`);
+        }
+      });
+    }
+
+    // Sanidade: sem rota anotada, a lista vazia acima não prova nada. O painel
+    // do profissional (#157) tem exatamente uma.
+    expect(anotadas).toBeGreaterThan(0);
+    expect(semAssociacao).toEqual([]);
   });
 
   it('só usa ações que existem no mapa', () => {
@@ -254,6 +301,7 @@ describe('todo método de controller de sharing declara a camada em que vive', (
   });
 
   it('as chaves de metadata não colidem', () => {
-    expect(GROUP_ACTION_KEY).not.toBe(SELF_ONLY_KEY);
+    const chaves = [GROUP_ACTION_KEY, SELF_ONLY_KEY, CONSENT_GOVERNED_KEY];
+    expect(new Set(chaves).size).toBe(chaves.length);
   });
 });
