@@ -83,3 +83,33 @@ describe('AppEnvSchema — IA hospedada', () => {
     expect(() => AppEnvSchema.parse({ ...BASE, AI_QUOTA_UNPRICED_DAILY_CALLS: valor })).toThrow();
   });
 });
+
+describe('AppEnvSchema — cobrança (#158)', () => {
+  it('instância que não cobra ninguém sobe sem preencher nada', () => {
+    // É como a instância pública roda hoje. Tornar qualquer variável de cobrança
+    // obrigatória impediria de subir quem nunca vai faturar academia nenhuma —
+    // e o app é grátis para o aluno em qualquer cenário.
+    const env = AppEnvSchema.parse(BASE);
+
+    expect(env.ASAAS_BASE_URL).toBeUndefined();
+    expect(env.ASAAS_API_KEY).toBeUndefined();
+    expect(env.ASAAS_WEBHOOK_TOKEN).toBeUndefined();
+  });
+
+  it('aceita as três variáveis quando a cobrança é ligada', () => {
+    const env = AppEnvSchema.parse({
+      ...BASE,
+      ASAAS_BASE_URL: 'https://api-sandbox.asaas.com',
+      ASAAS_API_KEY: '$aact_exemplo',
+      ASAAS_WEBHOOK_TOKEN: 'segredo',
+    });
+
+    expect(env.ASAAS_BASE_URL).toBe('https://api-sandbox.asaas.com');
+  });
+
+  it('derruba o boot se a base do provedor não for URL', () => {
+    // Uma base torta só apareceria no fechamento do ciclo, uma vez por mês, com
+    // a fatura já calculada e nenhuma cobrança criada.
+    expect(() => AppEnvSchema.parse({ ...BASE, ASAAS_BASE_URL: 'api.asaas.com' })).toThrow();
+  });
+});

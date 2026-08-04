@@ -62,6 +62,21 @@ export const AppEnvSchema = z.object({
   // painel pago. DÍVIDA DECLARADA: lista manual envelhece — grupo que cancelar
   // continua ligado até alguém editar o env. Sai quando a #158 entrar.
   INSIGHTS_ADDON_GROUP_IDS: z.string().default(''),
+
+  // Cobrança por aluno ativo (#158). As três são opcionais e a instância que não
+  // cobra ninguém — que é como o produto roda hoje — não preenche nenhuma: sem
+  // elas o motor de cobrança simplesmente não nasce (`AsaasProvider.fromEnv`
+  // recusa), e nada mais no app muda. Aluno nunca vê cobrança em caminho nenhum.
+  //
+  // A chave de PRODUÇÃO não vive no repositório nem no CI: o sandbox tem chave
+  // própria, e o teste usa `FakeBillingProvider` — `fromEnv` recusa rodar em
+  // `NODE_ENV=test` justamente para que ninguém precise de chave para testar.
+  ASAAS_BASE_URL: z.string().url().optional().or(z.literal('')),
+  ASAAS_API_KEY: z.string().optional().or(z.literal('')),
+  // Segredo compartilhado configurado no painel do Asaas e devolvido por ele no
+  // header `asaas-access-token`. É a única autenticação do webhook, que é rota
+  // pública por natureza.
+  ASAAS_WEBHOOK_TOKEN: z.string().optional().or(z.literal('')),
 });
 
 export type AppEnv = z.infer<typeof AppEnvSchema>;
