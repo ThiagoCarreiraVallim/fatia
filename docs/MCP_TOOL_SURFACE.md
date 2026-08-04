@@ -33,12 +33,8 @@ opções abaixo foram avaliadas com isso em mente.
 
 O que pesa no contexto não é a contagem de tools, é o payload. Medido no que o registry
 serve de fato — `name`, `title`, `description`, `annotations` e o JSON Schema do input das
-101 tools: **72,9 k caracteres**, enviados em toda sessão que lista as tools.
-O denominador importa. Contar só `name + description + inputSchema` dá 60,8 k e subestima o
-catálogo em ~20% — `title` e `annotations` também vão no fio, em toda tool.
-
-101 tools: **76,4 k caracteres**, enviados em toda sessão que lista as tools.
-O denominador importa. Contar só `name + description + inputSchema` dá 63,7 k e subestima o
+103 tools: **78,4 k caracteres**, enviados em toda sessão que lista as tools.
+O denominador importa. Contar só `name + description + inputSchema` dá 65,5 k e subestima o
 catálogo em ~20% — `title` e `annotations` também vão no fio, em toda tool.
 
 Dentro desse total, os exemplos de invocação que a #111 acrescentou às 52 tools de escrita
@@ -58,8 +54,8 @@ e não em campo separado — estão na §Convenções de [`docs/MCP.md`](./MCP.m
 Além da contagem, cada tool declara `hostedInference` — se a execução dispara inferência **paga
 pela Fatia**. É recorte de custo, não de tamanho, e por isso mora aqui junto do resto.
 
-Hoje são **101** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
-Hoje são **101** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
+Hoje são **103** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
+Hoje são **103** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
 **0** tools com inferência hospedada.
 
 O segundo número é o ponto inteiro. Chamada vinda do cliente MCP do usuário roda no
@@ -78,9 +74,11 @@ O campo é interno e não vai no fio, então o tamanho do catálogo servido, med
 
 ### Fica fora do MCP — administração de grupo (#154, #155)
 
-O domínio Sharing entra com **7 tools**, todas do lado do aluno: `list_my_groups`,
+O domínio Sharing entra com **9 tools**. Sete são do lado do aluno: `list_my_groups`,
 `join_group`, `leave_group`, `list_data_sharing`, `grant_data_sharing`, `revoke_data_sharing` e
-`list_data_access_log`. Criar grupo, aprovar entrada e remover membro ficam só em REST.
+`list_data_access_log`. As outras duas são o painel do profissional da #157 —
+`list_my_students` e `get_student_progress` —, e as duas **só leem**. Criar grupo, aprovar
+entrada e remover membro ficam só em REST.
 
 A ADR 006 diz que tudo que o PWA faz o Claude faz, e a exceção é deliberada: o "PWA" em
 questão é o painel do dono da academia, superfície B2B que não é o app do usuário. Manter
@@ -96,6 +94,16 @@ responde melhor que uma tela. Nenhuma delas lê dado de terceiro: `grant_data_sh
 destinatário pela **associação dele no grupo**, e quem amarra essa associação ao grupo do titular
 é o `ConsentService`. `tool-delegation.spec.ts` classifica toda tool do catálogo nesse eixo e
 reprova a que aceitar a associação de outra pessoa por fora dessa porta.
+
+O painel do profissional (#157) é o terceiro lado, e o único em que uma tool lê dado de outra
+pessoa. Entra por dois motivos concretos: "quem dos meus alunos autorizou o quê" e "como a Ana
+está indo no treino" são exatamente as perguntas que uma conversa responde melhor que uma tela —
+e a leitura já era possível pela REST do painel, então mantê-la fora do MCP não reduziria
+superfície nenhuma, só duplicaria caminho. `get_student_progress` está na allowlist de leitura
+delegada dos dois specs estruturais, com **uma** categoria por chamada, `readOnlyHint: true` e a
+porta única no caminho. O que continua fora é **escrever** em nome de aluno: pela ADR 014 isso
+não existe em lugar nenhum do produto — o profissional oferece a partir da conta dele, e o aceite
+do aluno roda sob o `userId` do aluno.
 
 ### Fica como está — CRUD por entidade
 

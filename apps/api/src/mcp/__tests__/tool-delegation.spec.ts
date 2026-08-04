@@ -1,5 +1,5 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { MCP_TOOL_METADATA, type McpToolDef } from '../../common/decorators/tool.decorator';
 
 /**
@@ -64,6 +64,27 @@ function loadTools(): LoadedTool[] {
   return tools;
 }
 
+/**
+ * Fonte da tool mais a dos módulos que ela importa por **caminho relativo** —
+ * um nível, que é a distância entre a tool e o service dela neste repositório.
+ *
+ * `node_modules` e imports por pacote ficam de fora de propósito: o que
+ * interessa é o código do próprio domínio, e seguir grafo de dependência
+ * inteiro trocaria um teste rápido por um que ninguém roda.
+ */
+function fonteComColaboradores(file: string): string {
+  const source = readFileSync(file, 'utf8');
+  const dir = dirname(file);
+  const relativos = [...source.matchAll(/from '(\.[^']+)'/g)].map((m) => m[1]);
+
+  const vizinhas = relativos
+    .map((rel) => resolve(dir, `${rel}.ts`))
+    .filter((caminho) => existsSync(caminho))
+    .map((caminho) => readFileSync(caminho, 'utf8'));
+
+  return [source, ...vizinhas].join('\n');
+}
+
 const tools = loadTools();
 
 const campos = (tool: LoadedTool) => Object.keys(tool.def.inputSchema);
@@ -89,12 +110,17 @@ describe('classificação de identidade das tools MCP', () => {
 
   it('leitura delegada só existe na allowlist, e passa pela porta única', () => {
     /**
-     * Tools autorizadas a LER dado de outra pessoa. Vazia, e é assim que tem de
-     * ser: a #157 e a #159 vão querer o painel do profissional, e é ali que a
-     * lista cresce — com diff visível e justificativa na PR, nunca por uma tool
-     * nova que "só recebe um id".
+     * Tools autorizadas a LER dado de outra pessoa.
+     *
+     * Nasceu vazia na #153 e cresceu **uma** entrada na #157, o painel do
+     * profissional. Cada linha aqui é uma exceção à garantia mais forte do
+     * produto e entra com diff visível e justificativa na PR — nunca por uma
+     * tool nova que "só recebe um id".
+     *
+     * `list_my_students` NÃO está aqui, e não é esquecimento: ela não recebe
+     * associação nenhuma e não devolve dado de saúde, só composição de grupo.
      */
-    const DELEGATED_READ_TOOLS: string[] = [];
+    const DELEGATED_READ_TOOLS: string[] = ['get_student_progress'];
 
     expect(delegadas.map((tool) => tool.def.name).sort()).toEqual([...DELEGATED_READ_TOOLS].sort());
 
@@ -107,6 +133,23 @@ describe('classificação de identidade das tools MCP', () => {
         true,
       ]);
     }
+  });
+
+  it('a delegada de fato chama assertReadable, e não só cita a porta', () => {
+    // O caso acima confere que o nome da porta aparece no fonte da tool — e um
+    // comentário satisfaz isso. Comentário não autoriza ninguém. Aqui a
+    // varredura desce para os colaboradores importados por caminho relativo e
+    // exige a **chamada**: uma tool delegada cujo service resolvesse o aluno com
+    // um `findUnique` próprio passaria no outro caso e morre neste.
+    const chamadas = delegadas.map((tool) => [
+      tool.def.name,
+      fonteComColaboradores(tool.file).includes('assertReadable('),
+    ]);
+
+    // Sanidade: sem tool delegada, a lista vazia acima não prova nada — e a
+    // allowlist do caso anterior já garante que existe exatamente uma.
+    expect(delegadas.length).toBeGreaterThan(0);
+    expect(chamadas).toEqual(delegadas.map((tool) => [tool.def.name, true]));
   });
 
   it('tool de consentimento aponta terceiro só pela associação, e valida no ConsentService', () => {

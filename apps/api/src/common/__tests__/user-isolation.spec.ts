@@ -7,12 +7,15 @@ import { GroupService } from '../../sharing/group.service';
 import { MembershipService } from '../../sharing/membership.service';
 import { ProfessionalAccessService } from '../../sharing/professional-access.service';
 import { ProfessionalLinkService } from '../../sharing/professional-link.service';
+import { StudentViewService } from '../../sharing/student-view.service';
 import { GoalsService } from '../../goals/goals.service';
 import { FoodService } from '../../nutrition/food.service';
 import { MealItemService } from '../../nutrition/meal-item.service';
 import { MealService } from '../../nutrition/meal.service';
 import { NutrientTargetService } from '../../nutrition/nutrient-target.service';
+import { NutritionSummaryService } from '../../nutrition/nutrition-summary.service';
 import { UserGoalsService } from '../../nutrition/user-goals.service';
+import { ProgressService } from '../../progress/progress.service';
 import { StepLogService } from '../../progress/step-log.service';
 import { WaterLogService } from '../../progress/water-log.service';
 import { WeightLogService } from '../../progress/weight-log.service';
@@ -51,6 +54,8 @@ describe('isolamento entre usuários', () => {
   const steps = new StepLogService(prisma);
   const waters = new WaterLogService(prisma);
   const goals = new GoalsService(prisma, weights, steps);
+  const progress = new ProgressService(prisma, steps, waters);
+  const nutritionSummary = new NutritionSummaryService(prisma);
   const exercises = new ExerciseService(prisma);
   const plans = new WorkoutPlanService(prisma);
   const sessions = new WorkoutSessionService(prisma);
@@ -847,6 +852,399 @@ describe('isolamento entre usuários', () => {
         expect.objectContaining({ action: 'auditoria_ok', denied: false, linkId: link.id }),
         expect.objectContaining({ action: 'auditoria_negada', denied: true, linkId: null }),
       ]);
+    });
+  });
+
+  /**
+   * Painel do profissional (#157) — a porta única exercitada pelo caminho que o
+   * produto de fato usa.
+   *
+   * O bloco acima prova que `assertReadable` recusa. Este prova que o **painel**
+   * recusa, e não é a mesma coisa: entre a porta e a resposta há um service que
+   * poderia, por descuido, cachear o `subjectUserId`, ler um escopo tendo
+   * conferido outro, ou simplesmente ignorar a porta num branch. Nenhum desses
+   * defeitos aparece testando `assertReadable` isolado.
+   *
+   * O caminho feliz vem junto, e por isso mesmo: sem ele, as recusas passariam
+   * de graça se a leitura estivesse quebrada por qualquer outro motivo.
+   */
+  describe('painel do profissional (#157)', () => {
+    const studentView = new StudentViewService(
+      prisma,
+      access,
+      plans,
+      sessions,
+      progress,
+      nutritionSummary,
+      goals,
+    );
+
+    /** Mensagem da recusa. Estoura se a leitura for **autorizada**. */
+    const mensagemDaRecusa = async (quem: string, membershipId: string, scope: ShareScope) => {
+      try {
+        await studentView.read(quem, membershipId, scope, 30);
+      } catch (err) {
+        return (err as Error).message;
+      }
+      throw new Error('esperava recusa, mas o painel devolveu dado');
+    };
+
+    /** A recusa que um estranho qualquer recebe, para comparar byte a byte. */
+    const recusaDeEstranho = (scope: ShareScope) =>
+      mensagemDaRecusa(owned.userB, owned.membershipA, scope);
+
+    const vincular = (scopes: ShareScope[]) =>
+      links.grant({
+        subjectUserId: owned.userA,
+        professionalId: owned.pro,
+        groupId: owned.groupId,
+        scopes,
+      });
+
+    afterEach(async () => {
+      await prisma.professionalAccessLog.deleteMany({ where: { subjectUserId: owned.userA } });
+      await prisma.professionalLink.deleteMany({ where: { subjectUserId: owned.userA } });
+    });
+
+    it('SEM vínculo o painel não devolve nada de aluno nenhum', async () => {
+      // O critério de pronto da issue, na forma mais crua: o profissional está
+      // no grupo, o aluno também, e mesmo assim não sai um byte.
+      for (const scope of Object.values(ShareScope)) {
+        await expect(studentView.read(owned.pro, owned.membershipA, scope, 30)).rejects.toThrow(
+          NotFoundException,
+        );
+      }
+
+      expect(await mensagemDaRecusa(owned.pro, owned.membershipA, ShareScope.WORKOUT)).toBe(
+        await recusaDeEstranho(ShareScope.WORKOUT),
+      );
+    });
+
+    it('escopo NÃO consentido é barrado mesmo com vínculo ativo', async () => {
+      await vincular([ShareScope.WORKOUT]);
+
+      // Consentir treino não abre o diário alimentar, nem o peso, nem as metas.
+      for (const scope of [ShareScope.NUTRITION, ShareScope.BODY, ShareScope.GOALS]) {
+        expect(await mensagemDaRecusa(owned.pro, owned.membershipA, scope)).toBe(
+          await recusaDeEstranho(scope),
+        );
+      }
+    });
+
+    it('vínculo REVOGADO recusa igual a nunca ter existido', async () => {
+      const link = await vincular([ShareScope.WORKOUT]);
+
+      // Antes de revogar ele lê — sem isto a recusa abaixo passaria de graça
+      // mesmo com o painel quebrado por outro motivo.
+      const antes = await studentView.read(owned.pro, owned.membershipA, ShareScope.WORKOUT, 30);
+      expect(antes.reading.scope).toBe(ShareScope.WORKOUT);
+
+      await links.revokeAsSubject(owned.userA, link.id);
+
+      expect(await mensagemDaRecusa(owned.pro, owned.membershipA, ShareScope.WORKOUT)).toBe(
+        await recusaDeEstranho(ShareScope.WORKOUT),
+      );
+    });
+
+    it('caminho feliz: devolve o dado do aluno, e é o dado dele mesmo', async () => {
+      await vincular([ShareScope.WORKOUT]);
+
+      const resultado = await studentView.read(
+        owned.pro,
+        owned.membershipA,
+        ShareScope.WORKOUT,
+        30,
+      );
+
+      // Não basta "não lançou": o payload tem de conter o plano semeado como
+      // user-A. Um painel que devolvesse listas vazias passaria em toda recusa
+      // deste arquivo e não serviria para nada.
+      expect(resultado.reading.scope).toBe(ShareScope.WORKOUT);
+      if (resultado.reading.scope !== ShareScope.WORKOUT) throw new Error('escopo errado');
+      expect(resultado.reading.plans.map((p) => p.id)).toContain(owned.planId);
+      expect(resultado.reading.sessions.map((s) => s.id)).toContain(owned.sessionId);
+    });
+
+    /**
+     * A **forma** do payload, escopo a escopo, contra o Postgres de verdade.
+     *
+     * Existe porque os tipos de `packages/api-client/src/sharing.ts` são
+     * escritos à mão: são declarações de resposta, não têm com o que conflitar,
+     * e o `tsc` fica verde sobre um payload que a API nunca devolveu. Foi assim
+     * que `history.days` (a janela, um número) virou array do lado do cliente,
+     * `ponto.value` nasceu sem existir em lado nenhum e `finishedAt` ficou com
+     * nome que o schema não tem — três campos errados, `typecheck` verde.
+     *
+     * Este caso prende a ponta da API; a outra ponta é
+     * `apps/web/src/app/(pro)/students/[membershipId]/__tests__/page.test.tsx`,
+     * cujas fixtures são estas mesmas formas anotadas com o tipo do cliente.
+     * Mudar a resposta de um service de domínio derruba este caso, e é aqui que
+     * se lê o que o cliente precisa acompanhar.
+     *
+     * Conferir a **lista** de chaves, e não `toHaveProperty`: campo que
+     * desaparece e campo que aparece são os dois defeitos, e só o conjunto pega
+     * os dois.
+     */
+    it('a forma de cada escopo é a que o api-client declara', async () => {
+      await vincular(Object.values(ShareScope));
+      const chaves = (v: object) => Object.keys(v).sort();
+
+      const workout = await studentView.read(owned.pro, owned.membershipA, ShareScope.WORKOUT, 30);
+      if (workout.reading.scope !== ShareScope.WORKOUT) throw new Error('escopo errado');
+      expect(chaves(workout.reading)).toEqual(['plans', 'scope', 'sessions', 'volume']);
+      expect(chaves(workout.reading.volume)).toEqual(['averageWeeklyVolumeKg', 'weeks']);
+      // A sessão semeada existe (o caso acima afirma o id), então a linha é
+      // conferível de verdade e não passa por vacuidade de array vazio.
+      const sessao = workout.reading.sessions.find((s) => s.id === owned.sessionId);
+      expect(sessao).toBeDefined();
+      expect(sessao).toHaveProperty('completedAt');
+      expect(sessao).not.toHaveProperty('finishedAt');
+
+      const nutrition = await studentView.read(
+        owned.pro,
+        owned.membershipA,
+        ShareScope.NUTRITION,
+        30,
+      );
+      if (nutrition.reading.scope !== ShareScope.NUTRITION) throw new Error('escopo errado');
+      expect(chaves(nutrition.reading.history)).toEqual(['averages', 'days', 'series']);
+      // O ponto do defeito: `days` é a janela pedida, e quem itera é `series`.
+      expect(nutrition.reading.history.days).toBe(30);
+      expect(nutrition.reading.history.series).toHaveLength(30);
+      expect(chaves(nutrition.reading.history.series[0])).toEqual([
+        'carbsG',
+        'date',
+        'fatG',
+        'kcal',
+        'meals',
+        'proteinG',
+      ]);
+
+      const habits = await studentView.read(owned.pro, owned.membershipA, ShareScope.HABITS, 30);
+      if (habits.reading.scope !== ShareScope.HABITS) throw new Error('escopo errado');
+      // Passos e água são séries distintas: o valor diário tem nome próprio em
+      // cada uma, e não existe `value` em nenhuma das duas.
+      expect(chaves(habits.reading.steps.points[0])).toEqual(['date', 'goalReached', 'steps']);
+      expect(chaves(habits.reading.water.points[0])).toEqual(['date', 'goalReached', 'totalMl']);
+
+      const body = await studentView.read(owned.pro, owned.membershipA, ShareScope.BODY, 30);
+      if (body.reading.scope !== ShareScope.BODY) throw new Error('escopo errado');
+      expect(chaves(body.reading.weight)).toEqual([
+        'currentWeightKg',
+        'points',
+        'totalDeltaKg',
+        'weeklyAverages',
+      ]);
+    });
+
+    it('o painel não devolve o userId do aluno em nível nenhum do payload', async () => {
+      await vincular([ShareScope.WORKOUT]);
+
+      const resultado = await studentView.read(
+        owned.pro,
+        owned.membershipA,
+        ShareScope.WORKOUT,
+        30,
+      );
+
+      // Busca no JSON serializado, e não campo a campo: o `userId` viaja dentro
+      // de `WorkoutPlan`, de `WorkoutSession` e do `Exercise` custom aninhado no
+      // plano, e conferir só o topo deixaria os três passarem. Procurar o valor
+      // (e não a chave) é o que também pega uma chave renomeada.
+      expect(JSON.stringify(resultado)).not.toContain(owned.userA);
+
+      // Sanidade do próprio caso: o id procurado existe e apareceria se saísse.
+      expect(owned.userA).not.toBe('');
+      expect(JSON.stringify(await plans.list(owned.userA))).toContain(owned.userA);
+    });
+
+    it('o dia é cortado no fuso do ALUNO, não no de quem lê', async () => {
+      // O personal muda de fuso; a aluna não. Se o painel usasse o fuso de quem
+      // lê, a janela do histórico começaria noutro dia — e o bug apareceria como
+      // "sumiu um treino da segunda", que ninguém liga a fuso.
+      await prisma.user.update({
+        where: { id: owned.pro },
+        data: { timezone: 'Pacific/Kiritimati' },
+      });
+      try {
+        await vincular([ShareScope.NUTRITION]);
+
+        const resultado = await studentView.read(
+          owned.pro,
+          owned.membershipA,
+          ShareScope.NUTRITION,
+          30,
+        );
+
+        expect(resultado.timezone).toBe(TZ);
+      } finally {
+        await prisma.user.update({ where: { id: owned.pro }, data: { timezone: TZ } });
+      }
+    });
+
+    it('grava uma linha de auditoria por escopo lido, e não uma por sessão de painel', async () => {
+      // A armadilha que o plano da issue chama de "assertReadable chamado uma
+      // vez e o userId reaproveitado": duas leituras de categorias diferentes
+      // com uma conferência só. A trilha é o que denuncia — duas leituras têm
+      // de virar duas linhas, cada uma com o seu escopo.
+      await vincular([ShareScope.WORKOUT, ShareScope.BODY]);
+
+      await studentView.read(owned.pro, owned.membershipA, ShareScope.WORKOUT, 30);
+      await studentView.read(owned.pro, owned.membershipA, ShareScope.BODY, 30);
+      await studentView
+        .read(owned.pro, owned.membershipA, ShareScope.NUTRITION, 30)
+        .catch(() => undefined);
+
+      const trilha = await prisma.professionalAccessLog.findMany({
+        where: { subjectUserId: owned.userA, professionalId: owned.pro },
+        orderBy: { at: 'asc' },
+        select: { action: true, scope: true, denied: true },
+      });
+
+      expect(trilha).toEqual([
+        { action: 'get_student_progress', scope: ShareScope.WORKOUT, denied: false },
+        { action: 'get_student_progress', scope: ShareScope.BODY, denied: false },
+        { action: 'get_student_progress', scope: ShareScope.NUTRITION, denied: true },
+      ]);
+    });
+
+    it('membershipId de OUTRO grupo não resolve, nem com vínculo válido em mãos', async () => {
+      // O #204 pela porta do painel: o `pro` tem vínculo legítimo com o user-A e
+      // usa esse crachá para pedir uma associação de um grupo em que ele é dono,
+      // mas não profissional.
+      await vincular([ShareScope.WORKOUT]);
+
+      expect(await mensagemDaRecusa(owned.pro, owned.membershipForaId, ShareScope.WORKOUT)).toBe(
+        await recusaDeEstranho(ShareScope.WORKOUT),
+      );
+    });
+
+    it('a lista de alunos é só de quem eu atendo, e mostra o consentimento de cada um', async () => {
+      await vincular([ShareScope.WORKOUT, ShareScope.BODY]);
+
+      const alunos = await studentView.listStudents(owned.pro);
+
+      // O user-A e o colega são MEMBER da academia; dono, criador e o outro
+      // profissional não são alunos e não podem aparecer.
+      const porMembership = new Map(alunos.map((a) => [a.membershipId, a]));
+      expect(porMembership.get(owned.membershipA)?.scopesGrantedToMe).toEqual([
+        ShareScope.WORKOUT,
+        ShareScope.BODY,
+      ]);
+      expect(alunos.map((a) => a.name).sort()).toEqual(['Colega', 'User A']);
+
+      // A lista não é dado de saúde, mas também não pode virar diretório: o
+      // `pro` é dono de um segundo grupo, e ninguém de lá entra aqui.
+      expect(alunos.every((a) => a.groupId === owned.groupId)).toBe(true);
+    });
+
+    it('vínculo revogado some do consentimento da lista, e não só da leitura', async () => {
+      // Os dois filtros de `listStudents` estavam certos no código e nenhum
+      // teste os distinguia: apagar `revokedAt: null` da consulta passava com a
+      // suíte inteira verde, porque todo caso concedia um vínculo fresco.
+      //
+      // O sintoma não é vazamento de dado — a leitura continua barrada pela
+      // porta. É pior de explicar: a aluna revoga em Privacidade, o chip
+      // "Treino" continua na tela do personal, e cada clique vira uma linha
+      // `denied: true` na trilha que ela lê. Do lado dela, isso é sondagem.
+      const link = await vincular([ShareScope.WORKOUT]);
+      const antes = await studentView.listStudents(owned.pro);
+      expect(antes.find((a) => a.membershipId === owned.membershipA)?.scopesGrantedToMe).toEqual([
+        ShareScope.WORKOUT,
+      ]);
+
+      await links.revokeAsSubject(owned.userA, link.id);
+
+      const depois = await studentView.listStudents(owned.pro);
+      // Ela continua aluna — some o consentimento, não a pessoa.
+      const aluna = depois.find((a) => a.membershipId === owned.membershipA);
+      expect(aluna).toBeDefined();
+      expect(aluna?.scopesGrantedToMe).toEqual([]);
+    });
+
+    it('aluna que SAIU da academia não fica na lista do profissional', async () => {
+      // A simetria que o comentário do código promete e que nenhum teste
+      // cobrava: `status: ACTIVE` vale para a consulta dos meus grupos (o
+      // profissional demitido) **e** para a dos alunos (a aluna que saiu).
+      // Tirar o segundo passava com 1065/1065 verdes.
+      await vincular([ShareScope.WORKOUT]);
+      expect((await studentView.listStudents(owned.pro)).map((a) => a.membershipId)).toContain(
+        owned.membershipA,
+      );
+
+      try {
+        await prisma.groupMembership.update({
+          where: { id: owned.membershipA },
+          data: { status: MembershipStatus.LEFT, leftAt: new Date() },
+        });
+
+        const depois = await studentView.listStudents(owned.pro);
+        expect(depois.map((a) => a.membershipId)).not.toContain(owned.membershipA);
+        // O colega continua — o filtro é por associação, não um apagão da lista.
+        expect(depois.map((a) => a.name)).toEqual(['Colega']);
+      } finally {
+        await prisma.groupMembership.update({
+          where: { id: owned.membershipA },
+          data: { status: MembershipStatus.ACTIVE, leftAt: null },
+        });
+      }
+    });
+
+    it('quem não é PROFESSIONAL não tem lista de alunos, nem sendo dono da academia', async () => {
+      // O user-B é OWNER do grupo do user-A. Dono administra e cobra; não
+      // atende. Devolver a lista a ele daria ao painel de dono um caminho de
+      // aquisição de acesso que a ADR 014 nega.
+      await expect(studentView.listStudents(owned.userB)).resolves.toEqual([]);
+      await expect(studentView.listStudents(owned.creator)).resolves.toEqual([]);
+      await expect(studentView.listStudents(owned.colega)).resolves.toEqual([]);
+    });
+
+    it('profissional DEMITIDO perde a lista e a leitura no mesmo instante', async () => {
+      await vincular([ShareScope.WORKOUT]);
+      expect(await studentView.listStudents(owned.pro)).not.toEqual([]);
+
+      try {
+        await prisma.groupMembership.update({
+          where: { id: owned.membershipPro },
+          data: { status: MembershipStatus.REMOVED, leftAt: new Date() },
+        });
+
+        // O vínculo continua intacto — é o que torna o caso perigoso.
+        const vinculo = await prisma.professionalLink.findFirst({
+          where: { subjectUserId: owned.userA, professionalId: owned.pro },
+        });
+        expect(vinculo?.revokedAt).toBeNull();
+
+        await expect(studentView.listStudents(owned.pro)).resolves.toEqual([]);
+        expect(await mensagemDaRecusa(owned.pro, owned.membershipA, ShareScope.WORKOUT)).toBe(
+          await recusaDeEstranho(ShareScope.WORKOUT),
+        );
+      } finally {
+        await prisma.groupMembership.update({
+          where: { id: owned.membershipPro },
+          data: { status: MembershipStatus.ACTIVE, leftAt: null },
+        });
+      }
+    });
+
+    it('o painel não escreve nada na conta do aluno', async () => {
+      // A ADR 014 reescreveu a issue: o profissional NUNCA opera na conta do
+      // aluno. Aqui isso vira contrato executável — nenhum método público de
+      // `StudentViewService` muda estado, e o que existe do lado do aluno antes
+      // é idêntico ao que existe depois de um painel inteiro ser aberto.
+      await vincular([ShareScope.WORKOUT, ShareScope.BODY, ShareScope.GOALS]);
+
+      const antes = await plans.list(owned.userA);
+      for (const scope of [ShareScope.WORKOUT, ShareScope.BODY, ShareScope.GOALS]) {
+        await studentView.read(owned.pro, owned.membershipA, scope, 30);
+      }
+      const depois = await plans.list(owned.userA);
+
+      expect(depois).toEqual(antes);
+
+      // E o profissional continua sem plano nenhum na conta dele: ler o do aluno
+      // não materializa cópia — isso só acontece no aceite de uma oferta.
+      await expect(plans.list(owned.pro)).resolves.toEqual([]);
     });
   });
 

@@ -23,6 +23,21 @@ um andar acima. É o desenho que a ADR 014 rejeitou.
 Então não é "só um": **são dois mecanismos, cada um no seu lugar, e este documento descreve os
 dois.** É mais garantia, não menos.
 
+### E toda rota diz em qual das duas ela vive
+
+Um controller de `sharing/` declara a camada por decorator, e não existe rota sem declaração:
+
+| Decorator             | O que afirma                                  | Quem barra de fato                     |
+| --------------------- | --------------------------------------------- | -------------------------------------- |
+| `@RequireGroupAction` | administra o grupo; papel decide              | `GroupRoleGuard`, pelo `:groupId`      |
+| `@SelfOnly`           | age sobre quem chamou; papel não decide nada  | o próprio `userId` do contexto         |
+| `@ConsentGoverned`    | lê dado de outra pessoa; **o vínculo** decide | `assertReadable`, pelo `:membershipId` |
+
+O terceiro entrou com o painel do profissional (#157). Ele não é um afrouxamento: continua não
+existindo rota sem declaração, e `permission-matrix.spec.ts` cobra de cada rota `@ConsentGoverned`
+que ela enderece o titular por `:membershipId` — porque a variante que a ADR 014 proíbe é
+justamente resolver o aluno por um identificador de usuário vindo de fora.
+
 ## Acúmulo de papéis é impossível por construção
 
 A armadilha clássica ("o dono também é trainer por padrão") deixa de ser risco de disciplina em
@@ -148,4 +163,10 @@ chamada. `hasSome` com lista casaria com tudo, e consentir treino abriria a diet
   "papel não lê": `OWNER`, `CREATOR` e `MEMBER` × os cinco escopos, todos recusados mesmo com o
   usuário sendo membro ativo do grupo do titular.
 - `apps/api/src/mcp/__tests__/tool-delegation.spec.ts` classifica **toda** tool MCP e reprova a
-  que aceitar a associação de outra pessoa sem passar pela porta certa.
+  que aceitar a associação de outra pessoa sem passar pela porta certa. Desde a #157 ele desce
+  também para o service colaborador e exige a **chamada** a `assertReadable`: citar o nome da
+  porta num comentário satisfazia a versão anterior, e comentário não autoriza ninguém.
+- O painel do profissional (#157) é exercitado ponta a ponta em `user-isolation.spec.ts` contra
+  Postgres real — sem vínculo, com escopo não consentido, com vínculo revogado e com o
+  profissional demitido, todos com a **mesma** mensagem que um estranho recebe, mais o caminho
+  feliz e a contagem de linhas de auditoria por escopo lido.

@@ -75,7 +75,7 @@ const TOOL_COUNT_SLICES: ReadonlyArray<{ file: string; text: string; count: () =
     // Contagem do domínio Sharing, que fica fora do MCP na parte administrativa
     // (#154). Declarada como recorte, e não isenta: se uma tool de grupo nascer
     // ou morrer, a frase que explica a decisão tem de acompanhar.
-    text: 'entra com **7 tools**',
+    text: 'entra com **9 tools**',
     count: () => tools.filter(({ file }) => file.includes('/sharing/mcp/')).length,
   },
   {
@@ -321,8 +321,8 @@ const payload = tools.reduce(
  * número; o caso abaixo confere as duas pontas, então nem o texto some nem o número derrapa.
  */
 const PAYLOAD_CLAIMS: ReadonlyArray<{ file: string; text: string; medido: () => string }> = [
-  { file: 'docs/MCP.md', text: '**76,4 k caracteres**', medido: () => emK(payload.cheio) },
-  { file: 'docs/MCP.md', text: '(63,7 k)', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP.md', text: '**78,4 k caracteres**', medido: () => emK(payload.cheio) },
+  { file: 'docs/MCP.md', text: '(65,5 k)', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP.md',
     text: '**4.499 são os exemplos**',
@@ -330,10 +330,10 @@ const PAYLOAD_CLAIMS: ReadonlyArray<{ file: string; text: string; medido: () => 
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**76,4 k caracteres**',
+    text: '**78,4 k caracteres**',
     medido: () => emK(payload.cheio),
   },
-  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 63,7 k', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 65,5 k', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
     text: '**4.499 caracteres**',
@@ -462,6 +462,34 @@ describe('catálogo de tools MCP', () => {
     }
 
     expect(errados.sort()).toEqual([]);
+  });
+
+  it('não deixa NENHUM tamanho em k caracteres fora da medição, nas docs que afirmam um', () => {
+    // O `PAYLOAD_CLAIMS` acima procura a *presença* de um trecho literal. Isso
+    // deixa passar o vizinho: um merge duplicou o parágrafo do custo em
+    // `MCP.md` e `MCP_TOOL_SURFACE.md`, a cópia velha ficou afirmando 72,9 k
+    // para o MESMO catálogo, e o guarda passou verde porque a cópia nova, com
+    // 78,4 k, continuava lá. Duas medições contraditórias na mesma página, uma
+    // delas conferida.
+    //
+    // Aqui a varredura é ao contrário: TODA ocorrência de "N,N k" nessas docs
+    // tem de ser um dos dois números medidos agora. Número novo em prosa nova
+    // só entra somando uma claim, que é exatamente o objetivo.
+    const medidos = new Set([emK(payload.cheio), emK(payload.estreito)]);
+    const arquivos = [...new Set(PAYLOAD_CLAIMS.map((c) => c.file))];
+    const forasteiros: string[] = [];
+
+    for (const arquivo of arquivos) {
+      const conteudo = readFileSync(resolve(REPO_ROOT, arquivo), 'utf8');
+      for (const achado of conteudo.matchAll(/(\d+,\d+ k)(?= caracteres| e subestima)/g)) {
+        if (!medidos.has(achado[1])) forasteiros.push(`${arquivo}: "${achado[1]}"`);
+      }
+    }
+
+    // Sanidade do próprio caso: se o regex parar de casar, o vazio acima seria
+    // o mesmo verde de "está tudo certo".
+    expect(arquivos.length).toBeGreaterThan(0);
+    expect(forasteiros.sort()).toEqual([]);
   });
 
   it('cita o custo real dos exemplos em docs/MCP_TOOL_SURFACE.md', () => {
