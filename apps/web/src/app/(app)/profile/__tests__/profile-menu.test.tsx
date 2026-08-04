@@ -34,8 +34,6 @@ vi.mock('@/components/profile/profile-metrics', () => ({ ProfileMetrics: () => n
  * que rendesse `null` deixaria a remoção do componente do perfil passar verde.
  */
 vi.mock('@/components/sharing/professional-panel-link', () => ({
-  // O dublê rende `<a>` cru; o componente real usa `next/link`, e é nele que a
-  // regra abaixo tem o que cobrar.
   ProfessionalPanelLink: () => <a href="/students">Meus alunos</a>,
 }));
 
