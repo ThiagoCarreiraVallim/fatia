@@ -71,7 +71,8 @@ pedir relatório a ninguém.
 
 > Conta como **aluno ativo** no ciclo quem, ao mesmo tempo:
 >
-> 1. tem associação com papel `MEMBER` num grupo **patrocinado**, em qualquer momento do ciclo; **e**
+> 1. esteve associado a um grupo **patrocinado** em qualquer momento do ciclo, com papel `MEMBER`
+>    **no fechamento**; **e**
 > 2. registrou pelo menos uma atividade própria no app dentro dos **30 dias** que terminam no
 >    fechamento do ciclo.
 >
@@ -83,13 +84,19 @@ pedir relatório a ninguém.
 >
 > Papéis `OWNER`, `PROFESSIONAL` e `CREATOR` **não** contam como aluno.
 
-Duas consequências que valem escrever antes de alguém perguntar:
+Três consequências que valem escrever antes de alguém perguntar:
 
 - **Grupo social nunca gera cobrança**, para ninguém. O grupo do influenciador não é "faturado em
   zero": ele não é faturado, e ninguém conta os fãs dele. Tentar fechar o ciclo de um grupo social
   é erro, não fatura vazia.
 - **Um ciclo de 31 dias tem um primeiro dia fora da janela de atividade.** É consequência da regra
   publicada — 30 dias são 30 dias —, não arredondamento.
+- **O papel vale pelo estado do fechamento, não pelo histórico.** O banco guarda o papel atual da
+  associação e não a troca dele: não existe "era `MEMBER` até dia 20". Então promover um aluno a
+  `PROFESSIONAL` no último dia tira o ciclo inteiro da fatura, e rebaixar um profissional a
+  `MEMBER` no último dia cobra o ciclo inteiro. É a aproximação honesta com o schema de hoje, e
+  está escrita aqui em vez de descoberta na fatura. Cobrar pelo papel vigente em cada dia exigiria
+  histórico de papel — coluna que não existe e que esta fatia não cria.
 
 O que vale como data do registro é o momento em que ele **entrou no app**, e não a data que o
 usuário declarou. Quem lança hoje a refeição de semana passada usou o app hoje. (A exceção é a
@@ -146,7 +153,7 @@ quinto campo sem alguém decidir isso explicitamente.
 
 ## Inadimplência degrada, não bloqueia
 
-`decideAiTier` responde qual nível de IA patrocinada o grupo tem **agora**:
+`decideAiTier` calcula qual nível de IA patrocinada o grupo teria, dado o estado da assinatura:
 
 | Estado da assinatura          | Nível de IA        |
 | ----------------------------- | ------------------ |
@@ -163,6 +170,11 @@ comercial entre a academia e a Fatia — e o que ele perderia de vista é o hist
 A função **nunca lança**, inclusive diante de um status que o deploy corrente não conhece. Um
 `throw` num caminho de aluno seria bloqueio por acidente, decidido por ninguém.
 
+**A regra está calculada e ainda não está ligada.** Nada no app consulta `decideAiTier` hoje: a
+assinatura mora em `GroupSubscription`, que depende da migration que esta fatia não entrega, e sem
+o estado gravado não há o que passar para a função. Na prática, portanto, **nenhum grupo é
+degradado hoje** — todos usam a IA como antes. Quem ligar a persistência liga a chamada junto.
+
 ## O provedor fica atrás de uma porta
 
 O Asaas é conhecido por **um arquivo só**, `apps/api/src/billing/asaas/asaas.provider.ts`, por trás
@@ -170,9 +182,15 @@ da interface `BillingProvider`. Nome de endpoint, header de autenticação e voc
 detalhe de um fornecedor; a contagem e a pró-rata não. **Sem dependência nova**: `fetch` é global no
 Node 24, e nenhum cliente HTTP entra no caminho de um segredo de pagamento.
 
-Nenhum teste do repositório toca a rede — as suítes usam `FakeBillingProvider`. E
-`AsaasProvider.fromEnv` **recusa rodar em `NODE_ENV=test`**: um teste apontado para o Asaas de
-verdade falha na primeira execução, em vez de aparecer como cobrança criada por engano.
+Nenhum teste do repositório toca a rede: quem exercita o adapter é `asaas.provider.spec.ts`,
+trocando o `fetch` global. E `AsaasProvider.fromEnv` **recusa rodar em `NODE_ENV=test`**: um teste
+apontado para o Asaas de verdade falha na primeira execução, em vez de aparecer como cobrança
+criada por engano.
+
+Não existe dublê genérico da porta, e é deliberado: `verifyWebhook` recebe o corpo **cru**, no
+vocabulário do provedor. Um fake que aceitasse o vocabulário da Fatia não substituiria o adapter em
+teste nenhum — passaria verde justamente sobre a tradução de status, que é o que o adapter existe
+para fazer. O dublê útil nasce junto com o handler de webhook, e falando Asaas.
 
 ## Conferir a conta antes de ela virar dinheiro
 

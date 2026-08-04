@@ -18,6 +18,15 @@ import {
  *
  * Quando a migration entrar, o service que grava chama esta função e persiste o
  * que ela devolve. O cálculo não muda de lugar.
+ *
+ * **Ela não confere posse, e quem expuser isso numa rota precisa conferir.**
+ * `groupId` entra por parâmetro e é usado como verdade — hoje só o CLI e o spec
+ * chamam, não há rota, então não há o que explorar. No dia em que houver
+ * controller, o `groupId` tem de ser amarrado ao dono autenticado
+ * (`@CurrentUser()`, nunca `userId` por parâmetro) e grupo de outra conta tem de
+ * responder igual a grupo inexistente — não há RLS, o isolamento é 100% da
+ * aplicação (ADR 010, #92). O `GrupoNaoFaturavelError` já ajuda: inexistente e
+ * não patrocinado saem com a mesma recusa.
  */
 
 export interface ParametrosDeCobranca {

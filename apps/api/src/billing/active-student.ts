@@ -72,6 +72,17 @@ export async function usuariosAtivos(
   // regra fala em "registrou atividade no app nos últimos 30 dias", e quem
   // lança hoje uma refeição de semana passada usou o app hoje. `WorkoutSession`
   // é a exceção — não tem coluna de registro, então vale `startedAt`.
+  //
+  // O custo dessa escolha, que é melhor estar escrito do que descoberto: metade
+  // destas consultas fica **fora de índice**. `StepLog`, `WaterLog` e
+  // `WorkoutSession` batem em `[userId, loggedAt]`/`[userId, startedAt]`; as de
+  // `Meal`, `WeightLog` e `Goal` filtram por `createdAt`/`completedAt`, e os
+  // índices que existem são `[userId, eatenAt]`, `[userId, loggedAt]` e
+  // `[userId, status]`/`[userId, kind]`. Aceitável hoje: é job mensal, roda por
+  // grupo, o `in` já corta pelos membros e o `distinct` é do banco. Trocar o
+  // campo para o declarado corrigiria o índice e **erraria a regra** — a troca
+  // certa é índice novo, e esta fatia não é dona da migration. Os três estão na
+  // proposta de schema da PR.
   const [refeicoes, sessoes, pesos, passos, agua, metas] = await Promise.all([
     db.meal.findMany({
       where: { userId: { in: alvo }, createdAt: janela },

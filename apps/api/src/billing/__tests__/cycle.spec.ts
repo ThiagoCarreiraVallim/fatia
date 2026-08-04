@@ -45,12 +45,47 @@ describe('periodoDeCobranca', () => {
     expect(fevereiro.startYmd).toBe('2026-01-28');
     expect(fevereiro.endYmd).toBe('2026-02-28');
 
-    // Doze fechamentos seguidos, um por mês: nenhum salto, nenhum repetido.
+    // Doze fechamentos seguidos, um por mês. A asserção lista os doze em vez de
+    // conferir `new Set(...).size === 12`: contar distintos é invariante a um
+    // deslocamento de mês inteiro — com o fechamento caindo sempre um mês antes
+    // os doze continuariam distintos, e o teste continuaria verde sobre uma
+    // fatura emitida para o mês errado.
     const fechamentos = Array.from(
       { length: 12 },
       (_, i) => periodoDeCobranca(28, SP, new Date(Date.UTC(2026, i, 28, 15))).endYmd,
     );
-    expect(new Set(fechamentos).size).toBe(12);
+    expect(fechamentos).toEqual([
+      '2026-01-28',
+      '2026-02-28',
+      '2026-03-28',
+      '2026-04-28',
+      '2026-05-28',
+      '2026-06-28',
+      '2026-07-28',
+      '2026-08-28',
+      '2026-09-28',
+      '2026-10-28',
+      '2026-11-28',
+      '2026-12-28',
+    ]);
+  });
+
+  it('fatura o ciclo que fechou hoje quando o job roda no próprio dia do fechamento', () => {
+    // A fronteira mais cara do módulo: ela decide *qual* ciclo vira fatura.
+    // 01/08/2026 às 02:00 de São Paulo (05:00 UTC) é a hora natural de um job
+    // mensal. Se o dia do fechamento não contasse como já fechado, este mesmo
+    // instante reemitiria junho e julho nunca seria faturado — até alguém
+    // reparar e rodar de novo no dia 2.
+    const noDia = periodoDeCobranca(1, SP, new Date('2026-08-01T05:00:00Z'));
+    expect(noDia.startYmd).toBe('2026-07-01');
+    expect(noDia.endYmd).toBe('2026-08-01');
+
+    // Mesma fronteira com fechamento no dia 28, meia hora depois da virada local.
+    expect(periodoDeCobranca(28, SP, new Date('2026-08-28T03:30:00Z')).endYmd).toBe('2026-08-28');
+
+    // E a véspera continua no ciclo anterior: 31/07 às 21h local ainda não
+    // chegou no dia 1, então o fechamento vigente é o de 01/07.
+    expect(periodoDeCobranca(1, SP, new Date('2026-08-01T00:00:00Z')).endYmd).toBe('2026-07-01');
   });
 
   it('recusa dia de fechamento que não existe em todo mês', () => {
@@ -152,6 +187,23 @@ describe('pró-rata', () => {
         leftAt: new Date('2026-06-30T12:00:00Z'),
       }),
     ).toBe(0);
+  });
+
+  it('não cobra o dia que a associação não chegou a tocar, na meia-noite exata', () => {
+    // Meia-noite local de 12/07 em São Paulo = 03:00 UTC — o instante em que o
+    // dia 11 acaba e o 12 começa. Quem entra nele não esteve um milissegundo do
+    // dia 11; quem sai nele não esteve um milissegundo do dia 12. É a fronteira
+    // que decide um dia inteiro de cobrança, e ela cai para o lado de não cobrar
+    // o dia que não existiu.
+    const meiaNoiteDe12 = new Date('2026-07-12T03:00:00.000Z');
+
+    // 12 a 31 de julho: 20 dias, não 21.
+    expect(diasAtivos(periodo, { joinedAt: meiaNoiteDe12, leftAt: null })).toBe(20);
+
+    // 01 a 11 de julho: 11 dias, não 12.
+    expect(
+      diasAtivos(periodo, { joinedAt: new Date('2026-01-01T12:00:00Z'), leftAt: meiaNoiteDe12 }),
+    ).toBe(11);
   });
 
   it('não cobra convite que nunca virou entrada', () => {

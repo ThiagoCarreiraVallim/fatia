@@ -7,8 +7,14 @@
  * Sem a porta, esse vocabulário vazaria para o job de fechamento e para os
  * testes, e trocar de provedor viraria reescrita.
  *
- * O segundo motivo é testável: **nenhum teste toca a rede.** O fake de
- * `__tests__/fake-billing.provider.ts` implementa esta interface inteira.
+ * O segundo motivo é testável: **nenhum teste toca a rede.** Quem exercita o
+ * adapter é `__tests__/asaas.provider.spec.ts`, trocando o `fetch` global.
+ *
+ * Não há dublê genérico desta porta, e é deliberado: `verifyWebhook` recebe o
+ * corpo **cru** do provedor, no vocabulário dele. Um fake que aceitasse o
+ * vocabulário da Fatia não seria substituto do adapter em teste nenhum — passaria
+ * verde justamente sobre a tradução, que é o que o adapter existe para fazer. O
+ * dublê útil só nasce junto com o handler de webhook, e falando Asaas.
  */
 
 /**

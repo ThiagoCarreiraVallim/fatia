@@ -69,8 +69,9 @@ export const AppEnvSchema = z.object({
   // recusa), e nada mais no app muda. Aluno nunca vê cobrança em caminho nenhum.
   //
   // A chave de PRODUÇÃO não vive no repositório nem no CI: o sandbox tem chave
-  // própria, e o teste usa `FakeBillingProvider` — `fromEnv` recusa rodar em
-  // `NODE_ENV=test` justamente para que ninguém precise de chave para testar.
+  // própria, e o teste do adapter troca o `fetch` global — `fromEnv` recusa
+  // rodar em `NODE_ENV=test` justamente para que ninguém precise de chave para
+  // testar.
   ASAAS_BASE_URL: z.string().url().optional().or(z.literal('')),
   ASAAS_API_KEY: z.string().optional().or(z.literal('')),
   // Segredo compartilhado configurado no painel do Asaas e devolvido por ele no

@@ -86,7 +86,7 @@ export class AsaasProvider implements BillingProvider {
   static fromEnv(env: NodeJS.ProcessEnv = process.env): AsaasProvider {
     if (env.NODE_ENV === 'test') {
       throw new Error(
-        'AsaasProvider.fromEnv é proibido em NODE_ENV=test — use o FakeBillingProvider',
+        'AsaasProvider.fromEnv é proibido em NODE_ENV=test — construa o provider com valores explícitos e troque o `fetch`',
       );
     }
 

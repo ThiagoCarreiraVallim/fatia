@@ -26,7 +26,21 @@ interface Argumentos {
   at?: Date;
 }
 
-function leArgumentos(argv: string[]): Argumentos {
+/**
+ * `Number('')` é `0`, e `Number('  ')` também.
+ *
+ * Sem esta guarda, `--price ""` passava por `Number.isFinite` e simulava a
+ * fatura inteira a zero sem reclamar de nada — o pior resultado possível num
+ * comando cujo propósito é conferir dinheiro. `--cycle-day ""` virava `0` e
+ * morria lá dentro com stack de `RangeError`, em vez da mensagem de uso.
+ * Ausente vira `NaN` de propósito: quem decide é o `Number.isFinite` abaixo.
+ */
+function numeroDoArgumento(bruto: string | undefined): number {
+  const texto = bruto?.trim();
+  return texto ? Number(texto) : Number.NaN;
+}
+
+export function leArgumentos(argv: string[]): Argumentos {
   const mapa = new Map<string, string>();
   for (let i = 0; i < argv.length; i += 2) {
     if (!argv[i]?.startsWith('--')) continue;
@@ -34,8 +48,8 @@ function leArgumentos(argv: string[]): Argumentos {
   }
 
   const group = mapa.get('group');
-  const price = Number(mapa.get('price'));
-  const cycleDay = Number(mapa.get('cycle-day'));
+  const price = numeroDoArgumento(mapa.get('price'));
+  const cycleDay = numeroDoArgumento(mapa.get('cycle-day'));
 
   if (!group || !Number.isFinite(price) || !Number.isFinite(cycleDay)) {
     throw new Error(
@@ -57,7 +71,17 @@ const emReais = (centavos: number) =>
   (centavos / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 async function main(): Promise<void> {
-  const args = leArgumentos(process.argv.slice(2));
+  let args: Argumentos;
+  try {
+    args = leArgumentos(process.argv.slice(2));
+  } catch (erro) {
+    // Erro de uso é do operador, não do programa: a mensagem sozinha resolve, e
+    // a pilha de chamadas só a esconde no meio de vinte linhas de `node:internal`.
+    console.error(`\n${erro instanceof Error ? erro.message : String(erro)}\n`);
+    process.exitCode = 1;
+    return;
+  }
+
   const prisma = new PrismaClient();
 
   try {
@@ -88,7 +112,10 @@ async function main(): Promise<void> {
     }
     console.log('');
   } catch (erro) {
-    if (erro instanceof GrupoNaoFaturavelError) {
+    // `RangeError` aqui é sempre argumento fora de faixa (`--cycle-day 31`,
+    // `--price 15.9`), que é erro do operador pelo mesmo motivo: mensagem, não
+    // pilha.
+    if (erro instanceof GrupoNaoFaturavelError || erro instanceof RangeError) {
       console.error(`\n${erro.message}\n`);
       process.exitCode = 1;
       return;
@@ -99,4 +126,6 @@ async function main(): Promise<void> {
   }
 }
 
-void main();
+// Só roda quando o arquivo é o comando, nunca quando é importado. Sem a guarda,
+// o spec de `leArgumentos` abriria uma conexão Prisma de verdade só por existir.
+if (require.main === module) void main();

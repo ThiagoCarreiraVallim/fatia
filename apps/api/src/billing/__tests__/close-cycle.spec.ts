@@ -102,8 +102,13 @@ describe('fecharCiclo', () => {
       await fecharCiclo(como(db), PARAMS, AGORA);
 
       const where = db.groupMembership.findMany.mock.calls[0][0].where;
-      // `joinedAt` nulo é convite não aceito: não há o que cobrar.
-      expect(where.joinedAt.not).toBeNull();
+      // `joinedAt` nulo é convite não aceito: não há o que cobrar. E o `lt` é o
+      // que mantém fora quem entrou **depois** do fechamento: fechar julho em
+      // 03/08 (ou refazer um ciclo antigo pelo `--at`) traria de volta o aluno
+      // que entrou em 02/08, com zero dia ativo — uma linha de R$ 0,00 na
+      // fatura e, pior, um `activeCount` inflado, que é o campo gravado na
+      // emissão e nunca recalculado.
+      expect(where.joinedAt).toEqual({ not: null, lt: new Date('2026-08-01T03:00:00Z') });
       expect(where.OR).toEqual([
         { status: MembershipStatus.ACTIVE },
         {
