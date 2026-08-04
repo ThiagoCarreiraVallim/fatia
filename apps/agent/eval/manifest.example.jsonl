@@ -1,0 +1,3 @@
+{"id":"prato-feito-01","sha256":"0000000000000000000000000000000000000000000000000000000000000000","split":"eval","condicao":"almoço em casa, luz de janela, foto de cima","items":[{"food":"arroz branco cozido","grams":152,"kcal_100g":128},{"food":"feijão carioca cozido","grams":98,"kcal_100g":76},{"food":"bife de contrafilé grelhado","grams":110,"kcal_100g":220}]}
+{"id":"pao-de-queijo-01","sha256":"1111111111111111111111111111111111111111111111111111111111111111","split":"dev","condicao":"padaria, luz amarela, foto de lado","items":[{"food":"pão de queijo","grams":58,"kcal_100g":363}]}
+{"id":"prato-lavado-01","sha256":"2222222222222222222222222222222222222222222222222222222222222222","split":"eval","condicao":"controle negativo: prato limpo, sem comida","items":[]}

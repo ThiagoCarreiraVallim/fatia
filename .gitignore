@@ -56,6 +56,13 @@ apps/mobile/expo-env.d.ts
 apps/mobile/ios/
 apps/mobile/android/
 
+# Fotos do conjunto de avaliação do reconhecimento (#138). Os **rótulos** são
+# versionados (apps/agent/eval/manifest.jsonl) e as imagens não: foto de refeição
+# de gente real é dado de saúde, a mesma categoria que docs/DATA_RETENTION.md
+# promete não guardar, e um diretório de pratos num repositório público não tem
+# desfazer. O sha256 no manifesto é o que amarra o número publicado a estas fotos.
+apps/agent/eval/images/
+
 # Python (apps/agent, ADR 015)
 .venv/
 __pycache__/

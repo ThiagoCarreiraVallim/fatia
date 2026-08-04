@@ -208,14 +208,41 @@ src/fatia_agent/
     recognized_meal.py        # texto do modelo → dado validado, ou erro nomeado
   recognition/
     recognize_meal.py         # visão + validação, em linha reta
+  eval/                       # #138: benchmark de precisão — mede, não afirma
+    matching.py               # previsto x rotulado, com a normalização da busca
+    metrics.py                # identificação e porção, separadas, com n e desvio
+    report.py                 # o Markdown, e a recusa de publicar amostra pequena
+    run_benchmark.py          # o runner (CLI), sequencial e sobre o caminho real
+eval/                         # o **conjunto**: rótulos versionados, fotos não
 tests/
   providers/                  # duplo do provedor, sem rede
   recognition/                # #139: parser, rota e a guarda de custo
+  eval/                       # #138: métricas e a guarda de publicação
   test_degradation.py         # o serviço sem IA
   test_api.py                 # saúde e contrato de erro
   test_allowed_models.py      # a foto não sai para destino ou modelo não revisado
   smoke/                      # contra provedor de verdade; fora do CI
 ```
+
+## Benchmark de reconhecimento (#138)
+
+```bash
+uv run python -m fatia_agent.eval.run_benchmark \
+  --base-url http://localhost:1234/v1 --model google/gemma-4-12b-qat --split dev
+```
+
+**Não existe número de precisão do reconhecimento da Fatia**, e este runner não
+produz um sozinho: ele depende de um conjunto de fotos de comida brasileira
+rotuladas **com peso de balança**, que é trabalho manual e não está feito. O
+gerador de relatório se recusa a emitir veredito abaixo de 30 fotos **medidas**
+no split de avaliação — medidas, e não tentadas: trinta fotos com vinte e nove
+timeouts são uma medida sobre uma foto. A regra mora no código, e não na
+disciplina de quem roda, porque um número medido sobre cinco fotos vira citação
+em decisão futura.
+
+Como montar o conjunto: [`eval/README.md`](./eval/README.md). Metodologia,
+métricas e limiar:
+[`docs/benchmark-reconhecimento-refeicao.md`](../../docs/benchmark-reconhecimento-refeicao.md).
 
 ## O que ainda **não** existe aqui
 
