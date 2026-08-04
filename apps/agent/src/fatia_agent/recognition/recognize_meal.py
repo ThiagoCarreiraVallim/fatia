@@ -25,6 +25,13 @@ from ..schemas.recognized_meal import RecognizedMeal, parse_recognized_meal
 # um 400 sem explicação.
 MEDIA_TYPES_ACEITOS = frozenset({"image/jpeg", "image/png", "image/webp"})
 
+# O prompt exatamente como ele sai daqui — em uma constante porque o benchmark
+# (#138) grava o `sha256` dele no relatório. Um número medido com o prompt de
+# ontem, publicado como se fosse o de hoje, é a forma mais silenciosa de um
+# benchmark mentir; se a impressão digital fosse remontada lá, ela deixaria de
+# corresponder ao que o modelo recebeu no primeiro ajuste feito aqui.
+PROMPT = f"{SISTEMA}\n\n{INSTRUCAO}"
+
 
 async def recognize_meal(
     provider: VisionCapability,
@@ -41,7 +48,7 @@ async def recognize_meal(
     """
     resposta = await provider.describe(
         image,
-        prompt=f"{SISTEMA}\n\n{INSTRUCAO}",
+        prompt=PROMPT,
         media_type=media_type,
     )
     return parse_recognized_meal(resposta)
