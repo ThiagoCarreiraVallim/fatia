@@ -1,7 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { dateInTz, weekStartInTz } from '../progress/helpers/date-tz';
-import { HOUR_BANDS, daysBetween, hourBandInTz, monthInTz } from './helpers/time-buckets';
+import {
+  HOUR_BANDS,
+  daysBetween,
+  hourBandInTz,
+  monthBuckets,
+  weekBuckets,
+} from './helpers/time-buckets';
 import type { Cell } from './aggregation.service';
 import type { Participant } from './stats-participation.port';
 
@@ -97,33 +103,50 @@ export class EngagementService {
   }
 
   /**
-   * Participantes por faixa de "dias desde o último treino".
+   * Participantes por faixa de "dias desde o último treino" **dentro da janela**.
+   *
+   * A janela não é enfeite: a versão anterior lia o último treino sem limite
+   * nenhum, e então `last_30_days` e `last_12_months` devolviam células idênticas
+   * enquanto a resposta e o CSV carimbavam períodos diferentes. Um período que a
+   * resposta declara e o recorte ignora é uma afirmação falsa sobre o número.
+   *
+   * As faixas também saem da janela: publicar "31+ dias: 0 pessoas" numa janela
+   * de 30 dias seria dizer que ninguém está sumido há mais de um mês, quando na
+   * verdade essa gente está em "sem treino na janela".
    *
    * Aqui a métrica **é** a contagem de pessoas: `value === n`. Vale notar por
    * quê — num recorte assim, suprimir o valor sem suprimir o `n` não esconderia
    * nada, e é por isso que `suppress()` zera os dois juntos.
    */
-  async membersByRecency(participants: readonly Participant[], now: Date): Promise<Cell[]> {
-    const ultimo = await this.lastSessionByUser(participants);
+  async membersByRecency(
+    participants: readonly Participant[],
+    start: Date,
+    now: Date,
+  ): Promise<Cell[]> {
+    const ultimo = await this.lastSessionByUser(participants, start);
+    const faixas = recencyBands(daysBetween(start, now));
 
-    const porFaixa = new Map<string, number>(RECENCY_BANDS.map((faixa) => [faixa, 0]));
+    const porFaixa = new Map<string, number>(faixas.map((faixa) => [faixa, 0]));
     for (const participante of participants) {
       const sessao = ultimo.get(participante.userId);
-      const faixa = sessao === undefined ? 'sem treino' : recencyBand(daysBetween(sessao, now));
+      const faixa = sessao === undefined ? SEM_TREINO : recencyBand(daysBetween(sessao, now));
       porFaixa.set(faixa, (porFaixa.get(faixa) ?? 0) + 1);
     }
 
-    return RECENCY_BANDS.map((faixa) => {
+    return faixas.map((faixa) => {
       const total = porFaixa.get(faixa) ?? 0;
       return { key: faixa, n: total, value: total };
     });
   }
 
-  /** Último treino de cada participante, sem limite de janela. */
-  async lastSessionByUser(participants: readonly Participant[]): Promise<Map<string, Date>> {
+  /** Último treino de cada participante **na janela**. */
+  async lastSessionByUser(
+    participants: readonly Participant[],
+    start: Date,
+  ): Promise<Map<string, Date>> {
     const rows = await this.prisma.workoutSession.groupBy({
       by: ['userId'],
-      where: { userId: { in: participants.map((p) => p.userId) } },
+      where: { userId: { in: participants.map((p) => p.userId) }, startedAt: { gte: start } },
       _max: { startedAt: true },
     });
 
@@ -153,8 +176,28 @@ export class EngagementService {
   }
 }
 
-/** Faixas de recência, fechadas e nomeadas. */
-export const RECENCY_BANDS = ['0-7 dias', '8-14 dias', '15-30 dias', '31+ dias', 'sem treino'];
+/** O balde de quem não treinou **na janela** — não "nunca treinou". */
+export const SEM_TREINO = 'sem treino na janela';
+
+/**
+ * Faixas de recência, fechadas e nomeadas, com o **piso** de cada uma.
+ *
+ * O piso é o que decide se a faixa cabe na janela: numa janela de 30 dias a
+ * faixa "31+ dias" não pode existir, porque quem está nela não aparece na
+ * consulta — ele está em "sem treino na janela".
+ */
+const FAIXAS_DE_RECENCIA = [
+  { key: '0-7 dias', piso: 0 },
+  { key: '8-14 dias', piso: 8 },
+  { key: '15-30 dias', piso: 15 },
+  { key: '31+ dias', piso: 31 },
+] as const;
+
+/** As faixas que cabem numa janela de `janelaDias`, em ordem do eixo. */
+export function recencyBands(janelaDias: number): string[] {
+  const cabem = FAIXAS_DE_RECENCIA.filter((faixa) => faixa.piso < janelaDias).map((f) => f.key);
+  return [...cabem, SEM_TREINO];
+}
 
 function recencyBand(dias: number): string {
   if (dias <= 7) return '0-7 dias';
@@ -185,28 +228,22 @@ function contar(eventos: Array<{ key: string; userId: string }>, baldes: string[
     pessoas.set(evento.key, set);
   }
 
-  return [...valores.keys()]
-    .sort()
-    .map((key) => ({ key, n: pessoas.get(key)?.size ?? 0, value: valores.get(key) ?? 0 }));
+  // A ordem é a de `baldes`, **não** alfabética. O eixo tem ordem própria —
+  // cronológica nas séries de tempo, e "madrugada, manhã, tarde, noite" nas
+  // faixas do dia, que ordenadas por string virariam "madrugada, manhã, noite,
+  // tarde". A supressão complementar escolhe o complemento pela **vizinhança no
+  // eixo**, então trocar a ordem troca quem cai junto.
+  return baldes.map((key) => ({
+    key,
+    n: pessoas.get(key)?.size ?? 0,
+    value: valores.get(key) ?? 0,
+  }));
 }
 
-/** Semanas da janela, no fuso do primeiro participante — só para nomear baldes. */
-function semanasDaJanela(start: Date, now: Date, participants: readonly Participant[]): string[] {
-  const fuso = participants[0]?.timezone ?? 'UTC';
-  const baldes: string[] = [];
-  for (let t = start.getTime(); t <= now.getTime(); t += 86_400_000) {
-    const semana = weekStartInTz(new Date(t), fuso);
-    if (!baldes.includes(semana)) baldes.push(semana);
-  }
-  return baldes;
-}
+const fusosDe = (participants: readonly Participant[]) => participants.map((p) => p.timezone);
 
-function mesesDaJanela(start: Date, now: Date, participants: readonly Participant[]): string[] {
-  const fuso = participants[0]?.timezone ?? 'UTC';
-  const baldes: string[] = [];
-  for (let t = start.getTime(); t <= now.getTime(); t += 86_400_000) {
-    const mes = monthInTz(new Date(t), fuso);
-    if (!baldes.includes(mes)) baldes.push(mes);
-  }
-  return baldes;
-}
+const semanasDaJanela = (start: Date, now: Date, participants: readonly Participant[]) =>
+  weekBuckets(start, now, fusosDe(participants));
+
+const mesesDaJanela = (start: Date, now: Date, participants: readonly Participant[]) =>
+  monthBuckets(start, now, fusosDe(participants));

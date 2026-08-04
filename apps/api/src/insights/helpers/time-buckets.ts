@@ -1,4 +1,4 @@
-import { dateInTz } from '../../progress/helpers/date-tz';
+import { dateInTz, weekStartInTz } from '../../progress/helpers/date-tz';
 
 /**
  * Baldes de tempo dos recortes, sempre no fuso de **quem treinou**.
@@ -46,3 +46,45 @@ export function monthInTz(date: Date, timezone: string): string {
 export function daysBetween(from: Date, to: Date): number {
   return Math.max(0, Math.floor((to.getTime() - from.getTime()) / 86_400_000));
 }
+
+/**
+ * Todos os baldes de tempo da janela, cobrindo **todos os fusos** informados.
+ *
+ * Existe por dois motivos, e nenhum é estética:
+ *
+ * 1. **Balde vazio precisa existir.** Série temporal com buraco convida o leitor
+ *    a preencher, e a célula ausente é informação sobre a célula ausente
+ *    (`AGGREGATION_POLICY.md` §1). Quem monta o mapa a partir das linhas do banco
+ *    simplesmente não tem o mês em que ninguém treinou.
+ * 2. **O eixo precisa de ordem.** A supressão complementar escolhe o vizinho no
+ *    eixo; sem a lista completa e ordenada não existe "vizinho".
+ *
+ * Um fuso só deixaria de fora a semana ou o mês em que a virada do calendário
+ * cai de um lado da linha e não do outro. A ordem lexicográfica de `YYYY-MM-DD` e
+ * de `YYYY-MM` é a cronológica, então ordenar por string aqui é ordenar por tempo.
+ */
+export function timeBuckets(
+  start: Date,
+  now: Date,
+  timezones: readonly string[],
+  rotular: (instante: Date, fuso: string) => string,
+): string[] {
+  const fusos = new Set(timezones.length > 0 ? timezones : ['UTC']);
+  const baldes = new Set<string>();
+
+  for (const fuso of fusos) {
+    for (let t = start.getTime(); t <= now.getTime(); t += 86_400_000) {
+      baldes.add(rotular(new Date(t), fuso));
+    }
+    // A ponta da janela não cai necessariamente num passo de 24h.
+    baldes.add(rotular(now, fuso));
+  }
+
+  return [...baldes].sort();
+}
+
+export const weekBuckets = (start: Date, now: Date, timezones: readonly string[]) =>
+  timeBuckets(start, now, timezones, weekStartInTz);
+
+export const monthBuckets = (start: Date, now: Date, timezones: readonly string[]) =>
+  timeBuckets(start, now, timezones, monthInTz);

@@ -17,6 +17,10 @@
  *
  * Constante no código, e não configurável por grupo: um `k` que a academia
  * ajusta vira `k = 1` no primeiro pedido comercial. Mudar exige diff e revisão.
+ *
+ * O mesmo número serve de piso para o **bloco oculto** (ver `blocoSeguro`): o
+ * conjunto de células suprimidas precisa somar pelo menos tanta gente quanto uma
+ * célula que teríamos publicado.
  */
 export const MIN_CELL = 5;
 
@@ -25,7 +29,14 @@ export const SUPPRESSED = 'SUPPRESSED';
 
 /** Célula crua, como sai de quem conta. Nunca sai desta forma pela API. */
 export interface Cell {
-  /** Rótulo do balde no eixo ("2026-07", "manhã", "peito"). Nunca uma pessoa. */
+  /**
+   * Rótulo do balde no eixo ("2026-07", "manhã", "peito"). Nunca uma pessoa, e
+   * nunca texto livre: todo eixo do catálogo é lista fechada ou balde de tempo.
+   * O eixo aberto foi o furo da revisão — `modality_mix` carregava o nome que um
+   * aluno digitou, e a **existência** dessa célula já era a divulgação, num
+   * lugar que o limiar não alcança porque ele decide sobre o valor, não sobre a
+   * chave.
+   */
   key: string;
   /** Indivíduos distintos que compõem a célula. É sobre `n` que o limiar decide. */
   n: number;
@@ -54,51 +65,97 @@ export interface Aggregate {
 /**
  * Aplica o limiar e a **supressão complementar**.
  *
- * Duas regras, e a segunda é a que existe por causa do modo de falha silencioso:
+ * ## O que mudou depois da revisão, e por quê
+ *
+ * A primeira versão desta função escolhia o complemento como "a menor célula
+ * visível **desta consulta**", e disparava só quando sobrava exatamente uma
+ * célula oculta. As duas decisões estavam erradas, cada uma por um motivo:
+ *
+ * 1. **Relativa à consulta.** Os períodos nomeados são janelas *encaixadas* e o
+ *    balde de um recorte de tempo é o mesmo em todas elas (a semana só contém as
+ *    sessões daquela semana). Como "a menor visível" depende do conjunto de
+ *    células da janela pedida, o complemento mudava de janela para janela — e a
+ *    segunda consulta publicava exatamente o que a primeira tinha escondido.
+ *    Duas requisições ao painel gratuito, sem construtor de filtro nenhum,
+ *    devolviam o número inteiro.
+ * 2. **Só quando `hidden.size === 1`.** Com duas células naturalmente pequenas
+ *    nenhum complemento entrava, e o resíduo `total − visíveis` era a soma de
+ *    duas parcelas que valiam 1 cada — cada uma recuperada exatamente.
+ *
+ * ## A regra de hoje
  *
  * 1. Célula com `0 < n < minCell` é suprimida. `n = 0` é publicada como está —
- *    não há ninguém a proteger num balde vazio.
- * 2. Se sobrar **exatamente uma** célula suprimida, a menor célula visível com
- *    `n > 0` também é suprimida. Uma célula oculta sozinha não está oculta:
- *    quem souber o total subtrai as visíveis e lê o número que o limiar
- *    recusou. Este é o "falha em silêncio" central da #159.
+ *    não há ninguém a proteger num balde vazio, e um balde vazio nem participa
+ *    da conta: zero é valor conhecido, não muda resíduo nenhum.
+ * 2. Cada célula suprimida pelo limiar é uma **semente**, e cada semente monta o
+ *    **seu** bloco: ela absorve vizinhos até o bloco ficar **seguro**
+ *    (`blocoSeguro`). O conjunto oculto é a união dos blocos.
+ * 3. O bloco cresce **para a direita** — em direção ao presente. Só quando já
+ *    encosta na borda direita do eixo é que ele passa a crescer para a esquerda.
+ * 4. Semente cujo bloco não consegue ficar seguro derruba o recorte inteiro. É a
+ *    resposta certa: aquele recorte, naquele grupo, não é agregado.
  *
- * O complemento **precisa** ter `n > 0`: suprimir um balde vazio ao lado do
- * balde pequeno é teatro, porque o valor de um balde vazio é conhecido (zero) e
- * a subtração continua funcionando.
+ * ## Por que o bloco é **por semente**, e não um bloco por vizinhança
  *
- * Quando não existe complemento elegível — recorte de uma célula só, ou de uma
- * célula pequena cercada de baldes vazios — o recorte inteiro é suprimido. É a
- * resposta certa: aquele recorte, naquele grupo, não é agregado.
+ * A tentação é agrupar as ocultas em blocos contíguos e crescer cada grupo. Isso
+ * reabre o vazamento pela porta dos fundos: na janela longa aparece uma semente
+ * a mais, à esquerda, que se funde com o grupo — e o grupo fundido pode já estar
+ * seguro **sem** precisar absorver o vizinho da direita que a janela curta tinha
+ * absorvido. Aquele vizinho sai publicado na janela longa e a subtração volta.
+ *
+ * Com bloco por semente, `bloco(s)` é função de `s` e das células **à direita**
+ * de `s`, e de mais nada. Semente nova à esquerda não muda bloco nenhum.
+ *
+ * ## Por que "para a direita" fecha o vazamento entre consultas
+ *
+ * As três janelas terminam todas em `now`; elas diferem só onde **começam**.
+ * Logo o vizinho à direita de um balde é o mesmo balde em `last_30_days`,
+ * `last_90_days` e `last_12_months`. Crescer para a direita torna a decisão de
+ * suprimir uma função do balde e dos baldes à direita dele — todos compartilhados
+ * pelas três janelas — e não do recorte pedido. Célula oculta na janela curta
+ * continua oculta na janela longa, que é a invariante que a revisão derrubou.
+ *
+ * A ida para a esquerda só acontece quando o bloco já toca a borda direita, e aí
+ * os baldes à esquerda também são compartilhados — até o ponto em que a janela
+ * curta acaba. Se o bloco precisar passar desse ponto, a janela curta não tem
+ * mais para onde crescer e suprime **tudo**: não publica nada, e o que não é
+ * publicado não entra em subtração nenhuma. Falha para o lado seguro.
+ *
+ * O preço está registrado em `docs/AGGREGATION_POLICY.md`: o complemento deixou
+ * de ser "a menor célula visível" (que minimizava a perda de informação) e passou
+ * a ser o vizinho. Perde-se mais utilidade; ganha-se a única versão da regra que
+ * sobrevive a duas consultas.
  *
  * **O total não é publicado.** A soma das células é a arma do ataque por
- * diferença, e a UI não precisa dela: somar o que está visível ela faz sozinha,
- * e essa soma não revela nada. A supressão complementar continua existindo
- * porque o total pode ser sabido de fora (outro recorte, outro período, o
- * tamanho conhecido da turma).
+ * diferença, e a UI não precisa dela. A supressão complementar continua
+ * existindo porque o total pode ser sabido de fora — inclusive de um recorte
+ * irmão sobre a mesma população, que foi como a revisão montou o ataque:
+ * `sessions_by_week` e `sessions_by_hour_band` particionam as mesmas sessões.
  */
 export function suppress(cells: readonly Cell[], minCell: number = MIN_CELL): Aggregate {
-  const hidden = new Set<number>();
+  // Só as células **com gente** entram na conta. Um balde vazio vale zero em
+  // qualquer resíduo: escondê-lo seria teatro, e mantê-lo no meio do bloco
+  // quebraria a noção de vizinhança sem proteger nada.
+  const comGente = cells.map((cell, i) => ({ cell, i })).filter(({ cell }) => cell.n > 0);
 
-  cells.forEach((cell, i) => {
-    if (cell.n > 0 && cell.n < minCell) hidden.add(i);
-  });
+  const sementes = comGente
+    .map((_, posicao) => posicao)
+    .filter((posicao) => comGente[posicao].cell.n < minCell);
 
-  if (hidden.size === 1) {
-    const complement = smallestVisibleWithPeople(cells, hidden);
-    if (complement === undefined) {
-      // Sem complemento não há como esconder a única célula oculta. Cai tudo.
-      cells.forEach((_, i) => hidden.add(i));
-    } else {
-      hidden.add(complement);
-    }
+  const ocultas = new Set<number>();
+  for (const semente of sementes) {
+    const bloco = blocoDaSemente(comGente, semente, minCell);
+    if (bloco === undefined) return tudoSuprimido(cells);
+    for (const posicao of bloco) ocultas.add(posicao);
   }
+
+  const indicesOcultos = new Set([...ocultas].map((posicao) => comGente[posicao].i));
 
   const published = cells.map((cell, i) => ({
     key: cell.key,
-    value: hidden.has(i) ? null : cell.value,
-    n: hidden.has(i) ? null : cell.n,
-    suppressed: hidden.has(i),
+    value: indicesOcultos.has(i) ? null : cell.value,
+    n: indicesOcultos.has(i) ? null : cell.n,
+    suppressed: indicesOcultos.has(i),
   }));
 
   // "Amostra insuficiente" é não ter sobrado **gente** visível: um recorte cujas
@@ -109,34 +166,69 @@ export function suppress(cells: readonly Cell[], minCell: number = MIN_CELL): Ag
   return { cells: published, insufficientSample };
 }
 
+/** Célula com gente e o índice dela no recorte original. */
+type ComGente = { cell: Cell; i: number };
+
 /**
- * A menor célula visível que tenha gente, para servir de complemento.
+ * Um bloco oculto está seguro quando o resíduo não isola ninguém.
  *
- * Menor, e não maior, para minimizar a perda de informação — é a prática usual
- * de controle de divulgação estatística. O preço está registrado em
- * `docs/AGGREGATION_POLICY.md`: um complemento pequeno estreita o intervalo em
- * que o valor oculto pode estar; ele não o revela, que é o que o limiar promete.
+ * Três condições, e cada uma fecha um ataque diferente:
  *
- * Desempate pela chave, para a resposta ser determinística — recorte que muda de
- * célula suprimida entre duas chamadas iguais vaza as duas.
+ * - **Duas células, no mínimo.** Uma incógnita só é uma equação resolvida.
+ * - **`n` somado ≥ `minCell`.** O bloco precisa esconder pelo menos tanta gente
+ *   quanto uma célula que teríamos publicado. Sem isto, duas células de uma
+ *   pessoa cada satisfariam a condição anterior e continuariam sendo duas
+ *   pessoas identificáveis.
+ * - **Folga no valor: `soma − quantas ≥ minCell`.** Quem conhece o total sabe o
+ *   resíduo; para cada célula do bloco o valor possível vai de 1 (o mínimo de
+ *   quem aparece) até `resíduo − (quantas − 1)`. A largura desse intervalo é
+ *   `soma − quantas`. Quando ela é zero, todas as parcelas valem 1 e o bloco
+ *   inteiro está publicado por dedução — foi exatamente o caso `1 + 1 = 2` que a
+ *   revisão exibiu. Exigir `minCell` de largura é a versão redonda de "o
+ *   intervalo tem de ser largo o bastante para não ser uma resposta".
  */
-function smallestVisibleWithPeople(
-  cells: readonly Cell[],
-  hidden: ReadonlySet<number>,
-): number | undefined {
-  let escolhida: number | undefined;
+function blocoSeguro(comGente: readonly ComGente[], bloco: readonly number[], minCell: number) {
+  if (bloco.length < 2) return false;
 
-  cells.forEach((cell, i) => {
-    if (hidden.has(i) || cell.n === 0) return;
-    if (escolhida === undefined) {
-      escolhida = i;
-      return;
-    }
-    const atual = cells[escolhida];
-    if (cell.n < atual.n || (cell.n === atual.n && cell.key < atual.key)) escolhida = i;
-  });
+  const somaN = bloco.reduce((soma, posicao) => soma + comGente[posicao].cell.n, 0);
+  if (somaN < minCell) return false;
 
-  return escolhida;
+  const somaValor = bloco.reduce((soma, posicao) => soma + comGente[posicao].cell.value, 0);
+  return somaValor - bloco.length >= minCell;
+}
+
+/**
+ * O bloco de uma semente: ela e os vizinhos que precisou absorver para ficar
+ * segura. `undefined` quando o eixo acabou antes — e aí o recorte inteiro cai.
+ *
+ * Cresce para a **direita** enquanto houver eixo à direita, e só depois para a
+ * esquerda. É esta ordem que torna o bloco função apenas da semente e do que
+ * está à direita dela — ver o comentário de `suppress`.
+ */
+function blocoDaSemente(
+  comGente: readonly ComGente[],
+  semente: number,
+  minCell: number,
+): number[] | undefined {
+  const bloco = [semente];
+  let direita = semente + 1;
+  let esquerda = semente - 1;
+
+  while (!blocoSeguro(comGente, bloco, minCell)) {
+    if (direita < comGente.length) bloco.push(direita++);
+    else if (esquerda >= 0) bloco.unshift(esquerda--);
+    else return undefined;
+  }
+
+  return bloco;
+}
+
+/** O recorte inteiro cai — inclusive os baldes vazios, para não sobrar borda. */
+function tudoSuprimido(cells: readonly Cell[]): Aggregate {
+  return {
+    cells: cells.map((cell) => ({ key: cell.key, value: null, n: null, suppressed: true })),
+    insufficientSample: true,
+  };
 }
 
 /**

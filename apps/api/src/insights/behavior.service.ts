@@ -1,8 +1,30 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
-import { monthInTz } from './helpers/time-buckets';
+import { CANONICAL_MUSCLE_GROUPS } from '../workout/helpers/muscle-group';
+import { monthBuckets, monthInTz } from './helpers/time-buckets';
 import type { Cell } from './aggregation.service';
 import type { Participant } from './stats-participation.port';
+
+/**
+ * O eixo do `modality_mix`, **fechado**.
+ *
+ * `Exercise.muscleGroup` não é a lista canônica: `MUSCLE_GROUP_PATTERN` aceita
+ * 50 caracteres de letras, espaços e hífens, e exercício custom é criado pelo
+ * próprio aluno. Publicar a chave crua entregava ao dono da academia uma frase
+ * escrita por **uma** pessoa ("reabilitacao ombro pos cirurgia") — e o limiar não
+ * alcançava isso, porque ele decide sobre o valor e o `n`, não sobre a chave: a
+ * célula saía com `value: null`, `n: null`, `suppressed: true` e o texto intacto,
+ * na resposta e no CSV. A **existência** da célula era a divulgação.
+ *
+ * Tudo que não está na lista canônica vira `outros`. Não é sanitização de texto
+ * (escapar `=HYPERLINK` continua sendo necessário no CSV, por outro motivo): é
+ * fechar o eixo, que é a regra §4 da política aplicada ao único recorte que a
+ * violava. De quebra, some a cardinalidade que o aluno controlava — cada texto
+ * distinto era uma célula de uma pessoa.
+ */
+export const OUTRAS_MODALIDADES = 'outros';
+
+export const MODALITY_AXIS: readonly string[] = [...CANONICAL_MUSCLE_GROUPS, OUTRAS_MODALIDADES];
 
 /**
  * Os recortes de comportamento do add-on pago (#160).
@@ -31,7 +53,11 @@ export class BehaviorService {
    * gente, não de sessões. É sobre ele que o limiar decide: um percentual
    * calculado sobre uma pessoa é o treino dessa pessoa com casas decimais.
    */
-  async planAdherenceByMonth(participants: readonly Participant[], start: Date): Promise<Cell[]> {
+  async planAdherenceByMonth(
+    participants: readonly Participant[],
+    start: Date,
+    now: Date,
+  ): Promise<Cell[]> {
     const fusos = new Map(participants.map((p) => [p.userId, p.timezone]));
 
     const rows = await this.prisma.workoutSession.findMany({
@@ -49,13 +75,17 @@ export class BehaviorService {
       porMes.set(mes, balde);
     }
 
-    return [...porMes.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([mes, balde]) => ({
+    // O eixo vem da janela, não das linhas: mês sem sessão nenhuma é `0`, e não
+    // uma lacuna. `contar()` já fazia isso nos recortes gratuitos, e o painel
+    // pago estava omitindo o balde vazio — a assimetria que a revisão pegou.
+    return monthBuckets(start, now, [...fusos.values()]).map((mes) => {
+      const balde = porMes.get(mes);
+      return {
         key: mes,
-        n: balde.pessoas.size,
-        value: Math.round((balde.comPlano / balde.total) * 100),
-      }));
+        n: balde?.pessoas.size ?? 0,
+        value: balde === undefined ? 0 : Math.round((balde.comPlano / balde.total) * 100),
+      };
+    });
   }
 
   /**
@@ -68,14 +98,25 @@ export class BehaviorService {
    * denominador que precisa passar no limiar. A supressão complementar cuida do
    * resto, porque coorte pequena é o caso comum, não a exceção.
    */
-  async retentionByCohort(participants: readonly Participant[], now: Date): Promise<Cell[]> {
-    const trintaDias = new Date(now.getTime() - 30 * 86_400_000);
-
+  async retentionByCohort(
+    participants: readonly Participant[],
+    start: Date,
+    now: Date,
+  ): Promise<Cell[]> {
+    // O período é a **janela de retenção**: "retido" é ter treinado dentro dela.
+    // Antes eram 30 dias fixos, e então `last_30_days` e `last_12_months`
+    // devolviam a mesma célula com o carimbo de períodos diferentes — o período
+    // entrava na resposta e no CSV sem entrar na conta.
+    //
+    // O período **não** escolhe as coortes: recortar o eixo pela janela esconderia
+    // justamente a coorte antiga, que é o que este recorte existe para mostrar.
+    // Como consequência boa, o eixo não depende da janela — e é o eixo que a
+    // supressão complementar percorre para achar o vizinho.
     const ativos = await this.prisma.workoutSession.groupBy({
       by: ['userId'],
       where: {
         userId: { in: participants.map((p) => p.userId) },
-        startedAt: { gte: trintaDias },
+        startedAt: { gte: start },
       },
       _count: { _all: true },
     });
@@ -93,13 +134,24 @@ export class BehaviorService {
       porCoorte.set(coorte, balde);
     }
 
-    return [...porCoorte.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([coorte, balde]) => ({
+    // O eixo vai da coorte mais antiga até hoje, **sem buraco**: mês em que
+    // ninguém entrou é `0`, e não uma lacuna que o leitor preenche sozinho.
+    const primeiraEntrada = participants
+      .map((p) => p.joinedAt)
+      .filter((data): data is Date => data !== null)
+      .reduce<Date | null>((menor, data) => (menor === null || data < menor ? data : menor), null);
+
+    if (primeiraEntrada === null) return [];
+
+    const fusos = participants.map((p) => p.timezone);
+    return monthBuckets(primeiraEntrada, now, fusos).map((coorte) => {
+      const balde = porCoorte.get(coorte);
+      return {
         key: coorte,
-        n: balde.tamanho,
-        value: Math.round((balde.retidos / balde.tamanho) * 100),
-      }));
+        n: balde?.tamanho ?? 0,
+        value: balde === undefined ? 0 : Math.round((balde.retidos / balde.tamanho) * 100),
+      };
+    });
   }
 
   /**
@@ -128,25 +180,28 @@ export class BehaviorService {
     const porGrupo = new Map<string, { sessoes: number; pessoas: Set<string> }>();
 
     for (const row of rows) {
-      const chave = `${row.sessionId}|${row.exercise.muscleGroup}`;
+      const grupo = modalidade(row.exercise.muscleGroup);
+      const chave = `${row.sessionId}|${grupo}`;
       if (vistos.has(chave)) continue;
       vistos.add(chave);
 
-      const balde = porGrupo.get(row.exercise.muscleGroup) ?? {
-        sessoes: 0,
-        pessoas: new Set<string>(),
-      };
+      const balde = porGrupo.get(grupo) ?? { sessoes: 0, pessoas: new Set<string>() };
       balde.sessoes += 1;
       balde.pessoas.add(row.session.userId);
-      porGrupo.set(row.exercise.muscleGroup, balde);
+      porGrupo.set(grupo, balde);
     }
 
-    return [...porGrupo.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([grupo, balde]) => ({
-        key: grupo,
-        n: balde.pessoas.size,
-        value: balde.sessoes,
-      }));
+    return MODALITY_AXIS.map((grupo) => {
+      const balde = porGrupo.get(grupo);
+      return { key: grupo, n: balde?.pessoas.size ?? 0, value: balde?.sessoes ?? 0 };
+    });
   }
+}
+
+/** Grupo muscular fora da lista canônica não vira eixo — vira `outros`. */
+function modalidade(muscleGroup: string): string {
+  const normalizado = muscleGroup.trim().toLowerCase();
+  return MODALITY_AXIS.includes(normalizado) && normalizado !== OUTRAS_MODALIDADES
+    ? normalizado
+    : OUTRAS_MODALIDADES;
 }

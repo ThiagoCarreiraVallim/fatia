@@ -26,12 +26,23 @@ const INSIGHTS_SRC = resolve(__dirname, '..');
  */
 const PROIBIDOS = [
   'weightLog',
+  'weightKg',
   'meal',
   'mealItem',
   'food',
+  // `\b` não casa dentro de `foodGroup`: `\bfood\b` para em "food" seguido de
+  // "G", que é caractere de palavra. O modelo precisa estar na lista por escrito.
+  'foodGroup',
   'nutrientTarget',
   'heightCm',
   'userGoals',
+  // `Goal` é literalmente "meta corporal": `kind: GoalKind` tem `weight` e
+  // `body_fat`, com `startValue`, `targetValue` e `lastReportedValue`. Estava
+  // fora da lista, e a revisão provou que dava para consultar meta de percentual
+  // de gordura dentro do módulo com este spec verde.
+  'goal',
+  'goals',
+  'bodyFat',
   'waterLog',
   'stepLog',
   'avgHeartRate',
@@ -65,6 +76,27 @@ describe('insights/ não toca dado corporal nem alimentar', () => {
     // E não casa com o que é legítimo no módulo.
     expect(PADRAO.test('muscleGroup')).toBe(false);
     expect(PADRAO.test('workoutSession')).toBe(false);
+  });
+
+  it.each([
+    // As duas consultas que a revisão escreveu no módulo com este spec verde.
+    ["this.prisma.goal.findMany({ where: { kind: 'body_fat' } })", 'goal'],
+    ['this.prisma.foodGroup.findMany({ select: { id: true } })', 'foodGroup'],
+    // E as vizinhas óbvias da mesma família.
+    ['select: { targetValue: true, bodyFat: true }', 'bodyFat'],
+    ['select: { weightKg: true }', 'weightKg'],
+  ])('o detector pega %s', (linha) => {
+    // Cada uma destas passava. `\b(food)\b` não casa com `foodGroup`, e `goal`
+    // simplesmente não estava na lista — a promessa "nunca meta corporal" da
+    // política §6 e do vetor 9 do THREAT_MODEL dependia de ninguém tentar.
+    expect(PADRAO.test(linha)).toBe(true);
+  });
+
+  it('não reprova o que é legítimo e parece', () => {
+    // Lista que só cresce também erra crescendo demais: um falso positivo aqui
+    // vira "remova o identificador certo" e o spec é desligado.
+    expect(PADRAO.test('const objetivo = plan.goalless;')).toBe(false);
+    expect(PADRAO.test('foodie')).toBe(false);
   });
 
   it.each(arquivos)('%s', (arquivo) => {

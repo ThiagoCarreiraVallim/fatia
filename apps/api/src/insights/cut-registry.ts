@@ -84,12 +84,20 @@ export function cutsOf(panel: Panel): CutName[] {
  * arbitrária é o que permite estreitar até sobrar a semana em que uma pessoa só
  * treinou, e comparar duas janelas quase iguais para isolar quem entrou entre
  * elas. Três janelas fixas custam utilidade e fecham a porta.
+ *
+ * As três terminam em `now` e diferem só onde **começam**. Não é detalhe de
+ * implementação: é o que faz o vizinho à direita de um balde ser o mesmo balde
+ * nas três janelas, e é disso que a supressão complementar depende para não
+ * publicar numa consulta o que escondeu na outra (ver `aggregation.service.ts`).
+ *
+ * `last_12_months` conta **meses de calendário**, não 365 dias. O nome diz meses;
+ * 365 dias erra um dia em ano bissexto e nunca é o mesmo dia do mês.
  */
 export const PERIODS = {
-  last_30_days: 30,
-  last_90_days: 90,
-  last_12_months: 365,
-} as const;
+  last_30_days: { unidade: 'dias', quantidade: 30 },
+  last_90_days: { unidade: 'dias', quantidade: 90 },
+  last_12_months: { unidade: 'meses', quantidade: 12 },
+} as const satisfies Record<string, { unidade: 'dias' | 'meses'; quantidade: number }>;
 
 export type PeriodName = keyof typeof PERIODS;
 
@@ -97,5 +105,22 @@ export const PERIOD_NAMES = Object.keys(PERIODS) as PeriodName[];
 
 /** Instante inicial da janela, contado para trás a partir de `now`. */
 export function periodStart(period: PeriodName, now: Date): Date {
-  return new Date(now.getTime() - PERIODS[period] * 86_400_000);
+  const spec = PERIODS[period];
+  if (spec.unidade === 'dias') return new Date(now.getTime() - spec.quantidade * 86_400_000);
+
+  const inicio = new Date(now.getTime());
+  inicio.setUTCMonth(inicio.getUTCMonth() - spec.quantidade);
+  return inicio;
+}
+
+/**
+ * Largura da janela em dias inteiros.
+ *
+ * Existe porque os recortes que não são série temporal — recência e risco de
+ * evasão — precisam da largura para **honrar** o período em vez de carimbá-lo na
+ * resposta e ignorá-lo. Depende de `now` justamente porque o mês de calendário
+ * não tem largura fixa.
+ */
+export function periodDays(period: PeriodName, now: Date): number {
+  return Math.round((now.getTime() - periodStart(period, now).getTime()) / 86_400_000);
 }

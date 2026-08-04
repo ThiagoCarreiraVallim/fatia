@@ -31,14 +31,25 @@ export class RetentionService {
   /** Faixas de risco, fechadas e nomeadas. */
   static readonly RISK_BANDS = ['baixo', 'médio', 'alto'] as const;
 
-  /** Janela de comparação da queda de frequência: 4 semanas contra as 4 anteriores. */
-  private static readonly JANELA_MS = 28 * 86_400_000;
+  /**
+   * O sinal é calculado **dentro da janela pedida**: a queda de frequência
+   * compara a metade recente com a metade anterior dela.
+   *
+   * A versão anterior usava 28 dias contra 28 dias, fixos, para qualquer período
+   * — e então `last_30_days` e `last_12_months` devolviam a mesma célula com o
+   * carimbo de períodos diferentes. Ou o recorte honra a janela, ou o período não
+   * devia entrar na resposta dele.
+   */
+  async membersByChurnRisk(
+    participants: readonly Participant[],
+    janelaDias: number,
+    now: Date,
+  ): Promise<Cell[]> {
+    const metadeMs = (janelaDias / 2) * 86_400_000;
+    const inicioRecente = new Date(now.getTime() - metadeMs);
+    const inicioAnterior = new Date(now.getTime() - 2 * metadeMs);
 
-  async membersByChurnRisk(participants: readonly Participant[], now: Date): Promise<Cell[]> {
-    const ultimoTreino = await this.engagement.lastSessionByUser(participants);
-
-    const inicioRecente = new Date(now.getTime() - RetentionService.JANELA_MS);
-    const inicioAnterior = new Date(now.getTime() - 2 * RetentionService.JANELA_MS);
+    const ultimoTreino = await this.engagement.lastSessionByUser(participants, inicioAnterior);
 
     const recentes = await this.engagement.sessionCountsBetween(participants, inicioRecente, now);
     const anteriores = await this.engagement.sessionCountsBetween(
@@ -55,6 +66,7 @@ export class RetentionService {
         diasSemTreinar: sessao === undefined ? Infinity : daysBetween(sessao, now),
         recentes: recentes.get(participante.userId) ?? 0,
         anteriores: anteriores.get(participante.userId) ?? 0,
+        janelaDias,
       });
       porFaixa.set(faixa, (porFaixa.get(faixa) ?? 0) + 1);
     }
@@ -72,20 +84,33 @@ export class RetentionService {
  * Ausência longa é o sinal forte; queda de frequência é o sinal antecedente —
  * quem treinava três vezes por semana e passou a treinar uma ainda "veio essa
  * semana", e o critério de ausência sozinho o classificaria como tranquilo.
+ *
+ * Os cortes são **proporcionais à janela**, e não dias absolutos: "sumido" numa
+ * janela de 30 dias não é "sumido" numa de um ano. `janelaDias = 30` reproduz
+ * exatamente os números que estavam escritos à mão aqui antes — 21, 10 e 7 dias,
+ * e base mínima de 4 sessões —, que é como se lê que a generalização não mudou o
+ * sinal, só passou a admitir as outras duas janelas.
  */
 export function riskBand(input: {
   diasSemTreinar: number;
   recentes: number;
   anteriores: number;
+  janelaDias?: number;
 }): 'baixo' | 'médio' | 'alto' {
-  const { diasSemTreinar, recentes, anteriores } = input;
+  const { diasSemTreinar, recentes, anteriores, janelaDias = 30 } = input;
+
+  const ausenciaLonga = 0.7 * janelaDias; // 21 dias em 30
+  const ausenciaMedia = (7 / 30) * janelaDias; // 7 dias em 30
+  const ausenciaComQueda = janelaDias / 3; // 10 dias em 30
+  // ~2 sessões por semana na metade anterior da janela: 4 sessões em 30 dias.
+  const baseMinima = Math.max(2, Math.round(janelaDias / 7));
 
   // Queda só é queda se havia de onde cair: sem base anterior, uma frequência
   // baixa é alguém que acabou de chegar, não alguém que está indo embora.
-  const caiuPelaMetade = anteriores >= 4 && recentes * 2 <= anteriores;
+  const caiuPelaMetade = anteriores >= baseMinima && recentes * 2 <= anteriores;
 
-  if (diasSemTreinar > 21) return 'alto';
-  if (caiuPelaMetade && diasSemTreinar > 10) return 'alto';
-  if (diasSemTreinar > 7 || caiuPelaMetade) return 'médio';
+  if (diasSemTreinar > ausenciaLonga) return 'alto';
+  if (caiuPelaMetade && diasSemTreinar > ausenciaComQueda) return 'alto';
+  if (diasSemTreinar > ausenciaMedia || caiuPelaMetade) return 'médio';
   return 'baixo';
 }

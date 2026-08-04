@@ -59,22 +59,56 @@ function montar(prisma: MockPrisma, lista: Participant[]): InsightsService {
 }
 
 describe('InsightsService — consentimento', () => {
-  it('só consulta os userIds de quem deu opt-in — nem o denominador tem os outros', () => {
+  it('só consulta os userIds de quem deu opt-in — nem o denominador tem os outros', async () => {
     const prisma = makePrisma();
     const consentidos = [1, 2, 3, 4, 5, 6].map(participante);
+    // Estes dois são membros do grupo e **recusaram**. Eles existem na fixture:
+    // a asserção anterior procurava `aluno-99`, que não existia em lugar nenhum
+    // do teste, e portanto não podia falhar nunca.
+    const recusaram = [7, 8].map(participante);
     const service = montar(prisma, consentidos);
 
-    return service
-      .aggregate('grupo-1', 'retention', 'sessions_by_hour_band', 'last_30_days', AGORA)
-      .then(() => {
-        const where = prisma.workoutSession.findMany.mock.calls[0][0].where;
-        expect(where.userId.in).toEqual(consentidos.map((p) => p.userId));
+    await service.aggregate('grupo-1', 'retention', 'sessions_by_hour_band', 'last_30_days', AGORA);
 
-        // O aluno que recusou não está em lugar nenhum da consulta. Numerador
-        // consentido sobre denominador cheio vazaria informação exatamente sobre
-        // quem recusou — quantos são e como se comportam por diferença.
-        expect(JSON.stringify(prisma.workoutSession.findMany.mock.calls)).not.toContain('aluno-99');
-      });
+    const where = prisma.workoutSession.findMany.mock.calls[0][0].where;
+    expect(where.userId.in).toEqual(consentidos.map((p) => p.userId));
+
+    const consultado = JSON.stringify(prisma.workoutSession.findMany.mock.calls);
+    for (const quemRecusou of recusaram) {
+      expect([quemRecusou.userId, consultado.includes(quemRecusou.userId)]).toEqual([
+        quemRecusou.userId,
+        false,
+      ]);
+    }
+  });
+
+  it('quem recusou não entra nem no denominador do recorte', async () => {
+    // O caso que a asserção vazia deixava sem cobertura de verdade: não basta o
+    // id não aparecer na consulta, a **contagem** não pode contá-lo. Numerador
+    // consentido sobre denominador cheio informa sobre quem recusou — quantos
+    // são e como se comportam, por diferença.
+    const prisma = makePrisma();
+    const consentidos = [1, 2, 3, 4, 5, 6].map(participante);
+    prisma.workoutSession.groupBy.mockResolvedValue(
+      // O banco devolve gente demais de propósito: dois que recusaram vêm junto.
+      [...consentidos, ...[7, 8].map(participante)].map((p) => ({
+        userId: p.userId,
+        _max: { startedAt: new Date('2026-08-02T10:00:00Z') },
+        _count: { _all: 4 },
+      })),
+    );
+
+    const resposta = await montar(prisma, consentidos).aggregate(
+      'grupo-1',
+      'retention',
+      'members_by_recency',
+      'last_30_days',
+      AGORA,
+    );
+
+    // `members_by_recency` conta pessoas: a soma dos `n` é o denominador inteiro.
+    const denominador = resposta.cells.reduce((soma, cell) => soma + (cell.n ?? 0), 0);
+    expect(denominador).toBe(consentidos.length);
   });
 
   it('grupo com menos participantes que o limiar não chega a consultar o banco', async () => {

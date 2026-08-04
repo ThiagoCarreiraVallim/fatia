@@ -87,7 +87,47 @@ describe('InsightsExportService', () => {
 
     expect(csv).toContain(`"'=HYPERLINK(""http://x"",""clique"")"`);
     expect(csv).toContain('"peito, costas"');
-    // A vírgula do rótulo não pode virar coluna nova.
-    expect(csv.split('\n')[2].split('","').length).toBeGreaterThan(0);
+
+    // A vírgula do rótulo não pode virar coluna nova. A asserção que estava aqui
+    // — `split('","').length).toBeGreaterThan(0)` — era verdadeira para qualquer
+    // string: `String.prototype.split` nunca devolve array vazio. Ela passava
+    // inclusive para o CSV quebrado que o comentário dizia estar testando.
+    const linhas = csv.trimEnd().split('\n');
+    expect(camposDe(linhas[0])).toHaveLength(5);
+    for (const linha of linhas) {
+      expect([linha, camposDe(linha).length]).toEqual([linha, 5]);
+    }
+    expect(camposDe(linhas[2])[2]).toBe('peito, costas');
   });
 });
+
+/**
+ * Campos de uma linha de CSV, respeitando aspas — o parser que o Excel usa.
+ *
+ * Escrito à mão, e curto, porque é ele que decide se o rótulo com vírgula virou
+ * uma coluna a mais. Um `split(',')` aqui teria o mesmo defeito do código sob
+ * teste e concordaria com ele.
+ */
+function camposDe(linha: string): string[] {
+  const campos: string[] = [];
+  let atual = '';
+  let dentroDeAspas = false;
+
+  for (let i = 0; i < linha.length; i++) {
+    const c = linha[i];
+    if (dentroDeAspas && c === '"' && linha[i + 1] === '"') {
+      atual += '"';
+      i++;
+    } else if (c === '"') {
+      dentroDeAspas = !dentroDeAspas;
+    } else if (c === ',' && !dentroDeAspas) {
+      campos.push(atual);
+      atual = '';
+    } else {
+      atual += c;
+    }
+  }
+
+  campos.push(atual);
+  return campos;
+}

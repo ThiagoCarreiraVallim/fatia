@@ -109,17 +109,34 @@ describe('suppress — supressão complementar (o vazamento por diferença)', ()
     expect(JSON.stringify(cells)).not.toContain('11');
   });
 
-  it('o complemento é a MENOR célula visível com gente', () => {
+  it('o complemento é o VIZINHO no eixo, não a menor célula visível', () => {
     const { cells } = suppress(RECORTE);
 
     const porChave = new Map(cells.map((cell) => [cell.key, cell]));
     expect(porChave.get('tarde')?.suppressed).toBe(true);
-    // 18 < 20: `noite` cai junto, `manhã` sobrevive e o painel ainda informa.
+    // `tarde` é a última do eixo, então o bloco cresce para a esquerda e leva
+    // `noite`. `manhã` sobrevive e o painel ainda informa.
     expect(porChave.get('noite')?.suppressed).toBe(true);
     expect(porChave.get('manhã')?.suppressed).toBe(false);
   });
 
-  it('para quando já há duas suprimidas — não devora o recorte inteiro', () => {
+  it('o bloco cresce para a DIREITA quando há eixo à direita', () => {
+    // A direção não é gosto: é o que torna o complemento independente da janela
+    // consultada (as três janelas terminam no mesmo instante). Aqui a menor
+    // célula visível é `c` (n = 6), e é `b` que cai — porque `b` é o vizinho.
+    const { cells } = suppress([
+      { key: 'a', n: 3, value: 9 },
+      { key: 'b', n: 40, value: 400 },
+      { key: 'c', n: 6, value: 30 },
+    ]);
+
+    const porChave = new Map(cells.map((cell) => [cell.key, cell]));
+    expect(porChave.get('a')?.suppressed).toBe(true);
+    expect(porChave.get('b')?.suppressed).toBe(true);
+    expect(porChave.get('c')?.suppressed).toBe(false);
+  });
+
+  it('para quando o bloco fica seguro — não devora o recorte inteiro', () => {
     const { cells } = suppress([
       { key: 'a', n: 20, value: 200 },
       { key: 'b', n: 3, value: 7 },
@@ -127,6 +144,36 @@ describe('suppress — supressão complementar (o vazamento por diferença)', ()
     ]);
 
     expect(cells.filter((cell) => cell.suppressed).map((cell) => cell.key)).toEqual(['b', 'c']);
+  });
+
+  it('duas células pequenas que se bastam NÃO se bastam — 1 + 1 devolve as duas', () => {
+    // O furo que a revisão exibiu. Com a regra antiga ("complementa só quando
+    // sobra exatamente uma oculta"), estas duas caíam sozinhas e o resíduo do
+    // total valia 2, sobre duas parcelas de no mínimo 1 cada: cada uma vale 1, e
+    // `n <= value` com `n >= 1` fecha em `n = 1`. Duas pessoas publicadas por
+    // subtração, cada uma sozinha na sua célula.
+    //
+    // O total (182) não sai deste recorte: sai de `sessions_by_week`, que
+    // particiona exatamente as mesmas sessões.
+    const TOTAL = 182;
+    const { cells } = suppress([
+      { key: 'madrugada', n: 1, value: 1 },
+      { key: 'manhã', n: 1, value: 1 },
+      { key: 'tarde', n: 20, value: 100 },
+      { key: 'noite', n: 15, value: 80 },
+    ]);
+
+    const ocultas = cells.filter((cell) => cell.suppressed);
+    const visiveis = cells.filter((cell) => !cell.suppressed);
+
+    // O bloco cresceu para a direita até esconder gente de verdade.
+    expect(ocultas.map((cell) => cell.key)).toEqual(['madrugada', 'manhã', 'tarde']);
+
+    const residuo = TOTAL - visiveis.reduce((soma, cell) => soma + (cell.value ?? 0), 0);
+    expect(residuo).toBe(102);
+    // Três incógnitas, e a folga do intervalo é larga: cada parcela pode valer
+    // de 1 a 100. O valor `1` não é mais uma resposta, é um palpite.
+    expect(residuo - ocultas.length).toBeGreaterThanOrEqual(MIN_CELL);
   });
 
   it('não usa balde vazio como complemento — seria teatro', () => {
@@ -179,9 +226,12 @@ describe('suppress — supressão complementar (o vazamento por diferença)', ()
     const segunda = suppress(empate).cells.map((cell) => cell.suppressed);
 
     expect(primeira).toEqual(segunda);
-    // Desempate pela chave: `a` cai, `b` fica. Sem regra estável, uma chamada
-    // esconderia `a` e a outra `b`, e quem fizesse as duas veria as duas.
+    // `c` é a última do eixo; o bloco cresce para a esquerda e leva `a`, que é a
+    // vizinha — o empate de `n` entre `a` e `b` nem chega a ser consultado.
+    // Sem regra estável, uma chamada esconderia uma e a outra chamada a outra, e
+    // quem fizesse as duas veria as duas.
     expect(suppress(empate).cells.find((cell) => cell.key === 'a')?.suppressed).toBe(true);
+    expect(suppress(empate).cells.find((cell) => cell.key === 'b')?.suppressed).toBe(false);
   });
 });
 
@@ -235,8 +285,29 @@ describe('suppress — propriedade sobre distribuições aleatórias', () => {
         comVisivelEOculta++;
         const residuo = total - visiveis.reduce((soma, cell) => soma + (cell.value ?? 0), 0);
         const originaisOcultas = cells.filter((_, i) => saida[i].suppressed);
-        for (const original of originaisOcultas) {
-          expect(residuo).not.toBe(original.value);
+        const comGente = originaisOcultas.filter((cell) => cell.n > 0);
+
+        // A asserção que estava aqui — `expect(residuo).not.toBe(original.value)`
+        // — era **inatingível por construção** quando havia duas ocultas: o
+        // resíduo é a soma delas e o gerador garante `value >= 1` em toda célula
+        // com gente, então a soma nunca é igual a uma parcela. Mil distribuições
+        // e zero poder de detecção justamente na classe que estava quebrada.
+        //
+        // O que precisa ser verdade é mais forte: o resíduo tem de admitir
+        // **mais de uma** decomposição para cada célula oculta. Com `k` parcelas
+        // de no mínimo 1, o valor de cada uma vai de 1 a `residuo - (k - 1)`;
+        // largura zero significa que todas valem 1 e estão publicadas.
+        expect(comGente.length).not.toBe(1);
+        expect(residuo - comGente.length).toBeGreaterThanOrEqual(MIN_CELL);
+
+        // E o teste direto do ataque: nenhuma célula oculta pode ser o único
+        // valor possível para a posição dela.
+        for (const original of comGente) {
+          const menorPossivel = 1;
+          const maiorPossivel = residuo - (comGente.length - 1);
+          expect(maiorPossivel).toBeGreaterThan(menorPossivel);
+          expect(original.value).toBeGreaterThanOrEqual(menorPossivel);
+          expect(original.value).toBeLessThanOrEqual(maiorPossivel);
         }
       }
     }
@@ -246,5 +317,104 @@ describe('suppress — propriedade sobre distribuições aleatórias', () => {
     // apodreceu neste repositório antes.
     expect(comOculta).toBeGreaterThan(500);
     expect(comVisivelEOculta).toBeGreaterThan(300);
+  });
+});
+
+/**
+ * O bloqueio central da revisão: a supressão tem de ser a **mesma** nas três
+ * janelas.
+ *
+ * Os períodos nomeados são encaixados — `last_90_days` ⊂ `last_12_months` — e o
+ * balde de um recorte de tempo é o mesmo objeto nos dois: a semana só contém as
+ * sessões daquela semana. Com o complemento escolhido como "a menor célula
+ * visível **desta consulta**", ele mudava de janela para janela, e a segunda
+ * requisição publicava exatamente o balde que a primeira havia escondido.
+ * Restava uma incógnita só, e o total vinha de um recorte irmão sobre a mesma
+ * população (`sessions_by_hour_band` particiona as mesmas sessões que
+ * `sessions_by_week`).
+ *
+ * O ataque inteiro cabia em três GETs do painel **gratuito**, sem construtor de
+ * filtro nenhum.
+ */
+describe('suppress — a mesma célula oculta nas três janelas encaixadas', () => {
+  /** Uma série semanal; a janela curta é o sufixo da longa (as duas terminam hoje). */
+  function serie(semanas: number, semente: number): Cell[] {
+    let estado = semente;
+    const proximo = () => {
+      estado = (estado * 1_664_525 + 1_013_904_223) % 4_294_967_296;
+      return estado / 4_294_967_296;
+    };
+
+    return Array.from({ length: semanas }, (_, i) => {
+      const n = Math.floor(proximo() * 14);
+      return { key: `s${String(i).padStart(2, '0')}`, n, value: n === 0 ? 0 : n + 5 };
+    });
+  }
+
+  const ocultasDe = (cells: Cell[]) =>
+    new Set(
+      suppress(cells)
+        .cells.filter((cell) => cell.suppressed)
+        .map((cell) => cell.key),
+    );
+
+  it('o caso concreto da revisão: o balde escondido em 90 dias não sai em 12 meses', () => {
+    // `sessions_by_week`. A janela longa vê 52 semanas; a curta vê as 13 últimas.
+    // `s51` (a semana de 3 pessoas) é o alvo, e `s50` era o complemento na janela
+    // curta — publicado na longa porque lá havia semana menor para escolher.
+    const longa: Cell[] = [
+      ...Array.from({ length: 39 }, (_, i) => ({
+        key: `o${String(i).padStart(2, '0')}`,
+        n: i === 20 ? 2 : 30,
+        value: i === 20 ? 4 : 120,
+      })),
+      ...Array.from({ length: 11 }, (_, i) => ({
+        key: `s${String(i + 39).padStart(2, '0')}`,
+        n: 25,
+        value: 100,
+      })),
+      { key: 's50', n: 8, value: 25 },
+      { key: 's51', n: 3, value: 11 },
+    ];
+    const curta = longa.slice(39);
+
+    const ocultasCurta = ocultasDe(curta);
+    const ocultasLonga = ocultasDe(longa);
+
+    expect(ocultasCurta.has('s51')).toBe(true);
+    // O complemento da janela curta. Se ele sair publicado na janela longa, o
+    // resíduo da curta fica com uma incógnita só e `s51` volta inteiro.
+    expect(ocultasCurta.has('s50')).toBe(true);
+    expect(ocultasLonga.has('s50')).toBe(true);
+    expect(ocultasLonga.has('s51')).toBe(true);
+  });
+
+  it('em 300 séries, nada oculto na janela curta é publicado na janela longa', () => {
+    let comOcultaNaCurta = 0;
+
+    for (let rodada = 0; rodada < 300; rodada++) {
+      const longa = serie(52, 20260804 + rodada);
+      const curta = longa.slice(39); // mesmas 13 últimas semanas, mesmos valores
+
+      const resultadoCurta = suppress(curta);
+      // Janela curta que suprime tudo não publica nada, e o que não é publicado
+      // não entra em subtração nenhuma. É o modo de falha seguro, não o vazamento.
+      if (resultadoCurta.cells.every((cell) => cell.suppressed)) continue;
+
+      const publicadaNaLonga = new Set(
+        suppress(longa)
+          .cells.filter((cell) => !cell.suppressed)
+          .map((cell) => cell.key),
+      );
+      const ocultasCurta = ocultasDe(curta);
+      if (ocultasCurta.size > 0) comOcultaNaCurta++;
+
+      for (const chave of ocultasCurta) {
+        // A janela longa não pode desfazer a supressão da curta.
+        expect([rodada, chave, publicadaNaLonga.has(chave)]).toEqual([rodada, chave, false]);
+      }
+    }
+
+    expect(comOcultaNaCurta).toBeGreaterThan(150);
   });
 });

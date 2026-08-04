@@ -29,8 +29,9 @@ O limiar é **constante no código**, não configurável por grupo. Um `k` que a
 
 ### 2. Supressão complementar — a regra que existe por causa da subtração
 
-Se sobrar **exatamente uma** célula suprimida, a menor célula visível com gente também é
-suprimida. Uma célula oculta sozinha não está oculta.
+Célula suprimida pelo limiar é uma **semente**. Cada semente absorve vizinhos no eixo até o
+**bloco** oculto ficar seguro; o que a resposta esconde é a união dos blocos. Uma célula oculta
+sozinha não está oculta.
 
 Com números, que é como isto se entende:
 
@@ -45,12 +46,35 @@ devolve exatamente o número que o limiar recusou, sobre um recorte de três pes
 supressão complementar, `noite` cai junto: o resíduo passa a ser 107, a soma de **duas**
 incógnitas, e não a segunda parcela de uma subtração.
 
-O complemento precisa ter `n > 0`. Suprimir o balde vazio ao lado do balde pequeno é teatro: zero
-é um valor conhecido, e a subtração continua funcionando com uma incógnita só.
+**Um bloco é seguro quando as três valem:**
 
-Quando não existe complemento elegível — recorte de uma célula só, ou de uma célula pequena
-cercada de baldes vazios — o recorte inteiro é suprimido. A resposta é **"amostra insuficiente"**,
-nunca `0`: dizer zero é uma afirmação sobre as pessoas, e é falsa.
+1. tem pelo menos **duas** células com gente — uma incógnita só é uma equação resolvida;
+2. a soma dos `n` ocultos é **≥ `MIN_CELL`** — o bloco esconde pelo menos tanta gente quanto uma
+   célula que teríamos publicado;
+3. a soma dos valores ocultos, menos o número de células do bloco, é **≥ `MIN_CELL`** — é a
+   largura do intervalo em que cada parcela pode estar. Largura zero significa que todas valem 1
+   e o bloco inteiro está publicado por dedução.
+
+A condição 3 é a que faltava. Duas células naturalmente pequenas, de uma pessoa cada, satisfaziam
+"não fica exatamente uma oculta" e mesmo assim voltavam inteiras: resíduo 2, duas parcelas de no
+mínimo 1, cada uma vale 1.
+
+**O complemento é o vizinho no eixo, e cresce para a direita** — em direção ao presente —, só
+indo para a esquerda quando o bloco já encosta na borda direita. Não é gosto: as três janelas
+terminam todas em `now` e diferem só onde começam, então o vizinho da direita é o mesmo balde nas
+três. Escolher "a menor célula visível **desta consulta**", como esta política dizia antes, fazia
+o complemento mudar de janela para janela — e a segunda consulta publicava o balde que a primeira
+tinha escondido, deixando uma incógnita só. Ver §9.
+
+O complemento precisa ter `n > 0`. Suprimir o balde vazio ao lado do balde pequeno é teatro: zero
+é um valor conhecido, e a subtração continua funcionando com uma incógnita só. Balde vazio é
+transparente: não entra no bloco e não muda resíduo nenhum.
+
+Quando o bloco não consegue ficar seguro — recorte de uma célula só, ou eixo curto demais — o
+recorte inteiro é suprimido. A resposta é **"amostra insuficiente"**, nunca `0`: dizer zero é uma
+afirmação sobre as pessoas, e é falsa. É também o que acontece na janela curta quando o bloco
+precisaria crescer para além do começo dela: ela não publica nada, e o que não é publicado não
+entra em subtração nenhuma.
 
 ### 3. O total não é publicado
 
@@ -71,6 +95,14 @@ supressão fraca é só o sintoma.
 O período também é nomeado (`last_30_days`, `last_90_days`, `last_12_months`). Um `from`/`to`
 livre é um construtor de filtro com outro nome: permite estreitar até sobrar a semana em que uma
 pessoa só treinou, e comparar duas janelas quase iguais para isolar quem entrou entre elas.
+
+**Todo recorte honra a janela.** Três deles não honravam — recência, risco de evasão e coorte
+liam janelas fixas — e mesmo assim a resposta e a coluna `periodo` do CSV carimbavam o período
+pedido: `last_30_days` e `last_12_months` devolviam células idênticas com rótulos diferentes. Um
+período que a resposta declara e o recorte ignora é uma afirmação falsa sobre o número, e o painel
+que compara os dois carimbos conclui coisas sobre a diferença entre eles.
+
+`last_12_months` são **doze meses de calendário**, não 365 dias.
 
 ### 5. Nenhum atributo demográfico
 
@@ -113,6 +145,40 @@ Entregar a lista de alunos em risco ao dono é o que todo software de gestão de
 que o dono vai pedir, e é a promessa do produto sendo quebrada. Se um dia virar requisito, é
 vínculo consentido com escopo escolhido pelo aluno — e aí o alerta deixa de ser agregado.
 
+### 9. A supressão é a mesma nas três janelas
+
+Os períodos são **encaixados**: `last_30_days` ⊂ `last_90_days` ⊂ `last_12_months`. E o balde de
+um recorte de tempo é o mesmo objeto nas três — a semana só contém as sessões daquela semana.
+
+Logo a decisão de suprimir um balde **não pode depender da consulta**. Se depender, duas
+requisições ao painel bastam: a janela longa publica o balde que a janela curta escondeu, o
+resíduo da curta fica com uma incógnita só, e o número volta inteiro. O total nem precisa ser
+publicado — ele sai de um recorte irmão sobre a mesma população, porque `sessions_by_week` e
+`sessions_by_hour_band` particionam exatamente as mesmas sessões.
+
+A regra que garante isso: **o bloco de uma semente é função da semente e do que está à direita
+dela**, e de mais nada. Por isso o crescimento é para a direita, por isso os blocos são por
+semente (e não por vizinhança — semente nova à esquerda, que só a janela longa enxerga, não pode
+mudar bloco nenhum), e por isso `last_12_months` conta meses de calendário a partir de `now`.
+
+`aggregation.service.spec.ts` transforma isto em teste: em 300 séries de 52 semanas, nada que a
+janela de 13 semanas ocultou aparece publicado na janela de 52.
+
+### 10. Toda chave de célula vem de lista fechada
+
+O limiar decide sobre `value` e `n`. Ele **não alcança a chave**: uma célula suprimida sai com
+`value: null`, `n: null`, `suppressed: true` — e o rótulo intacto, na resposta e no CSV.
+
+Num eixo de tempo isso é inofensivo. Num eixo de texto livre é a divulgação inteira: o eixo do
+`modality_mix` é `Exercise.muscleGroup`, que aceita 50 caracteres de letras, espaços e hífens, e
+exercício custom é criado pelo próprio aluno. Uma célula de **uma** pessoa entregava ao dono da
+academia a frase que ela digitou, e a existência da célula já era o vazamento — além de dar ao
+aluno o controle da cardinalidade do eixo, uma célula unitária por texto distinto.
+
+Grupo muscular fora da lista canônica vira `outros`. Não é sanitização de texto (o escape de
+fórmula no CSV continua existindo, por outro motivo): é a regra §4 aplicada ao único eixo que a
+violava.
+
 ## Os recortes, lista fechada
 
 | Recorte                   | Eixo           | Métrica         | Painéis             |
@@ -135,14 +201,25 @@ anonimização no mesmo produto — e uma delas estaria errada sem ninguém sabe
 No espírito da seção homônima do [`THREAT_MODEL.md`](./THREAT_MODEL.md): supressão com limiar não
 é privacidade diferencial, e fingir o contrário seria pior que não ter nada.
 
-- **Diferencial entre períodos.** Comparar a mesma célula em duas janelas consecutivas em que
-  entrou exatamente uma pessoa revela essa pessoa. É a limitação honesta da supressão sem
-  orçamento de privacidade. Mitigação parcial: os períodos são três, fixos e sobrepostos, o que
-  reduz — não elimina — as diferenças úteis.
-- **O intervalo do valor oculto.** O complemento é a _menor_ célula visível, para minimizar a
-  perda de informação. Isso estreita a faixa em que o valor oculto pode estar; não o revela, que é
-  o que o limiar promete. Suprimir a maior protegeria mais e custaria justamente o número que dá
-  utilidade ao recorte.
+- **Diferencial entre períodos.** Comparar a mesma célula em duas janelas em que entrou
+  exatamente uma pessoa revela essa pessoa. É a limitação honesta da supressão sem orçamento de
+  privacidade.
+
+  A versão anterior deste documento dizia aqui que "os períodos são três, fixos e **sobrepostos**,
+  o que reduz as diferenças úteis". Estava **invertido**: a sobreposição é o que fazia o ataque
+  funcionar, porque o complemento era escolhido dentro da consulta e mudava de uma janela para a
+  outra. O §9 fecha essa porta — a supressão passou a ser a mesma nas três janelas. O que sobra
+  aqui é o diferencial genuíno: dois valores visíveis de janelas diferentes ainda contam quem
+  entrou entre elas.
+
+- **O intervalo do valor oculto.** O bloco garante que o resíduo admita pelo menos `MIN_CELL`
+  valores diferentes para cada parcela; ele não torna o intervalo infinito. Quem conhece o total
+  sabe a faixa em que o valor oculto está — não o valor, que é o que o limiar promete.
+
+  O complemento **era** a menor célula visível, para minimizar a perda de informação; hoje é o
+  vizinho no eixo, porque só o vizinho é o mesmo nas três janelas. Custa mais utilidade: às vezes
+  cai junto uma célula grande, que era justamente a que dava valor ao recorte.
+
 - **Conhecimento externo.** O dono conhece a academia dele. Nenhuma regra estatística impede que
   ele olhe um número agregado e se lembre de quem faltou. O que este documento garante é que o
   **sistema** não conta.

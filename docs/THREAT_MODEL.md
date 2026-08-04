@@ -236,23 +236,27 @@ A definição completa, com o limiar, a regra complementar e a lista fechada de 
 [`AGGREGATION_POLICY.md`](./AGGREGATION_POLICY.md) — publicada de propósito, porque uma promessa
 de anonimização que não pode ser conferida não vale nada.
 
-| Vetor                                                            | Mitigação                                                                                                                                     |
-| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Recorte estreito até sobrar uma pessoa ("alunas, 30-35, manhã")  | Não existe construtor de filtro: a API recebe o **nome** de um recorte registrado, um eixo por consulta, sem atributo demográfico             |
-| Célula suprimida recalculada pelo total menos as visíveis        | Supressão **complementar**: nunca fica exatamente uma célula oculta; e o total não é publicado                                                |
-| Balde vazio usado como complemento                               | O complemento exige `n > 0` — zero é valor conhecido, e a subtração continuaria com uma incógnita só                                          |
-| Janela de datas estreitada até isolar uma sessão                 | Período também é nomeado (`last_30_days`, `last_90_days`, `last_12_months`). `from`/`to` livre é construtor de filtro com outro nome          |
-| Dado de saúde entrando no agregado ("quem parou de perder peso") | Só engajamento é métrica ou eixo. `no-body-data.spec.ts` varre `insights/` e reprova `weightLog`, `meal`, `nutrientTarget` e cia.             |
-| Quem não consentiu contado no denominador                        | O denominador é só de quem deu opt-in (`GroupMembership.statsOptIn`). Numerador consentido sobre denominador cheio informa sobre quem recusou |
-| Supressão aplicada só na UI                                      | `suppress()` roda no servidor e o campo sai `null` — inclusive o `n`. Teste serializa a resposta e procura o número                           |
-| Export do painel ignorando a supressão da tela                   | O export recebe as **mesmas células já suprimidas** e não tem `PrismaService` no construtor: não há como fazer a segunda consulta             |
-| Segundo caminho de agregação nascendo no painel pago             | `single-aggregation-path.spec.ts`: um único arquivo importa `suppress`, um único arquivo define o limiar, todo recorte vem do catálogo        |
-| Add-on pago conferido só na tela                                 | `InsightsAddonGuard` na rota, respondendo `NOT_FOUND` (não `402`) para grupo sem o add-on                                                     |
-| Lista de "alunos em risco" chegando ao dono                      | O sinal é contagem por faixa. Não existe estrutura com id de pessoa saindo do módulo — não é escondida, não existe                            |
+| Vetor                                                            | Mitigação                                                                                                                                                                                             |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Recorte estreito até sobrar uma pessoa ("alunas, 30-35, manhã")  | Não existe construtor de filtro: a API recebe o **nome** de um recorte registrado, um eixo por consulta, sem atributo demográfico                                                                     |
+| Célula suprimida recalculada pelo total menos as visíveis        | Supressão **complementar** por bloco: ≥ 2 células ocultas, `n` somado ≥ `MIN_CELL` e folga de valor ≥ `MIN_CELL`; e o total não é publicado                                                           |
+| Duas células pequenas que "se bastam" (resíduo 2, 1 + 1)         | É a folga de valor da linha acima. Sem ela, cada parcela valia 1 e as duas voltavam exatas — o bloqueio que a revisão da PR #240 exibiu                                                               |
+| Mesma célula publicada por outra janela do mesmo catálogo        | O bloco cresce para a **direita** e é montado por semente: ele é função da semente e do que está à direita dela, e as três janelas terminam em `now`. Oculto na janela curta continua oculto na longa |
+| Balde vazio usado como complemento                               | O complemento exige `n > 0` — zero é valor conhecido, e a subtração continuaria com uma incógnita só                                                                                                  |
+| Janela de datas estreitada até isolar uma sessão                 | Período também é nomeado (`last_30_days`, `last_90_days`, `last_12_months`). `from`/`to` livre é construtor de filtro com outro nome                                                                  |
+| Chave da célula suprimida carregando texto do aluno              | O limiar zera `value` e `n`, **não** a chave. Todo eixo é lista fechada: `muscleGroup` fora da lista canônica vira `outros`                                                                           |
+| Dado de saúde entrando no agregado ("quem parou de perder peso") | Só engajamento é métrica ou eixo. `no-body-data.spec.ts` varre `insights/` e reprova `weightLog`, `meal`, `goal`, `foodGroup`, `bodyFat` e cia.                                                       |
+| Quem não consentiu contado no denominador                        | O denominador é só de quem deu opt-in (`GroupMembership.statsOptIn`). Numerador consentido sobre denominador cheio informa sobre quem recusou                                                         |
+| Supressão aplicada só na UI                                      | `suppress()` roda no servidor e o campo sai `null` — inclusive o `n`. Teste serializa a resposta e procura o número                                                                                   |
+| Export do painel ignorando a supressão da tela                   | O export recebe as **mesmas células já suprimidas** e não tem `PrismaService` no construtor: não há como fazer a segunda consulta                                                                     |
+| Segundo caminho de agregação nascendo no painel pago             | `single-aggregation-path.spec.ts`: um único arquivo importa `suppress`, um único arquivo define o limiar, todo recorte vem do catálogo                                                                |
+| Add-on pago conferido só na tela                                 | `InsightsAddonGuard` na rota, respondendo `NOT_FOUND` (não `402`) para grupo sem o add-on                                                                                                             |
+| Lista de "alunos em risco" chegando ao dono                      | O sinal é contagem por faixa. Não existe estrutura com id de pessoa saindo do módulo — não é escondida, não existe                                                                                    |
 
-**Não mitigado:** supressão com limiar **não é privacidade diferencial**. Comparar a mesma célula
-em dois períodos em que entrou exatamente uma pessoa revela essa pessoa, e o complemento estreita
-— sem revelar — o intervalo do valor oculto. As duas limitações estão escritas em
+**Não mitigado:** supressão com limiar **não é privacidade diferencial**. Comparar duas células
+**visíveis** de períodos diferentes em que entrou exatamente uma pessoa revela essa pessoa, e o
+bloco estreita — sem revelar — o intervalo do valor oculto: ele garante `MIN_CELL` valores
+possíveis para cada parcela, não infinitos. As duas limitações estão escritas em
 `AGGREGATION_POLICY.md`, na seção "O que não está protegido". Ruído diferencial foi considerado e
 descartado: sem orçamento de privacidade por consulta e contabilidade de composição, é ruído que
 dá falsa sensação de garantia, e não é auditável por quem lê o código — que é metade do valor,

@@ -78,10 +78,11 @@ export default function PrivacyPage() {
         </p>
         <p>
           E um número só aparece se houver gente suficiente por trás dele: recortes com menos de
-          cinco pessoas são omitidos — junto com um segundo recorte, porque omitir um só permitiria
-          deduzi-lo por subtração. A academia escolhe entre recortes prontos; ela não monta o
-          próprio filtro, e não existe recorte por idade ou sexo. A metodologia completa, com o que
-          ela <em>não</em> protege, está publicada em{' '}
+          cinco pessoas são omitidos — junto com os vizinhos que forem necessários para que o que
+          sobrou escondido não possa ser deduzido por subtração. A academia escolhe entre recortes
+          prontos; ela não monta o próprio filtro, não existe recorte por idade ou sexo, e os
+          rótulos vêm de uma lista nossa — nunca de um texto que você escreveu. A metodologia
+          completa, com o que ela <em>não</em> protege, está publicada em{' '}
           <a href="https://github.com/ThiagoCarreiraVallim/fatia/blob/main/docs/AGGREGATION_POLICY.md">
             docs/AGGREGATION_POLICY.md
           </a>{' '}

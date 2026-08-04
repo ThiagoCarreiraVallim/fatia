@@ -12,6 +12,7 @@ import {
 } from './aggregation.service';
 import {
   cutBelongsTo,
+  periodDays,
   periodStart,
   type CutName,
   type Panel,
@@ -69,7 +70,7 @@ export class InsightsService {
       return { cut, period, ...insufficientSample() };
     }
 
-    const cells = await this.cells(cut, participants, periodStart(period, now), now);
+    const cells = await this.cells(cut, participants, period, now);
     return { cut, period, ...suppress(cells) };
   }
 
@@ -77,13 +78,19 @@ export class InsightsService {
    * Despacho do recorte para quem conta. O `switch` é exaustivo por tipo: um
    * recorte novo no `CUTS` sem linha aqui não compila, e é assim que "endpoint
    * só para este relatório" deixa de ser um caminho possível.
+   *
+   * **Todo** recorte recebe a janela. Três deles a ignoravam e mesmo assim a
+   * resposta e o CSV carimbavam o período pedido — `last_30_days` e
+   * `last_12_months` devolviam células idênticas com rótulos diferentes.
    */
   private async cells(
     cut: CutName,
     participants: readonly Participant[],
-    start: Date,
+    period: PeriodName,
     now: Date,
   ): Promise<Cell[]> {
+    const start = periodStart(period, now);
+
     switch (cut) {
       case 'sessions_by_week':
         return this.engagement.sessionsByWeek(participants, start, now);
@@ -92,13 +99,13 @@ export class InsightsService {
       case 'sessions_by_hour_band':
         return this.engagement.sessionsByHourBand(participants, start);
       case 'members_by_recency':
-        return this.engagement.membersByRecency(participants, now);
+        return this.engagement.membersByRecency(participants, start, now);
       case 'members_by_churn_risk':
-        return this.retention.membersByChurnRisk(participants, now);
+        return this.retention.membersByChurnRisk(participants, periodDays(period, now), now);
       case 'plan_adherence_by_month':
-        return this.behavior.planAdherenceByMonth(participants, start);
+        return this.behavior.planAdherenceByMonth(participants, start, now);
       case 'retention_by_cohort':
-        return this.behavior.retentionByCohort(participants, now);
+        return this.behavior.retentionByCohort(participants, start, now);
       case 'modality_mix':
         return this.behavior.modalityMix(participants, start);
     }
