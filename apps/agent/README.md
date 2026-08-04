@@ -79,6 +79,54 @@ Todas as variáveis estão em `.env.example`. As que decidem o comportamento:
 e não há `if ambiente == 'prod'` no caminho de inferência: LM Studio e Cloudflare AI Gateway falam
 o mesmo protocolo.
 
+### Destino e modelo revisados como subprocessador (issue #136)
+
+A frase acima vale **inteira contra provedor local** e ganha uma exceção contra provedor remoto.
+
+Trocar `AI_MODEL_VISION` num painel troca **quem recebe a foto do prato**. A `/privacy` nomeia esse
+terceiro, declara a transferência internacional e afirma que o dado não treina modelo — as três
+frases dependem de qual modelo está configurado. Sem nada no caminho, uma edição de painel torna as
+três falsas, sem diff, sem erro e sem sintoma.
+
+Por isso, quando `AI_BASE_URL` aponta para fora de `localhost`, **duas** listas de
+`src/fatia_agent/allowed_models.py` valem:
+
+| lista            | responde                        | recusa com                |
+| ---------------- | ------------------------------- | ------------------------- |
+| `ALLOWED_HOSTS`  | para qual máquina os bytes saem | `AI_ENDPOINT_NOT_ALLOWED` |
+| `ALLOWED_MODELS` | o que roda do outro lado        | `AI_MODEL_NOT_ALLOWED`    |
+
+São duas porque **nenhuma implica a outra**: um gateway roteia para muitos fornecedores, e muitos
+gateways servem o mesmo nome de modelo. Vigiar só o nome do modelo deixava a foto sair para um proxy
+não declarado com uma edição de `AI_BASE_URL` — que mora no mesmo painel.
+
+A recusa acontece **antes de montar a requisição**: nenhum byte sai. `/capabilities` passa a
+anunciar a capacidade como ausente, e `/health` diz o motivo — `unreviewed_host` para o destino (um
+fato só, que derruba todas as capacidades) e `unreviewed_models` por capacidade.
+
+As duas listas nascem **vazias**: nenhuma funcionalidade de IA hospedada foi a produção (#139 e #141
+seguem abertas), então nem o destino nem os modelos foram revisados ou declarados. Quem escolher o
+destino de produção acrescenta host e modelo ali **na mesma PR** que atualiza a política. É o efeito
+pretendido — ver [ADR 020](../../docs/ADR/020-foto-e-audio-trafegam-sem-persistencia.md).
+
+### O log do gateway sai desligado em cada chamada
+
+O Cloudflare AI Gateway grava corpo de requisição e de resposta **por padrão** — registrar é o
+produto dele. Toda requisição daqui leva `cf-aig-collect-log: false`, que desliga o registro daquela
+chamada; sem isso, a foto do prato e a resposta do modelo ficariam legíveis no painel da Cloudflare
+enquanto a `/privacy` afirma que ninguém guardou nada.
+
+O header vai **sempre**, e não só quando o endpoint parece remoto: essa derivação é exatamente o que
+um proxy reverso em `localhost` engana, e é aí que a proteção mais faria falta. Para quem não é o
+gateway, é um header desconhecido e ignorado.
+
+**Em produção, desligue também a opção de log no painel do gateway.** O header cobre o que sai deste
+código; qualquer chamada feita por fora continua sujeita ao default.
+
+Provedor local não cai na regra: o dado não sai da máquina, não há subprocessador a declarar, e a
+ergonomia de desenvolvimento continua intacta. Auto-hospedagem contra gateway próprio edita a lista
+— é uma linha, e quem opera instância própria responde pela política dela.
+
 ## Erros nomeados
 
 Todo erro carrega um `code` estável — é ele que atravessa o HTTP, não a mensagem em prosa.
@@ -86,6 +134,8 @@ Todo erro carrega um `code` estável — é ele que atravessa o HTTP, não a men
 | `code`                       | Quando                                             | HTTP |
 | ---------------------------- | -------------------------------------------------- | ---- |
 | `AI_PROVIDER_NOT_CONFIGURED` | Falta `AI_BASE_URL`, `AI_API_KEY` ou `AI_MODEL_*`. | 503  |
+| `AI_ENDPOINT_NOT_ALLOWED`    | `AI_BASE_URL` remota fora de `ALLOWED_HOSTS`.      | 503  |
+| `AI_MODEL_NOT_ALLOWED`       | `AI_MODEL_*` remoto fora de `ALLOWED_MODELS`.      | 503  |
 | `AI_PROVIDER_TIMEOUT`        | O provedor não respondeu em `AI_TIMEOUT_S`.        | 504  |
 | `AI_PROVIDER_UNREACHABLE`    | Conexão recusada, DNS, TLS, conexão fechada.       | 502  |
 | `AI_PROVIDER_REFUSED`        | O provedor respondeu 401/403/429/5xx.              | 502  |
@@ -108,6 +158,7 @@ rota é anônima e o path de um gateway carrega id de conta e nome do gateway.
 ```
 src/fatia_agent/
   settings.py                 # env → configuração; nada aqui levanta exceção
+  allowed_models.py           # destino e modelos revisados como subprocessador (#136)
   api.py                      # FastAPI: /health e /capabilities
   providers/
     base.py                   # capacidades (Protocol), separadas do fornecedor
@@ -118,6 +169,7 @@ tests/
   providers/                  # duplo do provedor, sem rede
   test_degradation.py         # o serviço sem IA
   test_api.py                 # saúde e contrato de erro
+  test_allowed_models.py      # a foto não sai para destino ou modelo não revisado
   smoke/                      # contra provedor de verdade; fora do CI
 ```
 

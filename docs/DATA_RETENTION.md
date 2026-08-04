@@ -59,13 +59,120 @@ essa é a clientela dele, e é dado de terceiro.
 
 ## Dados que NÃO são armazenados
 
-- **Fotos de refeição.** Decisão registrada na [ADR 004](./ADR/004-sem-armazenamento-fotos.md).
-  Quando o usuário fotografa um prato para o Claude analisar, a imagem é processada no lado do
-  Claude; o Fatia recebe só o resultado textual. Não há bucket, não há upload, não há EXIF.
+- **Fotos de refeição.** Decisão registrada na [ADR 004](./ADR/004-sem-armazenamento-fotos.md) e
+  estendida pela [ADR 020](./ADR/020-foto-e-audio-trafegam-sem-persistencia.md). **Não há bucket,
+  não há disco, não há coluna** — em nenhum dos dois caminhos de IA. O que muda entre eles é se a
+  imagem chega a atravessar o Fatia; ver a seção seguinte.
 - **Senhas.** Removidas na [ADR 008](./ADR/008-logto-oidc-provider.md) — a migration
   `20260510190000_logto_auth_adr008` dropou a coluna `passwordHash`. A credencial vive no Logto.
 - **Meios de pagamento.** A instância pública é gratuita.
 - **Localização, contatos, agenda** ou qualquer dado do dispositivo.
+
+## O que sai para provedor de IA
+
+> Entregável da issue #136. Desenho na
+> [ADR 020](./ADR/020-foto-e-audio-trafegam-sem-persistencia.md), que complementa a
+> [ADR 004](./ADR/004-sem-armazenamento-fotos.md) e a
+> [ADR 015](./ADR/015-agente-python-langgraph-cliente-mcp.md).
+>
+> **Pendente de revisão jurídica (#112).** O mecanismo descrito abaixo é o que o código faz — isso é
+> verificável hoje, e há teste para as partes que dão para testar. A redação definitiva de
+> `/privacy` e `/terms`, a identificação nominal do subprocessador de modelo e a forma do
+> consentimento específico dependem do dono e da #112. Enquanto ela não fecha, **nenhuma
+> funcionalidade de IA hospedada vai a produção** — é o portão que a épica #133 descreve.
+
+Existem **dois caminhos de IA**, e eles coexistem no mesmo usuário, no mesmo dia
+([ADR 018](./ADR/018-inferencia-hospedada-fora-do-mcp.md)). Eles tratam o dado de formas
+diferentes, e confundi-los é o que tornava a descrição anterior desta seção falsa.
+
+**Caminho 1 — a IA do próprio usuário, pelo MCP.** É como o produto funciona hoje. O usuário
+conecta o Claude dele ao `/mcp` e conversa. Se fotografa um prato, quem olha a imagem é o Claude
+**dele**, na assinatura **dele**; o Fatia recebe só a chamada de tool com o resultado já
+estruturado. A imagem nunca chega aqui. O tratamento dessa conversa é regido pela política da
+Anthropic, não por esta. Custo de inferência para a Fatia: zero, por construção.
+
+**Caminho 2 — a IA hospedada pela Fatia.** Ainda **não está disponível a nenhum usuário**; entra
+com as issues #139 (foto) e #141 (voz). Aqui o conteúdo sai do dispositivo, atravessa o `apps/api`,
+vai ao `apps/agent` e de lá ao provedor, pelo Cloudflare AI Gateway. É este caminho que a tabela
+abaixo descreve.
+
+| Capacidade         | O que sai do dispositivo                           | Metadados que vão junto | Persistido? |
+| ------------------ | -------------------------------------------------- | ----------------------- | ----------- |
+| Visão (#139)       | a imagem do prato, reencodada em JPEG **sem EXIF** | o prompt, e nada mais   | **não**     |
+| Texto (#141)       | a frase digitada ou já transcrita                  | o prompt, e nada mais   | **não**     |
+| Transcrição (#141) | o áudio gravado                                    | o formato do áudio      | **não**     |
+
+**Nenhum identificador do usuário acompanha o conteúdo.** Não vai `userId`, e-mail, nome, nem o
+Bearer do usuário — o Bearer autentica o `apps/api` e o `/mcp`, e não é repassado ao gateway. Do
+lado do provedor, uma chamada é indistinguível da seguinte, como já acontece com o Open Food Facts.
+
+**O EXIF é removido no aparelho, antes do envio.** É o único ponto onde isso tem efeito: uma vez
+enviada, a localização já vazou. Sem essa remoção, a afirmação de que o Fatia não coleta localização
+ficaria falsa por um metadado que ninguém vê olhando o backend.
+
+**Nada disso é armazenado em ponto nenhum do caminho que este repositório opera.** Não há bucket,
+não há disco, não há coluna, nem no `apps/api` nem no `apps/agent`. Os bytes vivem em memória
+durante a requisição. O que está fora do repositório — o gateway e o provedor de modelo — é tratado
+nos dois parágrafos seguintes, e é tratado à parte de propósito: uma promessa em nome de terceiro
+que ninguém consegue conferir é o defeito que a #136 existe para eliminar, não algo a repetir aqui.
+
+**O log do gateway é desligado em cada chamada.** O Cloudflare AI Gateway grava corpo de requisição
+e corpo de resposta **por padrão** — registrar é o produto dele. Sem nada no caminho, a foto do
+prato e a resposta do modelo ficariam retidas e legíveis no painel da Cloudflare, e o parágrafo
+acima seria verdadeiro só dentro deste repositório. Toda requisição do `apps/agent` leva
+`cf-aig-collect-log: false`, que desliga o registro daquela chamada
+(`apps/agent/src/fatia_agent/providers/openai_compat.py`). O header vai **sempre**, e não só quando
+o endpoint parece remoto: a derivação de "isto é local?" é justamente o que um proxy reverso em
+`localhost` engana. Para quem não é o gateway, é um header desconhecido e ignorado. Coberto por
+`apps/agent/tests/providers/test_openai_compat.py`.
+
+Desligar pela chave do painel do gateway resolveria igual — e é uma promessa que depende de alguém
+lembrar de uma configuração, que é a classe de defeito que a #136 existe para eliminar. Quem opera
+uma instância própria deve fazer **as duas coisas**: o header cobre o caminho do código, a opção do
+painel cobre qualquer chamada que não venha daqui.
+
+**Do provedor de modelo, quem responde é o contrato.** Este documento afirma o que o repositório
+sustenta e o que o gateway é instruído a fazer. A retenção do lado do provedor de modelo não é
+executável a partir daqui: ela é cláusula contratual (não-retenção e não-treinamento por escrito),
+e o provedor será nomeado aqui, com essas cláusulas, na PR que ativar a #139 — junto da #112.
+
+**O destino e o modelo são duas listas fechadas no código**, não variáveis de ambiente
+(`apps/agent/src/fatia_agent/allowed_models.py`). O AI Gateway permite trocar de modelo por
+configuração, sem deploy — e trocar o modelo troca **o subprocessador que esta seção nomeia**. Sem
+a lista, alterar `AI_MODEL_VISION` no painel tornaria este documento falso sem que nenhuma linha do
+repositório mudasse, sem erro e sem sintoma.
+
+São **duas** listas porque uma não implica a outra: `ALLOWED_MODELS` diz o que roda, `ALLOWED_HOSTS`
+diz para qual máquina os bytes saem. `AI_BASE_URL` mora no mesmo painel do Dokploy e é editável do
+mesmo jeito — com um modelo já revisado configurado, bastaria apontá-la para outro proxy compatível
+com o protocolo da OpenAI que sirva aquele nome, e a foto sairia para um terceiro não declarado. Com
+as duas, a capacidade recusa a chamada **antes de qualquer byte sair**, com `code` próprio para cada
+caso, e autorizar um destino ou um modelo novo exige um PR — que é onde a revisão deste texto
+acontece. Coberto por `apps/agent/tests/test_allowed_models.py`.
+
+A regra vale para **endpoint remoto**. Uma instância auto-hospedada apontada para um modelo local
+(LM Studio) não tem subprocessador nenhum: o dado não sai da máquina, e não há terceiro a declarar.
+Quem responde "isto é local?" para fins de privacidade é `PRIVACY_LOCAL_HOSTS`, uma lista separada
+da homônima de `settings.py` — aquela decide se `AI_API_KEY` vazia é descuido, e uma conveniência de
+credencial não pode mover a fronteira de privacidade. **Escape conhecido e aceito:** um proxy
+reverso em `localhost` encaminhando para um gateway remoto passa pelas duas listas; quem opera
+instância própria responde pela política dela.
+
+### Registro de uso da IA
+
+Para conter custo (issue #135), cada chamada de IA hospedada gera um registro de **uso**, nunca de
+conteúdo: capacidade, provedor, modelo, unidades consumidas, custo estimado, latência, sucesso ou
+falha, e a categoria do erro. **Sem prompt, sem resposta, sem nome de alimento, sem os bytes da
+imagem.** Um registro de uso com o prompt dentro tornaria falsas, de uma vez, a §"O que é registrado
+em log" deste documento e a §Observabilidade de `docs/MCP.md`.
+
+Chamada do caminho 1 não gera registro nenhum aqui — ela não passa por este módulo, por construção.
+
+> **Pendência conhecida:** a tabela que guarda esse registro e a que guarda o consentimento
+> específico de IA **ainda não existem** no `schema.prisma`. Elas estão propostas na PR da #135/#136
+> e dependem de aprovação do dono, junto da migration. Enquanto não existirem, não há IA hospedada
+> em produção, então não há o que registrar. Quando entrarem, valem as mesmas regras de todo o
+> resto: `onDelete: Cascade` a partir de `User`, e o registro vai embora com a conta.
 
 ## Consulta ao Open Food Facts (scanner de código de barras)
 

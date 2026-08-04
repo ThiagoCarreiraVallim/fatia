@@ -25,6 +25,7 @@ Decisões arquiteturais relevantes do projeto. Cada ADR é imutável depois de a
 | [017](./017-open-food-facts-para-industrializado.md)                   | Open Food Facts sob demanda para produto industrializado | Accepted             |
 | [018](./018-inferencia-hospedada-fora-do-mcp.md)                       | Inferência paga pela Fatia não se expõe pelo MCP         | Accepted             |
 | [019](./019-periodizacao-intencao-materializada-andamento-derivado.md) | Periodização: intenção materializada, andamento derivado | Accepted             |
+| [020](./020-foto-e-audio-trafegam-sem-persistencia.md)                 | Foto e áudio trafegam para a IA, sem persistência        | Accepted             |
 
 ## Template
 

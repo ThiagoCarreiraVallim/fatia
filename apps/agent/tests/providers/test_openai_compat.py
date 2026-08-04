@@ -181,6 +181,52 @@ async def test_com_api_key_manda_bearer():
     assert transport.requests[-1].headers["authorization"] == "Bearer cf-token"
 
 
+@pytest.mark.parametrize(
+    ("capacidade", "chamar", "transporte_de"),
+    [
+        ("texto", lambda p: p.complete("comi arroz"), lambda: None),
+        (
+            "visão",
+            lambda p: p.describe(PIXEL_PNG, prompt="o que é isto?", media_type="image/png"),
+            lambda: None,
+        ),
+        (
+            "embedding",
+            lambda p: p.embed(["arroz"]),
+            lambda: embeddings_transport([{"index": 0, "embedding": [0.1]}]),
+        ),
+    ],
+)
+async def test_toda_chamada_manda_o_gateway_nao_registrar_o_conteudo(
+    capacidade, chamar, transporte_de
+):
+    """`cf-aig-collect-log: false` em toda requisição, em toda capacidade (#136).
+
+    O Cloudflare AI Gateway **grava corpo de requisição e corpo de resposta por
+    padrão** — logging é o produto dele. Sem este header, a foto do prato e a
+    resposta do modelo ficam retidas e legíveis no painel da Cloudflare, e a
+    frase da `/privacy` de que não há bucket, disco nem coluna passa a valer só
+    dentro deste repositório. A alternativa era desligar pela chave do painel: a
+    mesma classe de promessa que depende de alguém lembrar de uma configuração,
+    que é justamente o que a #136 existe para não fazer.
+
+    O endpoint aqui é o **local**, de propósito: o header vai sempre, e não só
+    quando a derivação diz "isto é remoto". Essa derivação é exatamente o que um
+    proxy reverso em `localhost` engana — e é aí que a proteção mais faria falta.
+    """
+    transport = transporte_de() or RecordingTransport(lambda _r: chat_response("ok"))
+    async with make_provider(transport) as provider:
+        await chamar(provider)
+
+    assert transport.requests, f"nenhuma requisição de {capacidade} foi feita"
+    # `.get` e não `[...]`: com o header removido, a indexação estoura
+    # `KeyError` e o CI vermelho não diz o que aconteceu, só qual chave faltou.
+    assert transport.requests[-1].headers.get("cf-aig-collect-log") == "false", (
+        f"a chamada de {capacidade} saiu sem instruir o gateway a não registrar o conteúdo — "
+        "o corpo dela fica retido no painel da Cloudflare"
+    )
+
+
 async def test_401_vira_refused_e_nao_e_repetido():
     transport = RecordingTransport(lambda _r: httpx.Response(401, json={"error": "no"}))
     async with make_provider(transport) as provider:
