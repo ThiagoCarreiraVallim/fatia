@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { z } from 'zod';
 import { muscleGroupSchema, muscleListSchema } from '../workout/helpers/muscle-group';
 
@@ -84,12 +85,19 @@ export const planSnapshotSchema = z
     // conferência, snapshot com o exercício repetido só falharia no `create`,
     // depois de já ter criado o exercício custom do adotante — sobra sujeira e
     // a mensagem sai como erro de banco.
+    //
+    // A chave do custom é o nome **cru**, exatamente o que `copiarCustom` usa no
+    // `findFirst` e o que o `@@unique([name, createdByUserId])` do Postgres
+    // compara — e o Postgres é case-sensitive. Normalizar aqui
+    // (`trim().toLowerCase()`) reprovava um plano legítimo: "Prancha" e
+    // "prancha" são duas linhas que o autor pode ter, viram dois ids diferentes
+    // na adoção e não colidem em `@@unique([planId, exerciseId])`.
     const vistos = new Set<string>();
     snap.exercises.forEach((item, i) => {
       const chave =
         item.source === 'catalog'
           ? `catalog:${item.catalogExerciseId}`
-          : `custom:${item.exercise.name.trim().toLowerCase()}`;
+          : `custom:${item.exercise.name}`;
       if (vistos.has(chave)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -102,6 +110,10 @@ export const planSnapshotSchema = z
   });
 
 export type PlanSnapshot = z.infer<typeof planSnapshotSchema>;
+
+/** `caminho: motivo; caminho: motivo` — o que o Zod reprovou, em uma linha. */
+export const descreverProblemas = (erro: z.ZodError): string =>
+  erro.issues.map((i) => `${i.path.join('.') || 'snapshot'}: ${i.message}`).join('; ');
 
 /** A forma mínima de `WorkoutPlan` + exercícios que o snapshot sabe congelar. */
 export type PlanoParaCongelar = {
@@ -143,6 +155,11 @@ const semVazios = <T extends object>(obj: T): Partial<T> =>
  * O resultado passa pelo próprio schema antes de sair: snapshot inválido tem
  * que estourar na publicação, com o autor na frente da tela, e não meses depois
  * na adoção de um membro que não pode fazer nada a respeito.
+ *
+ * E estoura como `BadRequestException`, não como `ZodError` cru: o que chega
+ * aqui é um plano que o autor montou (51 exercícios, nome longo demais), então
+ * o erro é dele para corrigir. `ZodError` escapando pela rota vira 500
+ * "Internal server error", que não diz o que arrumar.
  */
 export function buildPlanSnapshot(plano: PlanoParaCongelar): PlanSnapshot {
   const exercises = plano.exercises.map((item) => {
@@ -160,9 +177,15 @@ export function buildPlanSnapshot(plano: PlanoParaCongelar): PlanSnapshot {
     return { source: 'custom' as const, exercise: semVazios(definicao), ...base };
   });
 
-  return planSnapshotSchema.parse({
+  const parsed = planSnapshotSchema.safeParse({
     version: PLAN_SNAPSHOT_VERSION,
     name: plano.name,
     exercises,
   });
+  if (!parsed.success) {
+    throw new BadRequestException(
+      `Este plano não pode ser publicado (${descreverProblemas(parsed.error)}).`,
+    );
+  }
+  return parsed.data;
 }

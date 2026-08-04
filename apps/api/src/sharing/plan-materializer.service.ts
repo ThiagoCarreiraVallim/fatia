@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { ExerciseService } from '../workout/exercise.service';
 import {
+  descreverProblemas,
   PLAN_SNAPSHOT_VERSION,
   planSnapshotSchema,
   type DefinicaoCustom,
@@ -27,9 +28,13 @@ const PLAN_INCLUDE = {
  * mora em `sharing/` e não em `workout/`: quem materializa é a camada que sabe
  * que existe outra conta do outro lado; os services de domínio seguem sem saber.
  *
- * `grep -rn "workoutPlanExercise" apps/api/src` tem que continuar apontando para
- * dois arquivos só: `workout-plan.service.ts` (o dono edita o próprio plano) e
- * este. Um terceiro é um segundo caminho de cópia.
+ * `grep -rln "prisma\.workoutPlan\.create" apps/api/src --exclude-dir=__tests__`
+ * tem que continuar devolvendo dois arquivos só: `workout-plan.service.ts` (o
+ * dono cria o próprio plano) e este. Um terceiro é um segundo caminho de cópia.
+ *
+ * O comando anterior (`grep -rn "workoutPlanExercise" apps/api/src`) prometia
+ * isso e não cumpria: casava também `training-block.service.ts`, que só lê, e os
+ * specs. Invariante que o comando escrito não confere apodrece calada.
  *
  * **Proveniência ainda não é gravada.** `fromOfferId`/`fromTemplateId` em
  * `WorkoutPlan` dependem de model novo, que esta fatia não abre (ver a proposta
@@ -46,7 +51,18 @@ export class PlanMaterializerService {
   ) {}
 
   /**
-   * Cria o plano do snapshot sob `userId`. Ou sai inteiro, ou não sai.
+   * Cria o plano do snapshot sob `userId`.
+   *
+   * **Snapshot reprovado não deixa rastro**: toda validação — versão, schema,
+   * dedupe e os ids de catálogo — roda antes da primeira escrita, e é só nesses
+   * erros que a mensagem diz "Nada foi criado". Depois que a cópia de exercício
+   * começa, a garantia acaba: `createCustom`/`updateCustom` são escritas do
+   * `ExerciseService`, fora da transação do `workoutPlan.create`, então uma
+   * falha no meio (indisponibilidade, `@@unique` numa corrida) pode deixar
+   * exercícios custom já copiados na biblioteca de quem adota, sem plano. Eles
+   * são exercícios **dele**, editáveis e apagáveis por ele — o que a adoção
+   * nunca pode fazer é escrever ali por causa de um snapshot que ela mesma vai
+   * recusar.
    *
    * O snapshot chega como `unknown` de propósito: ele vem de coluna `Json`,
    * escrita possivelmente por uma versão anterior do produto, e o `as` que o
@@ -54,6 +70,7 @@ export class PlanMaterializerService {
    */
   async materialize(userId: string, snapshot: unknown) {
     const snap = this.validar(snapshot);
+    await this.conferirCatalogo(snap);
 
     const exercises: Array<{
       exerciseId: number;
@@ -65,7 +82,7 @@ export class PlanMaterializerService {
       exercises.push({
         exerciseId:
           item.source === 'catalog'
-            ? await this.resolverDoCatalogo(item.catalogExerciseId)
+            ? item.catalogExerciseId
             : await this.copiarCustom(userId, item.exercise),
         order: item.order,
         targetSets: item.targetSets,
@@ -96,10 +113,9 @@ export class PlanMaterializerService {
 
     const parsed = planSnapshotSchema.safeParse(snapshot);
     if (!parsed.success) {
-      const problemas = parsed.error.issues
-        .map((i) => `${i.path.join('.') || 'snapshot'}: ${i.message}`)
-        .join('; ');
-      throw new BadRequestException(`Snapshot de plano inválido (${problemas}). Nada foi criado.`);
+      throw new BadRequestException(
+        `Snapshot de plano inválido (${descreverProblemas(parsed.error)}). Nada foi criado.`,
+      );
     }
     return parsed.data;
   }
@@ -111,16 +127,38 @@ export class PlanMaterializerService {
    * ele, um snapshot forjado com o id de um exercício custom de terceiro poria
    * a linha dessa pessoa dentro do plano de quem adota, e o nome dela sairia na
    * leitura do plano. Id de `Exercise` é inteiro sequencial (#92).
+   *
+   * **Pré-passada, e não uma resolução por item dentro do laço de cópia**: o id
+   * reprovado costuma vir depois de um item `custom` no mesmo snapshot, e
+   * resolver na hora estourava com o `createCustom` do item anterior já
+   * commitado. O snapshot forjado era recusado, a mensagem dizia "Nada foi
+   * criado", e mesmo assim quem forjou escrevia um exercício de nome à escolha
+   * na biblioteca de quem adota. Uma query só para todos os ids, antes de
+   * qualquer escrita.
    */
-  private async resolverDoCatalogo(id: number): Promise<number> {
-    const ex = await this.prisma.exercise.findFirst({ where: { id, createdByUserId: null } });
-    if (!ex) {
+  private async conferirCatalogo(snap: PlanSnapshot): Promise<void> {
+    const ids = [
+      ...new Set(
+        snap.exercises.flatMap((item) =>
+          item.source === 'catalog' ? [item.catalogExerciseId] : [],
+        ),
+      ),
+    ];
+    if (ids.length === 0) return;
+
+    const publicos = await this.prisma.exercise.findMany({
+      where: { id: { in: ids }, createdByUserId: null },
+      select: { id: true },
+    });
+
+    const encontrados = new Set(publicos.map((ex) => ex.id));
+    const forasteiro = ids.find((id) => !encontrados.has(id));
+    if (forasteiro !== undefined) {
       throw new BadRequestException(
-        `O exercício ${id} não está no catálogo público e por isso não pode vir de um plano ` +
+        `O exercício ${forasteiro} não está no catálogo público e por isso não pode vir de um plano ` +
           'de outra pessoa. Nada foi criado.',
       );
     }
-    return ex.id;
   }
 
   /**

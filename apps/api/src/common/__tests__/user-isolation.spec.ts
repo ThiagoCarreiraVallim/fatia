@@ -1465,6 +1465,49 @@ describe('isolamento entre usuários', () => {
       await expect(plans.list(pronto.membro2)).resolves.toEqual(antes);
     });
 
+    it('"Nada foi criado" é literal: snapshot recusado não deixa exercício na biblioteca de quem adota', async () => {
+      // Conferir só `plans.list` deixava passar a escrita de verdade: o item
+      // `custom` vem ANTES do id forjado, e a cópia dele já estava commitada
+      // quando a recusa acontecia — quem forja escolhia o nome que entrava na
+      // biblioteca da vítima, e ainda lia "Nada foi criado".
+      const orfao = `tpl-${Date.now()}-orfao`;
+      const forjado = {
+        version: PLAN_SNAPSHOT_VERSION,
+        name: 'Plano forjado',
+        exercises: [
+          {
+            source: 'custom',
+            exercise: { name: orfao, muscleGroup: 'peito' },
+            order: 1,
+            targetSets: 3,
+            targetReps: '10',
+          },
+          {
+            source: 'catalog',
+            catalogExerciseId: pronto.exercicioDoCriador,
+            order: 2,
+            targetSets: 3,
+            targetReps: '10',
+          },
+        ],
+      };
+
+      const antesDosPlanos = await plans.list(pronto.membro2);
+      const antesDosExercicios = await prisma.exercise.count({
+        where: { createdByUserId: pronto.membro2 },
+      });
+
+      await expect(materializer.materialize(pronto.membro2, forjado)).rejects.toThrow(
+        /Nada foi criado/,
+      );
+
+      await expect(plans.list(pronto.membro2)).resolves.toEqual(antesDosPlanos);
+      await expect(
+        prisma.exercise.count({ where: { createdByUserId: pronto.membro2 } }),
+      ).resolves.toBe(antesDosExercicios);
+      await expect(prisma.exercise.findFirst({ where: { name: orfao } })).resolves.toBeNull();
+    });
+
     it('materializar duas vezes reaproveita o exercício custom em vez de estourar o unique', async () => {
       // `@@unique([name, createdByUserId])`: a segunda adoção não pode criar um
       // segundo "remada do criador" na conta do membro, e também não pode

@@ -59,7 +59,7 @@ describe('PlanMaterializerService.materialize', () => {
   let tabela: LinhaExercise[];
   let proximoId: number;
   let prisma: {
-    exercise: { findFirst: jest.Mock };
+    exercise: { findFirst: jest.Mock; findMany: jest.Mock };
     workoutPlan: { create: jest.Mock };
   };
   let exercises: { createCustom: jest.Mock; updateCustom: jest.Mock };
@@ -81,6 +81,20 @@ describe('PlanMaterializerService.materialize', () => {
                   (where.createdByUserId === undefined ||
                     ex.createdByUserId === where.createdByUserId),
               ) ?? null,
+            ),
+        ),
+        // Mesma regra do `findFirst`, na forma que a pré-passada usa: um fake
+        // que devolvesse `tabela` inteira daria verde com o `createdByUserId:
+        // null` removido do `where`.
+        findMany: jest.fn(
+          ({ where }: { where: { id?: { in: number[] }; createdByUserId?: string | null } }) =>
+            Promise.resolve(
+              tabela.filter(
+                (ex) =>
+                  (where.id === undefined || where.id.in.includes(ex.id)) &&
+                  (where.createdByUserId === undefined ||
+                    ex.createdByUserId === where.createdByUserId),
+              ),
             ),
         ),
       },
@@ -176,6 +190,49 @@ describe('PlanMaterializerService.materialize', () => {
     expect(prisma.workoutPlan.create).not.toHaveBeenCalled();
   });
 
+  it('não escreve exercício nenhum na biblioteca de quem adota quando o id de catálogo é reprovado', async () => {
+    // O item custom vem ANTES do id forjado de propósito: é a ordem que fazia a
+    // recusa dizer "Nada foi criado" com um exercício de nome à escolha de quem
+    // forjou já commitado na conta de quem adota.
+    const forjado = {
+      version: PLAN_SNAPSHOT_VERSION,
+      name: 'Plano forjado',
+      exercises: [
+        {
+          source: 'custom',
+          exercise: { name: 'X-orfao', muscleGroup: 'peito' },
+          order: 1,
+          targetSets: 3,
+          targetReps: '10',
+        },
+        {
+          source: 'catalog',
+          catalogExerciseId: CRUCIFIXO_DO_AUTOR.id,
+          order: 2,
+          targetSets: 3,
+          targetReps: '10',
+        },
+      ],
+    };
+
+    await expect(service.materialize(ADOTANTE, forjado)).rejects.toThrow(/Nada foi criado/);
+    expect(exercises.createCustom).not.toHaveBeenCalled();
+    expect(exercises.updateCustom).not.toHaveBeenCalled();
+    expect(tabela.some((ex) => ex.name === 'X-orfao')).toBe(false);
+    expect(prisma.workoutPlan.create).not.toHaveBeenCalled();
+  });
+
+  it('confere todos os ids de catálogo numa passada só, antes da primeira cópia', async () => {
+    // Não é performance: é a ordem. Se a conferência voltasse para dentro do
+    // laço, a cópia do item 1 sairia antes de o item 3 ser recusado.
+    await service.materialize(ADOTANTE, snapshotDoAutor());
+
+    expect(prisma.exercise.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.exercise.findMany.mock.invocationCallOrder[0]).toBeLessThan(
+      exercises.createCustom.mock.invocationCallOrder[0],
+    );
+  });
+
   it('reaproveita o exercício que o adotante já tem com o mesmo nome, em vez de estourar o unique', async () => {
     const jaTinha = exercicio({
       id: 900,
@@ -223,7 +280,7 @@ describe('PlanMaterializerService.materialize', () => {
         },
         {
           source: 'custom',
-          exercise: { name: 'remada ', muscleGroup: 'costas' },
+          exercise: { name: 'Remada', muscleGroup: 'costas' },
           order: 2,
           targetSets: 3,
           targetReps: '10',
@@ -235,6 +292,42 @@ describe('PlanMaterializerService.materialize', () => {
     // Sem esta checagem, a primeira cópia já teria sido criada quando o
     // `create` do plano falhasse com P2002.
     expect(exercises.createCustom).not.toHaveBeenCalled();
+  });
+
+  it('aceita dois customs que só diferem por caixa — o `@@unique` do Postgres é case-sensitive', async () => {
+    // "Prancha" e "prancha" são DUAS linhas que o autor pode legitimamente ter,
+    // e viram dois ids diferentes na conta de quem adota: não colidem em
+    // `@@unique([planId, exerciseId])`. Reprovar era transformar plano válido em
+    // erro na publicação.
+    const duasCaixas = {
+      version: PLAN_SNAPSHOT_VERSION,
+      name: 'Core',
+      exercises: [
+        {
+          source: 'custom',
+          exercise: { name: 'Prancha', muscleGroup: 'core' },
+          order: 1,
+          targetSets: 3,
+          targetReps: '30s',
+        },
+        {
+          source: 'custom',
+          exercise: { name: 'prancha', muscleGroup: 'core' },
+          order: 2,
+          targetSets: 3,
+          targetReps: '30s',
+        },
+      ],
+    };
+
+    await service.materialize(ADOTANTE, duasCaixas);
+
+    const nomesCriados = (
+      exercises.createCustom.mock.calls as Array<[string, { name: string }]>
+    ).map(([, dto]) => dto.name);
+    expect(nomesCriados).toEqual(['Prancha', 'prancha']);
+    const criados = dadosDoPlanoCriado().data.exercises.create.map((e) => e.exerciseId);
+    expect(new Set(criados).size).toBe(2);
   });
 
   it('preserva ordem, séries e repetições prescritas pelo autor', async () => {
@@ -278,7 +371,24 @@ describe('buildPlanSnapshot', () => {
     });
   });
 
-  it('recusa músculo fora das chaves do diagrama', () => {
+  it('congela dois customs que só diferem por caixa, porque o Postgres os guarda separados', () => {
+    const prancha = (name: string, id: number) =>
+      exercicio({ id, name, muscleGroup: 'core', createdByUserId: AUTOR });
+
+    const snap = buildPlanSnapshot({
+      name: 'Core',
+      exercises: [
+        { order: 1, targetSets: 3, targetReps: '30s', exercise: prancha('Prancha', 1) },
+        { order: 2, targetSets: 3, targetReps: '30s', exercise: prancha('prancha', 2) },
+      ],
+    });
+
+    expect(snap.exercises).toHaveLength(2);
+  });
+
+  it('recusa músculo fora das chaves do diagrama como BadRequest, não como ZodError cru', () => {
+    // `ZodError` escapando pela rota de publicação vira 500 "Internal server
+    // error", e o autor fica sem saber o que arrumar no plano dele.
     expect(() =>
       buildPlanSnapshot({
         name: 'Push',
@@ -296,6 +406,6 @@ describe('buildPlanSnapshot', () => {
           },
         ],
       }),
-    ).toThrow();
+    ).toThrow(BadRequestException);
   });
 });
