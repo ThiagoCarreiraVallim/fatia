@@ -965,6 +965,78 @@ describe('isolamento entre usuários', () => {
       expect(resultado.reading.sessions.map((s) => s.id)).toContain(owned.sessionId);
     });
 
+    /**
+     * A **forma** do payload, escopo a escopo, contra o Postgres de verdade.
+     *
+     * Existe porque os tipos de `packages/api-client/src/sharing.ts` são
+     * escritos à mão: são declarações de resposta, não têm com o que conflitar,
+     * e o `tsc` fica verde sobre um payload que a API nunca devolveu. Foi assim
+     * que `history.days` (a janela, um número) virou array do lado do cliente,
+     * `ponto.value` nasceu sem existir em lado nenhum e `finishedAt` ficou com
+     * nome que o schema não tem — três campos errados, `typecheck` verde.
+     *
+     * Este caso prende a ponta da API; a outra ponta é
+     * `apps/web/src/app/(pro)/students/[membershipId]/__tests__/page.test.tsx`,
+     * cujas fixtures são estas mesmas formas anotadas com o tipo do cliente.
+     * Mudar a resposta de um service de domínio derruba este caso, e é aqui que
+     * se lê o que o cliente precisa acompanhar.
+     *
+     * Conferir a **lista** de chaves, e não `toHaveProperty`: campo que
+     * desaparece e campo que aparece são os dois defeitos, e só o conjunto pega
+     * os dois.
+     */
+    it('a forma de cada escopo é a que o api-client declara', async () => {
+      await vincular(Object.values(ShareScope));
+      const chaves = (v: object) => Object.keys(v).sort();
+
+      const workout = await studentView.read(owned.pro, owned.membershipA, ShareScope.WORKOUT, 30);
+      if (workout.reading.scope !== ShareScope.WORKOUT) throw new Error('escopo errado');
+      expect(chaves(workout.reading)).toEqual(['plans', 'scope', 'sessions', 'volume']);
+      expect(chaves(workout.reading.volume)).toEqual(['averageWeeklyVolumeKg', 'weeks']);
+      // A sessão semeada existe (o caso acima afirma o id), então a linha é
+      // conferível de verdade e não passa por vacuidade de array vazio.
+      const sessao = workout.reading.sessions.find((s) => s.id === owned.sessionId);
+      expect(sessao).toBeDefined();
+      expect(sessao).toHaveProperty('completedAt');
+      expect(sessao).not.toHaveProperty('finishedAt');
+
+      const nutrition = await studentView.read(
+        owned.pro,
+        owned.membershipA,
+        ShareScope.NUTRITION,
+        30,
+      );
+      if (nutrition.reading.scope !== ShareScope.NUTRITION) throw new Error('escopo errado');
+      expect(chaves(nutrition.reading.history)).toEqual(['averages', 'days', 'series']);
+      // O ponto do defeito: `days` é a janela pedida, e quem itera é `series`.
+      expect(nutrition.reading.history.days).toBe(30);
+      expect(nutrition.reading.history.series).toHaveLength(30);
+      expect(chaves(nutrition.reading.history.series[0])).toEqual([
+        'carbsG',
+        'date',
+        'fatG',
+        'kcal',
+        'meals',
+        'proteinG',
+      ]);
+
+      const habits = await studentView.read(owned.pro, owned.membershipA, ShareScope.HABITS, 30);
+      if (habits.reading.scope !== ShareScope.HABITS) throw new Error('escopo errado');
+      // Passos e água são séries distintas: o valor diário tem nome próprio em
+      // cada uma, e não existe `value` em nenhuma das duas.
+      expect(chaves(habits.reading.steps.points[0])).toEqual(['date', 'goalReached', 'steps']);
+      expect(chaves(habits.reading.water.points[0])).toEqual(['date', 'goalReached', 'totalMl']);
+
+      const body = await studentView.read(owned.pro, owned.membershipA, ShareScope.BODY, 30);
+      if (body.reading.scope !== ShareScope.BODY) throw new Error('escopo errado');
+      expect(chaves(body.reading.weight)).toEqual([
+        'currentWeightKg',
+        'points',
+        'totalDeltaKg',
+        'weeklyAverages',
+      ]);
+    });
+
     it('o painel não devolve o userId do aluno em nível nenhum do payload', async () => {
       await vincular([ShareScope.WORKOUT]);
 
@@ -1064,6 +1136,58 @@ describe('isolamento entre usuários', () => {
       // A lista não é dado de saúde, mas também não pode virar diretório: o
       // `pro` é dono de um segundo grupo, e ninguém de lá entra aqui.
       expect(alunos.every((a) => a.groupId === owned.groupId)).toBe(true);
+    });
+
+    it('vínculo revogado some do consentimento da lista, e não só da leitura', async () => {
+      // Os dois filtros de `listStudents` estavam certos no código e nenhum
+      // teste os distinguia: apagar `revokedAt: null` da consulta passava com a
+      // suíte inteira verde, porque todo caso concedia um vínculo fresco.
+      //
+      // O sintoma não é vazamento de dado — a leitura continua barrada pela
+      // porta. É pior de explicar: a aluna revoga em Privacidade, o chip
+      // "Treino" continua na tela do personal, e cada clique vira uma linha
+      // `denied: true` na trilha que ela lê. Do lado dela, isso é sondagem.
+      const link = await vincular([ShareScope.WORKOUT]);
+      const antes = await studentView.listStudents(owned.pro);
+      expect(antes.find((a) => a.membershipId === owned.membershipA)?.scopesGrantedToMe).toEqual([
+        ShareScope.WORKOUT,
+      ]);
+
+      await links.revokeAsSubject(owned.userA, link.id);
+
+      const depois = await studentView.listStudents(owned.pro);
+      // Ela continua aluna — some o consentimento, não a pessoa.
+      const aluna = depois.find((a) => a.membershipId === owned.membershipA);
+      expect(aluna).toBeDefined();
+      expect(aluna?.scopesGrantedToMe).toEqual([]);
+    });
+
+    it('aluna que SAIU da academia não fica na lista do profissional', async () => {
+      // A simetria que o comentário do código promete e que nenhum teste
+      // cobrava: `status: ACTIVE` vale para a consulta dos meus grupos (o
+      // profissional demitido) **e** para a dos alunos (a aluna que saiu).
+      // Tirar o segundo passava com 1065/1065 verdes.
+      await vincular([ShareScope.WORKOUT]);
+      expect((await studentView.listStudents(owned.pro)).map((a) => a.membershipId)).toContain(
+        owned.membershipA,
+      );
+
+      try {
+        await prisma.groupMembership.update({
+          where: { id: owned.membershipA },
+          data: { status: MembershipStatus.LEFT, leftAt: new Date() },
+        });
+
+        const depois = await studentView.listStudents(owned.pro);
+        expect(depois.map((a) => a.membershipId)).not.toContain(owned.membershipA);
+        // O colega continua — o filtro é por associação, não um apagão da lista.
+        expect(depois.map((a) => a.name)).toEqual(['Colega']);
+      } finally {
+        await prisma.groupMembership.update({
+          where: { id: owned.membershipA },
+          data: { status: MembershipStatus.ACTIVE, leftAt: null },
+        });
+      }
     });
 
     it('quem não é PROFESSIONAL não tem lista de alunos, nem sendo dono da academia', async () => {

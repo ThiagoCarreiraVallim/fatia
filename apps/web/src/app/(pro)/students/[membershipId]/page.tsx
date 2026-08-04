@@ -28,12 +28,21 @@ function Corpo({ reading }: { reading: StudentReading }) {
               />
             ))}
           </Bloco>
-          <Bloco titulo="Últimas sessões" vazio="Nenhum treino registrado no período.">
+          {/*
+            "no período" era mentira: a API traz as N sessões mais recentes
+            (`SESSOES_NO_PAINEL`), sem cortar pela janela de dias que as demais
+            séries respeitam — um treino de três meses atrás aparecia numa tela
+            que se anunciava como janela de 30 dias. Fazer a lista respeitar a
+            janela exigiria um filtro novo em `WorkoutSessionService`, e domínio
+            intocado é critério de pronto desta issue; o rótulo é que estava
+            errado, não a consulta.
+          */}
+          <Bloco titulo="Sessões mais recentes" vazio="Nenhum treino registrado ainda.">
             {reading.sessions.map((sessao) => (
               <Linha
                 key={sessao.id}
                 titulo={new Date(sessao.startedAt).toLocaleDateString('pt-BR')}
-                detalhe={sessao.finishedAt ? 'concluído' : 'em andamento'}
+                detalhe={sessao.completedAt ? 'concluído' : 'em andamento'}
               />
             ))}
           </Bloco>
@@ -42,7 +51,7 @@ function Corpo({ reading }: { reading: StudentReading }) {
     case 'NUTRITION':
       return (
         <Bloco titulo="Dias registrados" vazio="Nenhum dia com refeição registrada.">
-          {reading.history.days.map((dia) => (
+          {reading.history.series.map((dia) => (
             <Linha key={dia.date} titulo={dia.date} detalhe={`${Math.round(dia.kcal)} kcal`} />
           ))}
         </Bloco>
@@ -60,12 +69,12 @@ function Corpo({ reading }: { reading: StudentReading }) {
         <div className="space-y-3">
           <Bloco titulo="Passos" vazio="Sem registro de passos.">
             {reading.steps.points.map((ponto) => (
-              <Linha key={ponto.date} titulo={ponto.date} detalhe={String(ponto.value)} />
+              <Linha key={ponto.date} titulo={ponto.date} detalhe={String(ponto.steps)} />
             ))}
           </Bloco>
           <Bloco titulo="Água" vazio="Sem registro de água.">
             {reading.water.points.map((ponto) => (
-              <Linha key={ponto.date} titulo={ponto.date} detalhe={`${ponto.value} ml`} />
+              <Linha key={ponto.date} titulo={ponto.date} detalhe={`${ponto.totalMl} ml`} />
             ))}
           </Bloco>
         </div>

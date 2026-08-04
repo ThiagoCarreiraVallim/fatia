@@ -464,6 +464,34 @@ describe('catálogo de tools MCP', () => {
     expect(errados.sort()).toEqual([]);
   });
 
+  it('não deixa NENHUM tamanho em k caracteres fora da medição, nas docs que afirmam um', () => {
+    // O `PAYLOAD_CLAIMS` acima procura a *presença* de um trecho literal. Isso
+    // deixa passar o vizinho: um merge duplicou o parágrafo do custo em
+    // `MCP.md` e `MCP_TOOL_SURFACE.md`, a cópia velha ficou afirmando 72,9 k
+    // para o MESMO catálogo, e o guarda passou verde porque a cópia nova, com
+    // 78,4 k, continuava lá. Duas medições contraditórias na mesma página, uma
+    // delas conferida.
+    //
+    // Aqui a varredura é ao contrário: TODA ocorrência de "N,N k" nessas docs
+    // tem de ser um dos dois números medidos agora. Número novo em prosa nova
+    // só entra somando uma claim, que é exatamente o objetivo.
+    const medidos = new Set([emK(payload.cheio), emK(payload.estreito)]);
+    const arquivos = [...new Set(PAYLOAD_CLAIMS.map((c) => c.file))];
+    const forasteiros: string[] = [];
+
+    for (const arquivo of arquivos) {
+      const conteudo = readFileSync(resolve(REPO_ROOT, arquivo), 'utf8');
+      for (const achado of conteudo.matchAll(/(\d+,\d+ k)(?= caracteres| e subestima)/g)) {
+        if (!medidos.has(achado[1])) forasteiros.push(`${arquivo}: "${achado[1]}"`);
+      }
+    }
+
+    // Sanidade do próprio caso: se o regex parar de casar, o vazio acima seria
+    // o mesmo verde de "está tudo certo".
+    expect(arquivos.length).toBeGreaterThan(0);
+    expect(forasteiros.sort()).toEqual([]);
+  });
+
   it('cita o custo real dos exemplos em docs/MCP_TOOL_SURFACE.md', () => {
     // O número de tools já era conferido; o de CARACTERES não era, e apodreceu:
     // a doc afirmava "4.110 caracteres … média de 91 por tool", medido na #111

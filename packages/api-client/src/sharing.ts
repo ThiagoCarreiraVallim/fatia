@@ -39,7 +39,7 @@ export type StudentReading =
   | { scope: 'WORKOUT'; plans: StudentPlan[]; sessions: StudentSession[]; volume: StudentVolume }
   | { scope: 'NUTRITION'; history: StudentNutritionHistory }
   | { scope: 'BODY'; weight: WeightProgress }
-  | { scope: 'HABITS'; steps: StudentSeries; water: StudentSeries }
+  | { scope: 'HABITS'; steps: StudentStepsProgress; water: StudentWaterProgress }
   | { scope: 'GOALS'; goals: Array<Omit<Goal, 'userId'>> };
 
 export interface StudentPlan {
@@ -58,20 +58,53 @@ export interface StudentPlan {
 export interface StudentSession {
   id: string;
   startedAt: string;
-  finishedAt: string | null;
+  /** O schema fecha a sessão em `completedAt`; não existe `finishedAt`. */
+  completedAt: string | null;
   notes: string | null;
 }
 
 export interface StudentVolume {
-  points: Array<{ weekStart: string; totalVolume: number }>;
+  weeks: Array<{ weekStart: string; totalVolumeKg: number; sessionCount: number }>;
+  averageWeeklyVolumeKg: number;
 }
 
 export interface StudentNutritionHistory {
-  days: Array<{ date: string; kcal: number; proteinG: number; carbsG: number; fatG: number }>;
+  /** A **janela** em dias, não a série. O array é o `series` abaixo. */
+  days: number;
+  series: Array<{
+    date: string;
+    meals: number;
+    kcal: number;
+    proteinG: number;
+    carbsG: number;
+    fatG: number;
+  }>;
+  averages: { kcal: number; proteinG: number; carbsG: number; fatG: number };
 }
 
-export interface StudentSeries {
-  points: Array<{ date: string; value: number }>;
+/**
+ * Passos e água são séries **distintas** — o valor diário chama-se `steps` de um
+ * lado e `totalMl` do outro. Um `StudentSeries` genérico com `value` já existiu
+ * aqui e não correspondia a campo nenhum da API: a tela renderizava `undefined`
+ * em toda linha, sem quebrar nada.
+ */
+export interface StudentStepsProgress {
+  points: Array<{ date: string; steps: number; goalReached: boolean | null }>;
+  weeklyAverages: Array<{ weekStart: string; avgSteps: number }>;
+  totalSteps: number;
+  averageDaily: number;
+  bestDay: { date: string; steps: number } | null;
+  goalTarget: number | null;
+  daysWithGoalReached: number;
+}
+
+export interface StudentWaterProgress {
+  points: Array<{ date: string; totalMl: number; goalReached: boolean | null }>;
+  totalMl: number;
+  averageDailyMl: number;
+  bestDay: { date: string; totalMl: number } | null;
+  goalTargetMl: number | null;
+  daysWithGoalReached: number;
 }
 
 export interface StudentReadResult {
@@ -99,7 +132,7 @@ export const professionalApi = {
     const qs = new URLSearchParams({ scope });
     if (days !== undefined) qs.set('days', String(days));
     return apiFetch<StudentReadResult>(
-      `/api/professional/students/${membershipId}/progress?${qs.toString()}`,
+      `/api/professional/students/${encodeURIComponent(membershipId)}/progress?${qs.toString()}`,
     );
   },
 };

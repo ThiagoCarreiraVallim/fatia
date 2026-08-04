@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Flag, Sparkles, Settings, Shield, LogOut, ChevronRight } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth-server';
 import { ProfileMetrics } from '@/components/profile/profile-metrics';
+import { ProfessionalPanelLink } from '@/components/sharing/professional-panel-link';
 
 interface MenuItemProps {
   href: string;
@@ -49,6 +50,8 @@ export default async function ProfilePage() {
       <ProfileMetrics />
 
       <nav className="overflow-hidden rounded-2xl border border-white/5 bg-card">
+        {/* Só rende algo para quem atende alguém — ver o componente. */}
+        <ProfessionalPanelLink />
         <MenuItem
           href="/goals"
           icon={<Flag size={18} className="text-primary" />}

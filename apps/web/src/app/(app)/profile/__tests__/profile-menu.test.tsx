@@ -26,6 +26,19 @@ vi.mock('@/lib/auth-server', () => ({
 // Fora do caminho: as métricas do topo dependem de React Query e não participam do menu.
 vi.mock('@/components/profile/profile-metrics', () => ({ ProfileMetrics: () => null }));
 
+/**
+ * O item do painel depende de React Query; quando mostra e quando some é caso de
+ * `components/sharing/__tests__/professional-panel-link.test.tsx`. Aqui o dublê
+ * rende um link de verdade porque o que este arquivo cobra é a **montagem**: o
+ * painel do profissional foi entregue sem porta de entrada nenhuma, e um dublê
+ * que rendesse `null` deixaria a remoção do componente do perfil passar verde.
+ */
+vi.mock('@/components/sharing/professional-panel-link', () => ({
+  // O dublê rende `<a>` cru; o componente real usa `next/link`, e é nele que a
+  // regra abaixo tem o que cobrar.
+  ProfessionalPanelLink: () => <a href="/students">Meus alunos</a>,
+}));
+
 describe('menu do perfil', () => {
   it('leva ao fluxo de conectar a IA, com um nome que descreve o destino', async () => {
     render(await ProfilePage());
@@ -37,6 +50,16 @@ describe('menu do perfil', () => {
     // O rótulo antigo prometia integrações que não existem. Prometer de novo seria pior que o
     // nome errado: manda o usuário esperar por algo que não vai encontrar.
     expect(link.textContent).not.toMatch(/Dispositivos|Apple Health|Garmin/);
+  });
+
+  it('o perfil monta a entrada do painel do profissional', async () => {
+    // A #157 entregou `/students` sem link em lugar nenhum do web ou do mobile:
+    // só chegava quem digitasse o endereço. O caso prende a montagem — tirar o
+    // componente do perfil volta a deixar o painel inalcançável, e isso tem de
+    // dar vermelho.
+    render(await ProfilePage());
+
+    expect(screen.getByRole('link', { name: /Meus alunos/ })).toHaveAttribute('href', '/students');
   });
 
   it('não deixa uma segunda superfície de conexão viva na mesma tela', async () => {
