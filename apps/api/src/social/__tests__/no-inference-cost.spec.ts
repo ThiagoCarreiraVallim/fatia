@@ -29,12 +29,62 @@ const IMPORTS_PERMITIDOS = [
   '../progress/helpers/date-tz',
 ];
 
-/** Todo especificador de `import ... from '<x>'` do arquivo. */
+/**
+ * Todo especificador de dependência do arquivo, em qualquer das formas que o
+ * TypeScript aceita.
+ *
+ * Fechar só por `from` com aspas simples deixava quatro portas abertas contra um
+ * módulo que já existe no repositório: import de efeito colateral (sem `from`),
+ * import dinâmico, `require` e aspas duplas. O import dinâmico é o que mais
+ * importa — é exatamente assim que um "resumo da semana do grupo" entraria
+ * dentro de um método, sem tocar no topo do arquivo, que é onde a revisão olha.
+ */
+const PADROES_DE_DEPENDENCIA = [
+  /\bfrom\s*['"]([^'"]+)['"]/g, // import x from 'y' | export * from 'y'
+  /\bimport\s*['"]([^'"]+)['"]/g, // import 'y'  (efeito colateral)
+  /\bimport\s*\(\s*['"]([^'"]+)['"]/g, // await import('y')
+  /\brequire\s*\(\s*['"]([^'"]+)['"]/g, // require('y')
+];
+
 function importsDe(conteudo: string): string[] {
-  return [...conteudo.matchAll(/from\s+'([^']+)'/g)].map((m) => m[1]);
+  return PADROES_DE_DEPENDENCIA.flatMap((padrao) =>
+    [...conteudo.matchAll(padrao)].map((m) => m[1]),
+  );
+}
+
+/**
+ * Dependências do conteúdo que saem da pasta **e** não estão na lista.
+ *
+ * É esta função — e não só o extrator — que o guarda aplica sobre os fontes de
+ * verdade. Ter uma função só é o que permite provar o vermelho com um fonte de
+ * mentira: exercitar o guarda inteiro mexendo em `scoreboard.service.ts` exigiria
+ * deixar um import de IA no repositório para o teste ficar verde.
+ */
+function foraDaLista(conteudo: string): string[] {
+  return importsDe(conteudo).filter(
+    // Import da própria pasta é livre; o que precisa de justificativa é sair dela.
+    (especificador) =>
+      !especificador.startsWith('./') && !IMPORTS_PERMITIDOS.includes(especificador),
+  );
 }
 
 describe('social não gera custo de inferência', () => {
+  it.each([
+    ["import { AI_MODEL_PRICING } from '../ai/ai-pricing';", 'import nomeado'],
+    ['import { AI_MODEL_PRICING } from "../ai/ai-pricing";', 'aspas duplas'],
+    ["import '../ai/ai-pricing';", 'efeito colateral, sem `from`'],
+    ["const ia = await import('../ai/ai-pricing');", 'import dinâmico dentro do método'],
+    ["void require('../ai/ai-pricing');", 'require'],
+  ])('o guarda pega %s (%s)', (linha) => {
+    // Enquanto o extrator fechava só por `from` com aspas simples, as quatro
+    // últimas formas passavam por baixo dele: `tsc`, `eslint` e os testes de
+    // `social/` ficavam verdes com `apps/api/src/ai/ai-pricing` importado dentro
+    // de `recompute`. O import dinâmico é o que mais importa — é exatamente
+    // assim que um cliente de inferência é plugado sob demanda, sem tocar no
+    // topo do arquivo, que é onde a revisão olha.
+    expect(foraDaLista(linha)).toEqual(['../ai/ai-pricing']);
+  });
+
   it('só importa o que está na lista — nada de IA entra por dependência', () => {
     const fontes = fontesDeSocial();
 
@@ -43,15 +93,10 @@ describe('social não gera custo de inferência', () => {
 
     for (const arquivo of fontes) {
       const relativo = arquivo.replace(`${RAIZ_SOCIAL}/`, '');
-      for (const especificador of importsDe(readFileSync(arquivo, 'utf8'))) {
-        // Import da própria pasta é livre; o que precisa de justificativa é sair dela.
-        if (especificador.startsWith('./')) continue;
-        expect({
-          relativo,
-          especificador,
-          permitido: IMPORTS_PERMITIDOS.includes(especificador),
-        }).toEqual({ relativo, especificador, permitido: true });
-      }
+      expect({ relativo, fora: foraDaLista(readFileSync(arquivo, 'utf8')) }).toEqual({
+        relativo,
+        fora: [],
+      });
     }
   });
 

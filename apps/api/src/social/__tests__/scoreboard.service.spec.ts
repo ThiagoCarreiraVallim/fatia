@@ -21,10 +21,15 @@ import type { PrismaService } from '../../common/prisma.service';
 const SP = 'America/Sao_Paulo'; // UTC-3
 const KIRITIMATI = 'Pacific/Kiritimati'; // UTC+14
 
-/** Segunda 00h e segunda 00h em São Paulo, sete dias depois. */
+/**
+ * Segunda 00h e segunda 00h em São Paulo, sete dias depois — os dias de
+ * calendário 02/03 a 08/03. O desafio tem fuso próprio: é o calendário em que
+ * ele foi anunciado, e vale igual para Ana e para Quirino.
+ */
 const JANELA = {
   startsAt: new Date('2026-03-02T03:00:00.000Z'),
   endsAt: new Date('2026-03-09T03:00:00.000Z'),
+  timezone: SP,
 };
 
 const ANA: ChallengeParticipant = { membershipId: 'm-ana', userId: 'u-ana', timezone: SP };
@@ -151,22 +156,59 @@ describe('ScoreboardService.recompute', () => {
     expect(porMembro(placar)).toEqual({ 'm-ana': 14_500 });
   });
 
-  it('a janela de dias é a de cada participante, não a de quem abriu o desafio', async () => {
-    // Em Kiritimati (UTC+14) a janela ainda cobre 09/03; em São Paulo, não.
-    // Uma janela única para todos daria a Ana um dia que o desafio dela não tem
-    // — ou tiraria de Quirino um dia que ele viveu dentro do desafio.
+  it('os mesmos passos nos mesmos dias pontuam igual em qualquer fuso', async () => {
+    // Ana (UTC-3) e Quirino (UTC+14) registram EXATAMENTE os mesmos passos nos
+    // mesmos dias de calendário. Placar é ranking: fuso não é desempenho, e a
+    // única resposta comparável é o empate.
+    //
+    // Com a janela derivada do fuso de cada participante, Quirino ficava com
+    // 02/03 a 09/03 (OITO dias) contra os sete de Ana, levava 09/03 sozinho e
+    // ainda pontuava com o 02/03 dele, que começou às 10h UTC de 01/03 — 17
+    // horas antes de o desafio existir. Ana não tinha como fazer nem um nem outro.
+    const dias = ['2026-03-01', '2026-03-02', '2026-03-05', '2026-03-08', '2026-03-09'];
     const { service } = build({
-      stepLog: [
-        { userId: 'u-ana', date: '2026-03-02', steps: 1000 },
-        { userId: 'u-ana', date: '2026-03-09', steps: 10_000 },
-        { userId: 'u-quirino', date: '2026-03-02', steps: 1000 },
-        { userId: 'u-quirino', date: '2026-03-09', steps: 10_000 },
-      ],
+      stepLog: dias.flatMap((date) => [
+        { userId: 'u-ana', date, steps: 1000 },
+        { userId: 'u-quirino', date, steps: 1000 },
+      ]),
     });
 
     const placar = await service.recompute(desafio('STEPS'), [ANA, QUIRINO]);
 
-    expect(porMembro(placar)).toEqual({ 'm-ana': 1000, 'm-quirino': 11_000 });
+    // Só 02, 05 e 08 estão no desafio — para os dois.
+    expect(porMembro(placar)).toEqual({ 'm-ana': 3000, 'm-quirino': 3000 });
+  });
+
+  it('a água usa a mesma janela do desafio, e não a do fuso de cada um', async () => {
+    // O gêmeo do teste acima para `WATER_ML`: sem ele, a janela por participante
+    // podia voltar só nesta métrica e nenhum teste acusaria.
+    const { service } = build({
+      waterLog: [
+        { userId: 'u-ana', date: '2026-03-03', ml: 500 },
+        { userId: 'u-quirino', date: '2026-03-03', ml: 500 },
+        // 09/03 está fora do desafio. Era o dia que Quirino ganhava de graça.
+        { userId: 'u-ana', date: '2026-03-09', ml: 9000 },
+        { userId: 'u-quirino', date: '2026-03-09', ml: 9000 },
+      ],
+    });
+
+    const placar = await service.recompute(desafio('WATER_ML'), [ANA, QUIRINO]);
+
+    expect(porMembro(placar)).toEqual({ 'm-ana': 500, 'm-quirino': 500 });
+  });
+
+  it('a consulta pede exatamente os dias do desafio, nem um a mais', async () => {
+    // A janela agora é o próprio `where`: não há segundo recorte em memória para
+    // consertar uma consulta larga demais. Se este `where` abrir, o placar conta
+    // dia que o desafio não cobre — e é esta asserção que segura isso.
+    const { prisma, service } = build({});
+
+    await service.recompute(desafio('STEPS'), [ANA, QUIRINO]);
+
+    expect(prisma.stepLog.findMany.mock.calls[0][0].where.date).toEqual({
+      gte: '2026-03-02',
+      lte: '2026-03-08',
+    });
   });
 
   it('dia ativo é o dia local, e o mesmo dia não conta duas vezes', async () => {
@@ -183,13 +225,109 @@ describe('ScoreboardService.recompute', () => {
     expect(porMembro(placar)).toEqual({ 'm-ana': 2 });
   });
 
+  it('o dia do treino é o do participante, mesmo com a janela sendo a do desafio', async () => {
+    // O mesmo instante cai em dias diferentes para os dois: 03/03 02h30 UTC é
+    // 02/03 23h30 em São Paulo e 03/03 16h30 em Kiritimati.
+    //
+    // Os dois têm passos em 02/03. Para Ana, treino e passos são o MESMO dia:
+    // um dia ativo. Para Quirino são dois. Datar a sessão pelo fuso do desafio
+    // colapsaria Quirino em um também — e o conjunto de dias dele passaria a
+    // misturar dois calendários, contando a mesma atividade duas vezes quando
+    // não colapsasse.
+    const { service } = build({
+      workoutSession: [
+        { userId: 'u-ana', completedAt: new Date('2026-03-03T02:30:00.000Z') },
+        { userId: 'u-quirino', completedAt: new Date('2026-03-03T02:30:00.000Z') },
+      ],
+      stepLog: [
+        { userId: 'u-ana', date: '2026-03-02', steps: 7000 },
+        { userId: 'u-quirino', date: '2026-03-02', steps: 7000 },
+      ],
+    });
+
+    const placar = await service.recompute(desafio('ACTIVE_DAYS'), [ANA, QUIRINO]);
+
+    expect(porMembro(placar)).toEqual({ 'm-ana': 1, 'm-quirino': 2 });
+  });
+
+  it('treino cujo dia local cai fora do desafio não vira dia ativo', async () => {
+    // 08/03 23h UTC ainda está dentro da janela de instantes, mas em Kiritimati
+    // já é 09/03 — dia que o desafio não cobre para ninguém. Sem o recorte, quem
+    // está a leste ganharia um oitavo dia que Ana não tem como ter.
+    const { service } = build({
+      workoutSession: [
+        { userId: 'u-ana', completedAt: new Date('2026-03-08T23:00:00.000Z') },
+        { userId: 'u-quirino', completedAt: new Date('2026-03-08T23:00:00.000Z') },
+      ],
+    });
+
+    const placar = await service.recompute(desafio('ACTIVE_DAYS'), [ANA, QUIRINO]);
+
+    expect(porMembro(placar)).toEqual({ 'm-ana': 1, 'm-quirino': 0 });
+  });
+
+  it('treino na madrugada do primeiro dia salva o dia também para quem está a leste', async () => {
+    // A outra ponta do teste acima, e a que sobrou depois de a janela de dias
+    // virar única. Os dois treinam às 2h da manhã de 02/03 — mesma hora, mesmo
+    // dia de calendário do desafio. Em São Paulo isso é 02/03 05h UTC; em
+    // Kiritimati, 01/03 12h UTC, quinze horas ANTES de `startsAt`.
+    //
+    // Enquanto a consulta de sessões usava `{ gte: startsAt, lt: endsAt }`, o
+    // treino de Quirino nem era lido: ele perdia um dia ativo que Ana ganhava
+    // pela mesma atividade. Recortar por dia local só resolve se a consulta
+    // trouxer o dia local inteiro — daí `instantesDosDias`.
+    const { service } = build({
+      workoutSession: [
+        { userId: 'u-ana', completedAt: new Date('2026-03-02T05:00:00.000Z') },
+        { userId: 'u-quirino', completedAt: new Date('2026-03-01T12:00:00.000Z') },
+      ],
+    });
+
+    const placar = await service.recompute(desafio('ACTIVE_DAYS'), [ANA, QUIRINO]);
+
+    expect(porMembro(placar)).toEqual({ 'm-ana': 1, 'm-quirino': 1 });
+  });
+
+  it('a faixa de instantes de ACTIVE_DAYS cobre o dia local de leste a oeste', async () => {
+    // A faixa é larga de propósito, mas não pode ser larga a esmo: se ela virar
+    // "a tabela inteira", a consulta lê registro de dia que o desafio não cobre
+    // — e o recorte em memória vira a única defesa contra um `select` distraído.
+    const { prisma, service } = build({});
+
+    await service.recompute(desafio('ACTIVE_DAYS'), [ANA, QUIRINO]);
+
+    // Meia-noite de 02/03 em Kiritimati (o mais a leste) até a virada de 08/03
+    // em São Paulo (o mais a oeste).
+    expect(prisma.workoutSession.findMany.mock.calls[0][0].where.completedAt).toEqual({
+      gte: new Date('2026-03-01T10:00:00.000Z'),
+      lt: new Date('2026-03-09T03:00:00.000Z'),
+    });
+  });
+
+  it('registro de valor zero não salva o dia', async () => {
+    // `steps: 0` é sync parcial que reportou zero, e o schema permite. Sem as
+    // guardas, um dia em que a pessoa não andou nem bebeu nada entraria como
+    // ativo só por existir uma linha na tabela.
+    const { service } = build({
+      stepLog: [
+        { userId: 'u-ana', date: '2026-03-03', steps: 0 },
+        { userId: 'u-ana', date: '2026-03-04', steps: 6000 },
+      ],
+      waterLog: [{ userId: 'u-ana', date: '2026-03-05', ml: 0 }],
+    });
+
+    const placar = await service.recompute(desafio('ACTIVE_DAYS'), [ANA]);
+
+    expect(porMembro(placar)).toEqual({ 'm-ana': 1 });
+  });
+
   it('água soma os copos do dia', async () => {
     const { service } = build({
       waterLog: [
         { userId: 'u-ana', date: '2026-03-03', ml: 250 },
         { userId: 'u-ana', date: '2026-03-03', ml: 250 },
         { userId: 'u-ana', date: '2026-03-04', ml: 500 },
-        // Fora da janela local de São Paulo.
+        // Fora dos dias do desafio.
         { userId: 'u-ana', date: '2026-03-09', ml: 9000 },
       ],
     });
@@ -289,13 +427,30 @@ describe('buildScoreboard', () => {
       { displayName: 'Bruno', score: 10 },
       { displayName: 'Ana', score: 30 },
       { displayName: 'Carla', score: 10 },
+      // Sem esta quarta linha o fixture acabava no empate: "a seguinte" nunca
+      // existia, e o ranking denso (que daria 3 aqui, não 4) passava verde
+      // apesar do nome do teste.
+      { displayName: 'Dedé', score: 5 },
     ]);
 
     expect(placar).toEqual([
       { displayName: 'Ana', score: 30, rank: 1 },
       { displayName: 'Bruno', score: 10, rank: 2 },
       { displayName: 'Carla', score: 10, rank: 2 },
+      { displayName: 'Dedé', score: 5, rank: 4 },
     ]);
+  });
+
+  it('empate ordena por nome, e não pela ordem em que os participantes entraram', () => {
+    // A entrada já vem na ordem contrária à esperada de propósito: com a
+    // ordenação estável do JS, um desempate ausente devolveria 'Zoe' primeiro e
+    // a posição dos empatados oscilaria entre duas leituras iguais do placar.
+    const placar = buildScoreboard([
+      { displayName: 'Zoe', score: 10 },
+      { displayName: 'Ana', score: 10 },
+    ]);
+
+    expect(placar.map((l) => l.displayName)).toEqual(['Ana', 'Zoe']);
   });
 
   it('a linha que vai para a tela tem exatamente três chaves', () => {
