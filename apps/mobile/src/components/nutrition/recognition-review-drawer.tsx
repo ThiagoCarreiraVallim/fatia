@@ -35,8 +35,11 @@ import {
  *
  * Três coisas que a tela mostra de propósito, e que custam espaço:
  *
- * - **qual alimento da TACO casou**, e não só o nome que o modelo disse. "Arroz"
- *   casa com integral ou com tipo 1, e os macros diferem;
+ * - **qual alimento da TACO casou**, e não só o nome que o modelo disse.
+ *   "Mandioca frita" casa com "Mandioca, frita", e o preparo é o que decide o
+ *   macro — "Mandioca, crua" tem metade da caloria. A API só casa quando o nome
+ *   determina uma entrada só ("mandioca" sozinho não casa), mas quem confere se
+ *   acertou é quem está olhando o prato;
  * - **a confiança**, para ordenar a leitura e pintar de amarelo o duvidoso — ela
  *   nunca esconde item nem decide nada;
  * - **que o macro é estimado**, quando não houve casamento.

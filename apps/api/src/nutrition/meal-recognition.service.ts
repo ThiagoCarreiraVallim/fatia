@@ -11,7 +11,7 @@ import { ConfigService } from '@nestjs/config';
 import { FoodService } from './food.service';
 import { calcMacrosFromFood } from './helpers/calc-macros';
 import { NaoEhJpegError, removerMetadadosDoJpeg } from './helpers/strip-exif';
-import { matchRank, MatchRank, normalizeSearchText } from '../common/search-text';
+import { normalizeSearchText } from '../common/search-text';
 
 /**
  * Reconhecimento de refeição por foto (#139).
@@ -46,10 +46,10 @@ export interface ItemReconhecido {
   foodId: number | null;
   /**
    * Nome do alimento do catálogo que casou. É **diferente** de
-   * `nomeReconhecido` de propósito: "arroz" casa com "Arroz, integral, cozido"
-   * ou com "Arroz, tipo 1, cozido", e os macros não são os mesmos. Esconder qual
-   * deles foi escolhido transforma um erro corrigível num macro errado gravado
-   * em silêncio.
+   * `nomeReconhecido` de propósito: "mandioca frita" casa com "Mandioca, frita",
+   * e o nome da tabela carrega o preparo que decide o macro. Esconder qual
+   * entrada foi escolhida transformaria um erro corrigível num macro errado
+   * gravado em silêncio — e é por isso que a tela mostra os dois nomes.
    */
   nomeDoCatalogo: string | null;
   grams: number;
@@ -104,13 +104,27 @@ const TIMEOUT_PADRAO_MS = 180_000;
 const TIMEOUT_DE_STATUS_MS = 3_000;
 
 /**
- * Casamento com a TACO só a partir de `WordPrefix`. `Contains` — que é o que
- * casaria "coco" com "leite de coco" — fica de fora: um casamento errado grava
- * um macro completamente diferente sem nenhum sinal de erro, e é o risco mais
- * caro desta funcionalidade. Item que não casa vira item livre estimado, que a
- * pessoa corrige em um toque; item casado errado ela não tem como perceber.
+ * Quantos candidatos pedir ao catálogo — o teto que `FoodService.search` aceita.
+ *
+ * Não é folga estética: a segunda condição de `melhorCorrespondencia` decide
+ * pela **quantidade** de entradas que competem pelo nome, e uma lista cortada
+ * cedo demais faria um nome ambíguo parecer único. Pedir o teto é o que mantém
+ * a competição visível — a identidade mais populosa da TACO ("carne") tem 60
+ * entradas e continua ambígua com folga mesmo truncada em 50.
  */
-const RANK_MINIMO = MatchRank.WordPrefix;
+const LIMITE_DE_CANDIDATOS = 50;
+
+/**
+ * A **identidade** de um nome de catálogo: o segmento antes da primeira vírgula.
+ *
+ * Os nomes da TACO são `"<Alimento>, <qualificador>, <qualificador>"` — "Arroz,
+ * integral, cozido", "Frango, coxa, com pele, assada". O primeiro segmento é o
+ * alimento; o resto é preparo, corte ou variedade. Essa separação é o que
+ * permite dizer que "maçã" não é "macaúba" sem manter uma lista de exceções.
+ */
+function identidadeDoCatalogo(nome: string): string {
+  return normalizeSearchText(nome.split(',')[0] ?? '');
+}
 
 @Injectable()
 export class MealRecognitionService {
@@ -248,6 +262,19 @@ export class MealRecognitionService {
     this.logger.warn(`Agente de IA respondeu ${http.status} (${code || 'sem code'})`);
 
     const manual = 'Registre a refeição manualmente enquanto isso.';
+
+    // 401/403 do agente é **erro de configuração**, e ele chega sem `code`
+    // porque quem recusa é a camada de credencial, antes do handler. Caindo no
+    // `default`, virava "o reconhecimento por foto falhou" — uma falha de
+    // operação vestida de falha do modelo, que manda quem opera procurar no
+    // lugar errado. Os dois lados precisam concordar sobre `AGENT_API_KEY`.
+    if (http.status === 401 || http.status === 403) {
+      return new ServiceUnavailableException(
+        'O reconhecimento por foto está mal configurado nesta instância: a API não conseguiu ' +
+          `se autenticar no agente de IA. ${manual}`,
+      );
+    }
+
     switch (code) {
       case 'AI_PROVIDER_NOT_CONFIGURED':
         return new ServiceUnavailableException(
@@ -315,17 +342,47 @@ export class MealRecognitionService {
     return casados;
   }
 
+  /**
+   * O alimento da TACO que o nome reconhecido **determina**, ou `null`.
+   *
+   * Determina, e não "mais se parece com". A regra anterior era um piso de
+   * `MatchRank` e não protegia o que dizia proteger: como todo nome da TACO
+   * começa pela identidade, um termo de uma palavra casa em `Prefix` com
+   * qualquer entrada que **comece** por ele, e o desempate por nome mais curto
+   * escolhia uma arbitrária. Contra o catálogo real isso dava "maçã" →
+   * "Macaúba, crua" (525 kcal em 130 g no lugar de ~73), "sal" → "Salame",
+   * "frango" → "Frango, fígado, cru" — todos com `estimado: false`, ou seja,
+   * apresentados como confirmados pela tabela.
+   *
+   * Duas condições, as duas necessárias:
+   *
+   * 1. **Identidade.** O termo tem de cobrir o segmento antes da primeira
+   *    vírgula, que é o alimento. "maçã" não cobre "macaúba"; "leite de coco"
+   *    cobre o "leite" de "Leite, de coco" e "coco" não cobre.
+   * 2. **Unicidade.** Se mais de uma entrada passa em (1), o nome não escolheu
+   *    entre elas — e nós também não escolhemos. "arroz" vale igualmente para
+   *    "Arroz, integral, cru" (360 kcal/100 g) e "Arroz, tipo 1, cozido" (128);
+   *    chutar é exatamente o macro errado gravado sem sintoma. Vira item livre
+   *    estimado, que a pessoa corrige em um toque e vê marcado na tela.
+   */
   private async melhorCorrespondencia(userId: string, nome: string) {
     const termo = normalizeSearchText(nome);
     if (!termo) return null;
 
-    // O `search` já filtra por dono (catálogo público + customs do usuário) e
-    // já ranqueia. O que falta é o **piso**: ele devolve `Contains` de bom grado,
-    // e é aí que "coco" casa com "leite de coco".
-    const candidatos = await this.foods.search(userId, { q: nome, limit: 5 });
-    const melhor = candidatos[0];
-    if (!melhor) return null;
+    // O `search` já filtra por dono (catálogo público + customs do usuário) e já
+    // ranqueia. O que ele não faz — nem deve — é recusar: para quem digita, o
+    // resultado mais ou menos parecido é útil, porque quem escolhe é a pessoa.
+    // Aqui não há quem escolha, então a recusa é nossa.
+    const candidatos = await this.foods.search(userId, {
+      q: nome,
+      limit: LIMITE_DE_CANDIDATOS,
+    });
 
-    return matchRank(normalizeSearchText(melhor.name), termo) <= RANK_MINIMO ? melhor : null;
+    const elegiveis = candidatos.filter((alimento) => {
+      const identidade = identidadeDoCatalogo(alimento.name);
+      return identidade === termo || termo.startsWith(`${identidade} `);
+    });
+
+    return elegiveis.length === 1 ? elegiveis[0] : null;
   }
 }

@@ -98,10 +98,12 @@ export default function PrivacyPage() {
       <LegalSection title="O que NÃO coletamos">
         <ul>
           <li>
-            <strong>Fotos.</strong> Não guardamos imagem nenhuma: não há bucket, não há disco, não
-            há coluna de foto. Se você fotografa uma refeição para o <em>seu</em> Claude analisar, a
-            imagem nem chega ao Fatia. Veja a seção <strong>Inteligência artificial</strong> para o
-            caso em que ela passa por aqui sem ser guardada.
+            <strong>Fotos.</strong> Nenhuma imagem é armazenada — não há banco de fotos, nem em
+            disco, nem em cache. Se você usa o <strong>reconhecimento de refeição por foto</strong>{' '}
+            no aplicativo, a imagem <em>transita</em> pelo servidor do Fatia e segue para um
+            provedor de visão, sem os metadados (veja abaixo); ela não é gravada em lugar nenhum e
+            não fica vinculada a você. Se você fotografa uma refeição no seu próprio Claude, a
+            imagem não passa pelo Fatia em momento algum.
           </li>
           <li>
             <strong>Senhas.</strong> Ficam no provedor de identidade, não conosco.
@@ -222,8 +224,7 @@ export default function PrivacyPage() {
         <p>
           <strong>Se você auto-hospeda o Fatia</strong> com um modelo rodando na sua própria
           máquina, nada disso se aplica: não há terceiro envolvido, porque o dado não sai de onde
-          você o instalou.
-        </p>
+          você o instalou.        </p>
       </LegalSection>
 
       <LegalSection title="Com quem compartilhamos">
@@ -250,8 +251,7 @@ export default function PrivacyPage() {
             instrução de <strong>não registrar</strong> o conteúdo; do lado do provedor de modelo,
             quem responde pela retenção é o contrato com ele, que será nomeado aqui — junto dessa
             cláusula — antes de a funcionalidade existir. Veja{' '}
-            <strong>Inteligência artificial</strong>.
-          </li>
+            <strong>Inteligência artificial</strong>.          </li>
         </ul>
         <p>
           Não vendemos, alugamos nem cedemos dados. Só entregamos algo a autoridade pública mediante

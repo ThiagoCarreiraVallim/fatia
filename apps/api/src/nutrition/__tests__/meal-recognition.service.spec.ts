@@ -84,6 +84,45 @@ function alimento(parcial: Partial<Food> & Pick<Food, 'id' | 'name'>): Food {
   } as Food;
 }
 
+/**
+ * Recorte do catálogo **real**, com id, nome e kcal copiados de
+ * `packages/db/prisma/data/taco.csv`.
+ *
+ * Ele existe porque a versão anterior destes testes montava um catálogo de
+ * **um item** por cenário, e com cardinalidade 1 não existe desempate — que é
+ * exatamente onde o casamento errava. Um catálogo de um item só responde "achou
+ * o único que havia" e diz isso com cara de teste verde.
+ *
+ * As vizinhanças aqui não são decorativas: cada uma é uma classe de erro que já
+ * aconteceu contra o catálogo de verdade. Macaúba é a vizinha de "maçã" em
+ * `Prefix`; Melado é a de "mel"; os três arrozes e as duas maçãs são a
+ * ambiguidade que nenhum nome de uma palavra resolve.
+ */
+const TACO: Food[] = [
+  alimento({ id: 1, name: 'Arroz, integral, cozido', kcalPer100g: 123.53 }),
+  alimento({ id: 2, name: 'Arroz, integral, cru', kcalPer100g: 359.68 }),
+  alimento({ id: 3, name: 'Arroz, tipo 1, cozido', kcalPer100g: 128.26 }),
+  alimento({ id: 221, name: 'Maçã, Argentina, com casca, crua', kcalPer100g: 62.53 }),
+  alimento({ id: 222, name: 'Maçã, Fuji, com casca, crua', kcalPer100g: 55.52 }),
+  alimento({ id: 223, name: 'Macaúba, crua', kcalPer100g: 404.28 }),
+  alimento({ id: 129, name: 'Mandioca, cozida', kcalPer100g: 125.36 }),
+  alimento({ id: 130, name: 'Mandioca, crua', kcalPer100g: 151.42 }),
+  alimento({
+    id: 132,
+    name: 'Mandioca, frita',
+    kcalPer100g: 300.06,
+    proteinPer100g: 2.2,
+    carbsPer100g: 40.5,
+    fatPer100g: 13.4,
+  }),
+  alimento({ id: 507, name: 'Mel, de abelha', kcalPer100g: 309.24 }),
+  alimento({ id: 508, name: 'Melado', kcalPer100g: 296.5 }),
+  alimento({ id: 509, name: 'Caramelo, doce', kcalPer100g: 382 }),
+  alimento({ id: 523, name: 'Leite, de coco', kcalPer100g: 166.16 }),
+  alimento({ id: 148, name: 'Coco, cru', kcalPer100g: 406 }),
+  alimento({ id: 149, name: 'Coco, verde, água', kcalPer100g: 21.6 }),
+];
+
 interface CenarioOpcoes {
   env?: Record<string, string>;
   catalogo?: Food[];
@@ -101,9 +140,10 @@ function montar(opcoes: CenarioOpcoes = {}) {
 
   const search = jest.fn(
     async (userId: string, params: { q?: string; limit?: number }): Promise<Food[]> => {
-      // Reusa o ranqueamento de verdade: um duplo que devolvesse sempre o
-      // primeiro alimento esconderia justamente o piso de casamento que este
-      // serviço acrescenta.
+      // Reusa o ranqueamento de verdade — e, com ele, o filtro que o `contains`
+      // do banco faz (`rankByRelevance` descarta `MatchRank.None`). Um duplo que
+      // devolvesse sempre o primeiro alimento esconderia justamente a recusa que
+      // este serviço acrescenta em cima da busca.
       const { rankByRelevance } = await import('../../common/search-text');
       const visiveis = (opcoes.catalogo ?? []).filter(
         (f) => f.createdByUserId === null || f.createdByUserId === userId,
@@ -199,10 +239,10 @@ describe('MealRecognitionService', () => {
   });
 
   describe('casamento com a TACO', () => {
-    const respostaComArrozEBolinho = {
+    const respostaComMandiocaEBolinho = {
       items: [
         {
-          name: 'arroz',
+          name: 'mandioca frita',
           grams: 150,
           confidence: 0.9,
           kcal: 999,
@@ -215,39 +255,66 @@ describe('MealRecognitionService', () => {
     };
 
     it('casou: o macro vem da TACO e a estimativa do modelo é descartada', async () => {
-      const { service } = montar({
-        catalogo: [
-          alimento({
-            id: 42,
-            name: 'Arroz, integral, cozido',
-            kcalPer100g: 124,
-            proteinPer100g: 2.6,
-            carbsPer100g: 25.8,
-            fatPer100g: 1,
-          }),
-        ],
-      });
-      fetchMock.mockResolvedValue(respostaDoAgente(respostaComArrozEBolinho));
+      // O catálogo tem as **três** mandiocas, e não só a que deve ganhar: com
+      // uma entrada só não existe desempate, e é no desempate que o casamento
+      // erra. Quem escolhe aqui é o preparo dito pelo modelo ("frita"), não a
+      // sorte da ordenação.
+      const { service } = montar({ catalogo: TACO });
+      fetchMock.mockResolvedValue(respostaDoAgente(respostaComMandiocaEBolinho));
 
       const { itens } = await service.reconhecer(USER, JPEG_COM_EXIF_GPS);
 
       expect(itens[0]).toMatchObject({
-        nomeReconhecido: 'arroz',
-        foodId: 42,
-        // A UI mostra qual alimento casou, e não só o nome que o modelo disse:
-        // "arroz" casa com integral ou com tipo 1, e os macros diferem.
-        nomeDoCatalogo: 'Arroz, integral, cozido',
+        nomeReconhecido: 'mandioca frita',
+        foodId: 132,
+        // A UI mostra qual entrada casou, e não só o nome que o modelo disse:
+        // crua, cozida e frita são o mesmo alimento com o dobro da caloria.
+        nomeDoCatalogo: 'Mandioca, frita',
         estimado: false,
-        kcal: 186,
-        proteinG: 3.9,
+        kcal: 450.09,
+        proteinG: 3.3,
       });
       // O 999 kcal do modelo não sobreviveu ao casamento.
       expect(itens[0].kcal).not.toBe(999);
     });
 
+    it('não casa "maçã" com "Macaúba" só porque um nome começa pelo outro', async () => {
+      // A regressão que custou caro. Todo nome da TACO começa pela identidade,
+      // então "maca" é `MatchRank.Prefix` (1) de "macauba crua" — passava em
+      // qualquer piso de rank — e o desempate por nome mais curto escolhia
+      // Macaúba na frente das duas maçãs. Resultado contra o catálogo real:
+      // 525,56 kcal em 130 g no lugar de ~73, com `estimado: false`, ou seja,
+      // apresentado como confirmado pela tabela.
+      const { service } = montar({ catalogo: TACO });
+      fetchMock.mockResolvedValue(
+        respostaDoAgente({ items: [{ name: 'maçã', grams: 130, confidence: 0.9 }] }),
+      );
+
+      const { itens } = await service.reconhecer(USER, JPEG_COM_EXIF_GPS);
+
+      expect(itens[0]).toMatchObject({ foodId: null, nomeDoCatalogo: null, estimado: true });
+      // E, principalmente, sem a caloria da macaúba entrando como maçã.
+      expect(itens[0].kcal).toBeNull();
+    });
+
+    it('nome genérico que serve a várias entradas não escolhe nenhuma', async () => {
+      // "arroz" vale igualmente para integral cru (360 kcal/100 g) e tipo 1
+      // cozido (128). O nome não escolheu entre elas; escolher por conta seria
+      // errar o macro em quase 3× sem nenhum sintoma na tela. Item livre é a
+      // resposta honesta — a pessoa corrige em um toque e vê que é estimado.
+      const { service } = montar({ catalogo: TACO });
+      fetchMock.mockResolvedValue(
+        respostaDoAgente({ items: [{ name: 'arroz', grams: 150, confidence: 0.9 }] }),
+      );
+
+      const { itens } = await service.reconhecer(USER, JPEG_COM_EXIF_GPS);
+
+      expect(itens[0]).toMatchObject({ foodId: null, estimado: true });
+    });
+
     it('não casou: vira item livre marcado como estimado', async () => {
       const { service } = montar({ catalogo: [] });
-      fetchMock.mockResolvedValue(respostaDoAgente(respostaComArrozEBolinho));
+      fetchMock.mockResolvedValue(respostaDoAgente(respostaComMandiocaEBolinho));
 
       const { itens } = await service.reconhecer(USER, JPEG_COM_EXIF_GPS);
 
@@ -266,35 +333,64 @@ describe('MealRecognitionService', () => {
       expect(itens[1].fatG).toBeNull();
     });
 
-    it('não casa "mel" com "caramelo" só porque um contém o outro', async () => {
-      // O risco mais caro da funcionalidade. `mel` está no meio de `caramelo`, e
-      // a busca por texto devolve isso de bom grado — é `MatchRank.Contains`, o
-      // mesmo caso de "coco" dentro de "leite de coco". Casado, ele gravaria o
-      // macro do caramelo com o nome do mel, sem nenhum sintoma; a pessoa não
-      // tem como perceber. Item não casado, ela corrige em um toque.
-      const { service } = montar({
-        catalogo: [alimento({ id: 7, name: 'Caramelo, doce', kcalPer100g: 382 })],
-      });
+    it('"mel" acha "Mel, de abelha" no meio de "Melado" e "Caramelo"', async () => {
+      // Um teste, as duas classes de erro que competem com a resposta certa:
+      // "Melado" começa com "mel" (`Prefix`, a falha dominante e a que nenhum
+      // piso de rank barrava) e "Caramelo, doce" contém "mel" no meio da
+      // palavra (`Contains`). Nenhum dos dois tem "mel" como identidade, então
+      // sobra uma entrada só — e é a certa, com o macro dela.
+      const { service } = montar({ catalogo: TACO });
       fetchMock.mockResolvedValue(
         respostaDoAgente({ items: [{ name: 'mel', grams: 20, confidence: 0.7 }] }),
       );
 
       const { itens } = await service.reconhecer(USER, JPEG_COM_EXIF_GPS);
 
-      expect(itens[0].foodId).toBeNull();
-      expect(itens[0].estimado).toBe(true);
-      // E, principalmente, sem o macro do caramelo entrando como mel.
-      expect(itens[0].kcal).toBeNull();
+      expect(itens[0]).toMatchObject({
+        foodId: 507,
+        nomeDoCatalogo: 'Mel, de abelha',
+        estimado: false,
+        kcal: 61.85,
+      });
+    });
+
+    it('"coco" não casa com "Leite, de coco", mas "leite de coco" casa', async () => {
+      // O par que o comentário antigo usava como exemplo, agora nos dois
+      // sentidos. "coco" não é a identidade de "Leite, de coco" — a identidade
+      // é "leite" —, e além disso serve a duas entradas de coco: item livre. Já
+      // "leite de coco" cobre a identidade "leite" e sobra uma só.
+      const { service } = montar({ catalogo: TACO });
+      fetchMock.mockResolvedValue(
+        respostaDoAgente({
+          items: [
+            { name: 'coco', grams: 50, confidence: 0.6 },
+            { name: 'leite de coco', grams: 200, confidence: 0.8 },
+          ],
+        }),
+      );
+
+      const { itens } = await service.reconhecer(USER, JPEG_COM_EXIF_GPS);
+
+      expect(itens[0]).toMatchObject({ foodId: null, estimado: true });
+      expect(itens[1]).toMatchObject({
+        foodId: 523,
+        nomeDoCatalogo: 'Leite, de coco',
+        estimado: false,
+      });
     });
 
     it('procura no catálogo do dono da foto, e não em catálogo alheio', async () => {
       // Sem RLS (ADR 010), o isolamento é da aplicação: o `userId` que chega ao
       // `FoodService.search` tem de ser o do `@CurrentUser()`, sempre.
+      // O nome é "Tapioca" e não "Tapioca da casa": precisa ser um alimento que
+      // **casaria** se estivesse visível (identidade igual ao termo, e único),
+      // senão o `foodId: null` abaixo seria consequência da regra de casamento
+      // e não do isolamento, e o teste passaria verde com o isolamento furado.
       const { service, search } = montar({
         catalogo: [
           alimento({
             id: 9,
-            name: 'Tapioca da casa',
+            name: 'Tapioca',
             source: 'CUSTOM',
             createdByUserId: OUTRO_USER,
           }),
@@ -374,6 +470,19 @@ describe('MealRecognitionService', () => {
           tipo as never,
         );
       }
+    });
+
+    it('401 do agente é erro de configuração, e não "o modelo falhou"', async () => {
+      // API com `AGENT_API_KEY` e agente sem (ou com outra) devolve 401 **sem**
+      // `error.code`, porque a recusa acontece antes do handler. Caindo no
+      // `default`, a pessoa lia "o reconhecimento por foto falhou" e quem opera
+      // ia procurar defeito no modelo. É configuração, e o erro tem de dizer.
+      const { service } = montar();
+      fetchMock.mockResolvedValue(respostaDoAgente({ detail: 'Unauthorized' }, 401));
+
+      await expect(service.reconhecer(USER, JPEG_COM_EXIF_GPS)).rejects.toThrow(
+        /mal configurado.*autenticar no agente/i,
+      );
     });
 
     it('resposta do agente sem `items` vira 502 em vez de itens undefined', async () => {

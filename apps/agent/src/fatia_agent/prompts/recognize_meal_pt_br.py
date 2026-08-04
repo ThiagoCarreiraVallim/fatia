@@ -5,10 +5,17 @@ nomes brasileiros. Pedir a resposta em inglês obrigaria a traduzir "collard
 greens" de volta para "couve" antes de procurar no catálogo, e é exatamente aí
 que o casamento erra.
 
-O prompt pede nome **genérico e curto** ("arroz branco cozido", não "arroz do
-almoço de domingo da vó") por um motivo mecânico: quem casa com a TACO é a mesma
-busca por texto normalizado que a pessoa usa digitando (`search-text.ts`). Nome
-comprido perde no ranqueamento, e o item cai como estimado sem necessidade.
+O prompt pede nome **sem marca e sem apelido** ("arroz branco cozido", não "arroz
+do almoço de domingo da vó"), mas **com o preparo**, e isso não é estilo: é o que
+decide se o macro vem da tabela ou de um chute.
+
+Os nomes da TACO são `"<Alimento>, <qualificador>"`, e o qualificador é
+justamente o preparo — "Mandioca, crua" tem 151 kcal/100 g e "Mandioca, frita"
+tem 300. Por isso `meal-recognition.service.ts` só casa quando o nome
+**determina uma entrada só**: "mandioca frita" casa, "mandioca" sozinho não, e
+"maçã" não pode virar "Macaúba, crua". Quanto mais específico o nome que o
+modelo devolve, mais itens casam com a tabela; nome de uma palavra cai como
+estimado — o que é a resposta correta, e não um defeito a contornar.
 """
 
 SISTEMA = (
@@ -26,9 +33,12 @@ Responda com um único objeto JSON neste formato exato:
 "protein_g":3.6,"carbs_g":42.0,"fat_g":0.3}],"note":null}
 
 Regras:
-- "name": nome genérico do alimento, em português do Brasil, curto e sem marca.
-  Prefira "feijão carioca cozido" a "feijãozinho da casa". Um item por alimento;
-  não junte "arroz e feijão" numa linha só.
+- "name": nome do alimento em português do Brasil, sem marca e sem apelido —
+  prefira "feijão carioca cozido" a "feijãozinho da casa". Inclua o **preparo**
+  sempre que der para ver na foto ("mandioca frita", "arroz branco cozido",
+  "frango grelhado"): cru, cozido e frito são o mesmo alimento com o dobro da
+  caloria, e sem o preparo não dá para saber qual é. Um item por alimento; não
+  junte "arroz e feijão" numa linha só.
 - "grams": porção estimada em gramas, considerando o tamanho do prato e dos
   talheres como referência. Sempre maior que zero.
 - "confidence": de 0 a 1, o quanto você tem certeza de que este alimento está na

@@ -13,8 +13,11 @@ import {
   Put,
   Query,
   ServiceUnavailableException,
+  UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { CurrentUser, type CurrentUserPayload } from '../common/decorators/current-user.decorator';
+import { InferenceThrottlerGuard } from './inference-throttler.guard';
 import { FoodService } from './food.service';
 import { MealRecognitionService } from './meal-recognition.service';
 import { OffFoodService, atribuicaoDoOff } from './off-food.service';
@@ -33,6 +36,18 @@ import {
 } from './dto/meal.dto';
 import { UpsertGoalsDto } from './dto/goals.dto';
 import { UpsertNutrientTargetDto } from './dto/nutrient-target.dto';
+
+/**
+ * Teto de reconhecimentos por usuário e janela (#139).
+ *
+ * Cada chamada custa uma inferência de visão que a Fatia paga, e o
+ * reconhecimento é um gesto humano: fotografar, esperar de 20 a 100 s, conferir
+ * e confirmar. Cinco por minuto é folgado para quem está registrando uma
+ * refeição e barra o laço automatizado, que é o caso que importa. Não substitui
+ * a cota da #135 — corta o abuso trivial, não atribui custo.
+ */
+const TETO_DE_INFERENCIA = 5;
+const TETO_DE_INFERENCIA_MS = 60_000;
 
 @Controller('nutrition')
 export class NutritionController {
@@ -75,6 +90,8 @@ export class NutritionController {
    * tela de confirmação. Ver `meal-recognition.service.ts`.
    */
   @Post('meals/recognize')
+  @UseGuards(InferenceThrottlerGuard)
+  @Throttle({ default: { ttl: TETO_DE_INFERENCIA_MS, limit: TETO_DE_INFERENCIA } })
   async recognizeMealPhoto(@CurrentUser() user: CurrentUserPayload, @Body() corpo: unknown) {
     if (typeof corpo !== 'string' || corpo.trim() === '') {
       throw new BadRequestException(

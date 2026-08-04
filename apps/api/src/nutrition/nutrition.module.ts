@@ -3,6 +3,7 @@ import { text } from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import { NutritionController } from './nutrition.controller';
 import { FoodService } from './food.service';
+import { InferenceThrottlerGuard } from './inference-throttler.guard';
 import { MealRecognitionService } from './meal-recognition.service';
 import { OffFoodService } from './off-food.service';
 import { MealService } from './meal.service';
@@ -49,6 +50,7 @@ const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 })
   controllers: [NutritionController],
   providers: [
     FoodService,
+    InferenceThrottlerGuard,
     MealRecognitionService,
     OffFoodService,
     MealService,
