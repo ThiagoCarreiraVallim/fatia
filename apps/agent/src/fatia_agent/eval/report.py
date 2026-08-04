@@ -54,16 +54,30 @@ class Cabecalho:
     modelo: str
     provedor_host: str
     split: str
-    manifesto_sha256: str
+    conjunto_sha256: str
+    """Impressão digital dos rótulos **do split medido**, e não do arquivo inteiro.
+
+    O manifesto tem as duas metades: acrescentar uma foto ao `dev` não muda o
+    conjunto contra o qual o `eval` foi medido, e não pode liberar uma nova
+    medição no ledger (`run_benchmark.chave_da_execucao`).
+    """
     prompt_sha256: str
     n_fotos: int
+    """Fotos **tentadas**. Quantas renderam medida sai de `Identificacao.n_fotos`."""
     data: date
     truncado: bool = False
     """`True` quando `--limite` cortou o conjunto — nunca publicável."""
 
 
-def motivo_de_rascunho(cabecalho: Cabecalho) -> str | None:
-    """Por que este relatório não é publicável; `None` quando ele é."""
+def motivo_de_rascunho(cabecalho: Cabecalho, ident: Identificacao, porc: Porcao) -> str | None:
+    """Por que este relatório não é publicável; `None` quando ele é.
+
+    **A guarda conta o que foi medido, não o que foi tentado.** Trinta fotos no
+    manifesto com vinte e nove timeouts são uma medida sobre uma foto, e o
+    veredito abaixo sai exatamente dessas. Por isso `ident` e `porc` são
+    obrigatórios: quem chama não consegue perguntar "é publicável?" sem ter em
+    mãos os números que o veredito vai usar.
+    """
     if cabecalho.truncado:
         return (
             "A execução foi cortada por `--limite`: o conjunto medido não é o "
@@ -75,11 +89,19 @@ def motivo_de_rascunho(cabecalho: Cabecalho) -> str | None:
             "`dev` é o conjunto contra o qual o prompt é ajustado, e medir nele "
             "reporta o quanto o ajuste decorou as fotos do ajuste."
         )
-    if cabecalho.n_fotos < MINIMO_PUBLICAVEL:
+    if ident.n_fotos < MINIMO_PUBLICAVEL:
         return (
-            f"{cabecalho.n_fotos} foto(s) no split de avaliação, e o mínimo é "
-            f"{MINIMO_PUBLICAVEL}. Abaixo disso o intervalo contém aprovação e "
-            "reprovação ao mesmo tempo."
+            f"{ident.n_fotos} de {cabecalho.n_fotos} foto(s) renderam resposta "
+            f"utilizável, e o mínimo é {MINIMO_PUBLICAVEL}. O portão de "
+            "identificação é decidido só sobre essas — abaixo do mínimo o "
+            "intervalo contém aprovação e reprovação ao mesmo tempo."
+        )
+    if porc.erro_kcal_refeicao.n < MINIMO_PUBLICAVEL:
+        return (
+            f"{porc.erro_kcal_refeicao.n} de {cabecalho.n_fotos} foto(s) têm "
+            f"`kcal_100g` em todos os itens, e o mínimo é {MINIMO_PUBLICAVEL}. O "
+            "portão de kcal por refeição é decidido só sobre essas, e é ele que "
+            "decide."
         )
     return None
 
@@ -94,13 +116,13 @@ def montar_markdown(
 ) -> str:
     """O relatório inteiro em Markdown, pronto para virar arquivo."""
     limiares = limiares or Limiares()
-    motivo = motivo_de_rascunho(cabecalho)
+    motivo = motivo_de_rascunho(cabecalho, ident, porc)
 
     linhas: list[str] = ["# Benchmark de reconhecimento de refeição — execução", ""]
     if motivo is not None:
         linhas += [CARIMBO_RASCUNHO.format(motivo=motivo), ""]
 
-    linhas += _bloco_cabecalho(cabecalho)
+    linhas += _bloco_cabecalho(cabecalho, ident, porc)
     linhas += _bloco_limiares(limiares)
     linhas += _bloco_identificacao(ident)
     linhas += _bloco_porcao(porc)
@@ -122,7 +144,7 @@ def montar_markdown(
     return "\n".join(linhas) + "\n"
 
 
-def _bloco_cabecalho(cabecalho: Cabecalho) -> list[str]:
+def _bloco_cabecalho(cabecalho: Cabecalho, ident: Identificacao, porc: Porcao) -> list[str]:
     return [
         "## Contra o que isto foi medido",
         "",
@@ -135,8 +157,12 @@ def _bloco_cabecalho(cabecalho: Cabecalho) -> list[str]:
         f"| modelo | `{cabecalho.modelo}` |",
         f"| host do provedor | `{cabecalho.provedor_host}` |",
         f"| split | `{cabecalho.split}` |",
-        f"| fotos | {cabecalho.n_fotos} |",
-        f"| sha256 do manifesto | `{cabecalho.manifesto_sha256[:16]}…` |",
+        f"| fotos tentadas | {cabecalho.n_fotos} |",
+        # Tentada e medida são números diferentes, e é a segunda que sustenta o
+        # veredito: sem esta linha, vinte e nove timeouts somem do documento.
+        f"| fotos com resposta utilizável | {ident.n_fotos} |",
+        f"| fotos que sustentam o portão de kcal | {porc.erro_kcal_refeicao.n} |",
+        f"| sha256 do conjunto medido | `{cabecalho.conjunto_sha256[:16]}…` |",
         f"| sha256 do prompt | `{cabecalho.prompt_sha256[:16]}…` |",
         f"| data | {cabecalho.data.isoformat()} |",
         "",
@@ -190,12 +216,29 @@ def _bloco_porcao(porc: Porcao) -> list[str]:
         "| métrica | valor | n |",
         "| --- | --- | --- |",
         _linha_dist("MAPE em gramas (item)", porc.mape_gramas, unidade=" %"),
-        _linha_dist("MAPE em kcal (item)", porc.mape_kcal_item, unidade=" %"),
+        _linha_dist("erro de kcal por item (kcal)", porc.erro_kcal_item, unidade=" kcal"),
         _linha_dist("erro de kcal (refeição)", porc.erro_kcal_refeicao, unidade=" %"),
+        "",
+        "**Não há um “MAPE em kcal por item” aqui, e a ausência é a informação.** Como a",
+        "kcal do item é a grama vezes a `kcal_100g` do rótulo, a `kcal_100g` cancela na",
+        "razão e o percentual em kcal seria o mesmo número do percentual em gramas, com",
+        "outro nome. O que a kcal acrescenta é a magnitude: 20 % a mais de alface são",
+        "3 kcal, e 20 % a mais de óleo são 177 kcal — por isso a linha do meio está em",
+        "kcal, e não em porcento.",
         "",
         "O erro por refeição inclui o item que o modelo **esqueceu** — ele entra na conta",
         "real com a kcal do rótulo — porque é isso que a pessoa vê no total do dia.",
     ]
+    if porc.kcal_inventada_em_controle.n:
+        linhas += [
+            "",
+            f"Em {porc.kcal_inventada_em_controle.n} foto(s) de controle — sem comida no "
+            "rótulo — o modelo somou "
+            f"{_dist(porc.kcal_inventada_em_controle, unidade=' kcal')}.",
+            "Elas ficam fora do erro percentual por refeição porque a kcal real é zero e a",
+            "razão não existe, mas a kcal inventada num prato lavado entra no dia da pessoa",
+            "igual.",
+        ]
     if porc.fotos_subestimadas:
         linhas += [
             "",

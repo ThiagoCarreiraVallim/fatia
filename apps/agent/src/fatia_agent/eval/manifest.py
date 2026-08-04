@@ -181,5 +181,20 @@ def _arquivo_da_foto(foto_id: str, imagens: Path) -> Path | None:
     return None
 
 
-def sha256_do_arquivo(caminho: Path) -> str:
-    return hashlib.sha256(caminho.read_bytes()).hexdigest()
+def sha256_do_conjunto(rotulos: list[RotuloDeFoto]) -> str:
+    """Impressão digital dos rótulos **medidos**, e não do arquivo do manifesto.
+
+    O `sha256` do arquivo inteiro muda quando alguém acrescenta uma foto ao split
+    `dev` — e o ledger do `eval` (`run_benchmark.chave_da_execucao`) passaria a
+    ver um conjunto novo, liberando uma segunda medição do mesmo `eval` sem que
+    nada do `eval` tenha mudado. É exatamente o vazamento que o ledger existe
+    para impedir.
+
+    Ordena por `id` e serializa canônico: reordenar as linhas do manifesto não é
+    conjunto novo.
+    """
+    canonico = "\n".join(
+        json.dumps(rotulo.model_dump(), sort_keys=True, ensure_ascii=False)
+        for rotulo in sorted(rotulos, key=lambda r: r.id)
+    )
+    return hashlib.sha256(canonico.encode("utf-8")).hexdigest()

@@ -75,11 +75,12 @@ outra. Não há casamento aproximado: distância de edição faria "macaúba" ca
 
 Só sobre itens **corretamente identificados**.
 
-| métrica                   | definição                                |
-| ------------------------- | ---------------------------------------- |
-| MAPE em gramas            | erro percentual absoluto médio, por item |
-| MAPE em kcal              | idem, e é o que decide                   |
-| erro de kcal por refeição | o que a pessoa sente no total do dia     |
+| métrica                        | definição                                   |
+| ------------------------------ | ------------------------------------------- |
+| MAPE em gramas                 | erro percentual absoluto médio, por item    |
+| erro de kcal por item, em kcal | quanta caloria aquele erro de grama custou  |
+| erro de kcal por refeição      | o que a pessoa sente no total do dia, em %  |
+| kcal inventada em controle     | caloria somada em foto sem comida no rótulo |
 
 Errar 30 % na gramagem do arroz custa muito menos caloria do que errar 30 % no
 óleo; um número só esconde isso. A kcal é calculada **como o produto calcula** —
@@ -87,6 +88,18 @@ Errar 30 % na gramagem do arroz custa muito menos caloria do que errar 30 % no
 porque `meal-recognition.service.ts` descarta a estimativa de kcal do modelo
 quando o item casa com a tabela. Medir a kcal auto-relatada mediria um número que
 o produto joga fora.
+
+**Não há "MAPE em kcal por item", e a ausência é a informação.** Como a kcal do
+item é a grama vezes a `kcal_100g` do rótulo, a `kcal_100g` cancela na razão
+(`|k·p - k·r| / (k·r) = |p - r| / r`): um percentual em kcal seria o **mesmo
+número** do percentual em gramas, com outro nome, e duas colunas idênticas seriam
+lidas como duas evidências. O que a kcal acrescenta é a magnitude — 20 % a mais
+de alface são 3 kcal e 20 % a mais de óleo são 177 kcal — e é por isso que o erro
+de kcal por item sai **em kcal**, não em porcento.
+
+A foto de controle não tem erro percentual: a kcal real é zero, e dividir por ela
+inventaria um denominador. Ela sai numa linha própria, em kcal absoluta, porque
+um prato lavado que vira 300 kcal entra no dia da pessoa igual.
 
 O erro por refeição inclui **o item que o modelo esqueceu**, com a kcal do
 rótulo: um modelo que acerta a grama de tudo que viu, mas não viu a farofa, tem
@@ -107,16 +120,25 @@ relatório reporta.
 
 ## Amostra
 
-**Mínimo: 50 fotos, sendo pelo menos 30 no split de avaliação.** Abaixo disso o
-intervalo de uma proporção é largo o bastante para conter "aprova" e "reprova" ao
-mesmo tempo no limiar de revocação — o relatório sairia com um veredito que a
-amostra não sustenta.
+**Mínimo: 50 fotos, sendo pelo menos 30 com comida no split de avaliação** (mais
+as 2 ou 3 de controle, que são extras e não contam para esse mínimo). Abaixo
+disso o intervalo de uma proporção é largo o bastante para conter "aprova" e
+"reprova" ao mesmo tempo no limiar de revocação — o relatório sairia com um
+veredito que a amostra não sustenta.
 
 Isso não é conselho: `report.MINIMO_PUBLICAVEL` vale 30, e o gerador **carimba o
-documento como rascunho e se recusa a emitir veredito** abaixo disso, fora do
-split `eval`, ou quando a execução foi cortada por `--limite`. A regra mora no
-gerador, e não na disciplina de quem roda, porque é assim que ela pode ser
-testada (`tests/eval/test_report.py`).
+documento como rascunho e se recusa a emitir veredito** fora do split `eval`,
+quando a execução foi cortada por `--limite`, ou quando a amostra não chega ao
+mínimo. A regra mora no gerador, e não na disciplina de quem roda, porque é assim
+que ela pode ser testada (`tests/eval/test_report.py`).
+
+**E a amostra que conta é a medida, não a tentada.** Trinta fotos no manifesto
+com vinte e nove timeouts são uma medida sobre **uma** foto, e é dessa foto que o
+veredito sairia; trinta fotos das quais três têm `kcal_100g` em todos os itens
+decidem o portão de kcal sobre **três**. Por isso `motivo_de_rascunho` exige os
+próprios números do veredito — as fotos que responderam e as que sustentam o
+portão de kcal — e as duas contagens vão impressas no cabeçalho do relatório, ao
+lado das tentadas.
 
 **Toda agregação sai com `n` e dispersão.** Um MAPE de 22 % sobre 12 fotos, sem
 desvio, é impressão com aparência de medida, e é a forma mais provável de este
@@ -132,6 +154,14 @@ que produzem o número, o número é otimista e ninguém consegue perceber depoi
 ajuste se faz no `dev`; o número sai do `eval`, que roda **uma vez por prompt e
 por modelo** — o runner registra cada medição em `apps/agent/eval/eval-runs.jsonl`,
 versionado para a repetição aparecer no diff.
+
+A chave do ledger é o `sha256` dos rótulos **do split medido**, e não do arquivo
+do manifesto: acrescentar uma foto ao `dev` não muda o conjunto contra o qual o
+`eval` foi medido, e não pode destravar uma segunda medição. E o ledger registra
+**medição**, não tentativa — uma execução que o próprio relatório se recusa a
+publicar (provedor fora do ar, amostra insuficiente) não grava linha nenhuma,
+porque um ledger versionado afirmando um `eval` que não aconteceu trancaria a
+medição de verdade atrás de `--repetir-eval`.
 
 ## Limiar de aceitação — fixado antes de medir
 
@@ -149,23 +179,26 @@ mudança passa por diff neste arquivo.
 
 ## Resultado
 
-| campo                 | valor        |
-| --------------------- | ------------ |
-| modelo                | **pendente** |
-| host do provedor      | **pendente** |
-| data                  | **pendente** |
-| fotos no split `eval` | **0**        |
-| `sha256` do conjunto  | **pendente** |
+| campo                             | valor        |
+| --------------------------------- | ------------ |
+| modelo                            | **pendente** |
+| host do provedor                  | **pendente** |
+| data                              | **pendente** |
+| fotos tentadas no split `eval`    | **0**        |
+| fotos com resposta utilizável     | **0**        |
+| fotos que sustentam o portão kcal | **0**        |
+| `sha256` do conjunto              | **pendente** |
 
-| métrica                    | medido         | limiar | passa? |
-| -------------------------- | -------------- | ------ | ------ |
-| revocação de identificação | **não medido** | ≥ 0,80 | —      |
-| taxa de alucinação         | **não medido** | ≤ 0,10 | —      |
-| MAPE em gramas             | **não medido** | —      | —      |
-| MAPE em kcal (item)        | **não medido** | —      | —      |
-| erro de kcal por refeição  | **não medido** | ≤ 25 % | —      |
-| latência p50 / p95         | **não medido** | —      | —      |
-| custo por reconhecimento   | **não medido** | —      | —      |
+| métrica                        | medido         | limiar | passa? |
+| ------------------------------ | -------------- | ------ | ------ |
+| revocação de identificação     | **não medido** | ≥ 0,80 | —      |
+| taxa de alucinação             | **não medido** | ≤ 0,10 | —      |
+| MAPE em gramas                 | **não medido** | —      | —      |
+| erro de kcal por item, em kcal | **não medido** | —      | —      |
+| erro de kcal por refeição      | **não medido** | ≤ 25 % | —      |
+| kcal inventada em controle     | **não medido** | —      | —      |
+| latência p50 / p95             | **não medido** | —      | —      |
+| custo por reconhecimento       | **não medido** | —      | —      |
 
 ### Comparação com Cal AI / MyFitnessPal
 

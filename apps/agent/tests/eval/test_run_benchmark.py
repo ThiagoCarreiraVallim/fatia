@@ -14,12 +14,19 @@ from pathlib import Path
 
 import pytest
 
-from fatia_agent.eval.manifest import ErroDeManifesto, carregar_manifesto, resolver_fotos
+from fatia_agent.eval.manifest import (
+    ErroDeManifesto,
+    RotuloDeFoto,
+    carregar_manifesto,
+    resolver_fotos,
+    sha256_do_conjunto,
+)
 from fatia_agent.eval.metrics import identificacao, porcao
-from fatia_agent.eval.report import Cabecalho
+from fatia_agent.eval.report import MINIMO_PUBLICAVEL, Cabecalho
 from fatia_agent.eval.run_benchmark import (
     execucao_anterior,
     executar,
+    main,
     montar_saida,
     registrar_execucao,
 )
@@ -43,6 +50,9 @@ class ProvedorGravado:
         if isinstance(resposta, Exception):
             raise resposta
         return resposta
+
+    async def aclose(self) -> None:
+        return None
 
 
 def escrever_conjunto(tmp_path: Path, rotulos: list[dict[str, object]]) -> tuple[Path, Path]:
@@ -82,12 +92,60 @@ CONJUNTO = [
 ]
 
 
+_ARROZ = {"food": "arroz branco cozido", "grams": 150, "kcal_100g": 128}
+_RESPOSTA_CERTA = '{"items":[{"name":"arroz branco cozido","grams":150,"confidence":0.9}]}'
+
+
+def _rotulos(tmp_path: Path, nome: str, linhas: list[dict[str, object]]) -> list[RotuloDeFoto]:
+    """Manifesto sem imagem: só o que `sha256_do_conjunto` precisa ver."""
+    caminho = tmp_path / nome
+    caminho.write_text(
+        "\n".join(json.dumps({"sha256": "0" * 64, **linha}) for linha in linhas) + "\n",
+        encoding="utf-8",
+    )
+    return carregar_manifesto(caminho)
+
+
+def _so_do_eval(rotulos: list[RotuloDeFoto]) -> list[RotuloDeFoto]:
+    return [rotulo for rotulo in rotulos if rotulo.split == "eval"]
+
+
+def conjunto_publicavel(tmp_path: Path) -> tuple[Path, Path]:
+    """`MINIMO_PUBLICAVEL` fotos no `eval`, todas com `kcal_100g`."""
+    return escrever_conjunto(
+        tmp_path,
+        [
+            {"id": f"prato-{i:02d}", "split": "eval", "items": [_ARROZ]}
+            for i in range(MINIMO_PUBLICAVEL)
+        ],
+    )
+
+
+def argv_de(manifesto: Path, imagens: Path, ledger: Path, saida: Path) -> list[str]:
+    return [
+        "--base-url",
+        "http://localhost:1234/v1",
+        "--model",
+        "modelo-de-teste",
+        "--split",
+        "eval",
+        "--manifesto",
+        str(manifesto),
+        "--imagens",
+        str(imagens),
+        "--ledger",
+        str(ledger),
+        "--saida",
+        str(saida),
+    ]
+
+
 def cabecalho_de_teste(n_fotos: int, split: str = "dev") -> Cabecalho:
     return Cabecalho(
         modelo="modelo-de-teste",
         provedor_host="localhost",
         split=split,
-        manifesto_sha256="a" * 64,
+        conjunto_sha256="a" * 64,
         prompt_sha256=hashlib.sha256(PROMPT.encode()).hexdigest(),
         n_fotos=n_fotos,
         data=date(2026, 8, 4),
@@ -273,9 +331,133 @@ class TestLedgerDoSplitDeAvaliacao:
             modelo="modelo-de-teste",
             provedor_host="localhost",
             split="eval",
-            manifesto_sha256="a" * 64,
+            conjunto_sha256="a" * 64,
             prompt_sha256="c" * 64,
             n_fotos=30,
             data=date(2026, 8, 5),
         )
         assert execucao_anterior(ledger, outro) is None
+
+    def test_foto_nova_no_split_de_ajuste_nao_libera_repetir_o_eval(self, tmp_path):
+        """A chave do ledger é o conjunto **medido**. Com o `sha256` do arquivo
+        inteiro, acrescentar uma linha `dev` — que a medição do `eval` nem lê —
+        passaria por conjunto novo e liberaria uma segunda medição do mesmo
+        `eval`, que é justamente o que o ledger existe para impedir."""
+        do_eval = {"id": "prato-01", "split": "eval", "items": [{"food": "arroz", "grams": 100}]}
+        antes = _so_do_eval(_rotulos(tmp_path, "antes.jsonl", [do_eval]))
+        depois = _so_do_eval(
+            _rotulos(tmp_path, "depois.jsonl", [do_eval, {"id": "ajuste-09", "split": "dev"}])
+        )
+        assert sha256_do_conjunto(antes) == sha256_do_conjunto(depois)
+
+    def test_linha_dev_acrescentada_depois_nao_destrava_o_eval_no_runner(
+        self, tmp_path, monkeypatch
+    ):
+        """O mesmo, pelo caminho que o dono percorre: mede o `eval`, acrescenta
+        uma foto ao `dev` e tenta medir de novo. Tem de continuar recusando."""
+        manifesto, imagens = conjunto_publicavel(tmp_path)
+        ledger = tmp_path / "eval-runs.jsonl"
+        argv = argv_de(manifesto, imagens, ledger, tmp_path / "saida")
+        monkeypatch.setattr(
+            "fatia_agent.eval.run_benchmark.build_provider",
+            lambda _settings: ProvedorGravado([_RESPOSTA_CERTA] * MINIMO_PUBLICAVEL),
+        )
+        assert main(argv) == 0
+
+        with manifesto.open("a", encoding="utf-8") as arquivo:
+            arquivo.write(
+                json.dumps({"id": "ajuste-09", "sha256": "0" * 64, "split": "dev", "items": []})
+                + "\n"
+            )
+        assert main(argv) == 2
+
+    def test_ordem_das_linhas_nao_muda_o_conjunto(self, tmp_path):
+        linhas = [{"id": "b-01", "split": "eval"}, {"id": "a-01", "split": "eval"}]
+        rotulos = _rotulos(tmp_path, "ordem.jsonl", linhas)
+        assert sha256_do_conjunto(rotulos) == sha256_do_conjunto(list(reversed(rotulos)))
+
+    def test_rotulo_corrigido_muda_o_conjunto_e_libera_a_medicao(self, tmp_path):
+        antes = _rotulos(tmp_path, "a.jsonl", [{"id": "p-01", "split": "eval", "items": [_ARROZ]}])
+        depois = _rotulos(
+            tmp_path,
+            "b.jsonl",
+            [{"id": "p-01", "split": "eval", "items": [_ARROZ, {"food": "farofa", "grams": 30}]}],
+        )
+        assert sha256_do_conjunto(antes) != sha256_do_conjunto(depois)
+
+
+class TestOQueOLedgerRegistra:
+    """O ledger registra **medição**, e não tentativa.
+
+    Uma execução em que o provedor recusou tudo grava no repositório uma linha
+    afirmando um `eval` que não aconteceu — e tranca a medição de verdade atrás
+    de `--repetir-eval`, que é a porta que existe para o caso legítimo.
+    """
+
+    def test_execucao_toda_falha_nao_grava_o_ledger_e_sai_diferente_de_zero(
+        self, tmp_path, monkeypatch
+    ):
+        manifesto, imagens = conjunto_publicavel(tmp_path)
+        ledger = tmp_path / "eval-runs.jsonl"
+        recusa = ProvedorGravado(
+            [AIProviderTimeout("o provedor não respondeu")] * MINIMO_PUBLICAVEL
+        )
+        monkeypatch.setattr(
+            "fatia_agent.eval.run_benchmark.build_provider", lambda _settings: recusa
+        )
+
+        codigo = main(argv_de(manifesto, imagens, ledger, tmp_path / "saida"))
+
+        assert codigo != 0
+        assert not ledger.exists()
+        markdown = (tmp_path / "saida.md").read_text(encoding="utf-8")
+        assert "NÃO É RESULTADO PUBLICÁVEL" in markdown
+
+    def test_a_medicao_de_verdade_depois_de_uma_execucao_falha_nao_precisa_de_repetir(
+        self, tmp_path, monkeypatch
+    ):
+        """É o dano concreto: com o ledger gravado pela execução falha, a medição
+        seguinte — já configurada certo — sai com "já foi medido"."""
+        manifesto, imagens = conjunto_publicavel(tmp_path)
+        ledger = tmp_path / "eval-runs.jsonl"
+        argv = argv_de(manifesto, imagens, ledger, tmp_path / "saida")
+
+        monkeypatch.setattr(
+            "fatia_agent.eval.run_benchmark.build_provider",
+            lambda _settings: ProvedorGravado(
+                [AIProviderTimeout("o provedor não respondeu")] * MINIMO_PUBLICAVEL
+            ),
+        )
+        main(argv)
+
+        monkeypatch.setattr(
+            "fatia_agent.eval.run_benchmark.build_provider",
+            lambda _settings: ProvedorGravado([_RESPOSTA_CERTA] * MINIMO_PUBLICAVEL),
+        )
+        assert main(argv) == 0
+        assert ledger.is_file()
+        assert "NÃO É RESULTADO PUBLICÁVEL" not in (tmp_path / "saida.md").read_text(
+            encoding="utf-8"
+        )
+
+    def test_medicao_publicavel_e_registrada_e_a_repeticao_e_recusada(self, tmp_path, monkeypatch):
+        manifesto, imagens = conjunto_publicavel(tmp_path)
+        ledger = tmp_path / "eval-runs.jsonl"
+        argv = argv_de(manifesto, imagens, ledger, tmp_path / "saida")
+        monkeypatch.setattr(
+            "fatia_agent.eval.run_benchmark.build_provider",
+            lambda _settings: ProvedorGravado([_RESPOSTA_CERTA] * MINIMO_PUBLICAVEL),
+        )
+
+        assert main(argv) == 0
+        assert main(argv) == 2
+
+
+class TestLimite:
+    def test_limite_zero_e_recusado_em_vez_de_ignorado(self, capsys):
+        """`bool(0)` engolia a flag: o runner rodava o conjunto inteiro e o
+        relatório saía sem o carimbo de truncado. Flag ignorada em silêncio é
+        pior que flag inexistente."""
+        with pytest.raises(SystemExit):
+            main(["--base-url", "http://localhost:1234/v1", "--model", "m", "--limite", "0"])
+        assert "--limite precisa ser ≥ 1" in capsys.readouterr().err

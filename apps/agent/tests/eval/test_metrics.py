@@ -5,6 +5,8 @@ número: `n` nunca some, divisão por zero nunca vira 0,0 em silêncio, e foto q
 falhou não entra na conta de precisão como se o modelo tivesse errado.
 """
 
+import pytest
+
 from fatia_agent.eval.metrics import (
     ItemSolto,
     ResultadoDaFoto,
@@ -150,16 +152,58 @@ class TestPorcao:
                 )
             ]
         )
-        assert porc.mape_kcal_item.n == 1
-        assert porc.mape_kcal_item.media == 100.0
+        assert porc.erro_kcal_item.n == 1
+        # 100 g a mais de um alimento de 128 kcal/100 g = 128 kcal, e não 999.
+        assert porc.erro_kcal_item.media == 128.0
+
+    def test_erro_de_kcal_por_item_distingue_alface_de_oleo(self):
+        """O percentual em kcal seria **idêntico** ao percentual em gramas: a
+        `kcal_100g` cancela na razão. Duas colunas com o mesmo número seriam
+        lidas como duas evidências. O que a kcal acrescenta é a magnitude — 20 %
+        a mais de alface e 20 % a mais de óleo custam coisas diferentes."""
+        alface = porcao(
+            [foto(previstos=[("alface", 120, None)], rotulados=[("alface", 100, 15.0)])]
+        )
+        oleo = porcao(
+            [
+                foto(
+                    previstos=[("óleo de soja", 120, None)],
+                    rotulados=[("óleo de soja", 100, 884.0)],
+                )
+            ]
+        )
+
+        assert alface.mape_gramas.media == oleo.mape_gramas.media == 20.0
+        assert alface.erro_kcal_item.media == 3.0
+        assert oleo.erro_kcal_item.media == pytest.approx(176.8)
 
     def test_item_sem_kcal_no_rotulo_fica_de_fora_da_metrica_de_kcal(self):
         porc = porcao(
             [foto(previstos=[("arroz branco", 120, None)], rotulados=[("arroz branco", 100, None)])]
         )
         assert porc.mape_gramas.n == 1
-        assert porc.mape_kcal_item.n == 0
+        assert porc.erro_kcal_item.n == 0
         assert porc.fotos_com_kcal == 0
+
+    def test_rotulo_de_zero_grama_nao_vira_erro_zero(self):
+        """Erro relativo com real zero não existe. Devolver 0,0 entraria na média
+        como o **melhor** resultado possível de um item que ninguém mediu."""
+        porc = porcao(
+            [foto(previstos=[("arroz branco", 120, None)], rotulados=[("arroz branco", 0, 128.0)])]
+        )
+        assert porc.mape_gramas.n == 0
+        assert porc.mape_gramas.media is None
+
+    def test_controle_negativo_reporta_a_kcal_que_o_modelo_inventou(self):
+        """Prato lavado não tem erro percentual — a kcal real é zero e a razão
+        não existe. Sem esta linha, um controle que vira 300 kcal ficaria fora de
+        toda métrica de kcal, e é kcal que entra no dia da pessoa."""
+        porc = porcao(
+            [foto(previstos=[("feijoada", 300, 300.0)], rotulados=[], id_da_foto="prato-lavado")]
+        )
+        assert porc.erro_kcal_refeicao.n == 0
+        assert porc.kcal_inventada_em_controle.n == 1
+        assert porc.kcal_inventada_em_controle.media == 300.0
 
     def test_erro_da_refeicao_inclui_o_item_que_o_modelo_esqueceu(self):
         """É o número que a pessoa sente. Um modelo que acerta a grama de tudo

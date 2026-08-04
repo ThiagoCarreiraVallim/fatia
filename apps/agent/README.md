@@ -234,9 +234,11 @@ uv run python -m fatia_agent.eval.run_benchmark \
 **Não existe número de precisão do reconhecimento da Fatia**, e este runner não
 produz um sozinho: ele depende de um conjunto de fotos de comida brasileira
 rotuladas **com peso de balança**, que é trabalho manual e não está feito. O
-gerador de relatório se recusa a emitir veredito abaixo de 30 fotos no split de
-avaliação — a regra mora no código, e não na disciplina de quem roda, porque um
-número medido sobre cinco fotos vira citação em decisão futura.
+gerador de relatório se recusa a emitir veredito abaixo de 30 fotos **medidas**
+no split de avaliação — medidas, e não tentadas: trinta fotos com vinte e nove
+timeouts são uma medida sobre uma foto. A regra mora no código, e não na
+disciplina de quem roda, porque um número medido sobre cinco fotos vira citação
+em decisão futura.
 
 Como montar o conjunto: [`eval/README.md`](./eval/README.md). Metodologia,
 métricas e limiar:

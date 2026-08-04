@@ -19,6 +19,12 @@ Duas recusas moram aqui, e as duas existem para o **número** valer:
   número, o número é otimista e ninguém consegue auditar isso depois. O ledger em
   `eval/eval-runs.jsonl` é versionado justamente para que a repetição apareça no
   diff em vez de na cabeça de quem rodou.
+
+O ledger registra **medição**, e não tentativa: execução que o próprio relatório
+se recusa a publicar não grava linha nenhuma (`motivo_de_nao_medir`), porque uma
+linha afirmando um `eval` que não aconteceu trancaria a medição de verdade atrás
+de `--repetir-eval`. E a chave é o `sha256` dos rótulos do **split medido**: uma
+foto nova no `dev` não destrava o `eval`.
 """
 
 import argparse
@@ -36,7 +42,7 @@ from ..recognition.recognize_meal import PROMPT, recognize_meal
 from ..settings import AgentSettings, endpoint_host
 from . import manifest as mf
 from . import metrics as mt
-from .report import Cabecalho, Limiares, montar_markdown
+from .report import Cabecalho, Limiares, montar_markdown, motivo_de_rascunho
 
 # Raiz dos dados do benchmark: manifesto, imagens e ledger. `parents[3]` sai de
 # `src/fatia_agent/eval/` até `apps/agent/`.
@@ -132,6 +138,21 @@ def montar_saida(execucao: Execucao, limiares: Limiares | None = None) -> tuple[
     return markdown, bruto
 
 
+def motivo_de_nao_medir(execucao: Execucao) -> str | None:
+    """Por que esta execução **não é uma medição**; `None` quando ela é.
+
+    É a mesma regra do relatório, e de propósito: o ledger só pode registrar o
+    que o documento assumiria publicar. Uma execução em que o provedor recusou
+    tudo produz um ledger versionado afirmando uma medição que não houve — e
+    tranca a medição de verdade atrás de `--repetir-eval`.
+    """
+    return motivo_de_rascunho(
+        execucao.cabecalho,
+        mt.identificacao(execucao.resultados),
+        mt.porcao(execucao.resultados),
+    )
+
+
 # --- ledger: o split de avaliação roda uma vez por prompt ------------------
 
 
@@ -139,7 +160,7 @@ def chave_da_execucao(cabecalho: Cabecalho) -> dict[str, str]:
     return {
         "modelo": cabecalho.modelo,
         "prompt_sha256": cabecalho.prompt_sha256,
-        "manifesto_sha256": cabecalho.manifesto_sha256,
+        "conjunto_sha256": cabecalho.conjunto_sha256,
     }
 
 
@@ -167,6 +188,19 @@ def registrar_execucao(ledger: Path, cabecalho: Cabecalho) -> None:
 # --- CLI -------------------------------------------------------------------
 
 
+def _limite(valor: str) -> int:
+    """`--limite` só existe acima de zero.
+
+    `--limite 0` caía num `bool(0)` e era engolido: o runner rodava o conjunto
+    inteiro sem marcar o relatório como truncado. Uma flag que o programa ignora
+    em silêncio é pior que uma flag que não existe.
+    """
+    numero = int(valor)
+    if numero < 1:
+        raise argparse.ArgumentTypeError(f"--limite precisa ser ≥ 1 (recebi {numero}).")
+    return numero
+
+
 def _argumentos(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="python -m fatia_agent.eval.run_benchmark",
@@ -186,7 +220,7 @@ def _argumentos(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--limite",
-        type=int,
+        type=_limite,
         default=None,
         help="Corta o conjunto — só para depurar o runner. Marca o relatório como rascunho.",
     )
@@ -205,15 +239,15 @@ async def _rodar(args: argparse.Namespace) -> int:
         return 1
 
     fotos = mf.resolver_fotos(rotulos, args.imagens)
-    truncado = bool(args.limite) and args.limite < len(fotos)
-    if args.limite:
+    truncado = args.limite is not None and args.limite < len(fotos)
+    if args.limite is not None:
         fotos = fotos[: args.limite]
 
     cabecalho = Cabecalho(
         modelo=args.model,
         provedor_host=endpoint_host(args.base_url),
         split=args.split,
-        manifesto_sha256=mf.sha256_do_arquivo(args.manifesto),
+        conjunto_sha256=mf.sha256_do_conjunto(rotulos),
         prompt_sha256=hashlib.sha256(PROMPT.encode("utf-8")).hexdigest(),
         n_fotos=len(fotos),
         data=date.today(),
@@ -243,8 +277,16 @@ async def _rodar(args: argparse.Namespace) -> int:
     finally:
         await provider.aclose()
 
-    if args.split == "eval" and not truncado:
-        registrar_execucao(args.ledger, cabecalho)
+    # O ledger registra **medição**, não tentativa. Gravar uma execução que o
+    # próprio relatório se recusa a publicar deixa no repositório uma linha
+    # afirmando um `eval` que não aconteceu — e tranca o `eval` de verdade atrás
+    # de `--repetir-eval`.
+    motivo = motivo_de_nao_medir(execucao)
+    if args.split == "eval":
+        if motivo is None:
+            registrar_execucao(args.ledger, cabecalho)
+        else:
+            print(f"Ledger não gravado — esta execução não é uma medição: {motivo}")
 
     markdown, bruto = montar_saida(execucao)
     if args.saida is None:
@@ -254,6 +296,13 @@ async def _rodar(args: argparse.Namespace) -> int:
         args.saida.with_suffix(".md").write_text(markdown, encoding="utf-8")
         args.saida.with_suffix(".json").write_text(bruto, encoding="utf-8")
         print(f"Relatório em {args.saida.with_suffix('.md')}")
+
+    if all(not resultado.respondeu for resultado in execucao.resultados):
+        # Nenhuma foto respondeu: é provedor mal configurado ou fora do ar, e não
+        # um resultado. Sair 0 faria um script de CI ou um `&&` tratar como
+        # sucesso a execução que mais precisa ser vista.
+        print("Nenhuma foto rendeu resposta utilizável — confira o provedor, não o modelo.")
+        return 1
     return 0
 
 

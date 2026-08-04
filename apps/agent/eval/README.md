@@ -7,17 +7,27 @@ ledger das medições.
 > **O número de precisão do reconhecimento não existe até este diretório ter
 > fotos rotuladas com peso de balança.** Nada no repositório reporta precisão
 > hoje, e é assim de propósito: o gerador de relatório se recusa a emitir
-> veredito abaixo de 30 fotos no split de avaliação. Ver
+> veredito abaixo de 30 fotos **medidas** no split de avaliação. Ver
 > [`docs/benchmark-reconhecimento-refeicao.md`](../../../docs/benchmark-reconhecimento-refeicao.md).
 
 ## O que você precisa entregar
 
-| item                           | quantidade | por quê                                       |
-| ------------------------------ | ---------- | --------------------------------------------- |
-| fotos rotuladas, no total      | ≥ 50       | menos que isso não sustenta um veredito       |
-| delas, no split `eval`         | ≥ 30       | é sobre este split que o número é publicado   |
-| delas, no split `dev`          | o resto    | é olhando **estas** que o prompt é ajustado   |
-| fotos de controle (sem comida) | 2 ou 3     | medem se o modelo inventa comida onde não tem |
+| item                              | quantidade | por quê                                       |
+| --------------------------------- | ---------- | --------------------------------------------- |
+| fotos rotuladas, no total         | ≥ 50       | menos que isso não sustenta um veredito       |
+| delas, com comida no split `eval` | ≥ 30       | é sobre este split que o número é publicado   |
+| delas, no split `dev`             | o resto    | é olhando **estas** que o prompt é ajustado   |
+| fotos de controle (sem comida)    | 2 ou 3     | medem se o modelo inventa comida onde não tem |
+
+As de controle são **extras**: elas não têm erro de porção (a kcal real é zero) e
+não contam para o mínimo de 30.
+
+**E o mínimo é de fotos medidas.** A foto cujo provedor deu timeout não entra em
+nenhuma métrica de qualidade, e a que não tem `kcal_100g` em todos os itens não
+entra no portão de kcal — o relatório imprime as três contagens (tentadas, com
+resposta utilizável, e as que sustentam o portão de kcal) e sai carimbado como
+rascunho se qualquer uma delas ficar abaixo do mínimo. Trinta fotos com vinte e
+nove timeouts são uma medida sobre uma foto.
 
 **Cardápio**, seguindo a issue: prato feito (arroz, feijão, bife, salada),
 feijoada, açaí, pão de queijo, marmita, tapioca, cuscuz, farofa, moqueca,
@@ -72,6 +82,11 @@ porque errar 30 % na gramagem do arroz custa muito menos caloria do que errar
 calcula: quando o item casa com a TACO, `meal-recognition.service.ts` descarta a
 estimativa do modelo e usa a tabela com a grama que ele estimou.
 
+Na prática ela é **obrigatória para o número sair**: a foto que tiver um item sem
+`kcal_100g` fica de fora do portão de kcal por refeição, e o relatório nasce
+rascunho se menos de 30 fotos sustentarem esse portão. "Não, mas" na tabela acima
+quer dizer "o manifesto aceita; o veredito, não".
+
 Para achar a `kcal_100g`, procure o alimento no próprio Fatia (a busca é o mesmo
 catálogo) e use o valor da entrada que você escolheria à mão.
 
@@ -125,9 +140,22 @@ depois**. Duas coisas defendem contra isso:
   modelo e o mesmo conjunto. Mudou o prompt, a impressão digital muda e a
   medição libera.
 
-`--repetir-eval` existe para o caso legítimo (o provedor caiu no meio). Usar para
-"tentar de novo, quem sabe melhora" é o vazamento que o ledger existe para tornar
-visível.
+O "mesmo conjunto" é o `sha256` dos rótulos **do `eval`**, e não do arquivo
+inteiro: acrescentar uma foto ao `dev` não destrava uma segunda medição do
+`eval`, porque não mudou nada do que foi medido. Corrigir um rótulo do `eval`,
+sim — aí o conjunto é outro.
+
+**O ledger registra medição, não tentativa.** Uma execução que o relatório se
+recusa a publicar — provedor fora do ar, amostra abaixo do mínimo, `--limite` —
+não grava linha nenhuma, e o runner diz isso na saída. Sem essa regra, uma
+execução em que o provedor recusou tudo deixaria no repositório uma linha
+afirmando um `eval` que não aconteceu, e trancaria a medição de verdade atrás de
+`--repetir-eval`. Execução em que **nenhuma** foto respondeu sai com código
+diferente de zero: é provedor mal configurado, não resultado.
+
+`--repetir-eval` existe para o caso legítimo (o provedor caiu no meio de uma
+medição que valeu). Usar para "tentar de novo, quem sabe melhora" é o vazamento
+que o ledger existe para tornar visível.
 
 ## O `manifest.example.jsonl`
 

@@ -173,8 +173,19 @@ class Porcao:
     mape_gramas: Distribuicao
     """Erro percentual absoluto na grama, por item casado."""
 
-    mape_kcal_item: Distribuicao
-    """Idem, em kcal, e só para item com `kcal_100g` no rótulo."""
+    erro_kcal_item: Distribuicao
+    """Erro do item **em kcal**, não em percentual, e só com `kcal_100g` no rótulo.
+
+    **Não existe "MAPE em kcal por item" separado do MAPE em gramas.** Como o
+    produto calcula a kcal do item casado multiplicando a grama estimada pela
+    `kcal_100g` do rótulo, a `kcal_100g` cancela na razão:
+    `|k·p - k·r| / (k·r) = |p - r| / r`. Reportar as duas daria dois números
+    idênticos com nomes diferentes, e alguém os leria como duas evidências —
+    exatamente o erro que a taxa de alucinação já obriga a explicar.
+
+    O que a kcal acrescenta é a **magnitude**: 20 % a mais de alface são 3 kcal e
+    20 % a mais de óleo são 177 kcal. Por isso este número é absoluto.
+    """
 
     erro_kcal_refeicao: Distribuicao
     """Erro percentual da refeição inteira — o que a pessoa sente no dia."""
@@ -182,13 +193,22 @@ class Porcao:
     fotos_com_kcal: int
     """Quantas fotos entraram em `erro_kcal_refeicao`."""
 
+    kcal_inventada_em_controle: Distribuicao = field(default_factory=lambda: Distribuicao(n=0))
+    """Kcal que o modelo somou em foto **sem comida nenhuma** no rótulo.
+
+    O controle negativo não tem erro percentual: a kcal real é zero, e dividir por
+    ela inventaria um denominador. Sem esta linha ele ficaria fora de toda métrica
+    de kcal, e o dano de um prato lavado que vira 300 kcal no dia da pessoa não
+    apareceria em lugar nenhum — só a contagem de itens, na identificação.
+    """
+
     fotos_subestimadas: int = 0
     """Fotos em que um item inventado entrou com 0 kcal por o modelo não ter
     dito a caloria dele. O erro de refeição delas é um **piso**, não a medida."""
 
 
 def porcao(resultados: Sequence[ResultadoDaFoto]) -> Porcao:
-    """MAPE em gramas e em kcal, por item e por refeição.
+    """MAPE em gramas, kcal absoluta por item e erro percentual por refeição.
 
     A kcal do item casado é calculada **como o produto calcula**: `kcal_100g` do
     rótulo (a entrada da TACO) vezes a grama, prevista de um lado e real do
@@ -199,6 +219,7 @@ def porcao(resultados: Sequence[ResultadoDaFoto]) -> Porcao:
     erros_gramas: list[float] = []
     erros_kcal_item: list[float] = []
     erros_refeicao: list[float] = []
+    kcal_em_controle: list[float] = []
     subestimadas = 0
 
     for r in resultados:
@@ -206,14 +227,21 @@ def porcao(resultados: Sequence[ResultadoDaFoto]) -> Porcao:
             continue
 
         for par in r.pares:
-            erros_gramas.append(_erro_relativo(par.gramas_previstas, par.gramas_rotuladas))
+            erro_gramas = _erro_relativo(par.gramas_previstas, par.gramas_rotuladas)
+            if erro_gramas is not None:
+                erros_gramas.append(erro_gramas)
             if par.kcal_100g is not None:
+                # Absoluto de propósito: o percentual seria o mesmo do de gramas,
+                # porque `kcal_100g` cancela na razão. Ver `Porcao.erro_kcal_item`.
                 erros_kcal_item.append(
-                    _erro_relativo(
-                        par.kcal_100g * par.gramas_previstas / 100,
-                        par.kcal_100g * par.gramas_rotuladas / 100,
-                    )
+                    abs(par.gramas_previstas - par.gramas_rotuladas) * par.kcal_100g / 100
                 )
+
+        if _e_controle_negativo(r):
+            # Sem comida no rótulo não há erro percentual — só a kcal que o
+            # modelo somou onde não havia nada.
+            kcal_em_controle.append(sum(extra.kcal or 0.0 for extra in r.extras))
+            continue
 
         erro_refeicao = _erro_da_refeicao(r)
         if erro_refeicao is None:
@@ -224,11 +252,17 @@ def porcao(resultados: Sequence[ResultadoDaFoto]) -> Porcao:
 
     return Porcao(
         mape_gramas=resumir(erros_gramas),
-        mape_kcal_item=resumir(erros_kcal_item),
+        erro_kcal_item=resumir(erros_kcal_item),
         erro_kcal_refeicao=resumir(erros_refeicao),
         fotos_com_kcal=len(erros_refeicao),
+        kcal_inventada_em_controle=resumir(kcal_em_controle),
         fotos_subestimadas=subestimadas,
     )
+
+
+def _e_controle_negativo(resultado: ResultadoDaFoto) -> bool:
+    """Foto cujo rótulo não tem alimento nenhum (prato lavado, mesa vazia)."""
+    return not resultado.pares and not resultado.faltantes
 
 
 def _erro_da_refeicao(resultado: ResultadoDaFoto) -> float | None:
@@ -358,5 +392,11 @@ def _razao(numerador: int, denominador: int) -> float | None:
     return numerador / denominador if denominador else None
 
 
-def _erro_relativo(previsto: float, real: float) -> float:
-    return abs(previsto - real) / real * 100 if real else 0.0
+def _erro_relativo(previsto: float, real: float) -> float | None:
+    """Erro percentual, ou `None` quando o real é zero e a razão não existe.
+
+    Devolver 0,0 aqui seria o pior valor possível: zero é o **melhor** erro que
+    existe, e ele entraria na média como um acerto perfeito de um item que
+    ninguém mediu — a mesma armadilha que `resumir([])` recusa.
+    """
+    return abs(previsto - real) / real * 100 if real else None
