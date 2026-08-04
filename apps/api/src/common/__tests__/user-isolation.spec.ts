@@ -1508,6 +1508,47 @@ describe('isolamento entre usuários', () => {
       await expect(prisma.exercise.findFirst({ where: { name: orfao } })).resolves.toBeNull();
     });
 
+    it('plano reordenado pelo Claude continua publicável, e a cópia preserva a prescrição', async () => {
+      // Nada aqui é forjado: são as portas documentadas do produto, escrevendo
+      // pelos services de verdade. `reorder_plan_exercises` descreve
+      // "0 = primeiro" e manda `"order":0` no exemplo; `AddPlanExerciseDto`
+      // aceita `targetReps` vazia (sem mínimo) e `targetSets` sem teto.
+      //
+      // Um v1 congelado que reprovasse isso deixaria o plano impublicável para
+      // sempre: depois da primeira `PlanTemplate.snapshot` gravada, afrouxar o
+      // formato é bump de versão e migração de coluna `Json`.
+      const plano = await plans.create(owned.creator, { name: 'Reordenado pelo Claude' });
+      try {
+        const item = await plans.addExercise(owned.creator, plano.id, {
+          exerciseId: owned.sharedExerciseId,
+          order: 1,
+          targetSets: 60,
+          targetReps: '',
+        });
+        await plans.reorderExercises(owned.creator, plano.id, {
+          exercises: [{ id: item.id, order: 0 }],
+        });
+
+        // O que o Postgres devolve depois das rotas é o que precisa congelar.
+        const gravado = await plans.findById(owned.creator, plano.id);
+        expect(gravado.exercises.map((e) => [e.order, e.targetSets, e.targetReps])).toEqual([
+          [0, 60, ''],
+        ]);
+
+        const snapshot = buildPlanSnapshot(gravado);
+        const copia = await materializer.materialize(pronto.membro2, snapshot);
+
+        // E atravessa inteiro: adotar não pode inventar `order: 1` no meio do
+        // caminho, senão a cópia sai numa ordem que o autor não prescreveu.
+        const lido = await plans.findById(pronto.membro2, copia.id);
+        expect(lido.exercises.map((e) => [e.order, e.targetSets, e.targetReps])).toEqual([
+          [0, 60, ''],
+        ]);
+      } finally {
+        await plans.delete(owned.creator, plano.id);
+      }
+    });
+
     it('materializar duas vezes reaproveita o exercício custom em vez de estourar o unique', async () => {
       // `@@unique([name, createdByUserId])`: a segunda adoção não pode criar um
       // segundo "remada do criador" na conta do membro, e também não pode

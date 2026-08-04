@@ -1,8 +1,11 @@
 import { BadRequestException } from '@nestjs/common';
+import { plainToInstance, type ClassConstructor } from 'class-transformer';
+import { validateSync } from 'class-validator';
 import { PlanMaterializerService } from '../plan-materializer.service';
 import { buildPlanSnapshot, PLAN_SNAPSHOT_VERSION } from '../plan-snapshot';
 import type { PrismaService } from '../../common/prisma.service';
 import type { ExerciseService } from '../../workout/exercise.service';
+import { AddPlanExerciseDto, CreatePlanDto, ReorderExercisesDto } from '../../workout/dto/plan.dto';
 
 const AUTOR = 'autor-1';
 const ADOTANTE = 'adotante-1';
@@ -239,6 +242,8 @@ describe('PlanMaterializerService.materialize', () => {
       name: 'Crucifixo na polia alta',
       muscleGroup: 'costas',
       createdByUserId: ADOTANTE,
+      equipment: 'elástico',
+      instructions: ['pegada supinada, minha lombar'],
     });
     tabela.push(jaTinha);
 
@@ -248,6 +253,14 @@ describe('PlanMaterializerService.materialize', () => {
     expect(dadosDoPlanoCriado().data.exercises.create.map((e) => e.exerciseId)).toEqual([
       SUPINO.id,
       900,
+    ]);
+    // Reaproveitar é apontar, não regravar. Aplicar o `enriquecimento` do autor
+    // no exercício reaproveitado trocaria o equipamento e as anotações que quem
+    // adota escreveu — conteúdo de outra conta por cima de dado dele, calado.
+    expect(exercises.updateCustom).not.toHaveBeenCalled();
+    expect([jaTinha.equipment, jaTinha.instructions]).toEqual([
+      'elástico',
+      ['pegada supinada, minha lombar'],
     ]);
   });
 
@@ -292,6 +305,38 @@ describe('PlanMaterializerService.materialize', () => {
     // Sem esta checagem, a primeira cópia já teria sido criada quando o
     // `create` do plano falhasse com P2002.
     expect(exercises.createCustom).not.toHaveBeenCalled();
+  });
+
+  it('recusa o exercício de CATÁLOGO repetido, em vez de deixar o P2002 virar 500', async () => {
+    // O ramo `catalog:` do dedupe não tinha teste: `conferirCatalogo` faz
+    // `new Set(ids)` antes da query, então um id repetido atravessa a
+    // pré-passada inteira e só morre no `create`, em
+    // `@@unique([planId, exerciseId])` — P2002 sobe como "Internal server
+    // error" em vez do `BadRequestException` nomeado que o resto do arquivo
+    // se dá ao trabalho de produzir.
+    const repetido = {
+      version: PLAN_SNAPSHOT_VERSION,
+      name: 'Plano repetido',
+      exercises: [
+        {
+          source: 'catalog',
+          catalogExerciseId: SUPINO.id,
+          order: 1,
+          targetSets: 3,
+          targetReps: '10',
+        },
+        {
+          source: 'catalog',
+          catalogExerciseId: SUPINO.id,
+          order: 2,
+          targetSets: 3,
+          targetReps: '10',
+        },
+      ],
+    };
+
+    await expect(service.materialize(ADOTANTE, repetido)).rejects.toThrow(/duas vezes/);
+    expect(prisma.workoutPlan.create).not.toHaveBeenCalled();
   });
 
   it('aceita dois customs que só diferem por caixa — o `@@unique` do Postgres é case-sensitive', async () => {
@@ -384,6 +429,100 @@ describe('buildPlanSnapshot', () => {
     });
 
     expect(snap.exercises).toHaveLength(2);
+  });
+
+  /**
+   * v1 é **formato congelado**: um plano que as rotas já aceitaram e gravaram
+   * precisa caber nele. Reprovar aqui não é "validação extra" — é deixar esse
+   * plano impublicável para sempre, porque afrouxar `plan-snapshot.ts` depois
+   * da primeira `PlanTemplate.snapshot` gravada é bump de versão e migração de
+   * coluna `Json`.
+   *
+   * Cada caso amarra os dois lados: o DTO que grava **aceita** o valor (é o que
+   * `validateSync` prova, e não a minha leitura do decorator), e
+   * `buildPlanSnapshot` **congela** o mesmo valor sem normalizar por baixo do
+   * pano. Apertar um dos dois lados sozinho fica vermelho aqui.
+   */
+  describe('congela o que as rotas de plano de fato gravam', () => {
+    const problemasDoDto = (cls: ClassConstructor<object>, payload: object): string[] =>
+      validateSync(plainToInstance(cls, payload), {
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }).map((e) => e.toString());
+
+    /** Um plano de um exercício só, com a prescrição sob teste. */
+    const planoCom = (
+      over: Partial<{ name: string; order: number; targetSets: number; targetReps: string }>,
+    ) => ({
+      name: over.name ?? 'Plano',
+      exercises: [
+        {
+          order: over.order ?? 1,
+          targetSets: over.targetSets ?? 3,
+          targetReps: over.targetReps ?? '10',
+          exercise: SUPINO,
+        },
+      ],
+    });
+
+    it('`order: 0`, que é o que `reorder_plan_exercises` documenta como "0 = primeiro"', () => {
+      // `ReorderItemDto.order` é `@Min(0)`, e o exemplo da própria tool manda
+      // `"order":0`. Com `min(1)` no snapshot, pedir ao Claude para reordenar o
+      // treino tornava aquele plano impublicável — e o autor não tem como saber.
+      expect(
+        problemasDoDto(ReorderExercisesDto, {
+          exercises: [{ id: '66666666-7777-4888-8999-aaaaaaaaaaaa', order: 0 }],
+        }),
+      ).toEqual([]);
+
+      expect(buildPlanSnapshot(planoCom({ order: 0 })).exercises[0].order).toBe(0);
+    });
+
+    it('`targetReps` vazia, que `AddPlanExerciseDto` aceita por não ter mínimo', () => {
+      expect(
+        problemasDoDto(AddPlanExerciseDto, {
+          exerciseId: 1,
+          order: 1,
+          targetSets: 3,
+          targetReps: '',
+        }),
+      ).toEqual([]);
+
+      expect(buildPlanSnapshot(planoCom({ targetReps: '' })).exercises[0].targetReps).toBe('');
+    });
+
+    it('`targetSets` acima de 50, que o REST aceita por não ter teto', () => {
+      // A tool MCP corta em 20, o `AddPlanExerciseDto` é `@Min(1)` sem `@Max`.
+      // O teto do snapshot é o da coluna (`Int` = int4), não um número redondo.
+      expect(
+        problemasDoDto(AddPlanExerciseDto, {
+          exerciseId: 1,
+          order: 1,
+          targetSets: 60,
+          targetReps: '10',
+        }),
+      ).toEqual([]);
+
+      expect(buildPlanSnapshot(planoCom({ targetSets: 60 })).exercises[0].targetSets).toBe(60);
+    });
+
+    it('nome de plano vazio, que `CreatePlanDto` aceita por não ter mínimo', () => {
+      expect(problemasDoDto(CreatePlanDto, { name: '' })).toEqual([]);
+
+      expect(buildPlanSnapshot(planoCom({ name: '' })).name).toBe('');
+    });
+
+    it('mas segue recusando o que estoura a coluna `Int`, para o erro não virar 500 no `create`', () => {
+      // O outro lado da moeda: o snapshot também chega como `Json` forjado. Sem
+      // teto nenhum, `targetSets: 1e12` passaria a validação e morreria dentro
+      // do `workoutPlan.create` como "Internal server error".
+      expect(() => buildPlanSnapshot(planoCom({ targetSets: 2_147_483_648 }))).toThrow(
+        BadRequestException,
+      );
+      expect(() => buildPlanSnapshot(planoCom({ order: 2_147_483_648 }))).toThrow(
+        BadRequestException,
+      );
+    });
   });
 
   it('recusa músculo fora das chaves do diagrama como BadRequest, não como ZodError cru', () => {

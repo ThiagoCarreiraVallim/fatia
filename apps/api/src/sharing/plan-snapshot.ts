@@ -31,11 +31,41 @@ export const PLAN_SNAPSHOT_VERSION = 1;
 /** Teto por plano. Existe para o snapshot ser um payload, não um dump. */
 export const MAX_EXERCICIOS_NO_SNAPSHOT = 50;
 
-/** O que o autor prescreveu para o exercício dentro do plano. */
+/**
+ * Teto de `Int` do Postgres (int4) — o que a coluna guarda, e portanto o único
+ * teto que este formato pode ter sem reprovar plano legítimo.
+ *
+ * Ele existe pelo outro lado: o snapshot também chega como `Json` forjado na
+ * adoção, e sem teto nenhum um `targetSets: 1e12` passaria a validação para
+ * morrer dentro do `workoutPlan.create` como 500.
+ */
+const INT4_MAX = 2_147_483_647;
+
+/**
+ * O que o autor prescreveu para o exercício dentro do plano.
+ *
+ * Os limites são os do que o produto **de fato grava** — não os que pareceriam
+ * razoáveis. v1 é formato congelado: reprovar aqui um plano que as rotas
+ * aceitaram não é validação extra, é deixar esse plano impublicável para
+ * sempre, porque afrouxar depois da primeira `PlanTemplate.snapshot` gravada é
+ * bump de versão com migração de coluna `Json`.
+ *
+ * - `order` começa em **0**: `ReorderItemDto` é `@Min(0)` e a tool
+ *   `reorder_plan_exercises` documenta "0 = primeiro" no `.describe()` e manda
+ *   `"order":0` no próprio exemplo. Com `min(1)`, pedir ao Claude para
+ *   reordenar o treino tornava aquele plano impublicável, sem o autor ter como
+ *   saber por quê. (`add_exercise_to_plan` diz "1 = primeiro"; as duas tools já
+ *   divergiam, e não cabe a este formato eleger uma das duas.)
+ * - `targetReps` aceita vazia: `AddPlanExerciseDto` é `@IsString() @MaxLength(20)`,
+ *   sem mínimo.
+ * - `targetSets` não tem teto de domínio: o DTO é `@IsInt() @Min(1)`, sem
+ *   `@Max` (só a tool MCP corta em 20). O antigo `max(50)` reprovava o que o
+ *   REST aceitou.
+ */
 const prescricao = {
-  order: z.number().int().min(1),
-  targetSets: z.number().int().min(1).max(50),
-  targetReps: z.string().min(1).max(20),
+  order: z.number().int().min(0).max(INT4_MAX),
+  targetSets: z.number().int().min(1).max(INT4_MAX),
+  targetReps: z.string().max(20),
 } as const;
 
 /**
@@ -45,9 +75,20 @@ const prescricao = {
  * aceitam, e a validação de músculo reusa os schemas do próprio domínio: um
  * snapshot com `primaryMuscles: ["peitoral"]` materializaria um exercício que o
  * diagrama muscular não sabe colorir.
+ *
+ * `name` sem mínimo pelo mesmo motivo da prescrição: `CreateCustomExerciseDto`
+ * é `@MaxLength(200)` sem `@MinLength`, então nome vazio é uma linha que o
+ * produto guarda — e um plano que a contenha tem que continuar publicável.
+ *
+ * O `max(50)` de `instructions` é a **única** regra deste bloco mais estrita do
+ * que a escrita (os DTOs e as duas tools não põem teto de itens): ele bota
+ * limite no `Json` que chega forjado na adoção. Medido: o exercício mais
+ * detalhado dos seeds tem 24 instruções, então nada real esbarra nele hoje.
+ * Fechar a diferença de verdade é limitar o lado da escrita, o que mexe no
+ * schema de duas tools MCP e nos números de payload da prosa — mudança à parte.
  */
 const definicaoCustomSchema = z.object({
-  name: z.string().min(1).max(200),
+  name: z.string().max(200),
   muscleGroup: muscleGroupSchema,
   equipment: z.string().max(100).optional(),
   level: z.string().max(50).optional(),
@@ -77,7 +118,14 @@ const itemSchema = z.discriminatedUnion('source', [
 export const planSnapshotSchema = z
   .object({
     version: z.literal(PLAN_SNAPSHOT_VERSION),
-    name: z.string().min(1).max(100),
+    // Sem mínimo: `CreatePlanDto` é `@MaxLength(100)` sem `@MinLength`. Exigir
+    // título aqui seria política de publicação — e ela pertence à rota que
+    // publica, não ao formato congelado que atravessa contas.
+    name: z.string().max(100),
+    // O teto de exercícios é a outra regra deliberadamente mais estrita do que
+    // a escrita, e existe pela adoção: é ele que impede um `Json` forjado de
+    // virar um plano de 10 mil linhas. Quem esbarra nele é o autor, na
+    // publicação, com o plano na frente e um exercício a menos como conserto.
     exercises: z.array(itemSchema).min(1).max(MAX_EXERCICIOS_NO_SNAPSHOT),
   })
   .superRefine((snap, ctx) => {
