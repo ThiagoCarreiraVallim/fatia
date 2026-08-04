@@ -226,6 +226,42 @@ depois. Não há detecção de uso anômalo dentro do que foi consentido.
 requisição, então revogar no meio de uma leitura em voo não cancela aquela resposta. A janela é de
 **uma** requisição, e é isso que `/privacy` promete — em vez de "instantâneo", que seria mentira.
 
+### 9. Reidentificação por agregado — o painel do dono
+
+O painel de retenção (#159) e o de comportamento (#160) entregam número ao **dono da academia**,
+que não tem — e nunca terá — vínculo com aluno nenhum. O vetor aqui não é ler o que não devia: é
+**deduzir o indivíduo a partir de números que, um a um, parecem inofensivos**.
+
+A definição completa, com o limiar, a regra complementar e a lista fechada de eixos, está em
+[`AGGREGATION_POLICY.md`](./AGGREGATION_POLICY.md) — publicada de propósito, porque uma promessa
+de anonimização que não pode ser conferida não vale nada.
+
+| Vetor                                                            | Mitigação                                                                                                                                                                                             |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Recorte estreito até sobrar uma pessoa ("alunas, 30-35, manhã")  | Não existe construtor de filtro: a API recebe o **nome** de um recorte registrado, um eixo por consulta, sem atributo demográfico                                                                     |
+| Célula suprimida recalculada pelo total menos as visíveis        | Supressão **complementar** por bloco: ≥ 2 células ocultas, `n` somado ≥ `MIN_CELL` e folga de valor ≥ `MIN_CELL`; e o total não é publicado                                                           |
+| Duas células pequenas que "se bastam" (resíduo 2, 1 + 1)         | É a folga de valor da linha acima. Sem ela, cada parcela valia 1 e as duas voltavam exatas — o bloqueio que a revisão da PR #240 exibiu                                                               |
+| Mesma célula publicada por outra janela do mesmo catálogo        | O bloco cresce para a **direita** e é montado por semente: ele é função da semente e do que está à direita dela, e as três janelas terminam em `now`. Oculto na janela curta continua oculto na longa |
+| Balde vazio usado como complemento                               | O complemento exige `n > 0` — zero é valor conhecido, e a subtração continuaria com uma incógnita só                                                                                                  |
+| Janela de datas estreitada até isolar uma sessão                 | Período também é nomeado (`last_30_days`, `last_90_days`, `last_12_months`). `from`/`to` livre é construtor de filtro com outro nome                                                                  |
+| Chave da célula suprimida carregando texto do aluno              | O limiar zera `value` e `n`, **não** a chave. Todo eixo é lista fechada: `muscleGroup` fora da lista canônica vira `outros`                                                                           |
+| Dado de saúde entrando no agregado ("quem parou de perder peso") | Só engajamento é métrica ou eixo. `no-body-data.spec.ts` varre `insights/` e reprova `weightLog`, `meal`, `goal`, `foodGroup`, `bodyFat` e cia.                                                       |
+| Quem não consentiu contado no denominador                        | O denominador é só de quem deu opt-in (`GroupMembership.statsOptIn`). Numerador consentido sobre denominador cheio informa sobre quem recusou                                                         |
+| Supressão aplicada só na UI                                      | `suppress()` roda no servidor e o campo sai `null` — inclusive o `n`. Teste serializa a resposta e procura o número                                                                                   |
+| Export do painel ignorando a supressão da tela                   | O export recebe as **mesmas células já suprimidas** e não tem `PrismaService` no construtor: não há como fazer a segunda consulta                                                                     |
+| Segundo caminho de agregação nascendo no painel pago             | `single-aggregation-path.spec.ts`: um único arquivo importa `suppress`, um único arquivo define o limiar, todo recorte vem do catálogo                                                                |
+| Add-on pago conferido só na tela                                 | `InsightsAddonGuard` na rota, respondendo `NOT_FOUND` (não `402`) para grupo sem o add-on                                                                                                             |
+| Lista de "alunos em risco" chegando ao dono                      | O sinal é contagem por faixa. Não existe estrutura com id de pessoa saindo do módulo — não é escondida, não existe                                                                                    |
+
+**Não mitigado:** supressão com limiar **não é privacidade diferencial**. Comparar duas células
+**visíveis** de períodos diferentes em que entrou exatamente uma pessoa revela essa pessoa, e o
+bloco estreita — sem revelar — o intervalo do valor oculto: ele garante `MIN_CELL` valores
+possíveis para cada parcela, não infinitos. As duas limitações estão escritas em
+`AGGREGATION_POLICY.md`, na seção "O que não está protegido". Ruído diferencial foi considerado e
+descartado: sem orçamento de privacidade por consulta e contabilidade de composição, é ruído que
+dá falsa sensação de garantia, e não é auditável por quem lê o código — que é metade do valor,
+já que a metodologia é publicada.
+
 ## Matriz de cobertura
 
 Onde o escopo é aplicado, por domínio. Verificado por
@@ -260,6 +296,7 @@ dono do pai não autoriza escrever em qualquer filho.
 | Progresso/dashboard  | `progress.service.ts`, `dashboard.service.ts` | agregam sobre queries já escopadas                                         |
 | Grupos de alimento   | `food.service.ts#listGroups`                  | **sem escopo, de propósito** — `FoodGroup` não tem dono                    |
 | Leitura profissional | `sharing/professional-access.service.ts`      | `assertReadable` resolve o titular; a **única** leitura entre contas       |
+| Painel agregado      | `insights/insights.service.ts`                | opt-in + limiar + `suppress()`; nenhum id de pessoa sai do módulo          |
 
 ## O que não está protegido
 
@@ -295,4 +332,11 @@ Estes testes sustentam este doc. Quebrar qualquer um deles é sinal de regressã
    `delegated` ou `consent`, e reprova a que ler dado de outra pessoa fora da allowlist.
 4. `apps/api/src/sharing/__tests__/permission-matrix.spec.ts` — `PERMISSIONS.md` × `permissions.ts`,
    nos dois sentidos.
-5. Os specs por service, que provam que o `where` é montado com `userId`.
+5. `apps/api/src/insights/__tests__/aggregation.service.spec.ts` — a supressão, incluindo o caso
+   com números concretos em que o total denunciaria a célula pequena, e a propriedade sobre mil
+   distribuições.
+6. `apps/api/src/insights/__tests__/single-aggregation-path.spec.ts` — um caminho de agregação só,
+   e `AGGREGATION_POLICY.md` × `cut-registry.ts` nos dois sentidos.
+7. `apps/api/src/insights/__tests__/no-body-data.spec.ts` — dado corporal e alimentar fora do
+   agregado, por varredura de filesystem.
+8. Os specs por service, que provam que o `where` é montado com `userId`.

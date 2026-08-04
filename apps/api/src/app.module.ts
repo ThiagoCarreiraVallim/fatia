@@ -13,6 +13,8 @@ import { WorkoutModule } from './workout/workout.module';
 import { ProgressModule } from './progress/progress.module';
 import { GoalsModule } from './goals/goals.module';
 import { SharingModule } from './sharing/sharing.module';
+import { BillingModule } from './billing/billing.module';
+import { InsightsModule } from './insights/insights.module';
 import { McpModule } from './mcp/mcp.module';
 
 @Module({
@@ -48,6 +50,8 @@ import { McpModule } from './mcp/mcp.module';
     ProgressModule,
     GoalsModule,
     SharingModule,
+    BillingModule,
+    InsightsModule,
     McpModule,
   ],
 })

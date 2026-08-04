@@ -205,13 +205,19 @@ describe('todo método de controller de sharing declara a camada em que vive', (
     expect(usadas.filter((acao) => !GROUP_ACTIONS.includes(acao as GroupAction))).toEqual([]);
   });
 
-  it('o decorator não escapa de sharing/ e billing/', () => {
+  it('o decorator não escapa de sharing/, billing/ e insights/', () => {
     // `@RequireGroupAction` numa rota de domínio faria um service de domínio
     // depender de grupo — o oposto do que a ADR 014 decidiu.
+    //
+    // `insights/` entra na lista com a #159: o painel agregado é superfície de
+    // administração de grupo, como billing, e não leitura de dado de titular —
+    // não há indivíduo do outro lado, por construção. A lista é curta de
+    // propósito; crescer nela é a discussão, não a solução.
     const API_SRC = resolve(SHARING_SRC, '..');
+    const PERMITIDOS = ['sharing/', 'billing/', 'insights/'];
     const fora = readdirSync(API_SRC, { recursive: true, encoding: 'utf8' })
       .filter((entry) => entry.endsWith('.ts'))
-      .filter((entry) => !entry.startsWith('sharing/') && !entry.startsWith('billing/'))
+      .filter((entry) => !PERMITIDOS.some((prefixo) => entry.startsWith(prefixo)))
       .filter((entry) => /@RequireGroupAction\(/.test(readFileSync(join(API_SRC, entry), 'utf8')));
 
     expect(fora).toEqual([]);

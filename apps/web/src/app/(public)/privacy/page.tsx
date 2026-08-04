@@ -69,6 +69,26 @@ export default function PrivacyPage() {
           profissional — não é &ldquo;instantâneo&rdquo;, é uma requisição.
         </p>
         <p>
+          A academia pode ver <strong>estatísticas agregadas</strong> — quantas pessoas treinam de
+          manhã, como a frequência do grupo variou no mês. Você entra nessa contagem só se{' '}
+          <strong>ativar a participação</strong>, que vem desligada, e ela é diferente de autorizar
+          um profissional: ninguém passa a ver nada seu, você passa a fazer parte de um número. Só
+          entram dados de <strong>engajamento</strong> — frequência, horário, tempo desde o último
+          treino. Peso, medidas e alimentação não entram nessa conta, em hipótese alguma.
+        </p>
+        <p>
+          E um número só aparece se houver gente suficiente por trás dele: recortes com menos de
+          cinco pessoas são omitidos — junto com os vizinhos que forem necessários para que o que
+          sobrou escondido não possa ser deduzido por subtração. A academia escolhe entre recortes
+          prontos; ela não monta o próprio filtro, não existe recorte por idade ou sexo, e os
+          rótulos vêm de uma lista nossa — nunca de um texto que você escreveu. A metodologia
+          completa, com o que ela <em>não</em> protege, está publicada em{' '}
+          <a href="https://github.com/ThiagoCarreiraVallim/fatia/blob/main/docs/AGGREGATION_POLICY.md">
+            docs/AGGREGATION_POLICY.md
+          </a>{' '}
+          — é para ser conferida, não para ser acreditada.
+        </p>
+        <p>
           Toda leitura dos seus dados por um profissional fica <strong>registrada</strong>,
           inclusive as tentativas <em>barradas</em>, e você lê esse registro quando quiser. O
           registro guarda que houve leitura — data, categoria e quem — e nunca o conteúdo lido.
