@@ -24,6 +24,6 @@
     "astro-eslint-parser": "^3",
     "eslint-plugin-astro": "^3.0.1",
     "eslint-plugin-jsx-a11y": "^6.10.2",
-    "typescript": "^5.5.0"
+    "typescript": "^6.0.3"
   }
 }
