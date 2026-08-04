@@ -14,6 +14,41 @@ Duas coisas que a ADR fixou e que valem antes de qualquer leitura de código:
   responde 200, e quem pedir inferência recebe um erro nomeado com mensagem acionável. O produto
   continua inteiro sem IA hospedada — é como ele funciona hoje.
 
+## Rota de inferência
+
+`POST /recognize-meal` (#139) — foto de refeição em base64 → alimentos candidatos.
+
+```bash
+curl -s localhost:8100/recognize-meal \
+  -H 'Content-Type: application/json' \
+  -H "X-Fatia-Agent-Key: $AGENT_API_KEY" \
+  -d "{\"image_base64\":\"$(base64 -w0 prato.jpg)\",\"media_type\":\"image/jpeg\"}"
+```
+
+Três propriedades que valem mais que o código:
+
+- **Não grava nada e não devolve refeição.** O que sai é sugestão; quem grava é o `apps/api`,
+  pelo caminho manual que já existe. É isso que torna a tela de confirmação da #139 obrigatória
+  por construção, e não por disciplina.
+- **A imagem vive em memória e morre com a requisição** — ADR 004. Sem arquivo temporário, sem
+  cache, sem log do conteúdo. O `apps/api` já remove os metadados (EXIF/GPS) antes de mandar.
+- **O corpo não tem campo de identidade**, e `extra: "forbid"` recusa qualquer um que apareça. O
+  agente não sabe de quem é a foto, e não deve passar a saber — neste fluxo ele não fala com o
+  banco nem com o `/mcp`, então um Bearer de usuário aqui só aumentaria o estrago de um
+  comprometimento.
+
+**Autenticação: `AGENT_API_KEY`, exigida quando `AI_BASE_URL` não é local.** Uma rota de
+inferência anônima é um proxy aberto para o gateway pago — a fronteira de custo da
+[ADR 018](../../docs/ADR/018-inferencia-hospedada-fora-do-mcp.md). A exigência acompanha o custo, e
+não o ambiente: com o LM Studio local inferência não custa nada e pedir segredo só faria o
+desenvolvimento inventar um. Não há `if ambiente == 'prod'` em lugar nenhum.
+
+**Sem LangGraph, por ora.** O grafo previsto no plano da #139 tinha três passos: visão →
+`search_food` pelo MCP → casamento com a TACO. Os dois últimos ficaram no `apps/api`, que já tem o
+catálogo e o mesmo ranqueamento de busca que a pessoa usa digitando. O que sobra aqui é uma
+chamada e uma validação, em linha reta — um grafo de um nó só seria a dependência e a cerimônia
+sem o benefício. LangGraph entra quando houver ramificação de verdade (#141).
+
 ## Como rodar
 
 Pré-requisito: [`uv`](https://docs.astral.sh/uv/).
@@ -74,6 +109,7 @@ Todas as variáveis estão em `.env.example`. As que decidem o comportamento:
 | `AI_MODEL_EMBEDDING` | Modelo da capacidade de embedding.                                  |
 | `AI_TIMEOUT_S`       | Timeout por chamada. Default folgado: visão em CPU é lenta.         |
 | `AI_MAX_RETRIES`     | Repetições em 429 e 5xx. 401/403 não são repetidos.                 |
+| `AGENT_API_KEY`      | Segredo compartilhado com o `apps/api`. Obrigatório fora de local.  |
 
 **Trocar de provedor ou de modelo é editar `.env` e reiniciar.** Nenhum `.py` menciona fornecedor,
 e não há `if ambiente == 'prod'` no caminho de inferência: LM Studio e Cloudflare AI Gateway falam
@@ -160,31 +196,40 @@ src/fatia_agent/
   settings.py                 # env → configuração; nada aqui levanta exceção
   allowed_models.py           # destino e modelos revisados como subprocessador (#136)
   api.py                      # FastAPI: /health e /capabilities
+  api.py                      # FastAPI: /health, /capabilities, /recognize-meal
   providers/
     base.py                   # capacidades (Protocol), separadas do fornecedor
     openai_compat.py          # única implementação: cliente OpenAI-compatível
     errors.py                 # erros nomeados
     __init__.py               # build_provider(): monta ou degrada
+  prompts/
+    recognize_meal_pt_br.py   # prompt da #139, em português (o catálogo é a TACO)
+  schemas/
+    recognized_meal.py        # texto do modelo → dado validado, ou erro nomeado
+  recognition/
+    recognize_meal.py         # visão + validação, em linha reta
 tests/
   providers/                  # duplo do provedor, sem rede
+  recognition/                # #139: parser, rota e a guarda de custo
   test_degradation.py         # o serviço sem IA
   test_api.py                 # saúde e contrato de erro
   test_allowed_models.py      # a foto não sai para destino ou modelo não revisado
   smoke/                      # contra provedor de verdade; fora do CI
 ```
 
-## O que esta issue deliberadamente **não** entrega
+## O que ainda **não** existe aqui
 
-- **Nenhuma rota de inferência.** Uma rota que dispara inferência sem autenticar é um proxy aberto
-  para um gateway pago — a fronteira de custo da [ADR 018](../../docs/ADR/018-inferencia-hospedada-fora-do-mcp.md).
-  Ela entra junto com o repasse do Bearer do usuário, em #139/#141.
-- **Nenhum cliente MCP e nenhum grafo LangGraph.** Sem uma tool para chamar, um cliente MCP só
-  poderia ser testado contra um duplo de protocolo inventado aqui. Entra com #139, contra o `/mcp`
-  de verdade.
+- **Nenhum cliente MCP e nenhum grafo LangGraph.** O reconhecimento da #139 não precisou de
+  nenhum dos dois — ver §"Rota de inferência". Entram com #141, contra o `/mcp` de verdade e com
+  ramificação que justifique um grafo.
 - **Nenhuma implementação de transcrição.** O `TranscriptionCapability` está declarado, porque a
-  separação capacidade/fornecedor é o que esta issue entrega; a implementação vai com #141, quando
+  separação capacidade/fornecedor é o que a #134 entregou; a implementação vai com #141, quando
   houver um endpoint de transcrição real contra o qual verificar a forma da requisição.
-- **Nenhuma tool MCP nova.** O catálogo do `apps/api` não é tocado.
+- **Nenhuma tool MCP nova.** O catálogo do `apps/api` não é tocado, e não deve ser: expor
+  `recognize_meal_photo` como tool faria o Claude do usuário disparar inferência paga pela Fatia
+  (ADR 018). O reconhecimento é rota HTTP do app, não superfície MCP.
+- **Nenhum registro de uso ou cota.** É a #135, e ela depende de tabela nova em `schema.prisma`.
+  Enquanto não existir, não há como atribuir custo por chamada.
 
 ## CI
 

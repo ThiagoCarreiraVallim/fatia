@@ -63,6 +63,11 @@ essa é a clientela dele, e é dado de terceiro.
   estendida pela [ADR 020](./ADR/020-foto-e-audio-trafegam-sem-persistencia.md). **Não há bucket,
   não há disco, não há coluna** — em nenhum dos dois caminhos de IA. O que muda entre eles é se a
   imagem chega a atravessar o Fatia; ver a seção seguinte.
+- **Fotos de refeição.** Decisão registrada na [ADR 004](./ADR/004-sem-armazenamento-fotos.md).
+  Continua valendo com o registro por foto do app nativo (#139): a imagem **transita**, é analisada
+  e é descartada — não há bucket, não há upload persistido, não há coluna de foto em `Meal`. O que
+  entra no banco são os dados estruturados que a pessoa confirma. Detalhe do trânsito na seção
+  "Reconhecimento de refeição por foto", abaixo.
 - **Senhas.** Removidas na [ADR 008](./ADR/008-logto-oidc-provider.md) — a migration
   `20260510190000_logto_auth_adr008` dropou a coluna `passwordHash`. A credencial vive no Logto.
 - **Meios de pagamento.** A instância pública é gratuita.
@@ -221,9 +226,82 @@ código escaneado é um **segmento do caminho**, não um parâmetro de query.
 
 A mensagem de aviso de falha do OFF (`off-food.service.ts`) também não inclui o código.
 
-**A imagem da câmera não sai do aparelho e não é gravada.** O `expo-camera` faz a decodificação
-localmente; o que o app envia à API é o número já lido. Não há foto, não há upload — o mesmo
-princípio da [ADR 004](./ADR/004-sem-armazenamento-fotos.md).
+**No scanner, a imagem da câmera não sai do aparelho e não é gravada.** O `expo-camera` faz a
+decodificação localmente; o que o app envia à API é o número já lido. Não há foto, não há upload.
+(O registro **por foto** é outro fluxo, descrito na seção seguinte — lá a imagem transita, e é por
+isso que ela tem uma seção só dela.)
+
+## Reconhecimento de refeição por foto (app nativo)
+
+O registro por foto (issue #139) manda a imagem do prato para um modelo de visão. **Foto de
+refeição é dado sensível** — ela mostra o que a pessoa come e pode capturar o ambiente, outras
+pessoas e, pelo EXIF, a coordenada exata de onde ela estava. Por isso esta seção descreve o
+trânsito item a item, como a do Open Food Facts.
+
+A funcionalidade é **opcional e desligada por padrão**: sem `AGENT_BASE_URL` configurada, a entrada
+por foto não aparece na interface e nada disto acontece. O registro manual nunca depende dela.
+
+### O caminho da imagem
+
+```
+app nativo ──JPEG base64──► apps/api ──JPEG sem metadados──► apps/agent ──data URI──► provedor
+   câmera/galeria             remove EXIF                      em memória            de visão
+   reduz e recomprime         valida e limita
+```
+
+**O que sai do aparelho:** a foto, reduzida e recomprimida para JPEG. Nada mais — nem o dia
+selecionado, nem a refeição, nem o horário.
+
+**O que sai do `apps/api` para o agente e daí para o provedor:** os **pixels**, e só. A remoção de
+metadados acontece aqui, e não no aplicativo, porque uma garantia que depende do cliente não é
+garantia: versão antiga do app, PWA que ainda vai existir, um `curl` de quem tem token. Removidos:
+
+- **EXIF (APP1)** — GPS, marca, modelo, número de série, data e hora exata do disparo;
+- **XMP, IPTC e perfil ICC** (APP1, APP13, APP2) — autor, software, localização textual;
+- **JFIF (APP0)**, inclusive a miniatura embutida, que é uma segunda cópia da imagem e
+  sobreviveria a um recorte feito justamente para esconder algo;
+- **comentários (COM)**.
+
+Isso é `apps/api/src/nutrition/helpers/strip-exif.ts`, com teste sobre um JPEG real com EXIF real
+(`strip-exif.spec.ts`).
+
+**O que explicitamente não sai:**
+
+- `userId`, e-mail, nome ou qualquer identificador da pessoa — o corpo mandado ao agente tem
+  exatamente dois campos, `image_base64` e `media_type`, e o schema do agente **recusa** qualquer
+  outro (`extra: "forbid"`);
+- o `Authorization` do usuário. O `apps/api` autentica-se no agente com um segredo **de serviço**
+  (`AGENT_API_KEY`), que identifica o processo e não a pessoa;
+- o que foi comido, a refeição, o horário ou a quantidade — o reconhecimento acontece **antes** de
+  qualquer registro, e o registro não é comunicado ao agente nem ao provedor.
+
+A lista de cabeçalhos e de campos do corpo é fechada por teste
+(`apps/api/src/nutrition/__tests__/meal-recognition.service.spec.ts`).
+
+### Retenção
+
+| Dado                          | Onde                                     | Retenção                            |
+| ----------------------------- | ---------------------------------------- | ----------------------------------- |
+| Foto do prato                 | Memória dos processos, durante a chamada | Nenhuma: sem bucket, disco ou cache |
+| Resultado do reconhecimento   | **Não armazenado**                       | É sugestão até a pessoa confirmar   |
+| Itens confirmados pela pessoa | Postgres (`Meal`, `MealItem`)            | Enquanto a conta existir            |
+| Vínculo entre usuário e foto  | **Não existe**                           | —                                   |
+
+**Onde a foto pode ficar, e que não é conosco:** o provedor de inferência. Em desenvolvimento é o
+LM Studio na própria máquina, e a imagem não sai dela. Em produção é o Cloudflare AI Gateway e o
+modelo atrás dele — a política de retenção deles vale para essa cópia, e é por isso que a escolha
+do provedor é decisão de privacidade, não só de custo.
+
+**Nada da foto aparece em log.** As mensagens de aviso do `MealRecognitionService` trazem o nome
+do erro e o status, nunca a imagem nem o nome dos alimentos reconhecidos. Do lado do agente, a
+mensagem de erro de validação conta **quantos** campos falharam e não quais, justamente porque o
+dump do pydantic traria a lista de alimentos de volta para o log — e alimento é dado de saúde.
+
+### O que o usuário vê antes
+
+O texto da permissão de câmera do app diz que a foto é analisada e descartada, e a tela de captura
+repete isso. A confirmação é obrigatória por construção: o reconhecimento **não grava nada**, e a
+única forma de a refeição entrar no banco é a pessoa revisar a lista e tocar em registrar.
 
 ## Autenticação e OAuth
 

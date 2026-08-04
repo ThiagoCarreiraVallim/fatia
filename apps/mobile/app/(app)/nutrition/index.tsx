@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { ScanBarcode, Settings } from 'lucide-react-native';
+import { Camera, ScanBarcode, Settings } from 'lucide-react-native';
 import { nutritionApi, type MealItem, type MealType } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { ErrorState, LoadingState } from '@/components/ui';
@@ -43,6 +43,20 @@ export default function NutritionScreen() {
     queryKey: ['nutrition', 'goals'],
     queryFn: () => nutritionApi.goals(),
   });
+  /**
+   * Se a instância tem IA de visão configurada (#139). Sem ela a entrada por
+   * foto **some** em vez de aparecer e falhar — um botão que sempre erra é pior
+   * que um botão que não existe, e o registro manual continua inteiro.
+   *
+   * `staleTime` longo porque a resposta depende de configuração do servidor, não
+   * do dia: sem ele, cada visita à tela bateria no agente.
+   */
+  const fotoDisponivel = useQuery({
+    queryKey: ['nutrition', 'photo-recognition'],
+    queryFn: () => nutritionApi.photoRecognitionStatus(),
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+  });
 
   const atualizar = () => {
     void resumo.refetch();
@@ -65,6 +79,16 @@ export default function NutritionScreen() {
       >
         <View className="gap-5 px-5 pb-4 pt-4">
           <View className="flex-row items-center justify-end">
+            {fotoDisponivel.data?.available ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Registrar refeição por foto"
+                onPress={() => router.push(`/nutrition/photo?date=${data}`)}
+                className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
+              >
+                <Camera size={18} color="#baccaf" />
+              </Pressable>
+            ) : null}
             {/* Escanear entra no cabeçalho, e não dentro do drawer de busca: o
                 caso é "estou com a embalagem na mão", e enterrá-lo atrás de dois
                 toques faria a pessoa digitar o nome do produto assim mesmo. */}

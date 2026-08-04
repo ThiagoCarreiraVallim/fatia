@@ -16,6 +16,7 @@ import {
 } from '@nestjs/common';
 import { CurrentUser, type CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { FoodService } from './food.service';
+import { MealRecognitionService } from './meal-recognition.service';
 import { OffFoodService, atribuicaoDoOff } from './off-food.service';
 import { MealService } from './meal.service';
 import { MealItemService } from './meal-item.service';
@@ -43,7 +44,53 @@ export class NutritionController {
     private readonly summary: NutritionSummaryService,
     private readonly goals: UserGoalsService,
     private readonly nutrientTargets: NutrientTargetService,
+    private readonly recognition: MealRecognitionService,
   ) {}
+
+  // -------- Reconhecimento por foto (#139) --------
+
+  /**
+   * Se a entrada por foto deve aparecer na interface.
+   *
+   * Existe para que a funcionalidade **suma** onde não há agente configurado, em
+   * vez de aparecer e falhar: um botão que sempre erra é pior que um botão que
+   * não existe. Sem `@CurrentUser()` porque não lê nada do usuário — a rota
+   * continua atrás do guard global de autenticação.
+   */
+  @Get('photo-recognition')
+  async photoRecognitionStatus() {
+    return { available: await this.recognition.disponivel() };
+  }
+
+  /**
+   * Foto de refeição → alimentos candidatos. **Não grava nada.**
+   *
+   * O corpo é a foto em **base64, com `Content-Type: text/plain`**, e não JSON.
+   * O motivo é mecânico: o parser de JSON do Nest é global e tem teto de 100 kB;
+   * elevá-lo elevaria para todas as rotas do produto. `text/plain` passa intocado
+   * por ele e é parseado por um middleware com teto próprio — ver
+   * `nutrition.module.ts`.
+   *
+   * A resposta é sugestão, não refeição: quem grava é `POST /meals`, depois da
+   * tela de confirmação. Ver `meal-recognition.service.ts`.
+   */
+  @Post('meals/recognize')
+  async recognizeMealPhoto(@CurrentUser() user: CurrentUserPayload, @Body() corpo: unknown) {
+    if (typeof corpo !== 'string' || corpo.trim() === '') {
+      throw new BadRequestException(
+        'Envie a foto em base64 no corpo, com Content-Type: text/plain.',
+      );
+    }
+
+    // `base64` no `Buffer.from` do Node ignora caractere inválido em silêncio, e
+    // uma string truncada viraria bytes que não são JPEG — recusados adiante com
+    // uma mensagem errada. A validação explícita dá o erro certo.
+    if (!/^[A-Za-z0-9+/\s]+={0,2}$/.test(corpo)) {
+      throw new BadRequestException('O corpo não é base64 válido.');
+    }
+
+    return this.recognition.reconhecer(user.id, Buffer.from(corpo, 'base64'));
+  }
 
   // -------- Foods --------
   @Get('foods')

@@ -103,16 +103,20 @@ def test_capabilities_nao_ecoa_o_caminho_da_base_url(settings_factory):
     assert "fatia-gw" not in bruto
 
 
-def test_nenhuma_rota_de_inferencia_esta_exposta(settings_factory):
+def test_a_superficie_e_so_diagnostico_mais_o_reconhecimento(settings_factory):
     """Guarda de escopo, e de custo.
 
-    Uma rota de inferência sem autenticação seria um proxy aberto para o
-    gateway pago (ADR 018 trata a fronteira de custo). Ela entra junto com o
-    repasse do Bearer do usuário, em #139/#141 — não antes.
+    A #134 não expunha rota de inferência nenhuma; a #139 expõe exatamente uma, e
+    ela é autenticada por segredo compartilhado (ver `test_recognize_meal.py`).
+    Rota de inferência **anônima** seria um proxy aberto para o gateway pago —
+    a fronteira de custo da ADR 018. Este teste existe para que uma terceira rota
+    tenha de passar por aqui antes de nascer.
     """
     app = create_app(settings_factory())
 
     caminhos = {rota.path for rota in app.routes}  # type: ignore[attr-defined]
 
-    assert {"/health", "/capabilities"} <= caminhos
-    assert not any(caminho.startswith(("/v1/", "/infer")) for caminho in caminhos)
+    nossas = {
+        caminho for caminho in caminhos if not caminho.startswith(("/openapi", "/docs", "/redoc"))
+    }
+    assert nossas == {"/health", "/capabilities", "/recognize-meal"}

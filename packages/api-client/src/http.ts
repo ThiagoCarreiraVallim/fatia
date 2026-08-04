@@ -58,9 +58,24 @@ function requireTransport(): ApiTransport {
   return transport;
 }
 
-export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+export interface ApiFetchInit extends RequestInit {
+  /**
+   * Teto desta chamada, sobrepondo o do transporte.
+   *
+   * Existe por causa do reconhecimento de refeição por foto (#139): visão em CPU
+   * leva de 20 a 60 s, e o gemma local já passou de 100 s. Com o teto padrão de
+   * 15 s o cliente desiste, a pessoa vê "tempo excedido" e a inferência foi paga
+   * do mesmo jeito — o timeout em cascata. Elevar o teto do transporte inteiro
+   * resolveria isso e estragaria o resto: uma tela travada por 3 min em qualquer
+   * outra rota é pior que um erro em 15 s.
+   */
+  timeoutMs?: number;
+}
+
+export async function apiFetch<T>(path: string, init?: ApiFetchInit): Promise<T> {
   const t = requireTransport();
   const url = t.resolveUrl(path);
+  const { timeoutMs, ...requestInit } = init ?? {};
 
   const headers = new Headers(init?.headers);
   const extra = await t.headers?.(path);
@@ -72,14 +87,17 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), t.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    timeoutMs ?? t.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+  );
 
   const doFetch = t.fetch ?? fetch;
   let res: Response;
   try {
     res = await doFetch(url, {
       ...t.requestInit?.(),
-      ...init,
+      ...requestInit,
       headers,
       signal: controller.signal,
     });
