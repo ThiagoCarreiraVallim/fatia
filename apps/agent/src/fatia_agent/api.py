@@ -11,9 +11,10 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from . import __version__
-from .allowed_models import unreviewed_models, usable_models
+from .allowed_models import unreviewed_host_reason, unreviewed_models, usable_models
 from .providers import build_provider
 from .providers.errors import (
+    AIEndpointNotAllowed,
     AIModelNotAllowed,
     AIProviderError,
     AIProviderNotConfigured,
@@ -26,9 +27,11 @@ from .settings import AgentSettings, ai_unavailable_reason, endpoint_host
 # respondeu, mas mal. Todos são "tente de novo ou registre manualmente".
 _STATUS_BY_ERROR: dict[type[AIProviderError], int] = {
     AIProviderNotConfigured: 503,
-    # Também 503, e também "configuração nossa": o modelo apontado não passou
-    # por revisão de privacidade. O `code` é que separa os dois para quem opera.
+    # Também 503, e também "configuração nossa": o modelo apontado, ou o host
+    # para onde os bytes iriam, não passou por revisão de privacidade. O `code`
+    # é que separa os três para quem opera — são três correções diferentes.
     AIModelNotAllowed: 503,
+    AIEndpointNotAllowed: 503,
     AIProviderTimeout: 504,
     AIProviderRefused: 502,
 }
@@ -64,6 +67,11 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             "ai": {
                 "configured": reason is None,
                 "reason": reason,
+                # Por que o destino recusa, quando recusa. Separado de
+                # `unreviewed_models` porque é um fato só, não um por
+                # capacidade: se o host não passou pela revisão, nenhuma
+                # capacidade envia nada, por melhor que seja o nome do modelo.
+                "unreviewed_host": unreviewed_host_reason(resolved.ai_base_url),
                 # Capacidade → por que o modelo dela recusa. Aparece aqui para o
                 # operador ver a recusa antes do primeiro 503 de um usuário: a
                 # troca de `AI_MODEL_*` no painel é silenciosa por natureza.

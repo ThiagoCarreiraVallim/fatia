@@ -61,4 +61,25 @@ describe('AppEnvSchema — IA hospedada', () => {
     const env = AppEnvSchema.parse({ ...BASE, AI_QUOTA_DAILY_MICROS: '250000' });
     expect(env.AI_QUOTA_DAILY_MICROS).toBe(250_000);
   });
+
+  it('a tolerância de chamadas sem preço nasce diferente de zero', () => {
+    // Aqui o default **não** pode ser `0`, ao contrário dos dois tetos de dinheiro: `0` significa
+    // "nenhuma tolerância", e uma instância que só preencheu os tetos perderia a IA na primeira
+    // chamada de um modelo ainda não precificado, sem nunca ter pedido isso.
+    expect(AppEnvSchema.parse(BASE).AI_QUOTA_UNPRICED_DAILY_CALLS).toBe(20);
+    expect(
+      AppEnvSchema.parse({ ...BASE, AI_QUOTA_UNPRICED_DAILY_CALLS: '0' })
+        .AI_QUOTA_UNPRICED_DAILY_CALLS,
+    ).toBe(0);
+  });
+
+  it.each([
+    ['negativo', '-1'],
+    ['fracionário', '2.5'],
+    ['texto', 'algumas'],
+  ])('tolerância %s não é aceita', (_caso, valor) => {
+    // Mesma armadilha do teto: sem `.int()`, "algumas" viraria `NaN`, e `n >= NaN` é sempre
+    // falso — a guarda existiria no código e não no comportamento.
+    expect(() => AppEnvSchema.parse({ ...BASE, AI_QUOTA_UNPRICED_DAILY_CALLS: valor })).toThrow();
+  });
 });

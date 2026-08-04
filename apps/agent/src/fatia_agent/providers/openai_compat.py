@@ -16,10 +16,12 @@ import httpx
 from ..allowed_models import (
     CAPABILITY_ENV_VARS,
     CAPABILITY_LABELS,
+    is_local_destination,
+    unreviewed_host_reason,
     unreviewed_model_reason,
 )
-from ..settings import is_local_endpoint
 from .errors import (
+    AIEndpointNotAllowed,
     AIModelNotAllowed,
     AIProviderError,
     AIProviderNotConfigured,
@@ -62,12 +64,33 @@ class OpenAICompatProvider:
         # liberar — o mesmo motivo pelo qual `hostedInference` é obrigatório na
         # ADR 018. Assim não existe forma de construir o provedor escapando da
         # revisão de modelo, nem por engano nem em teste.
-        self._remote_endpoint = not is_local_endpoint(base_url)
+        self._remote_endpoint = not is_local_destination(base_url)
+        # Guardada pelo mesmo motivo: a revisão de destino é sobre esta string,
+        # e ela precisa estar disponível em `_require_model` — o único ponto por
+        # onde toda inferência passa antes de a requisição existir.
+        self._base_url = base_url
 
         # Sem chave, nenhum header de autorização: o LM Studio recusa nada, mas
         # mandar `Bearer ` vazio para um gateway produz um 401 mais confuso do
         # que a ausência do header.
         headers = {"Authorization": f"Bearer {api_key}"} if api_key.strip() else {}
+
+        # Desliga o log do Cloudflare AI Gateway **em cada chamada**.
+        #
+        # O gateway grava corpo de requisição e corpo de resposta por padrão — é
+        # o produto dele. Sem este header, a foto do prato e a resposta do modelo
+        # ficariam retidas e visíveis no painel da Cloudflare, e a frase da
+        # /privacy sobre não haver bucket, disco ou coluna seria verdadeira só
+        # dentro deste repositório. Desligar pela chave do painel resolveria
+        # igual — e é o mesmo tipo de promessa que depende de alguém lembrar de
+        # uma configuração, que é exatamente o que a #136 existe para não fazer.
+        # Aqui a decisão viaja com a requisição e passa por diff (ADR 020).
+        #
+        # Vai **sempre**, e não só quando `self._remote_endpoint`: a derivação de
+        # "isto é local?" é justamente o que um proxy reverso em `localhost`
+        # engana, e é aí que a proteção mais faria falta. Para quem não é o
+        # gateway é um header desconhecido, ignorado como qualquer outro.
+        headers["cf-aig-collect-log"] = "false"
 
         self._client = httpx.AsyncClient(
             base_url=base_url,
@@ -159,13 +182,19 @@ class OpenAICompatProvider:
     # --- modelo por capacidade -------------------------------------------
 
     def _require_model(self, capability: str, model: str) -> str:
-        """Resolve o modelo da capacidade, ou recusa com erro nomeado.
+        """Resolve modelo **e destino** da capacidade, ou recusa com erro nomeado.
 
         Único ponto por onde toda inferência passa antes de a requisição existir
         — é por isso que a revisão de privacidade da issue #136 mora aqui, e não
         no `build_provider`. Recusar na montagem derrubaria as três capacidades
         por causa de uma; recusar aqui derruba exatamente a que aponta para o
         fornecedor não revisado, e antes de qualquer byte sair.
+
+        A ordem das três recusas é a ordem em que o operador tem que agir:
+        preencher a variável vazia, apontar para um destino revisado, e só então
+        o nome do modelo faz alguma diferença. Acusar o modelo enquanto a
+        `AI_BASE_URL` está errada mandaria a pessoa mexer na lista que não é a
+        do problema.
         """
         env_var = CAPABILITY_ENV_VARS.get(capability, "AI_MODEL_*")
         label = CAPABILITY_LABELS.get(capability, capability)
@@ -176,6 +205,10 @@ class OpenAICompatProvider:
                 "Os modelos são variáveis separadas de propósito — o gateway roteia "
                 "capacidades diferentes para modelos diferentes."
             )
+
+        endpoint_reason = unreviewed_host_reason(self._base_url)
+        if endpoint_reason is not None:
+            raise AIEndpointNotAllowed(endpoint_reason)
 
         reason = unreviewed_model_reason(capability, model, remote=self._remote_endpoint)
         if reason is not None:

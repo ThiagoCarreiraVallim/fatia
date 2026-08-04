@@ -18,6 +18,10 @@ const TABELA: AiPriceTable = {
   // um milhão são os únicos que produzem fração, e é por isso que este existe: sem ele, arredondar
   // uma vez e arredondar duas dão sempre o mesmo número e o caso abaixo seria vacuoso.
   'gateway/modelo-barato': { in: 150_000, out: 400_000 },
+  // US$ 6,00 por milhão de **segundos** — a unidade de transcrição (#141). Está aqui porque a
+  // duração de um áudio é fracionária, e o caso fracionário precisa de um preço que não seja
+  // múltiplo de 1.000.000 para a conta distinguir uma fórmula da outra.
+  'gateway/audio': { in: 6_000_000, out: 0 },
   'local/gemma': { in: 0, out: 0 },
 };
 
@@ -95,13 +99,42 @@ describe('estimateAiCost', () => {
 
   it.each([
     ['unidade negativa', { inputUnits: -1, outputUnits: 10 }],
-    ['unidade fracionária', { inputUnits: 1.5, outputUnits: 10 }],
-    ['unidade não finita', { inputUnits: Number.NaN, outputUnits: 10 }],
+    ['unidade não finita (NaN)', { inputUnits: Number.NaN, outputUnits: 10 }],
+    ['unidade não finita (Infinity)', { inputUnits: Number.POSITIVE_INFINITY, outputUnits: 10 }],
   ])('%s é dado corrompido do provedor, não custo', (_caso, units) => {
     // `NaN` é o pior: propagado como número, viraria `costMicros: NaN` e envenenaria toda soma
     // posterior — inclusive a da cota, que passaria a nunca estourar.
     const custo = estimateAiCost('gateway/modelo-pago', units, TABELA);
     expect(custo).toEqual({ costMicros: 0, pricingKnown: false });
+  });
+
+  it('segundo de áudio fracionário é medida legítima, não corrupção', () => {
+    // `AiCallUnits.inputUnits` é "token **ou segundo de áudio**", e provedor de transcrição reporta
+    // duração fracionária. Exigir inteiro parecia a checagem mais segura e desligava a medição de
+    // áudio inteira na #141: toda chamada entraria como `pricingKnown: false`, acendendo o alerta
+    // de anomalia com fatura real do outro lado e fechando a cota pelo teto de chamadas sem preço.
+    //
+    // 12,5 s a US$ 6,00 por milhão de segundos = 75 micro-dólares, e o arredondamento único no
+    // fim é o que mantém isso exato.
+    expect(estimateAiCost('gateway/audio', { inputUnits: 12.5, outputUnits: 0 }, TABELA)).toEqual({
+      costMicros: 75,
+      pricingKnown: true,
+    });
+  });
+
+  it('capacidade sem saída cobrada precisa de `outputUnits: 0`, e aí o preço é conhecido', () => {
+    // `/embeddings` devolve `prompt_tokens` e `total_tokens`, e **nunca** `completion_tokens`.
+    // Quem mapear o `usage` campo a campo entrega `outputUnits: undefined` e todo embedding entra
+    // como não precificado — com o modelo na tabela, o preço certo e nada errado à vista. O
+    // contrato é do chamador porque só ele sabe qual é o caso; este par de asserções é onde ele
+    // está escrito de forma executável.
+    expect(
+      estimateAiCost('gateway/modelo-pago', { inputUnits: 1_000, outputUnits: 0 }, TABELA),
+    ).toEqual({ costMicros: 3_000, pricingKnown: true });
+    expect(estimateAiCost('gateway/modelo-pago', { inputUnits: 1_000 }, TABELA)).toEqual({
+      costMicros: 0,
+      pricingKnown: false,
+    });
   });
 
   it('arredonda uma vez só, no total — e não uma vez por lado', () => {

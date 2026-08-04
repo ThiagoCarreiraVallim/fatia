@@ -1,10 +1,17 @@
-"""Revisão de modelo como subprocessador (issue #136).
+"""Revisão de destino e de modelo como subprocessador (issue #136).
 
 O risco que estes testes existem para prender não é um bug: é uma **edição de
-painel**. Alguém troca `AI_MODEL_VISION` no Dokploy, o gateway roteia para outro
-fornecedor, e as três afirmações da `/privacy` — quem é o subprocessador, que há
-transferência internacional, que o dado não treina modelo — ficam falsas sem que
-nenhuma linha do repositório mude, sem erro e sem sintoma.
+painel**. Alguém troca `AI_MODEL_VISION` — ou `AI_BASE_URL`, que mora no mesmo
+painel — no Dokploy, os bytes passam a sair para outro fornecedor, e as três
+afirmações da `/privacy` (quem é o subprocessador, que há transferência
+internacional, que o dado não treina modelo) ficam falsas sem que nenhuma linha
+do repositório mude, sem erro e sem sintoma.
+
+São **duas** listas e dois grupos de casos aqui, de propósito: nenhuma implica a
+outra. Um gateway revisado pode servir um modelo que ninguém examinou, e um
+modelo revisado pode ser servido por qualquer proxy compatível com o protocolo
+da OpenAI. Por isso os casos de modelo rodam com o host **já autorizado** — sem
+isso eles passariam pela recusa errada e deixariam de provar o que dizem provar.
 
 Nenhum teste aqui fala com rede: a recusa acontece **antes** de a requisição
 existir, que é o único momento em que ela ainda protege alguma coisa.
@@ -14,14 +21,30 @@ import pytest
 from fastapi.testclient import TestClient
 
 from fatia_agent import allowed_models
-from fatia_agent.allowed_models import CAPABILITIES, CAPABILITY_ENV_VARS, usable_models
+from fatia_agent import settings as settings_module
+from fatia_agent.allowed_models import (
+    CAPABILITIES,
+    CAPABILITY_ENV_VARS,
+    configured_models,
+    usable_models,
+)
 from fatia_agent.api import create_app
 from fatia_agent.providers import build_provider
-from fatia_agent.providers.errors import AIModelNotAllowed, AIProviderNotConfigured
+from fatia_agent.providers.errors import (
+    AIEndpointNotAllowed,
+    AIModelNotAllowed,
+    AIProviderNotConfigured,
+)
+from fatia_agent.settings import AgentSettings
 
 from .support import RecordingTransport, chat_response
 
-GATEWAY = "https://gateway.ai.cloudflare.com/v1/conta/fatia/openai"
+GATEWAY_HOST = "gateway.ai.cloudflare.com"
+GATEWAY = f"https://{GATEWAY_HOST}/v1/conta/fatia/openai"
+
+# Outro proxy que fala o mesmo protocolo e serve nomes de modelo populares. É a
+# troca de uma variável só que o guarda de `ALLOWED_MODELS` não via.
+OUTRO_PROXY = "https://api.deepinfra.com/v1/openai"
 
 # 1x1 PNG transparente — imagem mínima que ainda é imagem de verdade.
 PIXEL_PNG = bytes.fromhex(
@@ -31,9 +54,33 @@ PIXEL_PNG = bytes.fromhex(
 
 
 @pytest.fixture
-def gateway_settings(settings_factory):
-    """Endpoint remoto com credencial — o cenário de produção da ADR 015."""
+def gateway_settings(settings_factory, monkeypatch):
+    """Endpoint remoto com credencial — o cenário de produção da ADR 015.
+
+    O host do gateway entra na lista revisada aqui porque os casos que usam esta
+    fixture são sobre **modelo**. Com `ALLOWED_HOSTS` vazia eles morreriam na
+    recusa anterior, continuariam verdes, e provariam a guarda errada.
+    """
+    _permitir_host(monkeypatch, GATEWAY_HOST)
     return settings_factory(ai_base_url=GATEWAY, ai_api_key="cf-token")
+
+
+@pytest.fixture
+def proxy_nao_revisado_settings(settings_factory, monkeypatch):
+    """Só `AI_BASE_URL` muda: o gateway é o revisado, o destino configurado não é.
+
+    E o modelo de **toda** capacidade está autorizado — sem isso o teste passaria
+    pela recusa de modelo e não provaria nada sobre o destino.
+    """
+    _permitir_host(monkeypatch, GATEWAY_HOST)
+    tabela = {
+        "text": frozenset({"ornith-1.0-9b"}),
+        "vision": frozenset({"google/gemma-4-12b-qat"}),
+        "embedding": frozenset({"text-embedding-nomic-embed-text-v1.5"}),
+        "transcription": frozenset(),
+    }
+    monkeypatch.setattr(allowed_models, "ALLOWED_MODELS", tabela)
+    return settings_factory(ai_base_url=OUTRO_PROXY, ai_api_key="tok")
 
 
 @pytest.fixture
@@ -59,6 +106,11 @@ def _permitir(monkeypatch: pytest.MonkeyPatch, capability: str, *models: str) ->
     tabela = {nome: frozenset(lista) for nome, lista in allowed_models.ALLOWED_MODELS.items()}
     tabela[capability] = frozenset(models)
     monkeypatch.setattr(allowed_models, "ALLOWED_MODELS", tabela)
+
+
+def _permitir_host(monkeypatch: pytest.MonkeyPatch, *hosts: str) -> None:
+    """Simula a PR que declara um destino como subprocessador revisado."""
+    monkeypatch.setattr(allowed_models, "ALLOWED_HOSTS", frozenset(hosts))
 
 
 async def _capturar(chamada) -> Exception | None:
@@ -150,6 +202,96 @@ async def test_texto_e_embedding_tambem_passam_pela_revisao(
     assert CAPABILITY_ENV_VARS[capability] in erro.message
 
 
+@pytest.mark.parametrize("capability", ["vision", "text", "embedding"])
+async def test_trocar_a_base_url_para_proxy_nao_revisado_nao_deixa_nada_sair(
+    proxy_nao_revisado_settings, transporte, capability
+):
+    """O buraco que a lista de modelos não via: a troca é de `AI_BASE_URL`.
+
+    Todos os modelos configurados estão revisados; quem mudou foi *a máquina que
+    recebe os bytes*. Um gateway roteia para muitos fornecedores e muitos
+    gateways servem o mesmo nome de modelo — nenhuma das duas listas implica a
+    outra, então vigiar só o nome deixava a foto sair para um terceiro não
+    declarado sem diff, sem erro e sem sintoma.
+    """
+    provider = build_provider(proxy_nao_revisado_settings, transport=transporte)
+
+    chamada = {
+        "vision": lambda: provider.describe(
+            PIXEL_PNG, prompt="O que é isto?", media_type="image/png"
+        ),
+        "text": lambda: provider.complete("comi arroz e feijão no almoço"),
+        "embedding": lambda: provider.embed(["arroz"]),
+    }[capability]
+    erro = await _capturar(chamada())
+
+    assert transporte.requests == [], "o dado saiu para um destino não revisado"
+    assert isinstance(erro, AIEndpointNotAllowed)
+    assert erro.code == "AI_ENDPOINT_NOT_ALLOWED"
+    # Código próprio, e não o do modelo: a correção é outra variável e outra
+    # lista. Mandar quem opera mexer em `ALLOWED_MODELS` aqui seria mandá-lo
+    # para o lugar errado.
+    assert erro.code != "AI_MODEL_NOT_ALLOWED"
+    assert "api.deepinfra.com" in erro.message
+    assert "ALLOWED_HOSTS" in erro.message
+
+
+async def test_destino_revisado_com_modelo_revisado_chega_ao_fornecedor(
+    gateway_settings, transporte, monkeypatch
+):
+    """A outra direção das duas listas juntas: com host e modelo revisados, passa."""
+    _permitir(monkeypatch, "vision", "google/gemma-4-12b-qat")
+    provider = build_provider(gateway_settings, transport=transporte)
+
+    await provider.describe(PIXEL_PNG, prompt="O que é isto?", media_type="image/png")
+
+    assert str(transporte.requests[-1].url).startswith(f"https://{GATEWAY_HOST}/")
+
+
+async def test_afrouxar_a_lista_de_credencial_nao_afrouxa_a_de_privacidade(
+    settings_factory, transporte, monkeypatch
+):
+    """As duas listas de "isto é local" são separadas, e este caso é o que prende isso.
+
+    `settings.LOCAL_HOSTS` existe para uma pergunta de conveniência — "chave
+    vazia aqui é descuido ou é o normal?". Se a revisão de privacidade lesse
+    *ela*, acrescentar um host para parar de preencher `AI_API_KEY` desligaria a
+    revisão de subprocessador inteira, sem que ninguém percebesse a relação.
+    """
+    monkeypatch.setattr(
+        settings_module, "LOCAL_HOSTS", settings_module.LOCAL_HOSTS | {"api.deepinfra.com"}
+    )
+    settings = settings_factory(ai_base_url=OUTRO_PROXY, ai_api_key="")
+    provider = build_provider(settings, transport=transporte)
+
+    erro = await _capturar(
+        provider.describe(PIXEL_PNG, prompt="O que é isto?", media_type="image/png")
+    )
+
+    assert transporte.requests == [], "a imagem saiu porque a lista de credencial foi afrouxada"
+    assert isinstance(erro, AIEndpointNotAllowed)
+
+
+def test_health_expoe_o_destino_nao_revisado(proxy_nao_revisado_settings):
+    """Um fato só, e não um por capacidade: se o destino recusa, nenhuma delas envia nada."""
+    corpo = TestClient(create_app(proxy_nao_revisado_settings)).get("/health").json()
+
+    assert corpo["ai"]["unreviewed_host"] is not None
+    assert "api.deepinfra.com" in corpo["ai"]["unreviewed_host"]
+
+
+def test_capabilities_nao_anuncia_nada_com_destino_nao_revisado(proxy_nao_revisado_settings):
+    """Com os três modelos revisados, o que zera o anúncio é só o destino."""
+    corpo = TestClient(create_app(proxy_nao_revisado_settings)).get("/capabilities").json()
+
+    assert corpo["capabilities"] == {
+        "text": None,
+        "vision": None,
+        "embedding": None,
+        "transcription": None,
+    }
+
+
 async def test_capacidade_sem_modelo_continua_dizendo_que_falta_configurar(settings_factory):
     """Modelo vazio não é modelo não revisado.
 
@@ -176,6 +318,40 @@ def test_toda_capacidade_declarada_tem_entrada_na_lista():
     """
     assert set(allowed_models.ALLOWED_MODELS) == set(CAPABILITIES)
     assert set(CAPABILITY_ENV_VARS) == set(CAPABILITIES)
+
+
+def test_configured_models_le_todo_ai_model_que_ja_existe(settings_factory):
+    """Guarda de esquecimento com dente, ao contrário da de cima.
+
+    A anterior confere só que as **chaves** existem, e por isso não pega o modo
+    de falha real: `configured_models` devolve `"transcription": ""` fixo em
+    código. Quando a #141 acrescentar `ai_model_transcription` às settings,
+    `/health` e `/capabilities` continuariam dizendo "transcrição não está
+    configurada" com o modelo configurado — e nenhuma asserção de chave acusaria.
+
+    Aqui a pergunta é outra: para toda capacidade cuja variável **já existe** nas
+    settings, o valor lido tem de ser o que está lá. A capacidade que ainda não
+    tem variável fica prendida pelo ramo de baixo, que é o que documenta o `""`
+    fixo como correto *enquanto* ela não existir.
+    """
+    sentinela = "modelo-sentinela"
+
+    for capability, env_var in CAPABILITY_ENV_VARS.items():
+        campo = env_var.lower()
+        if campo not in AgentSettings.model_fields:
+            assert configured_models(settings_factory())[capability] == "", (
+                f"{env_var} não existe em AgentSettings, então `configured_models` só pode "
+                f"devolver vazio para '{capability}'."
+            )
+            continue
+
+        settings = settings_factory(**{campo: sentinela})
+        assert configured_models(settings)[capability] == sentinela, (
+            f"{env_var} existe em AgentSettings, mas `configured_models` não devolve o valor "
+            f"dela para a capacidade '{capability}' — /health e /capabilities vão anunciar a "
+            "capacidade como não configurada com ela configurada, e a revisão de modelo dela "
+            "nunca roda."
+        )
 
 
 def test_capabilities_nao_anuncia_modelo_nao_revisado(gateway_settings):

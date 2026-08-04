@@ -10,6 +10,7 @@ from .base import (
     VisionCapability,
 )
 from .errors import (
+    AIEndpointNotAllowed,
     AIModelNotAllowed,
     AIProviderError,
     AIProviderNotConfigured,
@@ -22,6 +23,7 @@ from .errors import (
 from .openai_compat import OpenAICompatProvider
 
 __all__ = [
+    "AIEndpointNotAllowed",
     "AIModelNotAllowed",
     "AIProviderError",
     "AIProviderNotConfigured",

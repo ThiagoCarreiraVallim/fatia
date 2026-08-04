@@ -40,6 +40,18 @@ class AIModelNotAllowed(AIProviderError):
     code = "AI_MODEL_NOT_ALLOWED"
 
 
+class AIEndpointNotAllowed(AIProviderError):
+    """O host de `AI_BASE_URL` não passou por revisão de privacidade.
+
+    Código próprio, e não o de `AIModelNotAllowed`, porque a correção é outra
+    variável e outra lista: aqui não adianta mexer no nome do modelo. É também o
+    caso mais grave dos dois — o modelo diz o que roda, o host diz para qual
+    máquina os bytes saem, e é o host que a `/privacy` nomeia como terceiro.
+    """
+
+    code = "AI_ENDPOINT_NOT_ALLOWED"
+
+
 class AIProviderTimeout(AIProviderError):
     """O provedor não respondeu dentro de `AI_TIMEOUT_S`."""
 

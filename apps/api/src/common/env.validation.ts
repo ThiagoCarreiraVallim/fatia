@@ -47,6 +47,16 @@ export const AppEnvSchema = z.object({
   // o correto para instância auto-hospedada com modelo local: não há custo a conter.
   AI_QUOTA_DAILY_MICROS: z.coerce.number().int().nonnegative().default(0),
   AI_QUOTA_GLOBAL_DAILY_MICROS: z.coerce.number().int().nonnegative().default(0),
+
+  // Tolerância de chamadas cujo custo não deu para saber, na mesma janela. Existe porque custo
+  // desconhecido entra na soma como `0`, e uma soma que fica em `0` libera a cota para sempre —
+  // ou seja, a contenção se desligaria sozinha exatamente quando a medição se perdeu. O default
+  // não é `0` de propósito: um punhado de chamadas dá tempo de o alerta de anomalia aparecer
+  // antes de a IA apagar, e a exposição não medida fica limitada a esse punhado.
+  //
+  // Diferente dos dois de cima, `0` aqui não desliga — significa "nenhuma tolerância". A guarda
+  // inteira só vale quando algum teto de dinheiro está ligado (ver `decideAiQuota`).
+  AI_QUOTA_UNPRICED_DAILY_CALLS: z.coerce.number().int().nonnegative().default(20),
 });
 
 export type AppEnv = z.infer<typeof AppEnvSchema>;

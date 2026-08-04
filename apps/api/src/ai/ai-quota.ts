@@ -13,7 +13,7 @@ import { HttpException, HttpStatus } from '@nestjs/common';
  */
 
 /** Onde o teto bateu. Muda a mensagem e muda quem precisa agir. */
-export type AiQuotaScope = 'user' | 'global';
+export type AiQuotaScope = 'user' | 'global' | 'unpriced';
 
 export type AiQuotaLimits = {
   /** Teto diário de um usuário, em micro-unidades. `0` desliga a cota por usuário. */
@@ -23,20 +23,47 @@ export type AiQuotaLimits = {
    * mesmo dia — o caso em que o orçamento acaba sem ninguém individualmente abusar.
    */
   globalDailyMicros: number;
+  /**
+   * Quantas chamadas de custo **desconhecido** a janela tolera antes de a cota fechar.
+   *
+   * `0` aqui **não** desliga nada, ao contrário dos dois de cima: significa "nenhuma tolerância".
+   * A assimetria é deliberada e é o ponto do campo — um `0` que desligasse a guarda reproduziria
+   * exatamente o buraco que ela existe para fechar.
+   */
+  unpricedDailyCalls: number;
 };
 
 export type AiQuotaSpend = {
   userMicros: number;
   globalMicros: number;
+  /**
+   * Chamadas da janela que voltaram de `estimateAiCost` com `pricingKnown: false`.
+   *
+   * Sem este número, o sinal do `pricingKnown` morre no banco. Trocar `AI_MODEL_VISION` no painel
+   * sem mexer na `AI_PRICE_TABLE` faz toda chamada estimar `costMicros: 0`; a `SUM` da janela fica
+   * em `0`; e a decisão devolve `allowed: true` para sempre, com `AI_QUOTA_DAILY_MICROS`
+   * preenchido e correto. Ou seja: a contenção de custo se desligaria sozinha e em silêncio
+   * **precisamente** quando se perdeu a capacidade de medir, e o alerta de anomalia chegaria
+   * depois da fatura — que é o que a #135 diz querer evitar.
+   */
+  unpricedCalls: number;
 };
 
 export type AiQuotaDecision =
   | { allowed: true }
   | {
       allowed: false;
-      scope: AiQuotaScope;
+      scope: 'user' | 'global';
       spentMicros: number;
       limitMicros: number;
+      resetsAt: Date;
+    }
+  | {
+      allowed: false;
+      scope: 'unpriced';
+      /** Contagem, não dinheiro. Por isso não reaproveita `spentMicros`: a unidade é outra. */
+      unpricedCalls: number;
+      limitCalls: number;
       resetsAt: Date;
     };
 
@@ -77,6 +104,28 @@ export function decideAiQuota(
 ): AiQuotaDecision {
   const { resetsAt } = utcQuotaWindow(now);
 
+  // Antes dos dois tetos de dinheiro, e não depois: eles comparam contra uma `SUM` que sabidamente
+  // não conta essas chamadas. Deixar para o fim seria decidir com o número errado e só depois
+  // reparar que ele estava errado.
+  //
+  // Só vale quando existe alguma cota de dinheiro ligada. Sem nenhuma, não há medição a proteger —
+  // e a instância auto-hospedada com modelo local, que roda com a `AI_PRICE_TABLE` vazia de
+  // propósito, nasceria com a IA barrada por uma cota que ela desligou.
+  //
+  // `unpricedCalls > 0` na frente do teto para que `unpricedDailyCalls: 0` signifique "nenhuma
+  // tolerância" e não "barre sempre": sem esta cláusula, `0 >= 0` fecharia a IA de uma instância
+  // cuja medição está perfeita.
+  const quotaAtiva = limits.globalDailyMicros > 0 || limits.userDailyMicros > 0;
+  if (quotaAtiva && spend.unpricedCalls > 0 && spend.unpricedCalls >= limits.unpricedDailyCalls) {
+    return {
+      allowed: false,
+      scope: 'unpriced',
+      unpricedCalls: spend.unpricedCalls,
+      limitCalls: limits.unpricedDailyCalls,
+      resetsAt,
+    };
+  }
+
   // O teto global é avaliado primeiro: quando os dois estouram, o que importa dizer é o que o
   // usuário não resolve sozinho.
   if (limits.globalDailyMicros > 0 && spend.globalMicros >= limits.globalDailyMicros) {
@@ -115,16 +164,33 @@ export class AiQuotaExceededException extends HttpException {
         code: 'AI_QUOTA_EXCEEDED',
         scope: decision.scope,
         resetsAt: decision.resetsAt.toISOString(),
-        message:
-          decision.scope === 'user'
-            ? 'Você atingiu o limite diário de uso da IA do Fatia. O registro manual continua ' +
-              `disponível normalmente, e a IA volta em ${decision.resetsAt.toISOString()} (UTC).`
-            : 'A IA do Fatia atingiu o limite diário da instância e está indisponível para todos ' +
-              `no momento. O registro manual continua funcionando; a IA volta em ${decision.resetsAt.toISOString()} (UTC).`,
+        message: quotaMessage(decision),
       },
       HttpStatus.TOO_MANY_REQUESTS,
     );
   }
+}
+
+/**
+ * O texto que o usuário lê. Um por escopo, porque quem precisa agir é diferente em cada um.
+ *
+ * O escopo `unpriced` é um problema de operação, não do usuário: para ele o efeito é o mesmo do
+ * teto global, e é isso que a mensagem diz. Quem opera vê `scope` na resposta e no log, e é ali que
+ * está a diferença — descrever "a tabela de preço está desatualizada" para o aluno seria vazar
+ * detalhe de infraestrutura em troca de nenhuma ação possível do lado dele.
+ */
+function quotaMessage(decision: Extract<AiQuotaDecision, { allowed: false }>): string {
+  const volta = `${decision.resetsAt.toISOString()} (UTC)`;
+  if (decision.scope === 'user') {
+    return (
+      'Você atingiu o limite diário de uso da IA do Fatia. O registro manual continua ' +
+      `disponível normalmente, e a IA volta em ${volta}.`
+    );
+  }
+  return (
+    'A IA do Fatia atingiu o limite diário da instância e está indisponível para todos ' +
+    `no momento. O registro manual continua funcionando; a IA volta em ${volta}.`
+  );
 }
 
 /** Aplica a cota, lançando quando estourou. É o ponto que #139/#141 chamam antes do agente. */

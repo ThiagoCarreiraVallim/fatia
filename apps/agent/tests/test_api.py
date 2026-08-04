@@ -28,9 +28,15 @@ def test_health_com_provedor_configurado_nao_traz_motivo(settings_factory):
     corpo = client.get("/health").json()
 
     # Igualdade exata de propósito: campo novo em `ai` tem de passar por aqui.
-    # `unreviewed_models` vazio afirma, junto, que provedor local não exige
-    # revisão de modelo (#136) — ver `test_allowed_models.py`.
-    assert corpo["ai"] == {"configured": True, "reason": None, "unreviewed_models": {}}
+    # `unreviewed_models` vazio e `unreviewed_host` nulo afirmam, junto, que
+    # provedor local não exige revisão nenhuma (#136) — ver
+    # `test_allowed_models.py`.
+    assert corpo["ai"] == {
+        "configured": True,
+        "reason": None,
+        "unreviewed_host": None,
+        "unreviewed_models": {},
+    }
 
 
 def test_capabilities_sem_provedor_responde_erro_nomeado(settings_factory):

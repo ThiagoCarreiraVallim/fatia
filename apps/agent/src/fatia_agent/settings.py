@@ -13,6 +13,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # Endereços que não exigem credencial: LM Studio em dev, direto ou visto de
 # dentro de um container. Serve só para decidir se `AI_API_KEY` vazia é um
 # descuido ou o normal.
+#
+# **Não é a fronteira de privacidade.** Quem decide "há terceiro recebendo dado
+# de saúde aqui?" é `allowed_models.PRIVACY_LOCAL_HOSTS`, que é uma lista
+# separada de propósito: acrescentar um host aqui para parar de preencher
+# `AI_API_KEY` não pode desligar a revisão de subprocessador da #136.
 LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "0.0.0.0", "::1", "host.docker.internal"})
 
 LM_STUDIO_URL = "http://localhost:1234/v1"

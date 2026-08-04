@@ -149,9 +149,24 @@ export default function PrivacyPage() {
             próxima chamada.
           </li>
           <li>
-            <strong>Nada é guardado no caminho.</strong> A imagem e o áudio existem em memória
-            durante a requisição e somem com ela. Não há bucket, não há disco, não há coluna — nem
-            no Fatia, nem no serviço de IA.
+            <strong>O Fatia não guarda nada no caminho.</strong> A imagem e o áudio existem em
+            memória durante a requisição e somem com ela: não há bucket, não há disco, não há
+            coluna. Isso vale para o que <em>nós</em> operamos, e é verificável no código aberto.
+          </li>
+          <li>
+            <strong>O gateway é instruído, a cada chamada, a não registrar o conteúdo.</strong> O
+            Cloudflare AI Gateway grava corpo de requisição e de resposta <em>por padrão</em> —
+            registrar é o serviço que ele vende. Toda chamada do Fatia leva o cabeçalho{' '}
+            <code>cf-aig-collect-log: false</code>, que desliga esse registro para aquela chamada.
+            Está no código, e não numa caixa marcada no painel de alguém: a diferença é que uma
+            promessa que depende de configuração de painel ninguém consegue conferir, e esta some do
+            repositório se for removida.
+          </li>
+          <li>
+            <strong>Do provedor de modelo, quem responde é o contrato.</strong> Não temos como
+            executar código dentro dele, então não afirmamos aqui o que ele faz — afirmamos o que
+            exigimos: não-retenção e não-treinamento por escrito. O provedor será nomeado nesta
+            página, com essas cláusulas, antes de a funcionalidade existir.
           </li>
           <li>
             <strong>A localização é removida antes do envio.</strong> Fotos carregam EXIF, que pode
@@ -174,11 +189,13 @@ export default function PrivacyPage() {
             escrito aqui em vez de omitido.
           </li>
           <li>
-            <strong>Trocar de fornecedor exige mudar o código.</strong> A lista de modelos
-            autorizados fica no repositório, não numa configuração de servidor. Se alguém apontar o
-            sistema para um fornecedor que não está nesta política, a chamada é <em>recusada</em> em
-            vez de executada. É o mecanismo que impede este texto de ficar desatualizado sem ninguém
-            perceber.
+            <strong>Trocar de fornecedor exige mudar o código.</strong> Duas listas ficam no
+            repositório, e não numa configuração de servidor: o <em>endereço</em> para onde o
+            conteúdo pode ser enviado e os <em>modelos</em> autorizados a recebê-lo. São duas porque
+            uma não implica a outra — um endereço não revisado pode servir um modelo que está nesta
+            política. Se alguém apontar o sistema para qualquer um dos dois fora do que está aqui, a
+            chamada é <em>recusada</em> antes de qualquer byte sair, em vez de executada. É o
+            mecanismo que impede este texto de ficar desatualizado sem ninguém perceber.
           </li>
         </ul>
 
@@ -209,8 +226,10 @@ export default function PrivacyPage() {
           <li>
             <strong>Cloudflare AI Gateway e o provedor de modelo</strong> — somente se e quando você
             ativar a IA hospedada, que ainda não está disponível. Recebem a imagem, o áudio ou o
-            texto da pergunta, sem nenhum identificador seu, e não guardam nada. O provedor de
-            modelo será nomeado aqui antes de a funcionalidade existir. Veja{' '}
+            texto da pergunta, sem nenhum identificador seu. O gateway recebe, em cada chamada, a
+            instrução de <strong>não registrar</strong> o conteúdo; do lado do provedor de modelo,
+            quem responde pela retenção é o contrato com ele, que será nomeado aqui — junto dessa
+            cláusula — antes de a funcionalidade existir. Veja{' '}
             <strong>Inteligência artificial</strong>.
           </li>
         </ul>

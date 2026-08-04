@@ -39,6 +39,16 @@ export type AiPriceTable = z.infer<typeof AiPriceTableSchema>;
 export type AiCallUnits = {
   /** Tokens de entrada, ou segundos de áudio. `undefined` quando o provedor não devolveu `usage`. */
   inputUnits?: number;
+  /**
+   * Tokens de saída. **`0` explícito, e nunca `undefined`, quando a capacidade não tem saída
+   * cobrada.**
+   *
+   * A distinção é do chamador porque só ele sabe qual é o caso, e errar aqui é silencioso. O
+   * exemplo que vai acontecer é `/embeddings`: a resposta OpenAI-compatível traz `prompt_tokens` e
+   * `total_tokens`, e **nunca** `completion_tokens`. Quem mapear o `usage` campo a campo passa
+   * `outputUnits: undefined`, e aí todo embedding entra como preço desconhecido — com o modelo na
+   * tabela, o preço certo e nada errado à vista.
+   */
   outputUnits?: number;
 };
 
@@ -131,7 +141,22 @@ function tryParseJson(raw: string): JsonResult {
   }
 }
 
-/** Unidade utilizável: presente, finita, inteira e não negativa. */
+/**
+ * Unidade utilizável: presente, finita e não negativa. **Fração é válida.**
+ *
+ * Exigir inteiro parecia mais seguro e era um bug: a unidade documentada em `AiCallUnits` inclui
+ * **segundo de áudio**, e um provedor de transcrição reporta duração fracionária. Com
+ * `Number.isInteger`, toda chamada da #141 cairia em `pricingKnown: false` — ou seja, a medição de
+ * áudio nasceria desligada, acendendo o alerta de anomalia com fatura real do outro lado, e
+ * fechando a cota pelo teto de chamadas sem preço.
+ *
+ * O que a checagem continua recusando é o que é dado corrompido de verdade: `undefined`, `NaN`,
+ * `±Infinity` e negativo. `NaN` é o pior deles — propagado como número viraria `costMicros: NaN` e
+ * envenenaria toda soma posterior, inclusive a da cota, que passaria a nunca estourar.
+ *
+ * O arredondamento é único e no fim (ver `estimateAiCost`), então a fração não vira imprecisão
+ * acumulada: ela é somada com a do outro lado e só depois vira inteiro.
+ */
 function isCountable(value: number | undefined): value is number {
-  return value !== undefined && Number.isInteger(value) && value >= 0;
+  return value !== undefined && Number.isFinite(value) && value >= 0;
 }
