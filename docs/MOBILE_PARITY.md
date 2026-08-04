@@ -33,6 +33,7 @@ Nenhum placeholder restante no código.
 | `(app)/nutrition/goals`            | `app/(app)/nutrition/goals.tsx`            | ✅  |                                                                             |
 | `(app)/nutrition/nutrient-targets` | `app/(app)/nutrition/nutrient-targets.tsx` | ✅  |                                                                             |
 | —                                  | `app/(app)/nutrition/scan.tsx`             | ➕  | scanner de código de barras (#140); o PWA não tem, ver abaixo               |
+| —                                  | `app/(app)/nutrition/photo.tsx`            | ➕  | registro por foto (#139); o PWA não tem, ver abaixo                         |
 | `(app)/profile`                    | `app/(app)/profile/index.tsx`              | ✅  |                                                                             |
 | `(app)/profile/connect`            | `app/(app)/profile/tokens.tsx`             | ⚠️  | o PWA virou fluxo guiado (#164); o nativo ainda é a tela antiga, ver abaixo |
 | `(app)/progress`                   | `app/(app)/progress/index.tsx`             | ✅  |                                                                             |
@@ -195,6 +196,19 @@ exigência de loja.
 | Estados de erro onde o web deixa a tela em branco | a auditoria pede estados equivalentes; "equivalente a nada" não serve                  |
 | Scanner de código de barras                       | #140 — e não é escolha: o PWA depende de `BarcodeDetector`, que o Safari não tem       |
 | Notificação local do fim do descanso              | #182 — o descanso é o momento em que o celular vai para o bolso                        |
+| Registro de refeição por foto                     | #139 — depende de câmera e galeria; ver abaixo                                         |
+
+**Registro por foto (#139) não é dívida de paridade — é dependência de aparelho.**
+Câmera e galeria não existem no PWA de forma comparável (o `input[capture]` do
+Safari abre a câmera do sistema e devolve HEIC, que os modelos de visão não
+aceitam), e o fluxo inteiro se apoia em capturar, reduzir e recomprimir no
+dispositivo. O PWA continua na busca por nome, que é o caminho que sempre
+funcionou e é onde o nativo também termina, na tela de confirmação.
+
+**A entrada por foto some quando não há IA configurada.** O botão só aparece se
+`GET /api/nutrition/photo-recognition` responder `available: true`, o que exige
+`AGENT_BASE_URL` **e** um modelo de visão no agente. Numa instância sem IA
+hospedada — que é o default — o app fica exatamente como antes.
 
 **Correção que volta para o PWA:** o botão "Log Água" do dashboard, com ícone de
 gota e rótulo de água, abria o drawer de **passos**. Corrigido nos dois.

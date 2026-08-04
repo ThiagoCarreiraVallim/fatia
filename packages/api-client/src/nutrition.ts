@@ -60,6 +60,37 @@ export type BarcodeLookup =
       attribution: OffAttribution;
     };
 
+/**
+ * Um alimento que a IA viu na foto (#139). **Não é um `MealItem`** — nada foi
+ * gravado. Vira item de refeição só depois da tela de confirmação.
+ */
+export interface RecognizedFoodItem {
+  /** Nome que o modelo deu. Fica visível para a pessoa poder discordar. */
+  nomeReconhecido: string;
+  /** `null` quando não houve correspondência na TACO — item livre. */
+  foodId: number | null;
+  /**
+   * Alimento do catálogo que casou. Diferente de `nomeReconhecido` de propósito:
+   * "arroz" casa com "Arroz, integral, cozido" ou "Arroz, tipo 1, cozido", e os
+   * macros não são os mesmos. A tela mostra qual foi.
+   */
+  nomeDoCatalogo: string | null;
+  grams: number;
+  /** Auto-relatada pelo modelo: serve para ordenar e avisar, nunca para decidir. */
+  confidence: number;
+  /** `true` quando os macros vieram do modelo, não da TACO. */
+  estimado: boolean;
+  kcal: number | null;
+  proteinG: number | null;
+  carbsG: number | null;
+  fatG: number | null;
+}
+
+export interface MealRecognition {
+  itens: RecognizedFoodItem[];
+  observacao: string | null;
+}
+
 export interface MealItem {
   id: string;
   mealId: string;
@@ -153,6 +184,32 @@ export const nutritionApi = {
    */
   lookupBarcode: (code: string) =>
     apiFetch<BarcodeLookup>(`/api/nutrition/foods/barcode/${encodeURIComponent(code)}`),
+
+  /**
+   * Se a entrada por foto deve aparecer na interface (#139).
+   *
+   * Sem agente configurado — ou com o agente no ar mas sem modelo de visão — a
+   * funcionalidade **some** em vez de aparecer e falhar.
+   */
+  photoRecognitionStatus: () =>
+    apiFetch<{ available: boolean }>('/api/nutrition/photo-recognition'),
+
+  /**
+   * Foto de refeição (JPEG em base64) → alimentos candidatos. **Não grava nada.**
+   *
+   * `text/plain` e não JSON porque o parser de JSON da API é global e tem teto de
+   * 100 kB; elevá-lo elevaria para todas as rotas. Base64 e não bytes crus porque
+   * é o que a câmera e a galeria do Expo já devolvem, e corpo binário em `fetch`
+   * do React Native é caminho frágil.
+   */
+  recognizeMealPhoto: (jpegBase64: string) =>
+    apiFetch<MealRecognition>('/api/nutrition/meals/recognize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: jpegBase64,
+      // Visão em CPU passa de 100 s; o teto padrão de 15 s abortaria toda foto.
+      timeoutMs: 190_000,
+    }),
   createMeal: (body: {
     mealType: MealType;
     eatenAt: string;

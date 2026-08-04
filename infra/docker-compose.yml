@@ -67,6 +67,12 @@ services:
       LOGTO_AUDIENCE: ${LOGTO_AUDIENCE}
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3030}
       PORT: 3000
+      # Reconhecimento de refeição por foto (#139). Vazio = a funcionalidade
+      # some da interface e o registro manual continua inteiro; a API não sobe
+      # degradada nem falha por causa disso.
+      AGENT_BASE_URL: ${AGENT_BASE_URL:-}
+      AGENT_API_KEY: ${AGENT_API_KEY:-}
+      AGENT_TIMEOUT_MS: ${AGENT_TIMEOUT_MS:-180000}
     ports:
       - "${API_PORT:-3000}:3000"
     profiles: ["full"]
@@ -112,6 +118,9 @@ services:
       AI_MODEL_VISION: ${AI_MODEL_VISION:-}
       AI_MODEL_EMBEDDING: ${AI_MODEL_EMBEDDING:-}
       AI_TIMEOUT_S: ${AI_TIMEOUT_S:-120}
+      # Segredo compartilhado com o apps/api. Obrigatório quando AI_BASE_URL
+      # não é local — ver apps/agent/README.md, §"Rota de inferência".
+      AGENT_API_KEY: ${AGENT_API_KEY:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

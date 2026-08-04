@@ -70,7 +70,15 @@ describe('/privacy — o que já era verdade e continua', () => {
     const texto = textoDaPagina();
 
     expect(texto).toMatch(/nunca chega até nós/i);
-    expect(texto).toMatch(/ainda não está disponível/i);
+
+    // A asserção anterior era `/ainda não está disponível/`, e ela morreu quando a #139 entregou
+    // o reconhecimento por foto: a frase virou falsa sobre o software, e só continuava verdadeira
+    // sobre um deploy com `AGENT_BASE_URL` vazia. Política de privacidade descreve o que o
+    // software faz, não o que uma instância desligou — senão ligar a variável torna o texto
+    // mentiroso sem nada quebrar. O que se exige agora é a distinção que de fato importa ao
+    // titular: na instância pública, o caminho hospedado depende de consentimento dele.
+    expect(texto).toMatch(/consentimento específico seu/i);
+    expect(texto).toMatch(/cada instância decide se a liga/i);
   });
 
   it('mostra a data da última atualização', () => {

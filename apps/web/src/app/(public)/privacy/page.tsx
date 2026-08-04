@@ -98,10 +98,12 @@ export default function PrivacyPage() {
       <LegalSection title="O que NÃO coletamos">
         <ul>
           <li>
-            <strong>Fotos.</strong> Não guardamos imagem nenhuma: não há bucket, não há disco, não
-            há coluna de foto. Se você fotografa uma refeição para o <em>seu</em> Claude analisar, a
-            imagem nem chega ao Fatia. Veja a seção <strong>Inteligência artificial</strong> para o
-            caso em que ela passa por aqui sem ser guardada.
+            <strong>Fotos.</strong> Nenhuma imagem é armazenada — não há banco de fotos, nem em
+            disco, nem em cache. Se você usa o <strong>reconhecimento de refeição por foto</strong>{' '}
+            no aplicativo, a imagem <em>transita</em> pelo servidor do Fatia e segue para um
+            provedor de visão, sem os metadados (veja abaixo); ela não é gravada em lugar nenhum e
+            não fica vinculada a você. Se você fotografa uma refeição no seu próprio Claude, a
+            imagem não passa pelo Fatia em momento algum.
           </li>
           <li>
             <strong>Senhas.</strong> Ficam no provedor de identidade, não conosco.
@@ -150,17 +152,22 @@ export default function PrivacyPage() {
 
         <p>
           <strong>2. A IA hospedada pelo Fatia.</strong> Reconhecer a foto ou o áudio sem você
-          precisar de uma assinatura de IA própria. Para isso o conteúdo precisa sair do seu
-          aparelho e chegar a um provedor de modelo, através do{' '}
-          <strong>Cloudflare AI Gateway</strong>.{' '}
-          <strong>
-            Esta segunda opção ainda não está disponível para nenhum usuário da instância pública.
-          </strong>{' '}
-          Ela só será ativada com consentimento específico seu, e este texto será atualizado com o
-          nome do provedor de modelo antes disso.
+          precisar de uma assinatura de IA própria. É o caso do{' '}
+          <strong>reconhecimento de refeição por foto</strong>: a imagem sai do seu aparelho, passa
+          pelo servidor do Fatia sem ser gravada, e chega a um <strong>provedor de visão</strong>{' '}
+          através do <strong>Cloudflare AI Gateway</strong>. O resultado volta como uma sugestão que{' '}
+          <strong>você confirma antes de virar refeição</strong> — nada é registrado sem a sua
+          revisão.
         </p>
 
-        <p>Quando ela existir, valem as regras abaixo — todas verificáveis no código aberto:</p>
+        <p>
+          Esta segunda opção depende de configuração: cada instância decide se a liga. Na instância
+          pública ela só será ativada com <strong>consentimento específico seu</strong>, e o nome do
+          provedor de modelo entra nesta página antes disso. Se você auto-hospeda, quem decide é
+          você — e o endereço que você escolher está sujeito às mesmas regras abaixo.
+        </p>
+
+        <p>Valem as regras abaixo — todas verificáveis no código aberto:</p>
         <ul>
           <li>
             <strong>Consentimento separado e específico.</strong> Não vem embutido no aceite geral
@@ -190,8 +197,8 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>A localização é removida antes do envio.</strong> Fotos carregam EXIF, que pode
-            incluir as coordenadas de onde você estava. O aplicativo remove esses metadados no seu
-            aparelho, antes de a imagem sair.
+            incluir as coordenadas de GPS de onde você estava. O aplicativo remove esses metadados
+            no seu aparelho, antes de a imagem sair.
           </li>
           <li>
             <strong>Você não vai junto.</strong> O que sai é a imagem (ou o áudio) e a pergunta. Não
@@ -222,7 +229,7 @@ export default function PrivacyPage() {
         <p>
           <strong>Se você auto-hospeda o Fatia</strong> com um modelo rodando na sua própria
           máquina, nada disso se aplica: não há terceiro envolvido, porque o dado não sai de onde
-          você o instalou.
+          você o instalou.{' '}
         </p>
       </LegalSection>
 
@@ -244,13 +251,16 @@ export default function PrivacyPage() {
             aparelho.
           </li>
           <li>
-            <strong>Cloudflare AI Gateway e o provedor de modelo</strong> — somente se e quando você
-            ativar a IA hospedada, que ainda não está disponível. Recebem a imagem, o áudio ou o
-            texto da pergunta, sem nenhum identificador seu. O gateway recebe, em cada chamada, a
-            instrução de <strong>não registrar</strong> o conteúdo; do lado do provedor de modelo,
-            quem responde pela retenção é o contrato com ele, que será nomeado aqui — junto dessa
-            cláusula — antes de a funcionalidade existir. Veja{' '}
-            <strong>Inteligência artificial</strong>.
+            <strong>Cloudflare AI Gateway e o provedor de visão</strong> — somente quando a IA
+            hospedada está ativa nesta instância e você consentiu com ela. Recebem a imagem, o áudio
+            ou o texto da pergunta, <strong>sem nenhum identificador seu</strong>: não vai e-mail,
+            nome, nem id de conta, e do lado deles uma chamada é indistinguível da seguinte. A foto
+            vai <strong>sem os metadados que localizam a pessoa</strong> — o EXIF, que inclui as
+            coordenadas de onde você estava, é removido no seu aparelho antes do envio. O gateway
+            recebe, em cada chamada, a instrução de <strong>não registrar</strong> o conteúdo; do
+            lado do provedor de visão, quem responde pela retenção é o contrato com ele, que será
+            nomeado aqui — junto dessa cláusula — antes de a instância pública ligar a
+            funcionalidade. Veja <strong>Inteligência artificial</strong>.
           </li>
         </ul>
         <p>

@@ -51,6 +51,14 @@ class AgentSettings(BaseSettings):
     ai_max_retries: int = 2
     ai_retry_backoff_s: float = 0.5
 
+    # Segredo compartilhado com o `apps/api`, exigido no header
+    # `X-Fatia-Agent-Key` das rotas que fazem inferência. Ver
+    # `agent_auth_unavailable_reason`.
+    agent_api_key: str = ""
+
+
+AGENT_API_KEY_HEADER = "x-fatia-agent-key"
+
 
 def is_local_endpoint(base_url: str) -> bool:
     """True quando o endpoint é um provedor local que dispensa credencial."""
@@ -68,6 +76,34 @@ def endpoint_host(base_url: str) -> str:
     aponto", que é a pergunta que a rota existe para responder.
     """
     return urlparse(base_url).hostname or ""
+
+
+def agent_auth_unavailable_reason(settings: AgentSettings) -> str | None:
+    """Por que a rota de inferência não pode aceitar chamada; `None` quando pode.
+
+    Uma rota que dispara inferência sem autenticar é um **proxy aberto para um
+    gateway pago** — a fronteira de custo da ADR 018. O agente não publica porta
+    na internet hoje, mas "hoje" não é um mecanismo, e o compose já publica em
+    `0.0.0.0`.
+
+    A exigência acompanha o custo, e não o ambiente: com `AI_BASE_URL` local
+    (LM Studio), inferência não custa nada a ninguém e pedir segredo só faria o
+    desenvolvimento inventar um. Fora de `localhost`, `AGENT_API_KEY` é
+    obrigatória — é a mesma regra que `AI_API_KEY` já segue, pelo mesmo motivo, e
+    não há um `if ambiente == 'prod'` em lugar nenhum.
+    """
+    if settings.agent_api_key.strip():
+        return None
+    # Sem `AI_BASE_URL` não há inferência a proteger, e a mensagem que a pessoa
+    # precisa ler é a do provedor ausente — não uma sobre segredo compartilhado.
+    if not settings.ai_base_url.strip() or is_local_endpoint(settings.ai_base_url):
+        return None
+    host = urlparse(settings.ai_base_url).hostname or settings.ai_base_url
+    return (
+        f"AGENT_API_KEY está vazia e AI_BASE_URL aponta para '{host}', que não é local. "
+        "A rota de reconhecimento dispara inferência paga: sem segredo compartilhado "
+        "com o apps/api, ela seria um proxy aberto para o gateway (ADR 018)."
+    )
 
 
 def ai_unavailable_reason(settings: AgentSettings) -> str | None:

@@ -42,17 +42,34 @@ const config: ExpoConfig = {
     'expo-secure-store',
     'expo-web-browser',
     [
-      // Scanner de código de barras (#140). O texto é o que a loja e o próprio
-      // sistema mostram no diálogo de permissão; genérico ("o app precisa da
-      // câmera") é motivo de recusa na revisão da App Store, e a pessoa também
-      // merece saber que nada é gravado.
+      // Câmera: scanner de código de barras (#140) e registro por foto (#139).
+      // O texto é o que a loja e o próprio sistema mostram no diálogo de
+      // permissão; genérico ("o app precisa da câmera") é motivo de recusa na
+      // revisão da App Store.
+      //
+      // O texto mudou com a #139 e a mudança **não é cosmética**: enquanto só
+      // havia o scanner, ele dizia "nenhuma foto é tirada ou armazenada", e isso
+      // deixou de ser verdade — agora uma foto é tirada e sai do aparelho. Um
+      // texto de permissão que descreve errado o que o app faz é exatamente o
+      // que a revisão da loja procura, e é o tipo de mentira que sobrevive
+      // porque ninguém volta para reler.
       'expo-camera',
       {
         cameraPermission:
-          'O Fatia usa a câmera para ler o código de barras de produtos embalados. Nenhuma foto é tirada ou armazenada.',
-        // O scanner não grava vídeo nem áudio; desligar aqui evita que o
-        // aplicativo peça microfone que nunca vai usar.
+          'O Fatia usa a câmera para ler códigos de barras e para reconhecer a refeição em uma foto do prato. A foto é analisada e descartada — ela não é salva no Fatia.',
+        // Nem o scanner nem o registro por foto gravam vídeo ou áudio; desligar
+        // aqui evita que o aplicativo peça microfone que nunca vai usar.
         recordAudioAndroid: false,
+      },
+    ],
+    [
+      // Galeria (#139): a issue pede câmera **e** galeria, para quem fotografou
+      // o prato antes de abrir o app. Só leitura — o Fatia nunca escreve na
+      // galeria, e por isso não pede a permissão de gravação.
+      'expo-image-picker',
+      {
+        photosPermission:
+          'O Fatia acessa suas fotos para você escolher a imagem de uma refeição já fotografada. A imagem é analisada e descartada — ela não é salva no Fatia.',
       },
     ],
     [

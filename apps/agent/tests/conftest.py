@@ -14,6 +14,7 @@ AI_ENV_VARS = (
     "AI_MODEL_EMBEDDING",
     "AI_TIMEOUT_S",
     "AI_MAX_RETRIES",
+    "AGENT_API_KEY",
 )
 
 
@@ -33,6 +34,7 @@ def settings_factory() -> Callable[..., AgentSettings]:
             "ai_model_vision": "google/gemma-4-12b-qat",
             "ai_model_embedding": "text-embedding-nomic-embed-text-v1.5",
             "ai_retry_backoff_s": 0.0,
+            "agent_api_key": "",
         }
         defaults.update(overrides)
         return AgentSettings(_env_file=None, **defaults)  # type: ignore[arg-type]
