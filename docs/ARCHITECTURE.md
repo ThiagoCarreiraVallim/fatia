@@ -207,6 +207,12 @@ Ver `packages/db/prisma/schema.prisma` para o schema completo.
 - Leitura em nome de outra pessoa (B2B) entra por `membershipId`, nunca por id de usuário, e é
   resolvida só em `SharingModule` (`sharing/professional-access.service.ts`). Recusa é
   `NOT_FOUND` idêntico ao de um estranho — ver `docs/THREAT_MODEL.md` §8
+- **O painel do dono da academia (`InsightsModule`, #159/#160) não é leitura entre contas: é
+  agregação.** Ele nunca resolve um indivíduo — não importa `ProfessionalAccessService`, não
+  recebe `membershipId`, não devolve id de pessoa. O que o protege é outra coisa: opt-in por
+  membro, catálogo fechado de recortes (sem construtor de filtro) e supressão de célula pequena
+  **com complemento**, num caminho só (`insights/insights.service.ts`). A definição está em
+  `docs/AGGREGATION_POLICY.md`, é pública e é conferida por teste contra o código
 
 ### Headers e CORS
 

@@ -57,6 +57,11 @@ export const AppEnvSchema = z.object({
   // Diferente dos dois de cima, `0` aqui não desliga — significa "nenhuma tolerância". A guarda
   // inteira só vale quando algum teto de dinheiro está ligado (ver `decideAiQuota`).
   AI_QUOTA_UNPRICED_DAILY_CALLS: z.coerce.number().int().nonnegative().default(20),
+  // Add-on de insights (#160), habilitado à mão enquanto a cobrança (#158) não
+  // existe: lista de ids de grupo separados por vírgula. Vazio = ninguém tem o
+  // painel pago. DÍVIDA DECLARADA: lista manual envelhece — grupo que cancelar
+  // continua ligado até alguém editar o env. Sai quando a #158 entrar.
+  INSIGHTS_ADDON_GROUP_IDS: z.string().default(''),
 });
 
 export type AppEnv = z.infer<typeof AppEnvSchema>;
