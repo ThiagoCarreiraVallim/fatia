@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { MessageRole } from '@prisma/client';
 import { AiUsageService } from '../ai/ai-usage.service';
 import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
-import { AgentChatClient, ErroDeStreamDoAgente } from './agent-chat.client';
+import { AgentChatClient, ErroDeStreamDoAgente, type StreamDoAgente } from './agent-chat.client';
 import { ConversationService, type ToolChamada } from './conversation.service';
 import type { SendChatMessageDto } from './dto/chat.dto';
 import { criarLeitorSse, dadosDoEvento, formatarEventoSse } from './sse';
@@ -34,6 +34,26 @@ export interface DestinoDoStream {
   /** Cliente foi embora (aba fechada, rede caiu). */
   aoFechar(callback: () => void): void;
 }
+
+/** Unidades acumuladas de **um** modelo dentro de um turno. */
+type UnidadesDoModelo = { inputUnits?: number; outputUnits?: number };
+
+/**
+ * Soma em que `undefined` **contamina o total**, de propósito.
+ *
+ * Se qualquer rodada do turno deixou de reportar uma das unidades, o total
+ * daquele campo é desconhecido — e não a soma das que vieram. Somar só as
+ * presentes devolveria um número menor que o real **com cara de medido**:
+ * `estimateAiCost` cobraria por ele com `pricingKnown: true`, e a diferença
+ * sumiria. Com `undefined`, o turno cai em custo não medido e conta na
+ * tolerância de `unpricedCalls`, que é o comportamento que a #135 pediu.
+ */
+function somarUnidade(a: number | undefined, b: number | undefined): number | undefined {
+  return a === undefined || b === undefined ? undefined : a + b;
+}
+
+const numeroOuIndefinido = (valor: unknown): number | undefined =>
+  typeof valor === 'number' ? valor : undefined;
 
 @Injectable()
 export class ChatService {
@@ -72,7 +92,19 @@ export class ChatService {
 
     await this.uso.assertDentroDaCota(user.id);
 
-    const stream = await this.agent.abrir({
+    // **Registrado ANTES de `abrir`, e não depois.** `res.on('close')` não
+    // reentrega um evento que já foi emitido, e `abrir` espera até 120 s pelo
+    // primeiro byte. Com o registro depois, quem fechasse a aba dentro dessa
+    // janela — que é justamente a mais longa do turno — nunca cancelava o
+    // upstream: a inferência paga seguia até o fim para ninguém.
+    let stream: StreamDoAgente | null = null;
+    let clienteFoiEmbora = false;
+    destino.aoFechar(() => {
+      clienteFoiEmbora = true;
+      stream?.cancelar();
+    });
+
+    stream = await this.agent.abrir({
       bearer,
       // `null` numa conversa nova: o id só existe depois que o agente aceitou o
       // turno, e o agente não guarda histórico nenhum — ele recebe o que precisa
@@ -82,13 +114,15 @@ export class ChatService {
       messages: [...anterior, { role: MessageRole.user, content: dto.message }],
     });
 
+    // O `close` que chegou enquanto o agente demorava a responder não volta a
+    // ser entregue: cancelar aqui à mão é o que transforma o flag em corte real.
+    if (clienteFoiEmbora) stream.cancelar();
+
     const { conversationId } = await this.conversas.iniciarTurno(
       user.id,
       dto.conversationId,
       dto.message,
     );
-
-    destino.aoFechar(() => stream.cancelar());
 
     // Primeiro evento nosso: sem ele, o PWA que acabou de começar uma conversa
     // não teria como continuá-la — o id nasce aqui.
@@ -97,7 +131,22 @@ export class ChatService {
     const leitor = criarLeitorSse();
     const texto: string[] = [];
     const tools: ToolChamada[] = [];
-    let usage: { model: string; inputUnits?: number; outputUnits?: number } | null = null;
+    /**
+     * O gasto do turno, **acumulado por modelo**.
+     *
+     * Um mapa que soma, e não a última leitura, porque o agente emite mais de um
+     * `usage` por turno sempre que há tool: um grafo LangGraph chama o modelo uma
+     * vez para decidir a chamada e outra para responder com o resultado dela.
+     * Guardar o último sobrescreveria o primeiro, e o custo a menos seria o menor
+     * dos problemas — a linha ainda entraria com `model` preenchido, ou seja
+     * `pricingKnown: true`, então `unpricedCalls` não contaria, o alerta de
+     * anomalia não acenderia e a cota do dia fecharia tarde. É o "liberar em
+     * silêncio" que esta camada existe para evitar, entrando pela porta oposta.
+     *
+     * Somar é a única saída que não depende de o vizinho obedecer: mesmo que a
+     * #247 fixe "exatamente um `usage`, no fim", a API não tem como conferir.
+     */
+    const usoPorModelo = new Map<string, UnidadesDoModelo>();
 
     try {
       for await (const pedaco of stream.pedacos()) {
@@ -116,11 +165,14 @@ export class ChatService {
             // guarda a chamada, não os dois avisos sobre ela.
             if (!tools.some((t) => t.name === nome)) tools.push({ name: nome });
           } else if (evento.event === 'usage' && typeof dados.model === 'string') {
-            usage = {
-              model: dados.model,
-              inputUnits: typeof dados.inputUnits === 'number' ? dados.inputUnits : undefined,
-              outputUnits: typeof dados.outputUnits === 'number' ? dados.outputUnits : undefined,
-            };
+            const acumulado = usoPorModelo.get(dados.model) ?? { inputUnits: 0, outputUnits: 0 };
+            usoPorModelo.set(dados.model, {
+              inputUnits: somarUnidade(acumulado.inputUnits, numeroOuIndefinido(dados.inputUnits)),
+              outputUnits: somarUnidade(
+                acumulado.outputUnits,
+                numeroOuIndefinido(dados.outputUnits),
+              ),
+            });
           }
         }
       }
@@ -149,7 +201,7 @@ export class ChatService {
       // Fora do `try` de cima porque vale para os dois caminhos, e **em especial**
       // para o que deu errado: o texto parcial já está na tela da pessoa, e o
       // custo já saiu do caixa mesmo que a resposta não tenha terminado.
-      await this.registrarOQuePassou(user.id, conversationId, { texto, tools, usage });
+      await this.registrarOQuePassou(user.id, conversationId, { texto, tools, usoPorModelo });
       destino.fim();
     }
   }
@@ -166,7 +218,7 @@ export class ChatService {
     turno: {
       texto: string[];
       tools: ToolChamada[];
-      usage: { model: string; inputUnits?: number; outputUnits?: number } | null;
+      usoPorModelo: Map<string, UnidadesDoModelo>;
     },
   ): Promise<void> {
     try {
@@ -179,16 +231,18 @@ export class ChatService {
     }
 
     try {
-      // `model: null` quando o agente não reportou `usage`. Vira
-      // `pricingKnown: false`, não custo zero — ver `AiUsageService.registrar`.
-      await this.uso.registrar(userId, {
-        feature: 'chat',
-        model: turno.usage?.model ?? null,
-        units: {
-          inputUnits: turno.usage?.inputUnits,
-          outputUnits: turno.usage?.outputUnits,
-        },
-      });
+      if (turno.usoPorModelo.size === 0) {
+        // `model: null` quando o agente não reportou `usage` nenhum. Vira
+        // `pricingKnown: false`, não custo zero — ver `AiUsageService.registrar`.
+        await this.uso.registrar(userId, { feature: 'chat', model: null, units: {} });
+        return;
+      }
+      // Uma linha por modelo, e não uma linha por turno: dois modelos têm dois
+      // preços na tabela, e uma linha só teria de escolher um deles — que é
+      // preço errado gravado como se fosse conhecido.
+      for (const [model, units] of turno.usoPorModelo) {
+        await this.uso.registrar(userId, { feature: 'chat', model, units });
+      }
     } catch (erro) {
       this.logger.error(`Falha ao registrar o custo do chat: ${(erro as Error).name}`);
     }

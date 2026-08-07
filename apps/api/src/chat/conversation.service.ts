@@ -141,8 +141,18 @@ export class ConversationService {
    *
    * Persistir o parcial é deliberado: a pessoa leu aquele texto na tela, e uma
    * conversa que perde no F5 o que estava escrito ali é indistinguível de dado
-   * corrompido. Turno sem nenhum texto não grava nada — uma mensagem vazia do
-   * assistente é ruído no histórico e vira entrada paga no próximo turno.
+   * corrompido.
+   *
+   * **Turno que só chamou tool grava do mesmo jeito**, mesmo sem uma letra de
+   * texto: "registra 200g de arroz" pode emitir `tool{log_meal}` e ter o stream
+   * cortado antes do primeiro token. A refeição foi registrada de verdade no
+   * domínio de destino, e o histórico é o único vestígio de que a IA a criou —
+   * descartar a mensagem aqui é o oposto do que o `Message.tools` do
+   * `schema.prisma` promete ("auditável depois de recarregar a página").
+   *
+   * O que continua não sendo gravado é o turno vazio de verdade: sem texto e sem
+   * tool não há o que auditar, e uma mensagem em branco do assistente é ruído no
+   * histórico que ainda vira entrada paga no turno seguinte.
    */
   async concluirTurno(
     userId: string,
@@ -156,7 +166,7 @@ export class ConversationService {
     });
     if (!conversa) return;
 
-    if (resposta.texto.trim() === '') return;
+    if (resposta.texto.trim() === '' && resposta.tools.length === 0) return;
 
     await this.prisma.message.create({
       data: {

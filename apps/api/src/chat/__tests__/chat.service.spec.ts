@@ -112,7 +112,14 @@ function destinoDeTeste() {
   };
 }
 
-function montar(opcoes: { stream?: StreamDoAgente; historico?: MensagemDoHistorico[] } = {}) {
+function montar(
+  opcoes: {
+    stream?: StreamDoAgente;
+    historico?: MensagemDoHistorico[];
+    /** Segura o `abrir` até resolver — a janela em que o agente ainda pensa. */
+    atrasarAbertura?: Promise<void>;
+  } = {},
+) {
   const canal = canalDoAgente();
   const stream = opcoes.stream ?? canal.stream;
   const chamadas: EntradaDoTurno[] = [];
@@ -137,6 +144,7 @@ function montar(opcoes: { stream?: StreamDoAgente; historico?: MensagemDoHistori
   const agent = {
     abrir: jest.fn(async (entrada: EntradaDoTurno): Promise<StreamDoAgente> => {
       chamadas.push(entrada);
+      if (opcoes.atrasarAbertura) await opcoes.atrasarAbertura;
       return stream;
     }),
   } satisfies Partial<AgentChatClient>;
@@ -234,6 +242,41 @@ describe('ChatService — repasse do SSE', () => {
     await turno;
 
     expect(canal.foiCancelado()).toBe(true);
+  });
+
+  it('corta o upstream quando o cliente vai embora ANTES de o agente responder', async () => {
+    const canal = canalDoAgente();
+    // O agente demora a aceitar o turno — é a janela mais longa do fluxo
+    // (`TIMEOUT_DE_ABERTURA_MS` é 120 s) e a mais provável de a pessoa desistir.
+    let aceitarOTurno!: () => void;
+    const abriu = new Promise<void>((resolve) => {
+      aceitarOTurno = resolve;
+    });
+    const { service } = montar({
+      stream: canal.stream,
+      atrasarAbertura: abriu,
+    });
+    const saida = destinoDeTeste();
+
+    const turno = service.conversar(USUARIO, { message: 'oi' }, 'tok', saida.destino);
+    await respirar();
+
+    // Aba fechada com o `abrir` ainda pendurado. `res.on('close')` NÃO reentrega
+    // um evento já emitido: registrar o callback só depois do `await abrir`
+    // deixava esta janela inteira sem cancelamento nenhum.
+    saida.simularClienteSaindo();
+    aceitarOTurno();
+    await respirar();
+    await respirar();
+
+    // Lido antes de destravar o canal à mão: sem o cancelamento, o turno ficaria
+    // pendurado esperando pedaço de um agente que ninguém mais vai ler, e a
+    // falha viraria um timeout de 5 s em vez de uma asserção legível.
+    const cancelou = canal.foiCancelado();
+    canal.encerrar();
+    await turno;
+
+    expect(cancelou).toBe(true);
   });
 });
 
@@ -486,6 +529,74 @@ describe('ChatService — o que vai para o livro-caixa', () => {
       feature: 'chat',
       model: null,
       units: { inputUnits: undefined, outputUnits: undefined },
+    });
+  });
+
+  it('SOMA os `usage` do turno em vez de ficar com o último', async () => {
+    const { service, canal, uso } = montar();
+    const saida = destinoDeTeste();
+
+    const turno = service.conversar(USUARIO, { message: 'registra aí' }, 'tok', saida.destino);
+    await respirar();
+    // O formato natural de um grafo LangGraph com uma rodada de tool: uma chamada
+    // ao modelo para decidir a tool, outra para responder com o resultado dela.
+    canal.emitir('event: usage\ndata: {"model":"m","inputUnits":1000,"outputUnits":50}\n\n');
+    canal.emitir('event: tool\ndata: {"name":"log_meal","status":"ok"}\n\n');
+    canal.emitir('event: usage\ndata: {"model":"m","inputUnits":5000,"outputUnits":400}\n\n');
+    canal.emitir('event: token\ndata: {"text":"Registrei."}\n\n');
+    canal.encerrar();
+    await turno;
+
+    // Ficar com o último descartaria 1.000 + 50 — e gravaria a linha com `model`
+    // preenchido, ou seja `pricingKnown: true`: `unpricedCalls` não contaria, o
+    // alerta de anomalia não acenderia e a cota do dia fecharia tarde. Custo a
+    // menos disfarçado de custo medido é pior que custo ausente.
+    expect(uso.registrar).toHaveBeenCalledTimes(1);
+    expect(uso.registrar).toHaveBeenCalledWith('user-a', {
+      feature: 'chat',
+      model: 'm',
+      units: { inputUnits: 6000, outputUnits: 450 },
+    });
+  });
+
+  it('modelos diferentes no mesmo turno viram uma linha cada', async () => {
+    const { service, canal, uso } = montar();
+    const saida = destinoDeTeste();
+
+    const turno = service.conversar(USUARIO, { message: 'oi' }, 'tok', saida.destino);
+    await respirar();
+    canal.emitir('event: usage\ndata: {"model":"rapido","inputUnits":100,"outputUnits":10}\n\n');
+    canal.emitir('event: usage\ndata: {"model":"caro","inputUnits":900,"outputUnits":80}\n\n');
+    canal.encerrar();
+    await turno;
+
+    // Dois modelos têm dois preços na tabela. Uma linha só teria de escolher um
+    // deles, e o resultado seria preço errado gravado como se fosse conhecido.
+    expect(uso.registrar.mock.calls.map(([, entrada]) => entrada)).toEqual([
+      { feature: 'chat', model: 'rapido', units: { inputUnits: 100, outputUnits: 10 } },
+      { feature: 'chat', model: 'caro', units: { inputUnits: 900, outputUnits: 80 } },
+    ]);
+  });
+
+  it('rodada sem uma das unidades contamina o total em vez de subnotificar', async () => {
+    const { service, canal, uso } = montar();
+    const saida = destinoDeTeste();
+
+    const turno = service.conversar(USUARIO, { message: 'oi' }, 'tok', saida.destino);
+    await respirar();
+    canal.emitir('event: usage\ndata: {"model":"m","inputUnits":1000,"outputUnits":50}\n\n');
+    // A segunda rodada não reportou a saída. Somar só o que veio devolveria 50 —
+    // um número menor que o real, com cara de medido, que `estimateAiCost`
+    // cobraria com `pricingKnown: true`. `undefined` manda o turno para custo
+    // NÃO MEDIDO, que é o que a #135 pediu para a ausência.
+    canal.emitir('event: usage\ndata: {"model":"m","inputUnits":5000}\n\n');
+    canal.encerrar();
+    await turno;
+
+    expect(uso.registrar).toHaveBeenCalledWith('user-a', {
+      feature: 'chat',
+      model: 'm',
+      units: { inputUnits: 6000, outputUnits: undefined },
     });
   });
 
