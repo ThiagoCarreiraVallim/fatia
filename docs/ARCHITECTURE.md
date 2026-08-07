@@ -89,12 +89,13 @@ Tudo roda no servidor próprio. Em produção, Dokploy (Traefik) faz roteamento 
 - **Python** com toolchain própria (`uv`, `ruff`, `mypy`, `pytest`), **fora do workspace pnpm** — `pnpm-workspace.yaml` exclui `apps/agent` explicitamente
 - **FastAPI** — superfície HTTP do serviço
 - **httpx** — cliente OpenAI-compatível único: LM Studio local em desenvolvimento, Cloudflare AI Gateway em produção. Trocar de provedor ou de modelo é trocar variável de ambiente, sem `if ambiente == 'prod'` no caminho de inferência
-- **LangGraph** entra com o primeiro grafo (#139), não antes
+- **LangGraph** entrou com o chat (#248), e não com o reconhecimento por foto: aquele é uma chamada e uma validação em linha reta, e um grafo de um nó só seria cerimônia. O chat **volta** — o modelo pede tool, a tool responde, ele decide de novo — e é ciclo com condição de parada
 
-Duas propriedades que valem por si:
+Três propriedades que valem por si:
 
 - **Sem credencial de banco e sem rota privilegiada.** O acesso a dado do usuário é pelo `/mcp`, com o Bearer do próprio usuário — o filtro por `userId` continua tendo um dono só, o NestJS.
-- **Degrada explicitamente.** Sem `AI_BASE_URL`, o serviço sobe, `/health` responde 200 e as capacidades respondem `AI_PROVIDER_NOT_CONFIGURED`. O produto inteiro continua funcionando sem IA hospedada.
+- **O Bearer do usuário só existe no `/chat`, e só sai para o `/mcp`.** É a inversão registrada na [ADR 021](ADR/021-agente-recebe-o-bearer-do-usuario.md): o `/recognize-meal` continua sem identidade nenhuma, e o chat só chama as tools que o `/mcp` anuncia como somente-leitura. O token não entra em log, span, estado do grafo nem histórico — ver o vetor 10 do [`THREAT_MODEL.md`](THREAT_MODEL.md).
+- **Degrada explicitamente.** Sem `AI_BASE_URL`, o serviço sobe, `/health` responde 200 e as capacidades respondem `AI_PROVIDER_NOT_CONFIGURED`. Sem `MCP_BASE_URL`, é o `/chat` que responde `MCP_NOT_CONFIGURED`. O produto inteiro continua funcionando sem IA hospedada.
 
 ### Compartilhado (`packages/db`)
 

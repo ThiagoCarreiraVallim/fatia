@@ -473,12 +473,23 @@ describe('MealRecognitionService', () => {
     });
 
     it('401 do agente é erro de configuração, e não "o modelo falhou"', async () => {
-      // API com `AGENT_API_KEY` e agente sem (ou com outra) devolve 401 **sem**
-      // `error.code`, porque a recusa acontece antes do handler. Caindo no
-      // `default`, a pessoa lia "o reconhecimento por foto falhou" e quem opera
-      // ia procurar defeito no modelo. É configuração, e o erro tem de dizer.
+      // API com `AGENT_API_KEY` e agente sem (ou com outra) devolve 401 com
+      // `AGENT_KEY_REJECTED` — um código que este `switch` não conhece, e que
+      // portanto cairia no `default`: a pessoa lia "o reconhecimento por foto
+      // falhou" e quem opera ia procurar defeito no modelo. É configuração, e o
+      // erro tem de dizer. Por isso a decisão é pelo status, antes do código.
+      //
+      // O corpo é o que o agente responde de verdade desde a revisão da #248
+      // (`apps/agent/src/fatia_agent/api.py`, `AgentKeyRejected`); antes era um
+      // `{ detail: 'Unauthorized' }`, e um duplo com forma que a realidade não
+      // tem passa verde sobre a tradução que deveria testar.
       const { service } = montar();
-      fetchMock.mockResolvedValue(respostaDoAgente({ detail: 'Unauthorized' }, 401));
+      fetchMock.mockResolvedValue(
+        respostaDoAgente(
+          { error: { code: 'AGENT_KEY_REJECTED', message: 'chave ausente ou inválida' } },
+          401,
+        ),
+      );
 
       await expect(service.reconhecer(USER, JPEG_COM_EXIF_GPS)).rejects.toThrow(
         /mal configurado.*autenticar no agente/i,

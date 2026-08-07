@@ -56,6 +56,16 @@ class AgentSettings(BaseSettings):
     # `agent_auth_unavailable_reason`.
     agent_api_key: str = ""
 
+    # Endpoint do `/mcp` do NestJS — o **único** destino para onde o Bearer do
+    # usuário sai daqui (ADR 021). Vazio = a rota de chat degrada com erro
+    # nomeado, do mesmo jeito que `AI_BASE_URL` vazia degrada a inferência.
+    mcp_base_url: str = ""
+
+    # Menor que `AI_TIMEOUT_S` de propósito: do outro lado está o nosso Postgres,
+    # não um modelo em CPU. Uma tool que não responde em meio minuto é falha, e
+    # esperar dois minutos por ela só faria o chat parecer travado.
+    mcp_timeout_s: float = 30.0
+
 
 AGENT_API_KEY_HEADER = "x-fatia-agent-key"
 
@@ -64,6 +74,30 @@ def is_local_endpoint(base_url: str) -> bool:
     """True quando o endpoint é um provedor local que dispensa credencial."""
     host = urlparse(base_url).hostname
     return host in LOCAL_HOSTS
+
+
+def host_em_rede_privada(host: str | None) -> bool:
+    """True quando o host **não** é alcançável pela internet pública.
+
+    `LOCAL_HOSTS` responde "é esta máquina?", que é a pergunta do provedor de IA.
+    O `/mcp` faz uma pergunta maior: "o Bearer do usuário sai desta rede?". Dentro
+    do compose o `apps/api` atende por `api` — um nome de serviço, resolvido pelo
+    DNS do Docker, e que `localhost` não alcança porque `localhost` ali é o
+    próprio agente. Recusar `http://api:3000/mcp` mandava quem sobe o compose
+    "usar https ou apontar para um host local" numa rede onde nenhuma das duas
+    coisas existe, e o chat respondia 503 em toda mensagem.
+
+    O critério é o nome ter um rótulo só: `api`, `fatia-api`, `nestjs`. Um nome
+    sem ponto não é registrável no DNS público — ele só resolve dentro de uma
+    rede que alguém montou, que é exatamente onde o `http://` é aceitável. Host
+    com ponto (`api.exemplo.com`) e IPv6 literal (`2001:db8::1`) continuam
+    exigindo TLS: os dois podem estar do outro lado da internet.
+    """
+    if not host:
+        return False
+    if host in LOCAL_HOSTS:
+        return True
+    return "." not in host and ":" not in host
 
 
 def endpoint_host(base_url: str) -> str:
@@ -104,6 +138,41 @@ def agent_auth_unavailable_reason(settings: AgentSettings) -> str | None:
         "A rota de reconhecimento dispara inferência paga: sem segredo compartilhado "
         "com o apps/api, ela seria um proxy aberto para o gateway (ADR 018)."
     )
+
+
+def mcp_unavailable_reason(settings: AgentSettings) -> str | None:
+    """Por que o chat não pode falar com o `/mcp`; `None` quando pode.
+
+    O segundo caso é sobre o **Bearer**, e não sobre disponibilidade. A ADR 021
+    aceita que o agente vire um ponto por onde o token do usuário transita; o
+    preço disso é que uma `MCP_BASE_URL` errada não vaza dado do agente — vaza a
+    credencial de quem está usando o produto, para quem quer que atenda naquele
+    endereço. `http://` contra host remoto põe esse token em texto puro no fio,
+    e é a única forma de errar que dá para reconhecer olhando só a configuração.
+
+    Rede privada continua liberada em `http://`: é como o `apps/api` roda em
+    desenvolvimento e dentro do compose, e exigir TLS ali só faria alguém
+    inventar um certificado. Ver `host_em_rede_privada`.
+    """
+    if not settings.mcp_base_url.strip():
+        return (
+            "MCP_BASE_URL não está definida — o chat não tem como alcançar dado do usuário. "
+            "O agente não fala com o Postgres (ADR 015): toda leitura passa pelo /mcp do "
+            "apps/api, com o Bearer de quem está conversando. Em desenvolvimento aponte para "
+            "http://localhost:3000/mcp. Sem ela, o restante do produto continua inteiro."
+        )
+
+    parsed = urlparse(settings.mcp_base_url)
+    if parsed.scheme != "https" and not host_em_rede_privada(parsed.hostname):
+        return (
+            f"MCP_BASE_URL usa '{parsed.scheme or '(sem esquema)'}' contra o host "
+            f"'{parsed.hostname or '(sem host)'}', que é alcançável de fora da rede. O agente "
+            "encaminha o Bearer DO USUÁRIO para esse endereço: sem TLS, o token de acesso de "
+            "quem está conversando trafega em texto puro. Use https, ou aponte para um host "
+            "da rede local (localhost, ou o nome do serviço no compose — 'api')."
+        )
+
+    return None
 
 
 def ai_unavailable_reason(settings: AgentSettings) -> str | None:

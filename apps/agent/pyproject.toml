@@ -6,6 +6,12 @@ requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.121",
   "httpx>=0.28",
+  # Só o grafo. O modelo continua sendo chamado pelo nosso provedor
+  # OpenAI-compatível: é ele que carrega a revisão de destino e de modelo da
+  # #136 e o `cf-aig-collect-log: false`. Trazer um `langchain-*` para falar com
+  # o provedor contornaria as duas coisas em silêncio — o texto do chat sai para
+  # o mesmo host para onde a foto do prato ia.
+  "langgraph>=0.6",
   "pydantic>=2.12",
   "pydantic-settings>=2.12",
   "uvicorn>=0.41",

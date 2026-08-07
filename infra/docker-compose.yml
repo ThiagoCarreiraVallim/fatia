@@ -119,8 +119,14 @@ services:
       AI_MODEL_EMBEDDING: ${AI_MODEL_EMBEDDING:-}
       AI_TIMEOUT_S: ${AI_TIMEOUT_S:-120}
       # Segredo compartilhado com o apps/api. Obrigatório quando AI_BASE_URL
-      # não é local — ver apps/agent/README.md, §"Rota de inferência".
+      # não é local — ver apps/agent/README.md, §"Rotas de inferência".
       AGENT_API_KEY: ${AGENT_API_KEY:-}
+      # /mcp do apps/api — o único destino do Bearer do usuário (ADR 021). De
+      # dentro do container o apps/api é `api`, não `localhost`, e o agente
+      # aceita esse nome em http por ele não sair da rede do compose. Vazio = a
+      # rota /chat degrada com erro nomeado e o resto do agente segue de pé.
+      MCP_BASE_URL: ${MCP_BASE_URL:-}
+      MCP_TIMEOUT_S: ${MCP_TIMEOUT_S:-30}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

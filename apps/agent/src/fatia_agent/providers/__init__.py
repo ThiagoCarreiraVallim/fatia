@@ -10,6 +10,7 @@ from .base import (
     VisionCapability,
 )
 from .errors import (
+    AgentKeyRejected,
     AIEndpointNotAllowed,
     AIModelNotAllowed,
     AIProviderError,
@@ -32,6 +33,7 @@ __all__ = [
     "AIProviderUnreachable",
     "AIResponseTruncated",
     "AIResponseUnparseable",
+    "AgentKeyRejected",
     "EmbeddingCapability",
     "OpenAICompatProvider",
     "TextCapability",

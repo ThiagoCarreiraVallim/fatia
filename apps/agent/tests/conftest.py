@@ -15,6 +15,10 @@ AI_ENV_VARS = (
     "AI_TIMEOUT_S",
     "AI_MAX_RETRIES",
     "AGENT_API_KEY",
+    # Sem estas duas, uma máquina com o `apps/api` configurado no ambiente faria
+    # o teste de degradação do chat passar por engano — o mesmo motivo das de IA.
+    "MCP_BASE_URL",
+    "MCP_TIMEOUT_S",
 )
 
 
@@ -35,6 +39,7 @@ def settings_factory() -> Callable[..., AgentSettings]:
             "ai_model_embedding": "text-embedding-nomic-embed-text-v1.5",
             "ai_retry_backoff_s": 0.0,
             "agent_api_key": "",
+            "mcp_base_url": "http://localhost:3000/mcp",
         }
         defaults.update(overrides)
         return AgentSettings(_env_file=None, **defaults)  # type: ignore[arg-type]

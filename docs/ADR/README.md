@@ -26,6 +26,7 @@ Decisões arquiteturais relevantes do projeto. Cada ADR é imutável depois de a
 | [018](./018-inferencia-hospedada-fora-do-mcp.md)                       | Inferência paga pela Fatia não se expõe pelo MCP         | Accepted             |
 | [019](./019-periodizacao-intencao-materializada-andamento-derivado.md) | Periodização: intenção materializada, andamento derivado | Accepted             |
 | [020](./020-foto-e-audio-trafegam-sem-persistencia.md)                 | Foto e áudio trafegam para a IA, sem persistência        | Accepted             |
+| [021](./021-agente-recebe-o-bearer-do-usuario.md)                      | O agente recebe o Bearer do usuário, só para o `/mcp`    | Accepted             |
 
 ## Template
 

@@ -26,6 +26,22 @@ class AIProviderNotConfigured(AIProviderError):
     code = "AI_PROVIDER_NOT_CONFIGURED"
 
 
+class AgentKeyRejected(AIProviderError):
+    """O `X-Fatia-Agent-Key` não veio, ou veio diferente do esperado.
+
+    Mesma família — e por isso o mesmo envelope `{"error": {...}}` — porque é a
+    mesma fronteira: a da ADR 018, que decide se esta chamada pode gastar
+    inferência paga. `AIProviderNotConfigured` já mora aqui pelo mesmo motivo.
+
+    Existe como erro nomeado, e não como `HTTPException`, porque um
+    `{"detail": "..."}` no meio obrigaria o NestJS e o PWA a conhecer dois
+    formatos de erro — que é exatamente o defeito de contrato que a #157 pagou
+    caro. O `code` é estável; a mensagem em prosa não é.
+    """
+
+    code = "AGENT_KEY_REJECTED"
+
+
 class AIModelNotAllowed(AIProviderError):
     """O modelo configurado para a capacidade não passou por revisão de privacidade.
 
