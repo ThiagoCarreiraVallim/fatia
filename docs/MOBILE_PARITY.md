@@ -151,21 +151,21 @@ esconde a diferença é exatamente o que este documento existe para impedir.
 
 ### Layout e UI base — 10 de 10
 
-| PWA                   | App nativo          |     | Observação                                             |
-| --------------------- | ------------------- | :-: | ------------------------------------------------------ |
-| `layout/bottom-nav`   | `layout/bottom-nav` | ✅  | mesmos 5 destinos, mesma ordem, com safe area          |
-| `layout/top-bar`      | `layout/top-bar`    | ✅  | ganha seta de voltar — no navegador ela é do navegador |
-| `ui/button`           | `ui/button`         | ✅  | todos os tamanhos com 44pt mínimos                     |
-| `ui/card`             | `ui/card`           | ✅  |                                                        |
-| `ui/carousel` (embla) | `ui/carousel`       | ✅  | `FlatList` paginada                                    |
-| `ui/drawer` (vaul)    | `ui/drawer`         | ✅  | `@gorhom/bottom-sheet`                                 |
-| `ui/form`             | `ui/form`           | ✅  | rótulo vira `accessibilityLabel`, não `<label for>`    |
-| `ui/input`            | `ui/input`          | ✅  |                                                        |
-| `ui/label`            | `ui/label`          | ✅  |                                                        |
-| `ui/tabs`             | `ui/tabs`           | ✅  | implementação própria, sem `pager-view`                |
-| —                     | `ui/state`          | ➕  | carregamento, erro e vazio centralizados               |
-| —                     | `layout/screen`     | ➕  | moldura com safe area e pull-to-refresh                |
-| `legal-doc`           | —                   | ⛔  | só serve às rotas legais, que abrem no navegador       |
+| PWA                   | App nativo          |     | Observação                                                                                                             |
+| --------------------- | ------------------- | :-: | ---------------------------------------------------------------------------------------------------------------------- |
+| `layout/bottom-nav`   | `layout/bottom-nav` | ⚠️  | 5 destinos nos dois, mas o PWA trocou Perfil por Chat (#250); o nativo ainda leva ao Perfil — a épica #247 é só do PWA |
+| `layout/top-bar`      | `layout/top-bar`    | ✅  | ganha seta de voltar — no navegador ela é do navegador                                                                 |
+| `ui/button`           | `ui/button`         | ✅  | todos os tamanhos com 44pt mínimos                                                                                     |
+| `ui/card`             | `ui/card`           | ✅  |                                                                                                                        |
+| `ui/carousel` (embla) | `ui/carousel`       | ✅  | `FlatList` paginada                                                                                                    |
+| `ui/drawer` (vaul)    | `ui/drawer`         | ✅  | `@gorhom/bottom-sheet`                                                                                                 |
+| `ui/form`             | `ui/form`           | ✅  | rótulo vira `accessibilityLabel`, não `<label for>`                                                                    |
+| `ui/input`            | `ui/input`          | ✅  |                                                                                                                        |
+| `ui/label`            | `ui/label`          | ✅  |                                                                                                                        |
+| `ui/tabs`             | `ui/tabs`           | ✅  | implementação própria, sem `pager-view`                                                                                |
+| —                     | `ui/state`          | ➕  | carregamento, erro e vazio centralizados                                                                               |
+| —                     | `layout/screen`     | ➕  | moldura com safe area e pull-to-refresh                                                                                |
+| `legal-doc`           | —                   | ⛔  | só serve às rotas legais, que abrem no navegador                                                                       |
 
 ---
 

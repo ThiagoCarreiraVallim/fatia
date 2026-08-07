@@ -1,0 +1,243 @@
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type { ChatRequest, ChatStreamEvent } from '@fatia/api-client';
+
+/**
+ * A tela de chat (#250).
+ *
+ * O que este arquivo cobra é o que a issue chama de produto: **token a token**
+ * (e não a resposta inteira aparecendo no fim), **qual tool foi chamada**, e
+ * **erro que não trava a conversa**. Mais foco e anúncio, que num chat não são
+ * enfeite — a #221 nasceu de foco perdido para o `<body>`.
+ *
+ * O streaming é dirigido à mão por `Fonte`: se o teste apenas despejasse todos os
+ * eventos e olhasse o fim, ele passaria igual com uma implementação que só
+ * renderiza quando o stream fecha — exatamente o defeito que a épica proíbe.
+ */
+
+/** Gerador dirigido pelo teste: nada aparece até o caso mandar aparecer. */
+class Fonte {
+  private eventos: ChatStreamEvent[] = [];
+  private aguardando: (() => void) | null = null;
+  private terminou = false;
+
+  async *gerar(): AsyncGenerator<ChatStreamEvent> {
+    let i = 0;
+    for (;;) {
+      if (i < this.eventos.length) {
+        yield this.eventos[i];
+        i += 1;
+        continue;
+      }
+      if (this.terminou) return;
+      await new Promise<void>((resolve) => {
+        this.aguardando = resolve;
+      });
+    }
+  }
+
+  emitir(evento: ChatStreamEvent): void {
+    this.eventos.push(evento);
+    this.aguardando?.();
+    this.aguardando = null;
+  }
+
+  fechar(): void {
+    this.terminou = true;
+    this.aguardando?.();
+    this.aguardando = null;
+  }
+}
+
+let fontes: Fonte[] = [];
+// O parâmetro é anotado com `ChatRequest`, do cliente: se o corpo que a tela
+// manda deixar de bater com o contrato, o erro aparece no `tsc` (lição da #157).
+const streamChatMock = vi.fn((_corpo: ChatRequest) => {
+  const fonte = new Fonte();
+  fontes.push(fonte);
+  return fonte.gerar();
+});
+
+vi.mock('@fatia/api-client', async () => {
+  const actual = await vi.importActual<typeof import('@fatia/api-client')>('@fatia/api-client');
+  // `textoDeErroDoChat` entra **real**: a cópia por código é parte do requisito,
+  // e dublá-la faria o caso conversar consigo mesmo.
+  return { ...actual, streamChat: streamChatMock };
+});
+
+const { ChatView } = await import('../chat-view');
+
+beforeAll(() => {
+  // `use-stick-to-bottom`, que o `Conversation` do registry usa, observa o
+  // tamanho do container. O jsdom não tem ResizeObserver.
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+  Element.prototype.scrollTo = () => {};
+});
+
+beforeEach(() => {
+  fontes = [];
+});
+
+async function enviar(texto: string) {
+  const user = userEvent.setup();
+  const campo = screen.getByRole('textbox', { name: 'Mensagem para o Fatia' });
+  await user.type(campo, texto);
+  await user.click(screen.getByRole('button', { name: 'Enviar mensagem' }));
+  return { user, campo };
+}
+
+describe('ChatView', () => {
+  it('renderiza a resposta token a token, e não só no fim', async () => {
+    render(<ChatView />);
+    await enviar('bom dia');
+
+    fontes[0].emitir({ type: 'token', text: 'Bom ' });
+    // Correspondência exata: `toHaveTextContent`/substring passaria com o texto
+    // final já inteiro na tela, que é o defeito que este caso existe para pegar.
+    expect(await screen.findByText('Bom')).toBeInTheDocument();
+    expect(screen.queryByText('Bom dia!')).not.toBeInTheDocument();
+
+    fontes[0].emitir({ type: 'token', text: 'dia!' });
+    expect(await screen.findByText('Bom dia!')).toBeInTheDocument();
+  });
+
+  it('mostra qual tool foi chamada, e o resultado quando ele chega', async () => {
+    render(<ChatView />);
+    await enviar('registra 2 ovos');
+
+    fontes[0].emitir({
+      type: 'tool',
+      tool: { id: 'c1', name: 'registrar_refeicao', state: 'input-available', input: { g: 100 } },
+    });
+    expect(await screen.findByText('registrar_refeicao')).toBeInTheDocument();
+    expect(screen.getByText('Executando')).toBeInTheDocument();
+
+    fontes[0].emitir({
+      type: 'tool',
+      tool: {
+        id: 'c1',
+        name: 'registrar_refeicao',
+        state: 'output-available',
+        output: { mealId: 'm1' },
+      },
+    });
+    expect(await screen.findByText('Concluída')).toBeInTheDocument();
+    // O mesmo `id` atualiza o bloco; não abre um segundo.
+    expect(screen.getAllByText('registrar_refeicao')).toHaveLength(1);
+    expect(screen.queryByText('Executando')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['AI_PROVIDER_NOT_CONFIGURED', /não está configurado nesta instância/],
+    ['AI_QUOTA_EXCEEDED', /limite diário de uso da IA/],
+    ['AI_NETWORK_ERROR', /A conexão caiu no meio da resposta/],
+  ] as const)('%s aparece com mensagem própria', async (code, esperado) => {
+    render(<ChatView />);
+    await enviar('oi');
+
+    fontes[0].emitir({ type: 'error', error: { code } });
+    fontes[0].fechar();
+
+    const alerta = await screen.findByRole('alert');
+    expect(alerta).toHaveTextContent(esperado);
+  });
+
+  it('depois do erro a conversa continua utilizável', async () => {
+    render(<ChatView />);
+    await enviar('oi');
+
+    fontes[0].emitir({ type: 'token', text: 'come' });
+    fontes[0].emitir({ type: 'error', error: { code: 'AI_NETWORK_ERROR' } });
+    fontes[0].fechar();
+    await screen.findByRole('alert');
+
+    // O que já tinha chegado não some — é o que a mensagem de erro promete.
+    expect(screen.getByText('come')).toBeInTheDocument();
+
+    await enviar('de novo');
+    await waitFor(() => expect(streamChatMock).toHaveBeenCalledTimes(2));
+    expect(streamChatMock.mock.calls[1][0]).toMatchObject({ message: 'de novo' });
+
+    fontes[1].emitir({ type: 'token', text: 'Agora vai.' });
+    fontes[1].fechar();
+    expect(await screen.findByText('Agora vai.')).toBeInTheDocument();
+    // O turno que falhou continua marcado no histórico — mas só ele. A nova
+    // resposta não herda o erro da anterior.
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+  });
+
+  it('o botão de tentar de novo repete a pergunta sem duplicá-la na tela', async () => {
+    render(<ChatView />);
+    await enviar('quanto comi hoje?');
+
+    fontes[0].emitir({ type: 'error', error: { code: 'AI_PROVIDER_UNAVAILABLE' } });
+    fontes[0].fechar();
+    const alerta = await screen.findByRole('alert');
+
+    const user = userEvent.setup();
+    await user.click(within(alerta).getByRole('button', { name: /Tentar de novo/ }));
+
+    await waitFor(() => expect(streamChatMock).toHaveBeenCalledTimes(2));
+    expect(streamChatMock.mock.calls[1][0]).toMatchObject({ message: 'quanto comi hoje?' });
+    expect(screen.getAllByText('quanto comi hoje?')).toHaveLength(1);
+  });
+
+  it('mantém o foco no campo depois de enviar', async () => {
+    render(<ChatView />);
+    const { campo } = await enviar('oi');
+    // A #221: perder o foco para o `<body>` a cada envio obriga quem usa teclado
+    // ou leitor de tela a reencontrar o campo antes de cada mensagem.
+    expect(campo).toHaveFocus();
+    expect(campo).toHaveValue('');
+  });
+
+  it('anuncia a resposta uma vez, no fim, citando a tool usada', async () => {
+    const { container } = render(<ChatView />);
+    await enviar('registra 2 ovos');
+
+    const regiao = container.querySelector('[aria-live="polite"]');
+    expect(regiao).not.toBeNull();
+
+    fontes[0].emitir({ type: 'token', text: 'Registrei.' });
+    await screen.findByText('Registrei.');
+    // Nada de anúncio durante o streaming: token a token viraria ruído.
+    expect(regiao).toHaveTextContent('');
+
+    fontes[0].emitir({
+      type: 'tool',
+      tool: { id: 'c1', name: 'registrar_refeicao', state: 'output-available' },
+    });
+    fontes[0].fechar();
+
+    await waitFor(() => expect(regiao?.textContent ?? '').toContain('registrar_refeicao'));
+    expect(regiao?.textContent).toContain('Fatia respondeu');
+  });
+
+  it('a região viva do log fica calada — quem anuncia é a região de status', async () => {
+    render(<ChatView />);
+    // `role="log"` vem do `Conversation` do registry e anuncia sozinho cada
+    // mudança; com streaming isso é um anúncio por token.
+    expect(screen.getByRole('log')).toHaveAttribute('aria-live', 'off');
+  });
+
+  it('continua a mesma conversa na segunda pergunta', async () => {
+    render(<ChatView />);
+    await enviar('oi');
+    fontes[0].emitir({ type: 'conversation', conversationId: 'conv-7' });
+    fontes[0].emitir({ type: 'token', text: 'Oi!' });
+    fontes[0].fechar();
+    await screen.findByText('Oi!');
+
+    await enviar('e agora?');
+    await waitFor(() => expect(streamChatMock).toHaveBeenCalledTimes(2));
+    expect(streamChatMock.mock.calls[1][0]).toEqual({
+      message: 'e agora?',
+      conversationId: 'conv-7',
+    });
+  });
+});

@@ -42,10 +42,32 @@ async function proxy(request: NextRequest, ctx: RouteContext) {
     return new NextResponse(null, { status: upstream.status });
   }
 
+  const contentType = upstream.headers.get('content-type') ?? 'application/json';
+
+  // SSE passa **sem bufferizar**. `arrayBuffer()` só resolve quando o upstream
+  // fecha o corpo: para o chat (#247) isso entregaria a resposta inteira de uma
+  // vez no fim, desperdiçando o streaming das duas camadas de baixo e fazendo a
+  // conversa parecer travada. Repassar o `ReadableStream` mantém token a token.
+  //
+  // `X-Accel-Buffering: no` existe porque proxy reverso na frente do Next (nginx
+  // é o caso comum) rebuferiza event-stream por padrão e recria o mesmo sintoma
+  // fora do nosso código.
+  if (contentType.includes('text/event-stream') && upstream.body) {
+    return new NextResponse(upstream.body, {
+      status: upstream.status,
+      headers: {
+        'content-type': contentType,
+        'cache-control': 'no-cache, no-transform',
+        connection: 'keep-alive',
+        'x-accel-buffering': 'no',
+      },
+    });
+  }
+
   const body = await upstream.arrayBuffer();
   return new NextResponse(body, {
     status: upstream.status,
-    headers: { 'content-type': upstream.headers.get('content-type') ?? 'application/json' },
+    headers: { 'content-type': contentType },
   });
 }
 

@@ -49,6 +49,16 @@ export function resetApiClient(): void {
   transport = null;
 }
 
+/**
+ * O transporte configurado, ou erro se ninguém configurou.
+ *
+ * Exportado porque o chat (#250) não passa por `apiFetch` — ele precisa do corpo
+ * como stream — mas precisa das **mesmas** decisões de URL, cabeçalho e 401.
+ */
+export function getConfiguredTransport(): ApiTransport {
+  return requireTransport();
+}
+
 function requireTransport(): ApiTransport {
   if (!transport) {
     throw new Error(

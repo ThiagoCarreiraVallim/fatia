@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Scale, Plus, TrendingDown, TrendingUp } from 'lucide-react';
+import { Scale, Plus, TrendingDown, TrendingUp, User } from 'lucide-react';
 import { progressApi } from '@fatia/api-client';
 import { WeightChart } from '@/components/progress/weight-chart';
 import { StepsChart } from '@/components/progress/steps-chart';
@@ -78,11 +79,26 @@ export default function ProgressPage() {
 
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
-      <header>
-        <h1 className="text-3xl font-extrabold text-foreground">Evolução</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Seus dados de performance dos últimos {days} dias.
-        </p>
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-extrabold text-foreground">Evolução</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Seus dados de performance dos últimos {days} dias.
+          </p>
+        </div>
+        {/*
+          Única porta visível para o perfil desde que o Chat tomou a vaga dele na
+          bottom-nav (#250). É `Link` e não `router.push` porque precisa continuar
+          copiável, abrível em nova aba e favoritável — a rota `/profile` não
+          mudou, só o caminho até ela.
+        */}
+        <Link
+          href="/profile"
+          className="flex shrink-0 flex-col items-center gap-1 rounded-xl bg-muted/60 px-3 py-2 text-[10px] font-bold text-muted-foreground"
+        >
+          <User size={18} />
+          Perfil
+        </Link>
       </header>
 
       <Tabs defaultValue="overview" className="w-full">
