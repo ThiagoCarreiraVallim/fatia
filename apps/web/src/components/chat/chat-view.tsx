@@ -100,7 +100,19 @@ export function ChatView() {
   const respondendo = status === 'submitted' || status === 'streaming';
 
   return (
-    <div className="flex h-[calc(100dvh-5rem)] flex-col">
+    <div
+      /*
+        `10rem` = `pt-16` (4rem) + `pb-24` (6rem), o respiro que o layout de
+        `(app)` reserva para a barra do topo e a de baixo. Subtrair só a de baixo
+        (5rem, como esta linha fazia) faz a caixa terminar 4rem DENTRO da
+        `bottom-nav`, que é `fixed` com `z-50`: o campo de mensagem fica visível
+        e intocável — não dá para focar, digitar nem enviar.
+        O padding do `<main>` não segura isto, porque altura explícita no filho
+        transborda o padding do pai em vez de ser contida por ele.
+        `chat-view-cabe-na-tela.test.ts` amarra este número ao do layout.
+      */
+      className="flex h-[calc(100dvh-10rem)] flex-col"
+    >
       <header className="px-5 pt-4 pb-2">
         <h1 className="text-3xl font-extrabold text-foreground">Chat</h1>
         <p className="mt-1 text-sm text-muted-foreground">
