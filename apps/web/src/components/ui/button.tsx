@@ -21,6 +21,10 @@ const buttonVariants = cva(
         sm: 'h-8 rounded-md px-3 text-xs',
         lg: 'h-10 rounded-md px-8',
         icon: 'h-9 w-9',
+        // Os elementos de IA do registry pedem `icon-sm` (ações de mensagem e
+        // navegação de branch). Sem este tamanho o `tsc` recusa os arquivos que
+        // o CLI instalou — e reescrevê-los à mão é justamente o que a #250 proíbe.
+        'icon-sm': 'h-8 w-8',
       },
     },
     defaultVariants: {

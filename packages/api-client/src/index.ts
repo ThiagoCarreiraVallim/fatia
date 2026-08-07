@@ -10,8 +10,15 @@
  */
 
 export type { ApiTransport } from './transport';
-export { ApiError, apiFetch, configureApiClient, resetApiClient } from './http';
+export {
+  ApiError,
+  apiFetch,
+  configureApiClient,
+  getConfiguredTransport,
+  resetApiClient,
+} from './http';
 
+export * from './chat';
 export * from './goals';
 export * from './nutrition';
 export * from './progress';

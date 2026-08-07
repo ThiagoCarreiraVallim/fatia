@@ -24,9 +24,16 @@ async function proxy(request: NextRequest, ctx: RouteContext) {
   headers.delete('host');
   headers.delete('cookie');
 
+  // `signal` do pedido do navegador amarrado ao pedido de cima: quando o aluno
+  // aperta "Parar resposta" no meio do stream, o `AbortController` do PWA corta o
+  // fetch para cá — e sem isto o fetch daqui para o NestJS continuava vivo, com o
+  // agente gerando até o fim e a cota de `ai-quota.ts` sendo debitada por tokens
+  // que ninguém vai ler. Contar com o `cancel()` do `ReadableStream` chegar ao
+  // undici é sorte, não contrato.
   const init: RequestInit = {
     method: request.method,
     headers,
+    signal: request.signal,
   };
   if (!['GET', 'HEAD'].includes(request.method)) {
     init.body = await request.text();
@@ -42,10 +49,32 @@ async function proxy(request: NextRequest, ctx: RouteContext) {
     return new NextResponse(null, { status: upstream.status });
   }
 
+  const contentType = upstream.headers.get('content-type') ?? 'application/json';
+
+  // SSE passa **sem bufferizar**. `arrayBuffer()` só resolve quando o upstream
+  // fecha o corpo: para o chat (#247) isso entregaria a resposta inteira de uma
+  // vez no fim, desperdiçando o streaming das duas camadas de baixo e fazendo a
+  // conversa parecer travada. Repassar o `ReadableStream` mantém token a token.
+  //
+  // `X-Accel-Buffering: no` existe porque proxy reverso na frente do Next (nginx
+  // é o caso comum) rebuferiza event-stream por padrão e recria o mesmo sintoma
+  // fora do nosso código.
+  if (contentType.includes('text/event-stream') && upstream.body) {
+    return new NextResponse(upstream.body, {
+      status: upstream.status,
+      headers: {
+        'content-type': contentType,
+        'cache-control': 'no-cache, no-transform',
+        connection: 'keep-alive',
+        'x-accel-buffering': 'no',
+      },
+    });
+  }
+
   const body = await upstream.arrayBuffer();
   return new NextResponse(body, {
     status: upstream.status,
-    headers: { 'content-type': upstream.headers.get('content-type') ?? 'application/json' },
+    headers: { 'content-type': contentType },
   });
 }
 

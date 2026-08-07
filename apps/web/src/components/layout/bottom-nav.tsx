@@ -2,14 +2,21 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Apple, Dumbbell, TrendingUp, User, Home } from 'lucide-react';
+import { Apple, Dumbbell, TrendingUp, MessageCircle, Home } from 'lucide-react';
 
+/**
+ * Cinco abas, e o Chat no lugar do Perfil (#250).
+ *
+ * O Perfil não sumiu: `/profile` continua sendo uma rota, alcançada agora pelo
+ * botão dentro de Progresso. Quem tem link direto ou favorito não perde nada —
+ * mudou o caminho, não o destino.
+ */
 const navItems = [
   { href: '/progress', label: 'Progresso', icon: TrendingUp },
   { href: '/nutrition', label: 'Nutrição', icon: Apple },
   { href: '/', label: 'Dashboard', icon: Home },
   { href: '/workout', label: 'Treino', icon: Dumbbell },
-  { href: '/profile', label: 'Perfil', icon: User },
+  { href: '/chat', label: 'Chat', icon: MessageCircle },
 ];
 
 export function BottomNav() {

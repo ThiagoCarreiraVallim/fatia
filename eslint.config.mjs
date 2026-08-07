@@ -135,6 +135,31 @@ export default tseslint.config(
   },
 
   {
+    /**
+     * Arquivos que o CLI do shadcn instalou e que **não** editamos (#250).
+     *
+     * Os elementos de IA e o `command` vieram inteiros do registry. A regra da
+     * casa continua valendo para o que escrevemos; aqui o custo de obedecer é
+     * reescrever à mão o que o CLI entrega — e aí a próxima atualização do
+     * registry vira um conflito em vez de um `add` — em troca de nada, porque o
+     * `any` e o `refs` estão no código de terceiro.
+     *
+     * A lista é fechada de propósito: rule por rule, e só nos caminhos vendidos.
+     * Se um destes arquivos for adotado e reescrito, tirar daqui é o sinal.
+     */
+    files: ['apps/web/src/components/ai-elements/**', 'apps/web/src/components/ui/command.tsx'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
+      'react-hooks/refs': 'off',
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/exhaustive-deps': 'off',
+      'react/no-unknown-property': 'off',
+      '@next/next/no-img-element': 'off',
+    },
+  },
+
+  {
     // Os testes usam globais do Jest e do Vitest conforme o pacote.
     files: ['**/__tests__/**/*.{ts,tsx}', '**/*.{spec,test}.{ts,tsx}'],
     languageOptions: { globals: { ...globals.jest, ...globals.node } },
