@@ -24,9 +24,16 @@ async function proxy(request: NextRequest, ctx: RouteContext) {
   headers.delete('host');
   headers.delete('cookie');
 
+  // `signal` do pedido do navegador amarrado ao pedido de cima: quando o aluno
+  // aperta "Parar resposta" no meio do stream, o `AbortController` do PWA corta o
+  // fetch para cá — e sem isto o fetch daqui para o NestJS continuava vivo, com o
+  // agente gerando até o fim e a cota de `ai-quota.ts` sendo debitada por tokens
+  // que ninguém vai ler. Contar com o `cancel()` do `ReadableStream` chegar ao
+  // undici é sorte, não contrato.
   const init: RequestInit = {
     method: request.method,
     headers,
+    signal: request.signal,
   };
   if (!['GET', 'HEAD'].includes(request.method)) {
     init.body = await request.text();

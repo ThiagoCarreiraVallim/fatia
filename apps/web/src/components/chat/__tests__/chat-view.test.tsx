@@ -115,6 +115,45 @@ describe('ChatView', () => {
     expect(await screen.findByText('Bom dia!')).toBeInTheDocument();
   });
 
+  it('mostra "Pensando" enquanto nada chegou, e some no primeiro token', async () => {
+    // É o único retorno visual entre apertar enviar e o primeiro token. Sem
+    // caso próprio ele podia sumir num refactor sem nada acusar.
+    render(<ChatView />);
+    await enviar('bom dia');
+
+    expect(await screen.findByLabelText('Pensando')).toBeInTheDocument();
+
+    fontes[0].emitir({ type: 'token', text: 'Bom' });
+    await screen.findByText('Bom');
+    expect(screen.queryByLabelText('Pensando')).not.toBeInTheDocument();
+  });
+
+  it('o "Pensando" fica no balão que está sendo reescrito, não no último', async () => {
+    // `aguardando={m.id === respondendoId}` é por id, e não por posição: refazer
+    // um turno do meio deixa o "pensando" onde a resposta está sendo reescrita.
+    render(<ChatView />);
+    await enviar('quanto comi hoje?');
+    fontes[0].emitir({ type: 'error', error: { code: 'AI_PROVIDER_UNREACHABLE' } });
+    fontes[0].fechar();
+    await screen.findByRole('alert');
+
+    await enviar('e o treino?');
+    await waitFor(() => expect(streamChatMock).toHaveBeenCalledTimes(2));
+    fontes[1].emitir({ type: 'token', text: 'Foi peito.' });
+    fontes[1].fechar();
+    const resposta = await screen.findByText('Foi peito.');
+
+    const user = userEvent.setup();
+    await user.click(within(screen.getByRole('alert')).getByRole('button', { name: /Tentar/ }));
+
+    const pensando = await screen.findByLabelText('Pensando');
+    // Ordem no documento: o "pensando" está **antes** da resposta boa do turno
+    // seguinte, ou seja, no balão do turno refeito.
+    expect(pensando.compareDocumentPosition(resposta) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
   it('mostra qual tool foi chamada, e o resultado quando ele chega', async () => {
     render(<ChatView />);
     await enviar('registra 2 ovos');
@@ -184,7 +223,7 @@ describe('ChatView', () => {
     render(<ChatView />);
     await enviar('quanto comi hoje?');
 
-    fontes[0].emitir({ type: 'error', error: { code: 'AI_PROVIDER_UNAVAILABLE' } });
+    fontes[0].emitir({ type: 'error', error: { code: 'AI_PROVIDER_UNREACHABLE' } });
     fontes[0].fechar();
     const alerta = await screen.findByRole('alert');
 
@@ -203,7 +242,7 @@ describe('ChatView', () => {
     // pergunta errada e ainda apaga a resposta boa que veio depois.
     render(<ChatView />);
     await enviar('quanto comi hoje?');
-    fontes[0].emitir({ type: 'error', error: { code: 'AI_PROVIDER_UNAVAILABLE' } });
+    fontes[0].emitir({ type: 'error', error: { code: 'AI_PROVIDER_UNREACHABLE' } });
     fontes[0].fechar();
     await screen.findByRole('alert');
 
@@ -230,7 +269,7 @@ describe('ChatView', () => {
     // balão vazio e sem botão: o erro sumiria da tela sem nada ter acontecido.
     render(<ChatView />);
     await enviar('quanto comi hoje?');
-    fontes[0].emitir({ type: 'error', error: { code: 'AI_PROVIDER_UNAVAILABLE' } });
+    fontes[0].emitir({ type: 'error', error: { code: 'AI_PROVIDER_UNREACHABLE' } });
     fontes[0].fechar();
     const alerta = await screen.findByRole('alert');
 

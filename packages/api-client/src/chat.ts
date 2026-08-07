@@ -38,34 +38,37 @@ export interface ChatToolCall {
 /**
  * Códigos de erro do chat.
  *
- * Os quatro primeiros já são vocabulário da casa — `apps/agent` emite
- * `AI_PROVIDER_*` e `apps/api/src/ai/ai-quota.ts` emite `AI_QUOTA_EXCEEDED`. Os
- * dois últimos nascem no cliente, porque descrevem falhas que acontecem **antes**
- * de qualquer resposta do servidor.
+ * A lista é **conferida**, não suposta: os `AI_PROVIDER_*` / `AI_MODEL_*` /
+ * `AI_ENDPOINT_*` / `AI_RESPONSE_*` são exatamente os `code` de
+ * `apps/agent/src/fatia_agent/providers/errors.py`, que o NestJS repassa sem
+ * traduzir (o contrato da #247 é repasse de SSE, não tradução). `chat.test.ts`
+ * lê aquele arquivo e falha se as duas listas divergirem.
+ *
+ * `AI_PROVIDER_UNAVAILABLE` esteve aqui e **nenhuma camada emitia**: provedor
+ * fora do ar chega como `AI_PROVIDER_UNREACHABLE`, caía em `AI_UNKNOWN_ERROR` e
+ * o ramo escrito para ele era inalcançável. Era a #157 de novo — tipo do cliente
+ * descrevendo um servidor que não existe.
  */
 export type ChatErrorCode =
+  // Nascem no agente e atravessam as três camadas com o mesmo nome.
+  | 'AI_PROVIDER_ERROR'
   | 'AI_PROVIDER_NOT_CONFIGURED'
-  | 'AI_PROVIDER_UNAVAILABLE'
+  | 'AI_MODEL_NOT_ALLOWED'
+  | 'AI_ENDPOINT_NOT_ALLOWED'
   | 'AI_PROVIDER_TIMEOUT'
+  | 'AI_PROVIDER_UNREACHABLE'
+  | 'AI_PROVIDER_REFUSED'
+  | 'AI_RESPONSE_UNPARSEABLE'
+  | 'AI_RESPONSE_TRUNCATED'
+  // Nasce no NestJS (`apps/api/src/ai/ai-quota.ts`).
   | 'AI_QUOTA_EXCEEDED'
+  // Nascem no cliente: descrevem falhas de antes de qualquer resposta do servidor.
   | 'AI_NETWORK_ERROR'
   | 'AI_UNAUTHORIZED'
   | 'AI_UNKNOWN_ERROR';
 
-const CODIGOS: ReadonlySet<string> = new Set<ChatErrorCode>([
-  'AI_PROVIDER_NOT_CONFIGURED',
-  'AI_PROVIDER_UNAVAILABLE',
-  'AI_PROVIDER_TIMEOUT',
-  'AI_QUOTA_EXCEEDED',
-  'AI_NETWORK_ERROR',
-  'AI_UNAUTHORIZED',
-  'AI_UNKNOWN_ERROR',
-]);
-
 export interface ChatStreamError {
   code: ChatErrorCode;
-  /** Prosa vinda do servidor, quando houver. A tela prefere a cópia local. */
-  message?: string;
   /** ISO 8601 — só em `AI_QUOTA_EXCEEDED`, é quando a cota volta. */
   resetsAt?: string;
 }
@@ -90,35 +93,87 @@ export interface ChatRequest {
 }
 
 /**
+ * Falha de configuração da instância, nos três códigos que a produzem.
+ *
+ * Mesmo texto de propósito: para quem conversa, "faltou preencher `AI_BASE_URL`",
+ * "o modelo não passou pela revisão da #136" e "o host não passou" pedem a mesma
+ * coisa (nada) e revelariam infraestrutura de graça. Quem opera distingue pelo
+ * `code`, que continua inteiro no log do agente. É o mesmo raciocínio que
+ * `apps/api/src/ai/ai-quota.ts` já aplica ao escopo `unpriced`.
+ */
+const CONFIGURACAO =
+  'O chat com IA não está configurado nesta instância. O resto do Fatia ' +
+  'funciona normalmente — nada aqui depende de IA.';
+
+/**
+ * O provedor não entregou a resposta: não atendeu, recusou, ou falhou de um jeito
+ * que o agente não nomeou melhor. A ação de quem lê é uma só — tentar de novo.
+ *
+ * O 429 do provedor (`AI_PROVIDER_REFUSED`) entra aqui e **não** vira cota: quem
+ * conversa não estourou limite nenhum, e mandá-lo esperar até amanhã seria mentir.
+ */
+const PROVEDOR_FALHOU = 'O provedor de IA não atendeu agora. Tente de novo em alguns minutos.';
+
+/**
  * Texto que o usuário lê, um por código.
  *
  * Um erro genérico ("algo deu errado") faz a pessoa procurar o problema no lugar
  * errado — cota estourada some sozinha amanhã, provedor fora não. Compartilhado
  * entre PWA e nativo pelo mesmo motivo de `streak-copy.ts`: os dois têm de dizer
  * igual.
+ *
+ * Tabela e não `switch`: `Record<ChatErrorCode, string>` é o que faz código novo
+ * sem cópia virar `tsc` vermelho, e é dela que sai o conjunto aceito no parse —
+ * assim a lista de códigos conhecidos não tem como divergir da união.
  */
+const TEXTOS: Record<ChatErrorCode, string> = {
+  AI_PROVIDER_NOT_CONFIGURED: CONFIGURACAO,
+  AI_MODEL_NOT_ALLOWED: CONFIGURACAO,
+  AI_ENDPOINT_NOT_ALLOWED: CONFIGURACAO,
+  AI_PROVIDER_ERROR: PROVEDOR_FALHOU,
+  AI_PROVIDER_UNREACHABLE: PROVEDOR_FALHOU,
+  AI_PROVIDER_REFUSED: PROVEDOR_FALHOU,
+  AI_PROVIDER_TIMEOUT: 'O modelo demorou demais para responder. Tente enviar de novo.',
+  AI_RESPONSE_UNPARSEABLE:
+    'A resposta do modelo veio em um formato que o Fatia não entendeu. Tente enviar de novo.',
+  AI_RESPONSE_TRUNCATED:
+    'A resposta ficou longa demais e foi cortada. Tente uma pergunta mais específica.',
+  AI_QUOTA_EXCEEDED: 'Você atingiu o limite diário de uso da IA. Ele volta amanhã.',
+  AI_NETWORK_ERROR: 'A conexão caiu no meio da resposta. O que já chegou continua acima.',
+  AI_UNAUTHORIZED: 'Sua sessão expirou. Entre de novo para continuar a conversa.',
+  AI_UNKNOWN_ERROR: 'O chat falhou por um motivo não identificado. Tente enviar de novo.',
+};
+
+/**
+ * Todos os códigos conhecidos, na ordem da tabela.
+ *
+ * Exportado para o teste conferir contra `apps/agent` — é o que transforma
+ * "declarei um código que ninguém emite" em suíte vermelha.
+ */
+export const CHAT_ERROR_CODES = Object.keys(TEXTOS) as ChatErrorCode[];
+
+const CODIGOS: ReadonlySet<string> = new Set<string>(CHAT_ERROR_CODES);
+
+/**
+ * `resetsAt` na cópia do aluno é data legível, não ISO.
+ *
+ * O `${resetsAt.toISOString()} (UTC)` de `ai-quota.ts` é mensagem de API, lida
+ * por quem opera; aqui é balão de conversa. Sem fuso explícito de propósito: o
+ * horário que interessa é o do aparelho de quem lê. Data impossível não pode
+ * derrubar o balão de erro — aí a frase cai na versão sem horário.
+ */
+function quandoVolta(resetsAt: string): string | null {
+  const data = new Date(resetsAt);
+  if (Number.isNaN(data.getTime())) return null;
+  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(data);
+}
+
 export function textoDeErroDoChat(error: ChatStreamError): string {
-  switch (error.code) {
-    case 'AI_PROVIDER_NOT_CONFIGURED':
-      return (
-        'O chat com IA não está configurado nesta instância. O resto do Fatia ' +
-        'funciona normalmente — nada aqui depende de IA.'
-      );
-    case 'AI_PROVIDER_UNAVAILABLE':
-      return 'O provedor de IA está fora do ar. Tente de novo em alguns minutos.';
-    case 'AI_PROVIDER_TIMEOUT':
-      return 'O modelo demorou demais para responder. Tente enviar de novo.';
-    case 'AI_QUOTA_EXCEEDED':
-      return error.resetsAt
-        ? `Você atingiu o limite diário de uso da IA. Ele volta em ${error.resetsAt} (UTC).`
-        : 'Você atingiu o limite diário de uso da IA. Ele volta amanhã.';
-    case 'AI_NETWORK_ERROR':
-      return 'A conexão caiu no meio da resposta. O que já chegou continua acima.';
-    case 'AI_UNAUTHORIZED':
-      return 'Sua sessão expirou. Entre de novo para continuar a conversa.';
-    case 'AI_UNKNOWN_ERROR':
-      return error.message ?? 'O chat falhou por um motivo não identificado.';
+  if (error.code === 'AI_QUOTA_EXCEEDED' && error.resetsAt) {
+    const volta = quandoVolta(error.resetsAt);
+    if (volta) return `Você atingiu o limite diário de uso da IA. Ele volta em ${volta}.`;
   }
+  return TEXTOS[error.code];
 }
 
 function isRecord(valor: unknown): valor is Record<string, unknown> {
@@ -173,13 +228,16 @@ export function parseChatEvent(nome: string, data: string): ChatStreamEvent | nu
     }
     case 'error': {
       const bruto = texto(corpo.code);
-      // Código desconhecido vira `AI_UNKNOWN_ERROR` **preservando a mensagem**:
-      // um código novo do servidor não pode virar tela muda.
+      // Código desconhecido vira `AI_UNKNOWN_ERROR`, e a `message` do servidor
+      // **fica de fora**. O docstring do agente é explícito: "a mensagem em
+      // português é para o humano que lê o log, o código é para o cliente
+      // decidir". Ela carrega caminho de endpoint, `AI_BASE_URL`, nome de modelo
+      // e host do subprocessador (#136) — diagnóstico sem ação possível para
+      // quem conversa. Por isso `ChatStreamError` nem tem o campo: mostrar de
+      // novo custa `tsc` vermelho, não revisão de código.
       const code: ChatErrorCode =
         bruto && CODIGOS.has(bruto) ? (bruto as ChatErrorCode) : 'AI_UNKNOWN_ERROR';
       const error: ChatStreamError = { code };
-      const message = texto(corpo.message);
-      if (message) error.message = message;
       const resetsAt = texto(corpo.resetsAt);
       if (resetsAt) error.resetsAt = resetsAt;
       return { type: 'error', error };
@@ -228,8 +286,6 @@ async function erroDeResposta(res: Response): Promise<ChatStreamError> {
   const bruto = texto(dentro.code);
   if (bruto && CODIGOS.has(bruto)) {
     const error: ChatStreamError = { code: bruto as ChatErrorCode };
-    const message = texto(dentro.message);
-    if (message) error.message = message;
     const resetsAt = texto(dentro.resetsAt);
     if (resetsAt) error.resetsAt = resetsAt;
     return error;
@@ -237,8 +293,8 @@ async function erroDeResposta(res: Response): Promise<ChatStreamError> {
   // Sem código nomeado, o status ainda distingue os casos que a #250 exige
   // separar: cota (429) não é provedor fora (5xx).
   if (res.status === 429) return { code: 'AI_QUOTA_EXCEEDED' };
-  if (res.status === 503 || res.status === 504) return { code: 'AI_PROVIDER_UNAVAILABLE' };
-  return { code: 'AI_UNKNOWN_ERROR', message: texto(dentro.message) };
+  if (res.status === 503 || res.status === 504) return { code: 'AI_PROVIDER_UNREACHABLE' };
+  return { code: 'AI_UNKNOWN_ERROR' };
 }
 
 export interface StreamChatInit {
@@ -277,9 +333,11 @@ export async function* streamChat(
       body: JSON.stringify(body),
       signal: init.signal,
     });
-  } catch (erro) {
+  } catch {
     if (init.signal?.aborted) return;
-    yield { type: 'error', error: { code: 'AI_NETWORK_ERROR', message: (erro as Error).message } };
+    // A `message` do `fetch` não entra no evento: ela varia por navegador e não
+    // diz nada acionável a quem conversa. A cópia por código é a da tela.
+    yield { type: 'error', error: { code: 'AI_NETWORK_ERROR' } };
     return;
   }
 
@@ -307,10 +365,10 @@ export async function* streamChat(
         if (evento) yield evento;
       }
     }
-  } catch (erro) {
+  } catch {
     if (init.signal?.aborted) return;
     // Queda no meio do stream: o que já chegou fica na tela, e o erro diz isso.
-    yield { type: 'error', error: { code: 'AI_NETWORK_ERROR', message: (erro as Error).message } };
+    yield { type: 'error', error: { code: 'AI_NETWORK_ERROR' } };
     return;
   }
 

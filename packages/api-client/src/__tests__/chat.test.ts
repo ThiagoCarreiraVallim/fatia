@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { configureApiClient, resetApiClient } from '../http';
 import type { ApiTransport } from '../transport';
 import {
+  CHAT_ERROR_CODES,
   parseQuadro,
   recortarQuadros,
   streamChat,
@@ -75,11 +76,12 @@ describe('parseQuadro', () => {
     expect(parseQuadro('event: tool\ndata: {"id":"t1","name":"x","state":"voando"}')).toBeNull();
   });
 
-  it('preserva a mensagem quando o código de erro é desconhecido', () => {
-    expect(parseQuadro('event: error\ndata: {"code":"AI_NOVIDADE","message":"vixe"}')).toEqual({
-      type: 'error',
-      error: { code: 'AI_UNKNOWN_ERROR', message: 'vixe' },
-    });
+  it('código desconhecido vira AI_UNKNOWN_ERROR e a mensagem do servidor não vem junto', () => {
+    // A `message` do agente é "para o humano que lê o log" (`errors.py:4-5`) e
+    // carrega endpoint, `AI_BASE_URL`, modelo e host do subprocessador (#136).
+    const quadro =
+      'event: error\ndata: {"code":"AI_NOVIDADE","message":"Falha em POST chat/completions. Verifique AI_BASE_URL."}';
+    expect(parseQuadro(quadro)).toEqual({ type: 'error', error: { code: 'AI_UNKNOWN_ERROR' } });
   });
 });
 
@@ -160,9 +162,7 @@ describe('streamChat', () => {
     configure();
     fetchMock.mockRejectedValueOnce(new Error('Failed to fetch'));
     const eventos = await coletar(streamChat({ message: 'oi' }));
-    expect(eventos).toEqual([
-      { type: 'error', error: { code: 'AI_NETWORK_ERROR', message: 'Failed to fetch' } },
-    ]);
+    expect(eventos).toEqual([{ type: 'error', error: { code: 'AI_NETWORK_ERROR' } }]);
   });
 
   it('queda no meio do stream preserva o que já chegou', async () => {
@@ -193,7 +193,7 @@ describe('streamChat', () => {
 
   it.each([
     [429, 'AI_QUOTA_EXCEEDED'],
-    [503, 'AI_PROVIDER_UNAVAILABLE'],
+    [503, 'AI_PROVIDER_UNREACHABLE'],
     [500, 'AI_UNKNOWN_ERROR'],
   ])('status %i sem código nomeado ainda distingue o caso', async (status, code) => {
     configure();
@@ -219,8 +219,31 @@ describe('streamChat', () => {
     const eventos = await coletar(streamChat({ message: 'oi' }));
     expect(eventos[0]).toEqual({
       type: 'error',
-      error: { code: 'AI_PROVIDER_NOT_CONFIGURED', message: 'sem provedor' },
+      error: { code: 'AI_PROVIDER_NOT_CONFIGURED' },
     });
+  });
+
+  it('código desconhecido não põe diagnóstico do servidor na tela', async () => {
+    configure();
+    // Payload real de `apps/agent/.../openai_compat.py:266` quando o provedor
+    // está fora do ar. A `message` nomeia endpoint e variável de ambiente, e —
+    // em `AIModelNotAllowed`/`AIEndpointNotAllowed` — modelo e host do
+    // subprocessador, que é o que a #136 controla.
+    const doServidor = {
+      code: 'AI_CODIGO_QUE_AINDA_NAO_EXISTE',
+      message:
+        'Falha de transporte em POST chat/completions: ConnectError. Verifique AI_BASE_URL e ' +
+        'se o provedor está no ar.',
+    };
+    fetchMock.mockResolvedValueOnce(sse([`event: error\ndata: ${JSON.stringify(doServidor)}\n\n`]));
+
+    const eventos = await coletar(streamChat({ message: 'oi' }));
+    const evento = eventos[0] as Extract<ChatStreamEvent, { type: 'error' }>;
+    expect(evento).toEqual({ type: 'error', error: { code: 'AI_UNKNOWN_ERROR' } });
+
+    const naTela = textoDeErroDoChat(evento.error);
+    expect(naTela).not.toContain('AI_BASE_URL');
+    expect(naTela).not.toContain('chat/completions');
   });
 
   it('401 avisa o transporte antes de emitir o erro', async () => {
@@ -234,23 +257,44 @@ describe('streamChat', () => {
 });
 
 describe('textoDeErroDoChat', () => {
-  it('dá texto próprio a cada caso — genérico manda procurar no lugar errado', () => {
+  it('separa os casos em que a ação de quem lê é diferente', () => {
     const casos: ChatStreamError[] = [
       { code: 'AI_PROVIDER_NOT_CONFIGURED' },
-      { code: 'AI_PROVIDER_UNAVAILABLE' },
+      { code: 'AI_PROVIDER_UNREACHABLE' },
       { code: 'AI_PROVIDER_TIMEOUT' },
+      { code: 'AI_RESPONSE_TRUNCATED' },
       { code: 'AI_QUOTA_EXCEEDED' },
       { code: 'AI_NETWORK_ERROR' },
       { code: 'AI_UNAUTHORIZED' },
-      { code: 'AI_UNKNOWN_ERROR' },
     ];
-    const textos = casos.map(textoDeErroDoChat);
-    expect(new Set(textos).size).toBe(casos.length);
+    expect(new Set(casos.map(textoDeErroDoChat)).size).toBe(casos.length);
   });
 
-  it('a cota diz quando volta, quando o servidor manda o horário', () => {
-    expect(
-      textoDeErroDoChat({ code: 'AI_QUOTA_EXCEEDED', resetsAt: '2026-08-07T00:00:00.000Z' }),
-    ).toContain('2026-08-07T00:00:00.000Z');
+  it('todo código conhecido tem cópia', () => {
+    for (const code of CHAT_ERROR_CODES) {
+      expect(textoDeErroDoChat({ code }).length).toBeGreaterThan(20);
+    }
+  });
+
+  it('429 do provedor não vira cota — quem conversa não estourou limite nenhum', () => {
+    expect(textoDeErroDoChat({ code: 'AI_PROVIDER_REFUSED' })).not.toContain('limite diário');
+  });
+
+  it('a cota diz quando volta em data legível, e não em ISO', () => {
+    const texto = textoDeErroDoChat({
+      code: 'AI_QUOTA_EXCEEDED',
+      resetsAt: '2026-08-07T00:00:00.000Z',
+    });
+    expect(texto).not.toContain('2026-08-07T00:00:00.000Z');
+    // Sem fuso fixo no caso: a data sai no do aparelho. O ano é o mesmo em
+    // qualquer fuso da Terra, e prova que a frase veio do `resetsAt`.
+    expect(texto).toContain('2026');
+    expect(texto).toMatch(/\d{2}\/\d{2}\/\d{4},? \d{2}:\d{2}/);
+  });
+
+  it('resetsAt impossível cai na frase sem horário em vez de derrubar o balão', () => {
+    expect(textoDeErroDoChat({ code: 'AI_QUOTA_EXCEEDED', resetsAt: 'ontem' })).toContain(
+      'volta amanhã',
+    );
   });
 });
