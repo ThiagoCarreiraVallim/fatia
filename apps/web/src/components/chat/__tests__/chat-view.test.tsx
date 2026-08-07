@@ -1,7 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ChatRequest, ChatStreamEvent } from '@fatia/api-client';
+import type { ChatRequest, ChatStreamEvent, StreamChatInit } from '@fatia/api-client';
 
 /**
  * A tela de chat (#250).
@@ -16,15 +16,23 @@ import type { ChatRequest, ChatStreamEvent } from '@fatia/api-client';
  * renderiza quando o stream fecha — exatamente o defeito que a épica proíbe.
  */
 
-/** Gerador dirigido pelo teste: nada aparece até o caso mandar aparecer. */
+/**
+ * Gerador dirigido pelo teste: nada aparece até o caso mandar aparecer.
+ *
+ * Ele **obedece ao `signal`** porque o `streamChat` real obedece: abortado, o
+ * generator só retorna, sem lançar e sem emitir erro. Um dublê que ignorasse o
+ * sinal deixaria o caminho de "parar a resposta" verde sem nunca ser executado —
+ * a armadilha do dublê com forma que a realidade não tem.
+ */
 class Fonte {
   private eventos: ChatStreamEvent[] = [];
   private aguardando: (() => void) | null = null;
   private terminou = false;
 
-  async *gerar(): AsyncGenerator<ChatStreamEvent> {
+  async *gerar(signal?: AbortSignal): AsyncGenerator<ChatStreamEvent> {
     let i = 0;
     for (;;) {
+      if (signal?.aborted) return;
       if (i < this.eventos.length) {
         yield this.eventos[i];
         i += 1;
@@ -33,6 +41,7 @@ class Fonte {
       if (this.terminou) return;
       await new Promise<void>((resolve) => {
         this.aguardando = resolve;
+        signal?.addEventListener('abort', () => resolve(), { once: true });
       });
     }
   }
@@ -51,12 +60,12 @@ class Fonte {
 }
 
 let fontes: Fonte[] = [];
-// O parâmetro é anotado com `ChatRequest`, do cliente: se o corpo que a tela
+// Os parâmetros são anotados com os tipos do cliente: se o corpo que a tela
 // manda deixar de bater com o contrato, o erro aparece no `tsc` (lição da #157).
-const streamChatMock = vi.fn((_corpo: ChatRequest) => {
+const streamChatMock = vi.fn((_corpo: ChatRequest, _init?: StreamChatInit) => {
   const fonte = new Fonte();
   fontes.push(fonte);
-  return fonte.gerar();
+  return fonte.gerar(_init?.signal);
 });
 
 vi.mock('@fatia/api-client', async () => {
@@ -185,6 +194,78 @@ describe('ChatView', () => {
     await waitFor(() => expect(streamChatMock).toHaveBeenCalledTimes(2));
     expect(streamChatMock.mock.calls[1][0]).toMatchObject({ message: 'quanto comi hoje?' });
     expect(screen.getAllByText('quanto comi hoje?')).toHaveLength(1);
+  });
+
+  it('tentar de novo num erro antigo repete aquela pergunta, e não a última', async () => {
+    // O botão de "Tentar de novo" continua na tela do turno que falhou mesmo
+    // depois de a conversa seguir. Se o retry olhar sempre a **última** pergunta
+    // e cortar as duas últimas mensagens, clicar no aviso antigo reenvia a
+    // pergunta errada e ainda apaga a resposta boa que veio depois.
+    render(<ChatView />);
+    await enviar('quanto comi hoje?');
+    fontes[0].emitir({ type: 'error', error: { code: 'AI_PROVIDER_UNAVAILABLE' } });
+    fontes[0].fechar();
+    await screen.findByRole('alert');
+
+    await enviar('e o treino?');
+    await waitFor(() => expect(streamChatMock).toHaveBeenCalledTimes(2));
+    fontes[1].emitir({ type: 'token', text: 'Foi peito.' });
+    fontes[1].fechar();
+    await screen.findByText('Foi peito.');
+
+    const user = userEvent.setup();
+    const alerta = screen.getByRole('alert');
+    await user.click(within(alerta).getByRole('button', { name: /Tentar de novo/ }));
+
+    await waitFor(() => expect(streamChatMock).toHaveBeenCalledTimes(3));
+    expect(streamChatMock.mock.calls[2][0]).toMatchObject({ message: 'quanto comi hoje?' });
+    // A resposta boa do turno seguinte continua na conversa.
+    expect(screen.getByText('Foi peito.')).toBeInTheDocument();
+    expect(screen.getByText('e o treino?')).toBeInTheDocument();
+  });
+
+  it('tentar de novo enquanto outra resposta corre não apaga o aviso à toa', async () => {
+    // Dois streams ao mesmo tempo brigariam pela mesma lista, então o segundo é
+    // recusado. Recusar depois de já ter limpado o aviso deixaria o turno com o
+    // balão vazio e sem botão: o erro sumiria da tela sem nada ter acontecido.
+    render(<ChatView />);
+    await enviar('quanto comi hoje?');
+    fontes[0].emitir({ type: 'error', error: { code: 'AI_PROVIDER_UNAVAILABLE' } });
+    fontes[0].fechar();
+    const alerta = await screen.findByRole('alert');
+
+    await enviar('e o treino?');
+    await waitFor(() => expect(streamChatMock).toHaveBeenCalledTimes(2));
+    fontes[1].emitir({ type: 'token', text: 'Foi ' });
+    await screen.findByText('Foi');
+
+    const user = userEvent.setup();
+    await user.click(within(alerta).getByRole('button', { name: /Tentar de novo/ }));
+
+    expect(streamChatMock).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+  });
+
+  it('parar a resposta não anuncia que o Fatia respondeu', async () => {
+    const { container } = render(<ChatView />);
+    await enviar('me conta tudo');
+    const regiao = container.querySelector('[aria-live="polite"]');
+
+    fontes[0].emitir({ type: 'token', text: 'Vou come' });
+    await screen.findByText('Vou come');
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Parar resposta' }));
+
+    // Quem interrompeu não recebeu resposta; anunciar "Fatia respondeu" manda
+    // quem usa leitor de tela procurar no fim da conversa um texto truncado.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Enviar mensagem' })).toBeTruthy(),
+    );
+    expect(regiao?.textContent).not.toContain('Fatia respondeu');
+    expect(regiao?.textContent).toContain('interrompida');
+    // O que já tinha chegado fica: parar não apaga a resposta parcial.
+    expect(screen.getByText('Vou come')).toBeInTheDocument();
   });
 
   it('mantém o foco no campo depois de enviar', async () => {

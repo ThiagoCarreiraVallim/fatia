@@ -95,7 +95,7 @@ function Balao({
 }
 
 export function ChatView() {
-  const { messages, status, announcement, send, retry, stop } = useChatStream();
+  const { messages, status, respondendoId, announcement, send, retry, stop } = useChatStream();
   const campo = useRef<HTMLTextAreaElement>(null);
   const respondendo = status === 'submitted' || status === 'streaming';
 
@@ -123,12 +123,14 @@ export function ChatView() {
               description="Escreva abaixo — por exemplo: “registra 2 ovos e um café no café da manhã”."
             />
           ) : (
-            messages.map((m, i) => (
+            messages.map((m) => (
               <Balao
                 key={m.id}
                 mensagem={m}
-                aguardando={respondendo && i === messages.length - 1}
-                onRetry={() => void retry()}
+                // Pelo id, e não pela posição: refazer um turno do meio deixa o
+                // "pensando" no balão que está sendo reescrito, não no último.
+                aguardando={m.id === respondendoId}
+                onRetry={() => void retry(m.id)}
               />
             ))
           )}
