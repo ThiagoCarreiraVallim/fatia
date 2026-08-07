@@ -10,6 +10,11 @@ Dados de saúde vinculados a uma pessoa: refeições e o que ela come, peso corp
 cargas, passos, hidratação, metas. Não são dados triviais — o histórico de peso e alimentação
 de alguém é sensível, e a LGPD trata dado de saúde como categoria especial.
 
+Desde a #249 há mais um, e ele é de outra natureza: o **texto da conversa com a IA hospedada**
+(`Conversation`/`Message`). As outras tabelas guardam número — 80 kg, 1.800 kcal. Esta guarda o
+que a pessoa **escreveu**, em prosa, e é onde aparecem o remédio, o diagnóstico e o medo. Vale a
+mesma regra do §6: não entra em log, em span nem em mensagem de erro.
+
 Não armazenamos: fotos (ADR 004), senhas (ADR 008 — a identidade vive no Logto), meios de
 pagamento.
 
@@ -324,6 +329,7 @@ dono do pai não autoriza escrever em qualquer filho.
 | Grupos de alimento   | `food.service.ts#listGroups`                  | **sem escopo, de propósito** — `FoodGroup` não tem dono                    |
 | Leitura profissional | `sharing/professional-access.service.ts`      | `assertReadable` resolve o titular; a **única** leitura entre contas       |
 | Painel agregado      | `insights/insights.service.ts`                | opt-in + limiar + `suppress()`; nenhum id de pessoa sai do módulo          |
+| Chat com IA          | `chat/conversation.service.ts`                | `where: { id, userId }`; `Message` não tem dono — quem tem é a conversa    |
 
 ## O que não está protegido
 

@@ -56,6 +56,7 @@ export class AccountService {
       trainingBlocks,
       professionalLinks,
       accessLogs,
+      conversations,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
       this.prisma.nutrientTarget.findMany({ where: { userId }, orderBy: { label: 'asc' } }),
@@ -132,6 +133,27 @@ export class AccountService {
         select: { at: true, action: true, scope: true, denied: true, professionalId: true },
         orderBy: { at: 'asc' },
       }),
+      // Chat com a IA hospedada (#249). É o dado mais íntimo do produto: as
+      // outras tabelas guardam número, esta guarda o que a pessoa escreveu sobre
+      // a própria saúde, em prosa. Deixá-la fora seria devolver menos do que
+      // "tudo" no lugar em que "tudo" mais importa.
+      //
+      // O que NÃO entra junto é `AiUsage`: ali não há nada do titular — modelo e
+      // custo do que a instância pagou —, e a linha inclusive sobrevive à
+      // exclusão da conta de propósito (ver o `onDelete: SetNull` no schema).
+      this.prisma.conversation.findMany({
+        where: { userId },
+        select: {
+          id: true,
+          title: true,
+          createdAt: true,
+          messages: {
+            select: { role: true, content: true, tools: true, createdAt: true },
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
     ]);
 
     // `ProfessionalAccessLog.professionalId` é string pura, sem FK — é o que faz
@@ -169,12 +191,14 @@ export class AccountService {
       achievements,
       trainingBlocks,
       professionalLinks,
+      conversations,
       accessLogs: accessLogs.map(({ professionalId, ...linha }) => ({
         ...linha,
         professionalName: nomesDeProfissional.get(professionalId) ?? null,
       })),
       counts: {
         achievements: achievements.length,
+        conversations: conversations.length,
         professionalLinks: professionalLinks.length,
         accessLogs: accessLogs.length,
         meals: meals.length,

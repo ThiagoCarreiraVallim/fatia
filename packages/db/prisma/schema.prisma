@@ -41,6 +41,9 @@ model User {
   achievements    UserAchievement[]
   trainingBlocks  TrainingBlock[]
 
+  conversations Conversation[]
+  aiUsage       AiUsage[]
+
   // B2B (ADR 014). Nenhuma destas relações dá acesso a dado de saúde por si só —
   // quem autoriza leitura é exclusivamente uma linha de `ProfessionalLink`.
   ownedGroups         Group[]                 @relation("GroupOwner")
@@ -729,4 +732,107 @@ model ProfessionalAccessLog {
   @@index([subjectUserId, at])
   @@index([professionalId, at])
   @@index([linkId, at])
+}
+
+// ============================================================
+// CHAT COM IA HOSPEDADA (#247, #249)
+// ============================================================
+
+/// Uma conversa do usuário com a IA hospedada. O histórico mora **aqui**, e não
+/// no agente: o `apps/agent` não tem credencial de Postgres e não vai ter
+/// (ADR 015), então quem guarda é quem já é dono do isolamento.
+model Conversation {
+  id     String  @id @default(uuid())
+  userId String
+  /// Derivado da primeira mensagem, para a lista de conversas ter o que mostrar.
+  /// Nulo até o primeiro turno completar.
+  title  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  /// A listagem é sempre "minhas conversas, mais recente primeiro".
+  @@index([userId, updatedAt])
+}
+
+/// Papel de quem falou. Minúsculo e com estes dois nomes de propósito: é o
+/// vocabulário que o agente já usa no corpo da requisição, então não existe
+/// tradução entre a linha do banco e o que viaja — e tradução entre camadas foi
+/// exatamente o que custou caro na #157.
+enum MessageRole {
+  user
+  assistant
+}
+
+model Message {
+  id             String      @id @default(uuid())
+  conversationId String
+  role           MessageRole
+  content        String
+  /// Quais tools o agente chamou neste turno, na ordem, como `[{ "name": "log_meal" }]`.
+  /// Existe para que a ação continue auditável **depois de recarregar a página** —
+  /// sem isso, "o agente registrou uma refeição" só aparece durante o streaming e
+  /// some no F5, que é o oposto de auditável.
+  ///
+  /// Só o nome, e não o payload da tool: o argumento de uma chamada carrega dado
+  /// de saúde e já está persistido no domínio de destino. Guardar de novo aqui
+  /// criaria uma segunda cópia, com retenção própria, de dado que o usuário apaga
+  /// no lugar certo.
+  tools          Json?
+  createdAt      DateTime    @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  /// **Sem `userId` aqui, de propósito.** O dono é a conversa, e uma segunda
+  /// coluna de dono é uma segunda verdade que pode divergir da primeira — o
+  /// caminho mais curto para uma escrita entre contas do tipo da #204. Toda
+  /// leitura e escrita de mensagem passa por um `conversationId` que o
+  /// `ConversationService` já amarrou ao `userId` verificado.
+  @@index([conversationId, createdAt])
+}
+
+/// Livro-caixa da inferência que a **Fatia** paga (#135).
+///
+/// A lógica da cota já existia em `apps/api/src/ai/ai-quota.ts` desde a #135, sem
+/// nada que somasse o gasto — `nutrition/inference-throttler.guard.ts` registra a
+/// ausência com todas as letras. Esta tabela é essa soma, e é ela que faz
+/// `assertAiQuota` ser reuso e não um segundo mecanismo de cota.
+///
+/// O que **não** entra aqui: chamada que sai do Claude do próprio usuário pelo
+/// `/mcp`. Aquele custo é dele, não nosso (ADR 018).
+model AiUsage {
+  id String @id @default(uuid())
+
+  /// Nulo quando a conta foi apagada — ver `onDelete: SetNull` abaixo.
+  userId  String?
+  /// Qual caminho gastou: "chat" hoje; visão e áudio quando a #139/#141 passarem
+  /// a registrar. Serve para o operador saber onde o orçamento foi, e não muda
+  /// nenhuma decisão de cota — o teto é do dia inteiro, somando tudo.
+  feature String
+  /// Modelo que o agente reportou. String vazia quando ele não reportou nada, que
+  /// é o caso em que `pricingKnown` nasce falso.
+  model   String
+
+  /// Micro-unidades da moeda, inteiro. Ver `ai-pricing.ts` para a escala.
+  costMicros   Int
+  /// `false` = este custo **não foi medido**, e o `0` ao lado não significa
+  /// "grátis". É o que impede a cota de se desligar sozinha e em silêncio quando
+  /// a medição se perde (`AiQuotaSpend.unpricedCalls`).
+  pricingKnown Boolean
+
+  createdAt DateTime @default(now())
+
+  /// `SetNull`, e não `Cascade`: o teto **global** do dia mede dinheiro que já
+  /// saiu do caixa, e apagar a conta não desfaz a fatura. Com `Cascade`, quem
+  /// gastasse o orçamento da instância e apagasse a conta em seguida devolveria a
+  /// cota global ao zero. A linha órfã não guarda nada pessoal — id, papel e
+  /// conteúdo vão embora com o usuário; aqui fica um custo e um modelo.
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  /// Os dois `where` da janela: o do usuário e o da instância inteira.
+  @@index([userId, createdAt])
+  @@index([createdAt])
 }
