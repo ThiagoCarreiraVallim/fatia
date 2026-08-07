@@ -10,6 +10,11 @@ Dados de saúde vinculados a uma pessoa: refeições e o que ela come, peso corp
 cargas, passos, hidratação, metas. Não são dados triviais — o histórico de peso e alimentação
 de alguém é sensível, e a LGPD trata dado de saúde como categoria especial.
 
+Desde a #249 há mais um, e ele é de outra natureza: o **texto da conversa com a IA hospedada**
+(`Conversation`/`Message`). As outras tabelas guardam número — 80 kg, 1.800 kcal. Esta guarda o
+que a pessoa **escreveu**, em prosa, e é onde aparecem o remédio, o diagnóstico e o medo. Vale a
+mesma regra do §6: não entra em log, em span nem em mensagem de erro.
+
 Não armazenamos: fotos (ADR 004), senhas (ADR 008 — a identidade vive no Logto), meios de
 pagamento.
 
@@ -262,32 +267,51 @@ descartado: sem orçamento de privacidade por consulta e contabilidade de compos
 dá falsa sensação de garantia, e não é auditável por quem lê o código — que é metade do valor,
 já que a metodologia é publicada.
 
-### 10. O agente como segundo lugar por onde o Bearer transita
+### 10. O Bearer do usuário atravessando o agente
 
-Até a #248, o token de acesso de um usuário só existia em dois lugares: no cliente dele e no NestJS.
-O chat hospedado ([ADR 021](./ADR/021-agente-recebe-o-bearer-do-usuario.md)) acrescenta um terceiro
-— o `apps/agent`, em Python, com outro toolchain de log e outra pilha de dependências. É a mesma
-superfície da #215 num processo onde aquele conserto não vale.
+Até a #249 o `apps/agent` **deliberadamente não recebia** token de usuário; o docstring de
+`apps/agent/src/fatia_agent/api.py` registrava o porquê: "mandar um Bearer de usuário para um serviço que
+não precisa dele só aumentaria o estrago de um comprometimento". O chat com IA hospedada inverte
+isso, e a inversão é uma decisão, não um descuido: `agent-chat.client.ts` manda
+`Authorization: Bearer <token do usuário>` para o agente, que o reusa no `/mcp`.
 
-A decisão foi tomada porque a alternativa é pior: sem o token do usuário, o agente precisaria de
-credencial de banco (segundo ponto de isolamento, sem RLS embaixo — ADR 010) ou receberia o dado
-pronto no corpo, o que num chat significa mandar o histórico inteiro ao gateway antes de saber o que
-a pergunta pede.
+**Por que a inversão vale a pena.** É o desenho da [ADR 015](./ADR/015-agente-python-langgraph-cliente-mcp.md):
+o agente não fala com o Postgres e não tem credencial própria de dado. Ele alcança dado **só**
+pelo `/mcp`, com a identidade de quem está agindo, e por isso o isolamento continua com **um dono
+só** — o NestJS, exatamente o mesmo caminho que o Claude do usuário já percorre. As alternativas
+são piores: dar banco ao agente cria um segundo dono do isolamento, e dar-lhe um token de serviço
+privilegiado troca "um token de uma pessoa" por "um token que lê todo mundo".
 
-| Vetor                                                                          | Mitigação                                                                                                                                                                           |
-| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Token indo para o log do agente                                                | Ele só existe nos headers do cliente `httpx`; nenhum log do serviço registra requisição. `tests/chat/test_sem_vazamento.py` varre todo logger em DEBUG durante uma conversa inteira |
-| Token indo para o rastro (o `langsmith` é dependência transitiva do LangGraph) | Não entra no `state` nem no `config`: o grafo é montado por conversa e o cliente MCP é alcançado por fecho. O teste inspeciona o **estado final** inteiro, com controle negativo    |
-| Token persistido junto da conversa                                             | Não há checkpointer no grafo, e o corpo de `/chat` é `extra: "forbid"` — o token vem em header, não em campo                                                                        |
-| Token saindo no fluxo SSE, que atravessa NestJS e PWA                          | Nenhum evento o carrega; o teste concatena o fluxo inteiro e procura                                                                                                                |
-| Token vazando para o provedor de IA                                            | Duas dependências, duas credenciais. O teste afirma sobre headers **e** corpo de toda requisição que saiu para o gateway                                                            |
-| `MCP_BASE_URL` apontando para fora, com o token junto                          | `http://` contra host não local é recusado na montagem, com erro nomeado — sem TLS o token trafega em texto puro                                                                    |
-| Chat gravando ou apagando dado por alucinação                                  | O agente só recebe as tools que o `/mcp` anuncia como `readOnlyHint: true`, e o nome é conferido **de novo** na hora de chamar                                                      |
-| Token de outra pessoa chegando ao agente                                       | Fora do escopo daqui, e de propósito: quem valida o token é o `/mcp` (vetor 1). O agente não decide nada sobre identidade                                                           |
+**A consequência, que é o que precisa estar escrito:** o agente passa a ser **um lugar por onde um
+Bearer transita**. Se ele for comprometido enquanto um turno acontece, o estrago é o que aquele
+token já podia fazer, pelo tempo que ele ainda valer — não mais que isso, mas é uma superfície a
+mais, e ela não existia antes.
 
-**Não mitigado:** enquanto uma conversa acontece, o token daquela conversa está na memória do
-processo do agente. Não há como ter a funcionalidade sem isso. O que há é janela curta (o cliente
-morre com a requisição) e alcance limitado (só leitura, e só o que aquele token já podia ler).
+**O conserto do log não atravessa a fronteira de linguagem.** O `log-serializers.ts` protege o
+processo Node; o `apps/agent` é Python, com outro toolchain de log e outra pilha de dependências.
+A mesma superfície da #215 existe lá e **aquele conserto não vale ali** — por isso a varredura de
+vazamento do agente é um teste próprio, que olha stdout e stderr e tem controle negativo.
+
+| Onde o token poderia escapar        | O que impede                                                                                                                                                                                                                                                                 |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Log da requisição                   | `log-serializers.ts` é **lista de permissão** e `authorization` não está nela (§6)                                                                                                                                                                                           |
+| Log do proxy de chat                | `agent-chat.client.ts` e `chat.service.ts` só logam status e **nome** de classe de erro — nunca header, corpo ou resposta. Os dois specs têm um bloco "o que NÃO pode vazar" que percorre todos os caminhos que logam e falha se o token ou o que a pessoa escreveu aparecer |
+| Span                                | `headersToSpanAttributes` fica não configurado (§6b), e a chamada ao agente sai por `fetch`/undici, que **não** está na lista de instrumentações: ela não gera span nenhum                                                                                                   |
+| Banco                               | `Message` guarda `role`, `content` e `tools`. Não há coluna de token, aqui nem em `Conversation`                                                                                                                                                                             |
+| Corpo de erro                       | `traduzirErro` traduz pelo `code` do agente; 401/403 dele viram "instância mal configurada", sem eco do que foi mandado                                                                                                                                                      |
+| Confusão com o segredo da instância | O que autentica **a API no agente** é o `X-Fatia-Agent-Key`, um header separado. Por isso 401/403 do agente é problema de configuração, e nunca o token da pessoa                                                                                                            |
+
+**Não mitigado, e é o preço da inversão:** o token que vai ao agente é o token **inteiro** do
+usuário — mesmo `aud`, mesmo escopo, mesma validade. Não há redução de escopo por troca de token
+(RFC 8693) no Logto, então o agente recebe mais poder do que os poucos tools de que precisa. Um
+token estreitado por turno seria a defesa certa e depende de fiação que não existe hoje. Enquanto
+isso, o que limita o estrago é o tempo: expiração curta, e nada do token persistido em lugar
+nenhum dos dois lados.
+
+**Também não mitigado:** entre a API e o agente o transporte é o que a instância configurar. Os
+exemplos do `.env.example` são `http://` porque os dois ficam na mesma rede interna do compose,
+sem porta publicada — apontar o `AGENT_BASE_URL` para outra máquina sem TLS põe o Bearer na rede
+em texto claro.
 
 ## Matriz de cobertura
 
@@ -324,6 +348,7 @@ dono do pai não autoriza escrever em qualquer filho.
 | Grupos de alimento   | `food.service.ts#listGroups`                  | **sem escopo, de propósito** — `FoodGroup` não tem dono                    |
 | Leitura profissional | `sharing/professional-access.service.ts`      | `assertReadable` resolve o titular; a **única** leitura entre contas       |
 | Painel agregado      | `insights/insights.service.ts`                | opt-in + limiar + `suppress()`; nenhum id de pessoa sai do módulo          |
+| Chat com IA          | `chat/conversation.service.ts`                | `where: { id, userId }`; `Message` não tem dono — quem tem é a conversa    |
 
 ## O que não está protegido
 

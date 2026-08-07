@@ -15,6 +15,7 @@ import { GoalsModule } from './goals/goals.module';
 import { SharingModule } from './sharing/sharing.module';
 import { BillingModule } from './billing/billing.module';
 import { InsightsModule } from './insights/insights.module';
+import { ChatModule } from './chat/chat.module';
 import { McpModule } from './mcp/mcp.module';
 
 @Module({
@@ -52,6 +53,7 @@ import { McpModule } from './mcp/mcp.module';
     SharingModule,
     BillingModule,
     InsightsModule,
+    ChatModule,
     McpModule,
   ],
 })

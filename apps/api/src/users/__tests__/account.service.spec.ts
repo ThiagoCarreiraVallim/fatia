@@ -22,6 +22,7 @@ const makePrisma = () => ({
   trainingBlock: { findMany: jest.fn().mockResolvedValue([]) },
   professionalLink: { findMany: jest.fn().mockResolvedValue([]) },
   professionalAccessLog: { findMany: jest.fn().mockResolvedValue([]) },
+  conversation: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const SCHEMA = resolve(__dirname, '../../../../../packages/db/prisma/schema.prisma');
@@ -54,6 +55,8 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   // de que seriam consultados na tela de compartilhamento, e "está na tela" não é portabilidade.
   linksAsSubject: 'professionalLinks',
   accessLogs: 'accessLogs',
+  // Chat com a IA hospedada (#249): o que a pessoa escreveu sobre a própria saúde, em prosa.
+  conversations: 'conversations',
 };
 
 /**
@@ -64,6 +67,9 @@ const FORA_DO_EXPORT: Record<string, string> = {
   ownedGroups: 'B2B (ADR 014): o grupo é do profissional, não dado pessoal de saúde do titular.',
   memberships: 'B2B: vínculo administrativo, e exportá-lo revelaria a composição do grupo.',
   linksAsProfessional: 'B2B: lista os PACIENTES do profissional — dado de terceiro.',
+  aiUsage:
+    'Livro-caixa da inferência que a Fatia pagou (#249): modelo e custo, nada do titular. ' +
+    'A linha sobrevive à exclusão da conta de propósito — é fatura, não dado pessoal.',
 };
 
 /** Nomes de model do schema, para separar campo de relação de campo escalar. */

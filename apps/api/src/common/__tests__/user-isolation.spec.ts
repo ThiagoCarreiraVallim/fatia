@@ -15,6 +15,7 @@ import { buildPlanSnapshot, PLAN_SNAPSHOT_VERSION } from '../../sharing/plan-sna
 import { ProfessionalAccessService } from '../../sharing/professional-access.service';
 import { ProfessionalLinkService } from '../../sharing/professional-link.service';
 import { StudentViewService } from '../../sharing/student-view.service';
+import { ConversationService } from '../../chat/conversation.service';
 import { GoalsService } from '../../goals/goals.service';
 import { FoodService } from '../../nutrition/food.service';
 import { MealItemService } from '../../nutrition/meal-item.service';
@@ -72,6 +73,7 @@ describe('isolamento entre usuários', () => {
   const groups = new GroupService(prisma);
   const memberships = new MembershipService(prisma, links);
   const consent = new ConsentService(prisma, links);
+  const conversas = new ConversationService(prisma);
 
   /** Dados do user-A. Preenchido no beforeAll e sondado como user-B. */
   const owned = {
@@ -117,6 +119,8 @@ describe('isolamento entre usuários', () => {
     sessionId: '',
     setId: '',
     sharedExerciseId: 0,
+    /** Conversa com a IA hospedada (#249). Semeada como user-A. */
+    conversationId: '',
   };
 
   beforeAll(async () => {
@@ -326,6 +330,16 @@ describe('isolamento entre usuários', () => {
       reps: 8,
     });
     owned.setId = set.id;
+
+    // Conversa com a IA hospedada (#249), com um turno completo. Semeada pelo
+    // próprio serviço para que o caminho feliz de escrita seja exercitado aqui —
+    // sem ele, as recusas abaixo passariam vazias.
+    const turno = await conversas.iniciarTurno(owned.userA, undefined, 'quanto comi hoje?');
+    owned.conversationId = turno.conversationId;
+    await conversas.concluirTurno(owned.userA, turno.conversationId, {
+      texto: 'Você comeu 1.800 kcal hoje.',
+      tools: [{ name: 'get_nutrition_summary' }],
+    });
   }, 60_000);
 
   afterAll(async () => {
@@ -2270,6 +2284,152 @@ describe('isolamento entre usuários', () => {
           data: { status: MembershipStatus.ACTIVE, leftAt: null },
         });
       }
+    });
+  });
+
+  describe('chat com a IA hospedada (#249)', () => {
+    /**
+     * Quantas mensagens a conversa do user-A tem agora, contadas **direto no
+     * banco**.
+     *
+     * Pelo banco, e não pelo serviço, de propósito: usar o serviço para conferir
+     * o efeito de uma tentativa que ele mesmo recusou é perguntar ao réu se ele
+     * fez. Uma escrita entre contas que o `where` do serviço escondesse na
+     * leitura passaria despercebida.
+     */
+    const mensagensNoBanco = () =>
+      prisma.message.count({ where: { conversationId: owned.conversationId } });
+
+    // --- o caminho feliz, primeiro ---
+    //
+    // Sem ele, todas as recusas abaixo continuariam verdes com a leitura
+    // quebrada por qualquer outro motivo — um `NOT_FOUND` que sempre acontece
+    // não prova isolamento nenhum.
+    it('o dono lê a própria conversa, com as mensagens e as tools do turno', async () => {
+      const conversa = await conversas.obterComMensagens(owned.userA, owned.conversationId);
+
+      expect(conversa.userId).toBe(owned.userA);
+      expect(conversa.title).toBe('quanto comi hoje?');
+      expect(conversa.messages.map((m) => [m.role, m.content])).toEqual([
+        ['user', 'quanto comi hoje?'],
+        ['assistant', 'Você comeu 1.800 kcal hoje.'],
+      ]);
+      // A tool chamada sobrevive ao recarregar — é o que torna a ação auditável.
+      expect(conversa.messages[1].tools).toEqual([{ name: 'get_nutrition_summary' }]);
+    });
+
+    it('o dono vê a conversa na própria listagem', async () => {
+      const lista = await conversas.listar(owned.userA);
+      expect(lista.map((c) => c.id)).toContain(owned.conversationId);
+    });
+
+    it('o dono continua a própria conversa e o histórico vem em ordem', async () => {
+      const { conversationId } = await conversas.iniciarTurno(
+        owned.userA,
+        owned.conversationId,
+        'e de proteína?',
+      );
+      expect(conversationId).toBe(owned.conversationId);
+
+      const historico = await conversas.historicoParaOAgente(owned.userA, owned.conversationId);
+      expect(historico.map((m) => m.content)).toEqual([
+        'quanto comi hoje?',
+        'Você comeu 1.800 kcal hoje.',
+        'e de proteína?',
+      ]);
+
+      await prisma.message.deleteMany({
+        where: { conversationId: owned.conversationId, content: 'e de proteína?' },
+      });
+    });
+
+    // --- e as recusas ---
+    it('ler conversa alheia recusa com NOT_FOUND', async () => {
+      await expect(conversas.obterComMensagens(owned.userB, owned.conversationId)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('a recusa é idêntica à de conversa inexistente (#92)', async () => {
+      const mensagem = async (promessa: Promise<unknown>) => {
+        try {
+          await promessa;
+        } catch (err) {
+          return (err as Error).message;
+        }
+        throw new Error('esperava recusa, mas a leitura foi autorizada');
+      };
+
+      // Byte a byte: qualquer diferença aqui transforma a rota num oráculo de
+      // ids alheios — "não existe" e "existe e não é sua" têm de ser a mesma
+      // frase.
+      expect(await mensagem(conversas.obterComMensagens(owned.userB, owned.conversationId))).toBe(
+        await mensagem(
+          conversas.obterComMensagens(owned.userB, '00000000-0000-0000-0000-000000000000'),
+        ),
+      );
+    });
+
+    it('a listagem do vizinho não inclui a conversa do user-A', async () => {
+      const lista = await conversas.listar(owned.userB);
+      expect(lista.map((c) => c.id)).not.toContain(owned.conversationId);
+    });
+
+    it('ler o histórico de conversa alheia recusa', async () => {
+      await expect(
+        conversas.historicoParaOAgente(owned.userB, owned.conversationId),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('continuar conversa alheia recusa E não escreve nada nela', async () => {
+      const antes = await mensagensNoBanco();
+
+      // O padrão exato da #204: o id da conversa vem do CORPO da requisição, e
+      // ser um usuário válido não autoriza escrever no filho de outro.
+      await expect(
+        conversas.iniciarTurno(owned.userB, owned.conversationId, 'me conta o que ele comeu'),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(await mensagensNoBanco()).toBe(antes);
+    });
+
+    it('gravar a resposta numa conversa alheia não escreve nada', async () => {
+      const antes = await mensagensNoBanco();
+
+      // `concluirTurno` roda depois do streaming, com um id que atravessou o
+      // turno inteiro. Ele não lança — o cabeçalho já foi para o cliente e não há
+      // mais status a devolver —, mas também não pode gravar na conversa alheia.
+      await conversas.concluirTurno(owned.userB, owned.conversationId, {
+        texto: 'texto injetado',
+        tools: [],
+      });
+
+      expect(await mensagensNoBanco()).toBe(antes);
+    });
+
+    it('apagar conversa alheia recusa E a conversa continua lá', async () => {
+      await expect(conversas.apagar(owned.userB, owned.conversationId)).rejects.toThrow(
+        NotFoundException,
+      );
+
+      const aindaExiste = await prisma.conversation.findUnique({
+        where: { id: owned.conversationId },
+      });
+      expect(aindaExiste).toBeTruthy();
+      expect(await mensagensNoBanco()).toBe(2);
+    });
+
+    it('o dono apaga a própria conversa, e as mensagens vão junto', async () => {
+      const { conversationId } = await conversas.iniciarTurno(
+        owned.userA,
+        undefined,
+        'descartável',
+      );
+
+      await conversas.apagar(owned.userA, conversationId);
+
+      expect(await prisma.conversation.findUnique({ where: { id: conversationId } })).toBeNull();
+      expect(await prisma.message.count({ where: { conversationId } })).toBe(0);
     });
   });
 

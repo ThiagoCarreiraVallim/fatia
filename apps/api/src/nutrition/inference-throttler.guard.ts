@@ -9,9 +9,12 @@ import type { CurrentUserPayload } from '../common/decorators/current-user.decor
  * O `ThrottlerModule` está montado no `AppModule`, mas nunca foi registrado como
  * `APP_GUARD` — o único guard global do projeto é o de autenticação. Sem este
  * guard aqui, a rota de inferência não tinha teto **nenhum**: um token válido em
- * laço dispara inferência paga sem limite, e não há `AiUsage` para cobrar depois
- * (a cota é a #135, e depende de tabela que não existe na `main`). Um teto por
- * rota é a mitigação barata enquanto a cota não vem.
+ * laço dispara inferência paga sem limite. Um teto por rota é a mitigação barata.
+ *
+ * A tabela `AiUsage` que faltava para a cota da #135 existe desde a #249, e o
+ * chat já registra nela — **esta rota ainda não**. Enquanto ela não chamar
+ * `AiUsageService.registrar`, o reconhecimento por foto continua invisível para o
+ * teto do dia, e este guard segue sendo a única contenção que ele tem.
  *
  * Por usuário e não por IP porque o custo é por usuário: atrás de um CGNAT ou de
  * um proxy corporativo, chavear por IP faria uma pessoa consumir o teto de todas
