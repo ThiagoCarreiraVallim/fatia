@@ -103,14 +103,15 @@ def test_capabilities_nao_ecoa_o_caminho_da_base_url(settings_factory):
     assert "fatia-gw" not in bruto
 
 
-def test_a_superficie_e_so_diagnostico_mais_o_reconhecimento(settings_factory):
+def test_a_superficie_e_so_diagnostico_mais_as_rotas_de_inferencia(settings_factory):
     """Guarda de escopo, e de custo.
 
-    A #134 não expunha rota de inferência nenhuma; a #139 expõe exatamente uma, e
-    ela é autenticada por segredo compartilhado (ver `test_recognize_meal.py`).
-    Rota de inferência **anônima** seria um proxy aberto para o gateway pago —
-    a fronteira de custo da ADR 018. Este teste existe para que uma terceira rota
-    tenha de passar por aqui antes de nascer.
+    A #134 não expunha rota de inferência nenhuma; a #139 expôs uma e a #248
+    expõe a segunda (`/chat`). As duas são autenticadas por segredo compartilhado
+    (ver `test_recognize_meal.py` e `chat/test_chat_route.py`). Rota de inferência
+    **anônima** seria um proxy aberto para o gateway pago — a fronteira de custo
+    da ADR 018. Este teste existe para que a próxima tenha de passar por aqui
+    antes de nascer.
     """
     app = create_app(settings_factory())
 
@@ -119,4 +120,4 @@ def test_a_superficie_e_so_diagnostico_mais_o_reconhecimento(settings_factory):
     nossas = {
         caminho for caminho in caminhos if not caminho.startswith(("/openapi", "/docs", "/redoc"))
     }
-    assert nossas == {"/health", "/capabilities", "/recognize-meal"}
+    assert nossas == {"/health", "/capabilities", "/recognize-meal", "/chat"}

@@ -6,15 +6,15 @@ do repositório: lint, teste, build e imagem próprios, descritos aqui.
 
 Duas coisas que a ADR fixou e que valem antes de qualquer leitura de código:
 
-- **O agente não tem credencial de banco e não tem rota privilegiada.** Quando ele precisar de
-  dado do usuário, será pelo `/mcp` do NestJS, com o Bearer **do próprio usuário**. Quem filtra
-  por `userId` continua sendo um lugar só. Não existe `DATABASE_URL` aqui, e não deve passar a
-  existir.
+- **O agente não tem credencial de banco e não tem rota privilegiada.** Ele alcança dado do usuário
+  pelo `/mcp` do NestJS, com o Bearer **do próprio usuário** — é o que o `/chat` faz desde a #248
+  ([ADR 021](../../docs/ADR/021-agente-recebe-o-bearer-do-usuario.md)). Quem filtra por `userId`
+  continua sendo um lugar só. Não existe `DATABASE_URL` aqui, e não deve passar a existir.
 - **Sem provedor configurado, a capacidade degrada explicitamente.** O serviço sobe, `/health`
   responde 200, e quem pedir inferência recebe um erro nomeado com mensagem acionável. O produto
   continua inteiro sem IA hospedada — é como ele funciona hoje.
 
-## Rota de inferência
+## Rotas de inferência
 
 `POST /recognize-meal` (#139) — foto de refeição em base64 → alimentos candidatos.
 
@@ -43,11 +43,90 @@ inferência anônima é um proxy aberto para o gateway pago — a fronteira de c
 não o ambiente: com o LM Studio local inferência não custa nada e pedir segredo só faria o
 desenvolvimento inventar um. Não há `if ambiente == 'prod'` em lugar nenhum.
 
-**Sem LangGraph, por ora.** O grafo previsto no plano da #139 tinha três passos: visão →
-`search_food` pelo MCP → casamento com a TACO. Os dois últimos ficaram no `apps/api`, que já tem o
-catálogo e o mesmo ranqueamento de busca que a pessoa usa digitando. O que sobra aqui é uma
-chamada e uma validação, em linha reta — um grafo de um nó só seria a dependência e a cerimônia
-sem o benefício. LangGraph entra quando houver ramificação de verdade (#141).
+**Sem LangGraph nesta rota, e isso continua valendo.** O grafo previsto no plano da #139 tinha três
+passos: visão → `search_food` pelo MCP → casamento com a TACO. Os dois últimos ficaram no `apps/api`,
+que já tem o catálogo e o mesmo ranqueamento de busca que a pessoa usa digitando. O que sobra aqui é
+uma chamada e uma validação, em linha reta — um grafo de um nó só seria a dependência e a cerimônia
+sem o benefício. O LangGraph entrou com o chat, que é o caso oposto: ele **volta**.
+
+---
+
+`POST /chat` (#248) — conversa com as ferramentas de leitura do `/mcp`, em SSE.
+
+```bash
+curl -N localhost:8100/chat \
+  -H 'Content-Type: application/json' \
+  -H "X-Fatia-Agent-Key: $AGENT_API_KEY" \
+  -H "Authorization: Bearer $TOKEN_DO_USUARIO" \
+  -d '{"message":"o que eu comi ontem?","history":[]}'
+```
+
+**Duas credenciais, dois papéis.** `X-Fatia-Agent-Key` responde "esta chamada pode gastar inferência
+paga?" (ADR 018); `Authorization: Bearer` responde "em nome de quem?" e é repassado inteiro ao
+`/mcp`. Nenhuma substitui a outra: sem a primeira, a rota é proxy aberto para o gateway; sem a
+segunda, não há dado a alcançar. É a inversão registrada na
+[ADR 021](../../docs/ADR/021-agente-recebe-o-bearer-do-usuario.md) — leia-a antes de mexer aqui.
+
+**O agente só chama tool de leitura.** As que o próprio `/mcp` anuncia com
+`annotations.readOnlyHint === true`, e nenhuma lista de nomes mora neste repositório: o critério é
+derivado do catálogo a cada conversa, e conferido de novo na hora de chamar (modelo pequeno inventa
+nome de função). Gravar continua sendo o caminho manual, com tela de confirmação — é a propriedade
+da ADR 004, e a tela de chat da épica não tem confirmação de escrita.
+
+**O Bearer não entra em log, span, estado do grafo nem histórico.** Ele vive nos headers do cliente
+`httpx` e em mais lugar nenhum: o grafo é montado por conversa e o cliente é alcançado por fecho, e
+não pelo `state` nem pelo `config` — que são o que um checkpointer grava e o que o `langsmith`
+(dependência transitiva do LangGraph) exportaria. `tests/chat/test_sem_vazamento.py` exercita a
+conversa inteira e varre log, saída padrão, eventos e estado final — com controle negativo, porque
+varrer um canal vazio é uma afirmação sobre nada.
+
+### O contrato SSE, fixado aqui
+
+As três camadas da #247 são construídas em paralelo. Nomes de evento e chaves em inglês, como o
+resto do fio (`{"error": {"code", "message"}}`).
+
+```
+event: token
+data: {"text":"Você "}
+
+event: tool
+data: {"name":"list_meals","phase":"start","arguments":"{\"date\":\"2026-08-05\"}"}
+
+event: tool
+data: {"name":"list_meals","phase":"end","ok":true,"result":"[...]"}
+
+event: error
+data: {"code":"MCP_UNAUTHORIZED","message":"..."}
+
+event: done
+data: {"reason":"stop"}
+```
+
+Quatro garantias que o NestJS e o PWA podem assumir:
+
+1. **`done` é sempre o último evento**, inclusive depois de `error`. Um cliente que só fecha no
+   `done` não fica pendurado por causa de uma falha.
+2. **`error` é terminal**, e o `done` seguinte traz `reason: "error"`. Os outros motivos são `stop`
+   e `step_limit`.
+3. **O que falha antes do primeiro byte falha com status**, no envelope JSON de sempre — provedor
+   ausente (503), Bearer ausente (401), chave do agente recusada (401, `AGENT_KEY_REJECTED`), corpo
+   inválido (422, `INVALID_REQUEST`), token recusado pelo `/mcp` (401). **Todos** no formato
+   `{"error": {"code", "message"}}`: não há `{"detail": ...}` em caminho nenhum do `/chat`, e o
+   corpo do 422 não devolve o que a pessoa escreveu. O catálogo é buscado antes de o fluxo abrir
+   justamente para que um token expirado chegue como 401, e não como um 200 que o PWA teria de
+   destrinchar. Depois que o fluxo abre, o 200 já foi enviado e o erro só cabe como evento.
+4. **Só a mensagem de agora tem teto duro: 4 000 caracteres.** Passar disso é 422 — a pessoa está
+   olhando para o campo, e o cliente sabe contar antes de enviar. O **histórico não tem teto**: o
+   agente usa as últimas 40 mensagens e corta cada `content` em 4 000 caracteres, com marca visível.
+   A diferença é deliberada. O histórico carrega a resposta do modelo, e não há `max_tokens` no
+   payload: um "monte um plano de 7 dias" com 6 000 caracteres, persistido pelo NestJS e reenviado
+   no turno seguinte, viraria um 422 **permanente** — a conversa morta por um teto nosso que nem o
+   PWA nem o NestJS teriam como enxergar.
+
+`Cache-Control: no-transform` e `X-Accel-Buffering: no` saem na resposta: se qualquer camada
+bufferizar, o chat parece travado até a última palavra e o streaming das outras duas se perde. Do
+lado de cá, `tests/chat/test_graph.py` segura a mesma propriedade com um provedor que só termina o
+turno quando o teste manda: o primeiro `token` tem de chegar com o modelo ainda escrevendo.
 
 ## Como rodar
 
@@ -87,29 +166,41 @@ uv run ruff check .        # lint
 uv run ruff format .       # formatação (o prettier da raiz não toca em .py)
 uv run mypy                # tipos, modo strict — o equivalente ao "sem any" do TypeScript
 uv run pytest              # suíte que não precisa de rede (o -m "not smoke" é default)
-uv run pytest -m smoke     # exige AI_BASE_URL no ambiente; ver abaixo
+uv run pytest -m smoke     # exige provedor e/ou /mcp no ar; ver abaixo
 ```
 
 O `pytest` nu **não** fala com rede nem precisa do LM Studio ligado: o transporte do `httpx` é
-substituído por um duplo que devolve respostas gravadas de um endpoint OpenAI-compatível.
+substituído por um duplo que devolve respostas gravadas de um endpoint OpenAI-compatível — e, no
+caso do chat, de um `/mcp` que responde SSE com JSON-RPC dentro, como o do NestJS responde.
 
 O `-m smoke` é o único que prova que a configuração está certa **de verdade** — o duplo prova o
-nosso lado do protocolo, não o do provedor. Ele se auto-pula sem `AI_BASE_URL`.
+nosso lado do protocolo, não o do outro. Cada grupo se auto-pula sem as variáveis dele:
+
+```bash
+AI_BASE_URL=... uv run pytest -m smoke                       # o provedor
+MCP_BASE_URL=... MCP_BEARER=... uv run pytest -m smoke        # o /mcp do apps/api
+```
+
+O smoke do `/mcp` é o que verifica a propriedade da qual todo o `chat/mcp_client.py` depende: que o
+`/mcp` aceita um POST de JSON-RPC **sem `initialize`, sem sessão e sem cabeçalho de versão**. Ela é
+do outro repositório; se mudar, é ali que aparece.
 
 ## Configuração
 
 Todas as variáveis estão em `.env.example`. As que decidem o comportamento:
 
-| Variável             | Papel                                                               |
-| -------------------- | ------------------------------------------------------------------- |
-| `AI_BASE_URL`        | Endpoint OpenAI-compatível. Vazio = degradação explícita.           |
-| `AI_API_KEY`         | Obrigatória fora de `localhost`. O LM Studio dispensa; gateway não. |
-| `AI_MODEL_TEXT`      | Modelo da capacidade de texto.                                      |
-| `AI_MODEL_VISION`    | Modelo da capacidade de visão.                                      |
-| `AI_MODEL_EMBEDDING` | Modelo da capacidade de embedding.                                  |
-| `AI_TIMEOUT_S`       | Timeout por chamada. Default folgado: visão em CPU é lenta.         |
-| `AI_MAX_RETRIES`     | Repetições em 429 e 5xx. 401/403 não são repetidos.                 |
-| `AGENT_API_KEY`      | Segredo compartilhado com o `apps/api`. Obrigatório fora de local.  |
+| Variável             | Papel                                                                         |
+| -------------------- | ----------------------------------------------------------------------------- |
+| `AI_BASE_URL`        | Endpoint OpenAI-compatível. Vazio = degradação explícita.                     |
+| `AI_API_KEY`         | Obrigatória fora de `localhost`. O LM Studio dispensa; gateway não.           |
+| `AI_MODEL_TEXT`      | Modelo da capacidade de texto.                                                |
+| `AI_MODEL_VISION`    | Modelo da capacidade de visão.                                                |
+| `AI_MODEL_EMBEDDING` | Modelo da capacidade de embedding.                                            |
+| `AI_TIMEOUT_S`       | Timeout por chamada. Default folgado: visão em CPU é lenta.                   |
+| `AI_MAX_RETRIES`     | Repetições em 429 e 5xx. 401/403 não são repetidos.                           |
+| `AGENT_API_KEY`      | Segredo compartilhado com o `apps/api`. Obrigatório fora de local.            |
+| `MCP_BASE_URL`       | `/mcp` do `apps/api`. Único destino do Bearer do usuário; https fora da rede. |
+| `MCP_TIMEOUT_S`      | Timeout das chamadas ao `/mcp`. Menor que o de IA de propósito.               |
 
 **Trocar de provedor ou de modelo é editar `.env` e reiniciar.** Nenhum `.py` menciona fornecedor,
 e não há `if ambiente == 'prod'` no caminho de inferência: LM Studio e Cloudflare AI Gateway falam
@@ -177,6 +268,30 @@ Todo erro carrega um `code` estável — é ele que atravessa o HTTP, não a men
 | `AI_PROVIDER_REFUSED`        | O provedor respondeu 401/403/429/5xx.              | 502  |
 | `AI_RESPONSE_UNPARSEABLE`    | Veio 200, mas o corpo não tem a forma esperada.    | 502  |
 | `AI_RESPONSE_TRUNCATED`      | O modelo parou por limite de tokens.               | 502  |
+| `AGENT_KEY_REJECTED`         | Faltou o `X-Fatia-Agent-Key`, ou ele veio errado.  | 401  |
+| `INVALID_REQUEST`            | O corpo não passou na validação.                   | 422  |
+
+O chat acrescenta uma **segunda família**, do lado do `/mcp`. Ela não herda da primeira de propósito:
+falar com o provedor de IA e falar com o nosso `/mcp` são dependências diferentes, com donos e
+correções diferentes — tratar um 401 do `/mcp` como "o provedor está fora do ar" mandaria quem opera
+olhar o gateway quando o problema é o token de quem está conversando.
+
+| `code`                       | Quando                                                  | HTTP |
+| ---------------------------- | ------------------------------------------------------- | ---- |
+| `MCP_NOT_CONFIGURED`         | Falta `MCP_BASE_URL`, ou é `http://` para fora da rede. | 503  |
+| `MCP_UNAUTHENTICATED`        | A chamada de `/chat` chegou sem Bearer de usuário.      | 401  |
+| `MCP_UNAUTHORIZED`           | O `/mcp` recusou o Bearer (401/403).                    | 401  |
+| `MCP_TIMEOUT`                | O `/mcp` não respondeu em `MCP_TIMEOUT_S`.              | 504  |
+| `MCP_UNREACHABLE`            | Conexão recusada, DNS, TLS, conexão fechada.            | 502  |
+| `MCP_REFUSED`                | O `/mcp` respondeu 429/5xx.                             | 502  |
+| `MCP_RESPONSE_UNPARSEABLE`   | Veio 200, mas o JSON-RPC não tem a forma esperada.      | 502  |
+| `MCP_TOOL_NOT_ALLOWED`       | O modelo pediu tool fora do recorte de leitura.         | —    |
+| `MCP_TOOL_ARGUMENTS_INVALID` | O modelo mandou `arguments` que não são objeto JSON.    | —    |
+
+Os dois últimos não têm HTTP porque **não derrubam a conversa**: viram resultado de tool com falha,
+que o modelo lê e usa para se corrigir — do mesmo jeito que o `apps/api` devolve erro de execução
+como `isError` em vez de erro de protocolo. Derrubar ali trocaria "pedi a tool errada" por "o chat
+caiu".
 
 `AI_RESPONSE_TRUNCATED` é separado de propósito: saída truncada é indistinguível de saída completa
 para quem só lê a string, e devolvê-la como sucesso é o tipo de falha que só aparece muito depois.
@@ -195,15 +310,21 @@ rota é anônima e o path de um gateway carrega id de conta e nome do gateway.
 src/fatia_agent/
   settings.py                 # env → configuração; nada aqui levanta exceção
   allowed_models.py           # destino e modelos revisados como subprocessador (#136)
-  api.py                      # FastAPI: /health e /capabilities
-  api.py                      # FastAPI: /health, /capabilities, /recognize-meal
+  api.py                      # FastAPI: /health, /capabilities, /recognize-meal, /chat
   providers/
     base.py                   # capacidades (Protocol), separadas do fornecedor
     openai_compat.py          # única implementação: cliente OpenAI-compatível
     errors.py                 # erros nomeados
     __init__.py               # build_provider(): monta ou degrada
+  chat/                       # #248: o chat hospedado (ADR 021)
+    graph.py                  # o grafo: receber → decidir → agir → responder
+    mcp_client.py             # o /mcp do NestJS, com o Bearer do usuário
+    tool_policy.py            # o recorte de tools — critério, não lista
+    events.py                 # o contrato SSE, fixado para as três camadas
+    errors.py                 # erros nomeados do lado do /mcp
   prompts/
     recognize_meal_pt_br.py   # prompt da #139, em português (o catálogo é a TACO)
+    chat_pt_br.py             # prompt de sistema do chat
   schemas/
     recognized_meal.py        # texto do modelo → dado validado, ou erro nomeado
   recognition/
@@ -215,7 +336,8 @@ src/fatia_agent/
     run_benchmark.py          # o runner (CLI), sequencial e sobre o caminho real
 eval/                         # o **conjunto**: rótulos versionados, fotos não
 tests/
-  providers/                  # duplo do provedor, sem rede
+  providers/                  # duplo do provedor, sem rede (inclui o streaming)
+  chat/                       # #248: cliente MCP, recorte, grafo, rota e vazamento
   recognition/                # #139: parser, rota e a guarda de custo
   eval/                       # #138: métricas e a guarda de publicação
   test_degradation.py         # o serviço sem IA
@@ -246,9 +368,12 @@ métricas e limiar:
 
 ## O que ainda **não** existe aqui
 
-- **Nenhum cliente MCP e nenhum grafo LangGraph.** O reconhecimento da #139 não precisou de
-  nenhum dos dois — ver §"Rota de inferência". Entram com #141, contra o `/mcp` de verdade e com
-  ramificação que justifique um grafo.
+- **Nenhuma persistência de conversa.** O `/chat` recebe o histórico no corpo e devolve o fluxo;
+  quem grava é o NestJS (sub-issue 2/3 da #247). Não há checkpointer no grafo, e isso é decisão: um
+  checkpointer aqui gravaria histórico de saúde num segundo lugar, fora do banco que a `/privacy`
+  descreve.
+- **Nenhuma tool de escrita no chat.** Ver §"Rotas de inferência" e a ADR 021. Quando houver tela de
+  confirmação, a mudança é de uma linha em `chat/tool_policy.py` — e de uma ADR, que é o ponto.
 - **Nenhuma implementação de transcrição.** O `TranscriptionCapability` está declarado, porque a
   separação capacidade/fornecedor é o que a #134 entregou; a implementação vai com #141, quando
   houver um endpoint de transcrição real contra o qual verificar a forma da requisição.

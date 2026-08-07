@@ -8,7 +8,8 @@ capacidade. Nenhuma linha deste arquivo sabe em que ambiente está rodando.
 
 import asyncio
 import base64
-from collections.abc import Sequence
+import json as jsonlib
+from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
 import httpx
@@ -19,6 +20,15 @@ from ..allowed_models import (
     is_local_destination,
     unreviewed_host_reason,
     unreviewed_model_reason,
+)
+from .base import (
+    EmbeddingCapability,
+    TextCapability,
+    TextDelta,
+    ToolCall,
+    ToolChatCapability,
+    TurnEnd,
+    VisionCapability,
 )
 from .errors import (
     AIEndpointNotAllowed,
@@ -171,6 +181,86 @@ class OpenAICompatProvider:
         # faixa ⇒ toda posição foi preenchida. Nenhuma chave pode faltar aqui.
         return [by_index[position] for position in range(len(texts))]
 
+    async def stream_chat(
+        self,
+        messages: Sequence[dict[str, Any]],
+        *,
+        tools: Sequence[dict[str, Any]] = (),
+    ) -> AsyncIterator[TextDelta | TurnEnd]:
+        """Conversa em streaming, com tools. Atende `ToolChatCapability`.
+
+        Passa por `_require_model` como todas as outras capacidades — é o único
+        ponto por onde a revisão de destino e de modelo da #136 acontece, e o
+        chat manda texto do usuário para o mesmo lugar que a foto ia.
+
+        **Sem retentativa, ao contrário de `_request`.** Repetir um POST que já
+        entregou tokens duplicaria a resposta na tela; e o backoff, aqui, seria
+        indistinguível de "o modelo está pensando" para quem está olhando. Falha
+        antes do primeiro byte vira erro nomeado como em qualquer outra chamada.
+        """
+        model = self._require_model("text", self._text_model)
+        payload: dict[str, Any] = {
+            "model": model,
+            "messages": list(messages),
+            "stream": True,
+        }
+        if tools:
+            payload["tools"] = list(tools)
+
+        acumulador = _AcumuladorDeToolCalls()
+        finish_reason = "stop"
+
+        try:
+            async with self._client.stream("POST", "chat/completions", json=payload) as response:
+                if response.status_code >= 400:
+                    # O corpo do erro precisa ser lido antes de fechar o stream,
+                    # senão `response.text` estoura com `ResponseNotRead`.
+                    await response.aread()
+                    raise AIProviderRefused(
+                        f"O provedor respondeu {response.status_code} em POST chat/completions.",
+                        status_code=response.status_code,
+                    )
+
+                async for linha in response.aiter_lines():
+                    dado = _dado_do_evento_sse(linha)
+                    if dado is None:
+                        continue
+                    if dado == "[DONE]":
+                        break
+
+                    bloco = _bloco_de_stream(dado)
+                    delta = bloco.get("delta")
+                    if isinstance(delta, dict):
+                        conteudo = delta.get("content")
+                        if isinstance(conteudo, str) and conteudo:
+                            yield TextDelta(text=conteudo)
+                        acumulador.absorver(delta.get("tool_calls"))
+
+                    razao = bloco.get("finish_reason")
+                    if isinstance(razao, str):
+                        finish_reason = razao
+        except httpx.TimeoutException as exc:
+            raise AIProviderTimeout(
+                f"O provedor não respondeu POST chat/completions dentro de AI_TIMEOUT_S ({exc})."
+            ) from exc
+        # Mesmo ramo do `_request`, pelo mesmo motivo: `ConnectError`,
+        # `ReadError` e `RemoteProtocolError` herdam de `RequestError`, e **não**
+        # de `TimeoutException`. Sem isto, provedor caindo no meio do stream
+        # escapava cru, sem `code` — e no meio de um SSE isso é a tela travando
+        # sem uma linha dizendo por quê.
+        except httpx.RequestError as exc:
+            raise AIProviderUnreachable(
+                f"Falha de transporte em POST chat/completions: {type(exc).__name__} ({exc}). "
+                "Verifique AI_BASE_URL e se o provedor está no ar."
+            ) from exc
+
+        if finish_reason == "length":
+            raise AIResponseTruncated(
+                f"O modelo '{model}' parou por limite de tokens; a resposta veio pela metade."
+            )
+
+        yield TurnEnd(tool_calls=acumulador.resultado(), finish_reason=finish_reason)
+
     async def list_models(self) -> list[str]:
         """Usado pelo teste de fumaça e pelo diagnóstico — não é capacidade."""
         body = _json_body(await self._request("GET", "models"))
@@ -292,6 +382,110 @@ class OpenAICompatProvider:
     async def _backoff(self, attempt: int) -> None:
         if self._retry_backoff_s > 0:
             await asyncio.sleep(self._retry_backoff_s * (2**attempt))
+
+
+def _capacidades_atendidas(
+    provider: "OpenAICompatProvider",
+) -> tuple[TextCapability, VisionCapability, EmbeddingCapability, ToolChatCapability]:
+    """Conformidade com os `Protocol` da `base.py`, conferida pelo type checker.
+
+    Protocolo é estrutural: nada obriga esta classe a continuar batendo com ele.
+    Sem esta função, renomear um parâmetro de `stream_chat` — ou trocar o tipo do
+    que ele devolve — passaria pelo `mypy` sem uma palavra, e o erro apareceria
+    só quando o grafo recebesse o objeto errado, em runtime. `runtime_checkable`
+    também não pegaria: ele só olha se o método existe.
+    """
+    return provider, provider, provider, provider
+
+
+class _AcumuladorDeToolCalls:
+    """Junta os pedaços de `tool_calls` que o streaming entrega fatiados.
+
+    O protocolo da OpenAI manda `id` e `function.name` no primeiro fragmento e
+    depois só `function.arguments`, um punhado de caracteres por vez, ligados
+    pelo `index`. Quem lê fragmento a fragmento e não acumula fica com o nome da
+    tool e um JSON pela metade — que falha na validação da tool, longe da causa.
+    """
+
+    def __init__(self) -> None:
+        self._por_indice: dict[int, dict[str, str]] = {}
+
+    def absorver(self, fragmentos: object) -> None:
+        if not isinstance(fragmentos, list):
+            return
+        for fragmento in fragmentos:
+            if not isinstance(fragmento, dict):
+                continue
+            indice = fragmento.get("index")
+            # `bool` é `int` em Python: `{"index": true}` viraria a posição 1.
+            if isinstance(indice, bool) or not isinstance(indice, int):
+                indice = 0
+            atual = self._por_indice.setdefault(indice, {"id": "", "name": "", "arguments": ""})
+
+            identificador = fragmento.get("id")
+            if isinstance(identificador, str) and identificador:
+                atual["id"] = identificador
+
+            funcao = fragmento.get("function")
+            if not isinstance(funcao, dict):
+                continue
+            nome = funcao.get("name")
+            if isinstance(nome, str) and nome:
+                atual["name"] = nome
+            argumentos = funcao.get("arguments")
+            if isinstance(argumentos, str):
+                atual["arguments"] += argumentos
+
+    def resultado(self) -> tuple[ToolCall, ...]:
+        # Ordenado por `index`: é ele que define a ordem pedida, e um `dict` de
+        # fragmentos fora de ordem inverteria duas chamadas sem nenhum sintoma.
+        return tuple(
+            ToolCall(
+                # Modelo local nem sempre manda `id`. Um id vazio quebra a
+                # correlação com o `tool_call_id` da resposta, então o índice
+                # vira o id — estável dentro do turno, que é onde ele vale.
+                id=dados["id"] or f"call_{indice}",
+                name=dados["name"],
+                arguments=dados["arguments"],
+            )
+            for indice, dados in sorted(self._por_indice.items())
+            if dados["name"]
+        )
+
+
+def _dado_do_evento_sse(linha: str) -> str | None:
+    """O payload de uma linha `data:` de SSE; `None` para tudo que não é dado.
+
+    Linha em branco separa evento, linha iniciada por `:` é comentário
+    (keep-alive), e `event:`/`id:` são metadados. Nenhum dos três é JSON, e
+    tratá-los como se fossem é o erro que faz o parser estourar no primeiro
+    keep-alive de um provedor lento.
+    """
+    if not linha.startswith("data:"):
+        return None
+    return linha[len("data:") :].strip()
+
+
+def _bloco_de_stream(dado: str) -> dict[str, Any]:
+    """`{"choices": [{...}]}` → o primeiro choice, ou `{}` quando não há.
+
+    Fragmento sem `choices` é comum e legítimo: alguns gateways abrem o stream
+    com um bloco só de `usage` ou de metadados.
+    """
+    try:
+        bruto: object = jsonlib.loads(dado)
+    except ValueError as exc:
+        raise AIResponseUnparseable(
+            f"Fragmento do stream não é JSON: {dado[:120]!r} ({exc})."
+        ) from exc
+    if not isinstance(bruto, dict):
+        raise AIResponseUnparseable(f"Fragmento do stream não é objeto ({_describe(bruto)}).")
+
+    choices = bruto.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return {}
+    primeiro = choices[0]
+    return primeiro if isinstance(primeiro, dict) else {}
 
 
 def _floats(embedding: list[Any]) -> list[float]:

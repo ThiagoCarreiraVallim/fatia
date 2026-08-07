@@ -262,6 +262,33 @@ descartado: sem orçamento de privacidade por consulta e contabilidade de compos
 dá falsa sensação de garantia, e não é auditável por quem lê o código — que é metade do valor,
 já que a metodologia é publicada.
 
+### 10. O agente como segundo lugar por onde o Bearer transita
+
+Até a #248, o token de acesso de um usuário só existia em dois lugares: no cliente dele e no NestJS.
+O chat hospedado ([ADR 021](./ADR/021-agente-recebe-o-bearer-do-usuario.md)) acrescenta um terceiro
+— o `apps/agent`, em Python, com outro toolchain de log e outra pilha de dependências. É a mesma
+superfície da #215 num processo onde aquele conserto não vale.
+
+A decisão foi tomada porque a alternativa é pior: sem o token do usuário, o agente precisaria de
+credencial de banco (segundo ponto de isolamento, sem RLS embaixo — ADR 010) ou receberia o dado
+pronto no corpo, o que num chat significa mandar o histórico inteiro ao gateway antes de saber o que
+a pergunta pede.
+
+| Vetor                                                                          | Mitigação                                                                                                                                                                           |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Token indo para o log do agente                                                | Ele só existe nos headers do cliente `httpx`; nenhum log do serviço registra requisição. `tests/chat/test_sem_vazamento.py` varre todo logger em DEBUG durante uma conversa inteira |
+| Token indo para o rastro (o `langsmith` é dependência transitiva do LangGraph) | Não entra no `state` nem no `config`: o grafo é montado por conversa e o cliente MCP é alcançado por fecho. O teste inspeciona o **estado final** inteiro, com controle negativo    |
+| Token persistido junto da conversa                                             | Não há checkpointer no grafo, e o corpo de `/chat` é `extra: "forbid"` — o token vem em header, não em campo                                                                        |
+| Token saindo no fluxo SSE, que atravessa NestJS e PWA                          | Nenhum evento o carrega; o teste concatena o fluxo inteiro e procura                                                                                                                |
+| Token vazando para o provedor de IA                                            | Duas dependências, duas credenciais. O teste afirma sobre headers **e** corpo de toda requisição que saiu para o gateway                                                            |
+| `MCP_BASE_URL` apontando para fora, com o token junto                          | `http://` contra host não local é recusado na montagem, com erro nomeado — sem TLS o token trafega em texto puro                                                                    |
+| Chat gravando ou apagando dado por alucinação                                  | O agente só recebe as tools que o `/mcp` anuncia como `readOnlyHint: true`, e o nome é conferido **de novo** na hora de chamar                                                      |
+| Token de outra pessoa chegando ao agente                                       | Fora do escopo daqui, e de propósito: quem valida o token é o `/mcp` (vetor 1). O agente não decide nada sobre identidade                                                           |
+
+**Não mitigado:** enquanto uma conversa acontece, o token daquela conversa está na memória do
+processo do agente. Não há como ter a funcionalidade sem isso. O que há é janela curta (o cliente
+morre com a requisição) e alcance limitado (só leitura, e só o que aquele token já podia ler).
+
 ## Matriz de cobertura
 
 Onde o escopo é aplicado, por domínio. Verificado por
@@ -340,3 +367,5 @@ Estes testes sustentam este doc. Quebrar qualquer um deles é sinal de regressã
 7. `apps/api/src/insights/__tests__/no-body-data.spec.ts` — dado corporal e alimentar fora do
    agregado, por varredura de filesystem.
 8. Os specs por service, que provam que o `where` é montado com `userId`.
+9. `apps/agent/tests/chat/test_sem_vazamento.py` — o Bearer do usuário fora de log, evento e estado
+   do grafo, exercitando a conversa inteira (vetor 10).
