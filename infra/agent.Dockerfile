@@ -1,7 +1,7 @@
 # Agente de IA (apps/agent) — Python, fora do workspace pnpm (ADR 015).
 # Contexto de build é a raiz do repositório, como os outros Dockerfiles daqui.
 
-FROM python:3.13-slim AS base
+FROM python:3.14-slim AS base
 
 # `uv` vem da imagem oficial: instalar por pip dentro do build custa uma
 # resolução de dependências a mais só para chegar no mesmo binário.
