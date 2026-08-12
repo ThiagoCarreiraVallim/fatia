@@ -359,16 +359,15 @@ describe('ChatService — ordem das guardas', () => {
 
     expect(chamadasAoAgente[0]).toEqual({
       bearer: 'token-do-usuario',
-      conversationId: 'c1',
       timezone: 'America/Sao_Paulo',
-      messages: [
-        { role: MessageRole.user, content: 'anterior' },
-        { role: MessageRole.user, content: 'e agora?' },
-      ],
+      // A mensagem de agora separada do histórico: os dois têm tetos opostos do
+      // lado do agente — ver o contrato em `agent-chat.client.ts`.
+      mensagem: 'e agora?',
+      historico: [{ role: MessageRole.user, content: 'anterior' }],
     });
   });
 
-  it('conversa nova vai ao agente com `conversationId: null`', async () => {
+  it('conversa nova vai ao agente com o histórico vazio', async () => {
     const { service, canal, chamadasAoAgente, conversas } = montar();
     const saida = destinoDeTeste();
 
@@ -377,8 +376,8 @@ describe('ChatService — ordem das guardas', () => {
     canal.encerrar();
     await turno;
 
-    expect(chamadasAoAgente[0].conversationId).toBeNull();
-    expect(chamadasAoAgente[0].messages).toEqual([{ role: MessageRole.user, content: 'oi' }]);
+    expect(chamadasAoAgente[0].historico).toEqual([]);
+    expect(chamadasAoAgente[0].mensagem).toBe('oi');
     // E o histórico do banco nem é consultado: não há conversa para consultar.
     expect(conversas.historicoParaOAgente).not.toHaveBeenCalled();
   });

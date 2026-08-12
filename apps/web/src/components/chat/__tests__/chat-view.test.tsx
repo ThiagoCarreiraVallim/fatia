@@ -78,8 +78,9 @@ vi.mock('@fatia/api-client', async () => {
 const { ChatView } = await import('../chat-view');
 
 beforeAll(() => {
-  // `use-stick-to-bottom`, que o `Conversation` do registry usa, observa o
-  // tamanho do container. O jsdom não tem ResizeObserver.
+  // Dois consumidores de `ResizeObserver`, que o jsdom não tem: o
+  // `use-stick-to-bottom` do `Conversation` observa o container, e o `SwapLabel`
+  // dos elements mede o rótulo para animar a largura do bloco de tool.
   globalThis.ResizeObserver = class {
     observe() {}
     unobserve() {}
@@ -154,6 +155,19 @@ describe('ChatView', () => {
     );
   });
 
+  /**
+   * O estado é lido pelo **nome acessível** do bloco, e não por `getByText`.
+   *
+   * O `SwapLabel` dos elements do assistant-ui mantém os dois rótulos no DOM ao
+   * mesmo tempo — troca opacidade, não conteúdo — e marca `aria-hidden` no que
+   * está escondido. Além disso o shimmer é uma terceira cópia do rótulo ativo.
+   * `getByText('Executando')` acha três nós, e `queryByText(...).not.toBe...`
+   * ficaria vermelho para sempre mesmo com a tela certa.
+   *
+   * O nome acessível ignora o que está `aria-hidden`, então é exatamente o que a
+   * pessoa vê e o que o leitor de tela anuncia — asserção melhor que a anterior,
+   * e não só uma que passa.
+   */
   it('mostra qual tool foi chamada, e o resultado quando ele chega', async () => {
     render(<ChatView />);
     await enviar('registra 2 ovos');
@@ -162,8 +176,8 @@ describe('ChatView', () => {
       type: 'tool',
       tool: { id: 'c1', name: 'registrar_refeicao', state: 'input-available', input: { g: 100 } },
     });
-    expect(await screen.findByText('registrar_refeicao')).toBeInTheDocument();
-    expect(screen.getByText('Executando')).toBeInTheDocument();
+    const bloco = await screen.findByRole('button', { name: /registrar_refeicao/ });
+    expect(bloco).toHaveAccessibleName(/Executando/);
 
     fontes[0].emitir({
       type: 'tool',
@@ -174,10 +188,36 @@ describe('ChatView', () => {
         output: { mealId: 'm1' },
       },
     });
-    expect(await screen.findByText('Concluída')).toBeInTheDocument();
+    await waitFor(() => expect(bloco).toHaveAccessibleName(/Concluída/));
+    expect(bloco).not.toHaveAccessibleName(/Executando/);
     // O mesmo `id` atualiza o bloco; não abre um segundo.
-    expect(screen.getAllByText('registrar_refeicao')).toHaveLength(1);
-    expect(screen.queryByText('Executando')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /registrar_refeicao/ })).toHaveLength(1);
+  });
+
+  it('tool que falhou não se parece com tool que respondeu', async () => {
+    // O element do assistant-ui só prevê "rodando" e "pronta". Sem o terceiro
+    // estado, uma consulta que falhou ficaria com a mesma cara de uma que trouxe
+    // dados — e o número que o modelo disser em seguida pareceria vir deles.
+    render(<ChatView />);
+    await enviar('quanto comi hoje?');
+
+    fontes[0].emitir({
+      type: 'tool',
+      tool: { id: 'c1', name: 'get_today_summary', state: 'input-available', input: {} },
+    });
+    fontes[0].emitir({
+      type: 'tool',
+      tool: {
+        id: 'c1',
+        name: 'get_today_summary',
+        state: 'output-error',
+        errorText: 'MCP_UNAUTHORIZED',
+      },
+    });
+
+    const bloco = await screen.findByRole('button', { name: /get_today_summary/ });
+    await waitFor(() => expect(bloco).toHaveAccessibleName(/Falhou/));
+    expect(bloco).not.toHaveAccessibleName(/Concluída/);
   });
 
   it.each([
@@ -193,6 +233,41 @@ describe('ChatView', () => {
 
     const alerta = await screen.findByRole('alert');
     expect(alerta).toHaveTextContent(esperado);
+  });
+
+  /**
+   * A rede de baixo, e o caso mais caro de todos se cair.
+   *
+   * `streamChat` promete nunca lançar — emite `{type:'error'}` e termina. Todos
+   * os casos daqui exercitam essa promessa; **nenhum** exercitava o que acontece
+   * quando ela não se cumpre. E a resposta era: `status` fica preso em
+   * `submitted`, o composer passa a recusar o Enter e o botão vira "Parar
+   * resposta". Quem conversa digita, aperta, e não acontece nada. Sair disso só
+   * apertando o "Parar" com nada rodando — saída que ninguém adivinha.
+   *
+   * O `getByRole` do helper `enviar` é o que torna isto vermelho de verdade: com
+   * o status travado, não existe mais botão chamado "Enviar mensagem".
+   */
+  it('exceção crua no stream não trava o envio para sempre', async () => {
+    streamChatMock.mockImplementationOnce((() => {
+      // eslint-disable-next-line require-yield
+      return (async function* () {
+        throw new Error('transporte não configurado');
+      })();
+    }) as unknown as typeof streamChatMock);
+
+    render(<ChatView />);
+    await enviar('oi');
+
+    const alerta = await screen.findByRole('alert');
+    expect(alerta).toHaveTextContent(/motivo não identificado/);
+
+    // E a prova de que a conversa não morreu: a próxima pergunta sai.
+    await enviar('de novo');
+    await waitFor(() => expect(streamChatMock).toHaveBeenCalledTimes(2));
+    fontes[0].emitir({ type: 'token', text: 'Agora vai.' });
+    fontes[0].fechar();
+    expect(await screen.findByText('Agora vai.')).toBeInTheDocument();
   });
 
   it('depois do erro a conversa continua utilizável', async () => {
@@ -336,6 +411,23 @@ describe('ChatView', () => {
 
     await waitFor(() => expect(regiao?.textContent ?? '').toContain('registrar_refeicao'));
     expect(regiao?.textContent).toContain('Fatia respondeu');
+  });
+
+  it('a sugestão da tela vazia manda a pergunta, e some depois disso', async () => {
+    // A tela vazia é a única pista do que dá para perguntar: sem ela, quem abre
+    // o chat pela primeira vez encara um campo em branco e um assistente que só
+    // consulta — não dá para adivinhar o que ele sabe responder.
+    render(<ChatView />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'O que eu comi hoje?' }));
+
+    await waitFor(() => expect(streamChatMock).toHaveBeenCalledTimes(1));
+    expect(streamChatMock.mock.calls[0][0]).toMatchObject({ message: 'O que eu comi hoje?' });
+    // A pergunta já está na conversa; deixar as sugestões atrás dela seria oferecer
+    // um começo para quem já começou.
+    expect(
+      screen.queryByRole('button', { name: 'Qual foi meu último treino de peito?' }),
+    ).toBeNull();
   });
 
   it('a região viva do log fica calada — quem anuncia é a região de status', async () => {

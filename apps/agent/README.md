@@ -58,8 +58,14 @@ curl -N localhost:8100/chat \
   -H 'Content-Type: application/json' \
   -H "X-Fatia-Agent-Key: $AGENT_API_KEY" \
   -H "Authorization: Bearer $TOKEN_DO_USUARIO" \
-  -d '{"message":"o que eu comi ontem?","history":[]}'
+  -d '{"message":"o que eu comi ontem?","history":[],"timezone":"America/Sao_Paulo"}'
 ```
+
+**O corpo é este, exatamente** — `extra: "forbid"` recusa qualquer campo a mais.
+A mensagem de agora vai **separada** do histórico porque as duas têm regras de
+tamanho opostas (ver adiante), e `timezone` é opcional: sem ele o modelo não sabe
+que dia é hoje e chuta a data em qualquer pergunta sobre "ontem". Não é
+identidade — nome de fuso não aponta para ninguém.
 
 **Duas credenciais, dois papéis.** `X-Fatia-Agent-Key` responde "esta chamada pode gastar inferência
 paga?" (ADR 018); `Authorization: Bearer` responde "em nome de quem?" e é repassado inteiro ao
@@ -90,10 +96,13 @@ event: token
 data: {"text":"Você "}
 
 event: tool
-data: {"name":"list_meals","phase":"start","arguments":"{\"date\":\"2026-08-05\"}"}
+data: {"id":"c1","name":"list_meals","state":"input-available","input":"{\"date\":\"2026-08-05\"}"}
 
 event: tool
-data: {"name":"list_meals","phase":"end","ok":true,"result":"[...]"}
+data: {"id":"c1","name":"list_meals","state":"output-available","output":"[...]"}
+
+event: usage
+data: {"model":"ornith-1.0-9b","inputUnits":812,"outputUnits":96}
 
 event: error
 data: {"code":"MCP_UNAUTHORIZED","message":"..."}
@@ -101,6 +110,16 @@ data: {"code":"MCP_UNAUTHORIZED","message":"..."}
 event: done
 data: {"reason":"stop"}
 ```
+
+O vocabulário de `tool` é o dos elementos de IA do shadcn, que é o que a tela
+renderiza: `input-available` → `output-available` ou `output-error` (aí o texto
+vai em `errorText`). O `id` é o da tool call do modelo, e é ele que faz o segundo
+quadro substituir o primeiro em vez de duplicá-lo.
+
+O `usage` sai **uma vez por rodada do modelo**, não uma por turno: o ciclo de
+tool chama o modelo de novo a cada volta, e cada volta é paga. O `apps/api` soma
+por modelo. Quando o provedor não reporta custo, o evento simplesmente não sai —
+e o turno entra no livro-caixa como não medido, que é diferente de grátis.
 
 Quatro garantias que o NestJS e o PWA podem assumir:
 
@@ -380,8 +399,10 @@ métricas e limiar:
 - **Nenhuma tool MCP nova.** O catálogo do `apps/api` não é tocado, e não deve ser: expor
   `recognize_meal_photo` como tool faria o Claude do usuário disparar inferência paga pela Fatia
   (ADR 018). O reconhecimento é rota HTTP do app, não superfície MCP.
-- **Nenhum registro de uso ou cota.** É a #135, e ela depende de tabela nova em `schema.prisma`.
-  Enquanto não existir, não há como atribuir custo por chamada.
+- **Nenhuma contabilidade de custo aqui dentro.** O agente **reporta** o que o provedor cobrou, no
+  evento `usage`, e para por aí: quem soma, guarda e decide a cota é o `apps/api` (#135), que é quem
+  tem banco. É deliberado — um limite que dependesse de o próprio consumidor reportar com honestidade
+  não é limite, e o agente é disparado com o token de quem está conversando.
 
 ## CI
 

@@ -123,6 +123,11 @@ class ChatRequest(BaseModel):
 
     message: Annotated[str, Field(min_length=1, max_length=MAX_CARACTERES_POR_MENSAGEM)]
     history: Annotated[list[ChatMessage], Field(default_factory=list)]
+    # O fuso do perfil, que o `apps/api` já conhece — vira a data de hoje no
+    # prompt. **Não é identidade**: o nome de um fuso é grosso demais para
+    # apontar para alguém, e sem ele o modelo chuta a data em toda pergunta
+    # sobre "ontem". Opcional porque o agente responde sem ele, só pior.
+    timezone: str | None = None
 
 
 # 503: falta configuração nossa. 504: o provedor demorou. 502: o provedor
@@ -360,6 +365,7 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
                     permitidas,
                     mensagem=payload.message,
                     historico=[mensagem.model_dump() for mensagem in payload.history],
+                    timezone=payload.timezone,
                 ):
                     yield evento.frame()
             finally:

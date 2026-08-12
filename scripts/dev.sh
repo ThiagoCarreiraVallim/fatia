@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
-# One-command dev: postgres + logto (Docker) + api + web (host, hot reload).
+# One-command dev: postgres + logto (Docker) + agent (uv) + api + web (host, hot reload).
 #
 # Idempotent — `docker compose up -d` is a no-op if the services are already
-# running. After infra is healthy, hands off to `turbo run dev` in the
-# foreground so logs from API and Web stream until you Ctrl-C.
+# running, and the agent is skipped when something is already answering on its
+# port. After infra is healthy, hands off to `turbo run dev` in the foreground
+# so logs from API and Web stream until you Ctrl-C.
+#
+# The agent is Python and lives outside the pnpm workspace (ADR 015), so turbo
+# can't run it — it's started here and killed on exit. It is NOT required: a
+# missing `uv` or `apps/agent/.env` only costs the chat tab, and the rest of the
+# app is untouched. That's the degradation the ADR asks for, applied to dev.
 #
 # Run `pnpm bootstrap` first (once) to install deps, migrate, and seed.
 
@@ -90,6 +96,76 @@ EOM
   exit 1
 fi
 
+AGENT_PORT="${AGENT_PORT:-8100}"
+AGENT_LOG="$ROOT/.agent-dev.log"
+AGENT_PID=""
+AGENT_STATUS="not started"
+
+# Kills the agent on Ctrl-C, on a normal exit, and when turbo dies. Registered
+# before anything is started so an early failure doesn't leak the process.
+cleanup() {
+  if [ -n "$AGENT_PID" ] && kill -0 "$AGENT_PID" 2>/dev/null; then
+    kill "$AGENT_PID" 2>/dev/null || true
+    wait "$AGENT_PID" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT INT TERM
+
+start_agent() {
+  # Someone already runs it (a second `pnpm dev`, or `uv run uvicorn` by hand).
+  # Adopting it silently is the idempotent behaviour; killing it on our exit
+  # would be the surprising one, so AGENT_PID stays empty on purpose.
+  if curl -fs -o /dev/null -m 2 "http://localhost:${AGENT_PORT}/health" 2>/dev/null; then
+    AGENT_STATUS="already running on :${AGENT_PORT}"
+    return
+  fi
+
+  if ! command -v uv >/dev/null 2>&1; then
+    AGENT_STATUS="skipped — 'uv' not found (see apps/agent/README.md)"
+    return
+  fi
+
+  if [ ! -f "$ROOT/apps/agent/.env" ]; then
+    AGENT_STATUS="skipped — run 'cp apps/agent/.env.example apps/agent/.env'"
+    return
+  fi
+
+  say "Starting AI agent on :${AGENT_PORT} (log: .agent-dev.log)"
+  # `uv run` syncs the venv from uv.lock on its own, so the first run installs.
+  # Output goes to a file and not to the terminal: it would interleave with
+  # turbo's own streaming output and neither would be readable.
+  (
+    cd "$ROOT/apps/agent" &&
+      exec uv run --quiet uvicorn fatia_agent.api:app --port "$AGENT_PORT" --reload
+  ) >"$AGENT_LOG" 2>&1 &
+  AGENT_PID=$!
+
+  for _ in $(seq 1 40); do
+    if curl -fs -o /dev/null -m 2 "http://localhost:${AGENT_PORT}/health" 2>/dev/null; then
+      AGENT_STATUS="http://localhost:${AGENT_PORT}"
+      return
+    fi
+    # Died on boot: report it instead of waiting out the loop for nothing.
+    if ! kill -0 "$AGENT_PID" 2>/dev/null; then
+      AGENT_PID=""
+      AGENT_STATUS="failed to start — see .agent-dev.log"
+      return
+    fi
+    sleep 0.5
+  done
+  AGENT_STATUS="slow to answer /health — see .agent-dev.log"
+}
+
+start_agent
+
+# The chat tab needs the API to know where the agent is. Warning and not dying:
+# every other screen works without it.
+AGENT_BASE_URL_VALUE=$(grep -E "^AGENT_BASE_URL=" .env 2>/dev/null | head -1 | cut -d= -f2- || true)
+if [ -z "$AGENT_BASE_URL_VALUE" ]; then
+  warn "AGENT_BASE_URL is empty in .env — the API will report the chat as unavailable."
+  warn "Add: AGENT_BASE_URL=http://localhost:${AGENT_PORT}"
+fi
+
 cat <<EOF
 
 ✓ Infra is up. Starting API + Web with hot reload (Ctrl-C to stop).
@@ -97,9 +173,12 @@ cat <<EOF
   API:           http://localhost:3000
   Web:           http://localhost:3030
   MCP:           http://localhost:3000/mcp
+  AI agent:      ${AGENT_STATUS}
   Logto:         http://localhost:${LOGTO_PORT:-3001}
   Logto admin:   http://localhost:${LOGTO_ADMIN_PORT}
 
 EOF
 
-exec pnpm turbo run dev
+# Not `exec`: it would replace this shell and the trap above would never run,
+# leaving the agent orphaned on :${AGENT_PORT} after Ctrl-C.
+pnpm turbo run dev

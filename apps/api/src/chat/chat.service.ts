@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { MessageRole } from '@prisma/client';
 import { AiUsageService } from '../ai/ai-usage.service';
 import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { AgentChatClient, ErroDeStreamDoAgente, type StreamDoAgente } from './agent-chat.client';
@@ -106,12 +105,12 @@ export class ChatService {
 
     stream = await this.agent.abrir({
       bearer,
-      // `null` numa conversa nova: o id só existe depois que o agente aceitou o
-      // turno, e o agente não guarda histórico nenhum — ele recebe o que precisa
-      // em `messages`.
-      conversationId: dto.conversationId ?? null,
       timezone: user.timezone,
-      messages: [...anterior, { role: MessageRole.user, content: dto.message }],
+      // Separadas, e não concatenadas num array: o agente aplica tetos
+      // diferentes às duas — recusa a de agora, corta a do histórico. Ver o
+      // contrato em `agent-chat.client.ts`.
+      mensagem: dto.message,
+      historico: anterior,
     });
 
     // O `close` que chegou enquanto o agente demorava a responder não volta a

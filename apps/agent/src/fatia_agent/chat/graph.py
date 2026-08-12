@@ -31,7 +31,7 @@ from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from ..prompts.chat_pt_br import SISTEMA
+from ..prompts.chat_pt_br import sistema_com_data
 from ..providers.base import TextDelta, ToolChatCapability, TurnEnd
 from ..providers.errors import AIProviderError
 from . import events
@@ -96,12 +96,18 @@ def montar_grafo(
     provider: ToolChatCapability,
     client: McpClient,
     permitidas: Sequence[McpToolInfo],
+    *,
+    timezone: str | None = None,
 ) -> GrafoDaConversa:
     """Compila o grafo desta conversa, com provedor e cliente presos por fecho.
 
     Um grafo por conversa, e não um global: é o que mantém o Bearer fora do
     estado. Compilar um `StateGraph` de quatro nós é montar quatro dicionários —
     irrelevante diante de uma chamada de LLM.
+
+    `timezone` é o fuso de quem está conversando, que o `apps/api` já conhece do
+    perfil. Ele entra no prompt como a data de hoje — sem isso o modelo não tem
+    como resolver "ontem" numa chamada de tool, e chuta uma data.
     """
     catalogo_openai = formato_openai(permitidas)
 
@@ -113,7 +119,9 @@ def montar_grafo(
         `MAX_CARACTERES_POR_MENSAGEM`.
         """
         historico = state["historico"][-MAX_HISTORICO:]
-        mensagens: list[dict[str, Any]] = [{"role": "system", "content": SISTEMA}]
+        mensagens: list[dict[str, Any]] = [
+            {"role": "system", "content": sistema_com_data(timezone)}
+        ]
         mensagens.extend({"role": m["role"], "content": _cortado(m["content"])} for m in historico)
         mensagens.append({"role": "user", "content": state["mensagem"]})
         return {"mensagens": mensagens, "rodadas": 0, "resposta": "", "pendentes": []}
@@ -135,6 +143,17 @@ def montar_grafo(
                     {"id": chamada.id, "name": chamada.name, "arguments": chamada.arguments}
                     for chamada in pedaco.tool_calls[:MAX_TOOLS_POR_RODADA]
                 ]
+                if pedaco.usage is not None:
+                    # Um por rodada, e não um por turno: o grafo chama o modelo
+                    # de novo a cada volta do ciclo de tool, e cada volta custa.
+                    # O `apps/api` soma por modelo — ver `chat.service.ts`.
+                    writer(
+                        events.usage(
+                            pedaco.usage.model,
+                            input_units=pedaco.usage.input_units,
+                            output_units=pedaco.usage.output_units,
+                        )
+                    )
 
         conteudo = "".join(texto)
         mensagens = [*state["mensagens"]]
@@ -171,8 +190,8 @@ def montar_grafo(
         mensagens = [*state["mensagens"]]
 
         for chamada in state["pendentes"]:
-            nome = chamada["name"]
-            writer(events.tool_start(nome, chamada["arguments"]))
+            nome, identificador = chamada["name"], chamada["id"]
+            writer(events.tool_start(identificador, nome, chamada["arguments"]))
 
             try:
                 exigir_permitida(nome, permitidas)
@@ -185,8 +204,8 @@ def montar_grafo(
                 # trocaria "pedi a tool errada" por "o chat caiu".
                 texto, deu_certo = exc.message, False
 
-            writer(events.tool_end(nome, ok=deu_certo, result=texto))
-            mensagens.append({"role": "tool", "tool_call_id": chamada["id"], "content": texto})
+            writer(events.tool_end(identificador, nome, ok=deu_certo, result=texto))
+            mensagens.append({"role": "tool", "tool_call_id": identificador, "content": texto})
 
         return {"mensagens": mensagens, "pendentes": [], "rodadas": state["rodadas"] + 1}
 
@@ -236,6 +255,7 @@ async def stream_chat_events(
     *,
     mensagem: str,
     historico: Sequence[dict[str, str]],
+    timezone: str | None = None,
 ) -> AsyncIterator[events.ChatEvent]:
     """Roda o grafo e devolve os eventos do SSE, na ordem em que aconteceram.
 
@@ -244,7 +264,7 @@ async def stream_chat_events(
     mesmo que o envelope JSON carregaria, para o NestJS traduzir do mesmo jeito
     nos dois caminhos.
     """
-    grafo = montar_grafo(provider, client, permitidas)
+    grafo = montar_grafo(provider, client, permitidas, timezone=timezone)
     estado: EstadoDaConversa = {
         "mensagem": mensagem,
         "historico": list(historico),

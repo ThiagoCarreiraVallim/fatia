@@ -44,11 +44,32 @@ class TextDelta:
 
 
 @dataclass(frozen=True)
+class Usage:
+    """O que o turno consumiu, como o provedor reportou.
+
+    `model` vem do fragmento do stream, e não de `AI_MODEL_TEXT`: um gateway
+    pode servir o mesmo nome apontando para outro fornecedor, e quem precisa
+    casar com a tabela de preço do `apps/api` é o nome de quem de fato executou.
+
+    Unidades são `None` quando o provedor não as reportou, e **não** zero: o
+    `apps/api` trata ausência como custo não medido (`pricingKnown: false`) e
+    zero como medida — um turno caro entrando como grátis é o defeito que a
+    cota da #135 existe para não ter.
+    """
+
+    model: str
+    input_units: int | None = None
+    output_units: int | None = None
+
+
+@dataclass(frozen=True)
 class TurnEnd:
     """Fim de um turno do modelo: ou ele respondeu, ou pediu tools."""
 
     tool_calls: tuple[ToolCall, ...] = ()
     finish_reason: str = "stop"
+    # `None` quando o provedor não mandou bloco de `usage`. Ver `Usage`.
+    usage: Usage | None = None
 
 
 @runtime_checkable

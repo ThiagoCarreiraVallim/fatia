@@ -27,6 +27,7 @@ from fatia_agent.providers.base import TextDelta, ToolCall, TurnEnd
 from .support import (
     McpRecordingTransport,
     ProviderRecordingTransport,
+    bloco_de_uso,
     duplo_do_mcp,
     fim,
     fragmento_de_texto,
@@ -44,6 +45,15 @@ CATALOGO = [
     tool_do_catalogo("delete_meal", read_only=False),
 ]
 
+# Os dois estados terminais de uma tool no vocabulário da tela. Um `!=
+# "input-available"` diria a mesma coisa hoje e pararia de dizer no dia em que
+# aparecer um estado novo — que é justamente quando o teste precisa reclamar.
+FIM_DE_TOOL = ("output-available", "output-error")
+
+
+def _e_fim_de_tool(evento) -> bool:
+    return evento.name == "tool" and evento.data.get("state") in FIM_DE_TOOL
+
 
 async def rodar(
     settings_factory,
@@ -52,6 +62,7 @@ async def rodar(
     mcp_transport: httpx.AsyncBaseTransport | None = None,
     mensagem: str = "o que eu comi ontem?",
     historico=(),
+    timezone: str | None = None,
 ):
     """Roda o grafo inteiro e devolve (eventos, transporte do provedor, transporte do mcp)."""
     provider_transport = ProviderRecordingTransport(turnos)
@@ -63,7 +74,12 @@ async def rodar(
     eventos = [
         evento
         async for evento in stream_chat_events(
-            provider, client, permitidas, mensagem=mensagem, historico=historico
+            provider,
+            client,
+            permitidas,
+            mensagem=mensagem,
+            historico=historico,
+            timezone=timezone,
         )
     ]
 
@@ -110,10 +126,25 @@ async def test_o_ciclo_de_tool_emite_start_end_e_so_depois_a_resposta(settings_f
     )
 
     assert [(e.name, e.data) for e in eventos] == [
-        ("tool", {"name": "list_meals", "phase": "start", "arguments": '{"date":"2026-08-05"}'}),
         (
             "tool",
-            {"name": "list_meals", "phase": "end", "ok": True, "result": '[{"nome":"arroz"}]'},
+            {
+                "id": "c1",
+                "name": "list_meals",
+                "state": "input-available",
+                "input": '{"date":"2026-08-05"}',
+            },
+        ),
+        (
+            "tool",
+            {
+                # O mesmo `id` do quadro de início: é ele que faz a tela
+                # substituir o bloco em vez de mostrar a mesma tool duas vezes.
+                "id": "c1",
+                "name": "list_meals",
+                "state": "output-available",
+                "output": '[{"nome":"arroz"}]',
+            },
         ),
         ("token", {"text": "Arroz e feijão."}),
         ("done", {"reason": "stop"}),
@@ -158,8 +189,8 @@ async def test_tool_alucinada_vira_falha_de_tool_e_a_conversa_continua(settings_
         mcp_transport=mcp_transport,
     )
 
-    nomes = [(e.name, e.data.get("phase"), e.data.get("ok")) for e in eventos if e.name == "tool"]
-    assert nomes == [("tool", "start", None), ("tool", "end", False)]
+    nomes = [(e.name, e.data.get("state")) for e in eventos if e.name == "tool"]
+    assert nomes == [("tool", "input-available"), ("tool", "output-error")]
     assert eventos[-1].data == {"reason": "stop"}
 
     # Só o `tools/list` foi ao `/mcp` — nenhum `tools/call`.
@@ -183,8 +214,8 @@ async def test_argumentos_quebrados_do_modelo_nao_derrubam_a_conversa(settings_f
         mcp_transport=mcp_transport,
     )
 
-    (fim_da_tool,) = [e for e in eventos if e.name == "tool" and e.data["phase"] == "end"]
-    assert fim_da_tool.data["ok"] is False
+    (fim_da_tool,) = [e for e in eventos if _e_fim_de_tool(e)]
+    assert fim_da_tool.data["state"] == "output-error"
     assert [rpc["method"] for rpc in mcp_transport.rpcs] == ["tools/list"]
     assert eventos[-1].data == {"reason": "stop"}
 
@@ -207,9 +238,9 @@ async def test_tool_que_falha_no_apps_api_vira_evento_com_ok_falso(settings_fact
         ),
     )
 
-    (fim_da_tool,) = [e for e in eventos if e.name == "tool" and e.data["phase"] == "end"]
-    assert fim_da_tool.data["ok"] is False
-    assert "NOT_FOUND" in fim_da_tool.data["result"]
+    (fim_da_tool,) = [e for e in eventos if _e_fim_de_tool(e)]
+    assert fim_da_tool.data["state"] == "output-error"
+    assert "NOT_FOUND" in fim_da_tool.data["errorText"]
 
 
 async def test_modelo_em_laco_para_no_teto_de_rodadas(settings_factory):
@@ -471,11 +502,11 @@ async def test_o_evento_de_tool_tambem_sai_antes_de_a_conversa_acabar(settings_f
 
         # O `/mcp` ainda não respondeu, e o `start` já tem de estar no fio.
         inicio = await asyncio.wait_for(anext(fluxo), timeout=PORTAO_TIMEOUT_S)
-        assert (inicio.name, inicio.data["phase"]) == ("tool", "start")
+        assert (inicio.name, inicio.data["state"]) == ("tool", "input-available")
 
         mcp_respondendo.set()
         fim_da_tool = await asyncio.wait_for(anext(fluxo), timeout=PORTAO_TIMEOUT_S)
-        assert (fim_da_tool.name, fim_da_tool.data["phase"]) == ("tool", "end")
+        assert _e_fim_de_tool(fim_da_tool)
     finally:
         mcp_respondendo.set()
         await fluxo.aclose()
@@ -506,3 +537,101 @@ async def test_historico_gigante_e_cortado_e_a_conversa_segue(settings_factory):
     # Cortado com marca visível: corte silencioso faz o modelo responder sobre
     # uma frase que ele acha completa e não está.
     assert do_historico["content"].endswith("… (mensagem cortada por tamanho)")
+
+
+async def test_o_uso_sai_como_evento_uma_vez_por_rodada(settings_factory):
+    """A cota do `apps/api` (#135) só existe se este evento sair.
+
+    **Uma vez por rodada, e não uma por turno**: o ciclo de tool chama o modelo
+    de novo a cada volta, e cada volta é paga. O `chat.service.ts` soma por
+    modelo justamente porque conta com mais de um — guardar só o último
+    gravaria o turno inteiro pelo preço da última chamada, com `pricingKnown:
+    true` e sem nenhum sintoma.
+    """
+    eventos, _, _ = await rodar(
+        settings_factory,
+        [
+            [
+                fragmento_de_tool(0, id="c1", name="list_meals", arguments="{}"),
+                fim("tool_calls"),
+                bloco_de_uso(prompt_tokens=800, completion_tokens=12),
+            ],
+            [fragmento_de_texto("Arroz."), bloco_de_uso(prompt_tokens=910, completion_tokens=40)],
+        ],
+    )
+
+    usos = [e.data for e in eventos if e.name == "usage"]
+    assert usos == [
+        {"model": "ornith-1.0-9b", "inputUnits": 800, "outputUnits": 12},
+        {"model": "ornith-1.0-9b", "inputUnits": 910, "outputUnits": 40},
+    ]
+
+
+async def test_uso_com_campo_torto_nao_derruba_a_conversa(settings_factory):
+    """Contabilidade não pode custar a resposta que já está na tela.
+
+    Unidade que não é inteiro sai **de fora** do evento, e não como zero: o
+    `somarUnidade` do `apps/api` trata ausência como total desconhecido e o
+    turno cai em custo não medido, que é a degradação certa. Um zero entraria
+    como medida e a cota fecharia tarde.
+    """
+    eventos, _, _ = await rodar(
+        settings_factory,
+        [[fragmento_de_texto("oi"), bloco_de_uso(prompt_tokens="muitos", completion_tokens=True)]],
+    )
+
+    (uso,) = [e.data for e in eventos if e.name == "usage"]
+    assert uso == {"model": "ornith-1.0-9b"}
+    assert eventos[-1].data == {"reason": "stop"}
+
+
+async def test_sem_bloco_de_usage_nenhum_evento_de_uso_sai(settings_factory):
+    """Provedor que não reporta custo não pode virar custo zero.
+
+    Sem evento, o `apps/api` grava `model: null` e o turno entra como não
+    medido. Um `usage` com zeros seria a mesma linha com `pricingKnown: true`,
+    e a guarda de `unpricedCalls` da #135 nunca acenderia.
+    """
+    eventos, _, _ = await rodar(settings_factory, [[fragmento_de_texto("oi")]])
+
+    assert [e.name for e in eventos if e.name == "usage"] == []
+
+
+async def test_o_fuso_vira_a_data_de_hoje_no_prompt(settings_factory):
+    """Sem relógio, "ontem" é um chute — e um chute com cara de resposta certa.
+
+    As tools do `/mcp` recebem data em `AAAA-MM-DD`. O modelo não tem como
+    calcular a de ontem sem saber a de hoje, e o sintoma seria uma consulta bem
+    formada sobre a data errada.
+    """
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    _, provider_transport, _ = await rodar(
+        settings_factory,
+        [[fragmento_de_texto("ok")]],
+        timezone="America/Sao_Paulo",
+    )
+
+    sistema = provider_transport.corpos[0]["messages"][0]
+    hoje = datetime.now(ZoneInfo("America/Sao_Paulo"))
+    assert sistema["role"] == "system"
+    assert f"{hoje:%Y-%m-%d}" in sistema["content"]
+    assert "America/Sao_Paulo" in sistema["content"]
+
+
+async def test_fuso_desconhecido_responde_sem_a_linha_de_data(settings_factory):
+    """Chutar o fuso do servidor erraria o dia inteiro para quem está longe.
+
+    Melhor o modelo saber que não sabe: ele pergunta a data, em vez de consultar
+    com confiança o dia errado.
+    """
+    _, provider_transport, _ = await rodar(
+        settings_factory,
+        [[fragmento_de_texto("ok")]],
+        timezone="Marte/Olympus_Mons",
+    )
+
+    sistema = provider_transport.corpos[0]["messages"][0]
+    assert "Hoje é" not in sistema["content"]
+    assert sistema["content"].startswith("Você é o assistente da Fatia")

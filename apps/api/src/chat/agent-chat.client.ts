@@ -18,22 +18,37 @@ import type { MensagemDoHistorico } from './conversation.service';
  * uma. O que vai:
  *
  * ```json
- * { "conversation_id": "..." | null, "timezone": "America/Sao_Paulo",
- *   "messages": [{ "role": "user" | "assistant", "content": "..." }] }
+ * { "message": "o que eu comi ontem?", "timezone": "America/Sao_Paulo",
+ *   "history": [{ "role": "user" | "assistant", "content": "..." }] }
  * ```
  *
  * O histórico vai junto porque **o agente não guarda nada** — quem persiste é a
- * API, que é quem tem banco (ADR 015); `conversation_id` é só correlação, e vem
- * `null` no primeiro turno de uma conversa nova. O que volta é
- * `text/event-stream`, e o `data` de cada evento é um objeto JSON:
+ * API, que é quem tem banco (ADR 015).
  *
- * | evento  | `data`                                            |
- * | ------- | ------------------------------------------------- |
- * | `token` | `{ "text": "..." }` — pedaço da resposta           |
- * | `tool`  | `{ "name": "log_meal", ... }`                     |
- * | `usage` | `{ "model": "...", "inputUnits": n, "outputUnits": n }` |
- * | `error` | `{ "code": "...", "message": "..." }`             |
- * | `done`  | `{}`                                              |
+ * **A mensagem de agora vai separada do histórico**, e não como o último item de
+ * um array, porque os dois têm regras de tamanho opostas do outro lado: a de
+ * agora é recusada com 422 acima de 4 000 caracteres (a pessoa está olhando para
+ * o campo e o cliente sabe contar), e a do histórico é **cortada** em silêncio —
+ * recusá-la mataria a conversa por uma resposta longa do próprio modelo, que
+ * ninguém do lado de cá controla. Empacotar as duas num array só apagava essa
+ * diferença. Esta camada mandou `{conversation_id, timezone, messages}` até esta
+ * correção, e o agente declara `extra: "forbid"`: **todo turno voltava 422** e
+ * chegava ao aluno como "o chat falhou". Nenhum teste pegava — cada lado testava
+ * contra o dublê que ele mesmo escreveu.
+ *
+ * `conversation_id` deixou de ir: o agente não persiste nada e não o usava para
+ * coisa nenhuma, e um campo que existe só para ser ignorado é o que faz o
+ * contrato parecer maior do que é.
+ *
+ * O que volta é `text/event-stream`, e o `data` de cada evento é um objeto JSON:
+ *
+ * | evento  | `data`                                                                    |
+ * | ------- | ------------------------------------------------------------------------- |
+ * | `token` | `{ "text": "..." }` — pedaço da resposta                                   |
+ * | `tool`  | `{ "id", "name", "state", "input" \| "output" \| "errorText" }`            |
+ * | `usage` | `{ "model": "...", "inputUnits": n, "outputUnits": n }`                    |
+ * | `error` | `{ "code": "...", "message": "..." }`                                      |
+ * | `done`  | `{ "reason": "stop" \| "step_limit" \| "error" }`                          |
  *
  * O `usage` é o que faz a cota da #135 funcionar: sem ele, o turno entra no
  * livro-caixa como **custo não medido** (`pricingKnown: false`), não como
@@ -70,10 +85,12 @@ export interface StreamDoAgente {
 
 export type EntradaDoTurno = {
   bearer: string;
-  /** `null` quando a conversa ainda não existe — ver `ChatService.conversar`. */
-  conversationId: string | null;
+  /** O fuso do perfil. Vira a data de hoje no prompt do agente. */
   timezone: string;
-  messages: MensagemDoHistorico[];
+  /** A mensagem que a pessoa acabou de escrever. Ver o contrato acima. */
+  mensagem: string;
+  /** O que já foi dito nesta conversa, em ordem cronológica. */
+  historico: MensagemDoHistorico[];
 };
 
 /**
@@ -132,9 +149,9 @@ export class AgentChatClient {
           ...(chave ? { 'X-Fatia-Agent-Key': chave } : {}),
         },
         body: JSON.stringify({
-          conversation_id: entrada.conversationId,
+          message: entrada.mensagem,
           timezone: entrada.timezone,
-          messages: entrada.messages.map((m) => ({ role: m.role, content: m.content })),
+          history: entrada.historico.map((m) => ({ role: m.role, content: m.content })),
         }),
         signal: abortador.signal,
       });

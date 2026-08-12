@@ -51,3 +51,55 @@
     color-scheme: dark;
   }
 }
+
+/*
+  `shimmer`, escrito à mão porque o pacote não instala aqui.
+
+  Os elements do assistant-ui pedem `tw-shimmer`, e o shadcn o adicionou junto —
+  mas ele é um plugin **exclusivo do Tailwind v4**: `@utility`, `@theme inline`,
+  `@property` e `--value()` não existem no v3.4, que é o que este app usa. Deixar
+  o `@import "tw-shimmer"` no topo quebrava o build do PostCSS; instalar o v4 no
+  PWA inteiro para animar um rótulo seria o rabo abanando o cachorro.
+
+  O uso é sempre o mesmo: uma cópia `aria-hidden` do texto, em `absolute inset-0`
+  sobre o original. Daí o `background-clip: text` com a cor transparente — só as
+  letras sob a faixa clara acendem, e o texto de baixo continua legível e é ele
+  quem o leitor de tela anuncia.
+*/
+@layer utilities {
+  .shimmer {
+    background: linear-gradient(
+        100deg,
+        transparent 44%,
+        hsl(var(--foreground) / 0.9) 50%,
+        transparent 56%
+      )
+      0 0 / 250% 100% no-repeat;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    animation: fatia-shimmer 1.8s linear infinite;
+  }
+
+  /*
+    Dentro da própria regra, e não confiando no `motion-reduce:animate-none` que
+    os elements trazem na classe ao lado: as duas declarações têm a mesma
+    especificidade e a ordem entre a camada `utilities` do Tailwind e a nossa não
+    é garantida. Quem pediu menos movimento não pode depender de sorte de ordem.
+  */
+  @media (prefers-reduced-motion: reduce) {
+    .shimmer {
+      animation: none;
+    }
+  }
+}
+
+@keyframes fatia-shimmer {
+  from {
+    background-position: 250% 0;
+  }
+  to {
+    background-position: -150% 0;
+  }
+}

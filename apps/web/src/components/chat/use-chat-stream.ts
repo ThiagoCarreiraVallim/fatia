@@ -137,6 +137,28 @@ export function useChatStream(): UseChatStream {
             atuais.map((m) => (m.id === idAssistente ? aplicarEvento(m, evento) : m)),
           );
         }
+      } catch {
+        // `streamChat` promete nunca lançar — emite `{type:'error'}` e termina.
+        // Esta rede existe para quando a promessa não se cumprir: qualquer
+        // exceção escapando daqui deixaria `status` preso em `submitted`, e é aí
+        // que o chat **para de enviar**. Com `respondendo` travado em `true`, o
+        // Enter é recusado no composer e o botão vira "Parar resposta" — quem
+        // conversa digita, aperta, e não acontece nada. A única saída é apertar
+        // esse "Parar" sem nada estar rodando, que ninguém adivinha.
+        //
+        // Vira o mesmo `error` de qualquer outra falha: o aviso aparece no balão,
+        // com botão de tentar de novo, e a conversa segue utilizável — que é o
+        // requisito da #250, e vale principalmente para o defeito não previsto.
+        if (!controller.signal.aborted) {
+          houveErro = true;
+          atualizar((atuais) =>
+            atuais.map((m) =>
+              m.id === idAssistente
+                ? aplicarEvento(m, { type: 'error', error: { code: 'AI_UNKNOWN_ERROR' } })
+                : m,
+            ),
+          );
+        }
       } finally {
         if (abort.current === controller) abort.current = null;
       }
