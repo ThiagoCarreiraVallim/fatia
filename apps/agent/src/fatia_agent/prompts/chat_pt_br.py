@@ -5,10 +5,16 @@ parte do que se mede quando alguém for medir a qualidade do chat, e um prompt
 remontado em dois lugares deixa de ser o mesmo prompt sem ninguém notar.
 
 O que ele **não** faz: prometer que o modelo obedece. Instrução de prompt não é
-mecanismo de segurança — quem garante que o chat não grava nada é o recorte de
+mecanismo de segurança - quem garante que o chat não grava nada é o recorte de
 tools em `chat/tool_policy.py`, que simplesmente não oferece tool de escrita. O
 parágrafo abaixo existe para o modelo dar uma resposta útil quando o usuário
 pedir para gravar, e não para impedi-lo de tentar.
+
+Quando houver ferramentas CONFIRMABLE (reversíveis ou idempotentes), o modelo
+deve PARE antes de executar: gerar a proposta com os detalhes da operação,
+esperar a resposta do usuário na conversa, e só então proceder. O grafo LangGraph
+pausa automaticamente nestes casos — emite evento SSE de tipo `proposta` que o
+PWA usa para mostrar um modal visual com botões ink/ghostButton.
 """
 
 from datetime import datetime

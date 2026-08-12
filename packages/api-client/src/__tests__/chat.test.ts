@@ -83,6 +83,22 @@ describe('parseQuadro', () => {
       'event: error\ndata: {"code":"AI_NOVIDADE","message":"Falha em POST chat/completions. Verifique AI_BASE_URL."}';
     expect(parseQuadro(quadro)).toEqual({ type: 'error', error: { code: 'AI_UNKNOWN_ERROR' } });
   });
+
+  it('normaliza evento CONFIRMABLE de proposta no fluxo do stream', () => {
+    // O agente emite `event: proposta\ndata:{...}`. O parser converte para
+    // `{ type: 'proposal', data: { nomeTool, argumentos, motivo } }` — formato
+    // que o PWA consome e mostra no modal de confirmação.
+    const quadro =
+      'event: proposta\ndata: {"nome":"log_meal","argumentos": "{\"date\":\"2026-08-12\"}","motivo":"Registrar almoço de frango grelhado 200g"}';
+    expect(parseQuadro(quadro)).toEqual({
+      type: 'proposal',
+      data: {
+        nomeTool: 'log_meal',
+        argumentos: '{"date":"2026-08-12"}',
+        motivo: 'Registrar almoço de frango grelhado 200g',
+      },
+    });
+  });
 });
 
 describe('streamChat', () => {

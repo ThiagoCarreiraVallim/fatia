@@ -147,6 +147,32 @@ def done(reason: str) -> ChatEvent:
     return ChatEvent("done", {"reason": reason})
 
 
+def proposta(
+    nome_tool: str,
+    argumentos: str,
+    motivo: str,
+) -> ChatEvent:
+    """Solicita confirmação visual ao usuário antes de executar uma tool CONFIRMABLE.
+
+    Emite-se neste evento quando o grafo pausa em um estado intermediário, com
+todas as ferramentas confirmáveis pendentes que ainda não foram aprovadas.
+
+    O payload carrega:
+    - `nome`: nome da tool proposta (ex.: "log_meal")
+    - `argumentos`: JSON dos argumentos que o modelo pediu para usar
+    - `motivo`: por que a ferramenta foi sugerida — uma frase explicada ao usuário,
+      como "Registrar 200g de frango grelhado no almoço"
+
+    O NestJS repassa este evento sem bufferizar; o PWA renderiza um modal usando
+o design system swervable com botões ink/ghostButton. A aprovação (emoji 👍 ou
+"confirmar") fecha a pausa e volta para executar; o recuo cancela a proposta.
+    """
+    return ChatEvent(
+        "proposta",
+        {"nome": nome_tool, "argumentos": _cortar(argumentos, MAX_ARGUMENTOS_NO_EVENTO), "motivo": motivo},
+    )
+
+
 def _cortar(texto: str, limite: int) -> str:
     """Corta com reticência visível: texto cortado em silêncio vira JSON quebrado
     na mão de quem tentar fazer `parse` do evento sem saber que houve corte."""
@@ -161,6 +187,7 @@ __all__ = [
     "ChatEvent",
     "done",
     "error",
+    "proposta",
     "token",
     "tool_end",
     "tool_start",

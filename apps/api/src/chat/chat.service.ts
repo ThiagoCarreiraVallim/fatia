@@ -156,6 +156,11 @@ export class ChatService {
           const dados = dadosDoEvento(evento);
           if (!dados) continue;
 
+          // Proposta CONFIRMABLE: extrai os dados do evento e formata para o PWA.
+          if (evento.event === 'proposta' && typeof dados.nome === 'string') {
+            destino.escrever(formatarEventoSse('proposta', { nomeTool: dados.nome, argumentos: dados.argumentos ?? '', motivo: dados.motivo ?? '' }));
+          }
+
           if (evento.event === 'token' && typeof dados.text === 'string') {
             texto.push(dados.text);
           } else if (evento.event === 'tool' && typeof dados.name === 'string') {

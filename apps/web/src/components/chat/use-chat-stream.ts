@@ -55,6 +55,8 @@ export function aplicarEvento(mensagem: ChatUiMessage, evento: ChatStreamEvent):
 export interface UseChatStream {
   messages: ChatUiMessage[];
   status: ChatStatus;
+  /** Proposta CONFIRMABLE pendente, se houver. */
+  proposta: ChatStreamProposalEvent | null;
   /** Id da resposta que está sendo escrita agora — é onde o "pensando" aparece. */
   respondendoId: string | null;
   /** Texto para leitor de tela. Muda uma vez por resposta, nunca por token. */
@@ -84,6 +86,9 @@ export function useChatStream(): UseChatStream {
   const [status, setStatus] = useState<ChatStatus>('ready');
   const [respondendoId, setRespondendoId] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState('');
+
+  /** Proposta CONFIRMABLE pendente — o NestJS repassa do agente LangGraph via stream. */
+  const [proposta, setProposta] = useState<ChatStreamProposalEvent | null>(null);
   const conversationId = useRef<string | undefined>(undefined);
   const abort = useRef<AbortController | null>(null);
 
@@ -129,6 +134,11 @@ export function useChatStream(): UseChatStream {
           if (evento.type === 'conversation') {
             conversationId.current = evento.conversationId;
             continue;
+          }
+          // Proposta CONFIRMABLE: extrai os dados e armazena para o modal.
+          if (evento.type === 'proposal' && typeof evento.data === 'object') {
+            const p = evento.data as { nomeTool?: string; argumentos?: string; motivo?: string };
+            setProposta({ tipo: 'proposta', dados: { nomeTool: p.nomeTool ?? '', argumentos: p.argumentos ?? '', motivo: p.motivo ?? '' } });
           }
           if (evento.type === 'done') continue;
           if (evento.type === 'error') houveErro = true;
@@ -230,5 +240,5 @@ export function useChatStream(): UseChatStream {
     [atualizar, responder],
   );
 
-  return { messages, status, respondendoId, announcement, send, retry, stop };
+  return { messages, status, respondendoId, announcement, proposta, send, retry, stop };
 }

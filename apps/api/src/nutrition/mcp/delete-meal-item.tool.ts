@@ -13,7 +13,7 @@ export class DeleteMealItemTool implements McpToolDef {
   constructor(private readonly mealItems: MealItemService) {}
   readonly name = 'delete_meal_item';
   readonly title = 'Excluir item da refeição';
-  readonly annotations = { readOnlyHint: false, destructiveHint: true };
+  readonly annotations = {readOnlyHint: false, destructiveHint: true, confirmableHint: false};
   readonly hostedInference = false;
   readonly description =
     'Remove um item de refeição. ' + 'Exemplo: {"id":"11111111-2222-4333-8444-555555555555"}';

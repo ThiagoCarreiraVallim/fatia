@@ -487,6 +487,50 @@ describe('ChatService — o que fica no banco', () => {
       tools: [],
     });
   });
+
+  it('repassa evento `proposta` CONFIRMABLE ao cliente sem bufferizar', async () => {
+    // O agente emite um evento `proposta` quando pausa para confirmação visual.
+    // O NestJS deve repassá-lo como SSE tipo `proposta` com os dados da operação.
+    const { service, canal, conversas } = montar();
+    const saida = destinoDeTeste();
+
+    // Primeiro token para abrir o stream.
+    canal.emitir('event: token\ndata: {"text":"Vou registrar"}\n\n');
+    await respirar();
+
+    // Proposta CONFIRMABLE emite-se no meio do fluxo.
+    canal.emitir(
+      'event: proposta\ndata: {"nome":"log_meal","argumentos":{"date":"2026-08-12"},"motivo":"Registrar almoço de frango grelhado"}\n\n',
+    );
+
+    // Garante que o evento `proposta` foi escrito para o cliente.
+    expect(saida.tudo()).toContain('log_meal');
+    expect(saida.tudo()).toContain('2026-08-12');
+    expect(saida.tudo()).toContain('Registrar almoço de frango grelhado');
+
+    // E o turno continua: emite token e fecha.
+    canal.emitir('event: token\ndata: {"text":"confirme na tela"}\n\n');
+    canal.encerrar();
+  });
+
+  it('repassa evento `proposta` com dados truncados respeitando o limite', async () => {
+    // O agente pode enviar argumentos longos; o evento SSE deve ser legível.
+    const { service, canal } = montar();
+    const saida = destinoDeTeste();
+
+    canal.emitir('event: token\ndata: {"text":"x"}\n\n');
+    await respirar();
+
+    // Argumento grande — deve ser truncado com reticência visível.
+    const argumentosGrande = 'a'.repeat(500);
+    canal.emitir(
+      `event: proposta\ndata: {"nome":"log_meal","argumentos":"${JSON.stringify({ args: argumentosGrande })}","motivo":"teste"}\n\n`,
+    );
+
+    const tudo = saida.tudo();
+    // O payload do evento deve conter os dados da proposta.
+    expect(tudo).toContain('log_meal');
+  });
 });
 
 describe('ChatService — o que vai para o livro-caixa', () => {

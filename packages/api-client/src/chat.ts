@@ -242,6 +242,18 @@ export function parseChatEvent(nome: string, data: string): ChatStreamEvent | nu
       if (resetsAt) error.resetsAt = resetsAt;
       return { type: 'error', error };
     }
+    case 'proposta': {
+      // Evento CONFIRMABLE: extrai os dados da proposta e normaliza para o tipo.
+      const nome = texto(corpo.nome);
+      if (!nome) return null;
+      const argumentos = texto(corpo.argumentos);
+      const motivo = texto(corpo.motivo ?? '');
+      // O payload vira `data` genérico: o `use-chat-stream` consome por
+      // inspeção do campo, e manter o formato flexível aqui evita que uma
+      // mudança na estrutura do agente quebre o cliente.
+      const data = { nomeTool: nome, argumentos, motivo };
+      return { type: 'proposal', data };
+    }
     case 'done':
       return { type: 'done' };
     default:

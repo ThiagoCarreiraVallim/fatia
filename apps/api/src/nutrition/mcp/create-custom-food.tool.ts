@@ -13,7 +13,7 @@ export class CreateCustomFoodTool implements McpToolDef {
   constructor(private readonly foods: FoodService) {}
   readonly name = 'create_custom_food';
   readonly title = 'Criar alimento personalizado';
-  readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly annotations = {readOnlyHint: false, destructiveHint: false, confirmableHint: true};
   readonly hostedInference = false;
   readonly description =
     'Cria um alimento custom para o usuário. ' +

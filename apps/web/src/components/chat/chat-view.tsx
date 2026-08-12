@@ -16,7 +16,8 @@ import { ThinkingIndicator } from '@/components/elements/thinking-indicator';
 import { ToolCall, type ToolCallState } from '@/components/elements/tool-call';
 import { MobileComposer } from '@/components/elements/mobile-composer';
 import { Conversation, ConversationContent, ConversationScrollButton } from './conversation';
-import { useChatStream, type ChatUiMessage } from './use-chat-stream';
+import { useChatStream, type ChatUiMessage, type ChatStreamProposalEvent } from './use-chat-stream';
+import { ConfirmationModal } from './confirmation-modal';
 
 /**
  * A tela do chat, sobre os elements do assistant-ui.
@@ -129,11 +130,29 @@ function Balao({
 }
 
 export function ChatView() {
-  const { messages, status, respondendoId, announcement, send, retry, stop } = useChatStream();
+  const { messages, status, respondendoId, announcement, proposta, send, retry, stop } = useChatStream();
   const campo = useRef<HTMLTextAreaElement>(null);
   const [texto, setTexto] = useState('');
   const [digitando, setDigitando] = useState(false);
   const respondendo = status === 'submitted' || status === 'streaming';
+
+  /** Estado para controlar o modal de confirmação. */
+  const [aguardandoConfirmacao, setAguardandoConfirmacao] = useState(false);
+
+  // Quando uma nova proposta chega via stream, entra em modo espera.
+  useEffect(() => {
+    if (proposta) setAguardandoConfirmacao(true);
+  }, [proposta?.dados?.nomeTool]);
+
+  /** Callbacks para o modal: limpar estados quando aprovado/rejeitado. */
+  const onConclusao = useCallback(
+    () => {
+      setAguardandoConfirmacao(false);
+      // O modal é desmontado via state, e a proposta é limpa no useEffect
+      // que observa `aguardandoConfirmacao`.
+    },
+    [],
+  );
 
   function enviar(mensagem: string) {
     const limpo = mensagem.trim();
@@ -202,6 +221,15 @@ export function ChatView() {
               />
             ))
           )}
+
+          {aguardandoConfirmacao && proposta ? (
+            <ConfirmationModal
+              nomeTool={proposta.dados.nomeTool}
+              argumentos={proposta.dados.argumentos}
+              motivo={proposta.dados.motivo ?? `Confirmar chamada de ${proposta.dados.nomeTool}?`}
+              onConclusao={onConclusao}
+            />
+          ) : null}
         </ConversationContent>
         <ConversationScrollButton label="Ir para a última mensagem" />
       </Conversation>
