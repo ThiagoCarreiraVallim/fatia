@@ -6,6 +6,7 @@ import {
   type ChatStreamError,
   type ChatStreamEvent,
   type ChatToolCall,
+  type ChatToolProposal,
 } from '@fatia/api-client';
 
 /** Os mesmos nomes que `PromptInputSubmit` já entende, para não traduzir duas vezes. */
@@ -55,6 +56,18 @@ export function aplicarEvento(mensagem: ChatUiMessage, evento: ChatStreamEvent):
 export interface UseChatStream {
   messages: ChatUiMessage[];
   status: ChatStatus;
+  /**
+   * As ações que o agente propôs e que esperam decisão na tela (ADR 022).
+   *
+   * Uma lista, e não uma proposta: o modelo pode pedir duas escritas na mesma
+   * rodada ("registra o almoço e o peso"), e as duas chegam antes de qualquer
+   * decisão. Guardar só a última perderia a primeira sem nada acusar.
+   */
+  propostas: ChatToolProposal[];
+  /** Aprova as propostas pendentes e abre o turno que as executa. */
+  aprovar: () => Promise<void>;
+  /** Descarta as propostas pendentes. Não fala com o servidor — ver o hook. */
+  recusar: () => void;
   /** Id da resposta que está sendo escrita agora — é onde o "pensando" aparece. */
   respondendoId: string | null;
   /** Texto para leitor de tela. Muda uma vez por resposta, nunca por token. */
@@ -84,6 +97,8 @@ export function useChatStream(): UseChatStream {
   const [status, setStatus] = useState<ChatStatus>('ready');
   const [respondendoId, setRespondendoId] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState('');
+
+  const [propostas, setPropostas] = useState<ChatToolProposal[]>([]);
   const conversationId = useRef<string | undefined>(undefined);
   const abort = useRef<AbortController | null>(null);
 
@@ -112,22 +127,42 @@ export function useChatStream(): UseChatStream {
 
   /** Roda o stream escrevendo na mensagem de assistente já criada. */
   const responder = useCallback(
-    async (pergunta: string, idAssistente: string) => {
+    async (pergunta: string, idAssistente: string, aprovadas: ChatToolProposal[] = []) => {
       setStatus('submitted');
       setRespondendoId(idAssistente);
       setAnnouncement('');
+      // Limpa antes de abrir: a proposta pendente é sempre a **deste** turno, e
+      // deixar a do turno anterior na tela ofereceria "confirmar" para uma ação
+      // que o servidor não está mais esperando.
+      setPropostas([]);
 
       const controller = new AbortController();
       abort.current = controller;
 
       let houveErro = false;
+      // Contado à parte do `useState`: o anúncio é montado no fim desta função, e
+      // ler `propostas` aqui devolveria o valor do render que começou o turno —
+      // zero, sempre. É o mesmo motivo pelo qual `lista` tem um `ref`.
+      let propostasDoTurno = 0;
       try {
         for await (const evento of streamChat(
-          { message: pergunta, conversationId: conversationId.current },
+          {
+            message: pergunta,
+            conversationId: conversationId.current,
+            ...(aprovadas.length ? { approved: aprovadas } : {}),
+          },
           { signal: controller.signal },
         )) {
           if (evento.type === 'conversation') {
             conversationId.current = evento.conversationId;
+            continue;
+          }
+          if (evento.type === 'proposal') {
+            // Acumula em vez de substituir: duas escritas na mesma rodada chegam
+            // como dois quadros, e a tela precisa das duas para pedir uma decisão
+            // sobre o conjunto.
+            propostasDoTurno += 1;
+            setPropostas((atuais) => [...atuais, evento.proposal]);
             continue;
           }
           if (evento.type === 'done') continue;
@@ -135,6 +170,28 @@ export function useChatStream(): UseChatStream {
           if (evento.type === 'token') setStatus('streaming');
           atualizar((atuais) =>
             atuais.map((m) => (m.id === idAssistente ? aplicarEvento(m, evento) : m)),
+          );
+        }
+      } catch {
+        // `streamChat` promete nunca lançar — emite `{type:'error'}` e termina.
+        // Esta rede existe para quando a promessa não se cumprir: qualquer
+        // exceção escapando daqui deixaria `status` preso em `submitted`, e é aí
+        // que o chat **para de enviar**. Com `respondendo` travado em `true`, o
+        // Enter é recusado no composer e o botão vira "Parar resposta" — quem
+        // conversa digita, aperta, e não acontece nada. A única saída é apertar
+        // esse "Parar" sem nada estar rodando, que ninguém adivinha.
+        //
+        // Vira o mesmo `error` de qualquer outra falha: o aviso aparece no balão,
+        // com botão de tentar de novo, e a conversa segue utilizável — que é o
+        // requisito da #250, e vale principalmente para o defeito não previsto.
+        if (!controller.signal.aborted) {
+          houveErro = true;
+          atualizar((atuais) =>
+            atuais.map((m) =>
+              m.id === idAssistente
+                ? aplicarEvento(m, { type: 'error', error: { code: 'AI_UNKNOWN_ERROR' } })
+                : m,
+            ),
           );
         }
       } finally {
@@ -153,6 +210,17 @@ export function useChatStream(): UseChatStream {
       // por isso a região viva do `Conversation` fica calada (ver `chat-view`).
       if (houveErro) {
         setAnnouncement('A resposta falhou. O aviso está no fim da conversa.');
+        return;
+      }
+      // Antes do anúncio comum: "Fatia respondeu" mandaria quem usa leitor de tela
+      // procurar uma resposta no fim da conversa, e o que está lá é um pedido de
+      // decisão. Dizer o que é pedido, e quantas, é o que permite agir sem ver.
+      if (propostasDoTurno > 0) {
+        setAnnouncement(
+          propostasDoTurno === 1
+            ? 'Fatia propôs uma ação e espera sua confirmação no fim da conversa. Nada foi salvo ainda.'
+            : `Fatia propôs ${propostasDoTurno} ações e espera sua confirmação no fim da conversa. Nada foi salvo ainda.`,
+        );
         return;
       }
       const final = lista.current.find((m) => m.id === idAssistente);
@@ -185,6 +253,39 @@ export function useChatStream(): UseChatStream {
     [atualizar, responder],
   );
 
+  /**
+   * Aprova o que está pendente e abre o turno que executa.
+   *
+   * A mensagem que acompanha é "Confirmar", e ela **aparece na conversa** como
+   * qualquer outra: o histórico é o que fica, e um turno que grava sem nenhum
+   * vestígio de quem autorizou deixaria a conversa dizendo que a IA agiu sozinha.
+   */
+  const aprovar = useCallback(async () => {
+    const pendentes = propostas;
+    if (!pendentes.length) return;
+    if (abort.current) return;
+
+    const idAssistente = proximoId('assistente');
+    atualizar((atuais) => [
+      ...atuais,
+      { id: proximoId('voce'), role: 'user', text: 'Confirmar', tools: [] },
+      { id: idAssistente, role: 'assistant', text: '', tools: [] },
+    ]);
+    await responder('Confirmar', idAssistente, pendentes);
+  }, [atualizar, propostas, responder]);
+
+  /**
+   * Descarta o que estava pendente, **sem falar com o servidor**.
+   *
+   * Não há o que cancelar do outro lado: o turno já fechou com a proposta na mesa
+   * e nada foi gravado. Um endpoint de recusa daria a impressão de desfazer algo
+   * que nunca aconteceu, e seria uma chamada paga para não fazer nada.
+   */
+  const recusar = useCallback(() => {
+    setPropostas([]);
+    setAnnouncement('Ação cancelada. Nada foi salvo.');
+  }, []);
+
   const retry = useCallback(
     async (idAssistente: string) => {
       // Idem ao `send`: recusar depois de limpar o aviso faria o erro sumir da
@@ -208,5 +309,16 @@ export function useChatStream(): UseChatStream {
     [atualizar, responder],
   );
 
-  return { messages, status, respondendoId, announcement, send, retry, stop };
+  return {
+    messages,
+    status,
+    respondendoId,
+    announcement,
+    propostas,
+    aprovar,
+    recusar,
+    send,
+    retry,
+    stop,
+  };
 }

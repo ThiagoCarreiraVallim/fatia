@@ -302,7 +302,7 @@ def _tools_do_resultado(resultado: dict[str, Any]) -> list[McpToolInfo]:
                 # Objeto vazio e não `None`: o formato de tool da OpenAI exige um
                 # schema, e o do JSON Schema para "nenhum parâmetro" é este.
                 input_schema=schema if isinstance(schema, dict) else {"type": "object"},
-                # Ausente vira `{}`, e `{}` **não** passa no recorte da ADR 021 —
+                # Ausente vira `{}`, e `{}` **não** passa no recorte da ADR 022 —
                 # falha fechada. Ver `tool_policy.py`.
                 annotations=anotacoes if isinstance(anotacoes, dict) else {},
             )

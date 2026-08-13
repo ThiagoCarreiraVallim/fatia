@@ -16,7 +16,7 @@ export class FinishWorkoutSessionTool implements McpToolDef {
 
   readonly title = 'Finalizar treino';
 
-  readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
 
   readonly hostedInference = false;
   readonly description =

@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { MessageRole } from '@prisma/client';
 import { AiUsageService } from '../ai/ai-usage.service';
 import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { AgentChatClient, ErroDeStreamDoAgente, type StreamDoAgente } from './agent-chat.client';
@@ -106,12 +105,13 @@ export class ChatService {
 
     stream = await this.agent.abrir({
       bearer,
-      // `null` numa conversa nova: o id só existe depois que o agente aceitou o
-      // turno, e o agente não guarda histórico nenhum — ele recebe o que precisa
-      // em `messages`.
-      conversationId: dto.conversationId ?? null,
       timezone: user.timezone,
-      messages: [...anterior, { role: MessageRole.user, content: dto.message }],
+      // Separadas, e não concatenadas num array: o agente aplica tetos
+      // diferentes às duas — recusa a de agora, corta a do histórico. Ver o
+      // contrato em `agent-chat.client.ts`.
+      mensagem: dto.message,
+      historico: anterior,
+      aprovadas: dto.approved ?? [],
     });
 
     // O `close` que chegou enquanto o agente demorava a responder não volta a
@@ -157,6 +157,10 @@ export class ChatService {
           const dados = dadosDoEvento(evento);
           if (!dados) continue;
 
+          // `proposal` não aparece aqui de propósito: o quadro bruto já foi
+          // repassado no `escrever` acima, e reemitir uma versão traduzida
+          // entregaria a mesma proposta duas vezes — dois modais para uma
+          // ação. Este laço só **observa** o fluxo, para persistir e contar.
           if (evento.event === 'token' && typeof dados.text === 'string') {
             texto.push(dados.text);
           } else if (evento.event === 'tool' && typeof dados.name === 'string') {

@@ -97,4 +97,28 @@ describe('ConversationService — o que sobra do turno', () => {
     expect(mensagens[1].content).toBe('Registrei.');
     expect(mensagens[1].tools).toEqual([{ name: 'log_meal' }]);
   });
+
+  /**
+   * O par do teste acima, e o mais caro dos dois se quebrar.
+   *
+   * A mensagem sem texto **fica no banco** (é o vestígio da ação) e **não vai
+   * para o agente**: o `ChatMessage` de lá exige `content` com pelo menos um
+   * caractere, e um 422 causado pelo histórico é permanente — a conversa
+   * morreria a partir daquele turno, para sempre, sem nada que quem está
+   * conversando pudesse fazer. As duas propriedades juntas são o motivo de o
+   * filtro morar aqui e não no `concluirTurno`.
+   */
+  it('o histórico que vai ao agente pula a mensagem sem texto', async () => {
+    const { conversationId } = await conversas.iniciarTurno(userId, undefined, 'registra o arroz');
+    await conversas.concluirTurno(userId, conversationId, {
+      texto: '',
+      tools: [{ name: 'log_meal' }],
+    });
+
+    const historico = await conversas.historicoParaOAgente(userId, conversationId);
+
+    expect(historico).toEqual([{ role: 'user', content: 'registra o arroz' }]);
+    // E ela continua no banco: o filtro é do prompt, não do histórico.
+    expect((await mensagensDe(conversationId)).length).toBe(2);
+  });
 });

@@ -185,7 +185,7 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 103 tools): **78,4 k caracteres**
+`description`, `annotations` e o JSON Schema do input das 103 tools): **80,8 k caracteres**
 hoje, dos quais **4.499 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **87** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui

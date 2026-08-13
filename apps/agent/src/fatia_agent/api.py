@@ -46,7 +46,7 @@ from pydantic import BaseModel, Field
 
 from . import __version__
 from .allowed_models import unreviewed_host_reason, unreviewed_models, usable_models
-from .chat import build_mcp_client, somente_leitura, stream_chat_events
+from .chat import build_mcp_client, stream_chat_events, todas_permitidas
 from .chat.errors import (
     McpError,
     McpNotConfigured,
@@ -123,6 +123,37 @@ class ChatRequest(BaseModel):
 
     message: Annotated[str, Field(min_length=1, max_length=MAX_CARACTERES_POR_MENSAGEM)]
     history: Annotated[list[ChatMessage], Field(default_factory=list)]
+    # O fuso do perfil, que o `apps/api` já conhece — vira a data de hoje no
+    # prompt. **Não é identidade**: o nome de um fuso é grosso demais para
+    # apontar para alguém, e sem ele o modelo chuta a data em toda pergunta
+    # sobre "ontem". Opcional porque o agente responde sem ele, só pior.
+    timezone: str | None = None
+    # As propostas que a pessoa aprovou na tela. Vazio no turno comum; ver o
+    # handshake de dois turnos no docstring de `chat/events.py`.
+    approved: Annotated[list["ToolApproval"], Field(default_factory=list)]
+
+
+class ToolApproval(BaseModel):
+    """Uma proposta aprovada na tela, como o evento `proposal` a mandou.
+
+    `arguments` é o texto **exato** que foi para a tela, e não um objeto: é ele
+    que `exigir_aprovada` compara com o que vai executar, e reserializar um dict
+    no caminho mudaria a ordem das chaves e o espaçamento — duas coisas iguais
+    virando diferentes na única comparação que precisa bater.
+
+    O teto é o mesmo `MAX_CARACTERES_POR_MENSAGEM` da mensagem, e por isso é 422:
+    quem monta este corpo é o nosso PWA, com um valor que **nós** emitimos: acima
+    do teto é defeito de cliente, e um 422 nomeia o defeito onde um corte
+    silencioso executaria JSON pela metade.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    name: Annotated[str, Field(min_length=1, max_length=120)]
+    arguments: Annotated[str, Field(max_length=MAX_CARACTERES_POR_MENSAGEM)]
+
+
+ChatRequest.model_rebuild()
 
 
 # 503: falta configuração nossa. 504: o provedor demorou. 502: o provedor
@@ -346,7 +377,7 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             # primeira chamada que exercita o Bearer, e é a única chance de um
             # token inválido virar 401 de verdade em vez de um 200 com um evento
             # de erro dentro — que é o que o PWA teria de aprender a distinguir.
-            permitidas = somente_leitura(await client.list_tools())
+            permitidas = todas_permitidas(await client.list_tools())
         except BaseException:
             await client.aclose()
             await provider.aclose()
@@ -360,6 +391,8 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
                     permitidas,
                     mensagem=payload.message,
                     historico=[mensagem.model_dump() for mensagem in payload.history],
+                    timezone=payload.timezone,
+                    aprovadas=[aprovada.model_dump() for aprovada in payload.approved],
                 ):
                     yield evento.frame()
             finally:

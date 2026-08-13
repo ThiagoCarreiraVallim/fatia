@@ -25,6 +25,25 @@ export interface McpToolAnnotations {
   readOnlyHint: boolean;
   /** Apaga ou torna irrecuperável. O Claude sempre confirma antes. */
   destructiveHint: boolean;
+  /**
+   * Escreve, mas de forma reversível ou idempotente — o chat hospedado pode
+   * propô-la, e só executa depois de a pessoa aprovar na tela (ADR 022).
+   *
+   * **Não é anotação da spec MCP**, e sim política nossa servida no mesmo
+   * objeto: o cliente MCP externo ignora um campo que não conhece, e o agente
+   * da Fatia deriva dela o recorte de três camadas em `chat/tool_policy.py` —
+   * `readOnlyHint` executa direto, `confirmableHint` passa pelo modal, o resto
+   * nunca é oferecido ao modelo.
+   *
+   * **Obrigatório, não opcional com default `false`**, pelo mesmo motivo dos
+   * dois acima: um default classificaria toda tool nova como não-confirmável,
+   * ou seja fora do chat, e a capacidade sumiria sem ninguém ligar o sintoma à
+   * anotação esquecida. Quem esquece, esquece na direção que dá para notar.
+   *
+   * Incompatível com `destructiveHint: true` — apagar não é reversível, e não
+   * entra no chat nem com confirmação. O `tool-catalog.spec.ts` reprova o par.
+   */
+  confirmableHint: boolean;
 }
 
 export interface McpToolDef<S extends ZodRawShape = ZodRawShape> {

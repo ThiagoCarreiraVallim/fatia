@@ -78,8 +78,9 @@ vi.mock('@fatia/api-client', async () => {
 const { ChatView } = await import('../chat-view');
 
 beforeAll(() => {
-  // `use-stick-to-bottom`, que o `Conversation` do registry usa, observa o
-  // tamanho do container. O jsdom não tem ResizeObserver.
+  // Dois consumidores de `ResizeObserver`, que o jsdom não tem: o
+  // `use-stick-to-bottom` do `Conversation` observa o container, e o `SwapLabel`
+  // dos elements mede o rótulo para animar a largura do bloco de tool.
   globalThis.ResizeObserver = class {
     observe() {}
     unobserve() {}
@@ -154,6 +155,19 @@ describe('ChatView', () => {
     );
   });
 
+  /**
+   * O estado é lido pelo **nome acessível** do bloco, e não por `getByText`.
+   *
+   * O `SwapLabel` dos elements do assistant-ui mantém os dois rótulos no DOM ao
+   * mesmo tempo — troca opacidade, não conteúdo — e marca `aria-hidden` no que
+   * está escondido. Além disso o shimmer é uma terceira cópia do rótulo ativo.
+   * `getByText('Executando')` acha três nós, e `queryByText(...).not.toBe...`
+   * ficaria vermelho para sempre mesmo com a tela certa.
+   *
+   * O nome acessível ignora o que está `aria-hidden`, então é exatamente o que a
+   * pessoa vê e o que o leitor de tela anuncia — asserção melhor que a anterior,
+   * e não só uma que passa.
+   */
   it('mostra qual tool foi chamada, e o resultado quando ele chega', async () => {
     render(<ChatView />);
     await enviar('registra 2 ovos');
@@ -162,8 +176,8 @@ describe('ChatView', () => {
       type: 'tool',
       tool: { id: 'c1', name: 'registrar_refeicao', state: 'input-available', input: { g: 100 } },
     });
-    expect(await screen.findByText('registrar_refeicao')).toBeInTheDocument();
-    expect(screen.getByText('Executando')).toBeInTheDocument();
+    const bloco = await screen.findByRole('button', { name: /registrar_refeicao/ });
+    expect(bloco).toHaveAccessibleName(/Executando/);
 
     fontes[0].emitir({
       type: 'tool',
@@ -174,10 +188,36 @@ describe('ChatView', () => {
         output: { mealId: 'm1' },
       },
     });
-    expect(await screen.findByText('Concluída')).toBeInTheDocument();
+    await waitFor(() => expect(bloco).toHaveAccessibleName(/Concluída/));
+    expect(bloco).not.toHaveAccessibleName(/Executando/);
     // O mesmo `id` atualiza o bloco; não abre um segundo.
-    expect(screen.getAllByText('registrar_refeicao')).toHaveLength(1);
-    expect(screen.queryByText('Executando')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /registrar_refeicao/ })).toHaveLength(1);
+  });
+
+  it('tool que falhou não se parece com tool que respondeu', async () => {
+    // O element do assistant-ui só prevê "rodando" e "pronta". Sem o terceiro
+    // estado, uma consulta que falhou ficaria com a mesma cara de uma que trouxe
+    // dados — e o número que o modelo disser em seguida pareceria vir deles.
+    render(<ChatView />);
+    await enviar('quanto comi hoje?');
+
+    fontes[0].emitir({
+      type: 'tool',
+      tool: { id: 'c1', name: 'get_today_summary', state: 'input-available', input: {} },
+    });
+    fontes[0].emitir({
+      type: 'tool',
+      tool: {
+        id: 'c1',
+        name: 'get_today_summary',
+        state: 'output-error',
+        errorText: 'MCP_UNAUTHORIZED',
+      },
+    });
+
+    const bloco = await screen.findByRole('button', { name: /get_today_summary/ });
+    await waitFor(() => expect(bloco).toHaveAccessibleName(/Falhou/));
+    expect(bloco).not.toHaveAccessibleName(/Concluída/);
   });
 
   it.each([
@@ -193,6 +233,41 @@ describe('ChatView', () => {
 
     const alerta = await screen.findByRole('alert');
     expect(alerta).toHaveTextContent(esperado);
+  });
+
+  /**
+   * A rede de baixo, e o caso mais caro de todos se cair.
+   *
+   * `streamChat` promete nunca lançar — emite `{type:'error'}` e termina. Todos
+   * os casos daqui exercitam essa promessa; **nenhum** exercitava o que acontece
+   * quando ela não se cumpre. E a resposta era: `status` fica preso em
+   * `submitted`, o composer passa a recusar o Enter e o botão vira "Parar
+   * resposta". Quem conversa digita, aperta, e não acontece nada. Sair disso só
+   * apertando o "Parar" com nada rodando — saída que ninguém adivinha.
+   *
+   * O `getByRole` do helper `enviar` é o que torna isto vermelho de verdade: com
+   * o status travado, não existe mais botão chamado "Enviar mensagem".
+   */
+  it('exceção crua no stream não trava o envio para sempre', async () => {
+    streamChatMock.mockImplementationOnce((() => {
+      // eslint-disable-next-line require-yield
+      return (async function* () {
+        throw new Error('transporte não configurado');
+      })();
+    }) as unknown as typeof streamChatMock);
+
+    render(<ChatView />);
+    await enviar('oi');
+
+    const alerta = await screen.findByRole('alert');
+    expect(alerta).toHaveTextContent(/motivo não identificado/);
+
+    // E a prova de que a conversa não morreu: a próxima pergunta sai.
+    await enviar('de novo');
+    await waitFor(() => expect(streamChatMock).toHaveBeenCalledTimes(2));
+    fontes[0].emitir({ type: 'token', text: 'Agora vai.' });
+    fontes[0].fechar();
+    expect(await screen.findByText('Agora vai.')).toBeInTheDocument();
   });
 
   it('depois do erro a conversa continua utilizável', async () => {
@@ -338,6 +413,23 @@ describe('ChatView', () => {
     expect(regiao?.textContent).toContain('Fatia respondeu');
   });
 
+  it('a sugestão da tela vazia manda a pergunta, e some depois disso', async () => {
+    // A tela vazia é a única pista do que dá para perguntar: sem ela, quem abre
+    // o chat pela primeira vez encara um campo em branco e um assistente que só
+    // consulta — não dá para adivinhar o que ele sabe responder.
+    render(<ChatView />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'O que eu comi hoje?' }));
+
+    await waitFor(() => expect(streamChatMock).toHaveBeenCalledTimes(1));
+    expect(streamChatMock.mock.calls[0][0]).toMatchObject({ message: 'O que eu comi hoje?' });
+    // A pergunta já está na conversa; deixar as sugestões atrás dela seria oferecer
+    // um começo para quem já começou.
+    expect(
+      screen.queryByRole('button', { name: 'Qual foi meu último treino de peito?' }),
+    ).toBeNull();
+  });
+
   it('a região viva do log fica calada — quem anuncia é a região de status', async () => {
     render(<ChatView />);
     // `role="log"` vem do `Conversation` do registry e anuncia sozinho cada
@@ -359,5 +451,133 @@ describe('ChatView', () => {
       message: 'e agora?',
       conversationId: 'conv-7',
     });
+  });
+});
+
+/**
+ * A confirmação de escrita (ADR 022), pela tela.
+ *
+ * O que estes casos cobram é que **a decisão seja da pessoa**: o cartão aparece
+ * sem nada ter sido gravado, "Cancelar" não manda nada para o servidor, e
+ * "Confirmar" manda exatamente a proposta que estava na tela. O último é o que
+ * pega o defeito silencioso — o eco reserializado, que faz o agente recusar a
+ * própria proposta e o sintoma virar "aprovei e não salvou".
+ */
+describe('ChatView — confirmação de escrita', () => {
+  const PROPOSTA = {
+    id: 'c1',
+    name: 'log_meal',
+    arguments: '{"items":[{"food":"frango","grams":200}]}',
+  };
+
+  async function propor() {
+    render(<ChatView />);
+    await enviar('registra 200g de frango');
+    fontes[0].emitir({ type: 'proposal', proposal: PROPOSTA });
+    fontes[0].emitir({ type: 'done' });
+    fontes[0].fechar();
+    return screen.findByRole('group', { name: 'Ação aguardando confirmação' });
+  }
+
+  it('mostra o que vai ser gravado, em vez do JSON cru', async () => {
+    const cartao = await propor();
+
+    expect(within(cartao).getByText('Registrar refeição')).toBeInTheDocument();
+    // O nome da tool continua visível: é o que torna a ação auditável.
+    expect(within(cartao).getByText('log_meal')).toBeInTheDocument();
+  });
+
+  it('deixa claro que nada foi salvo enquanto o cartão está na tela', async () => {
+    const cartao = await propor();
+
+    expect(within(cartao).getByText(/Nada foi salvo ainda/)).toBeInTheDocument();
+  });
+
+  it('não abre turno nenhum só por propor', async () => {
+    await propor();
+
+    // Um só: o da pergunta. Se a tela mandasse a aprovação sozinha, seriam dois.
+    expect(streamChatMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('confirmar manda a proposta de volta byte a byte', async () => {
+    const user = userEvent.setup();
+    const cartao = await propor();
+
+    await user.click(within(cartao).getByRole('button', { name: 'Confirmar' }));
+
+    await waitFor(() => expect(streamChatMock).toHaveBeenCalledTimes(2));
+    const corpo = streamChatMock.mock.calls[1][0];
+    // `toEqual` sobre o array inteiro, e não `toContain` sobre o nome: o que o
+    // agente compara é o texto de `arguments`, e é ele que não pode ter passado
+    // por um `JSON.parse`/`stringify` no caminho.
+    expect(corpo.approved).toEqual([PROPOSTA]);
+  });
+
+  it('cancelar não fala com o servidor e tira o cartão da tela', async () => {
+    const user = userEvent.setup();
+    const cartao = await propor();
+
+    await user.click(within(cartao).getByRole('button', { name: 'Cancelar' }));
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('group', { name: 'Ação aguardando confirmação' }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(streamChatMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancelar é sempre alcançável, sem depender de digitar nada', async () => {
+    // O cartão anterior desabilitava "Recuar" enquanto o campo estivesse vazio:
+    // a saída exigia preencher algo, ou seja não era saída.
+    const cartao = await propor();
+
+    expect(within(cartao).getByRole('button', { name: 'Cancelar' })).toBeEnabled();
+  });
+
+  it('anuncia a confirmação pendente em vez de dizer que respondeu', async () => {
+    await propor();
+
+    await waitFor(() => expect(screen.getByText(/espera sua confirmação/)).toBeInTheDocument());
+    expect(screen.queryByText(/^Fatia respondeu/)).not.toBeInTheDocument();
+  });
+
+  it('duas propostas na mesma rodada aparecem as duas', async () => {
+    render(<ChatView />);
+    await enviar('registra frango e arroz');
+    fontes[0].emitir({ type: 'proposal', proposal: PROPOSTA });
+    fontes[0].emitir({
+      type: 'proposal',
+      proposal: { id: 'c2', name: 'log_weight', arguments: '{"kg":80}' },
+    });
+    fontes[0].fechar();
+
+    const cartao = await screen.findByRole('group', {
+      name: '2 ações aguardando confirmação',
+    });
+    expect(within(cartao).getByText('log_meal')).toBeInTheDocument();
+    expect(within(cartao).getByText('log_weight')).toBeInTheDocument();
+  });
+
+  it('o foco vai para Confirmar quando o cartão aparece', async () => {
+    // Quem conversa pelo teclado estava no campo de texto; sem isto teria de
+    // tabular por toda a conversa para alcançar a decisão que foi pedida.
+    const cartao = await propor();
+
+    expect(within(cartao).getByRole('button', { name: 'Confirmar' })).toHaveFocus();
+  });
+
+  it('a proposta de um turno não sobrevive ao turno seguinte', async () => {
+    const cartao = await propor();
+    expect(cartao).toBeInTheDocument();
+
+    await enviar('deixa, o que eu comi ontem?');
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('group', { name: 'Ação aguardando confirmação' }),
+      ).not.toBeInTheDocument(),
+    );
   });
 });

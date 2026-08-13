@@ -43,6 +43,7 @@ def tool_do_catalogo(
     name: str,
     *,
     read_only: bool,
+    confirmable: bool = False,
     description: str = "Descrição de teste com tamanho suficiente.",
     annotations: dict[str, object] | None = None,
 ) -> dict[str, object]:
@@ -64,6 +65,7 @@ def tool_do_catalogo(
             "title": name.replace("_", " ").title(),
             "readOnlyHint": read_only,
             "destructiveHint": False,
+            "confirmableHint": confirmable,
         },
     }
 
@@ -164,6 +166,32 @@ def fragmento_de_tool(
 
 def fim(finish_reason: str = "stop") -> dict[str, object]:
     return {"choices": [{"index": 0, "delta": {}, "finish_reason": finish_reason}]}
+
+
+def bloco_de_uso(
+    *,
+    model: str = "ornith-1.0-9b",
+    prompt_tokens: object = 812,
+    completion_tokens: object = 96,
+) -> dict[str, object]:
+    """O fragmento final de `usage`, na forma que o LM Studio emite.
+
+    `choices` vazio e `usage` na raiz — verificado contra o LM Studio local com
+    `stream_options: {"include_usage": true}`. Um dublê que pendurasse o `usage`
+    dentro do choice passaria verde sobre um parser que nunca acha o bloco de
+    verdade, e o sintoma seria a cota do `apps/api` nunca medir nada.
+
+    `prompt_tokens` e `completion_tokens` aceitam qualquer coisa de propósito:
+    é assim que o teste do formato torto exercita a guarda.
+    """
+    return {
+        "choices": [],
+        "model": model,
+        "usage": {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+        },
+    }
 
 
 def stream_do_provedor(fragmentos: Iterable[dict[str, object]]) -> httpx.Response:

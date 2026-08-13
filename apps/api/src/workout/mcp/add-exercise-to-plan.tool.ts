@@ -16,7 +16,7 @@ export class AddExerciseToPlanTool implements McpToolDef {
 
   readonly title = 'Adicionar exercício ao plano';
 
-  readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
 
   readonly hostedInference = false;
   readonly description =

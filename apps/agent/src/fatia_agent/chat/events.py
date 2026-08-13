@@ -10,16 +10,58 @@ renderiza. Nomes de evento e chaves de payload em inglês, como o resto do fio
     data: {"text": "Você registrou "}
 
     event: tool
-    data: {"name": "list_meals", "phase": "start", "arguments": "{\"date\":\"2026-08-05\"}"}
+    data: {"id": "c1", "name": "list_meals", "state": "input-available",
+           "input": "{\"date\":\"2026-08-05\"}"}
 
     event: tool
-    data: {"name": "list_meals", "phase": "end", "ok": true, "result": "[{...}]"}
+    data: {"id": "c1", "name": "list_meals", "state": "output-available", "output": "[{...}]"}
+
+    event: proposal
+    data: {"id": "c2", "name": "log_meal", "arguments": "{\"items\":[...]}"}
+
+    event: usage
+    data: {"model": "ornith-1.0-9b", "inputUnits": 812, "outputUnits": 96}
 
     event: error
     data: {"code": "MCP_UNAUTHORIZED", "message": "..."}
 
     event: done
     data: {"reason": "stop"}
+
+## O handshake de confirmação: dois turnos HTTP, não uma pausa
+
+Tool CONFIRMABLE (ADR 022) **não executa** no turno em que o modelo a pede. O
+agente emite `proposal` e fecha o turno com `reason: "awaiting_confirmation"`. Se
+a pessoa aprovar na tela, o PWA abre um turno novo com a proposta em `approved`,
+e o agente executa aquilo direto — sem passar pelo modelo de novo.
+
+Dois turnos, e não um `interrupt()` do LangGraph, porque pausar de verdade exige
+checkpointer, e não há: a persistência é do NestJS (ADR 015), e um checkpointer
+aqui gravaria histórico de saúde num segundo lugar. Ver `graph.py`.
+
+Executar direto no segundo turno, e não pedir ao modelo que chame a tool de novo,
+porque "de novo" não é garantido: o modelo pode reformular os argumentos entre um
+turno e outro, e o que a pessoa aprovou na tela deixaria de ser o que roda. O que
+ela viu é o que executa.
+
+Por isso os `arguments` de `proposal` vão inteiros — eles voltam na aprovação e
+são o que de fato executa. O PWA os devolve como recebeu; ele não é a autoridade
+sobre eles, mas também não precisa ser: a tool roda com o Bearer da própria
+pessoa contra os dados dela, e `exigir_permitida` continua valendo. Argumento
+adulterado não alcança nada que o app já não permitisse pela tela.
+
+## Por que `id`/`state`, e não `phase`/`ok`
+
+Este vocabulário é o dos elementos de IA do shadcn, que é o que a tela da #250
+renderiza — `input-available` → `output-available` | `output-error`. O agente
+emitiu `phase`/`ok` até esta correção, e o `parseChatEvent` do
+`@fatia/api-client` exige `id` e `state`: **todo quadro de tool era descartado
+em silêncio** e nenhuma tool aparecia na tela. As três camadas da #247 foram
+construídas em paralelo, e o contrato divergiu exatamente onde ninguém tinha
+teste dos dois lados.
+
+O `id` é o da tool call do modelo, e é o que faz o segundo quadro **substituir**
+o primeiro em vez de duplicá-lo. Sem ele, cada tool apareceria duas vezes.
 
 Três garantias que o outro lado pode assumir:
 
@@ -79,23 +121,47 @@ def token(text: str) -> ChatEvent:
     return ChatEvent("token", {"text": text})
 
 
-def tool_start(name: str, arguments: str) -> ChatEvent:
-    return ChatEvent(
-        "tool",
-        {"name": name, "phase": "start", "arguments": _cortar(arguments, MAX_ARGUMENTOS_NO_EVENTO)},
-    )
-
-
-def tool_end(name: str, *, ok: bool, result: str) -> ChatEvent:
+def tool_start(id: str, name: str, arguments: str) -> ChatEvent:
     return ChatEvent(
         "tool",
         {
+            "id": id,
             "name": name,
-            "phase": "end",
-            "ok": ok,
-            "result": _cortar(result, MAX_RESULTADO_NO_EVENTO),
+            "state": "input-available",
+            "input": _cortar(arguments, MAX_ARGUMENTOS_NO_EVENTO),
         },
     )
+
+
+def tool_end(id: str, name: str, *, ok: bool, result: str) -> ChatEvent:
+    """O fim da mesma chamada, casado pelo `id` com o quadro de início.
+
+    Sucesso e falha são **estados diferentes**, e não um booleano: é o que o
+    `ToolOutput` da tela usa para escolher entre mostrar o resultado e mostrar o
+    erro. O texto vai em `output` ou em `errorText`, nunca nos dois.
+    """
+    texto = _cortar(result, MAX_RESULTADO_NO_EVENTO)
+    if ok:
+        return ChatEvent(
+            "tool", {"id": id, "name": name, "state": "output-available", "output": texto}
+        )
+    return ChatEvent("tool", {"id": id, "name": name, "state": "output-error", "errorText": texto})
+
+
+def usage(model: str, *, input_units: int | None, output_units: int | None) -> ChatEvent:
+    """O que o turno consumiu, para a cota do `apps/api` (#135).
+
+    Chaves em camelCase porque é o que o `chat.service.ts` lê. Unidade ausente
+    fica **fora** do objeto em vez de ir como `0`: o `somarUnidade` de lá trata
+    `undefined` como "total desconhecido" e contamina a soma de propósito — um
+    zero aqui viraria custo medido e a cota fecharia tarde.
+    """
+    dados: dict[str, Any] = {"model": model}
+    if input_units is not None:
+        dados["inputUnits"] = input_units
+    if output_units is not None:
+        dados["outputUnits"] = output_units
+    return ChatEvent("usage", dados)
 
 
 def error(code: str, message: str) -> ChatEvent:
@@ -104,6 +170,22 @@ def error(code: str, message: str) -> ChatEvent:
 
 def done(reason: str) -> ChatEvent:
     return ChatEvent("done", {"reason": reason})
+
+
+def proposal(id: str, name: str, arguments: str) -> ChatEvent:
+    """Uma tool CONFIRMABLE que o modelo pediu e que **não** foi executada.
+
+    O turno termina aqui, com `done` e `reason: "awaiting_confirmation"`. Quem
+    decide é a pessoa, na tela; se ela aprovar, o PWA manda **outro** turno
+    carregando esta proposta em `approved`, e aí o agente executa. Ver o
+    handshake no topo deste módulo.
+
+    Os `arguments` viajam **inteiros**, ao contrário dos de `tool_start`: eles
+    voltam na aprovação e são o que de fato executa. Cortar aqui mandaria JSON
+    pela metade de volta — a tool falharia, ou pior, gravaria o pedaço que
+    sobrou. Quem passa do teto é recusado em `agir`, não truncado aqui.
+    """
+    return ChatEvent("proposal", {"id": id, "name": name, "arguments": arguments})
 
 
 def _cortar(texto: str, limite: int) -> str:
@@ -120,7 +202,9 @@ __all__ = [
     "ChatEvent",
     "done",
     "error",
+    "proposal",
     "token",
     "tool_end",
     "tool_start",
+    "usage",
 ]

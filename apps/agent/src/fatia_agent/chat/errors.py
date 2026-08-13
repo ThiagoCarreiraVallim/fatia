@@ -101,7 +101,7 @@ class McpToolRejected(McpError):
 class McpToolNotAllowed(McpToolRejected):
     """O modelo pediu uma tool fora do recorte permitido ao agente.
 
-    Não é falha de infraestrutura: é o recorte da ADR 021 funcionando. O modelo
+    Não é falha de infraestrutura: é o recorte da ADR 022 funcionando. O modelo
     alucina nome de tool com frequência, e um nome inventado que por acaso exista
     no catálogo de escrita não pode virar escrita.
     """

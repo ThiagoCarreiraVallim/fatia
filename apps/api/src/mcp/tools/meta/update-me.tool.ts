@@ -14,7 +14,7 @@ export class UpdateMeTool implements McpToolDef {
   constructor(private readonly prisma: PrismaService) {}
   readonly name = 'update_me';
   readonly title = 'Atualizar meu perfil';
-  readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
   readonly description =
     'Atualiza o perfil do usuário (nome, estatura, fuso horário). ' +

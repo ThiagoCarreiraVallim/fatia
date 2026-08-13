@@ -225,8 +225,8 @@ def test_o_fluxo_sse_sai_na_ordem_com_os_eventos_de_tool(settings_factory, monke
     assert "no-transform" in resposta.headers["cache-control"]
 
     assert eventos_do_fluxo(resposta.text) == [
-        ("tool", '{"name":"list_meals","phase":"start","arguments":"{}"}'),
-        ("tool", '{"name":"list_meals","phase":"end","ok":true,"result":"[]"}'),
+        ("tool", '{"id":"c1","name":"list_meals","state":"input-available","input":"{}"}'),
+        ("tool", '{"id":"c1","name":"list_meals","state":"output-available","output":"[]"}'),
         ("token", '{"text":"Você "}'),
         ("token", '{"text":"comeu arroz."}'),
         ("done", '{"reason":"stop"}'),

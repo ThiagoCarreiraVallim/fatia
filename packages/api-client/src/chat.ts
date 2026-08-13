@@ -74,6 +74,26 @@ export interface ChatStreamError {
 }
 
 /**
+ * Uma ação que o agente propôs e **não** executou (ADR 022).
+ *
+ * O turno termina aqui, com `done`. Quem decide é quem está conversando: se
+ * aprovar, o próximo `ChatRequest` leva este objeto de volta em `approved`, e é
+ * aí que a tool roda. Recusar é não mandar nada — não há evento de recusa,
+ * porque não há nada do outro lado esperando por ele.
+ *
+ * `arguments` é o texto do JSON como o agente o mandou, e volta **exatamente
+ * assim**. Reserializar mudaria ordem de chave e espaçamento, e o agente compara
+ * o texto literal para garantir que o que executa é o que foi aprovado — ver
+ * `exigir_aprovada` no `tool_policy.py`.
+ */
+export interface ChatToolProposal {
+  /** Id da tool call no turno que a propôs. Casa o modal com a proposta. */
+  id: string;
+  name: string;
+  arguments: string;
+}
+
+/**
  * Um quadro do SSE.
  *
  * `conversation` chega primeiro: sem ele, uma conversa interrompida no meio não
@@ -83,6 +103,7 @@ export type ChatStreamEvent =
   | { type: 'conversation'; conversationId: string }
   | { type: 'token'; text: string }
   | { type: 'tool'; tool: ChatToolCall }
+  | { type: 'proposal'; proposal: ChatToolProposal }
   | { type: 'error'; error: ChatStreamError }
   | { type: 'done' };
 
@@ -90,6 +111,14 @@ export interface ChatRequest {
   message: string;
   /** Ausente inicia conversa nova. O NestJS amarra o id ao usuário do token. */
   conversationId?: string;
+  /**
+   * Propostas que a pessoa aprovou na tela, para executar neste turno.
+   *
+   * Vão junto de uma `message` como qualquer turno: o agente monta o prompt com
+   * ela e executa a aprovação antes de falar com o modelo. Ver o handshake em
+   * `apps/agent/src/fatia_agent/chat/events.py`.
+   */
+  approved?: ChatToolProposal[];
 }
 
 /**
@@ -241,6 +270,20 @@ export function parseChatEvent(nome: string, data: string): ChatStreamEvent | nu
       const resetsAt = texto(corpo.resetsAt);
       if (resetsAt) error.resetsAt = resetsAt;
       return { type: 'error', error };
+    }
+    case 'proposal': {
+      // `id` e `name` são obrigatórios: sem eles não há como casar o modal com a
+      // proposta nem como executá-la depois, e um modal sem ação é pior que
+      // nenhum. Quadro incompleto é descartado, como nos outros ramos.
+      const id = texto(corpo.id);
+      const name = texto(corpo.name);
+      if (!id || !name) return null;
+      // Não passa pelo `texto`: ele trata `''` como ausente, e string vazia aqui
+      // é legítima — tool sem parâmetro é chamada com `{}` ou com nada. Só um
+      // valor que não é string invalida a proposta.
+      const args = typeof corpo.arguments === 'string' ? corpo.arguments : undefined;
+      if (args === undefined) return null;
+      return { type: 'proposal', proposal: { id, name, arguments: args } };
     }
     case 'done':
       return { type: 'done' };

@@ -13,7 +13,7 @@ export class JoinGroupTool implements McpToolDef {
   constructor(private readonly memberships: MembershipService) {}
   readonly name = 'join_group';
   readonly title = 'Pedir para entrar num grupo';
-  readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
   readonly description =
     'Pede para entrar numa academia ou grupo pelo identificador público (slug) do convite. ' +

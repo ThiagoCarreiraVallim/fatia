@@ -83,6 +83,45 @@ describe('parseQuadro', () => {
       'event: error\ndata: {"code":"AI_NOVIDADE","message":"Falha em POST chat/completions. Verifique AI_BASE_URL."}';
     expect(parseQuadro(quadro)).toEqual({ type: 'error', error: { code: 'AI_UNKNOWN_ERROR' } });
   });
+
+  it('normaliza o `proposal` do agente', () => {
+    const quadro =
+      'event: proposal\ndata: {"id":"c1","name":"log_meal","arguments":"{\\"grams\\":200}"}';
+    expect(parseQuadro(quadro)).toEqual({
+      type: 'proposal',
+      proposal: { id: 'c1', name: 'log_meal', arguments: '{"grams":200}' },
+    });
+  });
+
+  it('aceita `arguments` vazio, que é como tool sem parâmetro é proposta', () => {
+    const quadro =
+      'event: proposal\ndata: {"id":"c1","name":"refresh_achievements","arguments":""}';
+    expect(parseQuadro(quadro)).toEqual({
+      type: 'proposal',
+      proposal: { id: 'c1', name: 'refresh_achievements', arguments: '' },
+    });
+  });
+
+  it.each([
+    ['sem id', '{"name":"log_meal","arguments":"{}"}'],
+    ['sem name', '{"id":"c1","arguments":"{}"}'],
+    ['arguments não-string', '{"id":"c1","name":"log_meal","arguments":{"grams":200}}'],
+  ])('descarta proposta %s — um cartão sem ação é pior que nenhum', (_caso, data) => {
+    expect(parseQuadro(`event: proposal\ndata: ${data}`)).toBeNull();
+  });
+
+  /**
+   * O nome do evento é o do agente, e o teste o afirma **literalmente**.
+   *
+   * As três camadas foram construídas em paralelo e já divergiram duas vezes
+   * neste mesmo evento: `phase`/`ok` contra `id`/`state`, e depois `proposta`
+   * contra `proposal`. Nos dois casos o quadro era descartado em silêncio e o
+   * sintoma aparecia como "a tela não mostra nada".
+   */
+  it('não conhece o nome antigo `proposta`', () => {
+    const quadro = 'event: proposta\ndata: {"id":"c1","name":"log_meal","arguments":"{}"}';
+    expect(parseQuadro(quadro)).toBeNull();
+  });
 });
 
 describe('streamChat', () => {

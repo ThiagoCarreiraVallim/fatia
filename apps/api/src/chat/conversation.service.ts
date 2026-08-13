@@ -85,6 +85,14 @@ export class ConversationService {
    * mensagem, quadraticamente. O corte pega as mais recentes e devolve em ordem
    * cronológica — o começo de uma conversa velha é o que menos importa para a
    * próxima resposta.
+   *
+   * **Mensagem sem texto fica de fora.** `concluirTurno` grava o turno que só
+   * chamou tool, com `content: ''`, de propósito — é o vestígio de que a IA agiu
+   * (ver lá). Mas o agente recusa `content` vazio com 422, e um 422 no histórico
+   * é **permanente**: a conversa morreria para sempre a partir daquele turno, e
+   * quem estivesse conversando não teria nenhuma forma de consertar. Filtrar
+   * aqui mantém as duas propriedades — a linha continua no banco, auditável, e
+   * não vai para o prompt, onde ela não diz nada mesmo.
    */
   async historicoParaOAgente(
     userId: string,
@@ -97,7 +105,7 @@ export class ConversationService {
       take: TETO_DO_HISTORICO,
       select: { role: true, content: true },
     });
-    return ultimas.reverse();
+    return ultimas.reverse().filter((m) => m.content.trim() !== '');
   }
 
   /**

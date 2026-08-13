@@ -1,73 +1,80 @@
 'use client';
 
-import { useRef } from 'react';
-import { MessageCircle, RotateCcw } from 'lucide-react';
-import { textoDeErroDoChat, type ChatStreamError, type ChatToolCall } from '@fatia/api-client';
+import { useRef, useState } from 'react';
+import { Streamdown } from 'streamdown';
+import { textoDeErroDoChat, type ChatToolCall } from '@fatia/api-client';
+import { cn } from '@/lib/utils';
+import { field } from '@/components/elements/surfaces';
 import {
-  Conversation,
-  ConversationContent,
-  ConversationEmptyState,
-  ConversationScrollButton,
-} from '@/components/ai-elements/conversation';
-import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
-import { Loader } from '@/components/ai-elements/loader';
-import {
-  Tool,
-  ToolContent,
-  ToolHeader,
-  ToolInput,
-  ToolOutput,
-} from '@/components/ai-elements/tool';
-import {
-  PromptInput,
-  PromptInputBody,
-  PromptInputFooter,
-  PromptInputProvider,
-  PromptInputSubmit,
-  PromptInputTextarea,
-  PromptInputTools,
-} from '@/components/ai-elements/prompt-input';
+  EmptyState,
+  EmptyStateGreeting,
+  EmptyStateSuggestion,
+  EmptyStateSuggestions,
+} from '@/components/elements/empty-state';
+import { ErrorState } from '@/components/elements/error-state';
+import { ThinkingIndicator } from '@/components/elements/thinking-indicator';
+import { ToolCall, type ToolCallState } from '@/components/elements/tool-call';
+import { MobileComposer } from '@/components/elements/mobile-composer';
+import { Conversation, ConversationContent, ConversationScrollButton } from './conversation';
 import { useChatStream, type ChatUiMessage } from './use-chat-stream';
+import { ConfirmationCard } from './confirmation-card';
 
 /**
- * `ToolUIPart["type"]` é `tool-${string}` — o `ToolHeader` do registry corta o
- * primeiro segmento para exibir. Como mostramos o nome pelo `title`, o prefixo é
- * só o que o tipo exige.
+ * A tela do chat, sobre os elements do assistant-ui.
+ *
+ * O que **não** veio do pacote, e por quê: a rolagem (`./conversation`, porque o
+ * `elements-scroll-anchor` de lá é uma vitrine com timer) e o corpo da resposta
+ * do assistente, que continua no `streamdown`. A família de elements renderiza
+ * texto puro, palavra a palavra por contador; o agente responde em markdown, e
+ * trocar isso apagaria negrito, lista e tabela da resposta — perda visível para
+ * quem lê "seu almoço teve **42 g** de proteína".
  */
-function tipoDaTool(tool: ChatToolCall): `tool-${string}` {
-  return `tool-${tool.name}`;
+
+const SUGESTOES = [
+  'O que eu comi hoje?',
+  // Uma de escrita entre as sugestões: é a capacidade que a ADR 022 abriu, e
+  // ninguém descobre sozinho que dá para pedir — o chat parecia só consultar.
+  'Registra 200 g de frango no almoço',
+  'Qual foi meu último treino de peito?',
+] as const;
+
+/** O element pede texto; input e output do MCP chegam como JSON qualquer. */
+function comoTexto(valor: unknown): string {
+  if (valor === undefined || valor === null) return '—';
+  if (typeof valor === 'string') return valor;
+  try {
+    return JSON.stringify(valor, null, 2);
+  } catch {
+    // Referência circular: melhor a etiqueta do que derrubar a conversa inteira.
+    return String(valor);
+  }
 }
+
+const ESTADO_DA_TOOL: Record<ChatToolCall['state'], ToolCallState> = {
+  'input-available': 'running',
+  'output-available': 'done',
+  'output-error': 'error',
+};
 
 function BlocoDeTool({ tool }: { tool: ChatToolCall }) {
-  return (
-    <Tool>
-      <ToolHeader title={tool.name} type={tipoDaTool(tool)} state={tool.state} />
-      <ToolContent>
-        <ToolInput input={tool.input} />
-        <ToolOutput output={tool.output} errorText={tool.errorText} />
-      </ToolContent>
-    </Tool>
-  );
-}
+  const [aberto, setAberto] = useState(false);
+  const estado = ESTADO_DA_TOOL[tool.state];
 
-function AvisoDeErro({ error, onRetry }: { error: ChatStreamError; onRetry: () => void }) {
   return (
-    // `role="alert"` e não a região viva da conversa: erro é interrupção, e
-    // precisa chegar mesmo se a pessoa estiver com o foco no campo de texto.
-    <div
-      role="alert"
-      className="mt-2 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-[13px] text-foreground"
-    >
-      <p>{textoDeErroDoChat(error)}</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-destructive/20 px-3 py-1.5 text-xs font-bold text-foreground"
-      >
-        <RotateCcw size={12} />
-        Tentar de novo
-      </button>
-    </div>
+    <ToolCall
+      state={estado}
+      // O nome da tool vai na etiqueta monoespaçada, e não no rótulo: é o dado
+      // que torna a ação auditável, e é por ele que alguém procura na tela.
+      query={tool.name}
+      activeLabel="Executando"
+      label="Concluída"
+      errorLabel="Falhou"
+      request={comoTexto(tool.input)}
+      result={estado === 'error' ? (tool.errorText ?? '—') : comoTexto(tool.output)}
+      open={aberto}
+      onOpenChange={setAberto}
+      className="max-w-none"
+    />
   );
 }
 
@@ -80,24 +87,79 @@ function Balao({
   aguardando: boolean;
   onRetry: () => void;
 }) {
+  if (mensagem.role === 'user') {
+    return (
+      // `field`, e não `paper`: é a receita que os próprios elements usam para
+      // mensagem de quem pergunta. `paper` é `bg-background` com `dark:bg-popover`,
+      // e nesta paleta os dois ficam a 2,5% de luminosidade um do outro — o balão
+      // sumiria no fundo da página.
+      <p
+        className={cn(
+          field,
+          'max-w-[85%] self-end whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm',
+        )}
+      >
+        {mensagem.text}
+      </p>
+    );
+  }
+
   return (
-    <Message from={mensagem.role}>
-      <MessageContent>
-        {mensagem.tools.map((tool) => (
-          <BlocoDeTool key={tool.id} tool={tool} />
-        ))}
-        {mensagem.text ? <MessageResponse>{mensagem.text}</MessageResponse> : null}
-        {aguardando && !mensagem.text ? <Loader aria-label="Pensando" /> : null}
-        {mensagem.error ? <AvisoDeErro error={mensagem.error} onRetry={onRetry} /> : null}
-      </MessageContent>
-    </Message>
+    <div className="flex w-full flex-col items-start gap-3">
+      {mensagem.tools.map((tool) => (
+        <BlocoDeTool key={tool.id} tool={tool} />
+      ))}
+      {mensagem.text ? (
+        <Streamdown className="w-full text-sm leading-relaxed">{mensagem.text}</Streamdown>
+      ) : null}
+      {aguardando && !mensagem.text ? (
+        // `aria-label` além do rótulo visível: é o nome estável pelo qual o teste
+        // — e o leitor de tela — encontram o único retorno que existe entre
+        // apertar enviar e o primeiro token.
+        <ThinkingIndicator aria-label="Pensando" label="Pensando" />
+      ) : null}
+      {mensagem.error ? (
+        <ErrorState
+          className="max-w-none"
+          title="A resposta falhou"
+          detail={textoDeErroDoChat(mensagem.error)}
+          retryLabel="Tentar de novo"
+          onRetry={onRetry}
+        />
+      ) : null}
+    </div>
   );
 }
 
 export function ChatView() {
-  const { messages, status, respondendoId, announcement, send, retry, stop } = useChatStream();
+  const {
+    messages,
+    status,
+    respondendoId,
+    announcement,
+    propostas,
+    aprovar,
+    recusar,
+    send,
+    retry,
+    stop,
+  } = useChatStream();
   const campo = useRef<HTMLTextAreaElement>(null);
+  const [texto, setTexto] = useState('');
+  const [digitando, setDigitando] = useState(false);
   const respondendo = status === 'submitted' || status === 'streaming';
+
+  function enviar(mensagem: string) {
+    const limpo = mensagem.trim();
+    if (!limpo) return;
+    setTexto('');
+    // O envio não é aguardado de propósito: esperar o stream inteiro deixaria a
+    // pergunta na caixa durante toda a resposta.
+    void send(limpo);
+    // A #221 nasceu de foco perdido para o `<body>`. Sem esta linha, quem
+    // conversa pelo teclado teria de reencontrar o campo antes de cada mensagem.
+    campo.current?.focus();
+  }
 
   return (
     <div
@@ -113,27 +175,35 @@ export function ChatView() {
       */
       className="flex h-[calc(100dvh-10rem)] flex-col"
     >
-      <header className="px-5 pt-4 pb-2">
+      <header className="px-5 pb-2 pt-4">
         <h1 className="text-3xl font-extrabold text-foreground">Chat</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Peça para registrar refeição, consultar treino ou ver sua evolução.
         </p>
       </header>
 
-      {/*
-        `aria-live="off"` desliga o anúncio automático do `role="log"` que o
-        `Conversation` traz. Com ele ligado, cada token do streaming vira um
-        anúncio e a resposta fica impossível de acompanhar. Quem anuncia é a
-        região abaixo, uma vez por resposta.
-      */}
-      <Conversation aria-live="off" aria-busy={respondendo} className="min-h-0">
-        <ConversationContent className="gap-6 pb-2">
+      <Conversation aria-busy={respondendo} className="min-h-0">
+        <ConversationContent>
           {messages.length === 0 ? (
-            <ConversationEmptyState
-              icon={<MessageCircle size={28} />}
-              title="Nada por aqui ainda"
-              description="Escreva abaixo — por exemplo: “registra 2 ovos e um café no café da manhã”."
-            />
+            <EmptyState className="my-auto max-w-none self-center">
+              <EmptyStateGreeting>Por onde começamos?</EmptyStateGreeting>
+              <EmptyStateSuggestions>
+                {SUGESTOES.map((sugestao, indice) => (
+                  <EmptyStateSuggestion
+                    key={sugestao}
+                    index={indice}
+                    // A borda é acréscimo nosso: o `paper` do element conta com
+                    // um contraste entre `background` e `popover` que esta
+                    // paleta não tem, e sem ela a pílula não se lê como algo em
+                    // que dá para tocar.
+                    className="border border-border"
+                    onClick={() => enviar(sugestao)}
+                  >
+                    {sugestao}
+                  </EmptyStateSuggestion>
+                ))}
+              </EmptyStateSuggestions>
+            </EmptyState>
           ) : (
             messages.map((m) => (
               <Balao
@@ -146,57 +216,44 @@ export function ChatView() {
               />
             ))
           )}
+
+          {/* No fim do fluxo, e dentro da rolagem: a decisão é sobre a mensagem
+              logo acima, e é lá que a pessoa relê "200 g de frango" antes de
+              confirmar. Ver o docstring de `confirmation-card`. */}
+          <ConfirmationCard
+            propostas={propostas}
+            onAprovar={() => void aprovar()}
+            onRecusar={recusar}
+            executando={respondendo}
+          />
         </ConversationContent>
-        <ConversationScrollButton aria-label="Ir para a última mensagem" />
+        <ConversationScrollButton label="Ir para a última mensagem" />
       </Conversation>
 
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>
 
-      {/*
-        O `PromptInputProvider` não é enfeite: sem ele o `PromptInput` fica no
-        modo não controlado, que limpa o campo com `form.reset()`. O DOM esvazia,
-        mas o valor que o React guarda continua sendo o antigo — e a **segunda**
-        mensagem sai concatenada com a primeira ("oi" + "e agora?" = "oie
-        agora?"). Com o provider o campo é controlado e o `clear()` é do React.
-      */}
-      <PromptInputProvider>
-        <div className="px-4 pb-3">
-          <PromptInput
-            onSubmit={(mensagem) => {
-              if (respondendo) {
-                stop();
-                return;
-              }
-              if (!mensagem.text.trim()) return;
-              // O envio não é aguardado de propósito: `PromptInput` só limpa o
-              // campo quando o `onSubmit` resolve, e esperar o stream inteiro
-              // deixaria a pergunta na caixa durante toda a resposta.
-              void send(mensagem.text);
-              // A #221 nasceu de foco perdido para o `<body>`. Aqui é o botão de
-              // enviar que fica com o foco depois do clique, e quem conversa pelo
-              // teclado teria de reencontrar o campo antes de cada mensagem.
-              campo.current?.focus();
-            }}
-          >
-            <PromptInputBody>
-              <PromptInputTextarea
-                ref={campo}
-                aria-label="Mensagem para o Fatia"
-                placeholder="Escreva sua mensagem"
-              />
-              <PromptInputFooter>
-                <PromptInputTools />
-                <PromptInputSubmit
-                  status={status}
-                  aria-label={respondendo ? 'Parar resposta' : 'Enviar mensagem'}
-                />
-              </PromptInputFooter>
-            </PromptInputBody>
-          </PromptInput>
-        </div>
-      </PromptInputProvider>
+      <MobileComposer
+        ref={campo}
+        value={texto}
+        onValueChange={setTexto}
+        running={respondendo}
+        // O que o element chama de "teclado aberto" é, num celular, o campo com
+        // foco — e é aí que a dica do Enter tem serventia e o respiro de baixo
+        // sobra.
+        keyboardOpen={digitando}
+        onFocus={() => setDigitando(true)}
+        onBlur={() => setDigitando(false)}
+        label="Mensagem para o Fatia"
+        placeholder="Escreva sua mensagem"
+        sendLabel="Enviar mensagem"
+        stopLabel="Parar resposta"
+        hint="enter envia"
+        onSend={() => enviar(texto)}
+        onStop={stop}
+        className="shrink-0 bg-transparent shadow-none"
+      />
     </div>
   );
 }

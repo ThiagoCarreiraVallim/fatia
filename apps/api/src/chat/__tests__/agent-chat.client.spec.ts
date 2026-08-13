@@ -32,9 +32,10 @@ function montar(env: Record<string, string> = {}) {
 
 const ENTRADA = {
   bearer: 'token-secreto-do-usuario',
-  conversationId: 'c1',
   timezone: 'America/Sao_Paulo',
-  messages: [{ role: MessageRole.user, content: 'tomei 3 insulinas hoje' }],
+  mensagem: 'tomei 3 insulinas hoje',
+  historico: [{ role: MessageRole.assistant, content: 'oi, tudo bem?' }],
+  aprovadas: [],
 };
 
 function respostaSse(texto: string, status = 200) {
@@ -104,17 +105,64 @@ describe('AgentChatClient.abrir', () => {
     );
   });
 
-  it('manda o histórico e o fuso no corpo, com `conversation_id` nulo quando é conversa nova', async () => {
+  /**
+   * O corpo **exato** que o agente declara, e não um parecido.
+   *
+   * Esta camada mandava `{conversation_id, timezone, messages}`, que o
+   * `ChatRequest` do `apps/agent` recusa com 422 (`extra: "forbid"`): todo turno
+   * chegava ao aluno como "o chat falhou". O teste que existia aqui afirmava o
+   * corpo errado contra um `fetch` dublê — verde dos dois lados, quebrado no
+   * meio. `toEqual` e não `toMatchObject` porque campo a mais é exatamente o que
+   * o outro lado recusa.
+   */
+  it('manda a mensagem, o histórico e o fuso no corpo que o agente declara', async () => {
     dublarFetch(respostaSse('event: done\ndata: {}\n\n'));
 
-    await montar().abrir({ ...ENTRADA, conversationId: null });
+    await montar().abrir(ENTRADA);
 
     const corpo: unknown = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
     expect(corpo).toEqual({
-      conversation_id: null,
+      message: 'tomei 3 insulinas hoje',
       timezone: 'America/Sao_Paulo',
-      messages: [{ role: 'user', content: 'tomei 3 insulinas hoje' }],
+      history: [{ role: 'assistant', content: 'oi, tudo bem?' }],
+      approved: [],
     });
+  });
+
+  /**
+   * A proposta aprovada vai com o `arguments` **byte a byte** como veio.
+   *
+   * O agente compara o texto literal com o que propôs para garantir que executa o
+   * que estava no modal (`exigir_aprovada`). Um `JSON.parse` seguido de
+   * `stringify` em qualquer ponto desta camada mudaria espaçamento e ordem de
+   * chave, a comparação falharia, e o sintoma seria "aprovei e não gravou" — com
+   * as duas pontas parecendo certas.
+   */
+  it('repassa a proposta aprovada sem reserializar o arguments', async () => {
+    dublarFetch(respostaSse('event: done\ndata: {}\n\n'));
+    const argumentos = '{ "grams":200,   "food":"frango" }';
+
+    await montar().abrir({
+      ...ENTRADA,
+      aprovadas: [{ name: 'log_meal', arguments: argumentos }],
+    });
+
+    const corpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string) as Record<
+      string,
+      unknown
+    >;
+    expect(corpo.approved).toEqual([{ name: 'log_meal', arguments: argumentos }]);
+  });
+
+  it('conversa nova vai com o histórico vazio, e não sem o campo', async () => {
+    dublarFetch(respostaSse('event: done\ndata: {}\n\n'));
+
+    await montar().abrir({ ...ENTRADA, historico: [] });
+
+    const corpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string) as {
+      history: unknown;
+    };
+    expect(corpo.history).toEqual([]);
   });
 
   it('sem AGENT_BASE_URL recusa 503 sem chamar ninguém', async () => {

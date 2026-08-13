@@ -359,16 +359,18 @@ describe('ChatService — ordem das guardas', () => {
 
     expect(chamadasAoAgente[0]).toEqual({
       bearer: 'token-do-usuario',
-      conversationId: 'c1',
       timezone: 'America/Sao_Paulo',
-      messages: [
-        { role: MessageRole.user, content: 'anterior' },
-        { role: MessageRole.user, content: 'e agora?' },
-      ],
+      // A mensagem de agora separada do histórico: os dois têm tetos opostos do
+      // lado do agente — ver o contrato em `agent-chat.client.ts`.
+      mensagem: 'e agora?',
+      historico: [{ role: MessageRole.user, content: 'anterior' }],
+      // Vazio, e não ausente: o turno comum não aprova nada, e o agente distingue
+      // "nenhuma aprovação" de campo faltando pelo array vazio.
+      aprovadas: [],
     });
   });
 
-  it('conversa nova vai ao agente com `conversationId: null`', async () => {
+  it('conversa nova vai ao agente com o histórico vazio', async () => {
     const { service, canal, chamadasAoAgente, conversas } = montar();
     const saida = destinoDeTeste();
 
@@ -377,8 +379,8 @@ describe('ChatService — ordem das guardas', () => {
     canal.encerrar();
     await turno;
 
-    expect(chamadasAoAgente[0].conversationId).toBeNull();
-    expect(chamadasAoAgente[0].messages).toEqual([{ role: MessageRole.user, content: 'oi' }]);
+    expect(chamadasAoAgente[0].historico).toEqual([]);
+    expect(chamadasAoAgente[0].mensagem).toBe('oi');
     // E o histórico do banco nem é consultado: não há conversa para consultar.
     expect(conversas.historicoParaOAgente).not.toHaveBeenCalled();
   });
@@ -487,6 +489,83 @@ describe('ChatService — o que fica no banco', () => {
       texto: 'ok',
       tools: [],
     });
+  });
+
+  /**
+   * O `proposal` chega ao PWA **uma vez**, pelo repasse do chunk bruto.
+   *
+   * Esta camada já tinha um ramo que reemitia uma versão traduzida do quadro por
+   * cima do repasse: dois `proposal` no fio para uma ação, ou seja dois modais
+   * pedindo a mesma confirmação. Contar as ocorrências é o que pega isso — um
+   * `toContain('log_meal')` passa igual com um e com dois.
+   */
+  it('repassa o `proposal` do agente uma única vez, sem reemitir', async () => {
+    const { service, canal } = montar();
+    const saida = destinoDeTeste();
+
+    const turno = service.conversar(
+      USUARIO,
+      { message: 'registra 200g de frango' },
+      'tok',
+      saida.destino,
+    );
+    await respirar();
+    canal.emitir(
+      'event: proposal\ndata: {"id":"c1","name":"log_meal","arguments":"{\\"grams\\":200}"}\n\n',
+    );
+    canal.emitir('event: done\ndata: {"reason":"awaiting_confirmation"}\n\n');
+    canal.encerrar();
+    await turno;
+
+    const quadros = saida.tudo().match(/event: proposal/g) ?? [];
+    expect(quadros).toHaveLength(1);
+    expect(saida.tudo()).toContain('"name":"log_meal"');
+  });
+
+  /**
+   * A proposta não entra no histórico como tool executada.
+   *
+   * `concluirTurno` grava as tools que rodaram — é o vestígio de que a IA agiu. Uma
+   * proposta não agiu, e registrá-la faria o histórico afirmar uma escrita que não
+   * aconteceu: a pessoa recusa o modal e a conversa passa a dizer que gravou.
+   */
+  it('não registra a proposta como tool no histórico', async () => {
+    const { service, canal, conversas } = montar();
+    const saida = destinoDeTeste();
+
+    const turno = service.conversar(USUARIO, { message: 'registra' }, 'tok', saida.destino);
+    await respirar();
+    canal.emitir('event: token\ndata: {"text":"Vou registrar"}\n\n');
+    canal.emitir(
+      'event: proposal\ndata: {"id":"c1","name":"log_meal","arguments":"{\\"grams\\":200}"}\n\n',
+    );
+    canal.emitir('event: done\ndata: {"reason":"awaiting_confirmation"}\n\n');
+    canal.encerrar();
+    await turno;
+
+    expect(conversas.concluirTurno).toHaveBeenCalledWith('user-a', 'conversa-nova', {
+      texto: 'Vou registrar',
+      tools: [],
+    });
+  });
+
+  /** A aprovação atravessa a camada até o cliente do agente, sem interpretação. */
+  it('repassa as propostas aprovadas do DTO ao agente', async () => {
+    const { service, canal, agent } = montar();
+    const saida = destinoDeTeste();
+    const aprovadas = [{ name: 'log_meal', arguments: '{"grams":200}' }];
+
+    const turno = service.conversar(
+      USUARIO,
+      { message: 'confirmar', approved: aprovadas },
+      'tok',
+      saida.destino,
+    );
+    await respirar();
+    canal.encerrar();
+    await turno;
+
+    expect(agent.abrir).toHaveBeenCalledWith(expect.objectContaining({ aprovadas }));
   });
 });
 

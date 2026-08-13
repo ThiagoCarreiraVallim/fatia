@@ -29,7 +29,7 @@ export class GetStudentProgressTool implements McpToolDef {
   constructor(private readonly students: StudentViewService) {}
   readonly name = 'get_student_progress';
   readonly title = 'Acompanhar um aluno';
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
   readonly description =
     'Lê UMA categoria de dados de UM aluno que autorizou este profissional. As categorias são ' +

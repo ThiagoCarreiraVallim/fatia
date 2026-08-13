@@ -13,7 +13,7 @@ export class ListWaterLogsTool implements McpToolDef {
   constructor(private readonly waters: WaterLogService) {}
   readonly name = 'list_water_logs';
   readonly title = 'Listar registros de água';
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
   readonly description = 'Lista logs de água paginados, com filtros opcionais por data.';
   readonly inputSchema = {
