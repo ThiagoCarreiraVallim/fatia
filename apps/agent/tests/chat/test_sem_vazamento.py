@@ -17,7 +17,7 @@ import pytest
 
 from fatia_agent.chat.graph import montar_grafo, stream_chat_events
 from fatia_agent.chat.mcp_client import McpClient
-from fatia_agent.chat.tool_policy import somente_leitura
+from fatia_agent.chat.tool_policy import camada_read_only
 from fatia_agent.providers import build_provider
 
 from .support import (
@@ -81,7 +81,7 @@ async def test_a_conversa_inteira_nao_loga_nem_imprime_o_bearer_nem_o_que_a_pess
     uma linha de `logging` apareça no repositório.
     """
     provider, client = montar(settings_factory)
-    permitidas = somente_leitura(await client.list_tools())
+    permitidas = camada_read_only(await client.list_tools())
 
     async for _ in stream_chat_events(
         provider, client, permitidas, mensagem=CONFIDENCIA, historico=[]
@@ -115,7 +115,7 @@ def test_a_varredura_pegaria_o_vazamento_se_ele_existisse(caplog_tudo, capsys):
 async def test_nenhum_evento_do_fluxo_carrega_o_bearer(settings_factory):
     """O fluxo atravessa NestJS e PWA. O token não pode ir junto em lugar nenhum."""
     provider, client = montar(settings_factory)
-    permitidas = somente_leitura(await client.list_tools())
+    permitidas = camada_read_only(await client.list_tools())
 
     fluxo = ""
     async for evento in stream_chat_events(
@@ -138,7 +138,7 @@ async def test_o_estado_final_do_grafo_nao_tem_o_token(settings_factory):
     este caso olha o estado inteiro, e não só os campos que ele conhece.
     """
     provider, client = montar(settings_factory)
-    permitidas = somente_leitura(await client.list_tools())
+    permitidas = camada_read_only(await client.list_tools())
     grafo = montar_grafo(provider, client, permitidas)
 
     final = await grafo.ainvoke(
@@ -189,7 +189,7 @@ async def test_o_bearer_nao_vaza_para_o_provedor_de_ia(settings_factory):
         bearer=TOKEN,
         transport=duplo_do_mcp(catalogo=CATALOGO),
     )
-    permitidas = somente_leitura(await client.list_tools())
+    permitidas = camada_read_only(await client.list_tools())
 
     async for _ in stream_chat_events(
         provider, client, permitidas, mensagem=CONFIDENCIA, historico=[]

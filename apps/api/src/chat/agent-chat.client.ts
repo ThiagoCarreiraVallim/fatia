@@ -19,7 +19,8 @@ import type { MensagemDoHistorico } from './conversation.service';
  *
  * ```json
  * { "message": "o que eu comi ontem?", "timezone": "America/Sao_Paulo",
- *   "history": [{ "role": "user" | "assistant", "content": "..." }] }
+ *   "history": [{ "role": "user" | "assistant", "content": "..." }],
+ *   "approved": [{ "name": "log_meal", "arguments": "{...}" }] }
  * ```
  *
  * O histórico vai junto porque **o agente não guarda nada** — quem persiste é a
@@ -42,13 +43,19 @@ import type { MensagemDoHistorico } from './conversation.service';
  *
  * O que volta é `text/event-stream`, e o `data` de cada evento é um objeto JSON:
  *
- * | evento  | `data`                                                                    |
- * | ------- | ------------------------------------------------------------------------- |
- * | `token` | `{ "text": "..." }` — pedaço da resposta                                   |
- * | `tool`  | `{ "id", "name", "state", "input" \| "output" \| "errorText" }`            |
- * | `usage` | `{ "model": "...", "inputUnits": n, "outputUnits": n }`                    |
- * | `error` | `{ "code": "...", "message": "..." }`                                      |
- * | `done`  | `{ "reason": "stop" \| "step_limit" \| "error" }`                          |
+ * | evento     | `data`                                                                 |
+ * | ---------- | ---------------------------------------------------------------------- |
+ * | `token`    | `{ "text": "..." }` — pedaço da resposta                               |
+ * | `tool`     | `{ "id", "name", "state", "input" \| "output" \| "errorText" }`         |
+ * | `proposal` | `{ "id", "name", "arguments" }` — ação proposta, **não** executada     |
+ * | `usage`    | `{ "model": "...", "inputUnits": n, "outputUnits": n }`                 |
+ * | `error`    | `{ "code": "...", "message": "..." }`                                  |
+ * | `done`     | `{ "reason": "stop" \| "step_limit" \| "awaiting_confirmation" \| "error" }` |
+ *
+ * O `proposal` fecha o turno com `reason: "awaiting_confirmation"` e nada gravado.
+ * Se a pessoa aprovar na tela, o PWA abre um turno novo com aquilo em `approved`.
+ * Esta camada **repassa e observa**, não decide: ela não reemite o quadro (o
+ * `escrever` do chunk bruto já o entregou) e não interpreta o `arguments`.
  *
  * O `usage` é o que faz a cota da #135 funcionar: sem ele, o turno entra no
  * livro-caixa como **custo não medido** (`pricingKnown: false`), não como
@@ -91,6 +98,20 @@ export type EntradaDoTurno = {
   mensagem: string;
   /** O que já foi dito nesta conversa, em ordem cronológica. */
   historico: MensagemDoHistorico[];
+  /**
+   * Propostas que a pessoa aprovou na tela, para o agente executar neste turno.
+   *
+   * Repassadas **sem interpretação**: esta camada não sabe o que `log_meal` faz
+   * nem tem por que saber. Quem valida o par nome/argumentos contra o que foi
+   * proposto é o agente, que é quem tem o recorte de tools — ver ADR 022.
+   */
+  aprovadas: PropostaAprovada[];
+};
+
+/** Uma proposta aprovada, como o evento `proposal` a mandou. */
+export type PropostaAprovada = {
+  name: string;
+  arguments: string;
 };
 
 /**
@@ -152,6 +173,7 @@ export class AgentChatClient {
           message: entrada.mensagem,
           timezone: entrada.timezone,
           history: entrada.historico.map((m) => ({ role: m.role, content: m.content })),
+          approved: entrada.aprovadas.map((a) => ({ name: a.name, arguments: a.arguments })),
         }),
         signal: abortador.signal,
       });

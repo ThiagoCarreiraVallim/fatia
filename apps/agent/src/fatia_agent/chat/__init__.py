@@ -1,4 +1,4 @@
-"""Chat hospedado: grafo LangGraph + cliente do `/mcp` (ADR 021)."""
+"""Chat hospedado: grafo LangGraph + cliente do `/mcp` (ADR 021 e 022)."""
 
 from .errors import (
     McpError,
@@ -21,8 +21,9 @@ from .tool_policy import (
     camada_read_only,
     camada_restrita,
     classificar_tools,
+    exigir_aprovada,
+    exigir_permitida,
     formato_openai,
-    somente_leitura,
     todas_permitidas,
 )
 
@@ -38,8 +39,10 @@ __all__ = [
     "McpResponseUnparseable",
     "McpTimeout",
     "McpToolArgumentsInvalid",
+    "McpToolInfo",
     "McpToolNotAllowed",
     "McpToolRejected",
+    "McpToolResult",
     "McpUnauthenticated",
     "McpUnauthorized",
     "McpUnreachable",
@@ -48,8 +51,9 @@ __all__ = [
     "camada_read_only",
     "camada_restrita",
     "classificar_tools",
+    "exigir_aprovada",
+    "exigir_permitida",
     "formato_openai",
-    "somente_leitura",
     "stream_chat_events",
     "todas_permitidas",
 ]

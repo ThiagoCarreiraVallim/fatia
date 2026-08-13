@@ -43,6 +43,7 @@ def tool_do_catalogo(
     name: str,
     *,
     read_only: bool,
+    confirmable: bool = False,
     description: str = "Descrição de teste com tamanho suficiente.",
     annotations: dict[str, object] | None = None,
 ) -> dict[str, object]:
@@ -64,6 +65,7 @@ def tool_do_catalogo(
             "title": name.replace("_", " ").title(),
             "readOnlyHint": read_only,
             "destructiveHint": False,
+            "confirmableHint": confirmable,
         },
     }
 

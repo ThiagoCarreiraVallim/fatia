@@ -5,16 +5,12 @@ parte do que se mede quando alguém for medir a qualidade do chat, e um prompt
 remontado em dois lugares deixa de ser o mesmo prompt sem ninguém notar.
 
 O que ele **não** faz: prometer que o modelo obedece. Instrução de prompt não é
-mecanismo de segurança - quem garante que o chat não grava nada é o recorte de
-tools em `chat/tool_policy.py`, que simplesmente não oferece tool de escrita. O
-parágrafo abaixo existe para o modelo dar uma resposta útil quando o usuário
-pedir para gravar, e não para impedi-lo de tentar.
-
-Quando houver ferramentas CONFIRMABLE (reversíveis ou idempotentes), o modelo
-deve PARE antes de executar: gerar a proposta com os detalhes da operação,
-esperar a resposta do usuário na conversa, e só então proceder. O grafo LangGraph
-pausa automaticamente nestes casos — emite evento SSE de tipo `proposta` que o
-PWA usa para mostrar um modal visual com botões ink/ghostButton.
+mecanismo de segurança — quem garante que nada é gravado sem aprovação é o
+recorte de três camadas em `chat/tool_policy.py` (ADR 022): a tool confirmável
+sai como proposta e só executa no turno seguinte, com a aprovação da pessoa, e a
+tool que apaga não é oferecida. O parágrafo sobre escrita existe para o modelo
+**usar** a ferramenta em vez de pedir confirmação por texto — a tela já pergunta,
+e um modelo que pergunta antes faz a pessoa confirmar duas vezes.
 """
 
 from datetime import datetime
@@ -37,9 +33,15 @@ SISTEMA = (
     "refeições, alimentos, treinos, peso, metas e progresso. Use-as antes de responder "
     "qualquer pergunta sobre os dados da pessoa — nunca invente número, data ou nome de "
     "alimento. Se uma consulta não trouxer nada, diga que não encontrou.\n\n"
-    "Você NÃO tem ferramenta para criar, alterar ou apagar nada. Se pedirem para registrar "
-    "uma refeição, um treino ou um peso, explique que isso é feito na tela do app e diga em "
-    "qual, sem prometer que você fez.\n\n"
+    "Você também tem ferramentas para REGISTRAR e ALTERAR: refeição, treino, série, peso, "
+    "água, passos e metas. Elas não gravam na hora — quando você chama uma delas, a pessoa "
+    "vê na tela o que você propôs e aprova ou recusa. Então chame a ferramenta em vez de "
+    "pedir confirmação por texto: a tela já pergunta, e perguntar duas vezes só atrasa. "
+    "Não diga que gravou; diga o que vai gravar, e preencha os campos com o que a pessoa "
+    "falou — se faltar algo essencial, como a quantidade, pergunte antes de chamar.\n\n"
+    "Você NÃO tem ferramenta para apagar nada. Se pedirem para excluir uma refeição, um "
+    "treino ou um registro, explique que isso é feito na tela do app e diga em qual, sem "
+    "prometer que você fez.\n\n"
     "Não dê diagnóstico, prescrição médica nem meta calórica apresentada como recomendação "
     "clínica. Você ajuda a entender o que já está registrado."
 )

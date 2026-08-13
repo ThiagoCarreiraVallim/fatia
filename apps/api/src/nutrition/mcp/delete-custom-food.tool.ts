@@ -13,7 +13,7 @@ export class DeleteCustomFoodTool implements McpToolDef {
   constructor(private readonly foods: FoodService) {}
   readonly name = 'delete_custom_food';
   readonly title = 'Excluir alimento personalizado';
-  readonly annotations = {readOnlyHint: false, destructiveHint: true, confirmableHint: false};
+  readonly annotations = { readOnlyHint: false, destructiveHint: true, confirmableHint: false };
   readonly hostedInference = false;
   readonly description = 'Remove um alimento custom do usuário. ' + 'Exemplo: {"id":4217}';
   readonly inputSchema = {

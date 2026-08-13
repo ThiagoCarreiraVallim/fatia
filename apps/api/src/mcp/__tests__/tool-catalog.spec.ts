@@ -321,7 +321,7 @@ const payload = tools.reduce(
  * número; o caso abaixo confere as duas pontas, então nem o texto some nem o número derrapa.
  */
 const PAYLOAD_CLAIMS: ReadonlyArray<{ file: string; text: string; medido: () => string }> = [
-  { file: 'docs/MCP.md', text: '**78,4 k caracteres**', medido: () => emK(payload.cheio) },
+  { file: 'docs/MCP.md', text: '**80,8 k caracteres**', medido: () => emK(payload.cheio) },
   { file: 'docs/MCP.md', text: '(65,5 k)', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP.md',
@@ -330,7 +330,7 @@ const PAYLOAD_CLAIMS: ReadonlyArray<{ file: string; text: string; medido: () => 
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**78,4 k caracteres**',
+    text: '**80,8 k caracteres**',
     medido: () => emK(payload.cheio),
   },
   { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 65,5 k', medido: () => emK(payload.estreito) },
@@ -655,6 +655,56 @@ describe('catálogo de tools MCP', () => {
     expect(wrong.sort()).toEqual([]);
   });
 
+  /**
+   * O recorte de três camadas do chat hospedado (ADR 022).
+   *
+   * O agente Python **deriva** deste campo o que oferece ao modelo, e é por isso
+   * que a guarda mora aqui e não lá: `apps/agent/src/fatia_agent/chat/tool_policy.py`
+   * herda esta checagem em vez de duplicá-la, e uma tool nova que nasça sem a
+   * anotação perderia a capacidade em silêncio — ninguém liga "o chat não
+   * registra mais peso" a um campo esquecido num decorator.
+   */
+  it('classifica toda tool quanto a confirmação no chat', () => {
+    // Escrevem e são reversíveis no dado, mas mudam QUEM vê a saúde de quem — e a
+    // revogação não desfaz isso: quem leu, leu. O critério da camada CONFIRMABLE
+    // é reversibilidade, e exposição não é reversível. Ficam fora do chat.
+    const EXPOSICAO = new Set(['grant_data_sharing', 'join_group']);
+
+    const wrong: string[] = [];
+
+    for (const { tool } of tools) {
+      const a = tool.annotations ?? {};
+
+      if (typeof a.confirmableHint !== 'boolean') {
+        wrong.push(`${tool.name}: confirmableHint precisa ser declarado`);
+        continue;
+      }
+
+      // Ler não precisa de confirmação, e marcá-la faria a tool entrar duas vezes
+      // no catálogo do prompt — uma por camada. Ver `todas_permitidas`.
+      if (a.readOnlyHint === true && a.confirmableHint !== false) {
+        wrong.push(`${tool.name}: readOnlyHint com confirmableHint — ler não confirma`);
+        continue;
+      }
+
+      // Apagar não entra no chat nem com modal: quem clica "confirmar" está
+      // confirmando o que entendeu, não o que a tool vai fazer.
+      if (a.destructiveHint === true && a.confirmableHint !== false) {
+        wrong.push(`${tool.name}: destructiveHint com confirmableHint — apagar não confirma`);
+        continue;
+      }
+
+      if (a.readOnlyHint === false && a.destructiveHint === false) {
+        const esperado = !EXPOSICAO.has(tool.name);
+        if (a.confirmableHint !== esperado) {
+          wrong.push(`${tool.name}: esperado confirmableHint=${esperado}`);
+        }
+      }
+    }
+
+    expect(wrong.sort()).toEqual([]);
+  });
+
   // --- Inferência hospedada (issue #165) ---
   //
   // Quem chama o `/mcp` é o modelo do usuário: a inferência é dele, e não passa
@@ -726,6 +776,13 @@ describe('catálogo de tools MCP', () => {
       'destructiveHint',
       'idempotentHint',
       'openWorldHint',
+      // Fora da spec e **no fio de propósito**, ao contrário de `hostedInference`:
+      // quem lê é um cliente, o agente da Fatia, que deriva dele o recorte de três
+      // camadas do chat (ADR 022). É justamente o argumento do `tool_policy.py` —
+      // um campo que o servidor já serve em toda sessão, em vez de uma lista de
+      // nomes mantida à mão do outro lado. Cliente MCP externo ignora chave que
+      // não conhece, e o custo é uma linha por tool no payload.
+      'confirmableHint',
     ]);
 
     const leaked: string[] = [];

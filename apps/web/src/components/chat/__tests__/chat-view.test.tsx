@@ -453,3 +453,131 @@ describe('ChatView', () => {
     });
   });
 });
+
+/**
+ * A confirmação de escrita (ADR 022), pela tela.
+ *
+ * O que estes casos cobram é que **a decisão seja da pessoa**: o cartão aparece
+ * sem nada ter sido gravado, "Cancelar" não manda nada para o servidor, e
+ * "Confirmar" manda exatamente a proposta que estava na tela. O último é o que
+ * pega o defeito silencioso — o eco reserializado, que faz o agente recusar a
+ * própria proposta e o sintoma virar "aprovei e não salvou".
+ */
+describe('ChatView — confirmação de escrita', () => {
+  const PROPOSTA = {
+    id: 'c1',
+    name: 'log_meal',
+    arguments: '{"items":[{"food":"frango","grams":200}]}',
+  };
+
+  async function propor() {
+    render(<ChatView />);
+    await enviar('registra 200g de frango');
+    fontes[0].emitir({ type: 'proposal', proposal: PROPOSTA });
+    fontes[0].emitir({ type: 'done' });
+    fontes[0].fechar();
+    return screen.findByRole('group', { name: 'Ação aguardando confirmação' });
+  }
+
+  it('mostra o que vai ser gravado, em vez do JSON cru', async () => {
+    const cartao = await propor();
+
+    expect(within(cartao).getByText('Registrar refeição')).toBeInTheDocument();
+    // O nome da tool continua visível: é o que torna a ação auditável.
+    expect(within(cartao).getByText('log_meal')).toBeInTheDocument();
+  });
+
+  it('deixa claro que nada foi salvo enquanto o cartão está na tela', async () => {
+    const cartao = await propor();
+
+    expect(within(cartao).getByText(/Nada foi salvo ainda/)).toBeInTheDocument();
+  });
+
+  it('não abre turno nenhum só por propor', async () => {
+    await propor();
+
+    // Um só: o da pergunta. Se a tela mandasse a aprovação sozinha, seriam dois.
+    expect(streamChatMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('confirmar manda a proposta de volta byte a byte', async () => {
+    const user = userEvent.setup();
+    const cartao = await propor();
+
+    await user.click(within(cartao).getByRole('button', { name: 'Confirmar' }));
+
+    await waitFor(() => expect(streamChatMock).toHaveBeenCalledTimes(2));
+    const corpo = streamChatMock.mock.calls[1][0];
+    // `toEqual` sobre o array inteiro, e não `toContain` sobre o nome: o que o
+    // agente compara é o texto de `arguments`, e é ele que não pode ter passado
+    // por um `JSON.parse`/`stringify` no caminho.
+    expect(corpo.approved).toEqual([PROPOSTA]);
+  });
+
+  it('cancelar não fala com o servidor e tira o cartão da tela', async () => {
+    const user = userEvent.setup();
+    const cartao = await propor();
+
+    await user.click(within(cartao).getByRole('button', { name: 'Cancelar' }));
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('group', { name: 'Ação aguardando confirmação' }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(streamChatMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancelar é sempre alcançável, sem depender de digitar nada', async () => {
+    // O cartão anterior desabilitava "Recuar" enquanto o campo estivesse vazio:
+    // a saída exigia preencher algo, ou seja não era saída.
+    const cartao = await propor();
+
+    expect(within(cartao).getByRole('button', { name: 'Cancelar' })).toBeEnabled();
+  });
+
+  it('anuncia a confirmação pendente em vez de dizer que respondeu', async () => {
+    await propor();
+
+    await waitFor(() => expect(screen.getByText(/espera sua confirmação/)).toBeInTheDocument());
+    expect(screen.queryByText(/^Fatia respondeu/)).not.toBeInTheDocument();
+  });
+
+  it('duas propostas na mesma rodada aparecem as duas', async () => {
+    render(<ChatView />);
+    await enviar('registra frango e arroz');
+    fontes[0].emitir({ type: 'proposal', proposal: PROPOSTA });
+    fontes[0].emitir({
+      type: 'proposal',
+      proposal: { id: 'c2', name: 'log_weight', arguments: '{"kg":80}' },
+    });
+    fontes[0].fechar();
+
+    const cartao = await screen.findByRole('group', {
+      name: '2 ações aguardando confirmação',
+    });
+    expect(within(cartao).getByText('log_meal')).toBeInTheDocument();
+    expect(within(cartao).getByText('log_weight')).toBeInTheDocument();
+  });
+
+  it('o foco vai para Confirmar quando o cartão aparece', async () => {
+    // Quem conversa pelo teclado estava no campo de texto; sem isto teria de
+    // tabular por toda a conversa para alcançar a decisão que foi pedida.
+    const cartao = await propor();
+
+    expect(within(cartao).getByRole('button', { name: 'Confirmar' })).toHaveFocus();
+  });
+
+  it('a proposta de um turno não sobrevive ao turno seguinte', async () => {
+    const cartao = await propor();
+    expect(cartao).toBeInTheDocument();
+
+    await enviar('deixa, o que eu comi ontem?');
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('group', { name: 'Ação aguardando confirmação' }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+});

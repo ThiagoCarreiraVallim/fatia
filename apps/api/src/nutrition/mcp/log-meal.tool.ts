@@ -26,7 +26,7 @@ export class LogMealTool implements McpToolDef {
   constructor(private readonly meals: MealService) {}
   readonly name = 'log_meal';
   readonly title = 'Registrar refeição';
-  readonly annotations = {readOnlyHint: false, destructiveHint: false, confirmableHint: true};
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
   readonly description =
     'Registra uma refeição com items. Cada item pode referenciar foodId (TACO/custom) ou ser livre (foodName + macros estimados). ' +

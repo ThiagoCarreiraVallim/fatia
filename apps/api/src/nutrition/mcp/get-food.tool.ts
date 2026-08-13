@@ -13,7 +13,7 @@ export class GetFoodTool implements McpToolDef {
   constructor(private readonly foods: FoodService) {}
   readonly name = 'get_food';
   readonly title = 'Ver alimento';
-  readonly annotations = {readOnlyHint: true, destructiveHint: false, confirmableHint: false};
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
   readonly description = 'Detalhe de um alimento por id.';
   readonly inputSchema = {

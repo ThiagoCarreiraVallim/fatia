@@ -16,7 +16,7 @@ export class LogSetTool implements McpToolDef {
 
   readonly title = 'Registrar série';
 
-  readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
 
   readonly hostedInference = false;
   readonly description =

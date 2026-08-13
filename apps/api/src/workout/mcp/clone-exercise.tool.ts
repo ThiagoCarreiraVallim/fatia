@@ -17,7 +17,7 @@ export class CloneExerciseTool implements McpToolDef {
 
   readonly title = 'Duplicar exercício';
 
-  readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
 
   readonly hostedInference = false;
   readonly description =

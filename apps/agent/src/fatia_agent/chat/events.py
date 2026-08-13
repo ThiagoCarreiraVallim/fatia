@@ -16,6 +16,9 @@ renderiza. Nomes de evento e chaves de payload em inglês, como o resto do fio
     event: tool
     data: {"id": "c1", "name": "list_meals", "state": "output-available", "output": "[{...}]"}
 
+    event: proposal
+    data: {"id": "c2", "name": "log_meal", "arguments": "{\"items\":[...]}"}
+
     event: usage
     data: {"model": "ornith-1.0-9b", "inputUnits": 812, "outputUnits": 96}
 
@@ -24,6 +27,28 @@ renderiza. Nomes de evento e chaves de payload em inglês, como o resto do fio
 
     event: done
     data: {"reason": "stop"}
+
+## O handshake de confirmação: dois turnos HTTP, não uma pausa
+
+Tool CONFIRMABLE (ADR 022) **não executa** no turno em que o modelo a pede. O
+agente emite `proposal` e fecha o turno com `reason: "awaiting_confirmation"`. Se
+a pessoa aprovar na tela, o PWA abre um turno novo com a proposta em `approved`,
+e o agente executa aquilo direto — sem passar pelo modelo de novo.
+
+Dois turnos, e não um `interrupt()` do LangGraph, porque pausar de verdade exige
+checkpointer, e não há: a persistência é do NestJS (ADR 015), e um checkpointer
+aqui gravaria histórico de saúde num segundo lugar. Ver `graph.py`.
+
+Executar direto no segundo turno, e não pedir ao modelo que chame a tool de novo,
+porque "de novo" não é garantido: o modelo pode reformular os argumentos entre um
+turno e outro, e o que a pessoa aprovou na tela deixaria de ser o que roda. O que
+ela viu é o que executa.
+
+Por isso os `arguments` de `proposal` vão inteiros — eles voltam na aprovação e
+são o que de fato executa. O PWA os devolve como recebeu; ele não é a autoridade
+sobre eles, mas também não precisa ser: a tool roda com o Bearer da própria
+pessoa contra os dados dela, e `exigir_permitida` continua valendo. Argumento
+adulterado não alcança nada que o app já não permitisse pela tela.
 
 ## Por que `id`/`state`, e não `phase`/`ok`
 
@@ -147,30 +172,20 @@ def done(reason: str) -> ChatEvent:
     return ChatEvent("done", {"reason": reason})
 
 
-def proposta(
-    nome_tool: str,
-    argumentos: str,
-    motivo: str,
-) -> ChatEvent:
-    """Solicita confirmação visual ao usuário antes de executar uma tool CONFIRMABLE.
+def proposal(id: str, name: str, arguments: str) -> ChatEvent:
+    """Uma tool CONFIRMABLE que o modelo pediu e que **não** foi executada.
 
-    Emite-se neste evento quando o grafo pausa em um estado intermediário, com
-todas as ferramentas confirmáveis pendentes que ainda não foram aprovadas.
+    O turno termina aqui, com `done` e `reason: "awaiting_confirmation"`. Quem
+    decide é a pessoa, na tela; se ela aprovar, o PWA manda **outro** turno
+    carregando esta proposta em `approved`, e aí o agente executa. Ver o
+    handshake no topo deste módulo.
 
-    O payload carrega:
-    - `nome`: nome da tool proposta (ex.: "log_meal")
-    - `argumentos`: JSON dos argumentos que o modelo pediu para usar
-    - `motivo`: por que a ferramenta foi sugerida — uma frase explicada ao usuário,
-      como "Registrar 200g de frango grelhado no almoço"
-
-    O NestJS repassa este evento sem bufferizar; o PWA renderiza um modal usando
-o design system swervable com botões ink/ghostButton. A aprovação (emoji 👍 ou
-"confirmar") fecha a pausa e volta para executar; o recuo cancela a proposta.
+    Os `arguments` viajam **inteiros**, ao contrário dos de `tool_start`: eles
+    voltam na aprovação e são o que de fato executa. Cortar aqui mandaria JSON
+    pela metade de volta — a tool falharia, ou pior, gravaria o pedaço que
+    sobrou. Quem passa do teto é recusado em `agir`, não truncado aqui.
     """
-    return ChatEvent(
-        "proposta",
-        {"nome": nome_tool, "argumentos": _cortar(argumentos, MAX_ARGUMENTOS_NO_EVENTO), "motivo": motivo},
-    )
+    return ChatEvent("proposal", {"id": id, "name": name, "arguments": arguments})
 
 
 def _cortar(texto: str, limite: int) -> str:
@@ -187,7 +202,7 @@ __all__ = [
     "ChatEvent",
     "done",
     "error",
-    "proposta",
+    "proposal",
     "token",
     "tool_end",
     "tool_start",

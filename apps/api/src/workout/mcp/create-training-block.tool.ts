@@ -16,7 +16,7 @@ export class CreateTrainingBlockTool implements McpToolDef {
 
   readonly title = 'Montar bloco de periodização';
 
-  readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
 
   readonly hostedInference = false;
   readonly description =

@@ -13,7 +13,7 @@ export class LeaveGroupTool implements McpToolDef {
   constructor(private readonly memberships: MembershipService) {}
   readonly name = 'leave_group';
   readonly title = 'Sair de um grupo';
-  readonly annotations = { readOnlyHint: false, destructiveHint: true };
+  readonly annotations = { readOnlyHint: false, destructiveHint: true, confirmableHint: false };
   readonly hostedInference = false;
   readonly description =
     'Sai de uma academia ou grupo. A saída não passa pelo dono e ele não pode impedi-la. ' +

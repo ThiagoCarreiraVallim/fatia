@@ -15,7 +15,7 @@ export class ListPersonalRecordsTool implements McpToolDef {
 
   readonly title = 'Listar recordes pessoais';
 
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
 
   readonly hostedInference = false;
   readonly description =

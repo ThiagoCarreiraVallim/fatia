@@ -13,7 +13,7 @@ export class UpdateMealItemTool implements McpToolDef {
   constructor(private readonly mealItems: MealItemService) {}
   readonly name = 'update_meal_item';
   readonly title = 'Atualizar item da refeição';
-  readonly annotations = {readOnlyHint: false, destructiveHint: false, confirmableHint: true};
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
   readonly description =
     'Atualiza gramas ou macros de um item. ' +

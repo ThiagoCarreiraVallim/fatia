@@ -13,7 +13,7 @@ export class UpdateCustomFoodTool implements McpToolDef {
   constructor(private readonly foods: FoodService) {}
   readonly name = 'update_custom_food';
   readonly title = 'Atualizar alimento personalizado';
-  readonly annotations = {readOnlyHint: false, destructiveHint: false, confirmableHint: true};
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
   readonly description =
     'Atualiza um alimento custom do usuário. ' + 'Exemplo: {"id":4217,"kcalPer100g":315}';

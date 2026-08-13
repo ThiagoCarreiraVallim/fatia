@@ -111,6 +111,7 @@ export class ChatService {
       // contrato em `agent-chat.client.ts`.
       mensagem: dto.message,
       historico: anterior,
+      aprovadas: dto.approved ?? [],
     });
 
     // O `close` que chegou enquanto o agente demorava a responder não volta a
@@ -156,11 +157,10 @@ export class ChatService {
           const dados = dadosDoEvento(evento);
           if (!dados) continue;
 
-          // Proposta CONFIRMABLE: extrai os dados do evento e formata para o PWA.
-          if (evento.event === 'proposta' && typeof dados.nome === 'string') {
-            destino.escrever(formatarEventoSse('proposta', { nomeTool: dados.nome, argumentos: dados.argumentos ?? '', motivo: dados.motivo ?? '' }));
-          }
-
+          // `proposal` não aparece aqui de propósito: o quadro bruto já foi
+          // repassado no `escrever` acima, e reemitir uma versão traduzida
+          // entregaria a mesma proposta duas vezes — dois modais para uma
+          // ação. Este laço só **observa** o fluxo, para persistir e contar.
           if (evento.event === 'token' && typeof dados.text === 'string') {
             texto.push(dados.text);
           } else if (evento.event === 'tool' && typeof dados.name === 'string') {

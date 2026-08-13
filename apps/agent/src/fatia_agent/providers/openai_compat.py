@@ -238,6 +238,21 @@ class OpenAICompatProvider:
                         break
 
                     fragmento = _fragmento_de_stream(dado)
+                    # **Erro dentro do stream, com HTTP 200.** Tem de ser lido
+                    # antes de qualquer outra coisa: o `if` de status acima só
+                    # pega o que falhou antes de o stream abrir, e o provedor que
+                    # aceita a requisição e recusa a geração manda isto — o LM
+                    # Studio, com `event: error` e um objeto `{"error": {...}}`.
+                    #
+                    # Sem este ramo o quadro caía no caminho normal, não tinha
+                    # `choices`, e virava fragmento vazio: o turno terminava com
+                    # zero token, sem exceção e sem `code`. Na tela isso aparecia
+                    # como "não consegui fechar uma resposta" — uma frase que diz
+                    # que o modelo tentou, quando o provedor nem gerou. Custou
+                    # uma sessão de depuração inteira; o motivo estava no fio,
+                    # sendo descartado.
+                    _exigir_sem_erro(fragmento)
+
                     # O bloco de `usage` chega **no fim e sozinho**, com
                     # `choices: []`. Ler antes de escolher o choice é o que
                     # impede que ele seja descartado como fragmento vazio.
@@ -497,6 +512,36 @@ def _fragmento_de_stream(dado: str) -> dict[str, Any]:
     if not isinstance(bruto, dict):
         raise AIResponseUnparseable(f"Fragmento do stream não é objeto ({_describe(bruto)}).")
     return bruto
+
+
+def _exigir_sem_erro(fragmento: dict[str, Any]) -> None:
+    """Levanta quando o fragmento é um objeto de erro em vez de um pedaço de resposta.
+
+    `AIProviderRefused` com 200, e o status é honesto: o provedor **respondeu** —
+    aceitou a requisição, abriu o stream e recusou gerar. É a mesma família do
+    ramo de status, porque a ação de quem lê é a mesma (tentar de novo, ou olhar o
+    log), e o `code` que chega ao PWA é o mesmo `AI_PROVIDER_REFUSED`.
+
+    A mensagem do provedor entra inteira **no log**, e não na tela: ela é a única
+    pista do que aconteceu, e é onde apareceu "failed to parse grammar" quando o
+    catálogo ganhou uma tool cujo schema o llama.cpp não compila. O `errors.py`
+    deste pacote já registra que a mensagem é para quem lê o log; o PWA mostra o
+    texto do `code`.
+    """
+    erro = fragmento.get("error")
+    if erro is None:
+        return
+
+    if isinstance(erro, dict):
+        mensagem = erro.get("message")
+        detalhe = mensagem if isinstance(mensagem, str) and mensagem else jsonlib.dumps(erro)
+    else:
+        detalhe = str(erro)
+
+    raise AIProviderRefused(
+        f"O provedor recusou a geração no meio do stream: {detalhe}",
+        status_code=200,
+    )
 
 
 def _primeiro_choice(fragmento: dict[str, Any]) -> dict[str, Any]:

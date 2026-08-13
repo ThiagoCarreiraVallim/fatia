@@ -13,7 +13,7 @@ export class DeleteGoalTool implements McpToolDef {
   constructor(private readonly goals: GoalsService) {}
   readonly name = 'delete_goal';
   readonly title = 'Excluir meta';
-  readonly annotations = { readOnlyHint: false, destructiveHint: true };
+  readonly annotations = { readOnlyHint: false, destructiveHint: true, confirmableHint: false };
   readonly hostedInference = false;
   readonly description =
     'Remove permanentemente uma meta pessoal. ' +

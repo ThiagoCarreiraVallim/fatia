@@ -364,6 +364,9 @@ describe('ChatService — ordem das guardas', () => {
       // lado do agente — ver o contrato em `agent-chat.client.ts`.
       mensagem: 'e agora?',
       historico: [{ role: MessageRole.user, content: 'anterior' }],
+      // Vazio, e não ausente: o turno comum não aprova nada, e o agente distingue
+      // "nenhuma aprovação" de campo faltando pelo array vazio.
+      aprovadas: [],
     });
   });
 
@@ -488,48 +491,81 @@ describe('ChatService — o que fica no banco', () => {
     });
   });
 
-  it('repassa evento `proposta` CONFIRMABLE ao cliente sem bufferizar', async () => {
-    // O agente emite um evento `proposta` quando pausa para confirmação visual.
-    // O NestJS deve repassá-lo como SSE tipo `proposta` com os dados da operação.
-    const { service, canal, conversas } = montar();
-    const saida = destinoDeTeste();
-
-    // Primeiro token para abrir o stream.
-    canal.emitir('event: token\ndata: {"text":"Vou registrar"}\n\n');
-    await respirar();
-
-    // Proposta CONFIRMABLE emite-se no meio do fluxo.
-    canal.emitir(
-      'event: proposta\ndata: {"nome":"log_meal","argumentos":{"date":"2026-08-12"},"motivo":"Registrar almoço de frango grelhado"}\n\n',
-    );
-
-    // Garante que o evento `proposta` foi escrito para o cliente.
-    expect(saida.tudo()).toContain('log_meal');
-    expect(saida.tudo()).toContain('2026-08-12');
-    expect(saida.tudo()).toContain('Registrar almoço de frango grelhado');
-
-    // E o turno continua: emite token e fecha.
-    canal.emitir('event: token\ndata: {"text":"confirme na tela"}\n\n');
-    canal.encerrar();
-  });
-
-  it('repassa evento `proposta` com dados truncados respeitando o limite', async () => {
-    // O agente pode enviar argumentos longos; o evento SSE deve ser legível.
+  /**
+   * O `proposal` chega ao PWA **uma vez**, pelo repasse do chunk bruto.
+   *
+   * Esta camada já tinha um ramo que reemitia uma versão traduzida do quadro por
+   * cima do repasse: dois `proposal` no fio para uma ação, ou seja dois modais
+   * pedindo a mesma confirmação. Contar as ocorrências é o que pega isso — um
+   * `toContain('log_meal')` passa igual com um e com dois.
+   */
+  it('repassa o `proposal` do agente uma única vez, sem reemitir', async () => {
     const { service, canal } = montar();
     const saida = destinoDeTeste();
 
-    canal.emitir('event: token\ndata: {"text":"x"}\n\n');
-    await respirar();
-
-    // Argumento grande — deve ser truncado com reticência visível.
-    const argumentosGrande = 'a'.repeat(500);
-    canal.emitir(
-      `event: proposta\ndata: {"nome":"log_meal","argumentos":"${JSON.stringify({ args: argumentosGrande })}","motivo":"teste"}\n\n`,
+    const turno = service.conversar(
+      USUARIO,
+      { message: 'registra 200g de frango' },
+      'tok',
+      saida.destino,
     );
+    await respirar();
+    canal.emitir(
+      'event: proposal\ndata: {"id":"c1","name":"log_meal","arguments":"{\\"grams\\":200}"}\n\n',
+    );
+    canal.emitir('event: done\ndata: {"reason":"awaiting_confirmation"}\n\n');
+    canal.encerrar();
+    await turno;
 
-    const tudo = saida.tudo();
-    // O payload do evento deve conter os dados da proposta.
-    expect(tudo).toContain('log_meal');
+    const quadros = saida.tudo().match(/event: proposal/g) ?? [];
+    expect(quadros).toHaveLength(1);
+    expect(saida.tudo()).toContain('"name":"log_meal"');
+  });
+
+  /**
+   * A proposta não entra no histórico como tool executada.
+   *
+   * `concluirTurno` grava as tools que rodaram — é o vestígio de que a IA agiu. Uma
+   * proposta não agiu, e registrá-la faria o histórico afirmar uma escrita que não
+   * aconteceu: a pessoa recusa o modal e a conversa passa a dizer que gravou.
+   */
+  it('não registra a proposta como tool no histórico', async () => {
+    const { service, canal, conversas } = montar();
+    const saida = destinoDeTeste();
+
+    const turno = service.conversar(USUARIO, { message: 'registra' }, 'tok', saida.destino);
+    await respirar();
+    canal.emitir('event: token\ndata: {"text":"Vou registrar"}\n\n');
+    canal.emitir(
+      'event: proposal\ndata: {"id":"c1","name":"log_meal","arguments":"{\\"grams\\":200}"}\n\n',
+    );
+    canal.emitir('event: done\ndata: {"reason":"awaiting_confirmation"}\n\n');
+    canal.encerrar();
+    await turno;
+
+    expect(conversas.concluirTurno).toHaveBeenCalledWith('user-a', 'conversa-nova', {
+      texto: 'Vou registrar',
+      tools: [],
+    });
+  });
+
+  /** A aprovação atravessa a camada até o cliente do agente, sem interpretação. */
+  it('repassa as propostas aprovadas do DTO ao agente', async () => {
+    const { service, canal, agent } = montar();
+    const saida = destinoDeTeste();
+    const aprovadas = [{ name: 'log_meal', arguments: '{"grams":200}' }];
+
+    const turno = service.conversar(
+      USUARIO,
+      { message: 'confirmar', approved: aprovadas },
+      'tok',
+      saida.destino,
+    );
+    await respirar();
+    canal.encerrar();
+    await turno;
+
+    expect(agent.abrir).toHaveBeenCalledWith(expect.objectContaining({ aprovadas }));
   });
 });
 

@@ -330,3 +330,64 @@ async def test_sem_bloco_de_usage_o_turno_termina_sem_uso(settings_factory):
 
     (fim_do_turno,) = [p for p in pedacos if isinstance(p, TurnEnd)]
     assert fim_do_turno.usage is None
+
+
+async def test_erro_dentro_do_stream_com_200_vira_erro_nomeado(settings_factory):
+    """Provedor que aceita a requisição e recusa gerar **não** pode virar silêncio.
+
+    O LM Studio faz isto: HTTP 200, `event: error`, e um objeto `{"error": {...}}`
+    no lugar do fragmento. Sem este ramo o quadro caía no caminho normal, não tinha
+    `choices`, e o turno terminava com zero token e nenhuma exceção — na tela,
+    "não consegui fechar uma resposta", uma frase que culpa o modelo por algo que o
+    provedor nem tentou. Custou uma sessão de depuração inteira.
+    """
+    transport = ProviderRecordingTransport(
+        [
+            [
+                {
+                    "error": {
+                        "code": 400,
+                        "message": "Failed to initialize samplers: failed to parse grammar",
+                        "type": "invalid_request_error",
+                    }
+                }
+            ]
+        ]
+    )
+    provider = build_provider(settings_factory(), transport=transport)
+
+    with pytest.raises(AIProviderRefused, match="failed to parse grammar"):
+        await coletar(provider, [{"role": "user", "content": "oi"}])
+
+
+async def test_erro_no_stream_depois_de_token_tambem_sobe(settings_factory):
+    """Falhar no meio não é menos falha: a resposta parcial não vira resposta."""
+    transport = ProviderRecordingTransport(
+        [[fragmento_de_texto("Vou consultar"), {"error": {"message": "engine morreu"}}]]
+    )
+    provider = build_provider(settings_factory(), transport=transport)
+
+    with pytest.raises(AIProviderRefused, match="engine morreu"):
+        await coletar(provider, [{"role": "user", "content": "oi"}])
+
+
+async def test_erro_sem_message_ainda_diz_algo_util(settings_factory):
+    """Formato surpreendente não pode virar erro vazio — a mensagem é a única pista."""
+    transport = ProviderRecordingTransport([[{"error": {"code": 500}}]])
+    provider = build_provider(settings_factory(), transport=transport)
+
+    with pytest.raises(AIProviderRefused, match="500"):
+        await coletar(provider, [{"role": "user", "content": "oi"}])
+
+
+async def test_chave_error_nula_nao_e_erro(settings_factory):
+    """`{"error": null}` é o que vários gateways mandam em fragmento normal.
+
+    Tratá-lo como falha transformaria uma conversa boa em erro — o defeito oposto,
+    e mais visível, do que este ramo veio consertar.
+    """
+    transport = ProviderRecordingTransport([[{"error": None, **fragmento_de_texto("Oi")}, fim()]])
+    provider = build_provider(settings_factory(), transport=transport)
+
+    pedacos = await coletar(provider, [{"role": "user", "content": "oi"}])
+    assert [p.text for p in pedacos if isinstance(p, TextDelta)] == ["Oi"]

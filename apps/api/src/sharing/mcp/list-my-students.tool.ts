@@ -12,7 +12,7 @@ export class ListMyStudentsTool implements McpToolDef {
   constructor(private readonly students: StudentViewService) {}
   readonly name = 'list_my_students';
   readonly title = 'Meus alunos';
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
   readonly description =
     'Alunos que o profissional atende nas academias em que ele é PROFESSIONAL, com o que cada um ' +

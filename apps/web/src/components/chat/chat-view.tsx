@@ -16,8 +16,8 @@ import { ThinkingIndicator } from '@/components/elements/thinking-indicator';
 import { ToolCall, type ToolCallState } from '@/components/elements/tool-call';
 import { MobileComposer } from '@/components/elements/mobile-composer';
 import { Conversation, ConversationContent, ConversationScrollButton } from './conversation';
-import { useChatStream, type ChatUiMessage, type ChatStreamProposalEvent } from './use-chat-stream';
-import { ConfirmationModal } from './confirmation-modal';
+import { useChatStream, type ChatUiMessage } from './use-chat-stream';
+import { ConfirmationCard } from './confirmation-card';
 
 /**
  * A tela do chat, sobre os elements do assistant-ui.
@@ -32,7 +32,9 @@ import { ConfirmationModal } from './confirmation-modal';
 
 const SUGESTOES = [
   'O que eu comi hoje?',
-  'Como está minha proteína esta semana?',
+  // Uma de escrita entre as sugestões: é a capacidade que a ADR 022 abriu, e
+  // ninguém descobre sozinho que dá para pedir — o chat parecia só consultar.
+  'Registra 200 g de frango no almoço',
   'Qual foi meu último treino de peito?',
 ] as const;
 
@@ -130,29 +132,22 @@ function Balao({
 }
 
 export function ChatView() {
-  const { messages, status, respondendoId, announcement, proposta, send, retry, stop } = useChatStream();
+  const {
+    messages,
+    status,
+    respondendoId,
+    announcement,
+    propostas,
+    aprovar,
+    recusar,
+    send,
+    retry,
+    stop,
+  } = useChatStream();
   const campo = useRef<HTMLTextAreaElement>(null);
   const [texto, setTexto] = useState('');
   const [digitando, setDigitando] = useState(false);
   const respondendo = status === 'submitted' || status === 'streaming';
-
-  /** Estado para controlar o modal de confirmação. */
-  const [aguardandoConfirmacao, setAguardandoConfirmacao] = useState(false);
-
-  // Quando uma nova proposta chega via stream, entra em modo espera.
-  useEffect(() => {
-    if (proposta) setAguardandoConfirmacao(true);
-  }, [proposta?.dados?.nomeTool]);
-
-  /** Callbacks para o modal: limpar estados quando aprovado/rejeitado. */
-  const onConclusao = useCallback(
-    () => {
-      setAguardandoConfirmacao(false);
-      // O modal é desmontado via state, e a proposta é limpa no useEffect
-      // que observa `aguardandoConfirmacao`.
-    },
-    [],
-  );
 
   function enviar(mensagem: string) {
     const limpo = mensagem.trim();
@@ -183,7 +178,7 @@ export function ChatView() {
       <header className="px-5 pb-2 pt-4">
         <h1 className="text-3xl font-extrabold text-foreground">Chat</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Peça para consultar sua refeição, seu treino ou sua evolução.
+          Peça para registrar refeição, consultar treino ou ver sua evolução.
         </p>
       </header>
 
@@ -222,14 +217,15 @@ export function ChatView() {
             ))
           )}
 
-          {aguardandoConfirmacao && proposta ? (
-            <ConfirmationModal
-              nomeTool={proposta.dados.nomeTool}
-              argumentos={proposta.dados.argumentos}
-              motivo={proposta.dados.motivo ?? `Confirmar chamada de ${proposta.dados.nomeTool}?`}
-              onConclusao={onConclusao}
-            />
-          ) : null}
+          {/* No fim do fluxo, e dentro da rolagem: a decisão é sobre a mensagem
+              logo acima, e é lá que a pessoa relê "200 g de frango" antes de
+              confirmar. Ver o docstring de `confirmation-card`. */}
+          <ConfirmationCard
+            propostas={propostas}
+            onAprovar={() => void aprovar()}
+            onRecusar={recusar}
+            executando={respondendo}
+          />
         </ConversationContent>
         <ConversationScrollButton label="Ir para a última mensagem" />
       </Conversation>

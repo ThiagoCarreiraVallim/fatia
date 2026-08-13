@@ -35,6 +35,7 @@ const ENTRADA = {
   timezone: 'America/Sao_Paulo',
   mensagem: 'tomei 3 insulinas hoje',
   historico: [{ role: MessageRole.assistant, content: 'oi, tudo bem?' }],
+  aprovadas: [],
 };
 
 function respostaSse(texto: string, status = 200) {
@@ -124,7 +125,33 @@ describe('AgentChatClient.abrir', () => {
       message: 'tomei 3 insulinas hoje',
       timezone: 'America/Sao_Paulo',
       history: [{ role: 'assistant', content: 'oi, tudo bem?' }],
+      approved: [],
     });
+  });
+
+  /**
+   * A proposta aprovada vai com o `arguments` **byte a byte** como veio.
+   *
+   * O agente compara o texto literal com o que propôs para garantir que executa o
+   * que estava no modal (`exigir_aprovada`). Um `JSON.parse` seguido de
+   * `stringify` em qualquer ponto desta camada mudaria espaçamento e ordem de
+   * chave, a comparação falharia, e o sintoma seria "aprovei e não gravou" — com
+   * as duas pontas parecendo certas.
+   */
+  it('repassa a proposta aprovada sem reserializar o arguments', async () => {
+    dublarFetch(respostaSse('event: done\ndata: {}\n\n'));
+    const argumentos = '{ "grams":200,   "food":"frango" }';
+
+    await montar().abrir({
+      ...ENTRADA,
+      aprovadas: [{ name: 'log_meal', arguments: argumentos }],
+    });
+
+    const corpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string) as Record<
+      string,
+      unknown
+    >;
+    expect(corpo.approved).toEqual([{ name: 'log_meal', arguments: argumentos }]);
   });
 
   it('conversa nova vai com o histórico vazio, e não sem o campo', async () => {

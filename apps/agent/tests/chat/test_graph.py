@@ -20,7 +20,7 @@ from fatia_agent.chat.graph import (
     stream_chat_events,
 )
 from fatia_agent.chat.mcp_client import McpClient
-from fatia_agent.chat.tool_policy import somente_leitura
+from fatia_agent.chat.tool_policy import camada_read_only
 from fatia_agent.providers import build_provider
 from fatia_agent.providers.base import TextDelta, ToolCall, TurnEnd
 
@@ -70,7 +70,7 @@ async def rodar(
     transporte_mcp = mcp_transport if mcp_transport is not None else duplo_do_mcp(catalogo=CATALOGO)
     client = McpClient(base_url="http://localhost:3000/mcp", bearer=TOKEN, transport=transporte_mcp)
 
-    permitidas = somente_leitura(await client.list_tools())
+    permitidas = camada_read_only(await client.list_tools())
     eventos = [
         evento
         async for evento in stream_chat_events(
@@ -164,7 +164,7 @@ async def test_o_ciclo_de_tool_emite_start_end_e_so_depois_a_resposta(settings_f
 async def test_o_modelo_so_enxerga_as_tools_de_leitura(settings_factory):
     """O recorte da ADR 021, verificado no que **sai** para o provedor.
 
-    Afirmar sobre `somente_leitura` sozinho não bastaria: o defeito interessante
+    Afirmar sobre `camada_read_only` sozinho não bastaria: o defeito interessante
     é o catálogo certo ser calculado e o errado ser enviado.
     """
     _, provider_transport, _ = await rodar(settings_factory, [[fragmento_de_texto("oi")]])
@@ -350,7 +350,7 @@ async def test_provedor_que_cai_no_meio_do_stream_vira_evento_de_erro(settings_f
     provider = build_provider(settings_factory(), transport=httpx.MockTransport(handler))
     mcp_transport = duplo_do_mcp(catalogo=CATALOGO)
     client = McpClient(base_url="http://localhost:3000/mcp", bearer=TOKEN, transport=mcp_transport)
-    permitidas = somente_leitura(await client.list_tools())
+    permitidas = camada_read_only(await client.list_tools())
 
     eventos = [
         evento
@@ -378,7 +378,7 @@ async def test_defeito_nosso_nao_vira_evento_de_erro_generico(settings_factory):
 
     mcp_transport = duplo_do_mcp(catalogo=CATALOGO)
     client = McpClient(base_url="http://localhost:3000/mcp", bearer=TOKEN, transport=mcp_transport)
-    permitidas = somente_leitura(await client.list_tools())
+    permitidas = camada_read_only(await client.list_tools())
 
     with pytest.raises(ZeroDivisionError):
         async for _ in stream_chat_events(
@@ -441,7 +441,7 @@ async def test_o_token_sai_antes_de_o_turno_do_modelo_terminar(settings_factory)
         bearer=TOKEN,
         transport=duplo_do_mcp(catalogo=CATALOGO),
     )
-    permitidas = somente_leitura(await client.list_tools())
+    permitidas = camada_read_only(await client.list_tools())
 
     fluxo = stream_chat_events(
         provedor, client, permitidas, mensagem="o que eu comi?", historico=[]
@@ -490,7 +490,7 @@ async def test_o_evento_de_tool_tambem_sai_antes_de_a_conversa_acabar(settings_f
     client = McpClient(
         base_url="http://localhost:3000/mcp", bearer=TOKEN, transport=httpx.MockTransport(handler)
     )
-    permitidas = somente_leitura(await client.list_tools())
+    permitidas = camada_read_only(await client.list_tools())
 
     fluxo = stream_chat_events(provedor, client, permitidas, mensagem="oi", historico=[])
     try:
