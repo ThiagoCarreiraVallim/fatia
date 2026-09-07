@@ -41,16 +41,16 @@
     "@next/eslint-plugin-next": "^15",
     "@typescript-eslint/parser": "^8",
     "dotenv-cli": "^11.0.0",
-    "eslint": "^10.8.0",
+    "eslint": "^10.9.1",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "globals": "^17.8.0",
+    "globals": "^17.12.0",
     "husky": "^9.0.0",
     "lint-staged": "^15.0.0",
-    "prettier": "^3.9.1",
-    "turbo": "^2.10.0",
+    "prettier": "^3.9.6",
+    "turbo": "^2.10.12",
     "typescript": "^5.5.0",
-    "typescript-eslint": "^8.65"
+    "typescript-eslint": "^8.69"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
