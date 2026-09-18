@@ -8,19 +8,24 @@
 
 | Domínio                                                     |  Tools | Arquivos                       |
 | ----------------------------------------------------------- | -----: | ------------------------------ |
-| Workout (exercícios, planos, sessões, séries)               |     31 | `apps/api/src/workout/mcp/`    |
-| Progress (peso, passos, água, progresso, dashboard, streak) |     27 | `apps/api/src/progress/mcp/`   |
-| Nutrition (alimentos, refeições, itens, metas de nutriente) |     22 | `apps/api/src/nutrition/mcp/`  |
-| Goals (metas pessoais)                                      |      6 | `apps/api/src/goals/mcp/`      |
-| Meta (perfil)                                               |      3 | `apps/api/src/mcp/tools/meta/` |
-| Conta (export e deleção — LGPD)                             |      2 | `apps/api/src/users/mcp/`      |
-| Sharing (grupos — lado do aluno)                            |      3 | `apps/api/src/sharing/mcp/`    |
-| **Total**                                                   | **91** |                                |
+| Workout (exercícios, planos, sessões, séries)               |      34 | `apps/api/src/workout/mcp/`    |
+| Progress (peso, passos, água, progresso, dashboard, streak) |      27 | `apps/api/src/progress/mcp/`   |
+| Nutrition (alimentos, refeições, itens, metas de nutriente) |      22 | `apps/api/src/nutrition/mcp/`  |
+| Sharing (grupos, consentimento e painel do profissional)    |       9 | `apps/api/src/sharing/mcp/`    |
+| Goals (metas pessoais)                                      |       6 | `apps/api/src/goals/mcp/`      |
+| Meta (perfil)                                               |       3 | `apps/api/src/mcp/tools/meta/` |
+| Conta (export e deleção — LGPD)                             |       2 | `apps/api/src/users/mcp/`      |
+| **Total**                                                   | **103** |                                |
+
+⚠️ Esta tabela é a única contagem da doc **sem guarda automática**: o
+`TOOL_COUNT_PATTERN` do `tool-catalog.spec.ts` só enxerga um número colado na palavra `tools`, e
+célula de tabela não é. Ela derrapou por isso — dizia 91 com 103 registradas. Quem mexer no
+recorte por domínio confere à mão, ou acrescenta o guarda.
 
 A contagem é verificada por `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`, que também
 garante que `docs/MCP.md` bate com o registro real.
 
-## Por que 91 e não ~30
+## Por que uma centena e não ~30
 
 O Fatia é **MCP-first** por decisão de arquitetura (ADR 006): tudo que o PWA faz, o Claude
 faz. Isso produz um CRUD completo por entidade — e é o que dá ao conector sua proposta de
@@ -54,7 +59,6 @@ e não em campo separado — estão na §Convenções de [`docs/MCP.md`](./MCP.m
 Além da contagem, cada tool declara `hostedInference` — se a execução dispara inferência **paga
 pela Fatia**. É recorte de custo, não de tamanho, e por isso mora aqui junto do resto.
 
-Hoje são **103** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
 Hoje são **103** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
 **0** tools com inferência hospedada.
 
@@ -114,6 +118,12 @@ Parecem repetitivos, mas cada um opera numa entidade distinta com input distinto
 em algo como `mutate_record({ entity, op, payload })` trocaria 40 schemas tipados por um
 schema genérico — exatamente o oposto do que faz uma tool ser legível para um LLM. O custo
 de nomes previsíveis é baixo; o de um schema polimórfico é alto.
+
+O argumento acima responde a "fundir tudo numa tool genérica?", e a resposta continua sendo não.
+Ele **não** responde a "expor intenção em vez de entidade?" — que é outra pergunta, e que
+`get_today_summary` ("reduz N chamadas a 1") já responde com sim para um caso. Se vale para o
+catálogo inteiro é o que [`eval-fronteira-de-tools.md`](./eval-fronteira-de-tools.md) mede, e até
+lá esta seção descreve uma decisão sem medida, não uma medida.
 
 ### Fica — `get_personal_record` **e** `list_personal_records`
 
