@@ -16,12 +16,14 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
+import { AiUsageService } from '../ai/ai-usage.service';
 import { CurrentUser, type CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { ChatThrottlerGuard } from './chat-throttler.guard';
 import { AgentChatClient } from './agent-chat.client';
 import { ChatService, type DestinoDoStream } from './chat.service';
 import { CheckpointPurgeService } from './checkpoint-purge.service';
 import { ConversationService } from './conversation.service';
+import { MemoryService } from './memory/memory.service';
 import {
   ListConversationsQueryDto,
   MessageFeedbackDto,
@@ -54,6 +56,8 @@ export class ChatController {
     private readonly conversas: ConversationService,
     private readonly agent: AgentChatClient,
     private readonly checkpoints: CheckpointPurgeService,
+    private readonly memorias: MemoryService,
+    private readonly uso: AiUsageService,
   ) {}
 
   /**
@@ -106,6 +110,27 @@ export class ChatController {
   ) {
     await this.conversas.apagar(user.id, id);
     await this.checkpoints.apagarConversa(user.id, id);
+  }
+
+  /** Quanto da cota diária de IA desta pessoa já foi — o medidor da tela do chat. */
+  @Get('quota')
+  quota(@CurrentUser() user: CurrentUserPayload) {
+    return this.uso.cotaDoUsuario(user.id);
+  }
+
+  /** O que o assistente guardou sobre a pessoa. A mesma lista que `list_memories` devolve. */
+  @Get('memories')
+  listMemories(@CurrentUser() user: CurrentUserPayload) {
+    return this.memorias.listar(user.id);
+  }
+
+  @Delete('memories/:id')
+  @HttpCode(204)
+  async forgetMemory(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    await this.memorias.esquecer(user.id, id);
   }
 
   @Patch('conversations/:id/messages/:messageId/feedback')

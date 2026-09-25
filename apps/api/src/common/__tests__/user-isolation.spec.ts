@@ -17,6 +17,7 @@ import { ProfessionalAccessService } from '../../sharing/professional-access.ser
 import { ProfessionalLinkService } from '../../sharing/professional-link.service';
 import { StudentViewService } from '../../sharing/student-view.service';
 import { ConversationService } from '../../chat/conversation.service';
+import { MemoryService } from '../../chat/memory/memory.service';
 import { GoalsService } from '../../goals/goals.service';
 import { FoodService } from '../../nutrition/food.service';
 import { MealItemService } from '../../nutrition/meal-item.service';
@@ -75,6 +76,7 @@ describe('isolamento entre usuários', () => {
   const memberships = new MembershipService(prisma, links);
   const consent = new ConsentService(prisma, links);
   const conversas = new ConversationService(prisma);
+  const memorias = new MemoryService(prisma);
 
   /** Dados do user-A. Preenchido no beforeAll e sondado como user-B. */
   const owned = {
@@ -122,6 +124,8 @@ describe('isolamento entre usuários', () => {
     sharedExerciseId: 0,
     /** Conversa com a IA hospedada (#249). Semeada como user-A. */
     conversationId: '',
+    /** O que o assistente guardou sobre o user-A, a pedido dele. */
+    memoryId: '',
   };
 
   beforeAll(async () => {
@@ -344,6 +348,7 @@ describe('isolamento entre usuários', () => {
       pausa: null,
       runId: null,
     });
+    owned.memoryId = (await memorias.lembrar(owned.userA, 'Não come carne nem ovo.')).id;
   }, 60_000);
 
   afterAll(async () => {
@@ -2461,6 +2466,19 @@ describe('isolamento entre usuários', () => {
 
       expect(await prisma.conversation.findUnique({ where: { id: conversationId } })).toBeNull();
       expect(await prisma.message.count({ where: { conversationId } })).toBe(0);
+    });
+  });
+
+  describe('memória do assistente', () => {
+    it('list_memories do user-B não traz a memória do user-A', async () => {
+      expect(await memorias.listar(owned.userB)).toEqual([]);
+    });
+
+    it('forget_memory recusa o id do user-A, e a memória fica', async () => {
+      await expect(memorias.esquecer(owned.userB, owned.memoryId)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(await prisma.userMemory.findUnique({ where: { id: owned.memoryId } })).toBeTruthy();
     });
   });
 

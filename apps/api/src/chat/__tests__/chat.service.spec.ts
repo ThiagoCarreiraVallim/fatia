@@ -11,6 +11,7 @@ import {
   type TituloDoAgente,
 } from '../agent-chat.client';
 import { ChatService, type DestinoDoStream } from '../chat.service';
+import type { MemoryService } from '../memory/memory.service';
 import type {
   ConversationService,
   MensagemDoHistorico,
@@ -147,6 +148,7 @@ function montar(
     historico?: MensagemDoHistorico[];
     /** `false` = a conversa ainda não existe (primeira mensagem). */
     existente?: boolean;
+    memorias?: { id: string; content: string }[];
     /** Segura o `abrir` até resolver — a janela em que o agente ainda pensa. */
     atrasarAbertura?: Promise<void>;
   } = {},
@@ -200,10 +202,17 @@ function montar(
     ),
   } satisfies Partial<AiUsageService>;
 
+  const memorias = {
+    listar: jest.fn(async (_userId: string) =>
+      (opcoes.memorias ?? []).map((m) => ({ ...m, createdAt: new Date(0) })),
+    ),
+  } satisfies Partial<MemoryService>;
+
   const service = new ChatService(
     conversas as unknown as ConversationService,
     agent as unknown as AgentChatClient,
     uso as unknown as AiUsageService,
+    memorias as unknown as MemoryService,
   );
 
   return { service, conversas, agent, uso, canal, chamadasAoAgente: chamadas };
@@ -391,9 +400,10 @@ describe('ChatService — ordem das guardas', () => {
     expect(conversas.limparPausas).not.toHaveBeenCalled();
   });
 
-  it('manda o Bearer, a conversa e o histórico junto da mensagem nova', async () => {
+  it('manda o Bearer, a conversa, o histórico e as memórias junto da mensagem nova', async () => {
     const { service, canal, chamadasAoAgente } = montar({
       historico: [{ role: MessageRole.user, content: 'anterior' }],
+      memorias: [{ id: 'm1', content: 'É vegetariana.' }],
     });
 
     const turno = service.conversar(
@@ -412,6 +422,7 @@ describe('ChatService — ordem das guardas', () => {
       conversationId: CONVERSA,
       mensagem: 'e agora?',
       historico: [{ role: MessageRole.user, content: 'anterior' }],
+      memorias: [{ id: 'm1', content: 'É vegetariana.' }],
     });
   });
 

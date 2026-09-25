@@ -80,6 +80,16 @@ export interface McpToolDef<S extends ZodRawShape = ZodRawShape> {
   hostedInference: boolean;
   inputSchema: S;
   execute(input: z.infer<z.ZodObject<S>>, ctx: McpToolContext): Promise<unknown>;
+  /**
+   * A carga tipada que uma tela desenha a partir do resultado (`structuredContent`).
+   *
+   * Opcional, e só para leitura que vira cartão no chat hospedado: a métrica do dia,
+   * a série de peso, a tabela de refeições. O agente repassa isto à tela como
+   * artefato **sem** pôr no contexto do modelo — é o que faz o número chegar inteiro
+   * à tela sem passar pelos olhos de quem poderia transcrevê-lo errado. O formato é
+   * o de `apps/agent/.../chat/artefatos.py`; o que não se encaixa é descartado lá.
+   */
+  artifact?(result: unknown, input: z.infer<z.ZodObject<S>>): Record<string, unknown> | null;
 }
 
 export const MCP_TOOL_METADATA = 'mcp:tool';

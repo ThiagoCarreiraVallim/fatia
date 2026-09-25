@@ -3,6 +3,7 @@ import { AiUsageService } from '../ai/ai-usage.service';
 import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { AgentChatClient, ErroDeStreamDoAgente, type StreamDoAgente } from './agent-chat.client';
 import { ConversationService } from './conversation.service';
+import { MemoryService } from './memory/memory.service';
 import type { SendChatMessageDto } from './dto/chat.dto';
 import { type TurnoLido, criarLeitorDoTurno } from './leitor-do-turno';
 import { criarLeitorSse, formatarEventoSse } from './sse';
@@ -43,6 +44,7 @@ export class ChatService {
     private readonly conversas: ConversationService,
     private readonly agent: AgentChatClient,
     private readonly uso: AiUsageService,
+    private readonly memorias: MemoryService,
   ) {}
 
   /**
@@ -93,6 +95,7 @@ export class ChatService {
       timezone: user.timezone,
       conversationId: dto.conversationId,
       historico,
+      memorias: (await this.memorias.listar(user.id)).map(({ id, content }) => ({ id, content })),
     };
     stream = await this.agent.abrir(
       dto.resume

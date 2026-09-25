@@ -100,6 +100,8 @@ export type EntradaDoTurno = {
   conversationId: string;
   /** O que já foi dito, em ordem cronológica. O agente só lê numa thread fria. */
   historico: MensagemDoHistorico[];
+  /** O que a pessoa pediu para o assistente lembrar. Entra cercado no prompt. */
+  memorias?: { id: string; content: string }[];
 } & (
   | { mensagem: string; retomada?: undefined }
   | {
@@ -181,6 +183,7 @@ export class AgentChatClient {
           conversationId: entrada.conversationId,
           timezone: entrada.timezone,
           history: entrada.historico.map((m) => ({ role: m.role, content: m.content })),
+          memories: entrada.memorias ?? [],
           ...(entrada.retomada ? { resume: entrada.retomada } : { message: entrada.mensagem }),
         }),
         signal: abortador.signal,

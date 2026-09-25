@@ -24,4 +24,14 @@ export class GetWeightProgressTool implements McpToolDef {
   execute(input: { days: number }, { userId, timezone }: McpToolContext) {
     return this.progress.weightProgress(input.days, { userId, timezone });
   }
+  artifact(result: unknown, input: { days: number }) {
+    const serie = result as Awaited<ReturnType<ProgressService['weightProgress']>>;
+    return {
+      kind: 'timeline',
+      label: `Peso nos últimos ${input.days} dias`,
+      unit: 'kg',
+      delta: serie.totalDeltaKg,
+      events: serie.points.map((ponto) => ({ date: ponto.date, value: ponto.weightKg })),
+    };
+  }
 }

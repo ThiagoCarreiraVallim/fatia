@@ -12,6 +12,7 @@ import { AgentChatClient, type EntradaDoTurno, type StreamDoAgente } from '../ag
 import { ChatModule } from '../chat.module';
 import { CheckpointPurgeService } from '../checkpoint-purge.service';
 import { ConversationService } from '../conversation.service';
+import { MemoryService } from '../memory/memory.service';
 
 /**
  * `POST /api/chat` pela **porta da frente**, com express de verdade no meio.
@@ -155,6 +156,8 @@ async function subirApp(): Promise<Cenario> {
     })
     .overrideProvider(CheckpointPurgeService)
     .useValue({ apagarConversa: jest.fn(async () => undefined) })
+    .overrideProvider(MemoryService)
+    .useValue({ listar: jest.fn(async () => []) })
     .compile();
 
   const app = modulo.createNestApplication({ logger: false });

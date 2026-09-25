@@ -36,4 +36,18 @@ export class ListMealsTool implements McpToolDef {
   ) {
     return this.meals.list(userId, input, timezone);
   }
+  artifact(result: unknown) {
+    const refeicoes = result as Awaited<ReturnType<MealService['list']>>;
+    return {
+      kind: 'report',
+      label: 'Refeições',
+      columns: ['Refeição', 'Quando', 'kcal', 'Proteína (g)'],
+      rows: refeicoes.map((refeicao) => [
+        refeicao.mealType,
+        refeicao.eatenAt.toISOString(),
+        Math.round(refeicao.items.reduce((total, item) => total + item.kcal, 0)),
+        Math.round(refeicao.items.reduce((total, item) => total + item.proteinG, 0)),
+      ]),
+    };
+  }
 }

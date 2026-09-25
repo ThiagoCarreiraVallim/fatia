@@ -130,6 +130,7 @@ describe('AgentChatClient.abrir', () => {
       message: 'tomei 3 insulinas hoje',
       timezone: 'America/Sao_Paulo',
       history: [{ role: 'assistant', content: 'oi, tudo bem?' }],
+      memories: [],
     });
   });
 

@@ -6,6 +6,10 @@ import { ChatService } from './chat.service';
 import { ChatThrottlerGuard } from './chat-throttler.guard';
 import { CheckpointPurgeService } from './checkpoint-purge.service';
 import { ConversationService } from './conversation.service';
+import { ForgetMemoryTool } from './memory/mcp/forget-memory.tool';
+import { ListMemoriesTool } from './memory/mcp/list-memories.tool';
+import { SaveMemoryTool } from './memory/mcp/save-memory.tool';
+import { MemoryService } from './memory/memory.service';
 
 /**
  * Chat com a IA hospedada (#249).
@@ -25,6 +29,10 @@ import { ConversationService } from './conversation.service';
     ChatThrottlerGuard,
     AiUsageService,
     CheckpointPurgeService,
+    MemoryService,
+    SaveMemoryTool,
+    ForgetMemoryTool,
+    ListMemoriesTool,
   ],
   exports: [ConversationService, CheckpointPurgeService],
 })
