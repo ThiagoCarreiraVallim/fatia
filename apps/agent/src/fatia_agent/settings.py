@@ -43,6 +43,8 @@ class AgentSettings(BaseSettings):
     ai_model_text: str = ""
     ai_model_vision: str = ""
     ai_model_embedding: str = ""
+    # O ditado do chat (#141). Endpoint OpenAI-compatível de `/audio/transcriptions`.
+    ai_model_transcription: str = ""
 
     # Visão em CPU local leva dezenas de segundos. O default do httpx (5s) faria
     # isso parecer "o modelo não responde" quando na verdade o cliente desistiu.

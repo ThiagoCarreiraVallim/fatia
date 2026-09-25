@@ -1,7 +1,16 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { CheckIcon, CopyIcon, ThumbsDownIcon, ThumbsUpIcon } from 'lucide-react';
+import {
+  CameraIcon,
+  CheckIcon,
+  CopyIcon,
+  LoaderCircleIcon,
+  MicIcon,
+  SquareIcon,
+  ThumbsDownIcon,
+  ThumbsUpIcon,
+} from 'lucide-react';
 import {
   ActionBarPrimitive,
   AuiIf,
@@ -29,6 +38,9 @@ import { PausaDoAgente } from './pausa';
 import { MotivoDoVoto } from './motivo-do-voto';
 import { PlanoDoTurno } from './plano';
 import { AvisoDeCota } from './cota';
+import { AnexosDaMensagem, AnexosDoComposer } from './anexos';
+import { useDisponibilidadeDoChat } from './chat-runtime-provider';
+import { useDitado } from './use-ditado';
 
 /**
  * A conversa, sobre os primitivos do assistant-ui.
@@ -50,7 +62,8 @@ const SUGESTOES = [
 
 function MensagemDaPessoa() {
   return (
-    <MessagePrimitive.Root className="flex w-full justify-end">
+    <MessagePrimitive.Root className="flex w-full flex-col items-end gap-2">
+      <AnexosDaMensagem />
       {/* `field`, e não `paper`: nesta paleta `paper` fica a 2,5% de
           luminosidade do fundo, e o balão sumiria. */}
       <div className={cn(field, 'max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm')}>
@@ -193,44 +206,141 @@ function Anuncio() {
   );
 }
 
+function BotaoDeFoto() {
+  const aui = useAui();
+  const entrada = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <input
+        ref={entrada}
+        type="file"
+        accept="image/*"
+        hidden
+        aria-hidden
+        tabIndex={-1}
+        data-testid="entrada-de-foto"
+        onChange={(evento) => {
+          const arquivo = evento.target.files?.[0];
+          evento.target.value = '';
+          if (arquivo) void aui.composer().addAttachment(arquivo);
+        }}
+      />
+      <button
+        type="button"
+        aria-label="Anexar foto"
+        onClick={() => entrada.current?.click()}
+        className={cn(ghostButton, 'size-9 shrink-0 rounded-full')}
+      >
+        <CameraIcon size={18} aria-hidden />
+      </button>
+    </>
+  );
+}
+
+function BotaoDeDitado({ onAviso }: { onAviso: (aviso: string | null) => void }) {
+  const aui = useAui();
+  const ditado = useDitado(
+    (texto) => {
+      const atual = aui.composer().getState().text;
+      aui.composer().setText(atual.trim() ? `${atual.trimEnd()} ${texto}` : texto);
+      onAviso(null);
+    },
+    (mensagem) => onAviso(mensagem),
+  );
+  const gravando = ditado.estado === 'gravando';
+  const transcrevendo = ditado.estado === 'transcrevendo';
+  return (
+    <button
+      type="button"
+      aria-label={gravando ? 'Parar de gravar' : transcrevendo ? 'Transcrevendo' : 'Ditar mensagem'}
+      aria-pressed={gravando}
+      disabled={transcrevendo}
+      onClick={() => {
+        onAviso(null);
+        if (gravando) ditado.parar();
+        else void ditado.comecar();
+      }}
+      className={cn(
+        ghostButton,
+        'size-9 shrink-0 rounded-full disabled:opacity-60',
+        gravando && 'text-rose-500 hover:text-rose-500',
+      )}
+    >
+      {gravando ? (
+        <SquareIcon size={14} className="fill-current" aria-hidden />
+      ) : transcrevendo ? (
+        <LoaderCircleIcon
+          size={18}
+          className="animate-spin motion-reduce:animate-none"
+          aria-hidden
+        />
+      ) : (
+        <MicIcon size={18} aria-hidden />
+      )}
+    </button>
+  );
+}
+
 function Composer() {
   const aui = useAui();
   const campo = useRef<HTMLTextAreaElement>(null);
   const texto = useAuiState((s) => s.composer.text);
+  const temFoto = useAuiState((s) => s.composer.attachments.length > 0);
   const rodando = useAuiState((s) => s.thread.isRunning);
+  const recursos = useDisponibilidadeDoChat();
   // Com uma pausa na mesa, a resposta é o cartão: a mensagem nova descartaria a
   // pausa (o agente segue), e é fácil fazer isso sem querer.
   const pausado = Boolean(useLangGraphInterruptState()?.value);
   const [digitando, setDigitando] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
+  const podeEnviar = texto.trim() !== '' || temFoto;
 
   function enviar() {
-    if (!texto.trim() || rodando) return;
+    if (!podeEnviar || rodando) return;
     aui.composer().send();
     // A #221 nasceu de foco perdido para o `<body>`. Sem esta linha, quem conversa
     // pelo teclado teria de reencontrar o campo antes de cada mensagem.
     campo.current?.focus();
   }
 
+  const acoes =
+    recursos?.photos || recursos?.dictation ? (
+      <>
+        {recursos.photos ? <BotaoDeFoto /> : null}
+        {recursos.dictation ? <BotaoDeDitado onAviso={setAviso} /> : null}
+      </>
+    ) : undefined;
+
   return (
-    <MobileComposer
-      ref={campo}
-      value={texto}
-      onValueChange={(valor) => aui.composer().setText(valor)}
-      running={rodando}
-      keyboardOpen={digitando}
-      onFocus={() => setDigitando(true)}
-      onBlur={() => setDigitando(false)}
-      label="Mensagem para o Fatia"
-      placeholder={
-        pausado ? 'Responda no cartão acima, ou escreva outra coisa' : 'Escreva sua mensagem'
-      }
-      sendLabel="Enviar mensagem"
-      stopLabel="Parar resposta"
-      hint="enter envia"
-      onSend={enviar}
-      onStop={() => aui.thread().cancelRun()}
-      className="shrink-0 bg-transparent shadow-none"
-    />
+    <>
+      {aviso ? (
+        <p role="alert" className="shrink-0 px-5 pb-1 text-xs text-rose-500">
+          {aviso}
+        </p>
+      ) : null}
+      <MobileComposer
+        ref={campo}
+        value={texto}
+        onValueChange={(valor) => aui.composer().setText(valor)}
+        running={rodando}
+        keyboardOpen={digitando}
+        onFocus={() => setDigitando(true)}
+        onBlur={() => setDigitando(false)}
+        label="Mensagem para o Fatia"
+        placeholder={
+          pausado ? 'Responda no cartão acima, ou escreva outra coisa' : 'Escreva sua mensagem'
+        }
+        sendLabel="Enviar mensagem"
+        stopLabel="Parar resposta"
+        hint="enter envia"
+        actions={acoes}
+        attachments={<AnexosDoComposer />}
+        canSend={podeEnviar}
+        onSend={enviar}
+        onStop={() => aui.thread().cancelRun()}
+        className="shrink-0 bg-transparent shadow-none"
+      />
+    </>
   );
 }
 

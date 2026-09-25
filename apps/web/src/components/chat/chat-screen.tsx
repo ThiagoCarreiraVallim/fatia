@@ -1,10 +1,8 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
 import { useAuiState } from '@assistant-ui/react';
-import { getChatAvailability } from '@fatia/api-client';
 import { EmptyState, EmptyStateGreeting } from '@/components/elements/empty-state';
-import { useConversaAberta } from './chat-runtime-provider';
+import { useConversaAberta, useDisponibilidadeDoChat } from './chat-runtime-provider';
 import { GavetaDeConversas } from './conversas';
 import { GavetaDeMemorias } from './memorias';
 import { ChatThread } from './thread';
@@ -19,11 +17,7 @@ import { ChatThread } from './thread';
 export function ChatScreen() {
   const aberta = useConversaAberta();
   const titulo = useAuiState((s) => s.threadListItem?.title) ?? 'Chat';
-  const { data: disponivel } = useQuery({
-    queryKey: ['chat', 'availability'],
-    queryFn: getChatAvailability,
-    staleTime: 5 * 60_000,
-  });
+  const disponivel = useDisponibilidadeDoChat();
 
   return (
     <div

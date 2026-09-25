@@ -51,10 +51,16 @@ function doAssistente(linha: ChatHistoryMessage): LangChainMessage[] {
  * Só fala de pessoa e de assistente com conteúdo: uma linha vazia viraria bolha
  * em branco.
  */
+/** A foto não é guardada (ADR 004); depois de recarregar, fica o aviso de que ela existiu. */
+export const AVISO_DE_FOTO = '📷 Foto enviada — ela não fica guardada.';
+
 export function historicoParaMensagens(linhas: readonly ChatHistoryMessage[]): LangChainMessage[] {
   return linhas.flatMap((linha): LangChainMessage[] => {
     if (linha.role === 'user') {
-      return linha.content ? [{ id: linha.id, type: 'human', content: linha.content }] : [];
+      if (!linha.content) return [];
+      const fotos = linha.metadata?.photos ?? 0;
+      const content = fotos > 0 ? `${linha.content}\n\n${AVISO_DE_FOTO}` : linha.content;
+      return [{ id: linha.id, type: 'human', content }];
     }
     return doAssistente(linha);
   });

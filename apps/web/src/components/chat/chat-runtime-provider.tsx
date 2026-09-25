@@ -3,7 +3,8 @@
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { AssistantRuntimeProvider } from '@assistant-ui/react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getChatAvailability, type ChatAvailability } from '@fatia/api-client';
 import { useChatRuntime, useChatThreadList, type ChatRuntimeExtras } from './use-chat-runtime';
 
 /**
@@ -26,6 +27,16 @@ export function conversaDaRota(pathname: string | null): string | undefined {
 export const CHAVE_DAS_CONVERSAS = ['chat', 'conversations'] as const;
 export const CHAVE_DAS_MEMORIAS = ['chat', 'memories'] as const;
 export const CHAVE_DA_COTA = ['chat', 'quota'] as const;
+export const CHAVE_DA_DISPONIBILIDADE = ['chat', 'availability'] as const;
+
+/** Se o chat existe aqui e o que ele sabe além de texto. Uma consulta para as telas todas. */
+export function useDisponibilidadeDoChat(): ChatAvailability | undefined {
+  return useQuery({
+    queryKey: CHAVE_DA_DISPONIBILIDADE,
+    queryFn: getChatAvailability,
+    staleTime: 5 * 60_000,
+  }).data;
+}
 
 type Voto = ReturnType<typeof useChatRuntime>['voto'];
 
@@ -45,6 +56,7 @@ export function ChatRuntimeProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const lista = useChatThreadList();
   const alvo = conversaDaRota(pathname);
+  const disponivel = useDisponibilidadeDoChat();
 
   const aoTrocarDeConversa = useCallback(
     (threadId: string | undefined) => {
@@ -68,6 +80,7 @@ export function ChatRuntimeProvider({ children }: { children: ReactNode }) {
     conversationId: lista.ready ? alvo : undefined,
     threadListAdapter: lista.adapter,
     onThreadIdChange: aoTrocarDeConversa,
+    fotos: disponivel?.photos ?? false,
     // O turno pode ter guardado uma memória e gastou cota: as três listas mudam juntas.
     onTurnEnd: () => {
       for (const queryKey of [CHAVE_DAS_CONVERSAS, CHAVE_DAS_MEMORIAS, CHAVE_DA_COTA]) {

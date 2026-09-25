@@ -86,7 +86,7 @@ from .qualidade import (
     tool_em_falha,
     validar_resposta,
 )
-from .state import ContextoDoTurno, EstadoDaConversa, estado_vazio
+from .state import ContextoDoTurno, EstadoDaConversa, FotoDoTurno, estado_vazio
 from .tool_policy import (
     argumentos_do_modelo,
     camada_confirmavel,
@@ -211,6 +211,33 @@ def _janela(mensagens: Sequence[AnyMessage]) -> list[AnyMessage]:
         if isinstance(mensagens[indice], HumanMessage):
             return list(mensagens[indice:])
     return list(mensagens[inicio:])
+
+
+MARCA_DE_FOTO = "[📷 {n} foto(s) enviada(s) com esta mensagem — a imagem não fica guardada]"
+
+
+def _com_fotos(
+    conversa: Sequence[dict[str, Any]], fotos: Sequence[FotoDoTurno]
+) -> list[dict[str, Any]]:
+    """A última fala da pessoa com as fotos do turno, só na ida ao modelo.
+
+    É aqui, e não no estado, que a foto entra: o que o grafo grava no checkpoint
+    é a mensagem com a `MARCA_DE_FOTO`, e os bytes nunca passam pelo reducer.
+    """
+    saida = list(conversa)
+    if not fotos:
+        return saida
+    for indice in range(len(saida) - 1, -1, -1):
+        if saida[indice]["role"] == "user":
+            saida[indice] = {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": saida[indice]["content"]},
+                    *({"type": "image_url", "image_url": {"url": f.data_uri()}} for f in fotos),
+                ],
+            }
+            break
+    return saida
 
 
 def _para_o_provedor(mensagens: Sequence[AnyMessage]) -> list[dict[str, Any]]:
@@ -392,7 +419,7 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
             encerrar=encerrar,
         )
         conversa = _para_o_provedor(state.get("messages") or [])
-        prompt = [{"role": "system", "content": sistema}, *conversa]
+        prompt = [{"role": "system", "content": sistema}, *_com_fotos(conversa, contexto.fotos)]
         atualizacao: dict[str, Any] = {}
 
         if not state.get("contexto_informado"):
@@ -411,7 +438,9 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
         identificador = f"ai-{uuid.uuid4().hex}"
         texto: list[str] = []
         fim: TurnEnd | None = None
-        async for pedaco in contexto.provider.stream_chat(prompt, tools=catalogo):
+        async for pedaco in contexto.provider.stream_chat(
+            prompt, tools=catalogo, capacidade="vision" if contexto.fotos else "text"
+        ):
             if isinstance(pedaco, TextDelta):
                 texto.append(pedaco.text)
                 writer(
@@ -864,7 +893,16 @@ async def stream_chat_events(
     entrada: Any = (
         Command(resume=retomada if retomada is not None else "")
         if mensagem is None
-        else {"messages": [HumanMessage(content=mensagem, id=f"human-{uuid.uuid4().hex}")]}
+        else {
+            "messages": [
+                HumanMessage(
+                    content=f"{mensagem}\n\n{MARCA_DE_FOTO.format(n=len(contexto.fotos))}"
+                    if contexto.fotos
+                    else mensagem,
+                    id=f"human-{uuid.uuid4().hex}",
+                )
+            ]
+        }
     )
 
     yield events.start(conversation_id, contexto.run_id).frame()

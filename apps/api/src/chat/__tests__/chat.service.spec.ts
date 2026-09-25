@@ -436,7 +436,7 @@ describe('ChatService — ordem das guardas', () => {
 
     expect(chamadasAoAgente[0].historico).toEqual([]);
     expect(conversas.historicoParaOAgente).not.toHaveBeenCalled();
-    expect(conversas.iniciarTurno).toHaveBeenCalledWith('user-a', CONVERSA, 'oi');
+    expect(conversas.iniciarTurno).toHaveBeenCalledWith('user-a', CONVERSA, 'oi', 0);
   });
 
   it('a retomada vai ao agente sem mensagem e não grava fala da pessoa', async () => {

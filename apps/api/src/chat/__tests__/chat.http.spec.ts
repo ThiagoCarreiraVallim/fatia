@@ -13,6 +13,8 @@ import { ChatModule } from '../chat.module';
 import { CheckpointPurgeService } from '../checkpoint-purge.service';
 import { ConversationService } from '../conversation.service';
 import { MemoryService } from '../memory/memory.service';
+import { registrarCorposDoChat, TETO_DO_AUDIO } from '../corpos-do-chat';
+import { JPEG_COM_EXIF_GPS } from '../../nutrition/helpers/jpeg-com-exif.fixture';
 
 /**
  * `POST /api/chat` pela **porta da frente**, com express de verdade no meio.
@@ -115,6 +117,9 @@ interface Cenario {
   canal: ReturnType<typeof canalDoAgente>;
   abrir: jest.Mock<Promise<StreamDoAgente>, [EntradaDoTurno]>;
   configurado: jest.Mock<boolean, []>;
+  capacidades: jest.Mock;
+  transcrever: jest.Mock;
+  registrar: jest.Mock;
   assertDentroDaCota: jest.Mock<Promise<void>, [string]>;
   comoUsuario: (id: string) => void;
 }
@@ -124,6 +129,12 @@ async function subirApp(): Promise<Cenario> {
   const abrir = jest.fn(async (_entrada: EntradaDoTurno) => canal.stream);
   const configurado = jest.fn(() => true);
   const assertDentroDaCota = jest.fn(async (_userId: string) => undefined);
+  const capacidades = jest.fn(async () => ({ fotos: true, ditado: false }));
+  const transcrever = jest.fn(async (_audio: Buffer, _tipo: string) => ({
+    texto: 'registra 200 g de frango',
+    uso: { model: 'whisper-1', inputUnits: 3.4 },
+  }));
+  const registrar = jest.fn(async () => undefined);
 
   const modulo = await Test.createTestingModule({
     imports: [
@@ -142,9 +153,9 @@ async function subirApp(): Promise<Cenario> {
     .overrideProvider(PrismaService)
     .useValue({})
     .overrideProvider(AgentChatClient)
-    .useValue({ abrir, configurado })
+    .useValue({ abrir, configurado, capacidades, transcrever })
     .overrideProvider(AiUsageService)
-    .useValue({ assertDentroDaCota, registrar: jest.fn(async () => undefined) })
+    .useValue({ assertDentroDaCota, registrar })
     .overrideProvider(ConversationService)
     .useValue({
       encontrar: jest.fn(async () => null),
@@ -177,6 +188,7 @@ async function subirApp(): Promise<Cenario> {
     next();
   });
 
+  registrarCorposDoChat(app);
   app.setGlobalPrefix('api');
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
@@ -189,6 +201,9 @@ async function subirApp(): Promise<Cenario> {
     canal,
     abrir,
     configurado,
+    capacidades,
+    transcrever,
+    registrar,
     assertDentroDaCota,
     comoUsuario: (id: string) => {
       usuarioAtual = id;
@@ -401,8 +416,12 @@ describe('GET /api/chat/availability', () => {
     await cenario.app.close();
   });
 
-  it('diz que o chat existe quando há agente configurado', async () => {
-    expect(await (await fetch(`${cenario.url}/availability`)).json()).toEqual({ available: true });
+  it('diz que o chat existe e o que ele sabe fazer além de texto', async () => {
+    expect(await (await fetch(`${cenario.url}/availability`)).json()).toEqual({
+      available: true,
+      photos: true,
+      dictation: false,
+    });
   });
 
   it('instância sem agente responde `available: false` em vez de deixar a aba quebrar', async () => {
@@ -410,6 +429,131 @@ describe('GET /api/chat/availability', () => {
     // que permite o auto-hospedado sem agente continuar um produto inteiro.
     cenario.configurado.mockReturnValueOnce(false);
 
-    expect(await (await fetch(`${cenario.url}/availability`)).json()).toEqual({ available: false });
+    expect(await (await fetch(`${cenario.url}/availability`)).json()).toEqual({
+      available: false,
+      photos: false,
+      dictation: false,
+    });
+    expect(cenario.capacidades).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/chat com foto', () => {
+  let cenario: Cenario;
+
+  beforeEach(async () => {
+    cenario = await subirApp();
+  });
+
+  afterEach(async () => {
+    cenario.canal.encerrar();
+    await cenario.app.close();
+  });
+
+  it('um turno com foto passa do teto global de 100 kB e chega ao agente sem EXIF', async () => {
+    // Uma foto de celular reduzida ainda passa dos 100 kB do parser global:
+    // o recheio garante que o teste falharia sem o parser da rota.
+    const grande = Buffer.concat([JPEG_COM_EXIF_GPS, Buffer.alloc(150_000)]);
+    const resposta = await conversar(cenario.url, {
+      message: 'o que tem nesse prato?',
+      photos: [{ mediaType: 'image/jpeg', data: grande.toString('base64') }],
+    });
+
+    expect(resposta.status).toBe(200);
+    const entrada = cenario.abrir.mock.calls[0][0] as { fotos?: { data: string }[] };
+    const enviada = Buffer.from(entrada.fotos?.[0]?.data ?? '', 'base64');
+    expect(enviada.length).toBeGreaterThan(150_000);
+    expect(enviada.includes(Buffer.from('iPhone 15 Pro'))).toBe(false);
+    expect(enviada.includes(Buffer.from('F2LZQ8XKJC'))).toBe(false);
+    cenario.canal.encerrar();
+    await resposta.text();
+  });
+
+  it('recusa o que não é JPEG antes de abrir o agente', async () => {
+    const resposta = await conversar(cenario.url, {
+      message: 'o que é isso?',
+      photos: [{ mediaType: 'image/jpeg', data: Buffer.from('não sou jpeg').toString('base64') }],
+    });
+
+    expect(resposta.status).toBe(400);
+    expect(cenario.abrir).not.toHaveBeenCalled();
+  });
+
+  it('recusa foto na resposta a uma pausa', async () => {
+    const resposta = await conversar(cenario.url, {
+      resume: { interruptId: 'i-1', value: true },
+      photos: [{ mediaType: 'image/jpeg', data: JPEG_COM_EXIF_GPS.toString('base64') }],
+    });
+
+    expect([400, 404]).toContain(resposta.status);
+    expect(cenario.abrir).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/chat/transcribe', () => {
+  let cenario: Cenario;
+
+  beforeEach(async () => {
+    cenario = await subirApp();
+  });
+
+  afterEach(async () => {
+    await cenario.app.close();
+  });
+
+  const ditar = (corpo: Uint8Array<ArrayBuffer>, tipo: string) =>
+    fetch(`${cenario.url}/transcribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': tipo, Authorization: 'Bearer token-do-usuario' },
+      body: new Blob([corpo]),
+    });
+
+  it('repassa os bytes intactos, devolve o texto e lança o custo em segundos de áudio', async () => {
+    const audio = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0xff, 0x00, 0x80]);
+
+    const resposta = await ditar(audio, 'audio/webm;codecs=opus');
+
+    expect(resposta.status).toBe(200);
+    expect(await resposta.json()).toEqual({ text: 'registra 200 g de frango' });
+    const [bytes, tipo] = cenario.transcrever.mock.calls[0];
+    expect(Buffer.compare(bytes, Buffer.from(audio))).toBe(0);
+    expect(tipo).toBe('audio/webm;codecs=opus');
+    expect(cenario.assertDentroDaCota).toHaveBeenCalledWith(USER);
+    expect(cenario.registrar).toHaveBeenCalledWith(USER, {
+      feature: 'transcription',
+      model: 'whisper-1',
+      units: { inputUnits: 3.4, outputUnits: 0 },
+    });
+  });
+
+  it('recusa o que não é áudio sem chamar o agente', async () => {
+    const resposta = await ditar(enc('{"oi":1}'), 'application/json');
+
+    expect(resposta.status).toBe(415);
+    expect(cenario.transcrever).not.toHaveBeenCalled();
+  });
+
+  it('recusa áudio acima do teto sem chamar o agente', async () => {
+    const resposta = await ditar(new Uint8Array(TETO_DO_AUDIO + 1), 'audio/webm');
+
+    expect(resposta.status).toBe(413);
+    expect(cenario.transcrever).not.toHaveBeenCalled();
+  });
+
+  it('cota estourada barra antes do agente', async () => {
+    cenario.assertDentroDaCota.mockRejectedValueOnce(
+      new AiQuotaExceededException({
+        allowed: false,
+        scope: 'user',
+        spentMicros: 1,
+        limitMicros: 1,
+        resetsAt: new Date(),
+      }),
+    );
+
+    const resposta = await ditar(new Uint8Array([1, 2, 3]), 'audio/webm');
+
+    expect(resposta.status).toBe(429);
+    expect(cenario.transcrever).not.toHaveBeenCalled();
   });
 });

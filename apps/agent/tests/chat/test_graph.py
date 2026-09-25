@@ -357,7 +357,9 @@ async def test_falha_do_mcp_no_meio_da_conversa_vira_evento_de_erro(settings_fac
 
 async def test_provedor_que_cai_no_meio_do_stream_vira_evento_de_erro(settings_factory):
     class ProvedorQueCai:
-        async def stream_chat(self, messages, *, tools=()) -> AsyncIterator[TextDelta]:
+        async def stream_chat(
+            self, messages, *, tools=(), capacidade="text"
+        ) -> AsyncIterator[TextDelta]:
             from fatia_agent.providers.errors import AIProviderTimeout
 
             yield TextDelta(text="Você ")
@@ -377,7 +379,7 @@ async def test_defeito_nosso_nao_vira_evento_de_erro_generico(settings_factory):
     """Exceção sem `code` continua subindo: o traceback é a única pista dela."""
 
     class ProvedorComDefeito:
-        def stream_chat(self, messages, *, tools=()) -> Never:
+        def stream_chat(self, messages, *, tools=(), capacidade="text") -> Never:
             raise ZeroDivisionError("defeito de programação")
 
     fluxo = await _fluxo(ProvedorComDefeito(), mensagem="oi")
@@ -429,6 +431,7 @@ class ProvedorComPortao:
         messages: Sequence[dict[str, object]],
         *,
         tools: Sequence[dict[str, object]] = (),
+        capacidade: str = "text",
     ) -> AsyncIterator[TextDelta | TurnEnd]:
         self._chamadas += 1
         if self._chamadas > 1:

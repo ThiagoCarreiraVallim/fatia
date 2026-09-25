@@ -22,11 +22,14 @@ from ..allowed_models import (
     unreviewed_model_reason,
 )
 from .base import (
+    ChatCapability,
     EmbeddingCapability,
     TextCapability,
     TextDelta,
     ToolCall,
     ToolChatCapability,
+    Transcription,
+    TranscriptionCapability,
     TurnEnd,
     Usage,
     VisionCapability,
@@ -49,7 +52,7 @@ RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
 
 
 class OpenAICompatProvider:
-    """Atende `TextCapability`, `VisionCapability` e `EmbeddingCapability`."""
+    """Atende texto, visão, embedding, chat com tools e transcrição."""
 
     def __init__(
         self,
@@ -59,6 +62,7 @@ class OpenAICompatProvider:
         text_model: str = "",
         vision_model: str = "",
         embedding_model: str = "",
+        transcription_model: str = "",
         timeout_s: float = 120.0,
         max_retries: int = 2,
         retry_backoff_s: float = 0.5,
@@ -67,6 +71,7 @@ class OpenAICompatProvider:
         self._text_model = text_model
         self._vision_model = vision_model
         self._embedding_model = embedding_model
+        self._transcription_model = transcription_model
         self._max_retries = max_retries
         self._retry_backoff_s = retry_backoff_s
 
@@ -187,8 +192,12 @@ class OpenAICompatProvider:
         messages: Sequence[dict[str, Any]],
         *,
         tools: Sequence[dict[str, Any]] = (),
+        capacidade: ChatCapability = "text",
     ) -> AsyncIterator[TextDelta | TurnEnd]:
         """Conversa em streaming, com tools. Atende `ToolChatCapability`.
+
+        `capacidade="vision"` quando a conversa leva foto: o turno inteiro vai para
+        `AI_MODEL_VISION`, que por isso precisa aceitar tools também.
 
         Passa por `_require_model` como todas as outras capacidades — é o único
         ponto por onde a revisão de destino e de modelo da #136 acontece, e o
@@ -199,7 +208,9 @@ class OpenAICompatProvider:
         indistinguível de "o modelo está pensando" para quem está olhando. Falha
         antes do primeiro byte vira erro nomeado como em qualquer outra chamada.
         """
-        model = self._require_model("text", self._text_model)
+        model = self._require_model(
+            capacidade, self._vision_model if capacidade == "vision" else self._text_model
+        )
         payload: dict[str, Any] = {
             "model": model,
             "messages": list(messages),
@@ -291,6 +302,39 @@ class OpenAICompatProvider:
 
         yield TurnEnd(tool_calls=acumulador.resultado(), finish_reason=finish_reason, usage=uso)
 
+    async def transcribe(self, audio: bytes, *, media_type: str) -> Transcription:
+        """Áudio → texto, pelo `/audio/transcriptions` do contrato OpenAI. Atende a #141.
+
+        `verbose_json` porque é o único formato que devolve `duration`, e a
+        duração é a unidade de preço da transcrição (`ai-pricing.ts`). O nome do
+        arquivo leva a extensão do formato: há servidor compatível que escolhe o
+        decodificador por ela, e não pelo `content-type`.
+
+        O áudio vive nesta chamada e em mais lugar nenhum (ADR 020).
+        """
+        model = self._require_model("transcription", self._transcription_model)
+        extensao = media_type.split("/")[-1].split(";")[0] or "webm"
+        response = await self._request(
+            "POST",
+            "audio/transcriptions",
+            files={"file": (f"audio.{extensao}", audio, media_type)},
+            data={"model": model, "response_format": "verbose_json", "language": "pt"},
+        )
+        body = _json_body(response)
+        texto = body.get("text")
+        if not isinstance(texto, str):
+            raise AIResponseUnparseable(
+                f"'/audio/transcriptions' devolveu {_describe(texto)} em 'text'."
+            )
+        duracao = body.get("duration")
+        return Transcription(
+            text=texto.strip(),
+            duration_seconds=float(duracao)
+            if isinstance(duracao, (int, float)) and not isinstance(duracao, bool)
+            else None,
+            model=model,
+        )
+
     async def list_models(self) -> list[str]:
         """Usado pelo teste de fumaça e pelo diagnóstico — não é capacidade."""
         body = _json_body(await self._request("GET", "models"))
@@ -367,12 +411,20 @@ class OpenAICompatProvider:
         return content
 
     async def _request(
-        self, method: str, path: str, json: dict[str, object] | None = None
+        self,
+        method: str,
+        path: str,
+        json: dict[str, object] | None = None,
+        *,
+        files: dict[str, tuple[str, bytes, str]] | None = None,
+        data: dict[str, str] | None = None,
     ) -> httpx.Response:
         pending: AIProviderError | None = None
         for attempt in range(self._max_retries + 1):
             try:
-                response = await self._client.request(method, path, json=json)
+                response = await self._client.request(
+                    method, path, json=json, files=files, data=data
+                )
             except httpx.TimeoutException as exc:
                 pending = AIProviderTimeout(
                     f"O provedor não respondeu {method} {path} dentro de AI_TIMEOUT_S ({exc})."
@@ -416,7 +468,13 @@ class OpenAICompatProvider:
 
 def _capacidades_atendidas(
     provider: "OpenAICompatProvider",
-) -> tuple[TextCapability, VisionCapability, EmbeddingCapability, ToolChatCapability]:
+) -> tuple[
+    TextCapability,
+    VisionCapability,
+    EmbeddingCapability,
+    ToolChatCapability,
+    TranscriptionCapability,
+]:
     """Conformidade com os `Protocol` da `base.py`, conferida pelo type checker.
 
     Protocolo é estrutural: nada obriga esta classe a continuar batendo com ele.
@@ -425,7 +483,7 @@ def _capacidades_atendidas(
     só quando o grafo recebesse o objeto errado, em runtime. `runtime_checkable`
     também não pegaria: ele só olha se o método existe.
     """
-    return provider, provider, provider, provider
+    return provider, provider, provider, provider, provider
 
 
 class _AcumuladorDeToolCalls:

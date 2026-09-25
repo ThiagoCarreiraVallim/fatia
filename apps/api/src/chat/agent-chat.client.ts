@@ -1,68 +1,51 @@
 import {
   BadGatewayException,
+  BadRequestException,
   ConflictException,
   GatewayTimeoutException,
   Injectable,
   Logger,
+  PayloadTooLargeException,
   ServiceUnavailableException,
   UnauthorizedException,
+  UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { MensagemDoHistorico } from './conversation.service';
 
 /**
- * Cliente do `POST /chat` do `apps/agent` (#248), do lado do NestJS (#249).
+ * Cliente do `apps/agent` para o chat, do lado do NestJS (#249, ADR 023).
  *
- * ## O contrato, que é a razão de este arquivo existir separado
+ * ## O contrato
  *
- * As três camadas da épica #247 são construídas em paralelo, então o que viaja
- * entre elas está escrito **aqui** e no corpo da PR, e não descoberto por cada
- * uma. O que vai:
+ * O que vai no `POST /chat` — um turno novo **ou** a resposta a uma pausa:
  *
  * ```json
- * { "message": "o que eu comi ontem?", "timezone": "America/Sao_Paulo",
+ * { "conversationId": "…", "timezone": "America/Sao_Paulo",
  *   "history": [{ "role": "user" | "assistant", "content": "..." }],
- *   "approved": [{ "name": "log_meal", "arguments": "{...}" }] }
+ *   "memories": [{ "id": "…", "content": "..." }],
+ *   "message": "o que eu comi ontem?",
+ *   "photos": [{ "mediaType": "image/jpeg", "data": "<base64 sem EXIF>" }] }
  * ```
  *
- * O histórico vai junto porque **o agente não guarda nada** — quem persiste é a
- * API, que é quem tem banco (ADR 015).
+ * ou `"resume": { "interruptId": "…", "value": … }` no lugar de `message` e
+ * `photos`. O agente declara `extra: "forbid"`: campo a mais aqui vira 422 lá, e
+ * foi exatamente assim que todo turno já voltou recusado (#249).
  *
- * **A mensagem de agora vai separada do histórico**, e não como o último item de
- * um array, porque os dois têm regras de tamanho opostas do outro lado: a de
- * agora é recusada com 422 acima de 4 000 caracteres (a pessoa está olhando para
- * o campo e o cliente sabe contar), e a do histórico é **cortada** em silêncio —
- * recusá-la mataria a conversa por uma resposta longa do próprio modelo, que
- * ninguém do lado de cá controla. Empacotar as duas num array só apagava essa
- * diferença. Esta camada mandou `{conversation_id, timezone, messages}` até esta
- * correção, e o agente declara `extra: "forbid"`: **todo turno voltava 422** e
- * chegava ao aluno como "o chat falhou". Nenhum teste pegava — cada lado testava
- * contra o dublê que ele mesmo escreveu.
+ * **A mensagem de agora vai separada do histórico** porque as regras de tamanho
+ * são opostas: a de agora é recusada acima de 4 000 caracteres (a pessoa está
+ * olhando para o campo), a do histórico é **cortada** em silêncio — recusá-la
+ * mataria a conversa por uma resposta longa do próprio modelo.
  *
- * `conversation_id` deixou de ir: o agente não persiste nada e não o usava para
- * coisa nenhuma, e um campo que existe só para ser ignorado é o que faz o
- * contrato parecer maior do que é.
+ * O histórico só é lido pelo agente numa thread fria; numa quente, o estado no
+ * checkpointer é a verdade (ADR 023). As fotos vivem só naquele turno.
  *
- * O que volta é `text/event-stream`, e o `data` de cada evento é um objeto JSON:
- *
- * | evento     | `data`                                                                 |
- * | ---------- | ---------------------------------------------------------------------- |
- * | `token`    | `{ "text": "..." }` — pedaço da resposta                               |
- * | `tool`     | `{ "id", "name", "state", "input" \| "output" \| "errorText" }`         |
- * | `proposal` | `{ "id", "name", "arguments" }` — ação proposta, **não** executada     |
- * | `usage`    | `{ "model": "...", "inputUnits": n, "outputUnits": n }`                 |
- * | `error`    | `{ "code": "...", "message": "..." }`                                  |
- * | `done`     | `{ "reason": "stop" \| "step_limit" \| "awaiting_confirmation" \| "error" }` |
- *
- * O `proposal` fecha o turno com `reason: "awaiting_confirmation"` e nada gravado.
- * Se a pessoa aprovar na tela, o PWA abre um turno novo com aquilo em `approved`.
- * Esta camada **repassa e observa**, não decide: ela não reemite o quadro (o
- * `escrever` do chunk bruto já o entregou) e não interpreta o `arguments`.
- *
- * O `usage` é o que faz a cota da #135 funcionar: sem ele, o turno entra no
- * livro-caixa como **custo não medido** (`pricingKnown: false`), não como
- * grátis. Ou seja, se o agente parar de emitir, a cota fecha pela tolerância em
- * vez de liberar para sempre em silêncio.
+ * O que volta é `text/event-stream` no vocabulário nativo do LangGraph —
+ * `messages`, `updates`, `messages/complete` — mais os eventos próprios
+ * (`start`, `catalog`, `usage`, `plan`, `artifact`, `context`, `validation`,
+ * `error`, `done`). O contrato completo está em `apps/agent/.../chat/events.py`.
+ * Esta camada **repassa os bytes e observa** (`leitor-do-turno.ts`): grava o
+ * que a tela mostra depois de um F5 e soma o `usage` da cota da #135.
  *
  * ## O Bearer
  *
@@ -103,7 +86,12 @@ export type EntradaDoTurno = {
   /** O que a pessoa pediu para o assistente lembrar. Entra cercado no prompt. */
   memorias?: { id: string; content: string }[];
 } & (
-  | { mensagem: string; retomada?: undefined }
+  | {
+      mensagem: string;
+      retomada?: undefined;
+      /** Já sem metadados — ver `ChatService.fotosDoTurno`. */
+      fotos?: { mediaType: 'image/jpeg'; data: string }[];
+    }
   | {
       mensagem?: undefined;
       /**
@@ -133,6 +121,22 @@ const TIMEOUT_DE_OCIOSIDADE_MS = 90_000;
 /** O título não segura nada: quem espera é uma linha da lista de conversas. */
 const TIMEOUT_DO_TITULO_MS = 20_000;
 
+/** Ditado curto; quem espera é a pessoa olhando para o campo de mensagem. */
+const TIMEOUT_DA_TRANSCRICAO_MS = 60_000;
+
+const TIMEOUT_DAS_CAPACIDADES_MS = 3_000;
+/** O agente só muda de capacidade num restart; perguntar a cada tela seria ruído. */
+const VALIDADE_DAS_CAPACIDADES_MS = 60_000;
+
+/** O que o chat desta instância sabe fazer além de texto. */
+export type CapacidadesDoChat = { fotos: boolean; ditado: boolean };
+
+export type TranscricaoDoAgente = {
+  texto: string;
+  /** Segundos de áudio. `undefined` quando o provedor não mediu. */
+  uso: { model: string; inputUnits?: number };
+};
+
 export type TituloDoAgente = {
   titulo: string | null;
   /** `null` quando o agente não mediu — vira custo não medido no livro-caixa. */
@@ -143,11 +147,105 @@ export type TituloDoAgente = {
 export class AgentChatClient {
   private readonly logger = new Logger(AgentChatClient.name);
 
+  private capacidadesEmCache: { valor: CapacidadesDoChat; ate: number } | null = null;
+
   constructor(private readonly config: ConfigService) {}
 
   /** `true` quando esta instância tem agente configurado para conversar. */
   configurado(): boolean {
     return this.base() !== null;
+  }
+
+  /**
+   * Foto e ditado, pelo que o `/capabilities` do agente anuncia como usável.
+   *
+   * O agente sobe saudável sem `AI_MODEL_VISION` ou `AI_MODEL_TRANSCRIPTION` e
+   * recusa a chamada — mostrar o botão nesse estado seria pedir uma foto para
+   * devolver um erro. **Nunca lança:** agente fora do ar é "sem foto e sem voz".
+   */
+  async capacidades(agora = Date.now()): Promise<CapacidadesDoChat> {
+    if (this.capacidadesEmCache && this.capacidadesEmCache.ate > agora) {
+      return this.capacidadesEmCache.valor;
+    }
+    const base = this.base();
+    let valor: CapacidadesDoChat = { fotos: false, ditado: false };
+    if (base) {
+      try {
+        const http = await fetch(`${base}/capabilities`, {
+          headers: { Accept: 'application/json' },
+          signal: AbortSignal.timeout(TIMEOUT_DAS_CAPACIDADES_MS),
+        });
+        if (http.ok) {
+          const corpo = (await http.json()) as {
+            capabilities?: { vision?: unknown; transcription?: unknown };
+          };
+          const usavel = (modelo: unknown) => typeof modelo === 'string' && modelo.length > 0;
+          valor = {
+            fotos: usavel(corpo.capabilities?.vision),
+            ditado: usavel(corpo.capabilities?.transcription),
+          };
+        }
+      } catch (erro) {
+        this.logger.warn(`Capacidades do agente indisponíveis: ${(erro as Error).name}`);
+      }
+    }
+    this.capacidadesEmCache = { valor, ate: agora + VALIDADE_DAS_CAPACIDADES_MS };
+    return valor;
+  }
+
+  /**
+   * Áudio → texto (#141). Sem Bearer, como o título: transcrever não alcança
+   * dado nenhum. O áudio não é logado, gravado nem guardado (ADR 020).
+   */
+  async transcrever(audio: Buffer, contentType: string): Promise<TranscricaoDoAgente> {
+    const base = this.base();
+    if (!base) {
+      throw new ServiceUnavailableException('O ditado não está configurado nesta instância.');
+    }
+    const chave = this.config.get<string>('AGENT_API_KEY', '').trim();
+    let http: Response;
+    try {
+      http = await fetch(`${base}/transcribe`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': contentType,
+          ...(chave ? { 'X-Fatia-Agent-Key': chave } : {}),
+        },
+        body: new Uint8Array(audio),
+        signal: AbortSignal.timeout(TIMEOUT_DA_TRANSCRICAO_MS),
+      });
+    } catch (erro) {
+      const causa = erro as Error;
+      this.logger.warn(`Transcrição inacessível: ${causa.name}`);
+      if (causa.name === 'TimeoutError' || causa.name === 'AbortError') {
+        throw new GatewayTimeoutException('A transcrição demorou demais. Tente de novo.');
+      }
+      throw new ServiceUnavailableException('O ditado está fora do ar no momento.');
+    }
+
+    // Os 4xx do próprio `/transcribe` dizem o que a pessoa pode corrigir; o
+    // resto é o mesmo vocabulário do chat.
+    if (http.status === 400) throw new BadRequestException('O áudio veio vazio.');
+    if (http.status === 413) {
+      throw new PayloadTooLargeException('O áudio é longo demais. Grave um trecho mais curto.');
+    }
+    if (http.status === 415) {
+      throw new UnsupportedMediaTypeException('Este formato de áudio não é aceito.');
+    }
+    if (!http.ok) throw await this.traduzirErro(http);
+
+    const corpo = (await http.json()) as {
+      text?: unknown;
+      usage?: { model?: unknown; inputUnits?: unknown };
+    };
+    return {
+      texto: typeof corpo.text === 'string' ? corpo.text : '',
+      uso: {
+        model: typeof corpo.usage?.model === 'string' ? corpo.usage.model : '',
+        inputUnits:
+          typeof corpo.usage?.inputUnits === 'number' ? corpo.usage.inputUnits : undefined,
+      },
+    };
   }
 
   /**
@@ -184,7 +282,12 @@ export class AgentChatClient {
           timezone: entrada.timezone,
           history: entrada.historico.map((m) => ({ role: m.role, content: m.content })),
           memories: entrada.memorias ?? [],
-          ...(entrada.retomada ? { resume: entrada.retomada } : { message: entrada.mensagem }),
+          ...(entrada.retomada
+            ? { resume: entrada.retomada }
+            : {
+                message: entrada.mensagem,
+                ...(entrada.fotos?.length ? { photos: entrada.fotos } : {}),
+              }),
         }),
         signal: abortador.signal,
       });

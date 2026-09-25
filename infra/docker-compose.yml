@@ -117,6 +117,7 @@ services:
       AI_MODEL_TEXT: ${AI_MODEL_TEXT:-}
       AI_MODEL_VISION: ${AI_MODEL_VISION:-}
       AI_MODEL_EMBEDDING: ${AI_MODEL_EMBEDDING:-}
+      AI_MODEL_TRANSCRIPTION: ${AI_MODEL_TRANSCRIPTION:-}
       AI_TIMEOUT_S: ${AI_TIMEOUT_S:-120}
       # Segredo compartilhado com o apps/api. Obrigatório quando AI_BASE_URL
       # não é local — ver apps/agent/README.md, §"Rotas de inferência".

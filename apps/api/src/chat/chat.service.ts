@@ -1,10 +1,18 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  PayloadTooLargeException,
+} from '@nestjs/common';
 import { AiUsageService } from '../ai/ai-usage.service';
 import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { AgentChatClient, ErroDeStreamDoAgente, type StreamDoAgente } from './agent-chat.client';
 import { ConversationService } from './conversation.service';
 import { MemoryService } from './memory/memory.service';
-import type { SendChatMessageDto } from './dto/chat.dto';
+import type { ChatPhotoDto, SendChatMessageDto } from './dto/chat.dto';
+import { TETO_DA_FOTO_DO_CHAT } from './corpos-do-chat';
+import { NaoEhJpegError, removerMetadadosDoJpeg } from '../nutrition/helpers/strip-exif';
 import { type TurnoLido, criarLeitorDoTurno } from './leitor-do-turno';
 import { criarLeitorSse, formatarEventoSse } from './sse';
 
@@ -48,6 +56,27 @@ export class ChatService {
   ) {}
 
   /**
+   * O ditado do composer (#141): cota, transcrição e o custo no livro-caixa.
+   *
+   * O texto volta para o campo de mensagem e **não** vira turno: quem decide
+   * mandar é a pessoa, depois de ler. Nada do áudio é gravado ou logado.
+   */
+  async transcrever(userId: string, audio: Buffer, contentType: string): Promise<{ text: string }> {
+    if (audio.length === 0) throw new BadRequestException('O áudio veio vazio.');
+    await this.uso.assertDentroDaCota(userId);
+    const { texto, uso } = await this.agent.transcrever(audio, contentType);
+    // Transcrição não tem saída cobrada: `0`, e não `undefined` — ver `AiCallUnits`.
+    await this.uso
+      .registrar(userId, {
+        feature: 'transcription',
+        model: uso.model || null,
+        units: { inputUnits: uso.inputUnits, outputUnits: 0 },
+      })
+      .catch((erro: Error) => this.logger.error(`Uso da transcrição não gravado: ${erro.name}`));
+    return { text: texto };
+  }
+
+  /**
    * Conduz um turno inteiro — uma mensagem nova ou a resposta a uma pausa.
    *
    * **A ordem das etapas antes do primeiro byte é a garantia, não um detalhe.**
@@ -72,6 +101,10 @@ export class ChatService {
         'Envie message (turno novo) ou resume (resposta a uma pausa), não os dois.',
       );
     }
+    if (dto.resume && dto.photos?.length) {
+      throw new BadRequestException('Foto só acompanha uma mensagem nova.');
+    }
+    const fotos = fotosDoTurno(dto.photos ?? []);
 
     const existente = await this.conversas.encontrar(user.id, dto.conversationId);
     if (dto.resume && !existente) throw new NotFoundException('Conversa não encontrada.');
@@ -100,14 +133,14 @@ export class ChatService {
     stream = await this.agent.abrir(
       dto.resume
         ? { ...comum, retomada: { interruptId: dto.resume.interruptId, value: dto.resume.value } }
-        : { ...comum, mensagem: dto.message as string },
+        : { ...comum, mensagem: dto.message as string, ...(fotos.length ? { fotos } : {}) },
     );
 
     if (clienteFoiEmbora) stream.cancelar();
 
     if (existente) await this.conversas.limparPausas(user.id, dto.conversationId);
     if (dto.message !== undefined) {
-      await this.conversas.iniciarTurno(user.id, dto.conversationId, dto.message);
+      await this.conversas.iniciarTurno(user.id, dto.conversationId, dto.message, fotos.length);
       // Sem `await`: o nome é enfeite de lista, e esperar por ele atrasaria o
       // primeiro token da resposta, que é o que a pessoa está olhando.
       if (!existente) void this.nomear(user.id, dto.conversationId, dto.message);
@@ -217,4 +250,31 @@ export class ChatService {
     }
     return linha;
   }
+}
+
+/**
+ * As fotos do turno sem metadados, **de novo**.
+ *
+ * O PWA já recodifica a foto no aparelho, o que tira o EXIF antes de ela sair
+ * (ADR 020). Esta segunda passada é para o cliente que não fez isso — versão
+ * antiga, `curl` de quem tem token —, pelo mesmo motivo de `strip-exif.ts`: a
+ * garantia não pode depender de quem chama.
+ */
+export function fotosDoTurno(fotos: ChatPhotoDto[]): { mediaType: 'image/jpeg'; data: string }[] {
+  return fotos.map((foto) => {
+    const bytes = Buffer.from(foto.data, 'base64');
+    if (bytes.length === 0) throw new BadRequestException('A foto veio vazia.');
+    if (bytes.length > TETO_DA_FOTO_DO_CHAT) {
+      throw new PayloadTooLargeException(
+        `A foto tem ${bytes.length} bytes e o limite é ${TETO_DA_FOTO_DO_CHAT}. Reduza a resolução.`,
+      );
+    }
+    try {
+      return { mediaType: 'image/jpeg', data: removerMetadadosDoJpeg(bytes).toString('base64') };
+    } catch (erro) {
+      if (erro instanceof NaoEhJpegError)
+        throw new BadRequestException('A foto precisa ser um JPEG.');
+      throw erro;
+    }
+  });
 }

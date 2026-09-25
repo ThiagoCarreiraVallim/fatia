@@ -124,7 +124,8 @@ def test_a_superficie_e_so_diagnostico_mais_as_rotas_de_inferencia(settings_fact
     """Guarda de escopo, e de custo.
 
     A #134 não expunha rota de inferência nenhuma; a #139 expôs uma e a #248
-    expõe a segunda (`/chat`); o `/title` nomeia a conversa (ADR 023). Todas são
+    expõe a segunda (`/chat`); o `/title` nomeia a conversa (ADR 023) e o
+    `/transcribe` é o ditado do chat (#141). Todas são
     autenticadas por segredo compartilhado (ver `test_recognize_meal.py`,
     `chat/test_chat_route.py` e `chat/test_titulo.py`). Rota de inferência
     **anônima** seria um proxy aberto para o gateway pago — a fronteira de custo
@@ -138,4 +139,11 @@ def test_a_superficie_e_so_diagnostico_mais_as_rotas_de_inferencia(settings_fact
     nossas = {
         caminho for caminho in caminhos if not caminho.startswith(("/openapi", "/docs", "/redoc"))
     }
-    assert nossas == {"/health", "/capabilities", "/recognize-meal", "/chat", "/title"}
+    assert nossas == {
+        "/health",
+        "/capabilities",
+        "/recognize-meal",
+        "/chat",
+        "/title",
+        "/transcribe",
+    }

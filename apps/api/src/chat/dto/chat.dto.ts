@@ -2,6 +2,7 @@ import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBase64,
   IsDefined,
   IsIn,
   IsNotEmpty,
@@ -12,6 +13,7 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { MAX_FOTOS_POR_MENSAGEM, TETO_DA_FOTO_DO_CHAT } from '../corpos-do-chat';
 
 /**
  * Teto da mensagem que a pessoa acabou de escrever. É o mesmo do agente
@@ -47,6 +49,20 @@ export class ChatResumeDto {
 }
 
 /**
+ * Uma foto do turno, em base64. **Só JPEG**: é o que o PWA produz ao recodificar
+ * (o que já tira o EXIF no aparelho), e é o formato de que a API sabe remover
+ * metadados de novo antes de repassar (`removerMetadadosDoJpeg`).
+ */
+export class ChatPhotoDto {
+  @IsIn(['image/jpeg'])
+  mediaType!: 'image/jpeg';
+
+  @IsBase64()
+  @MaxLength(Math.ceil((TETO_DA_FOTO_DO_CHAT * 4) / 3) + 4)
+  data!: string;
+}
+
+/**
  * Um turno de conversa: uma mensagem nova **ou** a resposta a uma pausa.
  *
  * `conversationId` é obrigatório e gerado pelo PWA na primeira mensagem — é ele
@@ -69,6 +85,14 @@ export class SendChatMessageDto {
   @ValidateNested()
   @Type(() => ChatResumeDto)
   resume?: ChatResumeDto;
+
+  /** Vivem só neste turno: nada da foto é gravado (ADR 004 e 020). */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_FOTOS_POR_MENSAGEM)
+  @ValidateNested({ each: true })
+  @Type(() => ChatPhotoDto)
+  photos?: ChatPhotoDto[];
 }
 
 export class ListConversationsQueryDto {

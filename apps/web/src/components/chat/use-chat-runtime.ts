@@ -22,6 +22,10 @@ import {
   pausaPendente,
   textoDaMensagem,
 } from './historico';
+import { adaptadorDeFoto, fotosDaMensagem } from './foto';
+
+/** O que vai quando a pessoa manda só a foto: o agente recusa mensagem vazia. */
+export const PERGUNTA_DA_FOTO = 'O que tem nesta foto?';
 
 /**
  * Liga o chat do Fatia ao assistant-ui.
@@ -122,8 +126,11 @@ export function useChatRuntime({
   threadListAdapter,
   onThreadIdChange,
   onTurnEnd,
+  fotos = false,
 }: {
   conversationId: string | undefined;
+  /** A instância tem modelo de visão: o composer aceita foto. */
+  fotos?: boolean;
   threadListAdapter: RemoteThreadListAdapter;
   onThreadIdChange: (threadId: string | undefined) => void;
   /** Ao fim de cada turno — é quando o título gerado no servidor passa a existir. */
@@ -152,9 +159,15 @@ export function useChatRuntime({
   ) {
     const conversa = conversaAtual.current;
     if (!conversa) return;
+    const ultima = messages.at(-1);
+    const anexadas = fotosDaMensagem(ultima);
     const corpo = config.command?.resume
       ? { conversationId: conversa, resume: decodificarRetomada(config.command.resume) }
-      : { conversationId: conversa, message: textoDaMensagem(messages.at(-1)) };
+      : {
+          conversationId: conversa,
+          message: textoDaMensagem(ultima).trim() || PERGUNTA_DA_FOTO,
+          ...(anexadas.length ? { photos: anexadas } : {}),
+        };
     try {
       yield* streamChat(corpo, { signal: config.abortSignal });
     } finally {
@@ -209,7 +222,7 @@ export function useChatRuntime({
     unstable_allowCancellation: true,
     unstable_threadListAdapter: threadListAdapter,
     onThreadIdChange,
-    adapters: { feedback },
+    adapters: { feedback, ...(fotos ? { attachments: adaptadorDeFoto } : {}) },
     eventHandlers: {
       onCustomEvent: (tipo, dados) => {
         const corpo = (dados ?? {}) as Record<string, unknown>;

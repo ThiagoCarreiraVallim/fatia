@@ -1,6 +1,12 @@
 'use client';
 
-import { type ComponentProps, type RefObject, useLayoutEffect, useRef } from 'react';
+import {
+  type ComponentProps,
+  type ReactNode,
+  type RefObject,
+  useLayoutEffect,
+  useRef,
+} from 'react';
 import { ArrowUpIcon, SquareIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { field, inkButton, mono } from './surfaces';
@@ -17,9 +23,11 @@ import { field, inkButton, mono } from './surfaces';
  * escreveu antes de enviar. Virou `<textarea>` que cresce até um teto e então
  * rola.
  *
- * **Sem clipe e sem microfone.** O element deixa os dois desabilitados quando não
- * recebem handler, mas um botão cinza que nunca vai funcionar é promessa falsa
- * na barra mais vista da tela. Não há anexo nem voz no contrato do `/chat`.
+ * **Clipe e microfone só quando existem.** O element deixa os dois desabilitados
+ * quando não recebem handler, mas um botão cinza que nunca vai funcionar é
+ * promessa falsa na barra mais vista da tela. Quem sabe se a instância tem foto
+ * e ditado é o chat, que os passa em `actions`; `attachments` é a fileira das
+ * fotos escolhidas, acima do campo.
  *
  * **Sem a fileira de ações rápidas**, que no original fica acima do campo: as
  * sugestões daqui moram no `EmptyState`, onde servem de primeiro empurrão. Uma
@@ -44,6 +52,9 @@ export function MobileComposer({
   stopLabel,
   hint,
   ref,
+  actions,
+  attachments,
+  canSend,
   onValueChange,
   onSend,
   onStop,
@@ -77,6 +88,11 @@ export function MobileComposer({
   stopLabel: string;
   hint?: string;
   ref?: RefObject<HTMLTextAreaElement | null>;
+  /** Botões ao lado do campo (foto, microfone). */
+  actions?: ReactNode;
+  attachments?: ReactNode;
+  /** Envio liberado mesmo sem texto — uma foto sozinha é uma pergunta. */
+  canSend?: boolean;
   onValueChange?: (value: string) => void;
   onSend?: () => void;
   onStop?: () => void;
@@ -106,7 +122,9 @@ export function MobileComposer({
       )}
       {...props}
     >
+      {attachments}
       <div className="flex items-end gap-2">
+        {actions}
         <div
           className={cn(field, 'flex min-w-0 flex-1 items-center gap-2 rounded-[18px] px-3 py-2')}
         >
@@ -124,7 +142,7 @@ export function MobileComposer({
               // metade.
               if (event.nativeEvent.isComposing) return;
               event.preventDefault();
-              if (!running && value.trim() !== '') onSend?.();
+              if (!running && (canSend ?? value.trim() !== '')) onSend?.();
             }}
             placeholder={placeholder}
             aria-label={label}
@@ -138,7 +156,7 @@ export function MobileComposer({
           type="button"
           aria-label={running ? stopLabel : sendLabel}
           onClick={running ? onStop : onSend}
-          disabled={!running && value.trim() === ''}
+          disabled={!running && !(canSend ?? value.trim() !== '')}
           className={cn(
             inkButton,
             'flex size-9 shrink-0 items-center justify-center rounded-full disabled:pointer-events-none disabled:opacity-25',

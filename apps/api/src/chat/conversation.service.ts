@@ -183,10 +183,16 @@ export class ConversationService {
    * `conversationId` ausente cria conversa nova; presente **precisa** ser desta
    * pessoa. O `userId` vem do `@CurrentUser()` e nunca do corpo.
    */
+  /**
+   * `fotos` é só a **contagem**: a foto em si não é gravada (ADR 004 e 020). O
+   * número fica em `metadata.photos` para a tela dizer, depois de um F5, que ali
+   * houve uma foto que não foi guardada.
+   */
   async iniciarTurno(
     userId: string,
     conversationId: string,
     texto: string,
+    fotos = 0,
   ): Promise<{ conversationId: string }> {
     const conversa = await this.encontrar(userId, conversationId);
 
@@ -198,7 +204,12 @@ export class ConversationService {
         }));
 
       await tx.message.create({
-        data: { conversationId: alvo.id, role: MessageRole.user, content: texto },
+        data: {
+          conversationId: alvo.id,
+          role: MessageRole.user,
+          content: texto,
+          ...(fotos > 0 ? { metadata: { photos: fotos } } : {}),
+        },
       });
 
       await tx.conversation.update({

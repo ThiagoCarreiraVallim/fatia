@@ -66,6 +66,8 @@ const corpos: ChatTurnRequest[] = [];
 let conversaGravada: ChatConversation | null = null;
 let cota: ChatQuota;
 let memorias: ChatMemory[] = [];
+let recursos = { photos: false, dictation: false };
+const transcribeAudioMock = vi.fn(async (_audio: Blob) => ({ text: 'registra 200 g de frango' }));
 const deleteChatMemoryMock = vi.fn(async (id: string) => {
   memorias = memorias.filter((m) => m.id !== id);
 });
@@ -83,7 +85,8 @@ vi.mock('@fatia/api-client', async () => {
     ...actual,
     streamChat: streamChatMock,
     listConversations: vi.fn(async () => []),
-    getChatAvailability: vi.fn(async () => ({ available: true })),
+    getChatAvailability: vi.fn(async () => ({ available: true, ...recursos })),
+    transcribeAudio: transcribeAudioMock,
     getConversation: vi.fn(async () => {
       if (!conversaGravada) throw new actual.ApiError('Conversa não encontrada.', 404);
       return conversaGravada;
@@ -92,6 +95,23 @@ vi.mock('@fatia/api-client', async () => {
     getChatQuota: vi.fn(async () => cota),
     listChatMemories: vi.fn(async () => memorias),
     deleteChatMemory: deleteChatMemoryMock,
+  };
+});
+
+// O navegador de teste não tem canvas: a recodificação tem teste próprio, e aqui
+// a foto já "sai" recodificada.
+vi.mock('../foto', async () => {
+  const actual = await vi.importActual<typeof import('../foto')>('../foto');
+  return {
+    ...actual,
+    adaptadorDeFoto: {
+      ...actual.adaptadorDeFoto,
+      send: async (anexo: Parameters<typeof actual.adaptadorDeFoto.send>[0]) => ({
+        ...anexo,
+        status: { type: 'complete' as const },
+        content: [{ type: 'image' as const, image: 'data:image/jpeg;base64,SEMEXIF' }],
+      }),
+    },
   };
 });
 
@@ -140,7 +160,9 @@ beforeEach(() => {
     allowed: true,
   };
   memorias = [];
+  recursos = { photos: false, dictation: false };
   deleteChatMemoryMock.mockClear();
+  transcribeAudioMock.mockClear();
 });
 
 function montar() {
@@ -454,5 +476,78 @@ describe('ChatScreen', () => {
 
     await waitFor(() => expect(deleteChatMemoryMock).toHaveBeenCalledWith('m-1'));
     expect(await screen.findByText('Nada guardado ainda.')).toBeInTheDocument();
+  });
+
+  it('sem visão nem ditado na instância, o composer não mostra câmera nem microfone', async () => {
+    montar();
+
+    await screen.findByRole('textbox', { name: 'Mensagem para o Fatia' });
+    expect(screen.queryByRole('button', { name: 'Anexar foto' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ditar mensagem' })).not.toBeInTheDocument();
+  });
+
+  it('a foto vai no corpo do turno, recodificada, e só a foto já basta para enviar', async () => {
+    recursos = { photos: true, dictation: false };
+    const user = userEvent.setup();
+    montar();
+
+    await screen.findByRole('button', { name: 'Anexar foto' });
+    const arquivo = new File([new Uint8Array([0xff, 0xd8, 0xff])], 'prato.jpg', {
+      type: 'image/jpeg',
+    });
+    await user.upload(screen.getByTestId('entrada-de-foto'), arquivo);
+    expect(await screen.findByRole('button', { name: 'Tirar foto' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Enviar mensagem' }));
+    await waitFor(() => expect(corpos).toHaveLength(1));
+
+    expect(corpos[0]).toEqual({
+      conversationId: CONVERSA,
+      message: 'O que tem nesta foto?',
+      photos: [{ mediaType: 'image/jpeg', data: 'SEMEXIF' }],
+    });
+  });
+
+  it('o ditado preenche o campo e não envia nada', async () => {
+    recursos = { photos: false, dictation: true };
+    const pararTrilha = vi.fn();
+    const gravadores: {
+      onstop: (() => void) | null;
+      ondataavailable: ((e: { data: Blob }) => void) | null;
+    }[] = [];
+    class GravadorFalso {
+      static isTypeSupported = (tipo: string) => tipo === 'audio/webm;codecs=opus';
+      mimeType = 'audio/webm;codecs=opus';
+      onstop: (() => void) | null = null;
+      ondataavailable: ((e: { data: Blob }) => void) | null = null;
+      constructor() {
+        gravadores.push(this);
+      }
+      start() {}
+      stop() {
+        this.ondataavailable?.({ data: new Blob(['audio'], { type: this.mimeType }) });
+        this.onstop?.();
+      }
+    }
+    vi.stubGlobal('MediaRecorder', GravadorFalso);
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: pararTrilha }] })) },
+    });
+    const user = userEvent.setup();
+    montar();
+
+    await user.click(await screen.findByRole('button', { name: 'Ditar mensagem' }));
+    await user.click(await screen.findByRole('button', { name: 'Parar de gravar' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Mensagem para o Fatia' })).toHaveValue(
+        'registra 200 g de frango',
+      ),
+    );
+    expect(transcribeAudioMock.mock.calls[0][0].type).toBe('audio/webm;codecs=opus');
+    expect(pararTrilha).toHaveBeenCalled();
+    expect(corpos).toHaveLength(0);
+    vi.unstubAllGlobals();
   });
 });

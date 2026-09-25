@@ -12,6 +12,7 @@ import {
   Req,
   Res,
   UnauthorizedException,
+  UnsupportedMediaTypeException,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -68,8 +69,28 @@ export class ChatController {
    * continua um produto inteiro.
    */
   @Get('availability')
-  availability() {
-    return { available: this.agent.configurado() };
+  async availability() {
+    const available = this.agent.configurado();
+    const { fotos, ditado } = available
+      ? await this.agent.capacidades()
+      : { fotos: false, ditado: false };
+    return { available, photos: fotos, dictation: ditado };
+  }
+
+  /**
+   * O ditado do composer. O corpo é o áudio cru (`audio/*`), com parser próprio
+   * só nesta rota — ver `corpos-do-chat.ts`.
+   */
+  @Post('transcribe')
+  @UseGuards(ChatThrottlerGuard)
+  @Throttle({ default: { ttl: TETO_DE_TURNOS_MS, limit: TETO_DE_TURNOS } })
+  @HttpCode(200)
+  transcrever(@CurrentUser() user: CurrentUserPayload, @Req() req: Request) {
+    // Sem `audio/*` o parser da rota não roda e o corpo não é `Buffer`.
+    if (!Buffer.isBuffer(req.body)) {
+      throw new UnsupportedMediaTypeException('Envie o áudio cru, com Content-Type audio/*.');
+    }
+    return this.chat.transcrever(user.id, req.body, req.headers['content-type'] ?? '');
   }
 
   @Get('conversations')

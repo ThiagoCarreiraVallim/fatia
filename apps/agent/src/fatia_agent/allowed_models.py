@@ -190,13 +190,7 @@ def configured_models(settings: AgentSettings) -> dict[str, str]:
         "text": settings.ai_model_text,
         "vision": settings.ai_model_vision,
         "embedding": settings.ai_model_embedding,
-        # TODO(#141): passa a ser `settings.ai_model_transcription` quando a
-        # variável existir. Declarada como ausente e não omitida porque a
-        # capacidade já existe na lista revisada; o `""` fixo é correto só
-        # enquanto não há variável para ler, e
-        # `test_configured_models_le_todo_ai_model_que_ja_existe` fica vermelho
-        # no dia em que houver.
-        "transcription": "",
+        "transcription": settings.ai_model_transcription,
     }
 
 

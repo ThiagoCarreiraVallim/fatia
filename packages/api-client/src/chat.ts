@@ -69,12 +69,22 @@ export interface ChatStreamFrame {
   data: unknown;
 }
 
+/**
+ * Uma foto do turno. Só JPEG, recodificado no aparelho — é a recodificação que
+ * tira o EXIF antes de a foto sair (ADR 020). Nada dela é gravado.
+ */
+export interface ChatPhoto {
+  mediaType: 'image/jpeg';
+  /** Base64 sem o prefixo `data:`. */
+  data: string;
+}
+
 /** Um turno: mensagem nova **ou** a resposta a uma pausa. */
 export type ChatTurnRequest = {
   /** Gerado pelo PWA na primeira mensagem. É o endereço da conversa. */
   conversationId: string;
 } & (
-  | { message: string; resume?: undefined }
+  | { message: string; resume?: undefined; photos?: ChatPhoto[] }
   | { message?: undefined; resume: { interruptId: string; value: unknown } }
 );
 
@@ -374,6 +384,8 @@ export interface ChatHistoryMessage {
   metadata: {
     status?: 'completed' | 'interrupted' | 'error' | 'resolved';
     interrupt?: { id: string; value: ChatInterruptValue };
+    /** Na fala da pessoa: quantas fotos foram com ela. A foto em si não é guardada. */
+    photos?: number;
   } | null;
   runId: string | null;
   review: 'like' | 'dislike' | null;
@@ -393,8 +405,30 @@ export interface ChatFeedback {
   note?: string;
 }
 
-export function getChatAvailability(): Promise<{ available: boolean }> {
+/** O chat existe nesta instância, e o que ele sabe fazer além de texto. */
+export interface ChatAvailability {
+  available: boolean;
+  photos: boolean;
+  dictation: boolean;
+}
+
+export function getChatAvailability(): Promise<ChatAvailability> {
   return apiFetch('/api/chat/availability');
+}
+
+/**
+ * O ditado: o áudio gravado vira texto para o campo de mensagem. **Não envia
+ * nada** — quem decide mandar é a pessoa, depois de ler.
+ */
+export function transcribeAudio(audio: Blob): Promise<{ text: string }> {
+  return apiFetch('/api/chat/transcribe', {
+    method: 'POST',
+    headers: { 'Content-Type': audio.type || 'audio/webm' },
+    body: audio,
+    // O teto padrão do transporte é o de uma leitura; transcrição no gateway
+    // leva segundos por minuto de áudio.
+    timeoutMs: 60_000,
+  });
 }
 
 export function listConversations(busca?: string): Promise<ChatConversationSummary[]> {

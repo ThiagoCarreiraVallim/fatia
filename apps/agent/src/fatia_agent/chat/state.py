@@ -25,6 +25,22 @@ from .mcp_client import McpClient, McpToolInfo
 
 
 @dataclass(frozen=True)
+class FotoDoTurno:
+    """Uma foto enviada com a mensagem do turno, já sem EXIF (ADR 020).
+
+    Vive **só** no contexto: o checkpointer grava o estado, e o estado leva no
+    lugar dela uma marca de texto (`MARCA_DE_FOTO`). A foto vale para o turno em
+    que foi enviada; a retomada de uma pausa e os turnos seguintes não a veem.
+    """
+
+    media_type: str
+    base64: str
+
+    def data_uri(self) -> str:
+        return f"data:{self.media_type};base64,{self.base64}"
+
+
+@dataclass(frozen=True)
 class ContextoDoTurno:
     """Tudo o que um turno precisa e que não sobrevive a ele.
 
@@ -49,6 +65,8 @@ class ContextoDoTurno:
     memorias: Sequence[dict[str, str]] = field(default=())
     # Liga o planejador (`AGENT_CHAT_PLANNER`) — ver `planejador.py`.
     planejar: bool = False
+    # Com foto, o turno inteiro vai para `AI_MODEL_VISION` — ver `FotoDoTurno`.
+    fotos: Sequence[FotoDoTurno] = field(default=())
 
 
 class EstadoDaConversa(TypedDict, total=False):

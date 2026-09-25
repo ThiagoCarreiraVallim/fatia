@@ -72,6 +72,7 @@ from .chat.errors import (
     McpUnreachable,
 )
 from .chat.graph import MAX_CARACTERES_POR_MENSAGEM
+from .chat.state import FotoDoTurno
 from .chat.titulo import gerar_titulo
 from .providers import build_provider
 from .providers.errors import (
@@ -138,6 +139,25 @@ class ChatMemory(BaseModel):
     content: Annotated[str, Field(min_length=1, max_length=500)]
 
 
+MAX_FOTOS_POR_MENSAGEM = 3
+
+# O ditado é curto por natureza: dois minutos de opus mal passam de 1 MB. O teto
+# é de bytes porque a duração só se sabe depois de pagar a transcrição.
+MAX_AUDIO_BYTES = 4 * 1024 * 1024
+AUDIO_ACEITO = frozenset(
+    {"audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav", "audio/x-m4a"}
+)
+
+
+class ChatPhoto(BaseModel):
+    """Uma foto do turno, em base64, **já sem EXIF** — removido no aparelho (ADR 020)."""
+
+    model_config = {"extra": "forbid", "populate_by_name": True}
+
+    media_type: Annotated[str, Field(alias="mediaType")]
+    data: Annotated[str, Field(min_length=1)]
+
+
 class ChatResume(BaseModel):
     """A resposta a uma pausa: qual pausa (`interruptId`) e o que a pessoa disse.
 
@@ -183,11 +203,18 @@ class ChatRequest(BaseModel):
     # prompt. Não é identidade: o nome de um fuso é grosso demais para apontar
     # para alguém.
     timezone: str | None = None
+    # Vivem só neste turno: o checkpoint recebe uma marca no lugar (ver
+    # `FotoDoTurno` em `chat/state.py`).
+    photos: Annotated[
+        list[ChatPhoto], Field(default_factory=list, max_length=MAX_FOTOS_POR_MENSAGEM)
+    ]
 
     @model_validator(mode="after")
     def _um_dos_dois(self) -> "ChatRequest":
         if (self.message is None) == (self.resume is None):
             raise ValueError("envie 'message' (turno novo) ou 'resume' (resposta a uma pausa)")
+        if self.photos and self.message is None:
+            raise ValueError("foto só acompanha uma mensagem nova, não a resposta a uma pausa")
         return self
 
 
@@ -343,7 +370,6 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             # Modelo não revisado sai como ausente, não como configurado: a rota
             # anuncia o que a próxima chamada vai aceitar. Anunciar um modelo que
             # `_require_model` recusaria faria o erro aparecer longe da causa.
-            # Transcrição chega com #141; ver providers/base.py.
             "capabilities": usable_models(resolved),
         }
 
@@ -362,33 +388,7 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
         """
         _exigir_credencial(resolved, x_fatia_agent_key)
 
-        if payload.media_type not in MEDIA_TYPES_ACEITOS:
-            raise HTTPException(
-                status_code=415,
-                detail=(
-                    f"media_type '{payload.media_type}' não é aceito. "
-                    f"Use um de: {', '.join(sorted(MEDIA_TYPES_ACEITOS))}."
-                ),
-            )
-
-        try:
-            # `validate=True`: sem isso o base64 do Python **ignora** caractere
-            # inválido em silêncio, e uma foto corrompida no caminho viraria bytes
-            # truncados que o provedor recusa com um 400 sem explicação.
-            imagem = base64.b64decode(payload.image_base64, validate=True)
-        except (binascii.Error, ValueError) as exc:
-            raise HTTPException(status_code=400, detail=f"image_base64 inválido: {exc}") from exc
-
-        if not imagem:
-            raise HTTPException(status_code=400, detail="image_base64 decodificou para zero bytes.")
-        if len(imagem) > MAX_IMAGEM_BYTES:
-            raise HTTPException(
-                status_code=413,
-                detail=(
-                    f"A imagem tem {len(imagem)} bytes e o limite é {MAX_IMAGEM_BYTES}. "
-                    "Reduza a resolução no aparelho."
-                ),
-            )
+        imagem = _decodificar_imagem(payload.image_base64, payload.media_type, "image_base64")
 
         provider = build_provider(resolved)
         try:
@@ -425,6 +425,50 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             },
         }
 
+    @app.post("/transcribe")
+    async def transcribe_route(
+        request: Request,
+        content_type: Annotated[str | None, Header()] = None,
+        x_fatia_agent_key: Annotated[str | None, Header()] = None,
+    ) -> dict[str, object]:
+        """Ditado do chat (#141): o áudio cru no corpo, o texto de volta.
+
+        Não grava nada e não envia nada: o texto volta para o campo de mensagem,
+        e é a pessoa quem decide mandar. Sem Bearer, como o `/title` — transcrever
+        não alcança dado nenhum. O áudio vive em memória e morre com a requisição
+        (ADR 020).
+        """
+        _exigir_credencial(resolved, x_fatia_agent_key)
+        media_type = (content_type or "").split(";")[0].strip().lower()
+        if media_type not in AUDIO_ACEITO:
+            raise HTTPException(
+                status_code=415,
+                detail=(
+                    f"Content-Type '{media_type or 'ausente'}' não é aceito. "
+                    f"Use um de: {', '.join(sorted(AUDIO_ACEITO))}."
+                ),
+            )
+        audio = await _ler_audio(request)
+        if not audio:
+            raise HTTPException(status_code=400, detail="O corpo veio sem áudio.")
+
+        provider = build_provider(resolved)
+        try:
+            transcricao = await provider.transcribe(audio, media_type=media_type)
+        finally:
+            await provider.aclose()
+        return {
+            "text": transcricao.text,
+            "usage": {
+                "model": transcricao.model,
+                **(
+                    {"inputUnits": transcricao.duration_seconds}
+                    if transcricao.duration_seconds is not None
+                    else {}
+                ),
+            },
+        }
+
     @app.post("/chat", response_model=None)
     async def chat_route(
         payload: ChatRequest,
@@ -445,6 +489,22 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
         """
         _exigir_credencial(resolved, x_fatia_agent_key)
         bearer = _exigir_bearer(authorization)
+        fotos = tuple(
+            FotoDoTurno(
+                media_type=foto.media_type,
+                base64=base64.b64encode(
+                    _decodificar_imagem(foto.data, foto.media_type, f"photos[{indice}].data")
+                ).decode("ascii"),
+            )
+            for indice, foto in enumerate(payload.photos)
+        )
+        if fotos and usable_models(resolved)["vision"] is None:
+            # Antes do stream, para virar status: com o SSE aberto, a mesma
+            # recusa chegaria como evento no meio de uma resposta que não começou.
+            raise AIProviderNotConfigured(
+                "Foto no chat precisa de um modelo de visão configurado e revisado "
+                "(AI_MODEL_VISION), que também aceite tools."
+            )
 
         provider = build_provider(resolved)
         client = build_mcp_client(resolved, bearer=bearer)
@@ -477,6 +537,7 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             historico=tuple(mensagem.model_dump() for mensagem in payload.history),
             memorias=tuple(memoria.model_dump() for memoria in payload.memories),
             planejar=resolved.agent_chat_planner,
+            fotos=fotos,
         )
 
         async def fluxo() -> AsyncIterator[str]:
@@ -509,6 +570,53 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
         )
 
     return app
+
+
+def _decodificar_imagem(dados: str, media_type: str, campo: str) -> bytes:
+    """A imagem em bytes, ou o 4xx que diz o que corrigir."""
+    if media_type not in MEDIA_TYPES_ACEITOS:
+        raise HTTPException(
+            status_code=415,
+            detail=(
+                f"media_type '{media_type}' não é aceito. "
+                f"Use um de: {', '.join(sorted(MEDIA_TYPES_ACEITOS))}."
+            ),
+        )
+    try:
+        # `validate=True`: sem isso o base64 do Python **ignora** caractere
+        # inválido em silêncio, e uma foto corrompida no caminho viraria bytes
+        # truncados que o provedor recusa com um 400 sem explicação.
+        imagem = base64.b64decode(dados, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"{campo} inválido: {exc}") from exc
+    if not imagem:
+        raise HTTPException(status_code=400, detail=f"{campo} decodificou para zero bytes.")
+    if len(imagem) > MAX_IMAGEM_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"A imagem tem {len(imagem)} bytes e o limite é {MAX_IMAGEM_BYTES}. "
+                "Reduza a resolução no aparelho."
+            ),
+        )
+    return imagem
+
+
+async def _ler_audio(request: Request) -> bytes:
+    """O corpo inteiro, recusado **durante** a leitura se passar do teto.
+
+    Ler tudo e só depois medir deixaria qualquer um que tenha a chave do agente
+    encher a memória do processo com um corpo de gigabytes.
+    """
+    lido = bytearray()
+    async for pedaco in request.stream():
+        lido.extend(pedaco)
+        if len(lido) > MAX_AUDIO_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"O áudio passa de {MAX_AUDIO_BYTES} bytes. Grave um trecho mais curto.",
+            )
+    return bytes(lido)
 
 
 def _exigir_credencial(settings: AgentSettings, oferecida: str | None) -> None:

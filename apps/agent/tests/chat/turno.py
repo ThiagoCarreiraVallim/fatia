@@ -14,7 +14,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from fatia_agent.chat.graph import GrafoDaConversa, montar_grafo, stream_chat_events
 from fatia_agent.chat.mcp_client import McpClient
-from fatia_agent.chat.state import ContextoDoTurno
+from fatia_agent.chat.state import ContextoDoTurno, FotoDoTurno
 from fatia_agent.chat.tool_policy import todas_permitidas
 from fatia_agent.providers import build_provider
 from fatia_agent.settings import AgentSettings
@@ -103,6 +103,7 @@ async def turno(
     token: str = TOKEN,
     memorias: Sequence[dict[str, str]] = (),
     planejar: bool = False,
+    fotos: Sequence[FotoDoTurno] = (),
 ) -> Resultado:
     """Um turno inteiro. Passe o `grafo` de um turno anterior para continuar a thread."""
     provider_transport = ProviderRecordingTransport(turnos_do_provedor)
@@ -121,6 +122,7 @@ async def turno(
         historico=tuple(historico),
         memorias=tuple(memorias),
         planejar=planejar,
+        fotos=tuple(fotos),
     )
     brutos = [
         quadro
