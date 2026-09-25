@@ -35,22 +35,37 @@ no dia em que o chat entrou, e doc que contradiz o código é defeito.
 
 import base64
 import binascii
+import json
 import secrets
-from collections.abc import AsyncIterator
-from typing import Annotated
+import uuid
+from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Annotated, Any
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import UUID4, BaseModel, Field, model_validator
 
 from . import __version__
 from .allowed_models import unreviewed_host_reason, unreviewed_models, usable_models
-from .chat import build_mcp_client, stream_chat_events, todas_permitidas
+from .chat import (
+    Checkpointer,
+    ContextoDoTurno,
+    GrafoDaConversa,
+    McpClient,
+    build_mcp_client,
+    interrupcao_pendente,
+    montar_grafo,
+    stream_chat_events,
+    thread_da_conversa,
+    todas_permitidas,
+)
 from .chat.errors import (
     McpError,
     McpNotConfigured,
     McpRefused,
+    McpResponseUnparseable,
     McpTimeout,
     McpUnauthenticated,
     McpUnauthorized,
@@ -92,7 +107,7 @@ class RecognizeMealRequest(BaseModel):
 
 
 class ChatMessage(BaseModel):
-    """Uma mensagem já trocada. Quem persiste é o NestJS (sub-issue 2/3 da #247).
+    """Uma fala já gravada pelo `apps/api`, para semear uma thread fria.
 
     **Sem teto de tamanho aqui**, ao contrário de `message`: o histórico carrega
     a resposta do modelo, e o tamanho dela não é de ninguém. Quem limita é o
@@ -105,55 +120,54 @@ class ChatMessage(BaseModel):
     content: Annotated[str, Field(min_length=1)]
 
 
-class ChatRequest(BaseModel):
-    """A mensagem de agora e o histórico. **Nenhum campo de identidade.**
+class ChatResume(BaseModel):
+    """A resposta a uma pausa: qual pausa (`interruptId`) e o que a pessoa disse.
 
-    O Bearer vem no header `Authorization`, e não no corpo: `extra: "forbid"`
-    recusa qualquer campo inventado, e um token no corpo acabaria em log de
-    requisição, em relatório de validação e no histórico que o NestJS persiste —
-    exatamente os três lugares onde ele não pode estar (ADR 021).
-
-    Só `message` tem teto duro, e ele é 422: a pessoa acabou de escrever, está
-    olhando para o campo, e o cliente sabe contar caracteres antes de enviar. O
-    histórico é cortado em silêncio pelo grafo, porque recusá-lo mataria a
-    conversa por algo que quem está conversando não pode consertar.
+    O id não é enfeite. Sem ele, uma resposta dada a uma pergunta barata poderia
+    ser reenviada contra uma confirmação de escrita — o grafo retomaria a pausa
+    que estivesse pendente, fosse qual fosse. Ver `chat_route`.
     """
 
-    model_config = {"extra": "forbid"}
+    model_config = {"extra": "forbid", "populate_by_name": True}
 
-    message: Annotated[str, Field(min_length=1, max_length=MAX_CARACTERES_POR_MENSAGEM)]
+    interrupt_id: Annotated[str, Field(alias="interruptId", min_length=1, max_length=200)]
+    value: Any = None
+
+
+class ChatRequest(BaseModel):
+    """Um turno novo (`message`) **ou** a retomada de uma pausa (`resume`).
+
+    **Nenhum campo de identidade.** O Bearer vem no header, e o dono da conversa
+    sai dele (`get_me`), não do corpo: `extra: "forbid"` recusa qualquer campo
+    inventado, e um token ou um `userId` no corpo acabariam em log de requisição
+    e em relatório de validação (ADR 021 e 023).
+
+    `conversationId` é gerado pelo PWA na primeira mensagem, e é ele que torna
+    a conversa retomável: uma thread com id inventado aqui não teria como
+    receber a resposta a uma pergunta.
+
+    `history` é o que o `apps/api` tem gravado. Só é lido quando a thread está
+    fria — ver `hidratar` em `chat/graph.py`.
+    """
+
+    model_config = {"extra": "forbid", "populate_by_name": True}
+
+    conversation_id: Annotated[UUID4, Field(alias="conversationId")]
+    message: Annotated[str | None, Field(min_length=1, max_length=MAX_CARACTERES_POR_MENSAGEM)] = (
+        None
+    )
+    resume: ChatResume | None = None
     history: Annotated[list[ChatMessage], Field(default_factory=list)]
     # O fuso do perfil, que o `apps/api` já conhece — vira a data de hoje no
-    # prompt. **Não é identidade**: o nome de um fuso é grosso demais para
-    # apontar para alguém, e sem ele o modelo chuta a data em toda pergunta
-    # sobre "ontem". Opcional porque o agente responde sem ele, só pior.
+    # prompt. Não é identidade: o nome de um fuso é grosso demais para apontar
+    # para alguém.
     timezone: str | None = None
-    # As propostas que a pessoa aprovou na tela. Vazio no turno comum; ver o
-    # handshake de dois turnos no docstring de `chat/events.py`.
-    approved: Annotated[list["ToolApproval"], Field(default_factory=list)]
 
-
-class ToolApproval(BaseModel):
-    """Uma proposta aprovada na tela, como o evento `proposal` a mandou.
-
-    `arguments` é o texto **exato** que foi para a tela, e não um objeto: é ele
-    que `exigir_aprovada` compara com o que vai executar, e reserializar um dict
-    no caminho mudaria a ordem das chaves e o espaçamento — duas coisas iguais
-    virando diferentes na única comparação que precisa bater.
-
-    O teto é o mesmo `MAX_CARACTERES_POR_MENSAGEM` da mensagem, e por isso é 422:
-    quem monta este corpo é o nosso PWA, com um valor que **nós** emitimos: acima
-    do teto é defeito de cliente, e um 422 nomeia o defeito onde um corte
-    silencioso executaria JSON pela metade.
-    """
-
-    model_config = {"extra": "forbid"}
-
-    name: Annotated[str, Field(min_length=1, max_length=120)]
-    arguments: Annotated[str, Field(max_length=MAX_CARACTERES_POR_MENSAGEM)]
-
-
-ChatRequest.model_rebuild()
+    @model_validator(mode="after")
+    def _um_dos_dois(self) -> "ChatRequest":
+        if (self.message is None) == (self.resume is None):
+            raise ValueError("envie 'message' (turno novo) ou 'resume' (resposta a uma pausa)")
+        return self
 
 
 # 503: falta configuração nossa. 504: o provedor demorou. 502: o provedor
@@ -187,7 +201,21 @@ _STATUS_BY_MCP_ERROR: dict[type[McpError], int] = {
 
 def create_app(settings: AgentSettings | None = None) -> FastAPI:
     resolved = settings if settings is not None else AgentSettings()
-    app = FastAPI(title="Fatia Agent", version=__version__)
+    checkpointer = Checkpointer(resolved.agent_checkpoint_database_url)
+    grafos: list[GrafoDaConversa] = []
+
+    async def grafo() -> GrafoDaConversa:
+        """O grafo do processo, compilado com o checkpointer na primeira conversa."""
+        if not grafos:
+            grafos.append(montar_grafo(await checkpointer.obter()))
+        return grafos[0]
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
+        yield
+        await checkpointer.fechar()
+
+    app = FastAPI(title="Fatia Agent", version=__version__, lifespan=lifespan)
 
     @app.exception_handler(AIProviderError)
     async def _ai_error_handler(_request: Request, exc: AIProviderError) -> JSONResponse:
@@ -275,6 +303,8 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
                 # troca de `AI_MODEL_*` no painel é silenciosa por natureza.
                 "unreviewed_models": unreviewed_models(resolved),
             },
+            # Em memória, uma pausa do chat não sobrevive a um restart (ADR 023).
+            "checkpointer": {"persistent": checkpointer.persistente},
         }
 
     @app.get("/capabilities")
@@ -345,26 +375,23 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
         finally:
             await provider.aclose()
 
-    @app.post("/chat")
+    @app.post("/chat", response_model=None)
     async def chat_route(
         payload: ChatRequest,
         x_fatia_agent_key: Annotated[str | None, Header()] = None,
         authorization: Annotated[str | None, Header()] = None,
-    ) -> StreamingResponse:
-        """Conversa com as ferramentas de leitura do `/mcp`, em SSE (#248).
+    ) -> StreamingResponse | JSONResponse:
+        """Um turno de conversa, ou a retomada de uma pausa, em SSE (#248, ADR 023).
 
         **Duas credenciais, dois papéis.** `X-Fatia-Agent-Key` responde "esta
         chamada pode gastar inferência paga?" (ADR 018) — é o `apps/api` provando
-        que é ele. `Authorization: Bearer` responde "em nome de quem?" e é
-        repassado inteiro ao `/mcp`, que é quem filtra por `userId`. Nenhuma das
-        duas substitui a outra: sem a primeira, a rota é proxy aberto para o
-        gateway; sem a segunda, não há dado a alcançar.
+        que é ele. `Authorization: Bearer` responde "em nome de quem?", é
+        repassado ao `/mcp` e decide de quem é a thread. Nenhuma substitui a outra.
 
         **O que falha antes do primeiro byte falha com status.** Provedor não
-        configurado, Bearer ausente, `/mcp` recusando o token no `tools/list` —
-        tudo isso acontece aqui, antes do `StreamingResponse`, e sai como
-        envelope JSON com o status certo. Depois que o stream abre, o 200 já foi
-        enviado e o erro só cabe como evento `error` — ver `chat/events.py`.
+        configurado, Bearer recusado pelo `/mcp`, retomada que não corresponde à
+        pausa pendente — tudo isso acontece aqui, antes do `StreamingResponse`.
+        Depois que o stream abre, o erro só cabe como evento — ver `chat/events.py`.
         """
         _exigir_credencial(resolved, x_fatia_agent_key)
         bearer = _exigir_bearer(authorization)
@@ -373,33 +400,47 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
         client = build_mcp_client(resolved, bearer=bearer)
 
         try:
-            # O catálogo é buscado **antes** de abrir o stream de propósito: é a
-            # primeira chamada que exercita o Bearer, e é a única chance de um
-            # token inválido virar 401 de verdade em vez de um 200 com um evento
-            # de erro dentro — que é o que o PWA teria de aprender a distinguir.
+            # O catálogo antes do stream: é a primeira chamada que exercita o
+            # Bearer, e a única chance de um token inválido virar 401 de verdade.
             permitidas = todas_permitidas(await client.list_tools())
+            thread_id = thread_da_conversa(await _dono(client), str(payload.conversation_id))
+            compilado = await grafo()
+            if payload.resume is not None:
+                recusa = await _recusa_de_retomada(
+                    compilado, thread_id, payload.resume.interrupt_id
+                )
+                if recusa is not None:
+                    await client.aclose()
+                    await provider.aclose()
+                    return recusa
         except BaseException:
             await client.aclose()
             await provider.aclose()
             raise
 
+        contexto = ContextoDoTurno(
+            provider=provider,
+            client=client,
+            permitidas=tuple(permitidas),
+            run_id=uuid.uuid4().hex,
+            timezone=payload.timezone,
+            historico=tuple(mensagem.model_dump() for mensagem in payload.history),
+        )
+
         async def fluxo() -> AsyncIterator[str]:
             try:
-                async for evento in stream_chat_events(
-                    provider,
-                    client,
-                    permitidas,
+                async for quadro in stream_chat_events(
+                    compilado,
+                    contexto,
+                    thread_id=thread_id,
+                    conversation_id=str(payload.conversation_id),
                     mensagem=payload.message,
-                    historico=[mensagem.model_dump() for mensagem in payload.history],
-                    timezone=payload.timezone,
-                    aprovadas=[aprovada.model_dump() for aprovada in payload.approved],
+                    retomada=payload.resume.value if payload.resume is not None else None,
                 ):
-                    yield evento.frame()
+                    yield quadro
             finally:
-                # `finally`, e não depois do laço: quando o cliente desconecta no
-                # meio, o gerador é fechado com `GeneratorExit` e o laço nunca
-                # termina — sem isto, cada aba fechada deixaria dois clientes
-                # httpx e as conexões deles pendurados.
+                # `finally`, e não depois do laço: quando o cliente desconecta, o
+                # gerador é fechado com `GeneratorExit` e o laço nunca termina.
                 await client.aclose()
                 await provider.aclose()
 
@@ -408,8 +449,7 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             media_type="text/event-stream",
             headers={
                 # Sem isto, um proxy que bufferize entrega a conversa inteira de
-                # uma vez e o trabalho das outras duas camadas da #247 se perde:
-                # o chat parece travado até a última palavra chegar.
+                # uma vez, e o chat parece travado até a última palavra chegar.
                 "Cache-Control": "no-cache, no-transform",
                 "X-Accel-Buffering": "no",
                 "Connection": "keep-alive",
@@ -442,6 +482,57 @@ def _exigir_credencial(settings: AgentSettings, oferecida: str | None) -> None:
             "Rota de inferência sem essa prova é um proxy aberto para o gateway pago "
             "(ADR 018)."
         )
+
+
+async def _dono(client: McpClient) -> str:
+    """O id de quem está conversando, segundo o próprio `/mcp`.
+
+    Pelo token, e não pelo corpo: é o `/mcp` que valida o Bearer, e ele devolve
+    o usuário que o token representa. Um `userId` no corpo seria a thread de
+    outra pessoa a um campo adulterado de distância (ADR 023).
+    """
+    resultado = await client.call_tool("get_me", {})
+    try:
+        perfil: object = json.loads(resultado.text)
+    except ValueError:
+        perfil = None
+    identificador = perfil.get("id") if isinstance(perfil, dict) else None
+    if resultado.is_error or not isinstance(identificador, str) or not identificador:
+        raise McpResponseUnparseable(
+            "O /mcp não devolveu o id de quem está conversando em 'get_me' — sem ele não há "
+            "como saber de quem é a conversa."
+        )
+    return identificador
+
+
+async def _recusa_de_retomada(
+    grafo: GrafoDaConversa, thread_id: str, oferecido: str
+) -> JSONResponse | None:
+    """409 quando a retomada não responde à pausa que a thread está esperando."""
+    pendente = await interrupcao_pendente(grafo, thread_id)
+    if pendente is None:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": {
+                    "code": "CHAT_NOTHING_TO_RESUME",
+                    "message": (
+                        "Esta conversa não está esperando resposta. Envie uma mensagem nova."
+                    ),
+                }
+            },
+        )
+    if not secrets.compare_digest(pendente, oferecido):
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": {
+                    "code": "CHAT_RESUME_MISMATCH",
+                    "message": "Esta resposta não corresponde à pergunta pendente.",
+                }
+            },
+        )
+    return None
 
 
 def _exigir_bearer(authorization: str | None) -> str:

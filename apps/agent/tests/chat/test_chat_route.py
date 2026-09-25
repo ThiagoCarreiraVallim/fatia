@@ -21,14 +21,28 @@ from .support import (
     fragmento_de_tool,
     tool_do_catalogo,
 )
+from .turno import quadros
 
 TOKEN = "tok-do-usuario-xyz"
 BEARER = {"Authorization": f"Bearer {TOKEN}"}
+CONVERSA = "3f1c9a52-6b1e-4d8a-9c2f-0a5e7b3d1c44"
+EU = {"content": [{"type": "text", "text": '{"id": "user-1", "name": "Ana"}'}]}
 
 CATALOGO = [
+    tool_do_catalogo("get_me", read_only=True),
     tool_do_catalogo("list_meals", read_only=True),
+    tool_do_catalogo("log_meal", read_only=False, confirmable=True),
     tool_do_catalogo("delete_meal", read_only=False),
 ]
+
+
+def mcp(**resultados: dict[str, object]):
+    """O `/mcp` de teste, que sempre sabe responder `get_me`."""
+    return duplo_do_mcp(catalogo=CATALOGO, resultados={"get_me": EU, **resultados})
+
+
+def corpo(**campos: object) -> dict[str, object]:
+    return {"conversationId": CONVERSA, **campos}
 
 
 def app_com(
@@ -49,7 +63,7 @@ def app_com(
     from fatia_agent.providers import build_provider as build_provider_real
 
     provider_transport = ProviderRecordingTransport(turnos)
-    transporte_mcp = mcp_transport if mcp_transport is not None else duplo_do_mcp(catalogo=CATALOGO)
+    transporte_mcp = mcp_transport if mcp_transport is not None else mcp()
 
     def build_provider_fake(settings, *, transport=None) -> OpenAICompatProvider:
         return build_provider_real(settings, transport=provider_transport)
@@ -88,7 +102,7 @@ def test_sem_bearer_a_rota_recusa_com_erro_nomeado(settings_factory, monkeypatch
         settings_factory, turnos=[[fragmento_de_texto("oi")]], monkeypatch=monkeypatch
     )
 
-    resposta = client.post("/chat", json={"message": "oi"})
+    resposta = client.post("/chat", json=corpo(message="oi"))
 
     assert resposta.status_code == 401
     erro = resposta.json()["error"]
@@ -108,7 +122,7 @@ def test_authorization_malformado_tambem_recusa(settings_factory, monkeypatch, a
     )
 
     resposta = client.post(
-        "/chat", json={"message": "oi"}, headers={"Authorization": authorization}
+        "/chat", json=corpo(message="oi"), headers={"Authorization": authorization}
     )
 
     assert resposta.status_code == 401
@@ -128,7 +142,7 @@ def test_sem_provedor_configurado_degrada_com_status_e_envelope(settings_factory
         ai_base_url="",
     )
 
-    resposta = client.post("/chat", json={"message": "oi"}, headers=BEARER)
+    resposta = client.post("/chat", json=corpo(message="oi"), headers=BEARER)
 
     assert resposta.status_code == 503
     assert resposta.json()["error"]["code"] == "AI_PROVIDER_NOT_CONFIGURED"
@@ -143,7 +157,7 @@ def test_sem_mcp_configurado_degrada_com_status_e_envelope(settings_factory, mon
         mcp_base_url="",
     )
 
-    resposta = client.post("/chat", json={"message": "oi"}, headers=BEARER)
+    resposta = client.post("/chat", json=corpo(message="oi"), headers=BEARER)
 
     assert resposta.status_code == 503
     assert resposta.json()["error"]["code"] == "MCP_NOT_CONFIGURED"
@@ -168,7 +182,7 @@ def test_token_recusado_pelo_mcp_vira_401_e_nao_um_200_com_erro_dentro(
         monkeypatch=monkeypatch,
     )
 
-    resposta = client.post("/chat", json={"message": "oi"}, headers=BEARER)
+    resposta = client.post("/chat", json=corpo(message="oi"), headers=BEARER)
 
     assert resposta.status_code == 401
     assert resposta.json()["error"]["code"] == "MCP_UNAUTHORIZED"
@@ -190,50 +204,139 @@ def test_credencial_de_agente_exigida_quando_a_inferencia_e_paga(settings_factor
         agent_api_key="segredo-compartilhado",
     )
 
-    resposta = client.post("/chat", json={"message": "oi"}, headers=BEARER)
+    resposta = client.post("/chat", json=corpo(message="oi"), headers=BEARER)
 
     assert resposta.status_code == 401
     # No envelope de sempre, e não num `{"detail": ...}`: o NestJS traduz pelo
     # `code`, e um segundo formato de erro obrigaria os dois lados a conhecer os
     # dois. Foi o que a #157 pagou caro.
-    corpo = resposta.json()
-    assert corpo["error"]["code"] == "AGENT_KEY_REJECTED"
-    assert "detail" not in corpo
+    devolvido = resposta.json()
+    assert devolvido["error"]["code"] == "AGENT_KEY_REJECTED"
+    assert "detail" not in devolvido
 
 
-def test_o_fluxo_sse_sai_na_ordem_com_os_eventos_de_tool(settings_factory, monkeypatch):
+def test_o_fluxo_sse_sai_no_vocabulario_nativo(settings_factory, monkeypatch):
     client, _, mcp_transport = app_com(
         settings_factory,
         turnos=[
             [fragmento_de_tool(0, id="c1", name="list_meals", arguments="{}"), fim("tool_calls")],
             [fragmento_de_texto("Você "), fragmento_de_texto("comeu arroz.")],
         ],
+        monkeypatch=monkeypatch,
+    )
+
+    resposta = client.post("/chat", json=corpo(message="o que eu comi?"), headers=BEARER)
+
+    assert resposta.status_code == 200
+    assert resposta.headers["content-type"].startswith("text/event-stream")
+    # Sem isto, um proxy que bufferize entrega a conversa inteira de uma vez.
+    assert resposta.headers["x-accel-buffering"] == "no"
+    assert "no-transform" in resposta.headers["cache-control"]
+
+    eventos = quadros([resposta.text])
+    nomes = [nome for nome, _ in eventos]
+    assert nomes[:2] == ["start", "catalog"]
+    assert nomes[-2:] == ["messages/complete", "done"]
+    assert eventos[0][1]["conversationId"] == CONVERSA
+    assert "".join(d[0]["content"] for n, d in eventos if n == "messages") == "Você comeu arroz."
+    assert eventos[-1] == ("done", {"status": "completed"})
+
+    # O Bearer do usuário chegou ao /mcp — a propriedade inteira da ADR 021.
+    assert set(mcp_transport.bearers) == {f"Bearer {TOKEN}"}
+
+
+def test_a_thread_e_de_quem_o_token_diz(settings_factory, monkeypatch):
+    """O dono da thread sai do `get_me`, e não do corpo (ADR 023).
+
+    Dois tokens com a mesma conversa no corpo caem em duas threads: o segundo não
+    vê a primeira fala.
+    """
+    import fatia_agent.api as api_module
+
+    client, provider_transport, _ = app_com(
+        settings_factory, turnos=[[fragmento_de_texto("ok")]], monkeypatch=monkeypatch
+    )
+    client.post("/chat", json=corpo(message="segredo da Ana"), headers=BEARER)
+
+    outra = {"content": [{"type": "text", "text": '{"id": "user-2"}'}]}
+    monkeypatch.setattr(
+        api_module,
+        "build_mcp_client",
+        lambda settings, *, bearer, transport=None: McpClient(
+            base_url="http://localhost:3000/mcp",
+            bearer=bearer,
+            transport=duplo_do_mcp(catalogo=CATALOGO, resultados={"get_me": outra}),
+        ),
+    )
+    client.post("/chat", json=corpo(message="oi"), headers=BEARER)
+
+    segunda = provider_transport.corpos[-1]["messages"]
+    assert [m["content"] for m in segunda[1:]] == ["oi"]
+
+
+def test_get_me_sem_id_recusa_antes_do_fluxo(settings_factory, monkeypatch):
+    client, provider_transport, _ = app_com(
+        settings_factory,
+        turnos=[[fragmento_de_texto("oi")]],
         mcp_transport=duplo_do_mcp(
             catalogo=CATALOGO,
-            resultados={"list_meals": {"content": [{"type": "text", "text": "[]"}]}},
+            resultados={"get_me": {"content": [{"type": "text", "text": "null"}]}},
         ),
         monkeypatch=monkeypatch,
     )
 
-    resposta = client.post("/chat", json={"message": "o que eu comi?"}, headers=BEARER)
+    resposta = client.post("/chat", json=corpo(message="oi"), headers=BEARER)
 
-    assert resposta.status_code == 200
-    assert resposta.headers["content-type"].startswith("text/event-stream")
-    # Sem isto, um proxy que bufferize entrega a conversa inteira de uma vez e o
-    # streaming das outras duas camadas da #247 se perde.
-    assert resposta.headers["x-accel-buffering"] == "no"
-    assert "no-transform" in resposta.headers["cache-control"]
+    assert resposta.status_code == 502
+    assert resposta.json()["error"]["code"] == "MCP_RESPONSE_UNPARSEABLE"
+    assert provider_transport.requests == []
 
-    assert eventos_do_fluxo(resposta.text) == [
-        ("tool", '{"id":"c1","name":"list_meals","state":"input-available","input":"{}"}'),
-        ("tool", '{"id":"c1","name":"list_meals","state":"output-available","output":"[]"}'),
-        ("token", '{"text":"Você "}'),
-        ("token", '{"text":"comeu arroz."}'),
-        ("done", '{"reason":"stop"}'),
+
+def test_pausa_e_retomada_pela_rota(settings_factory, monkeypatch):
+    refeicao = '{"mealType":"lunch"}'
+    client, _, mcp_transport = app_com(
+        settings_factory,
+        turnos=[
+            [fragmento_de_tool(0, id="c1", name="log_meal", arguments=refeicao), fim("tool_calls")],
+            [fragmento_de_texto("Registrei.")],
+        ],
+        monkeypatch=monkeypatch,
+    )
+
+    pausa = quadros([client.post("/chat", json=corpo(message="almocei"), headers=BEARER).text])
+    assert pausa[-1] == ("done", {"status": "interrupted"})
+    interrupcao = next(
+        d["__interrupt__"][0] for n, d in pausa if n == "updates" and "__interrupt__" in d
+    )
+
+    errada = client.post(
+        "/chat",
+        json=corpo(resume={"interruptId": "outra-pausa", "value": True}),
+        headers=BEARER,
+    )
+    assert errada.status_code == 409
+    assert errada.json()["error"]["code"] == "CHAT_RESUME_MISMATCH"
+
+    retomada = client.post(
+        "/chat",
+        json=corpo(resume={"interruptId": interrupcao["id"], "value": {"approvals": {"c1": True}}}),
+        headers=BEARER,
+    )
+    assert quadros([retomada.text])[-1] == ("done", {"status": "completed"})
+    chamadas = [
+        r
+        for r in mcp_transport.rpcs
+        if r.get("method") == "tools/call" and r["params"]["name"] == "log_meal"
     ]
+    assert len(chamadas) == 1
 
-    # O Bearer do usuário chegou ao /mcp — a propriedade inteira da ADR 021.
-    assert set(mcp_transport.bearers) == {f"Bearer {TOKEN}"}
+    de_novo = client.post(
+        "/chat",
+        json=corpo(resume={"interruptId": interrupcao["id"], "value": True}),
+        headers=BEARER,
+    )
+    assert de_novo.status_code == 409
+    assert de_novo.json()["error"]["code"] == "CHAT_NOTHING_TO_RESUME"
 
 
 def test_acento_vai_sem_escape_no_fio(settings_factory, monkeypatch):
@@ -244,9 +347,9 @@ def test_acento_vai_sem_escape_no_fio(settings_factory, monkeypatch):
         monkeypatch=monkeypatch,
     )
 
-    resposta = client.post("/chat", json={"message": "oi"}, headers=BEARER)
+    resposta = client.post("/chat", json=corpo(message="oi"), headers=BEARER)
 
-    assert '{"text":"Refeição"}' in resposta.text
+    assert '"content":"Refeição"' in resposta.text
     assert "\\u00e7" not in resposta.text
 
 
@@ -258,9 +361,11 @@ def test_falha_no_meio_do_fluxo_sai_como_evento_e_o_done_continua_por_ultimo(
     from .support import resultado_mcp, sse_jsonrpc
 
     def handler(request: httpx.Request) -> httpx.Response:
-        corpo = jsonlib.loads(request.content)
-        if corpo["method"] == "tools/list":
-            return sse_jsonrpc(resultado_mcp(corpo["id"], {"tools": CATALOGO}))
+        rpc = jsonlib.loads(request.content)
+        if rpc["method"] == "tools/list":
+            return sse_jsonrpc(resultado_mcp(rpc["id"], {"tools": CATALOGO}))
+        if rpc["params"]["name"] == "get_me":
+            return sse_jsonrpc(resultado_mcp(rpc["id"], EU))
         raise httpx.ConnectError("apps/api caiu")
 
     client, _, _ = app_com(
@@ -272,7 +377,7 @@ def test_falha_no_meio_do_fluxo_sai_como_evento_e_o_done_continua_por_ultimo(
         monkeypatch=monkeypatch,
     )
 
-    resposta = client.post("/chat", json={"message": "oi"}, headers=BEARER)
+    resposta = client.post("/chat", json=corpo(message="oi"), headers=BEARER)
 
     # O status já foi 200 quando a falha aconteceu — não há como mudá-lo.
     assert resposta.status_code == 200
@@ -288,7 +393,7 @@ def test_o_corpo_recusa_campo_de_identidade(settings_factory, monkeypatch):
     )
 
     resposta = client.post(
-        "/chat", json={"message": "oi", "userId": "outro-usuario"}, headers=BEARER
+        "/chat", json=corpo(message="oi", userId="outro-usuario"), headers=BEARER
     )
 
     assert resposta.status_code == 422
@@ -311,15 +416,16 @@ def test_historico_longo_e_recortado_em_vez_de_recusado(settings_factory, monkey
 
     historico = [{"role": "user", "content": "x"} for _ in range(MAX_HISTORICO + 5)]
     historico.append({"role": "assistant", "content": "p" * (MAX_CARACTERES_POR_MENSAGEM + 2_000)})
+    # O grafo guarda tudo no estado; o corte é na ida ao modelo.
     resposta = client.post(
-        "/chat", json={"message": "e amanhã?", "history": historico}, headers=BEARER
+        "/chat", json=corpo(message="e amanhã?", history=historico), headers=BEARER
     )
 
     assert resposta.status_code == 200
-    # Sistema + 40 do histórico + a mensagem de agora: o corte aconteceu, e a
-    # conversa seguiu.
+    # Sistema + as últimas 40 (histórico e a mensagem de agora): o corte
+    # aconteceu, e a conversa seguiu.
     mensagens = provider_transport.corpos[0]["messages"]
-    assert len(mensagens) == MAX_HISTORICO + 2
+    assert len(mensagens) == MAX_HISTORICO + 1
     assert len(mensagens[-2]["content"]) < MAX_CARACTERES_POR_MENSAGEM + 2_000
 
 
@@ -333,7 +439,7 @@ def test_a_mensagem_de_agora_alem_do_teto_e_recusada(settings_factory, monkeypat
 
     resposta = client.post(
         "/chat",
-        json={"message": "z" * (MAX_CARACTERES_POR_MENSAGEM + 1)},
+        json=corpo(message="z" * (MAX_CARACTERES_POR_MENSAGEM + 1)),
         headers=BEARER,
     )
 
@@ -358,7 +464,7 @@ def test_o_erro_de_validacao_nao_devolve_o_que_a_pessoa_escreveu(settings_factor
         # Item de histórico sem `role`: o `input` do erro é o item **inteiro**, e
         # o item inteiro é o que a pessoa escreveu. Um cliente com defeito num
         # campo devolvia a conversa no corpo do erro.
-        json={"message": "oi", "history": [{"content": confidencia}]},
+        json=corpo(message="oi", history=[{"content": confidencia}]),
         headers=BEARER,
     )
 
@@ -377,8 +483,8 @@ def test_toda_recusa_do_chat_antes_do_primeiro_byte_sai_no_envelope(settings_fac
     alguém acrescentar com `HTTPException` — este pega.
     """
     caminhos: list[tuple[str, dict[str, object], dict[str, str], dict[str, object], int]] = [
-        ("sem bearer", {}, {}, {"message": "oi"}, 401),
-        ("bearer torto", {}, {"Authorization": "Basic x"}, {"message": "oi"}, 401),
+        ("sem bearer", {}, {}, corpo(message="oi"), 401),
+        ("bearer torto", {}, {"Authorization": "Basic x"}, corpo(message="oi"), 401),
         (
             "sem chave do agente",
             {
@@ -387,24 +493,29 @@ def test_toda_recusa_do_chat_antes_do_primeiro_byte_sai_no_envelope(settings_fac
                 "agent_api_key": "segredo",
             },
             BEARER,
-            {"message": "oi"},
+            corpo(message="oi"),
             401,
         ),
-        ("sem provedor", {"ai_base_url": ""}, BEARER, {"message": "oi"}, 503),
-        ("sem mcp", {"mcp_base_url": ""}, BEARER, {"message": "oi"}, 503),
+        ("sem provedor", {"ai_base_url": ""}, BEARER, corpo(message="oi"), 503),
+        ("sem mcp", {"mcp_base_url": ""}, BEARER, corpo(message="oi"), 503),
         ("corpo vazio", {}, BEARER, {}, 422),
-        ("campo inventado", {}, BEARER, {"message": "oi", "userId": "x"}, 422),
-        ("mensagem vazia", {}, BEARER, {"message": ""}, 422),
+        ("sem conversa", {}, BEARER, {"message": "oi"}, 422),
+        ("conversa que não é uuid", {}, BEARER, {"conversationId": "1", "message": "oi"}, 422),
+        ("campo inventado", {}, BEARER, corpo(message="oi", userId="x"), 422),
+        ("mensagem vazia", {}, BEARER, corpo(message=""), 422),
+        ("mensagem e retomada", {}, BEARER, corpo(message="oi", resume={"interruptId": "i"}), 422),
+        ("nem uma nem outra", {}, BEARER, corpo(), 422),
+        ("nada a retomar", {}, BEARER, corpo(resume={"interruptId": "i", "value": True}), 409),
     ]
 
-    for nome, overrides, headers, corpo, status in caminhos:
+    for nome, overrides, headers, enviado, status in caminhos:
         client, _, _ = app_com(
             settings_factory,
             turnos=[[fragmento_de_texto("oi")]],
             monkeypatch=monkeypatch,
             **overrides,
         )
-        resposta = client.post("/chat", json=corpo, headers=headers)
+        resposta = client.post("/chat", json=enviado, headers=headers)
 
         assert resposta.status_code == status, nome
         devolvido = resposta.json()

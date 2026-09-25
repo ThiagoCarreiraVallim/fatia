@@ -1,9 +1,8 @@
-"""O grafo: a ordem dos eventos, o ciclo de tool e as paradas.
+"""O grafo: o protocolo no fio, o ciclo de tool, a memória da thread e as paradas.
 
 Nada de duplo caseiro de provedor ou de cliente MCP: os dois são os objetos de
 produção, com o transporte do `httpx` trocado por um que emite o formato de
-verdade. É o que torna estes casos capazes de reprovar a tradução entre camadas,
-que é onde os defeitos desta série moraram.
+verdade. A confirmação e as perguntas estão em `test_confirmacao.py`.
 """
 
 import asyncio
@@ -13,20 +12,23 @@ from typing import Never
 
 import httpx
 import pytest
+from langgraph.checkpoint.memory import InMemorySaver
 
 from fatia_agent.chat.graph import (
+    LIMITE_DE_PASSOS,
     MAX_CARACTERES_POR_MENSAGEM,
     MAX_RODADAS_DE_TOOL,
+    MAX_TOOLS_POR_RODADA,
+    SEM_RESPOSTA,
+    montar_grafo,
     stream_chat_events,
 )
 from fatia_agent.chat.mcp_client import McpClient
-from fatia_agent.chat.tool_policy import camada_read_only
-from fatia_agent.providers import build_provider
+from fatia_agent.chat.state import ContextoDoTurno
+from fatia_agent.chat.tool_policy import todas_permitidas
 from fatia_agent.providers.base import TextDelta, ToolCall, TurnEnd
 
 from .support import (
-    McpRecordingTransport,
-    ProviderRecordingTransport,
     bloco_de_uso,
     duplo_do_mcp,
     fim,
@@ -34,88 +36,49 @@ from .support import (
     fragmento_de_tool,
     resultado_mcp,
     sse_jsonrpc,
-    tool_do_catalogo,
 )
-
-TOKEN = "tok-do-usuario"
-
-CATALOGO = [
-    tool_do_catalogo("list_meals", read_only=True),
-    tool_do_catalogo("log_meal", read_only=False),
-    tool_do_catalogo("delete_meal", read_only=False),
-]
-
-# Os dois estados terminais de uma tool no vocabulário da tela. Um `!=
-# "input-available"` diria a mesma coisa hoje e pararia de dizer no dia em que
-# aparecer um estado novo — que é justamente quando o teste precisa reclamar.
-FIM_DE_TOOL = ("output-available", "output-error")
+from .turno import CATALOGO, CONVERSA, THREAD, TOKEN, quadros, turno
 
 
-def _e_fim_de_tool(evento) -> bool:
-    return evento.name == "tool" and evento.data.get("state") in FIM_DE_TOOL
+def _com_tool(nome: str, *, id: str = "c1", arguments: str = "{}") -> list[dict[str, object]]:
+    return [fragmento_de_tool(0, id=id, name=nome, arguments=arguments), fim("tool_calls")]
 
 
-async def rodar(
-    settings_factory,
-    turnos,
-    *,
-    mcp_transport: httpx.AsyncBaseTransport | None = None,
-    mensagem: str = "o que eu comi ontem?",
-    historico=(),
-    timezone: str | None = None,
-):
-    """Roda o grafo inteiro e devolve (eventos, transporte do provedor, transporte do mcp)."""
-    provider_transport = ProviderRecordingTransport(turnos)
-    provider = build_provider(settings_factory(), transport=provider_transport)
-    transporte_mcp = mcp_transport if mcp_transport is not None else duplo_do_mcp(catalogo=CATALOGO)
-    client = McpClient(base_url="http://localhost:3000/mcp", bearer=TOKEN, transport=transporte_mcp)
-
-    permitidas = camada_read_only(await client.list_tools())
-    eventos = [
-        evento
-        async for evento in stream_chat_events(
-            provider,
-            client,
-            permitidas,
-            mensagem=mensagem,
-            historico=historico,
-            timezone=timezone,
-        )
-    ]
-
-    await client.aclose()
-    await provider.aclose()
-    return eventos, provider_transport, transporte_mcp
-
-
-async def test_resposta_sem_tool_sai_token_a_token_e_termina_com_done(settings_factory):
-    eventos, _, _ = await rodar(
-        settings_factory,
-        [[fragmento_de_texto("Você "), fragmento_de_texto("comeu arroz.")]],
+async def test_resposta_sem_tool_segue_o_protocolo_nativo(settings_factory):
+    r = await turno(
+        settings_factory, [[fragmento_de_texto("Você "), fragmento_de_texto("comeu arroz.")]]
     )
 
-    assert [(e.name, e.data) for e in eventos] == [
-        ("token", {"text": "Você "}),
-        ("token", {"text": "comeu arroz."}),
-        ("done", {"reason": "stop"}),
-    ]
+    assert r.nomes()[:2] == ["start", "catalog"]
+    assert r.nomes()[-2:] == ["messages/complete", "done"]
+    assert r.de("start") == [{"conversationId": CONVERSA, "runId": "run-1"}]
+    assert [d[0]["content"] for d in r.de("messages")] == ["Você ", "comeu arroz."]
+    # Os fragmentos são da mesma mensagem: é pelo `id` que a tela os junta.
+    assert len({d[0]["id"] for d in r.de("messages")}) == 1
+    assert r.de("messages")[0][0]["type"] == "AIMessageChunk"
+    assert r.de("messages")[0][1] == {"langgraph_node": "agente"}
+    (final,) = r.de("messages/complete")[0]
+    assert final["content"] == "Você comeu arroz."
+    assert final["id"] == r.de("messages")[0][0]["id"]
+    assert r.de("done") == [{"status": "completed"}]
 
 
-async def test_o_ciclo_de_tool_emite_start_end_e_so_depois_a_resposta(settings_factory):
-    """A ordem é o contrato: a UI mostra "consultando…" e troca pelo texto.
+async def test_o_catalogo_leva_o_titulo_de_toda_tool_oferecida(settings_factory):
+    """A tela rotula pelo título que o `/mcp` anuncia — não por uma tabela à mão."""
+    r = await turno(settings_factory, [[fragmento_de_texto("ok")]])
 
-    Igualdade da sequência inteira, e não `any(...)`: com `assert any`, um evento
-    de tool emitido DEPOIS da resposta passaria verde — e é exatamente o que
-    acontece quando alguém troca o `writer` por acumular e emitir no fim.
-    """
-    eventos, provider_transport, mcp_transport = await rodar(
+    (catalogo,) = r.de("catalog")
+    assert catalogo["tools"]["list_meals"] == "List Meals"
+    assert catalogo["tools"]["log_meal"] == "Log Meal"
+    assert "delete_meal" not in catalogo["tools"]
+
+
+async def test_o_ciclo_de_tool_chega_pelas_atualizacoes_do_grafo(settings_factory):
+    r = await turno(
         settings_factory,
         [
-            [
-                fragmento_de_tool(0, id="c1", name="list_meals", arguments='{"date":"2026-08-05"}'),
-                fim("tool_calls"),
-            ],
-            [fragmento_de_texto("Arroz e feijão.")],
+            _com_tool("list_meals", arguments='{"date":"2026-08-05"}'),
+            [fragmento_de_texto("Arroz.")],
         ],
         mcp_transport=duplo_do_mcp(
             catalogo=CATALOGO,
@@ -125,295 +88,245 @@ async def test_o_ciclo_de_tool_emite_start_end_e_so_depois_a_resposta(settings_f
         ),
     )
 
-    assert [(e.name, e.data) for e in eventos] == [
-        (
-            "tool",
-            {
-                "id": "c1",
-                "name": "list_meals",
-                "state": "input-available",
-                "input": '{"date":"2026-08-05"}',
-            },
-        ),
-        (
-            "tool",
-            {
-                # O mesmo `id` do quadro de início: é ele que faz a tela
-                # substituir o bloco em vez de mostrar a mesma tool duas vezes.
-                "id": "c1",
-                "name": "list_meals",
-                "state": "output-available",
-                "output": '[{"nome":"arroz"}]',
-            },
-        ),
-        ("token", {"text": "Arroz e feijão."}),
-        ("done", {"reason": "stop"}),
-    ]
+    pedido = next(d["agente"]["messages"][0] for d in r.de("updates") if "agente" in d)
+    assert pedido["tool_calls"][0]["name"] == "list_meals"
+    assert pedido["tool_calls"][0]["args"] == {"date": "2026-08-05"}
+    (resultado,) = r.mensagens_de_tool()
+    assert resultado["tool_call_id"] == "c1"
+    assert resultado["status"] == "success"
+    assert resultado["content"] == '[{"nome":"arroz"}]'
+    assert r.texto() == "Arroz."
+    assert r.de("done") == [{"status": "completed"}]
 
-    # O resultado da tool volta ao modelo como mensagem `tool`, amarrada pelo id.
-    segunda_chamada = provider_transport.corpos[1]["messages"]
-    assert segunda_chamada[-1] == {
-        "role": "tool",
-        "tool_call_id": "c1",
-        "content": '[{"nome":"arroz"}]',
-    }
-    # E o `/mcp` recebeu o Bearer nas duas idas: catálogo e execução.
-    assert mcp_transport.bearers == [f"Bearer {TOKEN}", f"Bearer {TOKEN}"]
+    # A resposta da tool volta ao modelo no formato da OpenAI.
+    segundo = r.provider.corpos[1]["messages"]
+    assert segundo[-1] == {"role": "tool", "tool_call_id": "c1", "content": '[{"nome":"arroz"}]'}
 
 
-async def test_o_modelo_so_enxerga_as_tools_de_leitura(settings_factory):
-    """O recorte da ADR 021, verificado no que **sai** para o provedor.
+async def test_o_modelo_enxerga_leitura_confirmavel_e_ask_user_mas_nao_a_restrita(
+    settings_factory,
+):
+    r = await turno(settings_factory, [[fragmento_de_texto("ok")]])
 
-    Afirmar sobre `camada_read_only` sozinho não bastaria: o defeito interessante
-    é o catálogo certo ser calculado e o errado ser enviado.
-    """
-    _, provider_transport, _ = await rodar(settings_factory, [[fragmento_de_texto("oi")]])
-
-    tools = provider_transport.corpos[0]["tools"]
-    assert [t["function"]["name"] for t in tools] == ["list_meals"]
+    nomes = {tool["function"]["name"] for tool in r.provider.corpos[0]["tools"]}
+    assert nomes == {"list_meals", "log_meal", "log_weight", "ask_user"}
 
 
 async def test_tool_alucinada_vira_falha_de_tool_e_a_conversa_continua(settings_factory):
-    """O modelo pede `delete_meal`, que existe no catálogo mas não no recorte.
-
-    Nada é chamado no `/mcp`, o modelo recebe o motivo e responde. Derrubar a
-    conversa aqui trocaria "pedi a tool errada" por "o chat caiu".
-    """
-    mcp_transport = duplo_do_mcp(catalogo=CATALOGO)
-    eventos, provider_transport, _ = await rodar(
-        settings_factory,
-        [
-            [fragmento_de_tool(0, id="c1", name="delete_meal", arguments="{}"), fim("tool_calls")],
-            [fragmento_de_texto("Não consigo apagar por aqui.")],
-        ],
-        mcp_transport=mcp_transport,
+    r = await turno(
+        settings_factory, [_com_tool("delete_meal"), [fragmento_de_texto("Não posso apagar.")]]
     )
 
-    nomes = [(e.name, e.data.get("state")) for e in eventos if e.name == "tool"]
-    assert nomes == [("tool", "input-available"), ("tool", "output-error")]
-    assert eventos[-1].data == {"reason": "stop"}
-
-    # Só o `tools/list` foi ao `/mcp` — nenhum `tools/call`.
-    assert [rpc["method"] for rpc in mcp_transport.rpcs] == ["tools/list"]
-    # E o modelo leu o motivo, para poder se corrigir.
-    resultado = provider_transport.corpos[1]["messages"][-1]
-    assert "não está no recorte permitido" in resultado["content"]
+    (resultado,) = r.mensagens_de_tool()
+    assert resultado["status"] == "error"
+    assert "recorte permitido" in resultado["content"]
+    assert r.chamadas_ao_mcp("delete_meal") == 0
+    assert r.texto() == "Não posso apagar."
 
 
 async def test_argumentos_quebrados_do_modelo_nao_derrubam_a_conversa(settings_factory):
-    mcp_transport = duplo_do_mcp(catalogo=CATALOGO)
-    eventos, _, _ = await rodar(
+    r = await turno(
         settings_factory,
-        [
-            [
-                fragmento_de_tool(0, id="c1", name="list_meals", arguments='{"date":'),
-                fim("tool_calls"),
-            ],
-            [fragmento_de_texto("Pode repetir?")],
-        ],
-        mcp_transport=mcp_transport,
+        [_com_tool("list_meals", arguments='{"date":'), [fragmento_de_texto("Tentei.")]],
     )
 
-    (fim_da_tool,) = [e for e in eventos if _e_fim_de_tool(e)]
-    assert fim_da_tool.data["state"] == "output-error"
-    assert [rpc["method"] for rpc in mcp_transport.rpcs] == ["tools/list"]
-    assert eventos[-1].data == {"reason": "stop"}
+    (resultado,) = r.mensagens_de_tool()
+    assert resultado["status"] == "error"
+    assert "não são JSON" in resultado["content"]
+    assert r.chamadas_ao_mcp("list_meals") == 0
+    # A chamada torta ainda vai ao provedor com a resposta dela, senão ele
+    # recusaria o histórico na volta seguinte.
+    chamada = r.provider.corpos[1]["messages"][-2]["tool_calls"][0]
+    assert chamada["function"]["arguments"] == '{"date":'
 
 
-async def test_tool_que_falha_no_apps_api_vira_evento_com_ok_falso(settings_factory):
-    eventos, _, _ = await rodar(
+async def test_tool_que_falha_no_apps_api_vira_resultado_com_erro(settings_factory):
+    r = await turno(
         settings_factory,
-        [
-            [fragmento_de_tool(0, id="c1", name="list_meals", arguments="{}"), fim("tool_calls")],
-            [fragmento_de_texto("Não achei.")],
-        ],
+        [_com_tool("list_meals"), [fragmento_de_texto("Deu erro.")]],
         mcp_transport=duplo_do_mcp(
             catalogo=CATALOGO,
             resultados={
-                "list_meals": {
-                    "content": [{"type": "text", "text": "NOT_FOUND: nada nessa data"}],
-                    "isError": True,
-                }
+                "list_meals": {"content": [{"type": "text", "text": "NOT_FOUND"}], "isError": True}
             },
         ),
     )
 
-    (fim_da_tool,) = [e for e in eventos if _e_fim_de_tool(e)]
-    assert fim_da_tool.data["state"] == "output-error"
-    assert "NOT_FOUND" in fim_da_tool.data["errorText"]
+    (resultado,) = r.mensagens_de_tool()
+    assert (resultado["status"], resultado["content"]) == ("error", "NOT_FOUND")
 
 
 async def test_modelo_em_laco_para_no_teto_de_rodadas(settings_factory):
-    """Modelo que só pede tool, para sempre. O teto é o que impede o laço.
+    r = await turno(settings_factory, [_com_tool("list_meals")])
 
-    Sem ele, cada mensagem gastaria a cota de 60/min do `/mcp` **do usuário** —
-    e a fatura do gateway, que é nossa.
-
-    **O número está escrito à mão de propósito.** Importando `MAX_RODADAS_DE_TOOL`
-    para o lado direito da igualdade, o caso concordava com qualquer valor: subir
-    a constante para 99 mantinha a suíte verde, e 99 rodadas de 5 tools passam de
-    quatro vezes a cota do usuário. O teto é decisão de produto; mudá-lo tem de
-    custar editar este número.
-    """
-    turno_em_laco = [
-        fragmento_de_tool(0, id="c1", name="list_meals", arguments="{}"),
-        fim("tool_calls"),
-    ]
-    mcp_transport = duplo_do_mcp(catalogo=CATALOGO)
-    eventos, provider_transport, _ = await rodar(
-        settings_factory, [turno_em_laco], mcp_transport=mcp_transport
-    )
-
-    assert MAX_RODADAS_DE_TOOL == 4
-    assert eventos[-1].data == {"reason": "step_limit"}
-    chamadas = [rpc["method"] for rpc in mcp_transport.rpcs]
-    assert chamadas.count("tools/call") == 4
-    # Uma decisão a mais que rodada: a última é a que ainda pede tool e é barrada.
-    assert len(provider_transport.corpos) == 5
+    assert r.chamadas_ao_mcp("list_meals") == MAX_RODADAS_DE_TOOL
+    assert LIMITE_DE_PASSOS in r.texto()
+    assert r.de("done") == [{"status": "completed"}]
+    (final,) = r.de("messages/complete")[0]
+    assert final["content"] == LIMITE_DE_PASSOS
 
 
-async def test_laco_sem_texto_nenhum_ainda_devolve_algo_para_a_tela(settings_factory):
-    """Balão vazio é indistinguível de travamento para quem está olhando."""
-    eventos, _, _ = await rodar(
-        settings_factory,
-        [[fragmento_de_tool(0, id="c1", name="list_meals", arguments="{}"), fim("tool_calls")]],
-    )
+async def test_resposta_vazia_ainda_devolve_algo_para_a_tela(settings_factory):
+    r = await turno(settings_factory, [[fim("stop")]])
 
-    tokens = [e for e in eventos if e.name == "token"]
-    assert tokens and tokens[0].data["text"].strip()
+    assert r.texto() == SEM_RESPOSTA
+    (final,) = r.de("messages/complete")[0]
+    assert final["content"] == SEM_RESPOSTA
 
 
 async def test_teto_de_tools_por_rodada(settings_factory):
-    """Dez tools num turno viram cinco chamadas, não dez."""
-    fragmentos = [
-        fragmento_de_tool(i, id=f"c{i}", name="list_meals", arguments="{}") for i in range(10)
+    muitas = [
+        fragmento_de_tool(i, id=f"c{i}", name="list_meals", arguments="{}")
+        for i in range(MAX_TOOLS_POR_RODADA + 3)
     ]
-    mcp_transport = duplo_do_mcp(catalogo=CATALOGO)
-    await rodar(
+    r = await turno(settings_factory, [[*muitas, fim("tool_calls")], [fragmento_de_texto("ok")]])
+
+    assert r.chamadas_ao_mcp("list_meals") == MAX_TOOLS_POR_RODADA
+
+
+async def test_thread_fria_e_semeada_com_o_historico_antes_da_mensagem(settings_factory):
+    r = await turno(
         settings_factory,
-        [[*fragmentos, fim("tool_calls")], [fragmento_de_texto("pronto")]],
-        mcp_transport=mcp_transport,
-    )
-
-    chamadas = [rpc["method"] for rpc in mcp_transport.rpcs]
-    assert chamadas.count("tools/call") == 5
-
-
-async def test_o_historico_entra_no_prompt_antes_da_mensagem(settings_factory):
-    _, provider_transport, _ = await rodar(
-        settings_factory,
-        [[fragmento_de_texto("oi")]],
-        mensagem="e hoje?",
+        [[fragmento_de_texto("ok")]],
+        mensagem="e amanhã?",
         historico=[
             {"role": "user", "content": "o que eu comi ontem?"},
-            {"role": "assistant", "content": "arroz"},
+            {"role": "assistant", "content": "Arroz."},
         ],
     )
 
-    mensagens = provider_transport.corpos[0]["messages"]
-    assert mensagens[0]["role"] == "system"
-    assert [m["content"] for m in mensagens[1:]] == [
-        "o que eu comi ontem?",
-        "arroz",
-        "e hoje?",
+    enviadas = r.provider.corpos[0]["messages"]
+    assert [(m["role"], m["content"]) for m in enviadas[1:]] == [
+        ("user", "o que eu comi ontem?"),
+        ("assistant", "Arroz."),
+        ("user", "e amanhã?"),
     ]
 
 
-async def test_falha_do_mcp_no_meio_da_conversa_vira_evento_de_erro(settings_factory):
-    """Quando o primeiro token saiu, o 200 já foi — o erro só cabe dentro do fluxo.
+async def test_thread_quente_ignora_o_historico_e_usa_o_estado(settings_factory):
+    """Numa thread com estado, o histórico do `apps/api` não entra de novo.
 
-    E `done` continua sendo o último evento: um cliente que só sabe fechar no
-    `done` não pode ficar pendurado por causa de uma falha.
+    Reaplicá-lo a cada turno duplicaria a conversa inteira no prompt — e as
+    chamadas de tool, que só o estado tem, sumiriam.
     """
+    primeiro = await turno(settings_factory, [[fragmento_de_texto("Arroz.")]], mensagem="oi")
+    segundo = await turno(
+        settings_factory,
+        [[fragmento_de_texto("ok")]],
+        mensagem="e amanhã?",
+        grafo=primeiro.grafo,
+        historico=[{"role": "user", "content": "histórico que não pode entrar"}],
+    )
 
+    enviadas = segundo.provider.corpos[0]["messages"]
+    assert [(m["role"], m["content"]) for m in enviadas[1:]] == [
+        ("user", "oi"),
+        ("assistant", "Arroz."),
+        ("user", "e amanhã?"),
+    ]
+
+
+async def test_a_thread_de_outra_pessoa_nao_se_mistura(settings_factory):
+    primeiro = await turno(settings_factory, [[fragmento_de_texto("Arroz.")]], mensagem="segredo")
+    outro = await turno(
+        settings_factory,
+        [[fragmento_de_texto("ok")]],
+        mensagem="oi",
+        grafo=primeiro.grafo,
+        thread="user-2:conversa-1",
+    )
+
+    conteudos = [m["content"] for m in outro.provider.corpos[0]["messages"][1:]]
+    assert conteudos == ["oi"]
+
+
+async def test_falha_do_mcp_no_meio_da_conversa_vira_evento_de_erro(settings_factory):
     def handler(request: httpx.Request) -> httpx.Response:
         corpo = json.loads(request.content)
         if corpo["method"] == "tools/list":
             return sse_jsonrpc(resultado_mcp(corpo["id"], {"tools": CATALOGO}))
-        raise httpx.ConnectError("apps/api caiu")
+        return httpx.Response(401)
 
-    eventos, _, _ = await rodar(
+    r = await turno(
         settings_factory,
-        [[fragmento_de_tool(0, id="c1", name="list_meals", arguments="{}"), fim("tool_calls")]],
-        mcp_transport=McpRecordingTransport(handler),
+        [_com_tool("list_meals"), [fragmento_de_texto("nunca")]],
+        mcp_transport=httpx.MockTransport(handler),
     )
 
-    assert [e.name for e in eventos[-2:]] == ["error", "done"]
-    assert eventos[-2].data["code"] == "MCP_UNREACHABLE"
-    assert eventos[-1].data == {"reason": "error"}
+    (erro,) = r.de("error")
+    assert erro["code"] == "MCP_UNAUTHORIZED"
+    assert r.nomes()[-1] == "done"
+    assert r.de("done") == [{"status": "error"}]
 
 
 async def test_provedor_que_cai_no_meio_do_stream_vira_evento_de_erro(settings_factory):
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.RemoteProtocolError("gateway fechou a conexão")
+    class ProvedorQueCai:
+        async def stream_chat(self, messages, *, tools=()) -> AsyncIterator[TextDelta]:
+            from fatia_agent.providers.errors import AIProviderTimeout
 
-    provider = build_provider(settings_factory(), transport=httpx.MockTransport(handler))
-    mcp_transport = duplo_do_mcp(catalogo=CATALOGO)
-    client = McpClient(base_url="http://localhost:3000/mcp", bearer=TOKEN, transport=mcp_transport)
-    permitidas = camada_read_only(await client.list_tools())
+            yield TextDelta(text="Você ")
+            raise AIProviderTimeout("o gateway demorou")
 
-    eventos = [
-        evento
-        async for evento in stream_chat_events(
-            provider, client, permitidas, mensagem="oi", historico=[]
-        )
-    ]
-    await client.aclose()
-    await provider.aclose()
+        async def aclose(self) -> None:
+            return None
 
-    assert [e.name for e in eventos] == ["error", "done"]
-    assert eventos[0].data["code"] == "AI_PROVIDER_UNREACHABLE"
+    fluxo = await _fluxo(ProvedorQueCai(), mensagem="oi")
+    eventos = quadros([q async for q in fluxo])
+
+    assert ("error", {"code": "AI_PROVIDER_TIMEOUT", "message": "o gateway demorou"}) in eventos
+    assert eventos[-1] == ("done", {"status": "error"})
 
 
 async def test_defeito_nosso_nao_vira_evento_de_erro_generico(settings_factory):
-    """Exceção sem `code` continua subindo: o traceback é a única pista dela.
-
-    Se ela virasse um `error` genérico no fluxo, o chat responderia "algo deu
-    errado" e o defeito ficaria invisível.
-    """
+    """Exceção sem `code` continua subindo: o traceback é a única pista dela."""
 
     class ProvedorComDefeito:
         def stream_chat(self, messages, *, tools=()) -> Never:
             raise ZeroDivisionError("defeito de programação")
 
-    mcp_transport = duplo_do_mcp(catalogo=CATALOGO)
-    client = McpClient(base_url="http://localhost:3000/mcp", bearer=TOKEN, transport=mcp_transport)
-    permitidas = camada_read_only(await client.list_tools())
-
+    fluxo = await _fluxo(ProvedorComDefeito(), mensagem="oi")
     with pytest.raises(ZeroDivisionError):
-        async for _ in stream_chat_events(
-            ProvedorComDefeito(),  # type: ignore[arg-type]
-            client,
-            permitidas,
-            mensagem="oi",
-            historico=[],
-        ):
+        async for _ in fluxo:
             pass
 
-    await client.aclose()
+
+async def _fluxo(provedor: object, *, mensagem: str) -> AsyncIterator[str]:
+    client = McpClient(
+        base_url="http://localhost:3000/mcp",
+        bearer=TOKEN,
+        transport=duplo_do_mcp(catalogo=CATALOGO),
+    )
+    permitidas = todas_permitidas(await client.list_tools())
+    contexto = ContextoDoTurno(
+        provider=provedor,  # type: ignore[arg-type]
+        client=client,
+        permitidas=tuple(permitidas),
+        run_id="run-1",
+    )
+    return stream_chat_events(
+        montar_grafo(InMemorySaver()),
+        contexto,
+        thread_id=THREAD,
+        conversation_id=CONVERSA,
+        mensagem=mensagem,
+    )
 
 
 # ------------------------------------------------------- o streaming incremental
 
-# Uma reversão que emita os tokens no fim do nó (ou no fim da conversa) não muda
-# a ORDEM de evento nenhum: nos casos acima, o turno que tem texto é o último. Os
-# dois casos abaixo são os únicos que distinguem "emitiu na hora" de "emitiu no
-# fim", e a propriedade que eles seguram é a que a #247 inteira existe para ter —
-# um chat que só responde no fim parece travado.
+# Bufferizar não troca a ORDEM de evento nenhum. Os dois casos abaixo são os
+# únicos que distinguem "emitiu na hora" de "emitiu no fim", e a propriedade que
+# eles seguram é a que a #247 inteira existe para ter.
 PORTAO_TIMEOUT_S = 2.0
 
 
 class ProvedorComPortao:
-    """Provedor cujo turno **não termina** até alguém abrir o portão.
-
-    O turno parado no meio é o ponto: um nó que acumule os pedaços e só emita
-    depois do `async for` não tem nada para emitir enquanto o modelo não acaba —
-    e o primeiro `token` só apareceria depois do portão, ou nunca.
-    """
+    """Provedor cujo turno **não termina** até alguém abrir o portão."""
 
     def __init__(self, *, tool_calls: tuple[ToolCall, ...] = ()) -> None:
         self.portao = asyncio.Event()
         self._tool_calls = tool_calls
+        self._chamadas = 0
 
     async def stream_chat(
         self,
@@ -421,6 +334,11 @@ class ProvedorComPortao:
         *,
         tools: Sequence[dict[str, object]] = (),
     ) -> AsyncIterator[TextDelta | TurnEnd]:
+        self._chamadas += 1
+        if self._chamadas > 1:
+            yield TextDelta(text="Pronto.")
+            yield TurnEnd()
+            return
         yield TextDelta(text="Você ")
         yield TextDelta(text="comeu ")
         await self.portao.wait()
@@ -428,52 +346,36 @@ class ProvedorComPortao:
         yield TurnEnd(tool_calls=self._tool_calls)
 
 
+async def _proximo_evento(fluxo: AsyncIterator[str], nome: str) -> object:
+    while True:
+        (evento,) = quadros([await asyncio.wait_for(anext(fluxo), timeout=PORTAO_TIMEOUT_S)])
+        if evento[0] == nome:
+            return evento[1]
+
+
 async def test_o_token_sai_antes_de_o_turno_do_modelo_terminar(settings_factory):
-    """O primeiro token chega com o modelo ainda escrevendo.
-
-    Sem isto, nada no repositório distingue o chat token a token do chat que
-    responde inteiro no fim: os dois passam por todos os outros casos, porque
-    bufferizar não troca a ordem relativa dos eventos.
-    """
     provedor = ProvedorComPortao()
-    client = McpClient(
-        base_url="http://localhost:3000/mcp",
-        bearer=TOKEN,
-        transport=duplo_do_mcp(catalogo=CATALOGO),
-    )
-    permitidas = camada_read_only(await client.list_tools())
-
-    fluxo = stream_chat_events(
-        provedor, client, permitidas, mensagem="o que eu comi?", historico=[]
-    )
+    fluxo = await _fluxo(provedor, mensagem="o que eu comi?")
     try:
-        primeiro = await asyncio.wait_for(anext(fluxo), timeout=PORTAO_TIMEOUT_S)
-        assert (primeiro.name, primeiro.data) == ("token", {"text": "Você "})
+        primeiro = await _proximo_evento(fluxo, "messages")
+        assert primeiro[0]["content"] == "Você "  # type: ignore[index]
+        segundo = await _proximo_evento(fluxo, "messages")
+        assert segundo[0]["content"] == "comeu "  # type: ignore[index]
 
-        segundo = await asyncio.wait_for(anext(fluxo), timeout=PORTAO_TIMEOUT_S)
-        assert (segundo.name, segundo.data) == ("token", {"text": "comeu "})
-
-        # Só agora o modelo termina. O resto do fluxo continua igual.
         provedor.portao.set()
-        resto = [evento async for evento in fluxo]
+        resto = quadros([q async for q in fluxo])
     finally:
-        await fluxo.aclose()
+        await fluxo.aclose()  # type: ignore[attr-defined]
 
-    assert [(e.name, e.data) for e in resto] == [
-        ("token", {"text": "arroz."}),
-        ("done", {"reason": "stop"}),
-    ]
-
-    await client.aclose()
+    assert resto[-1] == ("done", {"status": "completed"})
 
 
-async def test_o_evento_de_tool_tambem_sai_antes_de_a_conversa_acabar(settings_factory):
-    """A mesma garantia para o `tool` de `phase: "start"`.
+async def test_o_pedido_de_tool_sai_antes_de_a_tool_responder(settings_factory):
+    """A tela mostra "consultando…" **enquanto** o `/mcp` responde.
 
-    É ele que faz a tela mostrar "consultando suas refeições…" **enquanto** o
-    `/mcp` responde. Aqui o `/mcp` fica pendurado de propósito: o `start` tem de
-    chegar com a consulta ainda em curso, senão ele é um rótulo de progresso
-    sobre uma coisa que já acabou.
+    O `/mcp` fica pendurado de propósito: o pedido de tool tem de estar no fio
+    com a consulta ainda em curso, senão o rótulo de progresso é sobre algo que
+    já acabou.
     """
     provedor = ProvedorComPortao(tool_calls=(ToolCall(id="c1", name="list_meals", arguments="{}"),))
     mcp_respondendo = asyncio.Event()
@@ -490,148 +392,78 @@ async def test_o_evento_de_tool_tambem_sai_antes_de_a_conversa_acabar(settings_f
     client = McpClient(
         base_url="http://localhost:3000/mcp", bearer=TOKEN, transport=httpx.MockTransport(handler)
     )
-    permitidas = camada_read_only(await client.list_tools())
-
-    fluxo = stream_chat_events(provedor, client, permitidas, mensagem="oi", historico=[])
+    contexto = ContextoDoTurno(
+        provider=provedor,  # type: ignore[arg-type]
+        client=client,
+        permitidas=tuple(todas_permitidas(await client.list_tools())),
+        run_id="run-1",
+    )
+    fluxo = stream_chat_events(
+        montar_grafo(InMemorySaver()),
+        contexto,
+        thread_id=THREAD,
+        conversation_id=CONVERSA,
+        mensagem="oi",
+    )
     try:
-        # Os dois tokens do turno que ainda não terminou.
-        await asyncio.wait_for(anext(fluxo), timeout=PORTAO_TIMEOUT_S)
-        await asyncio.wait_for(anext(fluxo), timeout=PORTAO_TIMEOUT_S)
+        await _proximo_evento(fluxo, "messages")
         provedor.portao.set()
-        await asyncio.wait_for(anext(fluxo), timeout=PORTAO_TIMEOUT_S)  # "arroz."
-
-        # O `/mcp` ainda não respondeu, e o `start` já tem de estar no fio.
-        inicio = await asyncio.wait_for(anext(fluxo), timeout=PORTAO_TIMEOUT_S)
-        assert (inicio.name, inicio.data["state"]) == ("tool", "input-available")
+        pedido = await _proximo_evento(fluxo, "updates")
+        assert pedido["agente"]["messages"][0]["tool_calls"][0]["id"] == "c1"  # type: ignore[index]
 
         mcp_respondendo.set()
-        fim_da_tool = await asyncio.wait_for(anext(fluxo), timeout=PORTAO_TIMEOUT_S)
-        assert _e_fim_de_tool(fim_da_tool)
+        resultado = await _proximo_evento(fluxo, "updates")
+        assert resultado["ferramentas"]["messages"][0]["tool_call_id"] == "c1"  # type: ignore[index]
     finally:
         mcp_respondendo.set()
         await fluxo.aclose()
-
-    await client.aclose()
+        await client.aclose()
 
 
 async def test_historico_gigante_e_cortado_e_a_conversa_segue(settings_factory):
-    """A resposta longa do modelo volta no histórico — e não pode matar a conversa.
-
-    "Monte um plano de 7 dias" sai com mais de 4 000 caracteres, o NestJS
-    persiste e reenvia no turno seguinte. Recusar isso com 422 mataria o fio para
-    sempre, por um teto nosso que nem o PWA nem o NestJS têm como enxergar.
-    """
     resposta_longa = "a" * (MAX_CARACTERES_POR_MENSAGEM + 2_000)
-    _, provider_transport, _ = await rodar(
+    r = await turno(
         settings_factory,
         [[fragmento_de_texto("ok")]],
         mensagem="e amanhã?",
-        historico=[{"role": "assistant", "content": resposta_longa}],
-    )
-
-    (do_historico,) = [
-        m for m in provider_transport.corpos[0]["messages"] if m["role"] == "assistant"
-    ]
-    assert len(do_historico["content"]) < len(resposta_longa)
-    assert do_historico["content"].startswith("a" * MAX_CARACTERES_POR_MENSAGEM)
-    # Cortado com marca visível: corte silencioso faz o modelo responder sobre
-    # uma frase que ele acha completa e não está.
-    assert do_historico["content"].endswith("… (mensagem cortada por tamanho)")
-
-
-async def test_o_uso_sai_como_evento_uma_vez_por_rodada(settings_factory):
-    """A cota do `apps/api` (#135) só existe se este evento sair.
-
-    **Uma vez por rodada, e não uma por turno**: o ciclo de tool chama o modelo
-    de novo a cada volta, e cada volta é paga. O `chat.service.ts` soma por
-    modelo justamente porque conta com mais de um — guardar só o último
-    gravaria o turno inteiro pelo preço da última chamada, com `pricingKnown:
-    true` e sem nenhum sintoma.
-    """
-    eventos, _, _ = await rodar(
-        settings_factory,
-        [
-            [
-                fragmento_de_tool(0, id="c1", name="list_meals", arguments="{}"),
-                fim("tool_calls"),
-                bloco_de_uso(prompt_tokens=800, completion_tokens=12),
-            ],
-            [fragmento_de_texto("Arroz."), bloco_de_uso(prompt_tokens=910, completion_tokens=40)],
+        historico=[
+            {"role": "user", "content": "monte um plano"},
+            {"role": "assistant", "content": resposta_longa},
         ],
     )
 
-    usos = [e.data for e in eventos if e.name == "usage"]
-    assert usos == [
-        {"model": "ornith-1.0-9b", "inputUnits": 800, "outputUnits": 12},
-        {"model": "ornith-1.0-9b", "inputUnits": 910, "outputUnits": 40},
+    (do_historico,) = [m for m in r.provider.corpos[0]["messages"] if m["role"] == "assistant"]
+    assert do_historico["content"].startswith("a" * MAX_CARACTERES_POR_MENSAGEM)
+    assert do_historico["content"].endswith("… (mensagem cortada por tamanho)")
+
+
+async def test_o_uso_sai_como_evento_uma_vez_por_chamada_ao_modelo(settings_factory):
+    r = await turno(
+        settings_factory,
+        [
+            [*_com_tool("list_meals"), bloco_de_uso(prompt_tokens=100, completion_tokens=10)],
+            [fragmento_de_texto("ok"), bloco_de_uso(prompt_tokens=200, completion_tokens=20)],
+        ],
+    )
+
+    assert r.de("usage") == [
+        {"model": "ornith-1.0-9b", "inputUnits": 100, "outputUnits": 10},
+        {"model": "ornith-1.0-9b", "inputUnits": 200, "outputUnits": 20},
     ]
 
 
-async def test_uso_com_campo_torto_nao_derruba_a_conversa(settings_factory):
-    """Contabilidade não pode custar a resposta que já está na tela.
-
-    Unidade que não é inteiro sai **de fora** do evento, e não como zero: o
-    `somarUnidade` do `apps/api` trata ausência como total desconhecido e o
-    turno cai em custo não medido, que é a degradação certa. Um zero entraria
-    como medida e a cota fecharia tarde.
-    """
-    eventos, _, _ = await rodar(
-        settings_factory,
-        [[fragmento_de_texto("oi"), bloco_de_uso(prompt_tokens="muitos", completion_tokens=True)]],
-    )
-
-    (uso,) = [e.data for e in eventos if e.name == "usage"]
-    assert uso == {"model": "ornith-1.0-9b"}
-    assert eventos[-1].data == {"reason": "stop"}
-
-
 async def test_sem_bloco_de_usage_nenhum_evento_de_uso_sai(settings_factory):
-    """Provedor que não reporta custo não pode virar custo zero.
-
-    Sem evento, o `apps/api` grava `model: null` e o turno entra como não
-    medido. Um `usage` com zeros seria a mesma linha com `pricingKnown: true`,
-    e a guarda de `unpricedCalls` da #135 nunca acenderia.
-    """
-    eventos, _, _ = await rodar(settings_factory, [[fragmento_de_texto("oi")]])
-
-    assert [e.name for e in eventos if e.name == "usage"] == []
+    r = await turno(settings_factory, [[fragmento_de_texto("ok")]])
+    assert r.de("usage") == []
 
 
 async def test_o_fuso_vira_a_data_de_hoje_no_prompt(settings_factory):
-    """Sem relógio, "ontem" é um chute — e um chute com cara de resposta certa.
-
-    As tools do `/mcp` recebem data em `AAAA-MM-DD`. O modelo não tem como
-    calcular a de ontem sem saber a de hoje, e o sintoma seria uma consulta bem
-    formada sobre a data errada.
-    """
-    from datetime import datetime
-    from zoneinfo import ZoneInfo
-
-    _, provider_transport, _ = await rodar(
-        settings_factory,
-        [[fragmento_de_texto("ok")]],
-        timezone="America/Sao_Paulo",
-    )
-
-    sistema = provider_transport.corpos[0]["messages"][0]
-    hoje = datetime.now(ZoneInfo("America/Sao_Paulo"))
+    r = await turno(settings_factory, [[fragmento_de_texto("ok")]], timezone="America/Sao_Paulo")
+    sistema = r.provider.corpos[0]["messages"][0]
     assert sistema["role"] == "system"
-    assert f"{hoje:%Y-%m-%d}" in sistema["content"]
-    assert "America/Sao_Paulo" in sistema["content"]
+    assert "fuso America/Sao_Paulo" in sistema["content"]
 
 
 async def test_fuso_desconhecido_responde_sem_a_linha_de_data(settings_factory):
-    """Chutar o fuso do servidor erraria o dia inteiro para quem está longe.
-
-    Melhor o modelo saber que não sabe: ele pergunta a data, em vez de consultar
-    com confiança o dia errado.
-    """
-    _, provider_transport, _ = await rodar(
-        settings_factory,
-        [[fragmento_de_texto("ok")]],
-        timezone="Marte/Olympus_Mons",
-    )
-
-    sistema = provider_transport.corpos[0]["messages"][0]
-    assert "Hoje é" not in sistema["content"]
-    assert sistema["content"].startswith("Você é o assistente da Fatia")
+    r = await turno(settings_factory, [[fragmento_de_texto("ok")]], timezone="Marte/Olympus")
+    assert "Hoje é" not in r.provider.corpos[0]["messages"][0]["content"]

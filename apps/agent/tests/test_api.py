@@ -22,6 +22,23 @@ def test_health_responde_200_mesmo_sem_provedor(settings_factory):
     assert "AI_BASE_URL" in corpo["ai"]["reason"]
 
 
+def test_health_diz_se_o_estado_do_chat_sobrevive_a_um_restart(settings_factory):
+    """Em memória, uma pausa do chat morre no restart (ADR 023). O operador vê aqui."""
+    em_memoria = TestClient(create_app(settings_factory())).get("/health").json()
+    persistente = (
+        TestClient(
+            create_app(
+                settings_factory(agent_checkpoint_database_url="postgresql://x@localhost/fatia")
+            )
+        )
+        .get("/health")
+        .json()
+    )
+
+    assert em_memoria["checkpointer"] == {"persistent": False}
+    assert persistente["checkpointer"] == {"persistent": True}
+
+
 def test_health_com_provedor_configurado_nao_traz_motivo(settings_factory):
     client = TestClient(create_app(settings_factory()))
 

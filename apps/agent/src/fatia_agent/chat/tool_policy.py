@@ -15,8 +15,8 @@ Ler é reversível; gravar não; apagar não é nem reversível nem confirmável
 camada do meio existe porque a tela de confirmação passou a existir (ADR 022): é
 ela que mantém a propriedade da #139 — o que a IA produz é sugestão, quem grava
 é a pessoa — agora que a escrita entrou no chat. A confirmação é obrigatória por
-**construção**, não por disciplina: a confirmável nem chega a `agir` sem
-aprovação, e `exigir_aprovada` recusa se chegar.
+**construção**, não por disciplina: a confirmável não executa sem uma decisão
+da pessoa gravada no estado do grafo (ADR 023).
 
 O que fica de fora nas três camadas é o que não tem volta. "Apaga minha refeição
 de ontem" dita para um modelo pequeno é um `delete_meal` a uma alucinação de
@@ -191,36 +191,6 @@ def exigir_permitida(nome: str, permitidas: Iterable[McpToolInfo]) -> None:
     )
 
 
-def exigir_aprovada(
-    nome: str,
-    argumentos: str,
-    confirmaveis: Iterable[McpToolInfo],
-    aprovadas: Iterable[tuple[str, str]],
-) -> None:
-    """Recusa a execução de uma tool CONFIRMABLE que não foi aprovada na tela.
-
-    Segunda barreira, como `exigir_permitida`, e pelo mesmo motivo de existir
-    duas: a primeira é o grafo rotear a confirmável para `confirmar` em vez de
-    `agir`. Se um dia alguém acrescentar uma aresta, mexer no roteamento ou
-    inverter uma condição, é **aqui** que a propriedade da ADR 022 não cai — a
-    escrita não acontece por caminho de código, ela acontece por aprovação
-    presente.
-
-    Compara nome **e** argumentos: aprovar "registrar 200 g de frango" não pode
-    autorizar "registrar 2 kg de frango". A comparação é literal sobre o texto
-    que o `proposal` mandou e o PWA devolveu, e não sobre o JSON reserializado,
-    porque reserializar é onde entra a diferença de ordem de chave que faria
-    duas coisas iguais parecerem diferentes.
-    """
-    if not any(tool.name == nome for tool in confirmaveis):
-        return
-    if (nome, argumentos) in set(aprovadas):
-        return
-    raise McpToolNotAllowed(
-        f"A tool '{nome}' altera dados e só roda depois de você aprovar na tela. Nada foi gravado."
-    )
-
-
 def argumentos_do_modelo(bruto: str) -> dict[str, Any]:
     """Texto de `function.arguments` → objeto, ou erro nomeado.
 
@@ -262,7 +232,6 @@ __all__ = [
     "camada_read_only",
     "camada_restrita",
     "classificar_tools",
-    "exigir_aprovada",
     "exigir_permitida",
     "formato_openai",
     "todas_permitidas",

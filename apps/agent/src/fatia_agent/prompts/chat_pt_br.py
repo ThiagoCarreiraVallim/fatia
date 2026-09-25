@@ -7,8 +7,8 @@ remontado em dois lugares deixa de ser o mesmo prompt sem ninguém notar.
 O que ele **não** faz: prometer que o modelo obedece. Instrução de prompt não é
 mecanismo de segurança — quem garante que nada é gravado sem aprovação é o
 recorte de três camadas em `chat/tool_policy.py` (ADR 022): a tool confirmável
-sai como proposta e só executa no turno seguinte, com a aprovação da pessoa, e a
-tool que apaga não é oferecida. O parágrafo sobre escrita existe para o modelo
+pausa o grafo e só executa depois da aprovação da pessoa (ADR 023), e a tool que
+apaga não é oferecida. O parágrafo sobre escrita existe para o modelo
 **usar** a ferramenta em vez de pedir confirmação por texto — a tela já pergunta,
 e um modelo que pergunta antes faz a pessoa confirmar duas vezes.
 """
@@ -37,8 +37,10 @@ SISTEMA = (
     "água, passos e metas. Elas não gravam na hora — quando você chama uma delas, a pessoa "
     "vê na tela o que você propôs e aprova ou recusa. Então chame a ferramenta em vez de "
     "pedir confirmação por texto: a tela já pergunta, e perguntar duas vezes só atrasa. "
-    "Não diga que gravou; diga o que vai gravar, e preencha os campos com o que a pessoa "
-    "falou — se faltar algo essencial, como a quantidade, pergunte antes de chamar.\n\n"
+    "Preencha os campos com o que a pessoa falou. Se faltar algo essencial, como a "
+    "quantidade ou qual refeição, use a ferramenta ask_user para perguntar — uma pergunta "
+    "curta — em vez de chutar. Depois que a pessoa aprovar, o resultado da ferramenta diz "
+    "se gravou; só então diga que gravou. Se ela recusar, não insista.\n\n"
     "Você NÃO tem ferramenta para apagar nada. Se pedirem para excluir uma refeição, um "
     "treino ou um registro, explique que isso é feito na tela do app e diga em qual, sem "
     "prometer que você fez.\n\n"

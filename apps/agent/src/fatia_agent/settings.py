@@ -66,6 +66,12 @@ class AgentSettings(BaseSettings):
     # esperar dois minutos por ela só faria o chat parecer travado.
     mcp_timeout_s: float = 30.0
 
+    # O Postgres da Fatia, onde o checkpointer guarda o estado das conversas no
+    # schema `agent_checkpoint` (ADR 023). Vazio = estado em memória: aceitável
+    # em teste e em dev, e defeito em produção — uma pausa não sobrevive a um
+    # restart. O `/health` expõe qual dos dois está valendo.
+    agent_checkpoint_database_url: str = ""
+
 
 AGENT_API_KEY_HEADER = "x-fatia-agent-key"
 

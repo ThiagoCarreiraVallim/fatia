@@ -1,264 +1,355 @@
-"""O grafo LangGraph da conversa: receber → decidir → [confirmar] → agir → responder.
+"""O grafo da conversa, com estado no checkpointer (ADR 023).
 
-## Por que LangGraph aqui, e não na #139
+    START → hidratar → agente ⇄ ferramentas → portao → ferramentas → agente
+                          │            └──────────── (nada a perguntar) ──┘
+                          └── fechar → END
 
-O reconhecimento de foto é uma chamada e uma validação, em linha reta — um grafo
-de um nó só seria a dependência e a cerimônia sem o benefício, e está escrito
-assim em `recognition/recognize_meal.py`. O chat é o caso oposto: ele **volta**.
-O modelo pede tool, a tool responde, o modelo decide de novo, e isso se repete
-até ele parar de pedir. É ciclo com condição de parada, que é exatamente o que um
-`StateGraph` descreve melhor que um `while` com quatro flags.
+- **hidratar**: zera o que é do turno e, numa thread fria, semeia a conversa com
+  o histórico que o `apps/api` tem gravado.
+- **agente**: o modelo, em streaming — ou responde, ou pede tools.
+- **ferramentas**: executa pelo `/mcp`, com o Bearer de quem está falando, o que
+  pode rodar agora: toda READ_ONLY e toda CONFIRMABLE que a pessoa **já**
+  decidiu. A CONFIRMABLE sem decisão fica sem resultado, e é isso que leva ao
+  portão.
+- **portao**: o único nó que interrompe. Junta numa pausa só as escritas à
+  espera de aprovação e as perguntas de `ask_user`.
+- **fechar**: garante que o turno termina com texto na tela.
 
-## O que **não** entra no grafo
+## Por que LangGraph aqui
 
-O Bearer do usuário. Ele vive dentro do `McpClient`, que os nós alcançam por
-**fecho** — o grafo é montado por conversa e o cliente é capturado na montagem.
-Não passa pelo `state` e não passa pelo `config`: os dois são serializados por
-checkpointer e por tracing (o `langsmith` entra como dependência transitiva do
-LangGraph), e um token no estado seria um token no rastro. É a mesma classe de
-defeito da #214, onde o serializador do `pino-http` gravava `authorization` em
-texto puro sem ninguém ter pedido.
+O chat **volta**: o modelo pede tool, a tool responde, o modelo decide de novo.
+É ciclo com condição de parada, que é o que um `StateGraph` descreve melhor que
+um `while` com quatro flags. E agora ele também **pausa** — o que só existe com
+checkpointer.
 
-Pelo mesmo motivo não há checkpointer: a persistência da conversa é do NestJS
-(sub-issue 2/3 da #247), e um checkpointer aqui gravaria histórico de saúde num
-segundo lugar, fora do banco que a LGPD deste produto descreve.
+## O que não entra no estado
 
-## A confirmação de tool CONFIRMABLE não é uma pausa
+O Bearer. Ele vive dentro do `McpClient`, que os nós alcançam pelo runtime
+context (`ContextoDoTurno`), e o context não é serializado pelo checkpointer.
+Ver `state.py` e a ADR 023.
 
-Tool que escreve só roda depois de a pessoa aprovar na tela (ADR 022), e a
-implementação disso **não** é um `interrupt()`: pausar de verdade exige o
-checkpointer que o parágrafo acima descarta. São dois turnos HTTP.
+## Por que o portão é um nó separado das ferramentas
 
-    turno 1:  receber → decidir → confirmar → responder
-              o modelo pede `log_meal`; o agente emite `proposal` e fecha com
-              `reason: "awaiting_confirmation"`. Nada foi gravado.
+O LangGraph **reexecuta** o nó interrompido quando a pausa é retomada. Se a
+interrupção acontecesse dentro de `ferramentas`, a retomada rodaria de novo toda
+tool daquele lote — com um `log_meal` no meio, a refeição seria gravada duas
+vezes. O portão só lê o estado, então reexecutá-lo não custa nada.
 
-    turno 2:  receber → agir → decidir → responder
-              o PWA manda a proposta aprovada em `approved`; `receber` a
-              transforma em pendência e o grafo entra direto em `agir`.
+## A confirmação executa o que está no checkpoint
 
-O segundo turno **não passa pelo modelo antes de executar**. Pedir a ele que
-chame a tool de novo seria trocar uma garantia por uma probabilidade: ele pode
-reformular os argumentos, e o que rodaria deixaria de ser o que a pessoa viu no
-modal. Depois de executar, aí sim volta a `decidir` — para o modelo narrar o
-resultado, que é o que fecha a conversa.
-
-Um turno pode ter as duas coisas: o modelo que pede `list_meals` e `log_meal` na
-mesma rodada tem a leitura executada e a escrita proposta. Ver `confirmar`.
+Tool CONFIRMABLE (ADR 022) não roda na volta em que o modelo a pede. Ela fica sem
+resultado, o portão mostra à pessoa exatamente aquela chamada, e a retomada traz
+só "sim" ou "não" por `tool_call_id`. O que executa depois é o `tool_call`
+guardado — o cliente nunca mais carrega argumento de escrita. A leitura pedida na
+mesma volta roda antes da pausa: bloqueá-la faria a pessoa aprovar algo para ver
+o que só perguntou.
 """
 
+import json
 import logging
+import uuid
 from collections.abc import AsyncIterator, Sequence
-from typing import Any, TypedDict
+from typing import Any
 
+from langchain_core.messages import (
+    AIMessage,
+    AIMessageChunk,
+    AnyMessage,
+    BaseMessage,
+    HumanMessage,
+    RemoveMessage,
+    ToolMessage,
+)
+from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
+from langgraph.graph.message import REMOVE_ALL_MESSAGES
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.runtime import Runtime
+from langgraph.types import Command, interrupt
 
 from ..prompts.chat_pt_br import sistema_com_data
-from ..providers.base import TextDelta, ToolChatCapability, TurnEnd
+from ..providers.base import TextDelta, TurnEnd
 from ..providers.errors import AIProviderError
-from . import events
+from . import events, human
 from .errors import McpError, McpToolArgumentsInvalid, McpToolRejected
-from .mcp_client import McpClient, McpToolInfo
+from .state import ContextoDoTurno, EstadoDaConversa, estado_vazio
 from .tool_policy import (
     argumentos_do_modelo,
     camada_confirmavel,
-    exigir_aprovada,
     exigir_permitida,
     formato_openai,
 )
 
-# Handler é do uvicorn: o agente não configura logging, e por isso o que sai aqui
-# cai no mesmo lugar que o resto (`.agent-dev.log` em dev). **Nada de Bearer nem
-# de conteúdo de conversa passa por aqui** — só `code` e a mensagem do erro, que
-# `errors.py` já escreve para ser lida por quem opera. O
-# `tests/chat/test_sem_vazamento.py` varre a saída de log junto do resto.
+# Handler é do uvicorn. **Nada de Bearer nem de conteúdo de conversa passa por
+# aqui** — só `code` e a mensagem do erro, que `errors.py` escreve para quem
+# opera. O `tests/chat/test_sem_vazamento.py` varre a saída de log.
 logger = logging.getLogger(__name__)
 
-# Rodadas de tool por mensagem do usuário. Quatro cobre "consulta, refina,
-# consulta de novo, responde"; acima disso, na prática, é o modelo em laço.
+# Voltas do modelo que pedem tool, por mensagem da pessoa. Quatro cobre
+# "consulta, refina, consulta de novo, responde"; acima disso é laço.
 MAX_RODADAS_DE_TOOL = 4
 
-# Tools por rodada. Com o teto acima, dá no máximo 20 chamadas ao `/mcp` por
-# mensagem — folgado dentro do limite de 60/min por usuário que o
-# `mcp-throttler.guard.ts` aplica, e que é **do usuário**: um agente em laço
-# gastaria a cota do Claude dele.
+# Tools por volta. Com o teto acima, no máximo 20 chamadas ao `/mcp` por
+# mensagem — dentro do limite de 60/min por usuário do `mcp-throttler.guard.ts`,
+# que é **do usuário**: um agente em laço gastaria a cota do Claude dele.
 MAX_TOOLS_POR_RODADA = 5
 
-# Mensagens de histórico que entram no prompt. O NestJS é quem persiste
-# (sub-issue 2/3) e quem decide o que reenviar; o teto aqui é para que uma
-# conversa longa não vire um prompt de megabytes contra o gateway pago.
+# Mensagens do estado que entram no prompt. O checkpoint guarda a conversa
+# inteira; o teto é para que uma conversa longa não vire um prompt de megabytes
+# contra o gateway pago.
 MAX_HISTORICO = 40
 
-# Caracteres por mensagem. Vale como **recusa** para a mensagem que a pessoa
-# acabou de escrever (ela está na tela, e o cliente sabe contar caracteres) e
-# como **corte** para o histórico, que vem do que já aconteceu.
-#
-# A diferença não é estilo. O que entra no histórico inclui a resposta do modelo,
-# cujo tamanho ninguém controla: um "monte um plano de 7 dias" que sai com 6 000
-# caracteres, persistido pelo NestJS e reenviado no turno seguinte, viraria um
-# 422 permanente — a conversa morta por um teto nosso, sem que o PWA ou o NestJS
-# tivessem como saber por quê. Cortar degrada o contexto; recusar mata o fio.
+# Caracteres por fala de turnos anteriores, no prompt. **Corte**, e não recusa:
+# o que está no histórico inclui a resposta do modelo, cujo tamanho ninguém
+# controla, e recusar mataria a conversa por algo que ninguém pode consertar. A
+# mensagem que a pessoa acabou de escrever é recusada acima disto em `api.py`.
 MAX_CARACTERES_POR_MENSAGEM = 4_000
 
-# Reticência visível: histórico cortado em silêncio faz o modelo responder sobre
-# uma frase que ele acha completa e não está.
 AVISO_DE_CORTE = "… (mensagem cortada por tamanho)"
 
-
-# Argumentos de uma proposta aprovada, em caracteres. Recusa, e não corte: estes
-# argumentos vão **executar**, e JSON cortado ao meio ou falha na tool ou grava o
-# pedaço que sobrou. Folgado para qualquer chamada real — uma refeição de 30 itens
-# não passa de uns 2 kB — e serve como teto contra um cliente que devolva lixo.
+# Argumentos de uma escrita, em caracteres. Recusa, e não corte: estes
+# argumentos **executam**, e JSON cortado ao meio ou falha ou grava o pedaço.
 MAX_ARGUMENTOS_APROVADOS = 8_000
 
+RECUSADA = "A pessoa recusou esta alteração na tela. Nada foi gravado."
 
-class EstadoDaConversa(TypedDict):
-    """O estado do grafo. **Nenhum campo de credencial** — ver o docstring.
+NAO_EXECUTADA = "Não executada: a conversa seguiu antes de esta chamada rodar."
 
-    `pendentes` são as tools que o modelo pediu e que ainda não rodaram, no turno
-    de agora. `propostas` são as confirmáveis que foram oferecidas à pessoa e
-    **não** rodaram — elas existem no estado só para `responder` saber que o
-    turno fecha em `awaiting_confirmation` e não em `stop`.
+SEM_RESPOSTA = (
+    "Consultei seus dados, mas não consegui fechar uma resposta. Tente perguntar de outro jeito."
+)
 
-    `aprovadas` é o que veio do PWA neste turno: as propostas que a pessoa
-    aprovou na tela, cada uma com nome e os argumentos exatos que ela viu. Não é
-    memória do agente — o agente não tem memória entre turnos (ver o docstring
-    do módulo); é entrada da requisição, como `mensagem` e `historico`.
-    """
+LIMITE_DE_PASSOS = (
+    "Precisei de mais passos do que consigo dar numa mensagem só. "
+    "Me diga por onde quer começar, ou divida o pedido em partes menores."
+)
 
-    mensagem: str
-    historico: list[dict[str, str]]
-    mensagens: list[dict[str, Any]]
-    pendentes: list[dict[str, str]]
-    propostas: list[dict[str, str]]
-    aprovadas: list[dict[str, str]]
-    rodadas: int
-    resposta: str
-    motivo: str
-
-
-GrafoDaConversa = CompiledStateGraph[EstadoDaConversa, None, EstadoDaConversa, EstadoDaConversa]
+GrafoDaConversa = CompiledStateGraph[EstadoDaConversa, ContextoDoTurno, Any, Any]
 
 
 def _cortado(conteudo: str) -> str:
-    """Uma mensagem do histórico no tamanho que entra no prompt."""
     if len(conteudo) <= MAX_CARACTERES_POR_MENSAGEM:
         return conteudo
     return conteudo[:MAX_CARACTERES_POR_MENSAGEM] + AVISO_DE_CORTE
 
 
-def _exigir_argumentos_no_teto(nome: str, argumentos: str) -> None:
-    """Recusa argumentos acima de `MAX_ARGUMENTOS_APROVADOS`, sem cortar.
+def _texto(mensagem: BaseMessage) -> str:
+    conteudo = mensagem.content
+    if isinstance(conteudo, str):
+        return conteudo
+    return "".join(
+        str(bloco.get("text") or "") if isinstance(bloco, dict) else str(bloco)
+        for bloco in conteudo
+    )
 
-    Família `McpToolRejected` e não exceção de servidor: vira resultado de tool
-    com falha, o modelo lê e pode tentar de novo menor. Ver o `except` em `agir`.
+
+def _ultima_do_assistente(mensagens: Sequence[AnyMessage]) -> tuple[int, AIMessage] | None:
+    for indice in range(len(mensagens) - 1, -1, -1):
+        mensagem = mensagens[indice]
+        if isinstance(mensagem, AIMessage):
+            return indice, mensagem
+    return None
+
+
+def _chamadas(mensagem: AIMessage) -> list[dict[str, Any]]:
+    """As chamadas da mensagem — as válidas e as de JSON torto — na ordem pedida.
+
+    As inválidas ficam em `invalid_tool_calls`, com `args` em texto. Elas também
+    precisam de resultado: são chamadas que o modelo fez, e o provedor recusa uma
+    conversa com chamada sem resposta.
     """
-    if len(argumentos) <= MAX_ARGUMENTOS_APROVADOS:
+    validas = [
+        {"id": c["id"], "name": c["name"], "args": c["args"], "erro": None}
+        for c in mensagem.tool_calls
+        if c.get("id")
+    ]
+    invalidas = [
+        {
+            "id": c["id"],
+            "name": c.get("name") or "",
+            "args": c.get("args") or "",
+            "erro": c.get("error") or "Argumentos inválidos.",
+        }
+        for c in mensagem.invalid_tool_calls
+        if c.get("id")
+    ]
+    return [*validas, *invalidas]
+
+
+def _respondidas(mensagens: Sequence[AnyMessage], desde: int) -> dict[str, ToolMessage]:
+    return {
+        m.tool_call_id: m
+        for m in mensagens[desde + 1 :]
+        if isinstance(m, ToolMessage) and m.tool_call_id
+    }
+
+
+def _janela(mensagens: Sequence[AnyMessage]) -> list[AnyMessage]:
+    """As últimas `MAX_HISTORICO` mensagens, começando numa fala da pessoa.
+
+    Cortar no meio de um ciclo de tool deixaria um `role: "tool"` sem a chamada
+    que ele responde, e o provedor recusa o histórico inteiro com 400.
+    """
+    if len(mensagens) <= MAX_HISTORICO:
+        return list(mensagens)
+    inicio = len(mensagens) - MAX_HISTORICO
+    for indice in range(inicio, len(mensagens)):
+        if isinstance(mensagens[indice], HumanMessage):
+            return list(mensagens[indice:])
+    return list(mensagens[inicio:])
+
+
+def _para_o_provedor(mensagens: Sequence[AnyMessage]) -> list[dict[str, Any]]:
+    """O estado no formato de mensagens da OpenAI, com as chamadas órfãs reparadas.
+
+    🔴 Todo provedor OpenAI-compatível recusa com 400 um `assistant` com
+    `tool_calls` sem o `tool` correspondente. Isso nasce em caminho legítimo: a
+    pessoa escreveu outra coisa em vez de responder à pausa, ou o turno parou no
+    limite de passos. Sem reparo, a conversa ficaria quebrada para sempre. O
+    reparo é só na ida ao modelo — o estado guarda o que aconteceu de verdade.
+    """
+    saida: list[dict[str, Any]] = []
+    faltando: list[dict[str, Any]] = []
+    for mensagem in _janela(mensagens):
+        if faltando and not isinstance(mensagem, ToolMessage):
+            saida.extend(faltando)
+            faltando = []
+
+        if isinstance(mensagem, HumanMessage):
+            saida.append({"role": "user", "content": _cortado(_texto(mensagem))})
+        elif isinstance(mensagem, AIMessage):
+            chamadas = _chamadas(mensagem)
+            item: dict[str, Any] = {"role": "assistant", "content": _cortado(_texto(mensagem))}
+            if chamadas:
+                item["tool_calls"] = [
+                    {
+                        "id": chamada["id"],
+                        "type": "function",
+                        "function": {
+                            "name": chamada["name"],
+                            "arguments": chamada["args"]
+                            if isinstance(chamada["args"], str)
+                            else json.dumps(chamada["args"], ensure_ascii=False),
+                        },
+                    }
+                    for chamada in chamadas
+                ]
+                faltando = [
+                    {"role": "tool", "tool_call_id": chamada["id"], "content": NAO_EXECUTADA}
+                    for chamada in chamadas
+                ]
+            saida.append(item)
+        elif isinstance(mensagem, ToolMessage):
+            faltando = [f for f in faltando if f["tool_call_id"] != mensagem.tool_call_id]
+            saida.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": mensagem.tool_call_id,
+                    "content": _texto(mensagem),
+                }
+            )
+    saida.extend(faltando)
+    return saida
+
+
+def _exigir_argumentos_no_teto(nome: str, argumentos: dict[str, Any]) -> None:
+    tamanho = len(json.dumps(argumentos, ensure_ascii=False))
+    if tamanho <= MAX_ARGUMENTOS_APROVADOS:
         return
     raise McpToolArgumentsInvalid(
-        f"Os argumentos de '{nome}' têm {len(argumentos)} caracteres, acima do teto de "
+        f"Os argumentos de '{nome}' têm {tamanho} caracteres, acima do teto de "
         f"{MAX_ARGUMENTOS_APROVADOS}. Divida em chamadas menores."
     )
 
 
-def montar_grafo(
-    provider: ToolChatCapability,
-    client: McpClient,
-    permitidas: Sequence[McpToolInfo],
-    *,
-    timezone: str | None = None,
-) -> GrafoDaConversa:
-    """Compila o grafo desta conversa, com provedor e cliente presos por fecho.
+def _pergunta_pendente(mensagem: AnyMessage) -> dict[str, Any] | None:
+    """A pergunta que um resultado sentinela de `ask_user` carrega, se carrega."""
+    if not isinstance(mensagem, ToolMessage):
+        return None
+    artefato = mensagem.artifact
+    pergunta = artefato.get("ask") if isinstance(artefato, dict) else None
+    return pergunta if isinstance(pergunta, dict) else None
 
-    Um grafo por conversa, e não um global: é o que mantém o Bearer fora do
-    estado. Compilar um `StateGraph` de quatro nós é montar quatro dicionários —
-    irrelevante diante de uma chamada de LLM.
 
-    `timezone` é o fuso de quem está conversando, que o `apps/api` já conhece do
-    perfil. Ele entra no prompt como a data de hoje — sem isso o modelo não tem
-    como resolver "ontem" numa chamada de tool, e chuta uma data.
+def _aprovou(resposta: object, tool_call_id: str) -> bool:
+    """A decisão da pessoa sobre uma escrita.
+
+    **O default é não.** Gravar precisa de um sim explícito, e não da ausência
+    de um não: uma retomada malformada, um campo que faltou, um texto
+    inesperado — tudo isso recusa.
     """
-    catalogo_openai = formato_openai(permitidas)
-    confirmaveis = camada_confirmavel(permitidas)
-    nomes_confirmaveis = {tool.name for tool in confirmaveis}
+    if isinstance(resposta, dict):
+        aprovacoes = resposta.get("approvals")
+        if isinstance(aprovacoes, dict):
+            return aprovacoes.get(tool_call_id) is True
+        return resposta.get("approved") is True
+    return resposta is True
 
-    async def receber(state: EstadoDaConversa) -> dict[str, Any]:
-        """Monta o prompt: sistema + histórico recortado + a mensagem de agora.
 
-        O recorte do histórico **corta**, e não recusa — nas duas dimensões, a
-        quantidade de mensagens e o tamanho de cada uma. Ver
-        `MAX_CARACTERES_POR_MENSAGEM`.
+def _resposta_da_pergunta(resposta: object, tool_call_id: str) -> object:
+    if isinstance(resposta, dict):
+        respostas = resposta.get("answers")
+        if isinstance(respostas, dict) and tool_call_id in respostas:
+            return respostas[tool_call_id]
+    return resposta
 
-        Quando o turno traz proposta aprovada, ela vira pendência aqui e o grafo
-        vai direto para `agir` — ver `rota_apos_receber`. A mensagem sintética de
-        `assistant` com `tool_calls` existe porque o formato da OpenAI exige que
-        todo `role: "tool"` responda a uma chamada declarada antes; sem ela, a
-        volta a `decidir` mandaria um histórico que o endpoint recusa.
+
+def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConversa:
+    """Compila o grafo. Uma vez por processo — o que varia por turno vem no context."""
+
+    async def hidratar(
+        state: EstadoDaConversa, runtime: Runtime[ContextoDoTurno]
+    ) -> dict[str, Any]:
+        """Começo de um turno novo. A retomada de uma pausa não passa por aqui.
+
+        Numa thread fria, a conversa gravada pelo `apps/api` entra **antes** da
+        mensagem de agora. O `RemoveMessage(REMOVE_ALL_MESSAGES)` é o que faz a
+        ordem sair certa: o `add_messages` acrescenta id novo no fim, e sem a
+        remoção o histórico viria depois da pergunta que acabou de chegar.
         """
-        historico = state["historico"][-MAX_HISTORICO:]
-        mensagens: list[dict[str, Any]] = [
-            {"role": "system", "content": sistema_com_data(timezone)}
-        ]
-        mensagens.extend({"role": m["role"], "content": _cortado(m["content"])} for m in historico)
-        mensagens.append({"role": "user", "content": state["mensagem"]})
+        atualizacao: dict[str, Any] = estado_vazio()
+        if state.get("hidratada"):
+            return atualizacao
 
-        # Id nosso, e não o do turno anterior: o id de tool call vale dentro de um
-        # turno do modelo, e o daquele turno já morreu. O que amarra a aprovação à
-        # proposta é nome + argumentos, não o id — ver `exigir_aprovada`.
-        aprovadas = [
-            {"id": f"aprovada-{indice}", "name": item["name"], "arguments": item["arguments"]}
-            for indice, item in enumerate(state.get("aprovadas") or [])
-        ]
-        if aprovadas:
-            mensagens.append(
-                {
-                    "role": "assistant",
-                    "content": "",
-                    "tool_calls": [
-                        {
-                            "id": chamada["id"],
-                            "type": "function",
-                            "function": {
-                                "name": chamada["name"],
-                                "arguments": chamada["arguments"],
-                            },
-                        }
-                        for chamada in aprovadas
-                    ],
-                }
-            )
+        atualizacao["hidratada"] = True
+        atuais = state.get("messages") or []
+        historico = runtime.context.historico
+        if historico and len(atuais) <= 1:
+            semente: list[AnyMessage] = [
+                HumanMessage(content=fala["content"], id=f"hist-{indice}")
+                if fala["role"] == "user"
+                else AIMessage(content=fala["content"], id=f"hist-{indice}")
+                for indice, fala in enumerate(historico)
+            ]
+            atualizacao["messages"] = [RemoveMessage(id=REMOVE_ALL_MESSAGES), *semente, *atuais]
+        return atualizacao
 
-        return {
-            "mensagens": mensagens,
-            "rodadas": 0,
-            "resposta": "",
-            "pendentes": aprovadas,
-            "propostas": [],
-        }
-
-    async def decidir(state: EstadoDaConversa) -> dict[str, Any]:
-        """Chama o modelo em streaming: ou ele responde, ou pede tools."""
+    async def agente(state: EstadoDaConversa, runtime: Runtime[ContextoDoTurno]) -> dict[str, Any]:
+        """Chama o modelo em streaming. Cada token sai na hora, pelo `writer`."""
+        contexto = runtime.context
         writer = get_stream_writer()
-        texto: list[str] = []
-        pendentes: list[dict[str, str]] = []
+        catalogo = [*formato_openai(contexto.permitidas), human.DEFINICAO]
+        prompt = [
+            {"role": "system", "content": sistema_com_data(contexto.timezone)},
+            *_para_o_provedor(state.get("messages") or []),
+        ]
 
-        async for pedaco in provider.stream_chat(state["mensagens"], tools=catalogo_openai):
+        identificador = f"ai-{uuid.uuid4().hex}"
+        texto: list[str] = []
+        fim: TurnEnd | None = None
+        async for pedaco in contexto.provider.stream_chat(prompt, tools=catalogo):
             if isinstance(pedaco, TextDelta):
                 texto.append(pedaco.text)
-                # Emitido na hora, e não no fim do nó: é isto que faz o chat
-                # aparecer token a token em vez de aparecer inteiro no fim.
-                writer(events.token(pedaco.text))
+                writer(
+                    events.Fragmento(
+                        AIMessageChunk(content=pedaco.text, id=identificador), "agente"
+                    )
+                )
             elif isinstance(pedaco, TurnEnd):
-                pendentes = [
-                    {"id": chamada.id, "name": chamada.name, "arguments": chamada.arguments}
-                    for chamada in pedaco.tool_calls[:MAX_TOOLS_POR_RODADA]
-                ]
+                fim = pedaco
                 if pedaco.usage is not None:
-                    # Um por rodada, e não um por turno: o grafo chama o modelo
-                    # de novo a cada volta do ciclo de tool, e cada volta custa.
-                    # O `apps/api` soma por modelo — ver `chat.service.ts`.
                     writer(
                         events.usage(
                             pedaco.usage.model,
@@ -267,222 +358,360 @@ def montar_grafo(
                         )
                     )
 
-        conteudo = "".join(texto)
-        mensagens = [*state["mensagens"]]
-        if pendentes:
-            mensagens.append(
-                {
-                    "role": "assistant",
-                    "content": conteudo,
-                    "tool_calls": [
-                        {
-                            "id": chamada["id"],
-                            "type": "function",
-                            "function": {
-                                "name": chamada["name"],
-                                "arguments": chamada["arguments"],
-                            },
-                        }
-                        for chamada in pendentes
-                    ],
-                }
-            )
-        elif conteudo:
-            mensagens.append({"role": "assistant", "content": conteudo})
+        validas: list[dict[str, Any]] = []
+        invalidas: list[dict[str, Any]] = []
+        for chamada in (fim.tool_calls if fim is not None else ())[:MAX_TOOLS_POR_RODADA]:
+            try:
+                validas.append(
+                    {
+                        "id": chamada.id,
+                        "name": chamada.name,
+                        "args": argumentos_do_modelo(chamada.arguments),
+                        "type": "tool_call",
+                    }
+                )
+            except McpToolArgumentsInvalid as exc:
+                invalidas.append(
+                    {
+                        "id": chamada.id,
+                        "name": chamada.name,
+                        "args": chamada.arguments,
+                        "error": exc.message,
+                        "type": "invalid_tool_call",
+                    }
+                )
 
-        return {
-            "mensagens": mensagens,
-            "pendentes": pendentes,
-            "resposta": state["resposta"] + conteudo,
-        }
+        resposta = AIMessage(
+            content="".join(texto),
+            id=identificador,
+            tool_calls=validas,
+            invalid_tool_calls=invalidas,
+        )
+        atualizacao: dict[str, Any] = {"messages": [resposta]}
+        if validas or invalidas:
+            atualizacao["rodadas"] = (state.get("rodadas") or 0) + 1
+        return atualizacao
 
-    async def confirmar(state: EstadoDaConversa) -> dict[str, Any]:
-        """Separa o que roda agora do que precisa de aprovação na tela.
+    async def ferramentas(
+        state: EstadoDaConversa, runtime: Runtime[ContextoDoTurno]
+    ) -> dict[str, Any]:
+        """Executa o que pode rodar agora. Nada aqui interrompe — ver o docstring."""
+        contexto = runtime.context
+        mensagens = state.get("messages") or []
+        encontrada = _ultima_do_assistente(mensagens)
+        if encontrada is None:
+            return {}
+        indice, pedido = encontrada
+        respondidas = _respondidas(mensagens, indice)
+        confirmaveis = {tool.name for tool in camada_confirmavel(contexto.permitidas)}
+        decisoes = state.get("decisoes") or {}
+        novas: list[ToolMessage] = []
 
-        Uma rodada pode ter as duas coisas — "o que eu comi hoje? e registra mais
-        um ovo" faz o modelo pedir `list_meals` e `add_meal_item` juntos. A
-        leitura segue para `agir` na mesma rodada; a escrita sai como `proposal` e
-        fica para o turno seguinte. Bloquear a leitura junto faria a pessoa
-        esperar uma confirmação para ver o que ela só perguntou.
+        for chamada in _chamadas(pedido):
+            identificador, nome = chamada["id"], chamada["name"]
+            if identificador in respondidas:
+                continue
 
-        A confirmável que **já** veio aprovada não passa por aqui: ela entrou como
-        pendência em `receber` e o grafo nem visita este nó. Aqui só chega o que o
-        modelo pediu neste turno.
-        """
-        writer = get_stream_writer()
-        executar: list[dict[str, str]] = []
-        propostas: list[dict[str, str]] = []
+            def resultado(
+                conteudo: str,
+                *,
+                erro: bool = False,
+                artefato: dict[str, Any] | None = None,
+                identificador: str = identificador,
+                nome: str = nome,
+            ) -> ToolMessage:
+                return ToolMessage(
+                    content=conteudo,
+                    tool_call_id=identificador,
+                    name=nome,
+                    id=f"tool-{identificador}",
+                    status="error" if erro else "success",
+                    artifact=artefato,
+                )
 
-        for chamada in state["pendentes"]:
-            if chamada["name"] in nomes_confirmaveis:
-                propostas.append(chamada)
-            else:
-                executar.append(chamada)
+            if chamada["erro"] is not None:
+                novas.append(resultado(str(chamada["erro"]), erro=True))
+                continue
 
-        for chamada in propostas:
-            writer(events.proposal(chamada["id"], chamada["name"], chamada["arguments"]))
+            if nome == human.NOME:
+                pergunta = human.pergunta_dos_argumentos(chamada["args"])
+                novas.append(resultado(human.sentinela(pergunta), artefato={"ask": pergunta}))
+                continue
 
-        return {"pendentes": executar, "propostas": propostas}
-
-    async def agir(state: EstadoDaConversa) -> dict[str, Any]:
-        """Executa as tools pedidas, pelo `/mcp`, com o Bearer de quem está falando."""
-        writer = get_stream_writer()
-        mensagens = [*state["mensagens"]]
-        aprovadas = [(item["name"], item["arguments"]) for item in (state.get("aprovadas") or [])]
-
-        for chamada in state["pendentes"]:
-            nome, identificador = chamada["name"], chamada["id"]
-            writer(events.tool_start(identificador, nome, chamada["arguments"]))
+            if nome in confirmaveis:
+                decisao = decisoes.get(identificador)
+                if decisao is None:
+                    continue
+                if decisao is False:
+                    novas.append(resultado(RECUSADA, erro=True))
+                    continue
 
             try:
-                exigir_permitida(nome, permitidas)
-                exigir_aprovada(nome, chamada["arguments"], confirmaveis, aprovadas)
-                _exigir_argumentos_no_teto(nome, chamada["arguments"])
-                argumentos = argumentos_do_modelo(chamada["arguments"])
-                resultado = await client.call_tool(nome, argumentos)
-                texto, deu_certo = resultado.text, not resultado.is_error
+                exigir_permitida(nome, contexto.permitidas)
+                if nome in confirmaveis:
+                    _exigir_argumentos_no_teto(nome, chamada["args"])
+                saida = await contexto.client.call_tool(nome, chamada["args"])
+                novas.append(
+                    resultado(
+                        saida.text,
+                        erro=saida.is_error,
+                        artefato={"structured": saida.structured} if saida.structured else None,
+                    )
+                )
             except McpToolRejected as exc:
-                # Recuperável: o modelo pediu errado. Vira resultado de tool com
-                # falha para ele ler e se corrigir — derrubar a conversa aqui
-                # trocaria "pedi a tool errada" por "o chat caiu".
-                texto, deu_certo = exc.message, False
+                # Recuperável: o modelo pediu errado. Vira resultado com falha
+                # para ele ler e se corrigir — derrubar a conversa trocaria "pedi
+                # a tool errada" por "o chat caiu".
+                novas.append(resultado(exc.message, erro=True))
 
-            writer(events.tool_end(identificador, nome, ok=deu_certo, result=texto))
-            mensagens.append({"role": "tool", "tool_call_id": identificador, "content": texto})
+        return {"messages": novas} if novas else {}
 
-        return {"mensagens": mensagens, "pendentes": [], "rodadas": state["rodadas"] + 1}
+    async def portao(state: EstadoDaConversa, runtime: Runtime[ContextoDoTurno]) -> dict[str, Any]:
+        """Para e fala com a pessoa. O ÚNICO nó que interrompe.
 
-    async def responder(state: EstadoDaConversa) -> dict[str, Any]:
-        """Fecha o turno e emite o `done` — o último evento, sempre."""
+        ⚠️ Um `interrupt()` só, carregando a lista inteira de `actions`. Um por
+        item faria a tela ver só o primeiro, e os outros ficariam sem decisão.
+        """
+        contexto = runtime.context
+        itens = _paradas(state, contexto)
+        if not itens:
+            return {}
+
+        resposta = interrupt(
+            {"kind": itens[0]["kind"], "prompt": itens[0]["prompt"], "actions": itens}
+        )
+
+        decisoes = dict(state.get("decisoes") or {})
+        reescritas: list[ToolMessage] = []
+        for item in itens:
+            if item["kind"] == "confirm":
+                decisoes[item["toolCallId"]] = _aprovou(resposta, item["toolCallId"])
+            else:
+                # Substituição pelo `id` da mensagem, e não acréscimo: não existe
+                # segundo resultado para o mesmo `tool_call_id`, e o sentinela
+                # no histórico faria o modelo perguntar de novo.
+                reescritas.append(
+                    ToolMessage(
+                        content=human.resposta_em_texto(
+                            _resposta_da_pergunta(resposta, item["toolCallId"])
+                        ),
+                        tool_call_id=item["toolCallId"],
+                        name=human.NOME,
+                        id=item["messageId"],
+                    )
+                )
+        atualizacao: dict[str, Any] = {"decisoes": decisoes}
+        if reescritas:
+            atualizacao["messages"] = reescritas
+        return atualizacao
+
+    async def fechar(state: EstadoDaConversa) -> dict[str, Any]:
+        """Garante texto no fim do turno.
+
+        Dois jeitos de um turno acabar sem nada para ler: o modelo gastou o teto
+        de voltas pedindo tool, ou devolveu uma resposta vazia. Nos dois, a tela
+        ficaria com um balão vazio, indistinguível de travamento.
+        """
         writer = get_stream_writer()
-        propostas = state.get("propostas") or []
+        mensagens = state.get("messages") or []
+        encontrada = _ultima_do_assistente(mensagens)
+        if encontrada is None:
+            return {}
+        indice, ultima = encontrada
+        chamadas = _chamadas(ultima)
+        pendentes = [c for c in chamadas if c["id"] not in _respondidas(mensagens, indice)]
 
-        if propostas:
-            motivo = "awaiting_confirmation"
-        elif state["pendentes"]:
-            motivo = "step_limit"
-        else:
-            motivo = "stop"
-
-        # Sem fallback quando há proposta na mesa: o retorno da tela é o modal, e
-        # um "não consegui fechar uma resposta" ao lado dele diria que falhou algo
-        # que está exatamente onde deveria estar. O texto que o modelo escreveu
-        # antes de pedir a tool, se escreveu, já saiu em `token`.
-        if not state["resposta"].strip() and not propostas:
-            # Modelo que gasta o teto de rodadas chamando tool e nunca escreve
-            # deixaria a tela com um balão vazio, indistinguível de travamento.
-            fallback = (
-                "Consultei seus dados, mas não consegui fechar uma resposta. "
-                "Tente perguntar de outro jeito."
+        if pendentes:
+            aviso = AIMessage(content=LIMITE_DE_PASSOS, id=f"ai-{uuid.uuid4().hex}")
+            writer(
+                events.Fragmento(AIMessageChunk(content=LIMITE_DE_PASSOS, id=aviso.id), "fechar")
             )
-            writer(events.token(fallback))
+            return {
+                "messages": [
+                    *(
+                        ToolMessage(
+                            content=NAO_EXECUTADA,
+                            tool_call_id=c["id"],
+                            name=c["name"],
+                            id=f"tool-{c['id']}",
+                            status="error",
+                        )
+                        for c in pendentes
+                    ),
+                    aviso,
+                ]
+            }
 
-        writer(events.done(motivo))
-        return {"motivo": motivo}
+        if not chamadas and not _texto(ultima).strip():
+            writer(events.Fragmento(AIMessageChunk(content=SEM_RESPOSTA, id=ultima.id), "fechar"))
+            return {"messages": [AIMessage(content=SEM_RESPOSTA, id=ultima.id)]}
+        return {}
 
-    def rota_apos_receber(state: EstadoDaConversa) -> str:
-        """Proposta aprovada executa antes de o modelo falar. Ver o docstring."""
-        return "agir" if state["pendentes"] else "decidir"
+    def rota_apos_agente(state: EstadoDaConversa) -> str:
+        encontrada = _ultima_do_assistente(state.get("messages") or [])
+        if encontrada is None or not _chamadas(encontrada[1]):
+            return "fechar"
+        if (state.get("rodadas") or 0) > MAX_RODADAS_DE_TOOL:
+            return "fechar"
+        return "ferramentas"
 
-    def rota_apos_decidir(state: EstadoDaConversa) -> str:
-        if state["pendentes"] and state["rodadas"] < MAX_RODADAS_DE_TOOL:
-            return "confirmar"
-        return "responder"
+    def rota_apos_ferramentas(state: EstadoDaConversa, runtime: Runtime[ContextoDoTurno]) -> str:
+        return "portao" if _paradas(state, runtime.context) else "agente"
 
-    def rota_apos_confirmar(state: EstadoDaConversa) -> str:
-        """Sem leitura para executar, o turno fecha — a bola está com a pessoa."""
-        return "agir" if state["pendentes"] else "responder"
+    grafo = StateGraph(EstadoDaConversa, context_schema=ContextoDoTurno)
+    grafo.add_node("hidratar", hidratar)
+    grafo.add_node("agente", agente)
+    grafo.add_node("ferramentas", ferramentas)
+    grafo.add_node("portao", portao)
+    grafo.add_node("fechar", fechar)
 
-    grafo = StateGraph(EstadoDaConversa)
-    grafo.add_node("receber", receber)
-    grafo.add_node("decidir", decidir)
-    grafo.add_node("confirmar", confirmar)
-    grafo.add_node("agir", agir)
-    grafo.add_node("responder", responder)
+    grafo.add_edge(START, "hidratar")
+    grafo.add_edge("hidratar", "agente")
+    grafo.add_conditional_edges("agente", rota_apos_agente, ["ferramentas", "fechar"])
+    grafo.add_conditional_edges("ferramentas", rota_apos_ferramentas, ["portao", "agente"])
+    grafo.add_edge("portao", "ferramentas")
+    grafo.add_edge("fechar", END)
 
-    grafo.add_edge(START, "receber")
-    grafo.add_conditional_edges(
-        "receber", rota_apos_receber, {"agir": "agir", "decidir": "decidir"}
-    )
-    grafo.add_conditional_edges(
-        "decidir", rota_apos_decidir, {"confirmar": "confirmar", "responder": "responder"}
-    )
-    grafo.add_conditional_edges(
-        "confirmar", rota_apos_confirmar, {"agir": "agir", "responder": "responder"}
-    )
-    grafo.add_edge("agir", "decidir")
-    grafo.add_edge("responder", END)
+    return grafo.compile(checkpointer=checkpointer)
 
-    return grafo.compile()
+
+def _paradas(state: EstadoDaConversa, contexto: ContextoDoTurno) -> list[dict[str, Any]]:
+    """O que a volta atual espera da pessoa: escritas sem decisão e perguntas.
+
+    Os argumentos da escrita vão **inteiros** na parada: é o que a pessoa lê
+    para decidir, e é exatamente o que vai executar se ela aprovar.
+    """
+    mensagens = state.get("messages") or []
+    encontrada = _ultima_do_assistente(mensagens)
+    if encontrada is None:
+        return []
+    indice, pedido = encontrada
+    respondidas = _respondidas(mensagens, indice)
+    decisoes = state.get("decisoes") or {}
+    titulos = {tool.name: tool.title for tool in contexto.permitidas}
+    confirmaveis = {tool.name for tool in camada_confirmavel(contexto.permitidas)}
+
+    itens: list[dict[str, Any]] = []
+    for chamada in _chamadas(pedido):
+        identificador, nome = chamada["id"], chamada["name"]
+        respondida = respondidas.get(identificador)
+        if respondida is not None:
+            pergunta = _pergunta_pendente(respondida)
+            if pergunta is not None:
+                itens.append(
+                    {
+                        "kind": "question",
+                        "toolCallId": identificador,
+                        "messageId": respondida.id,
+                        "prompt": pergunta["prompt"],
+                        "fields": pergunta["fields"],
+                    }
+                )
+            continue
+        if chamada["erro"] is None and nome in confirmaveis and identificador not in decisoes:
+            itens.append(
+                {
+                    "kind": "confirm",
+                    "toolCallId": identificador,
+                    "tool": nome,
+                    "title": titulos.get(nome) or nome,
+                    "prompt": titulos.get(nome) or nome,
+                    "arguments": chamada["args"],
+                }
+            )
+    return itens
+
+
+async def interrupcao_pendente(grafo: GrafoDaConversa, thread_id: str) -> str | None:
+    """O id da pausa que a thread está esperando, ou `None` se não há nenhuma."""
+    estado = await grafo.aget_state({"configurable": {"thread_id": thread_id}})
+    for item in estado.interrupts:
+        if item.id:
+            return str(item.id)
+    return None
 
 
 async def stream_chat_events(
-    provider: ToolChatCapability,
-    client: McpClient,
-    permitidas: Sequence[McpToolInfo],
+    grafo: GrafoDaConversa,
+    contexto: ContextoDoTurno,
     *,
-    mensagem: str,
-    historico: Sequence[dict[str, str]],
-    timezone: str | None = None,
-    aprovadas: Sequence[dict[str, str]] = (),
-) -> AsyncIterator[events.ChatEvent]:
-    """Roda o grafo e devolve os eventos do SSE, na ordem em que aconteceram.
+    thread_id: str,
+    conversation_id: str,
+    mensagem: str | None = None,
+    retomada: object = None,
+) -> AsyncIterator[str]:
+    """Roda um turno (ou retoma uma pausa) e devolve os quadros SSE, na ordem.
 
-    Erro que chega até aqui vira **evento**, não exceção: quando o primeiro token
-    saiu, o 200 já foi enviado e não há mais status para mudar. O `code` é o
-    mesmo que o envelope JSON carregaria, para o NestJS traduzir do mesmo jeito
-    nos dois caminhos.
-
-    `aprovadas` são as propostas que a pessoa aprovou na tela, cada uma com
-    `name` e `arguments` como o `proposal` os mandou. Vazio no caso comum — ver o
-    handshake no docstring do módulo.
+    Erro que chega até aqui vira **evento**, não exceção: quando o primeiro
+    quadro saiu, o 200 já foi enviado. O `code` é o mesmo do envelope JSON, para
+    o `apps/api` traduzir do mesmo jeito nos dois caminhos.
     """
-    grafo = montar_grafo(provider, client, permitidas, timezone=timezone)
-    estado: EstadoDaConversa = {
-        "mensagem": mensagem,
-        "historico": list(historico),
-        "mensagens": [],
-        "pendentes": [],
-        "propostas": [],
-        "aprovadas": list(aprovadas),
-        "rodadas": 0,
-        "resposta": "",
-        "motivo": "stop",
-    }
+    config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+    # `Command(resume=None)` é lido pelo LangGraph como "sem retomada" e estoura;
+    # a resposta vazia é "", que o portão já trata como não.
+    entrada: Any = (
+        Command(resume=retomada if retomada is not None else "")
+        if mensagem is None
+        else {"messages": [HumanMessage(content=mensagem, id=f"human-{uuid.uuid4().hex}")]}
+    )
 
+    yield events.start(conversation_id, contexto.run_id).frame()
+    yield events.catalog(
+        {tool.name: tool.title for tool in contexto.permitidas if tool.title}
+    ).frame()
+
+    interrompido = False
     try:
-        async for emitido in grafo.astream(estado, stream_mode="custom"):
-            # O writer só recebe `ChatEvent` (ver os nós): qualquer outra coisa
-            # aqui seria um erro de programação, não um dado a tolerar.
-            if not isinstance(emitido, events.ChatEvent):
-                raise TypeError(f"O grafo emitiu {type(emitido).__name__}, não um ChatEvent.")
-            yield emitido
-    # Só as duas famílias nomeadas. Exceção sem `code` continua subindo: ela é
-    # defeito nosso, e transformá-la num evento `error` genérico esconderia o
-    # traceback exatamente onde ele é a única pista.
+        async for modo, pacote in grafo.astream(
+            entrada,
+            config=config,
+            context=contexto,
+            stream_mode=["custom", "updates"],
+        ):
+            if modo == "custom":
+                if isinstance(pacote, events.Fragmento):
+                    yield events.fragmento(pacote.mensagem, pacote.no)
+                elif isinstance(pacote, events.ChatEvent):
+                    yield pacote.frame()
+                else:
+                    raise TypeError(f"O grafo emitiu {type(pacote).__name__} no canal custom.")
+            elif modo == "updates" and isinstance(pacote, dict):
+                interrompido = interrompido or bool(pacote.get("__interrupt__"))
+                quadro = events.atualizacoes(pacote)
+                if quadro is not None:
+                    yield quadro
+    # Só as duas famílias nomeadas. Exceção sem `code` sobe com traceback: ela é
+    # defeito nosso, e um evento genérico esconderia a única pista.
     except (AIProviderError, McpError) as exc:
-        # **Logado, e não só emitido.** O evento leva o `code` até a tela, mas a
-        # `message` é para quem lê o log — e sem esta linha ela não chegava a log
-        # nenhum: o turno respondia 200, o erro viajava dentro do SSE, e
-        # `.agent-dev.log` mostrava só o 200. "Olhe os logs" não tinha o que
-        # mostrar justamente no caso em que ele é a única pista.
-        #
-        # `warning` e não `error`: quase tudo aqui é o provedor ou o `/mcp`
-        # respondendo mal, não defeito nosso. Defeito nosso é exceção sem `code`,
-        # que este `except` de propósito não pega — ela sobe com traceback.
         logger.warning("Turno de chat terminou em %s: %s", exc.code, exc.message)
-        yield events.error(exc.code, exc.message)
-        yield events.done("error")
+        yield events.error(exc.code, exc.message).frame()
+        yield events.done("error").frame()
+        return
+
+    if interrompido:
+        yield events.done("interrupted").frame()
+        return
+
+    estado = await grafo.aget_state(config)
+    encontrada = _ultima_do_assistente(estado.values.get("messages") or [])
+    if encontrada is not None:
+        yield events.completas([encontrada[1]])
+    yield events.done("completed").frame()
 
 
 __all__ = [
     "AVISO_DE_CORTE",
+    "LIMITE_DE_PASSOS",
     "MAX_ARGUMENTOS_APROVADOS",
     "MAX_CARACTERES_POR_MENSAGEM",
     "MAX_HISTORICO",
     "MAX_RODADAS_DE_TOOL",
     "MAX_TOOLS_POR_RODADA",
-    "EstadoDaConversa",
+    "NAO_EXECUTADA",
+    "RECUSADA",
+    "SEM_RESPOSTA",
+    "GrafoDaConversa",
+    "interrupcao_pendente",
     "montar_grafo",
     "stream_chat_events",
 ]
