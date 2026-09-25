@@ -60,8 +60,11 @@ export function ChatRuntimeProvider({ children }: { children: ReactNode }) {
 
   const aoTrocarDeConversa = useCallback(
     (threadId: string | undefined) => {
-      if (!threadId || conversaDaRota(pathname) === threadId) return;
-      router.push(`${PREFIXO}/${threadId}`);
+      // Só id de conversa vira rota: o id local que o runtime usa antes de a
+      // conversa ter endereço levaria a uma URL que não abre nada.
+      const destino = threadId ? conversaDaRota(`${PREFIXO}/${threadId}`) : undefined;
+      if (!destino || conversaDaRota(pathname) === destino) return;
+      router.push(`${PREFIXO}/${destino}`);
     },
     [pathname, router],
   );

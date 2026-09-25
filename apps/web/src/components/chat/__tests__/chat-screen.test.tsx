@@ -64,6 +64,9 @@ const CONVERSA = '3f1c9a52-6b1e-4d8a-9c2f-0a5e7b3d1c44';
 let fontes: Fonte[] = [];
 const corpos: ChatTurnRequest[] = [];
 let conversaGravada: ChatConversation | null = null;
+const pushMock = vi.fn();
+let liberarLista: () => void = () => {};
+let listaLiberada: Promise<void> = Promise.resolve();
 let cota: ChatQuota;
 let memorias: ChatMemory[] = [];
 let recursos = { photos: false, dictation: false };
@@ -84,7 +87,10 @@ vi.mock('@fatia/api-client', async () => {
   return {
     ...actual,
     streamChat: streamChatMock,
-    listConversations: vi.fn(async () => []),
+    listConversations: vi.fn(async () => {
+      await listaLiberada;
+      return [];
+    }),
     getChatAvailability: vi.fn(async () => ({ available: true, ...recursos })),
     transcribeAudio: transcribeAudioMock,
     getConversation: vi.fn(async () => {
@@ -117,7 +123,7 @@ vi.mock('../foto', async () => {
 
 vi.mock('next/navigation', () => ({
   usePathname: () => `/chat/${CONVERSA}`,
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ push: pushMock, replace: vi.fn() }),
 }));
 
 const { ChatRuntimeProvider } = await import('../chat-runtime-provider');
@@ -162,6 +168,8 @@ beforeEach(() => {
   memorias = [];
   recursos = { photos: false, dictation: false };
   deleteChatMemoryMock.mockClear();
+  pushMock.mockClear();
+  listaLiberada = Promise.resolve();
   transcribeAudioMock.mockClear();
 });
 
@@ -179,6 +187,7 @@ function montar() {
 async function enviar(texto: string) {
   const user = userEvent.setup();
   const campo = await screen.findByRole('textbox', { name: 'Mensagem para o Fatia' });
+  await waitFor(() => expect(campo).toBeEnabled());
   await user.type(campo, texto);
   await user.click(screen.getByRole('button', { name: 'Enviar mensagem' }));
   await waitFor(() => expect(fontes).toHaveLength(corpos.length || 1));
@@ -203,6 +212,66 @@ describe('ChatScreen', () => {
 
     fontes[0].emitir(fragmento('ai-1', 'dia!'));
     expect(await screen.findByText('Bom dia!')).toBeInTheDocument();
+  });
+
+  it('o campo espera a conversa abrir, em vez de perder o que foi digitado', async () => {
+    // A chegada à conversa da URL zera o composer; o que se digitasse antes sumia.
+    listaLiberada = new Promise((resolve) => {
+      liberarLista = resolve;
+    });
+    recursos = { photos: true, dictation: true };
+    montar();
+
+    const campo = await screen.findByRole('textbox', { name: 'Mensagem para o Fatia' });
+    expect(campo).toBeDisabled();
+    expect(campo).toHaveAttribute('placeholder', 'Abrindo a conversa…');
+    // A foto anexada nesse intervalo também sumiria na troca de conversa.
+    expect(await screen.findByRole('button', { name: 'Anexar foto' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Ditar mensagem' })).toBeDisabled();
+
+    liberarLista();
+    await waitFor(() => expect(campo).toBeEnabled());
+    expect(screen.getByRole('button', { name: 'Anexar foto' })).toBeEnabled();
+  });
+
+  it('o cabeçalho mostra o título que o servidor gerou depois do primeiro turno', async () => {
+    montar();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Chat' })).toBeInTheDocument();
+    await enviar('almocei arroz e feijão');
+
+    conversaGravada = {
+      id: CONVERSA,
+      title: 'Almoço de arroz e feijão',
+      createdAt: '2026-09-25T12:00:00Z',
+      updatedAt: '2026-09-25T12:00:01Z',
+      messages: [],
+    };
+    fontes[0].emitir(fragmento('ai-1', 'Anotado.'), {
+      event: 'done',
+      data: { status: 'completed' },
+    });
+    fontes[0].fechar();
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Almoço de arroz e feijão' }),
+    ).toBeInTheDocument();
+  });
+
+  it('conversa nova, que ainda não existe no servidor, fica na URL dela ao enviar', async () => {
+    // O 404 da conversa nova derrubava a troca de conversa do runtime, e o envio
+    // levava a tela para `/chat/__LOCALID_…`, vazia.
+    montar();
+    await enviar('bom dia');
+    fontes[0].emitir(fragmento('ai-1', 'Bom dia!'), {
+      event: 'done',
+      data: { status: 'completed' },
+    });
+    fontes[0].fechar();
+
+    expect(await screen.findByText('Bom dia!')).toBeInTheDocument();
+    for (const [destino] of pushMock.mock.calls) {
+      expect(destino).toMatch(/^\/chat\/[0-9a-f-]{36}$/);
+    }
   });
 
   it('mostra "Pensando" até o primeiro token', async () => {

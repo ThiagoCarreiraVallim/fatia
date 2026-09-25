@@ -1,8 +1,14 @@
 'use client';
 
 import { useAuiState } from '@assistant-ui/react';
+import { useQuery } from '@tanstack/react-query';
+import { ApiError, getConversation } from '@fatia/api-client';
 import { EmptyState, EmptyStateGreeting } from '@/components/elements/empty-state';
-import { useConversaAberta, useDisponibilidadeDoChat } from './chat-runtime-provider';
+import {
+  CHAVE_DAS_CONVERSAS,
+  useConversaAberta,
+  useDisponibilidadeDoChat,
+} from './chat-runtime-provider';
 import { GavetaDeConversas } from './conversas';
 import { GavetaDeMemorias } from './memorias';
 import { ChatThread } from './thread';
@@ -16,7 +22,23 @@ import { ChatThread } from './thread';
  */
 export function ChatScreen() {
   const aberta = useConversaAberta();
-  const titulo = useAuiState((s) => s.threadListItem?.title) ?? 'Chat';
+  // Do servidor, e não só da lista do runtime: o nome é gerado depois do primeiro
+  // turno, e a lista do runtime não é relida. A chave é a das conversas, que o fim
+  // de cada turno e o renomear já invalidam.
+  const { data: doServidor } = useQuery({
+    queryKey: [...CHAVE_DAS_CONVERSAS, 'titulo', aberta],
+    queryFn: async () => {
+      try {
+        return (await getConversation(aberta as string)).title;
+      } catch (erro) {
+        if (erro instanceof ApiError && erro.isNotFound) return null;
+        throw erro;
+      }
+    },
+    enabled: Boolean(aberta),
+  });
+  const doRuntime = useAuiState((s) => s.threadListItem?.title);
+  const titulo = doServidor ?? doRuntime ?? 'Chat';
   const disponivel = useDisponibilidadeDoChat();
 
   return (

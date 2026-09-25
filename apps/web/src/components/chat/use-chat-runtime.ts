@@ -82,8 +82,19 @@ export function useChatThreadList(): { adapter: RemoteThreadListAdapter; ready: 
       async initialize(threadId) {
         return { remoteId: threadId, externalId: threadId };
       },
+      // Conversa que ainda não existe no servidor é a nova, com o id que acabou de
+      // ser gerado: recusar aqui faz a troca de conversa falhar, e o runtime fica
+      // numa conversa local que o primeiro envio transforma em `__LOCALID_…`.
       async fetch(threadId) {
-        const conversa = await getConversation(threadId);
+        let conversa;
+        try {
+          conversa = await getConversation(threadId);
+        } catch (erro) {
+          if (erro instanceof ApiError && erro.isNotFound) {
+            return { status: 'regular' as const, remoteId: threadId, externalId: threadId };
+          }
+          throw erro;
+        }
         return {
           status: 'regular' as const,
           remoteId: threadId,

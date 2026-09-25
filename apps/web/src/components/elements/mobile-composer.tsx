@@ -55,6 +55,7 @@ export function MobileComposer({
   actions,
   attachments,
   canSend,
+  disabled = false,
   onValueChange,
   onSend,
   onStop,
@@ -93,6 +94,8 @@ export function MobileComposer({
   attachments?: ReactNode;
   /** Envio liberado mesmo sem texto — uma foto sozinha é uma pergunta. */
   canSend?: boolean;
+  /** Campo e envio travados — a conversa ainda está abrindo. */
+  disabled?: boolean;
   onValueChange?: (value: string) => void;
   onSend?: () => void;
   onStop?: () => void;
@@ -132,6 +135,7 @@ export function MobileComposer({
             ref={campo}
             rows={1}
             value={value}
+            disabled={disabled}
             onChange={(event) => onValueChange?.(event.target.value)}
             onFocus={onFocus}
             onBlur={onBlur}
@@ -142,7 +146,7 @@ export function MobileComposer({
               // metade.
               if (event.nativeEvent.isComposing) return;
               event.preventDefault();
-              if (!running && (canSend ?? value.trim() !== '')) onSend?.();
+              if (!disabled && !running && (canSend ?? value.trim() !== '')) onSend?.();
             }}
             placeholder={placeholder}
             aria-label={label}
@@ -156,7 +160,7 @@ export function MobileComposer({
           type="button"
           aria-label={running ? stopLabel : sendLabel}
           onClick={running ? onStop : onSend}
-          disabled={!running && !(canSend ?? value.trim() !== '')}
+          disabled={disabled || (!running && !(canSend ?? value.trim() !== ''))}
           className={cn(
             inkButton,
             'flex size-9 shrink-0 items-center justify-center rounded-full disabled:pointer-events-none disabled:opacity-25',

@@ -39,7 +39,7 @@ import { MotivoDoVoto } from './motivo-do-voto';
 import { PlanoDoTurno } from './plano';
 import { AvisoDeCota } from './cota';
 import { AnexosDaMensagem, AnexosDoComposer } from './anexos';
-import { useDisponibilidadeDoChat } from './chat-runtime-provider';
+import { useConversaAberta, useDisponibilidadeDoChat } from './chat-runtime-provider';
 import { useDitado } from './use-ditado';
 
 /**
@@ -206,7 +206,7 @@ function Anuncio() {
   );
 }
 
-function BotaoDeFoto() {
+function BotaoDeFoto({ disabled }: { disabled: boolean }) {
   const aui = useAui();
   const entrada = useRef<HTMLInputElement>(null);
   return (
@@ -228,8 +228,9 @@ function BotaoDeFoto() {
       <button
         type="button"
         aria-label="Anexar foto"
+        disabled={disabled}
         onClick={() => entrada.current?.click()}
-        className={cn(ghostButton, 'size-9 shrink-0 rounded-full')}
+        className={cn(ghostButton, 'size-9 shrink-0 rounded-full disabled:opacity-40')}
       >
         <CameraIcon size={18} aria-hidden />
       </button>
@@ -237,7 +238,13 @@ function BotaoDeFoto() {
   );
 }
 
-function BotaoDeDitado({ onAviso }: { onAviso: (aviso: string | null) => void }) {
+function BotaoDeDitado({
+  disabled,
+  onAviso,
+}: {
+  disabled: boolean;
+  onAviso: (aviso: string | null) => void;
+}) {
   const aui = useAui();
   const ditado = useDitado(
     (texto) => {
@@ -254,7 +261,7 @@ function BotaoDeDitado({ onAviso }: { onAviso: (aviso: string | null) => void })
       type="button"
       aria-label={gravando ? 'Parar de gravar' : transcrevendo ? 'Transcrevendo' : 'Ditar mensagem'}
       aria-pressed={gravando}
-      disabled={transcrevendo}
+      disabled={transcrevendo || (disabled && !gravando)}
       onClick={() => {
         onAviso(null);
         if (gravando) ditado.parar();
@@ -288,6 +295,11 @@ function Composer() {
   const temFoto = useAuiState((s) => s.composer.attachments.length > 0);
   const rodando = useAuiState((s) => s.thread.isRunning);
   const recursos = useDisponibilidadeDoChat();
+  // O runtime só chega à conversa da URL depois que a lista de conversas responde
+  // (ver `ChatRuntimeProvider`), e a chegada zera o composer: o texto digitado e a
+  // foto anexada antes disso sumiriam. Campo, câmera e microfone esperam.
+  const aberta = useConversaAberta();
+  const abrindo = useAuiState((s) => Boolean(aberta) && s.threadListItem?.remoteId !== aberta);
   // Com uma pausa na mesa, a resposta é o cartão: a mensagem nova descartaria a
   // pausa (o agente segue), e é fácil fazer isso sem querer.
   const pausado = Boolean(useLangGraphInterruptState()?.value);
@@ -296,7 +308,7 @@ function Composer() {
   const podeEnviar = texto.trim() !== '' || temFoto;
 
   function enviar() {
-    if (!podeEnviar || rodando) return;
+    if (!podeEnviar || rodando || abrindo) return;
     aui.composer().send();
     // A #221 nasceu de foco perdido para o `<body>`. Sem esta linha, quem conversa
     // pelo teclado teria de reencontrar o campo antes de cada mensagem.
@@ -306,8 +318,8 @@ function Composer() {
   const acoes =
     recursos?.photos || recursos?.dictation ? (
       <>
-        {recursos.photos ? <BotaoDeFoto /> : null}
-        {recursos.dictation ? <BotaoDeDitado onAviso={setAviso} /> : null}
+        {recursos.photos ? <BotaoDeFoto disabled={abrindo} /> : null}
+        {recursos.dictation ? <BotaoDeDitado disabled={abrindo} onAviso={setAviso} /> : null}
       </>
     ) : undefined;
 
@@ -328,8 +340,13 @@ function Composer() {
         onBlur={() => setDigitando(false)}
         label="Mensagem para o Fatia"
         placeholder={
-          pausado ? 'Responda no cartão acima, ou escreva outra coisa' : 'Escreva sua mensagem'
+          abrindo
+            ? 'Abrindo a conversa…'
+            : pausado
+              ? 'Responda no cartão acima, ou escreva outra coisa'
+              : 'Escreva sua mensagem'
         }
+        disabled={abrindo}
         sendLabel="Enviar mensagem"
         stopLabel="Parar resposta"
         hint="enter envia"
