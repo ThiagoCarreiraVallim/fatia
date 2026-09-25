@@ -7,6 +7,13 @@ import {
   type McpToolDef,
 } from '../../common/decorators/tool.decorator';
 
+const TIPO_DA_REFEICAO: Record<string, string> = {
+  BREAKFAST: 'Café da manhã',
+  LUNCH: 'Almoço',
+  DINNER: 'Jantar',
+  SNACK: 'Lanche',
+};
+
 @Injectable()
 @McpTool()
 export class ListMealsTool implements McpToolDef {
@@ -43,7 +50,7 @@ export class ListMealsTool implements McpToolDef {
       label: 'Refeições',
       columns: ['Refeição', 'Quando', 'kcal', 'Proteína (g)'],
       rows: refeicoes.map((refeicao) => [
-        refeicao.mealType,
+        TIPO_DA_REFEICAO[refeicao.mealType] ?? refeicao.mealType,
         refeicao.eatenAt.toISOString(),
         Math.round(refeicao.items.reduce((total, item) => total + item.kcal, 0)),
         Math.round(refeicao.items.reduce((total, item) => total + item.proteinG, 0)),

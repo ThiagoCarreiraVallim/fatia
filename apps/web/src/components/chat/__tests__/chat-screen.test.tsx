@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type {
   ChatConversation,
+  ChatMemory,
+  ChatQuota,
   ChatStreamFrame,
   ChatTurnRequest,
   StreamChatInit,
@@ -62,6 +64,11 @@ const CONVERSA = '3f1c9a52-6b1e-4d8a-9c2f-0a5e7b3d1c44';
 let fontes: Fonte[] = [];
 const corpos: ChatTurnRequest[] = [];
 let conversaGravada: ChatConversation | null = null;
+let cota: ChatQuota;
+let memorias: ChatMemory[] = [];
+const deleteChatMemoryMock = vi.fn(async (id: string) => {
+  memorias = memorias.filter((m) => m.id !== id);
+});
 
 const streamChatMock = vi.fn((corpo: ChatTurnRequest, init?: StreamChatInit) => {
   corpos.push(corpo);
@@ -82,6 +89,9 @@ vi.mock('@fatia/api-client', async () => {
       return conversaGravada;
     }),
     sendChatFeedback: vi.fn(async () => undefined),
+    getChatQuota: vi.fn(async () => cota),
+    listChatMemories: vi.fn(async () => memorias),
+    deleteChatMemory: deleteChatMemoryMock,
   };
 });
 
@@ -102,12 +112,35 @@ beforeAll(() => {
     disconnect() {}
   } as unknown as typeof ResizeObserver;
   Element.prototype.scrollTo = () => {};
+  // A gaveta (`vaul`) consulta `matchMedia` e captura o ponteiro para o arrasto,
+  // e o jsdom também não tem nenhum dos dois.
+  Element.prototype.setPointerCapture = () => {};
+  Element.prototype.releasePointerCapture = () => {};
+  window.matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
 });
 
 beforeEach(() => {
   fontes = [];
   corpos.length = 0;
   conversaGravada = null;
+  cota = {
+    spentMicros: 0,
+    limitMicros: null,
+    usedRatio: null,
+    resetsAt: '2026-09-26T00:00:00.000Z',
+    allowed: true,
+  };
+  memorias = [];
+  deleteChatMemoryMock.mockClear();
 });
 
 function montar() {
@@ -317,5 +350,109 @@ describe('ChatScreen', () => {
     expect(
       await screen.findByRole('group', { name: 'Pergunta do assistente' }),
     ).toBeInTheDocument();
+  });
+
+  it('o artefato da tool aparece no cartão dela, com o número inteiro', async () => {
+    montar();
+    await enviar('quanto comi hoje?');
+
+    fontes[0].emitir(
+      {
+        event: 'updates',
+        data: {
+          agente: {
+            messages: [
+              {
+                type: 'ai',
+                id: 'ai-1',
+                content: '',
+                tool_calls: [{ id: 'c1', name: 'get_today_summary', args: {} }],
+              },
+            ],
+          },
+        },
+      },
+      {
+        event: 'updates',
+        data: {
+          ferramentas: {
+            messages: [
+              {
+                type: 'tool',
+                id: 'tool-c1',
+                tool_call_id: 'c1',
+                name: 'get_today_summary',
+                content: '{"nutrition":{}}',
+              },
+            ],
+          },
+        },
+      },
+      {
+        event: 'artifact',
+        data: {
+          toolCallId: 'c1',
+          kind: 'metric',
+          label: 'Calorias de hoje',
+          value: 1832,
+          unit: 'kcal',
+          target: { min: 1800, max: 2200 },
+        },
+      },
+    );
+
+    const cartao = await screen.findByRole('figure', { name: 'Calorias de hoje' });
+    expect(within(cartao).getByText('1.832')).toBeInTheDocument();
+    expect(within(cartao).getByText('meta 1.800–2.200')).toBeInTheDocument();
+  });
+
+  it('mostra o plano do turno e o passo em andamento', async () => {
+    montar();
+    await enviar('compara minha semana com a anterior');
+
+    fontes[0].emitir({
+      event: 'plan',
+      data: {
+        steps: [
+          { id: '1', title: 'Ler esta semana', status: 'done' },
+          { id: '2', title: 'Ler a semana anterior', status: 'running' },
+          { id: '3', title: 'Comparar', status: 'pending' },
+        ],
+      },
+    });
+
+    const plano = await screen.findByRole('region', { name: 'Plano' });
+    const passos = within(plano).getAllByRole('listitem');
+    expect(passos.map((p) => p.textContent)).toEqual([
+      'Ler esta semana(feito)',
+      'Ler a semana anterior(em andamento)',
+      'Comparar(a fazer)',
+    ]);
+    expect(passos[1]).toHaveAttribute('aria-current', 'step');
+  });
+
+  it('avisa quando a cota de IA do dia acabou', async () => {
+    cota = { ...cota, limitMicros: 100_000, spentMicros: 100_000, usedRatio: 1, allowed: false };
+    montar();
+
+    expect(await screen.findByRole('status')).toHaveTextContent('A cota de IA de hoje acabou');
+  });
+
+  it('a gaveta de memórias lista e esquece com dois toques', async () => {
+    memorias = [
+      { id: 'm-1', content: 'Não come carne nem ovo.', createdAt: '2026-09-25T12:00:00Z' },
+    ];
+    const user = userEvent.setup();
+    montar();
+
+    await user.click(await screen.findByRole('button', { name: 'Memórias do assistente' }));
+    expect(await screen.findByText('Não come carne nem ovo.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Esquecer: Não come carne nem ovo.' }));
+    expect(deleteChatMemoryMock).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Confirmar: esquecer' }));
+
+    await waitFor(() => expect(deleteChatMemoryMock).toHaveBeenCalledWith('m-1'));
+    expect(await screen.findByText('Nada guardado ainda.')).toBeInTheDocument();
   });
 });

@@ -6,6 +6,7 @@ import { getChatAvailability } from '@fatia/api-client';
 import { EmptyState, EmptyStateGreeting } from '@/components/elements/empty-state';
 import { useConversaAberta } from './chat-runtime-provider';
 import { GavetaDeConversas } from './conversas';
+import { GavetaDeMemorias } from './memorias';
 import { ChatThread } from './thread';
 
 /**
@@ -42,7 +43,10 @@ export function ChatScreen() {
             Peça para registrar refeição, consultar treino ou ver sua evolução.
           </p>
         </div>
-        <GavetaDeConversas aberta={aberta} />
+        <div className="flex shrink-0 items-center gap-1">
+          <GavetaDeMemorias />
+          <GavetaDeConversas aberta={aberta} />
+        </div>
       </header>
 
       {disponivel?.available === false ? (

@@ -12,6 +12,8 @@ import {
   renameConversation,
   sendChatFeedback,
   streamChat,
+  type ChatArtifact,
+  type ChatPlanStep,
   type ChatReviewReason,
 } from '@fatia/api-client';
 import {
@@ -109,6 +111,10 @@ export function useChatThreadList(): { adapter: RemoteThreadListAdapter; ready: 
 export type ChatRuntimeExtras = {
   /** Nome de tool → título em português, como o agente anunciou no `catalog`. */
   titulos: Readonly<Record<string, string>>;
+  /** `toolCallId` → a carga tipada da tool (`artifact`). Só do que passou ao vivo. */
+  artefatos: Readonly<Record<string, ChatArtifact>>;
+  /** O plano do turno em curso ou do último, quando o agente fez um (`plan`). */
+  plano: readonly ChatPlanStep[] | null;
 };
 
 export function useChatRuntime({
@@ -124,6 +130,9 @@ export function useChatRuntime({
   onTurnEnd?: () => void;
 }) {
   const [titulos, setTitulos] = useState<Record<string, string>>({});
+  const [artefatos, setArtefatos] = useState<Record<string, ChatArtifact>>({});
+  // Com a conversa de origem: trocar de conversa não pode deixar o plano de outra na tela.
+  const [plano, setPlano] = useState<{ conversa: string; passos: ChatPlanStep[] } | null>(null);
   // A resposta recém-chegada tem o id do LangChain; o voto vai para a linha do
   // banco. O evento `persisted` liga os dois.
   const linhas = useRef(new Map<string, string>());
@@ -206,6 +215,14 @@ export function useChatRuntime({
         const corpo = (dados ?? {}) as Record<string, unknown>;
         if (tipo === 'catalog' && corpo.tools && typeof corpo.tools === 'object') {
           setTitulos(corpo.tools as Record<string, string>);
+        } else if (tipo === 'start') {
+          setPlano(null);
+        } else if (tipo === 'plan' && Array.isArray(corpo.steps)) {
+          const conversa = conversaAtual.current;
+          if (conversa) setPlano({ conversa, passos: corpo.steps as ChatPlanStep[] });
+        } else if (tipo === 'artifact' && typeof corpo.toolCallId === 'string') {
+          const id = corpo.toolCallId;
+          setArtefatos((antes) => ({ ...antes, [id]: corpo as unknown as ChatArtifact }));
         } else if (
           tipo === 'persisted' &&
           typeof corpo.messageId === 'string' &&
@@ -220,6 +237,8 @@ export function useChatRuntime({
   return {
     runtime,
     titulos,
+    artefatos,
+    plano: plano && plano.conversa === conversationId ? plano.passos : null,
     voto: {
       pendente: votoPendente,
       dispensar: () => setVotoPendente(null),

@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { AssistantRuntimeProvider } from '@assistant-ui/react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -24,14 +24,18 @@ export function conversaDaRota(pathname: string | null): string | undefined {
 }
 
 export const CHAVE_DAS_CONVERSAS = ['chat', 'conversations'] as const;
+export const CHAVE_DAS_MEMORIAS = ['chat', 'memories'] as const;
+export const CHAVE_DA_COTA = ['chat', 'quota'] as const;
 
 type Voto = ReturnType<typeof useChatRuntime>['voto'];
 
-const ExtrasContext = createContext<ChatRuntimeExtras>({ titulos: {} });
+const ExtrasContext = createContext<ChatRuntimeExtras>({ titulos: {}, artefatos: {}, plano: null });
 const VotoContext = createContext<Voto | null>(null);
 const ConversaContext = createContext<string | undefined>(undefined);
 
 export const useTitulosDasTools = () => useContext(ExtrasContext).titulos;
+export const useArtefato = (toolCallId: string) => useContext(ExtrasContext).artefatos[toolCallId];
+export const usePlanoDoTurno = () => useContext(ExtrasContext).plano;
 export const useVoto = () => useContext(VotoContext);
 export const useConversaAberta = () => useContext(ConversaContext);
 
@@ -60,17 +64,23 @@ export function ChatRuntimeProvider({ children }: { children: ReactNode }) {
    * o id depois, a troca passa a ser de uma conversa para outra, que é o caminho
    * que funciona. (Observado e corrigido na Lunia, que usa o mesmo runtime.)
    */
-  const { runtime, titulos, voto } = useChatRuntime({
+  const { runtime, titulos, artefatos, plano, voto } = useChatRuntime({
     conversationId: lista.ready ? alvo : undefined,
     threadListAdapter: lista.adapter,
     onThreadIdChange: aoTrocarDeConversa,
-    onTurnEnd: () => void queryClient.invalidateQueries({ queryKey: CHAVE_DAS_CONVERSAS }),
+    // O turno pode ter guardado uma memória e gastou cota: as três listas mudam juntas.
+    onTurnEnd: () => {
+      for (const queryKey of [CHAVE_DAS_CONVERSAS, CHAVE_DAS_MEMORIAS, CHAVE_DA_COTA]) {
+        void queryClient.invalidateQueries({ queryKey });
+      }
+    },
   });
+  const extras = useMemo(() => ({ titulos, artefatos, plano }), [titulos, artefatos, plano]);
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <ConversaContext.Provider value={alvo}>
-        <ExtrasContext.Provider value={{ titulos }}>
+        <ExtrasContext.Provider value={extras}>
           <VotoContext.Provider value={voto}>{children}</VotoContext.Provider>
         </ExtrasContext.Provider>
       </ConversaContext.Provider>

@@ -7,7 +7,8 @@
  *
  * O fio é o vocabulário nativo do LangGraph — `messages`, `updates`,
  * `messages/complete` —, mais os eventos próprios do Fatia (`start`, `catalog`,
- * `usage`, `persisted`, `error`, `done`). É o par `{ event, data }` que o
+ * `usage`, `plan`, `artifact`, `context`, `validation`, `persisted`,
+ * `error`, `done`). É o par `{ event, data }` que o
  * `useLangGraphRuntime` do assistant-ui consome direto; por isso `streamChat`
  * **não** traduz nada: só recorta quadros. Ver `apps/agent/.../chat/events.py`.
  *
@@ -428,4 +429,79 @@ export function sendChatFeedback(
     `/api/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/feedback`,
     { method: 'PATCH', body: JSON.stringify(feedback) },
   );
+}
+
+// ---------------------------------------------------------------- plano e artefatos
+
+/** Um passo do plano que o agente anuncia no evento `plan` — o plano inteiro a cada mudança. */
+export interface ChatPlanStep {
+  id: string;
+  title: string;
+  status: 'pending' | 'running' | 'done';
+}
+
+type ChatArtifactBase = { toolCallId: string; label?: string };
+
+/**
+ * A carga tipada de uma tool (evento `artifact`), pendurada no cartão dela pelo
+ * `toolCallId`. Os formatos são a lista fechada de `apps/agent/.../chat/artefatos.py`.
+ *
+ * Vive só no turno ao vivo: `Message.tools` guarda o nome da tool e nada mais, então
+ * depois de recarregar a página o cartão volta sem o artefato.
+ */
+export type ChatArtifact =
+  | (ChatArtifactBase & {
+      kind: 'metric';
+      value: number;
+      unit?: string;
+      target?: { min?: number | null; max?: number | null };
+      breakdown?: { label: string; value: number; unit?: string }[];
+    })
+  | (ChatArtifactBase & {
+      kind: 'timeline';
+      unit?: string;
+      delta?: number | null;
+      events: { date: string; value: number }[];
+    })
+  | (ChatArtifactBase & {
+      kind: 'report';
+      columns: string[];
+      rows: (string | number | null)[][];
+    })
+  | (ChatArtifactBase & {
+      kind: 'comparison';
+      items: { label: string; value: number | string; unit?: string }[];
+    });
+
+// ---------------------------------------------------------------- memória e cota
+
+/** O que o assistente guardou sobre a pessoa, a pedido dela (`save_memory`). */
+export interface ChatMemory {
+  id: string;
+  content: string;
+  createdAt: string;
+}
+
+/**
+ * A cota de IA do dia. `limitMicros: null` quando a instância não tem teto por
+ * pessoa — o medidor não aparece. `allowed` é a mesma decisão que barra o envio.
+ */
+export interface ChatQuota {
+  spentMicros: number;
+  limitMicros: number | null;
+  usedRatio: number | null;
+  resetsAt: string;
+  allowed: boolean;
+}
+
+export function listChatMemories(): Promise<ChatMemory[]> {
+  return apiFetch('/api/chat/memories');
+}
+
+export function deleteChatMemory(id: string): Promise<void> {
+  return apiFetch(`/api/chat/memories/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export function getChatQuota(): Promise<ChatQuota> {
+  return apiFetch('/api/chat/quota');
 }

@@ -27,6 +27,8 @@ import { Conversation, ConversationContent, ConversationScrollButton } from './c
 import { ChamadaDeTool, TextoDoAssistente } from './partes';
 import { PausaDoAgente } from './pausa';
 import { MotivoDoVoto } from './motivo-do-voto';
+import { PlanoDoTurno } from './plano';
+import { AvisoDeCota } from './cota';
 
 /**
  * A conversa, sobre os primitivos do assistant-ui.
@@ -246,12 +248,14 @@ export function ChatThread() {
           />
           {/* No fim do fluxo, e dentro da rolagem: a decisão é sobre a mensagem
               logo acima, e é lá que a pessoa relê "200 g de frango". */}
+          <PlanoDoTurno />
           <PausaDoAgente />
           <MotivoDoVoto />
         </ConversationContent>
         <ConversationScrollButton label="Ir para a última mensagem" />
       </Conversation>
       <Anuncio />
+      <AvisoDeCota />
       <Composer />
     </ThreadPrimitive.Root>
   );

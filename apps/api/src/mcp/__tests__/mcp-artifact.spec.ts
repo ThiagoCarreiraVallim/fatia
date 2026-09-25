@@ -108,7 +108,7 @@ describe('artefatos das tools de leitura', () => {
     ]);
 
     temOCampo(carga);
-    expect(carga.rows).toEqual([['LUNCH', '2026-09-24T15:00:00.000Z', 351, 34]]);
+    expect(carga.rows).toEqual([['Almoço', '2026-09-24T15:00:00.000Z', 351, 34]]);
   });
 
   it('lista vazia de refeições ainda é tabela, e não cartão sumido', () => {

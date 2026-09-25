@@ -8,7 +8,8 @@ import {
   type ToolCallMessagePartComponent,
 } from '@assistant-ui/react';
 import { ToolCall, type ToolCallState } from '@/components/elements/tool-call';
-import { useTitulosDasTools } from './chat-runtime-provider';
+import { useArtefato, useTitulosDasTools } from './chat-runtime-provider';
+import { Artefato } from './artefato';
 
 /**
  * As partes de uma mensagem do assistente: o texto em markdown e as tools.
@@ -48,6 +49,7 @@ function rotuloDoNome(nome: string): string {
  * técnico continua na etiqueta monoespaçada: é o dado que torna a ação auditável.
  */
 export const ChamadaDeTool: ToolCallMessagePartComponent = ({
+  toolCallId,
   toolName,
   args,
   argsText,
@@ -56,6 +58,7 @@ export const ChamadaDeTool: ToolCallMessagePartComponent = ({
   status,
 }) => {
   const titulos = useTitulosDasTools();
+  const artefato = useArtefato(toolCallId);
   const [aberto, setAberto] = useState(false);
   const estado: ToolCallState =
     status.type === 'running' || status.type === 'requires-action'
@@ -67,17 +70,20 @@ export const ChamadaDeTool: ToolCallMessagePartComponent = ({
   const pedido = argsText?.trim() ? argsText : comoTexto(args);
 
   return (
-    <ToolCall
-      state={estado}
-      query={toolName}
-      activeLabel={status.type === 'requires-action' ? `${titulo} · aguardando você` : titulo}
-      label={titulo}
-      errorLabel={`${titulo} · falhou`}
-      request={pedido === '{}' ? '—' : pedido}
-      result={comoTexto(result)}
-      open={aberto}
-      onOpenChange={setAberto}
-      className="max-w-none"
-    />
+    <div className="flex w-full flex-col gap-2">
+      <ToolCall
+        state={estado}
+        query={toolName}
+        activeLabel={status.type === 'requires-action' ? `${titulo} · aguardando você` : titulo}
+        label={titulo}
+        errorLabel={`${titulo} · falhou`}
+        request={pedido === '{}' ? '—' : pedido}
+        result={comoTexto(result)}
+        open={aberto}
+        onOpenChange={setAberto}
+        className="max-w-none"
+      />
+      {artefato && estado === 'done' ? <Artefato artefato={artefato} /> : null}
+    </div>
   );
 };
