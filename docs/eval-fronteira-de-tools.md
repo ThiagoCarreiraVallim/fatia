@@ -223,7 +223,7 @@ tudo" é `export_my_data`, e discriminar os dois é exatamente o que a superfíc
   ganho é ausência de ganho, e precisa aparecer no slide.
 - **Congelar o conjunto.** Mexer nas tarefas depois de começar a medir destrói a comparação. O
   `.jsonl` segue a mesma disciplina do eval de reconhecimento: o que muda o conjunto muda a
-  impressão digital dele.
+  impressão digital dele. Ver [Congelamento](#congelamento).
 - **Distratores.** No chat hospedado, o braço B oferece 20 tools e o A, 85. Comparar seleção entre conjuntos de tamanho
   diferente já é a medida, mas dentro de cada braço vale conferir se a tarefa tem vizinho próximo —
   `agua-hoje` tem dois (`get_water_history`, `get_water_progress`) e está marcado.
@@ -267,6 +267,19 @@ nele for outra, é ela que vai para o slide.
 - **Uma medição do `eval` por configuração.** Mudou uma descrição do braço B, a configuração é outra —
   e isso fica no ledger.
 
+### Congelamento
+
+O conjunto foi congelado em 2026-09-25, antes de qualquer medição. A impressão digital é o `sha256`
+das linhas do split `eval`, na ordem do arquivo, cada uma terminada em `\n`:
+
+```text
+1844a46f27ff245578c9acf02802e4b869173ff50956d4c315eef4cc0cec24e9   (31 tarefas)
+```
+
+É a partir desta data que mudar uma tarefa do `eval` é mudar o experimento. Acrescentar ou corrigir
+tarefa do `dev` não muda a impressão digital, pelo mesmo motivo do eval de reconhecimento: não
+mudou nada do que é medido.
+
 ### O ledger vale aqui igual
 
 O eval de reconhecimento de refeição recusa repetir uma medição com o mesmo prompt, o mesmo modelo
@@ -283,16 +296,12 @@ continua anunciando as 103 de hoje.
    dez tarefas com `argumentos` têm `argumentos_b`, e os dois são conferidos contra os schemas pelo
    `eval-tarefas.spec.ts`. Falta o `execute`.
 
-2. **Conta de avaliação.** Duas contas — uma pessoa usuária e um profissional com uma aluna no
-   grupo, com compartilhamento de treino concedido — e o histórico que as tarefas leem: refeições de
-   hoje, de ontem e da semana, água, passos, peso, um plano ativo, sessões com séries de supino,
-   uma meta perto de concluir, acessos no log. Tudo **relativo ao agora no fuso da conta**, porque
-   "ontem" é o que a tarefa pergunta. Dado sintético, nunca cópia de conta real.
-   **Reposto antes de cada tarefa**: tarefa de escrita muda o estado que a seguinte lê.
-   As contas são reais no Logto de desenvolvimento. O `/mcp` valida JWT pelo JWKS do emissor, e a
-   saída fácil — um emissor de teste aceito pela API — é um bypass de autenticação esperando para
-   ser ligado em produção por engano. O que falta decidir é como renovar o token numa rodada de
-   horas; é o primeiro spike.
+2. ~~**Conta de avaliação e token.**~~ Feito, e verificado de ponta a ponta contra Logto, Postgres e
+   API locais — ver [Preparar o ambiente](#preparar-o-ambiente). O `seed-eval.ts` recria o estado
+   que as tarefas leem, relativo ao agora no fuso da conta, em cerca de 2 s; o runner o chama antes
+   de cada tarefa. O token vem de um _personal access token_ por conta, trocado por access token
+   da API (token exchange do Logto) e renovado por `fatia_agent.eval.contas` antes de vencer.
+   Nenhum emissor de teste na API: o `/mcp` valida o mesmo JWT que valida em produção.
 
 3. **Recorte por superfície no `bindAll`.** Um header `x-fatia-superficie: entidade | intencao`,
    ausente = `entidade`. Cada tool declara a superfície a que pertence, e as de intenção declaram
@@ -337,6 +346,37 @@ porta de sempre — host e modelo na lista, na mesma PR que atualiza a `/privacy
 
 **Custo.** 31 tarefas × 5 execuções × 2 braços × 2 modelos são 620 conversas no `eval`, mais o `dev`
 e as 80 do braço C. Local e sequencial, é uma noite por modelo.
+
+## Preparar o ambiente
+
+Tudo local: Postgres e Logto do `infra/docker-compose.yml`, a API rodando na máquina. O Logto já
+configurado como em [`LOCAL_AUTH.md`](./LOCAL_AUTH.md), mais o app M2M da Management API
+(`LOGTO_M2M_APP_ID`/`SECRET`, o mesmo que a deleção de conta usa).
+
+```bash
+pnpm infra:up                  # Postgres + Logto
+pnpm db:migrate:deploy
+pnpm db:seed:taco && pnpm db:seed:exercises
+
+pnpm db:eval:contas            # uma vez: contas, PATs e o app "Fatia Eval"; cole a saída no .env
+pnpm db:seed:eval              # antes de cada tarefa
+pnpm db:seed:eval --estado sessao_ativa   # para as tarefas que declaram esse estado
+```
+
+`db:eval:contas` cria no Logto as contas `fatia_eval_usuario` e `fatia_eval_profissional`, um PAT de
+30 dias para cada, e o app `Fatia Eval` com token exchange ligado — que o Logto deixa desligado por
+padrão. Rodar de novo reaproveita contas e app e emite PATs novos.
+
+As travas, porque o seed **apaga** usuários e o PAT é credencial de longa duração:
+
+- o seed recusa banco que não seja local e `NODE_ENV=production`;
+- o seed só apaga linha com e-mail no domínio `@eval.fatia.local`. Se a API provisionou a conta num
+  login anterior ao primeiro seed, a linha existe com outro e-mail e o seed para, em vez de apagar;
+- `db:eval:contas` e o cliente de token recusam Logto que não seja local;
+- o cliente de token confere, no token trocado, que o `sub` é o declarado para aquela persona e o
+  `aud` é o da API — um PAT de outra conta colado no lugar errado para antes do `/mcp`.
+
+A aluna do profissional não tem conta no Logto e nunca faz login: ela existe só para ter o que ler.
 
 ## Fora de escopo
 
