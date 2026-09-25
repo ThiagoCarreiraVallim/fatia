@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { CHAVE_DA_COTA } from './chat-runtime-provider';
 
 /**
- * O aviso de cota de IA do dia, só quando ela importa: perto do fim ou esgotada.
+ * O aviso do limite de uso do dia, só quando ele importa: perto do fim ou esgotado.
  *
  * Um medidor sempre visível viraria ruído na tela de quem nunca chega perto do
  * teto — e a instância sem teto por pessoa (`limitMicros: null`) nem o tem.
@@ -20,9 +20,9 @@ export function avisoDaCota(cota: ChatQuota | undefined): string | null {
     hour: '2-digit',
     minute: '2-digit',
   });
-  if (!cota.allowed) return `A cota de IA de hoje acabou. Libera de novo às ${volta}.`;
+  if (!cota.allowed) return `O limite do assistente por hoje acabou. Ele volta às ${volta}.`;
   if (cota.usedRatio !== null && cota.usedRatio >= LIMIAR_DO_AVISO) {
-    return `Você já usou ${Math.round(cota.usedRatio * 100)}% da cota de IA de hoje.`;
+    return `Você já usou ${Math.round(cota.usedRatio * 100)}% do limite do assistente por hoje.`;
   }
   return null;
 }

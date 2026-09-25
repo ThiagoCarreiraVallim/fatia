@@ -438,6 +438,52 @@ describe('GET /api/chat/availability', () => {
   });
 });
 
+describe('GET /api/chat/tools e POST /api/chat/preview', () => {
+  let cenario: Cenario;
+
+  beforeEach(async () => {
+    cenario = await subirApp();
+  });
+
+  afterEach(async () => {
+    await cenario.app.close();
+  });
+
+  it('o título de cada tool vem do registry, para rotular o histórico depois de um F5', async () => {
+    const titulos = (await (await fetch(`${cenario.url}/tools`)).json()) as Record<string, string>;
+
+    expect(titulos.log_meal).toBe('Registrar refeição');
+    expect(titulos.save_memory).toBe('Guardar memória');
+  });
+
+  it('o resumo recusa tool que não pede confirmação, e corpo sem o nome da tool', async () => {
+    const pedir = (corpo: unknown) =>
+      fetch(`${cenario.url}/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(corpo),
+      });
+
+    expect((await pedir({ tool: 'list_meals', arguments: {} })).status).toBe(400);
+    expect((await pedir({ arguments: {} })).status).toBe(400);
+  });
+
+  it('argumento inválido volta como resumo inválido, e não como erro', async () => {
+    const resposta = await fetch(`${cenario.url}/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tool: 'log_weight', arguments: {} }),
+    });
+
+    expect(resposta.status).toBe(200);
+    expect(await resposta.json()).toEqual({
+      valida: false,
+      linhas: [],
+      problema: 'Faltou informar: peso. Peça de novo ao assistente.',
+    });
+  });
+});
+
 describe('POST /api/chat com foto', () => {
   let cenario: Cenario;
 

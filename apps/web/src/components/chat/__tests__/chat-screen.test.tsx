@@ -93,6 +93,14 @@ vi.mock('@fatia/api-client', async () => {
     }),
     getChatAvailability: vi.fn(async () => ({ available: true, ...recursos })),
     transcribeAudio: transcribeAudioMock,
+    listChatToolTitles: vi.fn(async () => ({
+      log_meal: 'Registrar refeição',
+      list_meals: 'Listar refeições',
+    })),
+    previewChatAction: vi.fn(async () => ({
+      valida: true,
+      linhas: [{ rotulo: 'Item', valor: '200 g de Frango grelhado' }],
+    })),
     getConversation: vi.fn(async () => {
       if (!conversaGravada) throw new actual.ApiError('Conversa não encontrada.', 404);
       return conversaGravada;
@@ -307,7 +315,45 @@ describe('ChatScreen', () => {
       },
     );
 
-    expect((await screen.findAllByText('Listar refeições')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/Listar refeições/)).length).toBeGreaterThan(0);
+    // Quem conversa não lê o nome técnico da tool nem o JSON dos argumentos.
+    const conversa = screen.getByRole('log');
+    expect(conversa.textContent).not.toMatch(/list_meals|2026-08-05|\{/);
+  });
+
+  it('depois do F5, a tool do histórico aparece pelo título, e não pelo nome técnico', async () => {
+    conversaGravada = {
+      id: CONVERSA,
+      title: 'Almoço',
+      createdAt: '2026-09-25T12:00:00Z',
+      updatedAt: '2026-09-25T12:00:00Z',
+      messages: [
+        {
+          id: 'm1',
+          role: 'user',
+          content: 'almocei frango',
+          tools: null,
+          metadata: null,
+          runId: null,
+          review: null,
+          createdAt: '2026-09-25T12:00:00Z',
+        },
+        {
+          id: 'm2',
+          role: 'assistant',
+          content: 'Registrei.',
+          tools: [{ name: 'log_meal' }],
+          metadata: { status: 'completed' },
+          runId: 'r',
+          review: null,
+          createdAt: '2026-09-25T12:00:01Z',
+        },
+      ],
+    };
+    montar();
+
+    expect((await screen.findAllByText('Registrar refeição')).length).toBeGreaterThan(0);
+    expect(screen.getByRole('log').textContent).not.toMatch(/log_meal|Log meal/);
   });
 
   it('a escrita pausa num cartão, e confirmar retoma com o id da pausa', async () => {
@@ -362,7 +408,8 @@ describe('ChatScreen', () => {
     expect(
       within(cartao).getByText('Nada foi salvo ainda. Confira os dados antes de confirmar.'),
     ).toBeInTheDocument();
-    expect(within(cartao).getByText('200')).toBeInTheDocument();
+    expect(await within(cartao).findByText('200 g de Frango grelhado')).toBeInTheDocument();
+    expect(cartao.textContent).not.toContain('log_meal');
 
     await user.click(within(cartao).getByRole('button', { name: 'Confirmar' }));
 
@@ -526,7 +573,9 @@ describe('ChatScreen', () => {
     cota = { ...cota, limitMicros: 100_000, spentMicros: 100_000, usedRatio: 1, allowed: false };
     montar();
 
-    expect(await screen.findByRole('status')).toHaveTextContent('A cota de IA de hoje acabou');
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'O limite do assistente por hoje acabou',
+    );
   });
 
   it('a gaveta de memórias lista e esquece com dois toques', async () => {

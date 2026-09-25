@@ -705,12 +705,14 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
         # Zera para a nova abordagem ter chance limpa.
         return {"reflexoes": reflexoes[-MAX_REFLEXOES:], "falhas": {}}
 
-    async def validar(state: EstadoDaConversa) -> dict[str, Any]:
+    async def validar(state: EstadoDaConversa, runtime: Runtime[ContextoDoTurno]) -> dict[str, Any]:
         """Confere a resposta final por regra. Reprovada, volta **uma** vez ao modelo."""
         writer = get_stream_writer()
         encontrada = _ultima_do_assistente(state.get("messages") or [])
         texto = _texto(encontrada[1]) if encontrada is not None else ""
-        relatorio = validar_resposta(texto)
+        relatorio = validar_resposta(
+            texto, [tool.name for tool in runtime.context.permitidas] + [human.NOME]
+        )
         writer(events.validation(relatorio["ok"], relatorio["issues"]))
         revalidacoes = state.get("revalidacoes") or 0
         # Resposta vazia não volta ao modelo: o `fechar` já põe um texto na tela,

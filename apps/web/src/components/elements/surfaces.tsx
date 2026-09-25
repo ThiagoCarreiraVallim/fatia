@@ -37,18 +37,6 @@ export const labelSwapIn = 'opacity-100 blur-none';
 
 export const labelSwapOut = 'pointer-events-none opacity-0 blur-[2px]';
 
-/*
-  Reescrito para o Radix, que é o collapsible deste app.
-
-  O original é `h-(--collapsible-panel-height) ... data-[starting-style]:h-0`:
-  sintaxe de Tailwind v4 (aqui é v3.4) sobre as variáveis do Base UI. O Radix
-  publica outro nome (`--radix-collapsible-content-height`) e marca o estado em
-  `data-state`, então a linha de cima animaria para `height: ` — vazio — e o
-  painel abriria e fecharia sem transição nenhuma.
-*/
-export const collapsePanel =
-  'h-[var(--radix-collapsible-content-height)] overflow-hidden transition-[height] duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] data-[state=closed]:h-0 motion-reduce:transition-none';
-
 export const live = 'text-blue-500 dark:text-blue-400';
 
 export const mono = 'font-mono text-[11px] tracking-tight';

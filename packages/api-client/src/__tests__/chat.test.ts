@@ -265,7 +265,7 @@ describe('textoDeErroDoChat', () => {
   });
 
   it('429 do provedor não vira cota — quem conversa não estourou limite nenhum', () => {
-    expect(textoDeErroDoChat({ code: 'AI_PROVIDER_REFUSED' })).not.toContain('limite diário');
+    expect(textoDeErroDoChat({ code: 'AI_PROVIDER_REFUSED' })).not.toContain('limite de uso');
   });
 
   it('a cota diz quando volta em data legível, e não em ISO', () => {

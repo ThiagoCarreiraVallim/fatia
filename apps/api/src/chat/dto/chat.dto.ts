@@ -145,3 +145,14 @@ export class MessageFeedbackDto {
   @MaxLength(TETO_DO_COMENTARIO)
   note?: string;
 }
+
+/** Uma escrita pausada, para o cartão de confirmação descrevê-la. */
+export class ChatActionPreviewDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(80)
+  tool!: string;
+
+  @IsDefined()
+  arguments!: Record<string, unknown>;
+}

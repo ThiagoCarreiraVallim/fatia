@@ -143,6 +143,14 @@ voltas de tool acabou, e o agente pergunta se segue em vez de cortar calado). A 
 `interruptId` da pausa, e o agente recusa com 409 um id que não é o pendente. A pausa aberta fica em
 `Message.metadata.interrupt` até o turno seguinte, e é isso que faz o cartão voltar depois de um F5.
 
+**A tela não mostra nada de programador.** O cartão de confirmação pede à API um resumo da chamada
+pausada (`POST /api/chat/preview`, em `apps/api/src/chat/previa/`): os argumentos passam pelo mesmo
+`inputSchema` que o `/mcp` aplica, cada campo vira rótulo em português (`rotulos.ts`, com spec que
+reprova campo sem rótulo) e cada id vira o nome do que aponta, lido só na conta de quem pergunta.
+Argumento que a tool recusaria desabilita o "Confirmar". As tools aparecem pelo `title` do `/mcp`
+(`GET /api/chat/tools` cobre o histórico depois de um F5), sem nome técnico nem JSON, e o `validar`
+do agente refaz a resposta que cita o nome interno de uma ferramenta.
+
 **Foto e ditado não persistem** ([ADR 020](ADR/020-foto-e-audio-trafegam-sem-persistencia.md)). A
 foto do chat é recodificada no aparelho (o que tira o EXIF antes de sair), limpa de novo na API e vai
 ao modelo de visão só naquele turno; o checkpoint guarda uma marca no lugar dos bytes, e `Message`

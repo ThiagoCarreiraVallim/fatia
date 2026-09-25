@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { AlertCircleIcon, CheckIcon } from 'lucide-react';
 import { Streamdown } from 'streamdown';
 import {
   useMessagePartText,
   type TextMessagePartComponent,
   type ToolCallMessagePartComponent,
 } from '@assistant-ui/react';
-import { ToolCall, type ToolCallState } from '@/components/elements/tool-call';
+import { SwapLabel } from '@/components/elements/surfaces';
 import { useArtefato, useTitulosDasTools } from './chat-runtime-provider';
 import { Artefato } from './artefato';
 
@@ -24,66 +24,87 @@ export const TextoDoAssistente: TextMessagePartComponent = () => {
   return <Streamdown className="w-full text-sm leading-relaxed">{text}</Streamdown>;
 };
 
-/** O element pede texto; argumento e resultado do MCP chegam como JSON qualquer. */
-function comoTexto(valor: unknown): string {
-  if (valor === undefined || valor === null || valor === '') return '—';
-  if (typeof valor === 'string') return valor;
-  try {
-    return JSON.stringify(valor, null, 2);
-  } catch {
-    return String(valor);
+/** A tool local do agente: a pergunta dela aparece no cartão da pausa. */
+const TITULOS_LOCAIS: Record<string, string> = { ask_user: 'Pergunta para você' };
+
+export type EstadoDoPasso = 'rodando' | 'aguardando' | 'feito' | 'falhou';
+
+/** O que a linha diz em cada estado — só português, nunca o nome técnico da tool. */
+export function rotuloDoPasso(titulo: string, estado: EstadoDoPasso): string {
+  switch (estado) {
+    case 'rodando':
+      return `${titulo}…`;
+    case 'aguardando':
+      return `${titulo}: aguardando sua confirmação`;
+    case 'falhou':
+      return `${titulo}: não deu certo`;
+    default:
+      return titulo;
   }
 }
 
-/** `log_meal` → "Log meal", quando o `/mcp` não mandou título. Rótulo tosco é melhor que nome cru. */
-function rotuloDoNome(nome: string): string {
-  return nome.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
-}
-
 /**
- * Uma chamada de tool, recolhida por padrão.
+ * Uma chamada de tool, como uma linha de status: o que o assistente está fazendo
+ * e se deu certo.
  *
- * O **título** vem do catálogo que o agente anuncia (`catalog`), que é o `title`
- * de cada tool no `/mcp` — "Registrar refeição". A tabela de rótulos à mão que
- * existia antes cobria 10 das 35 escritas e apodrecia a cada tool nova. O nome
- * técnico continua na etiqueta monoespaçada: é o dado que torna a ação auditável.
+ * **Sem nome técnico e sem JSON.** Quem conversa não lê `log_meal` nem
+ * `{"foodId":163}`; o que importa a essa pessoa é "Registrar refeição ✓", e o
+ * resultado que interessa já vem no texto da resposta e no artefato logo abaixo.
+ * O título é o `title` que o `/mcp` anuncia para cada tool — pelo `catalog` do
+ * turno ao vivo, e por `/chat/tools` depois de um F5.
  */
 export const ChamadaDeTool: ToolCallMessagePartComponent = ({
   toolCallId,
   toolName,
-  args,
-  argsText,
-  result,
   isError,
   status,
 }) => {
   const titulos = useTitulosDasTools();
   const artefato = useArtefato(toolCallId);
-  const [aberto, setAberto] = useState(false);
-  const estado: ToolCallState =
-    status.type === 'running' || status.type === 'requires-action'
-      ? 'running'
-      : isError || (status.type === 'incomplete' && status.reason === 'error')
-        ? 'error'
-        : 'done';
-  const titulo = titulos[toolName] ?? rotuloDoNome(toolName);
-  const pedido = argsText?.trim() ? argsText : comoTexto(args);
+  const estado: EstadoDoPasso =
+    status.type === 'requires-action'
+      ? 'aguardando'
+      : status.type === 'running'
+        ? 'rodando'
+        : isError || (status.type === 'incomplete' && status.reason === 'error')
+          ? 'falhou'
+          : 'feito';
+  const titulo = titulos[toolName] ?? TITULOS_LOCAIS[toolName] ?? 'Ação do assistente';
+  const ativo = estado === 'rodando' || estado === 'aguardando';
 
   return (
     <div className="flex w-full flex-col gap-2">
-      <ToolCall
-        state={estado}
-        query={toolName}
-        activeLabel={status.type === 'requires-action' ? `${titulo} · aguardando você` : titulo}
-        label={titulo}
-        errorLabel={`${titulo} · falhou`}
-        request={pedido === '{}' ? '—' : pedido}
-        result={comoTexto(result)}
-        open={aberto}
-        onOpenChange={setAberto}
-        className="max-w-none"
-      />
-      {artefato && estado === 'done' ? <Artefato artefato={artefato} /> : null}
+      <p
+        data-slot="passo"
+        data-estado={estado}
+        className="flex items-center gap-2 py-1 text-[13.5px] text-foreground/55"
+      >
+        <SwapLabel active={ativo ? 0 : 1} className="text-start">
+          <span className="relative inline-block leading-none">
+            <span>{rotuloDoPasso(titulo, estado)}</span>
+            <span
+              aria-hidden
+              className="shimmer pointer-events-none absolute inset-0 motion-reduce:animate-none"
+            >
+              {rotuloDoPasso(titulo, estado)}
+            </span>
+          </span>
+          <>{rotuloDoPasso(titulo, estado)}</>
+        </SwapLabel>
+        {estado === 'feito' ? (
+          <CheckIcon
+            aria-label="Feito"
+            className="fade-in zoom-in-90 animate-in size-3.5 shrink-0 text-emerald-500 duration-200"
+          />
+        ) : null}
+        {estado === 'falhou' ? (
+          <AlertCircleIcon
+            aria-hidden
+            className="fade-in zoom-in-90 animate-in size-3.5 shrink-0 text-red-500 duration-200"
+          />
+        ) : null}
+      </p>
+      {artefato && estado === 'feito' ? <Artefato artefato={artefato} /> : null}
     </div>
   );
 };

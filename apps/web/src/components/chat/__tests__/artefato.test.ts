@@ -34,10 +34,10 @@ describe('avisoDaCota', () => {
 
   it('avisa perto do fim, e diz quando volta quando acabou', () => {
     expect(avisoDaCota({ ...base, usedRatio: 0.85 })).toBe(
-      'Você já usou 85% da cota de IA de hoje.',
+      'Você já usou 85% do limite do assistente por hoje.',
     );
     expect(avisoDaCota({ ...base, usedRatio: 1, allowed: false })).toBe(
-      'A cota de IA de hoje acabou. Libera de novo às 00:00.',
+      'O limite do assistente por hoje acabou. Ele volta às 00:00.',
     );
   });
 

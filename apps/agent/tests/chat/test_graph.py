@@ -251,6 +251,32 @@ async def test_resposta_que_mostra_uuid_e_refeita_uma_vez(settings_factory):
     assert final["content"] == "Seu almoço foi registrado."
 
 
+async def test_resposta_que_cita_o_nome_da_tool_e_refeita_uma_vez(settings_factory):
+    """Quem conversa não é técnico: `log_meal` na resposta é ruído, como um UUID."""
+    r = await turno(
+        settings_factory,
+        [
+            [fragmento_de_texto("Usei o log_meal para registrar o almoço.")],
+            [fragmento_de_texto("Registrei o seu almoço.")],
+        ],
+    )
+
+    assert len(r.provider.corpos) == 2
+    assert (
+        "nome interno de uma ferramenta (log_meal)"
+        in r.provider.corpos[1]["messages"][0]["content"]
+    )
+    (final,) = r.de("messages/complete")[0]
+    assert final["content"] == "Registrei o seu almoço."
+
+
+async def test_o_prompt_proibe_nome_de_ferramenta_e_codigo_na_resposta(settings_factory):
+    r = await turno(settings_factory, [[fragmento_de_texto("Oi!")]])
+
+    sistema = r.provider.corpos[0]["messages"][0]["content"]
+    assert "Nunca escreva na resposta o nome de uma ferramenta" in sistema
+
+
 async def test_a_validacao_nao_vira_pingue_pongue(settings_factory):
     r = await turno(
         settings_factory,

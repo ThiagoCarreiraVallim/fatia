@@ -64,6 +64,15 @@ export class McpToolRegistry implements OnModuleInit {
     this.logger.log(`Discovered ${this.tools.length} MCP tools: ${names.join(', ')}`);
   }
 
+  buscar(nome: string): McpToolDef | undefined {
+    return this.tools.find((tool) => tool.name === nome);
+  }
+
+  /** Nome → título em português, o mesmo que o `tools/list` anuncia. */
+  titulos(): Record<string, string> {
+    return Object.fromEntries(this.tools.map((tool) => [tool.name, tool.title]));
+  }
+
   bindAll(server: McpServer, ctx: McpToolContext): void {
     for (const tool of this.tools) {
       // O type signature de registerTool gera type-instantiation explosivo;

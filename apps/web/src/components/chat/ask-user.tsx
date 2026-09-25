@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, HelpCircle, PlayCircle } from 'lucide-react';
 import type {
   ChatAskField,
@@ -9,9 +10,10 @@ import type {
   ChatQuestionAction,
   ChatResumeValue,
 } from '@fatia/api-client';
+import { previewChatAction } from '@fatia/api-client';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { field, floating, ghostButton, inkButton, mono } from '../elements/surfaces';
+import { field, floating, ghostButton, inkButton } from '../elements/surfaces';
 
 /**
  * A pausa do agente, nas três formas que ela tem (ADR 023).
@@ -40,14 +42,6 @@ export function AskUser({ pausa, ocupado, onResponder }: Props) {
   return <Acoes pausa={pausa} ocupado={ocupado} onResponder={onResponder} />;
 }
 
-/** Os argumentos de uma escrita como lista legível — ou o JSON, quando não dá. */
-export function camposDaEscrita(argumentos: Record<string, unknown>): Array<[string, string]> {
-  return Object.entries(argumentos).map(([chave, valor]) => [
-    chave,
-    typeof valor === 'string' ? valor : JSON.stringify(valor),
-  ]);
-}
-
 function Escrita({
   acao,
   decisao,
@@ -62,39 +56,65 @@ function Escrita({
   focar: boolean;
 }) {
   const confirmar = useRef<HTMLButtonElement>(null);
+  const {
+    data: previa,
+    isPending,
+    isError,
+  } = useQuery({
+    queryKey: ['chat', 'preview', acao.toolCallId],
+    queryFn: () => previewChatAction(acao.tool, acao.arguments),
+    staleTime: Infinity,
+    retry: 1,
+  });
+  // Confirmar antes de o resumo chegar seria aprovar sem ler; e o argumento que a
+  // própria tool recusaria só levaria a um erro depois.
+  const travado = isPending || previa?.valida === false;
   useEffect(() => {
-    // O foco vai para "Confirmar" quando o cartão aparece: quem conversa pelo
+    // O foco vai para "Confirmar" quando o resumo aparece: quem conversa pelo
     // teclado estava no campo de texto, e sem isto tabularia a conversa inteira.
-    if (focar) confirmar.current?.focus();
-  }, [focar]);
-  const lista = camposDaEscrita(acao.arguments);
+    if (focar && !travado) confirmar.current?.focus();
+  }, [focar, travado]);
 
   return (
-    <div className={cn(field, 'rounded-lg p-3 text-xs')}>
+    <div className={cn(field, 'rounded-lg p-3 text-sm')}>
       <p className="font-semibold text-foreground">{acao.title}</p>
-      <p className={cn(mono, 'mt-0.5 text-foreground/45')}>{acao.tool}</p>
-      {lista.length > 0 ? (
-        <dl className="mt-2 space-y-0.5">
-          {lista.map(([chave, valor]) => (
-            <div key={chave} className="flex gap-2">
-              <dt className="text-foreground/50">{chave}</dt>
-              <dd className="break-all text-foreground/80">{valor}</dd>
-            </div>
-          ))}
-        </dl>
-      ) : null}
+      {isPending ? (
+        <p className="mt-1 text-xs text-muted-foreground">Preparando o resumo…</p>
+      ) : isError ? (
+        <p className="mt-1 text-xs text-muted-foreground">
+          Não consegui mostrar os detalhes. Se tiver dúvida, recuse e peça de novo.
+        </p>
+      ) : (
+        <>
+          {previa.linhas.length > 0 ? (
+            <dl className="mt-2 space-y-1">
+              {previa.linhas.map((linha, indice) => (
+                <div key={`${linha.rotulo}-${indice}`} className="flex gap-2">
+                  <dt className="shrink-0 text-foreground/50">{linha.rotulo}</dt>
+                  <dd className="text-foreground/85">{linha.valor}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+          {previa.valida === false ? (
+            <p role="alert" className="mt-2 text-xs text-rose-500">
+              {previa.problema}
+            </p>
+          ) : null}
+        </>
+      )}
       <div className="mt-3 flex gap-2">
         <button
           ref={confirmar}
           type="button"
           aria-pressed={decisao === true}
-          disabled={ocupado}
+          disabled={ocupado || travado}
           onClick={() => onDecidir(true)}
           className={cn(
             inkButton,
             'rounded-full px-3 py-1.5 text-xs font-bold',
             decisao === false && 'opacity-40',
-            ocupado && 'pointer-events-none opacity-50',
+            (ocupado || travado) && 'pointer-events-none opacity-50',
           )}
         >
           Confirmar

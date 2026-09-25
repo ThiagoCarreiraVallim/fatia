@@ -7,7 +7,7 @@ import {
   type McpToolDef,
 } from '../../common/decorators/tool.decorator';
 
-const TIPO_DA_REFEICAO: Record<string, string> = {
+export const TIPO_DA_REFEICAO: Record<string, string> = {
   BREAKFAST: 'Café da manhã',
   LUNCH: 'Almoço',
   DINNER: 'Jantar',

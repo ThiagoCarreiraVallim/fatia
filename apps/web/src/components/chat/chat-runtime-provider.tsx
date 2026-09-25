@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useMemo, type ReactNode } from 
 import { usePathname, useRouter } from 'next/navigation';
 import { AssistantRuntimeProvider } from '@assistant-ui/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getChatAvailability, type ChatAvailability } from '@fatia/api-client';
+import { getChatAvailability, listChatToolTitles, type ChatAvailability } from '@fatia/api-client';
 import { useChatRuntime, useChatThreadList, type ChatRuntimeExtras } from './use-chat-runtime';
 
 /**
@@ -91,7 +91,21 @@ export function ChatRuntimeProvider({ children }: { children: ReactNode }) {
       }
     },
   });
-  const extras = useMemo(() => ({ titulos, artefatos, plano }), [titulos, artefatos, plano]);
+  // O `catalog` só chega no turno ao vivo; depois de um F5 as tools do histórico
+  // seriam rotuladas pelo nome técnico. A lista do servidor cobre as duas.
+  const { data: titulosDoServidor } = useQuery({
+    queryKey: ['chat', 'tools'],
+    queryFn: listChatToolTitles,
+    staleTime: 60 * 60_000,
+  });
+  const todosOsTitulos = useMemo(
+    () => ({ ...titulosDoServidor, ...titulos }),
+    [titulosDoServidor, titulos],
+  );
+  const extras = useMemo(
+    () => ({ titulos: todosOsTitulos, artefatos, plano }),
+    [todosOsTitulos, artefatos, plano],
+  );
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>

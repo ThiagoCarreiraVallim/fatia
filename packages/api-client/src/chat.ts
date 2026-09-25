@@ -139,14 +139,14 @@ export type ChatResumeValue =
  * infraestrutura de graça. Quem opera distingue pelo `code`, no log do agente.
  */
 const CONFIGURACAO =
-  'O chat com IA não está configurado nesta instância. O resto do Fatia ' +
-  'funciona normalmente — nada aqui depende de IA.';
+  'O assistente não está disponível neste app. O resto do Fatia funciona normalmente.';
 
 /**
  * O provedor não entregou a resposta. O 429 do provedor (`AI_PROVIDER_REFUSED`)
  * entra aqui e **não** vira cota: quem conversa não estourou limite nenhum.
  */
-const PROVEDOR_FALHOU = 'O provedor de IA não atendeu agora. Tente de novo em alguns minutos.';
+const PROVEDOR_FALHOU =
+  'O assistente não conseguiu responder agora. Tente de novo em alguns minutos.';
 
 const DADOS_FORA = 'Não consegui consultar seus dados agora. Tente de novo em instantes.';
 
@@ -165,9 +165,8 @@ const TEXTOS: Record<ChatErrorCode, string> = {
   AI_PROVIDER_ERROR: PROVEDOR_FALHOU,
   AI_PROVIDER_UNREACHABLE: PROVEDOR_FALHOU,
   AI_PROVIDER_REFUSED: PROVEDOR_FALHOU,
-  AI_PROVIDER_TIMEOUT: 'O modelo demorou demais para responder. Tente enviar de novo.',
-  AI_RESPONSE_UNPARSEABLE:
-    'A resposta do modelo veio em um formato que o Fatia não entendeu. Tente enviar de novo.',
+  AI_PROVIDER_TIMEOUT: 'O assistente demorou demais para responder. Tente enviar de novo.',
+  AI_RESPONSE_UNPARSEABLE: 'O assistente se enrolou nesta resposta. Tente enviar de novo.',
   AI_RESPONSE_TRUNCATED:
     'A resposta ficou longa demais e foi cortada. Tente uma pergunta mais específica.',
   MCP_UNREACHABLE: DADOS_FORA,
@@ -177,15 +176,15 @@ const TEXTOS: Record<ChatErrorCode, string> = {
   MCP_UNAUTHENTICATED: SESSAO,
   MCP_UNAUTHORIZED: SESSAO,
   AI_UNAUTHORIZED: SESSAO,
-  AI_QUOTA_EXCEEDED: 'Você atingiu o limite diário de uso da IA. Ele volta amanhã.',
+  AI_QUOTA_EXCEEDED: 'Você chegou ao limite de uso do assistente por hoje. Ele volta amanhã.',
   AGENT_STREAM_INTERRUPTED: 'A resposta foi interrompida antes de terminar. Tente enviar de novo.',
   AI_NETWORK_ERROR: 'A conexão caiu no meio da resposta. O que já chegou continua acima.',
   CHAT_RESUME_MISMATCH:
     'Esta conversa mudou desde que a pergunta apareceu. Recarregue para ver o que ela espera agora.',
   CHAT_NOTHING_TO_RESUME:
     'Esta conversa não está mais esperando resposta. Recarregue para ver como ela ficou.',
-  CHAT_INTERNAL_ERROR: 'O chat falhou por um motivo não identificado. Tente enviar de novo.',
-  AI_UNKNOWN_ERROR: 'O chat falhou por um motivo não identificado. Tente enviar de novo.',
+  CHAT_INTERNAL_ERROR: 'Algo deu errado nesta resposta. Tente enviar de novo.',
+  AI_UNKNOWN_ERROR: 'Algo deu errado nesta resposta. Tente enviar de novo.',
 };
 
 /** Todos os códigos conhecidos, na ordem da tabela. */
@@ -206,7 +205,7 @@ function quandoVolta(resetsAt: string): string | null {
 export function textoDeErroDoChat(error: ChatStreamError): string {
   if (error.code === 'AI_QUOTA_EXCEEDED' && error.resetsAt) {
     const volta = quandoVolta(error.resetsAt);
-    if (volta) return `Você atingiu o limite diário de uso da IA. Ele volta em ${volta}.`;
+    if (volta) return `Você chegou ao limite de uso do assistente por hoje. Ele volta em ${volta}.`;
   }
   return TEXTOS[error.code];
 }
@@ -538,4 +537,36 @@ export function deleteChatMemory(id: string): Promise<void> {
 
 export function getChatQuota(): Promise<ChatQuota> {
   return apiFetch('/api/chat/quota');
+}
+
+// ---------------------------------------------------------------- cartão de confirmação
+
+/** Uma linha do resumo de uma escrita pausada: "Refeição: Almoço". */
+export interface ChatActionPreviewLine {
+  rotulo: string;
+  valor: string;
+}
+
+/**
+ * O que a escrita pausada vai fazer, em português, montado pela API a partir da
+ * chamada exata que está no checkpoint. `valida: false` quando a própria tool
+ * recusaria os argumentos: aí o cartão não deixa confirmar.
+ */
+export type ChatActionPreview =
+  | { valida: true; linhas: ChatActionPreviewLine[] }
+  | { valida: false; linhas: ChatActionPreviewLine[]; problema: string };
+
+export function previewChatAction(
+  tool: string,
+  argumentos: Record<string, unknown>,
+): Promise<ChatActionPreview> {
+  return apiFetch('/api/chat/preview', {
+    method: 'POST',
+    body: JSON.stringify({ tool, arguments: argumentos }),
+  });
+}
+
+/** Nome da tool → título em português, para rotular o histórico depois de um F5. */
+export function listChatToolTitles(): Promise<Record<string, string>> {
+  return apiFetch('/api/chat/tools');
 }

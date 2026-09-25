@@ -29,14 +29,16 @@ _FORA_DO_PAPEL = re.compile(
 _UUID = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I)
 
 
-def validar_resposta(texto: str) -> dict[str, Any]:
+def validar_resposta(texto: str, nomes_de_tools: Iterable[str] = ()) -> dict[str, Any]:
     """O que reprova uma resposta final, com o motivo que vira reflexão.
 
     - vazia: a tela ficaria com um balão em branco;
     - fora do papel ("como uma IA, não posso…"): o assistente da Fatia não se
       apresenta como modelo genérico;
     - identificador interno cru (UUID): vem do resultado de uma tool, e para quem
-      lê é ruído que parece erro.
+      lê é ruído que parece erro;
+    - nome interno de ferramenta (`log_meal`): quem conversa não é técnico, e o
+      nome só diz algo a quem escreveu a tool.
     """
     problemas: list[str] = []
     if not texto.strip():
@@ -45,6 +47,14 @@ def validar_resposta(texto: str) -> dict[str, Any]:
         problemas.append("a resposta falou de si como uma IA genérica")
     if _UUID.search(texto):
         problemas.append("a resposta mostrou um identificador interno (UUID)")
+    citadas = sorted(
+        nome for nome in set(nomes_de_tools) if re.search(rf"\b{re.escape(nome)}\b", texto)
+    )
+    if citadas:
+        problemas.append(
+            f"a resposta citou o nome interno de uma ferramenta ({', '.join(citadas)}); "
+            "diga o que foi feito, como 'registrei o almoço'"
+        )
     return {"ok": not problemas, "issues": problemas}
 
 

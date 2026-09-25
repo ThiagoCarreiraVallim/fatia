@@ -25,7 +25,10 @@ import { ChatService, type DestinoDoStream } from './chat.service';
 import { CheckpointPurgeService } from './checkpoint-purge.service';
 import { ConversationService } from './conversation.service';
 import { MemoryService } from './memory/memory.service';
+import { PreviaDaAcaoService } from './previa/previa-da-acao.service';
+import { McpToolRegistry } from '../mcp/mcp-tool.registry';
 import {
+  ChatActionPreviewDto,
   ListConversationsQueryDto,
   MessageFeedbackDto,
   RenameConversationDto,
@@ -49,6 +52,8 @@ import {
  */
 const TETO_DE_TURNOS = 12;
 const TETO_DE_TURNOS_MS = 60_000;
+/** Cada cartão pede um resumo, e um F5 pede de novo: folga sobre os turnos. */
+const TETO_DE_PREVIAS = 60;
 
 @Controller('chat')
 export class ChatController {
@@ -59,7 +64,28 @@ export class ChatController {
     private readonly checkpoints: CheckpointPurgeService,
     private readonly memorias: MemoryService,
     private readonly uso: AiUsageService,
+    private readonly previas: PreviaDaAcaoService,
+    private readonly registry: McpToolRegistry,
   ) {}
+
+  /**
+   * Nome de tool → título em português. O stream anuncia o mesmo no `catalog`,
+   * mas só no turno ao vivo: depois de recarregar, a tela rotularia as tools do
+   * histórico pelo nome técnico.
+   */
+  @Get('tools')
+  titulosDasTools() {
+    return this.registry.titulos();
+  }
+
+  /** O cartão de confirmação em português: o que a escrita pausada vai fazer. */
+  @Post('preview')
+  @HttpCode(200)
+  @UseGuards(ChatThrottlerGuard)
+  @Throttle({ default: { ttl: TETO_DE_TURNOS_MS, limit: TETO_DE_PREVIAS } })
+  previa(@CurrentUser() user: CurrentUserPayload, @Body() dto: ChatActionPreviewDto) {
+    return this.previas.previa(user, dto.tool, dto.arguments);
+  }
 
   /**
    * Se a aba de chat deve existir nesta instância.

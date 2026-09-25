@@ -349,7 +349,6 @@ function Composer() {
         disabled={abrindo}
         sendLabel="Enviar mensagem"
         stopLabel="Parar resposta"
-        hint="enter envia"
         actions={acoes}
         attachments={<AnexosDoComposer />}
         canSend={podeEnviar}

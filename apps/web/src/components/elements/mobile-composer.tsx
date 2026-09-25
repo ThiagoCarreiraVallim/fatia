@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { ArrowUpIcon, SquareIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { field, inkButton, mono } from './surfaces';
+import { field, inkButton } from './surfaces';
 
 /**
  * `elements-mobile-composer` do assistant-ui, adaptado. O Fatia é um PWA de
@@ -50,7 +50,6 @@ export function MobileComposer({
   placeholder,
   sendLabel,
   stopLabel,
-  hint,
   ref,
   actions,
   attachments,
@@ -87,7 +86,6 @@ export function MobileComposer({
   placeholder: string;
   sendLabel: string;
   stopLabel: string;
-  hint?: string;
   ref?: RefObject<HTMLTextAreaElement | null>;
   /** Botões ao lado do campo (foto, microfone). */
   actions?: ReactNode;
@@ -173,10 +171,6 @@ export function MobileComposer({
           )}
         </button>
       </div>
-
-      {hint && keyboardOpen && (
-        <span className={cn(mono, 'text-center text-foreground/25')}>{hint}</span>
-      )}
     </div>
   );
 }
