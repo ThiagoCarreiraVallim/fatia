@@ -36,12 +36,17 @@ composição do lado de cá.
 Nenhum dos dois toca banco, service ou regra de negócio. A diferença é **só** qual conjunto de
 tools o `/mcp` anuncia, e o que cada uma compõe antes de responder.
 
-| | Braço A (hoje) | Braço B (intenção) |
-| --- | --- | --- |
-| Tools anunciadas | 103 | 23 |
-| Granularidade | uma entidade por tool | uma intenção por tool |
-| Quem compõe | o agente, encadeando | o backend, dentro do `execute` |
-| Lógica de negócio | a mesma | a mesma |
+|                                | Braço A (hoje)        | Braço B (intenção)                      |
+| ------------------------------ | --------------------- | --------------------------------------- |
+| Tools anunciadas               | 103                   | 37 — 18 de intenção e 19 iguais às do A |
+| Oferecidas pelo chat hospedado | 85                    | 20                                      |
+| Granularidade                  | uma entidade por tool | uma intenção por tool                   |
+| Quem compõe                    | o agente, encadeando  | o backend, dentro do `execute`          |
+| Lógica de negócio              | a mesma               | a mesma                                 |
+
+O chat hospedado oferece menos que o catálogo porque a política de 3 camadas
+([ADR 022](./ADR/022-classificacao-3-camadas-do-chat.md)) tira do recorte o que é RESTRICTED. O braço
+principal do experimento é o chat; o catálogo inteiro é o que o braço C mede.
 
 ### Como alternar entre eles
 
@@ -53,73 +58,96 @@ registrada não aparece no `tools/list` e não existe para o modelo.
 Isso é o que torna "uma variável por vez" mecânico em vez de disciplinar. Mesma imagem, mesmo
 banco, mesmo modelo, mesmo prompt, mesmas tarefas — um header de diferença.
 
-### As 23 tools do braço B
+### O braço B
 
-Derivadas do conjunto de tarefas, não de arquitetura no papel: cada uma existe porque pelo menos
-uma tarefa real a pede. Sobre os mesmos services de hoje.
+O contrato das tools — nome, descrição, anotações, input e o que cada uma compõe — mora em
+[`apps/api/src/mcp/intent/intent-surface.ts`](../apps/api/src/mcp/intent/intent-surface.ts), e ainda
+não é servido: o arquivo não é um `*.tool.ts` e o registry não o vê. Ele existe antes do `execute`
+porque o conjunto de tarefas precisa dos nomes de campo para ser congelado.
 
-| Tool | Compõe (braço A) |
-| --- | --- |
-| `consultar_dia` | `get_nutrition_summary` + `get_nutrition_goals` + `get_water_for_date` + `get_steps_for_date` + `get_streak` |
-| `consultar_periodo` | os `get_*_history` / `get_*_progress` de um domínio, por janela |
-| `consultar_refeicoes` | `list_meals` + `get_meal` |
-| `registrar_refeicao` | `search_food` (N) + `log_meal` + `add_meal_item` (N) |
-| `corrigir_refeicao` | `list_meals` + `get_meal` + `update_meal_item` / `update_meal` |
-| `remover_da_refeicao` | `list_meals` + `get_meal` + `delete_meal_item` |
-| `registrar_alimento_proprio` | `create_custom_food` |
-| `definir_meta_nutricional` | `set_nutrition_goals` / `set_nutrient_target` |
-| `registrar_medida` | `log_water` / `log_steps` / `log_weight`, resolvendo data relativa |
-| `iniciar_treino` | `list_workout_plans` + `get_workout_plan` + `start_workout_session` |
-| `registrar_serie` | `get_active_workout_session` + `search_exercise` + `log_set` (N) |
-| `encerrar_treino` | `get_active_workout_session` + `finish_workout_session` |
-| `consultar_exercicio` | `search_exercise` + `get_last_set_for_exercise` / `get_personal_record` / `get_strength_progress` / `get_cardio_progress` / `get_load_prescription` / `explain_form` |
-| `editar_plano_de_treino` | `list_workout_plans` + `search_exercise` + `add_exercise_to_plan` / `update_plan_exercise` / `reorder_plan_exercises` |
-| `remover_do_plano` | `list_workout_plans` + `get_workout_plan` + `remove_exercise_from_plan` |
-| `consultar_metas` | `list_goals` + `get_goal` + `list_achievements` |
-| `concluir_meta` | `list_goals` + `complete_goal` |
-| `atualizar_perfil` | `update_me` / `update_timezone` |
-| `consultar_compartilhamento` | `list_data_sharing` + `list_data_access_log` |
-| `conceder_compartilhamento` | `list_my_groups` + `grant_data_sharing` |
-| `revogar_compartilhamento` | `list_data_sharing` + `revoke_data_sharing` |
-| `consultar_aluno` | `list_my_students` + `get_student_progress` |
-| `exportar_dados` | `export_my_data` |
+As 18 tools de intenção, derivadas do conjunto de tarefas e não de arquitetura no papel — o
+`eval-tarefas.spec.ts` reprova tool de intenção que nenhuma tarefa pede:
 
-São 23, e não os "12 a 15" que o desenho inicial supunha. O número saiu das tarefas: espremer
-abaixo disso exigiria um parâmetro `tipo` polimórfico, que é exatamente o desenho que a
-`MCP_TOOL_SURFACE.md` descarta com razão. 103 → 23 já é o corte que a tese prevê; forçar 103 → 12
-seria trocar um erro de granularidade por outro.
+| Tool                   | Camada      | Compõe (braço A)                                                                                                                                                                       |
+| ---------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_day_overview`     | leitura     | `get_nutrition_summary`, `get_nutrition_goals`, `get_water_for_date`, `get_steps_for_date`, `get_streak`, `list_workout_sessions`                                                      |
+| `get_period_overview`  | leitura     | `get_week_summary` e os `get_*_history` / `get_*_progress`                                                                                                                             |
+| `find_meals`           | leitura     | `list_meals`, `get_meal`                                                                                                                                                               |
+| `get_exercise_insight` | leitura     | `search_exercise`, `get_exercise_details`, `explain_form`, `get_last_set_for_exercise`, `get_personal_record`, `get_strength_progress`, `get_cardio_progress`, `get_load_prescription` |
+| `get_goals_overview`   | leitura     | `list_goals`, `get_goal`, `list_achievements`                                                                                                                                          |
+| `get_sharing_overview` | leitura     | `list_my_groups`, `list_data_sharing`, `list_data_access_log`                                                                                                                          |
+| `get_student_overview` | leitura     | `list_my_students`, `get_student_progress`                                                                                                                                             |
+| `record_meal`          | confirmável | `search_food`, `log_meal`                                                                                                                                                              |
+| `fix_meal`             | confirmável | `list_meals`, `get_meal`, `update_meal_item`, `update_meal`                                                                                                                            |
+| `update_my_targets`    | confirmável | `get_nutrition_goals`, `set_nutrition_goals`, `set_nutrient_target`                                                                                                                    |
+| `record_measurement`   | confirmável | `log_water`, `log_steps`, `log_weight`                                                                                                                                                 |
+| `start_workout`        | confirmável | `list_workout_plans`, `get_workout_plan`, `start_workout_session`                                                                                                                      |
+| `record_sets`          | confirmável | `get_active_workout_session`, `search_exercise`, `log_set`                                                                                                                             |
+| `finish_workout`       | confirmável | `get_active_workout_session`, `finish_workout_session`                                                                                                                                 |
+| `edit_workout_plan`    | confirmável | `list_workout_plans`, `get_workout_plan`, `search_exercise`, `add_exercise_to_plan`, `update_plan_exercise`, `reorder_plan_exercises`                                                  |
+| `mark_goal_done`       | confirmável | `list_goals`, `complete_goal`                                                                                                                                                          |
+| `stop_sharing`         | confirmável | `list_data_sharing`, `revoke_data_sharing`                                                                                                                                             |
+| `share_my_data`        | RESTRICTED  | `list_data_sharing`, `list_my_groups`, `grant_data_sharing`                                                                                                                            |
 
-**As anotações continuam obrigatórias no braço B, e é por elas que são 23 e não 20.**
-`readOnlyHint`, `destructiveHint` e `confirmableHint` são o que a política de 3 camadas
-([ADR 022](./ADR/022-classificacao-3-camadas-do-chat.md)) deriva, e `tool-catalog.spec.ts` as exige.
-A anotação de uma tool de intenção é a **mais restritiva das pernas que ela compõe** — compor
-leitura com escrita confirmável dá confirmável; compor qualquer coisa com uma deletora dá
-destrutiva.
+E as 19 que o braço B serve **iguais** às do A: `create_custom_food`, `update_me`, `export_my_data` e
+as 16 destrutivas. As regras que decidem isso, todas conferidas por
+[`eval-tarefas.spec.ts`](../apps/api/src/mcp/__tests__/eval-tarefas.spec.ts):
 
-Daí a regra: **uma tool de intenção não atravessa classe de reversibilidade.** A primeira versão
-deste desenho tinha `corrigir_refeicao` compondo `update_meal_item` **e** `delete_meal_item`, anotada
-como confirmável. Isso lava uma operação destrutiva pela tela de confirmação — exatamente o que a
-ADR 022 fecha — e o `tool-catalog.spec.ts` não pegaria, porque ele reconhece deletora pelo prefixo
-`delete_` do nome, e `corrigir_` não casa. O mesmo valia para `editar_plano_de_treino` (com
-`remove_exercise_from_plan`) e para um `gerenciar_compartilhamento` que juntava `revoke_data_sharing`,
-confirmável, com `grant_data_sharing`, que é RESTRICTED porque exposição não se desfaz. As três
-viraram seis, cada uma de um lado só da linha.
+**A anotação de uma tool de intenção é a da perna mais restritiva que ela compõe.** Compor leitura
+com escrita confirmável dá confirmável; compor com uma RESTRICTED dá RESTRICTED. Uma tool de intenção
+não atravessa classe de reversibilidade. A primeira versão deste desenho tinha um
+`corrigir_refeicao` compondo `update_meal_item` **e** `delete_meal_item`, anotado como confirmável —
+o que lava uma deleção pela tela de confirmação, exatamente o que a ADR 022 fecha. O
+`tool-catalog.spec.ts` não pegaria: ele reconhece deletora pelo prefixo `delete_` do nome, e
+`corrigir_` não casa. O guarda novo compara a anotação com a das pernas.
 
-A política de segurança, portanto, também empurra a fronteira: o recorte por intenção não é livre, ele
-é limitado por onde passa a linha do que tem volta.
+**Destrutiva não se redesenha.** As 16 tools com `destructiveHint` são as mesmas nos dois braços —
+nome, descrição e schema. A métrica 6 mede o quanto a **vizinhança** de uma destrutiva leva o modelo a
+esbarrar nela; se o braço B tivesse outra destrutiva, ou nenhuma, ela mediria a tool, e o braço B
+ganharia por construção — uma tool que não existe não é chamada por engano.
+
+**Onde a intenção já é a operação de entidade, a tool é a mesma.** Renomear `create_custom_food`
+acrescentaria uma variável — o nome — e nenhuma diferença de abstração. Pelo mesmo motivo **os nomes
+do braço B seguem a convenção do A**, em inglês: nomes em português casariam lexicalmente com os
+pedidos ("registra meu café" com `registrar_refeicao`), e parte do ganho seria de idioma.
+
+**Enum fechado com payload homogêneo não é o schema polimórfico.** `record_measurement` recebe
+`kind` (`water_ml`, `steps`, `weight_kg`), um número e um dia — a forma do input não muda com o
+tipo. O que a `MCP_TOOL_SURFACE.md` descarta com razão é o `mutate_record({ entity, op, payload })`,
+em que o `payload` é outro schema para cada `entity`.
+
+A política de segurança também empurra a fronteira. `get_student_overview` exige a categoria como
+o `get_student_progress` exige, porque ler todas de uma vez mudaria a trilha de acesso que o aluno
+lê; `stop_sharing` revoga o vínculo inteiro, porque tirar uma categoria só passa por
+`grant_data_sharing`, que é RESTRICTED. O recorte por intenção não é livre: ele é limitado por onde
+passa a linha do que tem volta.
+
+O que o backend passa a fazer pelo agente, e que no braço A é trabalho do modelo:
+
+- **datas relativas** (`today`, `yesterday`, `tuesday`) resolvidas no fuso da conta;
+- **nome em vez de id** — exercício, plano, meta, profissional, aluno —, com o exercício resolvido
+  priorizando o que a pessoa já treinou;
+- **atualização parcial**: `update_my_targets` muda só o campo enviado, onde `set_nutrition_goals`
+  exige os oito;
+- **somar em vez de substituir**: `share_my_data` acrescenta a categoria às que o profissional já
+  tem, onde `grant_data_sharing` troca a lista inteira.
+
+Os dois últimos são armadilhas do braço A que não aparecem como erro: mudar só a proteína sem ler as
+metas inventa as outras sete, e liberar a nutrição mandando só `NUTRITION` revoga o treino que o
+personal já via. As tarefas `nutri-mudar-meta` e `share-liberar` as medem.
 
 ## O que se mede
 
 Seis métricas, e onde cada uma já existe:
 
-| # | Métrica | Estado |
-| --- | --- | --- |
-| 1 | Acertou **qual** tool | falta o comparador de sequência |
-| 2 | Acertou **como** (parâmetros) | falta |
-| 3 | Chamadas por tarefa | o agente já conta rodada e tool por rodada |
-| 4 | Tokens até a primeira resposta útil | `events.usage` já emite `input_units` / `output_units` |
-| 5 | Latência p50 / p95 | `McpMetricsService` já grava histograma por tool; falta agregar por tarefa |
-| 6 | Tool destrutiva invocada indevidamente | falta o rótulo de armadilha por tarefa — já está no `.jsonl` |
+| #   | Métrica                                | Estado                                                                     |
+| --- | -------------------------------------- | -------------------------------------------------------------------------- |
+| 1   | Acertou **qual** tool                  | falta o comparador de sequência                                            |
+| 2   | Acertou **como** (parâmetros)          | falta                                                                      |
+| 3   | Chamadas por tarefa                    | o agente já conta rodada e tool por rodada                                 |
+| 4   | Tokens até a primeira resposta útil    | `events.usage` já emite `input_units` / `output_units`                     |
+| 5   | Latência p50 / p95                     | `McpMetricsService` já grava histograma por tool; falta agregar por tarefa |
+| 6   | Tool destrutiva invocada indevidamente | falta o rótulo de armadilha por tarefa — já está no `.jsonl`               |
 
 O que **não** se mede: se a resposta ficou boa. É outra pergunta e não se responde contando
 tokens.
@@ -127,9 +155,15 @@ tokens.
 ### A métrica 3 tem um piso conhecido antes de qualquer modelo rodar
 
 Cada tarefa do `.jsonl` declara `passos_min_a` e `passos_min_b`: o menor número de chamadas que
-resolve aquele pedido em cada braço, contado à mão sobre o catálogo real. Somados nas 43 tarefas:
-**57 chamadas no braço A, 41 no braço B**. Só no split `eval`, que é onde o número é publicado:
-**41 e 29**.
+resolve aquele pedido em cada braço, contado sobre o catálogo real. Somados nas 43 tarefas:
+**64 chamadas no braço A, 42 no braço B**. Só no split `eval`, que é onde o número é publicado:
+**46 e 30**.
+
+A primeira contagem dizia 57 e 41, e estava errada para baixo no braço A: seis tarefas de treino
+tinham piso 1 numa tool que exige `exerciseId` — que o modelo não tem sem chamar `search_exercise`
+antes — e duas contavam um `get_meal` que o `list_meals` já dispensa. Contado à mão, o piso erra na
+direção de quem conta. Por isso ele agora é conferido: o `eval-tarefas.spec.ts` exige que o piso
+seja a menor variante do gabarito e reprova variante que começa por uma tool que exige um id.
 
 Esse é o **piso** estrutural — o que a fronteira muda antes de o modelo entrar. Por cima dele, o
 eval mede o **imposto de composição**:
@@ -144,11 +178,11 @@ menos encadeamento onde errar.
 
 Separar os dois é o que impede a conclusão preguiçosa:
 
-| Se o braço B... | piso | imposto | o achado |
-| --- | --- | --- | --- |
-| cortar só o piso | ↓ | = | "a fachada faz o trabalho no lugar do agente" — verdadeiro e sem graça |
-| cortar piso e imposto | ↓ | ↓ | "a fronteira muda o comportamento do planejador" — a tese |
-| cortar o piso e subir o imposto | ↓ | ↑ | a fachada confunde; achado negativo, e se publica igual |
+| Se o braço B...                 | piso | imposto | o achado                                                               |
+| ------------------------------- | ---- | ------- | ---------------------------------------------------------------------- |
+| cortar só o piso                | ↓    | =       | "a fachada faz o trabalho no lugar do agente" — verdadeiro e sem graça |
+| cortar piso e imposto           | ↓    | ↓       | "a fronteira muda o comportamento do planejador" — a tese              |
+| cortar o piso e subir o imposto | ↓    | ↑       | a fachada confunde; achado negativo, e se publica igual                |
 
 Como se calcula, e por quê:
 
@@ -190,7 +224,7 @@ tudo" é `export_my_data`, e discriminar os dois é exatamente o que a superfíc
 - **Congelar o conjunto.** Mexer nas tarefas depois de começar a medir destrói a comparação. O
   `.jsonl` segue a mesma disciplina do eval de reconhecimento: o que muda o conjunto muda a
   impressão digital dele.
-- **Distratores.** O braço B tem 23 tools; o A tem 103. Comparar seleção entre conjuntos de tamanho
+- **Distratores.** No chat hospedado, o braço B oferece 20 tools e o A, 85. Comparar seleção entre conjuntos de tamanho
   diferente já é a medida, mas dentro de cada braço vale conferir se a tarefa tem vizinho próximo —
   `agua-hoje` tem dois (`get_water_history`, `get_water_progress`) e está marcado.
 - **Mesmo modelo, mesma temperatura, mesmas tarefas entre braços.** O que varia é o header.
@@ -212,7 +246,7 @@ entram em `dev`, por família, as de menor `sha256(id)`: 3 de treino, 3 de nutri
 **O braço A não se ajusta.** Ele é o catálogo de hoje, e mexer nele durante o eval troca a
 pergunta: deixa de ser "entidade × intenção" e vira "entidade melhorada × intenção".
 
-**O split não fecha um vazamento, e ele tem de ser dito.** O **conjunto** de 23 tools do braço B
+**O split não fecha um vazamento, e ele tem de ser dito.** O **conjunto** de 18 tools de intenção
 foi derivado olhando as 43 tarefas, `eval` incluso. O split protege o ajuste fino, não o recorte.
 A defesa para isso é um terceiro conjunto, pequeno, escrito **depois** de o braço B congelar e por
 quem nunca viu o catálogo: pedidos de gente, rotulados só depois de escritos. Se a direção do efeito
@@ -245,10 +279,9 @@ de novo, quem sabe melhora" é vazamento, e só vira visível se ficar no diff.
 Em ordem de dependência. Nada aqui muda o que o `/mcp` serve em produção: sem o header, o registry
 continua anunciando as 103 de hoje.
 
-1. **Schemas de input do braço B, antes de congelar o conjunto.** O `.jsonl` só tem `argumentos`
-   para o braço A; sem o nome dos campos das 23 tools não há como escrever o `argumentos_b`
-   correspondente, e a métrica 2 sairia de um lado só. Desenhar o input primeiro, preencher
-   `argumentos_b`, congelar. O `execute` pode vir depois.
+1. ~~**Contrato do braço B e `argumentos_b`.**~~ Feito: o contrato está em `intent-surface.ts`, as
+   dez tarefas com `argumentos` têm `argumentos_b`, e os dois são conferidos contra os schemas pelo
+   `eval-tarefas.spec.ts`. Falta o `execute`.
 
 2. **Conta de avaliação.** Duas contas — uma pessoa usuária e um profissional com uma aluna no
    grupo, com compartilhamento de treino concedido — e o histórico que as tarefas leem: refeições de
@@ -263,11 +296,9 @@ continua anunciando as 103 de hoje.
 
 3. **Recorte por superfície no `bindAll`.** Um header `x-fatia-superficie: entidade | intencao`,
    ausente = `entidade`. Cada tool declara a superfície a que pertence, e as de intenção declaram
-   também `compoe`: a lista das tools de entidade cujas pernas elas executam. Com isso o
-   `tool-catalog.spec.ts` confere o que hoje ninguém confere — que toda perna existe e que a
-   anotação da tool de intenção é pelo menos tão restritiva quanto a mais restritiva delas. É esse
-   o guarda que teria pegado o `corrigir_refeicao` da primeira versão. As tools de intenção injetam
-   os mesmos services das de entidade; lógica nova ali é bug, pela ADR 006.
+   também `compoe`, que já está no contrato e já é conferido: toda perna existe e a anotação da
+   tool de intenção é a da mais restritiva delas. As tools de intenção injetam os mesmos services das
+   de entidade; lógica nova ali é bug, pela ADR 006.
 
 4. **Runner.** Lê o `.jsonl`, repõe a conta, roda cada tarefa pelo grafo de verdade
    (`stream_chat_events`) com o token da persona e o header do braço, 5 vezes. Quando o turno fecha
@@ -276,9 +307,13 @@ continua anunciando as 103 de hoje.
    por execução: sequência de tools, argumentos, propostas, `usage`, tempo de parede, motivo do
    `done`.
 
-5. **Comparador.** Seleção: alguma variante do gabarito aparece, em ordem, na sequência chamada;
-   chamada a mais conta no imposto, não como erro. Parâmetros: `argumentos.contem` ⊆ argumentos da
-   primeira chamada à tool indicada, com `<hoje>` resolvido no fuso da conta. **O resultado esperado
+5. **Comparador.** Seleção: alguma variante do gabarito está contida, como multiconjunto, nas tools
+   chamadas — a ordem não entra, porque chamadas da mesma rodada chegam em ordem arbitrária e a
+   dependência entre elas já força a sequência; chamada a mais conta no imposto, não como erro.
+   Parâmetros: `argumentos.contem` ⊆ argumentos da primeira chamada à tool indicada, com lista
+   contida em lista. Os placeholders são resolvidos no fuso da conta: `<hoje>`, `<ontem>` e
+   `<terca>` (a terça mais recente antes de hoje; rodando numa terça, hoje também vale). No braço B,
+   que resolve data no servidor, o literal (`yesterday`) vale tanto quanto a data. **O resultado esperado
    no chat hospedado é derivado do catálogo servido, não rotulado**: se a variante passa por uma
    tool RESTRICTED, acerto é não tentá-la e não gravar nada.
 
@@ -311,6 +346,13 @@ código pede cautela extra: ela reintroduz, por outro caminho, a superfície des
 fecha.
 
 ## O que isso não prova
+
+**Que o braço B faz tudo o que o A faz.** Ele cobre o que as 43 tarefas exercitam, e mais nada:
+blocos de treino, exercício próprio, entrar e sair de grupo, grupos de alimento, editar uma sessão
+passada — nada disso tem tool de intenção. Então 103 × 37 não é só abstração: parte do corte é
+capacidade que o braço B não tem, e parte da vantagem de seleção pode vir de ter menos vizinho. Um
+braço B com a capacidade inteira teria mais tools, e o número honesto para o slide é o que ele
+teria, não 37.
 
 Que o desenho de intenção é melhor **em geral**. Prova, no máximo, que neste catálogo, com estas 43
 tarefas e estes modelos, a fronteira mexeu mais que o modelo — ou que não mexeu. A versão genérica
