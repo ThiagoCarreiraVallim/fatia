@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 /**
  * O campo de mensagem ficou **visível e intocável** na primeira versão do chat.
  *
- * O `ChatView` fixava `h-[calc(100dvh-5rem)]` — tela cheia menos a barra de baixo. Mas ele vive
+ * A tela do chat fixava `h-[calc(100dvh-5rem)]` — tela cheia menos a barra de baixo. Mas ele vive
  * dentro de `<main className="pt-16 pb-24">`, então a caixa começa 4rem abaixo do topo e termina
  * 4rem **dentro** da `bottom-nav`, que é `fixed` com `z-50`. O campo aparecia na tela e não
  * aceitava foco, digitação nem envio: a barra estava por cima.
@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
  * o filho transborda.
  *
  * **Nenhum teste de componente pega este defeito**, e não é falha de quem os escreveu: o jsdom
- * não calcula layout nem empilhamento. Renderizar o `ChatView` e digitar funciona lá, porque não
+ * não calcula layout nem empilhamento. Renderizar a tela do chat e digitar funciona lá, porque não
  * existe barra nenhuma por cima. O que dá para amarrar é o **acordo entre os dois arquivos**, que
  * é onde o erro de fato mora — a mesma técnica que `mcp-url.test.ts` usa para não deixar a tela
  * divergir do controller.
@@ -22,7 +22,7 @@ import { describe, expect, it } from 'vitest';
 
 const RAIZ = resolve(__dirname, '..', '..', '..', '..');
 const LAYOUT = resolve(RAIZ, 'src/app/(app)/layout.tsx');
-const CHAT = resolve(RAIZ, 'src/components/chat/chat-view.tsx');
+const CHAT = resolve(RAIZ, 'src/components/chat/chat-screen.tsx');
 
 /** `pt-16` → 4, `pb-24` → 6. A escala do Tailwind é 0.25rem por unidade. */
 function remDaClasse(fonte: string, prefixo: 'pt' | 'pb'): number {
@@ -45,7 +45,7 @@ describe('a caixa do chat cabe entre as duas barras', () => {
     const reservado = remDaClasse(layout, 'pt') + remDaClasse(layout, 'pb');
 
     const altura = chat.match(/h-\[calc\(100dvh-([\d.]+)rem\)\]/);
-    expect(altura, 'ChatView precisa declarar a altura como calc(100dvh-Nrem)').not.toBeNull();
+    expect(altura, 'ChatScreen precisa declarar a altura como calc(100dvh-Nrem)').not.toBeNull();
 
     // O defeito original: 5 (só a barra de baixo) contra os 10 que o layout reserva.
     expect(Number(altura![1])).toBe(reservado);
