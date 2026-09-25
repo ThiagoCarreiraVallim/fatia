@@ -1,36 +1,42 @@
 """Superfície HTTP do agente.
 
-Duas rotas de diagnóstico (`/health`, `/capabilities`) e duas de inferência:
-`/recognize-meal` (#139) e `/chat` (#248). O que a superfície estabelece é o
-**contrato de erro**: todo `AIProviderError`, todo `McpError` e todo corpo
-inválido viram um envelope `{"error": {"code", "message"}}` com um `code`
-estável, que é o que o NestJS traduz para o cliente cair no caminho manual.
+Duas rotas de diagnóstico (`/health`, `/capabilities`) e quatro de inferência:
+`/recognize-meal` (#139), `/chat` (#248, ADR 023), `/title` e `/transcribe`
+(#141). O que a superfície estabelece é o **contrato de erro**: todo
+`AIProviderError`, todo `McpError` e todo corpo inválido viram um envelope
+`{"error": {"code", "message"}}` com um `code` estável, que é o que o NestJS
+traduz para o cliente cair no caminho manual.
 
 No `/chat` isso vale para **toda** recusa anterior ao primeiro byte, sem
-exceção — foi a promessa que a #248 escreveu e não cumpriu em dois caminhos (a
-credencial do agente e a validação do corpo, que saíam como `{"detail": ...}`).
-As recusas de formato de imagem do `/recognize-meal` continuam como
+exceção — credencial do agente, corpo inválido, Bearer recusado pelo `/mcp`,
+retomada que não responde à pausa pendente (409). As recusas de formato de
+imagem e de áudio do `/recognize-meal` e do `/transcribe` continuam como
 `HTTPException`: são o contrato da #139, e o NestJS as traduz por status.
 
-As duas rotas de inferência são autenticadas por segredo compartilhado com o
+As quatro rotas de inferência são autenticadas por segredo compartilhado com o
 `apps/api` — ver `settings.agent_auth_unavailable_reason`. É a fronteira de
 custo: rota que dispara inferência paga não pode ser anônima (ADR 018).
 
-**A identidade do usuário é exigência de uma rota e ausência deliberada na
-outra**, e a diferença é o que cada uma precisa alcançar:
+**A identidade do usuário é exigência de uma rota e ausência deliberada nas
+outras**, e a diferença é o que cada uma precisa alcançar:
 
-- `/recognize-meal` **não** recebe identidade. Ela olha uma foto e devolve
-  candidatos; não fala com o banco nem com o `/mcp`. Um Bearer de usuário ali só
-  aumentaria o estrago de um comprometimento, sem comprar nada.
-- `/chat` **exige** o Bearer do usuário, e o encaminha ao `/mcp`. É a inversão
-  registrada na ADR 021, e ela não é conveniência: é a única forma de o agente
-  alcançar dado sem ganhar credencial de banco — o que criaria um **segundo**
-  ponto de isolamento por `userId`, num serviço em outra linguagem e sem os
-  testes que protegem o primeiro (ADR 010 e ADR 015).
+- `/recognize-meal`, `/title` e `/transcribe` **não** recebem identidade. Olham
+  uma foto, um texto ou um áudio e devolvem sugestão; não falam com o banco nem
+  com o `/mcp`. Um Bearer de usuário ali só aumentaria o estrago de um
+  comprometimento, sem comprar nada.
+- `/chat` **exige** o Bearer do usuário, o encaminha ao `/mcp` e deriva dele o
+  dono da conversa (`get_me`), nunca do corpo. É a inversão registrada na ADR
+  021, e ela não é conveniência: é a única forma de o agente alcançar dado sem
+  ganhar credencial de domínio — o que criaria um **segundo** ponto de
+  isolamento por `userId`, num serviço em outra linguagem e sem os testes que
+  protegem o primeiro (ADR 010 e ADR 015).
 
-Até a #248, este docstring afirmava que o agente não recebia identidade de
-usuário, ponto. A frase valia para a única rota que existia; virou meia verdade
-no dia em que o chat entrou, e doc que contradiz o código é defeito.
+O `/chat` lê e escreve em três camadas (ADR 022) e **tem estado**: o grafo
+pausa em `interrupt()` — confirmar uma escrita, responder a `ask_user`, pedir
+mais orçamento — e a thread `{userId}:{conversationId}` espera no checkpointer
+do schema `agent_checkpoint` (ADR 023). O que o checkpointer grava é o estado
+da conversa; o Bearer e o provedor viajam no runtime context, que não é
+serializado, e a foto do turno entra só no prompt, com uma marca no estado.
 """
 
 import base64

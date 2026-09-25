@@ -813,12 +813,12 @@ model Message {
   @@index([conversationId, createdAt])
 }
 
-/// O que o assistente do chat guardou sobre a pessoa, a pedido dela ("lembra que sou
-/// vegetariana"). Entra no prompt de toda conversa, cercado como dado.
+/// O que o assistente do chat guardou sobre a pessoa, a pedido dela ("lembra que não
+/// como carne"). Entra no prompt de toda conversa, cercado como dado.
 ///
-/// Escrita só pela tool `remember` (CONFIRMABLE: a pessoa aprova o texto exato na tela) ou
-/// pela tela de memórias; apagada pela `forget` ou pela tela. Vai no `export_my_data` e morre
-/// com a conta pelo cascade.
+/// Escrita só pela tool `save_memory` (CONFIRMABLE: a pessoa aprova o texto exato na tela);
+/// apagada pela `forget_memory` ou pela gaveta de memórias do chat. Vai no `export_my_data` e
+/// morre com a conta pelo cascade.
 model UserMemory {
   id        String   @id @default(uuid())
   userId    String

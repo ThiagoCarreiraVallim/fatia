@@ -1,18 +1,27 @@
 """O grafo da conversa, com estado no checkpointer (ADR 023).
 
-    START → hidratar → agente ⇄ ferramentas → portao → ferramentas → agente
-                          │            └──────────── (nada a perguntar) ──┘
-                          └── fechar → END
+    START → hidratar → [planejar] → agente ⇄ ferramentas ⇄ portao
+                                agente ├─ tool falhou ──→ refletir → agente
+                                       ├─ passou do teto → orcamento → agente | ferramentas
+                                       ├─ sem tool ─────→ validar → agente | fechar → END
+                                       └─ volta de fechamento ──→ fechar
 
 - **hidratar**: zera o que é do turno e, numa thread fria, semeia a conversa com
   o histórico que o `apps/api` tem gravado.
-- **agente**: o modelo, em streaming — ou responde, ou pede tools.
+- **planejar**: só com `AGENT_CHAT_PLANNER` — divide o pedido em passos (`plan`).
+- **agente**: o modelo, em streaming — ou responde, ou pede tools. Com foto no
+  turno, vai ao modelo de visão (`FotoDoTurno`).
 - **ferramentas**: executa pelo `/mcp`, com o Bearer de quem está falando, o que
   pode rodar agora: toda READ_ONLY e toda CONFIRMABLE que a pessoa **já**
   decidiu. A CONFIRMABLE sem decisão fica sem resultado, e é isso que leva ao
   portão.
-- **portao**: o único nó que interrompe. Junta numa pausa só as escritas à
-  espera de aprovação e as perguntas de `ask_user`.
+- **portao**: junta numa pausa só as escritas à espera de aprovação e as
+  perguntas de `ask_user`.
+- **orcamento**: passou do teto de voltas de tool — pausa perguntando se segue
+  (`continue`). Com o `portao`, são os dois únicos nós que interrompem, e nenhum
+  dos dois tem efeito colateral antes do `interrupt()`.
+- **refletir** / **validar**: a segunda chance sem chamada extra ao modelo — ver
+  `qualidade.py`.
 - **fechar**: garante que o turno termina com texto na tela.
 
 ## Por que LangGraph aqui

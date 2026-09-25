@@ -81,6 +81,7 @@ Tudo roda no servidor próprio. Em produção, Dokploy (Traefik) faz roteamento 
 - **Recharts** — gráficos de progresso
 - **next-pwa** — service worker e manifest
 - **TanStack Query** — fetching/cache no client
+- **assistant-ui** (`@assistant-ui/react` + `useLangGraphRuntime`) — a tela do chat, que consome o protocolo nativo do LangGraph sem tradutor
 
 ### Agente de IA (`apps/agent`)
 
@@ -89,13 +90,76 @@ Tudo roda no servidor próprio. Em produção, Dokploy (Traefik) faz roteamento 
 - **Python** com toolchain própria (`uv`, `ruff`, `mypy`, `pytest`), **fora do workspace pnpm** — `pnpm-workspace.yaml` exclui `apps/agent` explicitamente
 - **FastAPI** — superfície HTTP do serviço
 - **httpx** — cliente OpenAI-compatível único: LM Studio local em desenvolvimento, Cloudflare AI Gateway em produção. Trocar de provedor ou de modelo é trocar variável de ambiente, sem `if ambiente == 'prod'` no caminho de inferência
-- **LangGraph** entrou com o chat (#248), e não com o reconhecimento por foto: aquele é uma chamada e uma validação em linha reta, e um grafo de um nó só seria cerimônia. O chat **volta** — o modelo pede tool, a tool responde, ele decide de novo — e é ciclo com condição de parada
+- **LangGraph** entrou com o chat (#248), e não com o reconhecimento por foto: aquele é uma chamada e uma validação em linha reta, e um grafo de um nó só seria cerimônia. O chat **volta** — o modelo pede tool, a tool responde, ele decide de novo — e **pausa** para ouvir a pessoa, que é o que só existe com checkpointer
+- **`langgraph-checkpoint-postgres` + `psycopg`** — o estado das conversas no schema `agent_checkpoint` do mesmo Postgres da Fatia ([ADR 023](ADR/023-checkpointer-no-postgres-da-fatia.md)). Sem `AGENT_CHECKPOINT_DATABASE_URL`, o saver é em memória: aceitável em desenvolvimento, e o `/health` diz qual dos dois vale
 
 Três propriedades que valem por si:
 
-- **Sem credencial de banco e sem rota privilegiada.** O acesso a dado do usuário é pelo `/mcp`, com o Bearer do próprio usuário — o filtro por `userId` continua tendo um dono só, o NestJS.
-- **O Bearer do usuário só existe no `/chat`, e só sai para o `/mcp`.** É a inversão registrada na [ADR 021](ADR/021-agente-recebe-o-bearer-do-usuario.md): o `/recognize-meal` continua sem identidade nenhuma, e o chat só chama as tools que o `/mcp` anuncia como somente-leitura. O token não entra em log, span, estado do grafo nem histórico — ver o vetor 10 do [`THREAT_MODEL.md`](THREAT_MODEL.md).
+- **Sem credencial de dado de domínio e sem rota privilegiada.** O acesso a dado do usuário é pelo `/mcp`, com o Bearer do próprio usuário — o filtro por `userId` continua tendo um dono só, o NestJS. A única credencial de Postgres do agente é a do checkpointer, e ela serve ao schema `agent_checkpoint` e a mais nada.
+- **O Bearer do usuário só existe no `/chat`, e só sai para o `/mcp`.** É a inversão registrada na [ADR 021](ADR/021-agente-recebe-o-bearer-do-usuario.md): `/recognize-meal`, `/title` e `/transcribe` continuam sem identidade nenhuma. O token viaja no runtime context do LangGraph, que o checkpointer não serializa, e não entra em log, span, estado do grafo, checkpoint nem histórico — ver o vetor 10 do [`THREAT_MODEL.md`](THREAT_MODEL.md).
 - **Degrada explicitamente.** Sem `AI_BASE_URL`, o serviço sobe, `/health` responde 200 e as capacidades respondem `AI_PROVIDER_NOT_CONFIGURED`. Sem `MCP_BASE_URL`, é o `/chat` que responde `MCP_NOT_CONFIGURED`. O produto inteiro continua funcionando sem IA hospedada.
+
+### Chat hospedado (`apps/web` → `apps/api` → `apps/agent`)
+
+A conversa com a IA hospedada pela Fatia atravessa as três camadas, e cada uma tem um papel que as
+outras não podem assumir:
+
+```
+PWA  /chat/[id]          assistant-ui + useLangGraphRuntime
+  │  POST /api/chat — SSE nativo do LangGraph
+  ▼
+apps/api  /chat          proxy byte a byte · persistência · cota · memórias · título
+  │  X-Fatia-Agent-Key + Bearer da pessoa
+  ▼
+apps/agent  /chat        hidratar → [planejar] → agente ⇄ ferramentas → portão | orçamento → validar → fechar
+  ├─ checkpointer        schema agent_checkpoint, no mesmo Postgres
+  └─ /mcp da apps/api    com o Bearer da pessoa — o único caminho até dado de domínio
+```
+
+- **O PWA** (`apps/web/src/components/chat/`) usa o runtime LangGraph do assistant-ui: gera o
+  `conversationId` na URL (`/chat` → `/chat/[id]`), mostra lista de conversas (busca, renomear,
+  apagar), memórias, aviso de cota, plano, artefatos nos cartões de tool, voto com motivos, e os
+  cartões de pausa. Não carrega argumento de escrita: responde sim ou não por `toolCallId`.
+- **A API** (`apps/api/src/chat/`) é a dona do que persiste. Ela repassa o SSE nativo do agente
+  **byte a byte**, escrevendo antes de ler, e só lê o que precisa gravar (`leitor-do-turno.ts`):
+  `Message` com `metadata` (status do turno, a pausa aberta, quantas fotos), `runId` e o voto.
+  Emite `persisted` com os ids gravados. Antes de abrir o turno ela confere a cota (`AiUsage`) e
+  junta o histórico e as memórias da pessoa; depois soma o `usage` de cada chamada ao modelo. É
+  também ela quem apaga o checkpoint de uma conversa apagada, por SQL direto no schema
+  (`checkpoint-purge.service.ts`) — a eliminação não pode depender de o agente estar no ar.
+- **O agente** (`apps/agent/src/fatia_agent/chat/`) roda o grafo com estado. A thread é
+  `{userId}:{conversationId}`, e o `userId` sai do `get_me` chamado com o Bearer, nunca do corpo.
+  Dado de domínio, ele alcança só pelo `/mcp`.
+
+**O chat lê e escreve, com confirmação.** O recorte é o das três camadas da
+[ADR 022](ADR/022-classificacao-3-camadas-do-chat.md), derivado das anotações que o `/mcp` serve:
+READ_ONLY executa direto, CONFIRMABLE pausa e só executa com o sim da pessoa, RESTRICTED (inclusive
+toda `delete_*`) nunca é oferecida ao modelo. O que executa depois do sim é o `tool_call` guardado
+no checkpoint — o que a pessoa viu é o que roda, sem o cliente como portador dos argumentos.
+
+**Três tipos de pausa, um mecanismo só** (`interrupt()` + retomada, ADR 023): `confirm` (escrita
+CONFIRMABLE), `question` (a tool local `ask_user`, com formulário tipado) e `continue` (o teto de
+voltas de tool acabou, e o agente pergunta se segue em vez de cortar calado). A retomada traz o
+`interruptId` da pausa, e o agente recusa com 409 um id que não é o pendente. A pausa aberta fica em
+`Message.metadata.interrupt` até o turno seguinte, e é isso que faz o cartão voltar depois de um F5.
+
+**Foto e ditado não persistem** ([ADR 020](ADR/020-foto-e-audio-trafegam-sem-persistencia.md)). A
+foto do chat é recodificada no aparelho (o que tira o EXIF antes de sair), limpa de novo na API e vai
+ao modelo de visão só naquele turno; o checkpoint guarda uma marca no lugar dos bytes, e `Message`
+guarda só **quantas** fotos foram. Depois de recarregar, a tela mostra que a foto foi enviada e não
+fica guardada. O ditado manda o áudio cru à API e dela ao `/transcribe` do agente; o texto volta ao
+campo de mensagem e **nunca é enviado sozinho** — a pessoa lê e decide. Do áudio, fica só a duração,
+como unidade de custo.
+
+**Os corpos grandes são por rota.** O parser global de JSON da API tem teto de 100 kB, o certo para
+o resto da superfície. `apps/api/src/chat/corpos-do-chat.ts` registra em `main.ts` um parser de JSON
+maior **só** para `POST /api/chat` (até três fotos em base64) e um parser de áudio cru **só** para
+`POST /api/chat/transcribe`. Subir o teto global abriria todas as outras rotas para corpos grandes.
+
+**Memória é pedido da pessoa, não inferência do agente.** `UserMemory` guarda o que ela pediu para
+lembrar, com teto de quantidade e de tamanho porque toda memória entra em todo prompt. Guardar e
+esquecer passam pela confirmação (`save_memory` e `forget_memory` são CONFIRMABLE); a lista aparece e
+se apaga na tela do chat, sai no export e vai embora com a conta.
 
 ### Compartilhado (`packages/db`)
 
@@ -170,6 +234,7 @@ Ver `packages/db/prisma/schema.prisma` para o schema completo.
 - `Exercise`, `WorkoutPlan`, `WorkoutPlanExercise`, `WorkoutSession`, `SessionSet` (cobre força e cardio)
 - `WeightLog`, `StepLog`
 - `Group`, `GroupMembership`, `ProfessionalLink`, `ProfessionalAccessLog` — B2B (ADR 014)
+- `Conversation`, `Message`, `UserMemory`, `AiUsage` — chat hospedado e o livro-caixa da inferência paga (#135). O estado de trabalho do grafo fica fora do Prisma, no schema `agent_checkpoint` (ADR 023)
 
 > **Removido em ADR 008:** `McpToken`. Tokens MCP estáticos foram substituídos por JWTs do Logto (OAuth flow).
 

@@ -68,6 +68,9 @@ essa é a clientela dele, e é dado de terceiro.
   e é descartada — não há bucket, não há upload persistido, não há coluna de foto em `Meal`. O que
   entra no banco são os dados estruturados que a pessoa confirma. Detalhe do trânsito na seção
   "Reconhecimento de refeição por foto", abaixo.
+- **Fotos e áudio do chat.** A foto anexada a uma mensagem e o áudio do ditado vão ao provedor
+  naquele turno e somem com a requisição; do banco e do checkpoint do agente, só sai que **houve**
+  foto (quantas) e quanto o áudio durou. Ver "Chat com a IA hospedada", abaixo.
 - **Senhas.** Removidas na [ADR 008](./ADR/008-logto-oidc-provider.md) — a migration
   `20260510190000_logto_auth_adr008` dropou a coluna `passwordHash`. A credencial vive no Logto.
 - **Meios de pagamento.** A instância pública é gratuita.
@@ -96,28 +99,40 @@ conecta o Claude dele ao `/mcp` e conversa. Se fotografa um prato, quem olha a i
 estruturado. A imagem nunca chega aqui. O tratamento dessa conversa é regido pela política da
 Anthropic, não por esta. Custo de inferência para a Fatia: zero, por construção.
 
-**Caminho 2 — a IA hospedada pela Fatia.** Ainda **não está disponível a nenhum usuário**; entra
-com as issues #139 (foto) e #141 (voz). Aqui o conteúdo sai do dispositivo, atravessa o `apps/api`,
-vai ao `apps/agent` e de lá ao provedor, pelo Cloudflare AI Gateway. É este caminho que a tabela
-abaixo descreve.
+**Caminho 2 — a IA hospedada pela Fatia.** O código existe — reconhecimento por foto (#139), chat
+hospedado e ditado (#141) —, mas **não está disponível a nenhum usuário da instância oficial**: as
+listas de destino e de modelo revisados estão vazias, e nada sai para provedor remoto enquanto
+estiverem (ver adiante). Aqui o conteúdo sai do dispositivo, atravessa o `apps/api`, vai ao
+`apps/agent` e de lá ao provedor, pelo Cloudflare AI Gateway. É este caminho que a tabela abaixo
+descreve.
 
-| Capacidade         | O que sai do dispositivo                           | Metadados que vão junto | Persistido? |
-| ------------------ | -------------------------------------------------- | ----------------------- | ----------- |
-| Visão (#139)       | a imagem do prato, reencodada em JPEG **sem EXIF** | o prompt, e nada mais   | **não**     |
-| Texto (#141)       | a frase digitada ou já transcrita                  | o prompt, e nada mais   | **não**     |
-| Transcrição (#141) | o áudio gravado                                    | o formato do áudio      | **não**     |
+| Capacidade                  | O que vai ao provedor                                                                        | Persistido?                                 |
+| --------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Visão — registro por foto   | a imagem do prato, reencodada em JPEG **sem EXIF**, e o prompt                               | **não**                                     |
+| Texto — chat                | a mensagem, as últimas falas da conversa, os resultados das tools lidas, as memórias, o fuso | a conversa, sim — em `Message`; ver adiante |
+| Visão — foto no chat        | tudo o que o texto leva, mais até três fotos da mensagem, recodificadas **sem EXIF**         | **não** — só quantas foram                  |
+| Transcrição — ditado (#141) | o áudio gravado e o formato dele                                                             | **não** — só a duração, como custo          |
+
+A linha do chat é diferente das outras, e é por isso que ela está escrita por extenso: para
+responder "o que eu comi ontem", o modelo **precisa ver** o que a pessoa comeu ontem. O resultado
+das tools que o agente chama pelo `/mcp` — refeições, peso, treinos — entra no prompt daquela
+chamada, junto com o que a pessoa escreveu. Não há como ter o chat sem isso; o que há é não mandar
+mais do que isso (o prompt usa as últimas 40 falas, não a conversa inteira) e não mandar quem é.
 
 **Nenhum identificador do usuário acompanha o conteúdo.** Não vai `userId`, e-mail, nome, nem o
-Bearer do usuário — o Bearer autentica o `apps/api` e o `/mcp`, e não é repassado ao gateway. Do
-lado do provedor, uma chamada é indistinguível da seguinte, como já acontece com o Open Food Facts.
+Bearer do usuário — o Bearer autentica o `apps/api` e o `/mcp`, e não é repassado ao gateway
+(`apps/agent/tests/chat/test_sem_vazamento.py` confere o corpo mandado ao provedor). Do
+lado do provedor, nenhuma chamada carrega quem a fez, como já acontece com o Open Food Facts — num
+chat, os turnos da mesma conversa se parecem pelo conteúdo, e é só isso que os liga.
 
 **O EXIF é removido no aparelho, antes do envio.** É o único ponto onde isso tem efeito: uma vez
 enviada, a localização já vazou. Sem essa remoção, a afirmação de que o Fatia não coleta localização
 ficaria falsa por um metadado que ninguém vê olhando o backend.
 
-**Nada disso é armazenado em ponto nenhum do caminho que este repositório opera.** Não há bucket,
-não há disco, não há coluna, nem no `apps/api` nem no `apps/agent`. Os bytes vivem em memória
-durante a requisição. O que está fora do repositório — o gateway e o provedor de modelo — é tratado
+**Nenhuma imagem nem áudio é armazenado em ponto nenhum do caminho que este repositório opera.**
+Não há bucket, não há disco, não há coluna, nem no `apps/api` nem no `apps/agent` — nem no
+checkpoint do agente. Os bytes vivem em memória durante a requisição. O texto do chat é a exceção
+declarada: ele é o histórico que a pessoa vê, e tem seção própria. O que está fora do repositório — o gateway e o provedor de modelo — é tratado
 nos dois parágrafos seguintes, e é tratado à parte de propósito: uma promessa em nome de terceiro
 que ninguém consegue conferir é o defeito que a #136 existe para eliminar, não algo a repetir aqui.
 
@@ -173,11 +188,17 @@ em log" deste documento e a §Observabilidade de `docs/MCP.md`.
 
 Chamada do caminho 1 não gera registro nenhum aqui — ela não passa por este módulo, por construção.
 
-> **Pendência conhecida:** a tabela que guarda esse registro e a que guarda o consentimento
-> específico de IA **ainda não existem** no `schema.prisma`. Elas estão propostas na PR da #135/#136
-> e dependem de aprovação do dono, junto da migration. Enquanto não existirem, não há IA hospedada
-> em produção, então não há o que registrar. Quando entrarem, valem as mesmas regras de todo o
-> resto: `onDelete: Cascade` a partir de `User`, e o registro vai embora com a conta.
+O registro é `AiUsage`: a funcionalidade (`chat`, `chat_title`, `transcription`), o modelo, o custo
+em micro-unidades e se o custo foi de fato medido. **É a única tabela ligada a `User` que não vai
+embora com a conta**, e é de propósito: `onDelete: SetNull`. O teto global do dia mede dinheiro que
+já saiu do caixa, e apagar a conta não desfaz a fatura — com `Cascade`, quem gastasse o orçamento da
+instância e apagasse a conta em seguida devolveria a cota global ao zero. A linha órfã não guarda
+nada pessoal: sem o `userId`, sobra um custo e um nome de modelo. Pelo mesmo motivo ela não entra no
+`export_my_data` — não há ali nada do titular.
+
+> **Pendência conhecida:** a tabela que guarda o consentimento específico de IA **ainda não existe**
+> no `schema.prisma`. Ela depende da #112 e de aprovação do dono, junto da migration. Enquanto não
+> existir, não há IA hospedada em produção.
 
 ## Consulta ao Open Food Facts (scanner de código de barras)
 
@@ -303,6 +324,99 @@ O texto da permissão de câmera do app diz que a foto é analisada e descartada
 repete isso. A confirmação é obrigatória por construção: o reconhecimento **não grava nada**, e a
 única forma de a refeição entrar no banco é a pessoa revisar a lista e tocar em registrar.
 
+## Chat com a IA hospedada
+
+A conversa com o assistente da Fatia (`/chat` no PWA) é o único lugar em que o produto guarda o que
+a pessoa **escreveu** sobre a própria saúde, em prosa — e não um número. Por isso ela é descrita
+aqui item a item. O fluxo está em [`ARCHITECTURE.md`](./ARCHITECTURE.md) §"Chat hospedado"; o estado
+do agente, na [ADR 023](./ADR/023-checkpointer-no-postgres-da-fatia.md).
+
+| Dado                                              | Onde                                              | Retenção                                                                  |
+| ------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------- |
+| Conversas e mensagens (`Conversation`, `Message`) | Postgres                                          | Enquanto a pessoa não apagar a conversa, e enquanto a conta existir       |
+| Voto na resposta e motivos (`Message.review*`)    | Postgres, na própria mensagem                     | Igual à mensagem                                                          |
+| Pausa aberta — a escrita ou a pergunta à espera   | Postgres, `Message.metadata.interrupt`            | **Até o turno seguinte**, qualquer que seja a resposta                    |
+| Estado do grafo da conversa                       | Postgres, schema `agent_checkpoint`               | Igual à conversa; apagado com ela e com a conta                           |
+| Memórias (`UserMemory`)                           | Postgres                                          | Até a pessoa esquecer, ou apagar a conta                                  |
+| Foto anexada a uma mensagem                       | Memória dos processos, durante o turno            | Nenhuma. Fica só **quantas** foram (`Message.metadata.photos`)            |
+| Áudio do ditado                                   | Memória da aba e dos processos, durante a chamada | Nenhuma. Fica só a **duração**, como unidade de custo em `AiUsage`        |
+| Uso da inferência (`AiUsage`)                     | Postgres                                          | Sobrevive à conta **sem** o `userId` — ver "Registro de uso da IA", acima |
+
+### O checkpoint do agente
+
+O agente guarda o estado de trabalho de cada conversa num checkpointer do LangGraph, para poder
+**pausar** — pedir confirmação de uma escrita, fazer uma pergunta, pedir licença para continuar — e
+retomar em outra requisição, depois de um F5 ou de um deploy. Isso é um segundo formato do mesmo
+diálogo, e as regras abaixo são o que impede que ele vire um segundo depósito que nenhum documento
+descreve:
+
+- **Mesmo banco, schema próprio.** `agent_checkpoint`, no Postgres da Fatia. Nenhum outro serviço,
+  nenhum outro banco. A thread é `{userId}:{conversationId}`.
+- **O que ele guarda:** as falas da conversa, as chamadas de tool com os resultados que o `/mcp`
+  devolveu, as decisões da pessoa sobre cada escrita e os contadores do turno. É dado de saúde, com
+  a mesma sensibilidade de `Message`.
+- **O que ele nunca guarda:** o Bearer do usuário, que viaja no runtime context e não no estado
+  (`apps/agent/tests/chat/test_sem_vazamento.py` lê o checkpoint gravado e procura o token), e os
+  bytes de foto ou de áudio — a mensagem com foto é gravada com uma marca no lugar da imagem
+  (`apps/agent/tests/chat/test_fotos.py`).
+- **Apagar a conversa apaga a thread; apagar a conta apaga todas.** O `onDelete: Cascade` do Prisma
+  não alcança um schema que o Prisma não conhece, então a purga é explícita:
+  `apps/api/src/chat/checkpoint-purge.service.ts`, por SQL direto no schema e chamada **antes** do
+  `delete` da conta — se ela falhar, a conta continua inteira e o erro sobe, em vez de sobrar um
+  checkpoint sem dono que a pessoa não teria como apagar. É por SQL daqui, e não por uma chamada ao
+  agente, porque a eliminação não pode depender de outro serviço estar no ar.
+- **O export não duplica.** A fonte de verdade da conversa é `Conversation`/`Message`, que o
+  `export_my_data` já inclui. O checkpoint é descartável: uma thread apagada é reidratada a partir de
+  `Message` no turno seguinte.
+- **Sem expiração automática**, pelo mesmo motivo do resto deste documento: a conversa é o produto
+  enquanto a pessoa a quiser.
+
+### A pausa aberta em `Message`
+
+Uma pausa aberta é gravada na mensagem do assistente (`metadata.interrupt`) para que o cartão de
+confirmação volte depois de um F5. Numa confirmação, isso inclui os **argumentos da escrita
+proposta** — o alimento, a quantidade. Por isso ela sai da linha no turno seguinte, seja qual for a
+resposta: aprovada, virou dado no domínio de destino, onde já tem retenção própria; recusada, não é
+dado de ninguém. Guardar a proposta depois disso seria uma segunda cópia com retenção inventada.
+O `metadata` não entra no export: é estado de tela, e o que ele descreve já está nas falas.
+
+### Memórias
+
+`UserMemory` guarda o que a pessoa **pediu** para o assistente lembrar ("sou vegetariana"). Não é
+inferência do agente sobre ela: guardar passa pela confirmação da tool `save_memory`, em que a
+pessoa aprova o texto exato. Os tetos — 50 memórias, 500 caracteres cada — existem porque toda
+memória entra em todo prompt do chat, cercada como dado; acima disso a lista deixa de ser "o que
+importa lembrar" e vira um segundo histórico pago a cada mensagem.
+
+A pessoa apaga uma memória na tela do chat ou pedindo ao assistente (`forget_memory`, também
+confirmável). As memórias saem no `export_my_data` e vão embora com a conta pelo cascade.
+
+### Foto no chat
+
+A foto que acompanha uma mensagem segue a [ADR 020](./ADR/020-foto-e-audio-trafegam-sem-persistencia.md)
+ponto por ponto:
+
+- **no aparelho**, o PWA recodifica a imagem num canvas (`apps/web/src/components/chat/foto.ts`) —
+  o JPEG que sai dali só tem pixels, sem GPS, aparelho nem horário;
+- **na API**, os metadados são removidos **de novo** (`removerMetadadosDoJpeg`, a mesma rotina do
+  registro por foto), porque a garantia não pode depender do cliente — versão antiga, `curl` de quem
+  tem token. Só JPEG, até três por mensagem e 2 MB cada;
+- **no agente**, os bytes entram só no prompt daquele turno, para o modelo de visão. O checkpoint
+  grava a fala com uma marca no lugar, e o turno seguinte não vê mais a foto;
+- **no banco**, `Message.metadata.photos` guarda **quantas** fotos a mensagem teve, e nada mais.
+
+Depois de recarregar a página, a mensagem mostra "📷 Foto enviada — ela não fica guardada.", que é
+a verdade: não há o que mostrar.
+
+### Ditado
+
+O áudio do ditado vive na memória da aba enquanto grava, vai cru à API (`POST /api/chat/transcribe`)
+e dela ao agente, que o manda ao provedor de transcrição e devolve o texto. Nada do áudio é gravado
+ou logado em ponto nenhum. O texto volta para o campo de mensagem e **não** é enviado sozinho:
+transcrição erra nome de alimento e número, e mandar sem a pessoa ler faria o erro virar registro.
+Do áudio, o que fica é a duração em segundos, em `AiUsage`, porque é a unidade de preço da
+transcrição.
+
 ## Autenticação e OAuth
 
 | Dado                                                         | Onde                                                                 | Retenção                                                                           |
@@ -398,7 +512,7 @@ O envio dos backups para storage offsite cifrado é acompanhado na issue #93.
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | Acesso e portabilidade     | `GET /users/me/export` ou a tool MCP `export_my_data`                                                                           |
 | Correção                   | Qualquer tool de `update_*`, ou a própria UI                                                                                    |
-| Eliminação                 | `DELETE /users/me` ou a tool `delete_my_account`, com confirmação explícita                                                     |
+| Eliminação                 | `DELETE /users/me` ou a tool `delete_my_account`, com confirmação explícita; uma conversa ou uma memória, na tela do chat       |
 | Revogação do consentimento | `revoke_data_sharing` / `DELETE /sharing/consents/:linkId` para cortar o acesso de um profissional; apagar a conta para o resto |
 | Saber quem acessou         | `list_data_sharing` (quem pode ver) e `list_data_access_log` (quem viu, e quem tentou)                                          |
 

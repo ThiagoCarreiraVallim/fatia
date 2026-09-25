@@ -3,6 +3,10 @@
 **Status:** Accepted
 **Data:** 2026-08-06
 
+**Checkpointer superado por:** [ADR 023](./023-checkpointer-no-postgres-da-fatia.md) — o agente
+passou a guardar o estado da conversa no schema `agent_checkpoint` do Postgres da Fatia; o Bearer
+continua só no `/mcp` e fora do estado.
+
 ## Contexto
 
 O chat hospedado (#247) precisa que o agente responda sobre **o dado de quem está conversando**:

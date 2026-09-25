@@ -6,6 +6,10 @@
 chat hospedado só chama tool de **leitura**" — o recorte deixa de ser só leitura. O resto da 021
 (o Bearer do usuário, sem `DATABASE_URL`, sem checkpointer) continua valendo inteiro.
 
+**Mecanismo de pausa superado por:** [ADR 023](./023-checkpointer-no-postgres-da-fatia.md) —
+`proposal`/`approved` deram lugar a `interrupt()`/`resume`; a classificação em 3 camadas continua
+valendo.
+
 ## Contexto
 
 O chat hospedado hoje oferece ao modelo apenas ferramentas de leitura (`readOnlyHint: true`).

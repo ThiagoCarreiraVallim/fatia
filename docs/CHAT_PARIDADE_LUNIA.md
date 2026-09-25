@@ -20,11 +20,52 @@ Decisões de direção:
 - **Front:** migrar o PWA para `@assistant-ui/react` + `react-langgraph`.
 - **Superfície:** só PWA web (mobile Expo fora, como na ADR 022).
 
+## Estado
+
+As fases 0–6 estão implementadas. A matriz e o roadmap abaixo ficam como registro do ponto de
+partida — a coluna "Fatia antes" descreve o chat **antes** da porta. O que vale hoje está nos docs
+de cada camada: [`apps/agent/README.md`](../apps/agent/README.md),
+[`ARCHITECTURE.md`](./ARCHITECTURE.md) §"Chat hospedado",
+[`DATA_RETENTION.md`](./DATA_RETENTION.md) §"Chat com a IA hospedada" e o vetor 10 do
+[`THREAT_MODEL.md`](./THREAT_MODEL.md).
+
+| Fase | O que entrou                                                                                                                                                                                                                                 |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0    | [ADR 023](./ADR/023-checkpointer-no-postgres-da-fatia.md); ADRs 021/022 apontam para ela; docs de agente, arquitetura, retenção e ameaças reescritos no estado atual                                                                         |
+| 1    | `AsyncPostgresSaver` no schema `agent_checkpoint`, thread `{userId}:{conversationId}`, Bearer no runtime context; `interrupt()` com `confirm` e `question` (`ask_user`); protocolo SSE nativo do LangGraph; retomada por `interruptId` (409) |
+| 2    | Proxy SSE byte a byte com leitura do que persistir; `Message.metadata`/`runId`/voto (migration `chat_parity_lunia`); `persisted`; busca, renomear, apagar com purga do checkpoint; título por LLM; `traduzirErro` separando os dois 401      |
+| 3    | PWA sobre assistant-ui (`useLangGraphRuntime`), `/chat` → `/chat/[id]`, gaveta de conversas, cartões de pausa, rótulos de **toda** tool pelo evento `catalog`; o chat antigo foi apagado                                                     |
+| 4    | Planejador opcional, pausa `continue` do orçamento, validação e reflexão por regra, evento `context`; artefatos por `structuredContent`; `UserMemory` com `list_memories`/`save_memory`/`forget_memory`; voto com motivos; aviso de cota     |
+| 5    | Foto no chat (recodificada no aparelho, limpa de novo na API, só no prompt do turno, marca no checkpoint) e ditado (`/transcribe`, áudio só em memória, texto no campo sem enviar)                                                           |
+| 6    | Benchmark do chat (`apps/agent/eval/chat/`, checks determinísticos, caso de injeção) e job `agent` no CI (ruff, format, mypy, pytest)                                                                                                        |
+
+**Onde a implementação divergiu do plano, e por quê:**
+
+- **Sem adaptador `BaseChatModel`.** O nó `agente` consome o `stream_chat` do provedor próprio e
+  emite os fragmentos pelo `writer` do LangGraph; o modo `messages` sai igual, sem uma camada de
+  LangChain por cima do cliente OpenAI-compatível.
+- **O corpo do `/chat` não leva `userId`.** O plano o aceitava por confiar na chave do agente; o
+  dono sai do `get_me` com o Bearer, e uma chave vazada deixa de bastar para ler a thread alheia.
+  `history` ficou, para a hidratação de thread fria.
+- **Sem rota de purga no agente.** Quem apaga as threads é o `apps/api`, por SQL no schema: a
+  eliminação não pode depender de o agente estar no ar.
+- **O orçamento conta voltas de tool** (`MAX_RODADAS_DE_TOOL`), não custo nem relógio. O custo é
+  medido e cobrado pelo `apps/api`, que tem a cota; duplicá-lo no agente seria um segundo teto a
+  divergir do primeiro.
+- **O evento de custo é o `usage`** que já existia, uma vez por chamada ao modelo.
+
+**O que ficou de fora de propósito:** os itens ⛔ da matriz (anexo PDF, busca na web, geração de
+imagem, painel Ctrl+J, créditos e o resto do B2B); prompts versionados, canary e Langfuse (opcionais
+na Fase 6, e mais um subprocessador a declarar); o contexto de tela (`extraContext`) e as citações de
+entidade; os popovers de execução e de contexto na UI — o agente emite `context` e `usage`, mas a
+tela não os mostra; e o ledger de runs, porque `AiUsage` continua sem `runId`, `kind` e `status`.
+`revoke_data_sharing` segue CONFIRMABLE.
+
 ## Matriz de gaps (Lunia → Fatia)
 
 Legenda: ✅ existe · 🟡 parcial · ❌ falta · ⛔ não se aplica · Fase = onde entra no roadmap.
 
-| Funcionalidade                                                                                                                                          | Lunia                                        | Fatia hoje                                                | Fase                                                                                  |
+| Funcionalidade                                                                                                                                          | Lunia                                        | Fatia antes                                               | Fase                                                                                  |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | Streaming de texto + markdown                                                                                                                           | ✅ protocolo nativo LangGraph                | ✅ protocolo próprio (`token/tool/proposal/usage/done`)   | 1/3                                                                                   |
 | Tool calls MCP com Bearer do usuário                                                                                                                    | ✅                                           | ✅ `chat/mcp_client.py`                                   | 1                                                                                     |
