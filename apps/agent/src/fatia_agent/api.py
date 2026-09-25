@@ -72,6 +72,7 @@ from .chat.errors import (
     McpUnreachable,
 )
 from .chat.graph import MAX_CARACTERES_POR_MENSAGEM
+from .chat.titulo import gerar_titulo
 from .providers import build_provider
 from .providers.errors import (
     AgentKeyRejected,
@@ -104,6 +105,14 @@ class RecognizeMealRequest(BaseModel):
 
     image_base64: str = Field(min_length=1)
     media_type: str = "image/jpeg"
+
+
+class TitleRequest(BaseModel):
+    """A primeira mensagem de uma conversa. Sem identidade: é só texto a nomear."""
+
+    model_config = {"extra": "forbid"}
+
+    text: Annotated[str, Field(min_length=1, max_length=MAX_CARACTERES_POR_MENSAGEM)]
 
 
 class ChatMessage(BaseModel):
@@ -374,6 +383,35 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             return await recognize_meal(provider, imagem, media_type=payload.media_type)
         finally:
             await provider.aclose()
+
+    @app.post("/title")
+    async def title_route(
+        payload: TitleRequest,
+        x_fatia_agent_key: Annotated[str | None, Header()] = None,
+    ) -> dict[str, object]:
+        """O nome da conversa. Nunca falha por causa do modelo — ver `chat/titulo.py`.
+
+        Sem Bearer, como o `/recognize-meal`: nomear um texto não alcança dado
+        nenhum, e um token de usuário aqui só aumentaria o estrago de um
+        comprometimento. A chave do agente continua exigida — é inferência paga.
+        """
+        _exigir_credencial(resolved, x_fatia_agent_key)
+        provider = build_provider(resolved)
+        try:
+            gerado = await gerar_titulo(provider, payload.text)
+        finally:
+            await provider.aclose()
+        usage = gerado.usage
+        return {
+            "title": gerado.titulo,
+            "usage": None
+            if usage is None
+            else {
+                "model": usage.model,
+                **({"inputUnits": usage.input_units} if usage.input_units is not None else {}),
+                **({"outputUnits": usage.output_units} if usage.output_units is not None else {}),
+            },
+        }
 
     @app.post("/chat", response_model=None)
     async def chat_route(

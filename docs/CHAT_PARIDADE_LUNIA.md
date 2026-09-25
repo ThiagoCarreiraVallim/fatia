@@ -204,7 +204,8 @@ juntos no mesmo `docker compose`. Migration Prisma antes da API. Nenhuma convers
 
 - Agente: `uv run pytest -q`, `uv run ruff check`, `uv run mypy`; teste que lê o checkpoint gravado
   e prova ausência do Bearer e de bytes de mídia.
-- API/web: `pnpm lint`, `pnpm typecheck`, `pnpm test` (turbo).
+- API/web: `pnpm lint`, `pnpm typecheck` e os testes de cada app (`pnpm --filter @fatia/api test`,
+  `pnpm --filter @fatia/web test`).
 - E2E manual com `pnpm dev` + Playwright em `/chat`: leitura; escrita → card → aprovar executa uma
   vez com os argumentos exibidos; rejeitar não grava; `ask_user` com formulário; `continue` do
   orçamento; F5 com pausa pendente restaura o card; renomear/buscar/apagar conversa (checar via SQL

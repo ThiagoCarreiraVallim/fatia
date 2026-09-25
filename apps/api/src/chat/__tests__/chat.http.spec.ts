@@ -10,6 +10,7 @@ import { CommonModule } from '../../common/common.module';
 import { PrismaService } from '../../common/prisma.service';
 import { AgentChatClient, type EntradaDoTurno, type StreamDoAgente } from '../agent-chat.client';
 import { ChatModule } from '../chat.module';
+import { CheckpointPurgeService } from '../checkpoint-purge.service';
 import { ConversationService } from '../conversation.service';
 
 /**
@@ -40,6 +41,7 @@ import { ConversationService } from '../conversation.service';
 
 const USER = '11111111-1111-1111-1111-111111111111';
 const OUTRO_USER = '22222222-2222-2222-2222-222222222222';
+const CONVERSA = '3f1c9a52-6b1e-4d8a-9c2f-0a5e7b3d1c44';
 
 const enc = (texto: string) => new TextEncoder().encode(texto);
 
@@ -144,11 +146,15 @@ async function subirApp(): Promise<Cenario> {
     .useValue({ assertDentroDaCota, registrar: jest.fn(async () => undefined) })
     .overrideProvider(ConversationService)
     .useValue({
+      encontrar: jest.fn(async () => null),
       historicoParaOAgente: jest.fn(async () => []),
-      iniciarTurno: jest.fn(async () => ({ conversationId: 'c0ffee' })),
-      concluirTurno: jest.fn(async () => undefined),
+      limparPausas: jest.fn(async () => undefined),
+      iniciarTurno: jest.fn(async () => ({ conversationId: CONVERSA })),
+      concluirTurno: jest.fn(async () => null),
       listar: jest.fn(async () => []),
     })
+    .overrideProvider(CheckpointPurgeService)
+    .useValue({ apagarConversa: jest.fn(async () => undefined) })
     .compile();
 
   const app = modulo.createNestApplication({ logger: false });
@@ -189,7 +195,7 @@ async function subirApp(): Promise<Cenario> {
 
 function conversar(
   url: string,
-  corpo: unknown,
+  corpoSemConversa: Record<string, unknown>,
   opcoes: { bearer?: string | null } = {},
 ): Promise<globalThis.Response> {
   const bearer = opcoes.bearer === undefined ? 'token-do-usuario' : opcoes.bearer;
@@ -199,7 +205,7 @@ function conversar(
       'Content-Type': 'application/json',
       ...(bearer === null ? {} : { Authorization: `Bearer ${bearer}` }),
     },
-    body: JSON.stringify(corpo),
+    body: JSON.stringify({ conversationId: CONVERSA, ...corpoSemConversa }),
   });
 }
 
@@ -228,18 +234,21 @@ describe('POST /api/chat', () => {
     expect(resposta.headers.get('cache-control')).toContain('no-transform');
 
     const leitor = resposta.body!.getReader();
+    // O cabeçalho sai assim que o agente aceita o turno, com um comentário SSE
+    // que nenhum leitor interpreta.
+    expect(await lerPedaco(leitor)).toBe(': aberto\n\n');
 
-    // O primeiro evento é nosso: sem o `conversationId`, quem acabou de começar
-    // uma conversa não teria como continuá-la.
-    expect(await lerPedaco(leitor)).toContain('event: conversation');
-
-    cenario.canal.emitir('event: token\ndata: {"text":"Boa "}\n\n');
+    cenario.canal.emitir(
+      'event: messages\ndata: [{"type":"AIMessageChunk","content":"Boa ","id":"ai-1"},{}]\n\n',
+    );
     // Lido AQUI, com o stream ainda aberto e o agente ainda falando. Uma
     // implementação que bufferizasse devolveria `null` nesta linha — e passaria
     // em todos os outros testes deste arquivo.
     expect(await lerPedaco(leitor)).toContain('"Boa "');
 
-    cenario.canal.emitir('event: token\ndata: {"text":"tarde"}\n\n');
+    cenario.canal.emitir(
+      'event: messages\ndata: [{"type":"AIMessageChunk","content":"tarde","id":"ai-1"},{}]\n\n',
+    );
     expect(await lerPedaco(leitor)).toContain('"tarde"');
 
     cenario.canal.encerrar();
@@ -308,6 +317,31 @@ describe('POST /api/chat', () => {
 
     expect(resposta.status).toBe(400);
     expect(cenario.abrir).not.toHaveBeenCalled();
+  });
+
+  it('sem mensagem nem retomada é 400', async () => {
+    const resposta = await conversar(cenario.url, {});
+
+    expect(resposta.status).toBe(400);
+    expect(cenario.abrir).not.toHaveBeenCalled();
+  });
+
+  it('a retomada chega ao agente com o id da pausa e o valor intacto', async () => {
+    const conversas = cenario.app.get(ConversationService) as unknown as {
+      encontrar: jest.Mock;
+    };
+    conversas.encontrar.mockResolvedValueOnce({ id: CONVERSA, userId: USER });
+
+    const resposta = await conversar(cenario.url, {
+      resume: { interruptId: 'pausa-1', value: { approvals: { c1: true } } },
+    });
+    cenario.canal.encerrar();
+    await resposta.text();
+
+    expect(resposta.status).toBe(200);
+    expect(cenario.abrir.mock.calls[0][0]).toMatchObject({
+      retomada: { interruptId: 'pausa-1', value: { approvals: { c1: true } } },
+    });
   });
 
   it('`conversationId` que não é UUID é 400', async () => {

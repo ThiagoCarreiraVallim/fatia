@@ -4,6 +4,7 @@ import { AgentChatClient } from './agent-chat.client';
 import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
 import { ChatThrottlerGuard } from './chat-throttler.guard';
+import { CheckpointPurgeService } from './checkpoint-purge.service';
 import { ConversationService } from './conversation.service';
 
 /**
@@ -23,7 +24,8 @@ import { ConversationService } from './conversation.service';
     AgentChatClient,
     ChatThrottlerGuard,
     AiUsageService,
+    CheckpointPurgeService,
   ],
-  exports: [ConversationService],
+  exports: [ConversationService, CheckpointPurgeService],
 })
 export class ChatModule {}

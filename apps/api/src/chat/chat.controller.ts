@@ -6,7 +6,9 @@ import {
   HttpCode,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
+  Query,
   Req,
   Res,
   UnauthorizedException,
@@ -18,8 +20,14 @@ import { CurrentUser, type CurrentUserPayload } from '../common/decorators/curre
 import { ChatThrottlerGuard } from './chat-throttler.guard';
 import { AgentChatClient } from './agent-chat.client';
 import { ChatService, type DestinoDoStream } from './chat.service';
+import { CheckpointPurgeService } from './checkpoint-purge.service';
 import { ConversationService } from './conversation.service';
-import { SendChatMessageDto } from './dto/chat.dto';
+import {
+  ListConversationsQueryDto,
+  MessageFeedbackDto,
+  RenameConversationDto,
+  SendChatMessageDto,
+} from './dto/chat.dto';
 
 /**
  * A fronteira de autenticação do chat (#249).
@@ -45,6 +53,7 @@ export class ChatController {
     private readonly chat: ChatService,
     private readonly conversas: ConversationService,
     private readonly agent: AgentChatClient,
+    private readonly checkpoints: CheckpointPurgeService,
   ) {}
 
   /**
@@ -60,8 +69,11 @@ export class ChatController {
   }
 
   @Get('conversations')
-  listConversations(@CurrentUser() user: CurrentUserPayload) {
-    return this.conversas.listar(user.id);
+  listConversations(
+    @CurrentUser() user: CurrentUserPayload,
+    @Query() query: ListConversationsQueryDto,
+  ) {
+    return this.conversas.listar(user.id, query.q);
   }
 
   @Get('conversations/:id')
@@ -69,6 +81,23 @@ export class ChatController {
     return this.conversas.obterComMensagens(user.id, id);
   }
 
+  @Patch('conversations/:id')
+  renameConversation(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RenameConversationDto,
+  ) {
+    return this.conversas.renomear(user.id, id, dto.title);
+  }
+
+  /**
+   * Apaga a conversa **e** o estado que o agente guardou dela (ADR 023).
+   *
+   * Nessa ordem: a conversa sai primeiro porque é ela que prova de quem é o id
+   * (`assertDaPessoa`); a purga usa o mesmo par depois. Se a purga falhar, o
+   * checkpoint órfão não é alcançável por ninguém — a thread só abre com o dono
+   * e uma conversa que já não existe —, mas o erro sobe para ser visto.
+   */
   @Delete('conversations/:id')
   @HttpCode(204)
   async deleteConversation(
@@ -76,6 +105,18 @@ export class ChatController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     await this.conversas.apagar(user.id, id);
+    await this.checkpoints.apagarConversa(user.id, id);
+  }
+
+  @Patch('conversations/:id/messages/:messageId/feedback')
+  @HttpCode(204)
+  async feedback(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+    @Body() dto: MessageFeedbackDto,
+  ) {
+    await this.conversas.votar(user.id, id, messageId, dto);
   }
 
   /**

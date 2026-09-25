@@ -42,6 +42,7 @@ model User {
   trainingBlocks  TrainingBlock[]
 
   conversations Conversation[]
+  memories      UserMemory[]
   aiUsage       AiUsage[]
 
   // B2B (ADR 014). Nenhuma destas relações dá acesso a dado de saúde por si só —
@@ -767,6 +768,11 @@ enum MessageRole {
   assistant
 }
 
+enum MessageReview {
+  like
+  dislike
+}
+
 model Message {
   id             String      @id @default(uuid())
   conversationId String
@@ -782,6 +788,19 @@ model Message {
   /// criaria uma segunda cópia, com retenção própria, de dado que o usuário apaga
   /// no lugar certo.
   tools          Json?
+  /// Estado do turno do assistente: `{ "status": "completed" | "interrupted" | "error" }`,
+  /// e, **só enquanto a pausa está aberta**, `interrupt: { id, value }` — a pergunta ou a
+  /// escrita que espera a pessoa (ADR 023). É o que faz o card de confirmação voltar
+  /// depois de um F5. O `value` de uma confirmação carrega os argumentos da escrita
+  /// proposta; por isso ele sai da linha no turno seguinte (`limparPausas`), seja qual
+  /// for a resposta: aprovado, vira dado no domínio de destino; recusado, não é dado.
+  metadata       Json?
+  /// O `runId` do agente que produziu esta resposta. Liga o voto da pessoa ao turno.
+  runId          String?
+  /// O voto da pessoa sobre a resposta (👍/👎), e por que, quando ela quis dizer.
+  review         MessageReview?
+  reviewReasons  String[]       @default([])
+  reviewNote     String?
   createdAt      DateTime    @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -792,6 +811,23 @@ model Message {
   /// leitura e escrita de mensagem passa por um `conversationId` que o
   /// `ConversationService` já amarrou ao `userId` verificado.
   @@index([conversationId, createdAt])
+}
+
+/// O que o assistente do chat guardou sobre a pessoa, a pedido dela ("lembra que sou
+/// vegetariana"). Entra no prompt de toda conversa, cercado como dado.
+///
+/// Escrita só pela tool `remember` (CONFIRMABLE: a pessoa aprova o texto exato na tela) ou
+/// pela tela de memórias; apagada pela `forget` ou pela tela. Vai no `export_my_data` e morre
+/// com a conta pelo cascade.
+model UserMemory {
+  id        String   @id @default(uuid())
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
 
 /// Livro-caixa da inferência que a **Fatia** paga (#135).

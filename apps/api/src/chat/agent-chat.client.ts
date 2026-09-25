@@ -1,9 +1,11 @@
 import {
   BadGatewayException,
+  ConflictException,
   GatewayTimeoutException,
   Injectable,
   Logger,
   ServiceUnavailableException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { MensagemDoHistorico } from './conversation.service';
@@ -94,25 +96,22 @@ export type EntradaDoTurno = {
   bearer: string;
   /** O fuso do perfil. Vira a data de hoje no prompt do agente. */
   timezone: string;
-  /** A mensagem que a pessoa acabou de escrever. Ver o contrato acima. */
-  mensagem: string;
-  /** O que já foi dito nesta conversa, em ordem cronológica. */
+  /** A conversa. O agente monta a thread com ela e com o dono que o token diz. */
+  conversationId: string;
+  /** O que já foi dito, em ordem cronológica. O agente só lê numa thread fria. */
   historico: MensagemDoHistorico[];
-  /**
-   * Propostas que a pessoa aprovou na tela, para o agente executar neste turno.
-   *
-   * Repassadas **sem interpretação**: esta camada não sabe o que `log_meal` faz
-   * nem tem por que saber. Quem valida o par nome/argumentos contra o que foi
-   * proposto é o agente, que é quem tem o recorte de tools — ver ADR 022.
-   */
-  aprovadas: PropostaAprovada[];
-};
-
-/** Uma proposta aprovada, como o evento `proposal` a mandou. */
-export type PropostaAprovada = {
-  name: string;
-  arguments: string;
-};
+} & (
+  | { mensagem: string; retomada?: undefined }
+  | {
+      mensagem?: undefined;
+      /**
+       * A resposta a uma pausa, repassada **sem interpretação**: esta camada não
+       * sabe o que `log_meal` faz nem tem por que saber. Quem confere a pausa e
+       * executa o que foi aprovado é o agente (ADR 023).
+       */
+      retomada: { interruptId: string; value: unknown };
+    }
+);
 
 /**
  * Quanto tempo esperar **o primeiro byte**. Um chat com tool call pensa antes de
@@ -128,6 +127,15 @@ const TIMEOUT_DE_ABERTURA_MS = 120_000;
  * precisa morrer é a conexão que parou de falar, e é ela que este relógio pega.
  */
 const TIMEOUT_DE_OCIOSIDADE_MS = 90_000;
+
+/** O título não segura nada: quem espera é uma linha da lista de conversas. */
+const TIMEOUT_DO_TITULO_MS = 20_000;
+
+export type TituloDoAgente = {
+  titulo: string | null;
+  /** `null` quando o agente não mediu — vira custo não medido no livro-caixa. */
+  uso: { model: string; inputUnits?: number; outputUnits?: number } | null;
+};
 
 @Injectable()
 export class AgentChatClient {
@@ -170,10 +178,10 @@ export class AgentChatClient {
           ...(chave ? { 'X-Fatia-Agent-Key': chave } : {}),
         },
         body: JSON.stringify({
-          message: entrada.mensagem,
+          conversationId: entrada.conversationId,
           timezone: entrada.timezone,
           history: entrada.historico.map((m) => ({ role: m.role, content: m.content })),
-          approved: entrada.aprovadas.map((a) => ({ name: a.name, arguments: a.arguments })),
+          ...(entrada.retomada ? { resume: entrada.retomada } : { message: entrada.mensagem }),
         }),
         signal: abortador.signal,
       });
@@ -238,6 +246,53 @@ export class AgentChatClient {
     };
   }
 
+  /**
+   * O nome da conversa, gerado pelo agente a partir da primeira mensagem.
+   *
+   * **Nunca lança.** Um título é enfeite de lista: qualquer falha devolve
+   * `null` e a conversa fica com o recorte da primeira mensagem que já tem.
+   * Sem Bearer — nomear um texto não alcança dado da pessoa.
+   */
+  async titular(texto: string): Promise<TituloDoAgente | null> {
+    const base = this.base();
+    if (!base) return null;
+    const chave = this.config.get<string>('AGENT_API_KEY', '').trim();
+    try {
+      const http = await fetch(`${base}/title`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(chave ? { 'X-Fatia-Agent-Key': chave } : {}),
+        },
+        body: JSON.stringify({ text: texto }),
+        signal: AbortSignal.timeout(TIMEOUT_DO_TITULO_MS),
+      });
+      if (!http.ok) {
+        this.logger.warn(`Título de conversa: o agente respondeu ${http.status}`);
+        return null;
+      }
+      const corpo = (await http.json()) as {
+        title?: unknown;
+        usage?: { model?: unknown; inputUnits?: unknown; outputUnits?: unknown } | null;
+      };
+      const usage = corpo.usage;
+      return {
+        titulo: typeof corpo.title === 'string' && corpo.title.trim() ? corpo.title.trim() : null,
+        uso:
+          usage && typeof usage.model === 'string'
+            ? {
+                model: usage.model,
+                inputUnits: typeof usage.inputUnits === 'number' ? usage.inputUnits : undefined,
+                outputUnits: typeof usage.outputUnits === 'number' ? usage.outputUnits : undefined,
+              }
+            : null,
+      };
+    } catch (erro) {
+      this.logger.warn(`Título de conversa não gerado: ${(erro as Error).name}`);
+      return null;
+    }
+  }
+
   private base(): string | null {
     const bruto = this.config.get<string>('AGENT_BASE_URL', '').trim();
     return bruto ? bruto.replace(/\/+$/, '') : null;
@@ -255,14 +310,32 @@ export class AgentChatClient {
     const code = corpo?.error?.code ?? '';
     this.logger.warn(`Agente de chat respondeu ${http.status} (${code || 'sem code'})`);
 
-    // 401/403 aqui é **configuração**, não o Bearer do usuário: quem barra por
-    // token de usuário é o `/mcp`, e isso chega como evento dentro do stream. O
-    // que falha antes do stream é o segredo compartilhado entre API e agente.
+    // O `code` separa os dois 401 que o agente devolve, e eles pedem correções
+    // opostas. O do `/mcp` é o token **da pessoa** (expirou): 401 aqui também, que
+    // é o que faz o PWA renovar a sessão. O da chave compartilhada é configuração
+    // **nossa**: 503, porque quem está conversando não tem o que fazer. Tratar os
+    // dois como 503 — como era — fazia um token vencido parecer instância quebrada.
+    if (code === 'MCP_UNAUTHENTICATED' || code === 'MCP_UNAUTHORIZED') {
+      return new UnauthorizedException({
+        code: 'AI_UNAUTHORIZED',
+        message: 'Sua sessão expirou. Entre de novo para continuar a conversa.',
+      });
+    }
     if (http.status === 401 || http.status === 403) {
       return new ServiceUnavailableException(
         'O chat com IA está mal configurado nesta instância: a API não conseguiu se ' +
           'autenticar no agente.',
       );
+    }
+    // A pausa que o PWA tentou responder não é a que a conversa espera — outra
+    // aba respondeu antes, ou a página ficou aberta sobre um estado velho.
+    if (code === 'CHAT_RESUME_MISMATCH' || code === 'CHAT_NOTHING_TO_RESUME') {
+      return new ConflictException({
+        code,
+        message:
+          'Esta conversa mudou desde que a pergunta apareceu. Recarregue a conversa para ver ' +
+          'o que ela espera agora.',
+      });
     }
 
     switch (code) {
