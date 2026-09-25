@@ -115,7 +115,7 @@ async def test_recusada_nao_grava_e_o_modelo_sabe_por_que(settings_factory):
     assert retomado.chamadas_ao_mcp("log_meal") == 0
     (resultado,) = retomado.mensagens_de_tool()
     assert (resultado["status"], resultado["content"]) == ("error", RECUSADA)
-    assert retomado.provider.corpos[0]["messages"][-1]["content"] == RECUSADA
+    assert RECUSADA in retomado.provider.corpos[0]["messages"][-1]["content"]
 
 
 async def test_o_default_e_nao(settings_factory):
@@ -183,9 +183,12 @@ async def test_argumentos_acima_do_teto_falham_sem_gravar(settings_factory):
 
 
 async def test_a_restrita_nao_pausa_e_nao_executa(settings_factory):
-    r = await _pausado(settings_factory, ("c1", "delete_meal", {"id": "m1"}))
+    r = await turno(
+        settings_factory,
+        [_pede(("c1", "delete_meal", {"id": "m1"})), [fragmento_de_texto("Não posso apagar.")]],
+    )
 
-    assert r.de("done") != [{"status": "interrupted"}]
+    assert r.de("done") == [{"status": "completed"}]
     assert r.chamadas_ao_mcp("delete_meal") == 0
 
 

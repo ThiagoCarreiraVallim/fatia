@@ -129,6 +129,15 @@ class ChatMessage(BaseModel):
     content: Annotated[str, Field(min_length=1)]
 
 
+class ChatMemory(BaseModel):
+    """Uma anotação que a pessoa pediu para o assistente lembrar (`UserMemory`)."""
+
+    model_config = {"extra": "forbid"}
+
+    id: Annotated[str, Field(min_length=1, max_length=64)]
+    content: Annotated[str, Field(min_length=1, max_length=500)]
+
+
 class ChatResume(BaseModel):
     """A resposta a uma pausa: qual pausa (`interruptId`) e o que a pessoa disse.
 
@@ -167,6 +176,9 @@ class ChatRequest(BaseModel):
     )
     resume: ChatResume | None = None
     history: Annotated[list[ChatMessage], Field(default_factory=list)]
+    # O teto é o mesmo do `apps/api`: acima disso a memória deixa de ser
+    # "o que importa lembrar" e vira um segundo histórico no prompt.
+    memories: Annotated[list[ChatMemory], Field(default_factory=list, max_length=50)]
     # O fuso do perfil, que o `apps/api` já conhece — vira a data de hoje no
     # prompt. Não é identidade: o nome de um fuso é grosso demais para apontar
     # para alguém.
@@ -463,6 +475,8 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             run_id=uuid.uuid4().hex,
             timezone=payload.timezone,
             historico=tuple(mensagem.model_dump() for mensagem in payload.history),
+            memorias=tuple(memoria.model_dump() for memoria in payload.memories),
+            planejar=resolved.agent_chat_planner,
         )
 
         async def fluxo() -> AsyncIterator[str]:

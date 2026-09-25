@@ -15,7 +15,6 @@ import pytest
 from langgraph.checkpoint.memory import InMemorySaver
 
 from fatia_agent.chat.graph import (
-    LIMITE_DE_PASSOS,
     MAX_CARACTERES_POR_MENSAGEM,
     MAX_RODADAS_DE_TOOL,
     MAX_TOOLS_POR_RODADA,
@@ -26,6 +25,7 @@ from fatia_agent.chat.graph import (
 from fatia_agent.chat.mcp_client import McpClient
 from fatia_agent.chat.state import ContextoDoTurno
 from fatia_agent.chat.tool_policy import todas_permitidas
+from fatia_agent.prompts.chat_pt_br import cercar
 from fatia_agent.providers.base import TextDelta, ToolCall, TurnEnd
 
 from .support import (
@@ -98,9 +98,13 @@ async def test_o_ciclo_de_tool_chega_pelas_atualizacoes_do_grafo(settings_factor
     assert r.texto() == "Arroz."
     assert r.de("done") == [{"status": "completed"}]
 
-    # A resposta da tool volta ao modelo no formato da OpenAI.
+    # A resposta da tool volta ao modelo no formato da OpenAI, cercada como dado.
     segundo = r.provider.corpos[1]["messages"]
-    assert segundo[-1] == {"role": "tool", "tool_call_id": "c1", "content": '[{"nome":"arroz"}]'}
+    assert segundo[-1] == {
+        "role": "tool",
+        "tool_call_id": "c1",
+        "content": cercar("RESULTADO DE list_meals", '[{"nome":"arroz"}]'),
+    }
 
 
 async def test_o_modelo_enxerga_leitura_confirmavel_e_ask_user_mas_nao_a_restrita(
@@ -156,14 +160,106 @@ async def test_tool_que_falha_no_apps_api_vira_resultado_com_erro(settings_facto
     assert (resultado["status"], resultado["content"]) == ("error", "NOT_FOUND")
 
 
-async def test_modelo_em_laco_para_no_teto_de_rodadas(settings_factory):
+async def test_modelo_em_laco_pausa_no_teto_e_pergunta_se_continua(settings_factory):
+    """O teto de voltas deixou de ser um corte calado: vira a pausa `continue`."""
     r = await turno(settings_factory, [_com_tool("list_meals")])
 
     assert r.chamadas_ao_mcp("list_meals") == MAX_RODADAS_DE_TOOL
-    assert LIMITE_DE_PASSOS in r.texto()
-    assert r.de("done") == [{"status": "completed"}]
+    assert r.de("done") == [{"status": "interrupted"}]
+    pausa = r.interrupcao()["value"]
+    assert pausa["kind"] == "continue"
+    assert pausa["actions"] == []
+    # O resumo diz o que já foi feito, pelo título da tool — é o que deixa a
+    # pessoa decidir sem adivinhar.
+    assert "List Meals" in pausa["summary"]
+
+
+async def test_continuar_concede_mais_voltas(settings_factory):
+    pausado = await turno(settings_factory, [_com_tool("list_meals")])
+    retomado = await turno(
+        settings_factory,
+        [_com_tool("list_meals"), [fragmento_de_texto("Pronto.")]],
+        mensagem=None,
+        retomada=True,
+        grafo=pausado.grafo,
+    )
+
+    # A chamada que estava pendente roda, e o modelo segue de onde parou.
+    assert retomado.chamadas_ao_mcp("list_meals") == 2
+    assert retomado.texto() == "Pronto."
+    assert retomado.de("done") == [{"status": "completed"}]
+
+
+async def test_parar_por_aqui_fecha_sem_ferramenta(settings_factory):
+    pausado = await turno(settings_factory, [_com_tool("list_meals")])
+    retomado = await turno(
+        settings_factory,
+        [[fragmento_de_texto("Até aqui encontrei arroz.")]],
+        mensagem=None,
+        retomada=False,
+        grafo=pausado.grafo,
+    )
+
+    assert retomado.chamadas_ao_mcp("list_meals") == 0
+    (unica,) = retomado.provider.corpos
+    # A volta de fechamento não recebe ferramenta nenhuma, e o prompt diz por quê.
+    assert "tools" not in unica
+    assert "NÃO chame mais nenhuma ferramenta" in unica["messages"][0]["content"]
+    assert retomado.texto() == "Até aqui encontrei arroz."
+
+
+async def test_tool_que_falha_duas_vezes_vira_reflexao(settings_factory):
+    r = await turno(
+        settings_factory,
+        [
+            _com_tool("list_meals", id="c1"),
+            _com_tool("list_meals", id="c2"),
+            # A terceira insistência não roda: vira reflexão antes da tool.
+            _com_tool("list_meals", id="c3"),
+            [fragmento_de_texto("Não consegui consultar.")],
+        ],
+        mcp_transport=duplo_do_mcp(
+            catalogo=CATALOGO,
+            resultados={
+                "list_meals": {"content": [{"type": "text", "text": "x"}], "isError": True}
+            },
+        ),
+    )
+
+    assert r.chamadas_ao_mcp("list_meals") == 2
+    ultimo = r.provider.corpos[-1]["messages"][0]["content"]
+    assert "falhou 2 vezes seguidas" in ultimo
+    assert r.texto().endswith("Não consegui consultar.")
+
+
+async def test_resposta_que_mostra_uuid_e_refeita_uma_vez(settings_factory):
+    r = await turno(
+        settings_factory,
+        [
+            [fragmento_de_texto("Sua refeição 3f1c9a52-6b1e-4d8a-9c2f-0a5e7b3d1c44 foi ok.")],
+            [fragmento_de_texto("Seu almoço foi registrado.")],
+        ],
+    )
+
+    assert len(r.provider.corpos) == 2
+    assert "identificador interno" in r.provider.corpos[1]["messages"][0]["content"]
+    assert r.de("validation")[0] == {
+        "ok": False,
+        "issues": ["a resposta mostrou um identificador interno (UUID)"],
+    }
     (final,) = r.de("messages/complete")[0]
-    assert final["content"] == LIMITE_DE_PASSOS
+    assert final["content"] == "Seu almoço foi registrado."
+
+
+async def test_a_validacao_nao_vira_pingue_pongue(settings_factory):
+    r = await turno(
+        settings_factory,
+        [[fragmento_de_texto("Como uma IA, não posso.")]],
+    )
+
+    # Uma volta de correção, e só: a segunda reprovação fecha o turno.
+    assert len(r.provider.corpos) == 2
+    assert r.de("done") == [{"status": "completed"}]
 
 
 async def test_resposta_vazia_ainda_devolve_algo_para_a_tela(settings_factory):

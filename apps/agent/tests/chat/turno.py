@@ -101,6 +101,8 @@ async def turno(
     timezone: str | None = None,
     thread: str = THREAD,
     token: str = TOKEN,
+    memorias: Sequence[dict[str, str]] = (),
+    planejar: bool = False,
 ) -> Resultado:
     """Um turno inteiro. Passe o `grafo` de um turno anterior para continuar a thread."""
     provider_transport = ProviderRecordingTransport(turnos_do_provedor)
@@ -117,6 +119,8 @@ async def turno(
         run_id="run-1",
         timezone=timezone,
         historico=tuple(historico),
+        memorias=tuple(memorias),
+        planejar=planejar,
     )
     brutos = [
         quadro

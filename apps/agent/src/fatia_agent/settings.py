@@ -72,6 +72,11 @@ class AgentSettings(BaseSettings):
     # restart. O `/health` expõe qual dos dois está valendo.
     agent_checkpoint_database_url: str = ""
 
+    # Uma chamada a mais ao modelo por turno, para planejar pedidos de vários
+    # passos. Desligado por padrão: num modelo local pequeno são segundos de tela
+    # parada antes da primeira palavra. Ver `chat/planejador.py`.
+    agent_chat_planner: bool = False
+
 
 AGENT_API_KEY_HEADER = "x-fatia-agent-key"
 

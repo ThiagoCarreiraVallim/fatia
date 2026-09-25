@@ -42,6 +42,13 @@ class ContextoDoTurno:
     # fria (primeira mensagem depois de uma purga, ou conversa anterior à ADR
     # 023) — numa thread quente o estado já é a verdade. Ver `hidratar`.
     historico: Sequence[dict[str, str]] = field(default=())
+    # O que a pessoa pediu para o assistente lembrar (`UserMemory`), como o
+    # `apps/api` leu no começo do turno. Por contexto, e não pelo estado: a
+    # verdade é o banco da API, e uma cópia no checkpoint envelheceria no
+    # primeiro "esquece isso" feito pela tela.
+    memorias: Sequence[dict[str, str]] = field(default=())
+    # Liga o planejador (`AGENT_CHAT_PLANNER`) — ver `planejador.py`.
+    planejar: bool = False
 
 
 class EstadoDaConversa(TypedDict, total=False):
@@ -54,17 +61,48 @@ class EstadoDaConversa(TypedDict, total=False):
       É do **turno**: `hidratar` zera no começo de cada mensagem nova.
     - `rodadas`: voltas do modelo que pediram tool neste turno.
     - `hidratada`: a thread já recebeu o histórico do `apps/api` uma vez.
+    - `concedidas`: voltas a mais que a pessoa autorizou quando o orçamento acabou.
+    - `encerrar`: a pessoa disse "pare por aqui" — a próxima volta responde sem tool.
+    - `falhas`: falhas seguidas por nome de tool, que alimentam a reflexão.
+    - `reflexoes`: o que a reflexão ou a validação concluíram, para a volta seguinte.
+    - `revalidacoes`: quantas vezes a resposta foi refeita por reprovar na validação.
+    - `refazer`: a validação acabou de reprovar e ainda cabe uma volta.
+    - `plano`: os passos do pedido, com status vivo (só com o planejador ligado).
+    - `contexto_informado`: o evento `context` já saiu neste turno.
+
+    🔴 Tudo que é "do turno" é zerado por `hidratar`. O estado vive no checkpoint
+    da **conversa**: sem zerar, o orçamento viraria por conversa e um "pare por
+    aqui" desligaria as ferramentas até o fim dela.
     """
 
     messages: Annotated[list[AnyMessage], add_messages]
     decisoes: dict[str, bool]
     rodadas: int
     hidratada: bool
+    concedidas: int
+    encerrar: bool
+    falhas: dict[str, int]
+    reflexoes: list[str]
+    revalidacoes: int
+    refazer: bool
+    plano: list[dict[str, Any]]
+    contexto_informado: bool
 
 
 def estado_vazio() -> dict[str, Any]:
     """O que zera no começo de um turno novo (e não na retomada de uma pausa)."""
-    return {"decisoes": {}, "rodadas": 0}
+    return {
+        "decisoes": {},
+        "rodadas": 0,
+        "concedidas": 0,
+        "encerrar": False,
+        "falhas": {},
+        "reflexoes": [],
+        "revalidacoes": 0,
+        "refazer": False,
+        "plano": [],
+        "contexto_informado": False,
+    }
 
 
 __all__ = ["ContextoDoTurno", "EstadoDaConversa", "estado_vazio"]

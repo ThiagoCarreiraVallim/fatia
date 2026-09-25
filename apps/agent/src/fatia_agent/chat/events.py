@@ -29,6 +29,10 @@ Os eventos próprios — o LangGraph não tem equivalente para eles:
     event: start       {"conversationId": "…", "runId": "…"}
     event: catalog     {"tools": {"log_meal": "Registrar refeição", …}}
     event: usage       {"model": "…", "inputUnits": 812, "outputUnits": 96}
+    event: plan        {"steps": [{"id": "1", "title": "…", "status": "running"}]}
+    event: artifact    {"toolCallId": "c1", "kind": "metric", …}
+    event: context     {"estimated": true, "segments": [{"key": "tools", "tokens": 900}]}
+    event: validation  {"ok": false, "issues": ["…"]}
     event: error       {"code": "MCP_UNAUTHORIZED", "message": "…"}
     event: done        {"status": "completed" | "interrupted" | "error"}
 
@@ -197,6 +201,33 @@ def usage(model: str, *, input_units: int | None, output_units: int | None) -> C
     return ChatEvent("usage", dados)
 
 
+def plan(passos: Iterable[Mapping[str, Any]]) -> ChatEvent:
+    """O plano inteiro, a cada mudança de status — ver `planejador.com_status`."""
+    return ChatEvent("plan", {"steps": [dict(p) for p in passos]})
+
+
+def artifact(tool_call_id: str, carga: Mapping[str, Any]) -> ChatEvent:
+    """A carga tipada de uma tool, pendurada no cartão dela pelo `toolCallId`.
+
+    Uma volta pode ter várias chamadas da mesma tool ("compare março e abril"),
+    e sem o id a tela não saberia a qual cartão pendurar a tabela.
+    """
+    return ChatEvent("artifact", {"toolCallId": tool_call_id, **carga})
+
+
+def context(segmentos: Iterable[Mapping[str, Any]]) -> ChatEvent:
+    """O que ocupa a janela de contexto, por origem, na primeira volta do turno.
+
+    Só o agente sabe dizer, porque é ele quem junta prompt, memória, histórico e
+    o esquema das ferramentas. **Estimativa**, e o campo diz isso.
+    """
+    return ChatEvent("context", {"estimated": True, "segments": [dict(s) for s in segmentos]})
+
+
+def validation(ok: bool, problemas: Iterable[str]) -> ChatEvent:
+    return ChatEvent("validation", {"ok": ok, "issues": list(problemas)})
+
+
 def error(code: str, message: str) -> ChatEvent:
     return ChatEvent("error", {"code": code, "message": message})
 
@@ -216,15 +247,19 @@ __all__ = [
     "MAX_RESULTADO_NO_EVENTO",
     "ChatEvent",
     "Fragmento",
+    "artifact",
     "atualizacoes",
     "catalog",
     "completas",
+    "context",
     "cortar",
     "done",
     "error",
     "fragmento",
+    "plan",
     "quadro",
     "serializar",
     "start",
     "usage",
+    "validation",
 ]
