@@ -100,11 +100,11 @@ estruturado. A imagem nunca chega aqui. O tratamento dessa conversa é regido pe
 Anthropic, não por esta. Custo de inferência para a Fatia: zero, por construção.
 
 **Caminho 2 — a IA hospedada pela Fatia.** O código existe — reconhecimento por foto (#139), chat
-hospedado e ditado (#141) —, mas **não está disponível a nenhum usuário da instância oficial**: as
-listas de destino e de modelo revisados estão vazias, e nada sai para provedor remoto enquanto
-estiverem (ver adiante). Aqui o conteúdo sai do dispositivo, atravessa o `apps/api`, vai ao
-`apps/agent` e de lá ao provedor, pelo Cloudflare AI Gateway. É este caminho que a tabela abaixo
-descreve.
+hospedado e ditado (#141). O destino revisado é o **OpenRouter** (host `openrouter.ai`), servindo o
+modelo **GLM 5.3 Flash** (`z-ai/glm-5.3-flash`, da Z.ai) para texto e visão, e só em endpoint de
+retenção zero (ver adiante). Ligar isso na instância oficial continua dependendo da #112 e do
+consentimento específico. Aqui o conteúdo sai do dispositivo, atravessa o `apps/api`, vai ao
+`apps/agent` e de lá ao provedor, pelo OpenRouter. É este caminho que a tabela abaixo descreve.
 
 | Capacidade                  | O que vai ao provedor                                                                        | Persistido?                                 |
 | --------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------- |
@@ -136,7 +136,19 @@ declarada: ele é o histórico que a pessoa vê, e tem seção própria. O que e
 nos dois parágrafos seguintes, e é tratado à parte de propósito: uma promessa em nome de terceiro
 que ninguém consegue conferir é o defeito que a #136 existe para eliminar, não algo a repetir aqui.
 
-**O log do gateway é desligado em cada chamada.** O Cloudflare AI Gateway grava corpo de requisição
+**Retenção zero é exigida em cada chamada.** O OpenRouter é um roteador: o mesmo nome de modelo é
+servido por dezenas de empresas, cada uma com a sua política, e sem nada no pedido a chamada cai em
+qualquer uma delas — inclusive nas que guardam o prompt ou treinam com ele. Toda requisição do
+`apps/agent` ao OpenRouter leva no corpo `provider: {"zdr": true, "data_collection": "deny"}`, que
+restringe a rota aos endpoints de retenção zero e aos que não usam o dado para treinar; se nenhum
+endpoint do modelo cumprir as duas, o OpenRouter recusa a chamada. A exigência mora em
+`ZERO_RETENTION_ROUTING` (`apps/agent/src/fatia_agent/allowed_models.py`), só vai para o host que a
+tem — a OpenAI recusa campo desconhecido com 400 —, e um host não entra em `ALLOWED_HOSTS` sem ela
+(`apps/agent/tests/test_allowed_models.py`). Coberto por
+`apps/agent/tests/providers/test_openai_compat.py`.
+
+**O log do Cloudflare AI Gateway é desligado em cada chamada**, para quem opera uma instância
+atrás dele. O Cloudflare AI Gateway grava corpo de requisição
 e corpo de resposta **por padrão** — registrar é o produto dele. Sem nada no caminho, a foto do
 prato e a resposta do modelo ficariam retidas e legíveis no painel da Cloudflare, e o parágrafo
 acima seria verdadeiro só dentro deste repositório. Toda requisição do `apps/agent` leva
@@ -151,10 +163,10 @@ lembrar de uma configuração, que é a classe de defeito que a #136 existe para
 uma instância própria deve fazer **as duas coisas**: o header cobre o caminho do código, a opção do
 painel cobre qualquer chamada que não venha daqui.
 
-**Do provedor de modelo, quem responde é o contrato.** Este documento afirma o que o repositório
-sustenta e o que o gateway é instruído a fazer. A retenção do lado do provedor de modelo não é
-executável a partir daqui: ela é cláusula contratual (não-retenção e não-treinamento por escrito),
-e o provedor será nomeado aqui, com essas cláusulas, na PR que ativar a #139 — junto da #112.
+**Dentro do fornecedor, quem responde é a política dele.** Este documento afirma o que o
+repositório sustenta e o que cada pedido exige. O que o OpenRouter e a empresa que atende a chamada
+fazem por dentro não é executável a partir daqui: vale a política de retenção zero do OpenRouter e
+a declaração de cada endpoint aceito por ela. A redação jurídica definitiva segue com a #112.
 
 **O destino e o modelo são duas listas fechadas no código**, não variáveis de ambiente
 (`apps/agent/src/fatia_agent/allowed_models.py`). O AI Gateway permite trocar de modelo por
@@ -309,9 +321,9 @@ A lista de cabeçalhos e de campos do corpo é fechada por teste
 | Vínculo entre usuário e foto  | **Não existe**                           | —                                   |
 
 **Onde a foto pode ficar, e que não é conosco:** o provedor de inferência. Em desenvolvimento é o
-LM Studio na própria máquina, e a imagem não sai dela. Em produção é o Cloudflare AI Gateway e o
-modelo atrás dele — a política de retenção deles vale para essa cópia, e é por isso que a escolha
-do provedor é decisão de privacidade, não só de custo.
+LM Studio na própria máquina, e a imagem não sai dela. Fora dela é o OpenRouter e o endpoint de
+retenção zero para o qual ele encaminhar — a política de retenção deles vale para essa cópia, e é
+por isso que a escolha do provedor é decisão de privacidade, não só de custo.
 
 **Nada da foto aparece em log.** As mensagens de aviso do `MealRecognitionService` trazem o nome
 do erro e o status, nunca a imagem nem o nome dos alimentos reconhecidos. Do lado do agente, a

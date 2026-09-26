@@ -1,7 +1,7 @@
 """Única implementação de provedor: cliente OpenAI-compatível.
 
 Não há um SDK por fornecedor por trás de uma fachada — o protocolo da OpenAI já
-é a fachada, e é o que LM Studio (dev) e Cloudflare AI Gateway (produção) falam.
+é a fachada, e é o que LM Studio (dev), OpenRouter e Cloudflare AI Gateway falam.
 Trocar de fornecedor é trocar `AI_BASE_URL`, `AI_API_KEY` e o nome do modelo da
 capacidade. Nenhuma linha deste arquivo sabe em que ambiente está rodando.
 """
@@ -17,10 +17,12 @@ import httpx
 from ..allowed_models import (
     CAPABILITY_ENV_VARS,
     CAPABILITY_LABELS,
+    ZERO_RETENTION_ROUTING,
     is_local_destination,
     unreviewed_host_reason,
     unreviewed_model_reason,
 )
+from ..settings import endpoint_host
 from .base import (
     ChatCapability,
     EmbeddingCapability,
@@ -108,6 +110,12 @@ class OpenAICompatProvider:
         # gateway é um header desconhecido, ignorado como qualquer outro.
         headers["cf-aig-collect-log"] = "false"
 
+        # O equivalente no OpenRouter não é header, é campo do corpo — e só
+        # onde ele existe: a OpenAI recusa parâmetro desconhecido com 400, então
+        # mandar sempre, como o header acima, quebraria o Cloudflare AI Gateway.
+        # Ver `ZERO_RETENTION_ROUTING` para o que o campo garante.
+        self._routing = ZERO_RETENTION_ROUTING.get(endpoint_host(base_url))
+
         self._client = httpx.AsyncClient(
             base_url=base_url,
             timeout=timeout_s,
@@ -151,7 +159,7 @@ class OpenAICompatProvider:
     async def embed(self, texts: Sequence[str]) -> list[list[float]]:
         model = self._require_model("embedding", self._embedding_model)
         response = await self._request(
-            "POST", "embeddings", json={"model": model, "input": list(texts)}
+            "POST", "embeddings", json=self._with_routing({"model": model, "input": list(texts)})
         )
         body = _json_body(response)
         data = body.get("data")
@@ -225,6 +233,7 @@ class OpenAICompatProvider:
         }
         if tools:
             payload["tools"] = list(tools)
+        payload = self._with_routing(payload)
 
         acumulador = _AcumuladorDeToolCalls()
         finish_reason = "stop"
@@ -382,9 +391,17 @@ class OpenAICompatProvider:
 
     # --- transporte ------------------------------------------------------
 
+    def _with_routing(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """O corpo com a exigência de retenção zero do gateway, quando ele a tem."""
+        if self._routing is None:
+            return payload
+        return {**payload, "provider": dict(self._routing)}
+
     async def _chat(self, model: str, messages: list[dict[str, Any]]) -> str:
         response = await self._request(
-            "POST", "chat/completions", json={"model": model, "messages": messages}
+            "POST",
+            "chat/completions",
+            json=self._with_routing({"model": model, "messages": messages}),
         )
         body = _json_body(response)
 

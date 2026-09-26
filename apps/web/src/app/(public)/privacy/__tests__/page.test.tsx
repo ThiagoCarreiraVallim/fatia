@@ -12,8 +12,8 @@ import PrivacyPage from '../page';
  * enquanto o Cloudflare AI Gateway registra corpo de requisição e de resposta por padrão.
  *
  * O que estes casos prendem é a **fronteira da promessa**: o Fatia pode afirmar o que o Fatia faz,
- * e sobre o terceiro só pode afirmar o que ele instrui (o cabeçalho, que está no código) ou o que
- * exige por contrato. Uma promessa absoluta em nome de quem não se controla é o defeito.
+ * e sobre o terceiro só pode afirmar o que o pedido exige (os campos de roteamento, que estão no
+ * código) ou o que ele declara. Uma promessa absoluta em nome de quem não se controla é o defeito.
  */
 
 /** O texto corrido da página, como o titular lê — sem tags no meio de uma frase. */
@@ -39,18 +39,28 @@ describe('/privacy — o que é prometido sobre a IA hospedada', () => {
     expect(texto).not.toMatch(/nem no serviço de IA/i);
   });
 
-  it('nomeia o mecanismo que desliga o registro do gateway, e não só a intenção', () => {
-    // O cabeçalho está na página de propósito: é o que torna a afirmação conferível por quem lê o
-    // código, e é o que some do repositório se alguém remover a proteção. "Configuramos o gateway
-    // para não registrar" seria a mesma promessa dependente de painel, escrita com outras palavras.
+  it('nomeia o mecanismo que exige retenção zero, e não só a intenção', () => {
+    // Os dois campos estão na página de propósito: é o que torna a afirmação conferível por quem lê
+    // o código (`ZERO_RETENTION_ROUTING` no agente), e é o que some do repositório se alguém remover
+    // a proteção. "Escolhemos fornecedores que não guardam" seria a mesma promessa dependente de
+    // painel, escrita com outras palavras — o OpenRouter roteia para quem estiver disponível.
     const texto = textoDaPagina();
 
-    expect(texto).toContain('cf-aig-collect-log: false');
-    expect(texto).toMatch(/por padrão/i);
+    expect(texto).toContain('zdr: true');
+    expect(texto).toContain('data_collection: "deny"');
+    expect(texto).toMatch(/recusada/i);
   });
 
-  it('atribui a retenção do provedor de modelo ao contrato, não a uma garantia nossa', () => {
-    expect(textoDaPagina()).toMatch(/contrato/i);
+  it('atribui o que acontece dentro do fornecedor à política dele, não a uma garantia nossa', () => {
+    // O Fatia controla o pedido, não a máquina de quem o atende. A página pode afirmar o que o
+    // pedido exige; o resto é declaração do fornecedor.
+    expect(textoDaPagina()).toMatch(/quem responde é a política dele/i);
+  });
+
+  it('não esconde que o chat manda dados da conta ao modelo', () => {
+    // "Você não vai junto" é verdade no reconhecimento por foto e falso no chat, que precisa ler a
+    // conta para responder. Uma promessa escrita para um caminho não pode cobrir o outro.
+    expect(textoDaPagina()).toMatch(/o que ele lê vai junto da conversa/i);
   });
 
   it('a recusa por configuração cobre o endereço, e não só o modelo', () => {

@@ -32,12 +32,11 @@ Quem responde "isto é local?" para fins de privacidade é `PRIVACY_LOCAL_HOSTS`
 aqui, e não a lista homônima da `settings` — ver o comentário dela para o porquê
 e para o escape que ela aceita.
 
-As duas listas nascem **vazias**, e isso não é lacuna: nenhuma funcionalidade de
-IA hospedada foi para produção (#139 e #141 seguem abertas), então nem o host
-nem os modelos foram revisados ou declarados na `/privacy`. Quem escolher o
-destino de produção acrescenta host e modelo aqui **na mesma PR** em que
-atualiza a política. É exatamente o efeito pretendido: falha fechada até alguém
-decidir.
+As duas listas nasceram **vazias**, e o primeiro destino entrou junto com a
+`/privacy` que o nomeia: o OpenRouter, restrito a endpoints de retenção zero
+(`ZERO_RETENTION_ROUTING`), servindo o GLM 5.3 Flash. Quem trocar o destino
+acrescenta host e modelo aqui **na mesma PR** em que atualiza a política. É
+exatamente o efeito pretendido: falha fechada até alguém decidir.
 """
 
 from collections.abc import Mapping
@@ -67,8 +66,11 @@ CAPABILITY_LABELS: Mapping[str, str] = {
 # usuário da instância pública, está nomeado na /privacy e não usa o dado para
 # treinar". Não é uma lista de modelos que funcionam — é uma lista de decisões.
 ALLOWED_MODELS: Mapping[str, frozenset[str]] = {
-    "text": frozenset(),
-    "vision": frozenset(),
+    # GLM 5.3 Flash (Z.ai), servido pelo OpenRouter só em endpoint de retenção
+    # zero — ver `ZERO_RETENTION_ROUTING`. Um modelo para as duas capacidades:
+    # aceita imagem e tools, e o turno do chat com foto vai inteiro para ele.
+    "text": frozenset({"z-ai/glm-5.3-flash"}),
+    "vision": frozenset({"z-ai/glm-5.3-flash"}),
     "embedding": frozenset(),
     "transcription": frozenset(),
 }
@@ -83,7 +85,25 @@ ALLOWED_MODELS: Mapping[str, frozenset[str]] = {
 # subprocessador mude. Comparar a URL inteira faria a lista recusar uma troca de
 # conta — que não é uma decisão de privacidade — e obrigaria a colar um
 # identificador de infraestrutura num arquivo público.
-ALLOWED_HOSTS: frozenset[str] = frozenset()
+ALLOWED_HOSTS: frozenset[str] = frozenset({"openrouter.ai"})
+
+# O que cada gateway revisado recebe no corpo de **toda** chamada, para que a
+# frase da /privacy sobre retenção e treino seja verdadeira por código, e não
+# por uma caixa marcada no painel da conta.
+#
+# O OpenRouter é um roteador: o mesmo nome de modelo é servido por dezenas de
+# empresas, cada uma com a sua política. Sem isto, a chamada cai em qualquer uma
+# delas — inclusive nas que guardam o prompt ou treinam com ele. `zdr: true`
+# restringe a rota aos endpoints de retenção zero, e `data_collection: "deny"`
+# aos que não usam o dado para treinar. Se nenhum endpoint do modelo cumprir as
+# duas, o OpenRouter recusa a chamada: falha fechada, que é o comportamento que
+# a lista acima existe para ter.
+#
+# Um host entra em `ALLOWED_HOSTS` **só** com a entrada correspondente aqui (ou
+# com a razão escrita de não precisar dela) — `test_allowed_models.py` cobra.
+ZERO_RETENTION_ROUTING: Mapping[str, Mapping[str, object]] = {
+    "openrouter.ai": {"zdr": True, "data_collection": "deny"},
+}
 
 # Hosts que a **revisão de privacidade** trata como "não há terceiro": o dado não
 # sai da máquina, então não há subprocessador a declarar nem lista a consultar.

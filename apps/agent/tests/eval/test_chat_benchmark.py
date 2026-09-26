@@ -142,7 +142,14 @@ async def test_resumo_nomeia_o_que_falhou(
     assert "números da resposta existem nos dados" in resumo
 
 
-def test_cli_recusa_endpoint_remoto_nao_revisado(capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_recusa_endpoint_remoto_nao_revisado(
+    capsys: pytest.CaptureFixture[str], tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # O `AgentSettings` lê o `.env` do diretório corrente. Rodando de dentro de
+    # `apps/agent`, a `AI_API_KEY` de quem desenvolve entrava aqui e o CLI deixava
+    # de recusar — o teste passava no CI e falhava na máquina de quem tem chave.
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("AI_API_KEY", raising=False)
     codigo = cli.main(["--base-url", "https://nao-revisado.example/v1", "--model", "qualquer"])
 
     assert codigo == 2
