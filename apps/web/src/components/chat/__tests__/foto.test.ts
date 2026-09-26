@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LangChainMessage } from '@assistant-ui/react-langgraph';
 import { fotosDaMensagem, LADO_MAXIMO, recodificarFoto } from '../foto';
 import { formatoDeGravacao } from '../use-ditado';
-import { AVISO_DE_FOTO, historicoParaMensagens } from '../historico';
+import { AVISO_DE_FOTO, historyToMessages } from '../historico';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -59,9 +59,9 @@ describe('formatoDeGravacao', () => {
   });
 });
 
-describe('historicoParaMensagens com foto', () => {
+describe('historyToMessages com foto', () => {
   it('a fala que levou foto volta com o aviso de que ela não foi guardada', () => {
-    const [fala] = historicoParaMensagens([
+    const [fala] = historyToMessages([
       {
         id: 'm1',
         role: 'user',

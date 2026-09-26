@@ -235,6 +235,9 @@ export class ChatService {
         ...(turno.durationMs !== undefined ? { durationMs: turno.durationMs } : {}),
         ...(turno.ttftMs !== undefined ? { ttftMs: turno.ttftMs } : {}),
         ...sumTurnUsage(turno.usoPorModelo),
+        toolCalls: turno.toolCalls,
+        toolResults: turno.toolResults,
+        artifacts: turno.artifacts,
       });
     } catch (erro) {
       this.logger.error(`Falha ao gravar a resposta do chat: ${(erro as Error).name}`);

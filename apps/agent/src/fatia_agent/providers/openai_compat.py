@@ -9,6 +9,7 @@ capacidade. Nenhuma linha deste arquivo sabe em que ambiente está rodando.
 import asyncio
 import base64
 import json as jsonlib
+import uuid
 from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
@@ -236,7 +237,7 @@ class OpenAICompatProvider:
             payload["tools"] = list(tools)
         payload = self._with_routing(payload)
 
-        acumulador = _AcumuladorDeToolCalls()
+        acumulador = _ToolCallAccumulator()
         finish_reason = "stop"
         uso: Usage | None = None
 
@@ -288,7 +289,7 @@ class OpenAICompatProvider:
                         conteudo = delta.get("content")
                         if isinstance(conteudo, str) and conteudo:
                             yield TextDelta(text=conteudo)
-                        acumulador.absorver(delta.get("tool_calls"))
+                        acumulador.absorb(delta.get("tool_calls"))
 
                     razao = bloco.get("finish_reason")
                     if isinstance(razao, str):
@@ -313,7 +314,7 @@ class OpenAICompatProvider:
                 f"O modelo '{model}' parou por limite de tokens; a resposta veio pela metade."
             )
 
-        yield TurnEnd(tool_calls=acumulador.resultado(), finish_reason=finish_reason, usage=uso)
+        yield TurnEnd(tool_calls=acumulador.result(), finish_reason=finish_reason, usage=uso)
 
     async def transcribe(self, audio: bytes, *, media_type: str) -> Transcription:
         """Áudio → texto, pelo `/audio/transcriptions` do contrato OpenAI. Atende a #141.
@@ -507,7 +508,7 @@ def _capacidades_atendidas(
     return provider, provider, provider, provider, provider
 
 
-class _AcumuladorDeToolCalls:
+class _ToolCallAccumulator:
     """Junta os pedaços de `tool_calls` que o streaming entrega fatiados.
 
     O protocolo da OpenAI manda `id` e `function.name` no primeiro fragmento e
@@ -518,8 +519,9 @@ class _AcumuladorDeToolCalls:
 
     def __init__(self) -> None:
         self._por_indice: dict[int, dict[str, str]] = {}
+        self._round = uuid.uuid4().hex[:8]
 
-    def absorver(self, fragmentos: object) -> None:
+    def absorb(self, fragmentos: object) -> None:
         if not isinstance(fragmentos, list):
             return
         for fragmento in fragmentos:
@@ -545,15 +547,17 @@ class _AcumuladorDeToolCalls:
             if isinstance(argumentos, str):
                 atual["arguments"] += argumentos
 
-    def resultado(self) -> tuple[ToolCall, ...]:
+    def result(self) -> tuple[ToolCall, ...]:
         # Ordenado por `index`: é ele que define a ordem pedida, e um `dict` de
         # fragmentos fora de ordem inverteria duas chamadas sem nenhum sintoma.
         return tuple(
             ToolCall(
                 # Modelo local nem sempre manda `id`. Um id vazio quebra a
                 # correlação com o `tool_call_id` da resposta, então o índice
-                # vira o id — estável dentro do turno, que é onde ele vale.
-                id=dados["id"] or f"call_{indice}",
+                # vira o id — com o prefixo desta rodada, porque o id é gravado
+                # (`Message.metadata.toolCalls`) e casado com o desfecho na
+                # conversa inteira: `call_0` em dois turnos misturaria os dois.
+                id=dados["id"] or f"call_{self._round}_{indice}",
                 name=dados["name"],
                 arguments=dados["arguments"],
             )

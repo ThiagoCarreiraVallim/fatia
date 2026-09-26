@@ -29,11 +29,38 @@ export type TurnStatus = 'completed' | 'interrupted' | 'error' | 'stopped';
 
 export type PausaDoTurno = { id: string; value: unknown };
 
+/** Uma chamada de tool pedida neste turno: o id que a liga ao resultado, e o nome. */
+export type ToolCallRecord = { id: string; name: string };
+
+/**
+ * O desfecho de uma tool, sem o resultado em si. O resultado carrega dado de
+ * saúde que já está no domínio de destino; o que a tela precisa depois de um F5
+ * é saber se deu certo — e, quando não deu, por quê (curto).
+ *
+ * Pode ser de uma chamada de um turno **anterior**: a escrita confirmada roda na
+ * retomada, e o resultado dela chega no turno seguinte ao do pedido.
+ */
+export type ToolResultRecord = { id: string; status: 'success' | 'error'; errorText?: string };
+
+/** Teto do motivo de falha gravado — é aviso de tela, não log. */
+export const MAX_TOOL_ERROR_TEXT = 300;
+
+/**
+ * Teto de um artefato gravado, em caracteres do JSON. Acima disso ele não é
+ * gravado (a tela volta sem o cartão, com o texto da resposta intacto): uma
+ * tabela de 90 refeições não pode inflar cada linha de `Message`.
+ */
+export const MAX_ARTIFACT_JSON = 32_000;
+
 export type TurnSummary = {
   /** O texto das respostas do assistente neste turno, na ordem. */
   texto: string;
   /** Tools pedidas, sem repetir nome, na ordem. Só o nome — ver `Message.tools`. */
   tools: { name: string }[];
+  toolCalls: ToolCallRecord[];
+  toolResults: ToolResultRecord[];
+  /** `toolCallId` → a carga tipada que a tela desenha (`artifact`), já normalizada pelo agente. */
+  artifacts: Record<string, Record<string, unknown>>;
   usoPorModelo: Map<string, UnidadesDoModelo>;
   status: TurnStatus;
   pausa: PausaDoTurno | null;
@@ -90,6 +117,9 @@ export function createTurnReader() {
   /** Texto por id de mensagem, na ordem em que cada id apareceu. */
   const textos = new Map<string, string>();
   const tools: { name: string }[] = [];
+  const toolCalls: ToolCallRecord[] = [];
+  const toolResults = new Map<string, ToolResultRecord>();
+  const artifacts: Record<string, Record<string, unknown>> = {};
   const usoPorModelo = new Map<string, UnidadesDoModelo>();
   let status: TurnStatus = 'error';
   let pausa: PausaDoTurno | null = null;
@@ -111,7 +141,27 @@ export function createTurnReader() {
       if (typeof nome === 'string' && !tools.some((t) => t.name === nome)) {
         tools.push({ name: nome });
       }
+      const id = objeto(chamada)?.id;
+      if (
+        typeof nome === 'string' &&
+        typeof id === 'string' &&
+        !toolCalls.some((t) => t.id === id)
+      ) {
+        toolCalls.push({ id, name: nome });
+      }
     }
+  }
+
+  function toolResult(mensagem: Record<string, unknown>) {
+    const id = mensagem.tool_call_id;
+    if (typeof id !== 'string') return;
+    const erro = mensagem.status === 'error';
+    const texto = textoDe(mensagem.content).trim();
+    toolResults.set(id, {
+      id,
+      status: erro ? 'error' : 'success',
+      ...(erro && texto ? { errorText: texto.slice(0, MAX_TOOL_ERROR_TEXT) } : {}),
+    });
   }
 
   return {
@@ -144,7 +194,9 @@ export function createTurnReader() {
             if (!Array.isArray(mensagens)) continue;
             for (const bruta of mensagens) {
               const mensagem = objeto(bruta);
-              if (mensagem) mensagemInteira(mensagem);
+              if (!mensagem) continue;
+              if (mensagem.type === 'tool') toolResult(mensagem);
+              else mensagemInteira(mensagem);
             }
           }
           return;
@@ -155,6 +207,15 @@ export function createTurnReader() {
             const mensagem = objeto(bruta);
             if (mensagem) mensagemInteira(mensagem);
           }
+          return;
+        }
+        case 'artifact': {
+          const dados = dadosDoEvento(evento);
+          if (!dados || typeof dados.toolCallId !== 'string' || typeof dados.kind !== 'string') {
+            return;
+          }
+          if (JSON.stringify(dados).length > MAX_ARTIFACT_JSON) return;
+          artifacts[dados.toolCallId] = dados;
           return;
         }
         case 'usage': {
@@ -186,6 +247,9 @@ export function createTurnReader() {
       return {
         texto: [...textos.values()].filter((t) => t.trim() !== '').join('\n\n'),
         tools: [...tools],
+        toolCalls: [...toolCalls],
+        toolResults: [...toolResults.values()],
+        artifacts: { ...artifacts },
         usoPorModelo,
         status,
         pausa: status === 'interrupted' ? pausa : null,

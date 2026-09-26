@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { MessageRole, Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
-import type { TurnStatus } from './leitor-do-turno';
+import type { ToolCallRecord, ToolResultRecord, TurnStatus } from './leitor-do-turno';
 
 /**
  * Persistência da conversa com a IA hospedada (#249).
@@ -40,6 +40,9 @@ export type TurnOutcome = {
   ttftMs?: number;
   /** O que o turno consumiu, somado entre os modelos. Ausente quando não foi medido. */
   usage?: { inputUnits: number; outputUnits: number };
+  toolCalls?: ToolCallRecord[];
+  toolResults?: ToolResultRecord[];
+  artifacts?: Record<string, Record<string, unknown>>;
 };
 
 /** O que a tela manda sobre uma resposta. `review: null` desfaz o voto. */
@@ -280,7 +283,13 @@ export class ConversationService {
     });
     if (!conversa) return null;
 
-    const vazia = resposta.texto.trim() === '' && resposta.tools.length === 0;
+    // Um turno que só trouxe o resultado de uma escrita confirmada (a retomada)
+    // também tem o que gravar: é esse resultado que diz, depois de um F5, se a
+    // escrita deu certo ou foi recusada.
+    const vazia =
+      resposta.texto.trim() === '' &&
+      resposta.tools.length === 0 &&
+      (resposta.toolResults?.length ?? 0) === 0;
     if (vazia && !resposta.pausa) return null;
 
     const linha = await this.prisma.message.create({
@@ -298,6 +307,11 @@ export class ConversationService {
           ...(resposta.durationMs !== undefined ? { durationMs: resposta.durationMs } : {}),
           ...(resposta.ttftMs !== undefined ? { ttftMs: resposta.ttftMs } : {}),
           ...(resposta.usage ? { usage: resposta.usage } : {}),
+          ...(resposta.toolCalls?.length ? { toolCalls: resposta.toolCalls } : {}),
+          ...(resposta.toolResults?.length ? { toolResults: resposta.toolResults } : {}),
+          ...(resposta.artifacts && Object.keys(resposta.artifacts).length > 0
+            ? { artifacts: resposta.artifacts }
+            : {}),
         } as Prisma.InputJsonValue,
         runId: resposta.runId,
       },

@@ -403,6 +403,15 @@ export interface ChatHistoryMessage {
         interrupt?: { id: string; value: ChatInterruptValue };
         /** Na fala da pessoa: quantas fotos foram com ela. A foto em si não é guardada. */
         photos?: number;
+        /** As tools pedidas neste turno, com o id que as liga ao desfecho. */
+        toolCalls?: { id: string; name: string }[];
+        /**
+         * Desfecho de cada tool, sem o resultado. Pode ser de chamada de um turno
+         * anterior: a escrita confirmada roda na retomada.
+         */
+        toolResults?: { id: string; status: 'success' | 'error'; errorText?: string }[];
+        /** `toolCallId` → o cartão da tool, como chegou ao vivo. */
+        artifacts?: Record<string, ChatArtifact>;
       } & Partial<ChatTurnTiming>)
     | null;
   runId: string | null;
@@ -498,8 +507,8 @@ type ChatArtifactBase = { toolCallId: string; label?: string };
  * A carga tipada de uma tool (evento `artifact`), pendurada no cartão dela pelo
  * `toolCallId`. Os formatos são a lista fechada de `apps/agent/.../chat/artefatos.py`.
  *
- * Vive só no turno ao vivo: `Message.tools` guarda o nome da tool e nada mais, então
- * depois de recarregar a página o cartão volta sem o artefato.
+ * Chega ao vivo pelo evento e volta gravado em `Message.metadata.artifacts`, para o
+ * cartão reaparecer depois de um F5 (ver `docs/DATA_RETENTION.md`).
  */
 export type ChatArtifact =
   | (ChatArtifactBase & {

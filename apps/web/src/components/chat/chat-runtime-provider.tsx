@@ -54,6 +54,7 @@ const ConversaContext = createContext<string | undefined>(undefined);
 
 export const useTitulosDasTools = () => useContext(ExtrasContext).titulos;
 export const useArtefato = (toolCallId: string) => useContext(ExtrasContext).artefatos[toolCallId];
+export const useArtefatos = () => useContext(ExtrasContext).artefatos;
 export const usePlanoDoTurno = () => useContext(ExtrasContext).plano;
 export const useVoto = () => useContext(VotoContext);
 export const useConversaAberta = () => useContext(ConversaContext);

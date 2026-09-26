@@ -704,6 +704,171 @@ describe('ChatScreen', () => {
     ).toBeInTheDocument();
   });
 
+  describe('depois do F5, as tools voltam como aconteceram', () => {
+    const linha = (id: string, extra: Partial<ChatConversation['messages'][number]>) => ({
+      id,
+      role: 'assistant' as const,
+      content: '',
+      tools: null,
+      metadata: null,
+      runId: null,
+      review: null,
+      createdAt: '2026-09-25T12:00:01Z',
+      ...extra,
+    });
+    const conversa = (messages: ChatConversation['messages']): ChatConversation => ({
+      id: CONVERSA,
+      title: 'Hoje',
+      createdAt: '2026-09-25T12:00:00Z',
+      updatedAt: '2026-09-25T12:00:00Z',
+      messages,
+    });
+
+    it('o cartão da tool volta', async () => {
+      conversaGravada = conversa([
+        linha('m1', { role: 'user', content: 'quanto comi hoje?' }),
+        linha('m2', {
+          content: 'Hoje você comeu 1.832 kcal.',
+          tools: [{ name: 'get_today_summary' }],
+          metadata: {
+            status: 'completed',
+            toolCalls: [{ id: 'c1', name: 'get_today_summary' }],
+            toolResults: [{ id: 'c1', status: 'success' }],
+            artifacts: {
+              c1: {
+                toolCallId: 'c1',
+                kind: 'metric',
+                label: 'Calorias de hoje',
+                value: 1832,
+                unit: 'kcal',
+              },
+            },
+          },
+        }),
+      ]);
+      montar();
+
+      const cartao = await screen.findByRole('figure', { name: 'Calorias de hoje' });
+      expect(within(cartao).getByText('1.832')).toBeInTheDocument();
+    });
+
+    it('a escrita recusada volta como recusada, e não como feita', async () => {
+      // A chamada está na linha do pedido; o desfecho, na da retomada.
+      conversaGravada = conversa([
+        linha('m1', { role: 'user', content: 'registra o almoço' }),
+        linha('m2', {
+          tools: [{ name: 'log_meal' }],
+          metadata: { status: 'resolved', toolCalls: [{ id: 'c1', name: 'log_meal' }] },
+        }),
+        linha('m3', {
+          content: 'Tudo bem, não registrei.',
+          metadata: {
+            status: 'completed',
+            toolResults: [
+              {
+                id: 'c1',
+                status: 'error',
+                errorText: 'A pessoa recusou esta alteração na tela. Nada foi gravado.',
+              },
+            ],
+          },
+        }),
+      ]);
+      montar();
+
+      // `findAll`: o rótulo tem duas camadas (a da troca animada), como todo passo.
+      expect(
+        await screen.findAllByText('Registrar refeição: você recusou, nada foi gravado'),
+      ).not.toHaveLength(0);
+      expect(screen.queryByLabelText('Feito')).not.toBeInTheDocument();
+    });
+
+    it('a tool que falhou diz que não deu certo, com o motivo atrás de um toque', async () => {
+      conversaGravada = conversa([
+        linha('m1', { role: 'user', content: 'o que comi?' }),
+        linha('m2', {
+          content: 'Não consegui ver agora.',
+          tools: [{ name: 'list_meals' }],
+          metadata: {
+            status: 'completed',
+            toolCalls: [{ id: 'c1', name: 'list_meals' }],
+            toolResults: [{ id: 'c1', status: 'error', errorText: 'Serviço fora do ar.' }],
+          },
+        }),
+      ]);
+      montar();
+      const user = userEvent.setup();
+
+      expect(await screen.findAllByText('Listar refeições: não deu certo')).not.toHaveLength(0);
+      expect(screen.queryByText('Serviço fora do ar.')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Ver detalhe' }));
+      expect(screen.getByText('Serviço fora do ar.')).toBeInTheDocument();
+    });
+  });
+
+  it('três tools seguidas viram um cabeçalho; com uma falha, ficam à mostra', async () => {
+    const chamadas = (mensagem: string, ids: string[]) => ({
+      event: 'updates',
+      data: {
+        agente: {
+          messages: [
+            {
+              type: 'ai',
+              id: mensagem,
+              content: '',
+              tool_calls: ids.map((id) => ({ id, name: 'list_meals', args: {} })),
+            },
+          ],
+        },
+      },
+    });
+    const resultado = (id: string, status: 'success' | 'error') => ({
+      event: 'updates',
+      data: {
+        ferramentas: {
+          messages: [
+            {
+              type: 'tool',
+              id: `t-${id}`,
+              tool_call_id: id,
+              name: 'list_meals',
+              content: 'x',
+              status,
+            },
+          ],
+        },
+      },
+    });
+
+    montar();
+    await enviar('o que comi essa semana?');
+    fontes[0].emitir(
+      chamadas('ai-1', ['c1', 'c2', 'c3']),
+      resultado('c1', 'success'),
+      resultado('c2', 'success'),
+      resultado('c3', 'success'),
+      fragmento('ai-2', 'Pronto.'),
+      { event: 'done', data: { status: 'completed' } },
+    );
+    fontes[0].fechar();
+    expect(await screen.findByRole('button', { name: 'Consultei 3 coisas' })).toBeInTheDocument();
+
+    await enviar('e na anterior?');
+    fontes[1].emitir(
+      chamadas('ai-10', ['d1', 'd2', 'd3']),
+      resultado('d1', 'success'),
+      resultado('d2', 'error'),
+      resultado('d3', 'success'),
+      fragmento('ai-3', 'Uma parte falhou.'),
+      { event: 'done', data: { status: 'completed' } },
+    );
+    fontes[1].fechar();
+    expect(await screen.findByText('Uma parte falhou.')).toBeInTheDocument();
+    // Só o primeiro turno agrupou: a falha não fica atrás de "Consultei 3 coisas".
+    expect(screen.getAllByRole('button', { name: /Consultei/ })).toHaveLength(1);
+    expect(screen.getAllByText('Listar refeições: não deu certo')).not.toHaveLength(0);
+  });
+
   it('o artefato da tool aparece no cartão dela, com o número inteiro', async () => {
     montar();
     await enviar('quanto comi hoje?');

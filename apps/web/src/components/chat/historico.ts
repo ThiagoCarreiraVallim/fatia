@@ -1,60 +1,102 @@
 import type { LangChainMessage, LangGraphInterruptState } from '@assistant-ui/react-langgraph';
-import type { ChatHistoryMessage, ChatResumeValue } from '@fatia/api-client';
+import type { ChatArtifact, ChatHistoryMessage, ChatResumeValue } from '@fatia/api-client';
 
 /**
  * A conversa gravada no `apps/api`, na forma que o runtime do assistant-ui redesenha.
  *
- * O que volta de um F5 é o que `Message` guarda: o texto de cada fala e o **nome**
- * de cada tool que o assistente chamou (o argumento de uma chamada carrega dado
- * de saúde e já está no domínio de destino — ver `Message.tools` no schema). Por
- * isso as tools voltam como chamadas concluídas, sem argumento nem resultado: o
- * que se preserva é a auditoria de "o assistente registrou uma refeição aqui".
+ * O que volta de um F5 é o que `Message` guarda: o texto de cada fala, as tools
+ * que o assistente chamou (com o id e o desfecho — deu certo, falhou e por quê,
+ * foi recusada) e o cartão de cada uma. O **resultado** de uma tool não volta: ele
+ * carrega dado de saúde que já está no domínio de destino, e o que se preserva é
+ * a auditoria de "o assistente registrou uma refeição aqui, e deu certo".
  */
+
+/**
+ * O desfecho que a tela escreve para a chamada que nunca rodou. Começa com o
+ * mesmo texto do `NAO_EXECUTADA` do agente, que é o que o passo reconhece como
+ * "não chegou a rodar" (ver `stepState`).
+ */
+export const NEVER_RAN = 'Não executada: a conversa seguiu antes de esta chamada rodar.';
 
 type MensagemDoAssistente = Extract<LangChainMessage, { type: 'ai' }>;
 type ResultadoDeTool = Extract<LangChainMessage, { type: 'tool' }>;
+type ToolResult = NonNullable<NonNullable<ChatHistoryMessage['metadata']>['toolResults']>[number];
 
-function doAssistente(linha: ChatHistoryMessage): LangChainMessage[] {
-  const tools = linha.tools ?? [];
-  if (tools.length === 0) {
+/**
+ * Linha gravada antes de a metadata ter `toolCalls` só tem o nome: a chamada
+ * ganha um id sintético e aparece como feita, que é o que a tela mostrava antes.
+ */
+function callsOf(linha: ChatHistoryMessage): { id: string; name: string; legacy: boolean }[] {
+  const gravadas = linha.metadata?.toolCalls;
+  if (gravadas?.length) return gravadas.map((c) => ({ ...c, legacy: false }));
+  return (linha.tools ?? []).map((tool, indice) => ({
+    id: `${linha.id}:${indice}`,
+    name: tool.name,
+    legacy: true,
+  }));
+}
+
+function assistantMessages(
+  linha: ChatHistoryMessage,
+  results: ReadonlyMap<string, ToolResult>,
+): LangChainMessage[] {
+  const chamadas = callsOf(linha);
+  if (chamadas.length === 0) {
     return linha.content ? [{ id: linha.id, type: 'ai', content: linha.content }] : [];
   }
 
   // A chamada e o resultado lado a lado, para o runtime desenhar a tool como
   // concluída. O texto da resposta fica na mesma mensagem, com o id da linha —
   // é por ele que o voto grava na resposta certa.
-  const chamadas = tools.map((tool, indice) => ({
-    id: `${linha.id}:${indice}`,
-    name: tool.name,
-    args: {},
-  }));
   const mensagem: MensagemDoAssistente = {
     id: linha.id,
     type: 'ai',
     content: linha.content,
-    tool_calls: chamadas,
+    tool_calls: chamadas.map(({ id, name }) => ({ id, name, args: {} })),
   };
-  const resultados: ResultadoDeTool[] = chamadas.map((chamada) => ({
-    id: `${chamada.id}:resultado`,
-    type: 'tool',
-    tool_call_id: chamada.id,
-    name: chamada.name,
-    content: '',
-    status: 'success',
-  }));
+  const pendente = linha.metadata?.status === 'interrupted';
+  const resultados: ResultadoDeTool[] = chamadas.flatMap((chamada) => {
+    const desfecho = results.get(chamada.id);
+    // Sem desfecho numa pausa ainda aberta: a chamada espera a pessoa, e o cartão
+    // da pausa é quem responde. Inventar "feito" aqui mentiria sobre uma escrita
+    // que não aconteceu.
+    if (!desfecho && pendente && !chamada.legacy) return [];
+    // Sem desfecho em linha nenhuma, fora de uma pausa aberta: a chamada nunca
+    // rodou — a pessoa escreveu outra coisa em vez de responder o cartão, ou o
+    // turno caiu antes. O agente só diz isso ao modelo, e não grava. Mostrar
+    // "feito" aqui seria dizer que uma escrita aconteceu.
+    const nuncaRodou = !desfecho && !chamada.legacy;
+    const falhou = nuncaRodou || desfecho?.status === 'error';
+    return [
+      {
+        id: `${chamada.id}:resultado`,
+        type: 'tool',
+        tool_call_id: chamada.id,
+        name: chamada.name,
+        content: nuncaRodou ? NEVER_RAN : falhou ? (desfecho?.errorText ?? '') : '',
+        status: falhou ? 'error' : 'success',
+      },
+    ];
+  });
   return [mensagem, ...resultados];
 }
+
+/** A foto não é guardada (ADR 004); depois de recarregar, fica o aviso de que ela existiu. */
+export const AVISO_DE_FOTO = '📷 Foto enviada — ela não fica guardada.';
 
 /**
  * As linhas, em ordem cronológica, como mensagens do LangChain.
  *
  * Só fala de pessoa e de assistente com conteúdo: uma linha vazia viraria bolha
- * em branco.
+ * em branco. O desfecho de uma tool pode estar numa linha posterior à da chamada
+ * (a escrita confirmada roda na retomada), então os desfechos são lidos da
+ * conversa inteira antes.
  */
-/** A foto não é guardada (ADR 004); depois de recarregar, fica o aviso de que ela existiu. */
-export const AVISO_DE_FOTO = '📷 Foto enviada — ela não fica guardada.';
-
-export function historicoParaMensagens(linhas: readonly ChatHistoryMessage[]): LangChainMessage[] {
+export function historyToMessages(linhas: readonly ChatHistoryMessage[]): LangChainMessage[] {
+  const results = new Map<string, ToolResult>();
+  for (const linha of linhas) {
+    for (const desfecho of linha.metadata?.toolResults ?? []) results.set(desfecho.id, desfecho);
+  }
   return linhas.flatMap((linha): LangChainMessage[] => {
     if (linha.role === 'user') {
       if (!linha.content) return [];
@@ -62,8 +104,15 @@ export function historicoParaMensagens(linhas: readonly ChatHistoryMessage[]): L
       const content = fotos > 0 ? `${linha.content}\n\n${AVISO_DE_FOTO}` : linha.content;
       return [{ id: linha.id, type: 'human', content }];
     }
-    return doAssistente(linha);
+    return assistantMessages(linha, results);
   });
+}
+
+/** Os cartões das tools gravados na conversa, pelo `toolCallId`. */
+export function artifactsFromHistory(
+  linhas: readonly ChatHistoryMessage[],
+): Record<string, ChatArtifact> {
+  return Object.assign({}, ...linhas.map((linha) => linha.metadata?.artifacts ?? {}));
 }
 
 /**

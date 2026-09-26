@@ -36,7 +36,7 @@ import { MobileComposer } from '@/components/elements/mobile-composer';
 import { MessageTiming } from '@/components/elements/message-timing';
 import { StoppedRun } from '@/components/elements/stopped-run';
 import { Conversation, ConversationContent, ConversationScrollButton } from './conversation';
-import { AssistantReasoning, ChamadaDeTool, TextoDoAssistente } from './partes';
+import { AssistantReasoning, TextoDoAssistente, ToolCallGroup, ToolCallPart } from './partes';
 import { PausaDoAgente } from './pausa';
 import { MotivoDoVoto } from './motivo-do-voto';
 import { PlanoDoTurno } from './plano';
@@ -204,7 +204,8 @@ function MensagemDoAssistente() {
         components={{
           Text: TextoDoAssistente,
           Reasoning: AssistantReasoning,
-          tools: { Fallback: ChamadaDeTool },
+          tools: { Fallback: ToolCallPart },
+          ToolGroup: ToolCallGroup,
         }}
       />
       <Pensando />

@@ -109,7 +109,26 @@ async def test_tool_call_sem_id_ganha_um_estavel(settings_factory):
     await provider.aclose()
 
     (fim_do_turno,) = [p for p in pedacos if isinstance(p, TurnEnd)]
-    assert fim_do_turno.tool_calls[0].id == "call_0"
+    assert fim_do_turno.tool_calls[0].id.startswith("call_")
+
+
+async def test_o_id_inventado_nao_se_repete_entre_rodadas(settings_factory):
+    """O id é gravado e casado com o desfecho na conversa inteira (F5).
+
+    `call_0` em duas rodadas faria o cartão e o "deu certo" de uma aparecer na outra.
+    """
+    sem_id = [fragmento_de_tool(0, name="get_me", arguments="{}"), fim("tool_calls")]
+    transport = ProviderRecordingTransport([sem_id, sem_id])
+    provider = build_provider(settings_factory(), transport=transport)
+
+    ids = []
+    for _ in range(2):
+        pedacos = await coletar(provider, [{"role": "user", "content": "oi"}])
+        (fim_do_turno,) = [p for p in pedacos if isinstance(p, TurnEnd)]
+        ids.append(fim_do_turno.tool_calls[0].id)
+    await provider.aclose()
+
+    assert ids[0] != ids[1]
 
 
 async def test_o_catalogo_de_tools_vai_no_corpo(settings_factory):

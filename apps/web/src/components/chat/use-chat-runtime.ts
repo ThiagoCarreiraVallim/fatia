@@ -17,8 +17,9 @@ import {
   type ChatReviewReason,
 } from '@fatia/api-client';
 import {
+  artifactsFromHistory,
   decodificarRetomada,
-  historicoParaMensagens,
+  historyToMessages,
   pausaPendente,
   textoDaMensagem,
 } from './historico';
@@ -135,7 +136,7 @@ export function useChatThreadList(): { adapter: RemoteThreadListAdapter; ready: 
 export type ChatRuntimeExtras = {
   /** Nome de tool → título em português, como o agente anunciou no `catalog`. */
   titulos: Readonly<Record<string, string>>;
-  /** `toolCallId` → a carga tipada da tool (`artifact`). Só do que passou ao vivo. */
+  /** `toolCallId` → a carga tipada da tool (`artifact`): ao vivo, e da linha gravada no F5. */
   artefatos: Readonly<Record<string, ChatArtifact>>;
   /** O plano do turno em curso ou do último, quando o agente fez um (`plan`). */
   plano: readonly ChatPlanStep[] | null;
@@ -232,13 +233,14 @@ export function useChatRuntime({
       const conversa = await getConversation(threadId);
       const pausa = pausaPendente(conversa.messages);
       setTimings((antes) => ({ ...antes, ...timingsFromHistory(conversa.messages) }));
+      setArtefatos((antes) => ({ ...antes, ...artifactsFromHistory(conversa.messages) }));
       for (const [tela, linha] of voteRowsFromHistory(conversa.messages)) {
         linhas.current.set(tela, linha);
       }
       const paradas = stoppedFromHistory(conversa.messages);
       if (paradas.length > 0) setStopped((antes) => new Set([...antes, ...paradas]));
       return {
-        messages: historicoParaMensagens(conversa.messages),
+        messages: historyToMessages(conversa.messages),
         ...(pausa ? { interrupts: [pausa] } : {}),
       };
     } catch (erro) {

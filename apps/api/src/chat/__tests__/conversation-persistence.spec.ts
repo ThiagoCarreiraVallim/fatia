@@ -201,6 +201,43 @@ describe('ConversationService — o que sobra do turno', () => {
     });
   });
 
+  it('grava chamadas, desfechos e artefatos na metadata', async () => {
+    const { conversationId } = await conversas.iniciarTurno(userId, randomUUID(), 'oi');
+    const linha = await conversas.completeTurn(
+      userId,
+      conversationId,
+      resposta({
+        texto: 'Hoje: 1832 kcal.',
+        tools: [{ name: 'get_today_summary' }],
+        toolCalls: [{ id: 'c0', name: 'get_today_summary' }],
+        toolResults: [{ id: 'c0', status: 'success' }],
+        artifacts: { c0: { toolCallId: 'c0', kind: 'metric', value: 1832 } },
+      }),
+    );
+
+    const gravada = await prisma.message.findUniqueOrThrow({ where: { id: linha! } });
+    expect(gravada.metadata).toMatchObject({
+      toolCalls: [{ id: 'c0', name: 'get_today_summary' }],
+      toolResults: [{ id: 'c0', status: 'success' }],
+      artifacts: { c0: { kind: 'metric', value: 1832 } },
+    });
+  });
+
+  it('a retomada que só trouxe o desfecho da escrita também é gravada', async () => {
+    // Sem isto, depois de um F5 a escrita recusada aparecia como feita.
+    const { conversationId } = await conversas.iniciarTurno(userId, randomUUID(), 'registra');
+    const linha = await conversas.completeTurn(
+      userId,
+      conversationId,
+      resposta({
+        texto: '',
+        toolResults: [{ id: 'c0', status: 'error', errorText: 'A pessoa recusou.' }],
+      }),
+    );
+
+    expect(linha).toEqual(expect.any(String));
+  });
+
   it('a resposta que a pessoa parou é gravada como `stopped`', async () => {
     const { conversationId } = await conversas.iniciarTurno(userId, randomUUID(), 'oi');
     const linha = await conversas.completeTurn(

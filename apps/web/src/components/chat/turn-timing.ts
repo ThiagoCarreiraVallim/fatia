@@ -66,7 +66,7 @@ export interface AnswerGroup {
   rows: ChatHistoryMessage[];
 }
 
-/** Linha que vira mensagem na tela — as outras `historicoParaMensagens` pula. */
+/** Linha que vira mensagem na tela — as outras `historyToMessages` pula. */
 const isShown = (row: ChatHistoryMessage): boolean =>
   row.content !== '' || (row.tools?.length ?? 0) > 0;
 

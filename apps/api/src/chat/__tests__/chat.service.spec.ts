@@ -486,6 +486,9 @@ describe('ChatService — o que fica no banco', () => {
       status: 'completed',
       pausa: null,
       runId: 'run-9',
+      toolCalls: [],
+      toolResults: [],
+      artifacts: {},
     });
   });
 
@@ -795,6 +798,64 @@ describe('ChatService — o que NÃO pode vazar', () => {
     expect(tudo).not.toContain('token-secreto-do-usuario');
     expect(tudo).not.toContain('tomei 3 insulinas');
     expect(tudo).not.toContain('glicemia');
+  });
+});
+
+describe('ChatService — o que a tela precisa das tools depois de um F5', () => {
+  const ferramenta = (id: string, conteudo: string, status: 'success' | 'error') =>
+    quadro('updates', {
+      ferramentas: {
+        messages: [
+          { type: 'tool', id: `t-${id}`, tool_call_id: id, name: 'x', content: conteudo, status },
+        ],
+      },
+    });
+
+  it('grava cada chamada com o id, e o desfecho de cada uma — sem o resultado', async () => {
+    const { service, canal, conversas } = montar();
+
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    await respirar();
+    canal.emitir(pedidoDeTool('ai-1', 'list_meals', 'get_streak'));
+    canal.emitir(ferramenta('c0', '[{"food":"arroz","kcal":200}]', 'success'));
+    canal.emitir(ferramenta('c1', 'Sequência indisponível agora.', 'error'));
+    canal.emitir(fragmento('ai-2', 'Pronto.'));
+    canal.emitir(fim('completed'));
+    canal.encerrar();
+    await turno;
+
+    const [, , resposta] = conversas.completeTurn.mock.calls[0];
+    expect(resposta.toolCalls).toEqual([
+      { id: 'c0', name: 'list_meals' },
+      { id: 'c1', name: 'get_streak' },
+    ]);
+    expect(resposta.toolResults).toEqual([
+      { id: 'c0', status: 'success' },
+      { id: 'c1', status: 'error', errorText: 'Sequência indisponível agora.' },
+    ]);
+    // O resultado de sucesso carrega dado de saúde que já está no domínio: não vai.
+    expect(JSON.stringify(resposta)).not.toContain('arroz');
+  });
+
+  it('grava o artefato já normalizado, e descarta o que passa do teto', async () => {
+    const { service, canal, conversas } = montar();
+    const metrica = { toolCallId: 'c0', kind: 'metric', label: 'kcal', value: 1832 };
+    const enorme = {
+      toolCallId: 'c1',
+      kind: 'report',
+      columns: ['a'],
+      rows: Array.from({ length: 5000 }, (_, i) => [`linha ${i}`]),
+    };
+
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    await respirar();
+    canal.emitir(quadro('artifact', metrica));
+    canal.emitir(quadro('artifact', enorme));
+    canal.emitir(fim('completed'));
+    canal.encerrar();
+    await turno;
+
+    expect(conversas.completeTurn.mock.calls[0][2].artifacts).toEqual({ c0: metrica });
   });
 });
 
