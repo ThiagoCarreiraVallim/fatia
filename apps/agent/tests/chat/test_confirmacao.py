@@ -65,7 +65,7 @@ async def test_tool_confirmavel_pausa_e_nao_executa(settings_factory):
 
 async def test_o_texto_antes_do_pedido_ainda_sai(settings_factory):
     r = await _pausado(settings_factory, ("c1", "log_meal", REFEICAO), texto_antes="Vou registrar.")
-    assert r.texto() == "Vou registrar."
+    assert r.text() == "Vou registrar."
 
 
 async def test_leitura_na_mesma_volta_roda_antes_da_pausa(settings_factory):
@@ -98,7 +98,7 @@ async def test_aprovada_executa_o_que_esta_no_checkpoint_antes_do_modelo(setting
     # resultado da tool.
     (unica,) = retomado.provider.corpos
     assert unica["messages"][-1]["role"] == "tool"
-    assert retomado.texto() == "Registrei o almoço."
+    assert retomado.text() == "Registrei o almoço."
     assert retomado.data_of("done") == [{"status": "completed"}]
 
 
@@ -246,7 +246,7 @@ async def test_a_resposta_da_pergunta_volta_como_resultado_da_tool(settings_fact
 
     resposta = retomado.provider.corpos[0]["messages"][-1]
     assert resposta == {"role": "tool", "tool_call_id": "q1", "content": "gramas: 150"}
-    assert retomado.texto() == "Anotado."
+    assert retomado.text() == "Anotado."
 
 
 async def test_pergunta_e_escrita_na_mesma_volta_saem_numa_pausa_so(settings_factory):

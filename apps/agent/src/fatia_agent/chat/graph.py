@@ -80,7 +80,7 @@ from langgraph.runtime import Runtime
 from langgraph.types import Command, interrupt
 
 from ..prompts.chat_pt_br import cercar, sistema_do_turno
-from ..providers.base import TextDelta, TurnEnd
+from ..providers.base import ReasoningDelta, TextDelta, TurnEnd
 from ..providers.errors import AIProviderError
 from . import events, human
 from .artefatos import artefato
@@ -164,6 +164,18 @@ def _texto(mensagem: BaseMessage) -> str:
     return "".join(
         str(bloco.get("text") or "") if isinstance(bloco, dict) else str(bloco)
         for bloco in conteudo
+    )
+
+
+def _reasoning_of(mensagem: BaseMessage) -> str:
+    """O raciocínio que o fragmento carrega — vazio quando ele é texto."""
+    conteudo = mensagem.content
+    if isinstance(conteudo, str):
+        return ""
+    return "".join(
+        str(bloco.get("reasoning") or "")
+        for bloco in conteudo
+        if isinstance(bloco, dict) and bloco.get("type") == "reasoning"
     )
 
 
@@ -451,7 +463,18 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
         async for pedaco in contexto.provider.stream_chat(
             prompt, tools=catalogo, capacidade="vision" if contexto.fotos else "text"
         ):
-            if isinstance(pedaco, TextDelta):
+            if isinstance(pedaco, ReasoningDelta):
+                # Só para a tela: o raciocínio não entra em `texto`, então não vai
+                # para o estado, para o checkpoint, nem de volta ao modelo.
+                writer(
+                    events.Fragmento(
+                        AIMessageChunk(
+                            content=[events.reasoning_block(pedaco.text)], id=identificador
+                        ),
+                        "agente",
+                    )
+                )
+            elif isinstance(pedaco, TextDelta):
                 texto.append(pedaco.text)
                 writer(
                     events.Fragmento(
@@ -921,6 +944,9 @@ async def stream_chat_events(
     # turno não pode dar duração negativa.
     started_at = time.perf_counter()
     first_visible_at: float | None = None
+    # Id da mensagem → o raciocínio que a tela recebeu dela neste turno. Ver
+    # `events._with_reasoning`: a mensagem inteira que chega depois precisa dele.
+    reasoning: dict[str, str] = {}
 
     def timing() -> dict[str, int | None]:
         return {
@@ -945,7 +971,14 @@ async def stream_chat_events(
         ):
             if modo == "custom":
                 if isinstance(pacote, events.Fragmento):
-                    if first_visible_at is None and _texto(pacote.mensagem).strip():
+                    reasoned = _reasoning_of(pacote.mensagem)
+                    if reasoned:
+                        key = str(pacote.mensagem.id)
+                        reasoning[key] = reasoning.get(key, "") + reasoned
+                    # O raciocínio conta como visível: é ele que aparece primeiro
+                    # na tela, no painel "Pensando", e é isso que o tempo mede.
+                    visible = _texto(pacote.mensagem).strip() or reasoned.strip()
+                    if first_visible_at is None and visible:
                         first_visible_at = time.perf_counter()
                     yield events.fragmento(pacote.mensagem, pacote.no)
                 elif isinstance(pacote, events.ChatEvent):
@@ -954,7 +987,7 @@ async def stream_chat_events(
                     raise TypeError(f"O grafo emitiu {type(pacote).__name__} no canal custom.")
             elif modo == "updates" and isinstance(pacote, dict):
                 interrompido = interrompido or bool(pacote.get("__interrupt__"))
-                quadro = events.atualizacoes(pacote)
+                quadro = events.atualizacoes(pacote, reasoning)
                 if quadro is not None:
                     yield quadro
     # Só as duas famílias nomeadas. Exceção sem `code` sobe com traceback: ela é
@@ -972,7 +1005,7 @@ async def stream_chat_events(
     estado = await grafo.aget_state(config)
     encontrada = _ultima_do_assistente(estado.values.get("messages") or [])
     if encontrada is not None:
-        yield events.completas([encontrada[1]])
+        yield events.completas([encontrada[1]], reasoning)
     yield events.done("completed", **timing()).frame()
 
 

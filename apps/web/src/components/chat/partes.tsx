@@ -4,9 +4,11 @@ import { AlertCircleIcon, CheckIcon } from 'lucide-react';
 import { Streamdown } from 'streamdown';
 import {
   useMessagePartText,
+  type ReasoningMessagePartComponent,
   type TextMessagePartComponent,
   type ToolCallMessagePartComponent,
 } from '@assistant-ui/react';
+import { ReasoningPanel } from '@/components/elements/reasoning-panel';
 import { SwapLabel } from '@/components/elements/surfaces';
 import { useArtefato, useTitulosDasTools } from './chat-runtime-provider';
 import { Artefato } from './artefato';
@@ -23,6 +25,20 @@ export const TextoDoAssistente: TextMessagePartComponent = () => {
   const { text } = useMessagePartText();
   return <Streamdown className="w-full text-sm leading-relaxed">{text}</Streamdown>;
 };
+
+/**
+ * O raciocínio do modelo, colapsado. Não é gravado: depois de um F5, a resposta
+ * volta sem ele — o que fica no histórico é o que o modelo respondeu, e não o
+ * rascunho (ver `events._with_reasoning` no agente).
+ */
+export const AssistantReasoning: ReasoningMessagePartComponent = ({ text, status }) => (
+  <ReasoningPanel
+    text={text}
+    streaming={status.type === 'running'}
+    activeLabel="Pensando…"
+    label="Como pensei"
+  />
+);
 
 /** A tool local do agente: a pergunta dela aparece no cartão da pausa. */
 const TITULOS_LOCAIS: Record<string, string> = { ask_user: 'Pergunta para você' };

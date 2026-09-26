@@ -36,7 +36,7 @@ import { MobileComposer } from '@/components/elements/mobile-composer';
 import { MessageTiming } from '@/components/elements/message-timing';
 import { StoppedRun } from '@/components/elements/stopped-run';
 import { Conversation, ConversationContent, ConversationScrollButton } from './conversation';
-import { ChamadaDeTool, TextoDoAssistente } from './partes';
+import { AssistantReasoning, ChamadaDeTool, TextoDoAssistente } from './partes';
 import { PausaDoAgente } from './pausa';
 import { MotivoDoVoto } from './motivo-do-voto';
 import { PlanoDoTurno } from './plano';
@@ -138,11 +138,15 @@ function TurnErrorNotice() {
  */
 function Pensando() {
   const rodando = useAuiState((s) => s.message.status?.type === 'running');
-  const temTexto = useAuiState((s) =>
-    s.message.parts.some((parte) => parte.type === 'text' && parte.text.trim() !== ''),
+  // O raciocínio conta: o painel dele já diz "Pensando…", e dois avisos de
+  // espera empilhados é ruído.
+  const temConteudo = useAuiState((s) =>
+    s.message.parts.some(
+      (parte) => (parte.type === 'text' || parte.type === 'reasoning') && parte.text.trim() !== '',
+    ),
   );
   const { stalled } = unstable_useMessageStallDetection({ thresholdMs: 2500 });
-  if (!rodando || (temTexto && !stalled)) return null;
+  if (!rodando || (temConteudo && !stalled)) return null;
   // `aria-label` além do rótulo visível: é o nome estável pelo qual o leitor de
   // tela encontra o único retorno entre apertar enviar e o primeiro token.
   return <ThinkingIndicator aria-label="Pensando" label="Pensando" />;
@@ -197,7 +201,11 @@ function MensagemDoAssistente() {
   return (
     <MessagePrimitive.Root className="flex w-full flex-col items-start gap-3">
       <MessagePrimitive.Parts
-        components={{ Text: TextoDoAssistente, tools: { Fallback: ChamadaDeTool } }}
+        components={{
+          Text: TextoDoAssistente,
+          Reasoning: AssistantReasoning,
+          tools: { Fallback: ChamadaDeTool },
+        }}
       />
       <Pensando />
       <ErroDaResposta />

@@ -108,7 +108,7 @@ async def test_o_plano_vira_progresso_conforme_as_tools_respondem(settings_facto
     assert [p["status"] for p in planos[1]] == ["running", "pending"]
     assert [p["status"] for p in planos[2]] == ["done", "pending"]
     # O texto do plano não aparece na conversa: só o nó `agente` fala.
-    assert "steps" not in r.texto()
+    assert "steps" not in r.text()
     assert "Consultar a semana" in r.provider.corpos[1]["messages"][0]["content"]
 
 

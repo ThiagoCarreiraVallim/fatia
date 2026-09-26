@@ -292,6 +292,46 @@ describe('ChatScreen', () => {
     expect(screen.queryByLabelText('Pensando')).not.toBeInTheDocument();
   });
 
+  it('o raciocínio chega colapsado, e continua lá depois da resposta final', async () => {
+    montar();
+    const user = await enviar('quanto comi hoje?');
+    const pensou = { type: 'reasoning', reasoning: 'Preciso somar os itens.', index: 0 };
+
+    fontes[0].emitir({
+      event: 'messages',
+      data: [
+        { type: 'AIMessageChunk', content: [pensou], id: 'ai-1' },
+        { langgraph_node: 'agente' },
+      ],
+    });
+    // Enquanto pensa, o painel diz isso — e o aviso genérico de espera some.
+    expect(await screen.findByRole('button', { name: /Pensando…/ })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Pensando')).not.toBeInTheDocument();
+    // Colapsado: o rascunho só aparece para quem abrir.
+    expect(screen.queryByText('Preciso somar os itens.')).not.toBeInTheDocument();
+
+    fontes[0].emitir(fragmento('ai-1', 'Você comeu 640 kcal.'), {
+      event: 'messages/complete',
+      data: [
+        {
+          type: 'ai',
+          id: 'ai-1',
+          content: [pensou, { type: 'text', text: 'Você comeu 640 kcal.' }],
+        },
+      ],
+    });
+    fontes[0].fechar();
+
+    expect(await screen.findByText('Você comeu 640 kcal.')).toBeInTheDocument();
+    // A mensagem inteira substitui a montada pelos fragmentos: sem o raciocínio
+    // nela, o painel sumiria aqui.
+    const painel = await screen.findByRole('button', { name: /Como pensei/ });
+    await user.click(painel);
+    expect(await screen.findByText('Preciso somar os itens.')).toBeInTheDocument();
+    // O rascunho não vira parte da resposta.
+    expect(screen.getByText('Você comeu 640 kcal.').textContent).not.toMatch(/Preciso somar/);
+  });
+
   it('rotula a tool pelo título que o agente anunciou', async () => {
     montar();
     await enviar('o que comi?');

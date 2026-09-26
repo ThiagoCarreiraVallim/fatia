@@ -95,7 +95,7 @@ async def test_o_ciclo_de_tool_chega_pelas_atualizacoes_do_grafo(settings_factor
     assert resultado["tool_call_id"] == "c1"
     assert resultado["status"] == "success"
     assert resultado["content"] == '[{"nome":"arroz"}]'
-    assert r.texto() == "Arroz."
+    assert r.text() == "Arroz."
     assert r.data_of("done") == [{"status": "completed"}]
 
     # A resposta da tool volta ao modelo no formato da OpenAI, cercada como dado.
@@ -125,7 +125,7 @@ async def test_tool_alucinada_vira_falha_de_tool_e_a_conversa_continua(settings_
     assert resultado["status"] == "error"
     assert "recorte permitido" in resultado["content"]
     assert r.chamadas_ao_mcp("delete_meal") == 0
-    assert r.texto() == "Não posso apagar."
+    assert r.text() == "Não posso apagar."
 
 
 async def test_argumentos_quebrados_do_modelo_nao_derrubam_a_conversa(settings_factory):
@@ -186,7 +186,7 @@ async def test_continuar_concede_mais_voltas(settings_factory):
 
     # A chamada que estava pendente roda, e o modelo segue de onde parou.
     assert retomado.chamadas_ao_mcp("list_meals") == 2
-    assert retomado.texto() == "Pronto."
+    assert retomado.text() == "Pronto."
     assert retomado.data_of("done") == [{"status": "completed"}]
 
 
@@ -205,7 +205,7 @@ async def test_parar_por_aqui_fecha_sem_ferramenta(settings_factory):
     # A volta de fechamento não recebe ferramenta nenhuma, e o prompt diz por quê.
     assert "tools" not in unica
     assert "NÃO chame mais nenhuma ferramenta" in unica["messages"][0]["content"]
-    assert retomado.texto() == "Até aqui encontrei arroz."
+    assert retomado.text() == "Até aqui encontrei arroz."
 
 
 async def test_tool_que_falha_duas_vezes_vira_reflexao(settings_factory):
@@ -229,7 +229,7 @@ async def test_tool_que_falha_duas_vezes_vira_reflexao(settings_factory):
     assert r.chamadas_ao_mcp("list_meals") == 2
     ultimo = r.provider.corpos[-1]["messages"][0]["content"]
     assert "falhou 2 vezes seguidas" in ultimo
-    assert r.texto().endswith("Não consegui consultar.")
+    assert r.text().endswith("Não consegui consultar.")
 
 
 async def test_resposta_que_mostra_uuid_e_refeita_uma_vez(settings_factory):
@@ -291,7 +291,7 @@ async def test_a_validacao_nao_vira_pingue_pongue(settings_factory):
 async def test_resposta_vazia_ainda_devolve_algo_para_a_tela(settings_factory):
     r = await turno(settings_factory, [[fim("stop")]])
 
-    assert r.texto() == SEM_RESPOSTA
+    assert r.text() == SEM_RESPOSTA
     (final,) = r.data_of("messages/complete")[0]
     assert final["content"] == SEM_RESPOSTA
 

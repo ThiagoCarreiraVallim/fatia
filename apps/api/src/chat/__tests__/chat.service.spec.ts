@@ -489,6 +489,35 @@ describe('ChatService — o que fica no banco', () => {
     });
   });
 
+  it('não grava o raciocínio do modelo como resposta — ele é só da tela', async () => {
+    const { service, canal, conversas } = montar();
+    const raciocinio = { type: 'reasoning', reasoning: 'Preciso somar os itens.', index: 0 };
+
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    await respirar();
+    canal.emitir(
+      quadro('messages', [
+        { type: 'AIMessageChunk', content: [raciocinio], id: 'ai-1' },
+        { langgraph_node: 'agente' },
+      ]),
+    );
+    canal.emitir(fragmento('ai-1', 'Você comeu 640 kcal.'));
+    canal.emitir(
+      quadro('messages/complete', [
+        {
+          type: 'ai',
+          id: 'ai-1',
+          content: [raciocinio, { type: 'text', text: 'Você comeu 640 kcal.' }],
+        },
+      ]),
+    );
+    canal.emitir(fim('completed'));
+    canal.encerrar();
+    await turno;
+
+    expect(conversas.completeTurn.mock.calls[0][2].texto).toBe('Você comeu 640 kcal.');
+  });
+
   it('guarda o nome de cada tool uma vez e o texto das duas voltas do modelo', async () => {
     const { service, canal, conversas } = montar();
 

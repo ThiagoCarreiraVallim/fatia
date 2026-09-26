@@ -64,7 +64,7 @@ def _quadros(brutos: Sequence[str]) -> list[tuple[str, Any]]:
     return achados
 
 
-def _absorver(traco: Traco, unidades: dict[str, int], eventos: list[tuple[str, Any]]) -> None:
+def _absorb(traco: Traco, unidades: dict[str, int], eventos: list[tuple[str, Any]]) -> None:
     for nome, dado in eventos:
         if nome == "updates":
             for no, conteudo in dado.items():
@@ -75,8 +75,8 @@ def _absorver(traco: Traco, unidades: dict[str, int], eventos: list[tuple[str, A
                     traco.pedidas.extend(mensagem.get("tool_calls") or [])
         elif nome == "messages/complete":
             for mensagem in dado:
-                texto = mensagem.get("content")
-                if mensagem.get("type") == "ai" and isinstance(texto, str) and texto.strip():
+                texto = _answer_text(mensagem.get("content"))
+                if mensagem.get("type") == "ai" and texto.strip():
                     traco.resposta = texto
         elif nome == "usage":
             for chave in ("inputUnits", "outputUnits"):
@@ -86,6 +86,23 @@ def _absorver(traco: Traco, unidades: dict[str, int], eventos: list[tuple[str, A
             traco.erros.append(dado)
         elif nome == "done":
             traco.status = dado.get("status", "error")
+
+
+def _answer_text(conteudo: object) -> str:
+    """Só a resposta: com raciocínio, o conteúdo vem em blocos, e o rascunho não conta.
+
+    Ler só `str` fazia todo caso rodado contra um modelo que raciocina chegar com
+    resposta vazia — e reprovar em tudo que olha o texto.
+    """
+    if isinstance(conteudo, str):
+        return conteudo
+    if not isinstance(conteudo, list):
+        return ""
+    return "".join(
+        str(bloco.get("text") or "")
+        for bloco in conteudo
+        if isinstance(bloco, dict) and bloco.get("type") == "text"
+    )
 
 
 async def rodar_caso(caso: Caso, provider: ToolChatCapability) -> ResultadoDoCaso:
@@ -120,7 +137,7 @@ async def rodar_caso(caso: Caso, provider: ToolChatCapability) -> ResultadoDoCas
                     retomada=turno.retomada,
                 )
             ]
-        _absorver(traco, unidades, _quadros(brutos))
+        _absorb(traco, unidades, _quadros(brutos))
 
     return ResultadoDoCaso(
         id=caso.id,

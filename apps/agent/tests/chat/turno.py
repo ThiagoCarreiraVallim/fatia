@@ -75,9 +75,16 @@ class Resultado:
         """Os dados do evento `nome`, na ordem. O `done` vem sem os tempos (`without_timing`)."""
         return [dado for evento, dado in map(without_timing, self.eventos) if evento == nome]
 
-    def texto(self) -> str:
-        """O texto que a tela montaria a partir dos fragmentos."""
-        return "".join(dado[0].get("content", "") for dado in self.data_of("messages"))
+    def text(self) -> str:
+        """O texto que a tela montaria a partir dos fragmentos — sem o raciocínio."""
+        partes: list[str] = []
+        for dado in self.data_of("messages"):
+            conteudo = dado[0].get("content", "")
+            if isinstance(conteudo, str):
+                partes.append(conteudo)
+            else:
+                partes.extend(str(b.get("text", "")) for b in conteudo if b.get("type") == "text")
+        return "".join(partes)
 
     def interrupcao(self) -> dict[str, Any]:
         for dado in self.data_of("updates"):

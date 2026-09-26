@@ -119,8 +119,37 @@ def serializar(mensagem: BaseMessage) -> dict[str, Any]:
     return {chave: valor for chave, valor in bruto.items() if valor not in (None, "", [], {})}
 
 
-def _para_a_tela(mensagem: BaseMessage) -> dict[str, Any]:
-    dados = serializar(mensagem)
+def reasoning_block(texto: str) -> dict[str, Any]:
+    """O raciocínio como bloco de conteúdo do LangChain, que o assistant-ui desenha.
+
+    `index` fixo: é por ele que o acumulador do cliente junta os pedaços num
+    bloco só, em vez de um bloco por token.
+    """
+    return {"type": "reasoning", "reasoning": texto, "index": 0}
+
+
+def _with_reasoning(dados: dict[str, Any], reasoning: str | None) -> dict[str, Any]:
+    """A mensagem com o raciocínio que a tela já mostrava, recolocado na frente.
+
+    A mensagem inteira (`updates`, `messages/complete`) **substitui** no cliente o
+    que os fragmentos montaram. Ela vem do estado, onde o raciocínio não entra de
+    propósito — e sem isto o painel "Pensando" sumia no instante em que o nó
+    terminava. O raciocínio viaja só no fio: nunca no estado, nunca no checkpoint.
+    """
+    if not reasoning or dados.get("type") != "ai":
+        return dados
+    conteudo = dados.get("content")
+    texto = conteudo if isinstance(conteudo, str) else ""
+    blocos = [reasoning_block(reasoning)]
+    if texto:
+        blocos.append({"type": "text", "text": texto})
+    return {**dados, "content": blocos}
+
+
+def _para_a_tela(
+    mensagem: BaseMessage, reasoning: Mapping[str, str] | None = None
+) -> dict[str, Any]:
+    dados = _with_reasoning(serializar(mensagem), (reasoning or {}).get(str(mensagem.id)))
     conteudo = dados.get("content")
     if isinstance(mensagem, ToolMessage) and isinstance(conteudo, str):
         dados["content"] = cortar(conteudo, MAX_RESULTADO_NO_EVENTO)
@@ -132,7 +161,9 @@ def fragmento(mensagem: BaseMessage, no: str) -> str:
     return quadro("messages", [serializar(mensagem), {"langgraph_node": no}])
 
 
-def atualizacoes(pacote: Mapping[str, Any]) -> str | None:
+def atualizacoes(
+    pacote: Mapping[str, Any], reasoning: Mapping[str, str] | None = None
+) -> str | None:
     """O modo `updates`, podado ao que a tela usa — ou `None` se nada sobrou.
 
     🔴 Só passam `messages` e `__interrupt__`. O resto do estado (decisões,
@@ -157,20 +188,25 @@ def atualizacoes(pacote: Mapping[str, Any]) -> str | None:
         if isinstance(conteudo, dict) and conteudo.get("messages"):
             podado[no] = {
                 "messages": [
-                    _para_a_tela(m) for m in conteudo["messages"] if isinstance(m, BaseMessage)
+                    _para_a_tela(m, reasoning)
+                    for m in conteudo["messages"]
+                    if isinstance(m, BaseMessage)
                 ]
             }
     return quadro("updates", podado) if podado else None
 
 
-def completas(mensagens: Iterable[BaseMessage]) -> str:
+def completas(mensagens: Iterable[BaseMessage], reasoning: Mapping[str, str] | None = None) -> str:
     """O modo `messages/complete`: a resposta final, lida do estado.
 
     A resposta não pode depender dos fragmentos: um stream que morreu no meio
     deixaria a tela com texto pela metade, e o `apps/api` gravaria essa metade.
     O cliente casa pelo `id` e funde com o que já recebeu.
     """
-    return quadro("messages/complete", [serializar(m) for m in mensagens])
+    return quadro(
+        "messages/complete",
+        [_with_reasoning(serializar(m), (reasoning or {}).get(str(m.id))) for m in mensagens],
+    )
 
 
 def start(conversation_id: str, run_id: str) -> ChatEvent:
@@ -274,6 +310,7 @@ __all__ = [
     "fragmento",
     "plan",
     "quadro",
+    "reasoning_block",
     "serializar",
     "start",
     "usage",

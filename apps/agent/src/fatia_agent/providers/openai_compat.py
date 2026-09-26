@@ -26,6 +26,7 @@ from ..settings import endpoint_host
 from .base import (
     ChatCapability,
     EmbeddingCapability,
+    ReasoningDelta,
     TextCapability,
     TextDelta,
     ToolCall,
@@ -201,7 +202,7 @@ class OpenAICompatProvider:
         *,
         tools: Sequence[dict[str, Any]] = (),
         capacidade: ChatCapability = "text",
-    ) -> AsyncIterator[TextDelta | TurnEnd]:
+    ) -> AsyncIterator[TextDelta | ReasoningDelta | TurnEnd]:
         """Conversa em streaming, com tools. Atende `ToolChatCapability`.
 
         `capacidade="vision"` quando a conversa leva foto: o turno inteiro vai para
@@ -281,6 +282,9 @@ class OpenAICompatProvider:
                     bloco = _primeiro_choice(fragmento)
                     delta = bloco.get("delta")
                     if isinstance(delta, dict):
+                        reasoning = _reasoning_from_delta(delta)
+                        if reasoning:
+                            yield ReasoningDelta(text=reasoning)
                         conteudo = delta.get("content")
                         if isinstance(conteudo, str) and conteudo:
                             yield TextDelta(text=conteudo)
@@ -673,6 +677,21 @@ def _floats(embedding: list[Any]) -> list[float]:
         return [float(value) for value in embedding]
     except (TypeError, ValueError) as exc:
         raise AIResponseUnparseable(f"'embedding' tem elemento não numérico: {exc}.") from exc
+
+
+# Onde cada provedor põe o raciocínio no delta. O OpenRouter usa `reasoning`
+# (medido contra o GLM 5.3 Flash); o LM Studio, `reasoning_content` (medido
+# contra o gemma local, em agosto). Os dois chegam a vir juntos com o mesmo texto
+# — por isso vale o primeiro presente, e nunca a soma.
+REASONING_KEYS = ("reasoning", "reasoning_content")
+
+
+def _reasoning_from_delta(delta: dict[str, Any]) -> str:
+    for key in REASONING_KEYS:
+        value = delta.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return ""
 
 
 def _json_body(response: httpx.Response) -> dict[str, Any]:

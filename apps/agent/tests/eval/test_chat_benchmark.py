@@ -20,6 +20,7 @@ from ..chat.support import (
     ProviderRecordingTransport,
     bloco_de_uso,
     fim,
+    fragmento,
     fragmento_de_texto,
     fragmento_de_tool,
 )
@@ -65,6 +66,27 @@ async def test_leitura_bem_resolvida_passa(settings_factory: Callable[..., Agent
 
     assert _falhas(resultado) == []
     assert resultado.unidades == {"inputUnits": 812 * 2, "outputUnits": 96 * 2}
+
+
+async def test_modelo_que_raciocina_e_avaliado_pela_resposta_e_nao_pelo_rascunho(
+    settings_factory: Callable[..., AgentSettings],
+) -> None:
+    """O GLM de produção raciocina: a resposta final chega em blocos, com o rascunho na frente."""
+    resultado = await _rodar(
+        settings_factory,
+        "leitura-resumo-de-hoje",
+        [
+            _tool("get_today_summary", {}),
+            [
+                fragmento(reasoning="Somar as refeições de hoje."),
+                fragmento_de_texto("Hoje você comeu 1.832 kcal, dentro da meta de 1.800 a 2.200."),
+                fim(),
+                bloco_de_uso(),
+            ],
+        ],
+    )
+
+    assert _falhas(resultado) == []
 
 
 async def test_numero_inventado_reprova(settings_factory: Callable[..., AgentSettings]) -> None:

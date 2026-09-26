@@ -47,6 +47,22 @@ class TextDelta:
 
 
 @dataclass(frozen=True)
+class ReasoningDelta:
+    """Um pedaço do raciocínio do modelo, antes (ou no meio) da resposta.
+
+    Tipo separado de `TextDelta`, e não um booleano nele, porque os destinos são
+    outros e nenhum ponto do caminho pode confundi-los: o texto vai para a
+    resposta, entra no estado da conversa e é gravado; o raciocínio vai só para a
+    tela, colapsado, e morre no fim do turno. Uma flag em `TextDelta` faria
+    "esqueci de olhar a flag" gravar rascunho como resposta num histórico de saúde.
+
+    Modelo que não raciocina nunca emite isto — não há capacidade a declarar.
+    """
+
+    text: str
+
+
+@dataclass(frozen=True)
 class Usage:
     """O que o turno consumiu, como o provedor reportou.
 
@@ -93,7 +109,7 @@ class ToolChatCapability(Protocol):
         *,
         tools: Sequence[dict[str, object]] = (),
         capacidade: ChatCapability = "text",
-    ) -> AsyncIterator[TextDelta | TurnEnd]: ...
+    ) -> AsyncIterator[TextDelta | ReasoningDelta | TurnEnd]: ...
 
 
 @runtime_checkable
