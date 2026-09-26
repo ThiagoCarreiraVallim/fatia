@@ -373,6 +373,22 @@ export interface ChatConversationSummary {
   updatedAt: string;
 }
 
+/**
+ * Quanto um turno do assistente demorou e consumiu, como o agente mediu.
+ *
+ * Chega no `done` (só as durações) e volta gravado na mensagem. Cada campo pode
+ * faltar: um turno parado não tem `done` do agente, e um turno em que nada
+ * apareceu na tela não tem primeiro caractere.
+ */
+export interface ChatTurnTiming {
+  /** Do começo do turno ao `done`, em ms. */
+  durationMs: number;
+  /** Até o primeiro caractere visível, em ms. */
+  ttftMs: number;
+  /** Somado entre os modelos do turno. Ausente quando alguma parte não foi medida. */
+  usage: { inputUnits: number; outputUnits: number };
+}
+
 /** Uma linha de `Message`, como `GET /chat/conversations/:id` devolve. */
 export interface ChatHistoryMessage {
   id: string;
@@ -380,12 +396,15 @@ export interface ChatHistoryMessage {
   content: string;
   /** Só o nome de cada tool: os argumentos já estão no domínio de destino. */
   tools: { name: string }[] | null;
-  metadata: {
-    status?: 'completed' | 'interrupted' | 'error' | 'resolved';
-    interrupt?: { id: string; value: ChatInterruptValue };
-    /** Na fala da pessoa: quantas fotos foram com ela. A foto em si não é guardada. */
-    photos?: number;
-  } | null;
+  metadata:
+    | ({
+        /** `stopped`: a pessoa parou a resposta no meio. O texto é o que tinha chegado. */
+        status?: 'completed' | 'interrupted' | 'error' | 'resolved' | 'stopped';
+        interrupt?: { id: string; value: ChatInterruptValue };
+        /** Na fala da pessoa: quantas fotos foram com ela. A foto em si não é guardada. */
+        photos?: number;
+      } & Partial<ChatTurnTiming>)
+    | null;
   runId: string | null;
   review: 'like' | 'dislike' | null;
   createdAt: string;

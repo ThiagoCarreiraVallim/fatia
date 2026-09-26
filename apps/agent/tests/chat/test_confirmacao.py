@@ -43,7 +43,7 @@ async def _pausado(
 async def test_tool_confirmavel_pausa_e_nao_executa(settings_factory):
     r = await _pausado(settings_factory, ("c1", "log_meal", REFEICAO))
 
-    assert r.de("done") == [{"status": "interrupted"}]
+    assert r.data_of("done") == [{"status": "interrupted"}]
     assert r.chamadas_ao_mcp("log_meal") == 0
     assert "messages/complete" not in r.nomes()
 
@@ -99,7 +99,7 @@ async def test_aprovada_executa_o_que_esta_no_checkpoint_antes_do_modelo(setting
     (unica,) = retomado.provider.corpos
     assert unica["messages"][-1]["role"] == "tool"
     assert retomado.texto() == "Registrei o almoço."
-    assert retomado.de("done") == [{"status": "completed"}]
+    assert retomado.data_of("done") == [{"status": "completed"}]
 
 
 async def test_recusada_nao_grava_e_o_modelo_sabe_por_que(settings_factory):
@@ -188,7 +188,7 @@ async def test_a_restrita_nao_pausa_e_nao_executa(settings_factory):
         [_pede(("c1", "delete_meal", {"id": "m1"})), [fragmento_de_texto("Não posso apagar.")]],
     )
 
-    assert r.de("done") == [{"status": "completed"}]
+    assert r.data_of("done") == [{"status": "completed"}]
     assert r.chamadas_ao_mcp("delete_meal") == 0
 
 
@@ -211,7 +211,7 @@ async def test_mensagem_nova_no_lugar_da_resposta_nao_quebra_a_conversa(settings
     orfa = next(m for m in enviadas if m.get("role") == "tool")
     assert (orfa["tool_call_id"], orfa["content"]) == ("c1", NAO_EXECUTADA)
     assert enviadas[-1] == {"role": "user", "content": "deixa pra lá"}
-    assert seguinte.de("done") == [{"status": "completed"}]
+    assert seguinte.data_of("done") == [{"status": "completed"}]
 
 
 # ------------------------------------------------------------------ ask_user
@@ -224,7 +224,7 @@ async def test_ask_user_pausa_com_o_formulario(settings_factory):
     }
     r = await _pausado(settings_factory, ("q1", "ask_user", pergunta))
 
-    assert r.de("done") == [{"status": "interrupted"}]
+    assert r.data_of("done") == [{"status": "interrupted"}]
     valor = r.interrupcao()["value"]
     assert (valor["kind"], valor["prompt"]) == ("question", "Quantas gramas?")
     (acao,) = valor["actions"]

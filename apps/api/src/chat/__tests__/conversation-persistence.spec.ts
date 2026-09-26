@@ -2,10 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma.service';
 import { CheckpointPurgeService } from '../checkpoint-purge.service';
-import { ConversationService, type RespostaDoTurno } from '../conversation.service';
+import { ConversationService, type TurnOutcome } from '../conversation.service';
 
 /**
- * O que `concluirTurno` grava e o que ele descarta, contra Postgres real (#249).
+ * O que `completeTurn` grava e o que ele descarta, contra Postgres real (#249).
  *
  * Contra o banco de verdade, e não sobre um dublê de Prisma, porque a afirmação
  * aqui é sobre a **linha que sobra depois de recarregar a página** — que é a
@@ -22,7 +22,7 @@ import { ConversationService, type RespostaDoTurno } from '../conversation.servi
 
 const TZ = 'America/Sao_Paulo';
 
-const resposta = (parcial: Partial<RespostaDoTurno>): RespostaDoTurno => ({
+const resposta = (parcial: Partial<TurnOutcome>): TurnOutcome => ({
   texto: '',
   tools: [],
   status: 'completed',
@@ -73,7 +73,7 @@ describe('ConversationService — o que sobra do turno', () => {
     // primeiro token. A refeição foi registrada **de verdade** no domínio de
     // destino; descartar a mensagem aqui deixaria a ação sem nenhum vestígio no
     // único lugar onde a pessoa poderia auditá-la.
-    await conversas.concluirTurno(
+    await conversas.completeTurn(
       userId,
       conversationId,
       resposta({ tools: [{ name: 'log_meal' }] }),
@@ -93,7 +93,7 @@ describe('ConversationService — o que sobra do turno', () => {
     // Sem texto e sem tool não há o que auditar: uma mensagem vazia do assistente
     // é ruído no histórico e ainda vira entrada paga no turno seguinte, porque a
     // conversa inteira é reenviada ao agente a cada mensagem.
-    await conversas.concluirTurno(userId, conversationId, resposta({ texto: '   ' }));
+    await conversas.completeTurn(userId, conversationId, resposta({ texto: '   ' }));
 
     expect((await mensagensDe(conversationId)).map((m) => m.role)).toEqual(['user']);
   });
@@ -101,7 +101,7 @@ describe('ConversationService — o que sobra do turno', () => {
   it('turno com texto e tool grava os dois na mesma mensagem', async () => {
     const { conversationId } = await conversas.iniciarTurno(userId, randomUUID(), 'e aí?');
 
-    await conversas.concluirTurno(
+    await conversas.completeTurn(
       userId,
       conversationId,
       resposta({ texto: 'Registrei.', tools: [{ name: 'log_meal' }] }),
@@ -120,7 +120,7 @@ describe('ConversationService — o que sobra do turno', () => {
    * caractere, e um 422 causado pelo histórico é permanente — a conversa
    * morreria a partir daquele turno, para sempre, sem nada que quem está
    * conversando pudesse fazer. As duas propriedades juntas são o motivo de o
-   * filtro morar aqui e não no `concluirTurno`.
+   * filtro morar aqui e não no `completeTurn`.
    */
   it('o histórico que vai ao agente pula a mensagem sem texto', async () => {
     const { conversationId } = await conversas.iniciarTurno(
@@ -128,7 +128,7 @@ describe('ConversationService — o que sobra do turno', () => {
       randomUUID(),
       'registra o arroz',
     );
-    await conversas.concluirTurno(
+    await conversas.completeTurn(
       userId,
       conversationId,
       resposta({ tools: [{ name: 'log_meal' }] }),
@@ -156,7 +156,7 @@ describe('ConversationService — o que sobra do turno', () => {
       value: { kind: 'confirm', actions: [{ arguments: { g: 200 } }] },
     };
 
-    const linha = await conversas.concluirTurno(
+    const linha = await conversas.completeTurn(
       userId,
       conversationId,
       resposta({ tools: [{ name: 'log_meal' }], status: 'interrupted', pausa }),
@@ -165,16 +165,57 @@ describe('ConversationService — o que sobra do turno', () => {
     const gravada = await prisma.message.findUniqueOrThrow({ where: { id: linha! } });
     expect(gravada.metadata).toEqual({ status: 'interrupted', interrupt: pausa });
 
-    await conversas.limparPausas(userId, conversationId);
+    await conversas.clearPauses(userId, conversationId);
 
     // Os argumentos da escrita proposta não sobrevivem à resposta da pessoa.
     const depois = await prisma.message.findUniqueOrThrow({ where: { id: linha! } });
     expect(depois.metadata).toEqual({ status: 'resolved' });
   });
 
+  it('grava o tempo e o consumo do turno, e resolver a pausa não os apaga', async () => {
+    const { conversationId } = await conversas.iniciarTurno(userId, randomUUID(), 'almocei');
+    const pausa = { id: 'pausa-2', value: { kind: 'confirm', actions: [] } };
+    const linha = await conversas.completeTurn(
+      userId,
+      conversationId,
+      resposta({
+        texto: 'Vou registrar.',
+        status: 'interrupted',
+        pausa,
+        durationMs: 4180,
+        ttftMs: 950,
+        usage: { inputUnits: 1200, outputUnits: 80 },
+      }),
+    );
+
+    await conversas.clearPauses(userId, conversationId);
+
+    // Só a pausa sai. Sobrescrever a metadata inteira apagava junto o que a tela
+    // mostra depois de um F5 ("respondeu em 4 s").
+    const depois = await prisma.message.findUniqueOrThrow({ where: { id: linha! } });
+    expect(depois.metadata).toEqual({
+      status: 'resolved',
+      durationMs: 4180,
+      ttftMs: 950,
+      usage: { inputUnits: 1200, outputUnits: 80 },
+    });
+  });
+
+  it('a resposta que a pessoa parou é gravada como `stopped`', async () => {
+    const { conversationId } = await conversas.iniciarTurno(userId, randomUUID(), 'oi');
+    const linha = await conversas.completeTurn(
+      userId,
+      conversationId,
+      resposta({ texto: 'Você comeu ', status: 'stopped' }),
+    );
+
+    const gravada = await prisma.message.findUniqueOrThrow({ where: { id: linha! } });
+    expect(gravada.metadata).toEqual({ status: 'stopped' });
+  });
+
   it('o voto vai para a resposta do assistente, e o motivo só no 👎', async () => {
     const { conversationId } = await conversas.iniciarTurno(userId, randomUUID(), 'oi');
-    const linha = await conversas.concluirTurno(
+    const linha = await conversas.completeTurn(
       userId,
       conversationId,
       resposta({ texto: 'Oi!', runId: 'run-1' }),

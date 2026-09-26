@@ -37,7 +37,7 @@ from .support import (
     resultado_mcp,
     sse_jsonrpc,
 )
-from .turno import CATALOGO, CONVERSA, THREAD, TOKEN, quadros, turno
+from .turno import CATALOGO, CONVERSA, THREAD, TOKEN, quadros, turno, without_timing
 
 
 def _com_tool(nome: str, *, id: str = "c1", arguments: str = "{}") -> list[dict[str, object]]:
@@ -51,23 +51,23 @@ async def test_resposta_sem_tool_segue_o_protocolo_nativo(settings_factory):
 
     assert r.nomes()[:2] == ["start", "catalog"]
     assert r.nomes()[-2:] == ["messages/complete", "done"]
-    assert r.de("start") == [{"conversationId": CONVERSA, "runId": "run-1"}]
-    assert [d[0]["content"] for d in r.de("messages")] == ["Você ", "comeu arroz."]
+    assert r.data_of("start") == [{"conversationId": CONVERSA, "runId": "run-1"}]
+    assert [d[0]["content"] for d in r.data_of("messages")] == ["Você ", "comeu arroz."]
     # Os fragmentos são da mesma mensagem: é pelo `id` que a tela os junta.
-    assert len({d[0]["id"] for d in r.de("messages")}) == 1
-    assert r.de("messages")[0][0]["type"] == "AIMessageChunk"
-    assert r.de("messages")[0][1] == {"langgraph_node": "agente"}
-    (final,) = r.de("messages/complete")[0]
+    assert len({d[0]["id"] for d in r.data_of("messages")}) == 1
+    assert r.data_of("messages")[0][0]["type"] == "AIMessageChunk"
+    assert r.data_of("messages")[0][1] == {"langgraph_node": "agente"}
+    (final,) = r.data_of("messages/complete")[0]
     assert final["content"] == "Você comeu arroz."
-    assert final["id"] == r.de("messages")[0][0]["id"]
-    assert r.de("done") == [{"status": "completed"}]
+    assert final["id"] == r.data_of("messages")[0][0]["id"]
+    assert r.data_of("done") == [{"status": "completed"}]
 
 
 async def test_o_catalogo_leva_o_titulo_de_toda_tool_oferecida(settings_factory):
     """A tela rotula pelo título que o `/mcp` anuncia — não por uma tabela à mão."""
     r = await turno(settings_factory, [[fragmento_de_texto("ok")]])
 
-    (catalogo,) = r.de("catalog")
+    (catalogo,) = r.data_of("catalog")
     assert catalogo["tools"]["list_meals"] == "List Meals"
     assert catalogo["tools"]["log_meal"] == "Log Meal"
     assert "delete_meal" not in catalogo["tools"]
@@ -88,7 +88,7 @@ async def test_o_ciclo_de_tool_chega_pelas_atualizacoes_do_grafo(settings_factor
         ),
     )
 
-    pedido = next(d["agente"]["messages"][0] for d in r.de("updates") if "agente" in d)
+    pedido = next(d["agente"]["messages"][0] for d in r.data_of("updates") if "agente" in d)
     assert pedido["tool_calls"][0]["name"] == "list_meals"
     assert pedido["tool_calls"][0]["args"] == {"date": "2026-08-05"}
     (resultado,) = r.mensagens_de_tool()
@@ -96,7 +96,7 @@ async def test_o_ciclo_de_tool_chega_pelas_atualizacoes_do_grafo(settings_factor
     assert resultado["status"] == "success"
     assert resultado["content"] == '[{"nome":"arroz"}]'
     assert r.texto() == "Arroz."
-    assert r.de("done") == [{"status": "completed"}]
+    assert r.data_of("done") == [{"status": "completed"}]
 
     # A resposta da tool volta ao modelo no formato da OpenAI, cercada como dado.
     segundo = r.provider.corpos[1]["messages"]
@@ -165,7 +165,7 @@ async def test_modelo_em_laco_pausa_no_teto_e_pergunta_se_continua(settings_fact
     r = await turno(settings_factory, [_com_tool("list_meals")])
 
     assert r.chamadas_ao_mcp("list_meals") == MAX_RODADAS_DE_TOOL
-    assert r.de("done") == [{"status": "interrupted"}]
+    assert r.data_of("done") == [{"status": "interrupted"}]
     pausa = r.interrupcao()["value"]
     assert pausa["kind"] == "continue"
     assert pausa["actions"] == []
@@ -187,7 +187,7 @@ async def test_continuar_concede_mais_voltas(settings_factory):
     # A chamada que estava pendente roda, e o modelo segue de onde parou.
     assert retomado.chamadas_ao_mcp("list_meals") == 2
     assert retomado.texto() == "Pronto."
-    assert retomado.de("done") == [{"status": "completed"}]
+    assert retomado.data_of("done") == [{"status": "completed"}]
 
 
 async def test_parar_por_aqui_fecha_sem_ferramenta(settings_factory):
@@ -243,11 +243,11 @@ async def test_resposta_que_mostra_uuid_e_refeita_uma_vez(settings_factory):
 
     assert len(r.provider.corpos) == 2
     assert "identificador interno" in r.provider.corpos[1]["messages"][0]["content"]
-    assert r.de("validation")[0] == {
+    assert r.data_of("validation")[0] == {
         "ok": False,
         "issues": ["a resposta mostrou um identificador interno (UUID)"],
     }
-    (final,) = r.de("messages/complete")[0]
+    (final,) = r.data_of("messages/complete")[0]
     assert final["content"] == "Seu almoço foi registrado."
 
 
@@ -266,7 +266,7 @@ async def test_resposta_que_cita_o_nome_da_tool_e_refeita_uma_vez(settings_facto
         "nome interno de uma ferramenta (log_meal)"
         in r.provider.corpos[1]["messages"][0]["content"]
     )
-    (final,) = r.de("messages/complete")[0]
+    (final,) = r.data_of("messages/complete")[0]
     assert final["content"] == "Registrei o seu almoço."
 
 
@@ -285,14 +285,14 @@ async def test_a_validacao_nao_vira_pingue_pongue(settings_factory):
 
     # Uma volta de correção, e só: a segunda reprovação fecha o turno.
     assert len(r.provider.corpos) == 2
-    assert r.de("done") == [{"status": "completed"}]
+    assert r.data_of("done") == [{"status": "completed"}]
 
 
 async def test_resposta_vazia_ainda_devolve_algo_para_a_tela(settings_factory):
     r = await turno(settings_factory, [[fim("stop")]])
 
     assert r.texto() == SEM_RESPOSTA
-    (final,) = r.de("messages/complete")[0]
+    (final,) = r.data_of("messages/complete")[0]
     assert final["content"] == SEM_RESPOSTA
 
 
@@ -375,10 +375,10 @@ async def test_falha_do_mcp_no_meio_da_conversa_vira_evento_de_erro(settings_fac
         mcp_transport=httpx.MockTransport(handler),
     )
 
-    (erro,) = r.de("error")
+    (erro,) = r.data_of("error")
     assert erro["code"] == "MCP_UNAUTHORIZED"
     assert r.nomes()[-1] == "done"
-    assert r.de("done") == [{"status": "error"}]
+    assert r.data_of("done") == [{"status": "error"}]
 
 
 async def test_provedor_que_cai_no_meio_do_stream_vira_evento_de_erro(settings_factory):
@@ -398,7 +398,7 @@ async def test_provedor_que_cai_no_meio_do_stream_vira_evento_de_erro(settings_f
     eventos = quadros([q async for q in fluxo])
 
     assert ("error", {"code": "AI_PROVIDER_TIMEOUT", "message": "o gateway demorou"}) in eventos
-    assert eventos[-1] == ("done", {"status": "error"})
+    assert without_timing(eventos[-1]) == ("done", {"status": "error"})
 
 
 async def test_defeito_nosso_nao_vira_evento_de_erro_generico(settings_factory):
@@ -492,7 +492,7 @@ async def test_o_token_sai_antes_de_o_turno_do_modelo_terminar(settings_factory)
     finally:
         await fluxo.aclose()  # type: ignore[attr-defined]
 
-    assert resto[-1] == ("done", {"status": "completed"})
+    assert without_timing(resto[-1]) == ("done", {"status": "completed"})
 
 
 async def test_o_pedido_de_tool_sai_antes_de_a_tool_responder(settings_factory):
@@ -571,7 +571,7 @@ async def test_o_uso_sai_como_evento_uma_vez_por_chamada_ao_modelo(settings_fact
         ],
     )
 
-    assert r.de("usage") == [
+    assert r.data_of("usage") == [
         {"model": "ornith-1.0-9b", "inputUnits": 100, "outputUnits": 10},
         {"model": "ornith-1.0-9b", "inputUnits": 200, "outputUnits": 20},
     ]
@@ -579,7 +579,7 @@ async def test_o_uso_sai_como_evento_uma_vez_por_chamada_ao_modelo(settings_fact
 
 async def test_sem_bloco_de_usage_nenhum_evento_de_uso_sai(settings_factory):
     r = await turno(settings_factory, [[fragmento_de_texto("ok")]])
-    assert r.de("usage") == []
+    assert r.data_of("usage") == []
 
 
 async def test_o_fuso_vira_a_data_de_hoje_no_prompt(settings_factory):

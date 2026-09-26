@@ -341,7 +341,7 @@ describe('isolamento entre usuários', () => {
     // sem ele, as recusas abaixo passariam vazias.
     const turno = await conversas.iniciarTurno(owned.userA, randomUUID(), 'quanto comi hoje?');
     owned.conversationId = turno.conversationId;
-    await conversas.concluirTurno(owned.userA, turno.conversationId, {
+    await conversas.completeTurn(owned.userA, turno.conversationId, {
       texto: 'Você comeu 1.800 kcal hoje.',
       tools: [{ name: 'get_nutrition_summary' }],
       status: 'completed',
@@ -2412,7 +2412,7 @@ describe('isolamento entre usuários', () => {
       await expect(
         conversas.votar(owned.userB, owned.conversationId, resposta.id, { review: 'like' }),
       ).rejects.toThrow(NotFoundException);
-      await expect(conversas.limparPausas(owned.userB, owned.conversationId)).rejects.toThrow(
+      await expect(conversas.clearPauses(owned.userB, owned.conversationId)).rejects.toThrow(
         NotFoundException,
       );
       // `encontrar` é a porta da primeira mensagem: o id da conversa alheia não
@@ -2429,10 +2429,10 @@ describe('isolamento entre usuários', () => {
     it('gravar a resposta numa conversa alheia não escreve nada', async () => {
       const antes = await mensagensNoBanco();
 
-      // `concluirTurno` roda depois do streaming, com um id que atravessou o
+      // `completeTurn` roda depois do streaming, com um id que atravessou o
       // turno inteiro. Ele não lança — o cabeçalho já foi para o cliente e não há
       // mais status a devolver —, mas também não pode gravar na conversa alheia.
-      await conversas.concluirTurno(owned.userB, owned.conversationId, {
+      await conversas.completeTurn(owned.userB, owned.conversationId, {
         texto: 'texto injetado',
         tools: [],
         status: 'completed',

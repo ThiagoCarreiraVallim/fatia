@@ -21,7 +21,7 @@ from .support import (
     fragmento_de_tool,
     tool_do_catalogo,
 )
-from .turno import quadros
+from .turno import quadros, without_timing
 
 TOKEN = "tok-do-usuario-xyz"
 BEARER = {"Authorization": f"Bearer {TOKEN}"}
@@ -239,7 +239,7 @@ def test_o_fluxo_sse_sai_no_vocabulario_nativo(settings_factory, monkeypatch):
     assert nomes[-2:] == ["messages/complete", "done"]
     assert eventos[0][1]["conversationId"] == CONVERSA
     assert "".join(d[0]["content"] for n, d in eventos if n == "messages") == "Você comeu arroz."
-    assert eventos[-1] == ("done", {"status": "completed"})
+    assert without_timing(eventos[-1]) == ("done", {"status": "completed"})
 
     # O Bearer do usuário chegou ao /mcp — a propriedade inteira da ADR 021.
     assert set(mcp_transport.bearers) == {f"Bearer {TOKEN}"}
@@ -304,7 +304,7 @@ def test_pausa_e_retomada_pela_rota(settings_factory, monkeypatch):
     )
 
     pausa = quadros([client.post("/chat", json=corpo(message="almocei"), headers=BEARER).text])
-    assert pausa[-1] == ("done", {"status": "interrupted"})
+    assert without_timing(pausa[-1]) == ("done", {"status": "interrupted"})
     interrupcao = next(
         d["__interrupt__"][0] for n, d in pausa if n == "updates" and "__interrupt__" in d
     )
@@ -322,7 +322,7 @@ def test_pausa_e_retomada_pela_rota(settings_factory, monkeypatch):
         json=corpo(resume={"interruptId": interrupcao["id"], "value": {"approvals": {"c1": True}}}),
         headers=BEARER,
     )
-    assert quadros([retomada.text])[-1] == ("done", {"status": "completed"})
+    assert without_timing(quadros([retomada.text])[-1]) == ("done", {"status": "completed"})
     chamadas = [
         r
         for r in mcp_transport.rpcs

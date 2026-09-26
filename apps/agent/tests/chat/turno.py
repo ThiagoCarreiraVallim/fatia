@@ -45,6 +45,21 @@ def quadros(fluxo: Sequence[str]) -> list[tuple[str, Any]]:
     return achados
 
 
+DONE_TIMING_KEYS = ("durationMs", "ttftMs")
+
+
+def without_timing(evento: tuple[str, Any]) -> tuple[str, Any]:
+    """O evento sem os tempos do `done`, que mudam a cada execução.
+
+    Quem compara o desfecho do turno quer saber *como* ele terminou; quanto
+    demorou tem teste próprio em `test_turn_timing.py`.
+    """
+    nome, dado = evento
+    if nome == "done" and isinstance(dado, dict):
+        return nome, {k: v for k, v in dado.items() if k not in DONE_TIMING_KEYS}
+    return evento
+
+
 @dataclass
 class Resultado:
     eventos: list[tuple[str, Any]]
@@ -56,15 +71,16 @@ class Resultado:
     def nomes(self) -> list[str]:
         return [nome for nome, _ in self.eventos]
 
-    def de(self, nome: str) -> list[Any]:
-        return [dado for evento, dado in self.eventos if evento == nome]
+    def data_of(self, nome: str) -> list[Any]:
+        """Os dados do evento `nome`, na ordem. O `done` vem sem os tempos (`without_timing`)."""
+        return [dado for evento, dado in map(without_timing, self.eventos) if evento == nome]
 
     def texto(self) -> str:
         """O texto que a tela montaria a partir dos fragmentos."""
-        return "".join(dado[0].get("content", "") for dado in self.de("messages"))
+        return "".join(dado[0].get("content", "") for dado in self.data_of("messages"))
 
     def interrupcao(self) -> dict[str, Any]:
-        for dado in self.de("updates"):
+        for dado in self.data_of("updates"):
             if "__interrupt__" in dado:
                 return dado["__interrupt__"][0]
         raise AssertionError("o turno não pausou")
@@ -72,7 +88,7 @@ class Resultado:
     def mensagens_de_tool(self) -> list[dict[str, Any]]:
         return [
             mensagem
-            for dado in self.de("updates")
+            for dado in self.data_of("updates")
             for no, conteudo in dado.items()
             if no != "__interrupt__"
             for mensagem in conteudo.get("messages", [])

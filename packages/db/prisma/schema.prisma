@@ -792,7 +792,7 @@ model Message {
   /// e, **só enquanto a pausa está aberta**, `interrupt: { id, value }` — a pergunta ou a
   /// escrita que espera a pessoa (ADR 023). É o que faz o card de confirmação voltar
   /// depois de um F5. O `value` de uma confirmação carrega os argumentos da escrita
-  /// proposta; por isso ele sai da linha no turno seguinte (`limparPausas`), seja qual
+  /// proposta; por isso ele sai da linha no turno seguinte (`clearPauses`), seja qual
   /// for a resposta: aprovado, vira dado no domínio de destino; recusado, não é dado.
   metadata       Json?
   /// O `runId` do agente que produziu esta resposta. Liga o voto da pessoa ao turno.

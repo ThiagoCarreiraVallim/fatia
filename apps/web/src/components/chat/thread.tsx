@@ -16,6 +16,7 @@ import {
   AuiIf,
   MessagePrimitive,
   ThreadPrimitive,
+  unstable_useMessageStallDetection,
   useAui,
   useAuiState,
 } from '@assistant-ui/react';
@@ -32,6 +33,8 @@ import {
 import { ErrorState } from '@/components/elements/error-state';
 import { ThinkingIndicator } from '@/components/elements/thinking-indicator';
 import { MobileComposer } from '@/components/elements/mobile-composer';
+import { MessageTiming } from '@/components/elements/message-timing';
+import { StoppedRun } from '@/components/elements/stopped-run';
 import { Conversation, ConversationContent, ConversationScrollButton } from './conversation';
 import { ChamadaDeTool, TextoDoAssistente } from './partes';
 import { PausaDoAgente } from './pausa';
@@ -39,7 +42,15 @@ import { MotivoDoVoto } from './motivo-do-voto';
 import { PlanoDoTurno } from './plano';
 import { AvisoDeCota } from './cota';
 import { AnexosDaMensagem, AnexosDoComposer } from './anexos';
-import { useConversaAberta, useDisponibilidadeDoChat } from './chat-runtime-provider';
+import {
+  useConversaAberta,
+  useDisponibilidadeDoChat,
+  useIsStopped,
+  useMarkStopped,
+  useTurnError,
+  useTurnTiming,
+} from './chat-runtime-provider';
+import { timingStats } from './turn-timing';
 import { useDitado } from './use-ditado';
 
 /**
@@ -73,41 +84,79 @@ function MensagemDaPessoa() {
   );
 }
 
-/** O erro de uma resposta, no texto do código — nunca a prosa do servidor. */
-function ErroDaResposta() {
-  const status = useAuiState((s) => s.message.status);
-  const ultimaPergunta = useAuiState((s) => {
+/** O texto da última pergunta da pessoa — o que "tentar de novo" reenvia. */
+function useLastQuestion(): string {
+  return useAuiState((s) => {
     const pessoa = [...s.thread.messages].reverse().find((m) => m.role === 'user');
     const parte = pessoa?.content.find((p) => p.type === 'text');
     return parte && parte.type === 'text' ? parte.text : '';
   });
+}
+
+/** O cartão de erro, no texto do código — nunca a prosa do servidor. */
+function FailedAnswer({ error }: { error: unknown }) {
+  const lastQuestion = useLastQuestion();
   const aui = useAui();
-  if (status?.type !== 'incomplete' || status.reason !== 'error') return null;
   return (
     <ErrorState
       className="max-w-none"
       title="A resposta falhou"
-      detail={textoDeErroDoChat(erroDoChat(status.error))}
+      detail={textoDeErroDoChat(erroDoChat(error))}
       retryLabel="Tentar de novo"
       // Reenvia a pergunta como mensagem nova: o estado da conversa está no
       // agente, e refazer "o turno do meio" exigiria bifurcar o checkpoint.
       onRetry={() => {
-        if (ultimaPergunta) aui.thread().append(ultimaPergunta);
+        if (lastQuestion) aui.thread().append(lastQuestion);
       }}
     />
   );
 }
 
-/** O "pensando", só enquanto a resposta ainda não tem texto nenhum. */
+function ErroDaResposta() {
+  const status = useAuiState((s) => s.message.status);
+  if (status?.type !== 'incomplete' || status.reason !== 'error') return null;
+  return <FailedAnswer error={status.error} />;
+}
+
+/**
+ * O erro de um turno que não chegou a ter resposta — cota, provedor fora.
+ *
+ * Fica no fim da conversa, logo abaixo da pergunta, porque não existe mensagem do
+ * assistente onde pendurá-lo (ver `separateTurnError`).
+ */
+function TurnErrorNotice() {
+  const error = useTurnError();
+  const running = useAuiState((s) => s.thread.isRunning);
+  if (!error || running) return null;
+  return <FailedAnswer error={error} />;
+}
+
+/**
+ * O "pensando": antes do primeiro token, e de novo quando a resposta trava no
+ * meio — o modelo decidindo uma tool, ou o provedor lento. Sem a segunda parte, o
+ * texto parava por dez segundos e a tela parecia congelada.
+ */
 function Pensando() {
   const rodando = useAuiState((s) => s.message.status?.type === 'running');
   const temTexto = useAuiState((s) =>
     s.message.parts.some((parte) => parte.type === 'text' && parte.text.trim() !== ''),
   );
-  if (!rodando || temTexto) return null;
+  const { stalled } = unstable_useMessageStallDetection({ thresholdMs: 2500 });
+  if (!rodando || (temTexto && !stalled)) return null;
   // `aria-label` além do rótulo visível: é o nome estável pelo qual o leitor de
   // tela encontra o único retorno entre apertar enviar e o primeiro token.
   return <ThinkingIndicator aria-label="Pensando" label="Pensando" />;
+}
+
+/** "Resposta interrompida" e o tempo da resposta, quando ela já não está chegando. */
+function AnswerFooter() {
+  const id = useAuiState((s) => s.message.id);
+  const running = useAuiState((s) => s.message.status?.type === 'running');
+  const stopped = useIsStopped(id);
+  const stats = timingStats(useTurnTiming(id));
+  if (running) return null;
+  if (stopped) return <StoppedRun reason="Resposta interrompida" />;
+  return <MessageTiming stats={stats} />;
 }
 
 function BarraDeAcoes() {
@@ -152,6 +201,7 @@ function MensagemDoAssistente() {
       />
       <Pensando />
       <ErroDaResposta />
+      <AnswerFooter />
       <BarraDeAcoes />
     </MessagePrimitive.Root>
   );
@@ -303,6 +353,7 @@ function Composer() {
   // Com uma pausa na mesa, a resposta é o cartão: a mensagem nova descartaria a
   // pausa (o agente segue), e é fácil fazer isso sem querer.
   const pausado = Boolean(useLangGraphInterruptState()?.value);
+  const markStopped = useMarkStopped();
   const [digitando, setDigitando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   const podeEnviar = texto.trim() !== '' || temFoto;
@@ -353,7 +404,13 @@ function Composer() {
         attachments={<AnexosDoComposer />}
         canSend={podeEnviar}
         onSend={enviar}
-        onStop={() => aui.thread().cancelRun()}
+        onStop={() => {
+          // Marcada antes de cancelar: o runtime não diferencia "parou" de
+          // "terminou" (react-langgraph nunca marca `incomplete/cancelled`).
+          const ultima = aui.thread().getState().messages.at(-1);
+          if (ultima?.role === 'assistant') markStopped(ultima.id);
+          aui.thread().cancelRun();
+        }}
         className="shrink-0 bg-transparent shadow-none"
       />
     </>
@@ -374,6 +431,7 @@ export function ChatThread() {
           />
           {/* No fim do fluxo, e dentro da rolagem: a decisão é sobre a mensagem
               logo acima, e é lá que a pessoa relê "200 g de frango". */}
+          <TurnErrorNotice />
           <PlanoDoTurno />
           <PausaDoAgente />
           <MotivoDoVoto />

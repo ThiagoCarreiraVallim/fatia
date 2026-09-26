@@ -15,7 +15,7 @@ import type { MemoryService } from '../memory/memory.service';
 import type {
   ConversationService,
   MensagemDoHistorico,
-  RespostaDoTurno,
+  TurnOutcome,
 } from '../conversation.service';
 
 /**
@@ -167,18 +167,18 @@ function montar(
       async (_userId: string, _id: string): Promise<MensagemDoHistorico[]> =>
         opcoes.historico ?? [],
     ),
-    limparPausas: jest.fn(async (_userId: string, _id: string): Promise<void> => undefined),
+    clearPauses: jest.fn(async (_userId: string, _id: string): Promise<void> => undefined),
     iniciarTurno: jest.fn(async (_userId: string, id: string, _texto: string) => ({
       conversationId: id,
     })),
     titularSeProvisorio: jest.fn(
       async (_u: string, _c: string, _p: string, _t: string): Promise<void> => undefined,
     ),
-    concluirTurno: jest.fn(
+    completeTurn: jest.fn(
       async (
         _userId: string,
         _conversationId: string,
-        _resposta: RespostaDoTurno,
+        _resposta: TurnOutcome,
       ): Promise<string | null> => 'linha-1',
     ),
   } satisfies Partial<ConversationService>;
@@ -232,7 +232,7 @@ describe('ChatService — repasse do SSE', () => {
     const { service, canal } = montar();
     const saida = destinoDeTeste();
 
-    const turno = service.conversar(USUARIO, turnoNovo('oi'), 'token-do-usuario', saida.destino);
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'token-do-usuario', saida.destino);
     await respirar();
 
     canal.emitir(fragmento('ai-1', 'Boa '));
@@ -255,7 +255,7 @@ describe('ChatService — repasse do SSE', () => {
     const { service, canal } = montar();
     const saida = destinoDeTeste();
 
-    const turno = service.conversar(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
     await respirar();
     canal.emitir(pedidoDeTool('ai-1', 'log_meal'));
     canal.encerrar();
@@ -268,7 +268,7 @@ describe('ChatService — repasse do SSE', () => {
     const { service, canal } = montar();
     const saida = destinoDeTeste();
 
-    const turno = service.conversar(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
     await respirar();
     canal.emitir(fragmento('ai-1', 'Oi!'));
     canal.emitir(fim('completed'));
@@ -285,7 +285,7 @@ describe('ChatService — repasse do SSE', () => {
     const { service, canal } = montar();
     const saida = destinoDeTeste();
 
-    const turno = service.conversar(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
     await respirar();
     saida.simularClienteSaindo();
     await turno;
@@ -302,7 +302,7 @@ describe('ChatService — repasse do SSE', () => {
     const { service } = montar({ stream: canal.stream, atrasarAbertura: abriu });
     const saida = destinoDeTeste();
 
-    const turno = service.conversar(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
     await respirar();
 
     // Aba fechada com o `abrir` ainda pendurado. `res.on('close')` NÃO reentrega
@@ -327,7 +327,7 @@ describe('ChatService — ordem das guardas', () => {
     conversas.encontrar.mockRejectedValueOnce(new NotFoundException('Conversa não encontrada.'));
     const saida = destinoDeTeste();
 
-    await expect(service.conversar(USUARIO, turnoNovo('oi'), 'tok', saida.destino)).rejects.toThrow(
+    await expect(service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino)).rejects.toThrow(
       NotFoundException,
     );
 
@@ -343,7 +343,7 @@ describe('ChatService — ordem das guardas', () => {
     const saida = destinoDeTeste();
 
     await expect(
-      service.conversar(
+      service.converse(
         USUARIO,
         { conversationId: CONVERSA, resume: { interruptId: 'p1', value: true } },
         'tok',
@@ -356,7 +356,7 @@ describe('ChatService — ordem das guardas', () => {
   it('mensagem e retomada juntas é 400', async () => {
     const { service, agent } = montar();
     await expect(
-      service.conversar(
+      service.converse(
         USUARIO,
         { conversationId: CONVERSA, message: 'oi', resume: { interruptId: 'p1', value: true } },
         'tok',
@@ -379,7 +379,7 @@ describe('ChatService — ordem das guardas', () => {
     );
     const saida = destinoDeTeste();
 
-    await expect(service.conversar(USUARIO, turnoNovo('oi'), 'tok', saida.destino)).rejects.toThrow(
+    await expect(service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino)).rejects.toThrow(
       AiQuotaExceededException,
     );
 
@@ -393,11 +393,11 @@ describe('ChatService — ordem das guardas', () => {
     agent.abrir.mockRejectedValueOnce(new Error('conexão recusada'));
 
     await expect(
-      service.conversar(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino),
+      service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino),
     ).rejects.toThrow();
 
     expect(conversas.iniciarTurno).not.toHaveBeenCalled();
-    expect(conversas.limparPausas).not.toHaveBeenCalled();
+    expect(conversas.clearPauses).not.toHaveBeenCalled();
   });
 
   it('manda o Bearer, a conversa, o histórico e as memórias junto da mensagem nova', async () => {
@@ -406,7 +406,7 @@ describe('ChatService — ordem das guardas', () => {
       memorias: [{ id: 'm1', content: 'É vegetariana.' }],
     });
 
-    const turno = service.conversar(
+    const turno = service.converse(
       USUARIO,
       turnoNovo('e agora?'),
       'token-do-usuario',
@@ -429,7 +429,7 @@ describe('ChatService — ordem das guardas', () => {
   it('conversa nova vai ao agente com o histórico vazio, e nasce com o id do PWA', async () => {
     const { service, canal, chamadasAoAgente, conversas } = montar({ existente: false });
 
-    const turno = service.conversar(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
     await respirar();
     canal.encerrar();
     await turno;
@@ -442,7 +442,7 @@ describe('ChatService — ordem das guardas', () => {
   it('a retomada vai ao agente sem mensagem e não grava fala da pessoa', async () => {
     const { service, canal, chamadasAoAgente, conversas } = montar();
 
-    const turno = service.conversar(
+    const turno = service.converse(
       USUARIO,
       {
         conversationId: CONVERSA,
@@ -461,7 +461,7 @@ describe('ChatService — ordem das guardas', () => {
     expect(chamadasAoAgente[0].mensagem).toBeUndefined();
     expect(conversas.iniciarTurno).not.toHaveBeenCalled();
     // A pausa anterior está resolvida: o card não pode voltar depois de um F5.
-    expect(conversas.limparPausas).toHaveBeenCalledWith('user-a', CONVERSA);
+    expect(conversas.clearPauses).toHaveBeenCalledWith('user-a', CONVERSA);
   });
 });
 
@@ -469,7 +469,7 @@ describe('ChatService — o que fica no banco', () => {
   it('junta os fragmentos de uma mensagem, e a completa tem a palavra final', async () => {
     const { service, canal, conversas } = montar();
 
-    const turno = service.conversar(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
     await respirar();
     canal.emitir(quadro('start', { conversationId: CONVERSA, runId: 'run-9' }));
     canal.emitir(fragmento('ai-1', 'Boa '));
@@ -480,7 +480,7 @@ describe('ChatService — o que fica no banco', () => {
     canal.encerrar();
     await turno;
 
-    expect(conversas.concluirTurno).toHaveBeenCalledWith('user-a', CONVERSA, {
+    expect(conversas.completeTurn).toHaveBeenCalledWith('user-a', CONVERSA, {
       texto: 'Boa tarde!',
       tools: [],
       status: 'completed',
@@ -492,7 +492,7 @@ describe('ChatService — o que fica no banco', () => {
   it('guarda o nome de cada tool uma vez e o texto das duas voltas do modelo', async () => {
     const { service, canal, conversas } = montar();
 
-    const turno = service.conversar(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
     await respirar();
     canal.emitir(fragmento('ai-1', 'Vou consultar.'));
     canal.emitir(pedidoDeTool('ai-1', 'list_meals', 'get_streak', 'list_meals'));
@@ -501,7 +501,7 @@ describe('ChatService — o que fica no banco', () => {
     canal.encerrar();
     await turno;
 
-    const [, , resposta] = conversas.concluirTurno.mock.calls[0];
+    const [, , resposta] = conversas.completeTurn.mock.calls[0];
     expect(resposta.tools).toEqual([{ name: 'list_meals' }, { name: 'get_streak' }]);
     expect(resposta.texto).toBe('Vou consultar.\n\nVocê comeu arroz.');
   });
@@ -509,7 +509,7 @@ describe('ChatService — o que fica no banco', () => {
   it('grava a pausa, para o card voltar depois de um F5', async () => {
     const { service, canal, conversas } = montar();
 
-    const turno = service.conversar(USUARIO, turnoNovo('almocei'), 'tok', destinoDeTeste().destino);
+    const turno = service.converse(USUARIO, turnoNovo('almocei'), 'tok', destinoDeTeste().destino);
     await respirar();
     canal.emitir(pedidoDeTool('ai-1', 'log_meal'));
     const valor = { kind: 'confirm', actions: [{ toolCallId: 'c0', tool: 'log_meal' }] };
@@ -518,7 +518,7 @@ describe('ChatService — o que fica no banco', () => {
     canal.encerrar();
     await turno;
 
-    const [, , resposta] = conversas.concluirTurno.mock.calls[0];
+    const [, , resposta] = conversas.completeTurn.mock.calls[0];
     expect(resposta.status).toBe('interrupted');
     expect(resposta.pausa).toEqual({ id: 'pausa-1', value: valor });
   });
@@ -526,14 +526,14 @@ describe('ChatService — o que fica no banco', () => {
   it('turno que terminou sem pausa não grava pausa, mesmo que o fluxo tenha tido uma', async () => {
     const { service, canal, conversas } = montar();
 
-    const turno = service.conversar(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
     await respirar();
     canal.emitir(pausa('pausa-1', { kind: 'question' }));
     canal.emitir(fim('error'));
     canal.encerrar();
     await turno;
 
-    expect(conversas.concluirTurno.mock.calls[0][2].pausa).toBeNull();
+    expect(conversas.completeTurn.mock.calls[0][2].pausa).toBeNull();
   });
 
   it('grava o parcial e fecha com error + done quando o stream quebra no meio', async () => {
@@ -548,9 +548,9 @@ describe('ChatService — o que fica no banco', () => {
     });
     const saida = destinoDeTeste();
 
-    await service.conversar(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
+    await service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
 
-    expect(conversas.concluirTurno.mock.calls[0][2]).toMatchObject({
+    expect(conversas.completeTurn.mock.calls[0][2]).toMatchObject({
       texto: 'Você comeu',
       status: 'error',
     });
@@ -574,7 +574,7 @@ describe('ChatService — o que fica no banco', () => {
     });
     const saida = destinoDeTeste();
 
-    await service.conversar(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
+    await service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
 
     expect(saida.tudo()).toContain('CHAT_INTERNAL_ERROR');
   });
@@ -582,7 +582,7 @@ describe('ChatService — o que fica no banco', () => {
   it('ignora quadro com `data` que não é JSON em vez de derrubar o turno', async () => {
     const { service, canal, conversas } = montar();
 
-    const turno = service.conversar(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
     await respirar();
     canal.emitir('event: messages\ndata: {nao-e-json\n\n');
     canal.emitir(fragmento('ai-1', 'ok'));
@@ -590,7 +590,7 @@ describe('ChatService — o que fica no banco', () => {
     canal.encerrar();
     await turno;
 
-    expect(conversas.concluirTurno.mock.calls[0][2].texto).toBe('ok');
+    expect(conversas.completeTurn.mock.calls[0][2].texto).toBe('ok');
   });
 });
 
@@ -602,7 +602,7 @@ describe('ChatService — o título da conversa', () => {
       uso: { model: 'm', inputUnits: 40, outputUnits: 5 },
     });
 
-    const turno = service.conversar(
+    const turno = service.converse(
       USUARIO,
       turnoNovo('registra 200 g de frango'),
       'tok',
@@ -630,7 +630,7 @@ describe('ChatService — o título da conversa', () => {
   it('conversa que já existe não é renomeada a cada mensagem', async () => {
     const { service, canal, agent } = montar();
 
-    const turno = service.conversar(
+    const turno = service.converse(
       USUARIO,
       turnoNovo('e amanhã?'),
       'tok',
@@ -648,7 +648,7 @@ describe('ChatService — o título da conversa', () => {
     agent.titular.mockRejectedValueOnce(new Error('agente caiu'));
     const saida = destinoDeTeste();
 
-    const turno = service.conversar(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
     await respirar();
     canal.emitir(fragmento('ai-1', 'Oi!'));
     canal.encerrar();
@@ -664,7 +664,7 @@ describe('ChatService — o que vai para o livro-caixa', () => {
   it('registra o custo com o modelo e as unidades que o agente reportou', async () => {
     const { service, canal, uso: livro } = montar();
 
-    const turno = service.conversar(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
     await respirar();
     canal.emitir(uso({ model: 'gateway/modelo', inputUnits: 1200, outputUnits: 300 }));
     canal.encerrar();
@@ -680,7 +680,7 @@ describe('ChatService — o que vai para o livro-caixa', () => {
   it('agente que não reporta `usage` vira custo NÃO MEDIDO, não custo zero', async () => {
     const { service, canal, uso: livro } = montar();
 
-    const turno = service.conversar(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
     await respirar();
     canal.emitir(fragmento('ai-1', 'oi'));
     canal.encerrar();
@@ -698,7 +698,7 @@ describe('ChatService — o que vai para o livro-caixa', () => {
   it('SOMA os `usage` do turno por modelo, e contamina quando falta unidade', async () => {
     const { service, canal, uso: livro } = montar();
 
-    const turno = service.conversar(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
     await respirar();
     canal.emitir(uso({ model: 'm', inputUnits: 1000, outputUnits: 50 }));
     canal.emitir(uso({ model: 'm', inputUnits: 5000, outputUnits: 400 }));
@@ -723,7 +723,7 @@ describe('ChatService — o que vai para o livro-caixa', () => {
       },
     });
 
-    await service.conversar(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    await service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
 
     expect(livro.registrar).toHaveBeenCalledWith('user-a', {
       feature: 'chat',
@@ -753,9 +753,9 @@ describe('ChatService — o que NÃO pode vazar', () => {
     });
     // Força também o caminho de erro de gravação, que é onde a tentação de logar
     // "o que eu estava tentando gravar" aparece.
-    conversas.concluirTurno.mockRejectedValueOnce(new Error('banco caiu'));
+    conversas.completeTurn.mockRejectedValueOnce(new Error('banco caiu'));
 
-    await service.conversar(
+    await service.converse(
       USUARIO,
       turnoNovo('tomei 3 insulinas hoje'),
       'token-secreto-do-usuario',
@@ -766,5 +766,117 @@ describe('ChatService — o que NÃO pode vazar', () => {
     expect(tudo).not.toContain('token-secreto-do-usuario');
     expect(tudo).not.toContain('tomei 3 insulinas');
     expect(tudo).not.toContain('glicemia');
+  });
+});
+
+describe('ChatService — tempo do turno e resposta parada', () => {
+  const usageFrame = (dados: Record<string, unknown>) => quadro('usage', dados);
+
+  it('grava quanto o turno demorou e o consumo somado, para voltarem depois de um F5', async () => {
+    const { service, canal, conversas } = montar();
+
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    await respirar();
+    canal.emitir(usageFrame({ model: 'm', inputUnits: 1000, outputUnits: 50 }));
+    canal.emitir(usageFrame({ model: 'outro', inputUnits: 200, outputUnits: 30 }));
+    canal.emitir(fragmento('ai-1', 'Oi!'));
+    canal.emitir(quadro('done', { status: 'completed', durationMs: 4180, ttftMs: 950 }));
+    canal.encerrar();
+    await turno;
+
+    const [, , resposta] = conversas.completeTurn.mock.calls[0];
+    expect(resposta).toMatchObject({
+      status: 'completed',
+      durationMs: 4180,
+      ttftMs: 950,
+      usage: { inputUnits: 1200, outputUnits: 80 },
+    });
+  });
+
+  it('consumo com unidade faltando não é gravado — total parcial pareceria medido', async () => {
+    const { service, canal, conversas } = montar();
+
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    await respirar();
+    canal.emitir(usageFrame({ model: 'm', inputUnits: 1000, outputUnits: 50 }));
+    canal.emitir(usageFrame({ model: 'caro', inputUnits: 900 }));
+    canal.emitir(fim('completed'));
+    canal.encerrar();
+    await turno;
+
+    expect(conversas.completeTurn.mock.calls[0][2]).not.toHaveProperty('usage');
+  });
+
+  it('medida que não é inteiro não negativo é descartada, e não gravada', async () => {
+    const { service, canal, conversas } = montar();
+
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    await respirar();
+    canal.emitir(quadro('done', { status: 'completed', durationMs: -3, ttftMs: '950' }));
+    canal.encerrar();
+    await turno;
+
+    const resposta = conversas.completeTurn.mock.calls[0][2];
+    expect(resposta).not.toHaveProperty('durationMs');
+    expect(resposta).not.toHaveProperty('ttftMs');
+  });
+
+  it('a pessoa parou a resposta: grava `stopped` com o que já tinha chegado, e não `error`', async () => {
+    const { service, canal, conversas } = montar();
+    const saida = destinoDeTeste();
+
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
+    await respirar();
+    canal.emitir(fragmento('ai-1', 'Você comeu '));
+    await respirar();
+    saida.simularClienteSaindo();
+    await turno;
+
+    const [, , resposta] = conversas.completeTurn.mock.calls[0];
+    expect(resposta.status).toBe('stopped');
+    expect(resposta.texto).toBe('Você comeu ');
+  });
+
+  it('o cliente sair depois do fim não transforma a resposta completa em parada', async () => {
+    const { service, canal, conversas } = montar();
+    const saida = destinoDeTeste();
+
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
+    await respirar();
+    canal.emitir(fragmento('ai-1', 'Oi!'));
+    canal.emitir(fim('completed'));
+    await respirar();
+    saida.simularClienteSaindo();
+    await turno;
+
+    expect(conversas.completeTurn.mock.calls[0][2].status).toBe('completed');
+  });
+
+  it('erro do provedor que chegou antes de o cliente sair continua `error`, e não vira parada', async () => {
+    const { service, canal, conversas } = montar();
+    const saida = destinoDeTeste();
+
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
+    await respirar();
+    canal.emitir(fragmento('ai-1', 'Você '));
+    canal.emitir(quadro('error', { code: 'AI_PROVIDER_TIMEOUT', message: 'demorou' }));
+    canal.emitir(fim('error'));
+    await respirar();
+    saida.simularClienteSaindo();
+    await turno;
+
+    expect(conversas.completeTurn.mock.calls[0][2].status).toBe('error');
+  });
+
+  it('o stream quebrar sem o cliente ter saído continua sendo `error`', async () => {
+    const { service, canal, conversas } = montar();
+
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    await respirar();
+    canal.emitir(fragmento('ai-1', 'Você '));
+    canal.encerrar();
+    await turno;
+
+    expect(conversas.completeTurn.mock.calls[0][2].status).toBe('error');
   });
 });

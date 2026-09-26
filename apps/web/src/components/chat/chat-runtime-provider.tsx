@@ -40,7 +40,15 @@ export function useDisponibilidadeDoChat(): ChatAvailability | undefined {
 
 type Voto = ReturnType<typeof useChatRuntime>['voto'];
 
-const ExtrasContext = createContext<ChatRuntimeExtras>({ titulos: {}, artefatos: {}, plano: null });
+const ExtrasContext = createContext<ChatRuntimeExtras>({
+  titulos: {},
+  artefatos: {},
+  plano: null,
+  timings: {},
+  stopped: new Set(),
+  turnError: null,
+});
+const MarkStoppedContext = createContext<(messageId: string) => void>(() => undefined);
 const VotoContext = createContext<Voto | null>(null);
 const ConversaContext = createContext<string | undefined>(undefined);
 
@@ -49,6 +57,10 @@ export const useArtefato = (toolCallId: string) => useContext(ExtrasContext).art
 export const usePlanoDoTurno = () => useContext(ExtrasContext).plano;
 export const useVoto = () => useContext(VotoContext);
 export const useConversaAberta = () => useContext(ConversaContext);
+export const useTurnTiming = (messageId: string) => useContext(ExtrasContext).timings[messageId];
+export const useIsStopped = (messageId: string) => useContext(ExtrasContext).stopped.has(messageId);
+export const useTurnError = () => useContext(ExtrasContext).turnError;
+export const useMarkStopped = () => useContext(MarkStoppedContext);
 
 export function ChatRuntimeProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -79,18 +91,19 @@ export function ChatRuntimeProvider({ children }: { children: ReactNode }) {
    * o id depois, a troca passa a ser de uma conversa para outra, que é o caminho
    * que funciona. (Observado e corrigido na Lunia, que usa o mesmo runtime.)
    */
-  const { runtime, titulos, artefatos, plano, voto } = useChatRuntime({
-    conversationId: lista.ready ? alvo : undefined,
-    threadListAdapter: lista.adapter,
-    onThreadIdChange: aoTrocarDeConversa,
-    fotos: disponivel?.photos ?? false,
-    // O turno pode ter guardado uma memória e gastou cota: as três listas mudam juntas.
-    onTurnEnd: () => {
-      for (const queryKey of [CHAVE_DAS_CONVERSAS, CHAVE_DAS_MEMORIAS, CHAVE_DA_COTA]) {
-        void queryClient.invalidateQueries({ queryKey });
-      }
-    },
-  });
+  const { runtime, titulos, artefatos, plano, timings, stopped, turnError, markStopped, voto } =
+    useChatRuntime({
+      conversationId: lista.ready ? alvo : undefined,
+      threadListAdapter: lista.adapter,
+      onThreadIdChange: aoTrocarDeConversa,
+      fotos: disponivel?.photos ?? false,
+      // O turno pode ter guardado uma memória e gastou cota: as três listas mudam juntas.
+      onTurnEnd: () => {
+        for (const queryKey of [CHAVE_DAS_CONVERSAS, CHAVE_DAS_MEMORIAS, CHAVE_DA_COTA]) {
+          void queryClient.invalidateQueries({ queryKey });
+        }
+      },
+    });
   // O `catalog` só chega no turno ao vivo; depois de um F5 as tools do histórico
   // seriam rotuladas pelo nome técnico. A lista do servidor cobre as duas.
   const { data: titulosDoServidor } = useQuery({
@@ -103,15 +116,17 @@ export function ChatRuntimeProvider({ children }: { children: ReactNode }) {
     [titulosDoServidor, titulos],
   );
   const extras = useMemo(
-    () => ({ titulos: todosOsTitulos, artefatos, plano }),
-    [todosOsTitulos, artefatos, plano],
+    () => ({ titulos: todosOsTitulos, artefatos, plano, timings, stopped, turnError }),
+    [todosOsTitulos, artefatos, plano, timings, stopped, turnError],
   );
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <ConversaContext.Provider value={alvo}>
         <ExtrasContext.Provider value={extras}>
-          <VotoContext.Provider value={voto}>{children}</VotoContext.Provider>
+          <MarkStoppedContext.Provider value={markStopped}>
+            <VotoContext.Provider value={voto}>{children}</VotoContext.Provider>
+          </MarkStoppedContext.Provider>
         </ExtrasContext.Provider>
       </ConversaContext.Provider>
     </AssistantRuntimeProvider>

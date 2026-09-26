@@ -13,7 +13,7 @@ import { MemoryService } from './memory/memory.service';
 import type { ChatPhotoDto, SendChatMessageDto } from './dto/chat.dto';
 import { TETO_DA_FOTO_DO_CHAT } from './corpos-do-chat';
 import { NaoEhJpegError, removerMetadadosDoJpeg } from '../nutrition/helpers/strip-exif';
-import { type TurnoLido, criarLeitorDoTurno } from './leitor-do-turno';
+import { type TurnSummary, createTurnReader } from './leitor-do-turno';
 import { criarLeitorSse, formatarEventoSse } from './sse';
 
 /**
@@ -90,7 +90,7 @@ export class ChatService {
    *    conversa órfã, com a pergunta e nenhuma resposta, toda vez que o agente
    *    estivesse fora do ar.
    */
-  async conversar(
+  async converse(
     user: CurrentUserPayload,
     dto: SendChatMessageDto,
     bearer: string,
@@ -138,7 +138,7 @@ export class ChatService {
 
     if (clienteFoiEmbora) stream.cancelar();
 
-    if (existente) await this.conversas.limparPausas(user.id, dto.conversationId);
+    if (existente) await this.conversas.clearPauses(user.id, dto.conversationId);
     if (dto.message !== undefined) {
       await this.conversas.iniciarTurno(user.id, dto.conversationId, dto.message, fotos.length);
       // Sem `await`: o nome é enfeite de lista, e esperar por ele atrasaria o
@@ -152,12 +152,12 @@ export class ChatService {
     destino.escrever(': aberto\n\n');
 
     const leitorSse = criarLeitorSse();
-    const turno = criarLeitorDoTurno();
+    const turno = createTurnReader();
 
     try {
       for await (const pedaco of stream.pedacos()) {
         destino.escrever(pedaco);
-        for (const evento of leitorSse.push(pedaco)) turno.absorver(evento);
+        for (const evento of leitorSse.push(pedaco)) turno.absorb(evento);
       }
     } catch (erro) {
       const nomeado =
@@ -177,14 +177,14 @@ export class ChatService {
       // o último evento: sem ele, a tela ficaria girando esperando.
       destino.escrever(formatarEventoSse('done', { status: 'error' }));
     } finally {
-      const lido = turno.lido();
-      const linha = await this.registrarOQuePassou(user.id, dto.conversationId, lido);
+      const summary = markStoppedWhenClientLeft(turno.read(), clienteFoiEmbora);
+      const linha = await this.recordTurn(user.id, dto.conversationId, summary);
       // Depois do `done` do agente, e antes do fim: é o que liga o id que a tela
       // conhece (o da mensagem do LangChain) à linha do banco, onde o voto grava.
-      if (linha && lido.ultimaMensagemId) {
+      if (linha && summary.ultimaMensagemId) {
         destino.escrever(
           formatarEventoSse('persisted', {
-            messageId: lido.ultimaMensagemId,
+            messageId: summary.ultimaMensagemId,
             assistantMessageId: linha,
           }),
         );
@@ -219,19 +219,22 @@ export class ChatService {
     }
   }
 
-  private async registrarOQuePassou(
+  private async recordTurn(
     userId: string,
     conversationId: string,
-    turno: TurnoLido,
+    turno: TurnSummary,
   ): Promise<string | null> {
     let linha: string | null = null;
     try {
-      linha = await this.conversas.concluirTurno(userId, conversationId, {
+      linha = await this.conversas.completeTurn(userId, conversationId, {
         texto: turno.texto,
         tools: turno.tools,
         status: turno.status,
         pausa: turno.pausa,
         runId: turno.runId,
+        ...(turno.durationMs !== undefined ? { durationMs: turno.durationMs } : {}),
+        ...(turno.ttftMs !== undefined ? { ttftMs: turno.ttftMs } : {}),
+        ...sumTurnUsage(turno.usoPorModelo),
       });
     } catch (erro) {
       this.logger.error(`Falha ao gravar a resposta do chat: ${(erro as Error).name}`);
@@ -250,6 +253,45 @@ export class ChatService {
     }
     return linha;
   }
+}
+
+/**
+ * O turno cortado porque o cliente foi embora é `stopped`, e não `error`.
+ *
+ * O caso de todo dia é o botão de parar: o `AbortController` do PWA fecha a
+ * conexão, e o `aoFechar` cancela o agente. Mas fechar a aba, o celular suspender
+ * o app ou a rede cair dão no mesmo, e daqui não há como separar um do outro — por
+ * isso a tela diz "resposta interrompida", e não "você parou". Em todos, o `done`
+ * do agente não chega, e sem isto o leitor ficava no `error` de partida.
+ *
+ * Só quando o `done` **não** chegou: um turno que terminou do lado do agente —
+ * inclusive com erro do provedor — antes de a conexão cair continua como estava.
+ */
+export function markStoppedWhenClientLeft(
+  summary: TurnSummary,
+  clienteFoiEmbora: boolean,
+): TurnSummary {
+  if (!clienteFoiEmbora || summary.sawDone) return summary;
+  return { ...summary, status: 'stopped' };
+}
+
+/**
+ * O consumo do turno somado entre os modelos, para a tela — ou nada, se alguma
+ * parte não foi medida. Mesma regra do `somarUnidade`: um total parcial com cara
+ * de medido é pior que a ausência.
+ */
+export function sumTurnUsage(usoPorModelo: TurnSummary['usoPorModelo']): {
+  usage?: { inputUnits: number; outputUnits: number };
+} {
+  if (usoPorModelo.size === 0) return {};
+  let inputUnits = 0;
+  let outputUnits = 0;
+  for (const unidades of usoPorModelo.values()) {
+    if (unidades.inputUnits === undefined || unidades.outputUnits === undefined) return {};
+    inputUnits += unidades.inputUnits;
+    outputUnits += unidades.outputUnits;
+  }
+  return { usage: { inputUnits, outputUnits } };
 }
 
 /**

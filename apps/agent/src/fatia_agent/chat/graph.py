@@ -56,6 +56,7 @@ o que só perguntou.
 
 import json
 import logging
+import time
 import uuid
 from collections.abc import AsyncIterator, Sequence
 from typing import Any
@@ -916,6 +917,19 @@ async def stream_chat_events(
         }
     )
 
+    # No relógio do processo, e não no de parede: um ajuste de NTP no meio do
+    # turno não pode dar duração negativa.
+    started_at = time.perf_counter()
+    first_visible_at: float | None = None
+
+    def timing() -> dict[str, int | None]:
+        return {
+            "duration_ms": _ms_since(started_at),
+            "ttft_ms": None
+            if first_visible_at is None
+            else _ms_between(started_at, first_visible_at),
+        }
+
     yield events.start(conversation_id, contexto.run_id).frame()
     yield events.catalog(
         {tool.name: tool.title for tool in contexto.permitidas if tool.title}
@@ -931,6 +945,8 @@ async def stream_chat_events(
         ):
             if modo == "custom":
                 if isinstance(pacote, events.Fragmento):
+                    if first_visible_at is None and _texto(pacote.mensagem).strip():
+                        first_visible_at = time.perf_counter()
                     yield events.fragmento(pacote.mensagem, pacote.no)
                 elif isinstance(pacote, events.ChatEvent):
                     yield pacote.frame()
@@ -946,18 +962,26 @@ async def stream_chat_events(
     except (AIProviderError, McpError) as exc:
         logger.warning("Turno de chat terminou em %s: %s", exc.code, exc.message)
         yield events.error(exc.code, exc.message).frame()
-        yield events.done("error").frame()
+        yield events.done("error", **timing()).frame()
         return
 
     if interrompido:
-        yield events.done("interrupted").frame()
+        yield events.done("interrupted", **timing()).frame()
         return
 
     estado = await grafo.aget_state(config)
     encontrada = _ultima_do_assistente(estado.values.get("messages") or [])
     if encontrada is not None:
         yield events.completas([encontrada[1]])
-    yield events.done("completed").frame()
+    yield events.done("completed", **timing()).frame()
+
+
+def _ms_between(inicio: float, fim: float) -> int:
+    return round((fim - inicio) * 1000)
+
+
+def _ms_since(inicio: float) -> int:
+    return _ms_between(inicio, time.perf_counter())
 
 
 __all__ = [

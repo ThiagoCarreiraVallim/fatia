@@ -160,9 +160,9 @@ async function subirApp(): Promise<Cenario> {
     .useValue({
       encontrar: jest.fn(async () => null),
       historicoParaOAgente: jest.fn(async () => []),
-      limparPausas: jest.fn(async () => undefined),
+      clearPauses: jest.fn(async () => undefined),
       iniciarTurno: jest.fn(async () => ({ conversationId: CONVERSA })),
-      concluirTurno: jest.fn(async () => null),
+      completeTurn: jest.fn(async () => null),
       listar: jest.fn(async () => []),
     })
     .overrideProvider(CheckpointPurgeService)

@@ -34,7 +34,8 @@ Os eventos próprios — o LangGraph não tem equivalente para eles:
     event: context     {"estimated": true, "segments": [{"key": "tools", "tokens": 900}]}
     event: validation  {"ok": false, "issues": ["…"]}
     event: error       {"code": "MCP_UNAUTHORIZED", "message": "…"}
-    event: done        {"status": "completed" | "interrupted" | "error"}
+    event: done        {"status": "completed" | "interrupted" | "error",
+                        "durationMs": 4180, "ttftMs": 950}
 
 Não existe evento de chamada nem de resultado de tool: a chamada vive em
 `tool_calls` da mensagem do assistente, e o resultado é a própria `ToolMessage`
@@ -232,8 +233,23 @@ def error(code: str, message: str) -> ChatEvent:
     return ChatEvent("error", {"code": code, "message": message})
 
 
-def done(status: str) -> ChatEvent:
-    return ChatEvent("done", {"status": status})
+def done(status: str, *, duration_ms: int | None = None, ttft_ms: int | None = None) -> ChatEvent:
+    """O fim do turno, com quanto ele demorou.
+
+    As medidas vão no `done`, e não num evento `timing` próprio: evento novo é
+    uma linha nova no parser do `apps/api` e no do PWA, e é exatamente onde este
+    contrato já divergiu seis vezes. O `done` já é lido pelos dois.
+
+    `ttftMs` é o tempo até o **primeiro caractere visível** — o que a pessoa
+    sente como "começou a responder". Ausente quando nada chegou a aparecer (um
+    turno que só pediu confirmação, ou que falhou antes).
+    """
+    dados: dict[str, Any] = {"status": status}
+    if duration_ms is not None:
+        dados["durationMs"] = duration_ms
+    if ttft_ms is not None:
+        dados["ttftMs"] = ttft_ms
+    return ChatEvent("done", dados)
 
 
 def cortar(texto: str, limite: int) -> str:

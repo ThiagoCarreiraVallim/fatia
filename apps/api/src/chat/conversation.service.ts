@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { MessageRole, Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
+import type { TurnStatus } from './leitor-do-turno';
 
 /**
  * Persistência da conversa com a IA hospedada (#249).
@@ -29,12 +30,16 @@ export type MensagemDoHistorico = { role: MessageRole; content: string };
 export type ToolChamada = { name: string };
 
 /** O fim de um turno do assistente, como `leitor-do-turno.ts` o leu. */
-export type RespostaDoTurno = {
+export type TurnOutcome = {
   texto: string;
   tools: ToolChamada[];
-  status: 'completed' | 'interrupted' | 'error';
+  status: TurnStatus;
   pausa: { id: string; value: unknown } | null;
   runId: string | null;
+  durationMs?: number;
+  ttftMs?: number;
+  /** O que o turno consumiu, somado entre os modelos. Ausente quando não foi medido. */
+  usage?: { inputUnits: number; outputUnits: number };
 };
 
 /** O que a tela manda sobre uma resposta. `review: null` desfaz o voto. */
@@ -155,7 +160,7 @@ export class ConversationService {
    * cronológica — o começo de uma conversa velha é o que menos importa para a
    * próxima resposta.
    *
-   * **Mensagem sem texto fica de fora.** `concluirTurno` grava o turno que só
+   * **Mensagem sem texto fica de fora.** `completeTurn` grava o turno que só
    * chamou tool, com `content: ''`, de propósito — é o vestígio de que a IA agiu
    * (ver lá). Mas o agente recusa `content` vazio com 422, e um 422 no histórico
    * é **permanente**: a conversa morreria para sempre a partir daquele turno, e
@@ -234,7 +239,7 @@ export class ConversationService {
    * argumentos de uma escrita proposta não ficam no banco depois disso — ver o
    * comentário de `Message.metadata`.
    */
-  async limparPausas(userId: string, conversationId: string): Promise<void> {
+  async clearPauses(userId: string, conversationId: string): Promise<void> {
     const conversa = await this.assertDaPessoa(userId, conversationId);
     const pausadas = await this.prisma.message.findMany({
       where: {
@@ -242,12 +247,16 @@ export class ConversationService {
         role: MessageRole.assistant,
         metadata: { path: ['status'], equals: 'interrupted' },
       },
-      select: { id: true },
+      select: { id: true, metadata: true },
     });
-    for (const { id } of pausadas) {
+    for (const { id, metadata } of pausadas) {
+      // Só `status` e `interrupt` mudam. Sobrescrever o objeto inteiro apagava
+      // junto o tempo e o consumo do turno, que a tela mostra depois de um F5.
+      const kept = { ...((metadata ?? {}) as Record<string, unknown>) };
+      delete kept.interrupt;
       await this.prisma.message.update({
         where: { id },
-        data: { metadata: { status: 'resolved' } },
+        data: { metadata: { ...kept, status: 'resolved' } as Prisma.InputJsonValue },
       });
     }
   }
@@ -259,10 +268,10 @@ export class ConversationService {
    * Uma pausa é gravada mesmo sem texto: é ela que traz o card de volta depois de
    * um F5, e um turno que só pediu uma confirmação não escreveu nada.
    */
-  async concluirTurno(
+  async completeTurn(
     userId: string,
     conversationId: string,
-    resposta: RespostaDoTurno,
+    resposta: TurnOutcome,
   ): Promise<string | null> {
     // De novo pelo par, e não pelo id sozinho: este método é chamado com um id
     // que atravessou o streaming inteiro, e reconferir custa uma linha.
@@ -286,6 +295,9 @@ export class ConversationService {
         metadata: {
           status: resposta.status,
           ...(resposta.pausa ? { interrupt: resposta.pausa } : {}),
+          ...(resposta.durationMs !== undefined ? { durationMs: resposta.durationMs } : {}),
+          ...(resposta.ttftMs !== undefined ? { ttftMs: resposta.ttftMs } : {}),
+          ...(resposta.usage ? { usage: resposta.usage } : {}),
         } as Prisma.InputJsonValue,
         runId: resposta.runId,
       },

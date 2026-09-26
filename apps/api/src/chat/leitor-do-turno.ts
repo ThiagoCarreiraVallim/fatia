@@ -19,21 +19,33 @@ import { type EventoSse, dadosDoEvento, jsonDoEvento } from './sse';
 /** Unidades acumuladas de **um** modelo dentro de um turno. */
 export type UnidadesDoModelo = { inputUnits?: number; outputUnits?: number };
 
-export type StatusDoTurno = 'completed' | 'interrupted' | 'error';
+/**
+ * `stopped` nunca vem do agente: é o `ChatService` que o decide, quando a pessoa
+ * parou a resposta (o cliente foi embora antes do `done`). Sem ele, um "parar"
+ * era gravado como `error`, e a tela, depois de um F5, dizia que algo tinha dado
+ * errado numa resposta que a própria pessoa interrompeu.
+ */
+export type TurnStatus = 'completed' | 'interrupted' | 'error' | 'stopped';
 
 export type PausaDoTurno = { id: string; value: unknown };
 
-export type TurnoLido = {
+export type TurnSummary = {
   /** O texto das respostas do assistente neste turno, na ordem. */
   texto: string;
   /** Tools pedidas, sem repetir nome, na ordem. Só o nome — ver `Message.tools`. */
   tools: { name: string }[];
   usoPorModelo: Map<string, UnidadesDoModelo>;
-  status: StatusDoTurno;
+  status: TurnStatus;
   pausa: PausaDoTurno | null;
   /** O id da última mensagem do assistente, como a tela a conhece. */
   ultimaMensagemId: string | null;
   runId: string | null;
+  /** Quanto o turno demorou, pelo relógio do agente. Ausente sem `done` do agente. */
+  durationMs?: number;
+  /** Até o primeiro caractere visível. Ausente quando nada chegou a aparecer. */
+  ttftMs?: number;
+  /** O agente mandou `done`: o turno terminou do lado dele, qualquer que seja o status. */
+  sawDone: boolean;
 };
 
 /**
@@ -50,6 +62,10 @@ function somarUnidade(a: number | undefined, b: number | undefined): number | un
 
 const numeroOuIndefinido = (valor: unknown): number | undefined =>
   typeof valor === 'number' ? valor : undefined;
+
+/** Medida de tempo que faz sentido gravar: inteiro, não negativo. O resto vira ausência. */
+const asMilliseconds = (valor: unknown): number | undefined =>
+  typeof valor === 'number' && Number.isInteger(valor) && valor >= 0 ? valor : undefined;
 
 const objeto = (valor: unknown): Record<string, unknown> | null =>
   typeof valor === 'object' && valor !== null && !Array.isArray(valor)
@@ -70,14 +86,17 @@ const textoDe = (conteudo: unknown): string => {
 const eDoAssistente = (mensagem: Record<string, unknown>): boolean =>
   mensagem.type === 'ai' || mensagem.type === 'AIMessageChunk';
 
-export function criarLeitorDoTurno() {
+export function createTurnReader() {
   /** Texto por id de mensagem, na ordem em que cada id apareceu. */
   const textos = new Map<string, string>();
   const tools: { name: string }[] = [];
   const usoPorModelo = new Map<string, UnidadesDoModelo>();
-  let status: StatusDoTurno = 'error';
+  let status: TurnStatus = 'error';
   let pausa: PausaDoTurno | null = null;
   let runId: string | null = null;
+  let durationMs: number | undefined;
+  let ttftMs: number | undefined;
+  let sawDone = false;
 
   function mensagemInteira(mensagem: Record<string, unknown>) {
     if (!eDoAssistente(mensagem) || typeof mensagem.id !== 'string') return;
@@ -96,7 +115,7 @@ export function criarLeitorDoTurno() {
   }
 
   return {
-    absorver(evento: EventoSse): void {
+    absorb(evento: EventoSse): void {
       switch (evento.event) {
         case 'start': {
           const dados = dadosDoEvento(evento);
@@ -149,8 +168,12 @@ export function criarLeitorDoTurno() {
           return;
         }
         case 'done': {
-          const valor = dadosDoEvento(evento)?.status;
+          sawDone = true;
+          const dados = dadosDoEvento(evento);
+          const valor = dados?.status;
           if (valor === 'completed' || valor === 'interrupted' || valor === 'error') status = valor;
+          durationMs = asMilliseconds(dados?.durationMs);
+          ttftMs = asMilliseconds(dados?.ttftMs);
           return;
         }
         default:
@@ -158,7 +181,7 @@ export function criarLeitorDoTurno() {
       }
     },
 
-    lido(): TurnoLido {
+    read(): TurnSummary {
       const ids = [...textos.keys()];
       return {
         texto: [...textos.values()].filter((t) => t.trim() !== '').join('\n\n'),
@@ -168,6 +191,9 @@ export function criarLeitorDoTurno() {
         pausa: status === 'interrupted' ? pausa : null,
         ultimaMensagemId: ids.at(-1) ?? null,
         runId,
+        sawDone,
+        ...(durationMs !== undefined ? { durationMs } : {}),
+        ...(ttftMs !== undefined ? { ttftMs } : {}),
       };
     },
   };

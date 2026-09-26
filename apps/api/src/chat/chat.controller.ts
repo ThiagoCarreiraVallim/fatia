@@ -197,7 +197,7 @@ export class ChatController {
    * `@Res()` (e não o suporte a `Observable` do Nest) porque o repasse aqui é de
    * **bytes**, não de objetos: o que o agente emitiu tem de chegar ao PWA como
    * saiu, sem uma serialização no meio que reescreva o envelope e sem uma fila
-   * que junte pedaços. Ver `ChatService.conversar`.
+   * que junte pedaços. Ver `ChatService.converse`.
    */
   @Post()
   @UseGuards(ChatThrottlerGuard)
@@ -215,7 +215,7 @@ export class ChatController {
       throw new UnauthorizedException('Missing bearer token');
     }
 
-    await this.chat.conversar(user, dto, bearer, destinoSse(res));
+    await this.chat.converse(user, dto, bearer, destinoSse(res));
   }
 }
 

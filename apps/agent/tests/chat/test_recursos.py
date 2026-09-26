@@ -44,7 +44,7 @@ async def test_o_contexto_sai_uma_vez_por_turno_com_estimativa(settings_factory)
         memorias=[{"id": "m", "content": "vegetariana"}],
     )
 
-    (contexto,) = r.de("context")
+    (contexto,) = r.data_of("context")
     assert contexto["estimated"] is True
     chaves = {segmento["key"] for segmento in contexto["segments"]}
     assert {"system", "memory", "history", "tools"} <= chaves
@@ -69,7 +69,7 @@ async def test_structured_content_vira_artefato_pendurado_na_chamada(settings_fa
         ),
     )
 
-    assert r.de("artifact") == [{"toolCallId": "c1", **metrica}]
+    assert r.data_of("artifact") == [{"toolCallId": "c1", **metrica}]
     # E não entra no contexto do modelo nem vai cru pelo `updates`.
     assert "structured" not in str(r.mensagens_de_tool())
     assert "Calorias hoje" not in str(r.provider.corpos[1]["messages"])
@@ -89,7 +89,7 @@ def test_artefato_desconhecido_vira_relatorio_e_incompleto_nao_vira_nada():
 async def test_o_planejador_desligado_nao_gasta_chamada(settings_factory):
     r = await turno(settings_factory, [[fragmento_de_texto("ok")]])
     assert len(r.provider.corpos) == 1
-    assert r.de("plan") == []
+    assert r.data_of("plan") == []
 
 
 async def test_o_plano_vira_progresso_conforme_as_tools_respondem(settings_factory):
@@ -103,7 +103,7 @@ async def test_o_plano_vira_progresso_conforme_as_tools_respondem(settings_facto
         planejar=True,
     )
 
-    planos = [evento["steps"] for evento in r.de("plan")]
+    planos = [evento["steps"] for evento in r.data_of("plan")]
     assert [p["status"] for p in planos[0]] == ["pending", "pending"]
     assert [p["status"] for p in planos[1]] == ["running", "pending"]
     assert [p["status"] for p in planos[2]] == ["done", "pending"]

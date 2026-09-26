@@ -23,6 +23,15 @@ import {
   textoDaMensagem,
 } from './historico';
 import { adaptadorDeFoto, fotosDaMensagem } from './foto';
+import { TURN_ERROR_EVENT, aiMessageIdIn, separateTurnError } from './turn-error';
+import {
+  openAnswerId,
+  stoppedFromHistory,
+  timingFromDone,
+  timingsFromHistory,
+  voteRowsFromHistory,
+  type TurnTiming,
+} from './turn-timing';
 
 /** O que vai quando a pessoa manda só a foto: o agente recusa mensagem vazia. */
 export const PERGUNTA_DA_FOTO = 'O que tem nesta foto?';
@@ -130,6 +139,15 @@ export type ChatRuntimeExtras = {
   artefatos: Readonly<Record<string, ChatArtifact>>;
   /** O plano do turno em curso ou do último, quando o agente fez um (`plan`). */
   plano: readonly ChatPlanStep[] | null;
+  /** Id da resposta → quanto ela demorou. Do `done` ao vivo, e da linha gravada no F5. */
+  timings: Readonly<Record<string, TurnTiming>>;
+  /** Respostas que a pessoa parou no meio. */
+  stopped: ReadonlySet<string>;
+  /**
+   * O erro de um turno que não chegou a ter resposta (ver `separateTurnError`).
+   * Sem ele, a pergunta ficava na tela sem resposta e sem aviso.
+   */
+  turnError: unknown;
 };
 
 export function useChatRuntime({
@@ -154,6 +172,15 @@ export function useChatRuntime({
   // A resposta recém-chegada tem o id do LangChain; o voto vai para a linha do
   // banco. O evento `persisted` liga os dois.
   const linhas = useRef(new Map<string, string>());
+  const [timings, setTimings] = useState<Record<string, TurnTiming>>({});
+  const [stopped, setStopped] = useState<ReadonlySet<string>>(() => new Set());
+  // Com a conversa de origem, como o plano: o erro de uma não pode aparecer na outra.
+  const [turnError, setTurnError] = useState<{ conversa: string; erro: unknown } | null>(null);
+  // O `done` chega antes do `persisted`, que é quem diz o id da resposta: o tempo
+  // espera aqui até saber a quem pertence.
+  const pendingTiming = useRef<TurnTiming | null>(null);
+  // O id com que a tela desenha a resposta do turno em curso — ver `answerGroups`.
+  const answerId = useRef<string | undefined>(undefined);
   // Em ref, e lidos só no `stream` e no voto: o runtime relê o `stream` a cada
   // envio, e uma troca de conversa no meio de uma geração não pode mudar o
   // destino do que já está no ar.
@@ -179,8 +206,18 @@ export function useChatRuntime({
           message: textoDaMensagem(ultima).trim() || PERGUNTA_DA_FOTO,
           ...(anexadas.length ? { photos: anexadas } : {}),
         };
+    // Aqui, e não no `start`: um turno parado ou recusado antes do `start` deixava
+    // o erro do turno anterior voltar para a tela, abaixo da pergunta nova.
+    setTurnError(null);
+    pendingTiming.current = null;
+    answerId.current = openAnswerId(messages);
     try {
-      yield* streamChat(corpo, { signal: config.abortSignal });
+      for await (const quadro of separateTurnError(
+        streamChat(corpo, { signal: config.abortSignal }),
+      )) {
+        answerId.current ??= aiMessageIdIn(quadro);
+        yield quadro;
+      }
     } finally {
       aoFimDoTurno.current?.();
     }
@@ -194,6 +231,12 @@ export function useChatRuntime({
     try {
       const conversa = await getConversation(threadId);
       const pausa = pausaPendente(conversa.messages);
+      setTimings((antes) => ({ ...antes, ...timingsFromHistory(conversa.messages) }));
+      for (const [tela, linha] of voteRowsFromHistory(conversa.messages)) {
+        linhas.current.set(tela, linha);
+      }
+      const paradas = stoppedFromHistory(conversa.messages);
+      if (paradas.length > 0) setStopped((antes) => new Set([...antes, ...paradas]));
       return {
         messages: historicoParaMensagens(conversa.messages),
         ...(pausa ? { interrupts: [pausa] } : {}),
@@ -241,6 +284,11 @@ export function useChatRuntime({
           setTitulos(corpo.tools as Record<string, string>);
         } else if (tipo === 'start') {
           setPlano(null);
+        } else if (tipo === 'done') {
+          pendingTiming.current = timingFromDone(corpo);
+        } else if (tipo === TURN_ERROR_EVENT) {
+          const conversa = conversaAtual.current;
+          if (conversa) setTurnError({ conversa, erro: dados });
         } else if (tipo === 'plan' && Array.isArray(corpo.steps)) {
           const conversa = conversaAtual.current;
           if (conversa) setPlano({ conversa, passos: corpo.steps as ChatPlanStep[] });
@@ -252,17 +300,34 @@ export function useChatRuntime({
           typeof corpo.messageId === 'string' &&
           typeof corpo.assistantMessageId === 'string'
         ) {
+          // Pelos dois ids: o da última mensagem, que o servidor conhece, e o da
+          // resposta como a tela a desenha, que é por onde o voto e o rodapé perguntam.
+          const tela = answerId.current ?? corpo.messageId;
           linhas.current.set(corpo.messageId, corpo.assistantMessageId);
+          linhas.current.set(tela, corpo.assistantMessageId);
+          const timing = pendingTiming.current;
+          if (timing) {
+            setTimings((antes) => ({ ...antes, [tela]: timing }));
+            pendingTiming.current = null;
+          }
         }
       },
     },
   });
+
+  const markStopped = useCallback((messageId: string) => {
+    setStopped((antes) => new Set([...antes, messageId]));
+  }, []);
 
   return {
     runtime,
     titulos,
     artefatos,
     plano: plano && plano.conversa === conversationId ? plano.passos : null,
+    timings,
+    stopped,
+    turnError: turnError && turnError.conversa === conversationId ? turnError.erro : null,
+    markStopped,
     voto: {
       pendente: votoPendente,
       dispensar: () => setVotoPendente(null),

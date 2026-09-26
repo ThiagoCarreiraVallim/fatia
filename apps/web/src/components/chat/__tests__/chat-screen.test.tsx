@@ -435,6 +435,180 @@ describe('ChatScreen', () => {
     expect(screen.queryByText(/Bearer recusado/)).not.toBeInTheDocument();
   });
 
+  it('erro antes da primeira palavra aparece no turno de agora, e não na resposta anterior', async () => {
+    montar();
+    await enviar('oi');
+    fontes[0].emitir(fragmento('ai-1', 'Olá!'), { event: 'done', data: { status: 'completed' } });
+    fontes[0].fechar();
+    expect(await screen.findByText('Olá!')).toBeInTheDocument();
+
+    await enviar('quanto comi hoje?');
+    fontes[1].emitir(
+      { event: 'error', data: { code: 'AI_QUOTA_EXCEEDED', message: 'cota' } },
+      { event: 'done', data: { status: 'error' } },
+    );
+    fontes[1].fechar();
+
+    // Um aviso só, e DEPOIS da pergunta que falhou. Sem a separação, o runtime
+    // marcava como falha a última resposta que conhecia — a "Olá!", que estava
+    // certa — e o cartão aparecia acima da pergunta de agora.
+    const avisos = await screen.findAllByText('A resposta falhou');
+    expect(avisos).toHaveLength(1);
+    const pergunta = screen.getByText('quanto comi hoje?');
+    expect(
+      pergunta.compareDocumentPosition(avisos[0]) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('mostra quanto a resposta demorou, com o tempo que o agente mediu', async () => {
+    montar();
+    await enviar('oi');
+    fontes[0].emitir(
+      fragmento('ai-1', 'Olá!'),
+      { event: 'done', data: { status: 'completed', durationMs: 4180, ttftMs: 950 } },
+      { event: 'persisted', data: { messageId: 'ai-1', assistantMessageId: 'linha-1' } },
+    );
+    fontes[0].fechar();
+
+    expect(await screen.findByText('4,2 s')).toBeInTheDocument();
+    expect(screen.getByText('950 ms')).toBeInTheDocument();
+  });
+
+  it('num turno com tool, o tempo aparece na resposta que a tela desenha', async () => {
+    // Duas mensagens de IA no turno (a que pede a tool e a que responde), e o
+    // assistant-ui as junta numa só com o id da PRIMEIRA. O `persisted` traz o id
+    // da última: guardar por ele deixava o rodapé procurando um id que não existe.
+    montar();
+    await enviar('quanto comi hoje?');
+    fontes[0].emitir(
+      {
+        event: 'updates',
+        data: {
+          agente: {
+            messages: [
+              {
+                type: 'ai',
+                id: 'ai-1',
+                content: '',
+                tool_calls: [{ id: 'c1', name: 'list_meals', args: {} }],
+              },
+            ],
+          },
+        },
+      },
+      {
+        event: 'updates',
+        data: {
+          ferramentas: {
+            messages: [
+              { type: 'tool', id: 't1', tool_call_id: 'c1', name: 'list_meals', content: '[]' },
+            ],
+          },
+        },
+      },
+      fragmento('ai-2', 'Nada ainda hoje.'),
+      { event: 'done', data: { status: 'completed', durationMs: 4180, ttftMs: 950 } },
+      { event: 'persisted', data: { messageId: 'ai-2', assistantMessageId: 'linha-1' } },
+    );
+    fontes[0].fechar();
+
+    expect(await screen.findByText('Nada ainda hoje.')).toBeInTheDocument();
+    expect(await screen.findByText('4,2 s')).toBeInTheDocument();
+  });
+
+  it('depois do F5, confirmação e retomada viram uma resposta, com o tempo e o estado da última parte', async () => {
+    const linha = (id: string, extra: Partial<ChatConversation['messages'][number]>) => ({
+      id,
+      role: 'assistant' as const,
+      content: '',
+      tools: null,
+      metadata: null,
+      runId: null,
+      review: null,
+      createdAt: '2026-09-25T12:00:01Z',
+      ...extra,
+    });
+    conversaGravada = {
+      id: CONVERSA,
+      title: 'Almoço',
+      createdAt: '2026-09-25T12:00:00Z',
+      updatedAt: '2026-09-25T12:00:00Z',
+      messages: [
+        linha('m1', { role: 'user', content: 'registra o almoço' }),
+        linha('m2', {
+          tools: [{ name: 'log_meal' }],
+          metadata: { status: 'resolved', durationMs: 1100 },
+        }),
+        linha('m3', { content: 'Registrado.', metadata: { status: 'stopped', durationMs: 7700 } }),
+      ],
+    };
+    montar();
+
+    expect(await screen.findByText('Resposta interrompida')).toBeInTheDocument();
+    // O tempo do pedido de confirmação não pode passar pelo da resposta.
+    expect(screen.queryByText('1,1 s')).not.toBeInTheDocument();
+  });
+
+  it('parar um turno antes de ele começar não traz de volta o erro do turno anterior', async () => {
+    montar();
+    await enviar('oi');
+    fontes[0].emitir(
+      { event: 'error', data: { code: 'AI_QUOTA_EXCEEDED', message: 'cota' } },
+      { event: 'done', data: { status: 'error' } },
+    );
+    fontes[0].fechar();
+    expect(await screen.findByText('A resposta falhou')).toBeInTheDocument();
+
+    const user = await enviar('e agora?');
+    await user.click(await screen.findByRole('button', { name: 'Parar resposta' }));
+
+    await waitFor(() => expect(screen.queryByText('A resposta falhou')).not.toBeInTheDocument());
+  });
+
+  it('parar a resposta deixa a etiqueta de interrompida, e não um fim normal', async () => {
+    montar();
+    const user = await enviar('me conta do meu almoço');
+    fontes[0].emitir(fragmento('ai-1', 'Seu almoço teve 42 g de'));
+    expect(await screen.findByText('Seu almoço teve 42 g de')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Parar resposta' }));
+
+    expect(await screen.findByText('Resposta interrompida')).toBeInTheDocument();
+  });
+
+  it('depois do F5, a resposta parada e o tempo gravado voltam', async () => {
+    const linha = (id: string, extra: Partial<ChatConversation['messages'][number]>) => ({
+      id,
+      role: 'assistant' as const,
+      content: '',
+      tools: null,
+      metadata: null,
+      runId: null,
+      review: null,
+      createdAt: '2026-09-25T12:00:01Z',
+      ...extra,
+    });
+    conversaGravada = {
+      id: CONVERSA,
+      title: 'Almoço',
+      createdAt: '2026-09-25T12:00:00Z',
+      updatedAt: '2026-09-25T12:00:00Z',
+      messages: [
+        linha('m1', { role: 'user', content: 'oi' }),
+        linha('m2', {
+          content: 'Olá!',
+          metadata: { status: 'completed', durationMs: 2300, ttftMs: 400 },
+        }),
+        linha('m3', { role: 'user', content: 'me conta do almoço' }),
+        linha('m4', { content: 'Seu almoço teve', metadata: { status: 'stopped' } }),
+      ],
+    };
+    montar();
+
+    expect(await screen.findByText('2,3 s')).toBeInTheDocument();
+    expect(screen.getByText('Resposta interrompida')).toBeInTheDocument();
+  });
+
   it('F5 com pausa pendente traz o cartão de volta', async () => {
     conversaGravada = {
       id: CONVERSA,
