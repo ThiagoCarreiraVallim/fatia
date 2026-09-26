@@ -1,4 +1,4 @@
-import { Role } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import { UserProvisioningService } from '../user-provisioning.service';
 import type { PrismaService } from '../../common/prisma.service';
 import type { LogtoJwtPayload } from '../jwt-validation.service';
@@ -57,6 +57,38 @@ describe('UserProvisioningService', () => {
         where: { logtoSub: 'logto|xyz' },
         select: { id: true, email: true, role: true, timezone: true },
       });
+    });
+
+    it('primeiro acesso com requisições paralelas: quem perde a corrida devolve o usuário criado', async () => {
+      const criado = {
+        id: 'user-3',
+        email: 'user@example.com',
+        role: Role.USER,
+        timezone: 'America/Sao_Paulo',
+      };
+      prisma.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(criado);
+      prisma.user.create.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError(
+          'Unique constraint failed on the fields: (`email`)',
+          {
+            code: 'P2002',
+            clientVersion: 'test',
+          },
+        ),
+      );
+
+      await expect(service.provision(makePayload())).resolves.toEqual(criado);
+    });
+
+    it('conflito de unique sem usuário pelo sub é de outra conta, e sobe', async () => {
+      const conflito = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+      });
+      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.user.create.mockRejectedValue(conflito);
+
+      await expect(service.provision(makePayload())).rejects.toBe(conflito);
     });
 
     it('creates a new user when no row matches the logtoSub', async () => {

@@ -43,6 +43,8 @@ class AgentSettings(BaseSettings):
     ai_model_text: str = ""
     ai_model_vision: str = ""
     ai_model_embedding: str = ""
+    # O ditado do chat (#141). Endpoint OpenAI-compatível de `/audio/transcriptions`.
+    ai_model_transcription: str = ""
 
     # Visão em CPU local leva dezenas de segundos. O default do httpx (5s) faria
     # isso parecer "o modelo não responde" quando na verdade o cliente desistiu.
@@ -65,6 +67,17 @@ class AgentSettings(BaseSettings):
     # não um modelo em CPU. Uma tool que não responde em meio minuto é falha, e
     # esperar dois minutos por ela só faria o chat parecer travado.
     mcp_timeout_s: float = 30.0
+
+    # O Postgres da Fatia, onde o checkpointer guarda o estado das conversas no
+    # schema `agent_checkpoint` (ADR 023). Vazio = estado em memória: aceitável
+    # em teste e em dev, e defeito em produção — uma pausa não sobrevive a um
+    # restart. O `/health` expõe qual dos dois está valendo.
+    agent_checkpoint_database_url: str = ""
+
+    # Uma chamada a mais ao modelo por turno, para planejar pedidos de vários
+    # passos. Desligado por padrão: num modelo local pequeno são segundos de tela
+    # parada antes da primeira palavra. Ver `chat/planejador.py`.
+    agent_chat_planner: bool = False
 
 
 AGENT_API_KEY_HEADER = "x-fatia-agent-key"

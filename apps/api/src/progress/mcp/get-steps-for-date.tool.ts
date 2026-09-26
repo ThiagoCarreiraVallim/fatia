@@ -18,7 +18,7 @@ export class GetStepsForDateTool implements McpToolDef {
   ) {}
   readonly name = 'get_steps_for_date';
   readonly title = 'Passos de um dia';
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
   readonly description = 'Retorna o valor efetivo de passos para um dia (max entre os logs).';
   readonly inputSchema = {

@@ -12,7 +12,7 @@ export class ListMyGroupsTool implements McpToolDef {
   constructor(private readonly groups: GroupService) {}
   readonly name = 'list_my_groups';
   readonly title = 'Listar meus grupos';
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
   readonly description =
     'Lista as academias e grupos de que o usuário participa, com o papel dele em cada um e a ' +

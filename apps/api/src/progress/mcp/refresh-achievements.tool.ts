@@ -15,7 +15,7 @@ export class RefreshAchievementsTool implements McpToolDef {
   // Escrita: cria as linhas de `UserAchievement` que passaram a valer. Fica fora do grupo de
   // leitura de propósito — era `get_today_summary` quem desbloqueava, e uma tool anotada como
   // `readOnlyHint: true` gravando é surpresa desagradável para quem lê a anotação.
-  readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
   readonly description =
     'Reavalia o catálogo de conquistas e desbloqueia as que o usuário já mereceu, devolvendo as ' +

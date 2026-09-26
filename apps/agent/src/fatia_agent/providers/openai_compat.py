@@ -22,12 +22,16 @@ from ..allowed_models import (
     unreviewed_model_reason,
 )
 from .base import (
+    ChatCapability,
     EmbeddingCapability,
     TextCapability,
     TextDelta,
     ToolCall,
     ToolChatCapability,
+    Transcription,
+    TranscriptionCapability,
     TurnEnd,
+    Usage,
     VisionCapability,
 )
 from .errors import (
@@ -48,7 +52,7 @@ RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
 
 
 class OpenAICompatProvider:
-    """Atende `TextCapability`, `VisionCapability` e `EmbeddingCapability`."""
+    """Atende texto, visão, embedding, chat com tools e transcrição."""
 
     def __init__(
         self,
@@ -58,6 +62,7 @@ class OpenAICompatProvider:
         text_model: str = "",
         vision_model: str = "",
         embedding_model: str = "",
+        transcription_model: str = "",
         timeout_s: float = 120.0,
         max_retries: int = 2,
         retry_backoff_s: float = 0.5,
@@ -66,6 +71,7 @@ class OpenAICompatProvider:
         self._text_model = text_model
         self._vision_model = vision_model
         self._embedding_model = embedding_model
+        self._transcription_model = transcription_model
         self._max_retries = max_retries
         self._retry_backoff_s = retry_backoff_s
 
@@ -186,8 +192,12 @@ class OpenAICompatProvider:
         messages: Sequence[dict[str, Any]],
         *,
         tools: Sequence[dict[str, Any]] = (),
+        capacidade: ChatCapability = "text",
     ) -> AsyncIterator[TextDelta | TurnEnd]:
         """Conversa em streaming, com tools. Atende `ToolChatCapability`.
+
+        `capacidade="vision"` quando a conversa leva foto: o turno inteiro vai para
+        `AI_MODEL_VISION`, que por isso precisa aceitar tools também.
 
         Passa por `_require_model` como todas as outras capacidades — é o único
         ponto por onde a revisão de destino e de modelo da #136 acontece, e o
@@ -198,17 +208,27 @@ class OpenAICompatProvider:
         indistinguível de "o modelo está pensando" para quem está olhando. Falha
         antes do primeiro byte vira erro nomeado como em qualquer outra chamada.
         """
-        model = self._require_model("text", self._text_model)
+        model = self._require_model(
+            capacidade, self._vision_model if capacidade == "vision" else self._text_model
+        )
         payload: dict[str, Any] = {
             "model": model,
             "messages": list(messages),
             "stream": True,
+            # Sem isto o endpoint de stream **não** manda bloco de `usage` — a
+            # resposta inteira sai sem uma linha sobre o que custou, e o turno
+            # entra no livro-caixa do `apps/api` como custo não medido. É o flag
+            # documentado pela OpenAI e implementado pelo LM Studio (verificado
+            # contra o local: o último fragmento vem com `choices: []` e
+            # `usage`). Provedor que não o conheça ignora um campo a mais.
+            "stream_options": {"include_usage": True},
         }
         if tools:
             payload["tools"] = list(tools)
 
         acumulador = _AcumuladorDeToolCalls()
         finish_reason = "stop"
+        uso: Usage | None = None
 
         try:
             async with self._client.stream("POST", "chat/completions", json=payload) as response:
@@ -228,7 +248,28 @@ class OpenAICompatProvider:
                     if dado == "[DONE]":
                         break
 
-                    bloco = _bloco_de_stream(dado)
+                    fragmento = _fragmento_de_stream(dado)
+                    # **Erro dentro do stream, com HTTP 200.** Tem de ser lido
+                    # antes de qualquer outra coisa: o `if` de status acima só
+                    # pega o que falhou antes de o stream abrir, e o provedor que
+                    # aceita a requisição e recusa a geração manda isto — o LM
+                    # Studio, com `event: error` e um objeto `{"error": {...}}`.
+                    #
+                    # Sem este ramo o quadro caía no caminho normal, não tinha
+                    # `choices`, e virava fragmento vazio: o turno terminava com
+                    # zero token, sem exceção e sem `code`. Na tela isso aparecia
+                    # como "não consegui fechar uma resposta" — uma frase que diz
+                    # que o modelo tentou, quando o provedor nem gerou. Custou
+                    # uma sessão de depuração inteira; o motivo estava no fio,
+                    # sendo descartado.
+                    _exigir_sem_erro(fragmento)
+
+                    # O bloco de `usage` chega **no fim e sozinho**, com
+                    # `choices: []`. Ler antes de escolher o choice é o que
+                    # impede que ele seja descartado como fragmento vazio.
+                    uso = _uso_do_fragmento(fragmento, padrao=model) or uso
+
+                    bloco = _primeiro_choice(fragmento)
                     delta = bloco.get("delta")
                     if isinstance(delta, dict):
                         conteudo = delta.get("content")
@@ -259,7 +300,40 @@ class OpenAICompatProvider:
                 f"O modelo '{model}' parou por limite de tokens; a resposta veio pela metade."
             )
 
-        yield TurnEnd(tool_calls=acumulador.resultado(), finish_reason=finish_reason)
+        yield TurnEnd(tool_calls=acumulador.resultado(), finish_reason=finish_reason, usage=uso)
+
+    async def transcribe(self, audio: bytes, *, media_type: str) -> Transcription:
+        """Áudio → texto, pelo `/audio/transcriptions` do contrato OpenAI. Atende a #141.
+
+        `verbose_json` porque é o único formato que devolve `duration`, e a
+        duração é a unidade de preço da transcrição (`ai-pricing.ts`). O nome do
+        arquivo leva a extensão do formato: há servidor compatível que escolhe o
+        decodificador por ela, e não pelo `content-type`.
+
+        O áudio vive nesta chamada e em mais lugar nenhum (ADR 020).
+        """
+        model = self._require_model("transcription", self._transcription_model)
+        extensao = media_type.split("/")[-1].split(";")[0] or "webm"
+        response = await self._request(
+            "POST",
+            "audio/transcriptions",
+            files={"file": (f"audio.{extensao}", audio, media_type)},
+            data={"model": model, "response_format": "verbose_json", "language": "pt"},
+        )
+        body = _json_body(response)
+        texto = body.get("text")
+        if not isinstance(texto, str):
+            raise AIResponseUnparseable(
+                f"'/audio/transcriptions' devolveu {_describe(texto)} em 'text'."
+            )
+        duracao = body.get("duration")
+        return Transcription(
+            text=texto.strip(),
+            duration_seconds=float(duracao)
+            if isinstance(duracao, (int, float)) and not isinstance(duracao, bool)
+            else None,
+            model=model,
+        )
 
     async def list_models(self) -> list[str]:
         """Usado pelo teste de fumaça e pelo diagnóstico — não é capacidade."""
@@ -337,12 +411,20 @@ class OpenAICompatProvider:
         return content
 
     async def _request(
-        self, method: str, path: str, json: dict[str, object] | None = None
+        self,
+        method: str,
+        path: str,
+        json: dict[str, object] | None = None,
+        *,
+        files: dict[str, tuple[str, bytes, str]] | None = None,
+        data: dict[str, str] | None = None,
     ) -> httpx.Response:
         pending: AIProviderError | None = None
         for attempt in range(self._max_retries + 1):
             try:
-                response = await self._client.request(method, path, json=json)
+                response = await self._client.request(
+                    method, path, json=json, files=files, data=data
+                )
             except httpx.TimeoutException as exc:
                 pending = AIProviderTimeout(
                     f"O provedor não respondeu {method} {path} dentro de AI_TIMEOUT_S ({exc})."
@@ -386,7 +468,13 @@ class OpenAICompatProvider:
 
 def _capacidades_atendidas(
     provider: "OpenAICompatProvider",
-) -> tuple[TextCapability, VisionCapability, EmbeddingCapability, ToolChatCapability]:
+) -> tuple[
+    TextCapability,
+    VisionCapability,
+    EmbeddingCapability,
+    ToolChatCapability,
+    TranscriptionCapability,
+]:
     """Conformidade com os `Protocol` da `base.py`, conferida pelo type checker.
 
     Protocolo é estrutural: nada obriga esta classe a continuar batendo com ele.
@@ -395,7 +483,7 @@ def _capacidades_atendidas(
     só quando o grafo recebesse o objeto errado, em runtime. `runtime_checkable`
     também não pegaria: ele só olha se o método existe.
     """
-    return provider, provider, provider, provider
+    return provider, provider, provider, provider, provider
 
 
 class _AcumuladorDeToolCalls:
@@ -466,11 +554,12 @@ def _dado_do_evento_sse(linha: str) -> str | None:
     return linha[len("data:") :].strip()
 
 
-def _bloco_de_stream(dado: str) -> dict[str, Any]:
-    """`{"choices": [{...}]}` → o primeiro choice, ou `{}` quando não há.
+def _fragmento_de_stream(dado: str) -> dict[str, Any]:
+    """Uma linha `data:` → o objeto inteiro do fragmento.
 
-    Fragmento sem `choices` é comum e legítimo: alguns gateways abrem o stream
-    com um bloco só de `usage` ou de metadados.
+    O objeto **inteiro**, e não só o choice, porque `usage` e `model` moram na
+    raiz: extrair o choice aqui dentro descartava o bloco final de custo antes
+    de alguém poder lê-lo.
     """
     try:
         bruto: object = jsonlib.loads(dado)
@@ -480,12 +569,81 @@ def _bloco_de_stream(dado: str) -> dict[str, Any]:
         ) from exc
     if not isinstance(bruto, dict):
         raise AIResponseUnparseable(f"Fragmento do stream não é objeto ({_describe(bruto)}).")
+    return bruto
 
-    choices = bruto.get("choices")
+
+def _exigir_sem_erro(fragmento: dict[str, Any]) -> None:
+    """Levanta quando o fragmento é um objeto de erro em vez de um pedaço de resposta.
+
+    `AIProviderRefused` com 200, e o status é honesto: o provedor **respondeu** —
+    aceitou a requisição, abriu o stream e recusou gerar. É a mesma família do
+    ramo de status, porque a ação de quem lê é a mesma (tentar de novo, ou olhar o
+    log), e o `code` que chega ao PWA é o mesmo `AI_PROVIDER_REFUSED`.
+
+    A mensagem do provedor entra inteira **no log**, e não na tela: ela é a única
+    pista do que aconteceu, e é onde apareceu "failed to parse grammar" quando o
+    catálogo ganhou uma tool cujo schema o llama.cpp não compila. O `errors.py`
+    deste pacote já registra que a mensagem é para quem lê o log; o PWA mostra o
+    texto do `code`.
+    """
+    erro = fragmento.get("error")
+    if erro is None:
+        return
+
+    if isinstance(erro, dict):
+        mensagem = erro.get("message")
+        detalhe = mensagem if isinstance(mensagem, str) and mensagem else jsonlib.dumps(erro)
+    else:
+        detalhe = str(erro)
+
+    raise AIProviderRefused(
+        f"O provedor recusou a geração no meio do stream: {detalhe}",
+        status_code=200,
+    )
+
+
+def _primeiro_choice(fragmento: dict[str, Any]) -> dict[str, Any]:
+    """O primeiro choice, ou `{}` quando não há.
+
+    Fragmento sem `choices` é comum e legítimo: alguns gateways abrem o stream
+    com um bloco só de metadados, e o de `usage` fecha com `choices: []`.
+    """
+    choices = fragmento.get("choices")
     if not isinstance(choices, list) or not choices:
         return {}
     primeiro = choices[0]
     return primeiro if isinstance(primeiro, dict) else {}
+
+
+def _uso_do_fragmento(fragmento: dict[str, Any], *, padrao: str) -> Usage | None:
+    """O bloco `usage` do fragmento, quando ele veio.
+
+    **Não levanta erro quando o formato surpreende.** Custo é contabilidade, e
+    derrubar uma conversa que já está na tela porque um gateway mandou
+    `prompt_tokens` como string seria trocar um dado a menos no livro-caixa por
+    uma resposta perdida. Campo que não é inteiro vira `None`, que o `apps/api`
+    já sabe tratar como não medido.
+
+    `model` da raiz do fragmento, com `AI_MODEL_TEXT` como reserva: é o nome de
+    quem executou que precisa casar com a tabela de preço.
+    """
+    uso = fragmento.get("usage")
+    if not isinstance(uso, dict):
+        return None
+
+    modelo = fragmento.get("model")
+    return Usage(
+        model=modelo if isinstance(modelo, str) and modelo else padrao,
+        input_units=_inteiro(uso.get("prompt_tokens")),
+        output_units=_inteiro(uso.get("completion_tokens")),
+    )
+
+
+def _inteiro(valor: object) -> int | None:
+    """`bool` é `int` em Python — `{"prompt_tokens": true}` viraria 1 sem esta guarda."""
+    if isinstance(valor, bool) or not isinstance(valor, int):
+        return None
+    return valor
 
 
 def _floats(embedding: list[Any]) -> list[float]:

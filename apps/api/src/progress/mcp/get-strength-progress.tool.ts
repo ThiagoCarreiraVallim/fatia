@@ -13,7 +13,7 @@ export class GetStrengthProgressTool implements McpToolDef {
   constructor(private readonly progress: ProgressService) {}
   readonly name = 'get_strength_progress';
   readonly title = 'Evolução de força';
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
   readonly description = 'Evolução de carga em um exercício de força (max_weight, 1RM ou volume).';
   readonly inputSchema = {

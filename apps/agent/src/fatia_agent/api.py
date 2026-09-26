@@ -1,62 +1,85 @@
 """Superfície HTTP do agente.
 
-Duas rotas de diagnóstico (`/health`, `/capabilities`) e duas de inferência:
-`/recognize-meal` (#139) e `/chat` (#248). O que a superfície estabelece é o
-**contrato de erro**: todo `AIProviderError`, todo `McpError` e todo corpo
-inválido viram um envelope `{"error": {"code", "message"}}` com um `code`
-estável, que é o que o NestJS traduz para o cliente cair no caminho manual.
+Duas rotas de diagnóstico (`/health`, `/capabilities`) e quatro de inferência:
+`/recognize-meal` (#139), `/chat` (#248, ADR 023), `/title` e `/transcribe`
+(#141). O que a superfície estabelece é o **contrato de erro**: todo
+`AIProviderError`, todo `McpError` e todo corpo inválido viram um envelope
+`{"error": {"code", "message"}}` com um `code` estável, que é o que o NestJS
+traduz para o cliente cair no caminho manual.
 
 No `/chat` isso vale para **toda** recusa anterior ao primeiro byte, sem
-exceção — foi a promessa que a #248 escreveu e não cumpriu em dois caminhos (a
-credencial do agente e a validação do corpo, que saíam como `{"detail": ...}`).
-As recusas de formato de imagem do `/recognize-meal` continuam como
+exceção — credencial do agente, corpo inválido, Bearer recusado pelo `/mcp`,
+retomada que não responde à pausa pendente (409). As recusas de formato de
+imagem e de áudio do `/recognize-meal` e do `/transcribe` continuam como
 `HTTPException`: são o contrato da #139, e o NestJS as traduz por status.
 
-As duas rotas de inferência são autenticadas por segredo compartilhado com o
+As quatro rotas de inferência são autenticadas por segredo compartilhado com o
 `apps/api` — ver `settings.agent_auth_unavailable_reason`. É a fronteira de
 custo: rota que dispara inferência paga não pode ser anônima (ADR 018).
 
-**A identidade do usuário é exigência de uma rota e ausência deliberada na
-outra**, e a diferença é o que cada uma precisa alcançar:
+**A identidade do usuário é exigência de uma rota e ausência deliberada nas
+outras**, e a diferença é o que cada uma precisa alcançar:
 
-- `/recognize-meal` **não** recebe identidade. Ela olha uma foto e devolve
-  candidatos; não fala com o banco nem com o `/mcp`. Um Bearer de usuário ali só
-  aumentaria o estrago de um comprometimento, sem comprar nada.
-- `/chat` **exige** o Bearer do usuário, e o encaminha ao `/mcp`. É a inversão
-  registrada na ADR 021, e ela não é conveniência: é a única forma de o agente
-  alcançar dado sem ganhar credencial de banco — o que criaria um **segundo**
-  ponto de isolamento por `userId`, num serviço em outra linguagem e sem os
-  testes que protegem o primeiro (ADR 010 e ADR 015).
+- `/recognize-meal`, `/title` e `/transcribe` **não** recebem identidade. Olham
+  uma foto, um texto ou um áudio e devolvem sugestão; não falam com o banco nem
+  com o `/mcp`. Um Bearer de usuário ali só aumentaria o estrago de um
+  comprometimento, sem comprar nada.
+- `/chat` **exige** o Bearer do usuário, o encaminha ao `/mcp` e deriva dele o
+  dono da conversa (`get_me`), nunca do corpo. É a inversão registrada na ADR
+  021, e ela não é conveniência: é a única forma de o agente alcançar dado sem
+  ganhar credencial de domínio — o que criaria um **segundo** ponto de
+  isolamento por `userId`, num serviço em outra linguagem e sem os testes que
+  protegem o primeiro (ADR 010 e ADR 015).
 
-Até a #248, este docstring afirmava que o agente não recebia identidade de
-usuário, ponto. A frase valia para a única rota que existia; virou meia verdade
-no dia em que o chat entrou, e doc que contradiz o código é defeito.
+O `/chat` lê e escreve em três camadas (ADR 022) e **tem estado**: o grafo
+pausa em `interrupt()` — confirmar uma escrita, responder a `ask_user`, pedir
+mais orçamento — e a thread `{userId}:{conversationId}` espera no checkpointer
+do schema `agent_checkpoint` (ADR 023). O que o checkpointer grava é o estado
+da conversa; o Bearer e o provedor viajam no runtime context, que não é
+serializado, e a foto do turno entra só no prompt, com uma marca no estado.
 """
 
 import base64
 import binascii
+import json
 import secrets
-from collections.abc import AsyncIterator
-from typing import Annotated
+import uuid
+from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Annotated, Any
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import UUID4, BaseModel, Field, model_validator
 
 from . import __version__
 from .allowed_models import unreviewed_host_reason, unreviewed_models, usable_models
-from .chat import build_mcp_client, somente_leitura, stream_chat_events
+from .chat import (
+    Checkpointer,
+    ContextoDoTurno,
+    GrafoDaConversa,
+    McpClient,
+    build_mcp_client,
+    interrupcao_pendente,
+    montar_grafo,
+    stream_chat_events,
+    thread_da_conversa,
+    todas_permitidas,
+)
 from .chat.errors import (
     McpError,
     McpNotConfigured,
     McpRefused,
+    McpResponseUnparseable,
     McpTimeout,
     McpUnauthenticated,
     McpUnauthorized,
     McpUnreachable,
 )
 from .chat.graph import MAX_CARACTERES_POR_MENSAGEM
+from .chat.state import FotoDoTurno
+from .chat.titulo import gerar_titulo
 from .providers import build_provider
 from .providers.errors import (
     AgentKeyRejected,
@@ -91,8 +114,16 @@ class RecognizeMealRequest(BaseModel):
     media_type: str = "image/jpeg"
 
 
+class TitleRequest(BaseModel):
+    """A primeira mensagem de uma conversa. Sem identidade: é só texto a nomear."""
+
+    model_config = {"extra": "forbid"}
+
+    text: Annotated[str, Field(min_length=1, max_length=MAX_CARACTERES_POR_MENSAGEM)]
+
+
 class ChatMessage(BaseModel):
-    """Uma mensagem já trocada. Quem persiste é o NestJS (sub-issue 2/3 da #247).
+    """Uma fala já gravada pelo `apps/api`, para semear uma thread fria.
 
     **Sem teto de tamanho aqui**, ao contrário de `message`: o histórico carrega
     a resposta do modelo, e o tamanho dela não é de ninguém. Quem limita é o
@@ -105,24 +136,92 @@ class ChatMessage(BaseModel):
     content: Annotated[str, Field(min_length=1)]
 
 
-class ChatRequest(BaseModel):
-    """A mensagem de agora e o histórico. **Nenhum campo de identidade.**
-
-    O Bearer vem no header `Authorization`, e não no corpo: `extra: "forbid"`
-    recusa qualquer campo inventado, e um token no corpo acabaria em log de
-    requisição, em relatório de validação e no histórico que o NestJS persiste —
-    exatamente os três lugares onde ele não pode estar (ADR 021).
-
-    Só `message` tem teto duro, e ele é 422: a pessoa acabou de escrever, está
-    olhando para o campo, e o cliente sabe contar caracteres antes de enviar. O
-    histórico é cortado em silêncio pelo grafo, porque recusá-lo mataria a
-    conversa por algo que quem está conversando não pode consertar.
-    """
+class ChatMemory(BaseModel):
+    """Uma anotação que a pessoa pediu para o assistente lembrar (`UserMemory`)."""
 
     model_config = {"extra": "forbid"}
 
-    message: Annotated[str, Field(min_length=1, max_length=MAX_CARACTERES_POR_MENSAGEM)]
+    id: Annotated[str, Field(min_length=1, max_length=64)]
+    content: Annotated[str, Field(min_length=1, max_length=500)]
+
+
+MAX_FOTOS_POR_MENSAGEM = 3
+
+# O ditado é curto por natureza: dois minutos de opus mal passam de 1 MB. O teto
+# é de bytes porque a duração só se sabe depois de pagar a transcrição.
+MAX_AUDIO_BYTES = 4 * 1024 * 1024
+AUDIO_ACEITO = frozenset(
+    {"audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav", "audio/x-m4a"}
+)
+
+
+class ChatPhoto(BaseModel):
+    """Uma foto do turno, em base64, **já sem EXIF** — removido no aparelho (ADR 020)."""
+
+    model_config = {"extra": "forbid", "populate_by_name": True}
+
+    media_type: Annotated[str, Field(alias="mediaType")]
+    data: Annotated[str, Field(min_length=1)]
+
+
+class ChatResume(BaseModel):
+    """A resposta a uma pausa: qual pausa (`interruptId`) e o que a pessoa disse.
+
+    O id não é enfeite. Sem ele, uma resposta dada a uma pergunta barata poderia
+    ser reenviada contra uma confirmação de escrita — o grafo retomaria a pausa
+    que estivesse pendente, fosse qual fosse. Ver `chat_route`.
+    """
+
+    model_config = {"extra": "forbid", "populate_by_name": True}
+
+    interrupt_id: Annotated[str, Field(alias="interruptId", min_length=1, max_length=200)]
+    value: Any = None
+
+
+class ChatRequest(BaseModel):
+    """Um turno novo (`message`) **ou** a retomada de uma pausa (`resume`).
+
+    **Nenhum campo de identidade.** O Bearer vem no header, e o dono da conversa
+    sai dele (`get_me`), não do corpo: `extra: "forbid"` recusa qualquer campo
+    inventado, e um token ou um `userId` no corpo acabariam em log de requisição
+    e em relatório de validação (ADR 021 e 023).
+
+    `conversationId` é gerado pelo PWA na primeira mensagem, e é ele que torna
+    a conversa retomável: uma thread com id inventado aqui não teria como
+    receber a resposta a uma pergunta.
+
+    `history` é o que o `apps/api` tem gravado. Só é lido quando a thread está
+    fria — ver `hidratar` em `chat/graph.py`.
+    """
+
+    model_config = {"extra": "forbid", "populate_by_name": True}
+
+    conversation_id: Annotated[UUID4, Field(alias="conversationId")]
+    message: Annotated[str | None, Field(min_length=1, max_length=MAX_CARACTERES_POR_MENSAGEM)] = (
+        None
+    )
+    resume: ChatResume | None = None
     history: Annotated[list[ChatMessage], Field(default_factory=list)]
+    # O teto é o mesmo do `apps/api`: acima disso a memória deixa de ser
+    # "o que importa lembrar" e vira um segundo histórico no prompt.
+    memories: Annotated[list[ChatMemory], Field(default_factory=list, max_length=50)]
+    # O fuso do perfil, que o `apps/api` já conhece — vira a data de hoje no
+    # prompt. Não é identidade: o nome de um fuso é grosso demais para apontar
+    # para alguém.
+    timezone: str | None = None
+    # Vivem só neste turno: o checkpoint recebe uma marca no lugar (ver
+    # `FotoDoTurno` em `chat/state.py`).
+    photos: Annotated[
+        list[ChatPhoto], Field(default_factory=list, max_length=MAX_FOTOS_POR_MENSAGEM)
+    ]
+
+    @model_validator(mode="after")
+    def _um_dos_dois(self) -> "ChatRequest":
+        if (self.message is None) == (self.resume is None):
+            raise ValueError("envie 'message' (turno novo) ou 'resume' (resposta a uma pausa)")
+        if self.photos and self.message is None:
+            raise ValueError("foto só acompanha uma mensagem nova, não a resposta a uma pausa")
+        return self
 
 
 # 503: falta configuração nossa. 504: o provedor demorou. 502: o provedor
@@ -156,7 +255,21 @@ _STATUS_BY_MCP_ERROR: dict[type[McpError], int] = {
 
 def create_app(settings: AgentSettings | None = None) -> FastAPI:
     resolved = settings if settings is not None else AgentSettings()
-    app = FastAPI(title="Fatia Agent", version=__version__)
+    checkpointer = Checkpointer(resolved.agent_checkpoint_database_url)
+    grafos: list[GrafoDaConversa] = []
+
+    async def grafo() -> GrafoDaConversa:
+        """O grafo do processo, compilado com o checkpointer na primeira conversa."""
+        if not grafos:
+            grafos.append(montar_grafo(await checkpointer.obter()))
+        return grafos[0]
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
+        yield
+        await checkpointer.fechar()
+
+    app = FastAPI(title="Fatia Agent", version=__version__, lifespan=lifespan)
 
     @app.exception_handler(AIProviderError)
     async def _ai_error_handler(_request: Request, exc: AIProviderError) -> JSONResponse:
@@ -244,6 +357,8 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
                 # troca de `AI_MODEL_*` no painel é silenciosa por natureza.
                 "unreviewed_models": unreviewed_models(resolved),
             },
+            # Em memória, uma pausa do chat não sobrevive a um restart (ADR 023).
+            "checkpointer": {"persistent": checkpointer.persistente},
         }
 
     @app.get("/capabilities")
@@ -261,7 +376,6 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             # Modelo não revisado sai como ausente, não como configurado: a rota
             # anuncia o que a próxima chamada vai aceitar. Anunciar um modelo que
             # `_require_model` recusaria faria o erro aparecer longe da causa.
-            # Transcrição chega com #141; ver providers/base.py.
             "capabilities": usable_models(resolved),
         }
 
@@ -280,33 +394,7 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
         """
         _exigir_credencial(resolved, x_fatia_agent_key)
 
-        if payload.media_type not in MEDIA_TYPES_ACEITOS:
-            raise HTTPException(
-                status_code=415,
-                detail=(
-                    f"media_type '{payload.media_type}' não é aceito. "
-                    f"Use um de: {', '.join(sorted(MEDIA_TYPES_ACEITOS))}."
-                ),
-            )
-
-        try:
-            # `validate=True`: sem isso o base64 do Python **ignora** caractere
-            # inválido em silêncio, e uma foto corrompida no caminho viraria bytes
-            # truncados que o provedor recusa com um 400 sem explicação.
-            imagem = base64.b64decode(payload.image_base64, validate=True)
-        except (binascii.Error, ValueError) as exc:
-            raise HTTPException(status_code=400, detail=f"image_base64 inválido: {exc}") from exc
-
-        if not imagem:
-            raise HTTPException(status_code=400, detail="image_base64 decodificou para zero bytes.")
-        if len(imagem) > MAX_IMAGEM_BYTES:
-            raise HTTPException(
-                status_code=413,
-                detail=(
-                    f"A imagem tem {len(imagem)} bytes e o limite é {MAX_IMAGEM_BYTES}. "
-                    "Reduza a resolução no aparelho."
-                ),
-            )
+        imagem = _decodificar_imagem(payload.image_base64, payload.media_type, "image_base64")
 
         provider = build_provider(resolved)
         try:
@@ -314,59 +402,164 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
         finally:
             await provider.aclose()
 
-    @app.post("/chat")
+    @app.post("/title")
+    async def title_route(
+        payload: TitleRequest,
+        x_fatia_agent_key: Annotated[str | None, Header()] = None,
+    ) -> dict[str, object]:
+        """O nome da conversa. Nunca falha por causa do modelo — ver `chat/titulo.py`.
+
+        Sem Bearer, como o `/recognize-meal`: nomear um texto não alcança dado
+        nenhum, e um token de usuário aqui só aumentaria o estrago de um
+        comprometimento. A chave do agente continua exigida — é inferência paga.
+        """
+        _exigir_credencial(resolved, x_fatia_agent_key)
+        provider = build_provider(resolved)
+        try:
+            gerado = await gerar_titulo(provider, payload.text)
+        finally:
+            await provider.aclose()
+        usage = gerado.usage
+        return {
+            "title": gerado.titulo,
+            "usage": None
+            if usage is None
+            else {
+                "model": usage.model,
+                **({"inputUnits": usage.input_units} if usage.input_units is not None else {}),
+                **({"outputUnits": usage.output_units} if usage.output_units is not None else {}),
+            },
+        }
+
+    @app.post("/transcribe")
+    async def transcribe_route(
+        request: Request,
+        content_type: Annotated[str | None, Header()] = None,
+        x_fatia_agent_key: Annotated[str | None, Header()] = None,
+    ) -> dict[str, object]:
+        """Ditado do chat (#141): o áudio cru no corpo, o texto de volta.
+
+        Não grava nada e não envia nada: o texto volta para o campo de mensagem,
+        e é a pessoa quem decide mandar. Sem Bearer, como o `/title` — transcrever
+        não alcança dado nenhum. O áudio vive em memória e morre com a requisição
+        (ADR 020).
+        """
+        _exigir_credencial(resolved, x_fatia_agent_key)
+        media_type = (content_type or "").split(";")[0].strip().lower()
+        if media_type not in AUDIO_ACEITO:
+            raise HTTPException(
+                status_code=415,
+                detail=(
+                    f"Content-Type '{media_type or 'ausente'}' não é aceito. "
+                    f"Use um de: {', '.join(sorted(AUDIO_ACEITO))}."
+                ),
+            )
+        audio = await _ler_audio(request)
+        if not audio:
+            raise HTTPException(status_code=400, detail="O corpo veio sem áudio.")
+
+        provider = build_provider(resolved)
+        try:
+            transcricao = await provider.transcribe(audio, media_type=media_type)
+        finally:
+            await provider.aclose()
+        return {
+            "text": transcricao.text,
+            "usage": {
+                "model": transcricao.model,
+                **(
+                    {"inputUnits": transcricao.duration_seconds}
+                    if transcricao.duration_seconds is not None
+                    else {}
+                ),
+            },
+        }
+
+    @app.post("/chat", response_model=None)
     async def chat_route(
         payload: ChatRequest,
         x_fatia_agent_key: Annotated[str | None, Header()] = None,
         authorization: Annotated[str | None, Header()] = None,
-    ) -> StreamingResponse:
-        """Conversa com as ferramentas de leitura do `/mcp`, em SSE (#248).
+    ) -> StreamingResponse | JSONResponse:
+        """Um turno de conversa, ou a retomada de uma pausa, em SSE (#248, ADR 023).
 
         **Duas credenciais, dois papéis.** `X-Fatia-Agent-Key` responde "esta
         chamada pode gastar inferência paga?" (ADR 018) — é o `apps/api` provando
-        que é ele. `Authorization: Bearer` responde "em nome de quem?" e é
-        repassado inteiro ao `/mcp`, que é quem filtra por `userId`. Nenhuma das
-        duas substitui a outra: sem a primeira, a rota é proxy aberto para o
-        gateway; sem a segunda, não há dado a alcançar.
+        que é ele. `Authorization: Bearer` responde "em nome de quem?", é
+        repassado ao `/mcp` e decide de quem é a thread. Nenhuma substitui a outra.
 
         **O que falha antes do primeiro byte falha com status.** Provedor não
-        configurado, Bearer ausente, `/mcp` recusando o token no `tools/list` —
-        tudo isso acontece aqui, antes do `StreamingResponse`, e sai como
-        envelope JSON com o status certo. Depois que o stream abre, o 200 já foi
-        enviado e o erro só cabe como evento `error` — ver `chat/events.py`.
+        configurado, Bearer recusado pelo `/mcp`, retomada que não corresponde à
+        pausa pendente — tudo isso acontece aqui, antes do `StreamingResponse`.
+        Depois que o stream abre, o erro só cabe como evento — ver `chat/events.py`.
         """
         _exigir_credencial(resolved, x_fatia_agent_key)
         bearer = _exigir_bearer(authorization)
+        fotos = tuple(
+            FotoDoTurno(
+                media_type=foto.media_type,
+                base64=base64.b64encode(
+                    _decodificar_imagem(foto.data, foto.media_type, f"photos[{indice}].data")
+                ).decode("ascii"),
+            )
+            for indice, foto in enumerate(payload.photos)
+        )
+        if fotos and usable_models(resolved)["vision"] is None:
+            # Antes do stream, para virar status: com o SSE aberto, a mesma
+            # recusa chegaria como evento no meio de uma resposta que não começou.
+            raise AIProviderNotConfigured(
+                "Foto no chat precisa de um modelo de visão configurado e revisado "
+                "(AI_MODEL_VISION), que também aceite tools."
+            )
 
         provider = build_provider(resolved)
         client = build_mcp_client(resolved, bearer=bearer)
 
         try:
-            # O catálogo é buscado **antes** de abrir o stream de propósito: é a
-            # primeira chamada que exercita o Bearer, e é a única chance de um
-            # token inválido virar 401 de verdade em vez de um 200 com um evento
-            # de erro dentro — que é o que o PWA teria de aprender a distinguir.
-            permitidas = somente_leitura(await client.list_tools())
+            # O catálogo antes do stream: é a primeira chamada que exercita o
+            # Bearer, e a única chance de um token inválido virar 401 de verdade.
+            permitidas = todas_permitidas(await client.list_tools())
+            thread_id = thread_da_conversa(await _dono(client), str(payload.conversation_id))
+            compilado = await grafo()
+            if payload.resume is not None:
+                recusa = await _recusa_de_retomada(
+                    compilado, thread_id, payload.resume.interrupt_id
+                )
+                if recusa is not None:
+                    await client.aclose()
+                    await provider.aclose()
+                    return recusa
         except BaseException:
             await client.aclose()
             await provider.aclose()
             raise
 
+        contexto = ContextoDoTurno(
+            provider=provider,
+            client=client,
+            permitidas=tuple(permitidas),
+            run_id=uuid.uuid4().hex,
+            timezone=payload.timezone,
+            historico=tuple(mensagem.model_dump() for mensagem in payload.history),
+            memorias=tuple(memoria.model_dump() for memoria in payload.memories),
+            planejar=resolved.agent_chat_planner,
+            fotos=fotos,
+        )
+
         async def fluxo() -> AsyncIterator[str]:
             try:
-                async for evento in stream_chat_events(
-                    provider,
-                    client,
-                    permitidas,
+                async for quadro in stream_chat_events(
+                    compilado,
+                    contexto,
+                    thread_id=thread_id,
+                    conversation_id=str(payload.conversation_id),
                     mensagem=payload.message,
-                    historico=[mensagem.model_dump() for mensagem in payload.history],
+                    retomada=payload.resume.value if payload.resume is not None else None,
                 ):
-                    yield evento.frame()
+                    yield quadro
             finally:
-                # `finally`, e não depois do laço: quando o cliente desconecta no
-                # meio, o gerador é fechado com `GeneratorExit` e o laço nunca
-                # termina — sem isto, cada aba fechada deixaria dois clientes
-                # httpx e as conexões deles pendurados.
+                # `finally`, e não depois do laço: quando o cliente desconecta, o
+                # gerador é fechado com `GeneratorExit` e o laço nunca termina.
                 await client.aclose()
                 await provider.aclose()
 
@@ -375,8 +568,7 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             media_type="text/event-stream",
             headers={
                 # Sem isto, um proxy que bufferize entrega a conversa inteira de
-                # uma vez e o trabalho das outras duas camadas da #247 se perde:
-                # o chat parece travado até a última palavra chegar.
+                # uma vez, e o chat parece travado até a última palavra chegar.
                 "Cache-Control": "no-cache, no-transform",
                 "X-Accel-Buffering": "no",
                 "Connection": "keep-alive",
@@ -384,6 +576,53 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
         )
 
     return app
+
+
+def _decodificar_imagem(dados: str, media_type: str, campo: str) -> bytes:
+    """A imagem em bytes, ou o 4xx que diz o que corrigir."""
+    if media_type not in MEDIA_TYPES_ACEITOS:
+        raise HTTPException(
+            status_code=415,
+            detail=(
+                f"media_type '{media_type}' não é aceito. "
+                f"Use um de: {', '.join(sorted(MEDIA_TYPES_ACEITOS))}."
+            ),
+        )
+    try:
+        # `validate=True`: sem isso o base64 do Python **ignora** caractere
+        # inválido em silêncio, e uma foto corrompida no caminho viraria bytes
+        # truncados que o provedor recusa com um 400 sem explicação.
+        imagem = base64.b64decode(dados, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"{campo} inválido: {exc}") from exc
+    if not imagem:
+        raise HTTPException(status_code=400, detail=f"{campo} decodificou para zero bytes.")
+    if len(imagem) > MAX_IMAGEM_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"A imagem tem {len(imagem)} bytes e o limite é {MAX_IMAGEM_BYTES}. "
+                "Reduza a resolução no aparelho."
+            ),
+        )
+    return imagem
+
+
+async def _ler_audio(request: Request) -> bytes:
+    """O corpo inteiro, recusado **durante** a leitura se passar do teto.
+
+    Ler tudo e só depois medir deixaria qualquer um que tenha a chave do agente
+    encher a memória do processo com um corpo de gigabytes.
+    """
+    lido = bytearray()
+    async for pedaco in request.stream():
+        lido.extend(pedaco)
+        if len(lido) > MAX_AUDIO_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"O áudio passa de {MAX_AUDIO_BYTES} bytes. Grave um trecho mais curto.",
+            )
+    return bytes(lido)
 
 
 def _exigir_credencial(settings: AgentSettings, oferecida: str | None) -> None:
@@ -409,6 +648,57 @@ def _exigir_credencial(settings: AgentSettings, oferecida: str | None) -> None:
             "Rota de inferência sem essa prova é um proxy aberto para o gateway pago "
             "(ADR 018)."
         )
+
+
+async def _dono(client: McpClient) -> str:
+    """O id de quem está conversando, segundo o próprio `/mcp`.
+
+    Pelo token, e não pelo corpo: é o `/mcp` que valida o Bearer, e ele devolve
+    o usuário que o token representa. Um `userId` no corpo seria a thread de
+    outra pessoa a um campo adulterado de distância (ADR 023).
+    """
+    resultado = await client.call_tool("get_me", {})
+    try:
+        perfil: object = json.loads(resultado.text)
+    except ValueError:
+        perfil = None
+    identificador = perfil.get("id") if isinstance(perfil, dict) else None
+    if resultado.is_error or not isinstance(identificador, str) or not identificador:
+        raise McpResponseUnparseable(
+            "O /mcp não devolveu o id de quem está conversando em 'get_me' — sem ele não há "
+            "como saber de quem é a conversa."
+        )
+    return identificador
+
+
+async def _recusa_de_retomada(
+    grafo: GrafoDaConversa, thread_id: str, oferecido: str
+) -> JSONResponse | None:
+    """409 quando a retomada não responde à pausa que a thread está esperando."""
+    pendente = await interrupcao_pendente(grafo, thread_id)
+    if pendente is None:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": {
+                    "code": "CHAT_NOTHING_TO_RESUME",
+                    "message": (
+                        "Esta conversa não está esperando resposta. Envie uma mensagem nova."
+                    ),
+                }
+            },
+        )
+    if not secrets.compare_digest(pendente, oferecido):
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": {
+                    "code": "CHAT_RESUME_MISMATCH",
+                    "message": "Esta resposta não corresponde à pergunta pendente.",
+                }
+            },
+        )
+    return None
 
 
 def _exigir_bearer(authorization: str | None) -> str:

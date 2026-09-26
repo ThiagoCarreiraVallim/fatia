@@ -13,7 +13,7 @@ export class ListWeightLogsTool implements McpToolDef {
   constructor(private readonly weights: WeightLogService) {}
   readonly name = 'list_weight_logs';
   readonly title = 'Listar registros de peso';
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
   readonly description = 'Lista logs de peso, com filtro de período e cursor de paginação.';
   readonly inputSchema = {

@@ -13,7 +13,7 @@ export class DeleteWaterLogTool implements McpToolDef {
   constructor(private readonly waters: WaterLogService) {}
   readonly name = 'delete_water_log';
   readonly title = 'Excluir registro de água';
-  readonly annotations = { readOnlyHint: false, destructiveHint: true };
+  readonly annotations = { readOnlyHint: false, destructiveHint: true, confirmableHint: false };
   readonly hostedInference = false;
   readonly description =
     'Remove um log de água. ' + 'Exemplo: {"id":"11111111-2222-4333-8444-555555555555"}';

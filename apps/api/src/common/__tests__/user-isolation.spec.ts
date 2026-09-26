@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -16,6 +17,7 @@ import { ProfessionalAccessService } from '../../sharing/professional-access.ser
 import { ProfessionalLinkService } from '../../sharing/professional-link.service';
 import { StudentViewService } from '../../sharing/student-view.service';
 import { ConversationService } from '../../chat/conversation.service';
+import { MemoryService } from '../../chat/memory/memory.service';
 import { GoalsService } from '../../goals/goals.service';
 import { FoodService } from '../../nutrition/food.service';
 import { MealItemService } from '../../nutrition/meal-item.service';
@@ -74,6 +76,7 @@ describe('isolamento entre usuários', () => {
   const memberships = new MembershipService(prisma, links);
   const consent = new ConsentService(prisma, links);
   const conversas = new ConversationService(prisma);
+  const memorias = new MemoryService(prisma);
 
   /** Dados do user-A. Preenchido no beforeAll e sondado como user-B. */
   const owned = {
@@ -121,6 +124,8 @@ describe('isolamento entre usuários', () => {
     sharedExerciseId: 0,
     /** Conversa com a IA hospedada (#249). Semeada como user-A. */
     conversationId: '',
+    /** O que o assistente guardou sobre o user-A, a pedido dele. */
+    memoryId: '',
   };
 
   beforeAll(async () => {
@@ -334,12 +339,16 @@ describe('isolamento entre usuários', () => {
     // Conversa com a IA hospedada (#249), com um turno completo. Semeada pelo
     // próprio serviço para que o caminho feliz de escrita seja exercitado aqui —
     // sem ele, as recusas abaixo passariam vazias.
-    const turno = await conversas.iniciarTurno(owned.userA, undefined, 'quanto comi hoje?');
+    const turno = await conversas.iniciarTurno(owned.userA, randomUUID(), 'quanto comi hoje?');
     owned.conversationId = turno.conversationId;
     await conversas.concluirTurno(owned.userA, turno.conversationId, {
       texto: 'Você comeu 1.800 kcal hoje.',
       tools: [{ name: 'get_nutrition_summary' }],
+      status: 'completed',
+      pausa: null,
+      runId: null,
     });
+    owned.memoryId = (await memorias.lembrar(owned.userA, 'Não come carne nem ovo.')).id;
   }, 60_000);
 
   afterAll(async () => {
@@ -2393,6 +2402,30 @@ describe('isolamento entre usuários', () => {
       expect(await mensagensNoBanco()).toBe(antes);
     });
 
+    it('renomear, votar e limpar pausa numa conversa alheia recusam', async () => {
+      await expect(conversas.renomear(owned.userB, owned.conversationId, 'x')).rejects.toThrow(
+        NotFoundException,
+      );
+      const [resposta] = await prisma.message.findMany({
+        where: { conversationId: owned.conversationId, role: 'assistant' },
+      });
+      await expect(
+        conversas.votar(owned.userB, owned.conversationId, resposta.id, { review: 'like' }),
+      ).rejects.toThrow(NotFoundException);
+      await expect(conversas.limparPausas(owned.userB, owned.conversationId)).rejects.toThrow(
+        NotFoundException,
+      );
+      // `encontrar` é a porta da primeira mensagem: o id da conversa alheia não
+      // pode parecer "livre" para quem tenta criar uma conversa com ele.
+      await expect(conversas.encontrar(owned.userB, owned.conversationId)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(
+        (await prisma.conversation.findUniqueOrThrow({ where: { id: owned.conversationId } }))
+          .title,
+      ).not.toBe('x');
+    });
+
     it('gravar a resposta numa conversa alheia não escreve nada', async () => {
       const antes = await mensagensNoBanco();
 
@@ -2402,6 +2435,9 @@ describe('isolamento entre usuários', () => {
       await conversas.concluirTurno(owned.userB, owned.conversationId, {
         texto: 'texto injetado',
         tools: [],
+        status: 'completed',
+        pausa: null,
+        runId: null,
       });
 
       expect(await mensagensNoBanco()).toBe(antes);
@@ -2422,7 +2458,7 @@ describe('isolamento entre usuários', () => {
     it('o dono apaga a própria conversa, e as mensagens vão junto', async () => {
       const { conversationId } = await conversas.iniciarTurno(
         owned.userA,
-        undefined,
+        randomUUID(),
         'descartável',
       );
 
@@ -2430,6 +2466,19 @@ describe('isolamento entre usuários', () => {
 
       expect(await prisma.conversation.findUnique({ where: { id: conversationId } })).toBeNull();
       expect(await prisma.message.count({ where: { conversationId } })).toBe(0);
+    });
+  });
+
+  describe('memória do assistente', () => {
+    it('list_memories do user-B não traz a memória do user-A', async () => {
+      expect(await memorias.listar(owned.userB)).toEqual([]);
+    });
+
+    it('forget_memory recusa o id do user-A, e a memória fica', async () => {
+      await expect(memorias.esquecer(owned.userB, owned.memoryId)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(await prisma.userMemory.findUnique({ where: { id: owned.memoryId } })).toBeTruthy();
     });
   });
 

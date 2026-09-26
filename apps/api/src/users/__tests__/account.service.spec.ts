@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { PrismaService } from '../../common/prisma.service';
 import type { LogtoManagementService } from '../../auth/logto-management.service';
+import type { CheckpointPurgeService } from '../../chat/checkpoint-purge.service';
 import { AccountService, DELETE_CONFIRMATION } from '../account.service';
 
 const makePrisma = () => ({
@@ -23,6 +24,7 @@ const makePrisma = () => ({
   professionalLink: { findMany: jest.fn().mockResolvedValue([]) },
   professionalAccessLog: { findMany: jest.fn().mockResolvedValue([]) },
   conversation: { findMany: jest.fn().mockResolvedValue([]) },
+  userMemory: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const SCHEMA = resolve(__dirname, '../../../../../packages/db/prisma/schema.prisma');
@@ -57,6 +59,8 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   accessLogs: 'accessLogs',
   // Chat com a IA hospedada (#249): o que a pessoa escreveu sobre a própria saúde, em prosa.
   conversations: 'conversations',
+  // O que o assistente guardou sobre a pessoa, com o texto que ela aprovou.
+  memories: 'memories',
 };
 
 /**
@@ -112,13 +116,16 @@ describe('AccountService', () => {
   let prisma: ReturnType<typeof makePrisma>;
   let logto: ReturnType<typeof makeLogto>;
   let service: AccountService;
+  let purga: { apagarDoUsuario: jest.Mock };
 
   beforeEach(() => {
     prisma = makePrisma();
     logto = makeLogto();
+    purga = { apagarDoUsuario: jest.fn(async (_userId: string) => undefined) };
     service = new AccountService(
       prisma as unknown as PrismaService,
       logto as unknown as LogtoManagementService,
+      purga as unknown as CheckpointPurgeService,
     );
   });
 
@@ -322,6 +329,31 @@ describe('AccountService', () => {
       await service.deleteAccount('user-A', DELETE_CONFIRMATION);
 
       expect(order).toEqual(['logto', 'prisma']);
+    });
+
+    it('apaga o estado do agente antes do usuário — o cascade não alcança o schema dele', async () => {
+      prisma.user.findUnique.mockResolvedValue(USER);
+      const order: string[] = [];
+      purga.apagarDoUsuario.mockImplementation(async () => {
+        order.push('checkpoint');
+      });
+      prisma.user.delete.mockImplementation(async () => {
+        order.push('prisma');
+        return USER;
+      });
+
+      await service.deleteAccount('user-A', DELETE_CONFIRMATION);
+
+      expect(purga.apagarDoUsuario).toHaveBeenCalledWith('user-A');
+      expect(order).toEqual(['checkpoint', 'prisma']);
+    });
+
+    it('se a purga do agente falhar, a conta fica inteira e o erro sobe', async () => {
+      prisma.user.findUnique.mockResolvedValue(USER);
+      purga.apagarDoUsuario.mockRejectedValueOnce(new Error('banco fora'));
+
+      await expect(service.deleteAccount('user-A', DELETE_CONFIRMATION)).rejects.toThrow();
+      expect(prisma.user.delete).not.toHaveBeenCalled();
     });
 
     it('não desfaz nada se o Logto falhar — apaga local e avisa', async () => {

@@ -16,7 +16,7 @@ export class DeleteWorkoutSessionTool implements McpToolDef {
 
   readonly title = 'Excluir sessão de treino';
 
-  readonly annotations = { readOnlyHint: false, destructiveHint: true };
+  readonly annotations = { readOnlyHint: false, destructiveHint: true, confirmableHint: false };
 
   readonly hostedInference = false;
   readonly description =

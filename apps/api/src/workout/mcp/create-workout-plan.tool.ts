@@ -16,7 +16,7 @@ export class CreateWorkoutPlanTool implements McpToolDef {
 
   readonly title = 'Criar plano de treino';
 
-  readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
 
   readonly hostedInference = false;
   readonly description =

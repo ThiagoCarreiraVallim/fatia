@@ -16,7 +16,7 @@ export class StartWorkoutSessionTool implements McpToolDef {
 
   readonly title = 'Iniciar treino';
 
-  readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
 
   readonly hostedInference = false;
   readonly description =

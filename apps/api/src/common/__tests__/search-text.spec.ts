@@ -18,9 +18,7 @@ describe('normalizeSearchText', () => {
 
   it('deixa quem digita sem acento achar o que está acentuado', () => {
     // O caso real: teclado de celular, ninguém acentua.
-    expect(normalizeSearchText('Feijão tropeiro mineiro')).toContain(
-      normalizeSearchText('feijao'),
-    );
+    expect(normalizeSearchText('Feijão tropeiro mineiro')).toContain(normalizeSearchText('feijao'));
   });
 
   it('faz a vírgula da TACO deixar de atrapalhar', () => {

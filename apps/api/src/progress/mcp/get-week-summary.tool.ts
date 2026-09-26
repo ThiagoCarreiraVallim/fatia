@@ -12,7 +12,7 @@ export class GetWeekSummaryTool implements McpToolDef {
   constructor(private readonly dashboard: DashboardService) {}
   readonly name = 'get_week_summary';
   readonly title = 'Resumo da semana';
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
   readonly description = 'Resumo da semana corrente: nutrição, treinos, cardio, passos, peso.';
   readonly inputSchema = {} as const;

@@ -17,7 +17,7 @@ export class UpdateCustomExerciseTool implements McpToolDef {
 
   readonly title = 'Atualizar exercício personalizado';
 
-  readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
 
   readonly hostedInference = false;
   readonly description =

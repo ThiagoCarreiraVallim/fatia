@@ -13,7 +13,7 @@ export class GetWaterHistoryTool implements McpToolDef {
   constructor(private readonly waters: WaterLogService) {}
   readonly name = 'get_water_history';
   readonly title = 'Histórico de água';
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
   readonly description = 'Histórico diário de consumo de água, preenchendo dias sem log com 0.';
   readonly inputSchema = {

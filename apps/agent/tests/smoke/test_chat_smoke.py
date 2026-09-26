@@ -19,7 +19,7 @@ import os
 import pytest
 
 from fatia_agent.chat.mcp_client import McpClient
-from fatia_agent.chat.tool_policy import somente_leitura
+from fatia_agent.chat.tool_policy import camada_read_only
 
 pytestmark = [
     pytest.mark.smoke,
@@ -58,7 +58,7 @@ async def test_o_recorte_de_leitura_nao_e_vazio_nem_o_catalogo_inteiro(mcp):
     sendo oferecida ao modelo.
     """
     catalogo = await mcp.list_tools()
-    permitidas = somente_leitura(catalogo)
+    permitidas = camada_read_only(catalogo)
 
     assert 0 < len(permitidas) < len(catalogo)
 

@@ -25,6 +25,25 @@ export interface McpToolAnnotations {
   readOnlyHint: boolean;
   /** Apaga ou torna irrecuperável. O Claude sempre confirma antes. */
   destructiveHint: boolean;
+  /**
+   * Escreve, mas de forma reversível ou idempotente — o chat hospedado pode
+   * propô-la, e só executa depois de a pessoa aprovar na tela (ADR 022).
+   *
+   * **Não é anotação da spec MCP**, e sim política nossa servida no mesmo
+   * objeto: o cliente MCP externo ignora um campo que não conhece, e o agente
+   * da Fatia deriva dela o recorte de três camadas em `chat/tool_policy.py` —
+   * `readOnlyHint` executa direto, `confirmableHint` passa pelo modal, o resto
+   * nunca é oferecido ao modelo.
+   *
+   * **Obrigatório, não opcional com default `false`**, pelo mesmo motivo dos
+   * dois acima: um default classificaria toda tool nova como não-confirmável,
+   * ou seja fora do chat, e a capacidade sumiria sem ninguém ligar o sintoma à
+   * anotação esquecida. Quem esquece, esquece na direção que dá para notar.
+   *
+   * Incompatível com `destructiveHint: true` — apagar não é reversível, e não
+   * entra no chat nem com confirmação. O `tool-catalog.spec.ts` reprova o par.
+   */
+  confirmableHint: boolean;
 }
 
 export interface McpToolDef<S extends ZodRawShape = ZodRawShape> {
@@ -61,6 +80,16 @@ export interface McpToolDef<S extends ZodRawShape = ZodRawShape> {
   hostedInference: boolean;
   inputSchema: S;
   execute(input: z.infer<z.ZodObject<S>>, ctx: McpToolContext): Promise<unknown>;
+  /**
+   * A carga tipada que uma tela desenha a partir do resultado (`structuredContent`).
+   *
+   * Opcional, e só para leitura que vira cartão no chat hospedado: a métrica do dia,
+   * a série de peso, a tabela de refeições. O agente repassa isto à tela como
+   * artefato **sem** pôr no contexto do modelo — é o que faz o número chegar inteiro
+   * à tela sem passar pelos olhos de quem poderia transcrevê-lo errado. O formato é
+   * o de `apps/agent/.../chat/artefatos.py`; o que não se encaixa é descartado lá.
+   */
+  artifact?(result: unknown, input: z.infer<z.ZodObject<S>>): Record<string, unknown> | null;
 }
 
 export const MCP_TOOL_METADATA = 'mcp:tool';
