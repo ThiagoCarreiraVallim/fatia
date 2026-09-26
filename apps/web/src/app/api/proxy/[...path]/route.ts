@@ -36,7 +36,9 @@ async function proxy(request: NextRequest, ctx: RouteContext) {
     signal: request.signal,
   };
   if (!['GET', 'HEAD'].includes(request.method)) {
-    init.body = await request.text();
+    // Bytes, e não `text()`: o ditado do chat sobe áudio cru, e decodificar como
+    // UTF-8 trocaria todo byte inválido por U+FFFD no caminho.
+    init.body = await request.arrayBuffer();
   }
 
   const upstream = await fetch(url.toString(), init);

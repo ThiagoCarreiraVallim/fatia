@@ -12,7 +12,7 @@ export class GetStreakTool implements McpToolDef {
   constructor(private readonly streaks: StreakService) {}
   readonly name = 'get_streak';
   readonly title = 'Sequência atual';
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
   readonly description =
     'Sequência atual de dias ativos (refeição registrada OU treino concluído OU meta de passos batida), ' +

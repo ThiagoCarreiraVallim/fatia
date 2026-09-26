@@ -16,7 +16,7 @@ export class UpdateSetTool implements McpToolDef {
 
   readonly title = 'Atualizar série';
 
-  readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
 
   readonly hostedInference = false;
   readonly description =

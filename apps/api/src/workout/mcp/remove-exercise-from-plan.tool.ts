@@ -16,7 +16,7 @@ export class RemoveExerciseFromPlanTool implements McpToolDef {
 
   readonly title = 'Remover exercício do plano';
 
-  readonly annotations = { readOnlyHint: false, destructiveHint: true };
+  readonly annotations = { readOnlyHint: false, destructiveHint: true, confirmableHint: false };
 
   readonly hostedInference = false;
   readonly description =

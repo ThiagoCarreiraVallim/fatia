@@ -20,7 +20,7 @@ export class RevokeDataSharingTool implements McpToolDef {
    * titular exerce sobre o próprio dado. Nada é perdido: a linha sobrevive com
    * `revokedAt`, e conceder de novo é uma chamada.
    */
-  readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
   readonly description =
     'Corta o acesso de um profissional aos dados do usuário, em todas as categorias de uma vez. ' +

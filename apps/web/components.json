@@ -10,6 +10,9 @@
     "cssVariables": true,
     "prefix": ""
   },
+  "registries": {
+    "@assistant-ui": "https://r.assistant-ui.com/styles/{style}/{name}.json"
+  },
   "aliases": {
     "components": "@/components",
     "utils": "@/lib/utils",

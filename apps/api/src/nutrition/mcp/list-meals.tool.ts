@@ -7,13 +7,20 @@ import {
   type McpToolDef,
 } from '../../common/decorators/tool.decorator';
 
+export const TIPO_DA_REFEICAO: Record<string, string> = {
+  BREAKFAST: 'Café da manhã',
+  LUNCH: 'Almoço',
+  DINNER: 'Jantar',
+  SNACK: 'Lanche',
+};
+
 @Injectable()
 @McpTool()
 export class ListMealsTool implements McpToolDef {
   constructor(private readonly meals: MealService) {}
   readonly name = 'list_meals';
   readonly title = 'Listar refeições';
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
   readonly description = 'Lista refeições do usuário (cursor pagination).';
   readonly inputSchema = {
@@ -35,5 +42,19 @@ export class ListMealsTool implements McpToolDef {
     { userId, timezone }: McpToolContext,
   ) {
     return this.meals.list(userId, input, timezone);
+  }
+  artifact(result: unknown) {
+    const refeicoes = result as Awaited<ReturnType<MealService['list']>>;
+    return {
+      kind: 'report',
+      label: 'Refeições',
+      columns: ['Refeição', 'Quando', 'kcal', 'Proteína (g)'],
+      rows: refeicoes.map((refeicao) => [
+        TIPO_DA_REFEICAO[refeicao.mealType] ?? refeicao.mealType,
+        refeicao.eatenAt.toISOString(),
+        Math.round(refeicao.items.reduce((total, item) => total + item.kcal, 0)),
+        Math.round(refeicao.items.reduce((total, item) => total + item.proteinG, 0)),
+      ]),
+    };
   }
 }

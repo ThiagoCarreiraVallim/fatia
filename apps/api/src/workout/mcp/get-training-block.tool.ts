@@ -15,7 +15,7 @@ export class GetTrainingBlockTool implements McpToolDef {
 
   readonly title = 'Ver o bloco de periodização em andamento';
 
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
 
   readonly hostedInference = false;
   readonly description =

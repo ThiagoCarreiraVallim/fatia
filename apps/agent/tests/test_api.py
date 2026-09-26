@@ -22,6 +22,23 @@ def test_health_responde_200_mesmo_sem_provedor(settings_factory):
     assert "AI_BASE_URL" in corpo["ai"]["reason"]
 
 
+def test_health_diz_se_o_estado_do_chat_sobrevive_a_um_restart(settings_factory):
+    """Em memória, uma pausa do chat morre no restart (ADR 023). O operador vê aqui."""
+    em_memoria = TestClient(create_app(settings_factory())).get("/health").json()
+    persistente = (
+        TestClient(
+            create_app(
+                settings_factory(agent_checkpoint_database_url="postgresql://x@localhost/fatia")
+            )
+        )
+        .get("/health")
+        .json()
+    )
+
+    assert em_memoria["checkpointer"] == {"persistent": False}
+    assert persistente["checkpointer"] == {"persistent": True}
+
+
 def test_health_com_provedor_configurado_nao_traz_motivo(settings_factory):
     client = TestClient(create_app(settings_factory()))
 
@@ -107,8 +124,10 @@ def test_a_superficie_e_so_diagnostico_mais_as_rotas_de_inferencia(settings_fact
     """Guarda de escopo, e de custo.
 
     A #134 não expunha rota de inferência nenhuma; a #139 expôs uma e a #248
-    expõe a segunda (`/chat`). As duas são autenticadas por segredo compartilhado
-    (ver `test_recognize_meal.py` e `chat/test_chat_route.py`). Rota de inferência
+    expõe a segunda (`/chat`); o `/title` nomeia a conversa (ADR 023) e o
+    `/transcribe` é o ditado do chat (#141). Todas são
+    autenticadas por segredo compartilhado (ver `test_recognize_meal.py`,
+    `chat/test_chat_route.py` e `chat/test_titulo.py`). Rota de inferência
     **anônima** seria um proxy aberto para o gateway pago — a fronteira de custo
     da ADR 018. Este teste existe para que a próxima tenha de passar por aqui
     antes de nascer.
@@ -120,4 +139,11 @@ def test_a_superficie_e_so_diagnostico_mais_as_rotas_de_inferencia(settings_fact
     nossas = {
         caminho for caminho in caminhos if not caminho.startswith(("/openapi", "/docs", "/redoc"))
     }
-    assert nossas == {"/health", "/capabilities", "/recognize-meal", "/chat"}
+    assert nossas == {
+        "/health",
+        "/capabilities",
+        "/recognize-meal",
+        "/chat",
+        "/title",
+        "/transcribe",
+    }

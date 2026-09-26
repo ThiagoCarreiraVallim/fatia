@@ -19,6 +19,7 @@ from fatia_agent.providers.errors import (
 
 from ..chat.support import (
     ProviderRecordingTransport,
+    bloco_de_uso,
     fim,
     fragmento_de_texto,
     fragmento_de_tool,
@@ -108,7 +109,26 @@ async def test_tool_call_sem_id_ganha_um_estavel(settings_factory):
     await provider.aclose()
 
     (fim_do_turno,) = [p for p in pedacos if isinstance(p, TurnEnd)]
-    assert fim_do_turno.tool_calls[0].id == "call_0"
+    assert fim_do_turno.tool_calls[0].id.startswith("call_")
+
+
+async def test_o_id_inventado_nao_se_repete_entre_rodadas(settings_factory):
+    """O id é gravado e casado com o desfecho na conversa inteira (F5).
+
+    `call_0` em duas rodadas faria o cartão e o "deu certo" de uma aparecer na outra.
+    """
+    sem_id = [fragmento_de_tool(0, name="get_me", arguments="{}"), fim("tool_calls")]
+    transport = ProviderRecordingTransport([sem_id, sem_id])
+    provider = build_provider(settings_factory(), transport=transport)
+
+    ids = []
+    for _ in range(2):
+        pedacos = await coletar(provider, [{"role": "user", "content": "oi"}])
+        (fim_do_turno,) = [p for p in pedacos if isinstance(p, TurnEnd)]
+        ids.append(fim_do_turno.tool_calls[0].id)
+    await provider.aclose()
+
+    assert ids[0] != ids[1]
 
 
 async def test_o_catalogo_de_tools_vai_no_corpo(settings_factory):
@@ -278,3 +298,115 @@ async def test_modelo_nao_revisado_recusa_antes_de_qualquer_byte(settings_factor
 
     assert excinfo.value.code == "AI_ENDPOINT_NOT_ALLOWED"  # type: ignore[attr-defined]
     assert chamadas == []
+
+
+async def test_o_corpo_pede_o_bloco_de_usage(settings_factory):
+    """Sem `stream_options`, o endpoint de stream não manda `usage` nenhum.
+
+    E sem `usage` o turno inteiro entra no livro-caixa do `apps/api` como custo
+    não medido — a cota da #135 deixa de medir sem uma linha de erro em lugar
+    nenhum. É um campo do corpo que nenhum comportamento visível denuncia, que é
+    exatamente o tipo que precisa de teste.
+    """
+    transport = ProviderRecordingTransport([[fragmento_de_texto("oi")]])
+    provider = build_provider(settings_factory(), transport=transport)
+
+    await coletar(provider, [{"role": "user", "content": "oi"}])
+    await provider.aclose()
+
+    assert transport.corpos[0]["stream_options"] == {"include_usage": True}
+
+
+async def test_o_bloco_final_de_usage_vira_o_uso_do_turno(settings_factory):
+    """O fragmento de custo chega sozinho, com `choices` vazio.
+
+    Um parser que extraísse o choice antes de olhar a raiz descartaria este
+    fragmento como vazio — que foi o que aconteceu até esta correção.
+    """
+    transport = ProviderRecordingTransport(
+        [[fragmento_de_texto("oi"), bloco_de_uso(model="gpt-do-gateway")]]
+    )
+    provider = build_provider(settings_factory(), transport=transport)
+
+    pedacos = await coletar(provider, [{"role": "user", "content": "oi"}])
+    await provider.aclose()
+
+    (fim_do_turno,) = [p for p in pedacos if isinstance(p, TurnEnd)]
+    assert fim_do_turno.usage is not None
+    # O modelo do fragmento, e não `AI_MODEL_TEXT`: um gateway pode servir o
+    # mesmo nome apontando para outro fornecedor, e quem casa com a tabela de
+    # preço do `apps/api` é o nome de quem executou.
+    assert fim_do_turno.usage.model == "gpt-do-gateway"
+    assert (fim_do_turno.usage.input_units, fim_do_turno.usage.output_units) == (812, 96)
+
+
+async def test_sem_bloco_de_usage_o_turno_termina_sem_uso(settings_factory):
+    transport = ProviderRecordingTransport([[fragmento_de_texto("oi")]])
+    provider = build_provider(settings_factory(), transport=transport)
+
+    pedacos = await coletar(provider, [{"role": "user", "content": "oi"}])
+    await provider.aclose()
+
+    (fim_do_turno,) = [p for p in pedacos if isinstance(p, TurnEnd)]
+    assert fim_do_turno.usage is None
+
+
+async def test_erro_dentro_do_stream_com_200_vira_erro_nomeado(settings_factory):
+    """Provedor que aceita a requisição e recusa gerar **não** pode virar silêncio.
+
+    O LM Studio faz isto: HTTP 200, `event: error`, e um objeto `{"error": {...}}`
+    no lugar do fragmento. Sem este ramo o quadro caía no caminho normal, não tinha
+    `choices`, e o turno terminava com zero token e nenhuma exceção — na tela,
+    "não consegui fechar uma resposta", uma frase que culpa o modelo por algo que o
+    provedor nem tentou. Custou uma sessão de depuração inteira.
+    """
+    transport = ProviderRecordingTransport(
+        [
+            [
+                {
+                    "error": {
+                        "code": 400,
+                        "message": "Failed to initialize samplers: failed to parse grammar",
+                        "type": "invalid_request_error",
+                    }
+                }
+            ]
+        ]
+    )
+    provider = build_provider(settings_factory(), transport=transport)
+
+    with pytest.raises(AIProviderRefused, match="failed to parse grammar"):
+        await coletar(provider, [{"role": "user", "content": "oi"}])
+
+
+async def test_erro_no_stream_depois_de_token_tambem_sobe(settings_factory):
+    """Falhar no meio não é menos falha: a resposta parcial não vira resposta."""
+    transport = ProviderRecordingTransport(
+        [[fragmento_de_texto("Vou consultar"), {"error": {"message": "engine morreu"}}]]
+    )
+    provider = build_provider(settings_factory(), transport=transport)
+
+    with pytest.raises(AIProviderRefused, match="engine morreu"):
+        await coletar(provider, [{"role": "user", "content": "oi"}])
+
+
+async def test_erro_sem_message_ainda_diz_algo_util(settings_factory):
+    """Formato surpreendente não pode virar erro vazio — a mensagem é a única pista."""
+    transport = ProviderRecordingTransport([[{"error": {"code": 500}}]])
+    provider = build_provider(settings_factory(), transport=transport)
+
+    with pytest.raises(AIProviderRefused, match="500"):
+        await coletar(provider, [{"role": "user", "content": "oi"}])
+
+
+async def test_chave_error_nula_nao_e_erro(settings_factory):
+    """`{"error": null}` é o que vários gateways mandam em fragmento normal.
+
+    Tratá-lo como falha transformaria uma conversa boa em erro — o defeito oposto,
+    e mais visível, do que este ramo veio consertar.
+    """
+    transport = ProviderRecordingTransport([[{"error": None, **fragmento_de_texto("Oi")}, fim()]])
+    provider = build_provider(settings_factory(), transport=transport)
+
+    pedacos = await coletar(provider, [{"role": "user", "content": "oi"}])
+    assert [p.text for p in pedacos if isinstance(p, TextDelta)] == ["Oi"]

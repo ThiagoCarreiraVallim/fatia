@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { LogtoManagementService } from '../auth/logto-management.service';
+import { CheckpointPurgeService } from '../chat/checkpoint-purge.service';
 
 /** Frase exata que o usuário precisa confirmar para apagar a conta. */
 export const DELETE_CONFIRMATION = 'DELETAR MINHA CONTA';
@@ -17,6 +18,7 @@ export class AccountService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly logtoManagement: LogtoManagementService,
+    private readonly checkpoints: CheckpointPurgeService,
   ) {}
 
   /**
@@ -57,6 +59,7 @@ export class AccountService {
       professionalLinks,
       accessLogs,
       conversations,
+      memories,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
       this.prisma.nutrientTarget.findMany({ where: { userId }, orderBy: { label: 'asc' } }),
@@ -148,10 +151,25 @@ export class AccountService {
           title: true,
           createdAt: true,
           messages: {
-            select: { role: true, content: true, tools: true, createdAt: true },
+            select: {
+              role: true,
+              content: true,
+              tools: true,
+              review: true,
+              reviewReasons: true,
+              reviewNote: true,
+              createdAt: true,
+            },
             orderBy: { createdAt: 'asc' },
           },
         },
+        orderBy: { createdAt: 'asc' },
+      }),
+      // O que o assistente guardou sobre a pessoa a pedido dela. É texto que ela
+      // aprovou, e entra em toda conversa — a portabilidade cobre os dois.
+      this.prisma.userMemory.findMany({
+        where: { userId },
+        select: { content: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
       }),
     ]);
@@ -192,6 +210,7 @@ export class AccountService {
       trainingBlocks,
       professionalLinks,
       conversations,
+      memories,
       accessLogs: accessLogs.map(({ professionalId, ...linha }) => ({
         ...linha,
         professionalName: nomesDeProfissional.get(professionalId) ?? null,
@@ -199,6 +218,7 @@ export class AccountService {
       counts: {
         achievements: achievements.length,
         conversations: conversations.length,
+        memories: memories.length,
         professionalLinks: professionalLinks.length,
         accessLogs: accessLogs.length,
         meals: meals.length,
@@ -243,6 +263,12 @@ export class AccountService {
     // próximo login — o usuário "renasceria" vazio em vez de ver um erro. Falhar
     // aqui deixa tudo intacto e retornável.
     const logtoDeleted = await this.logtoManagement.deleteUser(user.logtoSub);
+
+    // O estado que o agente guardou das conversas (ADR 023) mora num schema que o
+    // cascade não alcança. Antes do `delete`, e não depois: se a purga falhar, a
+    // conta continua inteira e o erro sobe — um checkpoint sobrevivendo à conta
+    // seria dado de saúde sem dono e sem como ser apagado pela pessoa.
+    await this.checkpoints.apagarDoUsuario(userId);
 
     await this.prisma.user.delete({ where: { id: userId } });
 

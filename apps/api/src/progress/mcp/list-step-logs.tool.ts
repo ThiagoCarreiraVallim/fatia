@@ -13,7 +13,7 @@ export class ListStepLogsTool implements McpToolDef {
   constructor(private readonly steps: StepLogService) {}
   readonly name = 'list_step_logs';
   readonly title = 'Listar registros de passos';
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
   readonly description =
     'Lista logs de passos com filtros de período. Retorna todos os logs (não o efetivo do dia).';

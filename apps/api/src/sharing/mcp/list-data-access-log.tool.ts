@@ -13,7 +13,7 @@ export class ListDataAccessLogTool implements McpToolDef {
   constructor(private readonly consent: ConsentService) {}
   readonly name = 'list_data_access_log';
   readonly title = 'Quem olhou meus dados';
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
   readonly description =
     'Trilha de acesso do usuário: cada vez que um profissional leu — ou TENTOU ler — dados dele, ' +
