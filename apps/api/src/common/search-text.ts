@@ -69,10 +69,7 @@ export function rankByRelevance<T>(
       return { item, rank: matchRank(normalized, needle), length: normalized.length, name };
     })
     .filter((entry) => entry.rank !== MatchRank.None)
-    .sort(
-      (a, b) =>
-        a.rank - b.rank || a.length - b.length || a.name.localeCompare(b.name, 'pt-BR'),
-    )
+    .sort((a, b) => a.rank - b.rank || a.length - b.length || a.name.localeCompare(b.name, 'pt-BR'))
     .slice(0, limit)
     .map((entry) => entry.item);
 }

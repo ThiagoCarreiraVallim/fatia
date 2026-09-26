@@ -11,7 +11,10 @@ o duplo de teste sendo um objeto qualquer com os métodos certos.
 
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Literal, Protocol, runtime_checkable
+
+#: As capacidades que servem uma conversa com tools. Visão quando há foto no turno.
+ChatCapability = Literal["text", "vision"]
 
 
 @runtime_checkable
@@ -89,6 +92,7 @@ class ToolChatCapability(Protocol):
         messages: Sequence[dict[str, object]],
         *,
         tools: Sequence[dict[str, object]] = (),
+        capacidade: ChatCapability = "text",
     ) -> AsyncIterator[TextDelta | TurnEnd]: ...
 
 
@@ -108,16 +112,27 @@ class EmbeddingCapability(Protocol):
     async def embed(self, texts: Sequence[str]) -> list[list[float]]: ...
 
 
-@runtime_checkable
-class TranscriptionCapability(Protocol):
-    """Áudio entra, texto sai.
+@dataclass(frozen=True)
+class Transcription:
+    """O texto do áudio, e a duração que o provedor mediu — a unidade de preço.
 
-    Declarado aqui porque a separação capacidade/fornecedor é o que esta issue
-    entrega, e transcrição é uma das capacidades. **Sem implementação ainda**:
-    o LM Studio local não serve modelo de transcrição, então uma implementação
-    hoje só poderia ser testada contra um mock inventado por mim — exatamente o
-    "mock com forma que a realidade não tem" que já custou caro aqui. Implementa
-    junto com #141 (voz), contra um endpoint de verdade.
+    `duration_seconds` é `None` quando o provedor não a devolveu, pelo mesmo
+    motivo das unidades de `Usage`: ausência é custo não medido, e não zero.
     """
 
-    async def transcribe(self, audio: bytes, *, media_type: str) -> str: ...
+    text: str
+    duration_seconds: float | None
+    model: str
+
+
+@runtime_checkable
+class TranscriptionCapability(Protocol):
+    """Áudio entra, texto sai (#141).
+
+    O contrato é o `/audio/transcriptions` da OpenAI (`verbose_json`), que o
+    gateway e os servidores compatíveis implementam. O LM Studio local não serve
+    modelo de transcrição, então os testes seguem a forma documentada do
+    contrato; o primeiro endpoint de verdade confere o resto.
+    """
+
+    async def transcribe(self, audio: bytes, *, media_type: str) -> Transcription: ...

@@ -1,160 +1,197 @@
-"""O contrato SSE do `/chat` — fixado aqui porque três camadas dependem dele.
+"""O contrato SSE do `/chat` — o vocabulário nativo do LangGraph, mais o nosso.
 
-A épica #247 constrói PWA, NestJS e agente **em paralelo**, e divergência entre
-o que um lado emite e o que o outro declara já custou caro neste repositório
-(#157). Este módulo é o lado que emite; o NestJS repassa sem bufferizar e o PWA
-renderiza. Nomes de evento e chaves de payload em inglês, como o resto do fio
-(`{"error": {"code", "message"}}`, `RecognizedMeal`).
+Três camadas dependem deste fio (agente, `apps/api`, PWA), e divergência entre o
+que um lado emite e o que o outro declara já custou caro aqui (#157, e de novo
+na #247, quando todo quadro de tool era descartado em silêncio). Por isso o fio
+deixou de ser um formato inventado: os três modos que carregam a conversa são os
+do próprio LangGraph, que o runtime do assistant-ui (`useLangGraphRuntime`)
+consome sem tradutor (ADR 023).
 
-    event: token
-    data: {"text": "Você registrou "}
+    event: messages
+    data: [{"type":"AIMessageChunk","content":"Você registrou ","id":"ai-…"},
+           {"langgraph_node":"agente"}]
 
-    event: tool
-    data: {"id": "c1", "name": "list_meals", "state": "input-available",
-           "input": "{\"date\":\"2026-08-05\"}"}
+    event: updates
+    data: {"agente": {"messages": [{"type":"ai","content":"","tool_calls":[…]}]}}
 
-    event: tool
-    data: {"id": "c1", "name": "list_meals", "state": "output-available", "output": "[{...}]"}
+    event: updates
+    data: {"__interrupt__": [{"id":"…","value":{"kind":"confirm","actions":[…]}}]}
 
-    event: proposal
-    data: {"id": "c2", "name": "log_meal", "arguments": "{\"items\":[...]}"}
+    event: messages/complete
+    data: [{"type":"ai","content":"Pronto, registrei o almoço.","id":"ai-…"}]
 
-    event: usage
-    data: {"model": "ornith-1.0-9b", "inputUnits": 812, "outputUnits": 96}
+⚠️ Nos três, o `data` é o do modo de stream, **cru**: em `messages` é uma lista
+de dois elementos, e enfiar uma chave ali quebraria a desserialização do
+cliente. Quem diz o que é o quadro é a linha `event:`.
 
-    event: error
-    data: {"code": "MCP_UNAUTHORIZED", "message": "..."}
+Os eventos próprios — o LangGraph não tem equivalente para eles:
 
-    event: done
-    data: {"reason": "stop"}
+    event: start       {"conversationId": "…", "runId": "…"}
+    event: catalog     {"tools": {"log_meal": "Registrar refeição", …}}
+    event: usage       {"model": "…", "inputUnits": 812, "outputUnits": 96}
+    event: plan        {"steps": [{"id": "1", "title": "…", "status": "running"}]}
+    event: artifact    {"toolCallId": "c1", "kind": "metric", …}
+    event: context     {"estimated": true, "segments": [{"key": "tools", "tokens": 900}]}
+    event: validation  {"ok": false, "issues": ["…"]}
+    event: error       {"code": "MCP_UNAUTHORIZED", "message": "…"}
+    event: done        {"status": "completed" | "interrupted" | "error"}
 
-## O handshake de confirmação: dois turnos HTTP, não uma pausa
-
-Tool CONFIRMABLE (ADR 022) **não executa** no turno em que o modelo a pede. O
-agente emite `proposal` e fecha o turno com `reason: "awaiting_confirmation"`. Se
-a pessoa aprovar na tela, o PWA abre um turno novo com a proposta em `approved`,
-e o agente executa aquilo direto — sem passar pelo modelo de novo.
-
-Dois turnos, e não um `interrupt()` do LangGraph, porque pausar de verdade exige
-checkpointer, e não há: a persistência é do NestJS (ADR 015), e um checkpointer
-aqui gravaria histórico de saúde num segundo lugar. Ver `graph.py`.
-
-Executar direto no segundo turno, e não pedir ao modelo que chame a tool de novo,
-porque "de novo" não é garantido: o modelo pode reformular os argumentos entre um
-turno e outro, e o que a pessoa aprovou na tela deixaria de ser o que roda. O que
-ela viu é o que executa.
-
-Por isso os `arguments` de `proposal` vão inteiros — eles voltam na aprovação e
-são o que de fato executa. O PWA os devolve como recebeu; ele não é a autoridade
-sobre eles, mas também não precisa ser: a tool roda com o Bearer da própria
-pessoa contra os dados dela, e `exigir_permitida` continua valendo. Argumento
-adulterado não alcança nada que o app já não permitisse pela tela.
-
-## Por que `id`/`state`, e não `phase`/`ok`
-
-Este vocabulário é o dos elementos de IA do shadcn, que é o que a tela da #250
-renderiza — `input-available` → `output-available` | `output-error`. O agente
-emitiu `phase`/`ok` até esta correção, e o `parseChatEvent` do
-`@fatia/api-client` exige `id` e `state`: **todo quadro de tool era descartado
-em silêncio** e nenhuma tool aparecia na tela. As três camadas da #247 foram
-construídas em paralelo, e o contrato divergiu exatamente onde ninguém tinha
-teste dos dois lados.
-
-O `id` é o da tool call do modelo, e é o que faz o segundo quadro **substituir**
-o primeiro em vez de duplicá-lo. Sem ele, cada tool apareceria duas vezes.
+Não existe evento de chamada nem de resultado de tool: a chamada vive em
+`tool_calls` da mensagem do assistente, e o resultado é a própria `ToolMessage`
+(`tool_call_id`, `status`). Emitir os dois também como evento próprio faria a
+tela desenhar cada tool duas vezes.
 
 Três garantias que o outro lado pode assumir:
 
-1. **`done` é sempre o último evento**, inclusive depois de `error`. Um cliente
-   que só sabe fechar no `done` não fica pendurado por causa de uma falha.
-2. **`error` é terminal.** Depois dele só vem `done`, com `reason: "error"`.
-3. **Nada do que sai daqui contém o Bearer.** Ele não entra no estado do grafo,
-   não é ecoado em evento nenhum e não aparece em mensagem de erro — ver o
-   docstring de `mcp_client.py` e `tests/chat/test_sem_vazamento.py`.
+1. **`done` é sempre o último evento**, inclusive depois de `error`.
+2. **`error` é terminal.** Depois dele só vem `done`, com `status: "error"`.
+3. **Nada do que sai daqui contém o Bearer.** Ele vive no `McpClient`, que viaja
+   pelo runtime context e não pelo estado — ver `state.py` e
+   `tests/chat/test_sem_vazamento.py`.
 
-Por que status HTTP não serve para o erro: quando o primeiro token sai, o 200 já
-foi enviado. Erro depois disso só cabe **dentro** do fluxo, e por isso ele
-carrega o mesmo `code` estável que o envelope JSON carregaria. Erro **antes** do
-primeiro byte continua sendo envelope JSON com status, em **todos** os caminhos
-— inclusive a credencial do agente e a validação do corpo, que saíam como
-`{"detail": ...}` até a revisão da #248. Ver `api.py`.
-
-E os tokens saem **na hora**, um a um, com o modelo ainda escrevendo. Essa é a
-propriedade que a #247 inteira existe para ter, e a que nenhum teste de ordem
-consegue segurar: bufferizar não troca a ordem relativa de evento nenhum. Quem a
-segura é `tests/chat/test_graph.py::test_o_token_sai_antes_de_o_turno_do_modelo_terminar`.
+Erro **antes** do primeiro byte continua sendo envelope JSON com status — ver
+`api.py`. Depois que o stream abriu, o 200 já foi, e o erro só cabe aqui dentro,
+com o mesmo `code` estável que o envelope carregaria.
 """
 
 import json
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-# O resultado da tool vai no evento para a UI poder mostrar o que foi consultado.
-# Truncado porque ele já viaja inteiro no prompt do modelo: mandar o dump de
-# `list_meals` duas vezes pelo fio pagaria o dobro pela mesma informação, e a
-# tela não mostra um JSON de 8 kB.
-MAX_RESULTADO_NO_EVENTO = 500
+from langchain_core.messages import BaseMessage, ToolMessage
 
-# Mesmo raciocínio para os argumentos, que são bem menores.
-MAX_ARGUMENTOS_NO_EVENTO = 300
+# O resultado de tool que vai para a **tela**. O estado guarda o texto inteiro —
+# é o que o modelo lê —, mas a tela mostra um resumo recolhível, e mandar uma
+# lista de 90 refeições em JSON a cada turno só pesaria o fio.
+MAX_RESULTADO_NO_EVENTO = 500
 
 
 @dataclass(frozen=True)
 class ChatEvent:
-    """Um evento do fluxo. `name` é o `event:` do SSE, `data` vira o JSON."""
+    """Um evento próprio. `name` é a linha `event:`, `data` vira o JSON."""
 
     name: str
     data: dict[str, Any]
 
     def frame(self) -> str:
-        """O evento já no formato do fio.
-
-        `ensure_ascii=False` porque o conteúdo é português e escapar acento
-        triplicaria o tamanho de cada token. `separators` sem espaço pelo mesmo
-        motivo — são milhares de eventos por conversa.
-        """
-        corpo = json.dumps(self.data, ensure_ascii=False, separators=(",", ":"))
-        return f"event: {self.name}\ndata: {corpo}\n\n"
+        return quadro(self.name, self.data)
 
 
-def token(text: str) -> ChatEvent:
-    return ChatEvent("token", {"text": text})
+@dataclass(frozen=True)
+class Fragmento:
+    """Um pedaço do texto do modelo, a caminho do modo `messages`.
 
-
-def tool_start(id: str, name: str, arguments: str) -> ChatEvent:
-    return ChatEvent(
-        "tool",
-        {
-            "id": id,
-            "name": name,
-            "state": "input-available",
-            "input": _cortar(arguments, MAX_ARGUMENTOS_NO_EVENTO),
-        },
-    )
-
-
-def tool_end(id: str, name: str, *, ok: bool, result: str) -> ChatEvent:
-    """O fim da mesma chamada, casado pelo `id` com o quadro de início.
-
-    Sucesso e falha são **estados diferentes**, e não um booleano: é o que o
-    `ToolOutput` da tela usa para escolher entre mostrar o resultado e mostrar o
-    erro. O texto vai em `output` ou em `errorText`, nunca nos dois.
+    Passa pelo `writer` do nó `agente` embrulhado neste tipo, e não como
+    `ChatEvent`, porque o formato dele é outro: sai como a tupla
+    `[mensagem, metadados]` do LangGraph.
     """
-    texto = _cortar(result, MAX_RESULTADO_NO_EVENTO)
-    if ok:
-        return ChatEvent(
-            "tool", {"id": id, "name": name, "state": "output-available", "output": texto}
-        )
-    return ChatEvent("tool", {"id": id, "name": name, "state": "output-error", "errorText": texto})
+
+    mensagem: BaseMessage
+    no: str
+
+
+def quadro(nome: str, dados: object) -> str:
+    """Um quadro SSE.
+
+    `ensure_ascii=False` porque o conteúdo é português e escapar acento
+    triplicaria cada token. `separators` sem espaço pelo mesmo motivo — são
+    milhares de quadros por conversa.
+    """
+    corpo = json.dumps(dados, ensure_ascii=False, separators=(",", ":"), default=str)
+    return f"event: {nome}\ndata: {corpo}\n\n"
+
+
+def serializar(mensagem: BaseMessage) -> dict[str, Any]:
+    """A mensagem do LangChain no formato que viaja no fio.
+
+    `model_dump()` já é a forma que o cliente espera — `type`, `tool_calls`,
+    `tool_call_id`, `status`. Campos vazios saem: um fragmento de texto puro
+    carregaria meia dúzia de chaves nulas em **cada** token.
+
+    O `artifact` da `ToolMessage` nunca sai: é o canal que não entra no contexto
+    do modelo, e é por ele que viaja a pergunta de `ask_user`. O que a tela
+    precisa dela chega pelo `__interrupt__`.
+    """
+    bruto = mensagem.model_dump()
+    bruto.pop("artifact", None)
+    return {chave: valor for chave, valor in bruto.items() if valor not in (None, "", [], {})}
+
+
+def _para_a_tela(mensagem: BaseMessage) -> dict[str, Any]:
+    dados = serializar(mensagem)
+    conteudo = dados.get("content")
+    if isinstance(mensagem, ToolMessage) and isinstance(conteudo, str):
+        dados["content"] = cortar(conteudo, MAX_RESULTADO_NO_EVENTO)
+    return dados
+
+
+def fragmento(mensagem: BaseMessage, no: str) -> str:
+    """O modo `messages`: `[mensagem, metadados]`."""
+    return quadro("messages", [serializar(mensagem), {"langgraph_node": no}])
+
+
+def atualizacoes(pacote: Mapping[str, Any]) -> str | None:
+    """O modo `updates`, podado ao que a tela usa — ou `None` se nada sobrou.
+
+    🔴 Só passam `messages` e `__interrupt__`. O resto do estado (decisões,
+    contadores) é do grafo, e o dicionário inteiro no navegador entregaria de
+    graça o que nada na tela precisa.
+
+    O nó `hidratar` nunca passa: ele devolve o histórico com os ids do grafo, e
+    o cliente já tem essas mesmas falas com os ids dele. O assistant-ui acrescenta
+    toda mensagem de `updates` com id desconhecido — repassar o nó duplicaria a
+    conversa na tela a cada envio.
+    """
+    podado: dict[str, Any] = {}
+    for no, conteudo in pacote.items():
+        if no == "hidratar":
+            continue
+        if no == "__interrupt__":
+            podado[no] = [
+                {"id": getattr(item, "id", None), "value": getattr(item, "value", item)}
+                for item in (conteudo or ())
+            ]
+            continue
+        if isinstance(conteudo, dict) and conteudo.get("messages"):
+            podado[no] = {
+                "messages": [
+                    _para_a_tela(m) for m in conteudo["messages"] if isinstance(m, BaseMessage)
+                ]
+            }
+    return quadro("updates", podado) if podado else None
+
+
+def completas(mensagens: Iterable[BaseMessage]) -> str:
+    """O modo `messages/complete`: a resposta final, lida do estado.
+
+    A resposta não pode depender dos fragmentos: um stream que morreu no meio
+    deixaria a tela com texto pela metade, e o `apps/api` gravaria essa metade.
+    O cliente casa pelo `id` e funde com o que já recebeu.
+    """
+    return quadro("messages/complete", [serializar(m) for m in mensagens])
+
+
+def start(conversation_id: str, run_id: str) -> ChatEvent:
+    return ChatEvent("start", {"conversationId": conversation_id, "runId": run_id})
+
+
+def catalog(titulos: Mapping[str, str]) -> ChatEvent:
+    """Nome de tool → título em português, como o `/mcp` anuncia.
+
+    É o que deixa a tela rotular **toda** tool sem uma tabela à mão que apodrece
+    a cada tool nova — o defeito da `ROTULOS` antiga, que cobria 10 de 35.
+    """
+    return ChatEvent("catalog", {"tools": dict(titulos)})
 
 
 def usage(model: str, *, input_units: int | None, output_units: int | None) -> ChatEvent:
-    """O que o turno consumiu, para a cota do `apps/api` (#135).
+    """O que uma chamada ao modelo consumiu, para a cota do `apps/api` (#135).
 
-    Chaves em camelCase porque é o que o `chat.service.ts` lê. Unidade ausente
-    fica **fora** do objeto em vez de ir como `0`: o `somarUnidade` de lá trata
-    `undefined` como "total desconhecido" e contamina a soma de propósito — um
-    zero aqui viraria custo medido e a cota fecharia tarde.
+    Um por chamada, e não um por turno: o grafo chama o modelo a cada volta do
+    ciclo de tool, e cada volta custa. Unidade ausente fica **fora** do objeto em
+    vez de ir como `0`: o `somarUnidade` do `chat.service.ts` trata `undefined`
+    como "total desconhecido" de propósito — um zero aqui viraria custo medido.
     """
     dados: dict[str, Any] = {"model": model}
     if input_units is not None:
@@ -164,47 +201,65 @@ def usage(model: str, *, input_units: int | None, output_units: int | None) -> C
     return ChatEvent("usage", dados)
 
 
+def plan(passos: Iterable[Mapping[str, Any]]) -> ChatEvent:
+    """O plano inteiro, a cada mudança de status — ver `planejador.com_status`."""
+    return ChatEvent("plan", {"steps": [dict(p) for p in passos]})
+
+
+def artifact(tool_call_id: str, carga: Mapping[str, Any]) -> ChatEvent:
+    """A carga tipada de uma tool, pendurada no cartão dela pelo `toolCallId`.
+
+    Uma volta pode ter várias chamadas da mesma tool ("compare março e abril"),
+    e sem o id a tela não saberia a qual cartão pendurar a tabela.
+    """
+    return ChatEvent("artifact", {"toolCallId": tool_call_id, **carga})
+
+
+def context(segmentos: Iterable[Mapping[str, Any]]) -> ChatEvent:
+    """O que ocupa a janela de contexto, por origem, na primeira volta do turno.
+
+    Só o agente sabe dizer, porque é ele quem junta prompt, memória, histórico e
+    o esquema das ferramentas. **Estimativa**, e o campo diz isso.
+    """
+    return ChatEvent("context", {"estimated": True, "segments": [dict(s) for s in segmentos]})
+
+
+def validation(ok: bool, problemas: Iterable[str]) -> ChatEvent:
+    return ChatEvent("validation", {"ok": ok, "issues": list(problemas)})
+
+
 def error(code: str, message: str) -> ChatEvent:
     return ChatEvent("error", {"code": code, "message": message})
 
 
-def done(reason: str) -> ChatEvent:
-    return ChatEvent("done", {"reason": reason})
+def done(status: str) -> ChatEvent:
+    return ChatEvent("done", {"status": status})
 
 
-def proposal(id: str, name: str, arguments: str) -> ChatEvent:
-    """Uma tool CONFIRMABLE que o modelo pediu e que **não** foi executada.
-
-    O turno termina aqui, com `done` e `reason: "awaiting_confirmation"`. Quem
-    decide é a pessoa, na tela; se ela aprovar, o PWA manda **outro** turno
-    carregando esta proposta em `approved`, e aí o agente executa. Ver o
-    handshake no topo deste módulo.
-
-    Os `arguments` viajam **inteiros**, ao contrário dos de `tool_start`: eles
-    voltam na aprovação e são o que de fato executa. Cortar aqui mandaria JSON
-    pela metade de volta — a tool falharia, ou pior, gravaria o pedaço que
-    sobrou. Quem passa do teto é recusado em `agir`, não truncado aqui.
-    """
-    return ChatEvent("proposal", {"id": id, "name": name, "arguments": arguments})
-
-
-def _cortar(texto: str, limite: int) -> str:
-    """Corta com reticência visível: texto cortado em silêncio vira JSON quebrado
-    na mão de quem tentar fazer `parse` do evento sem saber que houve corte."""
+def cortar(texto: str, limite: int) -> str:
+    """Corta com reticência visível: texto cortado em silêncio parece completo."""
     if len(texto) <= limite:
         return texto
     return f"{texto[:limite]}… (+{len(texto) - limite})"
 
 
 __all__ = [
-    "MAX_ARGUMENTOS_NO_EVENTO",
     "MAX_RESULTADO_NO_EVENTO",
     "ChatEvent",
+    "Fragmento",
+    "artifact",
+    "atualizacoes",
+    "catalog",
+    "completas",
+    "context",
+    "cortar",
     "done",
     "error",
-    "proposal",
-    "token",
-    "tool_end",
-    "tool_start",
+    "fragmento",
+    "plan",
+    "quadro",
+    "serializar",
+    "start",
     "usage",
+    "validation",
 ]

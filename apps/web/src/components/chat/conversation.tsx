@@ -18,7 +18,7 @@ import { floating } from '@/components/elements/surfaces';
  * `aria-live="off"` é obrigatório e não é detalhe: `role="log"` anuncia sozinho
  * cada mudança do conteúdo, e com streaming isso vira **um anúncio por token** —
  * a resposta fica impossível de acompanhar em leitor de tela. Quem anuncia é a
- * região de status do `ChatView`, uma vez por resposta.
+ * região de status da conversa (`Anuncio` em `thread.tsx`), uma vez por resposta.
  */
 export function Conversation({ className, ...props }: ComponentProps<typeof StickToBottom>) {
   return (

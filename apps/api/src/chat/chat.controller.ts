@@ -6,20 +6,34 @@ import {
   HttpCode,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
+  Query,
   Req,
   Res,
   UnauthorizedException,
+  UnsupportedMediaTypeException,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
+import { AiUsageService } from '../ai/ai-usage.service';
 import { CurrentUser, type CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { ChatThrottlerGuard } from './chat-throttler.guard';
 import { AgentChatClient } from './agent-chat.client';
 import { ChatService, type DestinoDoStream } from './chat.service';
+import { CheckpointPurgeService } from './checkpoint-purge.service';
 import { ConversationService } from './conversation.service';
-import { SendChatMessageDto } from './dto/chat.dto';
+import { MemoryService } from './memory/memory.service';
+import { PreviaDaAcaoService } from './previa/previa-da-acao.service';
+import { McpToolRegistry } from '../mcp/mcp-tool.registry';
+import {
+  ChatActionPreviewDto,
+  ListConversationsQueryDto,
+  MessageFeedbackDto,
+  RenameConversationDto,
+  SendChatMessageDto,
+} from './dto/chat.dto';
 
 /**
  * A fronteira de autenticação do chat (#249).
@@ -38,6 +52,8 @@ import { SendChatMessageDto } from './dto/chat.dto';
  */
 const TETO_DE_TURNOS = 12;
 const TETO_DE_TURNOS_MS = 60_000;
+/** Cada cartão pede um resumo, e um F5 pede de novo: folga sobre os turnos. */
+const TETO_DE_PREVIAS = 60;
 
 @Controller('chat')
 export class ChatController {
@@ -45,7 +61,31 @@ export class ChatController {
     private readonly chat: ChatService,
     private readonly conversas: ConversationService,
     private readonly agent: AgentChatClient,
+    private readonly checkpoints: CheckpointPurgeService,
+    private readonly memorias: MemoryService,
+    private readonly uso: AiUsageService,
+    private readonly previas: PreviaDaAcaoService,
+    private readonly registry: McpToolRegistry,
   ) {}
+
+  /**
+   * Nome de tool → título em português. O stream anuncia o mesmo no `catalog`,
+   * mas só no turno ao vivo: depois de recarregar, a tela rotularia as tools do
+   * histórico pelo nome técnico.
+   */
+  @Get('tools')
+  titulosDasTools() {
+    return this.registry.titulos();
+  }
+
+  /** O cartão de confirmação em português: o que a escrita pausada vai fazer. */
+  @Post('preview')
+  @HttpCode(200)
+  @UseGuards(ChatThrottlerGuard)
+  @Throttle({ default: { ttl: TETO_DE_TURNOS_MS, limit: TETO_DE_PREVIAS } })
+  previa(@CurrentUser() user: CurrentUserPayload, @Body() dto: ChatActionPreviewDto) {
+    return this.previas.previa(user, dto.tool, dto.arguments);
+  }
 
   /**
    * Se a aba de chat deve existir nesta instância.
@@ -55,13 +95,36 @@ export class ChatController {
    * continua um produto inteiro.
    */
   @Get('availability')
-  availability() {
-    return { available: this.agent.configurado() };
+  async availability() {
+    const available = this.agent.configurado();
+    const { fotos, ditado } = available
+      ? await this.agent.capacidades()
+      : { fotos: false, ditado: false };
+    return { available, photos: fotos, dictation: ditado };
+  }
+
+  /**
+   * O ditado do composer. O corpo é o áudio cru (`audio/*`), com parser próprio
+   * só nesta rota — ver `corpos-do-chat.ts`.
+   */
+  @Post('transcribe')
+  @UseGuards(ChatThrottlerGuard)
+  @Throttle({ default: { ttl: TETO_DE_TURNOS_MS, limit: TETO_DE_TURNOS } })
+  @HttpCode(200)
+  transcrever(@CurrentUser() user: CurrentUserPayload, @Req() req: Request) {
+    // Sem `audio/*` o parser da rota não roda e o corpo não é `Buffer`.
+    if (!Buffer.isBuffer(req.body)) {
+      throw new UnsupportedMediaTypeException('Envie o áudio cru, com Content-Type audio/*.');
+    }
+    return this.chat.transcrever(user.id, req.body, req.headers['content-type'] ?? '');
   }
 
   @Get('conversations')
-  listConversations(@CurrentUser() user: CurrentUserPayload) {
-    return this.conversas.listar(user.id);
+  listConversations(
+    @CurrentUser() user: CurrentUserPayload,
+    @Query() query: ListConversationsQueryDto,
+  ) {
+    return this.conversas.listar(user.id, query.q);
   }
 
   @Get('conversations/:id')
@@ -69,6 +132,23 @@ export class ChatController {
     return this.conversas.obterComMensagens(user.id, id);
   }
 
+  @Patch('conversations/:id')
+  renameConversation(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RenameConversationDto,
+  ) {
+    return this.conversas.renomear(user.id, id, dto.title);
+  }
+
+  /**
+   * Apaga a conversa **e** o estado que o agente guardou dela (ADR 023).
+   *
+   * Nessa ordem: a conversa sai primeiro porque é ela que prova de quem é o id
+   * (`assertDaPessoa`); a purga usa o mesmo par depois. Se a purga falhar, o
+   * checkpoint órfão não é alcançável por ninguém — a thread só abre com o dono
+   * e uma conversa que já não existe —, mas o erro sobe para ser visto.
+   */
   @Delete('conversations/:id')
   @HttpCode(204)
   async deleteConversation(
@@ -76,6 +156,39 @@ export class ChatController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     await this.conversas.apagar(user.id, id);
+    await this.checkpoints.apagarConversa(user.id, id);
+  }
+
+  /** Quanto da cota diária de IA desta pessoa já foi — o medidor da tela do chat. */
+  @Get('quota')
+  quota(@CurrentUser() user: CurrentUserPayload) {
+    return this.uso.cotaDoUsuario(user.id);
+  }
+
+  /** O que o assistente guardou sobre a pessoa. A mesma lista que `list_memories` devolve. */
+  @Get('memories')
+  listMemories(@CurrentUser() user: CurrentUserPayload) {
+    return this.memorias.listar(user.id);
+  }
+
+  @Delete('memories/:id')
+  @HttpCode(204)
+  async forgetMemory(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    await this.memorias.esquecer(user.id, id);
+  }
+
+  @Patch('conversations/:id/messages/:messageId/feedback')
+  @HttpCode(204)
+  async feedback(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+    @Body() dto: MessageFeedbackDto,
+  ) {
+    await this.conversas.votar(user.id, id, messageId, dto);
   }
 
   /**

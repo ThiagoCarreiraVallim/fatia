@@ -13,6 +13,8 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@assistant-ui/react": "^0.15.22",
+    "@assistant-ui/react-langgraph": "^0.14.30",
     "@fatia/api-client": "workspace:*",
     "@hookform/resolvers": "^3.9.0",
     "@logto/next": "^3.6.0",
@@ -26,6 +28,7 @@
     "@radix-ui/react-tabs": "^1.1.21",
     "@radix-ui/react-tooltip": "^1.2.16",
     "@tanstack/react-query": "^5.101.4",
+    "assistant-stream": "0.3.45",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",

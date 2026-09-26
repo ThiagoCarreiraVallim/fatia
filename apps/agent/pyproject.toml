@@ -12,6 +12,13 @@ dependencies = [
   # o provedor contornaria as duas coisas em silêncio — o texto do chat sai para
   # o mesmo host para onde a foto do prato ia.
   "langgraph>=0.6",
+  # As mensagens do estado (`add_messages`) e o formato que o runtime do
+  # assistant-ui consome. Só o núcleo: nada de `langchain-openai`, pelo motivo
+  # do comentário acima.
+  "langchain-core>=1.0",
+  # O estado da conversa no Postgres da Fatia (ADR 023), com o driver dele.
+  "langgraph-checkpoint-postgres>=3.0",
+  "psycopg[binary,pool]>=3.2",
   "pydantic>=2.12",
   "pydantic-settings>=2.12",
   "uvicorn>=0.41",

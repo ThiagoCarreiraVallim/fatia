@@ -23,5 +23,6 @@ import { UpdateMeTool } from './tools/meta/update-me.tool';
   ],
   controllers: [McpController],
   providers: [McpThrottlerGuard, McpToolRegistry, GetMeTool, UpdateTimezoneTool, UpdateMeTool],
+  exports: [McpToolRegistry],
 })
 export class McpModule {}

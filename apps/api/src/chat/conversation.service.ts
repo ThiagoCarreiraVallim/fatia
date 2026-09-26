@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { MessageRole, type Prisma } from '@prisma/client';
+import { MessageRole, Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 
 /**
@@ -28,6 +28,22 @@ export type MensagemDoHistorico = { role: MessageRole; content: string };
 
 export type ToolChamada = { name: string };
 
+/** O fim de um turno do assistente, como `leitor-do-turno.ts` o leu. */
+export type RespostaDoTurno = {
+  texto: string;
+  tools: ToolChamada[];
+  status: 'completed' | 'interrupted' | 'error';
+  pausa: { id: string; value: unknown } | null;
+  runId: string | null;
+};
+
+/** O que a tela manda sobre uma resposta. `review: null` desfaz o voto. */
+export type VotoNaResposta = {
+  review: 'like' | 'dislike' | null;
+  reasons?: string[];
+  note?: string;
+};
+
 @Injectable()
 export class ConversationService {
   constructor(private readonly prisma: PrismaService) {}
@@ -48,15 +64,59 @@ export class ConversationService {
   }
 
   /** Conversas da pessoa, mais recente primeiro. Sem as mensagens. */
-  async listar(userId: string) {
+  async listar(userId: string, busca?: string) {
+    const termo = busca?.trim();
     return this.prisma.conversation.findMany({
-      where: { userId },
+      where: {
+        userId,
+        ...(termo ? { title: { contains: termo, mode: Prisma.QueryMode.insensitive } } : {}),
+      },
       orderBy: { updatedAt: 'desc' },
       select: { id: true, title: true, createdAt: true, updatedAt: true },
     });
   }
 
-  /** Uma conversa com o histórico completo, em ordem cronológica. */
+  /**
+   * A conversa desta pessoa com este id, ou `null` se ainda não existe.
+   *
+   * `null` só quando **ninguém** tem o id: o PWA gera o id da conversa nova, e a
+   * primeira mensagem é que a cria. Um id que já é de outra pessoa é o mesmo 404
+   * de `assertDaPessoa` — senão a primeira mensagem viraria um jeito de escrever
+   * na conversa alheia.
+   */
+  async encontrar(userId: string, conversationId: string) {
+    const conversa = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
+    if (!conversa) return null;
+    if (conversa.userId !== userId) throw new NotFoundException('Conversa não encontrada.');
+    return conversa;
+  }
+
+  /**
+   * Troca o título provisório (o recorte da primeira mensagem) pelo que o agente
+   * gerou — **só se ninguém mexeu nele antes**. A pessoa pode renomear enquanto
+   * o título ainda está sendo gerado, e o nome dela ganha.
+   */
+  async titularSeProvisorio(
+    userId: string,
+    conversationId: string,
+    primeira: string,
+    title: string,
+  ) {
+    await this.prisma.conversation.updateMany({
+      where: { id: conversationId, userId, title: tituloDe(primeira) },
+      data: { title },
+    });
+  }
+
+  async renomear(userId: string, conversationId: string, title: string) {
+    await this.assertDaPessoa(userId, conversationId);
+    await this.prisma.conversation.updateMany({
+      where: { id: conversationId, userId },
+      data: { title },
+    });
+    return { id: conversationId, title };
+  }
+
   async obterComMensagens(userId: string, conversationId: string) {
     const conversa = await this.assertDaPessoa(userId, conversationId);
     const messages = await this.prisma.message.findMany({
@@ -64,7 +124,16 @@ export class ConversationService {
       // e não o id que veio da URL.
       where: { conversationId: conversa.id },
       orderBy: { createdAt: 'asc' },
-      select: { id: true, role: true, content: true, tools: true, createdAt: true },
+      select: {
+        id: true,
+        role: true,
+        content: true,
+        tools: true,
+        metadata: true,
+        runId: true,
+        review: true,
+        createdAt: true,
+      },
     });
     return { ...conversa, messages };
   }
@@ -114,19 +183,33 @@ export class ConversationService {
    * `conversationId` ausente cria conversa nova; presente **precisa** ser desta
    * pessoa. O `userId` vem do `@CurrentUser()` e nunca do corpo.
    */
+  /**
+   * `fotos` é só a **contagem**: a foto em si não é gravada (ADR 004 e 020). O
+   * número fica em `metadata.photos` para a tela dizer, depois de um F5, que ali
+   * houve uma foto que não foi guardada.
+   */
   async iniciarTurno(
     userId: string,
-    conversationId: string | undefined,
+    conversationId: string,
     texto: string,
+    fotos = 0,
   ): Promise<{ conversationId: string }> {
-    const conversa = conversationId ? await this.assertDaPessoa(userId, conversationId) : null;
+    const conversa = await this.encontrar(userId, conversationId);
 
     return this.prisma.$transaction(async (tx) => {
       const alvo =
-        conversa ?? (await tx.conversation.create({ data: { userId, title: tituloDe(texto) } }));
+        conversa ??
+        (await tx.conversation.create({
+          data: { id: conversationId, userId, title: tituloDe(texto) },
+        }));
 
       await tx.message.create({
-        data: { conversationId: alvo.id, role: MessageRole.user, content: texto },
+        data: {
+          conversationId: alvo.id,
+          role: MessageRole.user,
+          content: texto,
+          ...(fotos > 0 ? { metadata: { photos: fotos } } : {}),
+        },
       });
 
       await tx.conversation.update({
@@ -144,39 +227,54 @@ export class ConversationService {
   }
 
   /**
-   * Grava a resposta do agente. Chamado quando o stream termina — **inclusive
-   * quando ele termina mal**, com o pedaço que chegou.
+   * Tira a pausa das respostas anteriores — o turno de agora a resolveu.
    *
-   * Persistir o parcial é deliberado: a pessoa leu aquele texto na tela, e uma
-   * conversa que perde no F5 o que estava escrito ali é indistinguível de dado
-   * corrompido.
+   * Vale para a retomada **e** para a mensagem nova: quem escreve outra coisa em
+   * vez de responder ao card também encerra a pausa (o agente a descarta). E os
+   * argumentos de uma escrita proposta não ficam no banco depois disso — ver o
+   * comentário de `Message.metadata`.
+   */
+  async limparPausas(userId: string, conversationId: string): Promise<void> {
+    const conversa = await this.assertDaPessoa(userId, conversationId);
+    const pausadas = await this.prisma.message.findMany({
+      where: {
+        conversationId: conversa.id,
+        role: MessageRole.assistant,
+        metadata: { path: ['status'], equals: 'interrupted' },
+      },
+      select: { id: true },
+    });
+    for (const { id } of pausadas) {
+      await this.prisma.message.update({
+        where: { id },
+        data: { metadata: { status: 'resolved' } },
+      });
+    }
+  }
+
+  /**
+   * Grava a resposta do assistente e devolve o id da linha — ou `null` quando não
+   * havia o que gravar.
    *
-   * **Turno que só chamou tool grava do mesmo jeito**, mesmo sem uma letra de
-   * texto: "registra 200g de arroz" pode emitir `tool{log_meal}` e ter o stream
-   * cortado antes do primeiro token. A refeição foi registrada de verdade no
-   * domínio de destino, e o histórico é o único vestígio de que a IA a criou —
-   * descartar a mensagem aqui é o oposto do que o `Message.tools` do
-   * `schema.prisma` promete ("auditável depois de recarregar a página").
-   *
-   * O que continua não sendo gravado é o turno vazio de verdade: sem texto e sem
-   * tool não há o que auditar, e uma mensagem em branco do assistente é ruído no
-   * histórico que ainda vira entrada paga no turno seguinte.
+   * Uma pausa é gravada mesmo sem texto: é ela que traz o card de volta depois de
+   * um F5, e um turno que só pediu uma confirmação não escreveu nada.
    */
   async concluirTurno(
     userId: string,
     conversationId: string,
-    resposta: { texto: string; tools: ToolChamada[] },
-  ): Promise<void> {
+    resposta: RespostaDoTurno,
+  ): Promise<string | null> {
     // De novo pelo par, e não pelo id sozinho: este método é chamado com um id
     // que atravessou o streaming inteiro, e reconferir custa uma linha.
     const conversa = await this.prisma.conversation.findFirst({
       where: { id: conversationId, userId },
     });
-    if (!conversa) return;
+    if (!conversa) return null;
 
-    if (resposta.texto.trim() === '' && resposta.tools.length === 0) return;
+    const vazia = resposta.texto.trim() === '' && resposta.tools.length === 0;
+    if (vazia && !resposta.pausa) return null;
 
-    await this.prisma.message.create({
+    const linha = await this.prisma.message.create({
       data: {
         conversationId: conversa.id,
         role: MessageRole.assistant,
@@ -185,12 +283,38 @@ export class ConversationService {
           resposta.tools.length > 0
             ? (resposta.tools as unknown as Prisma.InputJsonValue)
             : undefined,
+        metadata: {
+          status: resposta.status,
+          ...(resposta.pausa ? { interrupt: resposta.pausa } : {}),
+        } as Prisma.InputJsonValue,
+        runId: resposta.runId,
       },
+      select: { id: true },
     });
     await this.prisma.conversation.update({
       where: { id: conversa.id },
       data: { updatedAt: new Date() },
     });
+    return linha.id;
+  }
+
+  /** O voto da pessoa numa resposta do assistente **desta** conversa. */
+  async votar(
+    userId: string,
+    conversationId: string,
+    messageId: string,
+    voto: VotoNaResposta,
+  ): Promise<void> {
+    const conversa = await this.assertDaPessoa(userId, conversationId);
+    const { count } = await this.prisma.message.updateMany({
+      where: { id: messageId, conversationId: conversa.id, role: MessageRole.assistant },
+      data: {
+        review: voto.review,
+        reviewReasons: voto.review === 'dislike' ? (voto.reasons ?? []) : [],
+        reviewNote: voto.review === 'dislike' ? (voto.note ?? null) : null,
+      },
+    });
+    if (count === 0) throw new NotFoundException('Mensagem não encontrada.');
   }
 }
 

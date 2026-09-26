@@ -117,6 +117,7 @@ services:
       AI_MODEL_TEXT: ${AI_MODEL_TEXT:-}
       AI_MODEL_VISION: ${AI_MODEL_VISION:-}
       AI_MODEL_EMBEDDING: ${AI_MODEL_EMBEDDING:-}
+      AI_MODEL_TRANSCRIPTION: ${AI_MODEL_TRANSCRIPTION:-}
       AI_TIMEOUT_S: ${AI_TIMEOUT_S:-120}
       # Segredo compartilhado com o apps/api. Obrigatório quando AI_BASE_URL
       # não é local — ver apps/agent/README.md, §"Rotas de inferência".
@@ -127,6 +128,11 @@ services:
       # rota /chat degrada com erro nomeado e o resto do agente segue de pé.
       MCP_BASE_URL: ${MCP_BASE_URL:-}
       MCP_TIMEOUT_S: ${MCP_TIMEOUT_S:-30}
+      # O Postgres da Fatia, onde o estado das conversas fica no schema
+      # `agent_checkpoint` (ADR 023). Vazio = em memória: uma pausa do chat
+      # (confirmação, pergunta) morre num restart. De dentro do compose o banco
+      # é `postgres`.
+      AGENT_CHECKPOINT_DATABASE_URL: ${AGENT_CHECKPOINT_DATABASE_URL:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

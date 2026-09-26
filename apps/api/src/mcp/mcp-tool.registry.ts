@@ -10,11 +10,29 @@ import {
 import { formatToolError } from './mcp-error';
 import { McpMetricsService } from '../observability/mcp-metrics.service';
 
-type ToolResult = { content: Array<{ type: 'text'; text: string }>; isError?: boolean };
+type ToolResult = {
+  content: Array<{ type: 'text'; text: string }>;
+  structuredContent?: Record<string, unknown>;
+  isError?: boolean;
+};
 
-const ok = (data: unknown): ToolResult => ({
+const ok = (data: unknown, artefato?: Record<string, unknown> | null): ToolResult => ({
   content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
+  ...(artefato ? { structuredContent: artefato } : {}),
 });
+
+/**
+ * O artefato é enfeite de tela: um defeito nele não pode derrubar a tool, cujo
+ * texto é o que o modelo lê para responder.
+ */
+function artefatoDe(tool: McpToolDef, data: unknown, input: unknown) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return tool.artifact?.(data, input as any) ?? null;
+  } catch {
+    return null;
+  }
+}
 
 const fail = (text: string): ToolResult => ({
   content: [{ type: 'text', text }],
@@ -46,6 +64,15 @@ export class McpToolRegistry implements OnModuleInit {
     this.logger.log(`Discovered ${this.tools.length} MCP tools: ${names.join(', ')}`);
   }
 
+  buscar(nome: string): McpToolDef | undefined {
+    return this.tools.find((tool) => tool.name === nome);
+  }
+
+  /** Nome → título em português, o mesmo que o `tools/list` anuncia. */
+  titulos(): Record<string, string> {
+    return Object.fromEntries(this.tools.map((tool) => [tool.name, tool.title]));
+  }
+
   bindAll(server: McpServer, ctx: McpToolContext): void {
     for (const tool of this.tools) {
       // O type signature de registerTool gera type-instantiation explosivo;
@@ -69,7 +96,7 @@ export class McpToolRegistry implements OnModuleInit {
             // A métrica repete o log de propósito, sem o `userId`: ela é o que sobrevive semanas
             // agregada, e rótulo por usuário explodiria a cardinalidade do Prometheus.
             this.metrics.record({ tool: tool.name, durationMs, success: true });
-            return ok(data);
+            return ok(data, artefatoDe(tool, data, input));
           } catch (err) {
             const { category, text } = formatToolError(err);
             const durationMs = Date.now() - start;

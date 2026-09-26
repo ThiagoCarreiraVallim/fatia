@@ -1,56 +1,34 @@
 /**
- * Contrato do chat com IA hospedada — épica #247.
+ * Contrato do chat com IA hospedada — épica #247, com estado no agente (ADR 023).
  *
  * O caminho é `PWA → proxy do Next → NestJS /api/chat → apps/agent`. Cada camada
  * repassa o SSE sem bufferizar; este arquivo é o **único** lugar onde o formato
- * dos eventos está escrito do lado do cliente.
+ * está escrito do lado do cliente.
+ *
+ * O fio é o vocabulário nativo do LangGraph — `messages`, `updates`,
+ * `messages/complete` —, mais os eventos próprios do Fatia (`start`, `catalog`,
+ * `usage`, `plan`, `artifact`, `context`, `validation`, `persisted`,
+ * `error`, `done`). É o par `{ event, data }` que o
+ * `useLangGraphRuntime` do assistant-ui consome direto; por isso `streamChat`
+ * **não** traduz nada: só recorta quadros. Ver `apps/agent/.../chat/events.py`.
  *
  * Mora em `@fatia/api-client`, e não no PWA, pelo motivo da #157: quando o tipo
  * do cliente e o que o serviço devolve são declarados em lugares diferentes, a
- * divergência aparece como bug de tela (bloco vazio, `undefined`, página caindo)
- * em vez de erro de compilação. As fixtures de teste são anotadas com os tipos
- * daqui exatamente para que divergir custe um `tsc` vermelho.
+ * divergência aparece como bug de tela em vez de erro de compilação.
  */
 
 import type { ApiTransport } from './transport';
-import { getConfiguredTransport } from './http';
-
-/** Estados de uma chamada de tool, no vocabulário dos elementos de IA do shadcn. */
-export type ChatToolState = 'input-available' | 'output-available' | 'output-error';
+import { apiFetch, getConfiguredTransport } from './http';
 
 /**
- * Uma tool que o agente chamou durante a resposta.
+ * Códigos de erro do chat, pelo lugar onde nascem.
  *
- * É o que torna a ação auditável em vez de mágica: quem conversa vê que "registrar
- * refeição" rodou, com que argumento e com que resultado.
- */
-export interface ChatToolCall {
-  /** Estável ao longo da conversa: o mesmo `id` chega de novo com o resultado. */
-  id: string;
-  /** Nome da tool no catálogo MCP, ex.: `registrar_refeicao`. */
-  name: string;
-  state: ChatToolState;
-  input?: unknown;
-  output?: unknown;
-  errorText?: string;
-}
-
-/**
- * Códigos de erro do chat.
- *
- * A lista é **conferida**, não suposta: os `AI_PROVIDER_*` / `AI_MODEL_*` /
- * `AI_ENDPOINT_*` / `AI_RESPONSE_*` são exatamente os `code` de
- * `apps/agent/src/fatia_agent/providers/errors.py`, que o NestJS repassa sem
- * traduzir (o contrato da #247 é repasse de SSE, não tradução). `chat.test.ts`
- * lê aquele arquivo e falha se as duas listas divergirem.
- *
- * `AI_PROVIDER_UNAVAILABLE` esteve aqui e **nenhuma camada emitia**: provedor
- * fora do ar chega como `AI_PROVIDER_UNREACHABLE`, caía em `AI_UNKNOWN_ERROR` e
- * o ramo escrito para ele era inalcançável. Era a #157 de novo — tipo do cliente
- * descrevendo um servidor que não existe.
+ * Os `AI_*` do provedor são os `code` de `apps/agent/.../providers/errors.py`, e
+ * os `MCP_*` os de `chat/errors.py`, que o NestJS repassa sem traduzir. Código
+ * que não está aqui vira `AI_UNKNOWN_ERROR` — ver `erroDoChat`.
  */
 export type ChatErrorCode =
-  // Nascem no agente e atravessam as três camadas com o mesmo nome.
+  // Agente → provedor de IA.
   | 'AI_PROVIDER_ERROR'
   | 'AI_PROVIDER_NOT_CONFIGURED'
   | 'AI_MODEL_NOT_ALLOWED'
@@ -60,9 +38,21 @@ export type ChatErrorCode =
   | 'AI_PROVIDER_REFUSED'
   | 'AI_RESPONSE_UNPARSEABLE'
   | 'AI_RESPONSE_TRUNCATED'
-  // Nasce no NestJS (`apps/api/src/ai/ai-quota.ts`).
+  // Agente → `/mcp` do NestJS.
+  | 'MCP_NOT_CONFIGURED'
+  | 'MCP_UNAUTHENTICATED'
+  | 'MCP_UNAUTHORIZED'
+  | 'MCP_UNREACHABLE'
+  | 'MCP_TIMEOUT'
+  | 'MCP_REFUSED'
+  | 'MCP_RESPONSE_UNPARSEABLE'
+  // NestJS.
   | 'AI_QUOTA_EXCEEDED'
-  // Nascem no cliente: descrevem falhas de antes de qualquer resposta do servidor.
+  | 'AGENT_STREAM_INTERRUPTED'
+  | 'CHAT_INTERNAL_ERROR'
+  | 'CHAT_RESUME_MISMATCH'
+  | 'CHAT_NOTHING_TO_RESUME'
+  // Cliente: falhas de antes de qualquer resposta do servidor.
   | 'AI_NETWORK_ERROR'
   | 'AI_UNAUTHORIZED'
   | 'AI_UNKNOWN_ERROR';
@@ -73,122 +63,137 @@ export interface ChatStreamError {
   resetsAt?: string;
 }
 
+/** Um quadro do SSE, cru: o `data` é o JSON do modo de stream, sem tradução. */
+export interface ChatStreamFrame {
+  event: string;
+  data: unknown;
+}
+
 /**
- * Uma ação que o agente propôs e **não** executou (ADR 022).
- *
- * O turno termina aqui, com `done`. Quem decide é quem está conversando: se
- * aprovar, o próximo `ChatRequest` leva este objeto de volta em `approved`, e é
- * aí que a tool roda. Recusar é não mandar nada — não há evento de recusa,
- * porque não há nada do outro lado esperando por ele.
- *
- * `arguments` é o texto do JSON como o agente o mandou, e volta **exatamente
- * assim**. Reserializar mudaria ordem de chave e espaçamento, e o agente compara
- * o texto literal para garantir que o que executa é o que foi aprovado — ver
- * `exigir_aprovada` no `tool_policy.py`.
+ * Uma foto do turno. Só JPEG, recodificado no aparelho — é a recodificação que
+ * tira o EXIF antes de a foto sair (ADR 020). Nada dela é gravado.
  */
-export interface ChatToolProposal {
-  /** Id da tool call no turno que a propôs. Casa o modal com a proposta. */
-  id: string;
+export interface ChatPhoto {
+  mediaType: 'image/jpeg';
+  /** Base64 sem o prefixo `data:`. */
+  data: string;
+}
+
+/** Um turno: mensagem nova **ou** a resposta a uma pausa. */
+export type ChatTurnRequest = {
+  /** Gerado pelo PWA na primeira mensagem. É o endereço da conversa. */
+  conversationId: string;
+} & (
+  | { message: string; resume?: undefined; photos?: ChatPhoto[] }
+  | { message?: undefined; resume: { interruptId: string; value: unknown } }
+);
+
+/** Um campo do formulário de `ask_user`. Quem escreve é o modelo — ver `normalizarCampos`. */
+export interface ChatAskField {
   name: string;
-  arguments: string;
+  label: string;
+  type: 'text' | 'number' | 'date' | 'select' | 'boolean';
+  required?: boolean;
+  options?: string[];
 }
 
-/**
- * Um quadro do SSE.
- *
- * `conversation` chega primeiro: sem ele, uma conversa interrompida no meio não
- * teria como ser continuada, porque o id é gerado no NestJS.
- */
-export type ChatStreamEvent =
-  | { type: 'conversation'; conversationId: string }
-  | { type: 'token'; text: string }
-  | { type: 'tool'; tool: ChatToolCall }
-  | { type: 'proposal'; proposal: ChatToolProposal }
-  | { type: 'error'; error: ChatStreamError }
-  | { type: 'done' };
-
-export interface ChatRequest {
-  message: string;
-  /** Ausente inicia conversa nova. O NestJS amarra o id ao usuário do token. */
-  conversationId?: string;
-  /**
-   * Propostas que a pessoa aprovou na tela, para executar neste turno.
-   *
-   * Vão junto de uma `message` como qualquer turno: o agente monta o prompt com
-   * ela e executa a aprovação antes de falar com o modelo. Ver o handshake em
-   * `apps/agent/src/fatia_agent/chat/events.py`.
-   */
-  approved?: ChatToolProposal[];
+/** Uma escrita que espera a pessoa aprovar (ADR 022). */
+export interface ChatConfirmAction {
+  kind: 'confirm';
+  toolCallId: string;
+  tool: string;
+  title: string;
+  prompt: string;
+  /** Inteiros: é o que a pessoa lê para decidir, e é o que executa se ela aprovar. */
+  arguments: Record<string, unknown>;
 }
 
+/** Uma pergunta do agente, com o formulário que ela pede. */
+export interface ChatQuestionAction {
+  kind: 'question';
+  toolCallId: string;
+  messageId: string;
+  prompt: string;
+  fields: ChatAskField[];
+}
+
+/** O `value` de uma pausa do grafo (`__interrupt__`). */
+export interface ChatInterruptValue {
+  kind: 'confirm' | 'question' | 'continue';
+  prompt: string;
+  actions: (ChatConfirmAction | ChatQuestionAction)[];
+  /** Só em `continue`: o que já foi feito, para decidir sem adivinhar. */
+  summary?: string;
+}
+
+/** A resposta a uma pausa, no formato que o `portao` do agente lê. */
+export type ChatResumeValue =
+  | { approvals: Record<string, boolean>; answers?: Record<string, unknown> }
+  | { answers: Record<string, unknown>; approvals?: Record<string, boolean> }
+  | boolean
+  | string;
+
 /**
- * Falha de configuração da instância, nos três códigos que a produzem.
- *
- * Mesmo texto de propósito: para quem conversa, "faltou preencher `AI_BASE_URL`",
- * "o modelo não passou pela revisão da #136" e "o host não passou" pedem a mesma
- * coisa (nada) e revelariam infraestrutura de graça. Quem opera distingue pelo
- * `code`, que continua inteiro no log do agente. É o mesmo raciocínio que
- * `apps/api/src/ai/ai-quota.ts` já aplica ao escopo `unpriced`.
+ * Falha de configuração da instância. Mesmo texto para os códigos que a
+ * produzem: para quem conversa, todos pedem a mesma coisa (nada) e revelariam
+ * infraestrutura de graça. Quem opera distingue pelo `code`, no log do agente.
  */
 const CONFIGURACAO =
-  'O chat com IA não está configurado nesta instância. O resto do Fatia ' +
-  'funciona normalmente — nada aqui depende de IA.';
+  'O assistente não está disponível neste app. O resto do Fatia funciona normalmente.';
 
 /**
- * O provedor não entregou a resposta: não atendeu, recusou, ou falhou de um jeito
- * que o agente não nomeou melhor. A ação de quem lê é uma só — tentar de novo.
- *
- * O 429 do provedor (`AI_PROVIDER_REFUSED`) entra aqui e **não** vira cota: quem
- * conversa não estourou limite nenhum, e mandá-lo esperar até amanhã seria mentir.
+ * O provedor não entregou a resposta. O 429 do provedor (`AI_PROVIDER_REFUSED`)
+ * entra aqui e **não** vira cota: quem conversa não estourou limite nenhum.
  */
-const PROVEDOR_FALHOU = 'O provedor de IA não atendeu agora. Tente de novo em alguns minutos.';
+const PROVEDOR_FALHOU =
+  'O assistente não conseguiu responder agora. Tente de novo em alguns minutos.';
+
+const DADOS_FORA = 'Não consegui consultar seus dados agora. Tente de novo em instantes.';
+
+const SESSAO = 'Sua sessão expirou. Entre de novo para continuar a conversa.';
 
 /**
- * Texto que o usuário lê, um por código.
- *
- * Um erro genérico ("algo deu errado") faz a pessoa procurar o problema no lugar
- * errado — cota estourada some sozinha amanhã, provedor fora não. Compartilhado
- * entre PWA e nativo pelo mesmo motivo de `streak-copy.ts`: os dois têm de dizer
- * igual.
- *
- * Tabela e não `switch`: `Record<ChatErrorCode, string>` é o que faz código novo
- * sem cópia virar `tsc` vermelho, e é dela que sai o conjunto aceito no parse —
- * assim a lista de códigos conhecidos não tem como divergir da união.
+ * Texto que o usuário lê, um por código. Tabela e não `switch`:
+ * `Record<ChatErrorCode, string>` é o que faz código novo sem cópia virar `tsc`
+ * vermelho, e é dela que sai o conjunto aceito no parse.
  */
 const TEXTOS: Record<ChatErrorCode, string> = {
   AI_PROVIDER_NOT_CONFIGURED: CONFIGURACAO,
   AI_MODEL_NOT_ALLOWED: CONFIGURACAO,
   AI_ENDPOINT_NOT_ALLOWED: CONFIGURACAO,
+  MCP_NOT_CONFIGURED: CONFIGURACAO,
   AI_PROVIDER_ERROR: PROVEDOR_FALHOU,
   AI_PROVIDER_UNREACHABLE: PROVEDOR_FALHOU,
   AI_PROVIDER_REFUSED: PROVEDOR_FALHOU,
-  AI_PROVIDER_TIMEOUT: 'O modelo demorou demais para responder. Tente enviar de novo.',
-  AI_RESPONSE_UNPARSEABLE:
-    'A resposta do modelo veio em um formato que o Fatia não entendeu. Tente enviar de novo.',
+  AI_PROVIDER_TIMEOUT: 'O assistente demorou demais para responder. Tente enviar de novo.',
+  AI_RESPONSE_UNPARSEABLE: 'O assistente se enrolou nesta resposta. Tente enviar de novo.',
   AI_RESPONSE_TRUNCATED:
     'A resposta ficou longa demais e foi cortada. Tente uma pergunta mais específica.',
-  AI_QUOTA_EXCEEDED: 'Você atingiu o limite diário de uso da IA. Ele volta amanhã.',
+  MCP_UNREACHABLE: DADOS_FORA,
+  MCP_TIMEOUT: DADOS_FORA,
+  MCP_REFUSED: DADOS_FORA,
+  MCP_RESPONSE_UNPARSEABLE: DADOS_FORA,
+  MCP_UNAUTHENTICATED: SESSAO,
+  MCP_UNAUTHORIZED: SESSAO,
+  AI_UNAUTHORIZED: SESSAO,
+  AI_QUOTA_EXCEEDED: 'Você chegou ao limite de uso do assistente por hoje. Ele volta amanhã.',
+  AGENT_STREAM_INTERRUPTED: 'A resposta foi interrompida antes de terminar. Tente enviar de novo.',
   AI_NETWORK_ERROR: 'A conexão caiu no meio da resposta. O que já chegou continua acima.',
-  AI_UNAUTHORIZED: 'Sua sessão expirou. Entre de novo para continuar a conversa.',
-  AI_UNKNOWN_ERROR: 'O chat falhou por um motivo não identificado. Tente enviar de novo.',
+  CHAT_RESUME_MISMATCH:
+    'Esta conversa mudou desde que a pergunta apareceu. Recarregue para ver o que ela espera agora.',
+  CHAT_NOTHING_TO_RESUME:
+    'Esta conversa não está mais esperando resposta. Recarregue para ver como ela ficou.',
+  CHAT_INTERNAL_ERROR: 'Algo deu errado nesta resposta. Tente enviar de novo.',
+  AI_UNKNOWN_ERROR: 'Algo deu errado nesta resposta. Tente enviar de novo.',
 };
 
-/**
- * Todos os códigos conhecidos, na ordem da tabela.
- *
- * Exportado para o teste conferir contra `apps/agent` — é o que transforma
- * "declarei um código que ninguém emite" em suíte vermelha.
- */
+/** Todos os códigos conhecidos, na ordem da tabela. */
 export const CHAT_ERROR_CODES = Object.keys(TEXTOS) as ChatErrorCode[];
 
 const CODIGOS: ReadonlySet<string> = new Set<string>(CHAT_ERROR_CODES);
 
 /**
- * `resetsAt` na cópia do aluno é data legível, não ISO.
- *
- * O `${resetsAt.toISOString()} (UTC)` de `ai-quota.ts` é mensagem de API, lida
- * por quem opera; aqui é balão de conversa. Sem fuso explícito de propósito: o
- * horário que interessa é o do aparelho de quem lê. Data impossível não pode
+ * `resetsAt` na cópia do aluno é data legível, não ISO. Data impossível não pode
  * derrubar o balão de erro — aí a frase cai na versão sem horário.
  */
 function quandoVolta(resetsAt: string): string | null {
@@ -200,13 +205,13 @@ function quandoVolta(resetsAt: string): string | null {
 export function textoDeErroDoChat(error: ChatStreamError): string {
   if (error.code === 'AI_QUOTA_EXCEEDED' && error.resetsAt) {
     const volta = quandoVolta(error.resetsAt);
-    if (volta) return `Você atingiu o limite diário de uso da IA. Ele volta em ${volta}.`;
+    if (volta) return `Você chegou ao limite de uso do assistente por hoje. Ele volta em ${volta}.`;
   }
   return TEXTOS[error.code];
 }
 
 function isRecord(valor: unknown): valor is Record<string, unknown> {
-  return typeof valor === 'object' && valor !== null;
+  return typeof valor === 'object' && valor !== null && !Array.isArray(valor);
 }
 
 function texto(valor: unknown): string | undefined {
@@ -214,90 +219,26 @@ function texto(valor: unknown): string | undefined {
 }
 
 /**
- * `data:` de um quadro → evento tipado, ou `null` quando o quadro não serve.
+ * O `data` de um evento `error` (ou o corpo de uma recusa) → erro tipado.
  *
- * Descartar em silêncio é deliberado: um quadro malformado no meio do stream não
- * pode derrubar a conversa inteira. O que **não** é aceitável é aceitar a forma
- * errada calada — daí cada campo obrigatório ser conferido aqui, e não assumido.
+ * A `message` do servidor **fica de fora**: ela é para quem lê o log, e carrega
+ * endpoint, `AI_BASE_URL`, modelo e host do subprocessador (#136). Por isso
+ * `ChatStreamError` nem tem o campo — mostrar de novo custa `tsc` vermelho.
  */
-export function parseChatEvent(nome: string, data: string): ChatStreamEvent | null {
-  let corpo: unknown;
-  try {
-    corpo = JSON.parse(data);
-  } catch {
-    return null;
-  }
-  if (!isRecord(corpo)) return null;
-
-  switch (nome) {
-    case 'conversation': {
-      const conversationId = texto(corpo.conversationId);
-      return conversationId ? { type: 'conversation', conversationId } : null;
-    }
-    case 'token': {
-      // String vazia é quadro legítimo do provedor e não tem o que renderizar;
-      // `typeof` (e não `texto`) porque aqui o vazio é válido, só é inútil.
-      if (typeof corpo.text !== 'string') return null;
-      return corpo.text ? { type: 'token', text: corpo.text } : null;
-    }
-    case 'tool': {
-      const id = texto(corpo.id);
-      const name = texto(corpo.name);
-      const state = corpo.state;
-      if (!id || !name) return null;
-      if (state !== 'input-available' && state !== 'output-available' && state !== 'output-error') {
-        return null;
-      }
-      const tool: ChatToolCall = { id, name, state };
-      if ('input' in corpo) tool.input = corpo.input;
-      if ('output' in corpo) tool.output = corpo.output;
-      const errorText = texto(corpo.errorText);
-      if (errorText) tool.errorText = errorText;
-      return { type: 'tool', tool };
-    }
-    case 'error': {
-      const bruto = texto(corpo.code);
-      // Código desconhecido vira `AI_UNKNOWN_ERROR`, e a `message` do servidor
-      // **fica de fora**. O docstring do agente é explícito: "a mensagem em
-      // português é para o humano que lê o log, o código é para o cliente
-      // decidir". Ela carrega caminho de endpoint, `AI_BASE_URL`, nome de modelo
-      // e host do subprocessador (#136) — diagnóstico sem ação possível para
-      // quem conversa. Por isso `ChatStreamError` nem tem o campo: mostrar de
-      // novo custa `tsc` vermelho, não revisão de código.
-      const code: ChatErrorCode =
-        bruto && CODIGOS.has(bruto) ? (bruto as ChatErrorCode) : 'AI_UNKNOWN_ERROR';
-      const error: ChatStreamError = { code };
-      const resetsAt = texto(corpo.resetsAt);
-      if (resetsAt) error.resetsAt = resetsAt;
-      return { type: 'error', error };
-    }
-    case 'proposal': {
-      // `id` e `name` são obrigatórios: sem eles não há como casar o modal com a
-      // proposta nem como executá-la depois, e um modal sem ação é pior que
-      // nenhum. Quadro incompleto é descartado, como nos outros ramos.
-      const id = texto(corpo.id);
-      const name = texto(corpo.name);
-      if (!id || !name) return null;
-      // Não passa pelo `texto`: ele trata `''` como ausente, e string vazia aqui
-      // é legítima — tool sem parâmetro é chamada com `{}` ou com nada. Só um
-      // valor que não é string invalida a proposta.
-      const args = typeof corpo.arguments === 'string' ? corpo.arguments : undefined;
-      if (args === undefined) return null;
-      return { type: 'proposal', proposal: { id, name, arguments: args } };
-    }
-    case 'done':
-      return { type: 'done' };
-    default:
-      return null;
-  }
+export function erroDoChat(dados: unknown): ChatStreamError {
+  const corpo = isRecord(dados) ? dados : {};
+  const bruto = texto(corpo.code);
+  const code: ChatErrorCode =
+    bruto && CODIGOS.has(bruto) ? (bruto as ChatErrorCode) : 'AI_UNKNOWN_ERROR';
+  const error: ChatStreamError = { code };
+  const resetsAt = texto(corpo.resetsAt);
+  if (resetsAt) error.resetsAt = resetsAt;
+  return error;
 }
 
 /**
- * Recorta quadros completos de um buffer de SSE.
- *
- * Existe separado do `fetch` porque é aqui que mora o erro clássico do streaming:
- * um chunk da rede não respeita fronteira de quadro. Devolver o resto e só emitir
- * o que terminou em linha em branco é o que faz o token não ser cortado ao meio.
+ * Recorta quadros completos de um buffer de SSE. Um chunk da rede não respeita
+ * fronteira de quadro: só o que terminou em linha em branco sai daqui.
  */
 export function recortarQuadros(buffer: string): { quadros: string[]; resto: string } {
   const normalizado = buffer.replace(/\r\n/g, '\n');
@@ -306,12 +247,18 @@ export function recortarQuadros(buffer: string): { quadros: string[]; resto: str
   return { quadros: partes.filter((q) => q.trim().length > 0), resto };
 }
 
-/** Um quadro cru (`event: token\ndata: {...}`) → evento tipado. */
-export function parseQuadro(quadro: string): ChatStreamEvent | null {
+/**
+ * Um quadro cru → `{ event, data }`, ou `null` para comentário e JSON quebrado.
+ *
+ * 🔴 Quem nomeia o quadro é a linha `event:`, **não** o corpo. Em `messages` o
+ * `data` é uma lista de dois elementos, e procurar `type` dentro do JSON
+ * descartaria justamente o texto da resposta.
+ */
+export function parseQuadro(quadro: string): ChatStreamFrame | null {
   let nome = 'message';
   const dados: string[] = [];
   for (const linha of quadro.split('\n')) {
-    if (linha.startsWith(':')) continue; // comentário/keep-alive
+    if (linha.startsWith(':')) continue;
     const sep = linha.indexOf(':');
     const campo = sep === -1 ? linha : linha.slice(0, sep);
     const valor = sep === -1 ? '' : linha.slice(sep + 1).replace(/^ /, '');
@@ -319,25 +266,28 @@ export function parseQuadro(quadro: string): ChatStreamEvent | null {
     else if (campo === 'data') dados.push(valor);
   }
   if (dados.length === 0) return null;
-  return parseChatEvent(nome, dados.join('\n'));
+  try {
+    return { event: nome, data: JSON.parse(dados.join('\n')) as unknown };
+  } catch {
+    return null;
+  }
 }
 
 async function erroDeResposta(res: Response): Promise<ChatStreamError> {
   if (res.status === 401) return { code: 'AI_UNAUTHORIZED' };
   const corpo: unknown = await res.json().catch(() => null);
-  const dentro = isRecord(corpo) ? corpo : {};
-  const bruto = texto(dentro.code);
-  if (bruto && CODIGOS.has(bruto)) {
-    const error: ChatStreamError = { code: bruto as ChatErrorCode };
-    const resetsAt = texto(dentro.resetsAt);
-    if (resetsAt) error.resetsAt = resetsAt;
-    return error;
-  }
-  // Sem código nomeado, o status ainda distingue os casos que a #250 exige
-  // separar: cota (429) não é provedor fora (5xx).
+  const erro = erroDoChat(corpo);
+  if (erro.code !== 'AI_UNKNOWN_ERROR') return erro;
+  // Sem código nomeado, o status ainda distingue cota (429) de provedor fora.
   if (res.status === 429) return { code: 'AI_QUOTA_EXCEEDED' };
   if (res.status === 503 || res.status === 504) return { code: 'AI_PROVIDER_UNREACHABLE' };
-  return { code: 'AI_UNKNOWN_ERROR' };
+  return erro;
+}
+
+/** Erro como quadros: o consumidor tem um caminho só de término, sempre com `done`. */
+function* comoQuadros(error: ChatStreamError): Generator<ChatStreamFrame> {
+  yield { event: 'error', data: error };
+  yield { event: 'done', data: { status: 'error' } };
 }
 
 export interface StreamChatInit {
@@ -345,21 +295,18 @@ export interface StreamChatInit {
 }
 
 /**
- * Envia uma mensagem e emite os eventos do SSE conforme chegam.
+ * Envia um turno e emite os quadros do SSE conforme chegam.
  *
  * **Não usa `apiFetch`** de propósito: aquele caminho lê `res.json()` de uma vez
- * e tem teto de tempo por requisição. Os dois matariam o streaming — resposta que
- * aparece inteira no fim desperdiça o SSE das camadas de baixo, e o teto abortaria
- * a conversa longa no meio. O corte aqui é do chamador, pelo `signal`.
+ * e tem teto de tempo por requisição, e os dois matariam o streaming.
  *
- * **Nunca lança por falha de rede ou status**: emite `{ type: 'error' }` e termina.
- * Um chat que estoura exceção deixa a tela travada, e o requisito da #250 é o
- * oposto — a conversa continua utilizável depois do erro.
+ * **Nunca lança por falha de rede ou status**: emite `error` + `done` e termina.
+ * Um chat que estoura exceção deixa a tela travada.
  */
 export async function* streamChat(
-  body: ChatRequest,
+  body: ChatTurnRequest,
   init: StreamChatInit = {},
-): AsyncGenerator<ChatStreamEvent> {
+): AsyncGenerator<ChatStreamFrame> {
   const transport: ApiTransport = getConfiguredTransport();
   const path = '/api/chat';
   const headers = new Headers({ 'Content-Type': 'application/json', Accept: 'text/event-stream' });
@@ -378,9 +325,7 @@ export async function* streamChat(
     });
   } catch {
     if (init.signal?.aborted) return;
-    // A `message` do `fetch` não entra no evento: ela varia por navegador e não
-    // diz nada acionável a quem conversa. A cópia por código é a da tela.
-    yield { type: 'error', error: { code: 'AI_NETWORK_ERROR' } };
+    yield* comoQuadros({ code: 'AI_NETWORK_ERROR' });
     return;
   }
 
@@ -389,7 +334,7 @@ export async function* streamChat(
     if (error.code === 'AI_UNAUTHORIZED') {
       await transport.onUnauthorized?.({ path, body: null });
     }
-    yield { type: 'error', error };
+    yield* comoQuadros(error);
     return;
   }
 
@@ -411,10 +356,217 @@ export async function* streamChat(
   } catch {
     if (init.signal?.aborted) return;
     // Queda no meio do stream: o que já chegou fica na tela, e o erro diz isso.
-    yield { type: 'error', error: { code: 'AI_NETWORK_ERROR' } };
+    yield* comoQuadros({ code: 'AI_NETWORK_ERROR' });
     return;
   }
 
   const ultimo = parseQuadro(buffer);
   if (ultimo) yield ultimo;
+}
+
+// ---------------------------------------------------------------- conversas
+
+export interface ChatConversationSummary {
+  id: string;
+  title: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Uma linha de `Message`, como `GET /chat/conversations/:id` devolve. */
+export interface ChatHistoryMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  /** Só o nome de cada tool: os argumentos já estão no domínio de destino. */
+  tools: { name: string }[] | null;
+  metadata: {
+    status?: 'completed' | 'interrupted' | 'error' | 'resolved';
+    interrupt?: { id: string; value: ChatInterruptValue };
+    /** Na fala da pessoa: quantas fotos foram com ela. A foto em si não é guardada. */
+    photos?: number;
+  } | null;
+  runId: string | null;
+  review: 'like' | 'dislike' | null;
+  createdAt: string;
+}
+
+export interface ChatConversation extends ChatConversationSummary {
+  messages: ChatHistoryMessage[];
+}
+
+export type ChatReviewReason =
+  'incorrect' | 'incomplete' | 'did_not_follow' | 'wrong_data' | 'slow' | 'other';
+
+export interface ChatFeedback {
+  review: 'like' | 'dislike' | null;
+  reasons?: ChatReviewReason[];
+  note?: string;
+}
+
+/** O chat existe nesta instância, e o que ele sabe fazer além de texto. */
+export interface ChatAvailability {
+  available: boolean;
+  photos: boolean;
+  dictation: boolean;
+}
+
+export function getChatAvailability(): Promise<ChatAvailability> {
+  return apiFetch('/api/chat/availability');
+}
+
+/**
+ * O ditado: o áudio gravado vira texto para o campo de mensagem. **Não envia
+ * nada** — quem decide mandar é a pessoa, depois de ler.
+ */
+export function transcribeAudio(audio: Blob): Promise<{ text: string }> {
+  return apiFetch('/api/chat/transcribe', {
+    method: 'POST',
+    headers: { 'Content-Type': audio.type || 'audio/webm' },
+    body: audio,
+    // O teto padrão do transporte é o de uma leitura; transcrição no gateway
+    // leva segundos por minuto de áudio.
+    timeoutMs: 60_000,
+  });
+}
+
+export function listConversations(busca?: string): Promise<ChatConversationSummary[]> {
+  const termo = busca?.trim();
+  return apiFetch(`/api/chat/conversations${termo ? `?q=${encodeURIComponent(termo)}` : ''}`);
+}
+
+export function getConversation(id: string): Promise<ChatConversation> {
+  return apiFetch(`/api/chat/conversations/${encodeURIComponent(id)}`);
+}
+
+export function renameConversation(
+  id: string,
+  title: string,
+): Promise<{ id: string; title: string }> {
+  return apiFetch(`/api/chat/conversations/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ title }),
+  });
+}
+
+export function deleteConversation(id: string): Promise<void> {
+  return apiFetch(`/api/chat/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export function sendChatFeedback(
+  conversationId: string,
+  messageId: string,
+  feedback: ChatFeedback,
+): Promise<void> {
+  return apiFetch(
+    `/api/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/feedback`,
+    { method: 'PATCH', body: JSON.stringify(feedback) },
+  );
+}
+
+// ---------------------------------------------------------------- plano e artefatos
+
+/** Um passo do plano que o agente anuncia no evento `plan` — o plano inteiro a cada mudança. */
+export interface ChatPlanStep {
+  id: string;
+  title: string;
+  status: 'pending' | 'running' | 'done';
+}
+
+type ChatArtifactBase = { toolCallId: string; label?: string };
+
+/**
+ * A carga tipada de uma tool (evento `artifact`), pendurada no cartão dela pelo
+ * `toolCallId`. Os formatos são a lista fechada de `apps/agent/.../chat/artefatos.py`.
+ *
+ * Vive só no turno ao vivo: `Message.tools` guarda o nome da tool e nada mais, então
+ * depois de recarregar a página o cartão volta sem o artefato.
+ */
+export type ChatArtifact =
+  | (ChatArtifactBase & {
+      kind: 'metric';
+      value: number;
+      unit?: string;
+      target?: { min?: number | null; max?: number | null };
+      breakdown?: { label: string; value: number; unit?: string }[];
+    })
+  | (ChatArtifactBase & {
+      kind: 'timeline';
+      unit?: string;
+      delta?: number | null;
+      events: { date: string; value: number }[];
+    })
+  | (ChatArtifactBase & {
+      kind: 'report';
+      columns: string[];
+      rows: (string | number | null)[][];
+    })
+  | (ChatArtifactBase & {
+      kind: 'comparison';
+      items: { label: string; value: number | string; unit?: string }[];
+    });
+
+// ---------------------------------------------------------------- memória e cota
+
+/** O que o assistente guardou sobre a pessoa, a pedido dela (`save_memory`). */
+export interface ChatMemory {
+  id: string;
+  content: string;
+  createdAt: string;
+}
+
+/**
+ * A cota de IA do dia. `limitMicros: null` quando a instância não tem teto por
+ * pessoa — o medidor não aparece. `allowed` é a mesma decisão que barra o envio.
+ */
+export interface ChatQuota {
+  spentMicros: number;
+  limitMicros: number | null;
+  usedRatio: number | null;
+  resetsAt: string;
+  allowed: boolean;
+}
+
+export function listChatMemories(): Promise<ChatMemory[]> {
+  return apiFetch('/api/chat/memories');
+}
+
+export function deleteChatMemory(id: string): Promise<void> {
+  return apiFetch(`/api/chat/memories/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export function getChatQuota(): Promise<ChatQuota> {
+  return apiFetch('/api/chat/quota');
+}
+
+// ---------------------------------------------------------------- cartão de confirmação
+
+/** Uma linha do resumo de uma escrita pausada: "Refeição: Almoço". */
+export interface ChatActionPreviewLine {
+  rotulo: string;
+  valor: string;
+}
+
+/**
+ * O que a escrita pausada vai fazer, em português, montado pela API a partir da
+ * chamada exata que está no checkpoint. `valida: false` quando a própria tool
+ * recusaria os argumentos: aí o cartão não deixa confirmar.
+ */
+export type ChatActionPreview =
+  | { valida: true; linhas: ChatActionPreviewLine[] }
+  | { valida: false; linhas: ChatActionPreviewLine[]; problema: string };
+
+export function previewChatAction(
+  tool: string,
+  argumentos: Record<string, unknown>,
+): Promise<ChatActionPreview> {
+  return apiFetch('/api/chat/preview', {
+    method: 'POST',
+    body: JSON.stringify({ tool, arguments: argumentos }),
+  });
+}
+
+/** Nome da tool → título em português, para rotular o histórico depois de um F5. */
+export function listChatToolTitles(): Promise<Record<string, string>> {
+  return apiFetch('/api/chat/tools');
 }
