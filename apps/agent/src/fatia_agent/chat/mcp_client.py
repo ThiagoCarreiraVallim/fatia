@@ -32,6 +32,7 @@ método e status, nunca o header — é a mesma lição da #214, do lado Python.
 """
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -81,10 +82,15 @@ class McpClient:
         bearer: str,
         timeout_s: float = 30.0,
         transport: httpx.AsyncBaseTransport | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> None:
+        # `headers` existe para o eval da fronteira escolher a superfície de tools
+        # (`x-fatia-superficie`). Os três de baixo vêm depois e não são
+        # sobrescrevíveis: o Bearer é de quem conversa, e só dele.
         self._client = httpx.AsyncClient(
             timeout=timeout_s,
             headers={
+                **(headers or {}),
                 "Authorization": f"Bearer {bearer}",
                 "Accept": ACCEPT,
                 "Content-Type": "application/json",

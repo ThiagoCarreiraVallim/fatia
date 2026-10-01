@@ -9,7 +9,7 @@ capacidade. Nenhuma linha deste arquivo sabe em que ambiente está rodando.
 import asyncio
 import base64
 import json as jsonlib
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Mapping, Sequence
 from typing import Any
 
 import httpx
@@ -63,8 +63,25 @@ class OpenAICompatProvider:
         max_retries: int = 2,
         retry_backoff_s: float = 0.5,
         transport: httpx.AsyncBaseTransport | None = None,
+        chat_extra: Mapping[str, Any] | None = None,
     ) -> None:
         self._text_model = text_model
+        # Campos a mais no corpo de `stream_chat` — temperatura, roteamento de provedor
+        # de um agregador. O produto não passa nada; o eval da fronteira passa, e grava
+        # o que passou no ledger, porque cada um deles muda o que está sendo medido.
+        self._chat_extra = dict(chat_extra or {})
+        sobrescritos = self._chat_extra.keys() & {
+            "model",
+            "messages",
+            "stream",
+            "stream_options",
+            "tools",
+        }
+        if sobrescritos:
+            raise ValueError(
+                f"chat_extra não pode trocar {', '.join(sorted(sobrescritos))}: o modelo e o "
+                "prompt registrados deixariam de ser os que rodaram."
+            )
         self._vision_model = vision_model
         self._embedding_model = embedding_model
         self._max_retries = max_retries
@@ -214,6 +231,7 @@ class OpenAICompatProvider:
         }
         if tools:
             payload["tools"] = list(tools)
+        payload.update(self._chat_extra)
 
         acumulador = _AcumuladorDeToolCalls()
         finish_reason = "stop"

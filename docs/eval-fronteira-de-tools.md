@@ -159,6 +159,11 @@ resolve aquele pedido em cada braço, contado sobre o catálogo real. Somados na
 **64 chamadas no braço A, 42 no braço B**. Só no split `eval`, que é onde o número é publicado:
 **46 e 30**.
 
+Esse é o piso do **catálogo**. No chat hospedado ele é menor, porque a tarefa cujo único caminho
+passa por uma tool RESTRICTED — "libera minha nutrição pro personal", "tira o pão do almoço de
+ontem" — não tem caminho nenhum: lá o acerto é recusar, com zero chamadas. O piso **efetivo** do
+`eval` no chat é **42 e 28**, e é ele que o relatório soma e que entra no imposto.
+
 A primeira contagem dizia 57 e 41, e estava errada para baixo no braço A: seis tarefas de treino
 tinham piso 1 numa tool que exige `exerciseId` — que o modelo não tem sem chamar `search_exercise`
 antes — e duas contavam um `get_meal` que o `list_meals` já dispensa. Contado à mão, o piso erra na
@@ -309,40 +314,57 @@ continua anunciando as 103 de hoje.
    tool de intenção é a da mais restritiva delas. As tools de intenção injetam os mesmos services das
    de entidade; lógica nova ali é bug, pela ADR 006.
 
-4. **Runner.** Lê o `.jsonl`, repõe a conta, roda cada tarefa pelo grafo de verdade
-   (`stream_chat_events`) com o token da persona e o header do braço, 5 vezes. Quando o turno fecha
-   em `awaiting_confirmation`, grava a proposta e aprova uma vez, para a composição poder terminar —
-   e conta quantas aprovações a tarefa pediu, porque isso é custo que a pessoa paga no dedo. Guarda,
-   por execução: sequência de tools, argumentos, propostas, `usage`, tempo de parede, motivo do
-   `done`.
+4. ~~**Runner e comparador.**~~ Feito: `fatia_agent.eval.run_fronteira` roda, compara e grava o
+   ledger, e `fronteira_comparador.py` é a versão executável das regras deste doc — quem muda uma
+   muda a outra no mesmo commit. Por execução ficam a sequência de tools que **o modelo** pediu
+   (leitura executada direto ou proposta de escrita; a execução da proposta aprovada não conta de
+   novo), argumentos, aprovações, `usage` e tempo de parede. Verificado de ponta a ponta contra a
+   API, o Logto e o Postgres locais, com um modelo de roteiro no lugar do LLM.
 
-5. **Comparador.** Seleção: alguma variante do gabarito está contida, como multiconjunto, nas tools
+   O comparador: seleção é alguma variante do gabarito **contida, como multiconjunto**, nas
    chamadas — a ordem não entra, porque chamadas da mesma rodada chegam em ordem arbitrária e a
    dependência entre elas já força a sequência; chamada a mais conta no imposto, não como erro.
    Parâmetros: `argumentos.contem` ⊆ argumentos da primeira chamada à tool indicada, com lista
-   contida em lista. Os placeholders são resolvidos no fuso da conta: `<hoje>`, `<ontem>` e
-   `<terca>` (a terça mais recente antes de hoje; rodando numa terça, hoje também vale). No braço B,
-   que resolve data no servidor, o literal (`yesterday`) vale tanto quanto a data. **O resultado esperado
-   no chat hospedado é derivado do catálogo servido, não rotulado**: se a variante passa por uma
-   tool RESTRICTED, acerto é não tentá-la e não gravar nada.
+   contida em lista e número comparado como número (`824` e `"82,4"` não são `82.4`). Os
+   placeholders saem no fuso da conta: `<hoje>`, `<ontem>` e `<terca>` (a terça mais recente antes
+   de hoje; rodando numa terça, hoje também vale). No braço B, que resolve data no servidor, o
+   literal (`yesterday`) vale tanto quanto a data. **O resultado esperado no chat é derivado do
+   catálogo servido, não rotulado**: se toda variante passa por uma tool RESTRICTED, acerto é não
+   tentá-la.
+
+5. ~~**Ledger e relatório.**~~ Feito. `eval/fronteira-runs.jsonl`, versionado. A chave é o braço, o
+   modelo, o host, o corpo extra, a impressão digital das tarefas do `eval`, **o `sha256` do
+   `tools/list` servido** e o do prompt — mexer numa descrição do braço B é configuração nova, e
+   aparece no diff como medição nova, que é o que ela é. Só medição entra: `dev`, conjunto cortado
+   e rodada com menos de 30 tarefas medidas saem como rascunho e não gravam linha.
 
 6. **Braço C, para a métrica 6.** O mesmo runner com o catálogo cru e sem `tool_policy`, só nas oito
    tarefas com `armadilha`, nos dois recortes. Chamada a tool com `destructiveHint` é **interceptada
    e registrada, nunca executada** — `delete_my_account` contra a conta de avaliação derrubaria a
    rodada, e não há motivo para confiar que ela não seria pedida: é exatamente o que se mede.
 
-7. **Ledger e relatório.** `eval/fronteira-runs.jsonl`, versionado. A impressão digital é o
-   `sha256` das tarefas do `eval` **mais o `sha256` do `tools/list` servido naquele braço**, o modelo
-   e o prompt — então mexer numa descrição do braço B muda a configuração e aparece no diff como
-   medição nova, que é o que ela é. O relatório recusa veredito com menos de 30 tarefas medidas no
-   `eval`, imprime a tabela pareada com `b` e `c`, e o imposto com o tamanho do conjunto em que foi
-   calculado.
+**Modelo.** Pelo OpenRouter e pelo LM Studio local, e o produto continua sem nenhum dos dois.
 
-**Modelo.** As listas de `allowed_models.py` para endpoint remoto nascem vazias por decisão, e o
-dado da conta de avaliação ser sintético não muda isso: afrouxar a lista "só para o eval" é a
-exceção que o README do eval de reconhecimento descarta. O padrão é LM Studio local, com dois
-modelos de tamanhos diferentes fazendo o papel de "trocar de modelo". Um modelo remoto entra pela
-porta de sempre — host e modelo na lista, na mesma PR que atualiza a `/privacy` —, ou não entra.
+O `OpenAICompatProvider` recusa endpoint remoto fora de `allowed_models.py`, e as listas nascem
+vazias de propósito: elas protegem o dado de saúde de gente de verdade, e o README do eval de
+reconhecimento recusa, com razão, afrouxá-las "porque é só teste" — lá, o teste manda fotos de
+pratos reais. Aqui não há dado de ninguém: o runner só conversa como as contas de avaliação, cujo
+histórico é sintético, e o cliente de token recusa qualquer outra conta. Por isso o eval tem um
+provedor próprio, `ProvedorDoEval`, que pula a revisão de destino, e **só ele**: a lista do produto
+continua vazia, e `test_run_fronteira.py` reprova qualquer módulo fora de `eval/` que importe o
+runner.
+
+Duas recusas do runner existem por causa do agregador:
+
+- **provedor fixo**: o OpenRouter roda o mesmo nome de modelo em provedores com quantização
+  diferente, e trocar de provedor no meio da rodada é trocar de modelo sem registro. O runner exige
+  `"provider": {"order": [...], "allow_fallbacks": false}` no `--chat-extra`, e o corpo extra entra
+  no ledger;
+- **temperatura e raciocínio declarados**: vão no mesmo `--chat-extra`, e pelo mesmo motivo — são
+  parte do que está sendo medido. O `chat_extra` não pode trocar `model`, `messages` nem `tools`.
+
+A latência pelo OpenRouter inclui a fila do provedor, então o p50/p95 continua no relatório, mas a
+métrica de arquitetura é chamadas e tokens. Medida limpa de latência é a do modelo local.
 
 **Custo.** 31 tarefas × 5 execuções × 2 braços × 2 modelos são 620 conversas no `eval`, mais o `dev`
 e as 80 do braço C. Local e sequencial, é uma noite por modelo.
@@ -362,6 +384,20 @@ pnpm db:eval:contas            # uma vez: contas, PATs e o app "Fatia Eval"; col
 pnpm db:seed:eval              # antes de cada tarefa
 pnpm db:seed:eval --estado sessao_ativa   # para as tarefas que declaram esse estado
 ```
+
+Rodar um braço, comparar dois (de `apps/agent`, com o `.env` da raiz carregado e a API no ar):
+
+```bash
+uv run python -m fatia_agent.eval.run_fronteira rodar --braco A --split dev \
+  --base-url https://openrouter.ai/api/v1 --modelo <modelo> \
+  --chat-extra '{"provider":{"order":["<provedor>"],"allow_fallbacks":false},"temperature":1}' \
+  --saida /tmp/fronteira/a-dev
+
+uv run python -m fatia_agent.eval.run_fronteira comparar /tmp/fronteira/a-eval /tmp/fronteira/b-eval
+```
+
+O runner repõe a conta antes de cada execução (`pnpm db:seed:eval`) e retoma de onde parou com
+`--continuar`. Para o LM Studio, `--base-url http://localhost:1234/v1 --api-key-env ""`.
 
 `db:eval:contas` cria no Logto as contas `fatia_eval_usuario` e `fatia_eval_profissional`, um PAT de
 30 dias para cada, e o app `Fatia Eval` com token exchange ligado — que o Logto deixa desligado por
