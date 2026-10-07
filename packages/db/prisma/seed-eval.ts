@@ -210,11 +210,32 @@ function item(a: Alimento, grams: number) {
 // A conta
 // ---------------------------------------------------------------------------
 
-export async function runSeedEval(estados: readonly Estado[] = []): Promise<void> {
+/**
+ * `agora` e `rotulo` existem para os specs da API: `agora` fixo torna a saída de uma tool
+ * comparável entre duas execuções, e o `rotulo` separa as contas de dois specs que rodam ao
+ * mesmo tempo no mesmo banco. O runner do eval não passa nenhum dos dois.
+ */
+export interface OpcoesDoSeedEval {
+  agora?: Date;
+  rotulo?: string;
+}
+
+export interface ContasDeAvaliacao {
+  usuarioId: string;
+  profissionalId: string;
+  alunaId: string;
+  fuso: string;
+}
+
+export async function runSeedEval(
+  estados: readonly Estado[] = [],
+  { agora = new Date(), rotulo = '' }: OpcoesDoSeedEval = {},
+): Promise<ContasDeAvaliacao> {
   exigirBancoLocal();
   const subUsuario = subDoAmbiente('EVAL_SUB_USUARIO');
   const subProfissional = subDoAmbiente('EVAL_SUB_PROFISSIONAL');
-  const agora = new Date();
+  const prefixo = rotulo ? `${rotulo}.` : '';
+  const subAluna = rotulo ? `${SUB_ALUNA}:${rotulo}` : SUB_ALUNA;
 
   const A = await alimentos([
     'Arroz, tipo 1, cozido',
@@ -239,13 +260,13 @@ export async function runSeedEval(estados: readonly Estado[] = []): Promise<void
     'Corrida na Esteira',
   ] as const);
 
-  await apagarContas([subUsuario, subProfissional, SUB_ALUNA]);
+  await apagarContas([subUsuario, subProfissional, subAluna]);
 
   const [usuario, profissional, aluna] = await Promise.all([
     prisma.user.create({
       data: {
         logtoSub: subUsuario,
-        email: `usuario${DOMINIO}`,
+        email: `${prefixo}usuario${DOMINIO}`,
         name: 'Bia Souza',
         timezone: FUSO,
         heightCm: 170,
@@ -254,13 +275,18 @@ export async function runSeedEval(estados: readonly Estado[] = []): Promise<void
     prisma.user.create({
       data: {
         logtoSub: subProfissional,
-        email: `profissional${DOMINIO}`,
+        email: `${prefixo}profissional${DOMINIO}`,
         name: 'Carlos Mendes',
         timezone: FUSO,
       },
     }),
     prisma.user.create({
-      data: { logtoSub: SUB_ALUNA, email: `ana${DOMINIO}`, name: 'Ana Lima', timezone: FUSO },
+      data: {
+        logtoSub: subAluna,
+        email: `${prefixo}ana${DOMINIO}`,
+        name: 'Ana Lima',
+        timezone: FUSO,
+      },
     }),
   ]);
 
@@ -660,6 +686,24 @@ export async function runSeedEval(estados: readonly Estado[] = []): Promise<void
     `  ✓ Conta de avaliação recriada (${dataLocal(agora, 0)}, ${FUSO}` +
       `${estados.length ? `, estado: ${estados.join(', ')}` : ''}).`,
   );
+  return { usuarioId: usuario.id, profissionalId: profissional.id, alunaId: aluna.id, fuso: FUSO };
+}
+
+/** `--agora <ISO>` e `--rotulo <nome>`: ver `OpcoesDoSeedEval`. */
+function opcoesDosArgumentos(argv: string[]): OpcoesDoSeedEval {
+  const valor = (nome: string) => {
+    const i = argv.indexOf(nome);
+    return i < 0 ? undefined : argv[i + 1];
+  };
+  const agora = valor('--agora');
+  const rotulo = valor('--rotulo');
+  if (agora !== undefined && Number.isNaN(Date.parse(agora))) {
+    throw new Error(`--agora não é uma data ISO: ${agora}.`);
+  }
+  if (rotulo !== undefined && !/^[a-z0-9-]+$/.test(rotulo)) {
+    throw new Error(`--rotulo aceita só minúsculas, dígitos e hífen: ${rotulo}.`);
+  }
+  return { ...(agora ? { agora: new Date(agora) } : {}), ...(rotulo ? { rotulo } : {}) };
 }
 
 function estadosDosArgumentos(argv: string[]): Estado[] {
@@ -674,7 +718,14 @@ function estadosDosArgumentos(argv: string[]): Estado[] {
 
 if (require.main === module) {
   Promise.resolve()
-    .then(() => runSeedEval(estadosDosArgumentos(process.argv.slice(2))))
+    .then(() => {
+      const argv = process.argv.slice(2);
+      return runSeedEval(estadosDosArgumentos(argv), opcoesDosArgumentos(argv));
+    })
+    .then((contas) => {
+      // Uma linha de JSON no fim da saída, para quem chama por subprocesso achar os ids.
+      console.log(JSON.stringify(contas));
+    })
     .catch((err) => {
       console.error(`  ✗ ${err instanceof Error ? err.message : String(err)}`);
       process.exitCode = 1;
