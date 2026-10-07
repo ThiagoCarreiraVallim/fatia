@@ -138,7 +138,12 @@ async function apagarContas(subs: string[]): Promise<void> {
         `conta de avaliação. Se ela foi provisionada pela API num login de teste, apague a linha à mão.`,
     );
   }
-  await prisma.user.deleteMany({ where: { logtoSub: { in: subs }, email: { endsWith: DOMINIO } } });
+  const minhas = { logtoSub: { in: subs }, email: { endsWith: DOMINIO } };
+  // As memórias morrem pelo cascade junto da conta; apagar antes, por nome, é o que garante que
+  // cada execução do eval começa sem memória mesmo se um dia a conta deixar de ser recriada.
+  // Memória de uma execução no prompt da seguinte tornaria as repetições dependentes.
+  await prisma.userMemory.deleteMany({ where: { user: minhas } });
+  await prisma.user.deleteMany({ where: minhas });
 }
 
 // ---------------------------------------------------------------------------
