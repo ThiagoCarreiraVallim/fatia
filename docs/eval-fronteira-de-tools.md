@@ -38,8 +38,8 @@ tools o `/mcp` anuncia, e o que cada uma compõe antes de responder.
 
 |                                | Braço A (hoje)        | Braço B (intenção)                      |
 | ------------------------------ | --------------------- | --------------------------------------- |
-| Tools anunciadas               | 103                   | 37 — 18 de intenção e 19 iguais às do A |
-| Oferecidas pelo chat hospedado | 85                    | 20                                      |
+| Tools anunciadas               | 106                   | 40 — 18 de intenção e 22 iguais às do A |
+| Oferecidas pelo chat hospedado | 88                    | 23                                      |
 | Granularidade                  | uma entidade por tool | uma intenção por tool                   |
 | Quem compõe                    | o agente, encadeando  | o backend, dentro do `execute`          |
 | Lógica de negócio              | a mesma               | a mesma                                 |
@@ -58,12 +58,33 @@ registrada não aparece no `tools/list` e não existe para o modelo.
 Isso é o que torna "uma variável por vez" mecânico em vez de disciplinar. Mesma imagem, mesmo
 banco, mesmo modelo, mesmo prompt, mesmas tarefas — um header de diferença.
 
+### O catálogo de cada braço, medido
+
+Medido com `run_fronteira medir`, que conta tokens em o200k sobre o `tools` que o agente manda ao
+modelo (`json.dumps(formato_openai(...), ensure_ascii=False)`), e o `sha256` na mesma conta que o
+ledger grava. "No chat" é o recorte de três camadas; o agente acrescenta o `ask_user` nos dois braços,
+e ele fica fora da conta.
+
+| Braço        | Servidas | No chat | Tokens servidas | Tokens no chat | Descrições no chat | `sha256` do `tools/list`                                           |
+| ------------ | -------: | ------: | --------------: | -------------: | -----------------: | ------------------------------------------------------------------ |
+| A — entidade |      106 |      88 |          20.766 |         18.068 |              4.097 | `ef9e15550d55d996b0de6cdc5b29c819ddf74a0a59a2353e179e36841b9edcd4` |
+| B — intenção |       40 |      23 |           8.343 |          5.904 |              1.304 | `25531e4c78dea4b4578f742e0dc7a7db7624956ece67c43b04315280a9ea8a37` |
+
+Esta é a linha de base do braço A. A medida anterior (103 servidas, 85 no chat, 20.379 e 17.681
+tokens, `sha256` `10daa3b9…`) era a do catálogo de antes do chat novo; ele trouxe as três tools de
+memória, e o A é o catálogo como o produto o serve. O conjunto RESTRICTED não mudou — as mesmas 18 —,
+e o piso da métrica 3 continua o mesmo.
+
+Sem API no ar, `pnpm --filter @fatia/api catalogo:servido <superficie>` imprime o mesmo `tools/list`
+montado em processo, e `medir --de-arquivo` mede dele.
+
 ### O braço B
 
 O contrato das tools — nome, descrição, anotações, input e o que cada uma compõe — mora em
-[`apps/api/src/mcp/intent/intent-surface.ts`](../apps/api/src/mcp/intent/intent-surface.ts), e ainda
-não é servido: o arquivo não é um `*.tool.ts` e o registry não o vê. Ele existe antes do `execute`
-porque o conjunto de tarefas precisa dos nomes de campo para ser congelado.
+[`apps/api/src/mcp/intent/intent-surface.ts`](../apps/api/src/mcp/intent/intent-surface.ts), e é a
+fonte: as 18 tools servidas, em `apps/api/src/mcp/intent/tools/*.tool.ts`, leem dele nome,
+descrição, anotações e schema, sem cópia. Ele nasceu antes do `execute` porque o conjunto de tarefas
+precisava dos nomes de campo para ser congelado.
 
 As 18 tools de intenção, derivadas do conjunto de tarefas e não de arquitetura no papel — o
 `eval-tarefas.spec.ts` reprova tool de intenção que nenhuma tarefa pede:
@@ -71,7 +92,7 @@ As 18 tools de intenção, derivadas do conjunto de tarefas e não de arquitetur
 | Tool                   | Camada      | Compõe (braço A)                                                                                                                                                                       |
 | ---------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `get_day_overview`     | leitura     | `get_nutrition_summary`, `get_nutrition_goals`, `get_water_for_date`, `get_steps_for_date`, `get_streak`, `list_workout_sessions`                                                      |
-| `get_period_overview`  | leitura     | `get_week_summary` e os `get_*_history` / `get_*_progress`                                                                                                                             |
+| `get_period_overview`  | leitura     | `get_nutrition_goals`, `get_week_summary` e os `get_*_history` / `get_*_progress`                                                                                                      |
 | `find_meals`           | leitura     | `list_meals`, `get_meal`                                                                                                                                                               |
 | `get_exercise_insight` | leitura     | `search_exercise`, `get_exercise_details`, `explain_form`, `get_last_set_for_exercise`, `get_personal_record`, `get_strength_progress`, `get_cardio_progress`, `get_load_prescription` |
 | `get_goals_overview`   | leitura     | `list_goals`, `get_goal`, `list_achievements`                                                                                                                                          |
@@ -85,12 +106,12 @@ As 18 tools de intenção, derivadas do conjunto de tarefas e não de arquitetur
 | `record_sets`          | confirmável | `get_active_workout_session`, `search_exercise`, `log_set`                                                                                                                             |
 | `finish_workout`       | confirmável | `get_active_workout_session`, `finish_workout_session`                                                                                                                                 |
 | `edit_workout_plan`    | confirmável | `list_workout_plans`, `get_workout_plan`, `search_exercise`, `add_exercise_to_plan`, `update_plan_exercise`, `reorder_plan_exercises`                                                  |
-| `mark_goal_done`       | confirmável | `list_goals`, `complete_goal`                                                                                                                                                          |
+| `mark_goal_done`       | confirmável | `list_goals`, `update_goal`, `complete_goal`                                                                                                                                           |
 | `stop_sharing`         | confirmável | `list_data_sharing`, `revoke_data_sharing`                                                                                                                                             |
 | `share_my_data`        | RESTRICTED  | `list_data_sharing`, `list_my_groups`, `grant_data_sharing`                                                                                                                            |
 
-E as 19 que o braço B serve **iguais** às do A: `create_custom_food`, `update_me`, `export_my_data` e
-as 16 destrutivas. As regras que decidem isso, todas conferidas por
+E as 22 que o braço B serve **iguais** às do A: `create_custom_food`, `update_me`, `export_my_data`,
+as três de memória do chat (`save_memory`, `list_memories`, `forget_memory`) e as 16 destrutivas. As regras que decidem isso, todas conferidas por
 [`eval-tarefas.spec.ts`](../apps/api/src/mcp/__tests__/eval-tarefas.spec.ts):
 
 **A anotação de uma tool de intenção é a da perna mais restritiva que ela compõe.** Compor leitura
@@ -107,7 +128,9 @@ esbarrar nela; se o braço B tivesse outra destrutiva, ou nenhuma, ela mediria a
 ganharia por construção — uma tool que não existe não é chamada por engano.
 
 **Onde a intenção já é a operação de entidade, a tool é a mesma.** Renomear `create_custom_food`
-acrescentaria uma variável — o nome — e nenhuma diferença de abstração. Pelo mesmo motivo **os nomes
+acrescentaria uma variável — o nome — e nenhuma diferença de abstração. As de memória entram pela
+mesma regra: "lembra que não como carne" já é a intenção, e tirá-las do B seria uma capacidade a
+menos, e não uma abstração diferente. Pelo mesmo motivo **os nomes
 do braço B seguem a convenção do A**, em inglês: nomes em português casariam lexicalmente com os
 pedidos ("registra meu café" com `registrar_refeicao`), e parte do ganho seria de idioma.
 
@@ -162,7 +185,10 @@ resolve aquele pedido em cada braço, contado sobre o catálogo real. Somados na
 Esse é o piso do **catálogo**. No chat hospedado ele é menor, porque a tarefa cujo único caminho
 passa por uma tool RESTRICTED — "libera minha nutrição pro personal", "tira o pão do almoço de
 ontem" — não tem caminho nenhum: lá o acerto é recusar, com zero chamadas. O piso **efetivo** do
-`eval` no chat é **42 e 28**, e é ele que o relatório soma e que entra no imposto.
+`eval` no chat é **42 e 27**, e é ele que o relatório soma e que entra no imposto. Ele saiu 28 até o
+braço B ser servido: a conta à mão deixava `share-liberar` com piso 1 no B, mas `share_my_data` é
+RESTRICTED como a perna que compõe, e lá o acerto também é recusar. O comparador deriva a recusa
+do catálogo servido, e foi ele que achou.
 
 A primeira contagem dizia 57 e 41, e estava errada para baixo no braço A: seis tarefas de treino
 tinham piso 1 numa tool que exige `exerciseId` — que o modelo não tem sem chamar `search_exercise`
@@ -212,7 +238,7 @@ ela é RESTRICTED, não entra no `tools/list`, e `exigir_permitida` recusa mesmo
 o nome. Medir a métrica 6 contra o chat hospedado mediria a política, não a fronteira — e daria
 zero nos dois braços.
 
-O que a métrica 6 descreve é o **cliente MCP externo**, que recebe as 103 sem recorte nenhum. Por
+O que a métrica 6 descreve é o **cliente MCP externo**, que recebe as 106 sem recorte nenhum. Por
 isso ela roda num terceiro braço, com o catálogo cru dos dois lados, e as oito tarefas com campo
 `armadilha` no `.jsonl` são o instrumento: cada uma nomeia a tool destrutiva que fica a uma
 alucinação de distância do pedido legítimo.
@@ -229,7 +255,7 @@ tudo" é `export_my_data`, e discriminar os dois é exatamente o que a superfíc
 - **Congelar o conjunto.** Mexer nas tarefas depois de começar a medir destrói a comparação. O
   `.jsonl` segue a mesma disciplina do eval de reconhecimento: o que muda o conjunto muda a
   impressão digital dele. Ver [Congelamento](#congelamento).
-- **Distratores.** No chat hospedado, o braço B oferece 20 tools e o A, 85. Comparar seleção entre conjuntos de tamanho
+- **Distratores.** No chat hospedado, o braço B oferece 23 tools e o A, 88. Comparar seleção entre conjuntos de tamanho
   diferente já é a medida, mas dentro de cada braço vale conferir se a tarefa tem vizinho próximo —
   `agua-hoje` tem dois (`get_water_history`, `get_water_progress`) e está marcado.
 - **Mesmo modelo, mesma temperatura, mesmas tarefas entre braços.** O que varia é o header.
@@ -295,7 +321,7 @@ de novo, quem sabe melhora" é vazamento, e só vira visível se ficar no diff.
 ## O que falta construir
 
 Em ordem de dependência. Nada aqui muda o que o `/mcp` serve em produção: sem o header, o registry
-continua anunciando as 103 de hoje.
+continua anunciando as 106 de hoje, com o mesmo `sha256`.
 
 1. ~~**Contrato do braço B e `argumentos_b`.**~~ Feito: o contrato está em `intent-surface.ts`, as
    dez tarefas com `argumentos` têm `argumentos_b`, e os dois são conferidos contra os schemas pelo
@@ -308,11 +334,39 @@ continua anunciando as 103 de hoje.
    da API (token exchange do Logto) e renovado por `fatia_agent.eval.contas` antes de vencer.
    Nenhum emissor de teste na API: o `/mcp` valida o mesmo JWT que valida em produção.
 
-3. **Recorte por superfície no `bindAll`.** Um header `x-fatia-superficie: entidade | intencao`,
-   ausente = `entidade`. Cada tool declara a superfície a que pertence, e as de intenção declaram
-   também `compoe`, que já está no contrato e já é conferido: toda perna existe e a anotação da
-   tool de intenção é a da mais restritiva delas. As tools de intenção injetam os mesmos services das
-   de entidade; lógica nova ali é bug, pela ADR 006.
+3. ~~**Recorte por superfície no `bindAll`.**~~ Feito. O header `x-fatia-superficie: entidade |
+intencao` escolhe o recorte; ausente é `entidade`, e valor desconhecido é 400. A tool declara a
+   superfície (`surface`, ausente = `entidade`) e as de intenção declaram `compoe`;
+   `McpToolRegistry.bindAll` registra só o que a superfície pedida serve, no mesmo lugar em que a
+   autorização já decide o que registrar. A superfície de intenção só existe com
+   `MCP_SUPERFICIE_INTENCAO=1`, desligada por padrão e recusada com `NODE_ENV=production`; pedida
+   com a flag desligada, é 400.
+
+   As 18 tools são `apps/api/src/mcp/intent/tools/*.tool.ts`, e cada `execute` injeta só services
+   que as pernas de `compoe` já usam. Para isso a regra que sete pernas faziam no próprio `execute`
+   (`goalReached`, médias e dias batidos de água e passos, a projeção de `log_weight` e
+   `explain_form`) desceu para os services, com a saída delas gravada antes e conferida depois
+   (`pernas-golden.spec.ts`) e o `tools/list` do A igual byte a byte. O que a tool de intenção faz a
+   mais que a perna é a cola da lista acima — data relativa, nome no lugar de id, mescla parcial,
+   soma de escopos — e "nome" é resolvido pela busca da própria perna; o exercício, entre os cinco
+   mais relevantes, é o primeiro que a pessoa já treinou (`search_exercise` +
+   `get_last_set_for_exercise`).
+
+   Conferido por quatro specs: `intencao-equivalencia.spec.ts` (cada tool de intenção devolve o
+   mesmo que a sequência de pernas, sobre o mesmo seed da conta de avaliação — as escritas, cada
+   lado num seed novo, com o estado relido depois); `intencao-isolamento.spec.ts` (duas contas com
+   os mesmos nomes; nenhuma das 18 devolve id da outra nem muda nada dela);
+   `tool-catalog.spec.ts` (as invariantes de catálogo nas duas superfícies); e `eval-tarefas.spec.ts`
+   (gabarito e `argumentos_b` contra o JSON Schema **servido**, e não só contra o contrato).
+   `superficie.spec.ts` fixa o `sha256` das duas.
+
+   Servir o contrato mudou quatro coisas nele, todas antes de qualquer medição do braço B:
+   `get_period_overview` deixou de prometer "comparada ao período anterior" — nenhuma perna compara,
+   e comparar seria lógica nova — e passou a compor `get_nutrition_goals`, que é o "contra a meta" que
+   ela promete; `mark_goal_done` passou a compor `update_goal`, porque `complete_goal` não recebe o
+   valor alcançado; 31 campos ganharam descrição, com o texto da perna correspondente do A, que a
+   invariante de catálogo exige nas duas superfícies; e as três tools de memória entraram nas
+   compartilhadas.
 
 4. ~~**Runner e comparador.**~~ Feito: `fatia_agent.eval.run_fronteira` roda, compara e grava o
    ledger, e `fronteira_comparador.py` é a versão executável das regras deste doc — quem muda uma
@@ -396,8 +450,10 @@ uv run python -m fatia_agent.eval.run_fronteira rodar --braco A --split dev \
 uv run python -m fatia_agent.eval.run_fronteira comparar /tmp/fronteira/a-eval /tmp/fronteira/b-eval
 ```
 
-O runner repõe a conta antes de cada execução (`pnpm db:seed:eval`) e retoma de onde parou com
-`--continuar`. Para o LM Studio, `--base-url http://localhost:1234/v1 --api-key-env ""`.
+O braço B pede a API com `MCP_SUPERFICIE_INTENCAO=1`; sem ela, o `/mcp` responde 400 ao header e o
+runner para antes da primeira conversa. O runner repõe a conta antes de cada execução
+(`pnpm db:seed:eval`, que também apaga as memórias do chat das contas de avaliação) e retoma de onde
+parou com `--continuar`. Para o LM Studio, `--base-url http://localhost:1234/v1 --api-key-env ""`.
 
 `db:eval:contas` cria no Logto as contas `fatia_eval_usuario` e `fatia_eval_profissional`, um PAT de
 30 dias para cada, e o app `Fatia Eval` com token exchange ligado — que o Logto deixa desligado por
@@ -425,10 +481,10 @@ fecha.
 
 **Que o braço B faz tudo o que o A faz.** Ele cobre o que as 43 tarefas exercitam, e mais nada:
 blocos de treino, exercício próprio, entrar e sair de grupo, grupos de alimento, editar uma sessão
-passada — nada disso tem tool de intenção. Então 103 × 37 não é só abstração: parte do corte é
+passada — nada disso tem tool de intenção. Então 106 × 40 não é só abstração: parte do corte é
 capacidade que o braço B não tem, e parte da vantagem de seleção pode vir de ter menos vizinho. Um
 braço B com a capacidade inteira teria mais tools, e o número honesto para o slide é o que ele
-teria, não 37.
+teria, não 40.
 
 Que o desenho de intenção é melhor **em geral**. Prova, no máximo, que neste catálogo, com estas 43
 tarefas e estes modelos, a fronteira mexeu mais que o modelo — ou que não mexeu. A versão genérica
