@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import { z, type ZodTypeAny } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { MCP_TOOL_METADATA, type McpToolDef } from '../../common/decorators/tool.decorator';
+import { servidaNa } from '../intent/superficie';
 
 /**
  * Guarda do catálogo de tools MCP (issue #94).
@@ -272,7 +273,16 @@ function deepStrict(schema: ZodTypeAny, path: string): ZodTypeAny {
   );
 }
 
-const tools = loadTools();
+/**
+ * Todas as tools do código, das duas superfícies do `/mcp`. As docs descrevem o catálogo de
+ * entidade — o que todo cliente recebe —, e é ele que os casos de doc conferem. As invariantes
+ * de catálogo valem para o que cada superfície serve (ver o `describe.each` mais abaixo): uma
+ * tool de intenção sem título ou com exemplo quebrado é tão ruim para o modelo quanto uma de
+ * entidade.
+ */
+const todas = loadTools();
+const SUPERFICIES = ['entidade', 'intencao'] as const;
+const tools = todas.filter(({ tool }) => servidaNa(tool, 'entidade'));
 const doc = readFileSync(MCP_DOC, 'utf8');
 
 /**
@@ -355,19 +365,6 @@ describe('catálogo de tools MCP', () => {
   it('descobre as tools do código', () => {
     // Sanidade: se a descoberta quebrar, os testes abaixo passariam vazios.
     expect(tools.length).toBeGreaterThan(50);
-  });
-
-  it('não tem nomes duplicados', () => {
-    const names = tools.map(({ tool }) => tool.name);
-    const duplicates = names.filter((name, i) => names.indexOf(name) !== i);
-    expect(duplicates).toEqual([]);
-  });
-
-  it('segue a convenção verb_noun em todos os nomes', () => {
-    const offenders = tools
-      .filter(({ tool }) => !TOOL_NAME_PATTERN.test(tool.name))
-      .map(({ tool }) => tool.name);
-    expect(offenders).toEqual([]);
   });
 
   it('tem uma seção em docs/MCP.md para cada tool registrada', () => {
@@ -531,6 +528,32 @@ describe('catálogo de tools MCP', () => {
 
     expect(orphans).toEqual([]);
   });
+});
+
+describe.each(SUPERFICIES)('catálogo servido na superfície %s', (superficie) => {
+  /** O que o `/mcp` serve com `x-fatia-superficie: <superficie>` — ver `servidaNa`. */
+  const tools = todas.filter(({ tool }) => servidaNa(tool, superficie));
+
+  it('serve as tools da própria superfície e não outra', () => {
+    expect(tools.length).toBeGreaterThan(30);
+    const intrusas = tools
+      .filter(({ tool }) => superficie === 'entidade' && tool.surface === 'intencao')
+      .map(({ tool }) => tool.name);
+    expect(intrusas).toEqual([]);
+  });
+
+  it('não tem nomes duplicados', () => {
+    const names = tools.map(({ tool }) => tool.name);
+    const duplicates = names.filter((name, i) => names.indexOf(name) !== i);
+    expect(duplicates).toEqual([]);
+  });
+
+  it('segue a convenção verb_noun em todos os nomes', () => {
+    const offenders = tools
+      .filter(({ tool }) => !TOOL_NAME_PATTERN.test(tool.name))
+      .map(({ tool }) => tool.name);
+    expect(offenders).toEqual([]);
+  });
 
   it('tem descrição em toda tool', () => {
     const missing = tools
@@ -609,7 +632,7 @@ describe('catálogo de tools MCP', () => {
   });
 
   it('declara o hint coerente com o prefixo do nome', () => {
-    const READ = /^(get|list|search|explain|export)_/;
+    const READ = /^(get|list|search|explain|export|find)_/;
     const DESTRUCTIVE = /^delete_/;
     // Desfaz o vínculo e perde séries/reps configuradas naquele exercício.
     //
@@ -668,7 +691,8 @@ describe('catálogo de tools MCP', () => {
     // Escrevem e são reversíveis no dado, mas mudam QUEM vê a saúde de quem — e a
     // revogação não desfaz isso: quem leu, leu. O critério da camada CONFIRMABLE
     // é reversibilidade, e exposição não é reversível. Ficam fora do chat.
-    const EXPOSICAO = new Set(['grant_data_sharing', 'join_group']);
+    // `share_my_data` é a de intenção que compõe `grant_data_sharing`, e fica onde a perna fica.
+    const EXPOSICAO = new Set(['grant_data_sharing', 'join_group', 'share_my_data']);
 
     const wrong: string[] = [];
 

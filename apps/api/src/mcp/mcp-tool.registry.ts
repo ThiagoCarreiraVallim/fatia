@@ -1,12 +1,14 @@
 // apps/api/src/mcp/mcp-tool.registry.ts
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { DiscoveryService } from '@nestjs/core';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import {
   MCP_TOOL_METADATA,
+  type McpSurface,
   type McpToolContext,
   type McpToolDef,
 } from '../common/decorators/tool.decorator';
+import { servidaNa, SuperficieDeIntencao } from './intent/superficie';
 import { formatToolError } from './mcp-error';
 import { McpMetricsService } from '../observability/mcp-metrics.service';
 
@@ -47,7 +49,15 @@ export class McpToolRegistry implements OnModuleInit {
   constructor(
     private readonly discovery: DiscoveryService,
     private readonly metrics: McpMetricsService,
+    // Opcional: sem ela, a superfície de intenção está desligada — é o que vale para quem
+    // monta o registry à mão, como os specs.
+    @Optional() private readonly intencao?: SuperficieDeIntencao,
   ) {}
+
+  /** A superfície de intenção pode ser servida nesta instância? Ver `SuperficieDeIntencao`. */
+  intencaoHabilitada(): boolean {
+    return this.intencao?.habilitada() ?? false;
+  }
 
   onModuleInit() {
     const providers = this.discovery.getProviders();
@@ -64,17 +74,30 @@ export class McpToolRegistry implements OnModuleInit {
     this.logger.log(`Discovered ${this.tools.length} MCP tools: ${names.join(', ')}`);
   }
 
+  /**
+   * Só a superfície de entidade: é a que o chat hospedado e a prévia da ação usam. Uma tool
+   * de intenção nunca é o que o produto executa.
+   */
   buscar(nome: string): McpToolDef | undefined {
-    return this.tools.find((tool) => tool.name === nome);
+    return this.tools.find((tool) => tool.name === nome && servidaNa(tool, 'entidade'));
   }
 
-  /** Nome → título em português, o mesmo que o `tools/list` anuncia. */
+  /** Nome → título em português, o mesmo que o `tools/list` de entidade anuncia. */
   titulos(): Record<string, string> {
-    return Object.fromEntries(this.tools.map((tool) => [tool.name, tool.title]));
+    return Object.fromEntries(
+      this.tools.filter((tool) => servidaNa(tool, 'entidade')).map((t) => [t.name, t.title]),
+    );
   }
 
-  bindAll(server: McpServer, ctx: McpToolContext): void {
-    for (const tool of this.tools) {
+  /**
+   * Registra no servidor da requisição as tools da `superficie` pedida. É o mesmo ponto em
+   * que só entra o que a pessoa pode chamar: tool fora do recorte não existe para o modelo.
+   */
+  bindAll(server: McpServer, ctx: McpToolContext, superficie: McpSurface = 'entidade'): void {
+    if (superficie === 'intencao' && !this.intencaoHabilitada()) {
+      throw new Error('Superfície de intenção pedida com MCP_SUPERFICIE_INTENCAO desligada.');
+    }
+    for (const tool of this.tools.filter((t) => servidaNa(t, superficie))) {
       // O type signature de registerTool gera type-instantiation explosivo;
       // contornamos com cast localizado (mesmo padrão do registry antigo).
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

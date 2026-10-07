@@ -8,6 +8,8 @@ import {
   isSharedWithIntentSurface,
   type IntentToolSpec,
 } from '../intent/intent-surface';
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv-provider.js';
+import { catalogoServido, type ToolServida } from './support/catalogo-servido';
 
 /**
  * Guarda do conjunto de tarefas do eval da fronteira de tools
@@ -84,7 +86,12 @@ const tarefas: Tarefa[] = readFileSync(TAREFAS, 'utf8')
   .filter((linha) => linha.trim() !== '')
   .map((linha) => JSON.parse(linha) as Tarefa);
 
-const entidade = new Map(loadTools().map((tool) => [tool.name, tool]));
+// Só a superfície de entidade: as tools de intenção também são `*.tool.ts`, e são o braço B.
+const entidade = new Map(
+  loadTools()
+    .filter((tool) => tool.surface === undefined)
+    .map((tool) => [tool.name, tool]),
+);
 const intencao = new Map(INTENT_TOOLS.map((tool) => [tool.name, tool]));
 
 type Contrato = Pick<McpToolDef, 'name' | 'annotations' | 'inputSchema'>;
@@ -257,6 +264,52 @@ describe('superfície de intenção (braço B)', () => {
         return valido ? [] : [`${tool.name}: o exemplo não passa no schema`];
       },
     );
+    expect(problemas).toEqual([]);
+  });
+});
+
+describe('braço B contra o tools/list servido', () => {
+  /**
+   * O contrato acima é a fonte, mas o modelo lê o que o `/mcp` anuncia: o JSON Schema que o
+   * servidor MCP gera do schema Zod. Um campo que existe no contrato e some na conversão (um
+   * `.transform`, um tipo que o conversor não conhece) passaria nos casos de cima e falharia
+   * só na rodada. Aqui gabarito e argumentos são conferidos contra o servido.
+   */
+  let servido: Map<string, ToolServida>;
+  const validador = new AjvJsonSchemaValidator();
+
+  beforeAll(async () => {
+    servido = new Map((await catalogoServido('intencao')).map((tool) => [tool.name, tool]));
+  });
+
+  it('serve toda tool que o gabarito B cita', () => {
+    const faltando = tarefas.flatMap((t) =>
+      t.gabarito_b
+        .flat()
+        .filter((nome) => !servido.has(nome))
+        .map((nome) => `${t.id}: ${nome}`),
+    );
+    expect(faltando).toEqual([]);
+  });
+
+  it('aceita, campo a campo, os argumentos B pelo JSON Schema servido', () => {
+    const problemas: string[] = [];
+    for (const t of tarefas) {
+      const argumentos = t.argumentos_b;
+      if (!argumentos) continue;
+      const propriedades = servido.get(argumentos.tool)?.inputSchema.properties ?? {};
+      for (const [chave, valor] of Object.entries(argumentos.contem)) {
+        const schema = propriedades[chave];
+        if (schema === undefined) {
+          problemas.push(`${t.id}: ${argumentos.tool} servida sem o campo ${chave}`);
+          continue;
+        }
+        const resultado = validador.getValidator(schema as never)(substituirPlaceholders(valor));
+        if (!resultado.valid) {
+          problemas.push(`${t.id}: ${argumentos.tool}.${chave} — ${resultado.errorMessage}`);
+        }
+      }
+    }
     expect(problemas).toEqual([]);
   });
 });

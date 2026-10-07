@@ -6,12 +6,10 @@ import type { McpToolAnnotations, McpToolDef } from '../../common/decorators/too
  * A superfície de **intenção** do eval da fronteira de tools — o braço B de
  * `docs/eval-fronteira-de-tools.md`.
  *
- * Aqui mora só o **contrato** (nome, descrição, anotações, input e as tools de
- * entidade que cada uma compõe). Nada daqui é servido: este arquivo não é um
- * `*.tool.ts`, não carrega `@McpTool()` e o `McpToolRegistry` não o enxerga. O
- * contrato existe antes do `execute` porque o conjunto de tarefas precisa dele
- * para ser congelado — sem o nome dos campos não há `argumentos_b` para
- * escrever, e a métrica de parâmetros sairia de um braço só.
+ * Aqui mora o **contrato** (nome, descrição, anotações, input e as tools de entidade que
+ * cada uma compõe), e ele é a fonte: as tools servidas em `intent/tools/*.tool.ts` leem daqui
+ * nome, descrição, anotações e schema, sem cópia. O `execute` mora lá, e só compõe os
+ * services que as pernas de `compoe` já usam — lógica de negócio nova ali é bug (ADR 006).
  *
  * Três regras, todas conferidas por `eval-tarefas.spec.ts`:
  *
@@ -43,8 +41,21 @@ export interface IntentToolSpec {
   inputSchema: ZodRawShape;
 }
 
-/** Tools de entidade servidas iguais no braço B, além das destrutivas (regra 2). */
-export const SHARED_ENTITY_TOOLS = ['create_custom_food', 'update_me', 'export_my_data'] as const;
+/**
+ * Tools de entidade servidas iguais no braço B, além das destrutivas (regra 2).
+ *
+ * As três de memória entram pela regra 3: lembrar, listar e esquecer já são a intenção, e o
+ * chat as oferece nos dois braços. Ficar de fora do B seria uma capacidade a menos, e não uma
+ * diferença de abstração.
+ */
+export const SHARED_ENTITY_TOOLS = [
+  'create_custom_food',
+  'update_me',
+  'export_my_data',
+  'save_memory',
+  'list_memories',
+  'forget_memory',
+] as const;
 
 export function isSharedWithIntentSurface(tool: Pick<McpToolDef, 'name' | 'annotations'>): boolean {
   return (
@@ -103,7 +114,7 @@ const macros = {
   fatG: z.number().min(0).optional().describe('Gordura em gramas'),
 };
 
-export const INTENT_TOOLS: readonly IntentToolSpec[] = [
+export const INTENT_TOOLS = [
   {
     name: 'get_day_overview',
     title: 'Ver o dia',
@@ -128,11 +139,12 @@ export const INTENT_TOOLS: readonly IntentToolSpec[] = [
     title: 'Ver um período',
     annotations: READ_ONLY,
     description:
-      'Tendência de um período, comparada ao período anterior de mesmo tamanho: média diária de ' +
-      'kcal e macros contra a meta, água e passos contra a meta (dias batidos), variação de peso e ' +
-      'volume de treino. Responde "minha média de proteína na semana", "tô batendo a meta de água", ' +
-      '"quanto perdi de peso", "meu volume caiu".',
+      'Tendência de um período: média diária de kcal e macros e as metas, água e passos contra a ' +
+      'meta (dias batidos), variação de peso e volume de treino por semana. Responde "minha média ' +
+      'de proteína na semana", "tô batendo a meta de água", "quanto perdi de peso", "meu volume ' +
+      'caiu". A resposta diz a janela de cada parte.',
     compoe: [
+      'get_nutrition_goals',
       'get_week_summary',
       'get_nutrition_history',
       'get_water_history',
@@ -177,7 +189,7 @@ export const INTENT_TOOLS: readonly IntentToolSpec[] = [
     inputSchema: {
       mealType: z.nativeEnum(MealType).describe('BREAKFAST, LUNCH, DINNER ou SNACK'),
       eatenAt: z.string().optional().describe('Quando comeu, em ISO 8601. Sem valor, é agora.'),
-      notes: z.string().max(500).optional(),
+      notes: z.string().max(500).optional().describe('Observações livres'),
       items: z
         .array(
           z.object({
@@ -186,7 +198,8 @@ export const INTENT_TOOLS: readonly IntentToolSpec[] = [
             ...macros,
           }),
         )
-        .min(1),
+        .min(1)
+        .describe('Itens da refeição — pelo menos um'),
     },
   },
   {
@@ -203,11 +216,14 @@ export const INTENT_TOOLS: readonly IntentToolSpec[] = [
       day: day.optional(),
       mealType: z.nativeEnum(MealType).describe('A refeição a corrigir'),
       item: z.string().min(2).optional().describe('Nome do alimento dentro da refeição'),
-      grams: z.number().min(0.1).optional(),
+      grams: z.number().min(0.1).optional().describe('Nova quantidade em gramas do item'),
       ...macros,
-      newMealType: z.nativeEnum(MealType).optional(),
+      newMealType: z
+        .nativeEnum(MealType)
+        .optional()
+        .describe('Novo tipo da refeição: BREAKFAST, LUNCH, DINNER ou SNACK'),
       eatenAt: z.string().optional().describe('Novo horário, em ISO 8601'),
-      notes: z.string().max(500).optional(),
+      notes: z.string().max(500).optional().describe('Observações livres'),
     },
   },
   {
@@ -219,17 +235,52 @@ export const INTENT_TOOLS: readonly IntentToolSpec[] = [
       '**Só os campos enviados mudam**; os outros continuam como estão. Exemplo: {"proteinMinG":180}',
     compoe: ['get_nutrition_goals', 'set_nutrition_goals', 'set_nutrient_target'],
     inputSchema: {
-      kcalMin: z.number().int().min(0).optional(),
-      kcalMax: z.number().int().min(0).optional(),
-      proteinMinG: z.number().int().min(0).optional(),
-      proteinMaxG: z.number().int().min(0).optional(),
-      carbsMinG: z.number().int().min(0).optional(),
-      carbsMaxG: z.number().int().min(0).optional(),
-      fatMinG: z.number().int().min(0).optional(),
-      fatMaxG: z.number().int().min(0).optional(),
-      weeklyWorkouts: z.number().int().min(0).optional(),
-      dailyStepsTarget: z.number().int().min(0).optional(),
-      dailyWaterTargetMl: z.number().int().min(0).optional(),
+      kcalMin: z.number().int().min(0).optional().describe('Piso da faixa diária de calorias'),
+      kcalMax: z.number().int().min(0).optional().describe('Teto da faixa diária de calorias'),
+      proteinMinG: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe('Piso da faixa diária de proteína, em gramas'),
+      proteinMaxG: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe('Teto da faixa diária de proteína, em gramas'),
+      carbsMinG: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe('Piso da faixa diária de carboidratos, em gramas'),
+      carbsMaxG: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe('Teto da faixa diária de carboidratos, em gramas'),
+      fatMinG: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe('Piso da faixa diária de gordura, em gramas'),
+      fatMaxG: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe('Teto da faixa diária de gordura, em gramas'),
+      weeklyWorkouts: z.number().int().min(0).optional().describe('Meta de treinos por semana'),
+      dailyStepsTarget: z.number().int().min(0).optional().describe('Meta diária de passos'),
+      dailyWaterTargetMl: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe('Meta diária de hidratação em mL'),
       nutrient: z
         .object({
           nutrientKey: z.string().max(40).describe('Chave usada nos itens, ex.: "sodium_mg"'),
@@ -254,10 +305,12 @@ export const INTENT_TOOLS: readonly IntentToolSpec[] = [
       // Enum fechado com payload homogêneo (um número e um dia), e não um `tipo` que muda a forma
       // do resto do input — essa é a linha que separa isto do schema polimórfico que
       // docs/MCP_TOOL_SURFACE.md descarta.
-      kind: z.enum(['water_ml', 'steps', 'weight_kg']),
-      value: z.number().positive(),
+      kind: z
+        .enum(['water_ml', 'steps', 'weight_kg'])
+        .describe('O que medir: água em mL, passos do dia ou peso em kg'),
+      value: z.number().positive().describe('O valor, na unidade do tipo'),
       day: day.optional(),
-      notes: z.string().max(500).optional(),
+      notes: z.string().max(500).optional().describe('Observações livres'),
     },
   },
   {
@@ -271,7 +324,7 @@ export const INTENT_TOOLS: readonly IntentToolSpec[] = [
     compoe: ['list_workout_plans', 'get_workout_plan', 'start_workout_session'],
     inputSchema: {
       plan: z.string().min(2).optional().describe('Nome do plano, busca parcial'),
-      notes: z.string().max(500).optional(),
+      notes: z.string().max(500).optional().describe('Observações livres'),
     },
   },
   {
@@ -286,9 +339,9 @@ export const INTENT_TOOLS: readonly IntentToolSpec[] = [
     inputSchema: {
       exercise: z.string().min(2).describe('Nome do exercício, busca parcial'),
       sets: z.number().int().min(1).max(20).default(1).describe('Quantas séries iguais'),
-      reps: z.number().int().min(0).optional(),
-      weightKg: z.number().min(0).optional(),
-      rpe: z.number().min(0).max(10).optional(),
+      reps: z.number().int().min(0).optional().describe('Repetições por série'),
+      weightKg: z.number().min(0).optional().describe('Carga em kg'),
+      rpe: z.number().min(0).max(10).optional().describe('Esforço percebido, de 0 a 10'),
       durationSeconds: z.number().int().min(1).optional().describe('Cardio: duração'),
       distanceMeters: z.number().min(0).optional().describe('Cardio: distância'),
     },
@@ -299,7 +352,7 @@ export const INTENT_TOOLS: readonly IntentToolSpec[] = [
     annotations: CONFIRMABLE,
     description: 'Encerra a sessão de treino em andamento e devolve o resumo dela. Exemplo: {}',
     compoe: ['get_active_workout_session', 'finish_workout_session'],
-    inputSchema: { notes: z.string().max(500).optional() },
+    inputSchema: { notes: z.string().max(500).optional().describe('Observações livres') },
   },
   {
     name: 'get_exercise_insight',
@@ -324,7 +377,8 @@ export const INTENT_TOOLS: readonly IntentToolSpec[] = [
       exercise: z.string().min(2).describe('Nome do exercício, busca parcial'),
       aspect: z
         .enum(['last_session', 'personal_record', 'progress', 'next_load', 'technique'])
-        .optional(),
+        .optional()
+        .describe('Só uma parte da resposta. Sem valor, todas'),
       days: z
         .union([z.literal(30), z.literal(90), z.literal(180), z.literal(365)])
         .optional()
@@ -358,7 +412,8 @@ export const INTENT_TOOLS: readonly IntentToolSpec[] = [
             targetReps: z.string().max(20).optional(),
           }),
         )
-        .optional(),
+        .optional()
+        .describe('Exercícios a acrescentar no fim do plano'),
       update: z
         .array(
           z.object({
@@ -367,7 +422,8 @@ export const INTENT_TOOLS: readonly IntentToolSpec[] = [
             targetReps: z.string().max(20).optional(),
           }),
         )
-        .optional(),
+        .optional()
+        .describe('Exercícios do plano com séries ou repetições novas'),
       order: z
         .array(z.string().min(2))
         .optional()
@@ -382,7 +438,12 @@ export const INTENT_TOOLS: readonly IntentToolSpec[] = [
       'Metas pessoais com o progresso de cada uma e as conquistas, com as desbloqueadas nos últimos ' +
       '7 dias em destaque. Responde "como tô nas metas", "conquistei algo novo".',
     compoe: ['list_goals', 'get_goal', 'list_achievements'],
-    inputSchema: { status: z.nativeEnum(GoalStatus).optional() },
+    inputSchema: {
+      status: z
+        .nativeEnum(GoalStatus)
+        .optional()
+        .describe('Filtra por situação: active, completed, expired ou archived'),
+    },
   },
   {
     name: 'mark_goal_done',
@@ -391,7 +452,7 @@ export const INTENT_TOOLS: readonly IntentToolSpec[] = [
     description:
       'Marca como concluída uma meta apontada pelo título (busca parcial). ' +
       'Exemplo: {"goal":"correr 5 km"}',
-    compoe: ['list_goals', 'complete_goal'],
+    compoe: ['list_goals', 'update_goal', 'complete_goal'],
     inputSchema: {
       goal: z.string().min(2).describe('Título da meta, busca parcial'),
       finalValue: z.number().optional().describe('Valor alcançado, quando a pessoa disser'),
@@ -426,7 +487,10 @@ export const INTENT_TOOLS: readonly IntentToolSpec[] = [
     compoe: ['list_data_sharing', 'list_my_groups', 'grant_data_sharing'],
     inputSchema: {
       professional: z.string().min(2).describe('Nome do profissional, busca parcial'),
-      scopes: z.array(z.nativeEnum(ShareScope)).min(1),
+      scopes: z
+        .array(z.nativeEnum(ShareScope))
+        .min(1)
+        .describe('Categorias a liberar, somadas às que o profissional já tem'),
     },
   },
   {
@@ -457,8 +521,27 @@ export const INTENT_TOOLS: readonly IntentToolSpec[] = [
       student: z.string().min(2).describe('Nome do aluno, busca parcial'),
       // Obrigatório como em get_student_progress: ler todas as categorias autorizadas de uma vez
       // mudaria a trilha de acesso que o aluno lê, e não só o formato da chamada.
-      scope: z.nativeEnum(ShareScope),
-      days: z.number().int().min(1).max(365).optional(),
+      scope: z.nativeEnum(ShareScope).describe('A categoria a ler'),
+      days: z.number().int().min(1).max(365).optional().describe('Janela em dias. Sem valor, 30'),
     },
   },
-];
+] as const satisfies readonly IntentToolSpec[];
+
+export type IntentToolName = (typeof INTENT_TOOLS)[number]['name'];
+
+/** O contrato de uma tool de intenção, com o tipo do input preservado. */
+export type IntentSpec<N extends IntentToolName> = Extract<
+  (typeof INTENT_TOOLS)[number],
+  { name: N }
+>;
+
+/** O input que o `execute` recebe, inferido do schema do contrato. */
+export type IntentInput<N extends IntentToolName> = z.infer<
+  z.ZodObject<IntentSpec<N>['inputSchema']>
+>;
+
+export function intentSpec<N extends IntentToolName>(name: N): IntentSpec<N> {
+  const spec = INTENT_TOOLS.find((t) => t.name === name);
+  if (!spec) throw new Error(`Tool de intenção desconhecida: ${name}`);
+  return spec as IntentSpec<N>;
+}
