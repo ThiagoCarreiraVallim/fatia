@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { StepSource } from '@prisma/client';
 import { StepLogService } from '../step-log.service';
-import { PrismaService } from '../../common/prisma.service';
 import {
   McpTool,
   type McpToolContext,
@@ -12,10 +11,7 @@ import {
 @Injectable()
 @McpTool()
 export class LogStepsTool implements McpToolDef {
-  constructor(
-    private readonly steps: StepLogService,
-    private readonly prisma: PrismaService,
-  ) {}
+  constructor(private readonly steps: StepLogService) {}
   readonly name = 'log_steps';
   readonly title = 'Registrar passos';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
@@ -32,21 +28,10 @@ export class LogStepsTool implements McpToolDef {
       .describe('Origem do dado (default MANUAL). Ex.: GOOGLE_FIT, APPLE_HEALTH, STRAVA'),
     notes: z.string().max(500).optional().describe('Observações do registro'),
   } as const;
-  async execute(
+  execute(
     input: { date?: string; steps: number; source?: StepSource; notes?: string },
     { userId, timezone }: McpToolContext,
   ) {
-    const log = await this.steps.create(input, userId, timezone);
-    const effective = await this.steps.getStepsForDate(log.date, userId);
-    const goals = await this.prisma.userGoals.findUnique({ where: { userId } });
-    const goalReached =
-      goals?.dailyStepsTarget !== undefined && goals?.dailyStepsTarget !== null
-        ? effective.steps >= goals.dailyStepsTarget
-        : null;
-    return {
-      stepLogId: log.id,
-      effectiveStepsForDate: effective.steps,
-      goalReached,
-    };
+    return this.steps.logWithDayTotal(input, userId, timezone);
   }
 }

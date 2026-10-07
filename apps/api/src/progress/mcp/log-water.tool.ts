@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { WaterLogService } from '../water-log.service';
-import { PrismaService } from '../../common/prisma.service';
 import {
   McpTool,
   type McpToolContext,
@@ -11,10 +10,7 @@ import {
 @Injectable()
 @McpTool()
 export class LogWaterTool implements McpToolDef {
-  constructor(
-    private readonly waters: WaterLogService,
-    private readonly prisma: PrismaService,
-  ) {}
+  constructor(private readonly waters: WaterLogService) {}
   readonly name = 'log_water';
   readonly title = 'Registrar água';
   readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
@@ -27,19 +23,10 @@ export class LogWaterTool implements McpToolDef {
     date: z.string().optional().describe('YYYY-MM-DD; default hoje no fuso do user'),
     notes: z.string().max(500).optional().describe('Observações do registro'),
   } as const;
-  async execute(
+  execute(
     input: { ml: number; date?: string; notes?: string },
     { userId, timezone }: McpToolContext,
   ) {
-    const log = await this.waters.create(input, userId, timezone);
-    const effective = await this.waters.getForDate(log.date, userId);
-    const goals = await this.prisma.userGoals.findUnique({ where: { userId } });
-    const targetMl = goals?.dailyWaterTargetMl ?? null;
-    return {
-      waterLogId: log.id,
-      totalMlForDate: effective.totalMl,
-      goalReached: targetMl !== null ? effective.totalMl >= targetMl : null,
-      goalTargetMl: targetMl,
-    };
+    return this.waters.logWithDayTotal(input, userId, timezone);
   }
 }
