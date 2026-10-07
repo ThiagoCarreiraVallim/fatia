@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { dayBoundsInTz, todayInTz, addDaysIso } from '../progress/helpers/date-tz';
 import { sumMacros, type ItemMacros } from './helpers/calc-macros';
+import { ITENS_EM_ORDEM } from './itens-em-ordem';
 
 export interface DayTotals extends ItemMacros {
   date: string;
@@ -17,7 +18,7 @@ export class NutritionSummaryService {
     const { start, end } = dayBoundsInTz(date, timezone);
     const meals = await this.prisma.meal.findMany({
       where: { userId, eatenAt: { gte: start, lt: end } },
-      include: { items: true },
+      include: ITENS_EM_ORDEM,
       orderBy: { eatenAt: 'asc' },
     });
     const allItems = meals.flatMap((m) => m.items);
@@ -34,7 +35,7 @@ export class NutritionSummaryService {
 
     const meals = await this.prisma.meal.findMany({
       where: { userId, eatenAt: { gte: start, lt: end } },
-      include: { items: true },
+      include: ITENS_EM_ORDEM,
     });
 
     const byDay = new Map<string, DayTotals>();

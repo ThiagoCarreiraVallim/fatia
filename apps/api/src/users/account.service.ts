@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { PrismaService } from '../common/prisma.service';
 import { LogtoManagementService } from '../auth/logto-management.service';
 import { CheckpointPurgeService } from '../chat/checkpoint-purge.service';
+import { ITENS_EM_ORDEM } from '../nutrition/itens-em-ordem';
 
 /** Frase exata que o usuário precisa confirmar para apagar a conta. */
 export const DELETE_CONFIRMATION = 'DELETAR MINHA CONTA';
@@ -66,7 +67,7 @@ export class AccountService {
       this.prisma.goal.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
       this.prisma.meal.findMany({
         where: { userId },
-        include: { items: true },
+        include: ITENS_EM_ORDEM,
         orderBy: { eatenAt: 'asc' },
       }),
       this.prisma.food.findMany({

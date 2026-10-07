@@ -197,6 +197,10 @@ model Meal {
 model MealItem {
   id        String @id @default(uuid())
   mealId    String
+  /// A ordem de inserção, e só isso: os itens de uma refeição saem por ela (`ITENS_EM_ORDEM`).
+  /// Sem ela, a ordem era a física da tabela, e um UPDATE que não cabe na página muda de lugar.
+  /// O `PrismaService` a omite de toda resposta.
+  seq       Int    @default(autoincrement())
   foodId    Int? // null = item livre estimado pelo Claude
   groupId   Int? // copiado do food, ou inferido pelo Claude
   foodName  String // snapshot — sempre preenchido

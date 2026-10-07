@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { MealType } from '@prisma/client';
 import { MealService } from '../meal.service';
+import { ITENS_EM_ORDEM } from '../itens-em-ordem';
 import type { PrismaService } from '../../common/prisma.service';
 
 type MockPrisma = {
@@ -311,7 +312,7 @@ describe('MealService', () => {
       await expect(service.findById(userId, 'meal-x')).rejects.toThrow(NotFoundException);
       expect(prisma.meal.findFirst).toHaveBeenCalledWith({
         where: { id: 'meal-x', userId },
-        include: { items: true },
+        include: ITENS_EM_ORDEM,
       });
     });
 
