@@ -64,12 +64,14 @@ from ..chat import (
     McpClient,
     McpToolInfo,
     camada_confirmavel,
+    formato_openai,
     montar_grafo,
     stream_chat_events,
     todas_permitidas,
 )
 from ..chat.errors import McpError
 from ..chat.human import NOME as ASK_USER
+from ..chat.mcp_client import _tools_do_resultado
 from ..prompts import chat_pt_br
 from ..providers.base import ToolChatCapability
 from ..providers.errors import AIProviderNotConfigured
@@ -144,6 +146,46 @@ def sha_do_catalogo(catalogo: Sequence[McpToolInfo]) -> str:
     return hashlib.sha256(
         json.dumps(canonico, ensure_ascii=False, sort_keys=True).encode()
     ).hexdigest()
+
+
+@dataclasses.dataclass(frozen=True)
+class MedidaDoCatalogo:
+    """O tamanho de um catálogo servido, como o doc o publica.
+
+    Tokens em o200k sobre `json.dumps(formato_openai(...), ensure_ascii=False)` — o que o
+    agente põe em `tools` na chamada ao modelo. "No chat" é o recorte de três camadas
+    (`todas_permitidas`); o agente acrescenta ainda o `ask_user`, igual nos dois braços, e
+    ele não entra aqui.
+    """
+
+    servidas: int
+    no_chat: int
+    tokens_servidas: int
+    tokens_no_chat: int
+    tokens_descricoes_no_chat: int
+    sha256: str
+
+
+def medir_catalogo(
+    catalogo: Sequence[McpToolInfo], contar: Callable[[str], int]
+) -> MedidaDoCatalogo:
+    chat = todas_permitidas(catalogo)
+    return MedidaDoCatalogo(
+        servidas=len(catalogo),
+        no_chat=len(chat),
+        tokens_servidas=contar(json.dumps(formato_openai(catalogo), ensure_ascii=False)),
+        tokens_no_chat=contar(json.dumps(formato_openai(chat), ensure_ascii=False)),
+        tokens_descricoes_no_chat=sum(contar(t.description) for t in chat),
+        sha256=sha_do_catalogo(catalogo),
+    )
+
+
+def contador_o200k() -> Callable[[str], int]:
+    """Import tardio: `tiktoken` é dependência de desenvolvimento, e só a medição a usa."""
+    import tiktoken
+
+    codificador = tiktoken.get_encoding("o200k_base")
+    return lambda texto: len(codificador.encode(texto))
 
 
 def sha_do_prompt() -> str:
@@ -553,6 +595,25 @@ def escrever_relatorio(
     return 0
 
 
+async def medir(args: argparse.Namespace) -> int:
+    if args.de_arquivo:
+        catalogo = _tools_do_resultado(json.loads(args.de_arquivo.read_text(encoding="utf-8")))
+    else:
+        tokens = TokensDeAvaliacao.do_ambiente()
+        superficie = SUPERFICIE[args.braco]
+        async with McpClient(
+            base_url=args.mcp_url,
+            bearer=await tokens.bearer("usuario"),
+            headers={HEADER_SUPERFICIE: superficie} if superficie else {},
+        ) as client:
+            catalogo = await client.list_tools()
+        await tokens.aclose()
+        conferir_catalogo(args.braco, {t.name for t in catalogo}, carregar(args.tarefas_arquivo))
+    medida = medir_catalogo(catalogo, contador_o200k())
+    print(json.dumps({"braco": args.braco, **dataclasses.asdict(medida)}, ensure_ascii=False))
+    return 0
+
+
 def comparar_rodadas(args: argparse.Namespace) -> int:
     cab_a, a, _ = _ler_rodada(args.rodada_a, args.tarefas_arquivo)
     cab_b, b, _ = _ler_rodada(args.rodada_b, args.tarefas_arquivo)
@@ -608,6 +669,16 @@ def _argumentos(argv: Sequence[str] | None) -> argparse.Namespace:
         help="Mede de novo uma configuração já medida. Leia o §ledger do doc antes.",
     )
 
+    m = sub.add_parser("medir", help="Tools, tokens (o200k) e sha256 do catálogo servido.")
+    m.add_argument("--braco", choices=("A", "B"), required=True)
+    m.add_argument("--mcp-url", default="http://localhost:3000/mcp")
+    m.add_argument(
+        "--de-arquivo",
+        type=Path,
+        default=None,
+        help="Um tools/list já salvo (JSON). Sem ele, lê do /mcp com a conta de avaliação.",
+    )
+
     c = sub.add_parser("comparar", help="Tabela pareada A x B de duas rodadas.")
     c.add_argument("rodada_a", type=Path)
     c.add_argument("rodada_b", type=Path)
@@ -621,6 +692,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.comando == "rodar":
             return asyncio.run(rodar(args))
+        if args.comando == "medir":
+            return asyncio.run(medir(args))
         return comparar_rodadas(args)
     except (ConfiguracaoRecusada, ContaDeAvaliacaoError, McpError) as exc:
         print(f"✗ {exc}", file=sys.stderr)

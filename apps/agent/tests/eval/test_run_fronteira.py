@@ -17,6 +17,7 @@ from fatia_agent.eval.run_fronteira import (
     conferir_catalogo,
     executar,
     exigir_provedor_fixo,
+    medir_catalogo,
     sha_do_catalogo,
 )
 from tests.chat.support import (
@@ -65,6 +66,27 @@ def test_o_hash_do_catalogo_muda_quando_uma_descricao_muda() -> None:
     a = McpToolInfo("x", "uma descrição", {}, {"readOnlyHint": True})
     b = McpToolInfo("x", "outra descrição", {}, {"readOnlyHint": True})
     assert sha_do_catalogo([a]) != sha_do_catalogo([b])
+
+
+def test_medir_conta_o_catalogo_servido_e_o_recorte_do_chat() -> None:
+    from fatia_agent.chat.mcp_client import McpToolInfo
+
+    leitura = {"readOnlyHint": True, "destructiveHint": False, "confirmableHint": False}
+    escrita = {"readOnlyHint": False, "destructiveHint": False, "confirmableHint": True}
+    restrita = {"readOnlyHint": False, "destructiveHint": True, "confirmableHint": False}
+    catalogo = [
+        McpToolInfo("get_x", "lê", {"type": "object"}, leitura),
+        McpToolInfo("log_x", "grava", {"type": "object"}, escrita),
+        McpToolInfo("delete_x", "apaga", {"type": "object"}, restrita),
+    ]
+
+    medida = medir_catalogo(catalogo, contar=len)
+
+    assert (medida.servidas, medida.no_chat) == (3, 2)
+    # A restrita pesa no catálogo servido e não no do chat.
+    assert medida.tokens_servidas > medida.tokens_no_chat > 0
+    assert medida.tokens_descricoes_no_chat == len("lê") + len("grava")
+    assert medida.sha256 == sha_do_catalogo(catalogo)
 
 
 def test_o_provedor_sem_revisao_de_destino_nao_e_importado_pelo_produto() -> None:
