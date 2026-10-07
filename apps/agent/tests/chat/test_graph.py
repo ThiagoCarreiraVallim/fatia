@@ -577,6 +577,35 @@ async def test_o_uso_sai_como_evento_uma_vez_por_chamada_ao_modelo(settings_fact
     ]
 
 
+async def test_cache_e_raciocinio_vao_no_evento_de_uso_so_quando_reportados(settings_factory):
+    """O `leitor-do-turno.ts` lê só `inputUnits` e `outputUnits`; o resto é para o eval."""
+    detalhes = {
+        "prompt_tokens_details": {"cached_tokens": 64},
+        "completion_tokens_details": {"reasoning_tokens": 7},
+    }
+    r = await turno(
+        settings_factory,
+        [
+            [
+                *_com_tool("list_meals"),
+                bloco_de_uso(prompt_tokens=100, completion_tokens=10, detalhes=detalhes),
+            ],
+            [fragmento_de_texto("ok"), bloco_de_uso(prompt_tokens=200, completion_tokens=20)],
+        ],
+    )
+
+    assert r.data_of("usage") == [
+        {
+            "model": "ornith-1.0-9b",
+            "inputUnits": 100,
+            "outputUnits": 10,
+            "cachedInputUnits": 64,
+            "reasoningUnits": 7,
+        },
+        {"model": "ornith-1.0-9b", "inputUnits": 200, "outputUnits": 20},
+    ]
+
+
 async def test_sem_bloco_de_usage_nenhum_evento_de_uso_sai(settings_factory):
     r = await turno(settings_factory, [[fragmento_de_texto("ok")]])
     assert r.data_of("usage") == []

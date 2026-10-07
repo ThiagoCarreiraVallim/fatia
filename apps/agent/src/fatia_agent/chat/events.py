@@ -222,7 +222,14 @@ def catalog(titulos: Mapping[str, str]) -> ChatEvent:
     return ChatEvent("catalog", {"tools": dict(titulos)})
 
 
-def usage(model: str, *, input_units: int | None, output_units: int | None) -> ChatEvent:
+def usage(
+    model: str,
+    *,
+    input_units: int | None,
+    output_units: int | None,
+    cached_input_units: int | None = None,
+    reasoning_units: int | None = None,
+) -> ChatEvent:
     """O que uma chamada ao modelo consumiu, para a cota do `apps/api` (#135).
 
     Um por chamada, e não um por turno: o grafo chama o modelo a cada volta do
@@ -235,6 +242,12 @@ def usage(model: str, *, input_units: int | None, output_units: int | None) -> C
         dados["inputUnits"] = input_units
     if output_units is not None:
         dados["outputUnits"] = output_units
+    # Só informativos: o `leitor-do-turno.ts` lê `inputUnits` e `outputUnits`, que já os
+    # incluem, e ignora o resto. O runner do eval os lê para a conta de cache.
+    if cached_input_units is not None:
+        dados["cachedInputUnits"] = cached_input_units
+    if reasoning_units is not None:
+        dados["reasoningUnits"] = reasoning_units
     return ChatEvent("usage", dados)
 
 

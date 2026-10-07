@@ -173,6 +173,7 @@ def bloco_de_uso(
     model: str = "ornith-1.0-9b",
     prompt_tokens: object = 812,
     completion_tokens: object = 96,
+    detalhes: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """O fragmento final de `usage`, na forma que o LM Studio emite.
 
@@ -182,7 +183,8 @@ def bloco_de_uso(
     verdade, e o sintoma seria a cota do `apps/api` nunca medir nada.
 
     `prompt_tokens` e `completion_tokens` aceitam qualquer coisa de propósito:
-    é assim que o teste do formato torto exercita a guarda.
+    é assim que o teste do formato torto exercita a guarda. `detalhes` entra no
+    `usage` como veio — `prompt_tokens_details` e `completion_tokens_details`.
     """
     return {
         "choices": [],
@@ -190,6 +192,7 @@ def bloco_de_uso(
         "usage": {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
+            **(detalhes or {}),
         },
     }
 

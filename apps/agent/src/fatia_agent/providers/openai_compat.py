@@ -681,7 +681,15 @@ def _uso_do_fragmento(fragmento: dict[str, Any], *, padrao: str) -> Usage | None
         model=modelo if isinstance(modelo, str) and modelo else padrao,
         input_units=_inteiro(uso.get("prompt_tokens")),
         output_units=_inteiro(uso.get("completion_tokens")),
+        cached_input_units=_detalhe(uso, "prompt_tokens_details", "cached_tokens"),
+        reasoning_units=_detalhe(uso, "completion_tokens_details", "reasoning_tokens"),
     )
+
+
+def _detalhe(uso: dict[str, Any], bloco: str, campo: str) -> int | None:
+    """`uso[bloco][campo]` quando é inteiro; `None` quando o provedor não o mandou."""
+    detalhes = uso.get(bloco)
+    return _inteiro(detalhes.get(campo)) if isinstance(detalhes, dict) else None
 
 
 def _inteiro(valor: object) -> int | None:

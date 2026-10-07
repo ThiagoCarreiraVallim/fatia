@@ -79,6 +79,12 @@ class Usage:
     model: str
     input_units: int | None = None
     output_units: int | None = None
+    # Detalhes que nem todo provedor manda (`prompt_tokens_details.cached_tokens` e
+    # `completion_tokens_details.reasoning_tokens`). Mesma regra: ausente é `None`.
+    # `input_units` já os inclui; isto diz quanto da entrada veio do cache e quanto
+    # da saída foi raciocínio.
+    cached_input_units: int | None = None
+    reasoning_units: int | None = None
 
 
 @dataclass(frozen=True)
