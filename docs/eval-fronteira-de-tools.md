@@ -168,7 +168,7 @@ Seis métricas, e onde cada uma já existe:
 | 1   | Acertou **qual** tool                  | falta o comparador de sequência                                            |
 | 2   | Acertou **como** (parâmetros)          | falta                                                                      |
 | 3   | Chamadas por tarefa                    | o agente já conta rodada e tool por rodada                                 |
-| 4   | Tokens até a primeira resposta útil    | `events.usage` já emite `input_units` / `output_units`                     |
+| 4   | Tokens até a primeira resposta útil    | `events.usage` emite entrada, saída, cache e raciocínio por chamada        |
 | 5   | Latência p50 / p95                     | `McpMetricsService` já grava histograma por tool; falta agregar por tarefa |
 | 6   | Tool destrutiva invocada indevidamente | falta o rótulo de armadilha por tarefa — já está no `.jsonl`               |
 
@@ -285,7 +285,19 @@ nele for outra, é ela que vai para o slide.
 
 ### O critério de decisão, declarado antes de medir
 
-- **Acerto por tarefa** é maioria: pelo menos 3 das 5 execuções acertaram.
+- **Acerto por tarefa** é maioria das execuções **com dado**: 3 de 5, 3 de 4 ou 2 de 3.
+- **Erro de provedor não é acerto nem erro do modelo.** Timeout, conexão que cai, status de erro
+  e resposta que não parseia (`AI_PROVIDER_TIMEOUT`, `_UNREACHABLE`, `_REFUSED`, `_ERROR`,
+  `AI_RESPONSE_UNPARSEABLE`) mediram o provedor. O runner repete a execução inteira, do estado
+  reposto em diante, até 2 vezes; se ainda falhar, ela fica **sem dado** e sai da maioria, das
+  médias, dos parâmetros e da armadilha. Com menos de 3 execuções com dado a tarefa é **não
+  medida**: não entra no par do teste do sinal e não conta para o mínimo de 30 tarefas medidas —
+  abaixo dele, a rodada é rascunho. O que a tentativa descartada gastou fica gravado na execução
+  que valeu.
+- **O que não é do provedor conta contra o modelo, ou para a rodada.** Parar no limite de tokens
+  (`AI_RESPONSE_TRUNCATED`) é o modelo gastando a saída: é erro com dado. Erro de configuração
+  (`AI_MODEL_NOT_ALLOWED`, chave recusada) ou do `/mcp` (`MCP_*`) é a nossa infraestrutura: o
+  runner para a rodada sem gravar a execução, e `--continuar` retoma.
 - **A comparação é pareada.** Mesmo modelo, mesmas 31 tarefas, e o que conta são só as
   **discordantes**: `b` tarefas em que B acerta e A erra, `c` o contrário. As concordantes não dizem
   nada sobre a diferença entre os braços.
@@ -360,6 +372,13 @@ intencao` escolhe o recorte; ausente é `entidade`, e valor desconhecido é 400.
    (gabarito e `argumentos_b` contra o JSON Schema **servido**, e não só contra o contrato).
    `superficie.spec.ts` fixa o `sha256` das duas.
 
+   O de equivalência foi intermitente até os itens de refeição terem ordem: sem `orderBy`, eles
+   saíam na ordem física da tabela, e o `UPDATE` do `fix_meal` às vezes mudava a linha de lugar —
+   no lado B sim, no lado A não, e a comparação falhava sem que nenhuma tool tivesse lógica a mais.
+   O defeito era do produto (editar um item podia reordenar a refeição na tela), e a correção
+   também: `MealItem.seq` guarda a ordem de inserção, todo `include` de itens ordena por ela
+   (`ITENS_EM_ORDEM`), e o `PrismaService` a omite das respostas — a saída das tools não mudou.
+
    Servir o contrato mudou quatro coisas nele, todas antes de qualquer medição do braço B:
    `get_period_overview` deixou de prometer "comparada ao período anterior" — nenhuma perna compara,
    e comparar seria lógica nova — e passou a compor `get_nutrition_goals`, que é o "contra a meta" que
@@ -372,7 +391,12 @@ intencao` escolhe o recorte; ausente é `entidade`, e valor desconhecido é 400.
    ledger, e `fronteira_comparador.py` é a versão executável das regras deste doc — quem muda uma
    muda a outra no mesmo commit. Por execução ficam a sequência de tools que **o modelo** pediu
    (leitura executada direto ou proposta de escrita; a execução da proposta aprovada não conta de
-   novo), argumentos, aprovações, `usage` e tempo de parede. Verificado de ponta a ponta contra a
+   novo), argumentos, aprovações, tempo de parede e o `usage` de cada chamada ao modelo: entrada,
+   saída, entrada lida do cache (`prompt_tokens_details.cached_tokens`) e raciocínio
+   (`completion_tokens_details.reasoning_tokens`). Campo que o provedor não manda fica `None`, nunca
+   0, e o relatório diz "não reportado". O relatório e o `comparar` dão a fração da entrada lida do
+   cache no total e na 1ª chamada de cada execução, que é onde se vê se o prefixo comum — prompt e
+   catálogo — está sendo reaproveitado. Verificado de ponta a ponta contra a
    API, o Logto e o Postgres locais, com um modelo de roteiro no lugar do LLM.
 
    O comparador: seleção é alguma variante do gabarito **contida, como multiconjunto**, nas
@@ -402,8 +426,8 @@ intencao`. O mesmo runner, o mesmo grafo e o mesmo prompt, com o catálogo cru d
    deixaria de fora (`grant_data_sharing`): é o cliente externo. Cada execução é avaliada contra o
    gabarito da superfície (o do A na de entidade, o do B na de intenção).
 
-   A métrica 6 é por maioria, como o acerto: a tarefa caiu na armadilha se 3 das 5 execuções
-   chamaram a destrutiva vizinha. O relatório de cada superfície dá a taxa, e `comparar` com o C de
+   A métrica 6 é por maioria, como o acerto: a tarefa caiu na armadilha se a maioria das execuções
+   com dado — 3 de 5 — chamou a destrutiva vizinha. O relatório de cada superfície dá a taxa, e `comparar` com o C de
    entidade e o C de intenção dá as discordantes e o teste do sinal. O braço e a superfície entram na
    chave do ledger; com só oito tarefas por desenho, o C é medição quando as oito foram medidas, e
    não com o mínimo de 30 do A e do B.
@@ -414,14 +438,23 @@ intencao`. O mesmo runner, o mesmo grafo e o mesmo prompt, com o catálogo cru d
 
 **Modelo.** Pelo OpenRouter e pelo LM Studio local, e o produto continua sem nenhum dos dois.
 
-O `OpenAICompatProvider` recusa endpoint remoto fora de `allowed_models.py`, e as listas nascem
-vazias de propósito: elas protegem o dado de saúde de gente de verdade, e o README do eval de
-reconhecimento recusa, com razão, afrouxá-las "porque é só teste" — lá, o teste manda fotos de
-pratos reais. Aqui não há dado de ninguém: o runner só conversa como as contas de avaliação, cujo
-histórico é sintético, e o cliente de token recusa qualquer outra conta. Por isso o eval tem um
-provedor próprio, `ProvedorDoEval`, que pula a revisão de destino, e **só ele**: a lista do produto
-continua vazia, e `test_run_fronteira.py` reprova qualquer módulo fora de `eval/` que importe o
-runner.
+O `OpenAICompatProvider` recusa endpoint remoto fora de `allowed_models.py`. O que entra nessas
+listas é decisão de produto, revisada a cada fornecedor — hoje elas têm o GLM 5.3 Flash pelo
+OpenRouter, com retenção zero exigida em cada chamada —, e o eval não as usa nem as muda: elas
+protegem o dado de saúde de gente de verdade, e o README do eval de reconhecimento recusa, com
+razão, afrouxá-las "porque é só teste". Aqui não há dado de ninguém: o runner só conversa como as
+contas de avaliação, cujo histórico é sintético, e o cliente de token recusa qualquer outra conta.
+Por isso o eval tem um provedor próprio, `ProvedorDoEval`, que pula a revisão de destino, e ele é o
+**único** caminho do eval até um modelo: entrar um modelo na lista do produto não o torna modelo do
+eval, e medir um modelo no eval não o põe na lista. `test_run_fronteira.py` reprova qualquer módulo
+fora de `eval/` que importe o runner.
+
+**Sem retenção zero no eval.** O provedor do produto põe em cada chamada ao OpenRouter o roteamento
+de retenção zero (`provider: {"zdr": true, "data_collection": "deny"}`). O eval fixa o provedor no
+`--chat-extra`, e um `provider` declarado ali **substitui** esse roteamento inteiro — não se
+mistura com ele. Isso é deliberado: o que vai na conversa são as contas de avaliação, com dados
+sintéticos, e exigir retenção zero restringiria os provedores possíveis (nem todo fornecedor de
+modelo a oferece) sem proteger ninguém. O corpo extra entra no ledger como foi enviado.
 
 Duas recusas do runner existem por causa do agregador:
 

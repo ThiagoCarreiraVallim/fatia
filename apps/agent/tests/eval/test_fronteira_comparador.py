@@ -1,17 +1,23 @@
 """As regras de decisão do eval da fronteira, como o doc as declara."""
 
+import dataclasses
+
 import pytest
 
 from fatia_agent.eval.fronteira_comparador import (
     CabecalhoDaRodada,
     Chamada,
     Execucao,
+    UsoDaChamada,
     agrupar,
     avaliar,
     comparar,
     espera_recusa,
+    markdown_do_braco,
+    medir_cache,
     motivo_de_rascunho,
     p_do_sinal,
+    resumir,
 )
 from fatia_agent.eval.fronteira_tarefas import Argumentos, Braco, Tarefa
 
@@ -47,6 +53,7 @@ def _exec(
     tarefa: str = "t",
     repeticao: int = 1,
     erro: str | None = None,
+    usos: tuple[UsoDaChamada, ...] = (),
 ) -> Execucao:
     lista = tuple(
         Chamada(c, "{}", "leitura") if isinstance(c, str) else Chamada(c[0], c[1], "leitura")
@@ -65,7 +72,13 @@ def _exec(
         segundos=1.0,
         motivos=("stop",),
         erro=erro,
+        usos=usos,
     )
+
+
+def _tres(*chamadas: tuple[str, str] | str, **kw: object) -> list[Execucao]:
+    """A mesma execução nas repetições 1 a 3: o mínimo com dado para a tarefa ser medida."""
+    return [_exec(*chamadas, repeticao=i, **kw) for i in (1, 2, 3)]  # type: ignore[arg-type]
 
 
 def test_acerta_quando_uma_variante_esta_contida_e_chamada_a_mais_nao_reprova() -> None:
@@ -164,15 +177,15 @@ def test_imposto_so_sai_das_tarefas_que_os_dois_bracos_acertaram() -> None:
         [um, dois],
         [
             # "um": A acerta com 5 chamadas sobre piso 2.
-            _exec("x", "y", "get_me", "get_me", "get_me", tarefa="um"),
+            *_tres("x", "y", "get_me", "get_me", "get_me", tarefa="um"),
             # "dois": A erra — não pode entrar no imposto de nenhum lado.
-            _exec("get_me", tarefa="dois"),
+            *_tres("get_me", tarefa="dois"),
         ],
         set(),
     )
     b = agrupar(
         [um, dois],
-        [_exec("z", tarefa="um", braco="B"), _exec("z", tarefa="dois", braco="B")],
+        [*_tres("z", tarefa="um", braco="B"), *_tres("z", tarefa="dois", braco="B")],
         set(),
     )
     cmp = comparar(a, b)
@@ -202,13 +215,15 @@ def _cab(**kw: object) -> CabecalhoDaRodada:
 
 def test_rascunho_quando_o_split_e_dev_ou_as_tarefas_medidas_nao_bastam() -> None:
     tarefas = [_tarefa(f"t{i}") for i in range(31)]
-    boas = agrupar(tarefas, [_exec("list_meals", tarefa=t.id) for t in tarefas], set())
+    boas = agrupar(tarefas, [e for t in tarefas for e in _tres("list_meals", tarefa=t.id)], set())
     assert motivo_de_rascunho(_cab(), boas) is None
     assert "dev" in (motivo_de_rascunho(_cab(split="dev"), boas) or "")
 
-    # Uma tarefa em que toda repetição morreu por erro não mediu o modelo.
+    # Uma tarefa em que as repetições morreram por erro de provedor não mediu o modelo.
     com_erro = [
-        _exec("list_meals", tarefa=t.id, erro="x" if i < 2 else None) for i, t in enumerate(tarefas)
+        e
+        for i, t in enumerate(tarefas)
+        for e in _tres("list_meals", tarefa=t.id, erro="AI_PROVIDER_TIMEOUT: x" if i < 2 else None)
     ]
     assert "29 tarefas medidas" in (
         motivo_de_rascunho(_cab(), agrupar(tarefas, com_erro, set())) or ""
@@ -220,9 +235,157 @@ def test_tarefa_de_recusa_no_chat_nao_entra_no_imposto_nem_no_piso() -> None:
         "liberar", a=(("list_data_sharing", "grant_data_sharing"),), b=(("share_my_data",),)
     )
     restritas = {"grant_data_sharing", "share_my_data"}
-    a = agrupar([liberar], [_exec("list_data_sharing", tarefa="liberar")], restritas)
-    b = agrupar([liberar], [_exec(tarefa="liberar", braco="B")], restritas)
+    a = agrupar([liberar], _tres("list_data_sharing", tarefa="liberar"), restritas)
+    b = agrupar([liberar], _tres(tarefa="liberar", braco="B"), restritas)
 
     assert a[0].acertou and b[0].acertou
     assert (a[0].piso, b[0].piso) == (0, 0)
     assert comparar(a, b).tarefas_no_imposto == 0
+
+
+# --- erro de provedor: sem dado ---------------------------------------------
+
+
+_TIMEOUT = "AI_PROVIDER_TIMEOUT: o provedor não respondeu"
+
+
+def _cinco(certas: int, sem_dado: int, *, erro: str = _TIMEOUT) -> list[Execucao]:
+    """Cinco repetições: `certas` acertam, `sem_dado` morrem por `erro`, o resto erra."""
+    mortas = [_exec("list_meals", repeticao=i, erro=erro) for i in range(1, sem_dado + 1)]
+    vivas = [
+        _exec("list_meals" if i <= sem_dado + certas else "get_me", repeticao=i)
+        for i in range(sem_dado + 1, 6)
+    ]
+    return mortas + vivas
+
+
+def test_erro_de_provedor_sai_da_maioria_em_vez_de_contar_como_erro() -> None:
+    tarefa = _tarefa()
+    # 2 sem dado, 2 de 3 certas: acerta. Antes, eram 2 de 5 — e a tarefa errava.
+    [r] = agrupar([tarefa], _cinco(certas=2, sem_dado=2), set())
+    assert r.medida and r.acertou
+    assert len(r.com_dado) == 3
+
+    # 1 sem dado, 2 de 4 certas: empate não é maioria.
+    [r] = agrupar([tarefa], _cinco(certas=2, sem_dado=1), set())
+    assert r.medida and not r.acertou
+
+
+def test_com_menos_de_tres_execucoes_com_dado_a_tarefa_nao_e_medida() -> None:
+    tarefa = _tarefa()
+    [r] = agrupar([tarefa], _cinco(certas=2, sem_dado=3), set())
+    assert not r.medida
+    assert not r.acertou
+    resumo = resumir([r])
+    assert (resumo.tarefas_medidas, resumo.acertos, resumo.sem_dado) == (0, 0, 3)
+
+
+def test_erro_que_nao_e_de_provedor_conta_contra_o_modelo() -> None:
+    """Truncar no limite de tokens é o modelo gastando a saída: é erro com dado."""
+    tarefa = _tarefa()
+    [r] = agrupar(
+        [tarefa], _cinco(certas=2, sem_dado=2, erro="AI_RESPONSE_TRUNCATED: parou"), set()
+    )
+    assert r.medida and len(r.com_dado) == 5
+    assert not r.acertou
+
+
+def test_sem_dado_fica_fora_dos_parametros_das_armadilhas_e_das_medias() -> None:
+    tarefa = _tarefa(armadilha="delete_meal")
+    execucoes = [
+        _exec("list_meals", "delete_meal", repeticao=1, erro=_TIMEOUT),
+        *[_exec("list_meals", repeticao=i) for i in (2, 3, 4)],
+    ]
+    [r] = agrupar([tarefa], execucoes, set())
+    resumo = resumir([r])
+    assert resumo.armadilhas == 0
+    assert resumo.chamadas_ao_modelo_por_execucao == 1.0
+    assert (resumo.sem_dado, resumo.erros) == (1, 0)
+
+
+def test_par_so_conta_tarefa_medida_nos_dois_bracos() -> None:
+    um, dois = _tarefa("um", b=(("z",),)), _tarefa("dois", b=(("z",),))
+    a = agrupar(
+        [um, dois],
+        [*_tres("list_meals", tarefa="um"), *_tres("get_me", tarefa="dois")],
+        set(),
+    )
+    # No B, "dois" morreu por provedor: não é vitória do A.
+    b = agrupar(
+        [um, dois],
+        [*_tres("z", tarefa="um", braco="B"), *_tres(tarefa="dois", braco="B", erro=_TIMEOUT)],
+        set(),
+    )
+    cmp = comparar(a, b)
+    assert cmp.tarefas == 1
+    assert (cmp.b, cmp.c) == (0, 0)
+
+
+def test_execucao_vai_e_volta_do_json_com_usos_e_tentativas() -> None:
+    original = dataclasses.replace(
+        _exec("list_meals", usos=(UsoDaChamada(100, 10, 0, None), UsoDaChamada(150, 5, 96, 3))),
+        erros_anteriores=(_TIMEOUT,),
+        tokens_descartados=42,
+    )
+    assert Execucao.de_json(original.como_json()) == original
+    # Linha gravada antes dos campos novos ainda lê.
+    antigo = {
+        k: v
+        for k, v in original.como_json().items()
+        if k not in {"usos", "erros_anteriores", "tokens_descartados"}
+    }
+    assert Execucao.de_json(antigo).usos == ()
+
+
+# --- cache e raciocínio ------------------------------------------------------
+
+
+def test_cache_total_e_da_primeira_chamada() -> None:
+    execucoes = [
+        _exec(usos=(UsoDaChamada(1000, 10, 0, 5), UsoDaChamada(1200, 10, 900, 5))),
+        _exec(usos=(UsoDaChamada(1000, 10, 800, 5), UsoDaChamada(1200, 10, 1000, 5))),
+    ]
+    cache = medir_cache(execucoes)
+    assert cache.primeira == 800 / 2000
+    assert cache.demais == 1900 / 2400
+    assert cache.total == 2700 / 4400
+    assert (cache.reportadas, cache.chamadas) == (4, 4)
+    assert execucoes[0].tokens_cache == 900
+    assert execucoes[0].tokens_raciocinio == 10
+
+
+def test_cache_ausente_e_nao_reportado_e_nao_zero() -> None:
+    sem = [_exec(usos=(UsoDaChamada(1000, 10), UsoDaChamada(1200, 10)))]
+    cache = medir_cache(sem)
+    assert (cache.total, cache.primeira, cache.reportadas) == (None, None, 0)
+    assert sem[0].tokens_cache is None and sem[0].tokens_raciocinio is None
+
+    # Uma chamada sem o campo contamina a soma da execução, mas não a fração das outras.
+    meio = [_exec(usos=(UsoDaChamada(1000, 10), UsoDaChamada(1200, 10, 600)))]
+    assert meio[0].tokens_cache is None
+    assert medir_cache(meio).total == 0.5
+    assert medir_cache(meio).primeira is None
+
+
+def test_relatorio_mostra_cache_raciocinio_e_sem_dado() -> None:
+    tarefa = _tarefa()
+    execucoes = [
+        _exec("list_meals", repeticao=1, erro=_TIMEOUT),
+        *[
+            _exec(
+                "list_meals",
+                repeticao=i,
+                usos=(UsoDaChamada(1000, 10, 0, 4), UsoDaChamada(1000, 10, 900, 6)),
+            )
+            for i in (2, 3, 4)
+        ],
+    ]
+    resultados = agrupar([tarefa], execucoes, set())
+    texto = markdown_do_braco(_cab(tarefas_rodadas=1), resultados, set())
+    assert (
+        "| Entrada lida do cache: total · 1ª chamada · demais | 45,0 % · 0,0 % · 90,0 % " in texto
+    )
+    assert "(6 de 6 chamadas reportaram)" in texto
+    assert "| Tokens de raciocínio por execução | 10 |" in texto
+    assert "| Execuções sem dado (erro de provedor) | 1, depois de 0 novas tentativas |" in texto
+    assert "| `t` | 3/3 |" in texto

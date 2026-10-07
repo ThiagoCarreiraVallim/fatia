@@ -17,13 +17,20 @@ pergunta (`ask_user`), a execução para ali: o pedido já traz o que a tarefa
 precisa, e o runner não inventa a resposta da pessoa.
 
 **O provedor não é o do produto, e esta é a única exceção.** O
-`OpenAICompatProvider` recusa endpoint remoto fora de `allowed_models.py`, e as
-listas nascem vazias de propósito (#136): elas protegem o dado de saúde de gente
-de verdade. O eval só conversa como as contas de avaliação, cujos dados são
-sintéticos (`packages/db/prisma/seed-eval.ts`), e o `TokensDeAvaliacao` recusa
-token de qualquer outra conta. `ProvedorDoEval` pula a revisão de destino por
-isso, e só por isso: ele não é importado fora deste módulo, e o
-`tests/eval/test_run_fronteira.py` reprova quem o importar do caminho do produto.
+`OpenAICompatProvider` recusa endpoint remoto fora de `allowed_models.py`, cujas
+listas são decisão de produto (#136): elas protegem o dado de saúde de gente de
+verdade, e o eval não as usa nem as muda. O eval só conversa como as contas de
+avaliação, cujos dados são sintéticos (`packages/db/prisma/seed-eval.ts`), e o
+`TokensDeAvaliacao` recusa token de qualquer outra conta. `ProvedorDoEval` pula a
+revisão de destino por isso, e só por isso: ele é o único caminho do eval até um
+modelo, não é importado fora deste módulo, e o `tests/eval/test_run_fronteira.py`
+reprova quem o importar do caminho do produto. O `provider` do `--chat-extra`
+substitui o roteamento de retenção zero do produto — ver §Modelo no doc.
+
+**Erro de provedor não é nota do modelo.** A execução que morre por ele é repetida
+inteira até `NOVAS_TENTATIVAS` vezes; se ainda falhar, fica sem dado, fora da
+maioria (`fronteira_comparador.ERROS_DE_PROVEDOR`). Erro de configuração ou do
+`/mcp` para a rodada (`com_novas_tentativas`).
 
 Três recusas, todas para o número valer:
 
@@ -49,6 +56,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import dataclasses
+import functools
 import hashlib
 import json
 import os
@@ -90,7 +98,10 @@ from .fronteira_comparador import (
     Chamada,
     Execucao,
     ResultadoDaTarefa,
+    UsoDaChamada,
     agrupar,
+    codigo_do_erro,
+    e_erro_de_provedor,
     markdown_da_comparacao,
     markdown_das_armadilhas,
     markdown_do_braco,
@@ -117,9 +128,13 @@ MAXIMO_DE_APROVACOES = 3
 
 AGREGADORES = frozenset({"openrouter.ai"})
 
+#: Novas tentativas de uma execução que morreu por erro de provedor. Depois delas, a
+#: execução fica sem dado: não é acerto nem erro do modelo (`Execucao.sem_dado`).
+NOVAS_TENTATIVAS = 2
+
 
 class ConfiguracaoRecusada(Exception):
-    """A rodada não começa: o número sairia medindo outra coisa."""
+    """A rodada não começa — ou para: o número sairia medindo outra coisa."""
 
 
 class McpSemDestrutivas(McpClient):
@@ -338,6 +353,7 @@ async def executar(
         motivos: list[str] = []
         tokens_entrada: int | None = 0
         tokens_saida: int | None = 0
+        usos: list[UsoDaChamada] = []
         chamadas_ao_modelo = 0
         aprovacoes = 0
         retomadas = 0
@@ -404,6 +420,14 @@ async def executar(
                         chamadas_ao_modelo += 1
                         tokens_entrada = _somar(tokens_entrada, d.get("inputUnits"))
                         tokens_saida = _somar(tokens_saida, d.get("outputUnits"))
+                        usos.append(
+                            UsoDaChamada(
+                                entrada=_unidade(d.get("inputUnits")),
+                                saida=_unidade(d.get("outputUnits")),
+                                cache=_unidade(d.get("cachedInputUnits")),
+                                raciocinio=_unidade(d.get("reasoningUnits")),
+                            )
+                        )
                     elif nome == "error":
                         erro = f"{d['code']}: {d['message']}"
                     elif nome == "done":
@@ -449,8 +473,59 @@ async def executar(
         erro=erro,
         texto="\n---\n".join(texto_total),
         interceptadas=tuple(client.interceptadas) if isinstance(client, McpSemDestrutivas) else (),
+        usos=tuple(usos),
     )
     return execucao, catalogo
+
+
+async def com_novas_tentativas(
+    uma: Callable[[], Awaitable[tuple[Execucao, list[McpToolInfo]]]],
+    *,
+    novas: int = NOVAS_TENTATIVAS,
+) -> tuple[Execucao, list[McpToolInfo]]:
+    """Roda `uma` e, se ela morrer por erro de provedor, de novo — até `novas` vezes.
+
+    Cada tentativa é uma execução inteira, do estado reposto em diante: retomar do meio
+    seria um turno que nenhuma pessoa teria. Vale a última; os erros das anteriores e o
+    que elas gastaram ficam registrados nela. Se a última ainda falhar por provedor, a
+    execução fica sem dado (`Execucao.sem_dado`).
+
+    Erro que não é de provedor nem do modelo — configuração, `/mcp` — para a rodada:
+    seria medir a nossa infraestrutura e dar a nota ao modelo.
+    """
+    erros: list[str] = []
+    descartados: int | None = 0
+    while True:
+        execucao, catalogo = await uma()
+        codigo = codigo_do_erro(execucao.erro)
+        if codigo is not None and (codigo in ERROS_QUE_PARAM_A_RODADA or codigo.startswith("MCP_")):
+            raise ConfiguracaoRecusada(
+                f"{execucao.tarefa} #{execucao.repeticao} terminou em {execucao.erro}. Não é "
+                "o modelo: a rodada parou, e nada desta execução foi gravado. Corrija e "
+                "retome com --continuar."
+            )
+        if not e_erro_de_provedor(execucao.erro) or len(erros) >= novas:
+            break
+        erros.append(execucao.erro or "")
+        descartados = _somar(_somar(descartados, execucao.tokens_entrada), execucao.tokens_saida)
+    return (
+        dataclasses.replace(
+            execucao, erros_anteriores=tuple(erros), tokens_descartados=descartados
+        ),
+        catalogo,
+    )
+
+
+#: Erros do provedor que não são falha passageira: tentar de novo dá o mesmo, e a nota
+#: iria para o modelo. A rodada para.
+ERROS_QUE_PARAM_A_RODADA = frozenset(
+    {
+        "AI_PROVIDER_NOT_CONFIGURED",
+        "AI_MODEL_NOT_ALLOWED",
+        "AI_ENDPOINT_NOT_ALLOWED",
+        "AGENT_KEY_REJECTED",
+    }
+)
 
 
 def _quadros(bruto: str) -> list[tuple[str, Any]]:
@@ -469,6 +544,10 @@ def _acoes_da_pausa(valor: Mapping[str, Any]) -> list[dict[str, Any]]:
     """As ações de uma pausa. O orçamento pausa sem ação nenhuma, só com o `kind`."""
     acoes = list(valor.get("actions") or [])
     return acoes or [{"kind": valor.get("kind")}]
+
+
+def _unidade(valor: object) -> int | None:
+    return valor if isinstance(valor, int) and not isinstance(valor, bool) else None
 
 
 def _somar(acumulado: int | None, valor: object) -> int | None:
@@ -626,21 +705,32 @@ async def rodar(args: argparse.Namespace) -> int:
                 n += 1
                 if (tarefa.id, repeticao) in feitas:
                     continue
-                execucao, servido = await executar(
-                    tarefa,
-                    braco,
-                    repeticao,
-                    provider=provider,
-                    tokens=tokens,
-                    mcp_url=args.mcp_url,
-                    repor=repor,
-                    cru=cru,
+                execucao, servido = await com_novas_tentativas(
+                    functools.partial(
+                        executar,
+                        tarefa,
+                        braco,
+                        repeticao,
+                        provider=provider,
+                        tokens=tokens,
+                        mcp_url=args.mcp_url,
+                        repor=repor,
+                        cru=cru,
+                    )
                 )
                 if sha_do_catalogo(servido) != catalogo_sha:
                     raise ConfiguracaoRecusada("O catálogo servido mudou no meio da rodada.")
                 with arquivo_execucoes.open("a", encoding="utf-8") as arquivo:
                     arquivo.write(json.dumps(execucao.como_json(), ensure_ascii=False) + "\n")
-                marca = "erro" if execucao.erro else f"{len(execucao.chamadas)} chamadas"
+                marca = (
+                    "sem dado"
+                    if execucao.sem_dado
+                    else "erro"
+                    if execucao.erro
+                    else f"{len(execucao.chamadas)} chamadas"
+                )
+                if execucao.erros_anteriores:
+                    marca += f", {len(execucao.erros_anteriores)} novas tentativas"
                 if execucao.interceptadas:
                     marca += f", interceptadas: {', '.join(execucao.interceptadas)}"
                 print(f"[{n}/{total}] {tarefa.id} #{repeticao}: {marca}", flush=True)

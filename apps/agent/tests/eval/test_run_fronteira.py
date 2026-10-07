@@ -2,18 +2,22 @@
 
 import ast
 import json
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
 
 import httpx
 import pytest
 
+from fatia_agent.chat import McpToolInfo
 from fatia_agent.eval.contas import ContaDeAvaliacao, TokensDeAvaliacao
+from fatia_agent.eval.fronteira_comparador import Execucao, UsoDaChamada
 from fatia_agent.eval.fronteira_tarefas import Tarefa, carregar
 from fatia_agent.eval.run_fronteira import (
     HEADER_SUPERFICIE,
+    NOVAS_TENTATIVAS,
     ConfiguracaoRecusada,
     ProvedorDoEval,
+    com_novas_tentativas,
     conferir_catalogo,
     executar,
     exigir_provedor_fixo,
@@ -404,3 +408,140 @@ async def test_fora_do_braco_c_a_destrutiva_nem_chega_ao_modelo() -> None:
     oferecidas = {t["function"]["name"] for t in provedor.corpos[0]["tools"]}  # type: ignore[index,union-attr]
     assert "delete_my_account" not in oferecidas
     assert "grant_data_sharing" not in oferecidas
+
+
+# --- uso por chamada e erro de provedor -----------------------------------
+
+
+def _mcp_de_leitura() -> httpx.AsyncBaseTransport:
+    return duplo_do_mcp(
+        catalogo=[
+            tool_do_catalogo("search_food", read_only=True),
+            tool_do_catalogo("get_me", read_only=True),
+        ],
+        resultados={"get_me": {"content": [{"type": "text", "text": "{}"}]}},
+    )
+
+
+async def _executar_com(roteiro: list[list[dict[str, object]]]) -> Execucao:
+    async def repor(_estado: Sequence[str]) -> None:
+        return None
+
+    async with ProvedorDoEval(
+        base_url="http://localhost:1234/v1",
+        text_model="roteiro",
+        transport=ProviderRecordingTransport(roteiro),
+    ) as provider:
+        execucao, _ = await executar(
+            _tarefa(),
+            "A",
+            1,
+            provider=provider,
+            tokens=_Tokens(),
+            mcp_url="http://localhost:3000/mcp",
+            repor=repor,
+            transport=_mcp_de_leitura(),
+        )
+    return execucao
+
+
+async def test_cada_chamada_ao_modelo_guarda_cache_e_raciocinio_como_vieram() -> None:
+    detalhes = {
+        "prompt_tokens_details": {"cached_tokens": 512},
+        "completion_tokens_details": {"reasoning_tokens": 30},
+    }
+    execucao = await _executar_com(
+        [
+            [
+                fragmento_de_tool(0, id="c1", name="search_food", arguments='{"q":"ovo"}'),
+                fim("tool_calls"),
+                bloco_de_uso(prompt_tokens=800, completion_tokens=40),
+            ],
+            [
+                fragmento_de_texto("Achei."),
+                fim(),
+                bloco_de_uso(prompt_tokens=900, completion_tokens=50, detalhes=detalhes),
+            ],
+        ]
+    )
+    # A 1ª chamada não reportou: `None`, e não zero.
+    assert execucao.usos == (
+        UsoDaChamada(entrada=800, saida=40, cache=None, raciocinio=None),
+        UsoDaChamada(entrada=900, saida=50, cache=512, raciocinio=30),
+    )
+    assert execucao.tokens_cache is None
+    assert execucao.tokens_entrada == 1700
+
+
+async def test_erro_do_provedor_no_meio_da_conversa_vira_execucao_sem_dado() -> None:
+    execucao = await _executar_com([[{"error": {"code": 502, "message": "upstream caiu"}}]])
+    assert execucao.erro is not None and execucao.erro.startswith("AI_PROVIDER_REFUSED")
+    assert execucao.sem_dado
+
+
+def _execucao(erro: str | None, entrada: int = 100) -> Execucao:
+    return Execucao(
+        tarefa="t",
+        braco="A",
+        repeticao=1,
+        hoje="2026-09-23",
+        chamadas=(),
+        aprovacoes=0,
+        chamadas_ao_modelo=1,
+        tokens_entrada=entrada,
+        tokens_saida=10,
+        segundos=0.1,
+        motivos=("error" if erro else "stop",),
+        erro=erro,
+    )
+
+
+Uma = Callable[[], Awaitable[tuple[Execucao, list[McpToolInfo]]]]
+
+
+def _roteiro(*execucoes: Execucao) -> tuple[Uma, list[int]]:
+    fila = list(execucoes)
+    vezes: list[int] = []
+
+    async def uma() -> tuple[Execucao, list[McpToolInfo]]:
+        vezes.append(1)
+        return fila.pop(0), []
+
+    return uma, vezes
+
+
+async def test_erro_de_provedor_tenta_de_novo_e_vale_a_tentativa_que_deu_certo() -> None:
+    uma, vezes = _roteiro(
+        _execucao("AI_PROVIDER_TIMEOUT: lento", entrada=300), _execucao(None, entrada=100)
+    )
+    execucao, _ = await com_novas_tentativas(uma)
+    assert len(vezes) == 2
+    assert execucao.erro is None and not execucao.sem_dado
+    assert execucao.erros_anteriores == ("AI_PROVIDER_TIMEOUT: lento",)
+    # O que a tentativa perdida gastou fica registrado, fora das médias.
+    assert (execucao.tokens_entrada, execucao.tokens_descartados) == (100, 310)
+
+
+async def test_depois_de_duas_novas_tentativas_a_execucao_fica_sem_dado() -> None:
+    falha = _execucao("AI_PROVIDER_REFUSED: 429")
+    uma, vezes = _roteiro(*[falha] * (NOVAS_TENTATIVAS + 2))
+    execucao, _ = await com_novas_tentativas(uma)
+    assert NOVAS_TENTATIVAS == 2
+    assert len(vezes) == 3
+    assert execucao.sem_dado
+    assert len(execucao.erros_anteriores) == 2
+
+
+async def test_erro_do_modelo_nao_e_repetido() -> None:
+    uma, vezes = _roteiro(_execucao("AI_RESPONSE_TRUNCATED: parou"), _execucao(None))
+    execucao, _ = await com_novas_tentativas(uma)
+    assert len(vezes) == 1
+    assert execucao.erro == "AI_RESPONSE_TRUNCATED: parou" and not execucao.sem_dado
+
+
+@pytest.mark.parametrize("erro", ["MCP_UNREACHABLE: api fora", "AI_MODEL_NOT_ALLOWED: x"])
+async def test_erro_do_mcp_ou_de_configuracao_para_a_rodada(erro: str) -> None:
+    uma, vezes = _roteiro(_execucao(erro), _execucao(None))
+    with pytest.raises(ConfiguracaoRecusada, match="a rodada parou"):
+        await com_novas_tentativas(uma)
+    assert len(vezes) == 1
