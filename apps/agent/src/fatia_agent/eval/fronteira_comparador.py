@@ -107,8 +107,16 @@ class Execucao:
     """Um por chamada ao modelo, na ordem: é daqui que sai o cache da 1ª chamada."""
     erros_anteriores: tuple[str, ...] = ()
     """As tentativas que morreram por erro de provedor antes desta, que é a que vale."""
-    tokens_descartados: int | None = 0
-    """Entrada + saída das tentativas descartadas: custo sem medida. `None`: não reportado."""
+    tokens_entrada_descartados: int | None = 0
+    tokens_saida_descartados: int | None = 0
+    """O que as tentativas descartadas gastaram. Entra no custo, e não nos tokens por execução:
+    o que se compara entre braços é o que a execução que valeu gastou. `None`: não reportado."""
+
+    @property
+    def truncada(self) -> bool:
+        """Parou no limite de tokens: erro do modelo, contado à parte (pode ser o limite cortando
+        o raciocínio, e não o modelo errando)."""
+        return codigo_do_erro(self.erro) == "AI_RESPONSE_TRUNCATED"
 
     @property
     def sem_dado(self) -> bool:
@@ -371,6 +379,26 @@ class ResumoDoBraco:
     novas_tentativas: int = 0
     cache: Cache | None = None
     tokens_raciocinio_por_execucao: float | None = None
+    truncamentos: int = 0
+    """Execuções com dado que pararam no limite de tokens (já contadas em `erros`)."""
+    custo: TokensDeCusto | None = None
+    nao_medidas: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class TokensDeCusto:
+    """Tudo o que a rodada pagou: execuções com e sem dado e as tentativas descartadas.
+
+    É a conta do custo, e não a de comparação: "tokens de entrada por execução" é só o que a
+    execução que valeu gastou, e só nas execuções com dado. `None`: alguma chamada não reportou.
+    """
+
+    entrada: int | None
+    saida: int | None
+    cache: int | None
+    """Da entrada, quanto veio do cache (preço menor). Só das execuções gravadas."""
+    descartadas: int
+    """Quantas tentativas foram descartadas — os tokens delas já estão em `entrada` e `saida`."""
 
 
 @dataclass(frozen=True)
@@ -434,6 +462,18 @@ def resumir(resultados: Sequence[ResultadoDaTarefa]) -> ResumoDoBraco:
         novas_tentativas=sum(len(e.erros_anteriores) for e in todas),
         cache=medir_cache(execucoes),
         tokens_raciocinio_por_execucao=_media(e.tokens_raciocinio for e in execucoes),
+        truncamentos=sum(e.truncada for e in execucoes),
+        custo=TokensDeCusto(
+            entrada=_soma_das(
+                [e.tokens_entrada for e in todas] + [e.tokens_entrada_descartados for e in todas]
+            ),
+            saida=_soma_das(
+                [e.tokens_saida for e in todas] + [e.tokens_saida_descartados for e in todas]
+            ),
+            cache=_soma_das([e.tokens_cache for e in todas]),
+            descartadas=sum(len(e.erros_anteriores) for e in todas),
+        ),
+        nao_medidas=tuple(r.tarefa.id for r in resultados if not r.medida),
     )
 
 
@@ -462,6 +502,9 @@ class Comparacao:
     imposto_b: float | None
     piso_a: int
     piso_b: int
+    fora_do_par_a: tuple[str, ...] = ()
+    """Tarefas fora do teste do sinal porque o braço A não as mediu (menos de 3 com dado)."""
+    fora_do_par_b: tuple[str, ...] = ()
 
     @property
     def veredito(self) -> str:
@@ -502,6 +545,8 @@ def comparar(a: Sequence[ResultadoDaTarefa], b: Sequence[ResultadoDaTarefa]) -> 
         imposto_b=imposto(pb),
         piso_a=sum(pa[t].piso for t in comuns),
         piso_b=sum(pb[t].piso for t in comuns),
+        fora_do_par_a=tuple(sorted(t for t in pa.keys() & pb.keys() if not pa[t].medida)),
+        fora_do_par_b=tuple(sorted(t for t in pa.keys() & pb.keys() if not pb[t].medida)),
     )
 
 
@@ -516,6 +561,8 @@ class ComparacaoDeArmadilhas:
     """Tarefas em que só a superfície de entidade caiu na armadilha (por maioria)."""
     so_intencao: int
     p: float
+    fora_do_par_entidade: tuple[str, ...] = ()
+    fora_do_par_intencao: tuple[str, ...] = ()
 
 
 def comparar_armadilhas(
@@ -534,6 +581,8 @@ def comparar_armadilhas(
         so_entidade=so_e,
         so_intencao=so_i,
         p=p_do_sinal(so_e, so_i),
+        fora_do_par_entidade=tuple(sorted(t for t in pe.keys() & pi.keys() if not pe[t].medida)),
+        fora_do_par_intencao=tuple(sorted(t for t in pe.keys() & pi.keys() if not pi[t].medida)),
     )
 
 
@@ -602,6 +651,26 @@ def _pct(valor: float | None) -> str:
     return "não reportado" if valor is None else f"{_f(valor * 100)} %"
 
 
+def _inteiro(valor: int | None) -> str:
+    return "não reportado" if valor is None else f"{valor:,}".replace(",", ".")
+
+
+def _custo(custo: TokensDeCusto | None) -> str:
+    if custo is None:
+        return "—"
+    return (
+        f"entrada {_inteiro(custo.entrada)} (cache {_inteiro(custo.cache)}) · "
+        f"saída {_inteiro(custo.saida)} · {custo.descartadas} tentativas descartadas incluídas"
+    )
+
+
+def _fora_do_par(braco: str, modelo: str, tarefas: Sequence[str]) -> str:
+    lista = ", ".join(f"`{t}`" for t in tarefas)
+    return f"- {braco}, `{modelo}`: {len(tarefas)} tarefa(s) não medida(s)" + (
+        f" — {lista}" if tarefas else ""
+    )
+
+
 def _cache(cache: Cache | None) -> str:
     if cache is None or cache.reportadas == 0:
         return "não reportado"
@@ -648,9 +717,11 @@ def markdown_do_braco(
         f"| Chamadas ao modelo por execução | {_f(resumo.chamadas_ao_modelo_por_execucao)} |",
         f"| Aprovações por execução | {_f(resumo.aprovacoes_por_execucao)} |",
         f"| Tempo p50 / p95 | {_f(resumo.segundos_p50)} s / {_f(resumo.segundos_p95)} s |",
-        f"| Execuções com erro do modelo | {resumo.erros} |",
+        f"| Execuções com erro do modelo | {resumo.erros}, das quais {resumo.truncamentos} "
+        "truncadas no limite de tokens |",
         f"| Execuções sem dado (erro de provedor) | {resumo.sem_dado}, depois de "
         f"{resumo.novas_tentativas} novas tentativas |",
+        f"| Tokens para o custo | {_custo(resumo.custo)} |",
         "",
         "| Tarefa | Acertos / com dado | Piso | Chamadas (média) | Recusa? |",
         "| --- | ---: | ---: | ---: | :---: |",
@@ -716,10 +787,17 @@ def markdown_da_comparacao(
         f"{_pct(ra.cache.primeira if ra.cache else None)} | "
         f"{_pct(rb.cache.primeira if rb.cache else None)} |",
         f"| Execuções sem dado (erro de provedor) | {ra.sem_dado} | {rb.sem_dado} |",
+        f"| Truncadas no limite de tokens | {ra.truncamentos} | {rb.truncamentos} |",
+        f"| Tokens para o custo | {_custo(ra.custo)} | {_custo(rb.custo)} |",
         "",
         f"Discordantes: **{cmp.b}** em que só B acerta, **{cmp.c}** em que só A acerta, "
         f"de {cmp.tarefas} tarefas medidas nos dois braços. "
         f"Teste do sinal bicaudal: p = {_f(cmp.p, 3)}.",
+        "",
+        "Fora do par (não medidas num dos braços — sem dado não é erro de nenhum dos dois):",
+        "",
+        _fora_do_par("A", cab_a.modelo, cmp.fora_do_par_a),
+        _fora_do_par("B", cab_b.modelo, cmp.fora_do_par_b),
     ]
     return "\n".join(linhas) + "\n"
 
@@ -761,6 +839,11 @@ def markdown_das_armadilhas(
                 f"Discordantes: **{cmp.so_entidade}** em que só a de entidade caiu, "
                 f"**{cmp.so_intencao}** em que só a de intenção caiu. "
                 f"Teste do sinal bicaudal: p = {_f(cmp.p, 3)}.",
+                "",
+                "Fora do par (não medidas numa das superfícies):",
+                "",
+                _fora_do_par("entidade", cab_e.modelo, cmp.fora_do_par_entidade),
+                _fora_do_par("intenção", cab_i.modelo, cmp.fora_do_par_intencao),
             ]
         )
         + "\n"
@@ -782,6 +865,7 @@ __all__ = [
     "Nota",
     "ResultadoDaTarefa",
     "ResumoDoBraco",
+    "TokensDeCusto",
     "UsoDaChamada",
     "agrupar",
     "avaliar",

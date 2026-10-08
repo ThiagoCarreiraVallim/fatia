@@ -494,7 +494,8 @@ async def com_novas_tentativas(
     seria medir a nossa infraestrutura e dar a nota ao modelo.
     """
     erros: list[str] = []
-    descartados: int | None = 0
+    entrada_descartada: int | None = 0
+    saida_descartada: int | None = 0
     while True:
         execucao, catalogo = await uma()
         codigo = codigo_do_erro(execucao.erro)
@@ -507,10 +508,14 @@ async def com_novas_tentativas(
         if not e_erro_de_provedor(execucao.erro) or len(erros) >= novas:
             break
         erros.append(execucao.erro or "")
-        descartados = _somar(_somar(descartados, execucao.tokens_entrada), execucao.tokens_saida)
+        entrada_descartada = _somar(entrada_descartada, execucao.tokens_entrada)
+        saida_descartada = _somar(saida_descartada, execucao.tokens_saida)
     return (
         dataclasses.replace(
-            execucao, erros_anteriores=tuple(erros), tokens_descartados=descartados
+            execucao,
+            erros_anteriores=tuple(erros),
+            tokens_entrada_descartados=entrada_descartada,
+            tokens_saida_descartados=saida_descartada,
         ),
         catalogo,
     )
@@ -725,6 +730,8 @@ async def rodar(args: argparse.Namespace) -> int:
                 marca = (
                     "sem dado"
                     if execucao.sem_dado
+                    else "truncada"
+                    if execucao.truncada
                     else "erro"
                     if execucao.erro
                     else f"{len(execucao.chamadas)} chamadas"

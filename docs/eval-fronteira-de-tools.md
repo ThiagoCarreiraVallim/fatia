@@ -292,12 +292,17 @@ nele for outra, é ela que vai para o slide.
   reposto em diante, até 2 vezes; se ainda falhar, ela fica **sem dado** e sai da maioria, das
   médias, dos parâmetros e da armadilha. Com menos de 3 execuções com dado a tarefa é **não
   medida**: não entra no par do teste do sinal e não conta para o mínimo de 30 tarefas medidas —
-  abaixo dele, a rodada é rascunho. O que a tentativa descartada gastou fica gravado na execução
-  que valeu.
+  abaixo dele, a rodada é rascunho. O `comparar` lista as tarefas que ficaram fora do par, por
+  braço e modelo. O que a tentativa descartada gastou fica gravado na execução que valeu e entra
+  nos tokens do custo, e não nos tokens por execução, que são os que se comparam entre braços.
 - **O que não é do provedor conta contra o modelo, ou para a rodada.** Parar no limite de tokens
-  (`AI_RESPONSE_TRUNCATED`) é o modelo gastando a saída: é erro com dado. Erro de configuração
-  (`AI_MODEL_NOT_ALLOWED`, chave recusada) ou do `/mcp` (`MCP_*`) é a nossa infraestrutura: o
-  runner para a rodada sem gravar a execução, e `--continuar` retoma.
+  (`AI_RESPONSE_TRUNCATED`) é o modelo gastando a saída: é erro com dado, e o relatório o conta à
+  parte, por braço e modelo — truncamento pode ser o limite de saída do provedor cortando o
+  raciocínio, e não o modelo errando. Erro de configuração (`AI_MODEL_NOT_ALLOWED`, chave recusada)
+  ou de infraestrutura do `/mcp` (transporte, 4xx/5xx do HTTP, autenticação, protocolo) para a
+  rodada sem gravar a execução, e `--continuar` retoma. Erro **de tool** — argumento que o schema
+  recusa, regra de negócio, tool fora do recorte, argumentos que não são JSON — não é nenhum dos
+  dois: volta ao modelo como resultado com falha, como no produto, e conta na tarefa.
 - **A comparação é pareada.** Mesmo modelo, mesmas 31 tarefas, e o que conta são só as
   **discordantes**: `b` tarefas em que B acerta e A erra, `c` o contrário. As concordantes não dizem
   nada sobre a diferença entre os braços.

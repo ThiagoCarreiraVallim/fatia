@@ -1,6 +1,7 @@
 """O runner do eval da fronteira, sem rede: `/mcp` e provedor são dublês do formato real."""
 
 import ast
+import functools
 import json
 from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
@@ -25,12 +26,15 @@ from fatia_agent.eval.run_fronteira import (
     sha_do_catalogo,
 )
 from tests.chat.support import (
+    McpRecordingTransport,
     ProviderRecordingTransport,
     bloco_de_uso,
     duplo_do_mcp,
     fim,
     fragmento_de_texto,
     fragmento_de_tool,
+    resultado_mcp,
+    sse_jsonrpc,
     tool_do_catalogo,
 )
 from tests.eval.test_contas import _jwt
@@ -519,7 +523,8 @@ async def test_erro_de_provedor_tenta_de_novo_e_vale_a_tentativa_que_deu_certo()
     assert execucao.erro is None and not execucao.sem_dado
     assert execucao.erros_anteriores == ("AI_PROVIDER_TIMEOUT: lento",)
     # O que a tentativa perdida gastou fica registrado, fora das médias.
-    assert (execucao.tokens_entrada, execucao.tokens_descartados) == (100, 310)
+    assert execucao.tokens_entrada == 100
+    assert (execucao.tokens_entrada_descartados, execucao.tokens_saida_descartados) == (300, 10)
 
 
 async def test_depois_de_duas_novas_tentativas_a_execucao_fica_sem_dado() -> None:
@@ -545,3 +550,118 @@ async def test_erro_do_mcp_ou_de_configuracao_para_a_rodada(erro: str) -> None:
     with pytest.raises(ConfiguracaoRecusada, match="a rodada parou"):
         await com_novas_tentativas(uma)
     assert len(vezes) == 1
+
+
+# --- /mcp: erro de tool volta ao modelo; falha de infraestrutura para a rodada ---
+
+
+def _mcp_que_falha_em_search_food(falha: Callable[[], httpx.Response]) -> McpRecordingTransport:
+    """O dublê de leitura, mas `search_food` responde com `falha` — o resto, normal."""
+    normal = _mcp_de_leitura()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        corpo = json.loads(request.content)
+        if corpo.get("method") == "tools/call" and corpo["params"]["name"] == "search_food":
+            return falha()
+        return normal.handler(request)  # type: ignore[attr-defined]
+
+    return McpRecordingTransport(handler)
+
+
+def _erro_de_tool(texto: str) -> Callable[[], httpx.Response]:
+    """Como o `apps/api` responde erro de execução: `isError` dentro de um `result`."""
+    return lambda: sse_jsonrpc(
+        resultado_mcp(2, {"content": [{"type": "text", "text": texto}], "isError": True})
+    )
+
+
+async def _rodada(
+    mcp: httpx.AsyncBaseTransport, argumentos: str = '{"q":"ovo"}'
+) -> tuple[Execucao, ProviderRecordingTransport]:
+    provedor = ProviderRecordingTransport(
+        [
+            [
+                fragmento_de_tool(0, id="c1", name="search_food", arguments=argumentos),
+                fim("tool_calls"),
+                bloco_de_uso(),
+            ],
+            [fragmento_de_texto("Não achei."), fim(), bloco_de_uso()],
+        ]
+    )
+
+    async def repor(_estado: Sequence[str]) -> None:
+        return None
+
+    async with ProvedorDoEval(
+        base_url="http://localhost:1234/v1", text_model="roteiro", transport=provedor
+    ) as provider:
+        execucao, _ = await com_novas_tentativas(
+            functools.partial(
+                executar,
+                _tarefa(),
+                "A",
+                1,
+                provider=provider,
+                tokens=_Tokens(),
+                mcp_url="http://localhost:3000/mcp",
+                repor=repor,
+                transport=mcp,
+            )
+        )
+    return execucao, provedor
+
+
+@pytest.mark.parametrize(
+    ("caso", "texto"),
+    [
+        # Argumento que o schema recusa: o SDK do MCP devolve `isError`, não erro de protocolo.
+        ("argumento inválido", "MCP error -32602: Input validation error: q: Required"),
+        # Regra de negócio: o registry devolve a categoria e a dica.
+        ("regra de negócio", "[NOT_FOUND] Alimento não encontrado.\nBusque por outro nome."),
+    ],
+)
+async def test_erro_de_tool_volta_ao_modelo_e_conta_na_tarefa(caso: str, texto: str) -> None:
+    execucao, provedor = await _rodada(_mcp_que_falha_em_search_food(_erro_de_tool(texto)))
+
+    assert execucao.erro is None, caso
+    assert [(c.nome, c.ok) for c in execucao.chamadas] == [("search_food", False)]
+    assert execucao.chamadas_ao_modelo == 2
+    # O modelo leu o erro e respondeu: a conversa seguiu.
+    ultimo = provedor.corpos[-1]["messages"]
+    assert ultimo[-1]["role"] == "tool" and texto in ultimo[-1]["content"]  # type: ignore[index]
+
+
+async def test_argumentos_que_nao_sao_json_voltam_ao_modelo() -> None:
+    mcp = _mcp_de_leitura()
+    execucao, provedor = await _rodada(mcp, argumentos='{"q": ovo')
+
+    assert execucao.erro is None
+    assert execucao.chamadas[0].ok is False
+    assert execucao.chamadas_ao_modelo == 2
+    # Recusada antes de sair do agente; o modelo lê a recusa como resultado da tool.
+    chamadas_mcp = [r["params"]["name"] for r in mcp.rpcs if r["method"] == "tools/call"]  # type: ignore[attr-defined,index]
+    assert chamadas_mcp == ["get_me"]
+    assert provedor.corpos[-1]["messages"][-1]["role"] == "tool"  # type: ignore[index]
+
+
+@pytest.mark.parametrize(
+    ("falha", "codigo"),
+    [
+        (lambda: httpx.Response(503, text="indisponível"), "MCP_REFUSED"),
+        (lambda: httpx.Response(500, text="erro"), "MCP_REFUSED"),
+        (lambda: httpx.Response(401, text="token vencido"), "MCP_UNAUTHORIZED"),
+    ],
+)
+async def test_falha_de_infraestrutura_do_mcp_para_a_rodada(
+    falha: Callable[[], httpx.Response], codigo: str
+) -> None:
+    with pytest.raises(ConfiguracaoRecusada, match=codigo):
+        await _rodada(_mcp_que_falha_em_search_food(falha))
+
+
+async def test_mcp_fora_do_ar_no_meio_da_conversa_para_a_rodada() -> None:
+    def cai() -> httpx.Response:
+        raise httpx.ConnectError("conexão recusada")
+
+    with pytest.raises(ConfiguracaoRecusada, match="MCP_UNREACHABLE"):
+        await _rodada(_mcp_que_falha_em_search_food(cai))

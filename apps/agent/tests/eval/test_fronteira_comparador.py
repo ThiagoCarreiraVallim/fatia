@@ -13,6 +13,7 @@ from fatia_agent.eval.fronteira_comparador import (
     avaliar,
     comparar,
     espera_recusa,
+    markdown_da_comparacao,
     markdown_do_braco,
     medir_cache,
     motivo_de_rascunho,
@@ -325,14 +326,21 @@ def test_execucao_vai_e_volta_do_json_com_usos_e_tentativas() -> None:
     original = dataclasses.replace(
         _exec("list_meals", usos=(UsoDaChamada(100, 10, 0, None), UsoDaChamada(150, 5, 96, 3))),
         erros_anteriores=(_TIMEOUT,),
-        tokens_descartados=42,
+        tokens_entrada_descartados=40,
+        tokens_saida_descartados=2,
     )
     assert Execucao.de_json(original.como_json()) == original
     # Linha gravada antes dos campos novos ainda lê.
     antigo = {
         k: v
         for k, v in original.como_json().items()
-        if k not in {"usos", "erros_anteriores", "tokens_descartados"}
+        if k
+        not in {
+            "usos",
+            "erros_anteriores",
+            "tokens_entrada_descartados",
+            "tokens_saida_descartados",
+        }
     }
     assert Execucao.de_json(antigo).usos == ()
 
@@ -389,3 +397,86 @@ def test_relatorio_mostra_cache_raciocinio_e_sem_dado() -> None:
     assert "| Tokens de raciocínio por execução | 10 |" in texto
     assert "| Execuções sem dado (erro de provedor) | 1, depois de 0 novas tentativas |" in texto
     assert "| `t` | 3/3 |" in texto
+
+
+# --- truncamento, custo e tarefas fora do par ---------------------------------
+
+
+_TRUNCADA = "AI_RESPONSE_TRUNCATED: parou no limite"
+
+
+def test_truncamento_e_erro_do_modelo_contado_a_parte() -> None:
+    tarefa = _tarefa()
+    execucoes = [
+        _exec("list_meals", repeticao=1, erro=_TRUNCADA),
+        _exec("list_meals", repeticao=2, erro="AI_RESPONSE_TRUNCATED: outra"),
+        *[_exec("list_meals", repeticao=i) for i in (3, 4, 5)],
+    ]
+    [r] = agrupar([tarefa], execucoes, set())
+    resumo = resumir([r])
+    assert (resumo.erros, resumo.truncamentos, resumo.sem_dado) == (2, 2, 0)
+    assert len(r.com_dado) == 5 and r.acertou  # 3 de 5: as truncadas contam como erro
+    texto = markdown_do_braco(_cab(tarefas_rodadas=1), [r], set())
+    assert (
+        "| Execuções com erro do modelo | 2, das quais 2 truncadas no limite de tokens |" in texto
+    )
+
+
+def test_tentativas_descartadas_e_sem_dado_entram_no_custo_e_nao_nos_tokens_por_execucao() -> None:
+    tarefa = _tarefa()
+    valeu = dataclasses.replace(
+        _exec("list_meals", repeticao=1, usos=(UsoDaChamada(100, 10, 60),)),
+        erros_anteriores=(_TIMEOUT, _TIMEOUT),
+        tokens_entrada_descartados=500,
+        tokens_saida_descartados=5,
+    )
+    execucoes = [
+        valeu,
+        *[_exec("list_meals", repeticao=i, usos=(UsoDaChamada(100, 10, 0),)) for i in (2, 3)],
+        _exec(repeticao=4, erro=_TIMEOUT, usos=(UsoDaChamada(100, 10, 0),)),
+    ]
+    resumo = resumir(agrupar([tarefa], execucoes, set()))
+    # Por execução: só as três com dado, cada uma com 100 de entrada.
+    assert resumo.tokens_entrada_por_execucao == 100
+    assert resumo.custo is not None
+    # Custo: as quatro gravadas (400) e as duas tentativas descartadas (500).
+    assert (resumo.custo.entrada, resumo.custo.saida) == (900, 45)
+    assert (resumo.custo.cache, resumo.custo.descartadas) == (60, 2)
+
+
+def test_custo_nao_reportado_quando_alguma_chamada_nao_reportou() -> None:
+    sem = dataclasses.replace(_exec(), tokens_entrada=None)
+    resumo = resumir(agrupar([_tarefa()], [sem, _exec(repeticao=2), _exec(repeticao=3)], set()))
+    assert resumo.custo is not None and resumo.custo.entrada is None
+
+
+def test_comparar_lista_as_tarefas_fora_do_par_por_braco_e_modelo() -> None:
+    um, dois, tres = (_tarefa(i, b=(("z",),)) for i in ("um", "dois", "tres"))
+    a = agrupar(
+        [um, dois, tres],
+        [
+            *_tres("list_meals", tarefa="um"),
+            *_tres("list_meals", tarefa="dois", erro=_TIMEOUT),
+            *_tres("list_meals", tarefa="tres"),
+        ],
+        set(),
+    )
+    b = agrupar(
+        [um, dois, tres],
+        [
+            *_tres("z", tarefa="um", braco="B"),
+            *_tres("z", tarefa="dois", braco="B"),
+            *_tres(tarefa="tres", braco="B", erro=_TIMEOUT),
+        ],
+        set(),
+    )
+    cmp = comparar(a, b)
+    assert cmp.tarefas == 1
+    assert (cmp.fora_do_par_a, cmp.fora_do_par_b) == (("dois",), ("tres",))
+
+    texto = markdown_da_comparacao(
+        _cab(modelo="z-ai/glm"), _cab(braco="B", modelo="z-ai/glm"), a, b
+    )
+    assert "- A, `z-ai/glm`: 1 tarefa(s) não medida(s) — `dois`" in texto
+    assert "- B, `z-ai/glm`: 1 tarefa(s) não medida(s) — `tres`" in texto
+    assert "| Truncadas no limite de tokens | 0 | 0 |" in texto
