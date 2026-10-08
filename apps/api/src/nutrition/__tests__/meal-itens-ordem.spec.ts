@@ -81,6 +81,48 @@ describe('itens de refeição na ordem em que foram registrados', () => {
     expect(almoco.items.map((i) => i.foodName)).toEqual(['Arroz', 'Feijão', 'Frango']);
   });
 
+  it('inserções concorrentes recebem `seq` distintos, e a leitura segue a ordem deles', async () => {
+    const nomes = Array.from({ length: 20 }, (_, i) => `Concorrente ${String(i).padStart(2, '0')}`);
+    await Promise.all(
+      nomes.map((foodName) =>
+        prisma.mealItem.create({ data: { mealId: outraId, ...item(foodName) } }),
+      ),
+    );
+    const gravados = await prisma.$queryRaw<Array<{ foodName: string; seq: number }>>`
+      SELECT "foodName", seq FROM "MealItem" WHERE "mealId" = ${outraId} ORDER BY seq`;
+    expect(new Set(gravados.map((g) => g.seq)).size).toBe(20);
+
+    const lida = await meals.findById(userId, outraId);
+    expect(lida.items.map((i) => i.foodName)).toEqual(gravados.map((g) => g.foodName));
+  });
+
+  it('empate em `seq` desempata pelo id, e não pela ordem física', async () => {
+    const empate = (
+      await prisma.meal.create({
+        data: {
+          userId,
+          mealType: 'SNACK',
+          eatenAt: new Date('2026-09-22T12:00:00Z'),
+          items: { create: [item('Banana'), item('Aveia'), item('Mel')] },
+        },
+      })
+    ).id;
+    // Só à mão se chega aqui: a sequência não repete valor.
+    await prisma.$executeRaw`UPDATE "MealItem" SET seq = 1 WHERE "mealId" = ${empate}`;
+    const ids = (await prisma.mealItem.findMany({ where: { mealId: empate } }))
+      .map((i) => i.id)
+      .sort();
+
+    // Mexer na ordem física entre as leituras não muda o que sai.
+    const antes = (await meals.findById(userId, empate)).items.map((i) => i.id);
+    await prisma.mealItem.update({ where: { id: ids[0] }, data: { mealId: outraId } });
+    await prisma.mealItem.update({ where: { id: ids[0] }, data: { mealId: empate } });
+    const depois = (await meals.findById(userId, empate)).items.map((i) => i.id);
+
+    expect(antes).toEqual(ids);
+    expect(depois).toEqual(ids);
+  });
+
   it('não devolve a coluna de ordem', async () => {
     const lida = await meals.findById(userId, mealId);
     expect(Object.keys(lida.items[0])).not.toContain('seq');

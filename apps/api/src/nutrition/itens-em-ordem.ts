@@ -1,3 +1,5 @@
+import type { Prisma } from '@fatia/db';
+
 /**
  * Os itens de uma refeição na ordem em que foram registrados.
  *
@@ -6,4 +8,9 @@
  * para o fim da lista, às vezes sim, às vezes não. `seq` é a ordem de inserção
  * (`MealItem.seq`), e o `PrismaService` a omite de toda resposta.
  */
-export const ITENS_EM_ORDEM = { items: { orderBy: { seq: 'asc' } } } as const;
+export const ITENS_EM_ORDEM = {
+  // `seq` é SERIAL — uma sequência global, `nextval` atômico, e não `MAX(seq) + 1` por
+  // refeição: inserções concorrentes não empatam. O `id` desempata o que não deveria acontecer
+  // (uma linha gravada com `seq` à mão), para que nem assim a ordem física volte a decidir.
+  items: { orderBy: [{ seq: 'asc' }, { id: 'asc' }] },
+} satisfies Prisma.MealInclude;
