@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import { z, type ZodTypeAny } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { MCP_TOOL_METADATA, type McpToolDef } from '../../common/decorators/tool.decorator';
+import { servidaNa } from '../intent/superficie';
 
 /**
  * Guarda do catálogo de tools MCP (issue #94).
@@ -88,7 +89,7 @@ const TOOL_COUNT_SLICES: ReadonlyArray<{ file: string; text: string; count: () =
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '52 tools de escrita',
+    text: '54 tools de escrita',
     // As de escrita que ganharam exemplo na #111 — `delete_my_account` é isenta,
     // e é por isso que o número não é o total de tools de escrita.
     count: () =>
@@ -272,7 +273,16 @@ function deepStrict(schema: ZodTypeAny, path: string): ZodTypeAny {
   );
 }
 
-const tools = loadTools();
+/**
+ * Todas as tools do código, das duas superfícies do `/mcp`. As docs descrevem o catálogo de
+ * entidade — o que todo cliente recebe —, e é ele que os casos de doc conferem. As invariantes
+ * de catálogo valem para o que cada superfície serve (ver o `describe.each` mais abaixo): uma
+ * tool de intenção sem título ou com exemplo quebrado é tão ruim para o modelo quanto uma de
+ * entidade.
+ */
+const todas = loadTools();
+const SUPERFICIES = ['entidade', 'intencao'] as const;
+const tools = todas.filter(({ tool }) => servidaNa(tool, 'entidade'));
 const doc = readFileSync(MCP_DOC, 'utf8');
 
 /**
@@ -321,22 +331,22 @@ const payload = tools.reduce(
  * número; o caso abaixo confere as duas pontas, então nem o texto some nem o número derrapa.
  */
 const PAYLOAD_CLAIMS: ReadonlyArray<{ file: string; text: string; medido: () => string }> = [
-  { file: 'docs/MCP.md', text: '**78,4 k caracteres**', medido: () => emK(payload.cheio) },
-  { file: 'docs/MCP.md', text: '(65,5 k)', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP.md', text: '**82,5 k caracteres**', medido: () => emK(payload.cheio) },
+  { file: 'docs/MCP.md', text: '(66,7 k)', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP.md',
-    text: '**4.499 são os exemplos**',
+    text: '**4.605 são os exemplos**',
     medido: () => emMilhar(payload.exemplos),
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**78,4 k caracteres**',
+    text: '**82,5 k caracteres**',
     medido: () => emK(payload.cheio),
   },
-  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 65,5 k', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 66,7 k', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**4.499 caracteres**',
+    text: '**4.605 caracteres**',
     medido: () => emMilhar(payload.exemplos),
   },
 ];
@@ -355,19 +365,6 @@ describe('catálogo de tools MCP', () => {
   it('descobre as tools do código', () => {
     // Sanidade: se a descoberta quebrar, os testes abaixo passariam vazios.
     expect(tools.length).toBeGreaterThan(50);
-  });
-
-  it('não tem nomes duplicados', () => {
-    const names = tools.map(({ tool }) => tool.name);
-    const duplicates = names.filter((name, i) => names.indexOf(name) !== i);
-    expect(duplicates).toEqual([]);
-  });
-
-  it('segue a convenção verb_noun em todos os nomes', () => {
-    const offenders = tools
-      .filter(({ tool }) => !TOOL_NAME_PATTERN.test(tool.name))
-      .map(({ tool }) => tool.name);
-    expect(offenders).toEqual([]);
   });
 
   it('tem uma seção em docs/MCP.md para cada tool registrada', () => {
@@ -531,6 +528,32 @@ describe('catálogo de tools MCP', () => {
 
     expect(orphans).toEqual([]);
   });
+});
+
+describe.each(SUPERFICIES)('catálogo servido na superfície %s', (superficie) => {
+  /** O que o `/mcp` serve com `x-fatia-superficie: <superficie>` — ver `servidaNa`. */
+  const tools = todas.filter(({ tool }) => servidaNa(tool, superficie));
+
+  it('serve as tools da própria superfície e não outra', () => {
+    expect(tools.length).toBeGreaterThan(30);
+    const intrusas = tools
+      .filter(({ tool }) => superficie === 'entidade' && tool.surface === 'intencao')
+      .map(({ tool }) => tool.name);
+    expect(intrusas).toEqual([]);
+  });
+
+  it('não tem nomes duplicados', () => {
+    const names = tools.map(({ tool }) => tool.name);
+    const duplicates = names.filter((name, i) => names.indexOf(name) !== i);
+    expect(duplicates).toEqual([]);
+  });
+
+  it('segue a convenção verb_noun em todos os nomes', () => {
+    const offenders = tools
+      .filter(({ tool }) => !TOOL_NAME_PATTERN.test(tool.name))
+      .map(({ tool }) => tool.name);
+    expect(offenders).toEqual([]);
+  });
 
   it('tem descrição em toda tool', () => {
     const missing = tools
@@ -609,7 +632,7 @@ describe('catálogo de tools MCP', () => {
   });
 
   it('declara o hint coerente com o prefixo do nome', () => {
-    const READ = /^(get|list|search|explain|export)_/;
+    const READ = /^(get|list|search|explain|export|find)_/;
     const DESTRUCTIVE = /^delete_/;
     // Desfaz o vínculo e perde séries/reps configuradas naquele exercício.
     //
@@ -649,6 +672,57 @@ describe('catálogo de tools MCP', () => {
       // indistinguível de esquecimento.
       if (a.destructiveHint !== shouldBeDestructive) {
         wrong.push(`${tool.name}: esperado destructiveHint=${shouldBeDestructive}`);
+      }
+    }
+
+    expect(wrong.sort()).toEqual([]);
+  });
+
+  /**
+   * O recorte de três camadas do chat hospedado (ADR 022).
+   *
+   * O agente Python **deriva** deste campo o que oferece ao modelo, e é por isso
+   * que a guarda mora aqui e não lá: `apps/agent/src/fatia_agent/chat/tool_policy.py`
+   * herda esta checagem em vez de duplicá-la, e uma tool nova que nasça sem a
+   * anotação perderia a capacidade em silêncio — ninguém liga "o chat não
+   * registra mais peso" a um campo esquecido num decorator.
+   */
+  it('classifica toda tool quanto a confirmação no chat', () => {
+    // Escrevem e são reversíveis no dado, mas mudam QUEM vê a saúde de quem — e a
+    // revogação não desfaz isso: quem leu, leu. O critério da camada CONFIRMABLE
+    // é reversibilidade, e exposição não é reversível. Ficam fora do chat.
+    // `share_my_data` é a de intenção que compõe `grant_data_sharing`, e fica onde a perna fica.
+    const EXPOSICAO = new Set(['grant_data_sharing', 'join_group', 'share_my_data']);
+
+    const wrong: string[] = [];
+
+    for (const { tool } of tools) {
+      const a = tool.annotations ?? {};
+
+      if (typeof a.confirmableHint !== 'boolean') {
+        wrong.push(`${tool.name}: confirmableHint precisa ser declarado`);
+        continue;
+      }
+
+      // Ler não precisa de confirmação, e marcá-la faria a tool entrar duas vezes
+      // no catálogo do prompt — uma por camada. Ver `todas_permitidas`.
+      if (a.readOnlyHint === true && a.confirmableHint !== false) {
+        wrong.push(`${tool.name}: readOnlyHint com confirmableHint — ler não confirma`);
+        continue;
+      }
+
+      // Apagar não entra no chat nem com modal: quem clica "confirmar" está
+      // confirmando o que entendeu, não o que a tool vai fazer.
+      if (a.destructiveHint === true && a.confirmableHint !== false) {
+        wrong.push(`${tool.name}: destructiveHint com confirmableHint — apagar não confirma`);
+        continue;
+      }
+
+      if (a.readOnlyHint === false && a.destructiveHint === false) {
+        const esperado = !EXPOSICAO.has(tool.name);
+        if (a.confirmableHint !== esperado) {
+          wrong.push(`${tool.name}: esperado confirmableHint=${esperado}`);
+        }
       }
     }
 
@@ -726,6 +800,13 @@ describe('catálogo de tools MCP', () => {
       'destructiveHint',
       'idempotentHint',
       'openWorldHint',
+      // Fora da spec e **no fio de propósito**, ao contrário de `hostedInference`:
+      // quem lê é um cliente, o agente da Fatia, que deriva dele o recorte de três
+      // camadas do chat (ADR 022). É justamente o argumento do `tool_policy.py` —
+      // um campo que o servidor já serve em toda sessão, em vez de uma lista de
+      // nomes mantida à mão do outro lado. Cliente MCP externo ignora chave que
+      // não conhece, e o custo é uma linha por tool no payload.
+      'confirmableHint',
     ]);
 
     const leaked: string[] = [];

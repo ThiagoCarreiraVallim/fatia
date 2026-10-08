@@ -13,7 +13,7 @@ export class UpdateWeightLogTool implements McpToolDef {
   constructor(private readonly weights: WeightLogService) {}
   readonly name = 'update_weight_log';
   readonly title = 'Atualizar registro de peso';
-  readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
   readonly description =
     'Atualiza um log de peso existente. ' +

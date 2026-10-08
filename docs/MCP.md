@@ -104,8 +104,8 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **103 tools** declaram `false`, e é a resposta que
-pela Fatia** (visão, LLM, embedding). Hoje as **103 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **106 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **106 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -185,12 +185,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 103 tools): **78,4 k caracteres**
-hoje, dos quais **4.499 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 106 tools): **82,5 k caracteres**
+hoje, dos quais **4.605 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **87** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (65,5 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (66,7 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -344,9 +344,12 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `list_data_access_log`       | R        |
 | **Painel do profissional** | `list_my_students`           | R        |
 |                            | `get_student_progress`       | R        |
+| **Memória do assistente**  | `list_memories`              | R        |
+|                            | `save_memory`                | C        |
+|                            | `forget_memory`              | D        |
 
-Total: **103 tools**. Cada uma documentada abaixo.
-Total: **103 tools**. Cada uma documentada abaixo.
+Total: **106 tools**. Cada uma documentada abaixo.
+Total: **106 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -2780,3 +2783,50 @@ Cada chamada loga:
 - input size (não o conteúdo, por privacidade)
 
 Sem PII em logs. Erros guardam stack trace, não o input.
+
+## Memória do assistente
+
+O que a pessoa pediu para o assistente do chat hospedado lembrar entre conversas ("sou
+vegetariana", "treino às 6h"). Cada memória entra, cercada como dado, no prompt de toda conversa
+do chat (ADR 023). Limite de 50 memórias por pessoa e 500 caracteres cada — acima disso a lista
+deixa de ser "o que importa lembrar" e vira um segundo histórico pago a cada mensagem. Entram no
+`export_my_data` e morrem com a conta.
+
+No chat hospedado, `save_memory` e `forget_memory` são **confirmáveis** (ADR 022): a pessoa vê o
+texto exato antes de ele ser guardado. `forget_memory` não é `delete_*` porque esquecer uma
+anotação do assistente não apaga dado de saúde nem histórico — dizer de novo a traz de volta.
+
+### `list_memories`
+
+Lista as memórias, da mais antiga para a mais nova.
+
+**Output:** `Array<{ id: string; content: string; createdAt: string }>`
+
+### `save_memory`
+
+Guarda uma memória: uma frase curta, na terceira pessoa.
+
+**Input:**
+
+```typescript
+{
+  content: string; // 1–500 caracteres
+}
+```
+
+**Output:** `{ id: string; content: string; createdAt: string }`. Recusa (`INVALID_INPUT`) acima de
+50 memórias.
+
+### `forget_memory`
+
+Esquece uma memória pelo id.
+
+**Input:**
+
+```typescript
+{
+  memoryId: string; // uuid, de list_memories
+}
+```
+
+**Output:** `{ forgotten: true }`. `NOT_FOUND` quando o id não é de uma memória da pessoa.

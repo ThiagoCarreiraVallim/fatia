@@ -17,7 +17,7 @@ export class SearchExerciseTool implements McpToolDef {
 
   readonly title = 'Buscar exercício';
 
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
 
   readonly hostedInference = false;
   readonly description =

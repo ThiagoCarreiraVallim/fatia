@@ -63,6 +63,10 @@ export const AppEnvSchema = z.object({
   // continua ligado até alguém editar o env. Sai quando a #158 entrar.
   INSIGHTS_ADDON_GROUP_IDS: z.string().default(''),
 
+  // Superfície de intenção do `/mcp` (eval da fronteira de tools). Desligada por padrão, e
+  // `SuperficieDeIntencao` recusa subir com ela ligada em produção.
+  MCP_SUPERFICIE_INTENCAO: z.enum(['', '0', '1', 'true', 'false']).default(''),
+
   // Cobrança por aluno ativo (#158). As três são opcionais e a instância que não
   // cobra ninguém — que é como o produto roda hoje — não preenche nenhuma: sem
   // elas o motor de cobrança simplesmente não nasce (`AsaasProvider.fromEnv`

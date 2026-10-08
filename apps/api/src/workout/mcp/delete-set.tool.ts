@@ -16,7 +16,7 @@ export class DeleteSetTool implements McpToolDef {
 
   readonly title = 'Excluir série';
 
-  readonly annotations = { readOnlyHint: false, destructiveHint: true };
+  readonly annotations = { readOnlyHint: false, destructiveHint: true, confirmableHint: false };
 
   readonly hostedInference = false;
   readonly description =

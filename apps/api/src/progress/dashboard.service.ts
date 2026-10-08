@@ -7,6 +7,7 @@ import { StreakService } from './streak.service';
 import { AchievementService, type AchievementEntry } from './achievement.service';
 import { TrainingBlockService } from '../workout/training-block.service';
 import { addDaysIso, dayBoundsInTz, todayInTz, weekStartInTz } from './helpers/date-tz';
+import { ITENS_EM_ORDEM } from '../nutrition/itens-em-ordem';
 
 interface UserCtx {
   userId: string;
@@ -48,7 +49,7 @@ export class DashboardService {
         // `lt` (nutrition-summary, nutrient-target, meal) — só o dashboard divergia, e por
         // isso a mesma refeição podia somar em dois lugares com respostas diferentes.
         where: { userId: ctx.userId, eatenAt: { gte: dayStart, lt: dayEnd } },
-        include: { items: true },
+        include: ITENS_EM_ORDEM,
       }),
       this.prisma.userGoals.findUnique({ where: { userId: ctx.userId } }),
       this.prisma.workoutSession.findFirst({
@@ -163,7 +164,7 @@ export class DashboardService {
     const [meals, goals, sessions, weightLogs] = await Promise.all([
       this.prisma.meal.findMany({
         where: { userId: ctx.userId, eatenAt: { gte: startDate, lte: endDate } },
-        include: { items: true },
+        include: ITENS_EM_ORDEM,
       }),
       this.prisma.userGoals.findUnique({ where: { userId: ctx.userId } }),
       this.prisma.workoutSession.findMany({

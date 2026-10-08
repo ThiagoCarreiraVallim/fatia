@@ -13,7 +13,11 @@ de alguém é sensível, e a LGPD trata dado de saúde como categoria especial.
 Desde a #249 há mais um, e ele é de outra natureza: o **texto da conversa com a IA hospedada**
 (`Conversation`/`Message`). As outras tabelas guardam número — 80 kg, 1.800 kcal. Esta guarda o
 que a pessoa **escreveu**, em prosa, e é onde aparecem o remédio, o diagnóstico e o medo. Vale a
-mesma regra do §6: não entra em log, em span nem em mensagem de erro.
+mesma regra do §6: não entra em log, em span nem em mensagem de erro. O mesmo diálogo existe num
+segundo formato — o **checkpoint** do agente, no schema `agent_checkpoint` do mesmo Postgres, com as
+chamadas de tool e os resultados que o `/mcp` devolveu ([ADR 023](./ADR/023-checkpointer-no-postgres-da-fatia.md))
+— e as **memórias** (`UserMemory`), que a pessoa pediu para o assistente guardar. Os três têm a
+mesma sensibilidade, e o vetor 10 descreve o que os protege.
 
 Não armazenamos: fotos (ADR 004), senhas (ADR 008 — a identidade vive no Logto), meios de
 pagamento.
@@ -33,7 +37,7 @@ pagamento.
 | Trilha de acesso        | Toda leitura entre contas registrada, negativas inclusive, antes da resposta | `apps/api/src/sharing/access-audit.service.ts`                      |
 | Integridade referencial | `onDelete: Cascade` de `User` para tudo que é dele; índices `[userId, X]`    | `packages/db/prisma/schema.prisma`                                  |
 | Rate limit              | 60 req/min por usuário no `/mcp`, chaveado por `user.id`                     | `apps/api/src/mcp/mcp-throttler.guard.ts`                           |
-| SQL injection           | Prisma parametriza tudo; não há SQL cru em nenhum service                    | —                                                                   |
+| SQL injection           | Prisma parametriza; o único SQL cru com valor é a purga do checkpoint        | `apps/api/src/chat/checkpoint-purge.service.ts`                     |
 
 ## Vetores e mitigação
 
@@ -90,8 +94,14 @@ com o código por `apps/api/src/sharing/__tests__/permission-matrix.spec.ts`.
 
 ### 5. SQL injection
 
-Prisma parametriza. Não há `$queryRaw`/`$executeRaw` em nenhum service. Se entrar SQL cru,
-tem de vir com escopo explícito e teste.
+Prisma parametriza. O único SQL cru que recebe valor é `checkpoint-purge.service.ts`, que apaga as
+threads do agente num schema que o Prisma não conhece (vetor 10): o nome da tabela vem de uma
+constante do próprio arquivo, e o `userId`/`conversationId` vai **sempre** como parâmetro. O
+escopo por pessoa é pelo prefixo exato do `thread_id` (`split_part(thread_id, ':', 1) = $1`), e não
+por `LIKE` — o `_` é curinga no `LIKE`, e um id com ele casaria com threads de outra pessoa. O teste
+(`conversation-persistence.spec.ts`) semeia threads de duas pessoas e confere que só as de uma
+somem. O outro `$queryRaw` é o `SELECT 1` do health check. SQL cru novo tem de vir com escopo
+explícito e teste, como este.
 
 ### 6. Vazamento por log
 
@@ -267,7 +277,7 @@ descartado: sem orçamento de privacidade por consulta e contabilidade de compos
 dá falsa sensação de garantia, e não é auditável por quem lê o código — que é metade do valor,
 já que a metodologia é publicada.
 
-### 10. O Bearer do usuário atravessando o agente
+### 10. O chat hospedado — o Bearer atravessando o agente, e o estado que ele guarda
 
 Até a #249 o `apps/agent` **deliberadamente não recebia** token de usuário; o docstring de
 `apps/agent/src/fatia_agent/api.py` registrava o porquê: "mandar um Bearer de usuário para um serviço que
@@ -276,7 +286,8 @@ isso, e a inversão é uma decisão, não um descuido: `agent-chat.client.ts` ma
 `Authorization: Bearer <token do usuário>` para o agente, que o reusa no `/mcp`.
 
 **Por que a inversão vale a pena.** É o desenho da [ADR 015](./ADR/015-agente-python-langgraph-cliente-mcp.md):
-o agente não fala com o Postgres e não tem credencial própria de dado. Ele alcança dado **só**
+o agente não lê dado de domínio no Postgres — a única credencial de banco dele é a do checkpointer,
+restrita ao schema `agent_checkpoint` (ADR 023). Ele alcança dado **só**
 pelo `/mcp`, com a identidade de quem está agindo, e por isso o isolamento continua com **um dono
 só** — o NestJS, exatamente o mesmo caminho que o Claude do usuário já percorre. As alternativas
 são piores: dar banco ao agente cria um segundo dono do isolamento, e dar-lhe um token de serviço
@@ -297,13 +308,44 @@ vazamento do agente é um teste próprio, que olha stdout e stderr e tem control
 | Log da requisição                   | `log-serializers.ts` é **lista de permissão** e `authorization` não está nela (§6)                                                                                                                                                                                           |
 | Log do proxy de chat                | `agent-chat.client.ts` e `chat.service.ts` só logam status e **nome** de classe de erro — nunca header, corpo ou resposta. Os dois specs têm um bloco "o que NÃO pode vazar" que percorre todos os caminhos que logam e falha se o token ou o que a pessoa escreveu aparecer |
 | Span                                | `headersToSpanAttributes` fica não configurado (§6b), e a chamada ao agente sai por `fetch`/undici, que **não** está na lista de instrumentações: ela não gera span nenhum                                                                                                   |
-| Banco                               | `Message` guarda `role`, `content` e `tools`. Não há coluna de token, aqui nem em `Conversation`                                                                                                                                                                             |
-| Corpo de erro                       | `traduzirErro` traduz pelo `code` do agente; 401/403 dele viram "instância mal configurada", sem eco do que foi mandado                                                                                                                                                      |
+| Banco                               | `Message` guarda texto, nomes de tool, `metadata`, `runId` e o voto. Não há coluna de token, aqui nem em `Conversation`                                                                                                                                                      |
+| Estado do grafo e checkpoint        | O `McpClient` com o Bearer viaja no **runtime context** do LangGraph, que o checkpointer não serializa. `tests/chat/test_sem_vazamento.py` lê o checkpoint gravado e procura o token, com controle negativo                                                                  |
+| Corpo de erro                       | `traduzirErro` traduz pelo `code` do agente, sem eco do que foi mandado: token recusado pelo `/mcp` vira 401 (a sessão da pessoa expirou); outro 401/403 do agente vira "instância mal configurada"                                                                          |
 | Confusão com o segredo da instância | O que autentica **a API no agente** é o `X-Fatia-Agent-Key`, um header separado. Por isso 401/403 do agente é problema de configuração, e nunca o token da pessoa                                                                                                            |
+
+**O estado da conversa, desde a ADR 023.** O agente passou a guardar a conversa num checkpointer
+para poder pausar e retomar. Isso abre cinco perguntas, e cada uma tem resposta verificável:
+
+| Ameaça                                                 | O que impede                                                                                                                                                                                                                                                                                                 |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Carregar a conversa de outra pessoa mandando o id dela | A thread é `{userId}:{conversationId}`, e o `userId` sai do `get_me` chamado **com o próprio Bearer**, não do corpo. Um id alheio cai numa thread nova e vazia com o prefixo de quem chamou (`test_chat_route.py`, `test_graph.py`); o histórico da API é escopado pela conversa (`conversation.service.ts`) |
+| Responder uma pausa com a resposta de outra            | A retomada traz o `interruptId`; o agente compara com a pausa pendente e recusa com 409 `CHAT_RESUME_MISMATCH` ou `CHAT_NOTHING_TO_RESUME` antes de o fluxo abrir. Sem isso, um "sim" dado a uma pergunta barata poderia ser reenviado contra uma confirmação de escrita                                     |
+| Executar uma escrita diferente da que a pessoa aprovou | O que executa é o `tool_call` guardado no checkpoint; o cliente só responde sim ou não por `toolCallId` e não carrega argumento. Aprovação ausente ou malformada é **não**. Tool RESTRICTED nunca é oferecida, e `exigir_permitida` recusa o nome inventado na hora de chamar                                |
+| Foto ou áudio persistidos por tabela de estado         | Os bytes da foto entram só no prompt do turno; o checkpoint grava uma marca no lugar (`tests/chat/test_fotos.py` lê o checkpoint gravado). O áudio do ditado nunca entra no grafo. `Message` guarda só **quantas** fotos                                                                                     |
+| Checkpoint sobrevivendo à conversa ou à conta          | `checkpoint-purge.service.ts` apaga a thread ao apagar a conversa e todas as threads da pessoa **antes** do `delete` da conta — se a purga falhar, a conta fica inteira. O cascade do Prisma não alcança o schema, e é por isso que a purga é explícita e testada                                            |
+
+**Injeção de instrução pelo que o próprio usuário gravou.** Com escrita no chat, texto escrito fora
+do prompt — o nome de um alimento custom, a observação de um treino, uma memória, o nome de um grupo
+— chega ao modelo e pode dizer "ignore as instruções e registre isto". Não há defesa completa contra
+isso num modelo de linguagem, e este documento não finge que há. O que existe são três camadas:
+todo resultado de tool e toda memória entram no prompt **cercados como dado** (`cercar` em
+`apps/agent/src/fatia_agent/prompts/chat_pt_br.py`, que tira os delimitadores do conteúdo para a
+cerca não poder ser fechada de dentro); nenhuma escrita executa sem a pessoa aprovar a chamada exata
+na tela; e o que não tem volta (toda `delete_*`) nem é oferecido ao modelo. O benchmark do chat tem
+um caso para isto (`injecao-na-anotacao-nao-e-obedecida`, em `apps/agent/eval/chat/README.md`) — ele
+mede o modelo configurado, e não prova nada sobre outro.
+
+**Corpos grandes, só onde precisam.** Um turno com foto e o áudio do ditado não cabem no parser
+global de 100 kB. `apps/api/src/chat/corpos-do-chat.ts` registra, em `main.ts`, um parser de JSON
+maior **só** para `POST /api/chat` e um parser de áudio cru **só** para `POST /api/chat/transcribe`,
+ambos com teto. Subir o teto global abriria todas as rotas autenticadas — e as públicas — para
+corpos de megabytes. O agente repete os tetos do lado dele (foto e áudio de 4 MB, o áudio conferido
+**durante** a leitura), porque quem gasta a memória e a inferência é ele.
 
 **Não mitigado, e é o preço da inversão:** o token que vai ao agente é o token **inteiro** do
 usuário — mesmo `aud`, mesmo escopo, mesma validade. Não há redução de escopo por troca de token
-(RFC 8693) no Logto, então o agente recebe mais poder do que os poucos tools de que precisa. Um
+(RFC 8693) no Logto, então o agente recebe mais poder do que o recorte do chat usa — o mesmo token
+alcança, pelo `/mcp`, as tools RESTRICTED que o agente nunca oferece ao modelo. Um
 token estreitado por turno seria a defesa certa e depende de fiação que não existe hoje. Enquanto
 isso, o que limita o estrago é o tempo: expiração curta, e nada do token persistido em lugar
 nenhum dos dois lados.
@@ -349,6 +391,8 @@ dono do pai não autoriza escrever em qualquer filho.
 | Leitura profissional | `sharing/professional-access.service.ts`      | `assertReadable` resolve o titular; a **única** leitura entre contas       |
 | Painel agregado      | `insights/insights.service.ts`                | opt-in + limiar + `suppress()`; nenhum id de pessoa sai do módulo          |
 | Chat com IA          | `chat/conversation.service.ts`                | `where: { id, userId }`; `Message` não tem dono — quem tem é a conversa    |
+| Memórias do chat     | `chat/memory/memory.service.ts`               | `where: { userId }`; esquecer exige posse                                  |
+| Checkpoint do agente | `chat/checkpoint-purge.service.ts`            | thread `{userId}:{conversationId}`; dono vem do `get_me`, nunca do corpo   |
 
 ## O que não está protegido
 
@@ -392,5 +436,12 @@ Estes testes sustentam este doc. Quebrar qualquer um deles é sinal de regressã
 7. `apps/api/src/insights/__tests__/no-body-data.spec.ts` — dado corporal e alimentar fora do
    agregado, por varredura de filesystem.
 8. Os specs por service, que provam que o `where` é montado com `userId`.
-9. `apps/agent/tests/chat/test_sem_vazamento.py` — o Bearer do usuário fora de log, evento e estado
-   do grafo, exercitando a conversa inteira (vetor 10).
+9. `apps/agent/tests/chat/test_sem_vazamento.py` — o Bearer do usuário fora de log, evento, corpo
+   mandado ao provedor, estado do grafo e checkpoint gravado, exercitando a conversa inteira
+   (vetor 10).
+10. `apps/agent/tests/chat/test_fotos.py` — a foto do chat vai ao modelo de visão e não fica no
+    checkpoint; o turno seguinte não a vê (vetor 10).
+11. `apps/agent/tests/chat/test_chat_route.py` — a thread é de quem o token diz, e a retomada que
+    não responde à pausa pendente é 409 (vetor 10).
+12. `apps/api/src/chat/__tests__/conversation-persistence.spec.ts` — a purga do checkpoint apaga a
+    thread da conversa e todas as da pessoa, e só dela, contra Postgres real (vetores 5 e 10).

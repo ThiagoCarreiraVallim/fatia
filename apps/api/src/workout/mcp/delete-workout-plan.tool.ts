@@ -16,7 +16,7 @@ export class DeleteWorkoutPlanTool implements McpToolDef {
 
   readonly title = 'Excluir plano de treino';
 
-  readonly annotations = { readOnlyHint: false, destructiveHint: true };
+  readonly annotations = { readOnlyHint: false, destructiveHint: true, confirmableHint: false };
 
   readonly hostedInference = false;
   readonly description =

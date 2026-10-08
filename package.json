@@ -29,6 +29,8 @@
     "db:seed:admin": "dotenv -e .env -- pnpm --filter @fatia/db seed:admin",
     "db:seed:taco": "dotenv -e .env -- pnpm --filter @fatia/db seed:taco",
     "db:seed:exercises": "dotenv -e .env -- pnpm --filter @fatia/db seed:exercises",
+    "db:seed:eval": "dotenv -e .env -- pnpm --filter @fatia/db seed:eval --",
+    "db:eval:contas": "dotenv -e .env -- pnpm --filter @fatia/db eval:contas",
     "infra:up": "docker compose --env-file .env -f infra/docker-compose.yml up -d postgres logto",
     "infra:up:db": "docker compose --env-file .env -f infra/docker-compose.yml up -d postgres",
     "infra:up:full": "docker compose --env-file .env -f infra/docker-compose.yml --profile full up -d",

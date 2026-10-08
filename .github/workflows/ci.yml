@@ -120,6 +120,41 @@ jobs:
       - name: Run tests
         run: pnpm --filter @fatia/api test -- --ci --coverage=false
 
+  agent:
+    name: Agent (Python)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/agent
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: apps/agent/uv.lock
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format
+        run: uv run ruff format --check .
+
+      - name: Typecheck
+        run: uv run mypy
+
+      # Sem provedor e sem Postgres: os `smoke` ficam de fora pelo `addopts`, e o
+      # checkpointer dos testes é em memória.
+      - name: Tests
+        run: uv run pytest -q
+
   prisma:
     name: Prisma Checks
     runs-on: ubuntu-latest

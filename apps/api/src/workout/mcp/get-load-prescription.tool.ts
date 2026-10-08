@@ -16,7 +16,7 @@ export class GetLoadPrescriptionTool implements McpToolDef {
 
   readonly title = 'Sugerir carga e repetições';
 
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
 
   readonly hostedInference = false;
   readonly description =
