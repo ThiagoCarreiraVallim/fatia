@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 
 /**
@@ -9,7 +10,8 @@ import { defineConfig, devices } from '@playwright/test';
  */
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:3030';
 
-export const STORAGE_STATE = '.auth/demo.json';
+// Absoluto: rodado da raiz do repo, o relativo gravaria a sessão em `./.auth`, fora do .gitignore.
+export const STORAGE_STATE = path.join(__dirname, '.auth/demo.json');
 
 export default defineConfig({
   testDir: './tests',
