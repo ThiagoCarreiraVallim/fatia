@@ -24,6 +24,8 @@ O trabalho é organizado em **épicas**, cada uma com sub-issues nativas do GitH
 | [#152](https://github.com/ThiagoCarreiraVallim/fatia/issues/152) | Camada B2B — grupos, academias, papéis e cobrança                                            |
 | [#163](https://github.com/ThiagoCarreiraVallim/fatia/issues/163) | BYO-AI — o usuário traz a própria IA                                                         |
 
+> **Novo direcionamento (proposta):** plano Free/Pago, comunidades com assentos de IA, dashboard da equipe, gamificação e timeline — desenho em [`NOVO_DIRECIONAMENTO.md`](./NOVO_DIRECIONAMENTO.md), a ser quebrado em épica e sub-issues.
+
 ## Itens que estavam pendentes aqui e viraram issue
 
 | Era                                              | Virou                                                                           |
