@@ -3,12 +3,14 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Calendar } from 'lucide-react';
+import { addDays, format, startOfDay, startOfWeek, subWeeks } from 'date-fns';
 import { workoutApi, type WorkoutSession } from '@fatia/api-client';
 
 const DAYS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
+/** Dia local — `toISOString().slice(0, 10)` punha o treino das 21h no dia seguinte. */
 function dateKey(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  return format(date, 'yyyy-MM-dd');
 }
 
 // Map intensity 0-4 from session duration + volume.
@@ -33,50 +35,61 @@ function intensityFor(sessions: WorkoutSession[]): number {
   return 4;
 }
 
-function HeatmapCell({ intensity }: { intensity: number }) {
+export interface HeatmapCell {
+  date: string;
+  intensity: number;
+  future: boolean;
+}
+
+/**
+ * Duas semanas de calendário, de domingo a sábado: a da semana passada e a
+ * atual. A janela era "os últimos 14 dias", que começa em qualquer dia da
+ * semana — e o cabeçalho D S T Q Q S S ficava em cima dos dias errados.
+ */
+export function heatmapCells(sessions: WorkoutSession[], today: Date): HeatmapCell[] {
+  const byDay = new Map<string, WorkoutSession[]>();
+  for (const s of sessions) {
+    const key = dateKey(new Date(s.startedAt));
+    byDay.set(key, [...(byDay.get(key) ?? []), s]);
+  }
+  const start = startOfWeek(subWeeks(today, 1));
+  const todayStart = startOfDay(today);
+  return Array.from({ length: 14 }, (_, i) => {
+    const day = addDays(start, i);
+    const date = dateKey(day);
+    return { date, intensity: intensityFor(byDay.get(date) ?? []), future: day > todayStart };
+  });
+}
+
+function HeatmapCellView({ cell }: { cell: HeatmapCell }) {
   const styles = ['bg-muted/40', 'bg-primary/20', 'bg-primary/40', 'bg-primary/70', 'bg-primary'];
+  const label = new Date(`${cell.date}T12:00:00`).toLocaleDateString('pt-BR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: '2-digit',
+  });
   return (
     <div
-      className={`aspect-square rounded-md ${styles[intensity]} ${
-        intensity >= 3 ? 'shadow-[0_0_8px_hsl(var(--primary)/0.4)]' : ''
-      }`}
+      title={label}
+      aria-label={cell.future ? undefined : `${label}: ${INTENSITY_LABEL[cell.intensity]}`}
+      aria-hidden={cell.future || undefined}
+      className={`aspect-square rounded-md ${
+        cell.future ? 'border border-dashed border-white/10' : styles[cell.intensity]
+      } ${cell.intensity >= 3 ? 'shadow-[0_0_8px_hsl(var(--primary)/0.4)]' : ''}`}
     />
   );
 }
 
-export function TrainingIntensity() {
-  // Janela: últimos 14 dias (2 linhas × 7 colunas)
-  const fromIso = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 13);
-    return dateKey(d);
-  }, []);
+const INTENSITY_LABEL = ['sem treino', 'leve', 'moderado', 'forte', 'intenso'];
 
+export function TrainingIntensity() {
+  // A API devolve no máximo 50 sessões, mais recentes primeiro: sobra para duas semanas.
   const sessions = useQuery({
-    queryKey: ['workout', 'sessions', 'heatmap', fromIso],
-    queryFn: () => workoutApi.listSessions({ limit: 100 }),
+    queryKey: ['workout', 'sessions', 'heatmap'],
+    queryFn: () => workoutApi.listSessions({ limit: 50 }),
   });
 
-  const grid = useMemo(() => {
-    const sessionsByDay = new Map<string, WorkoutSession[]>();
-    if (sessions.data) {
-      for (const s of sessions.data) {
-        const key = s.startedAt.slice(0, 10);
-        const arr = sessionsByDay.get(key) ?? [];
-        arr.push(s);
-        sessionsByDay.set(key, arr);
-      }
-    }
-    const cells: number[] = [];
-    const start = new Date(`${fromIso}T12:00:00Z`);
-    for (let i = 0; i < 14; i++) {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      const key = dateKey(d);
-      cells.push(intensityFor(sessionsByDay.get(key) ?? []));
-    }
-    return cells;
-  }, [sessions.data, fromIso]);
+  const grid = useMemo(() => heatmapCells(sessions.data ?? [], new Date()), [sessions.data]);
 
   return (
     <div className="rounded-2xl border border-white/5 bg-card p-4">
@@ -91,8 +104,8 @@ export function TrainingIntensity() {
             {d}
           </p>
         ))}
-        {grid.map((v, i) => (
-          <HeatmapCell key={i} intensity={v} />
+        {grid.map((cell) => (
+          <HeatmapCellView key={cell.date} cell={cell} />
         ))}
       </div>
 
