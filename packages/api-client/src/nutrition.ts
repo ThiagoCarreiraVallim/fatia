@@ -3,6 +3,14 @@ import { apiFetch } from './http';
 export type MealType = 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK';
 export type FoodSource = 'TACO' | 'USDA' | 'CUSTOM';
 
+/** Medida caseira: "colher de sopa" = 25 g. `mine` = criada pela própria pessoa. */
+export interface FoodPortion {
+  id: string;
+  label: string;
+  grams: number;
+  mine: boolean;
+}
+
 export interface Food {
   id: number;
   name: string;
@@ -13,12 +21,17 @@ export interface Food {
   carbsPer100g: number;
   fatPer100g: number;
   createdByUserId: string | null;
+  /** Catálogo + as da pessoa. A API sempre manda; opcional para alimento montado à mão. */
+  portions?: FoodPortion[];
 }
 
 /** Alimento da busca com o histórico da pessoa: o atalho que poupa digitar. */
 export interface FoodShortcut extends Food {
   /** Gramagem da última vez, para já vir preenchida. */
   lastGrams: number | null;
+  /** Como foi da última vez ("colher de sopa" × 2); nulos quando foi em gramas. */
+  lastPortionLabel?: string | null;
+  lastPortionQuantity?: number | null;
   timesEaten: number;
   favorite: boolean;
 }
@@ -112,6 +125,9 @@ export interface MealItem {
   foodName: string;
   groupId: number | null;
   grams: number;
+  /** Retrato de como foi digitado ("colher de sopa" × 2); a conta usa `grams`. */
+  portionLabel?: string | null;
+  portionQuantity?: number | null;
   kcal: number;
   proteinG: number;
   carbsG: number;
@@ -197,6 +213,14 @@ export const nutritionApi = {
     apiFetch<void>(`/api/nutrition/foods/${foodId}/favorite`, {
       method: favorite ? 'PUT' : 'DELETE',
     }),
+  portions: (foodId: number) => apiFetch<FoodPortion[]>(`/api/nutrition/foods/${foodId}/portions`),
+  createPortion: (foodId: number, body: { label: string; grams: number }) =>
+    apiFetch<FoodPortion>(`/api/nutrition/foods/${foodId}/portions`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  deletePortion: (id: string) =>
+    apiFetch<void>(`/api/nutrition/portions/${id}`, { method: 'DELETE' }),
   /**
    * Consulta um produto embalado pelo código de barras.
    *
@@ -238,7 +262,10 @@ export const nutritionApi = {
     items: Array<{
       foodId?: number;
       foodName?: string;
-      grams: number;
+      /** Ou gramas, ou `portionId` + `quantity` (só com `foodId`). */
+      grams?: number;
+      portionId?: string;
+      quantity?: number;
       kcal?: number;
       proteinG?: number;
       carbsG?: number;
@@ -255,7 +282,9 @@ export const nutritionApi = {
     item: {
       foodId?: number;
       foodName?: string;
-      grams: number;
+      grams?: number;
+      portionId?: string;
+      quantity?: number;
       kcal?: number;
       proteinG?: number;
       carbsG?: number;
@@ -267,7 +296,7 @@ export const nutritionApi = {
       method: 'POST',
       body: JSON.stringify(item),
     }),
-  updateItem: (id: string, patch: { grams?: number }) =>
+  updateItem: (id: string, patch: { grams?: number; portionId?: string; quantity?: number }) =>
     apiFetch<MealItem>(`/api/nutrition/meal-items/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(patch),

@@ -20,6 +20,7 @@ export {
 
 export * from './chat';
 export * from './food-shortcuts';
+export * from './portions';
 export * from './goals';
 export * from './nutrition';
 export * from './progress';

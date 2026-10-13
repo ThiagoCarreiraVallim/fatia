@@ -1,4 +1,5 @@
 import type { Food, FoodShortcut, FoodShortcuts } from './nutrition';
+import { portionText } from './portions';
 
 /**
  * Lógica dos atalhos da busca de alimento, comum ao PWA e ao app.
@@ -25,6 +26,8 @@ export function withFavorite(
   const entry: FoodShortcut = {
     ...food,
     lastGrams: known?.lastGrams ?? null,
+    lastPortionLabel: known?.lastPortionLabel ?? null,
+    lastPortionQuantity: known?.lastPortionQuantity ?? null,
     timesEaten: known?.timesEaten ?? 0,
     favorite: true,
   };
@@ -60,5 +63,8 @@ export function initialGrams(lastGrams: number | null | undefined): string {
 /** Linha de apoio do atalho: a porção de sempre vale mais que o kcal/100g. */
 export function shortcutDetail(food: FoodShortcut): string {
   const kcal = `${Math.round(food.kcalPer100g)} kcal/100g`;
+  if (food.lastPortionLabel && food.lastPortionQuantity) {
+    return `${portionText(food.lastPortionLabel, food.lastPortionQuantity)} da última vez · ${kcal}`;
+  }
   return food.lastGrams ? `${Math.round(food.lastGrams)} g da última vez · ${kcal}` : kcal;
 }
