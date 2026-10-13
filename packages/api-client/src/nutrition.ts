@@ -15,6 +15,20 @@ export interface Food {
   createdByUserId: string | null;
 }
 
+/** Alimento da busca com o histórico da pessoa: o atalho que poupa digitar. */
+export interface FoodShortcut extends Food {
+  /** Gramagem da última vez, para já vir preenchida. */
+  lastGrams: number | null;
+  timesEaten: number;
+  favorite: boolean;
+}
+
+export interface FoodShortcuts {
+  favorites: FoodShortcut[];
+  /** Comidos nos últimos 60 dias, sem repetir os favoritos. */
+  recent: FoodShortcut[];
+}
+
 /**
  * Produto embalado lido por código de barras (#140).
  *
@@ -176,6 +190,13 @@ export const nutritionApi = {
   searchFoods: (q: string, limit = 20) =>
     apiFetch<Food[]>(`/api/nutrition/foods?q=${encodeURIComponent(q)}&limit=${limit}`),
   groups: () => apiFetch<FoodGroup[]>('/api/nutrition/foods/groups'),
+  /** Favoritos e recentes; com `mealType`, o que costuma ir naquela refeição vem primeiro. */
+  myFoods: (mealType?: MealType) =>
+    apiFetch<FoodShortcuts>(`/api/nutrition/foods/mine${mealType ? `?mealType=${mealType}` : ''}`),
+  setFavorite: (foodId: number, favorite: boolean) =>
+    apiFetch<void>(`/api/nutrition/foods/${foodId}/favorite`, {
+      method: favorite ? 'PUT' : 'DELETE',
+    }),
   /**
    * Consulta um produto embalado pelo código de barras.
    *

@@ -120,6 +120,8 @@ test.describe('drawers de registro', () => {
     const add = page.getByRole('button', { name: 'Adicionar item' }).first();
     if (!(await appears(add))) return;
     await add.click();
+    // Atalhos (favoritos e recentes) carregam depois do drawer abrir.
+    await appears(page.getByText('Recentes'));
     await snap(page, '13-nutricao-drawer-busca', false);
     const search = page.getByRole('textbox').first();
     if (await appears(search)) {

@@ -27,6 +27,9 @@ test('refeição lançada em dia passado fica naquele dia', async ({ page }) => 
   await page.getByLabel('Nome').fill(nome);
   await page.getByLabel('Gramas').fill('250');
   await page.getByRole('button', { name: /^adicionar$/i }).click();
+  // O drawer fica aberto para o próximo item; "Concluir" fecha.
+  await expect(page.getByRole('status')).toContainText(`${nome} adicionado`);
+  await page.getByRole('button', { name: /^concluir/i }).click();
 
   // O bug gravava em hoje: o item sumia da tela do dia escolhido.
   await expect(page.getByText(nome)).toBeVisible();
@@ -74,3 +77,45 @@ test('adicionar exercício no treino livre não registra série', async ({ page 
     await expect(page.getByRole('button', { name: 'INICIAR TREINO LIVRE' })).toBeVisible();
   }
 });
+
+test('atalhos: favoritar e adicionar dois recentes sem fechar o drawer', async ({ page }) => {
+  // Dia vazio, mas dentro dos 60 dias de histórico: os recentes do seed aparecem.
+  const dia = diasAtras(46);
+  await page.goto(`/nutrition?date=${dia}`);
+  await page.getByRole('button', { name: 'Registrar Almoço' }).click();
+
+  const drawer = page.getByRole('dialog');
+  await expect(drawer.getByText('Recentes')).toBeVisible();
+  const recentes = drawer.getByRole('list', { name: 'Recentes' }).getByRole('listitem');
+  const [primeiro, segundo] = await Promise.all([
+    recentes.nth(0).getByRole('paragraph').first().textContent(),
+    recentes.nth(1).getByRole('paragraph').first().textContent(),
+  ]);
+
+  // Favoritar sobe o alimento para "Favoritos"; desfavoritar devolve.
+  await drawer.getByRole('button', { name: `Favoritar ${primeiro}` }).click();
+  await expect(drawer.getByRole('button', { name: `Desfavoritar ${primeiro}` })).toBeVisible();
+  await drawer.getByRole('button', { name: `Desfavoritar ${primeiro}` }).click();
+  await expect(drawer.getByRole('button', { name: `Favoritar ${primeiro}` })).toBeVisible();
+
+  for (const nome of [primeiro, segundo]) {
+    await drawer.getByRole('button', { name: new RegExp(`^${escapeRegex(nome!)}`) }).click();
+    await expect(drawer.getByLabel(/Quantidade/)).not.toHaveValue('100');
+    await drawer.getByRole('button', { name: /^adicionar$/i }).click();
+    await expect(drawer.getByRole('status')).toContainText(`${nome} adicionado`);
+  }
+  await drawer.getByRole('button', { name: /^concluir · 2 itens/i }).click();
+
+  // Os dois na MESMA refeição: um "Remover refeição" só, que leva os dois.
+  await expect(page.getByRole('button', { name: `Remover ${primeiro}` })).toBeVisible();
+  await expect(page.getByRole('button', { name: `Remover ${segundo}` })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(1);
+
+  await page.getByRole('button', { name: 'Remover refeição' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Remover' }).click();
+  await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(0);
+});
+
+function escapeRegex(text: string) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}

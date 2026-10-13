@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search } from 'lucide-react';
+import { Check, Search, Star } from 'lucide-react';
 import {
   Drawer,
   DrawerClose,
@@ -13,7 +13,13 @@ import {
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { nutritionApi, type Food, type MealType } from '@fatia/api-client';
+import {
+  nutritionApi,
+  type Food,
+  type FoodShortcut,
+  type FoodShortcuts,
+  type MealType,
+} from '@fatia/api-client';
 import { instanteNoDia } from '@/lib/dias';
 
 interface Props {
@@ -59,7 +65,11 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
   const [grams, setGrams] = useState<string>('100');
   const [manual, setManual] = useState(INITIAL_MANUAL);
   const [manualNutrients, setManualNutrients] = useState<Record<string, string>>({});
+  // Vários itens por abertura: o primeiro cria a refeição, os seguintes entram nela.
+  const [createdMealId, setCreatedMealId] = useState<string | null>(null);
+  const [added, setAdded] = useState<string[]>([]);
   const qc = useQueryClient();
+  const targetMealId = mealId ?? createdMealId;
 
   // Metas de nutrientes ativas: o item manual pode informar esses nutrientes (ADR 009).
   const targets = useQuery({
@@ -84,6 +94,8 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
       setGrams('100');
       setManual(INITIAL_MANUAL);
       setManualNutrients({});
+      setCreatedMealId(null);
+      setAdded([]);
     }
   }
 
@@ -98,22 +110,67 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
     enabled: open && mode === 'search' && debounced.trim().length >= 2,
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['nutrition', 'summary', date] });
+  const myFoodsKey = ['nutrition', 'my-foods', mealType ?? null] as const;
+  const shortcuts = useQuery({
+    queryKey: myFoodsKey,
+    queryFn: () => nutritionApi.myFoods(mealType),
+    enabled: open,
+  });
+  const favoriteIds = useMemo(
+    () => new Set((shortcuts.data?.favorites ?? []).map((f) => f.id)),
+    [shortcuts.data],
+  );
 
-  const addItem = useMutation<unknown, Error, ItemPayload>({
-    mutationFn: (payload) => {
-      if (mealId) return nutritionApi.addItem(mealId, payload);
+  // Otimista: a estrela responde no toque, e o servidor confirma depois.
+  const favorite = useMutation<void, Error, { food: Food; favorite: boolean }>({
+    mutationFn: ({ food, favorite }) => nutritionApi.setFavorite(food.id, favorite),
+    onMutate: ({ food, favorite }) => {
+      qc.setQueryData<FoodShortcuts>(myFoodsKey, (prev) => {
+        const base = prev ?? { favorites: [], recent: [] };
+        const others = base.favorites.filter((f) => f.id !== food.id);
+        const recentHit = base.recent.find((f) => f.id === food.id);
+        return {
+          favorites: favorite ? [asShortcut(food, recentHit, true), ...others] : others,
+          recent: base.recent.filter((f) => f.id !== food.id),
+        };
+      });
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['nutrition', 'my-foods'] }),
+  });
+
+  const addItem = useMutation<{ id?: string } | unknown, Error, ItemPayload & { label: string }>({
+    mutationFn: ({ label: _label, ...payload }) => {
+      if (targetMealId) return nutritionApi.addItem(targetMealId, payload);
       return nutritionApi.createMeal({
         mealType: mealType ?? 'SNACK',
         eatenAt: instanteNoDia(date),
         items: [payload],
       });
     },
-    onSuccess: () => {
-      invalidate();
-      onOpenChange(false);
+    onSuccess: (result, { label }) => {
+      if (!targetMealId) {
+        const id = (result as { id?: string } | undefined)?.id;
+        if (id) setCreatedMealId(id);
+      }
+      qc.invalidateQueries({ queryKey: ['nutrition', 'summary', date] });
+      qc.invalidateQueries({ queryKey: ['nutrition', 'my-foods'] });
+      setAdded((prev) => [...prev, label]);
+      // De volta aos atalhos, pronto para o próximo item.
+      setMode('search');
+      setSelected(null);
+      setQ('');
+      setDebounced('');
+      setGrams('100');
+      setManual(INITIAL_MANUAL);
+      setManualNutrients({});
     },
   });
+
+  const pick = (food: Food, lastGrams: number | null = null) => {
+    addItem.reset();
+    setSelected(food);
+    setGrams(lastGrams ? String(Math.round(lastGrams)) : '100');
+  };
 
   const preview = useMemo(() => {
     if (!selected) return null;
@@ -132,7 +189,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
     if (!selected) return;
     const g = parsePositive(grams);
     if (g === null) return;
-    addItem.mutate({ foodId: selected.id, grams: g });
+    addItem.mutate({ foodId: selected.id, grams: g, label: selected.name });
   };
 
   const submitManual = () => {
@@ -145,6 +202,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
       if (n !== undefined) nutrients[key] = n;
     }
     addItem.mutate({
+      label: name,
       foodName: name,
       grams: g,
       kcal: parseNonNegative(manual.kcal),
@@ -165,9 +223,19 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
           <DrawerDescription>
             {mode === 'manual'
               ? 'Informe nome e macros do alimento.'
-              : 'Busque um alimento da TACO ou seus customs.'}
+              : 'Toque num atalho ou busque. Dá para adicionar vários.'}
           </DrawerDescription>
         </DrawerHeader>
+
+        {added.length > 0 && (
+          <p
+            role="status"
+            className="flex items-center gap-2 rounded-lg bg-primary/10 px-3 py-2 text-sm text-primary"
+          >
+            <Check size={16} aria-hidden />
+            <span>{`${added[added.length - 1]} adicionado`}</span>
+          </p>
+        )}
 
         {mode === 'manual' ? (
           <ManualForm
@@ -191,6 +259,10 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
         ) : selected ? (
           <SelectedFoodPanel
             food={selected}
+            favorite={favoriteIds.has(selected.id)}
+            onToggleFavorite={() =>
+              favorite.mutate({ food: selected, favorite: !favoriteIds.has(selected.id) })
+            }
             grams={grams}
             onGramsChange={setGrams}
             preview={preview}
@@ -211,16 +283,30 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
             isError={search.isError}
             onRetry={() => search.refetch()}
             data={search.data}
-            onPick={setSelected}
-            onSwitchToManual={() => setMode('manual')}
+            shortcuts={shortcuts.data}
+            favoriteIds={favoriteIds}
+            onToggleFavorite={(food) =>
+              favorite.mutate({ food, favorite: !favoriteIds.has(food.id) })
+            }
+            onPick={pick}
+            onSwitchToManual={() => {
+              addItem.reset();
+              setMode('manual');
+            }}
           />
         )}
 
-        <DrawerClose asChild>
-          <Button variant="ghost" className="mt-2 w-full">
-            Cancelar
+        {added.length > 0 ? (
+          <Button className="mt-2 w-full" onClick={() => onOpenChange(false)}>
+            Concluir · {added.length} {added.length === 1 ? 'item' : 'itens'}
           </Button>
-        </DrawerClose>
+        ) : (
+          <DrawerClose asChild>
+            <Button variant="ghost" className="mt-2 w-full">
+              Cancelar
+            </Button>
+          </DrawerClose>
+        )}
       </DrawerContent>
     </Drawer>
   );
@@ -234,7 +320,10 @@ interface SearchPanelProps {
   isError: boolean;
   onRetry: () => void;
   data: Food[] | undefined;
-  onPick: (food: Food) => void;
+  shortcuts: FoodShortcuts | undefined;
+  favoriteIds: ReadonlySet<number>;
+  onToggleFavorite: (food: Food) => void;
+  onPick: (food: Food, lastGrams?: number | null) => void;
   onSwitchToManual: () => void;
 }
 
@@ -246,9 +335,15 @@ function SearchPanel({
   isError,
   onRetry,
   data,
+  shortcuts,
+  favoriteIds,
+  onToggleFavorite,
   onPick,
   onSwitchToManual,
 }: SearchPanelProps) {
+  const typing = debounced.trim().length >= 2;
+  const hasShortcuts = !!shortcuts && shortcuts.favorites.length + shortcuts.recent.length > 0;
+
   return (
     <>
       <div className="relative my-3">
@@ -274,32 +369,43 @@ function SearchPanel({
             </button>
           </li>
         )}
-        {!isFetching && !isError && debounced.length < 2 && (
+        {!typing && !hasShortcuts && (
           <li className="px-4 py-3 text-sm text-muted-foreground">
-            Digite pelo menos 2 caracteres.
+            Digite pelo menos 2 caracteres. O que você registrar aparece aqui, a um toque.
           </li>
         )}
-        {!isFetching && !isError && data?.length === 0 && (
+        {!typing && hasShortcuts && (
+          <>
+            <ShortcutSection
+              title="Favoritos"
+              foods={shortcuts.favorites}
+              favoriteIds={favoriteIds}
+              onPick={onPick}
+              onToggleFavorite={onToggleFavorite}
+            />
+            <ShortcutSection
+              title="Recentes"
+              foods={shortcuts.recent}
+              favoriteIds={favoriteIds}
+              onPick={onPick}
+              onToggleFavorite={onToggleFavorite}
+            />
+          </>
+        )}
+        {typing && !isFetching && !isError && data?.length === 0 && (
           <li className="px-4 py-3 text-sm text-muted-foreground">Nenhum resultado.</li>
         )}
-        {data?.map((food) => (
-          <li key={food.id}>
-            <button
-              type="button"
-              onClick={() => onPick(food)}
-              className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-accent"
-            >
-              <div>
-                <p className="text-sm font-medium">{food.name}</p>
-                <p className="text-xs text-muted-foreground tabular-nums">
-                  {Math.round(food.kcalPer100g)} kcal/100g · P{Math.round(food.proteinPer100g)} · C
-                  {Math.round(food.carbsPer100g)} · G{Math.round(food.fatPer100g)}
-                </p>
-              </div>
-              <span className="rounded bg-muted px-2 py-0.5 text-xs uppercase">{food.source}</span>
-            </button>
-          </li>
-        ))}
+        {typing &&
+          data?.map((food) => (
+            <FoodRow
+              key={food.id}
+              food={food}
+              favorite={favoriteIds.has(food.id)}
+              onPick={() => onPick(food)}
+              onToggleFavorite={() => onToggleFavorite(food)}
+              detail={`${Math.round(food.kcalPer100g)} kcal/100g · P${Math.round(food.proteinPer100g)} · C${Math.round(food.carbsPer100g)} · G${Math.round(food.fatPer100g)}`}
+            />
+          ))}
       </ul>
       <button
         type="button"
@@ -312,8 +418,118 @@ function SearchPanel({
   );
 }
 
+function ShortcutSection({
+  title,
+  foods,
+  favoriteIds,
+  onPick,
+  onToggleFavorite,
+}: {
+  title: string;
+  foods: FoodShortcut[];
+  favoriteIds: ReadonlySet<number>;
+  onPick: (food: Food, lastGrams?: number | null) => void;
+  onToggleFavorite: (food: Food) => void;
+}) {
+  if (foods.length === 0) return null;
+  return (
+    <li>
+      <h3 className="px-4 pt-3 pb-1 text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
+        {title}
+      </h3>
+      <ul aria-label={title} className="divide-y">
+        {foods.map((food) => (
+          <FoodRow
+            key={food.id}
+            food={food}
+            favorite={favoriteIds.has(food.id)}
+            onPick={() => onPick(food, food.lastGrams)}
+            onToggleFavorite={() => onToggleFavorite(food)}
+            detail={
+              food.lastGrams
+                ? `${Math.round(food.lastGrams)} g da última vez · ${Math.round(food.kcalPer100g)} kcal/100g`
+                : `${Math.round(food.kcalPer100g)} kcal/100g`
+            }
+          />
+        ))}
+      </ul>
+    </li>
+  );
+}
+
+/** Linha da lista: escolher e favoritar são alvos separados (botão dentro de botão não vale). */
+function FoodRow({
+  food,
+  favorite,
+  detail,
+  onPick,
+  onToggleFavorite,
+}: {
+  food: Food;
+  favorite: boolean;
+  detail: string;
+  onPick: () => void;
+  onToggleFavorite: () => void;
+}) {
+  return (
+    <li className="flex items-center">
+      <button
+        type="button"
+        onClick={onPick}
+        className="flex min-h-14 flex-1 items-center justify-between gap-2 py-3 pl-4 text-left hover:bg-accent"
+      >
+        <div className="min-w-0">
+          <p className="text-sm font-medium">{food.name}</p>
+          <p className="text-xs text-muted-foreground tabular-nums">{detail}</p>
+        </div>
+        {food.source === 'CUSTOM' && (
+          <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-[10px] uppercase">Meu</span>
+        )}
+      </button>
+      <FavoriteButton name={food.name} favorite={favorite} onToggle={onToggleFavorite} />
+    </li>
+  );
+}
+
+function FavoriteButton({
+  name,
+  favorite,
+  onToggle,
+}: {
+  name: string;
+  favorite: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={`${favorite ? 'Desfavoritar' : 'Favoritar'} ${name}`}
+      aria-pressed={favorite}
+      className="flex h-12 w-12 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
+    >
+      <Star
+        size={18}
+        className={favorite ? 'fill-amber-400 text-amber-400' : undefined}
+        aria-hidden
+      />
+    </button>
+  );
+}
+
+function asShortcut(food: Food, usage: FoodShortcut | undefined, favorite: boolean): FoodShortcut {
+  return {
+    ...food,
+    lastGrams: usage?.lastGrams ?? null,
+    timesEaten: usage?.timesEaten ?? 0,
+    favorite,
+  };
+}
+
 interface SelectedFoodPanelProps {
   food: Food;
+  favorite: boolean;
+  onToggleFavorite: () => void;
   grams: string;
   onGramsChange: (v: string) => void;
   preview: { kcal: number; proteinG: number; carbsG: number; fatG: number } | null;
@@ -325,6 +541,8 @@ interface SelectedFoodPanelProps {
 
 function SelectedFoodPanel({
   food,
+  favorite,
+  onToggleFavorite,
   grams,
   onGramsChange,
   preview,
@@ -336,9 +554,12 @@ function SelectedFoodPanel({
   const canSubmit = parsePositive(grams) !== null;
   return (
     <div className="my-3 space-y-4">
-      <div className="rounded-lg border p-3">
-        <p className="text-sm font-medium">{food.name}</p>
-        <p className="text-xs text-muted-foreground">{Math.round(food.kcalPer100g)} kcal/100g</p>
+      <div className="flex items-center rounded-lg border pl-3">
+        <div className="flex-1 py-3">
+          <p className="text-sm font-medium">{food.name}</p>
+          <p className="text-xs text-muted-foreground">{Math.round(food.kcalPer100g)} kcal/100g</p>
+        </div>
+        <FavoriteButton name={food.name} favorite={favorite} onToggle={onToggleFavorite} />
       </div>
       <div className="space-y-1">
         <label htmlFor="grams" className="text-sm font-medium">
