@@ -3,6 +3,7 @@ import { Flag, Sparkles, Settings, Shield, LogOut, ChevronRight } from 'lucide-r
 import { getCurrentUser } from '@/lib/auth-server';
 import { ProfileMetrics } from '@/components/profile/profile-metrics';
 import { ProfessionalPanelLink } from '@/components/sharing/professional-panel-link';
+import { AccountSection } from '@/components/profile/account-section';
 
 interface MenuItemProps {
   href: string;
@@ -80,6 +81,8 @@ export default async function ProfilePage() {
           subtitle="O que guardamos, e como exportar ou apagar"
         />
       </nav>
+
+      <AccountSection />
 
       {/* prefetch={false} obrigatório: sem isso o Next prefetcha o handler
           /api/logto/sign-out (mesma origem), que retorna Set-Cookie limpando
