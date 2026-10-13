@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { type Page, test } from '@playwright/test';
+import { type Locator, type Page, test } from '@playwright/test';
 
 /**
  * `pnpm ui:snap <etapa>` (ADR 029): fotografa cada tela do PWA, em celular e
@@ -36,6 +36,17 @@ async function snap(page: Page, name: string, fullPage = true) {
 async function visit(page: Page, path: string, name: string) {
   await page.goto(path);
   await snap(page, name);
+}
+
+/**
+ * Espera o controle aparecer. `networkidle` sai antes do React Query terminar
+ * no dev server, e checar `isVisible()` na hora pulava o drawer em silêncio.
+ */
+async function appears(locator: Locator): Promise<boolean> {
+  return locator
+    .waitFor({ state: 'visible', timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
 }
 
 /** Primeiro href da página que casa com o prefixo, ou null. */
@@ -95,7 +106,7 @@ test.describe('drawers de registro', () => {
       [/peso/i, '03-dashboard-drawer-peso'],
     ] as const) {
       const button = page.getByRole('button', { name: label }).first();
-      if (!(await button.isVisible().catch(() => false))) continue;
+      if (!(await appears(button))) continue;
       await button.click();
       await snap(page, name, false);
       await page.keyboard.press('Escape');
@@ -107,11 +118,11 @@ test.describe('drawers de registro', () => {
     await page.goto('/nutrition');
     await settle(page);
     const add = page.getByRole('button', { name: 'Adicionar item' }).first();
-    if (!(await add.isVisible().catch(() => false))) return;
+    if (!(await appears(add))) return;
     await add.click();
     await snap(page, '13-nutricao-drawer-busca', false);
     const search = page.getByRole('textbox').first();
-    if (await search.isVisible().catch(() => false)) {
+    if (await appears(search)) {
       await search.fill('arroz');
       await page.waitForTimeout(800);
       await snap(page, '14-nutricao-drawer-busca-resultado', false);
