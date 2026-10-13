@@ -68,6 +68,7 @@ function NutritionPageContent() {
           <MealTimeline
             meals={summary.data.meals}
             date={date}
+            today={todayIso()}
             onAddMeal={(mt) => setNewMealType(mt)}
           />
           <WeeklyTrendChart today={todayIso()} />

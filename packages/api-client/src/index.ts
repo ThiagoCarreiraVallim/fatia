@@ -33,3 +33,4 @@ export * from './workout/prescription';
 export * from './workout/quick-templates';
 export * from './session-view';
 export * from './streak-copy';
+export * from './meal-timeline';

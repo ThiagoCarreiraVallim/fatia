@@ -3,7 +3,15 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
-import { nutritionApi, type Meal, type MealItem, type MealType } from '@fatia/api-client';
+import {
+  buildMealTimeline,
+  mealTimelineTitle,
+  nutritionApi,
+  type Meal,
+  type MealItem,
+  type MealType,
+} from '@fatia/api-client';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FoodSearchDrawer } from './food-search-drawer';
 import { EditMealItemDrawer } from './edit-meal-item-drawer';
 
@@ -21,68 +29,80 @@ const mealTypeEmoji: Record<MealType, string> = {
   SNACK: '🍎',
 };
 
-const ALL_MEAL_TYPES: MealType[] = ['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK'];
-
 interface Props {
   meals: Meal[];
   date: string;
+  /** `yyyy-MM-dd` de hoje no fuso da pessoa, para o título ("hoje", "ontem"). */
+  today: string;
   onAddMeal: (type: MealType) => void;
 }
 
-export function MealTimeline({ meals, date, onAddMeal }: Props) {
+type PendingDelete = { kind: 'meal'; meal: Meal } | { kind: 'item'; item: MealItem };
+
+export function MealTimeline({ meals, date, today, onAddMeal }: Props) {
   const qc = useQueryClient();
   const [addingTo, setAddingTo] = useState<{ mealId?: string; mealType?: MealType } | null>(null);
   const [editing, setEditing] = useState<MealItem | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
 
+  const onDeleted = () => {
+    qc.invalidateQueries({ queryKey: ['nutrition', 'summary', date] });
+    setPendingDelete(null);
+  };
   const deleteItem = useMutation({
     mutationFn: (id: string) => nutritionApi.deleteItem(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['nutrition', 'summary', date] }),
+    onSuccess: onDeleted,
   });
   const deleteMeal = useMutation({
     mutationFn: (id: string) => nutritionApi.deleteMeal(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['nutrition', 'summary', date] }),
+    onSuccess: onDeleted,
   });
 
-  const loggedTypes = new Set(meals.map((m) => m.mealType));
-  const upcomingTypes = ALL_MEAL_TYPES.filter((t) => !loggedTypes.has(t));
+  const confirmDelete = () => {
+    if (pendingDelete?.kind === 'meal') deleteMeal.mutate(pendingDelete.meal.id);
+    if (pendingDelete?.kind === 'item') deleteItem.mutate(pendingDelete.item.id);
+  };
 
   return (
     <div>
       <h2 className="mb-4 text-[13px] font-bold uppercase tracking-wide text-muted-foreground">
-        Timeline de Hoje
+        {mealTimelineTitle(date, today)}
       </h2>
 
       <div className="relative">
         <div className="absolute left-[19px] top-0 bottom-0 w-px bg-white/10" />
 
         <div className="space-y-3">
-          {meals.map((meal) => (
-            <MealCard
-              key={meal.id}
-              meal={meal}
-              onAddItem={() => setAddingTo({ mealId: meal.id })}
-              onEditItem={setEditing}
-              onDeleteItem={(id) => deleteItem.mutate(id)}
-              onDeleteMeal={() => deleteMeal.mutate(meal.id)}
-            />
-          ))}
-
-          {upcomingTypes.map((type) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => onAddMeal(type)}
-              className="relative flex w-full items-center gap-3 text-left"
-            >
-              <div className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-white/20 bg-background text-base">
-                {mealTypeEmoji[type]}
-              </div>
-              <div className="flex flex-1 items-center justify-between rounded-xl border border-dashed border-white/10 bg-card/50 px-4 py-3">
-                <span className="text-[13px] text-muted-foreground">{mealTypeLabel[type]}</span>
-                <Plus size={14} className="text-muted-foreground" />
-              </div>
-            </button>
-          ))}
+          {buildMealTimeline(meals).map((entry) =>
+            entry.kind === 'meal' ? (
+              <MealCard
+                key={entry.meal.id}
+                meal={entry.meal}
+                onAddItem={() => setAddingTo({ mealId: entry.meal.id })}
+                onEditItem={setEditing}
+                onDeleteItem={(item) => setPendingDelete({ kind: 'item', item })}
+                onDeleteMeal={() => setPendingDelete({ kind: 'meal', meal: entry.meal })}
+              />
+            ) : (
+              <button
+                key={entry.mealType}
+                type="button"
+                onClick={() => onAddMeal(entry.mealType)}
+                aria-label={`Registrar ${mealTypeLabel[entry.mealType]}`}
+                className="relative flex w-full items-center gap-3 text-left"
+              >
+                <div className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-white/20 bg-background text-base">
+                  {mealTypeEmoji[entry.mealType]}
+                </div>
+                <div className="flex flex-1 items-center justify-between rounded-xl border border-dashed border-white/10 bg-card/50 px-4 py-3">
+                  <span className="text-[13px] text-muted-foreground">
+                    {mealTypeLabel[entry.mealType]}
+                  </span>
+                  <Plus size={14} className="text-muted-foreground" />
+                </div>
+              </button>
+            ),
+          )}
         </div>
       </div>
 
@@ -94,6 +114,20 @@ export function MealTimeline({ meals, date, onAddMeal }: Props) {
         date={date}
       />
       <EditMealItemDrawer item={editing} date={date} onClose={() => setEditing(null)} />
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title={pendingDelete?.kind === 'item' ? 'Remover item' : 'Remover refeição'}
+        description={
+          pendingDelete?.kind === 'item'
+            ? `${pendingDelete.item.foodName} sai desta refeição.`
+            : pendingDelete?.kind === 'meal'
+              ? `${mealTypeLabel[pendingDelete.meal.mealType]} e seus ${pendingDelete.meal.items.length} item(ns) serão apagados.`
+              : ''
+        }
+        pending={deleteMeal.isPending || deleteItem.isPending}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }
@@ -108,7 +142,7 @@ function MealCard({
   meal: Meal;
   onAddItem: () => void;
   onEditItem: (item: MealItem) => void;
-  onDeleteItem: (id: string) => void;
+  onDeleteItem: (item: MealItem) => void;
   onDeleteMeal: () => void;
 }) {
   const totalKcal = meal.items.reduce((sum, i) => sum + i.kcal, 0);
@@ -170,15 +204,15 @@ function MealCard({
                     type="button"
                     onClick={() => onEditItem(item)}
                     className="rounded p-1 text-muted-foreground hover:text-foreground"
-                    aria-label="Editar"
+                    aria-label={`Editar ${item.foodName}`}
                   >
                     <Pencil size={12} />
                   </button>
                   <button
                     type="button"
-                    onClick={() => onDeleteItem(item.id)}
+                    onClick={() => onDeleteItem(item)}
                     className="rounded p-1 text-muted-foreground hover:text-rose-500"
-                    aria-label="Remover"
+                    aria-label={`Remover ${item.foodName}`}
                   >
                     <Trash2 size={12} />
                   </button>
