@@ -17,6 +17,7 @@ import {
 import { DrawerInput, estiloDoCampoDoDrawer } from './drawer-input';
 import {
   NUMEROS_TABULARES,
+  instanteNoDia,
   mensagemDeErro,
   parseNaoNegativo,
   parsePositivo,
@@ -108,7 +109,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
       if (mealId) return nutritionApi.addItem(mealId, payload);
       return nutritionApi.createMeal({
         mealType: mealType ?? 'SNACK',
-        eatenAt: new Date().toISOString(),
+        eatenAt: instanteNoDia(date),
         items: [payload],
       });
     },

@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { nutritionApi, type Food, type MealType } from '@fatia/api-client';
+import { instanteNoDia } from '@/lib/dias';
 
 interface Props {
   open: boolean;
@@ -104,7 +105,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
       if (mealId) return nutritionApi.addItem(mealId, payload);
       return nutritionApi.createMeal({
         mealType: mealType ?? 'SNACK',
-        eatenAt: new Date().toISOString(),
+        eatenAt: instanteNoDia(date),
         items: [payload],
       });
     },

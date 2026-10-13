@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
+import { format } from 'date-fns';
 import { FoodSearchDrawer } from '../food-search-drawer';
 
 vi.mock('@/components/ui/drawer', () => {
@@ -125,6 +126,20 @@ describe('FoodSearchDrawer', () => {
     ]);
     expect(addItem).not.toHaveBeenCalled();
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('records a meal on a past date on that date, not today', async () => {
+    createMeal.mockResolvedValue({} as never);
+    const user = userEvent.setup();
+    renderDrawer({ date: '2026-05-19', mealType: 'DINNER' });
+
+    await user.click(screen.getByRole('button', { name: /inserir manualmente/i }));
+    await user.type(screen.getByLabelText(/Nome/), 'sopa');
+    await user.click(screen.getByRole('button', { name: /^adicionar$/i }));
+
+    await waitFor(() => expect(createMeal).toHaveBeenCalledTimes(1));
+    const eatenAt = new Date(createMeal.mock.calls[0][0].eatenAt!);
+    expect(format(eatenAt, 'yyyy-MM-dd')).toBe('2026-05-19');
   });
 
   it('adds a manual item to an existing meal when mealId is passed', async () => {
