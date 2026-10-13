@@ -4,13 +4,27 @@ import { logtoConfig } from '@/lib/logto';
 
 type RouteContext = { params: Promise<{ action: string }> };
 
+/**
+ * Tela do Logto em que o fluxo começa. A página de login oferece três entradas
+ * — entrar, criar conta, esqueci minha senha — e todas são o mesmo OIDC; muda
+ * só o `first_screen`. Lista fechada: o parâmetro vem da URL.
+ */
+const FIRST_SCREENS = {
+  cadastro: 'register',
+  senha: 'reset_password',
+} as const;
+
 export async function GET(request: NextRequest, ctx: RouteContext) {
   const { action } = await ctx.params;
 
   if (action === 'sign-in') {
     const client = new LogtoClient(logtoConfig);
+    const tela = request.nextUrl.searchParams.get('tela');
+    const firstScreen =
+      tela && tela in FIRST_SCREENS ? FIRST_SCREENS[tela as keyof typeof FIRST_SCREENS] : undefined;
     const { url } = await client.handleSignIn({
       redirectUri: `${logtoConfig.baseUrl}/api/logto/callback`,
+      firstScreen,
     });
     return NextResponse.redirect(url);
   }

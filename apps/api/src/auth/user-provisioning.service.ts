@@ -1,7 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import type { LogtoJwtPayload } from './jwt-validation.service';
+import { LogtoManagementService } from './logto-management.service';
+
+/**
+ * Domínio do e-mail provisório de quem nasceu sem e-mail no token. O access
+ * token do Logto não carrega `email`/`name` (só o ID token, que a API não vê),
+ * então antes da Management API todo usuário caía aqui.
+ */
+export const PLACEHOLDER_EMAIL_DOMAIN = '@logto.local';
 
 export interface ProvisionedUser {
   id: string;
@@ -14,17 +22,32 @@ export interface ProvisionedUser {
 export class UserProvisioningService {
   private readonly logger = new Logger(UserProvisioningService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  /**
+   * `sub`s cujo perfil já foi buscado neste processo. O guard roda em toda
+   * requisição: sem isto, um usuário que de fato não tem e-mail no Logto (cadastro
+   * só por nome de usuário) custaria uma chamada à Management API por request.
+   */
+  private readonly profileLookedUp = new Set<string>();
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly logto?: LogtoManagementService,
+  ) {}
 
   async provision(payload: LogtoJwtPayload): Promise<ProvisionedUser> {
     const existing = await this.prisma.user.findUnique({
       where: { logtoSub: payload.sub },
       select: { id: true, email: true, role: true, timezone: true },
     });
-    if (existing) return existing;
+    if (existing) {
+      return existing.email.endsWith(PLACEHOLDER_EMAIL_DOMAIN)
+        ? this.backfillProfile(existing, payload)
+        : existing;
+    }
 
-    const email = payload.email ?? `${payload.sub}@logto.local`;
-    const name = payload.name ?? email.split('@')[0] ?? 'User';
+    const profile = payload.email ? null : await this.lookUpProfile(payload.sub);
+    const email = payload.email ?? profile?.email ?? `${payload.sub}${PLACEHOLDER_EMAIL_DOMAIN}`;
+    const name = payload.name ?? profile?.name ?? email.split('@')[0] ?? 'User';
     const role = this.resolveRole(payload.roles);
 
     try {
@@ -49,6 +72,41 @@ export class UserProvisioningService {
       });
       if (!criadoPorOutra) throw erro;
       return criadoPorOutra;
+    }
+  }
+
+  private async lookUpProfile(sub: string) {
+    if (!this.logto || this.profileLookedUp.has(sub)) return null;
+    this.profileLookedUp.add(sub);
+    return this.logto.getUserProfile(sub);
+  }
+
+  /**
+   * Conta criada antes desta correção (ou com o Logto fora do ar): troca o e-mail
+   * provisório e o nome-`sub` pelo perfil real, uma vez por processo. Conflito de
+   * e-mail com outra conta mantém o provisório — não é hora de decidir fusão.
+   */
+  private async backfillProfile(
+    existing: ProvisionedUser,
+    payload: LogtoJwtPayload,
+  ): Promise<ProvisionedUser> {
+    const profile = payload.email
+      ? { email: payload.email, name: payload.name ?? null }
+      : await this.lookUpProfile(payload.sub);
+    if (!profile?.email) return existing;
+    try {
+      const updated = await this.prisma.user.update({
+        where: { id: existing.id },
+        data: { email: profile.email, ...(profile.name ? { name: profile.name } : {}) },
+        select: { id: true, email: true, role: true, timezone: true },
+      });
+      this.logger.log(`Backfilled e-mail/nome do usuário ${existing.id} a partir do Logto`);
+      return updated;
+    } catch (erro) {
+      if (erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === 'P2002') {
+        return existing;
+      }
+      throw erro;
     }
   }
 

@@ -20,6 +20,13 @@ placeholder (nunca sobrescreve um valor real). O usuário demo é `demo@fatia.lo
 `Fatia-demo-2026!` (sobrescreva com `DEMO_EMAIL`/`DEMO_PASSWORD`) e não é criado com
 `NODE_ENV=production`. Em produção, crie o app M2M no console e rode só `pnpm logto:bootstrap`.
 
+**E-mail e "esqueci minha senha".** Com `EMAIL_SMTP_HOST` preenchido o bootstrap cria o conector
+SMTP do Logto (templates em pt-BR), troca o cadastro para e-mail verificado e liga a recuperação
+de senha por código. Em dev o SMTP é o Mailpit do compose: todo e-mail aparece em
+<http://localhost:8025>. Em produção, aponte `EMAIL_SMTP_*` para um SMTP real e rode
+`pnpm logto:bootstrap` de novo. A página de login do PWA abre direto em cada tela do Logto:
+`/api/logto/sign-in` (entrar), `?tela=cadastro` e `?tela=senha`.
+
 Screenshots e fluxos de interface: [`e2e/README.md`](../e2e/README.md).
 
 ---

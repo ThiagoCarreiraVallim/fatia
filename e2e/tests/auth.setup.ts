@@ -2,6 +2,7 @@ import { execSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { expect, test as setup } from '@playwright/test';
 import { STORAGE_STATE } from '../playwright.config';
+import { logtoSignIn } from './logto';
 
 /**
  * Login real no Logto com o usuário demo (ADR 029) — sem bypass.
@@ -17,14 +18,7 @@ setup('login do usuário demo', async ({ page }) => {
   await page.goto('/login');
   await page.getByRole('link', { name: 'Entrar' }).click();
 
-  // Tela do Logto: identificador e senha podem vir na mesma etapa ou em duas.
-  await page.locator('input[name="identifier"]').fill(DEMO_EMAIL);
-  const password = page.locator('input[name="password"]');
-  if (!(await password.isVisible())) {
-    await page.locator('button[type="submit"]').click();
-  }
-  await password.fill(DEMO_PASSWORD);
-  await page.locator('button[type="submit"]').click();
+  await logtoSignIn(page, DEMO_EMAIL, DEMO_PASSWORD);
 
   // Consentimento do app aparece só no primeiro login de cada cliente.
   const consent = page.getByRole('button', { name: /autorizar|authorize|continuar|continue/i });

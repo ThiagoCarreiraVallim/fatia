@@ -6,8 +6,9 @@
  *
  *   1. API resource (`LOGTO_AUDIENCE`);
  *   2. apps OIDC: Fatia Web (Traditional), Fatia MCP (Traditional), Fatia Mobile (Native);
- *   3. experiência de login: marca, pt-BR, termos, métodos de entrada e cadastro;
- *   4. usuário demo (só fora de produção), usado pelo Playwright e pelo seed-demo.
+ *   3. conector de e-mail (SMTP) com templates em pt-BR, se EMAIL_SMTP_HOST estiver definido;
+ *   4. experiência de login: marca, pt-BR, termos, cadastro e "esqueci minha senha";
+ *   5. usuário demo (só fora de produção), usado pelo Playwright e pelo seed-demo.
  *
  * Pré-requisito: um app M2M com a role "Logto Management API access" em
  * LOGTO_M2M_APP_ID/SECRET. Local: `bash scripts/logto-seed-m2m.sh`. Produção: console.
@@ -189,27 +190,119 @@ async function appSecret(api: Api, appId: string): Promise<string> {
   return created.value;
 }
 
-async function configureSignInExperience(api: Api) {
+// ---------------------------------------------------------------------------
+// E-mail: conector SMTP + templates em pt-BR
+// ---------------------------------------------------------------------------
+
+const SMTP = {
+  host: env('EMAIL_SMTP_HOST'),
+  port: Number(env('EMAIL_SMTP_PORT', '587')),
+  user: env('EMAIL_SMTP_USER'),
+  pass: env('EMAIL_SMTP_PASS'),
+  secure: env('EMAIL_SMTP_SECURE') === 'true',
+  from: env('EMAIL_FROM', 'Fatia <nao-responda@fatia.local>'),
+};
+
+function emailHtml(title: string, lead: string): string {
+  return `<div style="font-family:Inter,Arial,sans-serif;background:#131313;padding:32px">
+  <div style="max-width:440px;margin:0 auto;background:#1e1e1e;border-radius:12px;padding:32px;color:#eeeeee">
+    <div style="font-size:22px;font-weight:700;color:#2ce500;margin-bottom:24px">Fatia</div>
+    <div style="font-size:18px;font-weight:600;margin-bottom:8px">${title}</div>
+    <div style="font-size:14px;color:#bbbbbb;margin-bottom:24px">${lead}</div>
+    <div style="font-size:32px;font-weight:700;letter-spacing:8px;background:#131313;border-radius:8px;padding:16px;text-align:center">{{code}}</div>
+    <div style="font-size:12px;color:#888888;margin-top:24px">O código vale por 10 minutos. Se não foi você, ignore este e-mail — nada muda na sua conta.</div>
+  </div>
+</div>`;
+}
+
+const EMAIL_TEMPLATES = [
+  ['SignIn', 'Seu código de acesso ao Fatia', 'Entrar no Fatia', 'Use este código para entrar.'],
+  [
+    'Register',
+    'Confirme seu e-mail no Fatia',
+    'Bem-vindo ao Fatia',
+    'Use este código para confirmar seu e-mail e terminar o cadastro.',
+  ],
+  [
+    'ForgotPassword',
+    'Redefinir sua senha do Fatia',
+    'Redefinir senha',
+    'Recebemos um pedido para redefinir sua senha. Use este código para criar uma nova.',
+  ],
+  ['Generic', 'Seu código do Fatia', 'Código de verificação', 'Use este código para continuar.'],
+].map(([usageType, subject, title, lead]) => ({
+  usageType,
+  subject,
+  contentType: 'text/html',
+  content: emailHtml(title!, lead!),
+}));
+
+/** Cria ou atualiza o conector SMTP. Devolve `false` quando não há SMTP configurado. */
+async function ensureEmailConnector(api: Api): Promise<boolean> {
+  if (!SMTP.host) {
+    say('EMAIL_SMTP_HOST vazio — sem conector de e-mail (sem recuperação de senha)');
+    return false;
+  }
+  const config = {
+    host: SMTP.host,
+    port: SMTP.port,
+    auth: { type: 'login', user: SMTP.user, pass: SMTP.pass },
+    fromEmail: SMTP.from,
+    secure: SMTP.secure,
+    templates: EMAIL_TEMPLATES,
+  };
+  const connectors = await api<Array<{ id: string; connectorId: string }>>('GET', '/connectors');
+  const existing = connectors.find((c) => c.connectorId === 'simple-mail-transfer-protocol');
+  if (existing) {
+    await api('PATCH', `/connectors/${existing.id}`, { config });
+    say(`Conector SMTP atualizado (${SMTP.host}:${SMTP.port})`);
+  } else {
+    await api('POST', '/connectors', { connectorId: 'simple-mail-transfer-protocol', config });
+    say(`Conector SMTP criado (${SMTP.host}:${SMTP.port})`);
+  }
+  return true;
+}
+
+/**
+ * Com e-mail: cadastro por e-mail verificado e "esqueci minha senha" por código.
+ * Sem e-mail: cadastro por nome de usuário, sem recuperação (o Logto recusa
+ * verificação sem conector).
+ */
+async function configureSignInExperience(api: Api, hasEmail: boolean) {
+  const passwordMethod = (identifier: 'email' | 'username') => ({
+    identifier,
+    password: true,
+    verificationCode: identifier === 'email' && hasEmail,
+    isPasswordPrimary: true,
+  });
   await api('PATCH', '/sign-in-exp', {
     color: { primaryColor: '#1f9e00', isDarkModeEnabled: true, darkPrimaryColor: '#2ce500' },
+    branding: {
+      logoUrl: `${WEB_BASE}/icons/icon-192.png`,
+      darkLogoUrl: `${WEB_BASE}/icons/icon-192.png`,
+    },
     languageInfo: { autoDetect: false, fallbackLanguage: 'pt-BR' },
     termsOfUseUrl: `${WEB_BASE}/terms`,
     privacyPolicyUrl: `${WEB_BASE}/privacy`,
     signInMode: 'SignInAndRegister',
-    signUp: { identifiers: ['username'], password: true, verify: false },
-    signIn: {
-      methods: [
-        { identifier: 'email', password: true, verificationCode: false, isPasswordPrimary: true },
-        {
-          identifier: 'username',
-          password: true,
-          verificationCode: false,
-          isPasswordPrimary: true,
-        },
-      ],
+    signUp: hasEmail
+      ? { identifiers: ['email'], password: true, verify: true }
+      : { identifiers: ['username'], password: true, verify: false },
+    signIn: { methods: [passwordMethod('email'), passwordMethod('username')] },
+    forgotPasswordMethods: hasEmail ? ['EmailVerificationCode'] : [],
+    // Explícita para não depender do default do Logto. `pwned` consulta o Have I
+    // Been Pwned (k-anonimidade: só os 5 primeiros caracteres do hash saem).
+    passwordPolicy: {
+      length: { min: 8, max: 256 },
+      characterTypes: { min: 1 },
+      rejects: { pwned: true, repetitionAndSequence: true, userInfo: true, words: [] },
     },
   });
-  say('Experiência de login configurada (pt-BR, marca Fatia, e-mail ou usuário + senha)');
+  say(
+    hasEmail
+      ? 'Experiência de login: pt-BR, cadastro por e-mail verificado, "esqueci minha senha" ligado'
+      : 'Experiência de login: pt-BR, cadastro por usuário e senha (sem e-mail)',
+  );
 }
 
 async function ensureDemoUser(api: Api) {
@@ -268,7 +361,7 @@ async function main() {
     envFileSetIfPlaceholder(MOBILE_ENV_PATH, 'EXPO_PUBLIC_LOGTO_APP_ID', mobile.id);
   }
 
-  await configureSignInExperience(api);
+  await configureSignInExperience(api, await ensureEmailConnector(api));
   await ensureDemoUser(api);
 
   say('Logto pronto.');

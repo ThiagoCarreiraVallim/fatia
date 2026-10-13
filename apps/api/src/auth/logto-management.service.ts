@@ -2,8 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 /**
- * Cliente mínimo da Management API do Logto — hoje só para apagar a identidade
- * quando o usuário apaga a conta (issue #95, direito de eliminação da LGPD).
+ * Cliente mínimo da Management API do Logto: apagar a identidade quando o
+ * usuário apaga a conta (issue #95, direito de eliminação da LGPD) e ler e-mail e
+ * nome no provisionamento, que o access token não traz.
  *
  * As credenciais são opcionais de propósito. Uma instância self-hosted que não as
  * configure continua funcionando: a conta e todos os dados são apagados do
@@ -62,6 +63,42 @@ export class LogtoManagementService {
         `Erro ao chamar a Management API do Logto: ${err instanceof Error ? err.message : String(err)}`,
       );
       return false;
+    }
+  }
+
+  /**
+   * E-mail e nome do usuário no Logto, pelo `sub`.
+   *
+   * Existe porque o **access token** do Logto não carrega `email` nem `name` —
+   * só o ID token carrega, e a API nunca o vê. Sem isto todo usuário nascia como
+   * `<sub>@logto.local`, com o `sub` no lugar do nome. `null` quando não está
+   * configurado ou o Logto falha: quem chama mantém o que já tinha.
+   */
+  async getUserProfile(
+    logtoSub: string,
+  ): Promise<{ email: string | null; name: string | null } | null> {
+    if (!this.isConfigured()) return null;
+    try {
+      const token = await this.fetchAccessToken();
+      if (!token) return null;
+      const response = await fetch(`${this.endpoint()}/api/users/${encodeURIComponent(logtoSub)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        this.logger.warn(`Perfil do usuário no Logto indisponível: ${response.status}`);
+        return null;
+      }
+      const user = (await response.json()) as {
+        primaryEmail?: string | null;
+        name?: string | null;
+        username?: string | null;
+      };
+      return { email: user.primaryEmail ?? null, name: user.name ?? user.username ?? null };
+    } catch (err) {
+      this.logger.warn(
+        `Erro ao ler perfil no Logto: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return null;
     }
   }
 

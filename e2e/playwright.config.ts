@@ -34,13 +34,13 @@ export default defineConfig({
     {
       name: 'mobile',
       dependencies: ['setup'],
-      testIgnore: /auth\.setup\.ts/,
+      testIgnore: /auth\.setup\.ts|logto\.ts/,
       use: { ...devices['Pixel 7'], storageState: STORAGE_STATE },
     },
     {
       name: 'desktop',
       dependencies: ['setup'],
-      testIgnore: /auth\.setup\.ts/,
+      testIgnore: /auth\.setup\.ts|logto\.ts/,
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1440, height: 900 },
