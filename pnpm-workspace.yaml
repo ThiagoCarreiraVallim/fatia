@@ -5,3 +5,5 @@ packages:
   # CI quebra com uma mensagem que não menciona Python nenhuma vez.
   - "!apps/agent"
   - "packages/*"
+  # Playwright (ADR 029): screenshots antes/depois e fluxos críticos.
+  - "e2e"

@@ -6,6 +6,22 @@ This page walks through the one-time setup. Re-running `pnpm bootstrap` or `pnpm
 
 > Time budget: ~10 minutes the first time. Zero on subsequent runs.
 
+## Atalho: configuração por script (ADR 029)
+
+Os passos 2–6 abaixo podem ser pulados. Com Postgres e Logto de pé:
+
+```bash
+pnpm logto:seed-m2m     # só local/CI: cria o app M2M de bootstrap direto na database do Logto
+pnpm logto:bootstrap    # API resource, apps Web/MCP/Mobile, experiência de login e usuário demo
+```
+
+O bootstrap é idempotente e grava no `.env` os IDs/secrets que ainda estiverem vazios ou com
+placeholder (nunca sobrescreve um valor real). O usuário demo é `demo@fatia.local` /
+`Fatia-demo-2026!` (sobrescreva com `DEMO_EMAIL`/`DEMO_PASSWORD`) e não é criado com
+`NODE_ENV=production`. Em produção, crie o app M2M no console e rode só `pnpm logto:bootstrap`.
+
+Screenshots e fluxos de interface: [`e2e/README.md`](../e2e/README.md).
+
 ---
 
 ## Why Logto in dev?

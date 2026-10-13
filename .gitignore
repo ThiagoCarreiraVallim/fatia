@@ -79,3 +79,9 @@ coverage/
 
 # Worktrees dos subagentes do Claude Code — cópias efêmeras do próprio repo.
 .claude/worktrees/
+
+# e2e (ADR 029) — screenshots e sessão ficam fora do git
+e2e/screenshots/
+e2e/.auth/
+e2e/test-results/
+e2e/playwright-report/

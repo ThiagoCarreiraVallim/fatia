@@ -105,7 +105,7 @@ português na frase seguinte.
 - ❌ Commitar `.env`, secrets, ou tokens
 - ❌ Criar dependências para coisas triviais (ex: lodash para 1 função)
 - ❌ Sobrepor decisões do PRD/ARCHITECTURE sem ADR (exceção prevista: ADR 013, para roadmap)
-- ❌ Adicionar testes E2E na v1 (testes unitários em services críticos é suficiente)
+- ❌ Testes E2E de lógica de negócio — isso é unitário. Playwright (`e2e/`, ADR 029) é para screenshots antes/depois (`pnpm ui:snap`) e poucos fluxos críticos de tela
 - ❌ Refatorar código que não está sendo tocado pela task atual
 
 ## Quando em dúvida
@@ -180,7 +180,7 @@ apps/web/src/
 
 - Unit tests para services com lógica não-trivial (cálculo de macros, agregações)
 - Integration tests para guards (auth, isolamento por user)
-- Sem E2E, sem snapshot, sem coverage report
+- E2E só em `e2e/` (Playwright, ADR 029); sem snapshot de componente, sem coverage report
 
 **Teste obrigatório quando:**
 

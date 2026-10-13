@@ -2,7 +2,7 @@
   "name": "fatia",
   "version": "0.1.0",
   "private": true,
-  "description": "App pessoal de tracking de nutrição e treino com integração via MCP",
+  "description": "App pessoal de tracking de nutri\u00e7\u00e3o e treino com integra\u00e7\u00e3o via MCP",
   "packageManager": "pnpm@9.0.0",
   "engines": {
     "node": ">=24.0.0"
@@ -11,6 +11,10 @@
     "bootstrap": "bash scripts/setup.sh",
     "reset:db": "bash scripts/reset-db.sh",
     "mcp:smoke": "bash scripts/mcp-smoke.sh",
+    "logto:seed-m2m": "bash scripts/logto-seed-m2m.sh",
+    "logto:bootstrap": "dotenv -e .env -- tsx scripts/logto-bootstrap.ts",
+    "ui:snap": "bash e2e/scripts/snap.sh",
+    "ui:compare": "tsx e2e/scripts/compare.ts",
     "billing:dry-run": "dotenv -e .env -- tsx apps/api/src/billing/billing-dry-run.ts",
     "secrets:scan": "bash scripts/secret-scan.sh",
     "secrets:scan:selftest": "bash scripts/secret-scan-selftest.sh",
@@ -29,6 +33,7 @@
     "db:seed:admin": "dotenv -e .env -- pnpm --filter @fatia/db seed:admin",
     "db:seed:taco": "dotenv -e .env -- pnpm --filter @fatia/db seed:taco",
     "db:seed:exercises": "dotenv -e .env -- pnpm --filter @fatia/db seed:exercises",
+    "db:seed:demo": "dotenv -e .env -- pnpm --filter @fatia/db seed:demo",
     "infra:up": "docker compose --env-file .env -f infra/docker-compose.yml up -d postgres logto",
     "infra:up:db": "docker compose --env-file .env -f infra/docker-compose.yml up -d postgres",
     "infra:up:full": "docker compose --env-file .env -f infra/docker-compose.yml --profile full up -d",
