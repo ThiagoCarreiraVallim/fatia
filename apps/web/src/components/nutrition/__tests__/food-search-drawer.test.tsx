@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { format } from 'date-fns';
 import { FoodSearchDrawer } from '../food-search-drawer';
-import type { FoodShortcut } from '@fatia/api-client';
+import type { FoodPortion, FoodShortcut } from '@fatia/api-client';
 
 vi.mock('@/components/ui/drawer', () => {
   const Passthrough = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
@@ -31,6 +31,7 @@ vi.mock('@fatia/api-client', async () => {
       myFoods: vi.fn(),
       setFavorite: vi.fn(),
       nutrientTargets: vi.fn(),
+      createPortion: vi.fn(),
     },
   };
 });
@@ -42,6 +43,10 @@ const createMeal = vi.mocked(nutritionApi.createMeal);
 const addItem = vi.mocked(nutritionApi.addItem);
 const myFoods = vi.mocked(nutritionApi.myFoods);
 const setFavorite = vi.mocked(nutritionApi.setFavorite);
+const createPortion = vi.mocked(nutritionApi.createPortion);
+
+const colher: FoodPortion = { id: 'p1', label: 'colher de sopa', grams: 25, mine: false };
+const escumadeira: FoodPortion = { id: 'p2', label: 'escumadeira', grams: 90, mine: false };
 
 const food = (id: number, name: string, extra: Partial<FoodShortcut> = {}): FoodShortcut => ({
   id,
@@ -282,6 +287,112 @@ describe('FoodSearchDrawer', () => {
 
       await user.click(screen.getByRole('button', { name: /concluir/i }));
       expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+  });
+
+  describe('medidas caseiras', () => {
+    const arroz = (extra: Partial<FoodShortcut> = {}) =>
+      food(7, 'Arroz, tipo 1, cozido', { portions: [colher, escumadeira], ...extra });
+
+    it('registra em medida: escolhe a colher, sobe para 2 e manda portionId + quantity', async () => {
+      searchFoods.mockResolvedValue([arroz()]);
+      createMeal.mockResolvedValue({ id: 'm1' } as never);
+      const user = userEvent.setup();
+      renderDrawer({ mealType: 'LUNCH' });
+
+      await user.type(screen.getByPlaceholderText(/Ex\.: arroz/), 'arroz');
+      await user.click(await screen.findByRole('button', { name: /^Arroz, tipo 1, cozido/ }));
+      await user.click(screen.getByRole('radio', { name: /colher de sopa/ }));
+
+      expect(screen.getByText('= 25 g')).toBeInTheDocument();
+      // De meio em meio: 1 → 1½ → 2.
+      await user.click(screen.getByRole('button', { name: 'Mais' }));
+      expect(screen.getByText('= 37,5 g')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Mais' }));
+      expect(screen.getByText('= 50 g')).toBeInTheDocument();
+      // A prévia de macros acompanha as gramas da medida: 50 g de 130 kcal/100g.
+      expect(screen.getByText(/Total: 65 kcal/)).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /^adicionar$/i }));
+
+      await waitFor(() =>
+        expect(createMeal).toHaveBeenCalledWith(
+          expect.objectContaining({
+            items: [{ foodId: 7, portionId: 'p1', quantity: 2 }],
+          }),
+        ),
+      );
+    });
+
+    it('voltar para gramas manda grams', async () => {
+      searchFoods.mockResolvedValue([arroz()]);
+      createMeal.mockResolvedValue({ id: 'm1' } as never);
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.type(screen.getByPlaceholderText(/Ex\.: arroz/), 'arroz');
+      await user.click(await screen.findByRole('button', { name: /^Arroz, tipo 1, cozido/ }));
+      await user.click(screen.getByRole('radio', { name: /escumadeira/ }));
+      await user.click(screen.getByRole('radio', { name: 'gramas' }));
+      await user.clear(screen.getByLabelText(/Quantidade/));
+      await user.type(screen.getByLabelText(/Quantidade/), '80');
+      await user.click(screen.getByRole('button', { name: /^adicionar$/i }));
+
+      await waitFor(() =>
+        expect(createMeal).toHaveBeenCalledWith(
+          expect.objectContaining({ items: [{ foodId: 7, grams: 80 }] }),
+        ),
+      );
+    });
+
+    it('recente em medida já abre na medida e quantidade da última vez', async () => {
+      myFoods.mockResolvedValue({
+        favorites: [],
+        recent: [
+          arroz({ lastGrams: 50, lastPortionLabel: 'colher de sopa', lastPortionQuantity: 2 }),
+        ],
+      });
+      const user = userEvent.setup();
+      renderDrawer();
+
+      expect(await screen.findByText(/2 × colher de sopa da última vez/)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /^Arroz, tipo 1, cozido/ }));
+
+      expect(screen.getByRole('radio', { name: /colher de sopa/ })).toBeChecked();
+      expect(screen.getByText('= 50 g')).toBeInTheDocument();
+    });
+
+    it('cria uma medida própria e já a seleciona', async () => {
+      searchFoods.mockResolvedValue([arroz()]);
+      createPortion.mockResolvedValue({ id: 'p9', label: 'concha', grams: 140, mine: true });
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.type(screen.getByPlaceholderText(/Ex\.: arroz/), 'arroz');
+      await user.click(await screen.findByRole('button', { name: /^Arroz, tipo 1, cozido/ }));
+      await user.click(screen.getByRole('button', { name: /nova medida/i }));
+      await user.type(screen.getByLabelText('Nome da medida'), 'concha');
+      await user.type(screen.getByLabelText('Gramas da medida'), '140');
+      await user.click(screen.getByRole('button', { name: /salvar medida/i }));
+
+      await waitFor(() =>
+        expect(createPortion).toHaveBeenCalledWith(7, { label: 'concha', grams: 140 }),
+      );
+      expect(await screen.findByRole('radio', { name: /concha/ })).toBeChecked();
+      expect(screen.getByText('= 140 g')).toBeInTheDocument();
+    });
+
+    it('alimento sem medida mostra só gramas e o atalho para criar', async () => {
+      searchFoods.mockResolvedValue([food(8, 'Kefir')]);
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.type(screen.getByPlaceholderText(/Ex\.: arroz/), 'kefir');
+      await user.click(await screen.findByRole('button', { name: /^Kefir/ }));
+
+      expect(screen.getByRole('radio', { name: 'gramas' })).toBeChecked();
+      expect(screen.getAllByRole('radio')).toHaveLength(1);
+      expect(screen.getByRole('button', { name: /nova medida/i })).toBeInTheDocument();
     });
   });
 });

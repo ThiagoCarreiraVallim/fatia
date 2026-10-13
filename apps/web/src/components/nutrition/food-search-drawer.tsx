@@ -14,16 +14,21 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-  initialGrams,
+  amountGrams,
+  amountPayload,
+  initialAmount,
   nutritionApi,
   shortcutDetail,
   withFavorite,
+  type Amount,
   type Food,
+  type FoodPortion,
   type FoodShortcut,
   type FoodShortcuts,
   type MealType,
 } from '@fatia/api-client';
 import { instanteNoDia } from '@/lib/dias';
+import { AmountPicker } from './amount-picker';
 
 interface Props {
   open: boolean;
@@ -39,13 +44,17 @@ type Mode = 'search' | 'manual';
 interface ItemPayload {
   foodId?: number;
   foodName?: string;
-  grams: number;
+  grams?: number;
+  portionId?: string;
+  quantity?: number;
   kcal?: number;
   proteinG?: number;
   carbsG?: number;
   fatG?: number;
   nutrients?: Record<string, number>;
 }
+
+const INITIAL_AMOUNT: Amount = { kind: 'grams', grams: '100' };
 
 const INITIAL_MANUAL = { name: '', grams: '100', kcal: '', proteinG: '', carbsG: '', fatG: '' };
 
@@ -65,7 +74,9 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
   const [selected, setSelected] = useState<Food | null>(null);
-  const [grams, setGrams] = useState<string>('100');
+  const [amount, setAmount] = useState<Amount>(INITIAL_AMOUNT);
+  // As medidas do alimento escolhido, mais as que a pessoa criar sem fechar o drawer.
+  const [portions, setPortions] = useState<FoodPortion[]>([]);
   const [manual, setManual] = useState(INITIAL_MANUAL);
   const [manualNutrients, setManualNutrients] = useState<Record<string, string>>({});
   // Vários itens por abertura: o primeiro cria a refeição, os seguintes entram nela.
@@ -94,7 +105,8 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
       setQ('');
       setDebounced('');
       setSelected(null);
-      setGrams('100');
+      setAmount(INITIAL_AMOUNT);
+      setPortions([]);
       setManual(INITIAL_MANUAL);
       setManualNutrients({});
       setCreatedMealId(null);
@@ -155,21 +167,35 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
       setSelected(null);
       setQ('');
       setDebounced('');
-      setGrams('100');
+      setAmount(INITIAL_AMOUNT);
+      setPortions([]);
       setManual(INITIAL_MANUAL);
       setManualNutrients({});
     },
   });
 
-  const pick = (food: Food, lastGrams: number | null = null) => {
+  const createPortion = async (label: string, grams: number) => {
+    if (!selected) throw new Error('Sem alimento');
+    const created = await nutritionApi.createPortion(selected.id, { label, grams });
+    setPortions((prev) => [...prev, created]);
+    // Busca e atalhos guardaram o alimento sem a medida nova.
+    qc.invalidateQueries({ queryKey: ['nutrition', 'search'] });
+    qc.invalidateQueries({ queryKey: ['nutrition', 'my-foods'] });
+    return created;
+  };
+
+  const pick = (food: Food | FoodShortcut) => {
     addItem.reset();
     setSelected(food);
-    setGrams(initialGrams(lastGrams));
+    setPortions(food.portions ?? []);
+    setAmount(initialAmount(food));
   };
+
+  const grams = selected ? amountGrams(amount, portions) : null;
 
   const preview = useMemo(() => {
     if (!selected) return null;
-    const g = parsePositive(grams);
+    const g = grams;
     if (g === null) return null;
     const ratio = g / 100;
     return {
@@ -181,10 +207,8 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
   }, [selected, grams]);
 
   const submitFromSearch = () => {
-    if (!selected) return;
-    const g = parsePositive(grams);
-    if (g === null) return;
-    addItem.mutate({ foodId: selected.id, grams: g, label: selected.name });
+    if (!selected || grams === null) return;
+    addItem.mutate({ foodId: selected.id, ...amountPayload(amount), label: selected.name });
   };
 
   const submitManual = () => {
@@ -258,8 +282,15 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
             onToggleFavorite={() =>
               favorite.mutate({ food: selected, favorite: !favoriteIds.has(selected.id) })
             }
-            grams={grams}
-            onGramsChange={setGrams}
+            picker={
+              <AmountPicker
+                portions={portions}
+                amount={amount}
+                onChange={setAmount}
+                onCreatePortion={createPortion}
+              />
+            }
+            canSubmit={grams !== null}
             preview={preview}
             onBack={() => {
               setSelected(null);
@@ -318,7 +349,7 @@ interface SearchPanelProps {
   shortcuts: FoodShortcuts | undefined;
   favoriteIds: ReadonlySet<number>;
   onToggleFavorite: (food: Food) => void;
-  onPick: (food: Food, lastGrams?: number | null) => void;
+  onPick: (food: Food | FoodShortcut) => void;
   onSwitchToManual: () => void;
 }
 
@@ -438,7 +469,7 @@ function ShortcutSection({
             key={food.id}
             food={food}
             favorite={favoriteIds.has(food.id)}
-            onPick={() => onPick(food, food.lastGrams)}
+            onPick={() => onPick(food)}
             onToggleFavorite={() => onToggleFavorite(food)}
             detail={shortcutDetail(food)}
           />
@@ -512,8 +543,8 @@ interface SelectedFoodPanelProps {
   food: Food;
   favorite: boolean;
   onToggleFavorite: () => void;
-  grams: string;
-  onGramsChange: (v: string) => void;
+  picker: React.ReactNode;
+  canSubmit: boolean;
   preview: { kcal: number; proteinG: number; carbsG: number; fatG: number } | null;
   onBack: () => void;
   onSubmit: () => void;
@@ -525,15 +556,14 @@ function SelectedFoodPanel({
   food,
   favorite,
   onToggleFavorite,
-  grams,
-  onGramsChange,
+  picker,
+  canSubmit,
   preview,
   onBack,
   onSubmit,
   isSubmitting,
   error,
 }: SelectedFoodPanelProps) {
-  const canSubmit = parsePositive(grams) !== null;
   return (
     <div className="my-3 space-y-4">
       <div className="flex items-center rounded-lg border pl-3">
@@ -543,20 +573,7 @@ function SelectedFoodPanel({
         </div>
         <FavoriteButton name={food.name} favorite={favorite} onToggle={onToggleFavorite} />
       </div>
-      <div className="space-y-1">
-        <label htmlFor="grams" className="text-sm font-medium">
-          Quantidade (g)
-        </label>
-        <Input
-          id="grams"
-          type="number"
-          inputMode="decimal"
-          value={grams}
-          onChange={(e) => onGramsChange(e.target.value)}
-          min={0}
-          step={1}
-        />
-      </div>
+      {picker}
       {preview && (
         <p className="text-sm tabular-nums text-muted-foreground">
           Total: {preview.kcal} kcal · P{preview.proteinG} · C{preview.carbsG} · G{preview.fatG}

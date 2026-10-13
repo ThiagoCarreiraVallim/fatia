@@ -37,16 +37,28 @@ const jantar: Meal = {
   ],
 };
 
-function renderTimeline(date = '2026-05-19') {
+function renderTimeline(date = '2026-05-19', meals: Meal[] = [jantar]) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <MealTimeline meals={[jantar]} date={date} today="2026-05-19" onAddMeal={() => undefined} />
+      <MealTimeline meals={meals} date={date} today="2026-05-19" onAddMeal={() => undefined} />
     </QueryClientProvider>,
   );
 }
 
 describe('MealTimeline', () => {
+  it('item em medida caseira aparece como foi dito, com as gramas', () => {
+    const emMedida: Meal = {
+      ...jantar,
+      items: [
+        { ...jantar.items[0], grams: 50, portionLabel: 'colher de sopa', portionQuantity: 2 },
+      ],
+    };
+    renderTimeline('2026-05-19', [emMedida]);
+
+    expect(screen.getByText(/2 × colher de sopa \(50 g\) · 128 kcal/)).toBeInTheDocument();
+  });
+
   it('asks before removing a meal and only deletes on confirm', async () => {
     vi.mocked(nutritionApi.deleteMeal).mockResolvedValue(undefined as never);
     const user = userEvent.setup();

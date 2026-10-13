@@ -128,6 +128,20 @@ test.describe('drawers de registro', () => {
       await search.fill('arroz');
       await page.waitForTimeout(800);
       await snap(page, '14-nutricao-drawer-busca-resultado', false);
+      // O alimento escolhido: onde se diz quanto comeu (gramas ou medida caseira).
+      const arroz = page.getByRole('button', { name: /^Arroz, tipo 1, cozido/ }).first();
+      if (await appears(arroz)) {
+        await arroz.click();
+        await page.waitForTimeout(500);
+        await snap(page, '15-nutricao-drawer-alimento', false);
+        const colher = page.getByRole('radio', { name: /colher de sopa/ });
+        if (await appears(colher)) {
+          await colher.click();
+          await page.getByRole('button', { name: 'Mais' }).click();
+          await page.waitForTimeout(300);
+          await snap(page, '16-nutricao-drawer-medida', false);
+        }
+      }
     }
   });
 });

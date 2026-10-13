@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import {
   buildMealTimeline,
+  itemAmountText,
   mealTimelineTitle,
   nutritionApi,
   type Meal,
@@ -195,8 +196,8 @@ function MealCard({
                 <div>
                   <p className="text-[13px] text-foreground">{item.foodName}</p>
                   <p className="text-[11px] tabular-nums text-muted-foreground">
-                    {item.grams}g · {Math.round(item.kcal)} kcal · P{Math.round(item.proteinG)} C
-                    {Math.round(item.carbsG)} G{Math.round(item.fatG)}
+                    {itemAmountText(item)} · {Math.round(item.kcal)} kcal · P
+                    {Math.round(item.proteinG)} C{Math.round(item.carbsG)} G{Math.round(item.fatG)}
                   </p>
                 </div>
                 <div className="flex items-center gap-0.5">

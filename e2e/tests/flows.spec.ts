@@ -105,6 +105,7 @@ test('atalhos: favoritar e adicionar dois recentes sem fechar o drawer', async (
     await expect(drawer.getByRole('status')).toContainText(`${nome} adicionado`);
   }
   await drawer.getByRole('button', { name: /^concluir · 2 itens/i }).click();
+  await expect(drawer).toBeHidden();
 
   // Os dois na MESMA refeição: um "Remover refeição" só, que leva os dois.
   await expect(page.getByRole('button', { name: `Remover ${primeiro}` })).toBeVisible();
@@ -113,6 +114,43 @@ test('atalhos: favoritar e adicionar dois recentes sem fechar o drawer', async (
 
   await page.getByRole('button', { name: 'Remover refeição' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Remover' }).click();
+  await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(0);
+  // Do servidor, não do cache: o teste não pode deixar refeição para trás no demo.
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Registrar Jantar' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(0);
+});
+
+test('medida caseira: 2 colheres de sopa de arroz viram 50 g na refeição', async ({ page }) => {
+  const dia = diasAtras(47);
+  await page.goto(`/nutrition?date=${dia}`);
+  await page.getByRole('button', { name: 'Registrar Jantar' }).click();
+
+  const drawer = page.getByRole('dialog');
+  await drawer.getByPlaceholder(/Ex\.: arroz/).fill('arroz tipo 1 cozido');
+  await drawer
+    .getByRole('button', { name: /^Arroz, tipo 1, cozido/ })
+    .first()
+    .click();
+
+  // A medida do catálogo (medidas-caseiras.json): colher de sopa = 25 g.
+  await drawer.getByRole('radio', { name: /colher de sopa/ }).click();
+  await drawer.getByRole('button', { name: 'Mais' }).click();
+  await drawer.getByRole('button', { name: 'Mais' }).click();
+  await expect(drawer.getByText('= 50 g')).toBeVisible();
+  await drawer.getByRole('button', { name: /^adicionar$/i }).click();
+  await expect(drawer.getByRole('status')).toContainText('Arroz, tipo 1, cozido adicionado');
+  await drawer.getByRole('button', { name: /^concluir · 1 item/i }).click();
+  await expect(drawer).toBeHidden();
+
+  await expect(page.getByText(/2 × colher de sopa \(50 g\)/)).toBeVisible();
+
+  await page.getByRole('button', { name: 'Remover refeição' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Remover' }).click();
+  await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(0);
+  // Do servidor, não do cache: o teste não pode deixar refeição para trás no demo.
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Registrar Jantar' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(0);
 });
 
