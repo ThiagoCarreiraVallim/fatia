@@ -2,7 +2,13 @@ import { useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useKeepAwake } from 'expo-keep-awake';
 import { Plus } from 'lucide-react-native';
-import { buildExerciseGroups, type SessionSet, type WorkoutSession } from '@fatia/api-client';
+import {
+  buildExerciseGroups,
+  pickFocusedGroup,
+  type PendingExercise,
+  type SessionSet,
+  type WorkoutSession,
+} from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { Button, DrawerLayer } from '@/components/ui';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
@@ -54,17 +60,16 @@ export function ActiveSession({
   const [finishOpen, setFinishOpen] = useState(false);
   const [rpeTarget, setRpeTarget] = useState<SessionSet | null>(null);
 
+  // Escolhidos na busca e ainda sem série: vivem só na tela (ver `buildExerciseGroups`).
+  const [pending, setPending] = useState<PendingExercise[]>([]);
+  const [pickedId, setPickedId] = useState<number | null>(null);
+
   const groups = useMemo(
-    () => buildExerciseGroups(session.plannedExercises, session.sets),
-    [session.plannedExercises, session.sets],
+    () => buildExerciseGroups(session.plannedExercises, session.sets, pending),
+    [session.plannedExercises, session.sets, pending],
   );
 
-  const focused = groups.find((group) => {
-    if (skipped.has(group.exerciseId)) return false;
-    if (group.isCardio) return group.sets.length === 0;
-    const target = group.targetSets ?? 0;
-    return target === 0 || group.sets.length < target;
-  });
+  const focused = pickFocusedGroup(groups, skipped, pickedId);
 
   const others = groups.filter((group) => group.exerciseId !== focused?.exerciseId);
 
@@ -159,7 +164,10 @@ export function ActiveSession({
         <ExerciseSearchDrawer
           open={searchOpen}
           onOpenChange={setSearchOpen}
-          sessionId={session.id}
+          onPick={(exercise) => {
+            setPending((prev) => [...prev, exercise]);
+            setPickedId(exercise.id);
+          }}
         />
         <RpeDrawer
           open={rpeTarget != null}

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react-native';
-import { isCardioExercise, workoutApi, type Exercise } from '@fatia/api-client';
+import { workoutApi, type Exercise } from '@fatia/api-client';
 import {
   Button,
   Drawer,
@@ -17,18 +17,17 @@ import {
 /**
  * Réplica de `apps/web/src/components/workout/exercise-search-drawer.tsx`.
  *
- * Registra uma série mínima do exercício escolhido na sessão em andamento — é
- * como o PWA faz o exercício "aparecer" no treino livre.
+ * Só escolhe: o exercício vai para a sessão como pendente e aparece em foco
+ * sem nenhuma série registrada (`buildExerciseGroups`, `pending`).
  */
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  sessionId: string;
+  onPick: (exercise: Exercise) => void;
 }
 
-export function ExerciseSearchDrawer({ open, onOpenChange, sessionId }: Props) {
-  const qc = useQueryClient();
+export function ExerciseSearchDrawer({ open, onOpenChange, onPick }: Props) {
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
 
@@ -54,19 +53,6 @@ export function ExerciseSearchDrawer({ open, onOpenChange, sessionId }: Props) {
     queryKey: ['workout', 'exercises', debounced],
     queryFn: () => workoutApi.searchExercises(debounced || undefined),
     enabled: open,
-  });
-
-  const logSet = useMutation({
-    mutationFn: (exercise: Exercise) =>
-      workoutApi.logSet(sessionId, {
-        exerciseId: exercise.id,
-        ...(isCardioExercise(exercise) ? { durationSeconds: 60 } : { reps: 1 }),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['workout', 'active'] });
-      qc.invalidateQueries({ queryKey: ['workout', 'session', sessionId] });
-      onOpenChange(false);
-    },
   });
 
   const filtered =
@@ -117,8 +103,10 @@ export function ExerciseSearchDrawer({ open, onOpenChange, sessionId }: Props) {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`${item.name}, ${item.muscleGroup}`}
-            disabled={logSet.isPending}
-            onPress={() => logSet.mutate(item)}
+            onPress={() => {
+              onPick(item);
+              onOpenChange(false);
+            }}
             className="min-h-[44px] flex-row items-center justify-between px-4 py-3 active:bg-accent"
           >
             <View className="flex-1 pr-2">

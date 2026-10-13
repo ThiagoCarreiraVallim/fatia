@@ -6,8 +6,10 @@ import Link from 'next/link';
 import { Plus, History, ListChecks, ChevronRight, Dumbbell } from 'lucide-react';
 import {
   buildExerciseGroups,
+  pickFocusedGroup,
   QUICK_TEMPLATES,
   workoutApi,
+  type PendingExercise,
   type WorkoutSession,
 } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
@@ -25,14 +27,11 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
   const [finishOpen, setFinishOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [skippedExerciseIds, setSkippedExerciseIds] = useState<Set<number>>(new Set());
-  const groups = buildExerciseGroups(session.plannedExercises, session.sets);
-
-  const focused = groups.find((g) => {
-    if (skippedExerciseIds.has(g.exerciseId)) return false;
-    if (g.isCardio) return g.sets.length === 0;
-    const target = g.targetSets ?? 0;
-    return target === 0 || g.sets.length < target;
-  });
+  // Escolhidos na busca e ainda sem série: vivem só na tela (ver `buildExerciseGroups`).
+  const [pending, setPending] = useState<PendingExercise[]>([]);
+  const [pickedId, setPickedId] = useState<number | null>(null);
+  const groups = buildExerciseGroups(session.plannedExercises, session.sets, pending);
+  const focused = pickFocusedGroup(groups, skippedExerciseIds, pickedId);
 
   const others = groups.filter((g) => g.exerciseId !== focused?.exerciseId);
 
@@ -136,7 +135,14 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
         Adicionar exercício
       </button>
 
-      <ExerciseSearchDrawer open={searchOpen} onOpenChange={setSearchOpen} sessionId={session.id} />
+      <ExerciseSearchDrawer
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        onPick={(exercise) => {
+          setPending((prev) => [...prev, exercise]);
+          setPickedId(exercise.id);
+        }}
+      />
       <FinishSessionModal open={finishOpen} onOpenChange={setFinishOpen} session={session} />
       <CancelSessionModal open={cancelOpen} onOpenChange={setCancelOpen} session={session} />
     </div>

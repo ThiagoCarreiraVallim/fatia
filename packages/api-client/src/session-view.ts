@@ -11,9 +11,24 @@ export interface ExerciseGroup {
   isPlanned: boolean;
 }
 
+/** Exercício escolhido na busca que ainda não tem série registrada. */
+export interface PendingExercise {
+  id: number;
+  name: string;
+  muscleGroup: string;
+}
+
+/**
+ * Agrupa as séries da sessão por exercício, na ordem: planejados, os que já
+ * têm série e, por fim, os `pending` — escolhidos na busca do treino livre e
+ * ainda sem série. Os pendentes existem só na tela: antes deles, o único jeito
+ * de um exercício "aparecer" era registrar uma série falsa de 1 repetição, que
+ * ia parar no volume, nos recordes e no histórico.
+ */
 export function buildExerciseGroups(
   plannedExercises: PlannedExercise[] | undefined,
   sets: SessionSet[] | undefined,
+  pending: PendingExercise[] = [],
 ): ExerciseGroup[] {
   const setsByExercise = new Map<number, SessionSet[]>();
   for (const s of sets ?? []) {
@@ -51,5 +66,39 @@ export function buildExerciseGroups(
     });
   }
 
+  for (const p of pending) {
+    if (seen.has(p.id)) continue;
+    seen.add(p.id);
+    groups.push({
+      exerciseId: p.id,
+      exerciseName: p.name,
+      isCardio: isCardioExercise({ muscleGroup: p.muscleGroup }),
+      sets: [],
+      isPlanned: false,
+    });
+  }
+
   return groups;
+}
+
+function isIncomplete(group: ExerciseGroup): boolean {
+  if (group.isCardio) return group.sets.length === 0;
+  const target = group.targetSets ?? 0;
+  return target === 0 || group.sets.length < target;
+}
+
+/**
+ * O exercício em foco na sessão: o `preferredId` (o que acabou de ser
+ * escolhido na busca) se ainda estiver por fazer, senão o primeiro incompleto
+ * que não foi pulado.
+ */
+export function pickFocusedGroup(
+  groups: ExerciseGroup[],
+  skipped: ReadonlySet<number>,
+  preferredId?: number | null,
+): ExerciseGroup | undefined {
+  const open = (g: ExerciseGroup) => !skipped.has(g.exerciseId) && isIncomplete(g);
+  const preferred = groups.find((g) => g.exerciseId === preferredId);
+  if (preferred && open(preferred)) return preferred;
+  return groups.find(open);
 }
