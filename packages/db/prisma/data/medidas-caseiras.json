@@ -1,0 +1,2074 @@
+{
+  "fonte": "Valores aproximados, curados à mão a partir da Tabela de Medidas Referidas para os Alimentos Consumidos no Brasil (POF/IBGE 2008–2009) e de medidas usuais de cozinha. São atalhos: a pessoa pode criar a própria medida quando a dela for outra.",
+  "medidas": [
+    {
+      "alimento": "Arroz, integral, cozido",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 25
+        },
+        {
+          "label": "escumadeira",
+          "grams": 90
+        }
+      ]
+    },
+    {
+      "alimento": "Arroz, tipo 1, cozido",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 25
+        },
+        {
+          "label": "escumadeira",
+          "grams": 90
+        }
+      ]
+    },
+    {
+      "alimento": "Arroz, tipo 2, cozido",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 25
+        },
+        {
+          "label": "escumadeira",
+          "grams": 90
+        }
+      ]
+    },
+    {
+      "alimento": "Aveia, flocos, crua",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 15
+        }
+      ]
+    },
+    {
+      "alimento": "Biscoito, doce, maisena",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 5
+        }
+      ]
+    },
+    {
+      "alimento": "Biscoito, doce, recheado com chocolate",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 15
+        }
+      ]
+    },
+    {
+      "alimento": "Biscoito, doce, recheado com morango",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 15
+        }
+      ]
+    },
+    {
+      "alimento": "Biscoito, salgado, cream cracker",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 6
+        }
+      ]
+    },
+    {
+      "alimento": "Bolo, pronto, chocolate",
+      "porcoes": [
+        {
+          "label": "fatia",
+          "grams": 60
+        }
+      ]
+    },
+    {
+      "alimento": "Bolo, pronto, coco",
+      "porcoes": [
+        {
+          "label": "fatia",
+          "grams": 60
+        }
+      ]
+    },
+    {
+      "alimento": "Bolo, pronto, milho",
+      "porcoes": [
+        {
+          "label": "fatia",
+          "grams": 60
+        }
+      ]
+    },
+    {
+      "alimento": "Bolo, pronto, aipim",
+      "porcoes": [
+        {
+          "label": "fatia",
+          "grams": 60
+        }
+      ]
+    },
+    {
+      "alimento": "Cereal matinal, milho",
+      "porcoes": [
+        {
+          "label": "xícara de chá",
+          "grams": 30
+        }
+      ]
+    },
+    {
+      "alimento": "Cereal matinal, milho, açúcar",
+      "porcoes": [
+        {
+          "label": "xícara de chá",
+          "grams": 30
+        }
+      ]
+    },
+    {
+      "alimento": "Farinha, de trigo",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 15
+        },
+        {
+          "label": "xícara de chá",
+          "grams": 120
+        }
+      ]
+    },
+    {
+      "alimento": "Macarrão, instantâneo",
+      "porcoes": [
+        {
+          "label": "pacote",
+          "grams": 80
+        }
+      ]
+    },
+    {
+      "alimento": "Pão, trigo, francês",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 50
+        }
+      ]
+    },
+    {
+      "alimento": "Pão, trigo, forma, integral",
+      "porcoes": [
+        {
+          "label": "fatia",
+          "grams": 25
+        }
+      ]
+    },
+    {
+      "alimento": "Pão, aveia, forma",
+      "porcoes": [
+        {
+          "label": "fatia",
+          "grams": 25
+        }
+      ]
+    },
+    {
+      "alimento": "Pão, milho, forma",
+      "porcoes": [
+        {
+          "label": "fatia",
+          "grams": 25
+        }
+      ]
+    },
+    {
+      "alimento": "Pão, glúten, forma",
+      "porcoes": [
+        {
+          "label": "fatia",
+          "grams": 25
+        }
+      ]
+    },
+    {
+      "alimento": "Pão, de queijo, assado",
+      "porcoes": [
+        {
+          "label": "unidade pequena",
+          "grams": 20
+        },
+        {
+          "label": "unidade grande",
+          "grams": 50
+        }
+      ]
+    },
+    {
+      "alimento": "Pipoca, com óleo de soja, sem sal",
+      "porcoes": [
+        {
+          "label": "xícara de chá",
+          "grams": 8
+        }
+      ]
+    },
+    {
+      "alimento": "Abobrinha, italiana, refogada",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 25
+        }
+      ]
+    },
+    {
+      "alimento": "Abobrinha, italiana, cozida",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 25
+        }
+      ]
+    },
+    {
+      "alimento": "Alface, americana, crua",
+      "porcoes": [
+        {
+          "label": "folha",
+          "grams": 10
+        }
+      ]
+    },
+    {
+      "alimento": "Alface, crespa, crua",
+      "porcoes": [
+        {
+          "label": "folha",
+          "grams": 10
+        }
+      ]
+    },
+    {
+      "alimento": "Alface, lisa, crua",
+      "porcoes": [
+        {
+          "label": "folha",
+          "grams": 10
+        }
+      ]
+    },
+    {
+      "alimento": "Alface, roxa, crua",
+      "porcoes": [
+        {
+          "label": "folha",
+          "grams": 10
+        }
+      ]
+    },
+    {
+      "alimento": "Alho, cru",
+      "porcoes": [
+        {
+          "label": "dente",
+          "grams": 3
+        }
+      ]
+    },
+    {
+      "alimento": "Batata, doce, cozida",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 40
+        },
+        {
+          "label": "unidade média",
+          "grams": 150
+        }
+      ]
+    },
+    {
+      "alimento": "Batata, inglesa, cozida",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 30
+        },
+        {
+          "label": "unidade média",
+          "grams": 135
+        }
+      ]
+    },
+    {
+      "alimento": "Batata, inglesa, frita",
+      "porcoes": [
+        {
+          "label": "porção pequena",
+          "grams": 70
+        }
+      ]
+    },
+    {
+      "alimento": "Beterraba, cozida",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 20
+        }
+      ]
+    },
+    {
+      "alimento": "Beterraba, crua",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 15
+        }
+      ]
+    },
+    {
+      "alimento": "Brócolis, cozido",
+      "porcoes": [
+        {
+          "label": "ramo",
+          "grams": 15
+        }
+      ]
+    },
+    {
+      "alimento": "Cebola, crua",
+      "porcoes": [
+        {
+          "label": "colher de sopa (picada)",
+          "grams": 10
+        },
+        {
+          "label": "unidade média",
+          "grams": 100
+        }
+      ]
+    },
+    {
+      "alimento": "Cenoura, crua",
+      "porcoes": [
+        {
+          "label": "colher de sopa (ralada)",
+          "grams": 12
+        },
+        {
+          "label": "unidade média",
+          "grams": 80
+        }
+      ]
+    },
+    {
+      "alimento": "Cenoura, cozida",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 25
+        }
+      ]
+    },
+    {
+      "alimento": "Chuchu, cozido",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 25
+        }
+      ]
+    },
+    {
+      "alimento": "Couve, manteiga, refogada",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 20
+        }
+      ]
+    },
+    {
+      "alimento": "Couve-flor, cozida",
+      "porcoes": [
+        {
+          "label": "ramo",
+          "grams": 20
+        }
+      ]
+    },
+    {
+      "alimento": "Mandioca, cozida",
+      "porcoes": [
+        {
+          "label": "pedaço médio",
+          "grams": 60
+        }
+      ]
+    },
+    {
+      "alimento": "Mandioca, farofa, temperada",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 15
+        }
+      ]
+    },
+    {
+      "alimento": "Farinha, de mandioca, torrada",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 15
+        }
+      ]
+    },
+    {
+      "alimento": "Farinha, de mandioca, crua",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 15
+        }
+      ]
+    },
+    {
+      "alimento": "Pepino, cru",
+      "porcoes": [
+        {
+          "label": "fatia",
+          "grams": 5
+        }
+      ]
+    },
+    {
+      "alimento": "Repolho, branco, cru",
+      "porcoes": [
+        {
+          "label": "colher de sopa (picado)",
+          "grams": 10
+        }
+      ]
+    },
+    {
+      "alimento": "Tomate, com semente, cru",
+      "porcoes": [
+        {
+          "label": "fatia",
+          "grams": 15
+        },
+        {
+          "label": "unidade média",
+          "grams": 100
+        }
+      ]
+    },
+    {
+      "alimento": "Tomate, molho industrializado",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 15
+        }
+      ]
+    },
+    {
+      "alimento": "Tomate, extrato",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 15
+        }
+      ]
+    },
+    {
+      "alimento": "Abacate, cru",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 30
+        }
+      ]
+    },
+    {
+      "alimento": "Abacaxi, cru",
+      "porcoes": [
+        {
+          "label": "fatia",
+          "grams": 75
+        }
+      ]
+    },
+    {
+      "alimento": "Açaí, polpa, congelada",
+      "porcoes": [
+        {
+          "label": "pacote",
+          "grams": 100
+        }
+      ]
+    },
+    {
+      "alimento": "Acerola, crua",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 12
+        }
+      ]
+    },
+    {
+      "alimento": "Banana, prata, crua",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 60
+        }
+      ]
+    },
+    {
+      "alimento": "Banana, nanica, crua",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 90
+        }
+      ]
+    },
+    {
+      "alimento": "Banana, maçã, crua",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 65
+        }
+      ]
+    },
+    {
+      "alimento": "Banana, ouro, crua",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 30
+        }
+      ]
+    },
+    {
+      "alimento": "Banana, da terra, crua",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 170
+        }
+      ]
+    },
+    {
+      "alimento": "Caqui, chocolate, cru",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 110
+        }
+      ]
+    },
+    {
+      "alimento": "Goiaba, vermelha, com casca, crua",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 150
+        }
+      ]
+    },
+    {
+      "alimento": "Goiaba, branca, com casca, crua",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 150
+        }
+      ]
+    },
+    {
+      "alimento": "Kiwi, cru",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 75
+        }
+      ]
+    },
+    {
+      "alimento": "Laranja, pêra, crua",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 140
+        }
+      ]
+    },
+    {
+      "alimento": "Laranja, baía, crua",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 180
+        }
+      ]
+    },
+    {
+      "alimento": "Laranja, lima, crua",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 140
+        }
+      ]
+    },
+    {
+      "alimento": "Laranja, valência, crua",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 160
+        }
+      ]
+    },
+    {
+      "alimento": "Laranja, pêra, suco",
+      "porcoes": [
+        {
+          "label": "copo (240 ml)",
+          "grams": 240
+        }
+      ]
+    },
+    {
+      "alimento": "Laranja, baía, suco",
+      "porcoes": [
+        {
+          "label": "copo (240 ml)",
+          "grams": 240
+        }
+      ]
+    },
+    {
+      "alimento": "Laranja, lima, suco",
+      "porcoes": [
+        {
+          "label": "copo (240 ml)",
+          "grams": 240
+        }
+      ]
+    },
+    {
+      "alimento": "Laranja, valência, suco",
+      "porcoes": [
+        {
+          "label": "copo (240 ml)",
+          "grams": 240
+        }
+      ]
+    },
+    {
+      "alimento": "Maçã, Fuji, com casca, crua",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 130
+        }
+      ]
+    },
+    {
+      "alimento": "Maçã, Argentina, com casca, crua",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 150
+        }
+      ]
+    },
+    {
+      "alimento": "Mamão, Papaia, cru",
+      "porcoes": [
+        {
+          "label": "meia unidade",
+          "grams": 150
+        }
+      ]
+    },
+    {
+      "alimento": "Mamão, Formosa, cru",
+      "porcoes": [
+        {
+          "label": "fatia média",
+          "grams": 150
+        }
+      ]
+    },
+    {
+      "alimento": "Manga, Palmer, crua",
+      "porcoes": [
+        {
+          "label": "unidade média",
+          "grams": 250
+        }
+      ]
+    },
+    {
+      "alimento": "Manga, Tommy Atkins, crua",
+      "porcoes": [
+        {
+          "label": "unidade média",
+          "grams": 250
+        }
+      ]
+    },
+    {
+      "alimento": "Manga, Haden, crua",
+      "porcoes": [
+        {
+          "label": "unidade média",
+          "grams": 250
+        }
+      ]
+    },
+    {
+      "alimento": "Melancia, crua",
+      "porcoes": [
+        {
+          "label": "fatia média",
+          "grams": 200
+        }
+      ]
+    },
+    {
+      "alimento": "Melão, cru",
+      "porcoes": [
+        {
+          "label": "fatia",
+          "grams": 100
+        }
+      ]
+    },
+    {
+      "alimento": "Mexerica, Rio, crua",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 120
+        }
+      ]
+    },
+    {
+      "alimento": "Mexerica, Murcote, crua",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 120
+        }
+      ]
+    },
+    {
+      "alimento": "Tangerina, Poncã, crua",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 150
+        }
+      ]
+    },
+    {
+      "alimento": "Morango, cru",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 12
+        }
+      ]
+    },
+    {
+      "alimento": "Pêra, Williams, crua",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 130
+        }
+      ]
+    },
+    {
+      "alimento": "Pêra, Park, crua",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 130
+        }
+      ]
+    },
+    {
+      "alimento": "Pêssego, Aurora, cru",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 100
+        }
+      ]
+    },
+    {
+      "alimento": "Uva, Itália, crua",
+      "porcoes": [
+        {
+          "label": "bago",
+          "grams": 8
+        }
+      ]
+    },
+    {
+      "alimento": "Uva, Rubi, crua",
+      "porcoes": [
+        {
+          "label": "bago",
+          "grams": 8
+        }
+      ]
+    },
+    {
+      "alimento": "Coco, água de",
+      "porcoes": [
+        {
+          "label": "copo (240 ml)",
+          "grams": 240
+        }
+      ]
+    },
+    {
+      "alimento": "Azeite, de oliva, extra virgem",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 13
+        },
+        {
+          "label": "colher de chá",
+          "grams": 4
+        }
+      ]
+    },
+    {
+      "alimento": "Óleo, de soja",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 13
+        },
+        {
+          "label": "colher de chá",
+          "grams": 4
+        }
+      ]
+    },
+    {
+      "alimento": "Óleo, de canola",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 13
+        },
+        {
+          "label": "colher de chá",
+          "grams": 4
+        }
+      ]
+    },
+    {
+      "alimento": "Óleo, de girassol",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 13
+        },
+        {
+          "label": "colher de chá",
+          "grams": 4
+        }
+      ]
+    },
+    {
+      "alimento": "Óleo, de milho",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 13
+        },
+        {
+          "label": "colher de chá",
+          "grams": 4
+        }
+      ]
+    },
+    {
+      "alimento": "Manteiga, com sal",
+      "porcoes": [
+        {
+          "label": "colher de chá",
+          "grams": 5
+        },
+        {
+          "label": "colher de sopa",
+          "grams": 14
+        }
+      ]
+    },
+    {
+      "alimento": "Manteiga, sem sal",
+      "porcoes": [
+        {
+          "label": "colher de chá",
+          "grams": 5
+        },
+        {
+          "label": "colher de sopa",
+          "grams": 14
+        }
+      ]
+    },
+    {
+      "alimento": "Margarina, com óleo hidrogenado, com sal (65% de lipídeos)",
+      "porcoes": [
+        {
+          "label": "colher de chá",
+          "grams": 5
+        },
+        {
+          "label": "colher de sopa",
+          "grams": 14
+        }
+      ]
+    },
+    {
+      "alimento": "Margarina, com óleo hidrogenado, sem sal (80% de lipídeos)",
+      "porcoes": [
+        {
+          "label": "colher de chá",
+          "grams": 5
+        },
+        {
+          "label": "colher de sopa",
+          "grams": 14
+        }
+      ]
+    },
+    {
+      "alimento": "Margarina, com óleo interesterificado, com sal (65%de lipídeos)",
+      "porcoes": [
+        {
+          "label": "colher de chá",
+          "grams": 5
+        },
+        {
+          "label": "colher de sopa",
+          "grams": 14
+        }
+      ]
+    },
+    {
+      "alimento": "Margarina, com óleo interesterificado, sem sal (65% de lipídeos)",
+      "porcoes": [
+        {
+          "label": "colher de chá",
+          "grams": 5
+        },
+        {
+          "label": "colher de sopa",
+          "grams": 14
+        }
+      ]
+    },
+    {
+      "alimento": "Atum, conserva em óleo",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 20
+        },
+        {
+          "label": "lata drenada",
+          "grams": 120
+        }
+      ]
+    },
+    {
+      "alimento": "Sardinha, conserva em óleo",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 25
+        }
+      ]
+    },
+    {
+      "alimento": "Salmão, sem pele, fresco, grelhado",
+      "porcoes": [
+        {
+          "label": "posta média",
+          "grams": 120
+        }
+      ]
+    },
+    {
+      "alimento": "Pescada, filé, frito",
+      "porcoes": [
+        {
+          "label": "filé médio",
+          "grams": 100
+        }
+      ]
+    },
+    {
+      "alimento": "Merluza, filé, assado",
+      "porcoes": [
+        {
+          "label": "filé médio",
+          "grams": 100
+        }
+      ]
+    },
+    {
+      "alimento": "Carne, bovina, acém, moído, cozido",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 25
+        }
+      ]
+    },
+    {
+      "alimento": "Carne, bovina, patinho, sem gordura, grelhado",
+      "porcoes": [
+        {
+          "label": "bife médio",
+          "grams": 100
+        }
+      ]
+    },
+    {
+      "alimento": "Carne, bovina, contra-filé, sem gordura, grelhado",
+      "porcoes": [
+        {
+          "label": "bife médio",
+          "grams": 100
+        }
+      ]
+    },
+    {
+      "alimento": "Carne, bovina, miolo de alcatra, sem gordura, grelhado",
+      "porcoes": [
+        {
+          "label": "bife médio",
+          "grams": 100
+        }
+      ]
+    },
+    {
+      "alimento": "Carne, bovina, filé mingnon, sem gordura, grelhado",
+      "porcoes": [
+        {
+          "label": "bife médio",
+          "grams": 100
+        }
+      ]
+    },
+    {
+      "alimento": "Carne, bovina, coxão mole, sem gordura, cozido",
+      "porcoes": [
+        {
+          "label": "bife médio",
+          "grams": 100
+        }
+      ]
+    },
+    {
+      "alimento": "Carne, bovina, picanha, com gordura, grelhada",
+      "porcoes": [
+        {
+          "label": "fatia média",
+          "grams": 70
+        }
+      ]
+    },
+    {
+      "alimento": "Carne, bovina, picanha, sem gordura, grelhada",
+      "porcoes": [
+        {
+          "label": "fatia média",
+          "grams": 70
+        }
+      ]
+    },
+    {
+      "alimento": "Hambúrguer, bovino, grelhado",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 50
+        }
+      ]
+    },
+    {
+      "alimento": "Hambúrguer, bovino, frito",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 50
+        }
+      ]
+    },
+    {
+      "alimento": "Frango, peito, sem pele, grelhado",
+      "porcoes": [
+        {
+          "label": "filé médio",
+          "grams": 100
+        }
+      ]
+    },
+    {
+      "alimento": "Frango, peito, sem pele, cozido",
+      "porcoes": [
+        {
+          "label": "filé médio",
+          "grams": 100
+        },
+        {
+          "label": "colher de sopa (desfiado)",
+          "grams": 20
+        }
+      ]
+    },
+    {
+      "alimento": "Frango, coxa, com pele, assada",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 70
+        }
+      ]
+    },
+    {
+      "alimento": "Frango, sobrecoxa, com pele, assada",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 90
+        }
+      ]
+    },
+    {
+      "alimento": "Frango, sobrecoxa, sem pele, assada",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 70
+        }
+      ]
+    },
+    {
+      "alimento": "Frango, filé, à milanesa",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 100
+        }
+      ]
+    },
+    {
+      "alimento": "Coxinha de frango, frita",
+      "porcoes": [
+        {
+          "label": "unidade média",
+          "grams": 80
+        },
+        {
+          "label": "unidade de festa",
+          "grams": 20
+        }
+      ]
+    },
+    {
+      "alimento": "Lingüiça, porco, grelhada",
+      "porcoes": [
+        {
+          "label": "gomo",
+          "grams": 60
+        }
+      ]
+    },
+    {
+      "alimento": "Lingüiça, porco, frita",
+      "porcoes": [
+        {
+          "label": "gomo",
+          "grams": 60
+        }
+      ]
+    },
+    {
+      "alimento": "Lingüiça, frango, grelhada",
+      "porcoes": [
+        {
+          "label": "gomo",
+          "grams": 60
+        }
+      ]
+    },
+    {
+      "alimento": "Mortadela",
+      "porcoes": [
+        {
+          "label": "fatia",
+          "grams": 15
+        }
+      ]
+    },
+    {
+      "alimento": "Presunto, sem capa de gordura",
+      "porcoes": [
+        {
+          "label": "fatia",
+          "grams": 15
+        }
+      ]
+    },
+    {
+      "alimento": "Presunto, com capa de gordura",
+      "porcoes": [
+        {
+          "label": "fatia",
+          "grams": 15
+        }
+      ]
+    },
+    {
+      "alimento": "Apresuntado",
+      "porcoes": [
+        {
+          "label": "fatia",
+          "grams": 15
+        }
+      ]
+    },
+    {
+      "alimento": "Salame",
+      "porcoes": [
+        {
+          "label": "fatia",
+          "grams": 5
+        }
+      ]
+    },
+    {
+      "alimento": "Porco, bisteca, grelhada",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 100
+        }
+      ]
+    },
+    {
+      "alimento": "Porco, lombo, assado",
+      "porcoes": [
+        {
+          "label": "fatia média",
+          "grams": 60
+        }
+      ]
+    },
+    {
+      "alimento": "Estrogonofe de carne",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 30
+        }
+      ]
+    },
+    {
+      "alimento": "Estrogonofe de frango",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 30
+        }
+      ]
+    },
+    {
+      "alimento": "Creme de Leite",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 15
+        }
+      ]
+    },
+    {
+      "alimento": "Iogurte, natural",
+      "porcoes": [
+        {
+          "label": "pote",
+          "grams": 170
+        }
+      ]
+    },
+    {
+      "alimento": "Iogurte, natural, desnatado",
+      "porcoes": [
+        {
+          "label": "pote",
+          "grams": 170
+        }
+      ]
+    },
+    {
+      "alimento": "Leite, condensado",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 20
+        }
+      ]
+    },
+    {
+      "alimento": "Leite, de vaca, integral",
+      "porcoes": [
+        {
+          "label": "copo (200 ml)",
+          "grams": 200
+        },
+        {
+          "label": "xícara de chá",
+          "grams": 240
+        }
+      ]
+    },
+    {
+      "alimento": "Leite, de vaca, desnatado, UHT",
+      "porcoes": [
+        {
+          "label": "copo (200 ml)",
+          "grams": 200
+        },
+        {
+          "label": "xícara de chá",
+          "grams": 240
+        }
+      ]
+    },
+    {
+      "alimento": "Leite, de vaca, achocolatado",
+      "porcoes": [
+        {
+          "label": "copo (200 ml)",
+          "grams": 200
+        }
+      ]
+    },
+    {
+      "alimento": "Leite, de vaca, integral, pó",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 10
+        }
+      ]
+    },
+    {
+      "alimento": "Leite, de vaca, desnatado, pó",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 10
+        }
+      ]
+    },
+    {
+      "alimento": "Queijo, minas, frescal",
+      "porcoes": [
+        {
+          "label": "fatia",
+          "grams": 30
+        }
+      ]
+    },
+    {
+      "alimento": "Queijo, minas, meia cura",
+      "porcoes": [
+        {
+          "label": "fatia",
+          "grams": 20
+        }
+      ]
+    },
+    {
+      "alimento": "Queijo, mozarela",
+      "porcoes": [
+        {
+          "label": "fatia",
+          "grams": 15
+        }
+      ]
+    },
+    {
+      "alimento": "Queijo, prato",
+      "porcoes": [
+        {
+          "label": "fatia",
+          "grams": 15
+        }
+      ]
+    },
+    {
+      "alimento": "Queijo, parmesão",
+      "porcoes": [
+        {
+          "label": "colher de sopa (ralado)",
+          "grams": 6
+        }
+      ]
+    },
+    {
+      "alimento": "Queijo, requeijão, cremoso",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 30
+        }
+      ]
+    },
+    {
+      "alimento": "Queijo, ricota",
+      "porcoes": [
+        {
+          "label": "fatia",
+          "grams": 30
+        }
+      ]
+    },
+    {
+      "alimento": "Queijo, petit suisse, morango",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 45
+        }
+      ]
+    },
+    {
+      "alimento": "Café, infusão 10%",
+      "porcoes": [
+        {
+          "label": "xícara de café",
+          "grams": 50
+        },
+        {
+          "label": "xícara de chá",
+          "grams": 200
+        }
+      ]
+    },
+    {
+      "alimento": "Chá, preto, infusão 5%",
+      "porcoes": [
+        {
+          "label": "xícara de chá",
+          "grams": 200
+        }
+      ]
+    },
+    {
+      "alimento": "Chá, mate, infusão 5%",
+      "porcoes": [
+        {
+          "label": "xícara de chá",
+          "grams": 200
+        }
+      ]
+    },
+    {
+      "alimento": "Chá, erva-doce, infusão 5%",
+      "porcoes": [
+        {
+          "label": "xícara de chá",
+          "grams": 200
+        }
+      ]
+    },
+    {
+      "alimento": "Refrigerante, tipo cola",
+      "porcoes": [
+        {
+          "label": "lata (350 ml)",
+          "grams": 350
+        },
+        {
+          "label": "copo (240 ml)",
+          "grams": 240
+        }
+      ]
+    },
+    {
+      "alimento": "Refrigerante, tipo guaraná",
+      "porcoes": [
+        {
+          "label": "lata (350 ml)",
+          "grams": 350
+        },
+        {
+          "label": "copo (240 ml)",
+          "grams": 240
+        }
+      ]
+    },
+    {
+      "alimento": "Refrigerante, tipo laranja",
+      "porcoes": [
+        {
+          "label": "lata (350 ml)",
+          "grams": 350
+        },
+        {
+          "label": "copo (240 ml)",
+          "grams": 240
+        }
+      ]
+    },
+    {
+      "alimento": "Refrigerante, tipo limão",
+      "porcoes": [
+        {
+          "label": "lata (350 ml)",
+          "grams": 350
+        },
+        {
+          "label": "copo (240 ml)",
+          "grams": 240
+        }
+      ]
+    },
+    {
+      "alimento": "Refrigerante, tipo água tônica",
+      "porcoes": [
+        {
+          "label": "lata (350 ml)",
+          "grams": 350
+        },
+        {
+          "label": "copo (240 ml)",
+          "grams": 240
+        }
+      ]
+    },
+    {
+      "alimento": "Cerveja, pilsen 2",
+      "porcoes": [
+        {
+          "label": "lata (350 ml)",
+          "grams": 350
+        }
+      ]
+    },
+    {
+      "alimento": "Bebida isotônica, sabores variados",
+      "porcoes": [
+        {
+          "label": "garrafa (500 ml)",
+          "grams": 500
+        }
+      ]
+    },
+    {
+      "alimento": "Cana, caldo de",
+      "porcoes": [
+        {
+          "label": "copo (300 ml)",
+          "grams": 300
+        }
+      ]
+    },
+    {
+      "alimento": "Ovo, de galinha, inteiro, cozido/10minutos",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 50
+        }
+      ]
+    },
+    {
+      "alimento": "Ovo, de galinha, inteiro, frito",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 50
+        }
+      ]
+    },
+    {
+      "alimento": "Ovo, de galinha, inteiro, cru",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 50
+        }
+      ]
+    },
+    {
+      "alimento": "Ovo, de galinha, clara, cozida/10minutos",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 30
+        }
+      ]
+    },
+    {
+      "alimento": "Ovo, de galinha, gema, cozida/10minutos",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 18
+        }
+      ]
+    },
+    {
+      "alimento": "Ovo, de codorna, inteiro, cru",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 10
+        }
+      ]
+    },
+    {
+      "alimento": "Açúcar, refinado",
+      "porcoes": [
+        {
+          "label": "colher de chá",
+          "grams": 4
+        },
+        {
+          "label": "colher de sopa",
+          "grams": 12
+        },
+        {
+          "label": "sachê",
+          "grams": 5
+        }
+      ]
+    },
+    {
+      "alimento": "Açúcar, cristal",
+      "porcoes": [
+        {
+          "label": "colher de chá",
+          "grams": 4
+        },
+        {
+          "label": "colher de sopa",
+          "grams": 12
+        },
+        {
+          "label": "sachê",
+          "grams": 5
+        }
+      ]
+    },
+    {
+      "alimento": "Açúcar, mascavo",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 10
+        }
+      ]
+    },
+    {
+      "alimento": "Achocolatado, pó",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 10
+        }
+      ]
+    },
+    {
+      "alimento": "Mel, de abelha",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 20
+        },
+        {
+          "label": "colher de chá",
+          "grams": 7
+        }
+      ]
+    },
+    {
+      "alimento": "Chocolate, ao leite",
+      "porcoes": [
+        {
+          "label": "quadradinho",
+          "grams": 5
+        },
+        {
+          "label": "barra pequena (25 g)",
+          "grams": 25
+        }
+      ]
+    },
+    {
+      "alimento": "Chocolate, meio amargo",
+      "porcoes": [
+        {
+          "label": "quadradinho",
+          "grams": 5
+        },
+        {
+          "label": "barra pequena (25 g)",
+          "grams": 25
+        }
+      ]
+    },
+    {
+      "alimento": "Doce, de leite, cremoso",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 20
+        }
+      ]
+    },
+    {
+      "alimento": "Paçoca, amendoim",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 20
+        }
+      ]
+    },
+    {
+      "alimento": "Maionese, tradicional com ovos",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 12
+        }
+      ]
+    },
+    {
+      "alimento": "Shoyu",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 15
+        }
+      ]
+    },
+    {
+      "alimento": "Azeitona, verde, conserva",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 4
+        }
+      ]
+    },
+    {
+      "alimento": "Azeitona, preta, conserva",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 4
+        }
+      ]
+    },
+    {
+      "alimento": "Leite, de coco",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 15
+        }
+      ]
+    },
+    {
+      "alimento": "Feijão, carioca, cozido",
+      "porcoes": [
+        {
+          "label": "concha média",
+          "grams": 100
+        },
+        {
+          "label": "colher de sopa",
+          "grams": 20
+        }
+      ]
+    },
+    {
+      "alimento": "Feijão, preto, cozido",
+      "porcoes": [
+        {
+          "label": "concha média",
+          "grams": 100
+        },
+        {
+          "label": "colher de sopa",
+          "grams": 20
+        }
+      ]
+    },
+    {
+      "alimento": "Feijão, fradinho, cozido",
+      "porcoes": [
+        {
+          "label": "concha média",
+          "grams": 100
+        },
+        {
+          "label": "colher de sopa",
+          "grams": 20
+        }
+      ]
+    },
+    {
+      "alimento": "Feijão, jalo, cozido",
+      "porcoes": [
+        {
+          "label": "concha média",
+          "grams": 100
+        },
+        {
+          "label": "colher de sopa",
+          "grams": 20
+        }
+      ]
+    },
+    {
+      "alimento": "Feijão, rajado, cozido",
+      "porcoes": [
+        {
+          "label": "concha média",
+          "grams": 100
+        },
+        {
+          "label": "colher de sopa",
+          "grams": 20
+        }
+      ]
+    },
+    {
+      "alimento": "Feijão, rosinha, cozido",
+      "porcoes": [
+        {
+          "label": "concha média",
+          "grams": 100
+        },
+        {
+          "label": "colher de sopa",
+          "grams": 20
+        }
+      ]
+    },
+    {
+      "alimento": "Feijão, roxo, cozido",
+      "porcoes": [
+        {
+          "label": "concha média",
+          "grams": 100
+        },
+        {
+          "label": "colher de sopa",
+          "grams": 20
+        }
+      ]
+    },
+    {
+      "alimento": "Lentilha, cozida",
+      "porcoes": [
+        {
+          "label": "concha média",
+          "grams": 100
+        },
+        {
+          "label": "colher de sopa",
+          "grams": 20
+        }
+      ]
+    },
+    {
+      "alimento": "Feijão tropeiro mineiro",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 20
+        }
+      ]
+    },
+    {
+      "alimento": "Baião de dois, arroz e feijão-de-corda",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 30
+        }
+      ]
+    },
+    {
+      "alimento": "Arroz carreteiro",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 25
+        }
+      ]
+    },
+    {
+      "alimento": "Macarrão, molho bolognesa",
+      "porcoes": [
+        {
+          "label": "pegador",
+          "grams": 110
+        }
+      ]
+    },
+    {
+      "alimento": "Salada, de legumes, com maionese",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 30
+        }
+      ]
+    },
+    {
+      "alimento": "Salpicão, de frango",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 30
+        }
+      ]
+    },
+    {
+      "alimento": "Ervilha, enlatada, drenada",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 20
+        }
+      ]
+    },
+    {
+      "alimento": "Amendoim, torrado, salgado",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 10
+        }
+      ]
+    },
+    {
+      "alimento": "Castanha-de-caju, torrada, salgada",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 3
+        }
+      ]
+    },
+    {
+      "alimento": "Castanha-do-Brasil, crua",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 4
+        }
+      ]
+    },
+    {
+      "alimento": "Amêndoa, torrada, salgada",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 1
+        }
+      ]
+    },
+    {
+      "alimento": "Noz, crua",
+      "porcoes": [
+        {
+          "label": "unidade",
+          "grams": 5
+        }
+      ]
+    },
+    {
+      "alimento": "Linhaça, semente",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 10
+        }
+      ]
+    },
+    {
+      "alimento": "Gergelim, semente",
+      "porcoes": [
+        {
+          "label": "colher de sopa",
+          "grams": 8
+        }
+      ]
+    },
+    {
+      "alimento": "Coco, cru",
+      "porcoes": [
+        {
+          "label": "colher de sopa (ralado)",
+          "grams": 8
+        }
+      ]
+    },
+    {
+      "alimento": "Soja, extrato solúvel, natural, fluido",
+      "porcoes": [
+        {
+          "label": "copo (200 ml)",
+          "grams": 200
+        }
+      ]
+    }
+  ]
+}

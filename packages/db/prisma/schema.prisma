@@ -37,6 +37,7 @@ model User {
   waterLogs       WaterLog[]
   customFoods     Food[]            @relation("UserCustomFoods")
   favoriteFoods   FavoriteFood[]
+  foodPortions    FoodPortion[]
   customExercises Exercise[]        @relation("UserCustomExercises")
   nutrientTargets NutrientTarget[]
   achievements    UserAchievement[]
@@ -159,6 +160,7 @@ model Food {
   createdBy   User?          @relation("UserCustomFoods", fields: [createdByUserId], references: [id], onDelete: Cascade)
   mealItems   MealItem[]
   favoritedBy FavoriteFood[]
+  portions    FoodPortion[]
 
   // Unicidade por (nome, source) só para públicos. Customs podem repetir nomes
   // entre usuários — unicidade real é (nome, source, createdByUserId).
@@ -182,6 +184,25 @@ model FavoriteFood {
 
   @@unique([userId, foodId])
   @@index([userId, createdAt])
+}
+
+// Medida caseira: "colher de sopa = 25 g". Atalho que vira gramas no registro —
+// `MealItem.grams` continua sendo a verdade. Sem dono = catálogo curado
+// (`prisma/data/medidas-caseiras.json`); com dono = medida da própria pessoa.
+model FoodPortion {
+  id              String   @id @default(uuid())
+  foodId          Int
+  label           String
+  grams           Float
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+
+  food      Food  @relation(fields: [foodId], references: [id], onDelete: Cascade)
+  createdBy User? @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+
+  @@unique([foodId, label, createdByUserId])
+  @@index([foodId])
+  @@index([createdByUserId])
 }
 
 enum FoodSource {
@@ -212,20 +233,24 @@ model Meal {
 }
 
 model MealItem {
-  id        String @id @default(uuid())
-  mealId    String
-  foodId    Int? // null = item livre estimado pelo Claude
-  groupId   Int? // copiado do food, ou inferido pelo Claude
-  foodName  String // snapshot — sempre preenchido
-  grams     Float
-  kcal      Float
-  proteinG  Float
-  carbsG    Float
-  fatG      Float
+  id              String  @id @default(uuid())
+  mealId          String
+  foodId          Int? // null = item livre estimado pelo Claude
+  groupId         Int? // copiado do food, ou inferido pelo Claude
+  foodName        String // snapshot — sempre preenchido
+  grams           Float
+  kcal            Float
+  proteinG        Float
+  carbsG          Float
+  fatG            Float
   // Micronutrientes opcionais (snapshot), mapa flexível: { "sodium_mg": 412, "sugar_g": 9 }.
   // Json em vez de colunas fixas: nutrientes são open-ended e a TACO não cobre todos
   // (ADR 009). Ausente = não rastreado para aquele item.
-  nutrients Json?
+  nutrients       Json?
+  // Retrato de como a quantidade foi digitada ("2 × colher de sopa"). Só exibição
+  // e sugestão da próxima vez; a conta usa `grams`. Nulos quando veio em gramas.
+  portionLabel    String?
+  portionQuantity Float?
 
   meal  Meal       @relation(fields: [mealId], references: [id], onDelete: Cascade)
   food  Food?      @relation(fields: [foodId], references: [id])

@@ -26,6 +26,7 @@ const makePrisma = () => ({
   conversation: { findMany: jest.fn().mockResolvedValue([]) },
   userMemory: { findMany: jest.fn().mockResolvedValue([]) },
   favoriteFood: { findMany: jest.fn().mockResolvedValue([]) },
+  foodPortion: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const SCHEMA = resolve(__dirname, '../../../../../packages/db/prisma/schema.prisma');
@@ -50,6 +51,7 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   waterLogs: 'waterLogs',
   customFoods: 'customFoods',
   favoriteFoods: 'favoriteFoods',
+  foodPortions: 'foodPortions',
   customExercises: 'customExercises',
   nutrientTargets: 'nutrientTargets',
   achievements: 'achievements',
@@ -157,7 +159,7 @@ describe('AccountService', () => {
         );
       }
       // Catálogo custom é escopado por createdByUserId, não userId.
-      for (const model of ['food', 'exercise'] as const) {
+      for (const model of ['food', 'exercise', 'foodPortion'] as const) {
         expect(prisma[model].findMany).toHaveBeenCalledWith(
           expect.objectContaining({ where: { createdByUserId: 'user-A' } }),
         );

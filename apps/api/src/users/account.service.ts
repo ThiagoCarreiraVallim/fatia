@@ -49,6 +49,7 @@ export class AccountService {
       meals,
       customFoods,
       favoriteFoods,
+      foodPortions,
       customExercises,
       workoutPlans,
       workoutSessions,
@@ -78,6 +79,18 @@ export class AccountService {
       this.prisma.favoriteFood.findMany({
         where: { userId },
         select: { foodId: true, food: { select: { name: true } }, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      // Medidas que a pessoa criou ("minha concha = 140 g"); as do catálogo não têm dono.
+      this.prisma.foodPortion.findMany({
+        where: { createdByUserId: userId },
+        select: {
+          foodId: true,
+          food: { select: { name: true } },
+          label: true,
+          grams: true,
+          createdAt: true,
+        },
         orderBy: { createdAt: 'asc' },
       }),
       this.prisma.exercise.findMany({
@@ -208,6 +221,7 @@ export class AccountService {
       meals,
       customFoods,
       favoriteFoods,
+      foodPortions,
       customExercises,
       workoutPlans,
       workoutSessions,
@@ -232,6 +246,7 @@ export class AccountService {
         meals: meals.length,
         customFoods: customFoods.length,
         favoriteFoods: favoriteFoods.length,
+        foodPortions: foodPortions.length,
         customExercises: customExercises.length,
         workoutPlans: workoutPlans.length,
         workoutSessions: workoutSessions.length,

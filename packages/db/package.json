@@ -11,6 +11,7 @@
     "seed": "tsx prisma/seed.ts",
     "seed:admin": "tsx prisma/seed-admin.ts",
     "seed:taco": "tsx prisma/seed-taco.ts",
+    "seed:portions": "tsx prisma/seed-portions.ts",
     "seed:exercises": "tsx prisma/seed-exercises.ts",
     "seed:demo": "tsx prisma/seed-demo.ts"
   },
