@@ -30,6 +30,8 @@ const comUnidade =
   (valor) =>
     typeof valor === 'number' ? `${numero(valor, casas)} ${unidade}` : null;
 
+const simOuNao: Formato = (valor) => (typeof valor === 'boolean' ? (valor ? 'Sim' : 'Não') : null);
+
 const semUnidade: Formato = (valor) => (typeof valor === 'number' ? numero(valor) : null);
 
 const texto: Formato = (valor) => (typeof valor === 'string' && valor.trim() ? valor.trim() : null);
@@ -183,6 +185,7 @@ export const CAMPOS: Record<string, Campo> = {
   deadline: { rotulo: 'Prazo', formato: dia },
   notes: { rotulo: 'Observação', formato: texto },
   foodName: { rotulo: 'Alimento', formato: texto },
+  favorite: { rotulo: 'Favorito', formato: simOuNao },
   grams: { rotulo: 'Quantidade', formato: comUnidade('g') },
   kcal: { rotulo: 'Calorias', formato: comUnidade('kcal', 0) },
   proteinG: { rotulo: 'Proteína', formato: comUnidade('g') },
@@ -308,6 +311,7 @@ export const ID_POR_TOOL: Record<string, TipoDeRegistro> = {
   update_meal: 'refeicao',
   update_meal_item: 'itemDaRefeicao',
   update_custom_food: 'alimento',
+  set_food_favorite: 'alimento',
   update_water_log: 'agua',
   clone_exercise: 'exercicio',
   update_custom_exercise: 'exercicio',

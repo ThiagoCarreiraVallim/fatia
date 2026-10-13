@@ -48,6 +48,7 @@ export class AccountService {
       personalGoals,
       meals,
       customFoods,
+      favoriteFoods,
       customExercises,
       workoutPlans,
       workoutSessions,
@@ -72,6 +73,12 @@ export class AccountService {
       this.prisma.food.findMany({
         where: { createdByUserId: userId },
         orderBy: { name: 'asc' },
+      }),
+      // O nome junto do id: o id de um alimento público só faz sentido dentro desta instância.
+      this.prisma.favoriteFood.findMany({
+        where: { userId },
+        select: { foodId: true, food: { select: { name: true } }, createdAt: true },
+        orderBy: { createdAt: 'asc' },
       }),
       this.prisma.exercise.findMany({
         where: { createdByUserId: userId },
@@ -200,6 +207,7 @@ export class AccountService {
       personalGoals,
       meals,
       customFoods,
+      favoriteFoods,
       customExercises,
       workoutPlans,
       workoutSessions,
@@ -223,6 +231,7 @@ export class AccountService {
         accessLogs: accessLogs.length,
         meals: meals.length,
         customFoods: customFoods.length,
+        favoriteFoods: favoriteFoods.length,
         customExercises: customExercises.length,
         workoutPlans: workoutPlans.length,
         workoutSessions: workoutSessions.length,

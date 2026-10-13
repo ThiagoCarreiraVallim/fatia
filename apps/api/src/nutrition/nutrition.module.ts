@@ -3,6 +3,7 @@ import { text } from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import { NutritionController } from './nutrition.controller';
 import { FoodService } from './food.service';
+import { FoodShortcutsService } from './food-shortcuts.service';
 import { InferenceThrottlerGuard } from './inference-throttler.guard';
 import { MealRecognitionService } from './meal-recognition.service';
 import { OffFoodService } from './off-food.service';
@@ -33,6 +34,8 @@ import { ListNutrientTargetsTool } from './mcp/list-nutrient-targets.tool';
 import { SetNutrientTargetTool } from './mcp/set-nutrient-target.tool';
 import { DeleteNutrientTargetTool } from './mcp/delete-nutrient-target.tool';
 import { GetNutrientSummaryTool } from './mcp/get-nutrient-summary.tool';
+import { ListMyFoodsTool } from './mcp/list-my-foods.tool';
+import { SetFoodFavoriteTool } from './mcp/set-food-favorite.tool';
 
 /**
  * Teto do corpo da rota de reconhecimento (#139).
@@ -50,6 +53,7 @@ const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 })
   controllers: [NutritionController],
   providers: [
     FoodService,
+    FoodShortcutsService,
     InferenceThrottlerGuard,
     MealRecognitionService,
     OffFoodService,
@@ -65,6 +69,8 @@ const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 })
     CreateCustomFoodTool,
     UpdateCustomFoodTool,
     DeleteCustomFoodTool,
+    ListMyFoodsTool,
+    SetFoodFavoriteTool,
     LogMealTool,
     GetMealTool,
     ListMealsTool,

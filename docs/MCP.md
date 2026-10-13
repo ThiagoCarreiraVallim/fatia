@@ -104,8 +104,8 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **106 tools** declaram `false`, e é a resposta que
-pela Fatia** (visão, LLM, embedding). Hoje as **106 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **108 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **108 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -185,12 +185,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 106 tools): **82,5 k caracteres**
-hoje, dos quais **4.605 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 108 tools): **83,9 k caracteres**
+hoje, dos quais **4.640 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **87** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (66,7 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (67,8 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -260,6 +260,8 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `get_nutrient_summary`       | R        |
 | **Alimentos (catálogo)**   | `search_food`                | R        |
 |                            | `get_food`                   | R        |
+|                            | `list_my_foods`              | R        |
+|                            | `set_food_favorite`          | U        |
 |                            | `create_custom_food`         | C        |
 |                            | `update_custom_food`         | U        |
 |                            | `delete_custom_food`         | D        |
@@ -348,8 +350,8 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `save_memory`                | C        |
 |                            | `forget_memory`              | D        |
 
-Total: **106 tools**. Cada uma documentada abaixo.
-Total: **106 tools**. Cada uma documentada abaixo.
+Total: **108 tools**. Cada uma documentada abaixo.
+Total: **108 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -582,6 +584,40 @@ Busca em TACO + alimentos custom do usuário.
 
 **Input:** `{ foodId: number }`  
 **Output:** mesmo formato de um item de `search_food`.
+
+### `list_my_foods`
+
+Favoritos e alimentos comidos nos últimos 60 dias — o atalho que o app mostra antes de a pessoa
+digitar. Para a IA, é a primeira consulta antes de `search_food`: o que a pessoa costuma comer
+já vem com `id` e com a gramagem da última vez. Os recentes saem do histórico de refeições (não
+há tabela própria); itens livres, sem alimento do catálogo, não entram.
+
+**Input:**
+
+```typescript
+{
+  mealType?: "BREAKFAST" | "LUNCH" | "DINNER" | "SNACK"; // o que costuma ir nela vem primeiro
+  limit?: number; // recentes, default 10, max 30
+}
+```
+
+**Output:**
+
+```typescript
+{
+  favorites: FoodShortcut[]; // mais recente primeiro
+  recent: FoodShortcut[];    // sem repetir favoritos
+}
+// FoodShortcut = Food & { lastGrams: number | null; timesEaten: number; favorite: boolean }
+```
+
+### `set_food_favorite`
+
+Marca ou desmarca um alimento como favorito. Idempotente nos dois sentidos. Alimento custom de
+outro usuário responde `NOT_FOUND`, como em `get_food`.
+
+**Input:** `{ id: number; favorite: boolean }`  
+**Output:** `{ id: number; favorite: boolean }`
 
 ### `create_custom_food`
 

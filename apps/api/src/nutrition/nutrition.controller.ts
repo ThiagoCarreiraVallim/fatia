@@ -26,7 +26,13 @@ import { MealItemService } from './meal-item.service';
 import { NutritionSummaryService } from './nutrition-summary.service';
 import { UserGoalsService } from './user-goals.service';
 import { NutrientTargetService } from './nutrient-target.service';
-import { CreateCustomFoodDto, SearchFoodDto, UpdateCustomFoodDto } from './dto/food.dto';
+import {
+  CreateCustomFoodDto,
+  ListFoodShortcutsDto,
+  SearchFoodDto,
+  UpdateCustomFoodDto,
+} from './dto/food.dto';
+import { FoodShortcutsService } from './food-shortcuts.service';
 import {
   CreateMealDto,
   ListMealsDto,
@@ -60,6 +66,7 @@ export class NutritionController {
     private readonly goals: UserGoalsService,
     private readonly nutrientTargets: NutrientTargetService,
     private readonly recognition: MealRecognitionService,
+    private readonly shortcuts: FoodShortcutsService,
   ) {}
 
   // -------- Reconhecimento por foto (#139) --------
@@ -118,6 +125,24 @@ export class NutritionController {
   @Get('foods/groups')
   listGroups() {
     return this.foods.listGroups();
+  }
+
+  /** Favoritos e recentes da busca — antes de `foods/:id`, que engoliria o "mine". */
+  @Get('foods/mine')
+  listFoodShortcuts(@CurrentUser() user: CurrentUserPayload, @Query() q: ListFoodShortcutsDto) {
+    return this.shortcuts.list(user.id, q);
+  }
+
+  @Put('foods/:id/favorite')
+  @HttpCode(204)
+  favoriteFood(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseIntPipe) id: number) {
+    return this.shortcuts.setFavorite(user.id, id, true);
+  }
+
+  @Delete('foods/:id/favorite')
+  @HttpCode(204)
+  unfavoriteFood(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseIntPipe) id: number) {
+    return this.shortcuts.setFavorite(user.id, id, false);
   }
 
   /**

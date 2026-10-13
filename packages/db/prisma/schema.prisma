@@ -36,6 +36,7 @@ model User {
   stepLogs        StepLog[]
   waterLogs       WaterLog[]
   customFoods     Food[]            @relation("UserCustomFoods")
+  favoriteFoods   FavoriteFood[]
   customExercises Exercise[]        @relation("UserCustomExercises")
   nutrientTargets NutrientTarget[]
   achievements    UserAchievement[]
@@ -154,9 +155,10 @@ model Food {
   searchName      String     @default("")
   createdAt       DateTime   @default(now())
 
-  group     FoodGroup? @relation(fields: [groupId], references: [id])
-  createdBy User?      @relation("UserCustomFoods", fields: [createdByUserId], references: [id], onDelete: Cascade)
-  mealItems MealItem[]
+  group       FoodGroup?     @relation(fields: [groupId], references: [id])
+  createdBy   User?          @relation("UserCustomFoods", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  mealItems   MealItem[]
+  favoritedBy FavoriteFood[]
 
   // Unicidade por (nome, source) só para públicos. Customs podem repetir nomes
   // entre usuários — unicidade real é (nome, source, createdByUserId).
@@ -165,6 +167,21 @@ model Food {
   @@index([name])
   @@index([source])
   @@index([createdByUserId])
+}
+
+// Atalho da busca de alimento: o que a pessoa marca para achar em um toque.
+// Os "recentes" não têm tabela — saem do histórico de `MealItem`.
+model FavoriteFood {
+  id        String   @id @default(uuid())
+  userId    String
+  foodId    Int
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  food Food @relation(fields: [foodId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, foodId])
+  @@index([userId, createdAt])
 }
 
 enum FoodSource {
@@ -774,7 +791,7 @@ enum MessageReview {
 }
 
 model Message {
-  id             String      @id @default(uuid())
+  id             String         @id @default(uuid())
   conversationId String
   role           MessageRole
   content        String
@@ -801,7 +818,7 @@ model Message {
   review         MessageReview?
   reviewReasons  String[]       @default([])
   reviewNote     String?
-  createdAt      DateTime    @default(now())
+  createdAt      DateTime       @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 

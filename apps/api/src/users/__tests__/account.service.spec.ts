@@ -25,6 +25,7 @@ const makePrisma = () => ({
   professionalAccessLog: { findMany: jest.fn().mockResolvedValue([]) },
   conversation: { findMany: jest.fn().mockResolvedValue([]) },
   userMemory: { findMany: jest.fn().mockResolvedValue([]) },
+  favoriteFood: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const SCHEMA = resolve(__dirname, '../../../../../packages/db/prisma/schema.prisma');
@@ -48,6 +49,7 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   stepLogs: 'stepLogs',
   waterLogs: 'waterLogs',
   customFoods: 'customFoods',
+  favoriteFoods: 'favoriteFoods',
   customExercises: 'customExercises',
   nutrientTargets: 'nutrientTargets',
   achievements: 'achievements',
@@ -148,6 +150,7 @@ describe('AccountService', () => {
         'weightLog',
         'stepLog',
         'waterLog',
+        'favoriteFood',
       ] as const) {
         expect(prisma[model].findMany).toHaveBeenCalledWith(
           expect.objectContaining({ where: expect.objectContaining({ userId: 'user-A' }) }),

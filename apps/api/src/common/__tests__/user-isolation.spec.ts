@@ -20,6 +20,7 @@ import { ConversationService } from '../../chat/conversation.service';
 import { MemoryService } from '../../chat/memory/memory.service';
 import { GoalsService } from '../../goals/goals.service';
 import { FoodService } from '../../nutrition/food.service';
+import { FoodShortcutsService } from '../../nutrition/food-shortcuts.service';
 import { MealItemService } from '../../nutrition/meal-item.service';
 import { MealService } from '../../nutrition/meal.service';
 import { NutrientTargetService } from '../../nutrition/nutrient-target.service';
@@ -57,6 +58,7 @@ describe('isolamento entre usuários', () => {
 
   const meals = new MealService(prisma);
   const foods = new FoodService(prisma);
+  const shortcuts = new FoodShortcutsService(prisma, foods);
   const mealItems = new MealItemService(prisma, meals);
   const nutrientTargets = new NutrientTargetService(prisma);
   const userGoals = new UserGoalsService(prisma);
@@ -265,6 +267,7 @@ describe('isolamento entre usuários', () => {
       fatPer100g: 1,
     });
     owned.customFoodId = customFood.id;
+    await shortcuts.setFavorite(owned.userA, customFood.id, true);
 
     const meal = await meals.create(owned.userA, {
       mealType: MealType.LUNCH,
@@ -461,6 +464,16 @@ describe('isolamento entre usuários', () => {
       expect(found.map((food) => food.id)).not.toContain(owned.customFoodId);
     });
 
+    it('list_my_foods não traz favorito nem recente do user-A', async () => {
+      // Sanidade: para o dono, o alimento aparece — senão o caso abaixo passaria vazio.
+      const deA = await shortcuts.list(owned.userA, {});
+      expect(deA.favorites.map((food) => food.id)).toContain(owned.customFoodId);
+
+      const deB = await shortcuts.list(owned.userB, {});
+      const ids = [...deB.favorites, ...deB.recent].map((food) => food.id);
+      expect(ids).not.toContain(owned.customFoodId);
+    });
+
     it('search_exercise não retorna o exercício custom do user-A', async () => {
       const found = await exercises.search(owned.userB, {});
       expect(found.map((exercise) => exercise.id)).not.toContain(owned.customExerciseId);
@@ -503,6 +516,12 @@ describe('isolamento entre usuários', () => {
 
     it('delete_custom_food recusa', async () => {
       await expect(foods.deleteCustom(owned.userB, owned.customFoodId)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('set_food_favorite recusa o alimento custom de outro', async () => {
+      await expect(shortcuts.setFavorite(owned.userB, owned.customFoodId, true)).rejects.toThrow(
         NotFoundException,
       );
     });

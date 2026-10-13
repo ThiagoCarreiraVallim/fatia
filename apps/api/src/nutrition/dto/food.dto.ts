@@ -1,4 +1,14 @@
-import { IsInt, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { MealType } from '@prisma/client';
+import {
+  IsEnum,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class SearchFoodDto {
@@ -16,6 +26,20 @@ export class SearchFoodDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  limit?: number;
+}
+
+export class ListFoodShortcutsDto {
+  /** Refeição sendo registrada: o que costuma ir nela sobe na lista. */
+  @IsOptional()
+  @IsEnum(MealType)
+  mealType?: MealType;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(30)
   limit?: number;
 }
 
