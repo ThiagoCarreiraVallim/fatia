@@ -154,7 +154,7 @@ esconde a diferença é exatamente o que este documento existe para impedir.
 | PWA                   | App nativo          |     | Observação                                                                                                             |
 | --------------------- | ------------------- | :-: | ---------------------------------------------------------------------------------------------------------------------- |
 | `layout/bottom-nav`   | `layout/bottom-nav` | ⚠️  | 5 destinos nos dois, mas o PWA trocou Perfil por Chat (#250); o nativo ainda leva ao Perfil — a épica #247 é só do PWA |
-| `layout/top-bar`      | `layout/top-bar`    | ✅  | ganha seta de voltar — no navegador ela é do navegador                                                                 |
+| —                     | `layout/top-bar`    | ✅  | só a barra de voltar das telas internas; o PWA não tem barra no topo (a seta é do navegador)                           |
 | `ui/button`           | `ui/button`         | ✅  | todos os tamanhos com 44pt mínimos                                                                                     |
 | `ui/card`             | `ui/card`           | ✅  |                                                                                                                        |
 | `ui/carousel` (embla) | `ui/carousel`       | ✅  | `FlatList` paginada                                                                                                    |

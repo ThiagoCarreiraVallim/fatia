@@ -44,11 +44,23 @@ describe('a caixa do chat cabe entre as duas barras', () => {
   it('o chat desconta a barra do topo E a de baixo', () => {
     const reservado = remDaClasse(layout, 'pt') + remDaClasse(layout, 'pb');
 
-    const altura = chat.match(/h-\[calc\(100dvh-([\d.]+)rem\)\]/);
+    const altura = chat.match(/h-\[calc\(100dvh-([\d.]+)rem[^\]]*\)\]/);
     expect(altura, 'ChatScreen precisa declarar a altura como calc(100dvh-Nrem)').not.toBeNull();
 
-    // O defeito original: 5 (só a barra de baixo) contra os 10 que o layout reserva.
+    // O defeito original: 5 (só a barra de baixo) contra os 10 que o layout reservava.
     expect(Number(altura![1])).toBe(reservado);
+  });
+
+  it('o chat desconta também as áreas seguras que o layout soma', () => {
+    // O wrapper do layout soma o notch e o indicador de home ao padding. Se o chat não os
+    // descontar, no iPhone a caixa volta a terminar embaixo da `bottom-nav`.
+    for (const lado of ['top', 'bottom'] as const) {
+      if (layout.includes(`env(safe-area-inset-${lado})`)) {
+        expect(chat).toMatch(
+          new RegExp(`h-\\[calc\\(100dvh-[^\\]]*env\\(safe-area-inset-${lado}\\)`),
+        );
+      }
+    }
   });
 
   it('a barra de baixo continua fixa e por cima — é o que torna o erro invisível', () => {

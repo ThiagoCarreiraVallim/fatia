@@ -31,6 +31,9 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
+  // Conteúdo até as bordas no PWA instalado; os paddings de área segura do
+  // layout `(app)` e da `bottom-nav` devolvem o espaço do notch e do indicador.
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

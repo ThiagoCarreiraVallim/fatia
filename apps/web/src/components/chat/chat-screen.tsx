@@ -44,13 +44,13 @@ export function ChatScreen() {
   return (
     <div
       /*
-        `10rem` = `pt-16` (4rem) + `pb-24` (6rem), o respiro que o layout de
-        `(app)` reserva para a barra do topo e a de baixo. Subtrair só a de baixo
-        faz a caixa terminar DENTRO da `bottom-nav`, que é `fixed` com `z-50`: o
-        campo fica visível e intocável (#255). `chat-cabe-na-tela.test.ts` amarra
-        este número ao do layout.
+        `7rem` = `pt-4` (1rem) + `pb-24` (6rem), o respiro que o `<main>` de
+        `(app)` reserva; mais as áreas seguras que o wrapper do layout soma.
+        Subtrair menos faz a caixa terminar DENTRO da `bottom-nav`, que é
+        `fixed` com `z-50`: o campo fica visível e intocável (#255).
+        `chat-cabe-na-tela.test.ts` amarra esta conta à do layout.
       */
-      className="flex h-[calc(100dvh-10rem)] flex-col"
+      className="flex h-[calc(100dvh-7rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] flex-col"
     >
       <header className="flex items-start justify-between gap-3 px-5 pb-2 pt-4">
         <div className="min-w-0">
