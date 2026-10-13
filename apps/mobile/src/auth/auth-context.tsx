@@ -40,10 +40,16 @@ const SCOPES = ['openid', 'offline_access'];
 
 export type AuthStatus = 'loading' | 'signedIn' | 'signedOut';
 
+/**
+ * Tela do Logto em que o login começa — o mesmo `first_screen` que o PWA manda
+ * por `/api/logto/sign-in?tela=…`. Ausente = tela de entrar.
+ */
+export type FirstScreen = 'register' | 'reset_password';
+
 interface AuthContextValue {
   status: AuthStatus;
   /** Abre o navegador do sistema e conclui o login. */
-  signIn(): Promise<void>;
+  signIn(firstScreen?: FirstScreen): Promise<void>;
   signOut(): Promise<void>;
   /** Token válido para a API, renovando se preciso. */
   getAccessToken(): Promise<string | null>;
@@ -98,62 +104,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [manager]);
 
-  const signIn = useCallback(async () => {
-    setError(null);
-    try {
-      const discovery = await endpoints();
-      const redirectUri = AuthSession.makeRedirectUri({ scheme: 'fatia', path: REDIRECT_PATH });
+  const signIn = useCallback(
+    async (firstScreen?: FirstScreen) => {
+      setError(null);
+      try {
+        const discovery = await endpoints();
+        const redirectUri = AuthSession.makeRedirectUri({ scheme: 'fatia', path: REDIRECT_PATH });
 
-      // No Expo Go o redirect NÃO é `fatia://auth/callback` — é um `exp://` com
-      // o IP da máquina, que muda de rede para rede. Se ele não estiver
-      // cadastrado no Logto, o login falha com `invalid_redirect_uri` e a
-      // mensagem não diz qual URI tentou. Imprimir aqui é o caminho mais curto
-      // entre o erro e a linha a colar no console do Logto.
-      if (__DEV__) console.log('[auth] redirect_uri:', redirectUri);
+        // No Expo Go o redirect NÃO é `fatia://auth/callback` — é um `exp://` com
+        // o IP da máquina, que muda de rede para rede. Se ele não estiver
+        // cadastrado no Logto, o login falha com `invalid_redirect_uri` e a
+        // mensagem não diz qual URI tentou. Imprimir aqui é o caminho mais curto
+        // entre o erro e a linha a colar no console do Logto.
+        if (__DEV__) console.log('[auth] redirect_uri:', redirectUri);
 
-      const request = new AuthSession.AuthRequest({
-        clientId: env.logtoAppId,
-        redirectUri,
-        scopes: SCOPES,
-        usePKCE: true,
-        codeChallengeMethod: AuthSession.CodeChallengeMethod.S256,
-        // RFC 8707: sem isto o Logto emite um token opaco de userinfo em vez de
-        // um JWT com a audience da API, e toda chamada volta 401.
-        extraParams: { resource: env.logtoAudience },
-      });
+        const request = new AuthSession.AuthRequest({
+          clientId: env.logtoAppId,
+          redirectUri,
+          scopes: SCOPES,
+          usePKCE: true,
+          codeChallengeMethod: AuthSession.CodeChallengeMethod.S256,
+          // RFC 8707: sem isto o Logto emite um token opaco de userinfo em vez de
+          // um JWT com a audience da API, e toda chamada volta 401.
+          extraParams: {
+            resource: env.logtoAudience,
+            ...(firstScreen ? { first_screen: firstScreen } : {}),
+          },
+        });
 
-      // `promptAsync` usa ASWebAuthenticationSession no iOS e Custom Tabs no
-      // Android — o navegador do sistema, com os cookies e o gerenciador de
-      // senhas da pessoa. Nunca WebView embutida: dentro dela o app conseguiria
-      // ler o que foi digitado na tela de login.
-      const result = await request.promptAsync({
-        authorizationEndpoint: discovery.authorizationEndpoint,
-      });
+        // `promptAsync` usa ASWebAuthenticationSession no iOS e Custom Tabs no
+        // Android — o navegador do sistema, com os cookies e o gerenciador de
+        // senhas da pessoa. Nunca WebView embutida: dentro dela o app conseguiria
+        // ler o que foi digitado na tela de login.
+        const result = await request.promptAsync({
+          authorizationEndpoint: discovery.authorizationEndpoint,
+        });
 
-      if (result.type === 'dismiss' || result.type === 'cancel') return;
-      if (result.type !== 'success') {
-        setError(
-          result.type === 'error'
-            ? (result.error?.message ?? 'Falha ao autenticar')
-            : 'Falha ao autenticar',
-        );
-        return;
+        if (result.type === 'dismiss' || result.type === 'cancel') return;
+        if (result.type !== 'success') {
+          setError(
+            result.type === 'error'
+              ? (result.error?.message ?? 'Falha ao autenticar')
+              : 'Falha ao autenticar',
+          );
+          return;
+        }
+
+        const tokens = await exchangeCode(discovery.tokenEndpoint, {
+          clientId: env.logtoAppId,
+          code: result.params.code,
+          codeVerifier: request.codeVerifier ?? '',
+          redirectUri,
+          resource: env.logtoAudience,
+        });
+
+        await manager.adopt(toStoredSession(tokens, Date.now()));
+        setStatus('signedIn');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Falha ao autenticar');
       }
-
-      const tokens = await exchangeCode(discovery.tokenEndpoint, {
-        clientId: env.logtoAppId,
-        code: result.params.code,
-        codeVerifier: request.codeVerifier ?? '',
-        redirectUri,
-        resource: env.logtoAudience,
-      });
-
-      await manager.adopt(toStoredSession(tokens, Date.now()));
-      setStatus('signedIn');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao autenticar');
-    }
-  }, [manager]);
+    },
+    [manager],
+  );
 
   const signOut = useCallback(async () => {
     // Limpa o cofre primeiro. Se a chamada ao Logto falhar por rede, o token

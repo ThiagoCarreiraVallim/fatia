@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/auth/auth-context';
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
+import { Button } from '@/components/ui';
 import { missingEnvVars } from '@/env';
 
 /**
@@ -23,13 +23,17 @@ export default function LoginScreen() {
 
   return (
     <View className="flex-1 items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="items-center">
-          <CardTitle className="text-3xl">Fatia</CardTitle>
-          <CardDescription>Entre com sua conta Logto</CardDescription>
-        </CardHeader>
+      <View className="w-full max-w-sm gap-8">
+        <View className="items-center gap-2">
+          <Text accessibilityRole="header" className="text-4xl font-extrabold text-primary">
+            Fatia
+          </Text>
+          <Text className="text-center text-sm text-muted-foreground">
+            Seu diário de nutrição e treino — rápido de registrar, fácil de acompanhar.
+          </Text>
+        </View>
 
-        <CardContent className="gap-3">
+        <View className="gap-3">
           {missing.length > 0 ? (
             // Sem isto a tela seria um botão que não faz nada e um erro só
             // visível no console do Metro — o modo mais lento de descobrir que
@@ -42,9 +46,26 @@ export default function LoginScreen() {
               </Text>
             </View>
           ) : (
-            <Button onPress={() => void signIn()} loading={status === 'loading'}>
-              Entrar
-            </Button>
+            <>
+              <Button size="lg" onPress={() => void signIn()} loading={status === 'loading'}>
+                Entrar
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                onPress={() => void signIn('register')}
+                disabled={status === 'loading'}
+              >
+                Criar conta grátis
+              </Button>
+              <Button
+                variant="link"
+                onPress={() => void signIn('reset_password')}
+                disabled={status === 'loading'}
+              >
+                Esqueci minha senha
+              </Button>
+            </>
           )}
 
           {error ? (
@@ -52,12 +73,12 @@ export default function LoginScreen() {
               {error}
             </Text>
           ) : null}
+        </View>
 
-          <Text className="text-center text-xs text-muted-foreground">
-            A mesma conta funciona no Claude pelo conector MCP.
-          </Text>
-        </CardContent>
-      </Card>
+        <Text className="text-center text-xs text-muted-foreground">
+          A mesma conta funciona no seu assistente de IA pelo conector MCP.
+        </Text>
+      </View>
     </View>
   );
 }
