@@ -21,6 +21,7 @@ import { MemoryService } from '../../chat/memory/memory.service';
 import { GoalsService } from '../../goals/goals.service';
 import { FoodService } from '../../nutrition/food.service';
 import { FoodShortcutsService } from '../../nutrition/food-shortcuts.service';
+import { FoodPortionService } from '../../nutrition/food-portion.service';
 import { MealItemService } from '../../nutrition/meal-item.service';
 import { MealService } from '../../nutrition/meal.service';
 import { NutrientTargetService } from '../../nutrition/nutrient-target.service';
@@ -59,6 +60,7 @@ describe('isolamento entre usuários', () => {
   const meals = new MealService(prisma);
   const foods = new FoodService(prisma);
   const shortcuts = new FoodShortcutsService(prisma, foods);
+  const portions = new FoodPortionService(prisma, foods);
   const mealItems = new MealItemService(prisma, meals);
   const nutrientTargets = new NutrientTargetService(prisma);
   const userGoals = new UserGoalsService(prisma);
@@ -114,6 +116,9 @@ describe('isolamento entre usuários', () => {
     mealId: '',
     mealItemId: '',
     customFoodId: 0,
+    /** Alimento público (como um da TACO): os dois enxergam, cada um com a sua medida. */
+    publicFoodId: 0,
+    portionA: '',
     customExerciseId: 0,
     goalId: '',
     weightLogId: '',
@@ -269,6 +274,23 @@ describe('isolamento entre usuários', () => {
     owned.customFoodId = customFood.id;
     await shortcuts.setFavorite(owned.userA, customFood.id, true);
 
+    owned.publicFoodId = (
+      await prisma.food.create({
+        data: {
+          name: `${stamp}-publico`,
+          searchName: `${stamp}-publico`,
+          source: 'TACO',
+          kcalPer100g: 100,
+          proteinPer100g: 1,
+          carbsPer100g: 20,
+          fatPer100g: 1,
+        },
+      })
+    ).id;
+    owned.portionA = (
+      await portions.create(owned.userA, owned.publicFoodId, { label: 'concha de A', grams: 140 })
+    ).id;
+
     const meal = await meals.create(owned.userA, {
       mealType: MealType.LUNCH,
       eatenAt: `${TODAY}T12:00:00Z`,
@@ -372,6 +394,7 @@ describe('isolamento entre usuários', () => {
         },
       })
       .catch(() => undefined);
+    await prisma.food.deleteMany({ where: { id: owned.publicFoodId } }).catch(() => undefined);
     await prisma.exercise
       .deleteMany({ where: { id: owned.sharedExerciseId } })
       .catch(() => undefined);
@@ -474,6 +497,19 @@ describe('isolamento entre usuários', () => {
       expect(ids).not.toContain(owned.customFoodId);
     });
 
+    it('get_food e search_food não mostram a medida caseira do user-A', async () => {
+      // Sanidade: o dono vê a própria medida.
+      const deA = await foods.get(owned.userA, owned.publicFoodId);
+      expect(deA.portions.map((p) => p.id)).toContain(owned.portionA);
+
+      const deB = await foods.get(owned.userB, owned.publicFoodId);
+      expect(deB.portions.map((p) => p.id)).not.toContain(owned.portionA);
+      const busca = await foods.search(owned.userB, { q: 'publico' });
+      const doPublico = busca.find((food) => food.id === owned.publicFoodId);
+      expect(doPublico?.portions.map((p) => p.id)).not.toContain(owned.portionA);
+      await expect(portions.list(owned.userB, owned.publicFoodId)).resolves.toEqual([]);
+    });
+
     it('search_exercise não retorna o exercício custom do user-A', async () => {
       const found = await exercises.search(owned.userB, {});
       expect(found.map((exercise) => exercise.id)).not.toContain(owned.customExerciseId);
@@ -524,6 +560,27 @@ describe('isolamento entre usuários', () => {
       await expect(shortcuts.setFavorite(owned.userB, owned.customFoodId, true)).rejects.toThrow(
         NotFoundException,
       );
+    });
+
+    it('delete_food_portion recusa a medida de outro', async () => {
+      await expect(portions.remove(owned.userB, owned.portionA)).rejects.toThrow(NotFoundException);
+      await expect(prisma.foodPortion.count({ where: { id: owned.portionA } })).resolves.toBe(1);
+    });
+
+    it('log_meal recusa registrar com a medida de outro', async () => {
+      await expect(
+        meals.create(owned.userB, {
+          mealType: MealType.SNACK,
+          eatenAt: `${TODAY}T16:00:00Z`,
+          items: [{ foodId: owned.publicFoodId, portionId: owned.portionA, quantity: 1 }],
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('create_food_portion recusa o alimento custom de outro', async () => {
+      await expect(
+        portions.create(owned.userB, owned.customFoodId, { label: 'x', grams: 10 }),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('update_custom_exercise recusa', async () => {

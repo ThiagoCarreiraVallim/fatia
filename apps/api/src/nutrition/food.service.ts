@@ -3,6 +3,9 @@ import { FoodSource, type Food } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import type { CreateCustomFoodDto, SearchFoodDto, UpdateCustomFoodDto } from './dto/food.dto';
 import { normalizeSearchText, rankByRelevance } from '../common/search-text';
+import { includePortions, withPortionViews, type FoodWithPortions } from './helpers/portion';
+
+export type { FoodWithPortions } from './helpers/portion';
 
 @Injectable()
 export class FoodService {
@@ -20,7 +23,7 @@ export class FoodService {
    * de um termo real é pequeno, e o catálogo inteiro tem centenas de linhas, não
    * milhões.
    */
-  async search(userId: string, params: SearchFoodDto): Promise<Food[]> {
+  async search(userId: string, params: SearchFoodDto): Promise<FoodWithPortions[]> {
     const limit = Math.min(params.limit ?? 20, 50);
     const term = params.q ? normalizeSearchText(params.q) : '';
 
@@ -33,25 +36,28 @@ export class FoodService {
         ],
       },
       orderBy: [{ name: 'asc' }],
+      include: includePortions(userId),
       ...(term ? {} : { take: limit }),
     });
 
-    return term ? rankByRelevance(matches, term, (food) => food.name, limit) : matches;
+    const ranked = term ? rankByRelevance(matches, term, (food) => food.name, limit) : matches;
+    return ranked.map((food) => withPortionViews(food, userId));
   }
 
-  async get(userId: string, id: number): Promise<Food> {
+  async get(userId: string, id: number): Promise<FoodWithPortions> {
     const food = await this.prisma.food.findFirst({
       where: {
         id,
         OR: [{ createdByUserId: null }, { createdByUserId: userId }],
       },
+      include: includePortions(userId),
     });
     if (!food) throw new NotFoundException('Food not found');
-    return food;
+    return withPortionViews(food, userId);
   }
 
-  async createCustom(userId: string, dto: CreateCustomFoodDto): Promise<Food> {
-    return this.prisma.food.create({
+  async createCustom(userId: string, dto: CreateCustomFoodDto): Promise<FoodWithPortions> {
+    const food = await this.prisma.food.create({
       data: {
         name: dto.name,
         searchName: normalizeSearchText(dto.name),
@@ -62,8 +68,21 @@ export class FoodService {
         proteinPer100g: dto.proteinPer100g,
         carbsPer100g: dto.carbsPer100g,
         fatPer100g: dto.fatPer100g,
+        ...(dto.portions?.length
+          ? {
+              portions: {
+                create: dto.portions.map((p) => ({
+                  label: p.label.trim(),
+                  grams: p.grams,
+                  createdByUserId: userId,
+                })),
+              },
+            }
+          : {}),
       },
+      include: includePortions(userId),
     });
+    return withPortionViews(food, userId);
   }
 
   async updateCustom(userId: string, id: number, dto: UpdateCustomFoodDto): Promise<Food> {

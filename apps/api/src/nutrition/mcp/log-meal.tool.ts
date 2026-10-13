@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { MealType } from '@prisma/client';
 import { MealService } from '../meal.service';
+import { MAX_PORTION_QUANTITY, MIN_PORTION_QUANTITY } from '../dto/meal.dto';
 import {
   McpTool,
   type McpToolContext,
@@ -11,7 +12,9 @@ import {
 const itemSchema = z.object({
   foodId: z.number().int().optional(),
   foodName: z.string().optional(),
-  grams: z.number().min(0.1),
+  grams: z.number().min(0.1).optional(),
+  portionId: z.string().uuid().optional(),
+  quantity: z.number().min(MIN_PORTION_QUANTITY).max(MAX_PORTION_QUANTITY).optional(),
   kcal: z.number().min(0).optional(),
   proteinG: z.number().min(0).optional(),
   carbsG: z.number().min(0).optional(),
@@ -31,6 +34,7 @@ export class LogMealTool implements McpToolDef {
   readonly description =
     'Registra uma refeição com items. Cada item pode referenciar foodId (TACO/custom) ou ser livre (foodName + macros estimados). ' +
     'Exemplo (item do catálogo): {"mealType":"LUNCH","eatenAt":"2026-07-29T12:30:00-03:00","items":[{"foodId":312,"grams":150}]} ' +
+    'Em vez de grams, um item do catálogo aceita portionId + quantity (medidas em get_food). ' +
     'Exemplo (item livre): {"mealType":"SNACK","eatenAt":"2026-07-29T16:00:00-03:00","items":[{"foodName":"Pão de queijo","grams":80,"kcal":264,"proteinG":6.8,"carbsG":27.2,"fatG":14.4}]}';
   readonly inputSchema = {
     mealType: z

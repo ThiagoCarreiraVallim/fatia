@@ -9,12 +9,15 @@ import { PrismaService } from '../common/prisma.service';
 import { dayBoundsInTz } from '../progress/helpers/date-tz';
 import type { CreateMealDto, ListMealsDto, MealItemInputDto, UpdateMealDto } from './dto/meal.dto';
 import { calcMacrosFromFood, calcNutrientsFromFood, type ItemMacros } from './helpers/calc-macros';
+import { gramsFromPortion, visiblePortions } from './helpers/portion';
 
 interface ResolvedItem extends ItemMacros {
   foodId: number | null;
   foodName: string;
   groupId: number | null;
   grams: number;
+  portionLabel?: string;
+  portionQuantity?: number;
   nutrients?: Prisma.InputJsonValue;
 }
 
@@ -147,6 +150,20 @@ export class MealService {
     await this.prisma.meal.delete({ where: { id } });
   }
 
+  /** Medida visível do alimento, ou 404 — alheia e inexistente respondem igual. */
+  async resolvePortion(
+    userId: string,
+    foodId: number,
+    portionId: string,
+  ): Promise<{ id: string; label: string; grams: number }> {
+    const portion = await this.prisma.foodPortion.findFirst({
+      where: { id: portionId, foodId, ...visiblePortions(userId) },
+      select: { id: true, label: true, grams: true },
+    });
+    if (!portion) throw new NotFoundException(`Portion ${portionId} not found`);
+    return portion;
+  }
+
   private async assertOwner(userId: string, id: string) {
     const meal = await this.prisma.meal.findUnique({ where: { id }, select: { userId: true } });
     // Mesma resposta para "não existe" e "não é sua" (§IDs de docs/MCP.md).
@@ -168,17 +185,18 @@ export class MealService {
           },
         });
         if (!food) throw new NotFoundException(`Food ${item.foodId} not found`);
-        const macros = calcMacrosFromFood(food, item.grams);
+        const amount = await this.resolveAmount(userId, food.id, item);
+        const macros = calcMacrosFromFood(food, amount.grams);
         // Micros explícitos (estimativa do Claude/correção) vencem; senão deriva do
         // catálogo por regra de 3 — assim logar um alimento da TACO já preenche sódio
         // & cia. sem digitação (ADR 009).
         const nutrients =
-          sanitizeNutrients(item.nutrients) ?? calcNutrientsFromFood(food.nutrients, item.grams);
+          sanitizeNutrients(item.nutrients) ?? calcNutrientsFromFood(food.nutrients, amount.grams);
         result.push({
           foodId: food.id,
           foodName: item.foodName ?? food.name,
           groupId: item.groupId ?? food.groupId,
-          grams: item.grams,
+          ...amount,
           ...macros,
           nutrients,
         });
@@ -186,6 +204,12 @@ export class MealService {
         if (!item.foodName) {
           // Validação de input, não de autorização — mapeia para INVALID_INPUT.
           throw new BadRequestException('Item livre requer foodName');
+        }
+        if (item.portionId !== undefined) {
+          throw new BadRequestException('Medida caseira só vale para item com foodId');
+        }
+        if (item.grams === undefined) {
+          throw new BadRequestException('Item livre requer grams');
         }
         result.push({
           foodId: null,
@@ -201,5 +225,35 @@ export class MealService {
       }
     }
     return result;
+  }
+
+  /**
+   * Quantidade do item: gramas, ou medida caseira × quantidade. As duas juntas
+   * é ambíguo (qual vale?) e nenhuma é falta de dado — 400 nos dois casos.
+   * Com medida, devolve também o retrato de como foi digitado.
+   */
+  async resolveAmount(
+    userId: string,
+    foodId: number,
+    item: Pick<MealItemInputDto, 'grams' | 'portionId' | 'quantity'>,
+  ): Promise<{ grams: number; portionLabel?: string; portionQuantity?: number }> {
+    if (item.portionId === undefined) {
+      if (item.grams === undefined) {
+        throw new BadRequestException('Informe grams ou portionId + quantity');
+      }
+      return { grams: item.grams };
+    }
+    if (item.grams !== undefined) {
+      throw new BadRequestException('Use grams ou portionId + quantity, não os dois');
+    }
+    if (item.quantity === undefined) {
+      throw new BadRequestException('portionId requer quantity');
+    }
+    const portion = await this.resolvePortion(userId, foodId, item.portionId);
+    return {
+      grams: gramsFromPortion(portion.grams, item.quantity),
+      portionLabel: portion.label,
+      portionQuantity: item.quantity,
+    };
   }
 }

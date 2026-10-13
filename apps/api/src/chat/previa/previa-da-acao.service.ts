@@ -3,6 +3,7 @@ import { z, type ZodError } from 'zod';
 import { PrismaService } from '../../common/prisma.service';
 import { McpToolRegistry } from '../../mcp/mcp-tool.registry';
 import { TIPO_DA_REFEICAO } from '../../nutrition/mcp/list-meals.tool';
+import { gramsFromPortion, visiblePortions } from '../../nutrition/helpers/portion';
 import {
   CAMPOS,
   COMPOSTOS,
@@ -24,7 +25,8 @@ export type PreviaDaAcao =
   | { valida: true; linhas: LinhaDaPrevia[] }
   | { valida: false; linhas: LinhaDaPrevia[]; problema: string };
 
-const numero = (valor: number) => valor.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+const numero = (valor: number, casas = 1) =>
+  valor.toLocaleString('pt-BR', { maximumFractionDigits: casas });
 
 /**
  * O que uma escrita pausada vai fazer, em português de gente (ADR 022).
@@ -101,6 +103,20 @@ export class PreviaDaAcaoService {
 
   private async itemDeRefeicao(userId: string, item: Record<string, unknown>) {
     const gramas = typeof item.grams === 'number' ? `${numero(item.grams)} g de ` : '';
+    if (typeof item.foodId === 'number' && typeof item.portionId === 'string') {
+      // "2 × colher de sopa (50 g)": como a pessoa disse, e o peso que vai ser gravado.
+      const [nome, medida] = await Promise.all([
+        this.resolver('alimento', item.foodId, userId),
+        this.prisma.foodPortion.findFirst({
+          where: { id: item.portionId, foodId: item.foodId, ...visiblePortions(userId) },
+          select: { label: true, grams: true },
+        }),
+      ]);
+      if (nome === null || !medida) return null;
+      const vezes = typeof item.quantity === 'number' ? item.quantity : 1;
+      const total = numero(gramsFromPortion(medida.grams, vezes));
+      return `${numero(vezes, 2)} × ${medida.label} (${total} g) de ${nome}`;
+    }
     if (typeof item.foodId === 'number') {
       const nome = await this.resolver('alimento', item.foodId, userId);
       return nome === null ? null : `${gramas}${nome}`;
@@ -181,9 +197,12 @@ export class PreviaDaAcaoService {
       case 'itemDaRefeicao': {
         const item = await this.prisma.mealItem.findFirst({
           where: { id, meal: { userId } },
-          select: { foodName: true, grams: true },
+          select: { foodName: true, grams: true, portionLabel: true, portionQuantity: true },
         });
-        return item ? `${numero(item.grams)} g de ${item.foodName}` : null;
+        if (!item) return null;
+        return item.portionLabel && item.portionQuantity
+          ? `${numero(item.portionQuantity, 2)} × ${item.portionLabel} (${numero(item.grams)} g) de ${item.foodName}`
+          : `${numero(item.grams)} g de ${item.foodName}`;
       }
       case 'meta': {
         const meta = await this.prisma.goal.findFirst({
@@ -239,6 +258,13 @@ export class PreviaDaAcaoService {
           select: { setNumber: true, exercise: { select: { name: true } } },
         });
         return serie ? `${serie.exercise.name}, série ${serie.setNumber}` : null;
+      }
+      case 'medida': {
+        const medida = await this.prisma.foodPortion.findFirst({
+          where: { id, ...visiblePortions(userId) },
+          select: { label: true, grams: true, food: { select: { name: true } } },
+        });
+        return medida ? `${medida.label} (${numero(medida.grams)} g) de ${medida.food.name}` : null;
       }
       case 'exercicioDoPlano': {
         const doPlano = await this.prisma.workoutPlanExercise.findFirst({

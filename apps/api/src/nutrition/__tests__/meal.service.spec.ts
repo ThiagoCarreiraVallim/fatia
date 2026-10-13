@@ -5,6 +5,7 @@ import type { PrismaService } from '../../common/prisma.service';
 
 type MockPrisma = {
   food: { findFirst: jest.Mock };
+  foodPortion: { findFirst: jest.Mock };
   meal: {
     findUnique: jest.Mock;
     findFirst: jest.Mock;
@@ -17,6 +18,7 @@ type MockPrisma = {
 
 const makePrisma = (): MockPrisma => ({
   food: { findFirst: jest.fn() },
+  foodPortion: { findFirst: jest.fn() },
   meal: {
     findUnique: jest.fn(),
     findFirst: jest.fn(),
@@ -130,6 +132,78 @@ describe('MealService', () => {
 
       expect(prisma.food.findFirst).toHaveBeenCalledWith({
         where: { id: 1, OR: [{ createdByUserId: null }, { createdByUserId: userId }] },
+      });
+    });
+
+    describe('medida caseira (portionId + quantity)', () => {
+      const colher = { id: 'p1', label: 'colher de sopa', grams: 25 };
+
+      it('converte a medida em gramas e guarda o retrato de como foi digitado', async () => {
+        prisma.food.findFirst.mockResolvedValue(makeFood());
+        prisma.foodPortion.findFirst.mockResolvedValue(colher);
+
+        const [item] = await service.resolveItems(userId, [
+          { foodId: 1, portionId: 'p1', quantity: 2 },
+        ]);
+
+        expect(item).toMatchObject({
+          grams: 50,
+          kcal: 65,
+          portionLabel: 'colher de sopa',
+          portionQuantity: 2,
+        });
+      });
+
+      it('só aceita medida do próprio alimento, do catálogo ou da pessoa', async () => {
+        prisma.food.findFirst.mockResolvedValue(makeFood());
+        prisma.foodPortion.findFirst.mockResolvedValue(colher);
+
+        await service.resolveItems(userId, [{ foodId: 1, portionId: 'p1', quantity: 1 }]);
+
+        expect(prisma.foodPortion.findFirst.mock.calls[0][0].where).toEqual({
+          id: 'p1',
+          foodId: 1,
+          OR: [{ createdByUserId: null }, { createdByUserId: userId }],
+        });
+      });
+
+      it('medida alheia (ou de outro alimento) responde 404', async () => {
+        prisma.food.findFirst.mockResolvedValue(makeFood());
+        prisma.foodPortion.findFirst.mockResolvedValue(null);
+
+        await expect(
+          service.resolveItems(userId, [{ foodId: 1, portionId: 'p-de-B', quantity: 1 }]),
+        ).rejects.toThrow(NotFoundException);
+      });
+
+      it('gramas e medida juntas é ambíguo: 400', async () => {
+        prisma.food.findFirst.mockResolvedValue(makeFood());
+
+        await expect(
+          service.resolveItems(userId, [{ foodId: 1, grams: 80, portionId: 'p1', quantity: 2 }]),
+        ).rejects.toThrow(BadRequestException);
+      });
+
+      it('sem gramas e sem medida: 400', async () => {
+        prisma.food.findFirst.mockResolvedValue(makeFood());
+
+        await expect(service.resolveItems(userId, [{ foodId: 1 }])).rejects.toThrow(
+          BadRequestException,
+        );
+      });
+
+      it('medida sem quantidade: 400', async () => {
+        prisma.food.findFirst.mockResolvedValue(makeFood());
+
+        await expect(
+          service.resolveItems(userId, [{ foodId: 1, portionId: 'p1' }]),
+        ).rejects.toThrow(BadRequestException);
+      });
+
+      it('item livre não tem medida para apontar: 400', async () => {
+        await expect(
+          service.resolveItems(userId, [{ foodName: 'Pastel', portionId: 'p1', quantity: 1 }]),
+        ).rejects.toThrow(BadRequestException);
       });
     });
   });

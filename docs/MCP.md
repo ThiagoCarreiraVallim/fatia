@@ -104,8 +104,8 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **108 tools** declaram `false`, e é a resposta que
-pela Fatia** (visão, LLM, embedding). Hoje as **108 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **110 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **110 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -185,12 +185,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 108 tools): **83,9 k caracteres**
-hoje, dos quais **4.640 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 110 tools): **85,9 k caracteres**
+hoje, dos quais **4.745 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **87** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (67,8 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (69,5 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -262,6 +262,8 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `get_food`                   | R        |
 |                            | `list_my_foods`              | R        |
 |                            | `set_food_favorite`          | U        |
+|                            | `create_food_portion`        | C        |
+|                            | `delete_food_portion`        | D        |
 |                            | `create_custom_food`         | C        |
 |                            | `update_custom_food`         | U        |
 |                            | `delete_custom_food`         | D        |
@@ -350,8 +352,8 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `save_memory`                | C        |
 |                            | `forget_memory`              | D        |
 
-Total: **108 tools**. Cada uma documentada abaixo.
-Total: **108 tools**. Cada uma documentada abaixo.
+Total: **110 tools**. Cada uma documentada abaixo.
+Total: **110 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -576,8 +578,10 @@ Busca em TACO + alimentos custom do usuário.
     proteinPer100g: number;
     carbsPer100g: number;
     fatPer100g: number;
+    portions: FoodPortion[]; // medidas caseiras: catálogo + as do usuário
   }>;
 }
+// FoodPortion = { id: string; label: string; grams: number; mine: boolean }
 ```
 
 ### `get_food`
@@ -608,7 +612,14 @@ há tabela própria); itens livres, sem alimento do catálogo, não entram.
   favorites: FoodShortcut[]; // mais recente primeiro
   recent: FoodShortcut[];    // sem repetir favoritos
 }
-// FoodShortcut = Food & { lastGrams: number | null; timesEaten: number; favorite: boolean }
+// FoodShortcut = Food & {
+//   portions: FoodPortion[];
+//   lastGrams: number | null;
+//   lastPortionLabel: string | null;    // "colher de sopa", se da última vez foi em medida
+//   lastPortionQuantity: number | null; // 2
+//   timesEaten: number;
+//   favorite: boolean;
+// }
 ```
 
 ### `set_food_favorite`
@@ -618,6 +629,26 @@ outro usuário responde `NOT_FOUND`, como em `get_food`.
 
 **Input:** `{ id: number; favorite: boolean }`  
 **Output:** `{ id: number; favorite: boolean }`
+
+### `create_food_portion`
+
+Cria uma medida caseira do usuário num alimento que ele enxerga ("minha concha" = 140 g). O
+catálogo já traz medidas comuns para ~200 alimentos da TACO (`portions` em `search_food` e
+`get_food`); esta tool é para a medida que não está lá. Depois, registre com `portionId` +
+`quantity` em `log_meal`, `add_meal_item` ou `update_meal_item` — o servidor converte em gramas.
+Nome repetido no mesmo alimento responde `CONFLICT`.
+
+**Input:** `{ foodId: number; name: string; grams: number }`  
+**Output:** `FoodPortion`
+
+### `delete_food_portion`
+
+Remove uma medida criada pelo usuário (`mine: true`). As do catálogo e as de outros usuários
+respondem `NOT_FOUND`. Itens já registrados com ela não mudam: guardam as gramas e o nome da
+medida como estavam.
+
+**Input:** `{ id: string }`  
+**Output:** `{ deleted: string }`
 
 ### `create_custom_food`
 
@@ -633,6 +664,7 @@ Cria um alimento privado do usuário. Útil pra produtos industrializados ou rec
   proteinPer100g: number;
   carbsPer100g: number;
   fatPer100g: number;
+  portions?: Array<{ label: string; grams: number }>; // até 5, ex.: a porção do rótulo
 }
 ```
 
@@ -693,7 +725,9 @@ Cria uma refeição com seus itens em uma única chamada. Tool principal usada p
     | {
         // Item vinculado à TACO/Custom — servidor calcula macros
         foodId: number;
-        grams: number;
+        grams?: number;       // ou portionId + quantity, nunca os dois
+        portionId?: string;   // medida caseira (portions de get_food)
+        quantity?: number;    // 0.25 a 20 medidas; grams = medida × quantity
         foodName?: string;    // override opcional do snapshot
       }
     | {
@@ -848,6 +882,9 @@ Corrige um item já logado. **Caso de uso central:** "na verdade era 200g, não 
   itemId: string;
   // Para item vinculado a Food: basta atualizar grams; servidor recalcula macros
   grams?: number;
+  // ...ou a medida caseira: servidor converte em gramas e guarda "2 × colher de sopa"
+  portionId?: string;
+  quantity?: number;
   foodId?: number;          // permite trocar o food
   foodName?: string;
   // Para item livre: pode atualizar macros diretamente

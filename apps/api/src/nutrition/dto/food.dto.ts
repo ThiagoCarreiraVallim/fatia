@@ -1,5 +1,7 @@
 import { MealType } from '@prisma/client';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsEnum,
   IsInt,
   IsNumber,
@@ -8,6 +10,7 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -43,6 +46,18 @@ export class ListFoodShortcutsDto {
   limit?: number;
 }
 
+/** Medida caseira: "colher de sopa" = 25 g. */
+export class CreateFoodPortionDto {
+  @IsString()
+  @MaxLength(40)
+  label!: string;
+
+  @IsNumber()
+  @Min(0.1)
+  @Max(2000)
+  grams!: number;
+}
+
 export class CreateCustomFoodDto {
   @IsString()
   @MaxLength(160)
@@ -67,6 +82,14 @@ export class CreateCustomFoodDto {
   @IsNumber()
   @Min(0)
   fatPer100g!: number;
+
+  /** Medidas que já nascem com o alimento — a porção do rótulo, no scanner. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5)
+  @ValidateNested({ each: true })
+  @Type(() => CreateFoodPortionDto)
+  portions?: CreateFoodPortionDto[];
 }
 
 export class UpdateCustomFoodDto {

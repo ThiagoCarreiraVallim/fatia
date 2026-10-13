@@ -17,9 +17,17 @@ const food = (id: number, extra: Record<string, unknown> = {}) => ({
 });
 
 /** Item de refeição como o `findMany` devolve: mais recente primeiro. */
-const eaten = (foodId: number, grams: number, mealType: MealType, day: number) => ({
+const eaten = (
+  foodId: number,
+  grams: number,
+  mealType: MealType,
+  day: number,
+  portion: { portionLabel: string; portionQuantity: number } | null = null,
+) => ({
   foodId,
   grams,
+  portionLabel: portion?.portionLabel ?? null,
+  portionQuantity: portion?.portionQuantity ?? null,
   meal: { mealType, eatenAt: new Date(2026, 9, day, 12) },
 });
 
@@ -114,6 +122,56 @@ describe('FoodShortcutsService', () => {
         id: { in: [7] },
         OR: [{ createdByUserId: null }, { createdByUserId: userId }],
       });
+    });
+
+    it('lembra a medida da última vez, e traz as medidas do alimento', async () => {
+      prisma.mealItem.findMany.mockResolvedValue([
+        eaten(1, 50, MealType.LUNCH, 12, { portionLabel: 'colher de sopa', portionQuantity: 2 }),
+        eaten(1, 120, MealType.LUNCH, 10),
+        eaten(2, 80, MealType.LUNCH, 9),
+      ]);
+      prisma.food.findMany.mockResolvedValue([
+        food(1, {
+          portions: [{ id: 'p1', label: 'colher de sopa', grams: 25, createdByUserId: null }],
+        }),
+        food(2),
+      ]);
+
+      const { recent } = await service.list(userId, {});
+
+      expect(prisma.food.findMany.mock.calls[0][0].include.portions.where).toEqual({
+        OR: [{ createdByUserId: null }, { createdByUserId: userId }],
+      });
+      expect(recent[0]).toMatchObject({
+        id: 1,
+        lastGrams: 50,
+        lastPortionLabel: 'colher de sopa',
+        lastPortionQuantity: 2,
+        portions: [{ id: 'p1', label: 'colher de sopa', grams: 25, mine: false }],
+      });
+      expect(recent[1]).toMatchObject({
+        id: 2,
+        lastPortionLabel: null,
+        lastPortionQuantity: null,
+        portions: [],
+      });
+    });
+
+    it('favoritos também trazem as medidas visíveis', async () => {
+      prisma.favoriteFood.findMany.mockResolvedValue([
+        {
+          food: food(1, {
+            portions: [{ id: 'p2', label: 'minha', grams: 30, createdByUserId: userId }],
+          }),
+        },
+      ]);
+
+      const { favorites } = await service.list(userId, {});
+
+      expect(
+        prisma.favoriteFood.findMany.mock.calls[0][0].include.food.include.portions.where,
+      ).toEqual({ OR: [{ createdByUserId: null }, { createdByUserId: userId }] });
+      expect(favorites[0].portions).toEqual([{ id: 'p2', label: 'minha', grams: 30, mine: true }]);
     });
 
     it('respeita o limite de recentes', async () => {

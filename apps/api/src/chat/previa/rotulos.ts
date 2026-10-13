@@ -187,6 +187,11 @@ export const CAMPOS: Record<string, Campo> = {
   foodName: { rotulo: 'Alimento', formato: texto },
   favorite: { rotulo: 'Favorito', formato: simOuNao },
   grams: { rotulo: 'Quantidade', formato: comUnidade('g') },
+  // Duas casas: um quarto de colher (0,25) não pode virar "0,3".
+  quantity: {
+    rotulo: 'Quantas medidas',
+    formato: (valor) => (typeof valor === 'number' ? numero(valor, 2) : null),
+  },
   kcal: { rotulo: 'Calorias', formato: comUnidade('kcal', 0) },
   proteinG: { rotulo: 'Proteína', formato: comUnidade('g') },
   carbsG: { rotulo: 'Carboidrato', formato: comUnidade('g') },
@@ -302,6 +307,7 @@ export const IDS = {
   stepLogId: 'passos',
   setId: 'serie',
   planExerciseId: 'exercicioDoPlano',
+  portionId: 'medida',
 } as const;
 
 export type TipoDeRegistro = (typeof IDS)[keyof typeof IDS] | 'itemDaRefeicao' | 'agua';
@@ -331,6 +337,7 @@ export const ROTULO_DO_REGISTRO: Record<TipoDeRegistro, string> = {
   passos: 'Registro de passos',
   serie: 'Série',
   exercicioDoPlano: 'Exercício do plano',
+  medida: 'Medida',
   itemDaRefeicao: 'Item',
   agua: 'Registro de água',
 };

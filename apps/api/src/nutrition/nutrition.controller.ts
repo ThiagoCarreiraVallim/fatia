@@ -8,6 +8,7 @@ import {
   NotFoundException,
   Param,
   ParseIntPipe,
+  ParseUUIDPipe,
   Patch,
   Post,
   Put,
@@ -28,11 +29,13 @@ import { UserGoalsService } from './user-goals.service';
 import { NutrientTargetService } from './nutrient-target.service';
 import {
   CreateCustomFoodDto,
+  CreateFoodPortionDto,
   ListFoodShortcutsDto,
   SearchFoodDto,
   UpdateCustomFoodDto,
 } from './dto/food.dto';
 import { FoodShortcutsService } from './food-shortcuts.service';
+import { FoodPortionService } from './food-portion.service';
 import {
   CreateMealDto,
   ListMealsDto,
@@ -67,6 +70,7 @@ export class NutritionController {
     private readonly nutrientTargets: NutrientTargetService,
     private readonly recognition: MealRecognitionService,
     private readonly shortcuts: FoodShortcutsService,
+    private readonly portions: FoodPortionService,
   ) {}
 
   // -------- Reconhecimento por foto (#139) --------
@@ -143,6 +147,28 @@ export class NutritionController {
   @HttpCode(204)
   unfavoriteFood(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseIntPipe) id: number) {
     return this.shortcuts.setFavorite(user.id, id, false);
+  }
+
+  // -------- Medidas caseiras --------
+
+  @Get('foods/:id/portions')
+  listPortions(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseIntPipe) id: number) {
+    return this.portions.list(user.id, id);
+  }
+
+  @Post('foods/:id/portions')
+  createPortion(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateFoodPortionDto,
+  ) {
+    return this.portions.create(user.id, id, dto);
+  }
+
+  @Delete('portions/:id')
+  @HttpCode(204)
+  deletePortion(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseUUIDPipe) id: string) {
+    return this.portions.remove(user.id, id);
   }
 
   /**

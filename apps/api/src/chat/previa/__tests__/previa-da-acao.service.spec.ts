@@ -36,6 +36,8 @@ describe('PreviaDaAcaoService', () => {
   let outro = { id: '', timezone: TZ };
   let alimentoDoDono = 0;
   let metaDoOutro = '';
+  let medidaDoDono = '';
+  let medidaDoOutro = '';
 
   beforeAll(async () => {
     const stamp = `previa-${Date.now()}`;
@@ -62,6 +64,21 @@ describe('PreviaDaAcaoService', () => {
           carbsPer100g: 28,
           fatPer100g: 0.2,
         },
+      })
+    ).id;
+    medidaDoDono = (
+      await prisma.foodPortion.create({
+        data: {
+          foodId: alimentoDoDono,
+          label: 'colher de sopa',
+          grams: 25,
+          createdByUserId: dono.id,
+        },
+      })
+    ).id;
+    medidaDoOutro = (
+      await prisma.foodPortion.create({
+        data: { foodId: alimentoDoDono, label: 'concha', grams: 140, createdByUserId: outro.id },
       })
     ).id;
     metaDoOutro = (
@@ -104,6 +121,40 @@ describe('PreviaDaAcaoService', () => {
         { rotulo: 'Item', valor: '150 g de Arroz branco cozido' },
       ],
     });
+  });
+
+  it('item em medida caseira aparece como foi dito, com as gramas ao lado', async () => {
+    const previa = await previas.previa(
+      dono,
+      'log_meal',
+      {
+        mealType: 'LUNCH',
+        eatenAt: '2026-09-25T15:30:00.000Z',
+        items: [{ foodId: alimentoDoDono, portionId: medidaDoDono, quantity: 2 }],
+      },
+      AGORA,
+    );
+
+    expect(previa.linhas.at(-1)).toEqual({
+      rotulo: 'Item',
+      valor: '2 × colher de sopa (50 g) de Arroz branco cozido',
+    });
+  });
+
+  it('medida de outra conta não é lida: o resumo recusa', async () => {
+    const previa = await previas.previa(
+      dono,
+      'log_meal',
+      {
+        mealType: 'LUNCH',
+        eatenAt: '2026-09-25T15:30:00.000Z',
+        items: [{ foodId: alimentoDoDono, portionId: medidaDoOutro, quantity: 1 }],
+      },
+      AGORA,
+    );
+
+    expect(previa.valida).toBe(false);
+    expect(JSON.stringify(previa)).not.toContain('concha');
   });
 
   it('nada do resumo é código: nem id, nem enum, nem data ISO', async () => {

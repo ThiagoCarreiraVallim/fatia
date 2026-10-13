@@ -1,12 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import type { Food, MealType } from '@prisma/client';
+import type { MealType } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { FoodService } from './food.service';
+import { includePortions, withPortionViews, type FoodWithPortions } from './helpers/portion';
 
 /** Alimento da busca com o que a pessoa já fez com ele: o atalho que poupa digitar. */
-export type FoodShortcut = Food & {
+export type FoodShortcut = FoodWithPortions & {
   /** Gramagem da última vez — o valor que o drawer já sugere preenchido. */
   lastGrams: number | null;
+  /** Como foi digitado da última vez ("2 × colher de sopa"); nulos quando foi em gramas. */
+  lastPortionLabel: string | null;
+  lastPortionQuantity: number | null;
   timesEaten: number;
   favorite: boolean;
 };
@@ -26,6 +30,8 @@ const MAX_LIMIT = 30;
 interface Usage {
   foodId: number;
   lastGrams: number;
+  lastPortionLabel: string | null;
+  lastPortionQuantity: number | null;
   lastEatenAt: Date;
   timesEaten: number;
   timesAtMeal: number;
@@ -55,13 +61,19 @@ export class FoodShortcutsService {
     const [items, favoriteRows] = await Promise.all([
       this.prisma.mealItem.findMany({
         where: { foodId: { not: null }, meal: { userId, eatenAt: { gte: since } } },
-        select: { foodId: true, grams: true, meal: { select: { mealType: true, eatenAt: true } } },
+        select: {
+          foodId: true,
+          grams: true,
+          portionLabel: true,
+          portionQuantity: true,
+          meal: { select: { mealType: true, eatenAt: true } },
+        },
         orderBy: { meal: { eatenAt: 'desc' } },
         take: HISTORY_ITEMS,
       }),
       this.prisma.favoriteFood.findMany({
         where: { userId },
-        include: { food: true },
+        include: { food: { include: includePortions(userId) } },
         orderBy: { createdAt: 'desc' },
       }),
     ]);
@@ -80,6 +92,8 @@ export class FoodShortcutsService {
       usage.set(item.foodId, {
         foodId: item.foodId,
         lastGrams: item.grams,
+        lastPortionLabel: item.portionLabel,
+        lastPortionQuantity: item.portionQuantity,
         lastEatenAt: item.meal.eatenAt,
         timesEaten: 1,
         timesAtMeal: atMeal ? 1 : 0,
@@ -87,7 +101,9 @@ export class FoodShortcutsService {
     }
 
     const favoriteIds = new Set(favoriteRows.map((row) => row.food.id));
-    const favorites = favoriteRows.map((row) => withUsage(row.food, usage.get(row.food.id), true));
+    const favorites = favoriteRows.map((row) =>
+      withUsage(withPortionViews(row.food, userId), usage.get(row.food.id), true),
+    );
 
     // Pedindo para o café da manhã, o pão de sempre vem antes do jantar de ontem;
     // dentro do mesmo grupo, o mais recente primeiro.
@@ -109,8 +125,9 @@ export class FoodShortcutsService {
         id: { in: ranked.map((u) => u.foodId) },
         OR: [{ createdByUserId: null }, { createdByUserId: userId }],
       },
+      include: includePortions(userId),
     });
-    const byId = new Map(visible.map((f) => [f.id, f]));
+    const byId = new Map(visible.map((f) => [f.id, withPortionViews(f, userId)]));
 
     const recent: FoodShortcut[] = [];
     for (const u of ranked) {
@@ -137,10 +154,16 @@ export class FoodShortcutsService {
   }
 }
 
-function withUsage(food: Food, usage: Usage | undefined, favorite: boolean): FoodShortcut {
+function withUsage(
+  food: FoodWithPortions,
+  usage: Usage | undefined,
+  favorite: boolean,
+): FoodShortcut {
   return {
     ...food,
     lastGrams: usage?.lastGrams ?? null,
+    lastPortionLabel: usage?.lastPortionLabel ?? null,
+    lastPortionQuantity: usage?.lastPortionQuantity ?? null,
     timesEaten: usage?.timesEaten ?? 0,
     favorite,
   };

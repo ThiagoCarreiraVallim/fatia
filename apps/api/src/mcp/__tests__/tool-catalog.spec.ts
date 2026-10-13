@@ -67,7 +67,7 @@ const TOOL_COUNT_PATTERN = /\*{0,2}(\d+)\*{0,2}\s+(?:tools|ferramentas|ações)\
 const TOOL_COUNT_SLICES: ReadonlyArray<{ file: string; text: string; count: () => number }> = [
   {
     file: 'docs/SUBMISSION_CHECKLIST.md',
-    text: '`delete_*` (14 tools)',
+    text: '`delete_*` (15 tools)',
     count: () => tools.filter(({ tool }) => tool.name.startsWith('delete_')).length,
   },
   {
@@ -88,7 +88,7 @@ const TOOL_COUNT_SLICES: ReadonlyArray<{ file: string; text: string; count: () =
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '55 tools de escrita',
+    text: '57 tools de escrita',
     // As de escrita que ganharam exemplo na #111 — `delete_my_account` é isenta,
     // e é por isso que o número não é o total de tools de escrita.
     count: () =>
@@ -321,22 +321,22 @@ const payload = tools.reduce(
  * número; o caso abaixo confere as duas pontas, então nem o texto some nem o número derrapa.
  */
 const PAYLOAD_CLAIMS: ReadonlyArray<{ file: string; text: string; medido: () => string }> = [
-  { file: 'docs/MCP.md', text: '**83,9 k caracteres**', medido: () => emK(payload.cheio) },
-  { file: 'docs/MCP.md', text: '(67,8 k)', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP.md', text: '**85,9 k caracteres**', medido: () => emK(payload.cheio) },
+  { file: 'docs/MCP.md', text: '(69,5 k)', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP.md',
-    text: '**4.640 são os exemplos**',
+    text: '**4.745 são os exemplos**',
     medido: () => emMilhar(payload.exemplos),
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**83,9 k caracteres**',
+    text: '**85,9 k caracteres**',
     medido: () => emK(payload.cheio),
   },
-  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 67,8 k', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 69,5 k', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**4.640 caracteres**',
+    text: '**4.745 caracteres**',
     medido: () => emMilhar(payload.exemplos),
   },
 ];

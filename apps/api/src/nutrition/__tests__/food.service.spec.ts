@@ -104,6 +104,28 @@ describe('FoodService', () => {
       expect(where.AND[2]).toEqual({ groupId: 5 });
     });
 
+    it('traz as medidas visíveis de cada alimento, marcando as da pessoa', async () => {
+      prisma.food.findMany.mockResolvedValue([
+        makeFood({
+          portions: [
+            { id: 'p1', label: 'colher de sopa', grams: 25, createdByUserId: null },
+            { id: 'p2', label: 'minha concha', grams: 140, createdByUserId: userId },
+          ],
+        }),
+      ]);
+
+      const [food] = await service.search(userId, {});
+
+      expect(prisma.food.findMany.mock.calls[0][0].include.portions.where).toEqual({
+        OR: [{ createdByUserId: null }, { createdByUserId: userId }],
+      });
+      expect(food.portions).toEqual([
+        { id: 'p1', label: 'colher de sopa', grams: 25, mine: false },
+        { id: 'p2', label: 'minha concha', grams: 140, mine: true },
+      ]);
+      expect(food).not.toHaveProperty('portions.0.createdByUserId');
+    });
+
     it('caps limit at 50 (default 20)', async () => {
       prisma.food.findMany.mockResolvedValue([]);
 
@@ -122,6 +144,21 @@ describe('FoodService', () => {
       const result = await service.get(userId, 1);
 
       expect(result.id).toBe(1);
+    });
+
+    it('traz as medidas visíveis do alimento', async () => {
+      prisma.food.findFirst.mockResolvedValue(
+        makeFood({
+          portions: [{ id: 'p1', label: 'escumadeira', grams: 90, createdByUserId: null }],
+        }),
+      );
+
+      const result = await service.get(userId, 1);
+
+      expect(prisma.food.findFirst.mock.calls[0][0].include.portions.where).toEqual({
+        OR: [{ createdByUserId: null }, { createdByUserId: userId }],
+      });
+      expect(result.portions).toEqual([{ id: 'p1', label: 'escumadeira', grams: 90, mine: false }]);
     });
 
     it('throws NotFoundException when no row matches the ownership filter', async () => {
@@ -144,13 +181,39 @@ describe('FoodService', () => {
         fatPer100g: 12,
       });
 
-      expect(prisma.food.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          name: 'Grandma cake',
+      expect(prisma.food.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            name: 'Grandma cake',
+            source: FoodSource.CUSTOM,
+            createdByUserId: userId,
+          }),
+        }),
+      );
+    });
+
+    it('cria junto as medidas do rótulo, como da própria pessoa', async () => {
+      prisma.food.create.mockResolvedValue(
+        makeFood({
           source: FoodSource.CUSTOM,
           createdByUserId: userId,
+          portions: [{ id: 'p1', label: '1 barra (30 g)', grams: 30, createdByUserId: userId }],
         }),
+      );
+
+      const food = await service.createCustom(userId, {
+        name: 'Barra de cereal',
+        kcalPer100g: 380,
+        proteinPer100g: 6,
+        carbsPer100g: 70,
+        fatPer100g: 8,
+        portions: [{ label: ' 1 barra (30 g) ', grams: 30 }],
       });
+
+      expect(prisma.food.create.mock.calls[0][0].data.portions).toEqual({
+        create: [{ label: '1 barra (30 g)', grams: 30, createdByUserId: userId }],
+      });
+      expect(food.portions).toEqual([{ id: 'p1', label: '1 barra (30 g)', grams: 30, mine: true }]);
     });
   });
 
