@@ -14,7 +14,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
+  initialGrams,
   nutritionApi,
+  shortcutDetail,
+  withFavorite,
   type Food,
   type FoodShortcut,
   type FoodShortcuts,
@@ -125,15 +128,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
   const favorite = useMutation<void, Error, { food: Food; favorite: boolean }>({
     mutationFn: ({ food, favorite }) => nutritionApi.setFavorite(food.id, favorite),
     onMutate: ({ food, favorite }) => {
-      qc.setQueryData<FoodShortcuts>(myFoodsKey, (prev) => {
-        const base = prev ?? { favorites: [], recent: [] };
-        const others = base.favorites.filter((f) => f.id !== food.id);
-        const recentHit = base.recent.find((f) => f.id === food.id);
-        return {
-          favorites: favorite ? [asShortcut(food, recentHit, true), ...others] : others,
-          recent: base.recent.filter((f) => f.id !== food.id),
-        };
-      });
+      qc.setQueryData<FoodShortcuts>(myFoodsKey, (prev) => withFavorite(prev, food, favorite));
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ['nutrition', 'my-foods'] }),
   });
@@ -169,7 +164,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
   const pick = (food: Food, lastGrams: number | null = null) => {
     addItem.reset();
     setSelected(food);
-    setGrams(lastGrams ? String(Math.round(lastGrams)) : '100');
+    setGrams(initialGrams(lastGrams));
   };
 
   const preview = useMemo(() => {
@@ -445,11 +440,7 @@ function ShortcutSection({
             favorite={favoriteIds.has(food.id)}
             onPick={() => onPick(food, food.lastGrams)}
             onToggleFavorite={() => onToggleFavorite(food)}
-            detail={
-              food.lastGrams
-                ? `${Math.round(food.lastGrams)} g da última vez · ${Math.round(food.kcalPer100g)} kcal/100g`
-                : `${Math.round(food.kcalPer100g)} kcal/100g`
-            }
+            detail={shortcutDetail(food)}
           />
         ))}
       </ul>
@@ -515,15 +506,6 @@ function FavoriteButton({
       />
     </button>
   );
-}
-
-function asShortcut(food: Food, usage: FoodShortcut | undefined, favorite: boolean): FoodShortcut {
-  return {
-    ...food,
-    lastGrams: usage?.lastGrams ?? null,
-    timesEaten: usage?.timesEaten ?? 0,
-    favorite,
-  };
 }
 
 interface SelectedFoodPanelProps {

@@ -19,6 +19,7 @@ export {
 } from './http';
 
 export * from './chat';
+export * from './food-shortcuts';
 export * from './goals';
 export * from './nutrition';
 export * from './progress';
