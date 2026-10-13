@@ -33,6 +33,7 @@ type MockPrisma = {
   userGoals: { findUnique: jest.Mock };
   workoutSession: { findFirst: jest.Mock; findMany: jest.Mock; count: jest.Mock };
   weightLog: { findMany: jest.Mock };
+  workoutPlan: { findMany: jest.Mock };
 };
 
 /**
@@ -74,6 +75,7 @@ const makePrisma = (): MockPrisma => ({
   userGoals: { findUnique: jest.fn() },
   workoutSession: { findFirst: jest.fn(), findMany: jest.fn(), count: jest.fn() },
   weightLog: { findMany: jest.fn() },
+  workoutPlan: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const makeStepLogs = (): MockStepLogs => ({ getStepsForDate: jest.fn() });
@@ -290,6 +292,72 @@ describe('DashboardService', () => {
       const result = await service.today(ctx);
 
       expect(result.workout.plannedToday).toBeNull();
+    });
+
+    describe('nextPlan', () => {
+      const plano = (id: string, name: string, lastCompletedAt?: string) => ({
+        id,
+        name,
+        sessions: lastCompletedAt ? [{ completedAt: new Date(lastCompletedAt) }] : [],
+      });
+
+      beforeEach(() => {
+        prisma.meal.findMany.mockResolvedValue([]);
+        prisma.userGoals.findUnique.mockResolvedValue(null);
+        prisma.workoutSession.findFirst.mockResolvedValue(null);
+        weightLogs.getLatest.mockResolvedValue(null);
+        stepLogs.getStepsForDate.mockResolvedValue({ steps: 0, logCount: 0, sources: [] });
+      });
+
+      it('sugere o plano seguinte ao último treinado quando não há bloco', async () => {
+        // Antes o card dizia "Sem plano configurado" para quem tinha Push/Pull/Legs.
+        prisma.workoutPlan.findMany.mockResolvedValue([
+          plano('p1', 'Push', '2026-01-12T18:00:00Z'),
+          plano('p2', 'Pull', '2026-01-14T18:00:00Z'),
+          plano('p3', 'Legs', '2026-01-10T18:00:00Z'),
+        ]);
+
+        const result = await service.today(ctx);
+
+        expect(result.workout.nextPlan).toEqual({ planId: 'p3', name: 'Legs', source: 'ROTATION' });
+        expect(prisma.workoutPlan.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { userId: 'user-A' } }),
+        );
+      });
+
+      it('volta ao primeiro plano depois do último da rotação', async () => {
+        prisma.workoutPlan.findMany.mockResolvedValue([
+          plano('p1', 'Push', '2026-01-12T18:00:00Z'),
+          plano('p2', 'Pull', '2026-01-14T18:00:00Z'),
+        ]);
+
+        const result = await service.today(ctx);
+
+        expect(result.workout.nextPlan?.planId).toBe('p1');
+      });
+
+      it('sugere o primeiro plano de quem ainda não treinou nenhum', async () => {
+        prisma.workoutPlan.findMany.mockResolvedValue([plano('p1', 'Push'), plano('p2', 'Pull')]);
+
+        const result = await service.today(ctx);
+
+        expect(result.workout.nextPlan).toEqual({ planId: 'p1', name: 'Push', source: 'ROTATION' });
+      });
+
+      it('prefere o plano do bloco ativo à rotação', async () => {
+        trainingBlocks.getActive.mockResolvedValue({ planId: 'p9', planName: 'Força' });
+        prisma.workoutPlan.findMany.mockResolvedValue([plano('p1', 'Push')]);
+
+        const result = await service.today(ctx);
+
+        expect(result.workout.nextPlan).toEqual({ planId: 'p9', name: 'Força', source: 'BLOCK' });
+      });
+
+      it('é nulo sem bloco e sem planos', async () => {
+        const result = await service.today(ctx);
+
+        expect(result.workout.nextPlan).toBeNull();
+      });
     });
 
     it('mantém plannedToday nulo quando não há bloco ativo', async () => {

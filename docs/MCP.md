@@ -2167,6 +2167,8 @@ Resumo agregado pro Claude responder "como estou hoje?".
   };
   workout: {
     plannedToday: { planId: string; name: string } | null;
+    // Plano do bloco ativo ou, sem bloco, o seguinte ao último plano treinado
+    nextPlan: { planId: string; name: string; source: 'BLOCK' | 'ROTATION' } | null;
     sessionInProgress: { sessionId: string; startedAt: string } | null;
     completedToday: boolean;
   };

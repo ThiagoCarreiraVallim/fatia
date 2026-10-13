@@ -1,7 +1,8 @@
 'use client';
 
+import { useSyncExternalStore } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { progressApi } from '@fatia/api-client';
+import { greetingLine, progressApi, usersApi } from '@fatia/api-client';
 import { NutritionMacroCard } from '@/components/dashboard/nutrition-macro-card';
 import { NextWorkoutCard } from '@/components/dashboard/next-workout-card';
 import { QuickLogActions } from '@/components/dashboard/quick-log-actions';
@@ -9,15 +10,17 @@ import { StepsCard } from '@/components/dashboard/steps-card';
 import { StreakCard } from '@/components/dashboard/streak-card';
 import { WaterCard } from '@/components/dashboard/water-card';
 
-function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 6) return 'Boa madrugada';
-  if (h < 12) return 'Bom dia';
-  if (h < 18) return 'Boa tarde';
-  return 'Boa noite';
-}
+const noSubscription = () => () => undefined;
 
 export default function HomePage() {
+  const me = useQuery({ queryKey: ['users', 'me'], queryFn: () => usersApi.me() });
+  // A saudação depende da hora local: no servidor (UTC) sairia "Boa noite" para
+  // quem lê às 18h em São Paulo, e a hidratação quebrava. Só o cliente a calcula.
+  const greeting = useSyncExternalStore(
+    noSubscription,
+    () => greetingLine(me.data?.name),
+    () => null,
+  );
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard', 'today'],
     queryFn: () => progressApi.today(),
@@ -36,7 +39,7 @@ export default function HomePage() {
     <div className="space-y-5 px-5 pt-6 pb-4">
       {/* Welcome */}
       <section>
-        <h1 className="text-[18px] font-semibold text-foreground">{greeting()}, Atleta.</h1>
+        <h1 className="text-[18px] font-semibold text-foreground">{greeting ?? '\u00a0'}</h1>
         <p className="text-sm text-muted-foreground">Pronto para dominar o dia?</p>
       </section>
 

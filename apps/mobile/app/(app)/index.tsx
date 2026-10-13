@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Text, View } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { progressApi } from '@fatia/api-client';
+import { greetingLine, progressApi, usersApi } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { DrawerLayer, EmptyState, ErrorState, LoadingState } from '@/components/ui';
 import { LogStepsDrawer, LogWaterDrawer, LogWeightDrawer } from '@/components/progress';
@@ -12,7 +12,6 @@ import {
   StepsCard,
   StreakCard,
   WaterCard,
-  saudacao,
 } from '@/components/dashboard';
 
 /**
@@ -29,6 +28,7 @@ export default function DashboardScreen() {
   const [atualizando, setAtualizando] = useState(false);
   const queryClient = useQueryClient();
 
+  const eu = useQuery({ queryKey: ['users', 'me'], queryFn: () => usersApi.me() });
   const hoje = useQuery({
     queryKey: ['dashboard', 'today'],
     queryFn: () => progressApi.today(),
@@ -57,7 +57,7 @@ export default function DashboardScreen() {
         <View className="gap-5 px-5 pb-4 pt-2">
           <View>
             <Text accessibilityRole="header" className="text-[18px] font-semibold text-foreground">
-              {saudacao()}, Atleta.
+              {greetingLine(eu.data?.name)}
             </Text>
             <Text className="text-sm text-muted-foreground">Pronto para dominar o dia?</Text>
           </View>

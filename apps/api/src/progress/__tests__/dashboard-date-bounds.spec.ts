@@ -33,6 +33,7 @@ describe('DashboardService — fronteiras de dia e semana', () => {
         count: jest.fn().mockResolvedValue(0),
       },
       weightLog: { findMany: jest.fn().mockResolvedValue([]) },
+      workoutPlan: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const stepLogs = { getStepsForDate: jest.fn().mockResolvedValue({ steps: 0 }) };
     const weightLogs = { getLatest: jest.fn().mockResolvedValue(null) };

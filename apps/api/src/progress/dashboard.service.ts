@@ -41,6 +41,7 @@ export class DashboardService {
       waterToday,
       streak,
       activeBlock,
+      plans,
     ] = await Promise.all([
       this.prisma.meal.findMany({
         // `lt`, não `lte`: o `end` do `dayBoundsInTz` é a meia-noite do dia SEGUINTE, então
@@ -70,7 +71,28 @@ export class DashboardService {
       // ativo — ou com um bloco já vencido, que o `getActive` devolve como `null` —
       // o campo continua nulo e o card volta a dizer "treino livre".
       this.trainingBlocks.getActive(ctx),
+      // Rotação para quem tem planos mas não tem bloco: só a última sessão
+      // concluída de cada plano, para saber qual foi treinado por último.
+      this.prisma.workoutPlan.findMany({
+        where: { userId: ctx.userId },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          sessions: {
+            where: { completedAt: { not: null } },
+            orderBy: { completedAt: 'desc' },
+            take: 1,
+            select: { completedAt: true },
+          },
+        },
+      }),
     ]);
+
+    const plannedToday =
+      activeBlock?.planId && activeBlock.planName
+        ? { planId: activeBlock.planId, name: activeBlock.planName }
+        : null;
 
     const consumed = meals
       .flatMap((m) => m.items)
@@ -123,10 +145,13 @@ export class DashboardService {
         // Bloco sem plano (`planId` nulo) periodiza treino livre: não há nome de
         // plano para prometer, e prometer o do bloco levaria a pessoa a procurar
         // uma tela que não existe.
-        plannedToday:
-          activeBlock?.planId && activeBlock.planName
-            ? { planId: activeBlock.planId, name: activeBlock.planName }
-            : null,
+        plannedToday,
+        // O que o card de "próximo treino" oferece: o plano do bloco, ou, sem
+        // bloco, o seguinte ao último plano treinado. `plannedToday` continua
+        // sendo só o do bloco, porque é o que ele promete.
+        nextPlan: plannedToday
+          ? { ...plannedToday, source: 'BLOCK' as const }
+          : nextInRotation(plans),
         sessionInProgress,
         completedToday: !!completedSession,
       },
@@ -254,4 +279,31 @@ export class DashboardService {
       weight: { startKg, currentKg, deltaKg },
     };
   }
+}
+
+type PlanWithLastSession = {
+  id: string;
+  name: string;
+  sessions: Array<{ completedAt: Date | null }>;
+};
+
+/**
+ * O plano seguinte ao último treinado, em ordem de criação, voltando ao
+ * primeiro depois do último. Quem ainda não treinou nenhum começa pelo primeiro.
+ */
+export function nextInRotation(
+  plans: PlanWithLastSession[],
+): { planId: string; name: string; source: 'ROTATION' } | null {
+  if (plans.length === 0) return null;
+  let lastIdx = -1;
+  let lastAt = 0;
+  plans.forEach((plan, idx) => {
+    const at = plan.sessions[0]?.completedAt?.getTime() ?? 0;
+    if (at > lastAt) {
+      lastAt = at;
+      lastIdx = idx;
+    }
+  });
+  const next = plans[(lastIdx + 1) % plans.length];
+  return { planId: next.id, name: next.name, source: 'ROTATION' };
 }

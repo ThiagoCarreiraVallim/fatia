@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { Dumbbell, Play } from 'lucide-react-native';
-import type { TodaySummary } from '@fatia/api-client';
+import { nextWorkoutCopy, type TodaySummary } from '@fatia/api-client';
 import { horaDoDia } from './helpers';
 
 /**
@@ -13,35 +13,18 @@ import { horaDoDia } from './helpers';
  */
 export function NextWorkoutCard({ workout }: { workout: TodaySummary['workout'] }) {
   const router = useRouter();
-  const { plannedToday, sessionInProgress, completedToday } = workout;
-
-  const selo = completedToday
-    ? 'Treino concluído'
-    : sessionInProgress
-      ? 'Em andamento'
-      : 'Próximo treino';
-
-  const titulo = sessionInProgress
-    ? 'Retomar sessão'
-    : completedToday
-      ? 'Ver histórico'
-      : (plannedToday?.name ?? 'Treino livre');
-
-  const subtitulo = completedToday
-    ? 'Parabéns!'
-    : sessionInProgress
-      ? `Iniciado às ${horaDoDia(sessionInProgress.startedAt)}`
-      : plannedToday
-        ? 'Plano de treino'
-        : 'Sem plano configurado';
+  const {
+    badge: selo,
+    title: titulo,
+    subtitle: subtitulo,
+    href,
+  } = nextWorkoutCopy(workout, horaDoDia, { sessionHref: (id) => `/workout/session/${id}` });
 
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${selo}: ${titulo}. ${subtitulo}.`}
-      onPress={() =>
-        router.push(sessionInProgress ? `/workout/session/${sessionInProgress.id}` : '/workout')
-      }
+      onPress={() => router.push(href as Href)}
       className="overflow-hidden rounded-xl border border-border bg-card active:opacity-80"
     >
       <View className="h-24 w-full justify-end bg-muted p-4">

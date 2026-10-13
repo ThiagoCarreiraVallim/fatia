@@ -1,35 +1,15 @@
 import Link from 'next/link';
 import { Play } from 'lucide-react';
-import type { TodaySummary } from '@fatia/api-client';
+import { nextWorkoutCopy, type TodaySummary } from '@fatia/api-client';
 
 interface Props {
   workout: TodaySummary['workout'];
 }
 
 export function NextWorkoutCard({ workout }: Props) {
-  const { plannedToday, sessionInProgress, completedToday } = workout;
-
-  const href = sessionInProgress ? `/workout/session/${sessionInProgress.id}` : '/workout';
-
-  const badge = completedToday
-    ? 'Treino concluído'
-    : sessionInProgress
-      ? 'Em andamento'
-      : 'Próximo treino';
-
-  const title = sessionInProgress
-    ? 'Retomar sessão'
-    : completedToday
-      ? 'Ver histórico'
-      : (plannedToday?.name ?? 'Treino livre');
-
-  const subtitle = completedToday
-    ? 'Parabéns!'
-    : sessionInProgress
-      ? `Iniciado às ${new Date(sessionInProgress.startedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
-      : plannedToday
-        ? 'Plano de treino'
-        : 'Sem plano configurado';
+  const { badge, title, subtitle, href } = nextWorkoutCopy(workout, (iso) =>
+    new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+  );
 
   return (
     <Link href={href} className="block">
