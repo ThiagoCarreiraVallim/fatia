@@ -38,6 +38,7 @@ model User {
   customFoods     Food[]            @relation("UserCustomFoods")
   favoriteFoods   FavoriteFood[]
   foodPortions    FoodPortion[]
+  mealTemplates   MealTemplate[]
   customExercises Exercise[]        @relation("UserCustomExercises")
   nutrientTargets NutrientTarget[]
   achievements    UserAchievement[]
@@ -131,8 +132,9 @@ model FoodGroup {
   id   Int    @id @default(autoincrement())
   name String @unique // "cereais", "leguminosas", "carnes", "frutas", etc
 
-  foods     Food[]
-  mealItems MealItem[]
+  foods             Food[]
+  mealItems         MealItem[]
+  mealTemplateItems MealTemplateItem[]
 }
 
 model Food {
@@ -156,11 +158,12 @@ model Food {
   searchName      String     @default("")
   createdAt       DateTime   @default(now())
 
-  group       FoodGroup?     @relation(fields: [groupId], references: [id])
-  createdBy   User?          @relation("UserCustomFoods", fields: [createdByUserId], references: [id], onDelete: Cascade)
-  mealItems   MealItem[]
-  favoritedBy FavoriteFood[]
-  portions    FoodPortion[]
+  group         FoodGroup?         @relation(fields: [groupId], references: [id])
+  createdBy     User?              @relation("UserCustomFoods", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  mealItems     MealItem[]
+  favoritedBy   FavoriteFood[]
+  portions      FoodPortion[]
+  templateItems MealTemplateItem[]
 
   // Unicidade por (nome, source) só para públicos. Customs podem repetir nomes
   // entre usuários — unicidade real é (nome, source, createdByUserId).
@@ -257,6 +260,48 @@ model MealItem {
   group FoodGroup? @relation(fields: [groupId], references: [id])
 
   @@index([mealId])
+}
+
+// Refeição salva ("meu café de sempre"): registrada de novo em um toque. Guarda o
+// retrato dos itens como foram registrados, sem recalcular: o que a pessoa comeu
+// continua igual mesmo se o alimento personalizado for apagado depois.
+model MealTemplate {
+  id        String    @id @default(uuid())
+  userId    String
+  name      String
+  // Tipo sugerido ao registrar; null = quem registra escolhe.
+  mealType  MealType?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items MealTemplateItem[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model MealTemplateItem {
+  id              String  @id @default(uuid())
+  templateId      String
+  position        Int
+  foodId          Int?
+  groupId         Int?
+  foodName        String
+  grams           Float
+  kcal            Float
+  proteinG        Float
+  carbsG          Float
+  fatG            Float
+  nutrients       Json?
+  portionLabel    String?
+  portionQuantity Float?
+
+  template MealTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  food     Food?        @relation(fields: [foodId], references: [id], onDelete: SetNull)
+  group    FoodGroup?   @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  @@index([templateId])
 }
 
 // ============================================================

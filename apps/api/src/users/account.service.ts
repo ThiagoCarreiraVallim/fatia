@@ -50,6 +50,7 @@ export class AccountService {
       customFoods,
       favoriteFoods,
       foodPortions,
+      mealTemplates,
       customExercises,
       workoutPlans,
       workoutSessions,
@@ -91,6 +92,12 @@ export class AccountService {
           grams: true,
           createdAt: true,
         },
+        orderBy: { createdAt: 'asc' },
+      }),
+      // Refeições salvas, com o retrato dos itens.
+      this.prisma.mealTemplate.findMany({
+        where: { userId },
+        include: { items: { orderBy: { position: 'asc' } } },
         orderBy: { createdAt: 'asc' },
       }),
       this.prisma.exercise.findMany({
@@ -222,6 +229,7 @@ export class AccountService {
       customFoods,
       favoriteFoods,
       foodPortions,
+      mealTemplates,
       customExercises,
       workoutPlans,
       workoutSessions,
@@ -247,6 +255,7 @@ export class AccountService {
         customFoods: customFoods.length,
         favoriteFoods: favoriteFoods.length,
         foodPortions: foodPortions.length,
+        mealTemplates: mealTemplates.length,
         customExercises: customExercises.length,
         workoutPlans: workoutPlans.length,
         workoutSessions: workoutSessions.length,

@@ -27,6 +27,7 @@ const makePrisma = () => ({
   userMemory: { findMany: jest.fn().mockResolvedValue([]) },
   favoriteFood: { findMany: jest.fn().mockResolvedValue([]) },
   foodPortion: { findMany: jest.fn().mockResolvedValue([]) },
+  mealTemplate: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const SCHEMA = resolve(__dirname, '../../../../../packages/db/prisma/schema.prisma');
@@ -52,6 +53,7 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   customFoods: 'customFoods',
   favoriteFoods: 'favoriteFoods',
   foodPortions: 'foodPortions',
+  mealTemplates: 'mealTemplates',
   customExercises: 'customExercises',
   nutrientTargets: 'nutrientTargets',
   achievements: 'achievements',
