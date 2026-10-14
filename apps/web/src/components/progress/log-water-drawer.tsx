@@ -11,13 +11,17 @@ import {
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { progressApi, type WaterLog } from '@fatia/api-client';
+import { dayLabel, progressApi, type WaterLog } from '@fatia/api-client';
+import { hojeIso } from '@/lib/dias';
+import { LogDayField } from './log-day-field';
 import { LogHistory, type LogHistoryEntry } from './log-history';
 import { dayMonth, formatInteger, hourMinute } from './log-format';
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  /** Dia em que o drawer abre; sem ele, hoje. */
+  date?: string;
 }
 
 const PRESETS_ML = [250, 500, 750, 1000] as const;
@@ -29,7 +33,9 @@ const PRESETS_ML = [250, 500, 750, 1000] as const;
  */
 const HISTORY_DAYS = 7;
 
-export function LogWaterDrawer({ open, onClose }: Props) {
+export function LogWaterDrawer({ open, onClose, date }: Props) {
+  const today = hojeIso();
+  const [day, setDay] = useState(date ?? today);
   const [ml, setMl] = useState('');
   const [editing, setEditing] = useState<WaterLog | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -59,6 +65,7 @@ export function LogWaterDrawer({ open, onClose }: Props) {
 
   function resetAll() {
     clearForm();
+    setDay(date ?? hojeIso());
     save.reset();
     remove.reset();
   }
@@ -69,11 +76,17 @@ export function LogWaterDrawer({ open, onClose }: Props) {
       // spread condicional (`...(dto.date && { date: dto.date })`): campo
       // ausente não é escrito, então o registro fica no dia em que nasceu. O
       // default de "hoje" está no `create`, não no `update`.
-      id ? progressApi.updateWater(id, { ml: value }) : progressApi.createWater({ ml: value }),
+      // Hoje não manda `date`: o padrão do servidor é hoje no fuso do perfil.
+      id
+        ? progressApi.updateWater(id, { ml: value })
+        : progressApi.createWater({ ml: value, ...(day !== today ? { date: day } : {}) }),
     onSuccess: (_data, variables) => {
       invalidate();
       clearForm();
-      if (!variables.id) onClose();
+      if (!variables.id) {
+        setDay(date ?? hojeIso());
+        onClose();
+      }
     },
   });
 
@@ -122,10 +135,12 @@ export function LogWaterDrawer({ open, onClose }: Props) {
           <DrawerDescription>
             {editing
               ? `Corrigindo o registro de ${dayMonth(editing.date)}.`
-              : 'Cada log soma ao total do dia.'}
+              : `Cada registro soma ao total de ${dayLabel(day, today)}.`}
           </DrawerDescription>
         </DrawerHeader>
         <div className="my-3 space-y-4">
+          {/* Editar nunca muda o dia (ver `save`): o campo é só de registro novo. */}
+          {!editing && <LogDayField id="water-day" day={day} today={today} onChange={setDay} />}
           {/* Durante uma edição os atalhos sairiam do lugar: eles criam um
               registro novo, não alteram o que está sendo corrigido. */}
           {!editing && (
@@ -199,7 +214,9 @@ export function LogWaterDrawer({ open, onClose }: Props) {
                 ? 'Salvando…'
                 : editing
                   ? 'Salvar alteração'
-                  : 'Adicionar valor personalizado'}
+                  : day === today
+                    ? 'Adicionar valor personalizado'
+                    : `Adicionar em ${dayLabel(day, today)}`}
             </Button>
             {editing && (
               <Button variant="outline" className="w-full" onClick={resetAll}>

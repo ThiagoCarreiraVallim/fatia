@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
+import { shiftDay } from '@fatia/api-client';
+import { hojeIso } from '@/lib/dias';
 import { LogWeightDrawer } from '../log-weight-drawer';
 
 vi.mock('@/components/ui/drawer', () => {
@@ -237,5 +239,64 @@ describe('LogWeightDrawer', () => {
 
     expect(await screen.findByText('Peso inválido')).toBeInTheDocument();
     expect(createWeight).not.toHaveBeenCalled();
+  });
+
+  describe('dia da pesagem', () => {
+    it('hoje não manda `loggedAt`: o servidor usa agora', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      expect(screen.getByRole('button', { name: 'Próximo dia' })).toBeDisabled();
+      await user.type(screen.getByLabelText('Peso (kg)'), '77.7');
+      await user.click(screen.getByRole('button', { name: 'Salvar' }));
+
+      await waitFor(() => expect(createWeight).toHaveBeenCalledWith({ weightKg: 77.7 }));
+    });
+
+    it('dia passado vai ao meio-dia local, e o botão diz o dia', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+      const ontem = shiftDay(hojeIso(), -1);
+
+      await user.click(screen.getByRole('button', { name: 'Dia anterior' }));
+      expect(screen.getByText('A pesagem vai para ontem.')).toBeInTheDocument();
+      await user.type(screen.getByLabelText('Peso (kg)'), '77.7');
+      await user.click(screen.getByRole('button', { name: 'Salvar em ontem' }));
+
+      await waitFor(() =>
+        expect(createWeight).toHaveBeenCalledWith({
+          weightKg: 77.7,
+          loggedAt: new Date(`${ontem}T12:00:00`).toISOString(),
+        }),
+      );
+    });
+
+    it('dia digitado no futuro vira hoje', () => {
+      renderDrawer();
+
+      fireEvent.change(screen.getByLabelText('Dia'), { target: { value: '2999-01-01' } });
+
+      expect(screen.getByLabelText('Dia')).toHaveValue(hojeIso());
+      expect(screen.getByLabelText('Dia')).toHaveAttribute('max', hojeIso());
+    });
+
+    it('a lista mostra o dia local da pesagem, o mesmo do gráfico', async () => {
+      const original = process.env.TZ;
+      process.env.TZ = 'America/Sao_Paulo';
+      try {
+        // 21h30 de 18/05 em São Paulo; em UTC já é 19/05.
+        listWeights.mockResolvedValue({
+          logs: [{ id: 'w9', weightKg: 77.7, loggedAt: '2026-05-19T00:30:00.000Z', notes: null }],
+        });
+        renderDrawer();
+
+        expect(
+          await screen.findByRole('button', { name: 'Editar registro de 77,7 kg, 18 mai' }),
+        ).toBeInTheDocument();
+      } finally {
+        if (original === undefined) delete process.env.TZ;
+        else process.env.TZ = original;
+      }
+    });
   });
 });

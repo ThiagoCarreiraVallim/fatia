@@ -11,19 +11,24 @@ import {
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { progressApi, type StepLog } from '@fatia/api-client';
+import { dayLabel, progressApi, type StepLog } from '@fatia/api-client';
+import { hojeIso } from '@/lib/dias';
+import { LogDayField } from './log-day-field';
 import { LogHistory, type LogHistoryEntry } from './log-history';
 import { dayMonth, formatInteger } from './log-format';
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  /** Dia em que o drawer abre; sem ele, hoje. */
   date?: string;
 }
 
 const HISTORY_DAYS = 30;
 
 export function LogStepsDrawer({ open, onClose, date }: Props) {
+  const today = hojeIso();
+  const [day, setDay] = useState(date ?? today);
   const [steps, setSteps] = useState('');
   const [editing, setEditing] = useState<StepLog | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -58,6 +63,7 @@ export function LogStepsDrawer({ open, onClose, date }: Props) {
 
   function resetAll() {
     clearForm();
+    setDay(date ?? hojeIso());
     save.reset();
     remove.reset();
   }
@@ -69,11 +75,14 @@ export function LogStepsDrawer({ open, onClose, date }: Props) {
       // não move o registro para hoje.
       id
         ? progressApi.updateStep(id, { steps: value })
-        : progressApi.createStep({ steps: value, ...(date ? { date } : {}) }),
+        : progressApi.createStep({ steps: value, ...(day !== today ? { date: day } : {}) }),
     onSuccess: (_data, variables) => {
       invalidate();
       clearForm();
-      if (!variables.id) onClose();
+      if (!variables.id) {
+        setDay(date ?? hojeIso());
+        onClose();
+      }
     },
   });
 
@@ -129,6 +138,8 @@ export function LogStepsDrawer({ open, onClose, date }: Props) {
           </DrawerDescription>
         </DrawerHeader>
         <div className="my-3 space-y-4">
+          {/* Editar nunca muda o dia (ver `save`): o campo é só de registro novo. */}
+          {!editing && <LogDayField id="steps-day" day={day} today={today} onChange={setDay} />}
           <div className="space-y-1">
             <label htmlFor="steps" className="text-sm font-medium">
               Passos
@@ -176,7 +187,13 @@ export function LogStepsDrawer({ open, onClose, date }: Props) {
 
           <div className="space-y-2">
             <Button className="w-full" onClick={submit} disabled={save.isPending || !steps.trim()}>
-              {save.isPending ? 'Salvando…' : editing ? 'Salvar alteração' : 'Salvar'}
+              {save.isPending
+                ? 'Salvando…'
+                : editing
+                  ? 'Salvar alteração'
+                  : day === today
+                    ? 'Salvar'
+                    : `Salvar em ${dayLabel(day, today)}`}
             </Button>
             {editing && (
               <Button variant="outline" className="w-full" onClick={resetAll}>

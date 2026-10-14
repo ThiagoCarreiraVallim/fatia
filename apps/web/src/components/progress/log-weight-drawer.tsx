@@ -11,18 +11,24 @@ import {
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { progressApi, type WeightLog } from '@fatia/api-client';
+import { dayLabel, progressApi, type WeightLog } from '@fatia/api-client';
+import { hojeIso, instanteNoDia } from '@/lib/dias';
+import { LogDayField } from './log-day-field';
 import { LogHistory, type LogHistoryEntry } from './log-history';
-import { dayMonth, formatDecimal } from './log-format';
+import { formatDecimal, instantDayMonth } from './log-format';
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  /** Dia em que o drawer abre; sem ele, hoje. */
+  date?: string;
 }
 
 const HISTORY_DAYS = 30;
 
-export function LogWeightDrawer({ open, onClose }: Props) {
+export function LogWeightDrawer({ open, onClose, date }: Props) {
+  const today = hojeIso();
+  const [day, setDay] = useState(date ?? today);
   const [weight, setWeight] = useState('');
   const [editing, setEditing] = useState<WeightLog | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -63,6 +69,7 @@ export function LogWeightDrawer({ open, onClose }: Props) {
   /** Sai da edição e apaga também o erro da tentativa anterior. */
   function resetAll() {
     clearForm();
+    setDay(date ?? hojeIso());
     save.reset();
     remove.reset();
   }
@@ -72,13 +79,22 @@ export function LogWeightDrawer({ open, onClose }: Props) {
       // `updateWeight` não manda `loggedAt`, e o service só escreve a data
       // quando ela vem no payload (spread condicional em
       // `weight-log.service.ts`). Corrigir o número preserva o dia da pesagem.
-      id ? progressApi.updateWeight(id, { weightKg }) : progressApi.createWeight({ weightKg }),
+      // Em dia passado vai meio-dia local (`instanteNoDia`); hoje, o servidor usa agora.
+      id
+        ? progressApi.updateWeight(id, { weightKg })
+        : progressApi.createWeight({
+            weightKg,
+            ...(day !== today ? { loggedAt: instanteNoDia(day) } : {}),
+          }),
     onSuccess: (_data, variables) => {
       invalidate();
       clearForm();
       // Criar fecha o drawer, como sempre foi. Editar mantém aberto: a lista
       // logo abaixo é a confirmação de que a correção pegou.
-      if (!variables.id) onClose();
+      if (!variables.id) {
+        setDay(date ?? hojeIso());
+        onClose();
+      }
     },
   });
 
@@ -106,7 +122,7 @@ export function LogWeightDrawer({ open, onClose }: Props) {
   const entries: LogHistoryEntry[] = (logs.data?.logs ?? []).map((log) => ({
     id: log.id,
     title: `${formatDecimal(log.weightKg)} kg`,
-    subtitle: dayMonth(log.loggedAt),
+    subtitle: instantDayMonth(log.loggedAt),
   }));
 
   const error = formError ?? (save.error as Error | null)?.message ?? null;
@@ -125,11 +141,15 @@ export function LogWeightDrawer({ open, onClose }: Props) {
           <DrawerTitle>{editing ? 'Editar peso' : 'Logar peso'}</DrawerTitle>
           <DrawerDescription>
             {editing
-              ? `Corrigindo a pesagem de ${dayMonth(editing.loggedAt)}.`
-              : 'Pesagem da manhã, em jejum, é o mais consistente.'}
+              ? `Corrigindo a pesagem de ${instantDayMonth(editing.loggedAt)}.`
+              : day === today
+                ? 'Pesagem da manhã, em jejum, é o mais consistente.'
+                : `A pesagem vai para ${dayLabel(day, today)}.`}
           </DrawerDescription>
         </DrawerHeader>
         <div className="my-3 space-y-4">
+          {/* Editar nunca muda o dia (ver `save`): o campo é só de registro novo. */}
+          {!editing && <LogDayField id="weight-day" day={day} today={today} onChange={setDay} />}
           <div className="space-y-1">
             <label htmlFor="weight-kg" className="text-sm font-medium">
               Peso (kg)
@@ -179,7 +199,13 @@ export function LogWeightDrawer({ open, onClose }: Props) {
 
           <div className="space-y-2">
             <Button className="w-full" onClick={submit} disabled={save.isPending}>
-              {save.isPending ? 'Salvando…' : editing ? 'Salvar alteração' : 'Salvar'}
+              {save.isPending
+                ? 'Salvando…'
+                : editing
+                  ? 'Salvar alteração'
+                  : day === today
+                    ? 'Salvar'
+                    : `Salvar em ${dayLabel(day, today)}`}
             </Button>
             {editing && (
               <Button variant="outline" className="w-full" onClick={resetAll}>

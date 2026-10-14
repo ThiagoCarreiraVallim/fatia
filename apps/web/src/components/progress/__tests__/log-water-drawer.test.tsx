@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
+import { shiftDay } from '@fatia/api-client';
+import { hojeIso } from '@/lib/dias';
 import { LogWaterDrawer } from '../log-water-drawer';
 
 vi.mock('@/components/ui/drawer', () => {
@@ -52,7 +54,7 @@ const LOGS = [
 const EDIT_250 = /^Editar registro de 250 mL, 17 mai/;
 const DELETE_250 = /^Apagar registro de 250 mL, 17 mai/;
 
-function renderDrawer() {
+function renderDrawer(props: Partial<Parameters<typeof LogWaterDrawer>[0]> = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -60,7 +62,7 @@ function renderDrawer() {
   const onClose = vi.fn();
   render(
     <QueryClientProvider client={client}>
-      <LogWaterDrawer open onClose={onClose} />
+      <LogWaterDrawer open onClose={onClose} {...props} />
     </QueryClientProvider>,
   );
   return { onClose, invalidateQueries };
@@ -118,7 +120,7 @@ describe('LogWaterDrawer', () => {
     const names = screen
       .getAllByRole('button')
       .map((button) => button.getAttribute('aria-label'))
-      .filter((name): name is string => name !== null);
+      .filter((name): name is string => name !== null && name.includes('registro'));
 
     expect(names).toHaveLength(6);
     expect(new Set(names).size).toBe(6);
@@ -195,5 +197,65 @@ describe('LogWaterDrawer', () => {
 
     expect(await screen.findByText('Falha ao apagar')).toBeInTheDocument();
     expect(screen.getByText('250 mL')).toBeInTheDocument();
+  });
+
+  describe('dia do registro', () => {
+    it('hoje não manda `date` e não deixa ir para amanhã', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      expect(screen.getByRole('button', { name: 'Próximo dia' })).toBeDisabled();
+      expect(screen.getByText('Cada registro soma ao total de hoje.')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: '+250 mL' }));
+
+      await waitFor(() => expect(createWater).toHaveBeenCalledWith({ ml: 250 }));
+    });
+
+    it('esqueceu ontem: a seta volta um dia e o atalho registra lá', async () => {
+      const user = userEvent.setup();
+      const { onClose } = renderDrawer();
+      const ontem = shiftDay(hojeIso(), -1);
+
+      await user.click(screen.getByRole('button', { name: 'Dia anterior' }));
+      expect(screen.getByLabelText('Dia')).toHaveValue(ontem);
+      expect(screen.getByText('Cada registro soma ao total de ontem.')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: '+500 mL' }));
+
+      await waitFor(() => expect(createWater).toHaveBeenCalledWith({ ml: 500, date: ontem }));
+      expect(onClose).toHaveBeenCalled();
+    });
+
+    it('volta para hoje depois de registrar, para a próxima abertura não herdar o dia', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.click(screen.getByRole('button', { name: 'Dia anterior' }));
+      await user.click(screen.getByRole('button', { name: '+250 mL' }));
+      await waitFor(() => expect(createWater).toHaveBeenCalledTimes(1));
+
+      expect(screen.getByLabelText('Dia')).toHaveValue(hojeIso());
+    });
+
+    it('valor personalizado diz para qual dia vai', async () => {
+      const user = userEvent.setup();
+      renderDrawer({ date: '2026-05-10' });
+
+      fireEvent.change(screen.getByLabelText('Dia'), { target: { value: '2026-05-09' } });
+      await user.type(screen.getByLabelText(/Quantidade personalizada/), '330');
+      await user.click(screen.getByRole('button', { name: 'Adicionar em sáb, 09/05' }));
+
+      await waitFor(() =>
+        expect(createWater).toHaveBeenCalledWith({ ml: 330, date: '2026-05-09' }),
+      );
+    });
+
+    it('editar esconde o dia: a correção não muda o registro de dia', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.click(await screen.findByRole('button', { name: EDIT_250 }));
+
+      expect(screen.queryByLabelText('Dia')).not.toBeInTheDocument();
+    });
   });
 });
