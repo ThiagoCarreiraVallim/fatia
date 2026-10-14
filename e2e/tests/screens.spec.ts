@@ -217,6 +217,54 @@ test.describe('alimento personalizado', () => {
   });
 });
 
+test.describe('código de barras', () => {
+  test('nutrição: leitor no drawer e produto lido', async ({ page }) => {
+    // Resposta fixa: a foto não depende do Open Food Facts estar no ar.
+    await page.route('**/api/proxy/nutrition/foods/barcode/**', (route) =>
+      route.fulfill({
+        json: {
+          status: 'ok',
+          product: {
+            barcode: '7891000100103',
+            name: 'Leite Condensado',
+            brand: 'Moça',
+            basis: '100g',
+            kcalPer100g: 325,
+            proteinPer100g: 7,
+            carbsPer100g: 55,
+            fatPer100g: 8,
+            servingSize: 20,
+            servingLabel: '20 g',
+          },
+          attribution: {
+            source: 'Open Food Facts',
+            license: 'ODbL 1.0',
+            url: 'https://world.openfoodfacts.org/product/7891000100103',
+          },
+        },
+      }),
+    );
+    await page.goto('/nutrition');
+    await settle(page);
+    const registrar = page.getByRole('button', { name: /^Registrar / }).first();
+    if (!(await appears(registrar))) return;
+    await registrar.click();
+    const drawer = page.getByRole('dialog');
+    await drawer.getByRole('button', { name: 'Ler código de barras' }).click();
+    // Sem câmera no navegador de teste: aparece o aviso, com o campo do código.
+    await drawer.getByLabel('Digitar o código').waitFor();
+    await settle(page);
+    await snap(page, '22-nutricao-ler-codigo', false);
+
+    await drawer.getByLabel('Digitar o código').fill('7891000100103');
+    await drawer.getByRole('button', { name: 'Buscar' }).click();
+    await drawer.getByText('Leite Condensado (Moça)').waitFor();
+    // Não adiciona: a foto não deixa refeição no demo.
+    await snap(page, '23-nutricao-produto-lido', false);
+    await page.keyboard.press('Escape');
+  });
+});
+
 test('login (sem sessão)', async ({ browser }, info) => {
   const context = await browser.newContext({
     ...info.project.use,

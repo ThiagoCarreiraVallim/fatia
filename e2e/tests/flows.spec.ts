@@ -272,6 +272,99 @@ test('alimento próprio: cria pela busca, registra por porção e apaga sem perd
   await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(0);
 });
 
+test('código de barras: lê pelo código digitado, guarda em Meus alimentos e registra a porção', async ({
+  page,
+}) => {
+  const dia = diasAtras(52);
+  const nome = `E2E Biscoito ${Date.now()}`;
+  // O Open Food Facts fica de fora: a resposta da API é fixa, com um nome único.
+  await page.route('**/api/proxy/nutrition/foods/barcode/**', (route) =>
+    route.fulfill({
+      json: {
+        status: 'ok',
+        product: {
+          barcode: '7890000000017',
+          name: nome,
+          brand: null,
+          basis: '100g',
+          kcalPer100g: 400,
+          proteinPer100g: 6,
+          carbsPer100g: 70,
+          fatPer100g: 10,
+          servingSize: 30,
+          servingLabel: '30 g',
+        },
+        attribution: {
+          source: 'Open Food Facts',
+          license: 'ODbL 1.0',
+          url: 'https://world.openfoodfacts.org/product/7890000000017',
+        },
+      },
+    }),
+  );
+
+  await page.goto(`/nutrition?date=${dia}`);
+  await page.getByRole('button', { name: 'Registrar Café da manhã' }).click();
+  const drawer = page.getByRole('dialog');
+  await drawer.getByRole('button', { name: 'Ler código de barras' }).click();
+  await drawer.getByLabel('Digitar o código').fill('7890000000017');
+  await drawer.getByRole('button', { name: 'Buscar' }).click();
+
+  await expect(drawer.getByText(nome)).toBeVisible();
+  await expect(drawer.getByRole('radio', { name: '1 porção (30 g)' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await expect(drawer.getByText('Total: 120 kcal · P 1,8 · C 21 · G 3')).toBeVisible();
+  await drawer.getByLabel('Guardar em Meus alimentos').check();
+  await drawer.getByRole('button', { name: /^adicionar$/i }).click();
+  await drawer.getByRole('button', { name: /^concluir · 1 item/i }).click();
+  await expect(drawer).toBeHidden();
+
+  // Guardado, o item entra ligado ao alimento, na medida "porção" do rótulo.
+  await expect(page.getByRole('button', { name: `Remover ${nome}` })).toBeVisible();
+  await expect(page.getByText(/porção \(30 g\) · 120 kcal/)).toBeVisible();
+
+  // E aparece em Meus alimentos — a próxima vez é pela busca.
+  await page.goto('/nutrition/foods');
+  await page.getByRole('button', { name: `Editar ${nome}` }).click();
+  await expect(page.getByLabel('Calorias (kcal)')).toHaveValue('400');
+  await page.getByRole('button', { name: 'Apagar alimento' }).click();
+  await page.getByRole('button', { name: 'Apagar', exact: true }).click();
+  await expect(page.getByRole('button', { name: `Editar ${nome}` })).toHaveCount(0);
+
+  await page.goto(`/nutrition?date=${dia}`);
+  await expect(page.getByRole('button', { name: `Remover ${nome}` })).toBeVisible();
+  await page.getByRole('button', { name: 'Remover refeição' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Remover' }).click();
+  await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Registrar Jantar' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(0);
+});
+
+test('código de barras desconhecido leva ao cadastro à mão', async ({ page }) => {
+  await page.route('**/api/proxy/nutrition/foods/barcode/**', (route) =>
+    route.fulfill({
+      status: 404,
+      json: { statusCode: 404, message: 'Barcode not found' },
+    }),
+  );
+
+  await page.goto(`/nutrition?date=${diasAtras(52)}`);
+  await page.getByRole('button', { name: 'Registrar Café da manhã' }).click();
+  const drawer = page.getByRole('dialog');
+  await drawer.getByRole('button', { name: 'Ler código de barras' }).click();
+  await drawer.getByLabel('Digitar o código').fill('7890000000024');
+  await drawer.getByRole('button', { name: 'Buscar' }).click();
+
+  await expect(drawer.getByRole('alert')).toHaveText(
+    'Esse código não está no Open Food Facts. Cadastre o produto pelo rótulo.',
+  );
+  await drawer.getByRole('button', { name: 'Cadastrar à mão' }).click();
+  await expect(drawer.getByLabel('Tamanho da porção (g)')).toBeVisible();
+});
+
 function escapeRegex(text: string) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
