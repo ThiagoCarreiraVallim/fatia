@@ -47,6 +47,74 @@ test('refeição lançada em dia passado fica naquele dia', async ({ page }) => 
   await expect(page.getByText(nome)).toHaveCount(0);
 });
 
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+/** "13 out", como a lista de registros recentes mostra o dia. */
+function diaMes(iso: string): string {
+  return `${iso.slice(8, 10)} ${MESES[Number(iso.slice(5, 7)) - 1]}`;
+}
+
+test('água, peso e passos registrados ontem ficam ontem', async ({ page }) => {
+  const ontem = diaMes(diasAtras(1));
+  const drawer = page.getByRole('dialog');
+  await page.goto('/');
+
+  /**
+   * Abre o drawer, volta um dia pela seta, registra e confere pela lista ao
+   * reabrir (o dia voltou a hoje); depois apaga pela própria lista, para não
+   * sujar o seed. O valor é incomum para não confundir com o do seed.
+   */
+  async function registrarOntem(opts: {
+    abrir: string | RegExp;
+    campo: string | RegExp;
+    valor: string;
+    salvar: string;
+    titulo: string;
+  }) {
+    await page.getByRole('button', { name: opts.abrir }).first().click();
+    await expect(drawer.getByRole('button', { name: 'Próximo dia' })).toBeDisabled();
+    await drawer.getByRole('button', { name: 'Dia anterior' }).click();
+    await expect(drawer.getByText('ontem', { exact: true })).toBeVisible();
+    await drawer.getByLabel(opts.campo).fill(opts.valor);
+    await drawer.getByRole('button', { name: opts.salvar }).click();
+    await expect(drawer).toHaveCount(0);
+
+    await page.getByRole('button', { name: opts.abrir }).first().click();
+    await expect(drawer.getByText('hoje', { exact: true })).toBeVisible();
+    // A água põe a hora depois do dia: o nome do botão continua após a data.
+    const linha = `${opts.titulo}, ${ontem}`;
+    const editar = drawer.getByRole('button', { name: `Editar registro de ${linha}` });
+    await expect(editar).toBeVisible();
+    await drawer.getByRole('button', { name: `Apagar registro de ${linha}` }).click();
+    await drawer.getByRole('button', { name: 'Apagar', exact: true }).click();
+    await expect(editar).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(drawer).toHaveCount(0);
+  }
+
+  await registrarOntem({
+    abrir: /log água/i,
+    campo: /quantidade personalizada/i,
+    valor: '333',
+    salvar: 'Adicionar em ontem',
+    titulo: '333 mL',
+  });
+  await registrarOntem({
+    abrir: /log peso/i,
+    campo: 'Peso (kg)',
+    valor: '77.7',
+    salvar: 'Salvar em ontem',
+    titulo: '77,7 kg',
+  });
+  await registrarOntem({
+    abrir: /logar passos/i,
+    campo: /^Passos$/,
+    valor: '4321',
+    salvar: 'Salvar em ontem',
+    titulo: '4.321 passos',
+  });
+});
+
 test('adicionar exercício no treino livre não registra série', async ({ page }) => {
   await page.goto('/workout');
   await page.getByRole('button', { name: 'INICIAR TREINO LIVRE' }).click();

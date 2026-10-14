@@ -114,6 +114,17 @@ test.describe('drawers de registro', () => {
     }
   });
 
+  test('dashboard: água em ontem', async ({ page }) => {
+    await page.goto('/');
+    await settle(page);
+    const button = page.getByRole('button', { name: /log água/i }).first();
+    if (!(await appears(button))) return;
+    await button.click();
+    // Só olha: volta um dia e fotografa, sem registrar nada.
+    await page.getByRole('dialog').getByRole('button', { name: 'Dia anterior' }).click();
+    await snap(page, '24-registrar-agua-ontem', false);
+  });
+
   test('nutrição: busca de alimento', async ({ page }) => {
     await page.goto('/nutrition');
     await settle(page);
