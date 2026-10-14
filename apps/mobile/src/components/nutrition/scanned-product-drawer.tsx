@@ -2,7 +2,15 @@ import { useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  baseUnit,
+  incompleteProductMessage,
+  mealItemFromProduct,
+  mealItemFromProductForm,
   nutritionApi,
+  productFormFromPartial,
+  productName,
+  productPreview,
+  servingOptions,
   type BarcodeLookup,
   type MealType,
   type OffAttribution,
@@ -18,16 +26,6 @@ import {
 } from '@/components/ui';
 import { DrawerInput } from './drawer-input';
 import { NUMEROS_TABULARES, instanteNoDia, mensagemDeErro, parsePositivo } from './helpers';
-import {
-  formularioAPartirDaFicha,
-  itemDeRefeicaoDoFormulario,
-  itemDeRefeicaoDoProduto,
-  mensagemDeFichaIncompleta,
-  nomeDoProduto,
-  opcoesDePorcao,
-  previaDoProduto,
-  unidadeDaBase,
-} from './barcode';
 
 /**
  * Confirmação do produto escaneado (#140).
@@ -116,7 +114,7 @@ export function ScannedProductDrawer({
             enviando={adicionar.isPending}
             erro={erro}
             onSubmit={(quantidade) =>
-              adicionar.mutate(itemDeRefeicaoDoProduto(resultado.product, quantidade))
+              adicionar.mutate(mealItemFromProduct(resultado.product, quantidade))
             }
           />
         ) : (
@@ -151,11 +149,11 @@ function PainelDoProduto({
   erro: string | undefined;
 }) {
   const { product } = resultado;
-  const opcoes = opcoesDePorcao(product);
-  const unidade = unidadeDaBase(product.basis);
-  const [quantidade, setQuantidade] = useState(String(opcoes[0].quantidade));
+  const opcoes = servingOptions(product);
+  const unidade = baseUnit(product.basis);
+  const [quantidade, setQuantidade] = useState(String(opcoes[0].amount));
 
-  const previa = previaDoProduto(product, quantidade);
+  const previa = productPreview(product, quantidade);
   const valor = parsePositivo(quantidade);
 
   return (
@@ -165,7 +163,7 @@ function PainelDoProduto({
       keyboardShouldPersistTaps="handled"
     >
       <View className="rounded-lg border border-border p-3">
-        <Text className="text-sm font-medium text-foreground">{nomeDoProduto(product)}</Text>
+        <Text className="text-sm font-medium text-foreground">{productName(product)}</Text>
         <Text style={NUMEROS_TABULARES} className="text-xs text-muted-foreground">
           {Math.round(product.kcalPer100g)} kcal/100 {unidade} · P
           {Math.round(product.proteinPer100g)} · C{Math.round(product.carbsPer100g)} · G
@@ -182,13 +180,13 @@ function PainelDoProduto({
       <View className="flex-row flex-wrap gap-2">
         {opcoes.map((opcao) => (
           <Pressable
-            key={opcao.rotulo}
+            key={opcao.label}
             accessibilityRole="button"
-            accessibilityLabel={opcao.rotulo}
-            onPress={() => setQuantidade(String(opcao.quantidade))}
+            accessibilityLabel={opcao.label}
+            onPress={() => setQuantidade(String(opcao.amount))}
             className="min-h-[44px] justify-center rounded-md border border-border px-3 active:bg-accent"
           >
-            <Text className="text-sm text-foreground">{opcao.rotulo}</Text>
+            <Text className="text-sm text-foreground">{opcao.label}</Text>
           </Pressable>
         ))}
       </View>
@@ -237,15 +235,15 @@ function PainelIncompleto({
   enviando: boolean;
   erro: string | undefined;
 }) {
-  const [valores, setValores] = useState(() => formularioAPartirDaFicha(resultado.partial));
-  const unidade = unidadeDaBase(resultado.partial.basis);
+  const [valores, setValores] = useState(() => productFormFromPartial(resultado.partial));
+  const unidade = baseUnit(resultado.partial.basis);
 
   const definir = (campo: keyof typeof valores) => (texto: string) =>
     setValores((anterior) => ({ ...anterior, [campo]: texto }));
 
   // Uma decisão só para habilitar o botão e para montar o payload: enquanto
   // faltar campo, não há item — e não há como o branco virar zero na API.
-  const item = itemDeRefeicaoDoFormulario(valores);
+  const item = mealItemFromProductForm(valores);
 
   return (
     <DrawerScrollView
@@ -254,7 +252,7 @@ function PainelIncompleto({
       keyboardShouldPersistTaps="handled"
     >
       <Text accessibilityRole="alert" className="text-sm text-[#facc15]">
-        {mensagemDeFichaIncompleta(resultado.missing)}
+        {incompleteProductMessage(resultado.missing)}
       </Text>
 
       {resultado.partial.basis === '100ml' ? (

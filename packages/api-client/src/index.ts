@@ -23,6 +23,7 @@ export * from './food-shortcuts';
 export * from './portions';
 export * from './meal-templates';
 export * from './custom-food';
+export * from './barcode';
 export * from './goals';
 export * from './nutrition';
 export * from './progress';

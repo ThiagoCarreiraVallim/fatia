@@ -2,25 +2,26 @@ import { useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
-import { nutritionApi, type BarcodeLookup, type MealType } from '@fatia/api-client';
+import {
+  canProcessScan,
+  lockAfterClose,
+  lookupErrorMessage,
+  nutritionApi,
+  type BarcodeLookup,
+  type MealType,
+  type ScanCloseReason,
+} from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { Button, DrawerLayer, LoadingState } from '@/components/ui';
 import { BarcodeCamera } from '@/components/nutrition/barcode-camera';
 import { ScannedProductDrawer } from '@/components/nutrition/scanned-product-drawer';
-import {
-  mensagemDeFalhaNaConsulta,
-  podeProcessarLeitura,
-  travaAposFechar,
-  type MotivoDoFechamento,
-} from '@/components/nutrition/barcode';
 import { hojeIso } from '@/components/nutrition/helpers';
 
 /**
  * Scanner de código de barras (#140).
  *
- * Só existe no app nativo: a leitura no navegador depende de `BarcodeDetector`,
- * que o Safari não tem. O PWA continua na busca por nome — ver
- * `docs/MOBILE_PARITY.md`.
+ * O PWA tem o seu leitor dentro do drawer de busca (`barcode-scanner.tsx`), com
+ * a mesma lógica de `@fatia/api-client` — ver `docs/MOBILE_PARITY.md`.
  *
  * O produto vem do Open Food Facts sob demanda e **não é gravado** no catálogo:
  * o que sai daqui é o número do código de barras, e nada do usuário (ADR 017).
@@ -52,20 +53,20 @@ export default function ScanScreen() {
     },
     onError: (erro) => {
       setResultado(null);
-      setFalha(mensagemDeFalhaNaConsulta(erro));
+      setFalha(lookupErrorMessage(erro));
     },
   });
 
   const aoLer = (codigo: string) => {
-    if (!podeProcessarLeitura(codigo, ultimoCodigo.current)) return;
+    if (!canProcessScan(codigo, ultimoCodigo.current)) return;
     ultimoCodigo.current = codigo;
     setDescartada(false);
     consultar.mutate(codigo);
   };
 
-  const fechar = (motivo: MotivoDoFechamento) => {
-    ultimoCodigo.current = travaAposFechar(ultimoCodigo.current, motivo);
-    setDescartada(motivo === 'descartada');
+  const fechar = (motivo: ScanCloseReason) => {
+    ultimoCodigo.current = lockAfterClose(ultimoCodigo.current, motivo);
+    setDescartada(motivo === 'dismissed');
     setResultado(null);
     setFalha(null);
     consultar.reset();
@@ -90,11 +91,7 @@ export default function ScanScreen() {
                   {falha}
                 </Text>
                 <View className="flex-row gap-2">
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onPress={() => fechar('nova-leitura')}
-                  >
+                  <Button variant="outline" className="flex-1" onPress={() => fechar('rescan')}>
                     Escanear de novo
                   </Button>
                   <Button
@@ -116,7 +113,7 @@ export default function ScanScreen() {
                 <Text className="text-center text-xs text-muted-foreground">
                   Leitura descartada. Aponte para outro produto ou toque abaixo.
                 </Text>
-                <Button variant="outline" onPress={() => fechar('nova-leitura')}>
+                <Button variant="outline" onPress={() => fechar('rescan')}>
                   Escanear de novo
                 </Button>
               </>
@@ -133,7 +130,7 @@ export default function ScanScreen() {
         {resultado ? (
           <ScannedProductDrawer
             open
-            onOpenChange={(aberto) => !aberto && fechar('descartada')}
+            onOpenChange={(aberto) => !aberto && fechar('dismissed')}
             resultado={resultado}
             mealId={mealId}
             mealType={mealType}
