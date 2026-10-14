@@ -221,6 +221,24 @@ describe('tool de intenção = sequência de pernas, sobre o mesmo seed', () => 
       expect((a.lastSession as unknown) !== null).toBe(true);
     });
 
+    it.each([
+      ['supino', 'supino reto'],
+      ['agachamento', 'agachamento livre'],
+    ])(
+      'get_exercise_insight resolve "%s" para o que a pessoa treinou, e não para o primeiro da busca',
+      async (pedido, treinado) => {
+        // "supino" tem dezenas de variações no catálogo, e o supino com barra da conta não está
+        // entre as cinco mais relevantes: conferir só essas devolvia uma máquina sem histórico, e
+        // o modelo respondia "você nunca fez supino".
+        const b = (await $(GetExerciseInsightTool, { exercise: pedido }, usuario)) as {
+          exercise: { id: number };
+          lastSession: unknown;
+        };
+        expect(b.exercise.id).toBe((await exercicioPeloNome(treinado)).id);
+        expect(b.lastSession).not.toBeNull();
+      },
+    );
+
     it('get_goals_overview', async () => {
       const b = await $(GetGoalsOverviewTool, {}, usuario);
       const achievements = (await $(ListAchievementsTool, {}, usuario)) as Array<{

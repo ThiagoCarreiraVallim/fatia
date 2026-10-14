@@ -191,4 +191,24 @@ describe('isolamento por usuário nas tools de intenção', () => {
     expect(vazamentos).toEqual([]);
     expect(await fotoDaContaA()).toEqual(antes);
   }, 120_000);
+
+  it('o histórico que escolhe o exercício pelo nome é só o de quem chama', async () => {
+    // O exercício é resolvido pelo que a pessoa já treinou. Quem nunca treinou — o profissional
+    // — não pode receber o supino que outra pessoa treinou só porque alguém o treinou.
+    type Insight = { exercise: { id: number }; lastSession: unknown };
+    const treinado = (await $(
+      GetExerciseInsightTool,
+      { exercise: 'supino' },
+      { userId: a.usuarioId, timezone: a.fuso },
+    )) as Insight;
+    expect(treinado.lastSession).not.toBeNull();
+
+    const semHistorico = (await $(
+      GetExerciseInsightTool,
+      { exercise: 'supino' },
+      { userId: b.profissionalId, timezone: b.fuso },
+    )) as Insight;
+    expect(semHistorico.lastSession).toBeNull();
+    expect(semHistorico.exercise.id).not.toBe(treinado.exercise.id);
+  });
 });

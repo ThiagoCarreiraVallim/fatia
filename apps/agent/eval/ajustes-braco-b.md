@@ -31,3 +31,7 @@ não da descrição: na conta de avaliação, "supino" resolve para **Supino Má
 Livre — a tool promete priorizar o que a pessoa já treinou. O modelo lê "sem histórico" e tenta outro
 nome ou outro `aspect`. Corrigir é lógica no `execute`, fora do que esta fase pode mudar, e o acerto
 de seleção não o enxerga: ele mede a tool chamada, e não a resposta.
+
+**Corrigido depois do congelamento**, por decisão de produto e antes de qualquer medição do `eval`:
+o resolvedor confere os 50 candidatos mais relevantes, e não os cinco. É defeito, e não ajuste — a
+descrição e o schema não mudaram, e o `sha256` do B continua `92bc0392…`.

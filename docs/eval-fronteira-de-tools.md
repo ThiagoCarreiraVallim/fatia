@@ -387,9 +387,13 @@ intencao` escolhe o recorte; ausente é `entidade`, e valor desconhecido é 400.
    `explain_form`) desceu para os services, com a saída delas gravada antes e conferida depois
    (`pernas-golden.spec.ts`) e o `tools/list` do A igual byte a byte. O que a tool de intenção faz a
    mais que a perna é a cola da lista acima — data relativa, nome no lugar de id, mescla parcial,
-   soma de escopos — e "nome" é resolvido pela busca da própria perna; o exercício, entre os cinco
-   mais relevantes, é o primeiro que a pessoa já treinou (`search_exercise` +
-   `get_last_set_for_exercise`).
+   soma de escopos — e "nome" é resolvido pela busca da própria perna; o exercício, entre os 50 mais
+   relevantes — o máximo do `search_exercise` —, é o primeiro que a pessoa já treinou
+   (`search_exercise` + `get_last_set_for_exercise`, com o histórico lido numa consulta só). Eram os
+   cinco mais relevantes, e "supino" tem dezenas de variações no catálogo: na conta de avaliação o
+   supino com barra ficava de fora, e a tool devolvia uma máquina sem histórico. O ajuste do `dev`
+   achou o defeito; ele foi corrigido depois do congelamento do B e antes de qualquer medição do
+   `eval`, e não muda o `tools/list` — o `sha256` do B é o mesmo.
 
    Conferido por quatro specs: `intencao-equivalencia.spec.ts` (cada tool de intenção devolve o
    mesmo que a sequência de pernas, sobre o mesmo seed da conta de avaliação — as escritas, cada
