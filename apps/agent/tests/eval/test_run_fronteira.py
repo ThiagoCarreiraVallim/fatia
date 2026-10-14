@@ -1,6 +1,7 @@
 """O runner do eval da fronteira, sem rede: `/mcp` e provedor são dublês do formato real."""
 
 import ast
+import dataclasses
 import functools
 import json
 from collections.abc import Awaitable, Callable, Sequence
@@ -11,7 +12,7 @@ import pytest
 
 from fatia_agent.chat import McpToolInfo
 from fatia_agent.eval.contas import ContaDeAvaliacao, TokensDeAvaliacao
-from fatia_agent.eval.fronteira_comparador import Execucao, UsoDaChamada
+from fatia_agent.eval.fronteira_comparador import Execucao, Preco, UsoDaChamada
 from fatia_agent.eval.fronteira_tarefas import Tarefa, carregar
 from fatia_agent.eval.run_fronteira import (
     HEADER_SUPERFICIE,
@@ -23,6 +24,7 @@ from fatia_agent.eval.run_fronteira import (
     executar,
     exigir_provedor_fixo,
     medir_catalogo,
+    preco_publicado,
     sha_do_catalogo,
 )
 from tests.chat.support import (
@@ -449,10 +451,11 @@ async def _executar_com(roteiro: list[list[dict[str, object]]]) -> Execucao:
     return execucao
 
 
-async def test_cada_chamada_ao_modelo_guarda_cache_e_raciocinio_como_vieram() -> None:
+async def test_cada_chamada_ao_modelo_guarda_cache_raciocinio_e_custo_como_vieram() -> None:
     detalhes = {
         "prompt_tokens_details": {"cached_tokens": 512},
         "completion_tokens_details": {"reasoning_tokens": 30},
+        "cost": 0.00021,
     }
     execucao = await _executar_com(
         [
@@ -471,7 +474,7 @@ async def test_cada_chamada_ao_modelo_guarda_cache_e_raciocinio_como_vieram() ->
     # A 1ª chamada não reportou: `None`, e não zero.
     assert execucao.usos == (
         UsoDaChamada(entrada=800, saida=40, cache=None, raciocinio=None),
-        UsoDaChamada(entrada=900, saida=50, cache=512, raciocinio=30),
+        UsoDaChamada(entrada=900, saida=50, cache=512, raciocinio=30, custo=0.00021),
     )
     assert execucao.tokens_cache is None
     assert execucao.tokens_entrada == 1700
@@ -525,6 +528,18 @@ async def test_erro_de_provedor_tenta_de_novo_e_vale_a_tentativa_que_deu_certo()
     # O que a tentativa perdida gastou fica registrado, fora das médias.
     assert execucao.tokens_entrada == 100
     assert (execucao.tokens_entrada_descartados, execucao.tokens_saida_descartados) == (300, 10)
+
+
+async def test_as_chamadas_da_tentativa_descartada_ficam_para_a_conta_em_dolar() -> None:
+    perdida = dataclasses.replace(
+        _execucao("AI_PROVIDER_TIMEOUT: lento", entrada=300),
+        usos=(UsoDaChamada(300, 10, 0, None, 0.0004),),
+    )
+    valeu = dataclasses.replace(_execucao(None), usos=(UsoDaChamada(100, 10, 0, None, 0.0001),))
+    uma, _ = _roteiro(perdida, valeu)
+    execucao, _ = await com_novas_tentativas(uma)
+    assert execucao.usos == valeu.usos
+    assert execucao.usos_descartados == perdida.usos
 
 
 async def test_depois_de_duas_novas_tentativas_a_execucao_fica_sem_dado() -> None:
@@ -665,3 +680,66 @@ async def test_mcp_fora_do_ar_no_meio_da_conversa_para_a_rodada() -> None:
 
     with pytest.raises(ConfiguracaoRecusada, match="MCP_UNREACHABLE"):
         await _rodada(_mcp_que_falha_em_search_food(cai))
+
+
+# --- preço publicado do provedor fixado -------------------------------------
+
+
+def _endpoints(*endpoints: dict[str, object]) -> httpx.MockTransport:
+    def responder(pedido: httpx.Request) -> httpx.Response:
+        assert pedido.url.path == "/api/v1/models/z-ai/glm-5.3-flash/endpoints"
+        return httpx.Response(200, json={"data": {"endpoints": list(endpoints)}})
+
+    return httpx.MockTransport(responder)
+
+
+def _endpoint(tag: str, entrada: str, saida: str, cache: str | None) -> dict[str, object]:
+    preco = {"prompt": entrada, "completion": saida}
+    if cache is not None:
+        preco["input_cache_read"] = cache
+    return {"tag": tag, "provider_name": tag, "pricing": preco}
+
+
+_FIXO = {"provider": {"order": ["z-ai"], "allow_fallbacks": False}}
+
+
+async def test_preco_e_o_do_provedor_fixado_em_dolar_por_milhao() -> None:
+    transporte = _endpoints(
+        _endpoint("deepinfra/fp4", "0.000000075", "0.00000025", "0.000000015"),
+        _endpoint("z-ai/fp8", "0.00000015", "0.0000005", "0.00000003"),
+    )
+    preco = await preco_publicado(
+        "https://openrouter.ai/api/v1", "z-ai/glm-5.3-flash", _FIXO, transport=transporte
+    )
+    assert preco is not None
+    assert (preco.entrada, preco.saida, preco.cache) == pytest.approx((0.15, 0.5, 0.03))
+    assert "z-ai/fp8" in preco.fonte
+
+
+async def test_sem_preco_de_cache_a_entrada_do_cache_custa_cheia() -> None:
+    transporte = _endpoints(_endpoint("z-ai", "0.00000015", "0.0000005", None))
+    preco = await preco_publicado(
+        "https://openrouter.ai/api/v1", "z-ai/glm-5.3-flash", _FIXO, transport=transporte
+    )
+    assert preco is not None and preco.cache == pytest.approx(0.15)
+
+
+async def test_preco_ambiguo_ausente_ou_fora_do_agregador_e_none() -> None:
+    url, modelo = "https://openrouter.ai/api/v1", "z-ai/glm-5.3-flash"
+    dois = _endpoints(
+        _endpoint("z-ai/fp8", "0.00000015", "0.0000005", None),
+        _endpoint("z-ai/fp4", "0.0000001", "0.0000004", None),
+    )
+    assert await preco_publicado(url, modelo, _FIXO, transport=dois) is None
+    outro = _endpoints(_endpoint("deepinfra/fp4", "0.000000075", "0.00000025", None))
+    assert await preco_publicado(url, modelo, _FIXO, transport=outro) is None
+    caiu = httpx.MockTransport(lambda _: httpx.Response(503))
+    assert await preco_publicado(url, modelo, _FIXO, transport=caiu) is None
+    # LM Studio: não há preço, e não se pergunta a ninguém.
+    assert await preco_publicado("http://localhost:1234/v1", modelo, {}) is None
+
+
+def test_preco_vai_e_volta_do_cabecalho() -> None:
+    preco = Preco(entrada=0.15, saida=0.5, cache=0.03, fonte="f")
+    assert Preco.de_json(dataclasses.asdict(preco)) == preco
+    assert Preco.de_json(None) is None

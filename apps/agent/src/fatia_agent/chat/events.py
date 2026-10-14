@@ -229,6 +229,7 @@ def usage(
     output_units: int | None,
     cached_input_units: int | None = None,
     reasoning_units: int | None = None,
+    cost_usd: float | None = None,
 ) -> ChatEvent:
     """O que uma chamada ao modelo consumiu, para a cota do `apps/api` (#135).
 
@@ -243,11 +244,13 @@ def usage(
     if output_units is not None:
         dados["outputUnits"] = output_units
     # Só informativos: o `leitor-do-turno.ts` lê `inputUnits` e `outputUnits`, que já os
-    # incluem, e ignora o resto. O runner do eval os lê para a conta de cache.
+    # incluem, e ignora o resto. O runner do eval os lê para a conta de cache e de custo.
     if cached_input_units is not None:
         dados["cachedInputUnits"] = cached_input_units
     if reasoning_units is not None:
         dados["reasoningUnits"] = reasoning_units
+    if cost_usd is not None:
+        dados["costUsd"] = cost_usd
     return ChatEvent("usage", dados)
 
 

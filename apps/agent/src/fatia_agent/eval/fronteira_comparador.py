@@ -82,6 +82,40 @@ class UsoDaChamada:
     """Tokens de entrada lidos do cache (`prompt_tokens_details.cached_tokens`)."""
     raciocinio: int | None = None
     """Tokens de saída de raciocínio (`completion_tokens_details.reasoning_tokens`)."""
+    custo: float | None = None
+    """O que o gateway cobrou pela chamada, em dólar (`usage.cost` do OpenRouter)."""
+
+
+@dataclass(frozen=True)
+class Preco:
+    """Preço publicado do provedor fixado, em dólar por milhão de tokens.
+
+    O runner o lê da OpenRouter no começo da rodada e o grava no cabeçalho. Serve para
+    duas contas: o custo da chamada que veio sem `usage.cost`, e o custo com o cache
+    zerado — toda a entrada a preço cheio —, que é o que mostra quanto o cache economizou.
+    """
+
+    entrada: float
+    saida: float
+    cache: float
+    """Entrada lida do cache."""
+    fonte: str = ""
+
+    @classmethod
+    def de_json(cls, bruto: Mapping[str, Any] | None) -> Preco | None:
+        return None if not bruto else cls(**bruto)
+
+    def da_chamada(self, uso: UsoDaChamada) -> float | None:
+        if uso.entrada is None or uso.saida is None:
+            return None
+        cache = uso.cache or 0
+        return (
+            (uso.entrada - cache) * self.entrada + cache * self.cache + uso.saida * self.saida
+        ) / 1e6
+
+    def desconto_do_cache(self, uso: UsoDaChamada) -> float:
+        """Quanto a entrada lida do cache deixou de custar nesta chamada."""
+        return (uso.cache or 0) * (self.entrada - self.cache) / 1e6
 
 
 @dataclass(frozen=True)
@@ -111,6 +145,8 @@ class Execucao:
     tokens_saida_descartados: int | None = 0
     """O que as tentativas descartadas gastaram. Entra no custo, e não nos tokens por execução:
     o que se compara entre braços é o que a execução que valeu gastou. `None`: não reportado."""
+    usos_descartados: tuple[UsoDaChamada, ...] = ()
+    """As chamadas das tentativas descartadas, para a conta em dólar."""
 
     @property
     def truncada(self) -> bool:
@@ -133,9 +169,14 @@ class Execucao:
 
     def como_json(self) -> dict[str, Any]:
         return {
-            **{k: v for k, v in self.__dict__.items() if k not in {"chamadas", "usos"}},
+            **{
+                k: v
+                for k, v in self.__dict__.items()
+                if k not in {"chamadas", "usos", "usos_descartados"}
+            },
             "chamadas": [c.__dict__ for c in self.chamadas],
             "usos": [u.__dict__ for u in self.usos],
+            "usos_descartados": [u.__dict__ for u in self.usos_descartados],
         }
 
     @classmethod
@@ -145,12 +186,23 @@ class Execucao:
                 **{
                     k: v
                     for k, v in bruto.items()
-                    if k not in {"chamadas", "motivos", "interceptadas", "usos", "erros_anteriores"}
+                    if k
+                    not in {
+                        "chamadas",
+                        "motivos",
+                        "interceptadas",
+                        "usos",
+                        "usos_descartados",
+                        "erros_anteriores",
+                    }
                 },
                 "chamadas": tuple(Chamada(**c) for c in bruto["chamadas"]),
                 "motivos": tuple(bruto["motivos"]),
                 "interceptadas": tuple(bruto.get("interceptadas") or ()),
                 "usos": tuple(UsoDaChamada(**u) for u in bruto.get("usos") or ()),
+                "usos_descartados": tuple(
+                    UsoDaChamada(**u) for u in bruto.get("usos_descartados") or ()
+                ),
                 "erros_anteriores": tuple(bruto.get("erros_anteriores") or ()),
             }
         )
@@ -383,6 +435,7 @@ class ResumoDoBraco:
     """Execuções com dado que pararam no limite de tokens (já contadas em `erros`)."""
     custo: TokensDeCusto | None = None
     nao_medidas: tuple[str, ...] = ()
+    dolares: Dolares | None = None
 
 
 @dataclass(frozen=True)
@@ -433,7 +486,65 @@ def medir_cache(execucoes: Sequence[Execucao]) -> Cache:
     return Cache(total, primeira, demais, reportadas, len(todos))
 
 
-def resumir(resultados: Sequence[ResultadoDaTarefa]) -> ResumoDoBraco:
+@dataclass(frozen=True)
+class Dolares:
+    """O custo em dólar de um conjunto de execuções, com as tentativas descartadas.
+
+    `total` é o que se pagou; `sem_cache` é a mesma conta com toda a entrada a preço cheio,
+    e a diferença é o que o cache economizou. `None` quando alguma chamada não tem como ser
+    contada — sem `usage.cost` e sem preço publicado —: um total parcial passaria por inteiro.
+    """
+
+    total: float | None
+    sem_cache: float | None
+    execucoes: int
+    chamadas: int
+    cobradas: int
+    """Chamadas com `usage.cost`. As demais, se houver preço, foram calculadas por ele."""
+    preco: Preco | None = None
+
+    def por_execucao(self, valor: float | None) -> float | None:
+        return None if valor is None or not self.execucoes else valor / self.execucoes
+
+    @property
+    def conta(self) -> str:
+        if self.total is None:
+            return "não reportado"
+        if self.cobradas == self.chamadas:
+            return "`usage.cost` da OpenRouter em todas as chamadas"
+        fonte = f" ({self.preco.fonte})" if self.preco and self.preco.fonte else ""
+        if self.cobradas == 0:
+            return f"preço publicado do provedor fixado{fonte}, com a entrada do cache à parte"
+        return (
+            f"`usage.cost` em {self.cobradas} de {self.chamadas} chamadas; as demais pelo "
+            f"preço publicado do provedor fixado{fonte}"
+        )
+
+
+def medir_dolares(execucoes: Sequence[Execucao], preco: Preco | None) -> Dolares:
+    """Tudo o que as execuções pagaram: as que valeram, as sem dado e as descartadas."""
+    usos = [u for e in execucoes for u in (*e.usos, *e.usos_descartados)]
+    total: float | None = 0.0
+    sem_cache: float | None = 0.0
+    for u in usos:
+        real = u.custo if u.custo is not None else preco.da_chamada(u) if preco else None
+        total = None if total is None or real is None else total + real
+        sem_cache = (
+            None
+            if sem_cache is None or real is None or preco is None
+            else sem_cache + real + preco.desconto_do_cache(u)
+        )
+    return Dolares(
+        total=total,
+        sem_cache=sem_cache,
+        execucoes=len(execucoes),
+        chamadas=len(usos),
+        cobradas=sum(u.custo is not None for u in usos),
+        preco=preco,
+    )
+
+
+def resumir(resultados: Sequence[ResultadoDaTarefa], preco: Preco | None = None) -> ResumoDoBraco:
     todas = [e for r in resultados for e in r.execucoes]
     # Execução sem dado não mediu o modelo: fica fora de toda média, como fica da maioria.
     execucoes = [e for e in todas if not e.sem_dado]
@@ -474,6 +585,7 @@ def resumir(resultados: Sequence[ResultadoDaTarefa]) -> ResumoDoBraco:
             descartadas=sum(len(e.erros_anteriores) for e in todas),
         ),
         nao_medidas=tuple(r.tarefa.id for r in resultados if not r.medida),
+        dolares=medir_dolares(todas, preco),
     )
 
 
@@ -608,6 +720,9 @@ class CabecalhoDaRodada:
     notas: list[str] = field(default_factory=list)
     superficie: str = "entidade"
     """O recorte do `/mcp`: `entidade` no A, `intencao` no B, e a escolhida no C."""
+    preco: dict[str, Any] | None = None
+    """O `Preco` publicado do provedor fixado, lido no começo da rodada. Fora da chave do
+    ledger: o preço muda sem que nada do que se mede mude."""
 
     def como_json(self) -> dict[str, Any]:
         return dict(self.__dict__)
@@ -664,6 +779,19 @@ def _custo(custo: TokensDeCusto | None) -> str:
     )
 
 
+def _usd(valor: float | None, casas: int = 4) -> str:
+    return "não reportado" if valor is None else f"US$ {_f(valor, casas)}"
+
+
+def _dolares(d: Dolares | None) -> str:
+    if d is None:
+        return "não reportado"
+    return (
+        f"{_usd(d.total)} total · {_usd(d.por_execucao(d.total), 5)} por execução · "
+        f"sem cache {_usd(d.sem_cache)} · conta: {d.conta}"
+    )
+
+
 def _fora_do_par(braco: str, modelo: str, tarefas: Sequence[str]) -> str:
     lista = ", ".join(f"`{t}`" for t in tarefas)
     return f"- {braco}, `{modelo}`: {len(tarefas)} tarefa(s) não medida(s)" + (
@@ -683,7 +811,8 @@ def _cache(cache: Cache | None) -> str:
 def markdown_do_braco(
     cab: CabecalhoDaRodada, resultados: Sequence[ResultadoDaTarefa], restritas: Iterable[str]
 ) -> str:
-    resumo = resumir(resultados)
+    preco = Preco.de_json(cab.preco)
+    resumo = resumir(resultados, preco)
     rascunho = motivo_de_rascunho(cab, resultados)
     restritas = set(restritas)
     linhas = [
@@ -722,9 +851,10 @@ def markdown_do_braco(
         f"| Execuções sem dado (erro de provedor) | {resumo.sem_dado}, depois de "
         f"{resumo.novas_tentativas} novas tentativas |",
         f"| Tokens para o custo | {_custo(resumo.custo)} |",
+        f"| Custo em dólar | {_dolares(resumo.dolares)} |",
         "",
-        "| Tarefa | Acertos / com dado | Piso | Chamadas (média) | Recusa? |",
-        "| --- | ---: | ---: | ---: | :---: |",
+        "| Tarefa | Acertos / com dado | Piso | Chamadas (média) | Custo por execução | Recusa? |",
+        "| --- | ---: | ---: | ---: | ---: | :---: |",
     ]
     for r in resultados:
         notas = r.com_dado
@@ -732,9 +862,11 @@ def markdown_do_braco(
         acertos = f"{sum(n.selecao for n in notas)}/{len(notas)}"
         if not r.medida:
             acertos += " (não medida)"
+        dolares = medir_dolares(r.execucoes, preco)
         linhas.append(
-            f"| `{r.tarefa.id}` | {acertos} | {r.piso} | "
-            f"{_f(media)} | {'sim' if espera_recusa(r.tarefa, r.braco, restritas) else ''} |"
+            f"| `{r.tarefa.id}` | {acertos} | {r.piso} | {_f(media)} | "
+            f"{_usd(dolares.por_execucao(dolares.total), 5)} | "
+            f"{'sim' if espera_recusa(r.tarefa, r.braco, restritas) else ''} |"
         )
     for nota in cab.notas:
         linhas += ["", f"> {nota}"]
@@ -760,7 +892,8 @@ def markdown_da_comparacao(
             problemas.append(f"braço {cab.braco}: {motivo}")
 
     cmp = comparar(a, b)
-    ra, rb = resumir(a), resumir(b)
+    ra, rb = resumir(a, Preco.de_json(cab_a.preco)), resumir(b, Preco.de_json(cab_b.preco))
+    da, db = ra.dolares, rb.dolares
     linhas = [
         f"# Eval da fronteira — A x B, `{cab_a.modelo}`",
         "",
@@ -789,6 +922,18 @@ def markdown_da_comparacao(
         f"| Execuções sem dado (erro de provedor) | {ra.sem_dado} | {rb.sem_dado} |",
         f"| Truncadas no limite de tokens | {ra.truncamentos} | {rb.truncamentos} |",
         f"| Tokens para o custo | {_custo(ra.custo)} | {_custo(rb.custo)} |",
+        f"| Custo real por execução | {_usd(da.por_execucao(da.total) if da else None, 5)} | "
+        f"{_usd(db.por_execucao(db.total) if db else None, 5)} |",
+        f"| Custo por execução com o cache zerado | "
+        f"{_usd(da.por_execucao(da.sem_cache) if da else None, 5)} | "
+        f"{_usd(db.por_execucao(db.sem_cache) if db else None, 5)} |",
+        f"| Custo real, total | {_usd(da.total if da else None)} | "
+        f"{_usd(db.total if db else None)} |",
+        f"| Custo com o cache zerado, total | {_usd(da.sem_cache if da else None)} | "
+        f"{_usd(db.sem_cache if db else None)} |",
+        "",
+        f"Conta do custo — A: {da.conta if da else 'não reportado'}; "
+        f"B: {db.conta if db else 'não reportado'}.",
         "",
         f"Discordantes: **{cmp.b}** em que só B acerta, **{cmp.c}** em que só A acerta, "
         f"de {cmp.tarefas} tarefas medidas nos dois braços. "
@@ -861,8 +1006,10 @@ __all__ = [
     "Chamada",
     "Comparacao",
     "ComparacaoDeArmadilhas",
+    "Dolares",
     "Execucao",
     "Nota",
+    "Preco",
     "ResultadoDaTarefa",
     "ResumoDoBraco",
     "TokensDeCusto",
@@ -878,6 +1025,7 @@ __all__ = [
     "markdown_das_armadilhas",
     "markdown_do_braco",
     "medir_cache",
+    "medir_dolares",
     "motivo_de_rascunho",
     "p_do_sinal",
     "resumir",

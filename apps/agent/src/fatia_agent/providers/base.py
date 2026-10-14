@@ -85,6 +85,10 @@ class Usage:
     # da saída foi raciocínio.
     cached_input_units: int | None = None
     reasoning_units: int | None = None
+    # O que o gateway cobrou pela chamada, em dólar (`usage.cost` do OpenRouter). O
+    # LM Studio não manda, e o `apps/api` continua calculando pela tabela de preço:
+    # isto é só para o eval.
+    cost_usd: float | None = None
 
 
 @dataclass(frozen=True)

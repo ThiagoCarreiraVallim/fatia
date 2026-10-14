@@ -379,6 +379,33 @@ async def test_cache_e_raciocinio_saem_dos_detalhes_do_usage(
     )
 
 
+@pytest.mark.parametrize(
+    ("usage_extra", "custo"),
+    [
+        ({"cost": 0.00042}, 0.00042),
+        # Zero cobrado é zero medido (modelo gratuito), e não "não sei".
+        ({"cost": 0}, 0.0),
+        ({}, None),
+        ({"cost": None}, None),
+        ({"cost": "0.00042"}, None),
+        ({"cost": True}, None),
+    ],
+)
+async def test_custo_sai_do_cost_do_usage(settings_factory, usage_extra, custo):
+    """`usage.cost` é o que o OpenRouter cobrou; o eval soma por tarefa."""
+    transport = ProviderRecordingTransport(
+        [[fragmento_de_texto("oi"), bloco_de_uso(detalhes=usage_extra)]]
+    )
+    provider = build_provider(settings_factory(), transport=transport)
+
+    pedacos = await coletar(provider, [{"role": "user", "content": "oi"}])
+    await provider.aclose()
+
+    (fim_do_turno,) = [p for p in pedacos if isinstance(p, TurnEnd)]
+    assert fim_do_turno.usage is not None
+    assert fim_do_turno.usage.cost_usd == custo
+
+
 async def test_sem_bloco_de_usage_o_turno_termina_sem_uso(settings_factory):
     transport = ProviderRecordingTransport([[fragmento_de_texto("oi")]])
     provider = build_provider(settings_factory(), transport=transport)

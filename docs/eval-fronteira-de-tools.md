@@ -401,7 +401,18 @@ intencao` escolhe o recorte; ausente é `entidade`, e valor desconhecido é 400.
    (`completion_tokens_details.reasoning_tokens`). Campo que o provedor não manda fica `None`, nunca
    0, e o relatório diz "não reportado". O relatório e o `comparar` dão a fração da entrada lida do
    cache no total e na 1ª chamada de cada execução, que é onde se vê se o prefixo comum — prompt e
-   catálogo — está sendo reaproveitado. Verificado de ponta a ponta contra a
+   catálogo — está sendo reaproveitado.
+
+   O custo em dólar sai de cada chamada: o `usage.cost` que a OpenRouter devolve em toda resposta,
+   gravado como veio. No começo da rodada o runner lê da OpenRouter o preço publicado do provedor
+   fixado (entrada, saída e entrada lida do cache) e o guarda no cabeçalho, fora da chave do
+   ledger. Ele serve a duas contas: a chamada que veio sem `usage.cost` é calculada por ele, com a
+   entrada do cache a preço de cache, e o relatório diz qual das duas contas usou; e o custo com o
+   cache zerado — toda a entrada a preço cheio —, que é o que mostra quanto o cache economizou. O
+   relatório e o `comparar` dão o custo total e por execução, real e com o cache zerado, e o
+   relatório o dá também por tarefa. Entram as execuções sem dado e as tentativas descartadas:
+   é o que se pagou. Sem `usage.cost` e sem preço, como no LM Studio, o custo é "não reportado", e
+   não zero. Verificado de ponta a ponta contra a
    API, o Logto e o Postgres locais, com um modelo de roteiro no lugar do LLM.
 
    O comparador: seleção é alguma variante do gabarito **contida, como multiconjunto**, nas

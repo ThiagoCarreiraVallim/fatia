@@ -8,6 +8,7 @@ from fatia_agent.eval.fronteira_comparador import (
     CabecalhoDaRodada,
     Chamada,
     Execucao,
+    Preco,
     UsoDaChamada,
     agrupar,
     avaliar,
@@ -16,6 +17,7 @@ from fatia_agent.eval.fronteira_comparador import (
     markdown_da_comparacao,
     markdown_do_braco,
     medir_cache,
+    medir_dolares,
     motivo_de_rascunho,
     p_do_sinal,
     resumir,
@@ -328,6 +330,7 @@ def test_execucao_vai_e_volta_do_json_com_usos_e_tentativas() -> None:
         erros_anteriores=(_TIMEOUT,),
         tokens_entrada_descartados=40,
         tokens_saida_descartados=2,
+        usos_descartados=(UsoDaChamada(40, 2, 0, None, 0.0001),),
     )
     assert Execucao.de_json(original.como_json()) == original
     # Linha gravada antes dos campos novos ainda lê.
@@ -340,6 +343,7 @@ def test_execucao_vai_e_volta_do_json_com_usos_e_tentativas() -> None:
             "erros_anteriores",
             "tokens_entrada_descartados",
             "tokens_saida_descartados",
+            "usos_descartados",
         }
     }
     assert Execucao.de_json(antigo).usos == ()
@@ -480,3 +484,89 @@ def test_comparar_lista_as_tarefas_fora_do_par_por_braco_e_modelo() -> None:
     assert "- A, `z-ai/glm`: 1 tarefa(s) não medida(s) — `dois`" in texto
     assert "- B, `z-ai/glm`: 1 tarefa(s) não medida(s) — `tres`" in texto
     assert "| Truncadas no limite de tokens | 0 | 0 |" in texto
+
+
+# --- custo em dólar ------------------------------------------------------------
+
+#: US$ por milhão: entrada 1, saída 10, cache 0,1 — números redondos para a conta à mão.
+_PRECO = Preco(entrada=1.0, saida=10.0, cache=0.1, fonte="teste")
+
+
+def test_custo_cobrado_vale_e_o_cache_zerado_soma_o_desconto() -> None:
+    # 1.000 de entrada, 800 do cache, 100 de saída; cobrado US$ 0,002.
+    e = _exec(usos=(UsoDaChamada(1000, 100, 800, None, 0.002),))
+    d = medir_dolares([e], _PRECO)
+    assert d.total == pytest.approx(0.002)
+    # Desconto do cache: 800 x (1 - 0,1) / 1e6 = 0,00072.
+    assert d.sem_cache == pytest.approx(0.002 + 0.00072)
+    assert d.conta.startswith("`usage.cost` da OpenRouter")
+
+
+def test_sem_usage_cost_o_custo_sai_do_preco_com_o_cache_a_parte() -> None:
+    e = _exec(usos=(UsoDaChamada(1000, 100, 800),))
+    d = medir_dolares([e], _PRECO)
+    # 200 x 1 + 800 x 0,1 + 100 x 10 = 1.280 por milhão.
+    assert d.total == pytest.approx(0.00128)
+    assert d.sem_cache == pytest.approx((1000 * 1 + 100 * 10) / 1e6)
+    assert d.conta.startswith("preço publicado do provedor fixado (teste)")
+
+
+def test_sem_cost_e_sem_preco_o_custo_nao_e_reportado_e_nao_zero() -> None:
+    d = medir_dolares([_exec(usos=(UsoDaChamada(1000, 100, 0),))], None)
+    assert (d.total, d.sem_cache, d.conta) == (None, None, "não reportado")
+    # Com `usage.cost` e sem preço: o real existe, o sem cache não tem como sair.
+    d = medir_dolares([_exec(usos=(UsoDaChamada(1000, 100, 0, None, 0.001),))], None)
+    assert (d.total, d.sem_cache) == (0.001, None)
+
+
+def test_custo_inclui_sem_dado_e_tentativas_descartadas_e_divide_por_execucao() -> None:
+    valeu = dataclasses.replace(
+        _exec(repeticao=1, usos=(UsoDaChamada(100, 10, 0, None, 0.001),)),
+        erros_anteriores=(_TIMEOUT,),
+        usos_descartados=(UsoDaChamada(100, 10, 0, None, 0.003),),
+    )
+    sem_dado = _exec(repeticao=2, erro=_TIMEOUT, usos=(UsoDaChamada(100, 10, 0, None, 0.002),))
+    d = medir_dolares([valeu, sem_dado], _PRECO)
+    assert d.total == pytest.approx(0.006)
+    assert d.por_execucao(d.total) == pytest.approx(0.003)
+    assert (d.chamadas, d.cobradas) == (3, 3)
+
+
+def test_conta_mista_diz_quantas_chamadas_vieram_cobradas() -> None:
+    e = _exec(usos=(UsoDaChamada(1000, 100, 0, None, 0.002), UsoDaChamada(1000, 100, 0)))
+    d = medir_dolares([e], _PRECO)
+    assert d.total == pytest.approx(0.002 + 0.002)
+    assert d.conta.startswith("`usage.cost` em 1 de 2 chamadas")
+
+
+def test_relatorio_e_comparacao_dao_o_custo_por_execucao_total_e_sem_cache() -> None:
+    tarefa = _tarefa()
+    preco = dataclasses.asdict(_PRECO)
+    a = agrupar(
+        [tarefa],
+        [
+            _exec("list_meals", repeticao=i, usos=(UsoDaChamada(1000, 100, 800, None, 0.002),))
+            for i in (1, 2, 3)
+        ],
+        set(),
+    )
+    b = agrupar(
+        [tarefa],
+        [
+            _exec(
+                "find_meals", braco="B", repeticao=i, usos=(UsoDaChamada(500, 50, 0, None, 0.001),)
+            )
+            for i in (1, 2, 3)
+        ],
+        set(),
+    )
+    texto = markdown_do_braco(_cab(tarefas_rodadas=1, preco=preco), a, set())
+    assert "| Custo em dólar | US$ 0,0060 total · US$ 0,00200 por execução · " in texto
+    assert "| `t` | 3/3 | 1 | 1,0 | US$ 0,00200 |" in texto
+
+    cmp = markdown_da_comparacao(_cab(preco=preco), _cab(braco="B", preco=preco), a, b)
+    assert "| Custo real por execução | US$ 0,00200 | US$ 0,00100 |" in cmp
+    assert "| Custo por execução com o cache zerado | US$ 0,00272 | US$ 0,00100 |" in cmp
+    assert "| Custo real, total | US$ 0,0060 | US$ 0,0030 |" in cmp
+    assert "| Custo com o cache zerado, total | US$ 0,0082 | US$ 0,0030 |" in cmp
+    assert "Conta do custo — A: `usage.cost` da OpenRouter em todas as chamadas" in cmp

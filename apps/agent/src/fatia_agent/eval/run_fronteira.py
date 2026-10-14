@@ -97,6 +97,7 @@ from .fronteira_comparador import (
     CabecalhoDaRodada,
     Chamada,
     Execucao,
+    Preco,
     ResultadoDaTarefa,
     UsoDaChamada,
     agrupar,
@@ -194,6 +195,57 @@ def exigir_provedor_fixo(base_url: str, chat_extra: Mapping[str, Any]) -> None:
             f"{host} roteia o mesmo modelo para provedores diferentes. Fixe um em --chat-extra: "
             '{"provider":{"order":["<provedor>"],"allow_fallbacks":false}}'
         )
+
+
+async def preco_publicado(
+    base_url: str,
+    modelo: str,
+    chat_extra: Mapping[str, Any],
+    *,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> Preco | None:
+    """O preço que a OpenRouter publica para o modelo no provedor fixado.
+
+    Só para o agregador, que é onde o provedor fixo é exigido. `None` quando o endpoint não
+    responde ou o provedor não aparece nele de forma única: o relatório diz então que o
+    custo sem `usage.cost` não pôde ser calculado, em vez de chutar um preço.
+    """
+    if (urlparse(base_url).hostname or "") not in AGREGADORES:
+        return None
+    roteamento = chat_extra.get("provider") or {}
+    fixados = roteamento.get("order") or roteamento.get("only") or []
+    if not fixados:
+        return None
+    slug = str(fixados[0]).lower()
+    try:
+        async with httpx.AsyncClient(transport=transport, timeout=30) as http:
+            resposta = await http.get(f"{base_url.rstrip('/')}/models/{modelo}/endpoints")
+            resposta.raise_for_status()
+            endpoints = resposta.json()["data"]["endpoints"]
+    except (httpx.HTTPError, ValueError, KeyError, TypeError):
+        return None
+    exatos = [e for e in endpoints if str(e.get("tag", "")).lower() == slug]
+    candidatos = exatos or [
+        e for e in endpoints if str(e.get("tag", "")).lower().split("/")[0] == slug
+    ]
+    precos = {
+        (
+            float(e["pricing"]["prompt"]) * 1e6,
+            float(e["pricing"]["completion"]) * 1e6,
+            float(e["pricing"].get("input_cache_read") or e["pricing"]["prompt"]) * 1e6,
+            str(e.get("tag")),
+        )
+        for e in candidatos
+    }
+    if len({p[:3] for p in precos}) != 1:
+        return None
+    entrada, saida, cache, tag = sorted(precos)[0]
+    return Preco(
+        entrada=entrada,
+        saida=saida,
+        cache=cache,
+        fonte=f"OpenRouter, endpoint {tag}, lido em {date.today().isoformat()}",
+    )
 
 
 def sha_do_catalogo(catalogo: Sequence[McpToolInfo]) -> str:
@@ -426,6 +478,7 @@ async def executar(
                                 saida=_unidade(d.get("outputUnits")),
                                 cache=_unidade(d.get("cachedInputUnits")),
                                 raciocinio=_unidade(d.get("reasoningUnits")),
+                                custo=_dolar(d.get("costUsd")),
                             )
                         )
                     elif nome == "error":
@@ -496,6 +549,7 @@ async def com_novas_tentativas(
     erros: list[str] = []
     entrada_descartada: int | None = 0
     saida_descartada: int | None = 0
+    usos_descartados: list[UsoDaChamada] = []
     while True:
         execucao, catalogo = await uma()
         codigo = codigo_do_erro(execucao.erro)
@@ -510,12 +564,14 @@ async def com_novas_tentativas(
         erros.append(execucao.erro or "")
         entrada_descartada = _somar(entrada_descartada, execucao.tokens_entrada)
         saida_descartada = _somar(saida_descartada, execucao.tokens_saida)
+        usos_descartados.extend(execucao.usos)
     return (
         dataclasses.replace(
             execucao,
             erros_anteriores=tuple(erros),
             tokens_entrada_descartados=entrada_descartada,
             tokens_saida_descartados=saida_descartada,
+            usos_descartados=tuple(usos_descartados),
         ),
         catalogo,
     )
@@ -553,6 +609,12 @@ def _acoes_da_pausa(valor: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 def _unidade(valor: object) -> int | None:
     return valor if isinstance(valor, int) and not isinstance(valor, bool) else None
+
+
+def _dolar(valor: object) -> float | None:
+    if isinstance(valor, bool) or not isinstance(valor, int | float):
+        return None
+    return float(valor)
 
 
 def _somar(acumulado: int | None, valor: object) -> int | None:
@@ -672,6 +734,7 @@ async def rodar(args: argparse.Namespace) -> int:
             catalogo = await client.list_tools()
         conferir_catalogo(braco, {t.name for t in catalogo}, tarefas_todas)
         catalogo_sha = sha_do_catalogo(catalogo)
+        preco = await preco_publicado(args.base_url, args.modelo, chat_extra)
 
         cab = CabecalhoDaRodada(
             braco=braco_da_rodada,
@@ -687,6 +750,7 @@ async def rodar(args: argparse.Namespace) -> int:
             data=date.today().isoformat(),
             tarefas_rodadas=len(tarefas),
             truncado=truncado,
+            preco=dataclasses.asdict(preco) if preco else None,
         )
         if args.split == "eval" and not truncado:
             anterior = execucao_anterior(args.ledger, cab)

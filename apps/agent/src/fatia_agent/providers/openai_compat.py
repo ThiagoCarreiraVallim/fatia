@@ -683,6 +683,7 @@ def _uso_do_fragmento(fragmento: dict[str, Any], *, padrao: str) -> Usage | None
         output_units=_inteiro(uso.get("completion_tokens")),
         cached_input_units=_detalhe(uso, "prompt_tokens_details", "cached_tokens"),
         reasoning_units=_detalhe(uso, "completion_tokens_details", "reasoning_tokens"),
+        cost_usd=_numero(uso.get("cost")),
     )
 
 
@@ -697,6 +698,13 @@ def _inteiro(valor: object) -> int | None:
     if isinstance(valor, bool) or not isinstance(valor, int):
         return None
     return valor
+
+
+def _numero(valor: object) -> float | None:
+    """Dólar vem fracionário (`0.00042`); `bool` fica fora pelo mesmo motivo de `_inteiro`."""
+    if isinstance(valor, bool) or not isinstance(valor, int | float):
+        return None
+    return float(valor)
 
 
 def _floats(embedding: list[Any]) -> list[float]:

@@ -491,6 +491,7 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
                             output_units=pedaco.usage.output_units,
                             cached_input_units=pedaco.usage.cached_input_units,
                             reasoning_units=pedaco.usage.reasoning_units,
+                            cost_usd=pedaco.usage.cost_usd,
                         )
                     )
 
@@ -690,6 +691,7 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
                     output_units=plano.usage.output_units,
                     cached_input_units=plano.usage.cached_input_units,
                     reasoning_units=plano.usage.reasoning_units,
+                    cost_usd=plano.usage.cost_usd,
                 )
             )
         if plano.passos:
