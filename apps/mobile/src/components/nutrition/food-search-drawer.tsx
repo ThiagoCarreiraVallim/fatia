@@ -184,6 +184,8 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
       void qc.invalidateQueries({ queryKey: ['nutrition', 'nutrient-summary', date] });
       void qc.invalidateQueries({ queryKey: ['nutrition', 'history', 7] });
       void qc.invalidateQueries({ queryKey: ['nutrition', 'my-foods'] });
+      // O card de macros do dashboard: a refeição pode vir do "+", fora da Nutrição.
+      void qc.invalidateQueries({ queryKey: ['dashboard'] });
       onOpenChange(false);
     },
   });
@@ -237,6 +239,8 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
       void qc.invalidateQueries({ queryKey: ['nutrition', 'nutrient-summary', date] });
       void qc.invalidateQueries({ queryKey: ['nutrition', 'history', 7] });
       void qc.invalidateQueries({ queryKey: ['nutrition', 'my-foods'] });
+      // O card de macros do dashboard: a refeição pode vir do "+", fora da Nutrição.
+      void qc.invalidateQueries({ queryKey: ['dashboard'] });
       setAdicionados((anteriores) => [...anteriores, rotulo]);
       // De volta aos atalhos, pronto para o próximo item.
       setModo('busca');

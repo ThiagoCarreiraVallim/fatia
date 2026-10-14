@@ -180,6 +180,52 @@ describe('FoodSearchDrawer', () => {
     expect(onOpenChange).not.toHaveBeenCalled();
   });
 
+  describe('dashboard', () => {
+    // O "+" registra refeição fora da Nutrição: o card de macros do dashboard
+    // (`['dashboard','today']`) tem de acompanhar sem recarregar a página.
+    const invalidados = () =>
+      vi
+        .mocked(QueryClient.prototype.invalidateQueries)
+        .mock.calls.map(([filtro]) => (filtro as { queryKey?: unknown[] } | undefined)?.queryKey);
+
+    beforeEach(() => {
+      vi.spyOn(QueryClient.prototype, 'invalidateQueries');
+    });
+
+    afterEach(() => {
+      vi.mocked(QueryClient.prototype.invalidateQueries).mockRestore();
+    });
+
+    it('adicionar um item atualiza o dashboard', async () => {
+      createMeal.mockResolvedValue({ id: 'm1' } as never);
+      const user = userEvent.setup();
+      renderDrawer({ mealType: 'LUNCH' });
+
+      await user.click(screen.getByRole('button', { name: /só desta vez/i }));
+      await user.type(screen.getByLabelText(/Nome/), 'salada');
+      await user.type(screen.getByLabelText(/^kcal$/i), '100');
+      await user.click(screen.getByRole('button', { name: /^adicionar$/i }));
+
+      await screen.findByText(/salada adicionado/i);
+      expect(invalidados()).toContainEqual(['dashboard']);
+    });
+
+    it('registrar uma refeição salva atualiza o dashboard', async () => {
+      mealTemplates.mockResolvedValue([
+        { id: 't1', name: 'Café', mealType: 'BREAKFAST', items: [] },
+      ] as never);
+      logMealTemplate.mockResolvedValue({} as never);
+      const onOpenChange = vi.fn();
+      const user = userEvent.setup();
+      renderDrawer({ mealType: 'BREAKFAST', onOpenChange });
+
+      await user.click(await screen.findByRole('button', { name: /^Café/ }));
+
+      await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+      expect(invalidados()).toContainEqual(['dashboard']);
+    });
+  });
+
   it('records a meal on a past date on that date, not today', async () => {
     createMeal.mockResolvedValue({} as never);
     const user = userEvent.setup();

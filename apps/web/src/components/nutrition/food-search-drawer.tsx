@@ -161,6 +161,8 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['nutrition', 'summary', date] });
       qc.invalidateQueries({ queryKey: ['nutrition', 'my-foods'] });
+      // O card de macros do dashboard: a refeição pode vir do "+", fora da Nutrição.
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
       onOpenChange(false);
     },
   });
@@ -195,6 +197,8 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
       }
       qc.invalidateQueries({ queryKey: ['nutrition', 'summary', date] });
       qc.invalidateQueries({ queryKey: ['nutrition', 'my-foods'] });
+      // O card de macros do dashboard: a refeição pode vir do "+", fora da Nutrição.
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
       setAdded((prev) => [...prev, label]);
       // De volta aos atalhos, pronto para o próximo item.
       setMode('search');
