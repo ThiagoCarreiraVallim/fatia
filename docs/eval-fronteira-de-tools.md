@@ -161,16 +161,17 @@ personal já via. As tarefas `nutri-mudar-meta` e `share-liberar` as medem.
 
 ## O que se mede
 
-Seis métricas, e onde cada uma já existe:
+Seis métricas, e onde cada uma é calculada — todas no `fronteira_comparador.py`, sobre o que o
+runner grava por execução:
 
-| #   | Métrica                                | Estado                                                                     |
-| --- | -------------------------------------- | -------------------------------------------------------------------------- |
-| 1   | Acertou **qual** tool                  | falta o comparador de sequência                                            |
-| 2   | Acertou **como** (parâmetros)          | falta                                                                      |
-| 3   | Chamadas por tarefa                    | o agente já conta rodada e tool por rodada                                 |
-| 4   | Tokens até a primeira resposta útil    | `events.usage` emite entrada, saída, cache e raciocínio por chamada        |
-| 5   | Latência p50 / p95                     | `McpMetricsService` já grava histograma por tool; falta agregar por tarefa |
-| 6   | Tool destrutiva invocada indevidamente | falta o rótulo de armadilha por tarefa — já está no `.jsonl`               |
+| #   | Métrica                                | Como sai                                                                                                                                                                                        |
+| --- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Acertou **qual** tool                  | alguma variante do gabarito contida, como multiconjunto, nas chamadas da execução; por tarefa, maioria das execuções com dado; A × B pelo teste do sinal                                        |
+| 2   | Acertou **como** (parâmetros)          | `argumentos.contem` (`argumentos_b` no B) ⊆ argumentos da primeira chamada à tool indicada, por execução                                                                                        |
+| 3   | Chamadas por tarefa                    | as tools que o modelo pediu, por execução; piso efetivo e imposto de composição no `comparar`, e chamadas ao modelo (voltas) por execução no relatório                                          |
+| 4   | Tokens até a primeira resposta útil    | o `usage` de cada chamada ao modelo — entrada, saída, cache e raciocínio — e o custo em dólar, somados na execução inteira, até ela parar; não se corta na primeira resposta útil               |
+| 5   | Latência p50 / p95                     | tempo de parede de cada execução, do pedido ao fim, agregado em p50 e p95 no relatório; pelo OpenRouter inclui a fila do provedor                                                               |
+| 6   | Tool destrutiva invocada indevidamente | o braço C, com o catálogo cru das duas superfícies e as oito tarefas com `armadilha`; a destrutiva é interceptada e registrada, e a tarefa cai na armadilha pela maioria das execuções com dado |
 
 O que **não** se mede: se a resposta ficou boa. É outra pergunta e não se responde contando
 tokens.
