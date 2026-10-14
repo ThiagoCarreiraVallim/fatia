@@ -1,6 +1,6 @@
 import { Alert, Pressable, Text, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Plus, Trash2 } from 'lucide-react-native';
+import { MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react-native';
 import {
   buildMealTimeline,
   mealTimelineTitle,
@@ -40,9 +40,18 @@ interface Props {
   onAddMeal: (type: MealType) => void;
   onAddItem: (mealId: string) => void;
   onEditItem: (item: MealItem) => void;
+  /** Copiar para outro dia, salvar como refeição salva. */
+  onMealActions: (meal: Meal) => void;
 }
 
-export function MealTimeline({ meals, date, onAddMeal, onAddItem, onEditItem }: Props) {
+export function MealTimeline({
+  meals,
+  date,
+  onAddMeal,
+  onAddItem,
+  onEditItem,
+  onMealActions,
+}: Props) {
   const qc = useQueryClient();
 
   const invalidar = () => {
@@ -113,6 +122,7 @@ export function MealTimeline({ meals, date, onAddMeal, onAddItem, onEditItem }: 
                 onEditItem={onEditItem}
                 onDeleteItem={confirmarRemocaoDoItem}
                 onDeleteMeal={() => confirmarRemocao(entry.meal)}
+                onMore={() => onMealActions(entry.meal)}
               />
             ) : (
               <Pressable
@@ -146,12 +156,14 @@ function MealCard({
   onEditItem,
   onDeleteItem,
   onDeleteMeal,
+  onMore,
 }: {
   meal: Meal;
   onAddItem: () => void;
   onEditItem: (item: MealItem) => void;
   onDeleteItem: (item: MealItem) => void;
   onDeleteMeal: () => void;
+  onMore: () => void;
 }) {
   const kcal = Math.round(totalKcal(meal.items));
 
@@ -180,6 +192,9 @@ function MealCard({
               onPress={onAddItem}
             >
               <Plus size={16} color="#baccaf" />
+            </AcaoDoIcone>
+            <AcaoDoIcone label={`Mais ações de ${ROTULO_REFEICAO[meal.mealType]}`} onPress={onMore}>
+              <MoreHorizontal size={16} color="#baccaf" />
             </AcaoDoIcone>
             <AcaoDoIcone label={`Remover ${ROTULO_REFEICAO[meal.mealType]}`} onPress={onDeleteMeal}>
               <Trash2 size={16} color="#baccaf" />

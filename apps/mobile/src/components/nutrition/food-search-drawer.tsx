@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Alert, Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Search, Star } from 'lucide-react-native';
+import { Check, Search, Star, Trash2 } from 'lucide-react-native';
 import {
   amountGrams,
   amountPayload,
@@ -9,12 +9,14 @@ import {
   nutritionApi,
   shortcutDetail,
   shortcutRows,
+  templateSummary,
   withFavorite,
   type Amount,
   type Food,
   type FoodPortion,
   type FoodShortcut,
   type FoodShortcuts,
+  type MealTemplate,
   type MealType,
   type ShortcutRow,
 } from '@fatia/api-client';
@@ -144,6 +146,43 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
     () => new Set((atalhos.data?.favorites ?? []).map((f) => f.id)),
     [atalhos.data],
   );
+
+  // Refeição salva registra a refeição inteira: só faz sentido ao criar uma nova.
+  const modelos = useQuery({
+    queryKey: ['nutrition', 'meal-templates'],
+    queryFn: () => nutritionApi.mealTemplates(),
+    enabled: open && !mealId,
+  });
+
+  const registrarModelo = useMutation<unknown, Error, MealTemplate>({
+    mutationFn: (modelo) =>
+      nutritionApi.logMealTemplate(modelo.id, { eatenAt: instanteNoDia(date), mealType }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['nutrition', 'summary', date] });
+      void qc.invalidateQueries({ queryKey: ['nutrition', 'nutrient-summary', date] });
+      void qc.invalidateQueries({ queryKey: ['nutrition', 'history', 7] });
+      void qc.invalidateQueries({ queryKey: ['nutrition', 'my-foods'] });
+      onOpenChange(false);
+    },
+  });
+
+  const apagarModelo = useMutation<void, Error, string>({
+    mutationFn: (id) => nutritionApi.deleteMealTemplate(id),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['nutrition', 'meal-templates'] }),
+  });
+
+  const confirmarApagarModelo = (modelo: MealTemplate) => {
+    Alert.alert(
+      'Apagar refeição salva',
+      `"${modelo.name}" sai da lista. O que já foi registrado fica.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Apagar', style: 'destructive', onPress: () => apagarModelo.mutate(modelo.id) },
+      ],
+    );
+  };
+
+  const erroDoModelo = registrarModelo.error ?? apagarModelo.error;
 
   // Otimista: a estrela responde no toque, e o servidor confirma depois.
   const favoritar = useMutation<void, Error, { food: Food; favorite: boolean }>({
@@ -327,6 +366,10 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
             onRetry={() => void resultados.refetch()}
             dados={resultados.data}
             atalhos={atalhos.data}
+            modelos={mealId ? [] : (modelos.data ?? [])}
+            onRegistrarModelo={(modelo) => registrarModelo.mutate(modelo)}
+            onApagarModelo={confirmarApagarModelo}
+            erroDoModelo={erroDoModelo ? mensagemDeErro(erroDoModelo) : undefined}
             favoritos={favoritos}
             onAlternarFavorito={alternarFavorito}
             onEscolher={escolher}
@@ -362,6 +405,10 @@ function PainelDeBusca({
   onRetry,
   dados,
   atalhos,
+  modelos,
+  onRegistrarModelo,
+  onApagarModelo,
+  erroDoModelo,
   favoritos,
   onAlternarFavorito,
   onEscolher,
@@ -375,6 +422,10 @@ function PainelDeBusca({
   onRetry: () => void;
   dados: Food[] | undefined;
   atalhos: FoodShortcuts | undefined;
+  modelos: MealTemplate[];
+  onRegistrarModelo: (modelo: MealTemplate) => void;
+  onApagarModelo: (modelo: MealTemplate) => void;
+  erroDoModelo?: string;
   favoritos: ReadonlySet<number>;
   onAlternarFavorito: (food: Food) => void;
   onEscolher: (food: Food | FoodShortcut) => void;
@@ -387,7 +438,7 @@ function PainelDeBusca({
         kind: 'food',
         food: { ...food, lastGrams: null, timesEaten: 0, favorite: favoritos.has(food.id) },
       }))
-    : shortcutRows(atalhos);
+    : shortcutRows(atalhos, modelos);
 
   return (
     <View className="flex-1">
@@ -427,6 +478,10 @@ function PainelDeBusca({
         ListHeaderComponent={
           buscando ? (
             <Text className="px-4 py-3 text-sm text-muted-foreground">Buscando...</Text>
+          ) : erroDoModelo && !digitando ? (
+            <Text accessibilityRole="alert" className="px-4 py-3 text-sm text-destructive">
+              {erroDoModelo}
+            </Text>
           ) : null
         }
         ListEmptyComponent={
@@ -461,7 +516,13 @@ function PainelDeBusca({
             >
               {linha.title}
             </Text>
-          ) : linha.kind === 'template' ? null : (
+          ) : linha.kind === 'template' ? (
+            <LinhaDeModelo
+              modelo={linha.template}
+              onRegistrar={() => onRegistrarModelo(linha.template)}
+              onApagar={() => onApagarModelo(linha.template)}
+            />
+          ) : (
             <LinhaDeAlimento
               food={linha.food}
               detalhe={
@@ -490,6 +551,42 @@ function PainelDeBusca({
 }
 
 /** Escolher e favoritar são alvos separados, cada um com 44 pt de toque. */
+/** Refeição salva: o toque registra tudo; apagar confirma antes. */
+function LinhaDeModelo({
+  modelo,
+  onRegistrar,
+  onApagar,
+}: {
+  modelo: MealTemplate;
+  onRegistrar: () => void;
+  onApagar: () => void;
+}) {
+  const resumo = templateSummary(modelo);
+  return (
+    <View className="min-h-[56px] flex-row items-center border-b border-border">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${modelo.name}, ${resumo}`}
+        onPress={onRegistrar}
+        className="flex-1 py-3 pl-4 active:bg-accent"
+      >
+        <Text className="text-sm font-medium text-foreground">{modelo.name}</Text>
+        <Text style={NUMEROS_TABULARES} className="text-xs text-muted-foreground">
+          {resumo}
+        </Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Apagar ${modelo.name}`}
+        onPress={onApagar}
+        className="h-11 w-11 items-center justify-center"
+      >
+        <Trash2 size={16} color="#baccaf" />
+      </Pressable>
+    </View>
+  );
+}
+
 function LinhaDeAlimento({
   food,
   detalhe,

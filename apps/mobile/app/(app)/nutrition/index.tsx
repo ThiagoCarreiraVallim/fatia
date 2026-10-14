@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { Camera, ScanBarcode, Settings } from 'lucide-react-native';
-import { nutritionApi, type MealItem, type MealType } from '@fatia/api-client';
+import { Camera, Copy, ScanBarcode, Settings } from 'lucide-react-native';
+import { nutritionApi, type Meal, type MealItem, type MealType } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { ErrorState, LoadingState } from '@/components/ui';
 import { CaloriesRingCard } from '@/components/nutrition/calories-ring-card';
@@ -15,6 +15,8 @@ import { MealTimeline } from '@/components/nutrition/meal-timeline';
 import { NutrientTargetsCard } from '@/components/nutrition/nutrient-targets-card';
 import { WeeklyTrendChart } from '@/components/nutrition/weekly-trend-chart';
 import { hojeIso } from '@/components/nutrition/helpers';
+import { AcoesDaRefeicaoDrawer } from '@/components/nutrition/acoes-da-refeicao-drawer';
+import { CopiarDiaDrawer } from '@/components/nutrition/copiar-dia-drawer';
 
 /**
  * Réplica de `apps/web/src/app/(app)/nutrition/page.tsx`.
@@ -34,6 +36,8 @@ export default function NutritionScreen() {
   const [novaRefeicao, setNovaRefeicao] = useState<MealType | null>(null);
   const [adicionandoEm, setAdicionandoEm] = useState<string | null>(null);
   const [editando, setEditando] = useState<MealItem | null>(null);
+  const [agindoEm, setAgindoEm] = useState<Meal | null>(null);
+  const [copiandoDia, setCopiandoDia] = useState(false);
 
   const resumo = useQuery({
     queryKey: ['nutrition', 'summary', data],
@@ -62,6 +66,8 @@ export default function NutritionScreen() {
     void resumo.refetch();
     void metas.refetch();
   };
+
+  const refeicoesDoDia = resumo.data?.meals.filter((m) => m.items.length > 0).length ?? 0;
 
   const drawerDeBuscaAberto = novaRefeicao !== null || adicionandoEm !== null;
 
@@ -100,6 +106,16 @@ export default function NutritionScreen() {
             >
               <ScanBarcode size={18} color="#baccaf" />
             </Pressable>
+            {refeicoesDoDia > 0 ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Copiar dia"
+                onPress={() => setCopiandoDia(true)}
+                className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
+              >
+                <Copy size={18} color="#baccaf" />
+              </Pressable>
+            ) : null}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Metas"
@@ -129,6 +145,7 @@ export default function NutritionScreen() {
                 onAddMeal={setNovaRefeicao}
                 onAddItem={setAdicionandoEm}
                 onEditItem={setEditando}
+                onMealActions={setAgindoEm}
               />
               <WeeklyTrendChart today={hojeIso()} />
             </>
@@ -150,6 +167,19 @@ export default function NutritionScreen() {
         date={data}
       />
       <EditMealItemDrawer item={editando} date={data} onClose={() => setEditando(null)} />
+      <AcoesDaRefeicaoDrawer
+        meal={agindoEm}
+        date={data}
+        onClose={() => setAgindoEm(null)}
+        onVerDia={setData}
+      />
+      <CopiarDiaDrawer
+        open={copiandoDia}
+        onOpenChange={setCopiandoDia}
+        date={data}
+        mealCount={refeicoesDoDia}
+        onVerDia={setData}
+      />
     </>
   );
 }
