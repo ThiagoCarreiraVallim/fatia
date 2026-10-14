@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 
 /**
  * Fluxos de registro de ponta a ponta, na stack real (ADR 029).
@@ -14,6 +14,12 @@ function diasAtras(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() - n);
   return d.toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+}
+
+/** O "+" global: abre o menu Registrar e escolhe o registro. */
+async function registrarPeloMais(page: Page, item: string) {
+  await page.getByRole('button', { name: 'Registrar', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: item }).click();
 }
 
 test('refeição lançada em dia passado fica naquele dia', async ({ page }) => {
@@ -60,18 +66,18 @@ test('água, peso e passos registrados ontem ficam ontem', async ({ page }) => {
   await page.goto('/');
 
   /**
-   * Abre o drawer, volta um dia pela seta, registra e confere pela lista ao
+   * Abre o drawer pelo "+", volta um dia pela seta, registra e confere pela lista ao
    * reabrir (o dia voltou a hoje); depois apaga pela própria lista, para não
    * sujar o seed. O valor é incomum para não confundir com o do seed.
    */
   async function registrarOntem(opts: {
-    abrir: string | RegExp;
+    item: string;
     campo: string | RegExp;
     valor: string;
     salvar: string;
     titulo: string;
   }) {
-    await page.getByRole('button', { name: opts.abrir }).first().click();
+    await registrarPeloMais(page, opts.item);
     await expect(drawer.getByRole('button', { name: 'Próximo dia' })).toBeDisabled();
     await drawer.getByRole('button', { name: 'Dia anterior' }).click();
     await expect(drawer.getByText('ontem', { exact: true })).toBeVisible();
@@ -79,7 +85,7 @@ test('água, peso e passos registrados ontem ficam ontem', async ({ page }) => {
     await drawer.getByRole('button', { name: opts.salvar }).click();
     await expect(drawer).toHaveCount(0);
 
-    await page.getByRole('button', { name: opts.abrir }).first().click();
+    await registrarPeloMais(page, opts.item);
     await expect(drawer.getByText('hoje', { exact: true })).toBeVisible();
     // A água põe a hora depois do dia: o nome do botão continua após a data.
     const linha = `${opts.titulo}, ${ontem}`;
@@ -93,26 +99,80 @@ test('água, peso e passos registrados ontem ficam ontem', async ({ page }) => {
   }
 
   await registrarOntem({
-    abrir: /log água/i,
+    item: 'Água',
     campo: /quantidade personalizada/i,
     valor: '333',
     salvar: 'Adicionar em ontem',
     titulo: '333 mL',
   });
   await registrarOntem({
-    abrir: /log peso/i,
+    item: 'Peso',
     campo: 'Peso (kg)',
     valor: '77.7',
     salvar: 'Salvar em ontem',
     titulo: '77,7 kg',
   });
   await registrarOntem({
-    abrir: /logar passos/i,
+    item: 'Passos',
     campo: /^Passos$/,
     valor: '4321',
     salvar: 'Salvar em ontem',
     titulo: '4.321 passos',
   });
+});
+
+test('refeição pelo "+" atualiza o dashboard sem recarregar', async ({ page }) => {
+  const nome = `E2E lanche ${Date.now()}`;
+  await page.goto('/');
+  const kcal = page.getByText('KCAL', { exact: true }).locator('xpath=following-sibling::span');
+  await expect(kcal).toBeVisible();
+  const antes = Number((await kcal.textContent())?.split('/')[0]);
+  // O dia de hoje no fuso do navegador (o do perfil), não no do processo de teste.
+  const hoje = await page.evaluate(() => new Date().toLocaleDateString('sv-SE'));
+
+  try {
+    await registrarPeloMais(page, 'Refeição');
+    const drawer = page.getByRole('dialog');
+    await drawer.getByRole('button', { name: /só desta vez/i }).click();
+    await drawer.getByLabel('Nome').fill(nome);
+    await drawer.getByLabel('Gramas').fill('100');
+    await drawer.getByLabel(/^kcal$/i).fill('123');
+    await drawer.getByRole('button', { name: /^adicionar$/i }).click();
+    await expect(drawer.getByRole('status')).toContainText(`${nome} adicionado`);
+    await drawer.getByRole('button', { name: /^concluir/i }).click();
+
+    // Antes o card de macros só mudava com um refetch: sem reload aqui.
+    await expect(kcal).toHaveText(new RegExp(`^${antes + 123}/`));
+  } finally {
+    // Limpa pelo nome: o dia de hoje do demo tem as refeições do seed.
+    const res = await page.request.get(`/api/proxy/nutrition/meals?date=${hoje}`);
+    const meals = (await res.json()) as { id: string; items: { foodName: string }[] }[];
+    for (const meal of meals.filter((m) => m.items.some((i) => i.foodName === nome))) {
+      await page.request.delete(`/api/proxy/nutrition/meals/${meal.id}`);
+    }
+  }
+});
+
+test('treino pelo "+" começa um livre e depois o retoma', async ({ page }) => {
+  await page.goto('/');
+  await registrarPeloMais(page, 'Começar treino livre');
+  await expect(page).toHaveURL(/\/workout$/);
+  await expect(page.getByRole('heading', { name: 'Treino em andamento' })).toBeVisible();
+
+  try {
+    // Com a sessão aberta, o "+" não cria outra.
+    await registrarPeloMais(page, 'Continuar treino');
+    await expect(page.getByRole('heading', { name: 'Treino em andamento' })).toBeVisible();
+    const res = await page.request.get('/api/proxy/workout/sessions?limit=5');
+    const abertas = ((await res.json()) as { completedAt: string | null }[]).filter(
+      (s) => s.completedAt === null,
+    );
+    expect(abertas).toHaveLength(1);
+  } finally {
+    await page.getByRole('button', { name: 'Cancelar', exact: true }).click();
+    await page.getByRole('button', { name: 'Sim, cancelar treino' }).click();
+    await expect(page.getByRole('button', { name: 'INICIAR TREINO LIVRE' })).toBeVisible();
+  }
 });
 
 test('adicionar exercício no treino livre não registra série', async ({ page }) => {

@@ -98,16 +98,34 @@ test.describe('telas', () => {
 });
 
 test.describe('drawers de registro', () => {
+  /** Abre o "+" global e escolhe o registro. Falso se o "+" não apareceu. */
+  async function registrar(page: Page, item: string | RegExp): Promise<boolean> {
+    const mais = page.getByRole('button', { name: 'Registrar', exact: true });
+    if (!(await appears(mais))) return false;
+    await mais.click();
+    await page.getByRole('dialog').getByRole('button', { name: item }).click();
+    return true;
+  }
+
+  test('dashboard: menu do "+"', async ({ page }) => {
+    await page.goto('/');
+    await settle(page);
+    await snap(page, '26-dashboard-botao-registrar', false);
+    const mais = page.getByRole('button', { name: 'Registrar', exact: true });
+    if (!(await appears(mais))) return;
+    await mais.click();
+    await appears(page.getByRole('dialog').getByRole('button', { name: /treino/i }));
+    await snap(page, '27-registrar-menu', false);
+  });
+
   test('dashboard: água e peso', async ({ page }) => {
     await page.goto('/');
     await settle(page);
-    for (const [label, name] of [
-      [/água/i, '02-dashboard-drawer-agua'],
-      [/peso/i, '03-dashboard-drawer-peso'],
+    for (const [item, name] of [
+      ['Água', '02-dashboard-drawer-agua'],
+      ['Peso', '03-dashboard-drawer-peso'],
     ] as const) {
-      const button = page.getByRole('button', { name: label }).first();
-      if (!(await appears(button))) continue;
-      await button.click();
+      if (!(await registrar(page, item))) continue;
       await snap(page, name, false);
       await page.keyboard.press('Escape');
       await page.waitForTimeout(300);
@@ -117,9 +135,7 @@ test.describe('drawers de registro', () => {
   test('dashboard: água em ontem', async ({ page }) => {
     await page.goto('/');
     await settle(page);
-    const button = page.getByRole('button', { name: /log água/i }).first();
-    if (!(await appears(button))) return;
-    await button.click();
+    if (!(await registrar(page, 'Água'))) return;
     // Só olha: volta um dia e fotografa, sem registrar nada.
     await page.getByRole('dialog').getByRole('button', { name: 'Dia anterior' }).click();
     await snap(page, '24-registrar-agua-ontem', false);
