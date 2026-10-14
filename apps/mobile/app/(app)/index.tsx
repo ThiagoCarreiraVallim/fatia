@@ -4,11 +4,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { greetingLine, progressApi, usersApi } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { DrawerLayer, EmptyState, ErrorState, LoadingState } from '@/components/ui';
-import { LogStepsDrawer, LogWaterDrawer, LogWeightDrawer } from '@/components/progress';
+import { LogStepsDrawer, LogWaterDrawer } from '@/components/progress';
 import {
   NextWorkoutCard,
   NutritionMacroCard,
-  QuickLogActions,
   StepsCard,
   StreakCard,
   WaterCard,
@@ -17,14 +16,13 @@ import {
 /**
  * Réplica de `apps/web/src/app/(app)/page.tsx`.
  *
- * Os três drawers ficam aqui, irmãos do `<Screen>`, e não dentro dos cards que
+ * Os drawers ficam aqui, irmãos do `<Screen>`, e não dentro dos cards que
  * os abrem como no PWA: o bottom sheet nativo não é portal e abriria com a
  * altura do card, rolando junto com o conteúdo. Ver `src/components/ui/drawer.tsx`.
  */
 export default function DashboardScreen() {
   const [aguaAberto, setAguaAberto] = useState(false);
   const [passosAberto, setPassosAberto] = useState(false);
-  const [pesoAberto, setPesoAberto] = useState(false);
   const [atualizando, setAtualizando] = useState(false);
   const queryClient = useQueryClient();
 
@@ -76,10 +74,6 @@ export default function DashboardScreen() {
                 streak={dados.streak}
                 achievements={conquistas.data ?? dados.achievements}
               />
-              <QuickLogActions
-                onLogWater={() => setAguaAberto(true)}
-                onLogWeight={() => setPesoAberto(true)}
-              />
             </>
           ) : hoje.isLoading ? null : (
             <EmptyState
@@ -93,7 +87,6 @@ export default function DashboardScreen() {
       <DrawerLayer>
         <LogWaterDrawer open={aguaAberto} onClose={() => setAguaAberto(false)} />
         <LogStepsDrawer open={passosAberto} onClose={() => setPassosAberto(false)} />
-        <LogWeightDrawer open={pesoAberto} onClose={() => setPesoAberto(false)} />
       </DrawerLayer>
     </>
   );

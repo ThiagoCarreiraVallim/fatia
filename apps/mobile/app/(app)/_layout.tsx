@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { Slot, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/auth-context';
 import { BottomNav } from '@/components/layout/bottom-nav';
+import { RegistroRapido } from '@/components/layout/registro-rapido';
 import { LoadingState } from '@/components/ui';
 
 /**
@@ -36,7 +37,10 @@ export default function AppLayout() {
   return (
     <View className="flex-1 bg-background">
       <Slot />
-      <BottomNav />
+      {/* O "+" global envolve a nav para acertar a ordem de pintura (ver o componente). */}
+      <RegistroRapido>
+        <BottomNav />
+      </RegistroRapido>
     </View>
   );
 }

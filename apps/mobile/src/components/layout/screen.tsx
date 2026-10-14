@@ -4,6 +4,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TOP_BAR_HEIGHT, TopBar } from './top-bar';
 
 /**
+ * A nav (80) e mais o "+" global, que flutua acima dela à direita
+ * (`registro-rapido.tsx`): sem os 32 a mais, o último card ficava sob o botão.
+ */
+const RESPIRO_INFERIOR = 128;
+
+/**
  * Moldura das telas autenticadas.
  *
  * Reserva o espaço da bottom nav e, nas telas internas, da barra de voltar — as
@@ -38,7 +44,7 @@ export function Screen({
   const body = scroll ? (
     <ScrollView
       className="flex-1"
-      contentContainerStyle={{ paddingTop, paddingBottom: 96 }}
+      contentContainerStyle={{ paddingTop, paddingBottom: RESPIRO_INFERIOR }}
       keyboardShouldPersistTaps="handled"
       refreshControl={
         onRefresh ? (
@@ -55,7 +61,7 @@ export function Screen({
       {children}
     </ScrollView>
   ) : (
-    <View className="flex-1" style={{ paddingTop, paddingBottom: 96 }}>
+    <View className="flex-1" style={{ paddingTop, paddingBottom: RESPIRO_INFERIOR }}>
       {children}
     </View>
   );
