@@ -306,8 +306,9 @@ nele for outra, é ela que vai para o slide.
 - **O que não é do provedor conta contra o modelo, ou para a rodada.** Parar no limite de tokens
   (`AI_RESPONSE_TRUNCATED`) é o modelo gastando a saída: é erro com dado, e o relatório o conta à
   parte, por braço e modelo — truncamento pode ser o limite de saída do provedor cortando o
-  raciocínio, e não o modelo errando. Erro de configuração (`AI_MODEL_NOT_ALLOWED`, chave recusada)
-  ou de infraestrutura do `/mcp` (transporte, 4xx/5xx do HTTP, autenticação, protocolo) para a
+  raciocínio, e não o modelo errando. Erro de configuração (`AI_MODEL_NOT_ALLOWED`, chave recusada,
+  e o provedor que recusa o corpo com 400, 401, 403, 404, 413 ou 422 — o mesmo corpo dá o mesmo
+  status, e repetir só gravaria a rodada inteira como sem dado) ou de infraestrutura do `/mcp` (transporte, 4xx/5xx do HTTP, autenticação, protocolo) para a
   rodada sem gravar a execução, e `--continuar` retoma. Erro **de tool** — argumento que o schema
   recusa, regra de negócio, tool fora do recorte, argumentos que não são JSON — não é nenhum dos
   dois: volta ao modelo como resultado com falha, como no produto, e conta na tarefa.

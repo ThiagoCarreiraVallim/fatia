@@ -26,7 +26,9 @@ from fatia_agent.eval.run_fronteira import (
     medir_catalogo,
     preco_publicado,
     sha_do_catalogo,
+    status_da_recusa,
 )
+from fatia_agent.providers.errors import AIProviderRefused
 from tests.chat.support import (
     McpRecordingTransport,
     ProviderRecordingTransport,
@@ -565,6 +567,42 @@ async def test_erro_do_mcp_ou_de_configuracao_para_a_rodada(erro: str) -> None:
     with pytest.raises(ConfiguracaoRecusada, match="a rodada parou"):
         await com_novas_tentativas(uma)
     assert len(vezes) == 1
+
+
+def _recusa(status: int) -> str:
+    return f"AI_PROVIDER_REFUSED: O provedor respondeu {status} em POST chat/completions."
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 413, 422])
+async def test_provedor_que_recusa_o_corpo_para_a_rodada_em_vez_de_virar_sem_dado(
+    status: int,
+) -> None:
+    """O mesmo corpo dá o mesmo 400: repetir e gravar sem dado esconderia a rodada inteira."""
+    uma, vezes = _roteiro(_execucao(_recusa(status)), _execucao(None))
+    with pytest.raises(ConfiguracaoRecusada, match="a rodada parou"):
+        await com_novas_tentativas(uma)
+    assert len(vezes) == 1
+
+
+@pytest.mark.parametrize("status", [408, 429, 500, 502, 503])
+async def test_fila_e_instabilidade_do_provedor_ainda_sao_repetidas(status: int) -> None:
+    uma, vezes = _roteiro(_execucao(_recusa(status)), _execucao(None))
+    execucao, _ = await com_novas_tentativas(uma)
+    assert len(vezes) == 2 and execucao.erro is None
+
+
+async def test_o_status_sai_da_mensagem_que_o_provedor_de_verdade_da() -> None:
+    """O runner lê o status do texto do `OpenAICompatProvider`; se o texto mudar, isto quebra."""
+    transporte = httpx.MockTransport(lambda _: httpx.Response(400, json={"error": "x"}))
+    async with ProvedorDoEval(
+        base_url="https://openrouter.ai/api/v1", text_model="m", transport=transporte, max_retries=0
+    ) as provedor:
+        with pytest.raises(AIProviderRefused) as recusa:
+            async for _ in provedor.stream_chat([{"role": "user", "content": "oi"}]):
+                pass
+    assert status_da_recusa(f"{recusa.value.code}: {recusa.value.message}") == 400
+    # A recusa no meio do stream (HTTP 200) não é recusa do corpo.
+    assert status_da_recusa("AI_PROVIDER_REFUSED: O provedor recusou a geração no meio") is None
 
 
 # --- /mcp: erro de tool volta ao modelo; falha de infraestrutura para a rodada ---

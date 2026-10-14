@@ -60,6 +60,7 @@ import functools
 import hashlib
 import json
 import os
+import re
 import shlex
 import sys
 import time
@@ -553,7 +554,11 @@ async def com_novas_tentativas(
     while True:
         execucao, catalogo = await uma()
         codigo = codigo_do_erro(execucao.erro)
-        if codigo is not None and (codigo in ERROS_QUE_PARAM_A_RODADA or codigo.startswith("MCP_")):
+        if codigo is not None and (
+            codigo in ERROS_QUE_PARAM_A_RODADA
+            or codigo.startswith("MCP_")
+            or status_da_recusa(execucao.erro) in STATUS_QUE_PARAM_A_RODADA
+        ):
             raise ConfiguracaoRecusada(
                 f"{execucao.tarefa} #{execucao.repeticao} terminou em {execucao.erro}. Não é "
                 "o modelo: a rodada parou, e nada desta execução foi gravado. Corrija e "
@@ -587,6 +592,23 @@ ERROS_QUE_PARAM_A_RODADA = frozenset(
         "AGENT_KEY_REJECTED",
     }
 )
+
+
+#: Status com que o provedor recusa o corpo da requisição — parâmetro, schema de tool, chave,
+#: modelo. O mesmo corpo dá o mesmo status: tentar de novo não muda nada, e gravar a execução
+#: como sem dado esconderia uma rodada inteira sem medida atrás de "erro de provedor". Foi o que
+#: aconteceu com o `pattern` `\p{L}` que a Xiaomi recusa com 400. 408 e 429 ficam fora: são fila.
+STATUS_QUE_PARAM_A_RODADA = frozenset({400, 401, 403, 404, 413, 422})
+
+#: A mensagem que o `OpenAICompatProvider` dá à recusa por status HTTP. A recusa no meio do
+#: stream (status 200) tem outra mensagem, e não casa.
+_RECUSA_POR_STATUS = re.compile(r"^AI_PROVIDER_REFUSED: O provedor respondeu (\d{3}) em ")
+
+
+def status_da_recusa(erro: str | None) -> int | None:
+    """O status HTTP de uma recusa do provedor, quando ela veio por status."""
+    achado = _RECUSA_POR_STATUS.match(erro or "")
+    return int(achado.group(1)) if achado else None
 
 
 def _quadros(bruto: str) -> list[tuple[str, Any]]:
