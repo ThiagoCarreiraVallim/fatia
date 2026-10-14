@@ -373,6 +373,17 @@ async def executar(
     superficie = SUPERFICIE[braco]
     headers = {HEADER_SUPERFICIE: superficie} if superficie else {}
 
+    # O fuso é contabilidade do runner, e não parte da conversa: ele vem da superfície de
+    # entidade, que serve `get_me`. A de intenção não serve, e lá o `/mcp` responde
+    # "Tool get_me not found" — o que o modelo lê não muda com isto.
+    async with McpClient(base_url=mcp_url, bearer=bearer, transport=transport) as conta:
+        resposta = await conta.call_tool("get_me", {})
+    if resposta.is_error:
+        raise ConfiguracaoRecusada(f"get_me falhou na conta de avaliação: {resposta.text[:200]}")
+    perfil = json.loads(resposta.text)
+    fuso = str(perfil.get("timezone") or "America/Sao_Paulo")
+    hoje = datetime.now(ZoneInfo(fuso)).date()
+
     cliente = McpSemDestrutivas if cru else McpClient
     async with cliente(
         base_url=mcp_url, bearer=bearer, headers=headers, transport=transport
@@ -384,9 +395,6 @@ async def executar(
         # passam pela pausa do grafo, e o runner aprova — como um cliente que não pergunta.
         permitidas = list(catalogo) if cru else todas_permitidas(catalogo)
         confirmaveis = {t.name for t in camada_confirmavel(permitidas)}
-        perfil = json.loads((await client.call_tool("get_me", {})).text)
-        fuso = str(perfil.get("timezone") or "America/Sao_Paulo")
-        hoje = datetime.now(ZoneInfo(fuso)).date()
 
         # O grafo do produto, com o checkpointer em memória: a pausa e a retomada
         # atravessam chamadas, como atravessam requisições no `api.py`. Uma thread por

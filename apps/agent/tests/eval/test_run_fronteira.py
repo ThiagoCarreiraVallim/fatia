@@ -159,16 +159,47 @@ def _tarefa() -> Tarefa:
     )
 
 
+_GET_ME_NAO_EXISTE = "MCP error -32602: Tool get_me not found"
+
+
+def _sem_get_me_na_intencao(duplo: McpRecordingTransport) -> McpRecordingTransport:
+    """Como o `/mcp` de verdade: a superfície de intenção não serve `get_me`."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        corpo = json.loads(request.content)
+        if (
+            request.headers.get(HEADER_SUPERFICIE) == "intencao"
+            and corpo.get("method") == "tools/call"
+            and corpo["params"]["name"] == "get_me"
+        ):
+            return sse_jsonrpc(
+                resultado_mcp(
+                    corpo["id"],
+                    {
+                        "content": [
+                            {"type": "text", "text": "MCP error -32602: Tool get_me not found"}
+                        ],
+                        "isError": True,
+                    },
+                )
+            )
+        return duplo.handler(request)  # type: ignore[no-any-return]
+
+    return McpRecordingTransport(handler)
+
+
 async def test_executa_aprova_a_proposta_e_conta_cada_chamada_uma_vez() -> None:
-    mcp = duplo_do_mcp(
-        catalogo=[
-            tool_do_catalogo("search_food", read_only=True),
-            tool_do_catalogo("log_meal", read_only=False, confirmable=True),
-            tool_do_catalogo("get_me", read_only=True),
-        ],
-        resultados={
-            "get_me": {"content": [{"type": "text", "text": '{"timezone":"America/Cuiaba"}'}]},
-        },
+    mcp = _sem_get_me_na_intencao(
+        duplo_do_mcp(
+            catalogo=[
+                tool_do_catalogo("search_food", read_only=True),
+                tool_do_catalogo("log_meal", read_only=False, confirmable=True),
+                tool_do_catalogo("get_me", read_only=True),
+            ],
+            resultados={
+                "get_me": {"content": [{"type": "text", "text": '{"timezone":"America/Cuiaba"}'}]},
+            },
+        )
     )
     provedor = ProviderRecordingTransport(
         [
@@ -228,8 +259,16 @@ async def test_executa_aprova_a_proposta_e_conta_cada_chamada_uma_vez() -> None:
     # A aprovada chegou ao /mcp — é a tela clicando "Confirmar".
     chamadas_mcp = [r["params"]["name"] for r in mcp.rpcs if r["method"] == "tools/call"]  # type: ignore[index]
     assert chamadas_mcp == ["get_me", "search_food", "log_meal"]
-    # O braço B pede a superfície de intenção em toda requisição ao /mcp.
-    assert {r.headers.get(HEADER_SUPERFICIE) for r in mcp.requests} == {"intencao"}
+    # O braço B pede a superfície de intenção em toda requisição da conversa; só o `get_me`
+    # do fuso, que é do runner e não do modelo, vai sem header — a intenção não o serve.
+    sem_header = [
+        json.loads(r.content).get("params", {}).get("name")
+        for r in mcp.requests
+        if HEADER_SUPERFICIE not in r.headers
+    ]
+    assert sem_header == ["get_me"]
+    conversa = [r for r in mcp.requests if HEADER_SUPERFICIE in r.headers]
+    assert conversa and {r.headers[HEADER_SUPERFICIE] for r in conversa} == {"intencao"}
     # E o corpo extra viaja em toda chamada ao modelo, sem trocar o modelo.
     assert all(
         c["temperature"] == 1 and c["model"] == "google/gemma-4-31b-it" for c in provedor.corpos
