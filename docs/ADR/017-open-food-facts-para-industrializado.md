@@ -131,3 +131,30 @@ O log da consulta não registra o código escaneado. Registrado em `docs/DATA_RE
   aviso na tela — que é diferente de gravá-la como se fosse dado do rótulo.
 - **Deixar a atribuição da ODbL numa página de créditos.** Rejeitada: "atribuição visível" quer
   dizer onde o dado aparece. Uma nota no `README` não é vista por quem usa o app.
+
+## Atualização — leitor no PWA e "Guardar em Meus alimentos" (2026-10)
+
+Duas coisas mudaram na Fase 3 do novo direcionamento ([`NOVO_DIRECIONAMENTO.md`](../NOVO_DIRECIONAMENTO.md)),
+sem mexer na decisão principal: a consulta continua sob demanda, por código, e o catálogo continua
+sem cache do OFF.
+
+1. **O PWA também lê código de barras.** A objeção da seção "Neutras" era o `BarcodeDetector`, que o
+   Safari não tem. O leitor da web usa o detector nativo quando existe e cai no `@zxing/browser`
+   (JavaScript puro, carregado só quando a câmera abre) quando não existe. Sem câmera ou sem
+   permissão, o código pode ser digitado. A lógica da leitura (trava, porção, ficha incompleta) saiu
+   do app e ficou em `@fatia/api-client`, comum às duas pontas.
+2. **A pessoa pode guardar o produto lido em "Meus alimentos".** É uma caixa desmarcada por padrão
+   no painel do produto. Marcada, cria um alimento `CUSTOM` **da própria pessoa**, por 100 g, com a
+   porção do rótulo como medida, e o item da refeição entra ligado a ele. Daí em diante o produto
+   aparece na busca, em recentes e em favoritos, e o ciclo "escaneio uma vez, acho pelo nome depois"
+   fecha sem a migration da seção 3.
+
+   Isso não é o cache que a seção 3 adiou nem distribuição de banco derivado (seção 4): o alimento
+   próprio é privado, só a dona o vê (isolamento por usuário), e guarda o mesmo retrato dos valores
+   que o `MealItem` livre já guardava. É a pessoa copiando o rótulo para si, só que sem digitar. Por
+   isso nenhum dado do OFF passa a ser servido a terceiros, e a obrigação de disponibilizar o derivado
+   sob ODbL continua sem nascer. O ciclo "cadastrei à mão, escaneio de novo e acho **pelo código**"
+   segue dependendo de `Food.barcode`.
+
+Continua sem tool MCP de consulta por código: a IA externa não tem câmera, e quem tem o número em mãos
+o digita no app.
