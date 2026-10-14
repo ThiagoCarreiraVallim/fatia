@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Plus, Search, Star, Trash2 } from 'lucide-react';
+import { Check, Plus, ScanBarcode, Search, Star, Trash2 } from 'lucide-react';
 import {
   Drawer,
   DrawerClose,
@@ -33,6 +33,7 @@ import {
 } from '@fatia/api-client';
 import { instanteNoDia } from '@/lib/dias';
 import { AmountPicker } from './amount-picker';
+import { BarcodeFlow } from './barcode-flow';
 import { CustomFoodForm } from './custom-food-form';
 
 interface Props {
@@ -44,7 +45,7 @@ interface Props {
   date: string;
 }
 
-type Mode = 'search' | 'manual' | 'create';
+type Mode = 'search' | 'manual' | 'create' | 'scan';
 
 interface ItemPayload {
   foodId?: number;
@@ -295,7 +296,9 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
               ? 'Só para esta refeição: informe nome e macros.'
               : mode === 'create'
                 ? 'Copie o rótulo. O alimento fica salvo em Meus alimentos.'
-                : 'Toque num atalho ou busque. Dá para adicionar vários.'}
+                : mode === 'scan'
+                  ? 'Aponte a câmera para as barras ou digite o código.'
+                  : 'Toque num atalho ou busque. Dá para adicionar vários.'}
           </DrawerDescription>
         </DrawerHeader>
 
@@ -309,7 +312,19 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
           </p>
         )}
 
-        {mode === 'create' ? (
+        {mode === 'scan' ? (
+          <>
+            <BarcodeFlow
+              onAdd={(payload) => addItem.mutate(payload)}
+              adding={addItem.isPending}
+              addError={addItem.error?.message}
+              onCreateManually={() => startCreate('')}
+            />
+            <Button variant="ghost" className="w-full" onClick={() => setMode('search')}>
+              Voltar para a busca
+            </Button>
+          </>
+        ) : mode === 'create' ? (
           <CustomFoodForm
             initial={emptyCustomFoodForm(createName)}
             submitLabel="Salvar e escolher quantidade"
@@ -386,6 +401,10 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
               setMode('manual');
             }}
             onCreate={startCreate}
+            onScan={() => {
+              addItem.reset();
+              setMode('scan');
+            }}
           />
         )}
 
@@ -423,6 +442,7 @@ interface SearchPanelProps {
   onPick: (food: Food | FoodShortcut) => void;
   onSwitchToManual: () => void;
   onCreate: (name: string) => void;
+  onScan: () => void;
 }
 
 function SearchPanel({
@@ -443,6 +463,7 @@ function SearchPanel({
   onPick,
   onSwitchToManual,
   onCreate,
+  onScan,
 }: SearchPanelProps) {
   const typing = debounced.trim().length >= 2;
   const hasShortcuts =
@@ -451,18 +472,31 @@ function SearchPanel({
 
   return (
     <>
-      <div className="relative my-3">
-        <Search
-          size={16}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-        />
-        <Input
-          autoFocus
-          value={q}
-          onChange={(e) => onQChange(e.target.value)}
-          placeholder="Ex.: arroz, frango, banana..."
-          className="pl-9"
-        />
+      <div className="my-3 flex gap-2">
+        <div className="relative flex-1">
+          <Search
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            autoFocus
+            value={q}
+            onChange={(e) => onQChange(e.target.value)}
+            placeholder="Ex.: arroz, frango, banana..."
+            className="pl-9"
+          />
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={onScan}
+          aria-label="Ler código de barras"
+          title="Ler código de barras"
+          className="shrink-0"
+        >
+          <ScanBarcode size={18} aria-hidden />
+        </Button>
       </div>
       <ul className="-mx-4 max-h-[55vh] divide-y overflow-y-auto">
         {isFetching && <li className="px-4 py-3 text-sm text-muted-foreground">Buscando...</li>}

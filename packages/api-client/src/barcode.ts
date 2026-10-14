@@ -346,3 +346,20 @@ export function findSavedProduct<T extends Pick<Food, 'name'>>(
   const target = comparable(name);
   return customFoods.find((food) => comparable(food.name) === target);
 }
+
+/**
+ * Item ligado ao alimento guardado, na quantidade escolhida no painel.
+ *
+ * Quando a quantidade é exatamente uma medida do alimento (a "porção" que veio
+ * do rótulo), vai como `portionId` + 1: no histórico aparece "1 porção (30 g)",
+ * que é como a pessoa pensa no que comeu. Fora isso, gramas.
+ */
+export function savedProductItem(
+  food: Pick<Food, 'id' | 'portions'>,
+  grams: number,
+): { foodId: number; grams: number } | { foodId: number; portionId: string; quantity: number } {
+  const portion = food.portions?.find((p) => p.grams === grams);
+  return portion
+    ? { foodId: food.id, portionId: portion.id, quantity: 1 }
+    : { foodId: food.id, grams };
+}

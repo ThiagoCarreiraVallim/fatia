@@ -19,6 +19,7 @@ import {
   customFoodFromProduct,
   customFoodFromProductForm,
   findSavedProduct,
+  savedProductItem,
 } from '../barcode';
 
 /** Dados reais do Open Food Facts, os mesmos das fixtures da API. */
@@ -493,5 +494,21 @@ describe('findSavedProduct', () => {
 
   it('não acha o que não foi guardado', () => {
     expect(findSavedProduct(guardados, 'Leite Condensado')).toBeUndefined();
+  });
+});
+
+describe('savedProductItem', () => {
+  const guardado = {
+    id: 7,
+    portions: [{ id: 'p1', label: 'porção', grams: 20, mine: true }],
+  };
+
+  it('a porção do rótulo vira a medida, para o histórico dizer "1 porção (20 g)"', () => {
+    expect(savedProductItem(guardado, 20)).toEqual({ foodId: 7, portionId: 'p1', quantity: 1 });
+  });
+
+  it('outra quantidade vai em gramas', () => {
+    expect(savedProductItem(guardado, 50)).toEqual({ foodId: 7, grams: 50 });
+    expect(savedProductItem({ id: 7 }, 20)).toEqual({ foodId: 7, grams: 20 });
   });
 });

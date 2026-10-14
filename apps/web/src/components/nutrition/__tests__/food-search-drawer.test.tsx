@@ -5,7 +5,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { format } from 'date-fns';
 import { FoodSearchDrawer } from '../food-search-drawer';
-import type { FoodPortion, FoodShortcut } from '@fatia/api-client';
+import {
+  ApiError,
+  type BarcodeLookup,
+  type FoodPortion,
+  type FoodShortcut,
+} from '@fatia/api-client';
 
 vi.mock('@/components/ui/drawer', () => {
   const Passthrough = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
@@ -36,6 +41,8 @@ vi.mock('@fatia/api-client', async () => {
       logMealTemplate: vi.fn(),
       deleteMealTemplate: vi.fn(),
       createCustomFood: vi.fn(),
+      customFoods: vi.fn(),
+      lookupBarcode: vi.fn(),
     },
   };
 });
@@ -52,6 +59,8 @@ const mealTemplates = vi.mocked(nutritionApi.mealTemplates);
 const logMealTemplate = vi.mocked(nutritionApi.logMealTemplate);
 const deleteMealTemplate = vi.mocked(nutritionApi.deleteMealTemplate);
 const createCustomFood = vi.mocked(nutritionApi.createCustomFood);
+const customFoods = vi.mocked(nutritionApi.customFoods);
+const lookupBarcode = vi.mocked(nutritionApi.lookupBarcode);
 
 const colher: FoodPortion = { id: 'p1', label: 'colher de sopa', grams: 25, mine: false };
 const escumadeira: FoodPortion = { id: 'p2', label: 'escumadeira', grams: 90, mine: false };
@@ -90,6 +99,8 @@ describe('FoodSearchDrawer', () => {
     setFavorite.mockReset().mockResolvedValue(undefined);
     vi.mocked(nutritionApi.nutrientTargets).mockResolvedValue([]);
     mealTemplates.mockReset().mockResolvedValue([]);
+    customFoods.mockReset().mockResolvedValue([]);
+    lookupBarcode.mockReset();
   });
 
   afterEach(() => {
@@ -559,6 +570,191 @@ describe('FoodSearchDrawer', () => {
         'Você já tem um alimento chamado "Pão".',
       );
       expect(screen.getByLabelText('Nome')).toHaveValue('Pão');
+    });
+  });
+
+  describe('código de barras', () => {
+    const leiteCondensado: BarcodeLookup = {
+      status: 'ok',
+      product: {
+        barcode: '7891000100103',
+        name: 'Leite Condensado',
+        brand: 'Moça',
+        basis: '100g',
+        kcalPer100g: 325,
+        proteinPer100g: 7,
+        carbsPer100g: 55,
+        fatPer100g: 8,
+        servingSize: 20,
+        servingLabel: '20 g',
+      },
+      attribution: {
+        source: 'Open Food Facts',
+        license: 'ODbL 1.0',
+        url: 'https://world.openfoodfacts.org/product/7891000100103',
+      },
+    };
+
+    async function lerCodigo(user: ReturnType<typeof userEvent.setup>, codigo = '7891000100103') {
+      await user.click(screen.getByRole('button', { name: 'Ler código de barras' }));
+      await user.type(screen.getByLabelText('Digitar o código'), codigo);
+      await user.click(screen.getByRole('button', { name: 'Buscar' }));
+    }
+
+    it('lê pelo código digitado e registra a porção do rótulo como item livre', async () => {
+      lookupBarcode.mockResolvedValue(leiteCondensado);
+      createMeal.mockResolvedValue({ id: 'm1' } as never);
+      const user = userEvent.setup();
+      renderDrawer({ mealType: 'SNACK', date: '2026-05-10' });
+
+      await lerCodigo(user);
+
+      expect(lookupBarcode).toHaveBeenCalledWith('7891000100103');
+      expect(await screen.findByText('Leite Condensado (Moça)')).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: '1 porção (20 g)' })).toBeChecked();
+      expect(screen.getByText('Total: 65 kcal · P 1,4 · C 11 · G 1,6')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /Open Food Facts/ })).toHaveAttribute(
+        'href',
+        'https://world.openfoodfacts.org/product/7891000100103',
+      );
+      await user.click(screen.getByRole('button', { name: /^adicionar$/i }));
+
+      await waitFor(() => expect(createMeal).toHaveBeenCalledTimes(1));
+      expect(createMeal.mock.calls[0][0]).toMatchObject({
+        mealType: 'SNACK',
+        items: [
+          {
+            foodName: 'Leite Condensado (Moça)',
+            grams: 20,
+            kcal: 65,
+            proteinG: 1.4,
+            carbsG: 11,
+            fatG: 1.6,
+          },
+        ],
+      });
+      expect(createMeal.mock.calls[0][0].items[0]).not.toHaveProperty('foodId');
+      // Volta à busca, pronto para o próximo item.
+      expect(await screen.findByText('Leite Condensado (Moça) adicionado')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/Ex\.: arroz/)).toBeInTheDocument();
+    });
+
+    it('guardar em Meus alimentos cria o alimento e registra ligado a ele', async () => {
+      lookupBarcode.mockResolvedValue(leiteCondensado);
+      createCustomFood.mockResolvedValue(
+        food(901, 'Leite Condensado (Moça)', {
+          source: 'CUSTOM',
+          portions: [{ id: 'pp', label: 'porção', grams: 20, mine: true }],
+        }),
+      );
+      addItem.mockResolvedValue({} as never);
+      const user = userEvent.setup();
+      renderDrawer({ mealId: 'meal-1' });
+
+      await lerCodigo(user);
+      await user.click(await screen.findByLabelText('Guardar em Meus alimentos'));
+      await user.click(screen.getByRole('button', { name: /^adicionar$/i }));
+
+      await waitFor(() => expect(addItem).toHaveBeenCalledTimes(1));
+      expect(createCustomFood).toHaveBeenCalledWith({
+        name: 'Leite Condensado (Moça)',
+        kcalPer100g: 325,
+        proteinPer100g: 7,
+        carbsPer100g: 55,
+        fatPer100g: 8,
+        portions: [{ label: 'porção', grams: 20 }],
+      });
+      expect(addItem).toHaveBeenCalledWith('meal-1', {
+        foodId: 901,
+        portionId: 'pp',
+        quantity: 1,
+      });
+    });
+
+    it('produto já guardado entra ligado ao alimento existente, sem criar outro', async () => {
+      lookupBarcode.mockResolvedValue(leiteCondensado);
+      customFoods.mockResolvedValue([
+        food(55, 'Leite condensado (moça)', { source: 'CUSTOM', portions: [] }),
+      ]);
+      addItem.mockResolvedValue({} as never);
+      const user = userEvent.setup();
+      renderDrawer({ mealId: 'meal-1' });
+
+      await lerCodigo(user);
+      expect(
+        await screen.findByText('Já está em Meus alimentos: o item entra ligado a ele.'),
+      ).toBeInTheDocument();
+      await user.click(screen.getByRole('radio', { name: '100 g' }));
+      await user.click(screen.getByRole('button', { name: /^adicionar$/i }));
+
+      await waitFor(() =>
+        expect(addItem).toHaveBeenCalledWith('meal-1', { foodId: 55, grams: 100 }),
+      );
+      expect(createCustomFood).not.toHaveBeenCalled();
+    });
+
+    it('ficha incompleta abre o formulário sem zero no que faltou', async () => {
+      lookupBarcode.mockResolvedValue({
+        status: 'incomplete',
+        missing: ['proteinPer100g', 'fatPer100g'],
+        partial: {
+          barcode: '7891910000197',
+          basis: '100g',
+          name: 'Açúcar Refinado',
+          brand: 'União',
+          kcalPer100g: 400,
+          carbsPer100g: 100,
+          servingSize: 5,
+          servingLabel: '5 g',
+        },
+        attribution: leiteCondensado.attribution,
+      });
+      createMeal.mockResolvedValue({ id: 'm1' } as never);
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await lerCodigo(user, '7891910000197');
+
+      expect(await screen.findByText(/está sem proteína e gordura/)).toBeInTheDocument();
+      expect(screen.getByLabelText('Proteína (g)')).toHaveValue('');
+      expect(screen.getByRole('button', { name: /^adicionar$/i })).toBeDisabled();
+      await user.type(screen.getByLabelText('Proteína (g)'), '0');
+      await user.type(screen.getByLabelText('Gordura (g)'), '0');
+      await user.click(screen.getByRole('button', { name: /^adicionar$/i }));
+
+      await waitFor(() => expect(createMeal).toHaveBeenCalledTimes(1));
+      expect(createMeal.mock.calls[0][0].items[0]).toMatchObject({
+        foodName: 'Açúcar Refinado (União)',
+        grams: 5,
+        kcal: 20,
+        carbsG: 5,
+      });
+    });
+
+    it('código desconhecido oferece cadastrar à mão', async () => {
+      lookupBarcode.mockRejectedValue(new ApiError('Barcode not found', 404));
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await lerCodigo(user);
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Esse código não está no Open Food Facts.',
+      );
+      await user.click(screen.getByRole('button', { name: 'Cadastrar à mão' }));
+      expect(screen.getByLabelText('Tamanho da porção (g)')).toBeInTheDocument();
+    });
+
+    it('código digitado errado não consulta', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await lerCodigo(user, '123');
+
+      expect(screen.getByLabelText('Digitar o código')).toHaveAccessibleDescription(
+        'O código tem de 8 a 14 números.',
+      );
+      expect(lookupBarcode).not.toHaveBeenCalled();
     });
   });
 });
