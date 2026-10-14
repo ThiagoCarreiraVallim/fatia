@@ -188,6 +188,35 @@ test.describe('copiar e refeições salvas', () => {
   });
 });
 
+test.describe('alimento personalizado', () => {
+  test('nutrição: cadastro pelo drawer e Meus alimentos', async ({ page }) => {
+    await page.goto('/nutrition');
+    await settle(page);
+    const registrar = page.getByRole('button', { name: /^Registrar / }).first();
+    if (await appears(registrar)) {
+      await registrar.click();
+      const drawer = page.getByRole('dialog');
+      await drawer.getByPlaceholder(/Ex\.: arroz/).fill('Granola da casa');
+      const criar = drawer.getByRole('button', { name: 'Criar "Granola da casa"' });
+      if (await appears(criar)) {
+        await criar.click();
+        // Preenche sem salvar: a foto não deixa alimento no demo.
+        await drawer.getByLabel('Tamanho da porção (g)').fill('40');
+        await drawer.getByLabel('Calorias (kcal)').fill('180');
+        await drawer.getByLabel('Proteína (g)').fill('4');
+        await drawer.getByLabel('Carboidrato (g)').fill('24');
+        await drawer.getByLabel('Gordura (g)').fill('7,2');
+        await snap(page, '20-nutricao-criar-alimento', false);
+      }
+      await page.keyboard.press('Escape');
+    }
+
+    await page.goto('/nutrition/foods');
+    await settle(page);
+    await snap(page, '21-meus-alimentos');
+  });
+});
+
 test('login (sem sessão)', async ({ browser }, info) => {
   const context = await browser.newContext({
     ...info.project.use,

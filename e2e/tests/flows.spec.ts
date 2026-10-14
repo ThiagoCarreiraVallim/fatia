@@ -23,7 +23,7 @@ test('refeição lançada em dia passado fica naquele dia', async ({ page }) => 
 
   await page.goto(`/nutrition?date=${dia}`);
   await page.getByRole('button', { name: 'Registrar Lanche' }).click();
-  await page.getByRole('button', { name: /inserir manualmente/i }).click();
+  await page.getByRole('button', { name: /só desta vez/i }).click();
   await page.getByLabel('Nome').fill(nome);
   await page.getByLabel('Gramas').fill('250');
   await page.getByRole('button', { name: /^adicionar$/i }).click();
@@ -218,6 +218,58 @@ test('copiar refeição para outro dia e registrar pela refeição salva', async
     await expect(page.getByRole('button', { name: 'Registrar Jantar' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(0);
   }
+});
+
+test('alimento próprio: cria pela busca, registra por porção e apaga sem perder o histórico', async ({
+  page,
+}) => {
+  const dia = diasAtras(50);
+  const nome = `E2E Granola ${Date.now()}`;
+
+  await page.goto(`/nutrition?date=${dia}`);
+  await page.getByRole('button', { name: 'Registrar Café da manhã' }).click();
+  const drawer = page.getByRole('dialog');
+  await drawer.getByPlaceholder(/Ex\.: arroz/).fill(nome);
+  await drawer.getByRole('button', { name: `Criar "${nome}"` }).click();
+
+  // O rótulo como vem no pacote: porção de 40 g.
+  await expect(drawer.getByLabel('Nome')).toHaveValue(nome);
+  await drawer.getByLabel('Tamanho da porção (g)').fill('40');
+  await drawer.getByLabel('Calorias (kcal)').fill('180');
+  await drawer.getByLabel('Proteína (g)').fill('4');
+  await drawer.getByLabel('Carboidrato (g)').fill('24');
+  await drawer.getByLabel('Gordura (g)').fill('7,2');
+  await expect(drawer.getByText(/Fica guardado como 450 kcal/)).toBeVisible();
+  await drawer.getByRole('button', { name: 'Salvar e escolher quantidade' }).click();
+
+  await drawer.getByRole('radio', { name: /porção · 40 g/ }).click();
+  await drawer.getByRole('button', { name: /^adicionar$/i }).click();
+  await drawer.getByRole('button', { name: /^concluir · 1 item/i }).click();
+  await expect(drawer).toBeHidden();
+  await expect(page.getByRole('button', { name: `Remover ${nome}` })).toBeVisible();
+  await expect(page.getByText(/porção \(40 g\) · 180 kcal/)).toBeVisible();
+
+  // Em Meus alimentos: apagar pede confirmação.
+  await page.goto('/nutrition/foods');
+  await page.getByRole('button', { name: `Editar ${nome}` }).click();
+  await expect(page.getByLabel('Calorias (kcal)')).toHaveValue('450');
+  await page.getByRole('button', { name: 'Apagar alimento' }).click();
+  await page.getByRole('button', { name: 'Apagar', exact: true }).click();
+  await expect(page.getByRole('button', { name: `Editar ${nome}` })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('button', { name: `Editar ${nome}` })).toHaveCount(0);
+
+  // A refeição guarda o nome e os valores: o histórico não muda.
+  await page.goto(`/nutrition?date=${dia}`);
+  await expect(page.getByRole('button', { name: `Remover ${nome}` })).toBeVisible();
+  await expect(page.getByText(/180 kcal/).first()).toBeVisible();
+
+  await page.getByRole('button', { name: 'Remover refeição' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Remover' }).click();
+  await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Registrar Jantar' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(0);
 });
 
 function escapeRegex(text: string) {

@@ -35,6 +35,7 @@ vi.mock('@fatia/api-client', async () => {
       mealTemplates: vi.fn(),
       logMealTemplate: vi.fn(),
       deleteMealTemplate: vi.fn(),
+      createCustomFood: vi.fn(),
     },
   };
 });
@@ -50,6 +51,7 @@ const createPortion = vi.mocked(nutritionApi.createPortion);
 const mealTemplates = vi.mocked(nutritionApi.mealTemplates);
 const logMealTemplate = vi.mocked(nutritionApi.logMealTemplate);
 const deleteMealTemplate = vi.mocked(nutritionApi.deleteMealTemplate);
+const createCustomFood = vi.mocked(nutritionApi.createCustomFood);
 
 const colher: FoodPortion = { id: 'p1', label: 'colher de sopa', grams: 25, mine: false };
 const escumadeira: FoodPortion = { id: 'p2', label: 'escumadeira', grams: 90, mine: false };
@@ -110,12 +112,12 @@ describe('FoodSearchDrawer', () => {
     await waitFor(() => expect(searchFoods).toHaveBeenCalledTimes(2));
   });
 
-  it('switches to the manual form when the user clicks "Inserir manualmente"', async () => {
+  it('switches to the manual form when the user clicks "Registrar só desta vez"', async () => {
     searchFoods.mockResolvedValue([]);
     const user = userEvent.setup();
     renderDrawer();
 
-    await user.click(screen.getByRole('button', { name: /inserir manualmente/i }));
+    await user.click(screen.getByRole('button', { name: /só desta vez/i }));
 
     expect(screen.getByLabelText(/Nome/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^kcal$/i)).toBeInTheDocument();
@@ -126,7 +128,7 @@ describe('FoodSearchDrawer', () => {
     const user = userEvent.setup();
     renderDrawer();
 
-    await user.click(screen.getByRole('button', { name: /inserir manualmente/i }));
+    await user.click(screen.getByRole('button', { name: /só desta vez/i }));
 
     const submit = screen.getByRole('button', { name: /^adicionar$/i });
     expect(submit).toBeDisabled();
@@ -138,7 +140,7 @@ describe('FoodSearchDrawer', () => {
     const user = userEvent.setup();
     renderDrawer({ onOpenChange, mealType: 'LUNCH' });
 
-    await user.click(screen.getByRole('button', { name: /inserir manualmente/i }));
+    await user.click(screen.getByRole('button', { name: /só desta vez/i }));
 
     await user.type(screen.getByLabelText(/Nome/), 'salada caseira');
     await user.clear(screen.getByLabelText(/Gramas/));
@@ -172,7 +174,7 @@ describe('FoodSearchDrawer', () => {
     const user = userEvent.setup();
     renderDrawer({ date: '2026-05-19', mealType: 'DINNER' });
 
-    await user.click(screen.getByRole('button', { name: /inserir manualmente/i }));
+    await user.click(screen.getByRole('button', { name: /só desta vez/i }));
     await user.type(screen.getByLabelText(/Nome/), 'sopa');
     await user.click(screen.getByRole('button', { name: /^adicionar$/i }));
 
@@ -186,7 +188,7 @@ describe('FoodSearchDrawer', () => {
     const user = userEvent.setup();
     renderDrawer({ mealId: 'meal-123' });
 
-    await user.click(screen.getByRole('button', { name: /inserir manualmente/i }));
+    await user.click(screen.getByRole('button', { name: /só desta vez/i }));
     await user.type(screen.getByLabelText(/Nome/), 'pão integral');
     await user.clear(screen.getByLabelText(/Gramas/));
     await user.type(screen.getByLabelText(/Gramas/), '60');
@@ -473,6 +475,90 @@ describe('FoodSearchDrawer', () => {
       await user.click(screen.getByRole('button', { name: 'Confirmar apagar Café de sempre' }));
 
       await waitFor(() => expect(deleteMealTemplate).toHaveBeenCalledWith('t1'));
+    });
+  });
+
+  describe('alimento próprio', () => {
+    it('busca sem resultado oferece criar com o nome digitado, e cai na quantidade', async () => {
+      searchFoods.mockResolvedValue([]);
+      createCustomFood.mockResolvedValue(
+        food(900, 'Granola da casa', {
+          source: 'CUSTOM',
+          kcalPer100g: 450,
+          portions: [{ id: 'px', label: 'porção', grams: 40, mine: true }],
+        }),
+      );
+      createMeal.mockResolvedValue({ id: 'm1' } as never);
+      const user = userEvent.setup();
+      renderDrawer({ mealType: 'BREAKFAST' });
+
+      await user.type(screen.getByPlaceholderText(/Ex\.: arroz/), 'Granola da casa');
+      expect(
+        await screen.findByText('Nenhum resultado para "Granola da casa".'),
+      ).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Criar "Granola da casa"' }));
+
+      expect(screen.getByLabelText('Nome')).toHaveValue('Granola da casa');
+      await user.type(screen.getByLabelText('Tamanho da porção (g)'), '40');
+      await user.type(screen.getByLabelText('Calorias (kcal)'), '180');
+      await user.type(screen.getByLabelText('Proteína (g)'), '4');
+      await user.type(screen.getByLabelText('Carboidrato (g)'), '24');
+      await user.type(screen.getByLabelText('Gordura (g)'), '7,2');
+      expect(screen.getByText(/Fica guardado como 450 kcal/)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Salvar e escolher quantidade' }));
+
+      await waitFor(() => expect(createCustomFood).toHaveBeenCalledTimes(1));
+      expect(createCustomFood).toHaveBeenCalledWith({
+        name: 'Granola da casa',
+        kcalPer100g: 450,
+        proteinPer100g: 10,
+        carbsPer100g: 60,
+        fatPer100g: 18,
+        portions: [{ label: 'porção', grams: 40 }],
+      });
+
+      // O alimento novo já está escolhido, com a porção do rótulo.
+      await user.click(await screen.findByRole('radio', { name: /porção · 40 g/ }));
+      await user.click(screen.getByRole('button', { name: /^adicionar$/i }));
+      await waitFor(() => expect(createMeal).toHaveBeenCalledTimes(1));
+      expect(createMeal.mock.calls[0][0].items).toEqual([
+        { foodId: 900, portionId: 'px', quantity: 1 },
+      ]);
+    });
+
+    it('aponta o erro no campo e não envia', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.click(screen.getByRole('button', { name: 'Criar meu alimento' }));
+      await user.type(screen.getByLabelText('Nome'), 'Biscoito');
+      await user.click(screen.getByRole('button', { name: 'Salvar e escolher quantidade' }));
+
+      expect(screen.getByLabelText('Tamanho da porção (g)')).toHaveAccessibleDescription(
+        'Informe o tamanho da porção em gramas.',
+      );
+      expect(screen.getByLabelText('Calorias (kcal)')).toHaveAccessibleDescription(
+        'Informe as calorias.',
+      );
+      expect(createCustomFood).not.toHaveBeenCalled();
+    });
+
+    it('nome repetido mostra a mensagem da API e mantém o formulário', async () => {
+      createCustomFood.mockRejectedValue(new Error('Você já tem um alimento chamado "Pão".'));
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.click(screen.getByRole('button', { name: 'Criar meu alimento' }));
+      await user.type(screen.getByLabelText('Nome'), 'Pão');
+      await user.click(screen.getByRole('radio', { name: 'Por 100 g' }));
+      expect(screen.queryByLabelText('Tamanho da porção (g)')).not.toBeInTheDocument();
+      await user.type(screen.getByLabelText('Calorias (kcal)'), '300');
+      await user.click(screen.getByRole('button', { name: 'Salvar e escolher quantidade' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Você já tem um alimento chamado "Pão".',
+      );
+      expect(screen.getByLabelText('Nome')).toHaveValue('Pão');
     });
   });
 });

@@ -12,6 +12,7 @@ import { MacroBentoGrid } from '@/components/nutrition/macro-bento-grid';
 import { MealTimeline } from '@/components/nutrition/meal-timeline';
 import { WeeklyTrendChart } from '@/components/nutrition/weekly-trend-chart';
 import { NutrientTargetsCard } from '@/components/nutrition/nutrient-targets-card';
+import { CustomFoodsCard } from '@/components/nutrition/custom-foods-card';
 import { FoodSearchDrawer } from '@/components/nutrition/food-search-drawer';
 import { CopyDayDrawer } from '@/components/nutrition/copy-day-drawer';
 
@@ -87,6 +88,7 @@ function NutritionPageContent() {
             onAddMeal={(mt) => setNewMealType(mt)}
           />
           <WeeklyTrendChart today={todayIso()} />
+          <CustomFoodsCard />
         </>
       )}
 

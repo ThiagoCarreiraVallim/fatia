@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Search, Star, Trash2 } from 'lucide-react';
+import { Check, Plus, Search, Star, Trash2 } from 'lucide-react';
 import {
   Drawer,
   DrawerClose,
@@ -16,12 +16,14 @@ import { Input } from '@/components/ui/input';
 import {
   amountGrams,
   amountPayload,
+  emptyCustomFoodForm,
   initialAmount,
   nutritionApi,
   shortcutDetail,
   templateSummary,
   withFavorite,
   type Amount,
+  type CustomFoodInput,
   type Food,
   type FoodPortion,
   type FoodShortcut,
@@ -31,6 +33,7 @@ import {
 } from '@fatia/api-client';
 import { instanteNoDia } from '@/lib/dias';
 import { AmountPicker } from './amount-picker';
+import { CustomFoodForm } from './custom-food-form';
 
 interface Props {
   open: boolean;
@@ -41,7 +44,7 @@ interface Props {
   date: string;
 }
 
-type Mode = 'search' | 'manual';
+type Mode = 'search' | 'manual' | 'create';
 
 interface ItemPayload {
   foodId?: number;
@@ -80,6 +83,8 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
   // As medidas do alimento escolhido, mais as que a pessoa criar sem fechar o drawer.
   const [portions, setPortions] = useState<FoodPortion[]>([]);
   const [manual, setManual] = useState(INITIAL_MANUAL);
+  // Nome que a busca já tinha: "Criar "granola X"" chega com ele preenchido.
+  const [createName, setCreateName] = useState('');
   const [manualNutrients, setManualNutrients] = useState<Record<string, string>>({});
   // Vários itens por abertura: o primeiro cria a refeição, os seguintes entram nela.
   const [createdMealId, setCreatedMealId] = useState<string | null>(null);
@@ -110,6 +115,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
       setAmount(INITIAL_AMOUNT);
       setPortions([]);
       setManual(INITIAL_MANUAL);
+      setCreateName('');
       setManualNutrients({});
       setCreatedMealId(null);
       setAdded([]);
@@ -201,6 +207,24 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
     },
   });
 
+  // Criou, já escolhe: o alimento cai no seletor de quantidade da refeição aberta.
+  const createFood = useMutation<Food, Error, CustomFoodInput>({
+    mutationFn: (input) => nutritionApi.createCustomFood(input),
+    onSuccess: (food) => {
+      qc.invalidateQueries({ queryKey: ['nutrition', 'search'] });
+      qc.invalidateQueries({ queryKey: ['nutrition', 'custom-foods'] });
+      setMode('search');
+      pick(food);
+    },
+  });
+
+  const startCreate = (name: string) => {
+    addItem.reset();
+    createFood.reset();
+    setCreateName(name);
+    setMode('create');
+  };
+
   const createPortion = async (label: string, grams: number) => {
     if (!selected) throw new Error('Sem alimento');
     const created = await nutritionApi.createPortion(selected.id, { label, grams });
@@ -268,8 +292,10 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
           <DrawerTitle>{title}</DrawerTitle>
           <DrawerDescription>
             {mode === 'manual'
-              ? 'Informe nome e macros do alimento.'
-              : 'Toque num atalho ou busque. Dá para adicionar vários.'}
+              ? 'Só para esta refeição: informe nome e macros.'
+              : mode === 'create'
+                ? 'Copie o rótulo. O alimento fica salvo em Meus alimentos.'
+                : 'Toque num atalho ou busque. Dá para adicionar vários.'}
           </DrawerDescription>
         </DrawerHeader>
 
@@ -283,7 +309,16 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
           </p>
         )}
 
-        {mode === 'manual' ? (
+        {mode === 'create' ? (
+          <CustomFoodForm
+            initial={emptyCustomFoodForm(createName)}
+            submitLabel="Salvar e escolher quantidade"
+            pending={createFood.isPending}
+            error={createFood.error?.message}
+            onSubmit={(input) => createFood.mutate(input)}
+            onCancel={() => setMode('search')}
+          />
+        ) : mode === 'manual' ? (
           <ManualForm
             values={manual}
             onChange={setManual}
@@ -350,6 +385,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
               addItem.reset();
               setMode('manual');
             }}
+            onCreate={startCreate}
           />
         )}
 
@@ -386,6 +422,7 @@ interface SearchPanelProps {
   onToggleFavorite: (food: Food) => void;
   onPick: (food: Food | FoodShortcut) => void;
   onSwitchToManual: () => void;
+  onCreate: (name: string) => void;
 }
 
 function SearchPanel({
@@ -405,6 +442,7 @@ function SearchPanel({
   onToggleFavorite,
   onPick,
   onSwitchToManual,
+  onCreate,
 }: SearchPanelProps) {
   const typing = debounced.trim().length >= 2;
   const hasShortcuts =
@@ -482,7 +520,13 @@ function SearchPanel({
           </>
         )}
         {typing && !isFetching && !isError && data?.length === 0 && (
-          <li className="px-4 py-3 text-sm text-muted-foreground">Nenhum resultado.</li>
+          <li className="space-y-2 px-4 py-3 text-sm">
+            <p className="text-muted-foreground">{`Nenhum resultado para "${debounced.trim()}".`}</p>
+            <Button variant="outline" size="sm" onClick={() => onCreate(debounced.trim())}>
+              <Plus size={14} aria-hidden />
+              {`Criar "${debounced.trim()}"`}
+            </Button>
+          </li>
         )}
         {typing &&
           data?.map((food) => (
@@ -496,13 +540,19 @@ function SearchPanel({
             />
           ))}
       </ul>
-      <button
-        type="button"
-        onClick={onSwitchToManual}
-        className="mt-3 w-full text-sm text-primary underline"
-      >
-        Não achei, inserir manualmente
-      </button>
+      <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm">
+        <span className="text-muted-foreground">Não achou?</span>
+        <button
+          type="button"
+          onClick={() => onCreate(q.trim())}
+          className="min-h-9 font-medium text-primary underline"
+        >
+          Criar meu alimento
+        </button>
+        <button type="button" onClick={onSwitchToManual} className="min-h-9 text-primary underline">
+          Registrar só desta vez
+        </button>
+      </div>
     </>
   );
 }
