@@ -68,7 +68,7 @@ e ele fica fora da conta.
 | Braço        | Servidas | No chat | Tokens servidas | Tokens no chat | Descrições no chat | `sha256` do `tools/list`                                           |
 | ------------ | -------: | ------: | --------------: | -------------: | -----------------: | ------------------------------------------------------------------ |
 | A — entidade |      106 |      88 |          20.666 |         17.968 |              4.097 | `3ef29a0d62b40d259f6d7051a67ce91f80b546b35be181af889c682d39e71879` |
-| B — intenção |       40 |      23 |           8.343 |          5.904 |              1.304 | `25531e4c78dea4b4578f742e0dc7a7db7624956ece67c43b04315280a9ea8a37` |
+| B — intenção |       40 |      23 |           8.400 |          5.961 |              1.304 | `92bc039278336d9e4115eab510c1796c6c3137d7d3b84ecf3751b4b9a0fb5831` |
 
 Esta é a linha de base do braço A, e ela mudou duas vezes antes da primeira medição. A primeira
 (103 servidas, 85 no chat, 20.379 e 17.681 tokens, `sha256` `10daa3b9…`) era a do catálogo de antes
@@ -79,7 +79,8 @@ segunda (20.766 e 18.068 tokens, `ef9e1555…`) servia o `muscleGroup` de cinco 
 `xiaomi/mimo-v2.6-pro` não rodava o braço A. O charset passou a ser conferido por `refine` no
 servidor, que aceita o mesmo e não vira `pattern` no schema; descrições, nomes e campos não mudaram,
 e o `tool-catalog.spec.ts` reprova `\p{…}` em schema servido nas duas superfícies. O braço B não
-tinha nenhum, e o `sha256` dele não mudou. O conjunto RESTRICTED não mudou — as mesmas 18 —, e o piso
+tinha nenhum, e o `sha256` dele não mudou com isso: a linha da tabela é a do B congelado, depois do
+ajuste no `dev` (antes dele, 8.343 e 5.904 tokens, `25531e4c…`). O conjunto RESTRICTED não mudou — as mesmas 18 —, e o piso
 da métrica 3 continua o mesmo.
 
 Sem API no ar, `pnpm --filter @fatia/api catalogo:servido <superficie>` imprime o mesmo `tools/list`
@@ -336,6 +337,18 @@ das linhas do split `eval`, na ordem do arquivo, cada uma terminada em `\n`:
 É a partir desta data que mudar uma tarefa do `eval` é mudar o experimento. Acrescentar ou corrigir
 tarefa do `dev` não muda a impressão digital, pelo mesmo motivo do eval de reconhecimento: não
 mudou nada do que é medido.
+
+O **braço B** foi congelado em 2026-10-14, depois do ajuste no `dev` registrado em
+[`ajustes-braco-b.md`](../apps/agent/eval/ajustes-braco-b.md) — um útil, um inútil revertido e um
+descartado antes de medir. O que o `eval` mede é este `tools/list` com `intencao`:
+
+```text
+92bc039278336d9e4115eab510c1796c6c3137d7d3b84ecf3751b4b9a0fb5831   (40 servidas, 23 no chat)
+```
+
+O catálogo B congelado tem 8.400 tokens servidas e 5.961 no chat; a medida de antes do ajuste
+(8.343 e 5.904, `25531e4c…`) é a da linha de base, em "O catálogo de cada braço, medido". Mudar uma descrição do B depois daqui é outra
+configuração, e o ledger a registra como tal.
 
 ### O ledger vale aqui igual
 

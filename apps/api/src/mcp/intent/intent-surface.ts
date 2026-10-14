@@ -105,7 +105,12 @@ const period = z
     'last_180_days',
     'last_365_days',
   ])
-  .describe('Janela, no fuso da conta. "this_week" começa na segunda; "last_7_days" inclui hoje.');
+  .describe(
+    'Janela, no fuso da conta. "this_week" (começa na segunda) é o resumo da semana: médias de ' +
+      'kcal e proteína, treinos, passos e peso, sem água. As demais trazem dia a dia kcal, água e ' +
+      'passos contra a meta: para "tô batendo a meta de água essa semana", use "last_7_days" ' +
+      '(inclui hoje).',
+  );
 
 const macros = {
   kcal: z.number().min(0).optional().describe('kcal do item, quando não vier do catálogo'),

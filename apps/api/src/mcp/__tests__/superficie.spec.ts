@@ -23,7 +23,7 @@ import {
  */
 
 const SHA_ENTIDADE = '3ef29a0d62b40d259f6d7051a67ce91f80b546b35be181af889c682d39e71879';
-const SHA_INTENCAO = '25531e4c78dea4b4578f742e0dc7a7db7624956ece67c43b04315280a9ea8a37';
+const SHA_INTENCAO = '92bc039278336d9e4115eab510c1796c6c3137d7d3b84ecf3751b4b9a0fb5831';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */
 function comoPython(valor: unknown): string {
