@@ -29,6 +29,15 @@ const CONTAS = [
   { persona: 'PROFISSIONAL', username: 'fatia_eval_profissional', name: 'Carlos Mendes (eval)' },
 ] as const;
 
+/**
+ * Entre aspas simples: o segredo que o Logto gera pode começar com `#`, e o `dotenv` lê um
+ * valor sem aspas que começa com `#` como comentário — a variável chega vazia, e o runner
+ * recusa a conta como se o `.env` não tivesse sido preenchido.
+ */
+function noEnv(valor: string): string {
+  return `'${valor}'`;
+}
+
 function exigir(nome: string): string {
   const valor = process.env[nome]?.trim();
   if (!valor) throw new Error(`${nome} não definido.`);
@@ -141,7 +150,7 @@ export async function runEvalContas(): Promise<void> {
   const api = gestao(endpoint, await tokenDeGestao(endpoint));
 
   const app = await appDeTroca(api);
-  const linhas = [`EVAL_LOGTO_APP_ID=${app.id}`, `EVAL_LOGTO_APP_SECRET=${app.secret}`];
+  const linhas = [`EVAL_LOGTO_APP_ID=${app.id}`, `EVAL_LOGTO_APP_SECRET=${noEnv(app.secret)}`];
 
   const expiresAt = Date.now() + VALIDADE_DO_PAT_DIAS * 24 * 60 * 60 * 1000;
   for (const c of CONTAS) {
@@ -150,7 +159,7 @@ export async function runEvalContas(): Promise<void> {
       method: 'POST',
       body: { name: `eval-${new Date().toISOString()}`, expiresAt },
     });
-    linhas.push(`EVAL_SUB_${c.persona}=${sub}`, `EVAL_PAT_${c.persona}=${pat.value}`);
+    linhas.push(`EVAL_SUB_${c.persona}=${sub}`, `EVAL_PAT_${c.persona}=${noEnv(pat.value)}`);
   }
 
   console.log('# Contas de avaliação — cole no .env (que não vai para o git).');
