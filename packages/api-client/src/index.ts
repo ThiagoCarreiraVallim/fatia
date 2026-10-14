@@ -40,3 +40,4 @@ export * from './session-view';
 export * from './streak-copy';
 export * from './meal-timeline';
 export * from './dashboard-copy';
+export * from './quick-add';
