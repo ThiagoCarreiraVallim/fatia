@@ -3,12 +3,17 @@ import { Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Search, Star } from 'lucide-react-native';
 import {
-  initialGrams,
+  amountGrams,
+  amountPayload,
+  initialAmount,
   nutritionApi,
   shortcutDetail,
   shortcutRows,
   withFavorite,
+  type Amount,
   type Food,
+  type FoodPortion,
+  type FoodShortcut,
   type FoodShortcuts,
   type MealType,
   type ShortcutRow,
@@ -33,6 +38,7 @@ import {
   parsePositivo,
   previaDoAlimento,
 } from './helpers';
+import { SeletorDeQuantidade } from './seletor-de-quantidade';
 
 /**
  * Réplica de `apps/web/src/components/nutrition/food-search-drawer.tsx`.
@@ -67,6 +73,8 @@ interface Props {
   date: string;
 }
 
+const QUANTIDADE_INICIAL: Amount = { kind: 'grams', grams: '100' };
+
 const MANUAL_INICIAL = { name: '', grams: '100', kcal: '', proteinG: '', carbsG: '', fatG: '' };
 type ValoresManuais = typeof MANUAL_INICIAL;
 
@@ -75,7 +83,9 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
   const [busca, setBusca] = useState('');
   const [buscaComAtraso, setBuscaComAtraso] = useState('');
   const [selecionado, setSelecionado] = useState<Food | null>(null);
-  const [gramas, setGramas] = useState('100');
+  const [quantidade, setQuantidade] = useState<Amount>(QUANTIDADE_INICIAL);
+  // As medidas do alimento escolhido, mais as que a pessoa criar sem fechar o drawer.
+  const [medidas, setMedidas] = useState<FoodPortion[]>([]);
   const [manual, setManual] = useState<ValoresManuais>(MANUAL_INICIAL);
   const [nutrientesManuais, setNutrientesManuais] = useState<Record<string, string>>({});
   // Vários itens por abertura: o primeiro cria a refeição, os seguintes entram nela.
@@ -104,7 +114,8 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
       setBusca('');
       setBuscaComAtraso('');
       setSelecionado(null);
-      setGramas('100');
+      setQuantidade(QUANTIDADE_INICIAL);
+      setMedidas([]);
       setManual(MANUAL_INICIAL);
       setNutrientesManuais({});
       setRefeicaoCriada(null);
@@ -171,17 +182,31 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
       setSelecionado(null);
       setBusca('');
       setBuscaComAtraso('');
-      setGramas('100');
+      setQuantidade(QUANTIDADE_INICIAL);
+      setMedidas([]);
       setManual(MANUAL_INICIAL);
       setNutrientesManuais({});
     },
   });
 
-  const escolher = (food: Food, ultimaGramagem: number | null = null) => {
+  const escolher = (food: Food | FoodShortcut) => {
     adicionar.reset();
     setSelecionado(food);
-    setGramas(initialGrams(ultimaGramagem));
+    setMedidas(food.portions ?? []);
+    setQuantidade(initialAmount(food));
   };
+
+  const criarMedida = async (rotulo: string, g: number) => {
+    if (!selecionado) throw new Error('Sem alimento');
+    const criada = await nutritionApi.createPortion(selecionado.id, { label: rotulo, grams: g });
+    setMedidas((anteriores) => [...anteriores, criada]);
+    // Busca e atalhos guardaram o alimento sem a medida nova.
+    void qc.invalidateQueries({ queryKey: ['nutrition', 'search'] });
+    void qc.invalidateQueries({ queryKey: ['nutrition', 'my-foods'] });
+    return criada;
+  };
+
+  const gramas = selecionado ? amountGrams(quantidade, medidas) : null;
 
   const erro = adicionar.error
     ? mensagemDeErro(adicionar.error, {
@@ -193,10 +218,12 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
     : undefined;
 
   const enviarDaBusca = () => {
-    if (!selecionado) return;
-    const g = parsePositivo(gramas);
-    if (g === null) return;
-    adicionar.mutate({ foodId: selecionado.id, grams: g, rotulo: selecionado.name });
+    if (!selecionado || gramas === null) return;
+    adicionar.mutate({
+      foodId: selecionado.id,
+      ...amountPayload(quantidade),
+      rotulo: selecionado.name,
+    });
   };
 
   const enviarManual = () => {
@@ -274,7 +301,14 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
             favorito={favoritos.has(selecionado.id)}
             onAlternarFavorito={() => alternarFavorito(selecionado)}
             gramas={gramas}
-            onGramasChange={setGramas}
+            seletor={
+              <SeletorDeQuantidade
+                medidas={medidas}
+                quantidade={quantidade}
+                onChange={setQuantidade}
+                onCriarMedida={criarMedida}
+              />
+            }
             onBack={() => {
               setSelecionado(null);
               adicionar.reset();
@@ -343,7 +377,7 @@ function PainelDeBusca({
   atalhos: FoodShortcuts | undefined;
   favoritos: ReadonlySet<number>;
   onAlternarFavorito: (food: Food) => void;
-  onEscolher: (food: Food, ultimaGramagem?: number | null) => void;
+  onEscolher: (food: Food | FoodShortcut) => void;
   onManual: () => void;
 }) {
   const digitando = buscaComAtraso.trim().length >= 2;
@@ -432,7 +466,7 @@ function PainelDeBusca({
                   : shortcutDetail(linha.food)
               }
               favorito={favoritos.has(linha.food.id)}
-              onEscolher={() => onEscolher(linha.food, digitando ? null : linha.food.lastGrams)}
+              onEscolher={() => onEscolher(linha.food)}
               onAlternarFavorito={() => onAlternarFavorito(linha.food)}
             />
           )
@@ -522,7 +556,7 @@ function PainelDoAlimento({
   favorito,
   onAlternarFavorito,
   gramas,
-  onGramasChange,
+  seletor,
   onBack,
   onSubmit,
   enviando,
@@ -531,15 +565,16 @@ function PainelDoAlimento({
   food: Food;
   favorito: boolean;
   onAlternarFavorito: () => void;
-  gramas: string;
-  onGramasChange: (valor: string) => void;
+  /** Gramas que vão ser gravadas (digitadas ou da medida); `null` se ainda não dá. */
+  gramas: number | null;
+  seletor: React.ReactNode;
   onBack: () => void;
   onSubmit: () => void;
   enviando: boolean;
   erro: string | undefined;
 }) {
-  const previa = previaDoAlimento(food, gramas);
-  const podeEnviar = parsePositivo(gramas) !== null;
+  const previa = gramas !== null ? previaDoAlimento(food, String(gramas)) : null;
+  const podeEnviar = gramas !== null;
 
   return (
     <View className="flex-1 gap-4 px-4 py-3">
@@ -553,13 +588,7 @@ function PainelDoAlimento({
         <BotaoFavorito nome={food.name} favorito={favorito} onPress={onAlternarFavorito} />
       </View>
 
-      <DrawerInput
-        label="Quantidade (g)"
-        keyboardType="numeric"
-        inputMode="decimal"
-        value={gramas}
-        onChangeText={onGramasChange}
-      />
+      {seletor}
 
       {previa ? (
         <Text style={NUMEROS_TABULARES} className="text-sm text-muted-foreground">

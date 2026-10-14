@@ -1,7 +1,7 @@
 import type { TextStyle } from 'react-native';
 import { addDays, format, getDay, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ApiError, type Food, type MealType } from '@fatia/api-client';
+import { ApiError, itemAmountText, type Food, type MealType } from '@fatia/api-client';
 
 /**
  * Lógica pura da fatia de nutrição.
@@ -113,15 +113,17 @@ export function totalKcal(itens: Array<{ kcal: number }>): number {
   return itens.reduce((soma, item) => soma + item.kcal, 0);
 }
 
-/** `120g · 210 kcal · P8 C20 G3` */
+/** `120 g · 210 kcal · P8 C20 G3`, ou `2 × colher de sopa (50 g) · …` quando foi em medida. */
 export function resumoDoItem(item: {
   grams: number;
+  portionLabel?: string | null;
+  portionQuantity?: number | null;
   kcal: number;
   proteinG: number;
   carbsG: number;
   fatG: number;
 }): string {
-  return `${item.grams}g · ${Math.round(item.kcal)} kcal · P${Math.round(item.proteinG)} C${Math.round(
+  return `${itemAmountText(item)} · ${Math.round(item.kcal)} kcal · P${Math.round(item.proteinG)} C${Math.round(
     item.carbsG,
   )} G${Math.round(item.fatG)}`;
 }
