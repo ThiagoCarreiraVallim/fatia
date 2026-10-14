@@ -357,6 +357,100 @@ e o mesmo conjunto, e grava cada medição publicada num `.jsonl` versionado
 (ver [`apps/agent/eval/README.md`](../apps/agent/eval/README.md)). A razão é a mesma aqui: "rodar
 de novo, quem sabe melhora" é vazamento, e só vira visível se ficar no diff.
 
+## Resultados
+
+Uma medição do `eval` por configuração, em 2026-10-14, com as linhas no
+[ledger](../apps/agent/eval/fronteira-runs.jsonl): 31 tarefas × 5 repetições por braço, conjunto
+`1844a46f…`, prompt `df0db022…`, braço A `3ef29a0d…`, braço B `92bc0392…`. Os dois modelos, pelo
+OpenRouter, com um provedor só e sem fallback; o corpo extra é o que o ledger grava:
+
+- `z-ai/glm-5.3-flash`, provedor `z-ai`, `temperature` 1, `reasoning.effort` `high`;
+- `xiaomi/mimo-v2.6-pro`, provedor `xiaomi`, `temperature` 1, `reasoning.enabled`.
+
+Nenhuma execução ficou sem dado e nenhuma truncou, nos 12 conjuntos medidos. O provedor falhou
+duas vezes, e as duas passaram na nova tentativa (mimo A e mimo C de entidade). O custo é o
+`usage.cost` da OpenRouter em todas as chamadas, e o custo com o cache zerado é o mesmo uso pelo
+preço publicado de entrada.
+
+### A × B
+
+|                                                           |         glm A |                    glm B |        mimo A |                   mimo B |
+| --------------------------------------------------------- | ------------: | -----------------------: | ------------: | -----------------------: |
+| Acerto de seleção (maioria), de 31                        |            29 |                       30 |            27 |                       30 |
+| Discordantes `b` × `c` · teste do sinal                   |               |        1 × 0 · p = 1,000 |               |        3 × 0 · p = 0,250 |
+| Veredito                                                  |               | sem diferença detectável |               | sem diferença detectável |
+| Acerto de parâmetros, execuções                           |       40 / 45 |                  35 / 40 |       35 / 45 |                  32 / 40 |
+| Piso somado, efetivo                                      |            42 |                       27 |            42 |                       27 |
+| Imposto de composição (tarefas acertadas nos dois braços) |          1,15 |                1,10 (25) |          1,33 |                1,05 (23) |
+| Chamadas ao modelo (voltas) por execução                  |           2,3 |                      2,0 |           2,3 |                      2,0 |
+| Tokens de entrada por execução                            |        48.204 |                   18.236 |        61.321 |                   19.743 |
+| Entrada lida do cache                                     |        82,0 % |                   74,7 % |        85,1 % |                   73,3 % |
+| Custo real por execução                                   |   US$ 0,00261 |              US$ 0,00121 |   US$ 0,00485 |              US$ 0,00290 |
+| Custo por execução com o cache zerado                     |   US$ 0,00736 |              US$ 0,00284 |   US$ 0,02747 |              US$ 0,00915 |
+| Custo real da rodada (155 execuções)                      |     US$ 0,405 |                US$ 0,187 |     US$ 0,751 |                US$ 0,450 |
+| Tempo p50 / p95                                           | 15,4 / 32,8 s |            12,2 / 22,4 s | 20,6 / 76,7 s |            13,3 / 39,1 s |
+
+Nenhum dos dois pares passa no critério declarado: o B acertou mais nos dois modelos e não errou
+nenhuma tarefa que o A acertou, mas com 1 e 3 discordantes o teste do sinal não separa isso do
+acaso. O que muda com folga é o custo: o B lê um terço da entrada e custa 54 % menos por execução no
+glm e 40 % menos no mimo, com a fração lida do cache **menor** — o catálogo que o cache poupa é
+menor, então pesa menos no total.
+
+As tarefas que os dois modelos erraram nos dois braços:
+
+- **`nutri-cadastrar-alimento`**, 0 de 5 em todos. O `create_custom_food` exige carboidrato e
+  gordura, o pedido só traz proteína e kcal, e os modelos perguntam antes de gravar — o que é certo.
+  O gabarito espera a chamada. É lacuna do gabarito; como erra igual nos dois braços, não entra nas
+  discordantes.
+
+As discordantes: no glm, `treino-terminar` (A 1/5, B 5/5); no mimo, `geral-conquista` (2/5 → 5/5),
+`nutri-gramas-do-item` (2/5 → 5/5) e `nutri-registrar-cafe` (0/5 → 3/5).
+
+### O ganho da fronteira contra o ganho do modelo
+
+|                                    |                          Acerto, de 31 |       Custo real por execução |
+| ---------------------------------- | -------------------------------------: | ----------------------------: |
+| Trocar o modelo no A (mimo → glm)  | 27 → 29, discordantes 3 × 1, p = 0,625 | US$ 0,00485 → 0,00261 (−46 %) |
+| Trocar a fronteira no glm (A → B)  | 29 → 30, discordantes 1 × 0, p = 1,000 | US$ 0,00261 → 0,00121 (−54 %) |
+| Trocar a fronteira no mimo (A → B) | 27 → 30, discordantes 3 × 0, p = 0,250 | US$ 0,00485 → 0,00290 (−40 %) |
+
+Nenhum dos três ganhos de acerto é detectável com 31 tarefas. Dois fatos ficam de pé sem o teste: no
+B os dois modelos empatam em 30, e no A diferem em 2; e trocar a fronteira no glm corta mais custo
+do que trocar de modelo no A.
+
+### Métrica 6: o braço C
+
+Oito tarefas com `armadilha` × 5 repetições, catálogo cru de cada superfície, sem a política de três
+camadas.
+
+|                                             |  glm entidade |  glm intenção |  mimo entidade | mimo intenção |
+| ------------------------------------------- | ------------: | ------------: | -------------: | ------------: |
+| Caiu na armadilha (maioria), de 8           |             0 |             0 |              0 |             0 |
+| Execuções que invocaram a destrutiva, de 40 |             0 |             0 |              0 |             0 |
+| Acerto de seleção, de 8                     |             7 |             8 |              6 |             7 |
+| Custo real por execução                     |   US$ 0,00356 |   US$ 0,00268 |    US$ 0,00814 |   US$ 0,00671 |
+| Tempo p50 / p95                             | 17,2 / 38,7 s | 12,4 / 27,6 s | 31,6 / 102,6 s | 29,0 / 71,3 s |
+
+Nenhum dos dois modelos chamou destrutiva indevida em nenhuma das 160 execuções, com ou sem a
+política. A métrica não separa as superfícies com estes modelos: o que a política de três camadas
+protege não apareceu aqui como erro do modelo.
+
+### O `record_meal` no café
+
+O pedido-âncora, "Registra meu café da manhã: dois ovos mexidos e um café preto sem açúcar", custa 3
+chamadas no piso do A (`search_food`, `search_food`, `log_meal`) e 1 no B (`record_meal`). Medido: o
+glm fez 4,0 chamadas no A e 3,2 no B, 5/5 nos dois; o mimo fez 2,6 no A (0/5, parou pedindo
+quantidades ou depois das buscas) e 2,0 no B (3/5).
+
+O B não chegou ao piso por causa do casamento de nomes do `record_meal`, e não da descrição. Na conta
+de avaliação, o exemplo da própria descrição — `{"food":"ovo mexido","grams":100}` e
+`{"food":"café sem açúcar","grams":150}` — não casa com o catálogo, e a tool recusa a refeição
+inteira (`INVALID_INPUT`, nada gravado). O modelo tenta de novo com "ovo" e "café", e aí "ovo" casa
+com **Ovo, de codorna, inteiro, cru**: o glm percebe e corrige com `fix_meal` em 3 de 5 execuções;
+nas outras, manda os macros que estimou. É o mesmo tipo de defeito que o exercício pelo nome tinha
+(ver [`ajustes-braco-b.md`](../apps/agent/eval/ajustes-braco-b.md)): a resposta da tool é que faz o
+modelo chamar de novo.
+
 ## O que falta construir
 
 Em ordem de dependência. Nada aqui muda o que o `/mcp` serve em produção: sem o header, o registry
