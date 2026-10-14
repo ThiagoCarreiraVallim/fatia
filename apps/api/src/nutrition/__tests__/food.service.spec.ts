@@ -1,5 +1,5 @@
-import { NotFoundException } from '@nestjs/common';
-import { FoodSource } from '@prisma/client';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { FoodSource, Prisma } from '@prisma/client';
 import { FoodService } from '../food.service';
 import type { PrismaService } from '../../common/prisma.service';
 
@@ -12,7 +12,7 @@ type MockPrisma = {
     update: jest.Mock;
     delete: jest.Mock;
   };
-  foodGroup: { findMany: jest.Mock };
+  foodGroup: { findMany: jest.Mock; findUnique: jest.Mock };
 };
 
 const makePrisma = (): MockPrisma => ({
@@ -24,7 +24,7 @@ const makePrisma = (): MockPrisma => ({
     update: jest.fn(),
     delete: jest.fn(),
   },
-  foodGroup: { findMany: jest.fn() },
+  foodGroup: { findMany: jest.fn(), findUnique: jest.fn().mockResolvedValue({ id: 9 }) },
 });
 
 const makeFood = (overrides: Partial<Record<string, unknown>> = {}) => ({
@@ -38,6 +38,11 @@ const makeFood = (overrides: Partial<Record<string, unknown>> = {}) => ({
   carbsPer100g: 28,
   fatPer100g: 0.2,
   ...overrides,
+});
+
+const p2002 = new Prisma.PrismaClientKnownRequestError('dup', {
+  code: 'P2002',
+  clientVersion: 'x',
 });
 
 describe('FoodService', () => {
@@ -217,6 +222,92 @@ describe('FoodService', () => {
     });
   });
 
+  describe('createCustom: validação', () => {
+    const valido = {
+      name: 'Granola da casa',
+      kcalPer100g: 450,
+      proteinPer100g: 10,
+      carbsPer100g: 60,
+      fatPer100g: 18,
+    };
+
+    beforeEach(() => {
+      prisma.food.create.mockResolvedValue(makeFood({ source: FoodSource.CUSTOM }));
+    });
+
+    it('apara o nome antes de gravar e de normalizar', async () => {
+      await service.createCustom(userId, { ...valido, name: '  Granola da casa ' });
+
+      expect(prisma.food.create.mock.calls[0][0].data).toMatchObject({
+        name: 'Granola da casa',
+        searchName: 'granola da casa',
+      });
+    });
+
+    it('nome em branco: 400', async () => {
+      await expect(service.createCustom(userId, { ...valido, name: '   ' })).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prisma.food.create).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['kcal acima de 900', { kcalPer100g: 901 }],
+      ['proteína acima de 100 g', { proteinPer100g: 101, carbsPer100g: 0, fatPer100g: 0 }],
+      ['carboidrato acima de 100 g', { carbsPer100g: 100.5, proteinPer100g: 0, fatPer100g: 0 }],
+      ['gordura acima de 100 g', { fatPer100g: 120, proteinPer100g: 0, carbsPer100g: 0 }],
+      ['macros somando mais de 100 g', { proteinPer100g: 40, carbsPer100g: 50, fatPer100g: 20 }],
+    ])('%s: 400', async (_caso, valores) => {
+      await expect(service.createCustom(userId, { ...valido, ...valores })).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prisma.food.create).not.toHaveBeenCalled();
+    });
+
+    it('óleo puro (100 g de gordura, 900 kcal) passa', async () => {
+      await service.createCustom(userId, {
+        name: 'Óleo',
+        kcalPer100g: 900,
+        proteinPer100g: 0,
+        carbsPer100g: 0,
+        fatPer100g: 100,
+      });
+      expect(prisma.food.create).toHaveBeenCalled();
+    });
+
+    it('grupo inexistente: 400, não erro de chave estrangeira', async () => {
+      prisma.foodGroup.findUnique.mockResolvedValue(null);
+
+      await expect(service.createCustom(userId, { ...valido, groupId: 999 })).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prisma.food.create).not.toHaveBeenCalled();
+    });
+
+    it('nome repetido: 409 com o nome, não 500', async () => {
+      prisma.food.create.mockRejectedValue(p2002);
+
+      await expect(service.createCustom(userId, valido)).rejects.toThrow(
+        new ConflictException('Você já tem um alimento chamado "Granola da casa".'),
+      );
+    });
+  });
+
+  describe('listCustom', () => {
+    it('só os alimentos próprios da pessoa, em ordem de nome, com as medidas', async () => {
+      prisma.food.findMany.mockResolvedValue([
+        makeFood({ source: FoodSource.CUSTOM, createdByUserId: userId, portions: [] }),
+      ]);
+
+      const foods = await service.listCustom(userId);
+
+      const args = prisma.food.findMany.mock.calls[0][0];
+      expect(args.where).toEqual({ source: FoodSource.CUSTOM, createdByUserId: userId });
+      expect(args.orderBy).toEqual({ name: 'asc' });
+      expect(foods[0].portions).toEqual([]);
+    });
+  });
+
   describe('updateCustom', () => {
     it('updates a CUSTOM food the user owns', async () => {
       prisma.food.findUnique.mockResolvedValue(
@@ -231,7 +322,59 @@ describe('FoodService', () => {
         // `searchName` acompanha o nome, senão a busca continua achando o
         // alimento pelo nome antigo.
         data: { name: 'Renamed', searchName: 'renamed' },
+        include: expect.anything(),
       });
+    });
+
+    it('devolve o alimento com as medidas, no mesmo formato da criação', async () => {
+      prisma.food.findUnique.mockResolvedValue(
+        makeFood({ source: FoodSource.CUSTOM, createdByUserId: userId }),
+      );
+      prisma.food.update.mockResolvedValue(
+        makeFood({
+          source: FoodSource.CUSTOM,
+          createdByUserId: userId,
+          portions: [{ id: 'p1', label: 'porção', grams: 40, createdByUserId: userId }],
+        }),
+      );
+
+      const food = await service.updateCustom(userId, 1, { kcalPer100g: 200 });
+
+      expect(food.portions).toEqual([{ id: 'p1', label: 'porção', grams: 40, mine: true }]);
+    });
+
+    it('nome repetido: 409, não 500', async () => {
+      prisma.food.findUnique.mockResolvedValue(
+        makeFood({ source: FoodSource.CUSTOM, createdByUserId: userId }),
+      );
+      prisma.food.update.mockRejectedValue(p2002);
+
+      await expect(service.updateCustom(userId, 1, { name: 'Granola' })).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it('nome em branco: 400', async () => {
+      prisma.food.findUnique.mockResolvedValue(
+        makeFood({ source: FoodSource.CUSTOM, createdByUserId: userId }),
+      );
+
+      await expect(service.updateCustom(userId, 1, { name: '   ' })).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prisma.food.update).not.toHaveBeenCalled();
+    });
+
+    it('confere a soma dos macros com os valores que já estão salvos', async () => {
+      // 28 g de carboidrato + 0,2 g de gordura já salvos: 80 g de proteína passa de 100 g.
+      prisma.food.findUnique.mockResolvedValue(
+        makeFood({ source: FoodSource.CUSTOM, createdByUserId: userId }),
+      );
+
+      await expect(service.updateCustom(userId, 1, { proteinPer100g: 80 })).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prisma.food.update).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException when the food does not exist', async () => {
