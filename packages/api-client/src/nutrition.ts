@@ -25,6 +25,17 @@ export interface Food {
   portions?: FoodPortion[];
 }
 
+/** O que cria um alimento próprio: valores sempre por 100 g. */
+export interface CustomFoodInput {
+  name: string;
+  kcalPer100g: number;
+  proteinPer100g: number;
+  carbsPer100g: number;
+  fatPer100g: number;
+  /** A porção do rótulo, só na criação: no PATCH as medidas têm rota própria. */
+  portions?: Array<{ label: string; grams: number }>;
+}
+
 /** Alimento da busca com o histórico da pessoa: o atalho que poupa digitar. */
 export interface FoodShortcut extends Food {
   /** Gramagem da última vez, para já vir preenchida. */
@@ -241,6 +252,16 @@ export const nutritionApi = {
     apiFetch<void>(`/api/nutrition/foods/${foodId}/favorite`, {
       method: favorite ? 'PUT' : 'DELETE',
     }),
+  /** Os alimentos que a pessoa cadastrou, por nome. */
+  customFoods: () => apiFetch<Food[]>('/api/nutrition/foods/custom'),
+  /** Nome repetido responde 409; valores fora do possível em 100 g, 400. */
+  createCustomFood: (body: CustomFoodInput) =>
+    apiFetch<Food>('/api/nutrition/foods', { method: 'POST', body: JSON.stringify(body) }),
+  updateCustomFood: (id: number, body: Partial<Omit<CustomFoodInput, 'portions'>>) =>
+    apiFetch<Food>(`/api/nutrition/foods/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  /** As refeições já registradas guardam nome e valores; só o alimento some. */
+  deleteCustomFood: (id: number) =>
+    apiFetch<void>(`/api/nutrition/foods/${id}`, { method: 'DELETE' }),
   portions: (foodId: number) => apiFetch<FoodPortion[]>(`/api/nutrition/foods/${foodId}/portions`),
   createPortion: (foodId: number, body: { label: string; grams: number }) =>
     apiFetch<FoodPortion>(`/api/nutrition/foods/${foodId}/portions`, {
