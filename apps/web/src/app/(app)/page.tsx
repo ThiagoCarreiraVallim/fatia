@@ -5,7 +5,6 @@ import { useQuery } from '@tanstack/react-query';
 import { greetingLine, progressApi, usersApi } from '@fatia/api-client';
 import { NutritionMacroCard } from '@/components/dashboard/nutrition-macro-card';
 import { NextWorkoutCard } from '@/components/dashboard/next-workout-card';
-import { QuickLogActions } from '@/components/dashboard/quick-log-actions';
 import { StepsCard } from '@/components/dashboard/steps-card';
 import { StreakCard } from '@/components/dashboard/streak-card';
 import { WaterCard } from '@/components/dashboard/water-card';
@@ -58,7 +57,6 @@ export default function HomePage() {
           <WaterCard data={data.water} />
           <StepsCard data={data.steps} />
           <StreakCard streak={data.streak} achievements={conquistas ?? data.achievements} />
-          <QuickLogActions />
         </>
       )}
     </div>

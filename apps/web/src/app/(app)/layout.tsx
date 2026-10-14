@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { BottomNav } from '@/components/layout/bottom-nav';
+import { QuickAdd } from '@/components/layout/quick-add';
 import { PwaInstallPrompt } from '@/components/pwa-install-prompt';
 import { getCurrentUser } from '@/lib/auth-server';
 
@@ -17,6 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-screen flex-col bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
       <main className="flex-1 pt-4 pb-24">{children}</main>
       <BottomNav />
+      <QuickAdd />
       <PwaInstallPrompt />
     </div>
   );
