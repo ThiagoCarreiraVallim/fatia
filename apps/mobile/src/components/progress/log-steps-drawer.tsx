@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { progressApi, type StepLog } from '@fatia/api-client';
+import { dayLabel, progressApi, type StepLog } from '@fatia/api-client';
+import { hojeIso } from '@/components/nutrition/helpers';
 import {
   Button,
   Drawer,
@@ -14,6 +15,7 @@ import {
 } from '@/components/ui';
 import { dayMonth, formatInteger } from '@/components/charts';
 import { LogHistory, type LogHistoryEntry } from './log-history';
+import { SeletorDeDia } from './seletor-de-dia';
 import { SheetField } from './sheet-field';
 import { parseAmount } from './parse';
 
@@ -30,9 +32,11 @@ export function LogStepsDrawer({
 }: {
   open: boolean;
   onClose: () => void;
-  /** Dia a registrar; ausente significa hoje, como no PWA. */
+  /** Dia em que o drawer abre; sem ele, hoje. */
   date?: string;
 }) {
+  const hoje = hojeIso();
+  const [dia, setDia] = useState(date ?? hoje);
   const [steps, setSteps] = useState('');
   const [editing, setEditing] = useState<StepLog | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -59,6 +63,7 @@ export function LogStepsDrawer({
   }
 
   function reset() {
+    setDia(date ?? hojeIso());
     setSteps('');
     setEditing(null);
     setFormError(null);
@@ -70,12 +75,15 @@ export function LogStepsDrawer({
     mutationFn: ({ value, id }: { value: number; id: string | null }) =>
       id
         ? progressApi.updateStep(id, { steps: value })
-        : progressApi.createStep({ steps: value, ...(date ? { date } : {}) }),
+        : progressApi.createStep({ steps: value, ...(dia !== hoje ? { date: dia } : {}) }),
     onSuccess: (_result, variables) => {
       invalidate();
       setSteps('');
       setEditing(null);
-      if (!variables.id) onClose();
+      if (!variables.id) {
+        setDia(date ?? hojeIso());
+        onClose();
+      }
     },
   });
 
@@ -129,6 +137,7 @@ export function LogStepsDrawer({
         </DrawerHeader>
 
         <View className="gap-4 py-3">
+          {editing ? null : <SeletorDeDia dia={dia} hoje={hoje} onChange={setDia} />}
           <SheetField
             label="Passos"
             value={steps}
@@ -163,7 +172,11 @@ export function LogStepsDrawer({
 
         <DrawerFooter className="px-0">
           <Button onPress={submit} loading={save.isPending}>
-            {editing ? 'Salvar alteração' : 'Salvar'}
+            {editing
+              ? 'Salvar alteração'
+              : dia === hoje
+                ? 'Salvar'
+                : `Salvar em ${dayLabel(dia, hoje)}`}
           </Button>
           {editing ? (
             <Button

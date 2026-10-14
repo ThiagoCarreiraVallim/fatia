@@ -127,14 +127,14 @@ esconde a diferença é exatamente o que este documento existe para impedir.
 | —                        | `workout/session/rest-timer`            | ➕  | cronômetro de descanso                                                       |
 | —                        | `workout/session/session-header`        | ➕  | header fixo com "X/Y exercícios"                                             |
 
-### Progresso — 12 de 12
+### Progresso — 13 de 13
 
 | PWA                              | App nativo                        |     | Observação                                         |
 | -------------------------------- | --------------------------------- | :-: | -------------------------------------------------- |
 | `cardio-chart`                   | `progress/cardio-chart`           | ✅  |                                                    |
 | `consistency-card`               | `progress/consistency-card`       | ✅  |                                                    |
 | `exercise-picker-drawer`         | `progress/exercise-picker-drawer` | ✅  |                                                    |
-| `log-steps-drawer`               | `progress/log-steps-drawer`       | ✅  | editar e apagar nos dois (#116)                    |
+| `log-steps-drawer`               | `progress/log-steps-drawer`       | ✅  | editar e apagar nos dois (#116); dia do registro   |
 | `log-water-drawer`               | `progress/log-water-drawer`       | ✅  | idem                                               |
 | `log-weight-drawer`              | `progress/log-weight-drawer`      | ✅  | idem                                               |
 | `personal-records`               | `progress/personal-records`       | ✅  |                                                    |
@@ -144,6 +144,7 @@ esconde a diferença é exatamente o que este documento existe para impedir.
 | `weight-chart`                   | `progress/weight-chart`           | ✅  |                                                    |
 | `WeightBarMini` (dentro da page) | `progress/weight-mini-bars`       | ✅  | extraído para arquivo próprio                      |
 | `log-history`                    | `progress/log-history`            | ✅  | lista de registros recentes, base do editar/apagar |
+| `log-day-field`                  | `progress/seletor-de-dia`         | ✅  | só setas ◀ ▶ no app; o PWA tem também o calendário |
 
 ### Metas e perfil — 4 de 4
 
@@ -304,6 +305,7 @@ rodando, e deve ser feito antes de publicar:
 - [ ] Formulário de alimento no sheet com o teclado numérico aberto (vírgula decimal), e "Cadastrar à mão" do scanner abrindo Meus alimentos
 - [ ] Botão "Ler código de barras" do sheet de busca abrindo o scanner no mesmo dia e tipo, e "Guardar em Meus alimentos" fazendo o produto aparecer na busca
 - [ ] "Mais ações" da refeição (copiar, salvar) e "Copiar dia": setas do dia de destino e "Ver dia" trocando a data da tela
+- [ ] Dia de água, peso e passos: seta "Próximo dia" apagada em hoje, e o registro de ontem aparecendo na lista com a data certa
 - [ ] Diagrama muscular destacando os grupos certos
 - [ ] Aparelho de entrada, não só simulador — os gráficos são o ponto a observar
 - [ ] Leitor de tela e fonte ampliada nos dois sistemas
