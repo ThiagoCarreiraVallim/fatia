@@ -331,8 +331,8 @@ const payload = tools.reduce(
  * número; o caso abaixo confere as duas pontas, então nem o texto some nem o número derrapa.
  */
 const PAYLOAD_CLAIMS: ReadonlyArray<{ file: string; text: string; medido: () => string }> = [
-  { file: 'docs/MCP.md', text: '**82,5 k caracteres**', medido: () => emK(payload.cheio) },
-  { file: 'docs/MCP.md', text: '(66,7 k)', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP.md', text: '**82,3 k caracteres**', medido: () => emK(payload.cheio) },
+  { file: 'docs/MCP.md', text: '(66,5 k)', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP.md',
     text: '**4.605 são os exemplos**',
@@ -340,10 +340,10 @@ const PAYLOAD_CLAIMS: ReadonlyArray<{ file: string; text: string; medido: () => 
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**82,5 k caracteres**',
+    text: '**82,3 k caracteres**',
     medido: () => emK(payload.cheio),
   },
-  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 66,7 k', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 66,5 k', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
     text: '**4.605 caracteres**',
@@ -626,6 +626,24 @@ describe.each(SUPERFICIES)('catálogo servido na superfície %s', (superficie) =
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const schema = zodToJsonSchema(object, { $refStrategy: 'root' }) as any;
       if (JSON.stringify(schema).includes('$ref')) offenders.push(tool.name);
+    }
+
+    expect(offenders.sort()).toEqual([]);
+  });
+
+  it('não emite pattern com escape de propriedade Unicode (\\p{…}) em nenhuma tool', () => {
+    // `\p{L}` é regex de JavaScript com a flag `u`, e o JSON Schema não carrega a flag: o
+    // provedor que compila o `pattern` com outro motor recusa a requisição inteira. A Xiaomi,
+    // a Novita e a GMICloud respondem 400 a qualquer chamada com uma tool dessas, antes de o
+    // modelo ler uma palavra. A validação continua no servidor, por `refine`, que não vira
+    // `pattern` no schema.
+    const offenders: string[] = [];
+
+    for (const { tool } of tools) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const object = z.object(tool.inputSchema as any) as any;
+      const schema = JSON.stringify(zodToJsonSchema(object, { $refStrategy: 'root' }));
+      if (/\\\\[pP]\{/.test(schema)) offenders.push(tool.name);
     }
 
     expect(offenders.sort()).toEqual([]);

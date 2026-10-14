@@ -62,6 +62,12 @@ export const MUSCLE_GROUP_PATTERN = /^\p{L}+(?:[ -]\p{L}+)*$/u;
 
 const normalize = (v: unknown): unknown => (typeof v === 'string' ? v.trim().toLowerCase() : v);
 
+/**
+ * O charset é conferido por `refine`, e não por `.regex()`: o `.regex()` vira `pattern` no JSON
+ * Schema que o `/mcp` serve, e `\p{L}` só existe no regex de JavaScript com a flag `u`, que o
+ * schema não carrega. Provedor que compila o `pattern` com outro motor recusa a chamada inteira
+ * ao modelo — ver `tool-catalog.spec.ts`. O que o servidor aceita não muda.
+ */
 export const muscleGroupSchema = z.preprocess(
   normalize,
   z
@@ -71,5 +77,7 @@ export const muscleGroupSchema = z.preprocess(
       MUSCLE_GROUP_MAX_LENGTH,
       `muscleGroup must have at most ${MUSCLE_GROUP_MAX_LENGTH} characters`,
     )
-    .regex(MUSCLE_GROUP_PATTERN, 'muscleGroup must contain only letters, spaces, and hyphens'),
+    .refine((v) => MUSCLE_GROUP_PATTERN.test(v), {
+      message: 'muscleGroup must contain only letters, spaces, and hyphens',
+    }),
 );

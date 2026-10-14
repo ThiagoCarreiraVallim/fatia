@@ -67,13 +67,20 @@ e ele fica fora da conta.
 
 | Braço        | Servidas | No chat | Tokens servidas | Tokens no chat | Descrições no chat | `sha256` do `tools/list`                                           |
 | ------------ | -------: | ------: | --------------: | -------------: | -----------------: | ------------------------------------------------------------------ |
-| A — entidade |      106 |      88 |          20.766 |         18.068 |              4.097 | `ef9e15550d55d996b0de6cdc5b29c819ddf74a0a59a2353e179e36841b9edcd4` |
+| A — entidade |      106 |      88 |          20.666 |         17.968 |              4.097 | `3ef29a0d62b40d259f6d7051a67ce91f80b546b35be181af889c682d39e71879` |
 | B — intenção |       40 |      23 |           8.343 |          5.904 |              1.304 | `25531e4c78dea4b4578f742e0dc7a7db7624956ece67c43b04315280a9ea8a37` |
 
-Esta é a linha de base do braço A. A medida anterior (103 servidas, 85 no chat, 20.379 e 17.681
-tokens, `sha256` `10daa3b9…`) era a do catálogo de antes do chat novo; ele trouxe as três tools de
-memória, e o A é o catálogo como o produto o serve. O conjunto RESTRICTED não mudou — as mesmas 18 —,
-e o piso da métrica 3 continua o mesmo.
+Esta é a linha de base do braço A, e ela mudou duas vezes antes da primeira medição. A primeira
+(103 servidas, 85 no chat, 20.379 e 17.681 tokens, `sha256` `10daa3b9…`) era a do catálogo de antes
+do chat novo; ele trouxe as três tools de memória, e o A é o catálogo como o produto o serve. A
+segunda (20.766 e 18.068 tokens, `ef9e1555…`) servia o `muscleGroup` de cinco tools de exercício com
+`pattern` `^\p{L}+…`: escape de propriedade Unicode, que só existe no regex de JavaScript com a flag
+`u`. A Xiaomi, a Novita e a GMICloud respondem 400 a qualquer chamada que leve uma dessas tools, e o
+`xiaomi/mimo-v2.6-pro` não rodava o braço A. O charset passou a ser conferido por `refine` no
+servidor, que aceita o mesmo e não vira `pattern` no schema; descrições, nomes e campos não mudaram,
+e o `tool-catalog.spec.ts` reprova `\p{…}` em schema servido nas duas superfícies. O braço B não
+tinha nenhum, e o `sha256` dele não mudou. O conjunto RESTRICTED não mudou — as mesmas 18 —, e o piso
+da métrica 3 continua o mesmo.
 
 Sem API no ar, `pnpm --filter @fatia/api catalogo:servido <superficie>` imprime o mesmo `tools/list`
 montado em processo, e `medir --de-arquivo` mede dele.

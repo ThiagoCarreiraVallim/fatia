@@ -22,7 +22,7 @@ import {
  * isso não aconteça sem alguém ver. O de intenção é o do braço B congelado.
  */
 
-const SHA_ENTIDADE = 'ef9e15550d55d996b0de6cdc5b29c819ddf74a0a59a2353e179e36841b9edcd4';
+const SHA_ENTIDADE = '3ef29a0d62b40d259f6d7051a67ce91f80b546b35be181af889c682d39e71879';
 const SHA_INTENCAO = '25531e4c78dea4b4578f742e0dc7a7db7624956ece67c43b04315280a9ea8a37';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */
