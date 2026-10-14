@@ -35,3 +35,9 @@ de seleção não o enxerga: ele mede a tool chamada, e não a resposta.
 **Corrigido depois do congelamento**, por decisão de produto e antes de qualquer medição do `eval`:
 o resolvedor confere os 50 candidatos mais relevantes, e não os cinco. É defeito, e não ajuste — a
 descrição e o schema não mudaram, e o `sha256` do B continua `92bc0392…`.
+
+Medido depois da correção, nas três tarefas de treino do `dev`, 5 repetições, `sha256` `92bc0392…`:
+as chamadas caíram para o piso nos dois modelos — glm 1,2 / 2,4 / 1,8 → 1,0 / 1,0 / 1,0, mimo
+2,2 / 4,0 / 2,6 → 1,0 / 1,0 / 1,0 (`treino-recorde`, `treino-carga-subindo`, `treino-prescricao`),
+acertos 5/5 → 5/5. O imposto que o ajuste 2 tentou tirar pela descrição era do defeito: o modelo
+chamava de novo porque a resposta dizia "sem histórico".
