@@ -7,6 +7,10 @@ import { MealTimeline } from '../meal-timeline';
 
 vi.mock('../food-search-drawer', () => ({ FoodSearchDrawer: () => null }));
 vi.mock('../edit-meal-item-drawer', () => ({ EditMealItemDrawer: () => null }));
+vi.mock('../meal-actions-drawer', () => ({
+  MealActionsDrawer: ({ meal }: { meal: Meal | null }) =>
+    meal ? <div role="dialog">{`Ações de ${meal.id}`}</div> : null,
+}));
 
 vi.mock('@fatia/api-client', async () => {
   const actual = await vi.importActual<typeof import('@fatia/api-client')>('@fatia/api-client');
@@ -57,6 +61,15 @@ describe('MealTimeline', () => {
     renderTimeline('2026-05-19', [emMedida]);
 
     expect(screen.getByText(/2 × colher de sopa \(50 g\) · 128 kcal/)).toBeInTheDocument();
+  });
+
+  it('"Mais ações" abre as ações daquela refeição (copiar, salvar)', async () => {
+    const user = userEvent.setup();
+    renderTimeline();
+
+    await user.click(screen.getByRole('button', { name: 'Mais ações de Jantar' }));
+
+    expect(screen.getByRole('dialog')).toHaveTextContent('Ações de meal-1');
   });
 
   it('asks before removing a meal and only deletes on confirm', async () => {

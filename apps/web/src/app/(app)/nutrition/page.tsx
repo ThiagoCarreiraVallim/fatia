@@ -4,7 +4,7 @@ import { Suspense, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Settings } from 'lucide-react';
+import { Copy, Settings } from 'lucide-react';
 import { nutritionApi, type MealType } from '@fatia/api-client';
 import { DateNavigator } from '@/components/nutrition/date-navigator';
 import { CaloriesRingCard } from '@/components/nutrition/calories-ring-card';
@@ -13,6 +13,7 @@ import { MealTimeline } from '@/components/nutrition/meal-timeline';
 import { WeeklyTrendChart } from '@/components/nutrition/weekly-trend-chart';
 import { NutrientTargetsCard } from '@/components/nutrition/nutrient-targets-card';
 import { FoodSearchDrawer } from '@/components/nutrition/food-search-drawer';
+import { CopyDayDrawer } from '@/components/nutrition/copy-day-drawer';
 
 function todayIso(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -27,6 +28,7 @@ function NutritionPageContent() {
   const params = useSearchParams();
   const date = params.get('date') ?? todayIso();
   const [newMealType, setNewMealType] = useState<MealType | null>(null);
+  const [copyingDay, setCopyingDay] = useState(false);
 
   const summary = useQuery({
     queryKey: ['nutrition', 'summary', date],
@@ -36,18 +38,31 @@ function NutritionPageContent() {
     queryKey: ['nutrition', 'goals'],
     queryFn: () => nutritionApi.goals(),
   });
+  const mealCount = summary.data?.meals.filter((m) => m.items.length > 0).length ?? 0;
 
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
       <header className="flex items-center justify-between">
         <h1 className="text-[18px] font-semibold text-foreground">Nutrição</h1>
-        <Link
-          href="/nutrition/goals"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
-          aria-label="Metas"
-        >
-          <Settings size={18} />
-        </Link>
+        <div className="flex items-center">
+          {mealCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setCopyingDay(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+              aria-label="Copiar dia"
+            >
+              <Copy size={18} />
+            </button>
+          )}
+          <Link
+            href="/nutrition/goals"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+            aria-label="Metas"
+          >
+            <Settings size={18} />
+          </Link>
+        </div>
       </header>
 
       <DateNavigator date={date} />
@@ -80,6 +95,14 @@ function NutritionPageContent() {
         onOpenChange={(open) => !open && setNewMealType(null)}
         mealType={newMealType ?? undefined}
         date={date}
+      />
+
+      <CopyDayDrawer
+        open={copyingDay}
+        onOpenChange={setCopyingDay}
+        date={date}
+        today={todayIso()}
+        mealCount={mealCount}
       />
 
       {summary.error && (

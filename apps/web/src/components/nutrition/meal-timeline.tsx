@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
 import {
   buildMealTimeline,
   itemAmountText,
@@ -15,13 +15,8 @@ import {
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FoodSearchDrawer } from './food-search-drawer';
 import { EditMealItemDrawer } from './edit-meal-item-drawer';
-
-const mealTypeLabel: Record<MealType, string> = {
-  BREAKFAST: 'Café da manhã',
-  LUNCH: 'Almoço',
-  DINNER: 'Jantar',
-  SNACK: 'Lanche',
-};
+import { MealActionsDrawer } from './meal-actions-drawer';
+import { MEAL_TYPE_LABEL as mealTypeLabel } from './meal-labels';
 
 const mealTypeEmoji: Record<MealType, string> = {
   BREAKFAST: '☀️',
@@ -45,6 +40,7 @@ export function MealTimeline({ meals, date, today, onAddMeal }: Props) {
   const [addingTo, setAddingTo] = useState<{ mealId?: string; mealType?: MealType } | null>(null);
   const [editing, setEditing] = useState<MealItem | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const [acting, setActing] = useState<Meal | null>(null);
 
   const onDeleted = () => {
     qc.invalidateQueries({ queryKey: ['nutrition', 'summary', date] });
@@ -83,6 +79,7 @@ export function MealTimeline({ meals, date, today, onAddMeal }: Props) {
                 onEditItem={setEditing}
                 onDeleteItem={(item) => setPendingDelete({ kind: 'item', item })}
                 onDeleteMeal={() => setPendingDelete({ kind: 'meal', meal: entry.meal })}
+                onMore={() => setActing(entry.meal)}
               />
             ) : (
               <button
@@ -115,6 +112,7 @@ export function MealTimeline({ meals, date, today, onAddMeal }: Props) {
         date={date}
       />
       <EditMealItemDrawer item={editing} date={date} onClose={() => setEditing(null)} />
+      <MealActionsDrawer meal={acting} date={date} today={today} onClose={() => setActing(null)} />
       <ConfirmDialog
         open={pendingDelete !== null}
         onOpenChange={(open) => !open && setPendingDelete(null)}
@@ -139,12 +137,15 @@ function MealCard({
   onEditItem,
   onDeleteItem,
   onDeleteMeal,
+  onMore,
 }: {
   meal: Meal;
   onAddItem: () => void;
   onEditItem: (item: MealItem) => void;
   onDeleteItem: (item: MealItem) => void;
   onDeleteMeal: () => void;
+  /** Copiar para outro dia, salvar como refeição salva. */
+  onMore: () => void;
 }) {
   const totalKcal = meal.items.reduce((sum, i) => sum + i.kcal, 0);
   const time = new Date(meal.eatenAt).toLocaleTimeString('pt-BR', {
@@ -177,6 +178,14 @@ function MealCard({
               aria-label="Adicionar item"
             >
               <Plus size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={onMore}
+              className="rounded p-1 text-muted-foreground hover:text-foreground"
+              aria-label={`Mais ações de ${mealTypeLabel[meal.mealType]}`}
+            >
+              <MoreHorizontal size={14} />
             </button>
             <button
               type="button"

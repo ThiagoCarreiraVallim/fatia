@@ -154,6 +154,72 @@ test('medida caseira: 2 colheres de sopa de arroz viram 50 g na refeição', asy
   await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(0);
 });
 
+test('copiar refeição para outro dia e registrar pela refeição salva', async ({ page }) => {
+  const origem = diasAtras(48);
+  const destino = diasAtras(49);
+  const nome = `E2E ${Date.now()}`;
+
+  // Uma refeição de um item, no dia de origem.
+  await page.goto(`/nutrition?date=${origem}`);
+  await page.getByRole('button', { name: 'Registrar Jantar' }).click();
+  let drawer = page.getByRole('dialog');
+  await drawer.getByPlaceholder(/Ex\.: arroz/).fill('banana prata');
+  await drawer
+    .getByRole('button', { name: /^Banana, prata, crua/ })
+    .first()
+    .click();
+  await drawer.getByRole('button', { name: /^adicionar$/i }).click();
+  await drawer.getByRole('button', { name: /^concluir · 1 item/i }).click();
+  await expect(drawer).toBeHidden();
+
+  // Copia para o dia de destino e salva como refeição salva.
+  await page.getByRole('button', { name: 'Mais ações de Jantar' }).click();
+  drawer = page.getByRole('dialog');
+  await drawer.getByLabel('Dia de destino').fill(destino);
+  await drawer.getByRole('button', { name: /^Copiar para / }).click();
+  await expect(drawer.getByRole('status')).toContainText('Copiada para');
+  // Copiar de novo não duplica: a API recusa e a tela diz por quê.
+  await drawer.getByRole('button', { name: /^Copiar para / }).click();
+  await expect(drawer.getByRole('alert')).toContainText('já foi copiada');
+  await drawer.getByLabel('Nome da refeição salva').fill(nome);
+  await drawer.getByRole('button', { name: 'Salvar refeição' }).click();
+  await expect(drawer.getByText(`"${nome}" salva`)).toBeVisible();
+  await drawer.getByRole('link', { name: /^Ver / }).click();
+  await expect(page).toHaveURL(new RegExp(`date=${destino}`));
+  await expect(page.getByText(/Banana, prata, crua/)).toBeVisible();
+
+  // No destino, um lanche pela refeição salva: duas refeições no dia.
+  await page.getByRole('button', { name: 'Registrar Lanche' }).click();
+  drawer = page.getByRole('dialog');
+  await drawer.getByRole('button', { name: new RegExp(`^${escapeRegex(nome)}`) }).click();
+  await expect(drawer).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(2);
+
+  // Limpeza: refeição salva, as duas do destino e a da origem.
+  await page.getByRole('button', { name: 'Registrar Café da manhã' }).click();
+  drawer = page.getByRole('dialog');
+  await drawer.getByRole('button', { name: `Apagar ${nome}` }).click();
+  await drawer.getByRole('button', { name: `Confirmar apagar ${nome}` }).click();
+  await expect(drawer.getByRole('button', { name: `Apagar ${nome}` })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(drawer).toBeHidden();
+  for (const dia of [destino, origem]) {
+    await page.goto(`/nutrition?date=${dia}`);
+    // Contar antes de o dia carregar daria zero e pularia a limpeza.
+    await expect(page.getByRole('button', { name: 'Registrar Café da manhã' })).toBeVisible();
+    const remover = page.getByRole('button', { name: 'Remover refeição' });
+    while ((await remover.count()) > 0) {
+      const antes = await remover.count();
+      await remover.first().click();
+      await page.getByRole('dialog').getByRole('button', { name: 'Remover' }).click();
+      await expect(remover).toHaveCount(antes - 1);
+    }
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Registrar Jantar' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(0);
+  }
+});
+
 function escapeRegex(text: string) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

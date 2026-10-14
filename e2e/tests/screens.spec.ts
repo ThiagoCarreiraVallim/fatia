@@ -146,6 +146,48 @@ test.describe('drawers de registro', () => {
   });
 });
 
+test.describe('copiar e refeições salvas', () => {
+  test('nutrição: ações da refeição, copiar dia e refeições salvas', async ({ page }) => {
+    await page.goto('/nutrition');
+    await settle(page);
+    const mais = page.getByRole('button', { name: /^Mais ações de / }).first();
+    if (!(await appears(mais))) return;
+    await mais.click();
+    await snap(page, '17-nutricao-acoes-refeicao', false);
+
+    // Salva uma refeição só para a foto da seção, e apaga no fim.
+    const nome = `Foto ${test.info().project.name}`;
+    const drawer = page.getByRole('dialog');
+    await drawer.getByLabel('Nome da refeição salva').fill(nome);
+    await drawer.getByRole('button', { name: 'Salvar refeição' }).click();
+    await appears(drawer.getByText(/salva\. Ela aparece/));
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(400);
+
+    const copiarDia = page.getByRole('button', { name: 'Copiar dia' });
+    if (await appears(copiarDia)) {
+      await copiarDia.click();
+      await snap(page, '18-nutricao-copiar-dia', false);
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(400);
+    }
+
+    const registrar = page.getByRole('button', { name: /^Registrar / }).first();
+    if (await appears(registrar)) {
+      await registrar.click();
+      await appears(page.getByText('Refeições salvas'));
+      await snap(page, '19-nutricao-drawer-salvas', false);
+    }
+    // Limpeza pela própria UI, para não sobrar refeição salva no demo.
+    const apagar = page.getByRole('button', { name: `Apagar ${nome}` });
+    if (await appears(apagar)) {
+      await apagar.click();
+      await page.getByRole('button', { name: `Confirmar apagar ${nome}` }).click();
+      await apagar.waitFor({ state: 'detached' }).catch(() => undefined);
+    }
+  });
+});
+
 test('login (sem sessão)', async ({ browser }, info) => {
   const context = await browser.newContext({
     ...info.project.use,

@@ -32,6 +32,9 @@ vi.mock('@fatia/api-client', async () => {
       setFavorite: vi.fn(),
       nutrientTargets: vi.fn(),
       createPortion: vi.fn(),
+      mealTemplates: vi.fn(),
+      logMealTemplate: vi.fn(),
+      deleteMealTemplate: vi.fn(),
     },
   };
 });
@@ -44,6 +47,9 @@ const addItem = vi.mocked(nutritionApi.addItem);
 const myFoods = vi.mocked(nutritionApi.myFoods);
 const setFavorite = vi.mocked(nutritionApi.setFavorite);
 const createPortion = vi.mocked(nutritionApi.createPortion);
+const mealTemplates = vi.mocked(nutritionApi.mealTemplates);
+const logMealTemplate = vi.mocked(nutritionApi.logMealTemplate);
+const deleteMealTemplate = vi.mocked(nutritionApi.deleteMealTemplate);
 
 const colher: FoodPortion = { id: 'p1', label: 'colher de sopa', grams: 25, mine: false };
 const escumadeira: FoodPortion = { id: 'p2', label: 'escumadeira', grams: 90, mine: false };
@@ -81,6 +87,7 @@ describe('FoodSearchDrawer', () => {
     myFoods.mockReset().mockResolvedValue({ favorites: [], recent: [] });
     setFavorite.mockReset().mockResolvedValue(undefined);
     vi.mocked(nutritionApi.nutrientTargets).mockResolvedValue([]);
+    mealTemplates.mockReset().mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -393,6 +400,79 @@ describe('FoodSearchDrawer', () => {
       expect(screen.getByRole('radio', { name: 'gramas' })).toBeChecked();
       expect(screen.getAllByRole('radio')).toHaveLength(1);
       expect(screen.getByRole('button', { name: /nova medida/i })).toBeInTheDocument();
+    });
+  });
+  describe('refeições salvas', () => {
+    const cafe = {
+      id: 't1',
+      name: 'Café de sempre',
+      mealType: 'BREAKFAST' as const,
+      items: [
+        {
+          id: 'a',
+          position: 0,
+          foodId: 1,
+          foodName: 'Pão',
+          grams: 50,
+          kcal: 150,
+          proteinG: 4,
+          carbsG: 29,
+          fatG: 1,
+        },
+        {
+          id: 'b',
+          position: 1,
+          foodId: null,
+          foodName: 'Café',
+          grams: 200,
+          kcal: 80,
+          proteinG: 4,
+          carbsG: 8,
+          fatG: 3,
+        },
+      ],
+    };
+
+    it('um toque registra a refeição inteira no dia e no tipo do drawer, e fecha', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      mealTemplates.mockResolvedValue([cafe]);
+      logMealTemplate.mockResolvedValue({} as never);
+      renderDrawer({ mealType: 'BREAKFAST', date: '2026-05-18', onOpenChange });
+
+      const linha = await screen.findByRole('button', { name: /^Café de sempre/ });
+      expect(linha).toHaveTextContent('2 itens · 230 kcal');
+      await user.click(linha);
+
+      await waitFor(() =>
+        expect(logMealTemplate).toHaveBeenCalledWith('t1', {
+          eatenAt: new Date('2026-05-18T12:00:00').toISOString(),
+          mealType: 'BREAKFAST',
+        }),
+      );
+      await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    });
+
+    it('não aparece ao adicionar item numa refeição que já existe', async () => {
+      mealTemplates.mockResolvedValue([cafe]);
+      renderDrawer({ mealId: 'meal-1' });
+
+      await screen.findByPlaceholderText(/arroz, frango/);
+      expect(screen.queryByText('Café de sempre')).not.toBeInTheDocument();
+      expect(mealTemplates).not.toHaveBeenCalled();
+    });
+
+    it('apagar pede confirmação na própria linha', async () => {
+      const user = userEvent.setup();
+      mealTemplates.mockResolvedValue([cafe]);
+      deleteMealTemplate.mockResolvedValue(undefined);
+      renderDrawer();
+
+      await user.click(await screen.findByRole('button', { name: 'Apagar Café de sempre' }));
+      expect(deleteMealTemplate).not.toHaveBeenCalled();
+      await user.click(screen.getByRole('button', { name: 'Confirmar apagar Café de sempre' }));
+
+      await waitFor(() => expect(deleteMealTemplate).toHaveBeenCalledWith('t1'));
     });
   });
 });

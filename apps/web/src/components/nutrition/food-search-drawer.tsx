@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Search, Star } from 'lucide-react';
+import { Check, Search, Star, Trash2 } from 'lucide-react';
 import {
   Drawer,
   DrawerClose,
@@ -19,12 +19,14 @@ import {
   initialAmount,
   nutritionApi,
   shortcutDetail,
+  templateSummary,
   withFavorite,
   type Amount,
   type Food,
   type FoodPortion,
   type FoodShortcut,
   type FoodShortcuts,
+  type MealTemplate,
   type MealType,
 } from '@fatia/api-client';
 import { instanteNoDia } from '@/lib/dias';
@@ -135,6 +137,31 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
     () => new Set((shortcuts.data?.favorites ?? []).map((f) => f.id)),
     [shortcuts.data],
   );
+
+  // Refeição salva registra a refeição inteira: só faz sentido ao criar uma nova.
+  const templates = useQuery({
+    queryKey: ['nutrition', 'meal-templates'],
+    queryFn: () => nutritionApi.mealTemplates(),
+    enabled: open && !mealId,
+  });
+
+  const logTemplate = useMutation<unknown, Error, MealTemplate>({
+    mutationFn: (template) =>
+      nutritionApi.logMealTemplate(template.id, {
+        eatenAt: instanteNoDia(date),
+        mealType,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['nutrition', 'summary', date] });
+      qc.invalidateQueries({ queryKey: ['nutrition', 'my-foods'] });
+      onOpenChange(false);
+    },
+  });
+
+  const deleteTemplate = useMutation<void, Error, string>({
+    mutationFn: (id) => nutritionApi.deleteMealTemplate(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['nutrition', 'meal-templates'] }),
+  });
 
   // Otimista: a estrela responde no toque, e o servidor confirma depois.
   const favorite = useMutation<void, Error, { food: Food; favorite: boolean }>({
@@ -310,6 +337,10 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
             onRetry={() => search.refetch()}
             data={search.data}
             shortcuts={shortcuts.data}
+            templates={mealId ? [] : (templates.data ?? [])}
+            onLogTemplate={(template) => logTemplate.mutate(template)}
+            onDeleteTemplate={(template) => deleteTemplate.mutate(template.id)}
+            templateError={logTemplate.error?.message ?? deleteTemplate.error?.message}
             favoriteIds={favoriteIds}
             onToggleFavorite={(food) =>
               favorite.mutate({ food, favorite: !favoriteIds.has(food.id) })
@@ -347,6 +378,10 @@ interface SearchPanelProps {
   onRetry: () => void;
   data: Food[] | undefined;
   shortcuts: FoodShortcuts | undefined;
+  templates: MealTemplate[];
+  onLogTemplate: (template: MealTemplate) => void;
+  onDeleteTemplate: (template: MealTemplate) => void;
+  templateError?: string;
   favoriteIds: ReadonlySet<number>;
   onToggleFavorite: (food: Food) => void;
   onPick: (food: Food | FoodShortcut) => void;
@@ -362,13 +397,19 @@ function SearchPanel({
   onRetry,
   data,
   shortcuts,
+  templates,
+  onLogTemplate,
+  onDeleteTemplate,
+  templateError,
   favoriteIds,
   onToggleFavorite,
   onPick,
   onSwitchToManual,
 }: SearchPanelProps) {
   const typing = debounced.trim().length >= 2;
-  const hasShortcuts = !!shortcuts && shortcuts.favorites.length + shortcuts.recent.length > 0;
+  const hasShortcuts =
+    templates.length > 0 ||
+    (!!shortcuts && shortcuts.favorites.length + shortcuts.recent.length > 0);
 
   return (
     <>
@@ -400,7 +441,29 @@ function SearchPanel({
             Digite pelo menos 2 caracteres. O que você registrar aparece aqui, a um toque.
           </li>
         )}
-        {!typing && hasShortcuts && (
+        {!typing && templateError && (
+          <li role="alert" className="px-4 py-3 text-sm text-rose-500">
+            {templateError}
+          </li>
+        )}
+        {!typing && templates.length > 0 && (
+          <li>
+            <h3 className="px-4 pt-3 pb-1 text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
+              Refeições salvas
+            </h3>
+            <ul aria-label="Refeições salvas" className="divide-y">
+              {templates.map((template) => (
+                <TemplateRow
+                  key={template.id}
+                  template={template}
+                  onLog={() => onLogTemplate(template)}
+                  onDelete={() => onDeleteTemplate(template)}
+                />
+              ))}
+            </ul>
+          </li>
+        )}
+        {!typing && shortcuts && (
           <>
             <ShortcutSection
               title="Favoritos"
@@ -475,6 +538,56 @@ function ShortcutSection({
           />
         ))}
       </ul>
+    </li>
+  );
+}
+
+/** Refeição salva: o toque registra tudo; apagar confirma na própria linha. */
+function TemplateRow({
+  template,
+  onLog,
+  onDelete,
+}: {
+  template: MealTemplate;
+  onLog: () => void;
+  onDelete: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <li className="flex items-center">
+      <button
+        type="button"
+        onClick={onLog}
+        className="min-h-11 flex-1 px-4 py-2 text-left hover:bg-accent"
+      >
+        <span className="block text-sm">{template.name}</span>
+        <span className="block text-xs text-muted-foreground">{templateSummary(template)}</span>
+      </button>
+      {confirming ? (
+        <div className="flex items-center gap-1 pr-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="destructive"
+            aria-label={`Confirmar apagar ${template.name}`}
+            onClick={onDelete}
+          >
+            Apagar
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setConfirming(false)}>
+            Não
+          </Button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          aria-label={`Apagar ${template.name}`}
+          className="flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-rose-500"
+        >
+          <Trash2 size={16} aria-hidden />
+        </button>
+      )}
     </li>
   );
 }
