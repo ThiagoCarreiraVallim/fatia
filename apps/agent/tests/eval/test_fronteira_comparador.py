@@ -570,3 +570,9 @@ def test_relatorio_e_comparacao_dao_o_custo_por_execucao_total_e_sem_cache() -> 
     assert "| Custo real, total | US$ 0,0060 | US$ 0,0030 |" in cmp
     assert "| Custo com o cache zerado, total | US$ 0,0082 | US$ 0,0030 |" in cmp
     assert "Conta do custo — A: `usage.cost` da OpenRouter em todas as chamadas" in cmp
+
+
+def test_sem_nenhuma_chamada_a_conta_nao_diz_que_todas_foram_cobradas() -> None:
+    d = medir_dolares([_exec(erro=_TIMEOUT)], _PRECO)
+    assert (d.total, d.chamadas) == (0.0, 0)
+    assert d.conta == "nenhuma chamada ao modelo reportou uso"

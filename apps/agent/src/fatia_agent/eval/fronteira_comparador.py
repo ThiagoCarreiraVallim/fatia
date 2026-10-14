@@ -510,6 +510,9 @@ class Dolares:
     def conta(self) -> str:
         if self.total is None:
             return "não reportado"
+        if self.chamadas == 0:
+            # Nada chegou a gerar: um 400 do provedor não traz `usage`, e não é cobrado.
+            return "nenhuma chamada ao modelo reportou uso"
         if self.cobradas == self.chamadas:
             return "`usage.cost` da OpenRouter em todas as chamadas"
         fonte = f" ({self.preco.fonte})" if self.preco and self.preco.fonte else ""
