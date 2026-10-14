@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../common/prisma.service';
 import { StepLogService } from './step-log.service';
 import { WaterLogService } from './water-log.service';
-import { addDaysIso, todayInTz, weekStartInTz } from './helpers/date-tz';
+import { addDaysIso, dateInTz, dayBoundsInTz, todayInTz, weekStartInTz } from './helpers/date-tz';
 import { calculatePace } from '../workout/helpers/calculate-pace';
 import { estimate1RM } from '../workout/helpers/estimate-1rm';
 
@@ -25,12 +25,14 @@ export class ProgressService {
   async weightProgress(days: number, ctx: UserCtx) {
     const today = todayInTz(ctx.timezone);
     const fromIso = addDaysIso(today, -(days - 1));
+    // Dia e janela no fuso da pessoa: em UTC, a pesagem das 21h30 em São Paulo
+    // cairia no dia seguinte do gráfico.
     const logs = await this.prisma.weightLog.findMany({
-      where: { userId: ctx.userId, loggedAt: { gte: new Date(`${fromIso}T00:00:00Z`) } },
+      where: { userId: ctx.userId, loggedAt: { gte: dayBoundsInTz(fromIso, ctx.timezone).start } },
       orderBy: { loggedAt: 'asc' },
     });
     const points = logs.map((l) => ({
-      date: l.loggedAt.toISOString().slice(0, 10),
+      date: dateInTz(l.loggedAt, ctx.timezone),
       weightKg: l.weightKg,
     }));
     const weeklyAverages = this.weeklyAverages(points, ctx.timezone);

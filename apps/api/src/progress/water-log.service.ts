@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import type { CreateWaterLogDto, ListWaterLogsDto, UpdateWaterLogDto } from './dto/water-log.dto';
 import { addDaysIso, todayInTz } from './helpers/date-tz';
+import { assertLoggableDay } from './helpers/log-day';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
@@ -13,6 +14,7 @@ export class WaterLogService {
 
   async create(dto: CreateWaterLogDto, userId: string, timezone: string) {
     const date = dto.date ?? todayInTz(timezone);
+    assertLoggableDay(date, timezone);
     return this.prisma.waterLog.create({
       data: {
         userId,
@@ -29,8 +31,9 @@ export class WaterLogService {
     return log;
   }
 
-  async update(id: string, dto: UpdateWaterLogDto, userId: string) {
+  async update(id: string, dto: UpdateWaterLogDto, userId: string, timezone: string) {
     await this.findById(id, userId);
+    if (dto.date) assertLoggableDay(dto.date, timezone);
     return this.prisma.waterLog.update({
       where: { id },
       data: {

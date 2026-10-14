@@ -6,7 +6,7 @@ import { WaterLogService } from './water-log.service';
 import { StreakService } from './streak.service';
 import { AchievementService, type AchievementEntry } from './achievement.service';
 import { TrainingBlockService } from '../workout/training-block.service';
-import { addDaysIso, dayBoundsInTz, todayInTz, weekStartInTz } from './helpers/date-tz';
+import { addDaysIso, dateInTz, dayBoundsInTz, todayInTz, weekStartInTz } from './helpers/date-tz';
 
 interface UserCtx {
   userId: string;
@@ -182,19 +182,20 @@ export class DashboardService {
     const today = todayInTz(ctx.timezone);
     const weekStart = weekStartInTz(new Date(`${today}T12:00:00Z`), ctx.timezone);
     const weekEnd = addDaysIso(weekStart, 6);
-    const startDate = new Date(`${weekStart}T00:00:00Z`);
-    const endDate = new Date(`${weekEnd}T23:59:59Z`);
+    // Semana e dias no fuso da pessoa, com `lt` na meia-noite seguinte como em `today`.
+    const startDate = dayBoundsInTz(weekStart, ctx.timezone).start;
+    const endDate = dayBoundsInTz(weekEnd, ctx.timezone).end;
 
     const [meals, goals, sessions, weightLogs] = await Promise.all([
       this.prisma.meal.findMany({
-        where: { userId: ctx.userId, eatenAt: { gte: startDate, lte: endDate } },
+        where: { userId: ctx.userId, eatenAt: { gte: startDate, lt: endDate } },
         include: { items: true },
       }),
       this.prisma.userGoals.findUnique({ where: { userId: ctx.userId } }),
       this.prisma.workoutSession.findMany({
         where: {
           userId: ctx.userId,
-          completedAt: { gte: startDate, lte: endDate },
+          completedAt: { gte: startDate, lt: endDate },
         },
         include: {
           plan: { select: { name: true } },
@@ -202,14 +203,14 @@ export class DashboardService {
         },
       }),
       this.prisma.weightLog.findMany({
-        where: { userId: ctx.userId, loggedAt: { gte: startDate, lte: endDate } },
+        where: { userId: ctx.userId, loggedAt: { gte: startDate, lt: endDate } },
         orderBy: { loggedAt: 'asc' },
       }),
     ]);
 
     const byDate = new Map<string, { kcal: number; proteinG: number }>();
     for (const m of meals) {
-      const date = m.eatenAt.toISOString().slice(0, 10);
+      const date = dateInTz(m.eatenAt, ctx.timezone);
       const cur = byDate.get(date) ?? { kcal: 0, proteinG: 0 };
       for (const i of m.items) {
         cur.kcal += i.kcal;
@@ -229,7 +230,7 @@ export class DashboardService {
         .filter((set) => set.weightKg && set.reps && set.exercise.muscleGroup !== 'cardio')
         .reduce((a, set) => a + (set.weightKg ?? 0) * (set.reps ?? 0), 0);
       return {
-        date: s.startedAt.toISOString().slice(0, 10),
+        date: dateInTz(s.startedAt, ctx.timezone),
         planName: s.plan?.name ?? null,
         volumeKg,
       };

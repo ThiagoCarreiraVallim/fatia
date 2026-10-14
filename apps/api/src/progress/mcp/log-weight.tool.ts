@@ -29,9 +29,9 @@ export class LogWeightTool implements McpToolDef {
   } as const;
   async execute(
     input: { weightKg: number; loggedAt?: string; notes?: string },
-    { userId }: McpToolContext,
+    { userId, timezone }: McpToolContext,
   ) {
-    const log = await this.weights.create(input, userId);
+    const log = await this.weights.create(input, userId, timezone);
     return { weightLogId: log.id };
   }
 }

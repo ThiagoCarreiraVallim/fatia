@@ -37,6 +37,7 @@ describe('WeightLogService', () => {
   let prisma: MockPrisma;
   let service: WeightLogService;
   const userId = 'user-A';
+  const timezone = 'America/Sao_Paulo';
 
   beforeEach(() => {
     prisma = makePrisma();
@@ -51,6 +52,7 @@ describe('WeightLogService', () => {
       const result = await service.create(
         { weightKg: 80.5, loggedAt: '2025-01-15T10:00:00Z' },
         userId,
+        timezone,
       );
 
       expect(prisma.weightLog.create).toHaveBeenCalledWith({
@@ -68,7 +70,7 @@ describe('WeightLogService', () => {
       const log = makeLog();
       prisma.weightLog.create.mockResolvedValue(log);
 
-      await service.create({ weightKg: 80.5 }, userId);
+      await service.create({ weightKg: 80.5 }, userId, timezone);
 
       const callArg = prisma.weightLog.create.mock.calls[0][0];
       expect(callArg.data.loggedAt).toBeInstanceOf(Date);
@@ -76,7 +78,7 @@ describe('WeightLogService', () => {
 
     it('saves notes as null when not provided', async () => {
       prisma.weightLog.create.mockResolvedValue(makeLog());
-      await service.create({ weightKg: 75 }, userId);
+      await service.create({ weightKg: 75 }, userId, timezone);
 
       const callArg = prisma.weightLog.create.mock.calls[0][0];
       expect(callArg.data.notes).toBeNull();
@@ -112,7 +114,7 @@ describe('WeightLogService', () => {
       prisma.weightLog.findUnique.mockResolvedValue(log);
       prisma.weightLog.update.mockResolvedValue({ ...log, weightKg: 79 });
 
-      const result = await service.update('log-1', { weightKg: 79 }, userId);
+      const result = await service.update('log-1', { weightKg: 79 }, userId, timezone);
 
       expect(prisma.weightLog.update).toHaveBeenCalledWith({
         where: { id: 'log-1' },
@@ -127,7 +129,7 @@ describe('WeightLogService', () => {
       prisma.weightLog.findUnique.mockResolvedValue(log);
       prisma.weightLog.update.mockResolvedValue(log);
 
-      await service.update('log-1', { loggedAt: newDate }, userId);
+      await service.update('log-1', { loggedAt: newDate }, userId, timezone);
 
       const callArg = prisma.weightLog.update.mock.calls[0][0];
       expect(callArg.data.loggedAt).toEqual(new Date(newDate));
@@ -138,7 +140,7 @@ describe('WeightLogService', () => {
       prisma.weightLog.findUnique.mockResolvedValue(log);
       prisma.weightLog.update.mockResolvedValue(log);
 
-      await service.update('log-1', { notes: 'after workout' }, userId);
+      await service.update('log-1', { notes: 'after workout' }, userId, timezone);
 
       const callArg = prisma.weightLog.update.mock.calls[0][0];
       expect(callArg.data).toEqual({ notes: 'after workout' });
@@ -149,7 +151,7 @@ describe('WeightLogService', () => {
       prisma.weightLog.findUnique.mockResolvedValue(log);
       prisma.weightLog.update.mockResolvedValue(log);
 
-      await service.update('log-1', { weightKg: 81 }, userId);
+      await service.update('log-1', { weightKg: 81 }, userId, timezone);
 
       const callArg = prisma.weightLog.update.mock.calls[0][0];
       expect(callArg.data).not.toHaveProperty('notes');
@@ -158,7 +160,7 @@ describe('WeightLogService', () => {
     it('does not allow user A to edit a record from user B', async () => {
       prisma.weightLog.findUnique.mockResolvedValue(makeLog({ userId: 'user-B' }));
 
-      await expect(service.update('log-1', { weightKg: 90 }, userId)).rejects.toThrow(
+      await expect(service.update('log-1', { weightKg: 90 }, userId, timezone)).rejects.toThrow(
         NotFoundException,
       );
     });

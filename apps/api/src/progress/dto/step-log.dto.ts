@@ -1,9 +1,10 @@
-import { IsEnum, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { Matches, IsEnum, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { ISO_DAY, ISO_DAY_MESSAGE } from '../helpers/log-day';
 import { StepSource } from '@prisma/client';
 
 export class CreateStepLogDto {
   @IsOptional()
-  @IsString()
+  @Matches(ISO_DAY, { message: ISO_DAY_MESSAGE })
   date?: string;
 
   @IsInt()
@@ -27,7 +28,7 @@ export class UpdateStepLogDto {
   steps?: number;
 
   @IsOptional()
-  @IsString()
+  @Matches(ISO_DAY, { message: ISO_DAY_MESSAGE })
   date?: string;
 
   @IsOptional()
@@ -38,11 +39,11 @@ export class UpdateStepLogDto {
 
 export class ListStepLogsDto {
   @IsOptional()
-  @IsString()
+  @Matches(ISO_DAY, { message: ISO_DAY_MESSAGE })
   from?: string;
 
   @IsOptional()
-  @IsString()
+  @Matches(ISO_DAY, { message: ISO_DAY_MESSAGE })
   to?: string;
 
   @IsOptional()

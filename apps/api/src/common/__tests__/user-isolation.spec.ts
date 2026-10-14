@@ -322,7 +322,7 @@ describe('isolamento entre usuários', () => {
       fatMaxG: 80,
     });
 
-    const weightLog = await weights.create({ weightKg: 80 }, owned.userA);
+    const weightLog = await weights.create({ weightKg: 80 }, owned.userA, TZ);
     owned.weightLogId = weightLog.id;
 
     const stepLog = await steps.create({ date: TODAY, steps: 9000 }, owned.userA, TZ);
@@ -620,9 +620,9 @@ describe('isolamento entre usuários', () => {
     });
 
     it('update_weight_log recusa', async () => {
-      await expect(weights.update(owned.weightLogId, { weightKg: 1 }, owned.userB)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        weights.update(owned.weightLogId, { weightKg: 1 }, owned.userB, TZ),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('delete_weight_log recusa', async () => {
@@ -632,7 +632,7 @@ describe('isolamento entre usuários', () => {
     });
 
     it('update_step_log recusa', async () => {
-      await expect(steps.update(owned.stepLogId, { steps: 1 }, owned.userB)).rejects.toThrow(
+      await expect(steps.update(owned.stepLogId, { steps: 1 }, owned.userB, TZ)).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -642,7 +642,7 @@ describe('isolamento entre usuários', () => {
     });
 
     it('update_water_log recusa', async () => {
-      await expect(waters.update(owned.waterLogId, { ml: 1 }, owned.userB)).rejects.toThrow(
+      await expect(waters.update(owned.waterLogId, { ml: 1 }, owned.userB, TZ)).rejects.toThrow(
         NotFoundException,
       );
     });

@@ -4,8 +4,14 @@ import type { PrismaService } from '../../common/prisma.service';
 import type { StepLogService } from '../step-log.service';
 import type { WaterLogService } from '../water-log.service';
 
+// Fuso fixo em UTC: o fuso de verdade é coberto em `log-day.spec.ts`.
 jest.mock('../helpers/date-tz', () => ({
   todayInTz: jest.fn(() => '2026-01-15'),
+  dateInTz: jest.fn((date: Date) => date.toISOString().slice(0, 10)),
+  dayBoundsInTz: jest.fn((ymd: string) => ({
+    start: new Date(`${ymd}T00:00:00Z`),
+    end: new Date(`${ymd}T00:00:00Z`),
+  })),
   addDaysIso: jest.fn((ymd: string, days: number) => {
     const [y, m, d] = ymd.split('-').map(Number);
     const date = new Date(Date.UTC(y, m - 1, d));

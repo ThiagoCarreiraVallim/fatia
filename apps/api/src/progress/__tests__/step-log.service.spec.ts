@@ -120,7 +120,7 @@ describe('StepLogService', () => {
       prisma.stepLog.findUnique.mockResolvedValue(makeLog());
       prisma.stepLog.update.mockResolvedValue(makeLog({ steps: 12000 }));
 
-      const result = await service.update('log-1', { steps: 12000 }, userId);
+      const result = await service.update('log-1', { steps: 12000 }, userId, timezone);
 
       expect(prisma.stepLog.update).toHaveBeenCalledWith({
         where: { id: 'log-1' },
@@ -133,7 +133,7 @@ describe('StepLogService', () => {
       prisma.stepLog.findUnique.mockResolvedValue(makeLog());
       prisma.stepLog.update.mockResolvedValue(makeLog({ notes: 'walking after lunch' }));
 
-      await service.update('log-1', { notes: 'walking after lunch' }, userId);
+      await service.update('log-1', { notes: 'walking after lunch' }, userId, timezone);
 
       const callArg = prisma.stepLog.update.mock.calls[0][0];
       expect(callArg.data).toEqual({ notes: 'walking after lunch' });
@@ -143,7 +143,7 @@ describe('StepLogService', () => {
       prisma.stepLog.findUnique.mockResolvedValue(makeLog());
       prisma.stepLog.update.mockResolvedValue(makeLog());
 
-      await service.update('log-1', { steps: 9000 }, userId);
+      await service.update('log-1', { steps: 9000 }, userId, timezone);
 
       const callArg = prisma.stepLog.update.mock.calls[0][0];
       expect(callArg.data).not.toHaveProperty('notes');
@@ -153,7 +153,7 @@ describe('StepLogService', () => {
       prisma.stepLog.findUnique.mockResolvedValue(makeLog());
       prisma.stepLog.update.mockResolvedValue(makeLog({ date: '2025-01-10' }));
 
-      await service.update('log-1', { date: '2025-01-10' }, userId);
+      await service.update('log-1', { date: '2025-01-10' }, userId, timezone);
 
       const callArg = prisma.stepLog.update.mock.calls[0][0];
       expect(callArg.data.date).toBe('2025-01-10');
@@ -162,7 +162,7 @@ describe('StepLogService', () => {
     it('returns NotFoundException when the record belongs to another user', async () => {
       prisma.stepLog.findUnique.mockResolvedValue(makeLog({ userId: 'user-B' }));
 
-      await expect(service.update('log-1', { steps: 5000 }, userId)).rejects.toThrow(
+      await expect(service.update('log-1', { steps: 5000 }, userId, timezone)).rejects.toThrow(
         NotFoundException,
       );
     });

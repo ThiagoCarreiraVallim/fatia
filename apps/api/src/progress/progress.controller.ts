@@ -36,7 +36,7 @@ export class ProgressController {
   // -------- Weight logs --------
   @Post('weight-logs')
   createWeight(@CurrentUser() user: CurrentUserPayload, @Body() dto: CreateWeightLogDto) {
-    return this.weights.create(dto, user.id);
+    return this.weights.create(dto, user.id, user.timezone);
   }
 
   @Get('weight-logs')
@@ -50,7 +50,7 @@ export class ProgressController {
     @Param('id') id: string,
     @Body() dto: UpdateWeightLogDto,
   ) {
-    return this.weights.update(id, dto, user.id);
+    return this.weights.update(id, dto, user.id, user.timezone);
   }
 
   @Delete('weight-logs/:id')
@@ -80,7 +80,7 @@ export class ProgressController {
     @Param('id') id: string,
     @Body() dto: UpdateStepLogDto,
   ) {
-    return this.steps.update(id, dto, user.id);
+    return this.steps.update(id, dto, user.id, user.timezone);
   }
 
   @Delete('step-logs/:id')
@@ -110,7 +110,7 @@ export class ProgressController {
     @Param('id') id: string,
     @Body() dto: UpdateWaterLogDto,
   ) {
-    return this.waters.update(id, dto, user.id);
+    return this.waters.update(id, dto, user.id, user.timezone);
   }
 
   @Delete('water-logs/:id')

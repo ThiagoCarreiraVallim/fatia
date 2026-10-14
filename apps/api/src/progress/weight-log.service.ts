@@ -6,6 +6,7 @@ import type {
   ListWeightLogsDto,
   UpdateWeightLogDto,
 } from './dto/weight-log.dto';
+import { assertLoggableInstant } from './helpers/log-day';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
@@ -14,12 +15,14 @@ const MAX_LIMIT = 100;
 export class WeightLogService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateWeightLogDto, userId: string) {
+  async create(dto: CreateWeightLogDto, userId: string, timezone: string) {
+    const loggedAt = dto.loggedAt ? new Date(dto.loggedAt) : new Date();
+    assertLoggableInstant(loggedAt, timezone);
     return this.prisma.weightLog.create({
       data: {
         userId,
         weightKg: dto.weightKg,
-        loggedAt: dto.loggedAt ? new Date(dto.loggedAt) : new Date(),
+        loggedAt,
         notes: dto.notes ?? null,
       },
     });
@@ -31,8 +34,9 @@ export class WeightLogService {
     return log;
   }
 
-  async update(id: string, dto: UpdateWeightLogDto, userId: string) {
+  async update(id: string, dto: UpdateWeightLogDto, userId: string, timezone: string) {
     await this.findById(id, userId);
+    if (dto.loggedAt) assertLoggableInstant(new Date(dto.loggedAt), timezone);
     return this.prisma.weightLog.update({
       where: { id },
       data: {
