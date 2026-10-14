@@ -1,4 +1,4 @@
-import type { Food, FoodShortcut, FoodShortcuts } from './nutrition';
+import type { Food, FoodShortcut, FoodShortcuts, MealTemplate } from './nutrition';
 import { portionText } from './portions';
 
 /**
@@ -38,12 +38,24 @@ export function withFavorite(
 }
 
 export type ShortcutRow =
-  { kind: 'header'; title: 'Favoritos' | 'Recentes' } | { kind: 'food'; food: FoodShortcut };
+  | { kind: 'header'; title: 'Refeições salvas' | 'Favoritos' | 'Recentes' }
+  | { kind: 'template'; template: MealTemplate }
+  | { kind: 'food'; food: FoodShortcut };
 
-/** Seções achatadas numa lista só, para `FlatList`; seção vazia não ganha título. */
-export function shortcutRows(shortcuts: FoodShortcuts | undefined): ShortcutRow[] {
-  if (!shortcuts) return [];
+/**
+ * Seções achatadas numa lista só, para `FlatList`; seção vazia não ganha título.
+ * Refeições salvas vêm primeiro: um toque registra a refeição inteira.
+ */
+export function shortcutRows(
+  shortcuts: FoodShortcuts | undefined,
+  templates: MealTemplate[] = [],
+): ShortcutRow[] {
   const rows: ShortcutRow[] = [];
+  if (templates.length > 0) {
+    rows.push({ kind: 'header', title: 'Refeições salvas' });
+    for (const template of templates) rows.push({ kind: 'template', template });
+  }
+  if (!shortcuts) return rows;
   for (const [title, foods] of [
     ['Favoritos', shortcuts.favorites],
     ['Recentes', shortcuts.recent],

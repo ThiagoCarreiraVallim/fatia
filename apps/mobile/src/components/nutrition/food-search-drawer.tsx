@@ -416,7 +416,11 @@ function PainelDeBusca({
         style={{ flex: 1 }}
         data={linhas}
         keyExtractor={(linha: ShortcutRow) =>
-          linha.kind === 'header' ? `titulo-${linha.title}` : String(linha.food.id)
+          linha.kind === 'header'
+            ? `titulo-${linha.title}`
+            : linha.kind === 'template'
+              ? `modelo-${linha.template.id}`
+              : String(linha.food.id)
         }
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
@@ -457,7 +461,7 @@ function PainelDeBusca({
             >
               {linha.title}
             </Text>
-          ) : (
+          ) : linha.kind === 'template' ? null : (
             <LinhaDeAlimento
               food={linha.food}
               detalhe={

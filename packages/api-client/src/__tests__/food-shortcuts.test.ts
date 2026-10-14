@@ -58,12 +58,21 @@ describe('shortcutRows', () => {
 
   it('favoritos vêm antes dos recentes', () => {
     const rows = shortcutRows({ favorites: [food(1)], recent: [food(2)] });
-    expect(rows.map((r) => (r.kind === 'header' ? r.title : r.food.id))).toEqual([
-      'Favoritos',
-      1,
-      'Recentes',
-      2,
+    expect(
+      rows.map((r) => (r.kind === 'header' ? r.title : r.kind === 'food' ? r.food.id : r)),
+    ).toEqual(['Favoritos', 1, 'Recentes', 2]);
+  });
+
+  it('refeições salvas vêm primeiro: registram a refeição inteira de uma vez', () => {
+    const cafe = { id: 't1', name: 'Café de sempre', mealType: null, items: [] };
+    const rows = shortcutRows({ favorites: [food(1)], recent: [] }, [cafe]);
+    expect(rows).toEqual([
+      { kind: 'header', title: 'Refeições salvas' },
+      { kind: 'template', template: cafe },
+      { kind: 'header', title: 'Favoritos' },
+      { kind: 'food', food: food(1) },
     ]);
+    expect(shortcutRows(undefined, [cafe])).toHaveLength(2);
   });
 });
 

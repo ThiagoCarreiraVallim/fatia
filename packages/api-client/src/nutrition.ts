@@ -143,6 +143,34 @@ export interface Meal {
   items: MealItem[];
 }
 
+export interface MealTemplateItem {
+  id: string;
+  position: number;
+  foodId: number | null;
+  foodName: string;
+  grams: number;
+  portionLabel?: string | null;
+  portionQuantity?: number | null;
+  kcal: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+}
+
+/** Refeição salva ("Café de sempre"): o retrato dos itens, registrado de novo em um toque. */
+export interface MealTemplate {
+  id: string;
+  name: string;
+  mealType: MealType | null;
+  items: MealTemplateItem[];
+}
+
+export interface CopyDayResult {
+  created: Meal[];
+  /** Refeições que já estavam no destino e ficaram de fora. */
+  skipped: number;
+}
+
 export interface DayTotals {
   kcal: number;
   proteinG: number;
@@ -274,6 +302,30 @@ export const nutritionApi = {
     }>;
   }) =>
     apiFetch<Meal>('/api/nutrition/meals', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  /** Copia para `toDate`, no mesmo horário local. Repetir responde 409. */
+  copyMeal: (id: string, body: { toDate: string; mealType?: MealType }) =>
+    apiFetch<Meal>(`/api/nutrition/meals/${id}/copy`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  copyDay: (body: { fromDate: string; toDate: string }) =>
+    apiFetch<CopyDayResult>('/api/nutrition/days/copy', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  mealTemplates: () => apiFetch<MealTemplate[]>('/api/nutrition/meal-templates'),
+  createMealTemplate: (body: { name: string; mealId: string; mealType?: MealType }) =>
+    apiFetch<MealTemplate>('/api/nutrition/meal-templates', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  deleteMealTemplate: (id: string) =>
+    apiFetch<void>(`/api/nutrition/meal-templates/${id}`, { method: 'DELETE' }),
+  logMealTemplate: (id: string, body: { eatenAt: string; mealType?: MealType }) =>
+    apiFetch<Meal>(`/api/nutrition/meal-templates/${id}/log`, {
       method: 'POST',
       body: JSON.stringify(body),
     }),
