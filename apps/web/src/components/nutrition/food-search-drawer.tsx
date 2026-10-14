@@ -313,17 +313,13 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
         )}
 
         {mode === 'scan' ? (
-          <>
-            <BarcodeFlow
-              onAdd={(payload) => addItem.mutate(payload)}
-              adding={addItem.isPending}
-              addError={addItem.error?.message}
-              onCreateManually={() => startCreate('')}
-            />
-            <Button variant="ghost" className="w-full" onClick={() => setMode('search')}>
-              Voltar para a busca
-            </Button>
-          </>
+          <BarcodeFlow
+            onAdd={(payload) => addItem.mutate(payload)}
+            adding={addItem.isPending}
+            addError={addItem.error?.message}
+            onCreateManually={() => startCreate('')}
+            onBack={() => setMode('search')}
+          />
         ) : mode === 'create' ? (
           <CustomFoodForm
             initial={emptyCustomFoodForm(createName)}

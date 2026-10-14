@@ -35,6 +35,8 @@ interface Props {
   adding: boolean;
   addError?: string;
   onCreateManually: () => void;
+  /** Só aparece na câmera: no painel do produto, "Voltar" já volta para ela. */
+  onBack: () => void;
 }
 
 /**
@@ -44,7 +46,7 @@ interface Props {
  * Mora no drawer, e não numa tela própria como no app, para herdar o contexto da
  * refeição (dia, tipo, vários itens por abertura) sem passar nada pela URL.
  */
-export function BarcodeFlow({ onAdd, adding, addError, onCreateManually }: Props) {
+export function BarcodeFlow({ onAdd, adding, addError, onCreateManually, onBack }: Props) {
   const qc = useQueryClient();
   // Último código consultado: a câmera repete o mesmo várias vezes por segundo.
   const lastCode = useRef<string | null>(null);
@@ -135,5 +137,12 @@ export function BarcodeFlow({ onAdd, adding, addError, onCreateManually }: Props
     );
   }
 
-  return <BarcodeScanner onCode={handleCode} />;
+  return (
+    <>
+      <BarcodeScanner onCode={handleCode} />
+      <Button variant="ghost" className="w-full" onClick={onBack}>
+        Voltar para a busca
+      </Button>
+    </>
+  );
 }
