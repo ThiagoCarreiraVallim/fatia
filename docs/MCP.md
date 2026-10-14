@@ -104,8 +104,8 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **116 tools** declaram `false`, e é a resposta que
-pela Fatia** (visão, LLM, embedding). Hoje as **116 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **117 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **117 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -185,12 +185,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 116 tools): **90,9 k caracteres**
-hoje, dos quais **5.117 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 117 tools): **91,9 k caracteres**
+hoje, dos quais **5.161 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **87** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (73,6 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (74,5 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -264,6 +264,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `set_food_favorite`          | U        |
 |                            | `create_food_portion`        | C        |
 |                            | `delete_food_portion`        | D        |
+|                            | `list_custom_foods`          | R        |
 |                            | `create_custom_food`         | C        |
 |                            | `update_custom_food`         | U        |
 |                            | `delete_custom_food`         | D        |
@@ -358,8 +359,8 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `save_memory`                | C        |
 |                            | `forget_memory`              | D        |
 
-Total: **116 tools**. Cada uma documentada abaixo.
-Total: **116 tools**. Cada uma documentada abaixo.
+Total: **117 tools**. Cada uma documentada abaixo.
+Total: **117 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -656,9 +657,24 @@ medida como estavam.
 **Input:** `{ id: string }`  
 **Output:** `{ deleted: string }`
 
+### `list_custom_foods`
+
+Os alimentos que a pessoa cadastrou, em ordem de nome — a tela "Meus alimentos" do app. Use para
+achar o `id` antes de `update_custom_food` ou `delete_custom_food`; para registrar, `search_food`
+já mistura estes com o catálogo.
+
+**Input:** `{}`  
+**Output:** `Food[]`, cada um com `portions` (mesmo formato de `search_food`).
+
 ### `create_custom_food`
 
 Cria um alimento privado do usuário. Útil pra produtos industrializados ou receitas frequentes ("minha shake matinal").
+Os valores são sempre **por 100 g**: o rótulo brasileiro traz "porção de 30 g", então converta
+(`valor × 100 / 30`) e mande a porção em `portions` — o app passa a oferecer "1 porção (30 g)".
+
+Limites por 100 g: até 900 kcal; proteína, carboidrato e gordura até 100 g cada e, somados, até
+100 g. Fora disso, ou com nome em branco ou `groupId` inexistente, responde `INVALID_INPUT`.
+Nome repetido entre os alimentos da própria pessoa responde `CONFLICT`.
 
 **Input:**
 
@@ -674,13 +690,15 @@ Cria um alimento privado do usuário. Útil pra produtos industrializados ou rec
 }
 ```
 
-**Output:** `{ foodId: number }`
+**Output:** o alimento criado, com `portions`.
 
 > **Nota:** custom foods são associados ao criador. Outros usuários não veem. Internamente, isso é modelado adicionando `createdByUserId` opcional em `Food` quando `source = CUSTOM`.
 
 ### `update_custom_food`
 
-Atualiza alimento custom próprio. Não pode editar TACO (`source = TACO`).
+Atualiza alimento custom próprio. Não pode editar TACO (`source = TACO`). Os limites de
+`create_custom_food` valem para o alimento resultante: a soma dos macros considera os valores que
+já estão salvos.
 
 **Input:**
 
@@ -696,7 +714,7 @@ Atualiza alimento custom próprio. Não pode editar TACO (`source = TACO`).
 }
 ```
 
-**Output:** alimento atualizado.
+**Output:** alimento atualizado, com `portions`.
 
 **Erros:** `NOT_FOUND` se não pertence ao usuário ou se é TACO.
 

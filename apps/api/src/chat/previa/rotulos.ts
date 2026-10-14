@@ -50,6 +50,18 @@ const listaDeMapa =
           .join(', ')
       : null;
 
+/** `[{label: 'porção', grams: 30}]` → "porção (30 g)". */
+const medidas: Formato = (valor) => {
+  if (!Array.isArray(valor) || !valor.length) return null;
+  const partes = valor.flatMap((m: unknown) => {
+    const { label, grams } = (m ?? {}) as { label?: unknown; grams?: unknown };
+    return typeof label === 'string' && typeof grams === 'number'
+      ? [`${label.trim()} (${numero(grams)} g)`]
+      : [];
+  });
+  return partes.length ? partes.join(', ') : null;
+};
+
 function diaNoFuso(data: Date, timezone: string): string {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: timezone,
@@ -189,6 +201,7 @@ export const CAMPOS: Record<string, Campo> = {
   foodName: { rotulo: 'Alimento', formato: texto },
   favorite: { rotulo: 'Favorito', formato: simOuNao },
   grams: { rotulo: 'Quantidade', formato: comUnidade('g') },
+  portions: { rotulo: 'Medidas', formato: medidas },
   // Duas casas: um quarto de colher (0,25) não pode virar "0,3".
   quantity: {
     rotulo: 'Quantas medidas',

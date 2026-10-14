@@ -147,6 +147,12 @@ export class NutritionController {
     return this.shortcuts.list(user.id, q);
   }
 
+  /** Os alimentos que a pessoa cadastrou — também antes de `foods/:id`. */
+  @Get('foods/custom')
+  listCustomFoods(@CurrentUser() user: CurrentUserPayload) {
+    return this.foods.listCustom(user.id);
+  }
+
   @Put('foods/:id/favorite')
   @HttpCode(204)
   favoriteFood(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseIntPipe) id: number) {

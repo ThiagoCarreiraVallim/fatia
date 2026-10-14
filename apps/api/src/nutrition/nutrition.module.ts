@@ -36,6 +36,7 @@ import { SetNutrientTargetTool } from './mcp/set-nutrient-target.tool';
 import { DeleteNutrientTargetTool } from './mcp/delete-nutrient-target.tool';
 import { GetNutrientSummaryTool } from './mcp/get-nutrient-summary.tool';
 import { ListMyFoodsTool } from './mcp/list-my-foods.tool';
+import { ListCustomFoodsTool } from './mcp/list-custom-foods.tool';
 import { SetFoodFavoriteTool } from './mcp/set-food-favorite.tool';
 import { CreateFoodPortionTool } from './mcp/create-food-portion.tool';
 import { DeleteFoodPortionTool } from './mcp/delete-food-portion.tool';
@@ -84,6 +85,7 @@ const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 })
     UpdateCustomFoodTool,
     DeleteCustomFoodTool,
     ListMyFoodsTool,
+    ListCustomFoodsTool,
     SetFoodFavoriteTool,
     CreateFoodPortionTool,
     DeleteFoodPortionTool,

@@ -555,6 +555,15 @@ describe('isolamento entre usuários', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
+    it('list_custom_foods não mostra o alimento de outro', async () => {
+      const deB = await foods.listCustom(owned.userB);
+      expect(deB.map((f) => f.id)).not.toContain(owned.customFoodId);
+
+      const deA = await foods.listCustom(owned.userA);
+      expect(deA.map((f) => f.id)).toContain(owned.customFoodId);
+      expect(deA.every((f) => f.createdByUserId === owned.userA)).toBe(true);
+    });
+
     it('delete_custom_food recusa', async () => {
       await expect(foods.deleteCustom(owned.userB, owned.customFoodId)).rejects.toThrow(
         NotFoundException,
