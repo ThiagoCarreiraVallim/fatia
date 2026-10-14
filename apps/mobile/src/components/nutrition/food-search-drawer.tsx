@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Search, Star, Trash2 } from 'lucide-react-native';
+import { Check, Plus, Search, Star, Trash2 } from 'lucide-react-native';
 import {
   amountGrams,
   amountPayload,
+  emptyCustomFoodForm,
   initialAmount,
   nutritionApi,
   shortcutDetail,
@@ -12,6 +13,7 @@ import {
   templateSummary,
   withFavorite,
   type Amount,
+  type CustomFoodInput,
   type Food,
   type FoodPortion,
   type FoodShortcut,
@@ -40,6 +42,7 @@ import {
   parsePositivo,
   previaDoAlimento,
 } from './helpers';
+import { FormularioDeAlimento } from './formulario-de-alimento';
 import { SeletorDeQuantidade } from './seletor-de-quantidade';
 
 /**
@@ -64,7 +67,7 @@ import { SeletorDeQuantidade } from './seletor-de-quantidade';
  */
 
 type ItemDaRefeicao = Parameters<typeof nutritionApi.addItem>[1];
-type Modo = 'busca' | 'manual';
+type Modo = 'busca' | 'manual' | 'criar';
 
 interface Props {
   open: boolean;
@@ -89,6 +92,8 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
   // As medidas do alimento escolhido, mais as que a pessoa criar sem fechar o drawer.
   const [medidas, setMedidas] = useState<FoodPortion[]>([]);
   const [manual, setManual] = useState<ValoresManuais>(MANUAL_INICIAL);
+  // Nome que a busca já tinha: "Criar "granola X"" chega com ele preenchido.
+  const [nomeACriar, setNomeACriar] = useState('');
   const [nutrientesManuais, setNutrientesManuais] = useState<Record<string, string>>({});
   // Vários itens por abertura: o primeiro cria a refeição, os seguintes entram nela.
   const [refeicaoCriada, setRefeicaoCriada] = useState<string | null>(null);
@@ -119,6 +124,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
       setQuantidade(QUANTIDADE_INICIAL);
       setMedidas([]);
       setManual(MANUAL_INICIAL);
+      setNomeACriar('');
       setNutrientesManuais({});
       setRefeicaoCriada(null);
       setAdicionados([]);
@@ -235,6 +241,24 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
     setQuantidade(initialAmount(food));
   };
 
+  // Criou, já escolhe: o alimento cai no seletor de quantidade da refeição aberta.
+  const criarAlimento = useMutation<Food, Error, CustomFoodInput>({
+    mutationFn: (input) => nutritionApi.createCustomFood(input),
+    onSuccess: (food) => {
+      void qc.invalidateQueries({ queryKey: ['nutrition', 'search'] });
+      void qc.invalidateQueries({ queryKey: ['nutrition', 'custom-foods'] });
+      setModo('busca');
+      escolher(food);
+    },
+  });
+
+  const comecarCadastro = (nome: string) => {
+    adicionar.reset();
+    criarAlimento.reset();
+    setNomeACriar(nome);
+    setModo('criar');
+  };
+
   const criarMedida = async (rotulo: string, g: number) => {
     if (!selecionado) throw new Error('Sem alimento');
     const criada = await nutritionApi.createPortion(selecionado.id, { label: rotulo, grams: g });
@@ -295,8 +319,10 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
           <DrawerTitle>{titulo}</DrawerTitle>
           <DrawerDescription>
             {modo === 'manual'
-              ? 'Informe nome e macros do alimento.'
-              : 'Toque num atalho ou busque. Dá para adicionar vários.'}
+              ? 'Só para esta refeição: informe nome e macros.'
+              : modo === 'criar'
+                ? 'Copie o rótulo. O alimento fica salvo em Meus alimentos.'
+                : 'Toque num atalho ou busque. Dá para adicionar vários.'}
           </DrawerDescription>
         </DrawerHeader>
 
@@ -313,7 +339,20 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
           </View>
         ) : null}
 
-        {modo === 'manual' ? (
+        {modo === 'criar' ? (
+          <FormularioDeAlimento
+            inicial={emptyCustomFoodForm(nomeACriar)}
+            rotuloDoEnvio="Salvar e escolher quantidade"
+            enviando={criarAlimento.isPending}
+            erro={
+              criarAlimento.error
+                ? mensagemDeErro(criarAlimento.error, { conflito: criarAlimento.error.message })
+                : undefined
+            }
+            onEnviar={(input) => criarAlimento.mutate(input)}
+            onCancelar={() => setModo('busca')}
+          />
+        ) : modo === 'manual' ? (
           <FormularioManual
             valores={manual}
             onChange={setManual}
@@ -377,6 +416,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
               adicionar.reset();
               setModo('manual');
             }}
+            onCriar={comecarCadastro}
           />
         )}
 
@@ -413,6 +453,7 @@ function PainelDeBusca({
   onAlternarFavorito,
   onEscolher,
   onManual,
+  onCriar,
 }: {
   busca: string;
   onBuscaChange: (valor: string) => void;
@@ -430,6 +471,7 @@ function PainelDeBusca({
   onAlternarFavorito: (food: Food) => void;
   onEscolher: (food: Food | FoodShortcut) => void;
   onManual: () => void;
+  onCriar: (nome: string) => void;
 }) {
   const digitando = buscaComAtraso.trim().length >= 2;
   // Sem termo, a lista mostra os atalhos; com termo, os resultados da busca.
@@ -505,7 +547,22 @@ function PainelDeBusca({
               Digite pelo menos 2 caracteres. O que você registrar aparece aqui, a um toque.
             </Text>
           ) : (
-            <Text className="px-4 py-3 text-sm text-muted-foreground">Nenhum resultado.</Text>
+            <View className="items-start gap-2 px-4 py-3">
+              <Text className="text-sm text-muted-foreground">
+                {`Nenhum resultado para "${buscaComAtraso.trim()}".`}
+              </Text>
+              <Button
+                variant="outline"
+                size="sm"
+                onPress={() => onCriar(buscaComAtraso.trim())}
+                accessibilityLabel={`Criar "${buscaComAtraso.trim()}"`}
+              >
+                <View className="flex-row items-center gap-1">
+                  <Plus size={14} color="#2ce500" />
+                  <Text className="text-sm text-foreground">{`Criar "${buscaComAtraso.trim()}"`}</Text>
+                </View>
+              </Button>
+            </View>
           )
         }
         renderItem={({ item: linha }: { item: ShortcutRow }) =>
@@ -538,14 +595,25 @@ function PainelDeBusca({
         }
       />
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Não achei, inserir manualmente"
-        onPress={onManual}
-        className="min-h-[44px] items-center justify-center px-4"
-      >
-        <Text className="text-sm text-primary underline">Não achei, inserir manualmente</Text>
-      </Pressable>
+      <View className="flex-row flex-wrap items-center justify-center gap-x-4 px-4">
+        <Text className="text-sm text-muted-foreground">Não achou?</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Criar meu alimento"
+          onPress={() => onCriar(busca.trim())}
+          className="min-h-[44px] justify-center"
+        >
+          <Text className="text-sm font-medium text-primary underline">Criar meu alimento</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Registrar só desta vez"
+          onPress={onManual}
+          className="min-h-[44px] justify-center"
+        >
+          <Text className="text-sm text-primary underline">Registrar só desta vez</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }

@@ -99,7 +99,8 @@ export default function ScanScreen() {
                   </Button>
                   <Button
                     className="flex-1"
-                    onPress={() => router.back()}
+                    // Vira um alimento próprio, que fica para a próxima compra.
+                    onPress={() => router.replace('/nutrition/foods?novo=1')}
                     accessibilityLabel="Cadastrar pelo rótulo"
                   >
                     Cadastrar à mão

@@ -13,6 +13,7 @@ import { FoodSearchDrawer } from '@/components/nutrition/food-search-drawer';
 import { MacroBentoGrid } from '@/components/nutrition/macro-bento-grid';
 import { MealTimeline } from '@/components/nutrition/meal-timeline';
 import { NutrientTargetsCard } from '@/components/nutrition/nutrient-targets-card';
+import { MeusAlimentosCard } from '@/components/nutrition/meus-alimentos-card';
 import { WeeklyTrendChart } from '@/components/nutrition/weekly-trend-chart';
 import { hojeIso } from '@/components/nutrition/helpers';
 import { AcoesDaRefeicaoDrawer } from '@/components/nutrition/acoes-da-refeicao-drawer';
@@ -148,6 +149,7 @@ export default function NutritionScreen() {
                 onMealActions={setAgindoEm}
               />
               <WeeklyTrendChart today={hojeIso()} />
+              <MeusAlimentosCard />
             </>
           ) : null}
 
