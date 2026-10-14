@@ -182,6 +182,8 @@ export const CAMPOS: Record<string, Campo> = {
   startedAt: { rotulo: 'Início', formato: dataEHora },
   completedAt: { rotulo: 'Fim', formato: dataEHora },
   date: { rotulo: 'Dia', formato: dia },
+  fromDate: { rotulo: 'Copiar de', formato: dia },
+  toDate: { rotulo: 'Copiar para', formato: dia },
   deadline: { rotulo: 'Prazo', formato: dia },
   notes: { rotulo: 'Observação', formato: texto },
   foodName: { rotulo: 'Alimento', formato: texto },
@@ -308,6 +310,7 @@ export const IDS = {
   setId: 'serie',
   planExerciseId: 'exercicioDoPlano',
   portionId: 'medida',
+  templateId: 'modelo',
 } as const;
 
 export type TipoDeRegistro = (typeof IDS)[keyof typeof IDS] | 'itemDaRefeicao' | 'agua';
@@ -338,6 +341,7 @@ export const ROTULO_DO_REGISTRO: Record<TipoDeRegistro, string> = {
   serie: 'Série',
   exercicioDoPlano: 'Exercício do plano',
   medida: 'Medida',
+  modelo: 'Refeição salva',
   itemDaRefeicao: 'Item',
   agua: 'Registro de água',
 };

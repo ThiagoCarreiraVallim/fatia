@@ -24,6 +24,9 @@ import { FoodShortcutsService } from '../../nutrition/food-shortcuts.service';
 import { FoodPortionService } from '../../nutrition/food-portion.service';
 import { MealItemService } from '../../nutrition/meal-item.service';
 import { MealService } from '../../nutrition/meal.service';
+import { MealCopyService } from '../../nutrition/meal-copy.service';
+import { MealTemplateService } from '../../nutrition/meal-template.service';
+import { dateInTz } from '../../progress/helpers/date-tz';
 import { NutrientTargetService } from '../../nutrition/nutrient-target.service';
 import { NutritionSummaryService } from '../../nutrition/nutrition-summary.service';
 import { UserGoalsService } from '../../nutrition/user-goals.service';
@@ -62,6 +65,8 @@ describe('isolamento entre usuários', () => {
   const shortcuts = new FoodShortcutsService(prisma, foods);
   const portions = new FoodPortionService(prisma, foods);
   const mealItems = new MealItemService(prisma, meals);
+  const mealCopies = new MealCopyService(prisma, meals);
+  const mealTemplates = new MealTemplateService(prisma, meals);
   const nutrientTargets = new NutrientTargetService(prisma);
   const userGoals = new UserGoalsService(prisma);
   const weights = new WeightLogService(prisma);
@@ -2542,6 +2547,74 @@ describe('isolamento entre usuários', () => {
 
       expect(await prisma.conversation.findUnique({ where: { id: conversationId } })).toBeNull();
       expect(await prisma.message.count({ where: { conversationId } })).toBe(0);
+    });
+  });
+
+  describe('cópia de refeição e refeições salvas', () => {
+    let templateA = '';
+    let diaDaRefeicaoA = '';
+    const refeicoesDoB = () => prisma.meal.count({ where: { userId: owned.userB } });
+
+    beforeAll(async () => {
+      templateA = (
+        await mealTemplates.create(owned.userA, { name: 'Café de A', mealId: owned.mealId })
+      ).id;
+      const meal = await meals.findById(owned.userA, owned.mealId);
+      diaDaRefeicaoA = dateInTz(meal.eatenAt, TZ);
+    });
+
+    it('copy_meal recusa a refeição de outro, e o vizinho não ganha nada', async () => {
+      const antes = await refeicoesDoB();
+      await expect(
+        mealCopies.copyMeal(owned.userB, owned.mealId, { toDate: '2030-01-01' }, TZ),
+      ).rejects.toThrow(NotFoundException);
+      await expect(refeicoesDoB()).resolves.toBe(antes);
+    });
+
+    it('copy_day só enxerga as refeições de quem pede', async () => {
+      const antes = await refeicoesDoB();
+      await expect(
+        mealCopies.copyDay(owned.userB, diaDaRefeicaoA, '2030-01-02', TZ),
+      ).rejects.toThrow(NotFoundException);
+      await expect(refeicoesDoB()).resolves.toBe(antes);
+    });
+
+    it('list_meal_templates do user-B não traz a refeição salva do user-A', async () => {
+      const deA = await mealTemplates.list(owned.userA);
+      expect(deA.map((t) => t.id)).toContain(templateA);
+      const deB = await mealTemplates.list(owned.userB);
+      expect(deB.map((t) => t.id)).not.toContain(templateA);
+    });
+
+    it('log_meal_template recusa a refeição salva de outro, e nada é registrado', async () => {
+      const antes = await refeicoesDoB();
+      await expect(
+        mealTemplates.log(owned.userB, templateA, { eatenAt: '2030-01-03T12:00:00Z' }),
+      ).rejects.toThrow(NotFoundException);
+      await expect(refeicoesDoB()).resolves.toBe(antes);
+    });
+
+    it('delete_meal_template recusa a de outro, e ela continua lá', async () => {
+      await expect(mealTemplates.remove(owned.userB, templateA)).rejects.toThrow(NotFoundException);
+      await expect(prisma.mealTemplate.count({ where: { id: templateA } })).resolves.toBe(1);
+    });
+
+    it('save_meal_template recusa salvar a refeição de outro', async () => {
+      await expect(
+        mealTemplates.create(owned.userB, { name: 'Roubado', mealId: owned.mealId }),
+      ).rejects.toThrow(NotFoundException);
+      await expect(
+        prisma.mealTemplate.count({ where: { userId: owned.userB, name: 'Roubado' } }),
+      ).resolves.toBe(0);
+    });
+
+    it('save_meal_template recusa itens com o alimento custom de outro', async () => {
+      await expect(
+        mealTemplates.create(owned.userB, {
+          name: 'Com alimento alheio',
+          items: [{ foodId: owned.customFoodId, grams: 100 }],
+        }),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 

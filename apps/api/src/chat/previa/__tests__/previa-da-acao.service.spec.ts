@@ -7,6 +7,9 @@ import { LogMealTool } from '../../../nutrition/mcp/log-meal.tool';
 import { ListMealsTool } from '../../../nutrition/mcp/list-meals.tool';
 import { CompleteGoalTool } from '../../../goals/mcp/complete-goal.tool';
 import { ForgetMemoryTool } from '../../../chat/memory/mcp/forget-memory.tool';
+import { CopyMealTool } from '../../../nutrition/mcp/copy-meal.tool';
+import { CopyDayTool } from '../../../nutrition/mcp/copy-day.tool';
+import { LogMealTemplateTool } from '../../../nutrition/mcp/log-meal-template.tool';
 import { PreviaDaAcaoService } from '../previa-da-acao.service';
 
 /**
@@ -23,7 +26,15 @@ const AGORA = new Date('2026-09-25T18:00:00.000Z');
 
 describe('PreviaDaAcaoService', () => {
   const prisma = new PrismaService();
-  const classes = [LogMealTool, ListMealsTool, CompleteGoalTool, ForgetMemoryTool];
+  const classes = [
+    LogMealTool,
+    ListMealsTool,
+    CompleteGoalTool,
+    ForgetMemoryTool,
+    CopyMealTool,
+    CopyDayTool,
+    LogMealTemplateTool,
+  ];
   const discovery = {
     getProviders: () =>
       classes.map((Classe) => ({ metatype: Classe, instance: new Classe(undefined as never) })),
@@ -38,6 +49,8 @@ describe('PreviaDaAcaoService', () => {
   let metaDoOutro = '';
   let medidaDoDono = '';
   let medidaDoOutro = '';
+  let refeicaoDoDono = '';
+  let modeloDoDono = '';
 
   beforeAll(async () => {
     const stamp = `previa-${Date.now()}`;
@@ -79,6 +92,51 @@ describe('PreviaDaAcaoService', () => {
     medidaDoOutro = (
       await prisma.foodPortion.create({
         data: { foodId: alimentoDoDono, label: 'concha', grams: 140, createdByUserId: outro.id },
+      })
+    ).id;
+    refeicaoDoDono = (
+      await prisma.meal.create({
+        data: {
+          userId: dono.id,
+          mealType: 'LUNCH',
+          eatenAt: new Date('2026-09-24T15:30:00.000Z'),
+          items: {
+            create: [
+              { foodName: 'Feijão', grams: 100, kcal: 76, proteinG: 4.8, carbsG: 13.6, fatG: 0.5 },
+            ],
+          },
+        },
+      })
+    ).id;
+    modeloDoDono = (
+      await prisma.mealTemplate.create({
+        data: {
+          userId: dono.id,
+          name: 'Café de sempre',
+          mealType: 'BREAKFAST',
+          items: {
+            create: [
+              {
+                position: 0,
+                foodName: 'Pão francês',
+                grams: 50,
+                kcal: 150,
+                proteinG: 4,
+                carbsG: 29,
+                fatG: 1,
+              },
+              {
+                position: 1,
+                foodName: 'Café com leite',
+                grams: 200,
+                kcal: 80,
+                proteinG: 4,
+                carbsG: 8,
+                fatG: 3,
+              },
+            ],
+          },
+        },
       })
     ).id;
     metaDoOutro = (
@@ -220,6 +278,64 @@ describe('PreviaDaAcaoService', () => {
     const alheia = await previas.previa(dono, 'complete_goal', { goalId: metaDoOutro });
     expect(alheia.valida).toBe(false);
     expect(JSON.stringify(alheia)).not.toContain('70 kg');
+  });
+
+  it('copiar refeição: qual refeição e para que dia', async () => {
+    await expect(
+      previas.previa(dono, 'copy_meal', { mealId: refeicaoDoDono, toDate: '2026-09-25' }, AGORA),
+    ).resolves.toEqual({
+      valida: true,
+      linhas: [
+        { rotulo: 'Refeição', valor: 'Almoço de ontem, 12:30' },
+        { rotulo: 'Copiar para', valor: 'hoje' },
+      ],
+    });
+    const alheia = await previas.previa(
+      outro,
+      'copy_meal',
+      { mealId: refeicaoDoDono, toDate: '2026-09-25' },
+      AGORA,
+    );
+    expect(alheia.valida).toBe(false);
+  });
+
+  it('copiar dia: de quando para quando', async () => {
+    await expect(
+      previas.previa(dono, 'copy_day', { fromDate: '2026-09-24', toDate: '2026-09-25' }, AGORA),
+    ).resolves.toEqual({
+      valida: true,
+      linhas: [
+        { rotulo: 'Copiar de', valor: 'ontem' },
+        { rotulo: 'Copiar para', valor: 'hoje' },
+      ],
+    });
+  });
+
+  it('refeição salva aparece pelo nome e pelos itens, só para a dona', async () => {
+    const previa = await previas.previa(
+      dono,
+      'log_meal_template',
+      { templateId: modeloDoDono, eatenAt: '2026-09-25T11:00:00.000Z' },
+      AGORA,
+    );
+    expect(previa).toEqual({
+      valida: true,
+      linhas: [
+        {
+          rotulo: 'Refeição salva',
+          valor: 'Café de sempre: 50 g de Pão francês, 200 g de Café com leite',
+        },
+        { rotulo: 'Quando', valor: 'hoje, 08:00' },
+      ],
+    });
+    const alheia = await previas.previa(
+      outro,
+      'log_meal_template',
+      { templateId: modeloDoDono, eatenAt: '2026-09-25T11:00:00.000Z' },
+      AGORA,
+    );
+    expect(alheia.valida).toBe(false);
+    expect(JSON.stringify(alheia)).not.toContain('Café');
   });
 
   it('tool que não pede confirmação não tem resumo', async () => {

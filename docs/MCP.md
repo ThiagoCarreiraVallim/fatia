@@ -104,8 +104,8 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **110 tools** declaram `false`, e é a resposta que
-pela Fatia** (visão, LLM, embedding). Hoje as **110 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **116 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **116 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -185,12 +185,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 110 tools): **85,9 k caracteres**
-hoje, dos quais **4.745 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 116 tools): **90,9 k caracteres**
+hoje, dos quais **5.117 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **87** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (69,5 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (73,6 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -273,6 +273,12 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `list_meals`                 | R        |
 |                            | `update_meal`                | U        |
 |                            | `delete_meal`                | D        |
+|                            | `copy_meal`                  | C        |
+|                            | `copy_day`                   | C        |
+| **Refeições salvas**       | `list_meal_templates`        | R        |
+|                            | `save_meal_template`         | C        |
+|                            | `log_meal_template`          | C        |
+|                            | `delete_meal_template`       | D        |
 | **Itens de refeição**      | `add_meal_item`              | C        |
 |                            | `update_meal_item`           | U        |
 |                            | `delete_meal_item`           | D        |
@@ -352,8 +358,8 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `save_memory`                | C        |
 |                            | `forget_memory`              | D        |
 
-Total: **110 tools**. Cada uma documentada abaixo.
-Total: **110 tools**. Cada uma documentada abaixo.
+Total: **116 tools**. Cada uma documentada abaixo.
+Total: **116 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -839,6 +845,62 @@ Deleta refeição e todos os seus itens (cascade).
 
 **Input:** `{ mealId: string }`  
 **Output:** `{ deleted: true }`
+
+### `copy_meal`
+
+Copia uma refeição para outro dia: mesmo horário local (no fuso do usuário), mesmos itens. Os
+itens vão como foram registrados — macros, micronutrientes e medida caseira —, sem recalcular.
+Copiar de novo para o mesmo dia responde `CONFLICT` em vez de duplicar; para o mesmo dia e
+mesmo tipo da origem, `INVALID_INPUT`. Refeição de outro usuário responde `NOT_FOUND`.
+
+**Input:** `{ mealId: string; toDate: string /* YYYY-MM-DD */; mealType?: MealType }`  
+**Output:** `Meal` (a cópia, com itens)
+
+### `copy_day`
+
+Copia todas as refeições de um dia para outro, cada uma no seu horário local. As que já estão
+no destino (mesmo tipo, horário e itens) são puladas: repetir a chamada completa o que faltou
+sem duplicar. Dia sem refeições responde `NOT_FOUND`.
+
+**Input:** `{ fromDate: string; toDate: string }` (YYYY-MM-DD)  
+**Output:** `{ created: Meal[]; skipped: number }`
+
+---
+
+## Refeições salvas
+
+Uma refeição salva ("Café de sempre") guarda os itens como foram registrados e vira refeição
+nova em uma chamada. Nome único por usuário (`CONFLICT` se repetir), até 30 itens e até 50
+refeições salvas por usuário. Apagar o alimento personalizado de um item mantém o item, sem
+`foodId`.
+
+### `list_meal_templates`
+
+**Input:** `{}`  
+**Output:** `MealTemplate[]` — `{ id, name, mealType | null, items: [{ position, foodId, foodName, grams, kcal, proteinG, carbsG, fatG, nutrients, portionLabel, portionQuantity }] }`, por nome.
+
+### `save_meal_template`
+
+Salva a partir de uma refeição registrada (`mealId`) ou de itens no formato de `log_meal`
+(`items`) — exatamente um dos dois. Com `mealId`, o tipo padrão é o da refeição.
+
+**Input:** `{ name: string; mealId?: string; mealType?: MealType; items?: MealItemInput[] }`  
+**Output:** `MealTemplate`
+
+### `log_meal_template`
+
+Registra a refeição salva como refeição nova. O tipo é o informado, senão o da refeição salva,
+senão `SNACK`. Mesma guarda de duplicata de `log_meal`.
+
+**Input:** `{ templateId: string; eatenAt: string /* ISO 8601 */; mealType?: MealType }`  
+**Output:** `Meal`
+
+### `delete_meal_template`
+
+Apaga uma refeição salva. As refeições já registradas com ela não mudam.
+
+**Input:** `{ id: string }`  
+**Output:** `{ deleted: string }`
 
 ---
 

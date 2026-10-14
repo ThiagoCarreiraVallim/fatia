@@ -39,6 +39,14 @@ import { ListMyFoodsTool } from './mcp/list-my-foods.tool';
 import { SetFoodFavoriteTool } from './mcp/set-food-favorite.tool';
 import { CreateFoodPortionTool } from './mcp/create-food-portion.tool';
 import { DeleteFoodPortionTool } from './mcp/delete-food-portion.tool';
+import { MealCopyService } from './meal-copy.service';
+import { MealTemplateService } from './meal-template.service';
+import { CopyMealTool } from './mcp/copy-meal.tool';
+import { CopyDayTool } from './mcp/copy-day.tool';
+import { ListMealTemplatesTool } from './mcp/list-meal-templates.tool';
+import { SaveMealTemplateTool } from './mcp/save-meal-template.tool';
+import { LogMealTemplateTool } from './mcp/log-meal-template.tool';
+import { DeleteMealTemplateTool } from './mcp/delete-meal-template.tool';
 
 /**
  * Teto do corpo da rota de reconhecimento (#139).
@@ -63,6 +71,8 @@ const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 })
     OffFoodService,
     MealService,
     MealItemService,
+    MealCopyService,
+    MealTemplateService,
     NutritionSummaryService,
     UserGoalsService,
     NutrientTargetService,
@@ -85,6 +95,12 @@ const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 })
     AddMealItemTool,
     UpdateMealItemTool,
     DeleteMealItemTool,
+    CopyMealTool,
+    CopyDayTool,
+    ListMealTemplatesTool,
+    SaveMealTemplateTool,
+    LogMealTemplateTool,
+    DeleteMealTemplateTool,
     GetNutritionSummaryTool,
     GetNutritionHistoryTool,
     GetNutritionGoalsTool,

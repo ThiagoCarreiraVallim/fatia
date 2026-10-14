@@ -36,6 +36,14 @@ import {
 } from './dto/food.dto';
 import { FoodShortcutsService } from './food-shortcuts.service';
 import { FoodPortionService } from './food-portion.service';
+import { MealCopyService } from './meal-copy.service';
+import { MealTemplateService } from './meal-template.service';
+import {
+  CopyDayDto,
+  CopyMealDto,
+  CreateMealTemplateDto,
+  LogMealTemplateDto,
+} from './dto/meal-template.dto';
 import {
   CreateMealDto,
   ListMealsDto,
@@ -71,6 +79,8 @@ export class NutritionController {
     private readonly recognition: MealRecognitionService,
     private readonly shortcuts: FoodShortcutsService,
     private readonly portions: FoodPortionService,
+    private readonly copies: MealCopyService,
+    private readonly templates: MealTemplateService,
   ) {}
 
   // -------- Reconhecimento por foto (#139) --------
@@ -254,6 +264,50 @@ export class NutritionController {
   @HttpCode(204)
   deleteMeal(@CurrentUser() user: CurrentUserPayload, @Param('id') id: string) {
     return this.meals.delete(user.id, id);
+  }
+
+  // -------- Copiar refeição e dia --------
+  @Post('meals/:id/copy')
+  copyMeal(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') id: string,
+    @Body() dto: CopyMealDto,
+  ) {
+    return this.copies.copyMeal(user.id, id, dto, user.timezone);
+  }
+
+  @Post('days/copy')
+  copyDay(@CurrentUser() user: CurrentUserPayload, @Body() dto: CopyDayDto) {
+    return this.copies.copyDay(user.id, dto.fromDate, dto.toDate, user.timezone);
+  }
+
+  // -------- Refeições salvas --------
+  @Get('meal-templates')
+  listMealTemplates(@CurrentUser() user: CurrentUserPayload) {
+    return this.templates.list(user.id);
+  }
+
+  @Post('meal-templates')
+  createMealTemplate(@CurrentUser() user: CurrentUserPayload, @Body() dto: CreateMealTemplateDto) {
+    return this.templates.create(user.id, dto);
+  }
+
+  @Delete('meal-templates/:id')
+  @HttpCode(204)
+  deleteMealTemplate(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.templates.remove(user.id, id);
+  }
+
+  @Post('meal-templates/:id/log')
+  logMealTemplate(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: LogMealTemplateDto,
+  ) {
+    return this.templates.log(user.id, id, dto);
   }
 
   // -------- MealItems --------

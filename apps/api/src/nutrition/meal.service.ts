@@ -11,7 +11,8 @@ import type { CreateMealDto, ListMealsDto, MealItemInputDto, UpdateMealDto } fro
 import { calcMacrosFromFood, calcNutrientsFromFood, type ItemMacros } from './helpers/calc-macros';
 import { gramsFromPortion, visiblePortions } from './helpers/portion';
 
-interface ResolvedItem extends ItemMacros {
+/** Item pronto para gravar: macros já calculados (ou copiados de um registro anterior). */
+export interface ResolvedItem extends ItemMacros {
   foodId: number | null;
   foodName: string;
   groupId: number | null;
@@ -53,9 +54,25 @@ export class MealService {
 
   async create(userId: string, dto: CreateMealDto) {
     const items = await this.resolveItems(userId, dto.items);
-    const eatenAt = new Date(dto.eatenAt);
+    return this.createResolved(
+      userId,
+      { mealType: dto.mealType, eatenAt: new Date(dto.eatenAt), notes: dto.notes },
+      items,
+    );
+  }
 
-    const duplicate = await this.findDuplicate(userId, eatenAt, dto.mealType, items);
+  /**
+   * Grava uma refeição com itens já resolvidos. É por aqui que copiar refeição e
+   * registrar refeição salva passam: o retrato dos itens vai como está, e a mesma
+   * guarda de duplicata vale (tocar duas vezes não grava duas vezes).
+   */
+  async createResolved(
+    userId: string,
+    meal: { mealType: CreateMealDto['mealType']; eatenAt: Date; notes?: string },
+    items: ResolvedItem[],
+  ) {
+    const { mealType, eatenAt, notes } = meal;
+    const duplicate = await this.findDuplicate(userId, eatenAt, mealType, items);
     if (duplicate) {
       throw new ConflictException(
         `Refeição idêntica já registrada (id ${duplicate.id}): mesmo tipo, mesmo horário e mesmos itens. ` +
@@ -67,9 +84,9 @@ export class MealService {
     return this.prisma.meal.create({
       data: {
         userId,
-        mealType: dto.mealType,
+        mealType,
         eatenAt,
-        notes: dto.notes,
+        notes,
         items: { create: items },
       },
       include: { items: true },

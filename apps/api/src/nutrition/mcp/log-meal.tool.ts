@@ -9,7 +9,7 @@ import {
   type McpToolDef,
 } from '../../common/decorators/tool.decorator';
 
-const itemSchema = z.object({
+export const mealItemSchema = z.object({
   foodId: z.number().int().optional(),
   foodName: z.string().optional(),
   grams: z.number().min(0.1).optional(),
@@ -45,7 +45,7 @@ export class LogMealTool implements McpToolDef {
       .describe('Quando a refeição foi consumida, em ISO 8601 (ex.: 2026-07-29T12:30:00-03:00)'),
     notes: z.string().max(500).optional().describe('Observações livres sobre a refeição'),
     items: z
-      .array(itemSchema)
+      .array(mealItemSchema)
       .min(1)
       .describe(
         'Itens da refeição — pelo menos um. Cada item: foodId do catálogo ou foodName + macros estimados',
@@ -56,7 +56,7 @@ export class LogMealTool implements McpToolDef {
       mealType: MealType;
       eatenAt: string;
       notes?: string;
-      items: z.infer<typeof itemSchema>[];
+      items: z.infer<typeof mealItemSchema>[];
     },
     { userId }: McpToolContext,
   ) {

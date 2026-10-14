@@ -28,6 +28,21 @@ export type PreviaDaAcao =
 const numero = (valor: number, casas = 1) =>
   valor.toLocaleString('pt-BR', { maximumFractionDigits: casas });
 
+/** Cartão é para ler de relance: depois disso, "e mais N". */
+const MAX_ITENS_DO_MODELO = 5;
+
+/** "2 × colher de sopa (50 g) de Arroz" ou "120 g de Arroz", como foi registrado. */
+function descricaoDoItem(item: {
+  foodName: string;
+  grams: number;
+  portionLabel: string | null;
+  portionQuantity: number | null;
+}): string {
+  return item.portionLabel && item.portionQuantity
+    ? `${numero(item.portionQuantity, 2)} × ${item.portionLabel} (${numero(item.grams)} g) de ${item.foodName}`
+    : `${numero(item.grams)} g de ${item.foodName}`;
+}
+
 /**
  * O que uma escrita pausada vai fazer, em português de gente (ADR 022).
  *
@@ -199,10 +214,7 @@ export class PreviaDaAcaoService {
           where: { id, meal: { userId } },
           select: { foodName: true, grams: true, portionLabel: true, portionQuantity: true },
         });
-        if (!item) return null;
-        return item.portionLabel && item.portionQuantity
-          ? `${numero(item.portionQuantity, 2)} × ${item.portionLabel} (${numero(item.grams)} g) de ${item.foodName}`
-          : `${numero(item.grams)} g de ${item.foodName}`;
+        return item ? descricaoDoItem(item) : null;
       }
       case 'meta': {
         const meta = await this.prisma.goal.findFirst({
@@ -265,6 +277,22 @@ export class PreviaDaAcaoService {
           select: { label: true, grams: true, food: { select: { name: true } } },
         });
         return medida ? `${medida.label} (${numero(medida.grams)} g) de ${medida.food.name}` : null;
+      }
+      case 'modelo': {
+        const modelo = await this.prisma.mealTemplate.findFirst({
+          where: { id, userId },
+          select: {
+            name: true,
+            items: {
+              orderBy: { position: 'asc' },
+              select: { foodName: true, grams: true, portionLabel: true, portionQuantity: true },
+            },
+          },
+        });
+        if (!modelo) return null;
+        const itens = modelo.items.slice(0, MAX_ITENS_DO_MODELO).map(descricaoDoItem);
+        const resto = modelo.items.length - itens.length;
+        return `${modelo.name}: ${itens.join(', ')}${resto > 0 ? ` e mais ${resto}` : ''}`;
       }
       case 'exercicioDoPlano': {
         const doPlano = await this.prisma.workoutPlanExercise.findFirst({
