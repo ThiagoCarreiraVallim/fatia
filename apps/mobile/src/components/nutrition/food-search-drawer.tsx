@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Plus, Search, Star, Trash2 } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { Check, Plus, ScanBarcode, Search, Star, Trash2 } from 'lucide-react-native';
 import {
   amountGrams,
   amountPayload,
@@ -99,7 +100,22 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
   const [refeicaoCriada, setRefeicaoCriada] = useState<string | null>(null);
   const [adicionados, setAdicionados] = useState<string[]>([]);
   const qc = useQueryClient();
+  const router = useRouter();
   const refeicaoAlvo = mealId ?? refeicaoCriada;
+
+  // O scanner é uma tela (precisa da câmera inteira). Leva o dia, o tipo e a
+  // refeição já criada nesta abertura, para o produto cair no mesmo lugar.
+  const lerCodigo = () => {
+    onOpenChange(false);
+    router.push({
+      pathname: '/nutrition/scan',
+      params: {
+        date,
+        ...(mealType ? { mealType } : {}),
+        ...(refeicaoAlvo ? { mealId: refeicaoAlvo } : {}),
+      },
+    });
+  };
 
   // Metas de nutrientes ativas: o item manual pode informá-las (ADR 009).
   const metas = useQuery({
@@ -417,6 +433,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
               setModo('manual');
             }}
             onCriar={comecarCadastro}
+            onLerCodigo={lerCodigo}
           />
         )}
 
@@ -454,6 +471,7 @@ function PainelDeBusca({
   onEscolher,
   onManual,
   onCriar,
+  onLerCodigo,
 }: {
   busca: string;
   onBuscaChange: (valor: string) => void;
@@ -472,6 +490,7 @@ function PainelDeBusca({
   onEscolher: (food: Food | FoodShortcut) => void;
   onManual: () => void;
   onCriar: (nome: string) => void;
+  onLerCodigo: () => void;
 }) {
   const digitando = buscaComAtraso.trim().length >= 2;
   // Sem termo, a lista mostra os atalhos; com termo, os resultados da busca.
@@ -484,8 +503,8 @@ function PainelDeBusca({
 
   return (
     <View className="flex-1">
-      <View className="px-4 py-3">
-        <View className="relative justify-center">
+      <View className="flex-row items-center gap-2 px-4 py-3">
+        <View className="relative flex-1 justify-center">
           {/* `pointerEvents` desligado: o ícone cobre a borda esquerda do campo
               e sem isso o toque ali não abre o teclado. */}
           <View pointerEvents="none" className="absolute left-3 z-10">
@@ -503,6 +522,14 @@ function PainelDeBusca({
             style={[estiloDoCampoDoDrawer, { paddingLeft: 36 }]}
           />
         </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Ler código de barras"
+          onPress={onLerCodigo}
+          className="h-11 w-11 items-center justify-center rounded-md border border-border active:bg-accent"
+        >
+          <ScanBarcode size={18} color="#baccaf" />
+        </Pressable>
       </View>
 
       <DrawerFlatList

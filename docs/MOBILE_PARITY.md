@@ -33,7 +33,7 @@ Nenhum placeholder restante no código.
 | `(app)/nutrition/foods`            | `app/(app)/nutrition/foods.tsx`            | ✅  | Meus alimentos; `?novo=1` abre o cadastro (card vazio e scanner)            |
 | `(app)/nutrition/goals`            | `app/(app)/nutrition/goals.tsx`            | ✅  |                                                                             |
 | `(app)/nutrition/nutrient-targets` | `app/(app)/nutrition/nutrient-targets.tsx` | ✅  |                                                                             |
-| —                                  | `app/(app)/nutrition/scan.tsx`             | ➕  | scanner de código de barras (#140); o PWA não tem, ver abaixo               |
+| —                                  | `app/(app)/nutrition/scan.tsx`             | ➕  | scanner de código de barras (#140); no PWA o leitor mora no drawer de busca |
 | —                                  | `app/(app)/nutrition/photo.tsx`            | ➕  | registro por foto (#139); o PWA não tem, ver abaixo                         |
 | `(app)/profile`                    | `app/(app)/profile/index.tsx`              | ✅  |                                                                             |
 | `(app)/profile/connect`            | `app/(app)/profile/tokens.tsx`             | ⚠️  | o PWA virou fluxo guiado (#164); o nativo ainda é a tela antiga, ver abaixo |
@@ -80,7 +80,7 @@ esconde a diferença é exatamente o que este documento existe para impedir.
 | `water-card`           | `dashboard/water-card`           | ✅  | erro do atalho é exibido; no PWA some                             |
 | —                      | `dashboard/macro-bar`            | ➕  | o alvo aqui é único, não faixa mín–máx como em nutrição           |
 
-### Nutrição — 16 de 16, mais 3 do scanner
+### Nutrição — 19 de 19, mais 1 do scanner
 
 | PWA                     | App nativo                           |     | Observação                                                                                                                                                                                                                                                                      |
 | ----------------------- | ------------------------------------ | :-: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -100,9 +100,10 @@ esconde a diferença é exatamente o que este documento existe para impedir.
 | `meal-timeline`         | `nutrition/meal-timeline`            | ✅  |                                                                                                                                                                                                                                                                                 |
 | `nutrient-targets-card` | `nutrition/nutrient-targets-card`    | ✅  |                                                                                                                                                                                                                                                                                 |
 | `weekly-trend-chart`    | `nutrition/weekly-trend-chart`       | ✅  | barras em `react-native-svg`                                                                                                                                                                                                                                                    |
-| —                       | `nutrition/barcode-camera`           | ➕  | `expo-camera` (o `expo-barcode-scanner` foi descontinuado)                                                                                                                                                                                                                      |
-| —                       | `nutrition/scanned-product-drawer`   | ➕  | produto do Open Food Facts + atribuição ODbL na própria tela (ADR 017)                                                                                                                                                                                                          |
-| —                       | `nutrition/barcode`                  | ➕  | só os formatos do `expo-camera`; a lógica pura (trava, porção, ficha incompleta) é comum ao PWA em `@fatia/api-client` (`barcode.ts`)                                                                                                                                           |
+| `barcode-scanner`       | `nutrition/barcode-camera`           | ✅  | `expo-camera` no app; no PWA, `BarcodeDetector` nativo ou `@zxing/browser` (Safari, Firefox, Chrome desktop), com o campo "Digitar o código" sempre à mão                                                                                                                       |
+| `scanned-product-panel` | `nutrition/scanned-product-drawer`   | ✅  | produto do Open Food Facts + atribuição ODbL na própria tela (ADR 017) e "Guardar em Meus alimentos"; checkbox no PWA, `Pressable` com papel de checkbox no app                                                                                                                 |
+| `barcode-flow`          | `app/(app)/nutrition/scan.tsx`       | ✅  | no PWA é um modo do drawer de busca; no app é tela (câmera inteira), aberta pelo cabeçalho da Nutrição ou pelo botão do drawer                                                                                                                                                  |
+| —                       | `nutrition/barcode`                  | ➕  | só os formatos do `expo-camera`; a lógica pura (trava, porção, ficha incompleta, guardar) é comum em `@fatia/api-client` (`barcode.ts`)                                                                                                                                         |
 
 ### Treino — 14 de 14
 
@@ -201,7 +202,6 @@ exigência de loja.
 | Feedback tátil e cronômetro de descanso           | #126                                                                                   |
 | Confirmação antes de apagar                       | em tela de toque o alvo erra, e a API não desfaz                                       |
 | Estados de erro onde o web deixa a tela em branco | a auditoria pede estados equivalentes; "equivalente a nada" não serve                  |
-| Scanner de código de barras                       | #140 — e não é escolha: o PWA depende de `BarcodeDetector`, que o Safari não tem       |
 | Notificação local do fim do descanso              | #182 — o descanso é o momento em que o celular vai para o bolso                        |
 | Registro de refeição por foto                     | #139 — depende de câmera e galeria; ver abaixo                                         |
 
@@ -302,6 +302,7 @@ rodando, e deve ser feito antes de publicar:
 - [ ] Estrela de favorito e "Concluir · N itens" no sheet de busca (toque de 44 pt, leitor de tela)
 - [ ] Chips de medida caseira, botões − e + (44 pt) e "Nova medida" com o teclado aberto no sheet
 - [ ] Formulário de alimento no sheet com o teclado numérico aberto (vírgula decimal), e "Cadastrar à mão" do scanner abrindo Meus alimentos
+- [ ] Botão "Ler código de barras" do sheet de busca abrindo o scanner no mesmo dia e tipo, e "Guardar em Meus alimentos" fazendo o produto aparecer na busca
 - [ ] "Mais ações" da refeição (copiar, salvar) e "Copiar dia": setas do dia de destino e "Ver dia" trocando a data da tela
 - [ ] Diagrama muscular destacando os grupos certos
 - [ ] Aparelho de entrada, não só simulador — os gráficos são o ponto a observar

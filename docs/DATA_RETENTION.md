@@ -214,7 +214,7 @@ nada pessoal: sem o `userId`, sobra um custo e um nome de modelo. Pelo mesmo mot
 
 ## Consulta ao Open Food Facts (scanner de código de barras)
 
-O scanner do app nativo consulta o [Open Food Facts](https://world.openfoodfacts.org) para descobrir
+O scanner (do app nativo e do PWA) consulta o [Open Food Facts](https://world.openfoodfacts.org) para descobrir
 o produto embalado a partir do código lido. É a **única transferência de dado para terceiro** no
 fluxo de nutrição, e por isso está descrita aqui item a item. Decisão em
 [ADR 017](./ADR/017-open-food-facts-para-industrializado.md).
@@ -233,11 +233,12 @@ O único cabeçalho que identifica algo é o `User-Agent`, que identifica **o ap
 pelo OFF) e não a pessoa. A lista de cabeçalhos é fechada por teste
 (`apps/api/src/nutrition/__tests__/off-food.service.spec.ts`).
 
-| Dado                                | Onde                       | Retenção                         |
-| ----------------------------------- | -------------------------- | -------------------------------- |
-| Ficha do produto consultada         | Memória do processo da API | 6 h, ou até o processo reiniciar |
-| Código de barras escaneado          | **Não armazenado**         | —                                |
-| Vínculo entre usuário e código lido | **Não existe**             | —                                |
+| Dado                                | Onde                       | Retenção                             |
+| ----------------------------------- | -------------------------- | ------------------------------------ |
+| Ficha do produto consultada         | Memória do processo da API | 6 h, ou até o processo reiniciar     |
+| Código de barras escaneado          | **Não armazenado**         | —                                    |
+| Vínculo entre usuário e código lido | **Não existe**             | —                                    |
+| Produto guardado em Meus alimentos  | `Food` `CUSTOM` da pessoa  | até ela apagar o alimento ou a conta |
 
 O cache é do produto, não da pessoa: é chaveado só pelo código de barras, não guarda quem consultou
 e some no primeiro deploy.
@@ -259,8 +260,13 @@ código escaneado é um **segmento do caminho**, não um parâmetro de query.
 
 A mensagem de aviso de falha do OFF (`off-food.service.ts`) também não inclui o código.
 
-**No scanner, a imagem da câmera não sai do aparelho e não é gravada.** O `expo-camera` faz a
-decodificação localmente; o que o app envia à API é o número já lido. Não há foto, não há upload.
+**No scanner, a imagem da câmera não sai do aparelho e não é gravada.** No app, o `expo-camera` faz a
+decodificação localmente; no PWA, o `BarcodeDetector` do navegador ou o `@zxing/browser`, que roda
+na própria página. O que chega à API é o número já lido (ou digitado). Não há foto, não há upload.
+
+**"Guardar em Meus alimentos" é opcional e é da pessoa.** Desmarcado por padrão, cria um alimento
+próprio com o nome e os valores por 100 g do rótulo. Fica sob o isolamento por usuário como qualquer
+alimento cadastrado à mão, sai no export e é apagado com a conta. Não guarda o código de barras.
 (O registro **por foto** é outro fluxo, descrito na seção seguinte — lá a imagem transita, e é por
 isso que ela tem uma seção só dela.)
 
