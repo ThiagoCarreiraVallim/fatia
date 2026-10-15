@@ -35,6 +35,7 @@ Nenhum placeholder restante no código.
 | `(app)/nutrition/nutrient-targets` | `app/(app)/nutrition/nutrient-targets.tsx` | ✅  |                                                                             |
 | —                                  | `app/(app)/nutrition/scan.tsx`             | ➕  | scanner de código de barras (#140); no PWA o leitor mora no drawer de busca |
 | —                                  | `app/(app)/nutrition/photo.tsx`            | ➕  | registro por foto (#139); o PWA não tem, ver abaixo                         |
+| `(app)/plan`                       | `app/(app)/plan.tsx`                       | ⚠️  | Meu plano (ADR 024); o app vende só pela loja (RevenueCat), ver abaixo      |
 | `(app)/profile`                    | `app/(app)/profile/index.tsx`              | ✅  |                                                                             |
 | `(app)/profile/connect`            | `app/(app)/profile/tokens.tsx`             | ⚠️  | o PWA virou fluxo guiado (#164); o nativo ainda é a tela antiga, ver abaixo |
 | `(app)/progress`                   | `app/(app)/progress/index.tsx`             | ✅  |                                                                             |
@@ -266,6 +267,19 @@ leitor de tela — o TalkBack e o VoiceOver anunciam a mudança pelo
 
 ---
 
+## Plano PRO — a mesma tela, outro caixa
+
+A tela "Meu plano" mostra o mesmo plano que o PWA (`billingApi.plan`, `PRO_BENEFITS`,
+`FREE_INCLUDES`, `planSummary` do api-client), mas a compra é diferente de propósito: as lojas
+exigem compra in-app, então o app vende pela App Store / Google Play via RevenueCat
+(`src/billing/purchases.ts`) e **nunca mostra link de pagamento externo**. Quem assinou pela web vê
+"gerencie pela web", sem link. Sem as chaves `EXPO_PUBLIC_REVENUECAT_*` (Expo Go, por exemplo) a
+tela diz que a assinatura não está disponível neste build.
+
+O cadeado: a câmera da Nutrição continua visível no Free, com cadeado, e leva a
+`/plan?recurso=foto`; a tela de foto trata o 402 com "Ver o plano PRO". O app não tem chat, então
+o menu não muda.
+
 ## O que o React Native impôs
 
 Diferenças que não são escolha de produto — são consequência da plataforma. Estão
@@ -315,6 +329,8 @@ rodando, e deve ser feito antes de publicar:
 - [ ] Barra nova: "+" central abrindo o Registrar (treino retomando a sessão aberta), "Mais" abrindo o menu com rolagem no sheet de 85%, e a aba acesa certa em Metas/Perfil/Progresso
 - [ ] Assistente de primeira vez: conta nova cai nele, "Pular por agora" não volta a perguntar, e "Recalcular com meus dados" volta às metas
 - [ ] "Desfazer" do aviso no rodapé: apagar água/peso/passos no sheet e item na timeline, tocar em Desfazer dentro de 5 s e o registro voltar (o aviso tem de ficar acima do sheet e da barra)
+- [ ] Meu plano (dev build com `EXPO_PUBLIC_REVENUECAT_*` e conta de teste da loja): pacotes com o preço da loja, compra virando PRO na hora (`revenuecat/sync`), "Restaurar compras", "Gerenciar na loja", e a câmera da Nutrição saindo do cadeado
+- [ ] Logout trocando a conta da RevenueCat (`Purchases.logOut`) e o login seguinte com outra pessoa não herdando a compra
 - [ ] Cores dos macros e de erro (`cores.ts`) iguais às do PWA lado a lado
 - [ ] Diagrama muscular destacando os grupos certos
 - [ ] Aparelho de entrada, não só simulador — os gráficos são o ponto a observar

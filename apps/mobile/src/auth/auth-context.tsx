@@ -13,6 +13,7 @@ import { env } from '@/env';
 import { discover, exchangeCode, memoizeDiscovery } from './oidc';
 import { SessionManager, toStoredSession } from './session-manager';
 import { secureTokenStore } from './token-store';
+import { sairDaLoja } from '@/billing/purchases';
 
 // Fecha a aba do navegador do sistema assim que o callback volta. Sem isto, no
 // Android a Custom Tab fica aberta atrás do app.
@@ -172,6 +173,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // local já saiu — sair pela metade é pior que sair sem avisar o servidor.
     const idToken = manager.current?.idToken ?? null;
     await manager.clear();
+    // A próxima pessoa no aparelho não herda a compra da loja (ADR 024).
+    await sairDaLoja();
     setStatus('signedOut');
     try {
       const { endSessionEndpoint } = await endpoints();

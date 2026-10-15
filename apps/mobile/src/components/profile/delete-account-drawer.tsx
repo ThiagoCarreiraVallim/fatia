@@ -80,6 +80,10 @@ export function DeleteAccountDrawer({ open, onClose }: { open: boolean; onClose:
             <Text className="mt-1 text-xs text-muted-foreground">
               Se quiser guardar uma cópia, exporte seus dados antes.
             </Text>
+            <Text className="mt-1 text-xs text-muted-foreground">
+              Assinatura PRO feita pela web é cancelada junto. A feita na App Store ou no Google
+              Play precisa ser cancelada na própria loja.
+            </Text>
           </View>
 
           <View className="gap-1.5">

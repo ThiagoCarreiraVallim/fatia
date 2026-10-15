@@ -2,7 +2,13 @@ import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
-import { nutritionApi, type MealRecognition, type MealType } from '@fatia/api-client';
+import {
+  ApiError,
+  nutritionApi,
+  planHref,
+  type MealRecognition,
+  type MealType,
+} from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { Button, DrawerLayer, LoadingState } from '@/components/ui';
 import { PhotoCapture } from '@/components/nutrition/photo-capture';
@@ -47,6 +53,7 @@ export default function PhotoScreen() {
     router.back();
   };
 
+  const planoNecessario = reconhecer.error instanceof ApiError && reconhecer.error.isPlanRequired;
   const falha = reconhecer.error
     ? mensagemDeErro(reconhecer.error, {
         alternativa: 'Não consegui analisar a foto. Registre pela busca de alimento.',
@@ -77,9 +84,20 @@ export default function PhotoScreen() {
                   {falha}
                 </Text>
                 <View className="flex-row gap-2">
-                  <Button variant="outline" className="flex-1" onPress={() => reconhecer.reset()}>
-                    Tentar outra foto
-                  </Button>
+                  {planoNecessario ? (
+                    // 402 (ADR 024): a foto é do PRO. Tentar de novo não adianta.
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onPress={() => router.replace(planHref('foto'))}
+                    >
+                      Ver o plano PRO
+                    </Button>
+                  ) : (
+                    <Button variant="outline" className="flex-1" onPress={() => reconhecer.reset()}>
+                      Tentar outra foto
+                    </Button>
+                  )}
                   <Button className="flex-1" onPress={irParaOManual}>
                     Registrar à mão
                   </Button>

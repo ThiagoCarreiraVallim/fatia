@@ -2,8 +2,8 @@ import { useCallback, useState } from 'react';
 import { Alert, Text, View } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Flag, LogOut, Settings, Shield, Watch } from 'lucide-react-native';
-import { usersApi } from '@fatia/api-client';
+import { Crown, Flag, LogOut, Settings, Shield, Sparkles } from 'lucide-react-native';
+import { billingApi, planSummary, usersApi } from '@fatia/api-client';
 import { useAuth } from '@/auth/auth-context';
 import { Screen } from '@/components/layout/screen';
 import { Button } from '@/components/ui';
@@ -27,12 +27,14 @@ export default function ProfileScreen() {
   // No PWA os dados do usuário vêm do servidor (`getCurrentUser()`); aqui vêm da
   // API, na mesma chave que o `ProfileMetrics` usa — uma requisição só.
   const me = useQuery({ queryKey: ['users', 'me'], queryFn: () => usersApi.me() });
+  const plano = useQuery({ queryKey: ['billing', 'plan'], queryFn: () => billingApi.plan() });
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     void Promise.all([
       qc.refetchQueries({ queryKey: ['users', 'me'] }),
       qc.refetchQueries({ queryKey: ['dashboard', 'today'] }),
+      qc.refetchQueries({ queryKey: ['billing', 'plan'] }),
     ]).finally(() => setRefreshing(false));
   }, [qc]);
 
@@ -76,6 +78,12 @@ export default function ProfileScreen() {
 
           <View className="overflow-hidden rounded-2xl border border-border bg-card">
             <MenuItem
+              icon={<Crown size={18} color={cores.primary} />}
+              title="Meu plano"
+              subtitle={plano.data ? planSummary(plano.data) : 'Free ou PRO'}
+              onPress={() => router.push('/plan')}
+            />
+            <MenuItem
               icon={<Flag size={18} color={cores.primary} />}
               title="Metas"
               subtitle="Acompanhe seus objetivos pessoais"
@@ -87,10 +95,12 @@ export default function ProfileScreen() {
               subtitle="Calorias e macros diários"
               onPress={() => router.push('/nutrition/goals')}
             />
+            {/* O rótulo dizia "Dispositivos — Apple Health e Garmin", integrações que não
+                existem; o destino sempre foi conectar a IA (mesma correção do PWA, #151). */}
             <MenuItem
-              icon={<Watch size={18} color={cores.primary} />}
-              title="Dispositivos"
-              subtitle="Integração com Apple Health e Garmin"
+              icon={<Sparkles size={18} color={cores.primary} />}
+              title="Conectar sua IA"
+              subtitle="Registre e consulte seu diário conversando com o Claude"
               onPress={() => router.push('/profile/tokens')}
             />
             <MenuItem

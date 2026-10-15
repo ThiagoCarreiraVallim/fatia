@@ -2,8 +2,15 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { Camera, Copy, ScanBarcode, Settings } from 'lucide-react-native';
-import { nutritionApi, type Meal, type MealItem, type MealType } from '@fatia/api-client';
+import { Camera, Copy, Lock, ScanBarcode, Settings } from 'lucide-react-native';
+import {
+  aiLock,
+  nutritionApi,
+  planHref,
+  type Meal,
+  type MealItem,
+  type MealType,
+} from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { ErrorState, LoadingState } from '@/components/ui';
 import { CaloriesRingCard } from '@/components/nutrition/calories-ring-card';
@@ -64,6 +71,8 @@ export default function NutritionScreen() {
     retry: false,
   });
 
+  const fotoTrava = aiLock(fotoDisponivel.data);
+
   const atualizar = () => {
     void resumo.refetch();
     void metas.refetch();
@@ -87,7 +96,7 @@ export default function NutritionScreen() {
       >
         <View className="gap-5 px-5 pb-4 pt-4">
           <View className="flex-row items-center justify-end">
-            {fotoDisponivel.data?.available ? (
+            {fotoTrava === 'open' ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Registrar refeição por foto"
@@ -95,6 +104,20 @@ export default function NutritionScreen() {
                 className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
               >
                 <Camera size={18} color={cores.mutedForeground} />
+              </Pressable>
+            ) : fotoTrava === 'locked' ? (
+              // Free (ADR 024): o botão aparece com cadeado e leva ao plano, em vez
+              // de sumir — a pessoa precisa saber que a função existe.
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Registrar refeição por foto, do plano PRO"
+                onPress={() => router.push(planHref('foto'))}
+                className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
+              >
+                <Camera size={18} color={cores.mutedForeground} />
+                <View className="absolute bottom-1.5 right-1.5 rounded-full bg-background p-0.5">
+                  <Lock size={10} color={cores.mutedForeground} />
+                </View>
               </Pressable>
             ) : null}
             {/* Escanear entra no cabeçalho, e não dentro do drawer de busca: o
