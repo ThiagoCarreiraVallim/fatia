@@ -4,10 +4,13 @@ import type {
   BillingProvider,
   EntradaDeAssinatura,
   EntradaDeCliente,
+  EntradaDeClienteGrupo,
   EntradaDeClientePessoa,
+  EntradaDeCobrancaDaAssinatura,
   EntradaDeCobranca,
   ResultadoDeWebhook,
   ResultadoDeWebhookDeAssinatura,
+  SeatProvider,
   StatusDaCobranca,
   SubscriptionProvider,
 } from '../billing-provider.port';
@@ -66,7 +69,7 @@ export class AsaasError extends Error {
   }
 }
 
-export class AsaasProvider implements BillingProvider, SubscriptionProvider {
+export class AsaasProvider implements BillingProvider, SubscriptionProvider, SeatProvider {
   private readonly timeoutMs: number;
 
   constructor(private readonly config: ConfiguracaoAsaas) {
@@ -225,6 +228,54 @@ export class AsaasProvider implements BillingProvider, SubscriptionProvider {
     return primeira?.invoiceUrl ?? null;
   }
 
+  /** Cliente da comunidade (ADR 025), com referência `group:<id>`. */
+  async ensureGroupCustomer(
+    entrada: EntradaDeClienteGrupo,
+  ): Promise<{ providerCustomerId: string }> {
+    const cliente = await this.request<AsaasCliente>('POST', '/v3/customers', {
+      name: entrada.name,
+      cpfCnpj: entrada.taxId,
+      email: entrada.email,
+      externalReference: `group:${entrada.groupId}`,
+    });
+    return { providerCustomerId: cliente.id };
+  }
+
+  /**
+   * Muda o valor da recorrente. `updatePendingPayments` leva o valor novo
+   * também à cobrança já gerada e não paga — senão a próxima fatura sairia com
+   * o número antigo de assentos.
+   */
+  async updateSubscriptionValue(providerSubscriptionId: string, valueCents: number): Promise<void> {
+    await this.request<AsaasAssinatura>(
+      'POST',
+      `/v3/subscriptions/${encodeURIComponent(providerSubscriptionId)}`,
+      { value: Number((valueCents / 100).toFixed(2)), updatePendingPayments: true },
+    );
+  }
+
+  /** Cobrança avulsa ao cliente da assinatura: o pró-rata do aumento de assentos. */
+  async createSubscriptionCharge(
+    entrada: EntradaDeCobrancaDaAssinatura,
+  ): Promise<{ providerChargeId: string; url: string | null }> {
+    const assinatura = await this.request<AsaasAssinatura>(
+      'GET',
+      `/v3/subscriptions/${encodeURIComponent(entrada.providerSubscriptionId)}`,
+    );
+    if (!assinatura.customer) {
+      throw new AsaasError(200, 'sem_cliente', 'assinatura sem cliente');
+    }
+    const cobranca = await this.request<AsaasCobranca>('POST', '/v3/payments', {
+      customer: assinatura.customer,
+      billingType: 'UNDEFINED' satisfies AsaasBillingType,
+      value: Number((entrada.amountCents / 100).toFixed(2)),
+      dueDate: entrada.dueDate,
+      description: entrada.description,
+      externalReference: entrada.externalReference,
+    });
+    return { providerChargeId: cobranca.id, url: cobranca.invoiceUrl ?? null };
+  }
+
   async cancelSubscription(providerSubscriptionId: string): Promise<void> {
     await this.request<unknown>(
       'DELETE',
@@ -268,6 +319,9 @@ export class AsaasProvider implements BillingProvider, SubscriptionProvider {
         evento.payment?.dueDate && /^\d{4}-\d{2}-\d{2}$/.test(evento.payment.dueDate)
           ? evento.payment.dueDate
           : null,
+      paymentId: evento.payment?.id ?? null,
+      externalReference:
+        evento.payment?.externalReference ?? evento.subscription?.externalReference ?? null,
     };
   }
 

@@ -232,6 +232,7 @@ describe('MealRecognitionService', () => {
       expect(uso.registrar).toHaveBeenCalledWith(USER, {
         feature: 'meal_photo',
         paidBy: 'INSTANCE',
+        groupId: null,
         model: null,
         units: {},
       });

@@ -147,3 +147,55 @@ describe('resolverDireitoIa', () => {
     ).toMatchObject({ tier: 'PRO', subscription: { id: 'a' } });
   });
 });
+
+describe('resolverDireitoIa — assento de comunidade (ADR 025)', () => {
+  const assento = (parcial: Partial<AssinaturaLida> = {}) =>
+    assinatura({
+      id: 'pool',
+      source: 'GROUP',
+      currentPeriodEnd: dias(30),
+      group: { id: 'g1', name: 'Academia X' },
+      ...parcial,
+    });
+
+  it('assento ativo dá PRO pela comunidade', () => {
+    expect(resolverDireitoIa([assento()], AGORA)).toMatchObject({
+      tier: 'PRO',
+      source: 'GROUP',
+      subscription: { group: { name: 'Academia X' } },
+    });
+  });
+
+  it('PRO próprio ativo vence o assento, mesmo terminando antes', () => {
+    expect(
+      resolverDireitoIa([assento(), assinatura({ id: 'meu', currentPeriodEnd: dias(2) })], AGORA),
+    ).toMatchObject({ tier: 'PRO', source: 'ASAAS', subscription: { id: 'meu' } });
+  });
+
+  it('assento ativo vence o PRO próprio em carência', () => {
+    const atraso = assinatura({ id: 'meu', status: 'PAST_DUE', graceEndsAt: dias(3) });
+    expect(resolverDireitoIa([atraso, assento()], AGORA)).toMatchObject({ source: 'GROUP' });
+  });
+
+  it('comunidade inadimplente: carência vale, depois volta ao Free', () => {
+    expect(
+      resolverDireitoIa([assento({ status: 'PAST_DUE', graceEndsAt: dias(2) })], AGORA),
+    ).toMatchObject({ tier: 'PRO', motivo: 'carencia' });
+    expect(
+      resolverDireitoIa([assento({ status: 'PAST_DUE', graceEndsAt: dias(-1) })], AGORA),
+    ).toMatchObject({ tier: 'FREE', degraded: true, source: 'GROUP' });
+  });
+
+  it('pool da comunidade ainda não pago não aparece como checkout da pessoa', () => {
+    expect(
+      resolverDireitoIa([assento({ status: 'PENDING', currentPeriodEnd: null })], AGORA),
+    ).toMatchObject({ tier: 'FREE', motivo: 'sem_assinatura', subscription: null });
+  });
+
+  it('cortesia de comunidade sem prazo (pool manual) dá PRO', () => {
+    expect(resolverDireitoIa([assento({ currentPeriodEnd: null })], AGORA)).toMatchObject({
+      tier: 'PRO',
+      source: 'GROUP',
+    });
+  });
+});

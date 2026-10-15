@@ -97,6 +97,9 @@ export const AppEnvSchema = z.object({
   // do produto cadastrado lá.
   BILLING_PRO_MONTHLY_CENTS: z.coerce.number().int().positive().default(1990),
   BILLING_PRO_YEARLY_CENTS: z.coerce.number().int().positive().default(17900),
+  // Preço de um assento de comunidade por mês (ADR 025). Vale para compras e
+  // aumentos novos; o pool guarda o preço com que foi comprado.
+  BILLING_SEAT_MONTHLY_CENTS: z.coerce.number().int().positive().default(1490),
 
   // RevenueCat (compra dentro do app, Apple e Google). Vazio = webhook recusa e
   // o app não oferece compra. `REVENUECAT_WEBHOOK_AUTH` é o valor do header

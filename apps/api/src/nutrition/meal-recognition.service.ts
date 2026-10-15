@@ -197,7 +197,7 @@ export class MealRecognitionService {
     await this.uso
       .registrar(userId, {
         feature: 'meal_photo',
-        paidBy: AiAccessService.pagoPor(direito),
+        ...AiAccessService.pagoPor(direito),
         model: null,
         units: {},
       })

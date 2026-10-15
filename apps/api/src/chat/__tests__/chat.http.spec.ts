@@ -630,6 +630,7 @@ describe('POST /api/chat/transcribe', () => {
     expect(cenario.registrar).toHaveBeenCalledWith(USER, {
       feature: 'transcription',
       paidBy: 'INSTANCE',
+      groupId: null,
       model: 'whisper-1',
       units: { inputUnits: 3.4, outputUnits: 0 },
     });

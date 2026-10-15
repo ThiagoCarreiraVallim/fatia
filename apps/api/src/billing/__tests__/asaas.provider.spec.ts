@@ -362,6 +362,8 @@ describe('AsaasProvider — assinatura PRO (ADR 024)', () => {
         subscriptionId: 'sub_1',
         status: 'PAID',
         dueDate: '2026-10-15',
+        paymentId: 'pay_1',
+        externalReference: null,
       });
     });
 
@@ -378,13 +380,22 @@ describe('AsaasProvider — assinatura PRO (ADR 024)', () => {
       ).toMatchObject({ ok: true, subscriptionId: 'sub_1', dueDate: null });
     });
 
-    it('cobrança avulsa (B2B) volta sem assinatura', () => {
+    it('cobrança avulsa (B2B) volta sem assinatura, com o id e a referência dela', () => {
       expect(
         provider().verifySubscriptionWebhook(
           headers,
-          JSON.stringify({ id: 'evt_3', event: 'PAYMENT_RECEIVED', payment: { id: 'pay_9' } }),
+          JSON.stringify({
+            id: 'evt_3',
+            event: 'PAYMENT_RECEIVED',
+            payment: { id: 'pay_9', externalReference: 'seat-adjustment:a1' },
+          }),
         ),
-      ).toMatchObject({ ok: true, subscriptionId: null });
+      ).toMatchObject({
+        ok: true,
+        subscriptionId: null,
+        paymentId: 'pay_9',
+        externalReference: 'seat-adjustment:a1',
+      });
     });
 
     it('token errado e corpo sem ids são recusados', () => {
@@ -396,6 +407,80 @@ describe('AsaasProvider — assinatura PRO (ADR 024)', () => {
         ok: false,
         motivo: 'payload_invalido',
       });
+    });
+  });
+});
+
+describe('AsaasProvider — assentos de comunidade (ADR 025)', () => {
+  const fetchOriginal = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = fetchOriginal;
+  });
+
+  it('cria o cliente da comunidade com referência `group:<id>`', async () => {
+    const fetchMock = responde(200, { id: 'cus_g' });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const r = await provider().ensureGroupCustomer({
+      groupId: 'g1',
+      name: 'Academia X',
+      email: 'dono@x.dev',
+      taxId: '11222333000181',
+    });
+
+    expect(r).toEqual({ providerCustomerId: 'cus_g' });
+    expect(corpoEnviado(fetchMock)).toEqual({
+      name: 'Academia X',
+      cpfCnpj: '11222333000181',
+      email: 'dono@x.dev',
+      externalReference: 'group:g1',
+    });
+  });
+
+  it('novo valor da recorrente vai em reais e atualiza a cobrança pendente', async () => {
+    const fetchMock = responde(200, { id: 'sub_g' });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await provider().updateSubscriptionValue('sub_g', 10430);
+
+    expect(fetchMock.mock.calls[0][0]).toMatch(/\/v3\/subscriptions\/sub_g$/);
+    expect(fetchMock.mock.calls[0][1].method).toBe('POST');
+    expect(corpoEnviado(fetchMock)).toEqual({ value: 104.3, updatePendingPayments: true });
+  });
+
+  it('cobrança avulsa vai ao cliente da assinatura', async () => {
+    const fetchMock = jest.fn(async (url: string, _init: RequestInit) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify(
+            url.endsWith('/v3/subscriptions/sub_g')
+              ? { id: 'sub_g', customer: 'cus_g' }
+              : { id: 'pay_x', invoiceUrl: 'https://pay/x' },
+          ),
+          { status: 200 },
+        ),
+      ),
+    ) as FetchMock;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const r = await provider().createSubscriptionCharge({
+      providerSubscriptionId: 'sub_g',
+      amountCents: 1442,
+      dueDate: '2026-11-01',
+      description: 'Fatia — 2 assentos novos até 15/11',
+      externalReference: 'seat-adjustment:a1',
+    });
+
+    expect(r).toEqual({ providerChargeId: 'pay_x', url: 'https://pay/x' });
+    expect(fetchMock.mock.calls[1][0]).toMatch(/\/v3\/payments$/);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body as string)).toEqual({
+      customer: 'cus_g',
+      billingType: 'UNDEFINED',
+      value: 14.42,
+      dueDate: '2026-11-01',
+      description: 'Fatia — 2 assentos novos até 15/11',
+      externalReference: 'seat-adjustment:a1',
     });
   });
 });

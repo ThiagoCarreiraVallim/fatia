@@ -5,8 +5,7 @@ import {
   NotFoundException,
   PayloadTooLargeException,
 } from '@nestjs/common';
-import type { AiPaidBy } from '@prisma/client';
-import { AiAccessService } from '../ai/ai-access.service';
+import { AiAccessService, type Pagador } from '../ai/ai-access.service';
 import { AiUsageService } from '../ai/ai-usage.service';
 import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { AgentChatClient, ErroDeStreamDoAgente, type StreamDoAgente } from './agent-chat.client';
@@ -66,13 +65,13 @@ export class ChatService {
    */
   async transcrever(userId: string, audio: Buffer, contentType: string): Promise<{ text: string }> {
     if (audio.length === 0) throw new BadRequestException('O áudio veio vazio.');
-    const paidBy = AiAccessService.pagoPor(await this.acesso.assertPodeUsar(userId));
+    const pagador = AiAccessService.pagoPor(await this.acesso.assertPodeUsar(userId));
     const { texto, uso } = await this.agent.transcrever(audio, contentType);
     // Transcrição não tem saída cobrada: `0`, e não `undefined` — ver `AiCallUnits`.
     await this.uso
       .registrar(userId, {
         feature: 'transcription',
-        paidBy,
+        ...pagador,
         model: uso.model || null,
         units: { inputUnits: uso.inputUnits, outputUnits: 0 },
       })
@@ -114,7 +113,7 @@ export class ChatService {
     const existente = await this.conversas.encontrar(user.id, dto.conversationId);
     if (dto.resume && !existente) throw new NotFoundException('Conversa não encontrada.');
 
-    const paidBy = AiAccessService.pagoPor(await this.acesso.assertPodeUsar(user.id));
+    const pagador = AiAccessService.pagoPor(await this.acesso.assertPodeUsar(user.id));
 
     const historico =
       existente && dto.message !== undefined
@@ -148,7 +147,7 @@ export class ChatService {
       await this.conversas.iniciarTurno(user.id, dto.conversationId, dto.message, fotos.length);
       // Sem `await`: o nome é enfeite de lista, e esperar por ele atrasaria o
       // primeiro token da resposta, que é o que a pessoa está olhando.
-      if (!existente) void this.nomear(user.id, dto.conversationId, dto.message, paidBy);
+      if (!existente) void this.nomear(user.id, dto.conversationId, dto.message, pagador);
     }
 
     // Um comentário SSE, que todo leitor ignora, só para o cabeçalho sair agora:
@@ -183,7 +182,7 @@ export class ChatService {
       destino.escrever(formatarEventoSse('done', { status: 'error' }));
     } finally {
       const summary = markStoppedWhenClientLeft(turno.read(), clienteFoiEmbora);
-      const linha = await this.recordTurn(user.id, dto.conversationId, summary, paidBy);
+      const linha = await this.recordTurn(user.id, dto.conversationId, summary, pagador);
       // Depois do `done` do agente, e antes do fim: é o que liga o id que a tela
       // conhece (o da mensagem do LangChain) à linha do banco, onde o voto grava.
       if (linha && summary.ultimaMensagemId) {
@@ -209,7 +208,7 @@ export class ChatService {
     userId: string,
     conversationId: string,
     primeira: string,
-    paidBy: AiPaidBy,
+    pagador: Pagador,
   ): Promise<void> {
     try {
       const gerado = await this.agent.titular(primeira);
@@ -219,7 +218,7 @@ export class ChatService {
       }
       await this.uso.registrar(userId, {
         feature: 'chat_title',
-        paidBy,
+        ...pagador,
         model: gerado.uso?.model ?? null,
         units: gerado.uso
           ? { inputUnits: gerado.uso.inputUnits, outputUnits: gerado.uso.outputUnits }
@@ -234,7 +233,7 @@ export class ChatService {
     userId: string,
     conversationId: string,
     turno: TurnSummary,
-    paidBy: AiPaidBy,
+    pagador: Pagador,
   ): Promise<string | null> {
     let linha: string | null = null;
     try {
@@ -257,10 +256,10 @@ export class ChatService {
 
     try {
       if (turno.usoPorModelo.size === 0) {
-        await this.uso.registrar(userId, { feature: 'chat', paidBy, model: null, units: {} });
+        await this.uso.registrar(userId, { feature: 'chat', ...pagador, model: null, units: {} });
       } else {
         for (const [model, units] of turno.usoPorModelo) {
-          await this.uso.registrar(userId, { feature: 'chat', paidBy, model, units });
+          await this.uso.registrar(userId, { feature: 'chat', ...pagador, model, units });
         }
       }
     } catch (erro) {

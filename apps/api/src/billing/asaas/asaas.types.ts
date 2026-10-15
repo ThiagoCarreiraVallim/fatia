@@ -41,6 +41,8 @@ export interface AsaasCobranca {
 /** Assinatura recorrente (`/v3/subscriptions`). */
 export interface AsaasAssinatura {
   id: string;
+  /** Cliente dono da assinatura (`cus_…`). */
+  customer?: string;
   status?: string;
   cycle?: string;
   nextDueDate?: string;

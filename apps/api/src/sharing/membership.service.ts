@@ -405,6 +405,12 @@ export class MembershipService {
       // grupo, então sair encerra TODOS os daquele grupo. Filtrar por um
       // profissional específico deixaria os outros lendo depois da saída.
       this.links.revokeAllForMemberOp(groupId, userId, reason, agora),
+      // O assento de IA pago pela comunidade (ADR 025) acaba junto: a
+      // comunidade deixa de pagar por quem saiu, e o lugar volta ao dono.
+      this.prisma.groupSeatAssignment.updateMany({
+        where: { membershipId, revokedAt: null },
+        data: { revokedAt: agora },
+      }),
     ]);
 
     return {

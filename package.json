@@ -17,6 +17,7 @@
     "ui:compare": "tsx e2e/scripts/compare.ts",
     "billing:dry-run": "dotenv -e .env -- tsx apps/api/src/billing/billing-dry-run.ts",
     "billing:grant-pro": "dotenv -e .env -- tsx apps/api/src/billing/grant-pro.ts",
+    "billing:grant-seat": "dotenv -e .env -- tsx apps/api/src/billing/grant-seat.ts",
     "secrets:scan": "bash scripts/secret-scan.sh",
     "secrets:scan:selftest": "bash scripts/secret-scan-selftest.sh",
     "dev": "bash scripts/dev.sh",

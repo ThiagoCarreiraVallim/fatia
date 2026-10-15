@@ -34,6 +34,12 @@ export class AiPlanRequiredException extends HttpException {
   }
 }
 
+/** Quem paga uma chamada à IA hospedada. */
+export interface Pagador {
+  paidBy: AiPaidBy;
+  groupId: string | null;
+}
+
 /** Disponibilidade como a tela mostra: `allowed` diz se esta pessoa pode usar. */
 export type MotivoDaIa = 'ok' | 'plan_required' | 'not_configured';
 
@@ -74,9 +80,16 @@ export class AiAccessService {
       : { allowed: false, reason: 'plan_required' };
   }
 
-  /** Quem paga, para `AiUsage.paidBy`. */
-  static pagoPor(direito: AiEntitlement): AiPaidBy {
-    if (direito.source === 'INSTANCE') return 'INSTANCE';
-    return direito.tier === 'PRO' ? 'USER' : 'FREE';
+  /**
+   * Quem paga, para `AiUsage.paidBy` e `AiUsage.groupId`. Com assento, a
+   * comunidade — e o uso entra na conta dela (ADR 025).
+   */
+  static pagoPor(direito: AiEntitlement): Pagador {
+    if (direito.source === 'INSTANCE') return { paidBy: 'INSTANCE', groupId: null };
+    if (direito.tier !== 'PRO') return { paidBy: 'FREE', groupId: null };
+    if (direito.source === 'GROUP') {
+      return { paidBy: 'GROUP', groupId: direito.subscription?.group?.id ?? null };
+    }
+    return { paidBy: 'USER', groupId: null };
   }
 }

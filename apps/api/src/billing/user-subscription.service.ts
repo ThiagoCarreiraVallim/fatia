@@ -5,22 +5,27 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type BillingInterval, type UserSubscription } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
-import { addDaysIso, dayBoundsInTz } from '../progress/helpers/date-tz';
-import { CARENCIA_DIAS, type AiEntitlement } from './ai-entitlement';
+import type { AiEntitlement } from './ai-entitlement';
 import type { SubscriptionProvider } from './billing-provider.port';
 import { cpfValido, somenteDigitos } from './cpf';
+import { SeatPoolService } from './seat-pool.service';
+import { mudancaDoEvento } from './subscription-events';
 import { AiEntitlements } from './subscription-entitlements.service';
+
+// A regra dos eventos mora em `subscription-events.ts`; reexportada para quem
+// já a importava daqui.
+export { fimDoPeriodo, mudancaDoEvento, type MudancaDeAssinatura } from './subscription-events';
 
 /** Token do provedor de assinatura web. `null` = instância sem Asaas configurado. */
 export const SUBSCRIPTION_PROVIDER = Symbol('SUBSCRIPTION_PROVIDER');
 
-const FUSO_DO_PROVEDOR = 'America/Sao_Paulo';
 /** Link de pagamento ainda vale para reabrir o mesmo checkout. */
 const CHECKOUT_REUSAVEL_MS = 24 * 60 * 60 * 1000;
 
@@ -44,6 +49,8 @@ export interface PlanoDaPessoa {
   paymentUrl: string | null;
   /** Gestão fora do app (lojas). */
   manageUrl: string | null;
+  /** A comunidade que paga, quando o PRO é um assento (`source: 'GROUP'`). */
+  groupName: string | null;
   /** A instância exige plano para a IA? Sem exigência, não há o que vender. */
   requiresPlan: boolean;
   /** Assinatura pela web disponível (Asaas configurado). */
@@ -66,6 +73,7 @@ export class UserSubscriptionService {
     private readonly config: ConfigService,
     private readonly direitos: AiEntitlements,
     @Inject(SUBSCRIPTION_PROVIDER) private readonly provedor: SubscriptionProvider | null,
+    @Optional() private readonly assentos?: SeatPoolService,
   ) {}
 
   precos() {
@@ -77,6 +85,33 @@ export class UserSubscriptionService {
 
   async plano(userId: string): Promise<PlanoDaPessoa> {
     const direito = await this.direitos.aiTierForUser(userId);
+    const base = {
+      tier: direito.tier,
+      source: direito.source,
+      reason: direito.motivo,
+      degraded: direito.degraded,
+      requiresPlan: this.direitos.exigePlano(),
+      webCheckout: this.provedor !== null,
+      prices: this.precos(),
+    };
+
+    // Assento de comunidade (ADR 025): a validade é a do pool, e quem gerencia
+    // é a equipe — não há checkout, cancelamento nem loja.
+    if (direito.source === 'GROUP' && direito.subscription) {
+      const assento = direito.subscription;
+      return {
+        ...base,
+        status: assento.status,
+        interval: null,
+        currentPeriodEnd: assento.currentPeriodEnd?.toISOString() ?? null,
+        graceEndsAt: assento.graceEndsAt?.toISOString() ?? null,
+        cancelAtPeriodEnd: assento.cancelAtPeriodEnd,
+        paymentUrl: null,
+        manageUrl: null,
+        groupName: assento.group?.name ?? null,
+      };
+    }
+
     const sub = direito.subscription
       ? await this.prisma.userSubscription.findFirst({
           where: { id: direito.subscription.id, userId },
@@ -85,10 +120,7 @@ export class UserSubscriptionService {
     const loja = sub && (sub.source === 'APPLE' || sub.source === 'GOOGLE') ? sub.source : null;
 
     return {
-      tier: direito.tier,
-      source: direito.source,
-      reason: direito.motivo,
-      degraded: direito.degraded,
+      ...base,
       status: sub?.status ?? null,
       interval: sub?.interval ?? null,
       currentPeriodEnd: sub?.currentPeriodEnd?.toISOString() ?? null,
@@ -96,9 +128,7 @@ export class UserSubscriptionService {
       cancelAtPeriodEnd: sub?.cancelAtPeriodEnd ?? false,
       paymentUrl: sub?.status === 'PENDING' ? sub.paymentUrl : null,
       manageUrl: loja ? GESTAO_NA_LOJA[loja] : null,
-      requiresPlan: this.direitos.exigePlano(),
-      webCheckout: this.provedor !== null,
-      prices: this.precos(),
+      groupName: null,
     };
   }
 
@@ -128,7 +158,11 @@ export class UserSubscriptionService {
 
     const direito = await this.direitos.aiTierForUser(userId);
     if (direito.tier === 'PRO') {
-      throw new ConflictException('Você já tem o plano PRO.');
+      throw new ConflictException(
+        direito.source === 'GROUP'
+          ? 'Você já tem o PRO por um assento da sua comunidade.'
+          : 'Você já tem o plano PRO.',
+      );
     }
 
     const pendentes = await this.prisma.userSubscription.findMany({
@@ -212,6 +246,11 @@ export class UserSubscriptionService {
    */
   async cancelar(userId: string): Promise<PlanoDaPessoa> {
     const direito = await this.direitos.aiTierForUser(userId);
+    if (direito.source === 'GROUP') {
+      throw new ConflictException(
+        'Este PRO é um assento pago pela sua comunidade; quem gerencia é a equipe dela.',
+      );
+    }
     const alvo =
       direito.subscription && direito.source !== 'INSTANCE'
         ? await this.prisma.userSubscription.findFirst({
@@ -313,6 +352,7 @@ export class UserSubscriptionService {
             type: r.event,
             payload: {
               subscriptionId: r.subscriptionId,
+              paymentId: r.paymentId,
               status: r.status,
               dueDate: r.dueDate,
             },
@@ -337,8 +377,17 @@ export class UserSubscriptionService {
           })
         : null;
       if (!sub) {
-        // Cobrança avulsa (B2B) ou assinatura que não é nossa: registra e
-        // responde 200, senão o Asaas reentrega em laço.
+        // Assentos de comunidade (ADR 025): a assinatura do pool ou a cobrança
+        // avulsa de um aumento.
+        const assento = this.assentos
+          ? await this.assentos.aplicarEventoAsaas(tx, r)
+          : 'desconhecido';
+        if (assento !== 'desconhecido') {
+          await marcar(assento);
+          return { received: true as const };
+        }
+        // Assinatura que não é nossa: registra e responde 200, senão o Asaas
+        // reentrega em laço.
         await marcar('assinatura_desconhecida');
         return { received: true as const, ignored: 'assinatura_desconhecida' };
       }
@@ -348,67 +397,5 @@ export class UserSubscriptionService {
       await marcar(mudanca ? null : 'sem_efeito');
       return { received: true as const };
     });
-  }
-}
-
-/** Fim do período pago por uma cobrança que vence em `dueDate`. */
-export function fimDoPeriodo(dueDate: string, interval: BillingInterval | null): Date {
-  const [a, m, d] = dueDate.split('-').map(Number);
-  const meses = interval === 'YEARLY' ? 12 : 1;
-  const alvoMes = m - 1 + meses;
-  const ano = a + Math.floor(alvoMes / 12);
-  const mes = alvoMes % 12;
-  const ultimo = new Date(Date.UTC(ano, mes + 1, 0)).getUTCDate();
-  const ymd = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(Math.min(d, ultimo)).padStart(2, '0')}`;
-  return dayBoundsInTz(ymd, FUSO_DO_PROVEDOR).start;
-}
-
-/** O que um evento muda na assinatura. `null` = nada (evento velho ou irrelevante). */
-export function mudancaDoEvento(
-  sub: Pick<UserSubscription, 'status' | 'interval' | 'currentPeriodEnd'>,
-  evento: string,
-  dueDate: string | null,
-): Prisma.UserSubscriptionUpdateInput | null {
-  const encerrada = sub.status === 'CANCELED' || sub.status === 'EXPIRED';
-  switch (evento) {
-    case 'PAYMENT_CONFIRMED':
-    case 'PAYMENT_RECEIVED': {
-      if (!dueDate) return null;
-      const fim = fimDoPeriodo(dueDate, sub.interval);
-      if (sub.currentPeriodEnd && fim <= sub.currentPeriodEnd && sub.status === 'ACTIVE') {
-        return null; // confirmação repetida ou fora de ordem
-      }
-      return {
-        status: 'ACTIVE',
-        graceEndsAt: null,
-        paymentUrl: null,
-        currentPeriodEnd:
-          sub.currentPeriodEnd && sub.currentPeriodEnd > fim ? sub.currentPeriodEnd : fim,
-      };
-    }
-    case 'PAYMENT_OVERDUE': {
-      // O primeiro pagamento nunca feito não é atraso: o checkout só não foi pago.
-      if (!dueDate || sub.status === 'PENDING' || encerrada) return null;
-      if (sub.currentPeriodEnd && fimDoPeriodo(dueDate, sub.interval) <= sub.currentPeriodEnd) {
-        return null; // atraso de uma cobrança que já foi superada
-      }
-      return {
-        status: 'PAST_DUE',
-        graceEndsAt: dayBoundsInTz(addDaysIso(dueDate, CARENCIA_DIAS), FUSO_DO_PROVEDOR).start,
-      };
-    }
-    case 'PAYMENT_REFUNDED':
-    case 'PAYMENT_CHARGEBACK_REQUESTED':
-      return { status: 'EXPIRED', canceledAt: new Date(), cancelAtPeriodEnd: false };
-    case 'SUBSCRIPTION_DELETED':
-    case 'SUBSCRIPTION_INACTIVATED':
-      if (sub.status === 'PENDING') {
-        return { status: 'CANCELED', canceledAt: new Date(), paymentUrl: null };
-      }
-      if (encerrada) return null;
-      // O período pago continua valendo; só a renovação acabou.
-      return { cancelAtPeriodEnd: true, canceledAt: new Date() };
-    default:
-      return null;
   }
 }

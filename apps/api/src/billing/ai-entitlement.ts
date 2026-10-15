@@ -22,15 +22,21 @@ export const FOLGA_DE_RENOVACAO_MS = 24 * 60 * 60 * 1000;
 
 const DIA_MS = 24 * 60 * 60 * 1000;
 
+/** De onde vem o PRO: assinatura da pessoa ou assento pago por uma comunidade (ADR 025). */
+export type FonteDoPro = SubscriptionSource | 'GROUP';
+
 export interface AssinaturaLida {
+  /** Id da assinatura, ou do pool de assentos quando `source` é `GROUP`. */
   id: string;
-  source: SubscriptionSource;
+  source: FonteDoPro;
   status: SubscriptionStatus;
   interval: BillingInterval | null;
   currentPeriodEnd: Date | null;
   graceEndsAt: Date | null;
   cancelAtPeriodEnd: boolean;
   createdAt: Date;
+  /** A comunidade que paga, quando `source` é `GROUP`. */
+  group?: { id: string; name: string } | null;
 }
 
 export type MotivoDoDireito = DecisaoDeTier['motivo'] | 'instancia' | 'pendente' | 'expirada';
@@ -38,7 +44,7 @@ export type MotivoDoDireito = DecisaoDeTier['motivo'] | 'instancia' | 'pendente'
 export interface AiEntitlement {
   tier: 'FREE' | 'PRO';
   /** `INSTANCE` quando a instância não exige plano (`AI_REQUIRES_PLAN=false`). */
-  source: SubscriptionSource | 'INSTANCE' | null;
+  source: FonteDoPro | 'INSTANCE' | null;
   motivo: MotivoDoDireito;
   /** Havia um PRO e ele não vale agora (atraso além da carência, cancelado). */
   degraded: boolean;
@@ -98,6 +104,10 @@ function paraTier(a: AssinaturaLida, agora: Date): DecisaoDeTier | null {
  * O maior direito entre as assinaturas. Vale a ativa; depois a em carência;
  * sem nenhuma valendo, a mais recente explica o porquê (para a tela dizer
  * "seu PRO venceu" em vez de só "Free").
+ *
+ * Assento de comunidade conta como mais uma assinatura. No empate, vale a da
+ * própria pessoa: a comunidade não paga o uso de quem já paga (ADR 025), e a
+ * tela mostra o plano que a pessoa gerencia.
  */
 export function resolverDireitoIa(
   assinaturas: AssinaturaLida[],
@@ -113,6 +123,7 @@ export function resolverDireitoIa(
     .sort(
       (x, y) =>
         ordem(x.d.motivo) - ordem(y.d.motivo) ||
+        Number(x.a.source === 'GROUP') - Number(y.a.source === 'GROUP') ||
         (y.a.currentPeriodEnd?.getTime() ?? Infinity) -
           (x.a.currentPeriodEnd?.getTime() ?? Infinity),
     )[0];
@@ -127,8 +138,9 @@ export function resolverDireitoIa(
     };
   }
 
+  // Pool de comunidade aguardando pagamento é assunto do dono, não da pessoa.
   const pendente = assinaturas
-    .filter((a) => a.status === 'PENDING')
+    .filter((a) => a.status === 'PENDING' && a.source !== 'GROUP')
     .sort((x, y) => y.createdAt.getTime() - x.createdAt.getTime())[0];
   if (pendente) {
     return {

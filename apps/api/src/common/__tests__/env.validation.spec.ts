@@ -120,6 +120,7 @@ describe('AppEnvSchema — plano Free/PRO (ADR 024)', () => {
     expect(env.AI_REQUIRES_PLAN).toBe(false);
     expect(env.BILLING_PRO_MONTHLY_CENTS).toBe(1990);
     expect(env.BILLING_PRO_YEARLY_CENTS).toBe(17900);
+    expect(env.BILLING_SEAT_MONTHLY_CENTS).toBe(1490);
     expect(env.REVENUECAT_ENTITLEMENT_ID).toBe('pro');
   });
 

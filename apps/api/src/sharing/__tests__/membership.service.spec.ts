@@ -14,6 +14,7 @@ type MockPrisma = {
     upsert: jest.Mock;
   };
   professionalLink: { findMany: jest.Mock };
+  groupSeatAssignment: { updateMany: jest.Mock };
   $transaction: jest.Mock;
 };
 
@@ -27,6 +28,7 @@ const makePrisma = (): MockPrisma => ({
     upsert: jest.fn(),
   },
   professionalLink: { findMany: jest.fn() },
+  groupSeatAssignment: { updateMany: jest.fn().mockReturnValue({ count: 0 }) },
   // O service passa um ARRAY de operações; `Promise.all` reproduz o batch sem banco.
   $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
 });
@@ -241,8 +243,13 @@ describe('MembershipService', () => {
       // Duas escritas separadas abririam uma janela em que a associação já
       // acabou e o vínculo ainda autoriza leitura de dado de saúde.
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-      expect(prisma.$transaction.mock.calls[0][0]).toHaveLength(2);
+      expect(prisma.$transaction.mock.calls[0][0]).toHaveLength(3);
       expect(resultado.revokedLinks).toBe(2);
+      // O assento pago pela comunidade (ADR 025) acaba na mesma transação.
+      expect(prisma.groupSeatAssignment.updateMany).toHaveBeenCalledWith({
+        where: { membershipId: 'm1', revokedAt: null },
+        data: { revokedAt: expect.any(Date) },
+      });
 
       const [groupId, userId, reason, at] = links.revokeAllForMemberOp.mock.calls[0];
       expect([groupId, userId, reason]).toEqual([GROUP, ALUNO, 'left_group']);

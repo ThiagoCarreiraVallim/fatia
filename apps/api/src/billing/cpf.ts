@@ -18,3 +18,26 @@ export function cpfValido(entrada: string): boolean {
   };
   return digito(cpf.slice(0, 9)) === Number(cpf[9]) && digito(cpf.slice(0, 10)) === Number(cpf[10]);
 }
+
+/** CNPJ válido pelos dígitos verificadores (assentos de comunidade, ADR 025). */
+export function cnpjValido(entrada: string): boolean {
+  const cnpj = somenteDigitos(entrada);
+  if (cnpj.length !== 14 || /^(\d)\1{13}$/.test(cnpj)) return false;
+  const digito = (base: string) => {
+    const pesos =
+      base.length === 12
+        ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+        : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    const soma = [...base].reduce((acc, d, i) => acc + Number(d) * pesos[i], 0);
+    const resto = soma % 11;
+    return resto < 2 ? 0 : 11 - resto;
+  };
+  return (
+    digito(cnpj.slice(0, 12)) === Number(cnpj[12]) && digito(cnpj.slice(0, 13)) === Number(cnpj[13])
+  );
+}
+
+/** CPF ou CNPJ: quem paga uma comunidade pode ser pessoa ou empresa. */
+export function documentoValido(entrada: string): boolean {
+  return cpfValido(entrada) || cnpjValido(entrada);
+}

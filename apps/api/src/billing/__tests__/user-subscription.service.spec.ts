@@ -190,6 +190,7 @@ describe('UserSubscriptionService (banco real)', () => {
     // O payload guarda só ids, status e datas.
     expect(Object.keys(ev.payload as object).sort()).toEqual([
       'dueDate',
+      'paymentId',
       'status',
       'subscriptionId',
     ]);

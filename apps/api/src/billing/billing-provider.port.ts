@@ -110,6 +110,10 @@ export type ResultadoDeWebhookDeAssinatura =
       status: StatusDaCobranca;
       /** Vencimento da cobrança do evento, `YYYY-MM-DD`, no fuso do provedor. */
       dueDate: string | null;
+      /** Cobrança do evento; liga a cobrança avulsa de assentos (`GroupSeatAdjustment`). */
+      paymentId: string | null;
+      /** A referência que mandamos ao criar (`user:<id>`, `group:<id>`, `seat-adjustment:<id>`). */
+      externalReference: string | null;
     };
 
 /**
@@ -128,4 +132,39 @@ export interface SubscriptionProvider {
     headers: Record<string, string | undefined>,
     rawBody: string,
   ): ResultadoDeWebhookDeAssinatura;
+}
+
+export interface EntradaDeClienteGrupo {
+  groupId: string;
+  name: string;
+  email: string;
+  /** CPF ou CNPJ de quem paga a comunidade. Não é guardado. */
+  taxId: string;
+}
+
+export interface EntradaDeCobrancaDaAssinatura {
+  providerSubscriptionId: string;
+  amountCents: number;
+  /** Vencimento, `YYYY-MM-DD` no fuso do provedor. */
+  dueDate: string;
+  description: string;
+  externalReference: string;
+}
+
+/**
+ * O lado de assentos de comunidade (ADR 025): uma assinatura mensal por
+ * comunidade, com valor que muda quando o número de assentos muda, e a
+ * cobrança avulsa do pró-rata quando aumenta no meio do ciclo.
+ */
+export interface SeatProvider {
+  ensureGroupCustomer(entrada: EntradaDeClienteGrupo): Promise<{ providerCustomerId: string }>;
+  createSubscription(entrada: EntradaDeAssinatura): Promise<{ providerSubscriptionId: string }>;
+  firstPaymentUrl(providerSubscriptionId: string): Promise<string | null>;
+  cancelSubscription(providerSubscriptionId: string): Promise<void>;
+  /** Novo valor da recorrente, inclusive da cobrança ainda não paga. */
+  updateSubscriptionValue(providerSubscriptionId: string, valueCents: number): Promise<void>;
+  /** Cobrança avulsa ao mesmo cliente da assinatura (o pró-rata do aumento). */
+  createSubscriptionCharge(
+    entrada: EntradaDeCobrancaDaAssinatura,
+  ): Promise<{ providerChargeId: string; url: string | null }>;
 }

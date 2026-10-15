@@ -665,6 +665,7 @@ describe('ChatService — o título da conversa', () => {
     expect(uso.registrar).toHaveBeenCalledWith('user-a', {
       feature: 'chat_title',
       paidBy: 'INSTANCE',
+      groupId: null,
       model: 'm',
       units: { inputUnits: 40, outputUnits: 5 },
     });
@@ -716,6 +717,7 @@ describe('ChatService — o que vai para o livro-caixa', () => {
     expect(livro.registrar).toHaveBeenCalledWith('user-a', {
       feature: 'chat',
       paidBy: 'INSTANCE',
+      groupId: null,
       model: 'gateway/modelo',
       units: { inputUnits: 1200, outputUnits: 300 },
     });
@@ -735,6 +737,7 @@ describe('ChatService — o que vai para o livro-caixa', () => {
     expect(livro.registrar).toHaveBeenCalledWith('user-a', {
       feature: 'chat',
       paidBy: 'INSTANCE',
+      groupId: null,
       model: null,
       units: {},
     });
@@ -755,12 +758,14 @@ describe('ChatService — o que vai para o livro-caixa', () => {
       {
         feature: 'chat',
         paidBy: 'INSTANCE',
+        groupId: null,
         model: 'm',
         units: { inputUnits: 6000, outputUnits: 450 },
       },
       {
         feature: 'chat',
         paidBy: 'INSTANCE',
+        groupId: null,
         model: 'caro',
         units: { inputUnits: 900, outputUnits: undefined },
       },
@@ -783,6 +788,7 @@ describe('ChatService — o que vai para o livro-caixa', () => {
     expect(livro.registrar).toHaveBeenCalledWith('user-a', {
       feature: 'chat',
       paidBy: 'INSTANCE',
+      groupId: null,
       model: 'gateway/modelo',
       units: { inputUnits: 900, outputUnits: undefined },
     });
