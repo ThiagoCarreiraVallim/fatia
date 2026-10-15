@@ -224,13 +224,14 @@ export default function PlanDetailPage() {
         <Link
           href="/workout"
           aria-label="Voltar"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-foreground"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-foreground alvo-toque"
         >
           <ChevronLeft size={20} />
         </Link>
         {editingName ? (
           <div className="flex flex-1 items-center gap-2 px-2">
             <Input
+              aria-label="Nome do plano"
               autoFocus
               value={nameEdit}
               onChange={(e) => setNameEdit(e.target.value)}
@@ -263,7 +264,7 @@ export default function PlanDetailPage() {
           type="button"
           onClick={handleDelete}
           aria-label="Excluir plano"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-danger"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-danger alvo-toque"
         >
           <Trash2 size={18} />
         </button>

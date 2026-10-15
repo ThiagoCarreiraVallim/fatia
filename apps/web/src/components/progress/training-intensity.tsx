@@ -71,6 +71,8 @@ function HeatmapCellView({ cell }: { cell: HeatmapCell }) {
   return (
     <div
       title={label}
+      // `aria-label` só vale em elemento com papel; a célula é uma figura.
+      role={cell.future ? undefined : 'img'}
       aria-label={cell.future ? undefined : `${label}: ${INTENSITY_LABEL[cell.intensity]}`}
       aria-hidden={cell.future || undefined}
       className={`aspect-square rounded-md ${

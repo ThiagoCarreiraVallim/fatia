@@ -4,11 +4,12 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Trash2, Plus, Dumbbell } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Trash2, Plus, Dumbbell, ClipboardList } from 'lucide-react';
 import { workoutApi } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 
 export default function PlansPage() {
   const qc = useQueryClient();
@@ -57,6 +58,7 @@ export default function PlansPage() {
       {showForm ? (
         <div className="flex gap-2">
           <Input
+            aria-label="Nome do plano"
             autoFocus
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
@@ -97,7 +99,11 @@ export default function PlansPage() {
       )}
 
       {plans.data && plans.data.length === 0 && (
-        <p className="text-sm text-muted-foreground">Nenhum plano criado ainda.</p>
+        <EmptyState
+          icon={ClipboardList}
+          title="Nenhum plano criado ainda"
+          description="Monte um treino (ex.: Push, Pull, Pernas) para começar mais rápido na academia."
+        />
       )}
 
       <div className="space-y-2">

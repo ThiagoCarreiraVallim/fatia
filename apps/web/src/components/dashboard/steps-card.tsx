@@ -31,6 +31,10 @@ export function StepsCard({ data }: { data: TodaySummary['steps'] }) {
           <div
             className="h-full bg-primary transition-all"
             style={{ width: `${pct}%` }}
+            role="progressbar"
+            aria-label="Meta de passos"
+            aria-valuemin={0}
+            aria-valuemax={100}
             aria-valuenow={pct}
           />
         </div>

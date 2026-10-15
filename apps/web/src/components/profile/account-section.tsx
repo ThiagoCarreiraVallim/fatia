@@ -41,7 +41,7 @@ function RowText({
   return (
     <div className="min-w-0 flex-1">
       <p
-        className={`text-base font-bold leading-tight ${danger ? 'text-destructive' : 'text-foreground'}`}
+        className={`text-base font-bold leading-tight ${danger ? 'text-danger' : 'text-foreground'}`}
       >
         {title}
       </p>
@@ -127,7 +127,7 @@ export function AccountSection() {
           }}
         >
           <RowIcon danger>
-            <Trash2 size={18} className="text-destructive" />
+            <Trash2 size={18} className="text-danger" />
           </RowIcon>
           <RowText danger title="Apagar minha conta" subtitle="Remove a conta e todos os dados" />
         </button>
@@ -142,8 +142,8 @@ export function AccountSection() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div role="alert" className="rounded-xl border border-destructive bg-card p-3">
-              <p className="text-sm font-bold text-destructive">
+            <div role="alert" className="rounded-xl border border-danger bg-card p-3">
+              <p className="text-sm font-bold text-danger">
                 Ação irreversível. Não há como recuperar depois.
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
@@ -163,7 +163,7 @@ export function AccountSection() {
               />
             </div>
             {deleteAccount.error ? (
-              <p className="text-sm text-destructive">{deleteAccount.error.message}</p>
+              <p className="text-sm text-danger">{deleteAccount.error.message}</p>
             ) : null}
             <Button
               variant="destructive"

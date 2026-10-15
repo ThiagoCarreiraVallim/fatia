@@ -115,7 +115,7 @@ function BlockCard({ block, onEncerrar }: { block: TrainingBlock; onEncerrar: ()
             <button
               type="button"
               onClick={onEncerrar}
-              className="text-[11px] font-extrabold text-destructive underline"
+              className="text-[11px] font-extrabold text-danger underline"
             >
               Confirmar
             </button>

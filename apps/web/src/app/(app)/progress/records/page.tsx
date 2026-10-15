@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ChevronLeft, Trophy, Dumbbell, Footprints } from 'lucide-react';
 import { workoutApi, type PersonalRecordEntry } from '@fatia/api-client';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 
 type SortKey = 'recent' | 'weight';
 
@@ -115,9 +116,11 @@ export default function RecordsPage() {
       )}
 
       {records.data && filtered.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-white/10 bg-card p-8 text-center text-sm text-muted-foreground">
-          Nenhum recorde ainda. Registre séries durante o treino para começar.
-        </div>
+        <EmptyState
+          icon={Trophy}
+          title="Nenhum recorde ainda"
+          description="Registre séries durante o treino; as melhores marcas aparecem aqui."
+        />
       )}
 
       <div className="space-y-2">

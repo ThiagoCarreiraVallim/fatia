@@ -4,10 +4,11 @@ import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, UtensilsCrossed } from 'lucide-react';
 import { customFoodSummary, nutritionApi, type Food } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { CustomFoodDrawer } from '@/components/nutrition/custom-food-drawer';
+import { EmptyState } from '@/components/ui/empty-state';
 
 /** `null` = drawer fechado; `'novo'` = cadastro; alimento = edição. */
 type Editing = Food | 'novo' | null;
@@ -55,9 +56,11 @@ function CustomFoodsContent() {
         </p>
       )}
       {foods.data && foods.data.length === 0 && (
-        <p className="rounded-xl border border-dashed border-white/10 p-4 text-center text-sm text-muted-foreground">
-          Nenhum alimento cadastrado ainda.
-        </p>
+        <EmptyState
+          icon={UtensilsCrossed}
+          title="Nenhum alimento cadastrado ainda."
+          description="Cadastre o que não está na tabela — um produto embalado ou uma receita de casa — e registre em dois toques."
+        />
       )}
       {foods.data && foods.data.length > 0 && (
         <ul

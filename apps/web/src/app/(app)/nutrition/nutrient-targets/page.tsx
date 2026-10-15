@@ -3,11 +3,12 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { ChevronLeft, Trash2, Plus } from 'lucide-react';
+import { ChevronLeft, Trash2, Plus, FlaskConical } from 'lucide-react';
 import { nutritionApi, type NutrientTarget } from '@fatia/api-client';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 
 interface Preset {
   nutrientKey: string;
@@ -100,7 +101,11 @@ export default function NutrientTargetsPage() {
           <TargetRow key={t.id} target={t} onDelete={() => remove.mutate(t.nutrientKey)} />
         ))}
         {targets.data && targets.data.length === 0 && (
-          <p className="text-sm text-muted-foreground">Nenhuma meta personalizada ainda.</p>
+          <EmptyState
+            icon={FlaskConical}
+            title="Nenhuma meta personalizada ainda"
+            description="Defina abaixo um alvo de fibra, sódio, açúcar ou outro nutriente."
+          />
         )}
       </div>
 

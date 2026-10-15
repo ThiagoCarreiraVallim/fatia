@@ -24,7 +24,7 @@ export default async function ProLayout({ children }: { children: React.ReactNod
       <header className="sticky top-0 z-50 flex h-16 items-center gap-3 border-b border-subtle bg-background/70 px-5 backdrop-blur-xl">
         <Link
           href="/"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-foreground alvo-toque"
           aria-label="Voltar ao meu app"
         >
           <ChevronLeft size={20} />

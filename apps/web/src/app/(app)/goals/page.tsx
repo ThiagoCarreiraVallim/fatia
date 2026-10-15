@@ -180,7 +180,7 @@ function SecondaryGoalCard({
           type="button"
           onClick={onDelete}
           aria-label="Remover meta"
-          className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+          className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted text-muted-foreground hover:bg-danger/15 hover:text-danger alvo-toque"
         >
           <Trash2 size={12} />
         </button>

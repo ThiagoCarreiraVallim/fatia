@@ -45,6 +45,9 @@ export function SetRow({
     },
   });
 
+  // Rótulo de cada campo para o leitor de tela: a linha não tem cabeçalho próprio.
+  const label = (field: string) => `Série ${index + 1}: ${field}`;
+
   const gridCols = showDelete
     ? 'grid-cols-[36px_1fr_1fr_1fr_32px]'
     : 'grid-cols-[40px_1fr_1fr_1fr]';
@@ -57,17 +60,20 @@ export function SetRow({
       {isCardio ? (
         <>
           <DurationCell
+            label={label('duração')}
             seconds={set.durationSeconds}
             editable={editable}
             onChange={(seconds) => update.mutate({ durationSeconds: seconds })}
           />
           <NumberCell
+            label={label('distância em metros')}
             value={set.distanceMeters}
             editable={editable}
             suffix="m"
             onChange={(distanceMeters) => update.mutate({ distanceMeters })}
           />
           <NumberCell
+            label={label('frequência cardíaca média')}
             value={set.avgHeartRate}
             editable={editable}
             onChange={(avgHeartRate) => update.mutate({ avgHeartRate })}
@@ -76,17 +82,24 @@ export function SetRow({
       ) : (
         <>
           <NumberCell
+            label={label('repetições')}
             value={set.reps}
             editable={editable}
             onChange={(reps) => update.mutate({ reps })}
           />
           <NumberCell
+            label={label('carga em kg')}
             value={set.weightKg}
             editable={editable}
             step="0.5"
             onChange={(weightKg) => update.mutate({ weightKg })}
           />
-          <RpeCell value={set.rpe} editable={editable} onChange={(rpe) => update.mutate({ rpe })} />
+          <RpeCell
+            label={label('esforço (RPE)')}
+            value={set.rpe}
+            editable={editable}
+            onChange={(rpe) => update.mutate({ rpe })}
+          />
         </>
       )}
       {showDelete && (
@@ -94,8 +107,8 @@ export function SetRow({
           type="button"
           onClick={() => remove.mutate()}
           disabled={remove.isPending}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:text-danger disabled:opacity-50"
-          aria-label="Excluir série"
+          className="alvo-toque flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:text-danger disabled:opacity-50"
+          aria-label={`Excluir série ${index + 1}`}
         >
           <Trash2 size={14} />
         </button>
@@ -138,6 +151,7 @@ function fmt(s: number | null): string {
 }
 
 function NumberCell({
+  label,
   value,
   editable,
   step,
@@ -151,6 +165,7 @@ function NumberCell({
   max?: number;
   suffix?: string;
   onChange: (n: number | undefined) => void;
+  label: string;
 }) {
   const [local, setLocal] = useMirroredDraft(value, asText);
 
@@ -181,6 +196,7 @@ function NumberCell({
 
   return (
     <Input
+      aria-label={label}
       value={local}
       inputMode="decimal"
       step={step}
@@ -196,10 +212,12 @@ function NumberCell({
 }
 
 function RpeCell({
+  label,
   value,
   editable,
   onChange,
 }: {
+  label: string;
   value: number | null;
   editable: boolean;
   onChange: (n: number | undefined) => void;
@@ -232,6 +250,7 @@ function RpeCell({
   return (
     <div className="relative">
       <Input
+        aria-label={label}
         value={local}
         inputMode="decimal"
         step="0.5"
@@ -256,10 +275,12 @@ function RpeCell({
 }
 
 function DurationCell({
+  label,
   seconds,
   editable,
   onChange,
 }: {
+  label: string;
   seconds: number | null;
   editable: boolean;
   onChange: (n: number | undefined) => void;
@@ -294,6 +315,7 @@ function DurationCell({
 
   return (
     <Input
+      aria-label={label}
       value={local}
       onChange={(e) => setLocal(e.target.value)}
       onBlur={commit}

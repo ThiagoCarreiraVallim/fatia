@@ -76,6 +76,10 @@ export function WaterCard({ data }: { data: TodaySummary['water'] }) {
             <div
               className="h-full bg-water transition-all"
               style={{ width: `${pct}%` }}
+              role="progressbar"
+              aria-label="Meta de água"
+              aria-valuemin={0}
+              aria-valuemax={100}
               aria-valuenow={pct}
             />
           </div>

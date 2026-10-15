@@ -64,7 +64,7 @@ export default function SessionDetailPage() {
         <Link
           href="/workout/history"
           aria-label="Voltar"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-foreground"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-foreground alvo-toque"
         >
           <ChevronLeft size={20} />
         </Link>

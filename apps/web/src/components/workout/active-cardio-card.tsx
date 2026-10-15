@@ -170,6 +170,7 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
         </p>
         {editingDuration ? (
           <Input
+            aria-label="Duração (mm:ss)"
             autoFocus
             value={durationInput}
             onChange={(e) => setDurationInput(e.target.value)}
@@ -214,7 +215,7 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
           <button
             type="button"
             onClick={reset}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground alvo-toque"
             aria-label="Zerar"
           >
             <RotateCcw size={14} />
@@ -293,6 +294,7 @@ function Field({
         {label}
       </p>
       <Input
+        aria-label={label}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}

@@ -59,7 +59,7 @@ function NutritionPageContent() {
           )}
           <Link
             href="/nutrition/goals"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-foreground alvo-toque"
             aria-label="Metas"
           >
             <Settings size={18} />

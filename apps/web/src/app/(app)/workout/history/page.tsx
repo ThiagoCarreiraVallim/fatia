@@ -2,9 +2,10 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, Dumbbell } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Dumbbell, History } from 'lucide-react';
 import { workoutApi, type WorkoutSession } from '@fatia/api-client';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 
 function formatDuration(start: string, end?: string): string {
   if (!end) return '—';
@@ -82,7 +83,11 @@ export default function WorkoutHistoryPage() {
       )}
 
       {sessions.data && sessions.data.length === 0 && (
-        <p className="text-sm text-muted-foreground">Nenhum treino registrado ainda.</p>
+        <EmptyState
+          icon={History}
+          title="Nenhum treino registrado ainda"
+          description="Toque em + e escolha Treino para começar o primeiro."
+        />
       )}
 
       <div className="space-y-2">

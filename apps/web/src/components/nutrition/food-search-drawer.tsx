@@ -479,6 +479,7 @@ function SearchPanel({
             className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
           />
           <Input
+            aria-label="Buscar alimento"
             autoFocus
             value={q}
             onChange={(e) => onQChange(e.target.value)}

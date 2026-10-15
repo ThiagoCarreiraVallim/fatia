@@ -90,7 +90,7 @@ export default async function ProfilePage() {
       <Link
         href="/api/logto/sign-out"
         prefetch={false}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-destructive/50 bg-transparent px-4 py-4 text-base font-bold text-destructive transition-colors hover:bg-destructive/10"
+        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-danger/50 bg-transparent px-4 py-4 text-base font-bold text-danger transition-colors hover:bg-destructive/10"
       >
         <LogOut size={18} />
         Sair da conta
