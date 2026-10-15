@@ -229,7 +229,9 @@ test('atalhos: favoritar e adicionar dois recentes sem fechar o drawer', async (
   await page.getByRole('button', { name: 'Registrar Almoço' }).click();
 
   const drawer = page.getByRole('dialog');
-  await expect(drawer.getByText('Recentes')).toBeVisible();
+  // A busca de recentes é a primeira chamada do drawer; no dev server a rota
+  // pode estar compilando na primeira rodada.
+  await expect(drawer.getByText('Recentes')).toBeVisible({ timeout: 15_000 });
   const recentes = drawer.getByRole('list', { name: 'Recentes' }).getByRole('listitem');
   const [primeiro, segundo] = await Promise.all([
     recentes.nth(0).getByRole('paragraph').first().textContent(),
@@ -525,7 +527,8 @@ test('recalcular metas pelo assistente salva a sugestão e volta às metas', asy
   try {
     await page.goto('/nutrition/goals');
     await page.getByRole('link', { name: /Recalcular com meus dados/ }).click();
-    await expect(page).toHaveURL(/\/onboarding\?refazer=1$/);
+    // Primeira visita compila a rota do assistente no dev server.
+    await expect(page).toHaveURL(/\/onboarding\?refazer=1$/, { timeout: 15_000 });
 
     await page.getByRole('radio', { name: /Manter o peso/ }).click();
     await page.getByRole('button', { name: 'Continuar' }).click();
