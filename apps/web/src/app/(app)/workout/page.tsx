@@ -22,6 +22,7 @@ import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { BlockTimeline } from '@/components/workout/block-timeline';
 import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TopBarActions, topBarActionClass, useTopBarTitle } from '@/components/layout/app-top-bar';
 
 function ActiveSession({ session }: { session: WorkoutSession }) {
   const [searchOpen, setSearchOpen] = useState(false);
@@ -35,13 +36,13 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
   const focused = pickFocusedGroup(groups, skippedExerciseIds, pickedId);
 
   const others = groups.filter((g) => g.exerciseId !== focused?.exerciseId);
+  useTopBarTitle('Treino em andamento');
 
   return (
     <div className="space-y-4 px-5 pt-4 pb-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold">Treino em andamento</h1>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Iniciado às{' '}
             {new Date(session.startedAt).toLocaleTimeString('pt-BR', {
               hour: '2-digit',
@@ -170,16 +171,11 @@ function NoSession() {
 
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
-      <header className="flex items-center justify-between">
-        <h1 className="text-3xl font-extrabold text-foreground">Treinos</h1>
-        <Link
-          href="/workout/history"
-          aria-label="Histórico"
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground"
-        >
-          <History size={16} />
+      <TopBarActions>
+        <Link href="/workout/history" aria-label="Histórico" className={topBarActionClass}>
+          <History size={20} />
         </Link>
-      </header>
+      </TopBarActions>
 
       <section>
         <p className="text-[11px] font-extrabold tracking-wide text-muted-foreground">

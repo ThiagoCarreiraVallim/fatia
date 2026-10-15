@@ -16,6 +16,7 @@ import { CustomFoodsCard } from '@/components/nutrition/custom-foods-card';
 import { FoodSearchDrawer } from '@/components/nutrition/food-search-drawer';
 import { CopyDayDrawer } from '@/components/nutrition/copy-day-drawer';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TopBarActions, topBarActionClass } from '@/components/layout/app-top-bar';
 
 function todayIso(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -44,28 +45,21 @@ function NutritionPageContent() {
 
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
-      <header className="flex items-center justify-between">
-        <h1 className="text-[18px] font-semibold text-foreground">Nutrição</h1>
-        <div className="flex items-center">
-          {mealCount > 0 && (
-            <button
-              type="button"
-              onClick={() => setCopyingDay(true)}
-              className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
-              aria-label="Copiar dia"
-            >
-              <Copy size={18} />
-            </button>
-          )}
-          <Link
-            href="/nutrition/goals"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-foreground alvo-toque"
-            aria-label="Metas"
+      <TopBarActions>
+        {mealCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setCopyingDay(true)}
+            className={topBarActionClass}
+            aria-label="Copiar dia"
           >
-            <Settings size={18} />
-          </Link>
-        </div>
-      </header>
+            <Copy size={20} />
+          </button>
+        )}
+        <Link href="/nutrition/goals" className={topBarActionClass} aria-label="Metas">
+          <Settings size={20} />
+        </Link>
+      </TopBarActions>
 
       <DateNavigator date={date} />
 

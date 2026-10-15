@@ -43,9 +43,10 @@ export default async function ProfilePage() {
           </span>
         </div>
 
-        <h1 className="mt-3 text-2xl font-extrabold text-foreground">
+        {/* O `h1` da tela é o "Perfil" da barra de topo. */}
+        <h2 className="mt-3 text-2xl font-extrabold text-foreground">
           {user?.name ? user.name : 'Atleta Fatia'}
-        </h1>
+        </h2>
         {user?.email && <p className="text-xs text-muted-foreground">{user.email}</p>}
       </div>
 

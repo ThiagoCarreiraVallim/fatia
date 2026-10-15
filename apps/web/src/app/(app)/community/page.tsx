@@ -5,7 +5,6 @@ import { EmptyState } from '@/components/ui/empty-state';
 export default function CommunityPage() {
   return (
     <div className="space-y-6 px-4">
-      <h1 className="text-2xl font-extrabold">Comunidade</h1>
       <EmptyState
         icon={Users}
         title="Suas comunidades aparecem aqui"

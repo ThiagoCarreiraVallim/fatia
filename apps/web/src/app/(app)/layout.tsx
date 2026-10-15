@@ -1,5 +1,6 @@
 import { Toaster } from '@/components/ui/toaster';
 import { redirect } from 'next/navigation';
+import { AppTopBar, TopBarProvider } from '@/components/layout/app-top-bar';
 import { BottomNav } from '@/components/layout/bottom-nav';
 import { QuickAddProvider } from '@/components/layout/quick-add';
 import { SideNav } from '@/components/layout/side-nav';
@@ -13,23 +14,26 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     /*
-      Sem barra no topo: cada tela já abre com o próprio título, e a marca
-      repetida em toda tela só empurrava o conteúdo para baixo. O padding de
-      área segura mantém o título fora do relógio/notch no PWA instalado
-      (`black-translucent` + `viewportFit: cover`).
+      Barra de topo como no iOS (`AppTopBar`): voltar + título pequeno em toda
+      tela menos o Início, que é a raiz e abre com a saudação. O padding de área
+      segura mantém o conteúdo fora do relógio/notch no PWA instalado
+      (`black-translucent` + `viewportFit: cover`); a barra cobre essa faixa.
     */
     <QuickAddProvider>
-      <div className="flex min-h-screen flex-col bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] md:pl-64">
-        {/* No desktop o conteúdo fica numa coluna legível, ao lado da `SideNav`. */}
-        <main className="flex-1 pt-4 pb-24">
-          <div className="mx-auto w-full max-w-3xl">{children}</div>
-        </main>
-        <BottomNav />
-        <SideNav />
-        <PwaInstallPrompt />
-        <OnboardingGate />
-        <Toaster />
-      </div>
+      <TopBarProvider>
+        <div className="flex min-h-screen flex-col bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] md:pl-64">
+          <AppTopBar />
+          {/* No desktop o conteúdo fica numa coluna legível, ao lado da `SideNav`. */}
+          <main className="flex-1 pt-4 pb-24">
+            <div className="mx-auto w-full max-w-3xl">{children}</div>
+          </main>
+          <BottomNav />
+          <SideNav />
+          <PwaInstallPrompt />
+          <OnboardingGate />
+          <Toaster />
+        </div>
+      </TopBarProvider>
     </QuickAddProvider>
   );
 }

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, ChevronLeft, ExternalLink, Lock } from 'lucide-react';
+import { Check, ExternalLink, Lock } from 'lucide-react';
 import {
   billingApi,
   formatBRL,
@@ -57,13 +57,6 @@ export function PlanScreen() {
 
   return (
     <div className="space-y-5 p-4">
-      <header className="flex items-center gap-2">
-        <Link href="/profile" className="rounded p-1 hover:bg-accent" aria-label="Voltar">
-          <ChevronLeft size={20} />
-        </Link>
-        <h1 className="flex-1 text-xl font-semibold">Meu plano</h1>
-      </header>
-
       {plan.isPending ? (
         <div className="space-y-3" aria-busy="true">
           <Skeleton className="h-24 rounded-2xl" />

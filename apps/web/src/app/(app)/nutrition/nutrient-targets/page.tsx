@@ -2,8 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import Link from 'next/link';
-import { ChevronLeft, Trash2, Plus, FlaskConical } from 'lucide-react';
+import { Trash2, Plus, FlaskConical } from 'lucide-react';
 import { nutritionApi, type NutrientTarget } from '@fatia/api-client';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -83,13 +82,6 @@ export default function NutrientTargetsPage() {
 
   return (
     <div className="space-y-5 p-4">
-      <header className="flex items-center gap-2">
-        <Link href="/nutrition" className="rounded p-1 hover:bg-accent" aria-label="Voltar">
-          <ChevronLeft size={20} />
-        </Link>
-        <h1 className="text-xl font-semibold">Metas personalizadas</h1>
-      </header>
-
       <p className="text-sm text-muted-foreground">
         Controle nutrientes além dos macros — sódio, açúcar, fibra... Defina um limite (máx) e/ou
         uma meta (mín). O valor do dia soma o que você registra nas refeições.

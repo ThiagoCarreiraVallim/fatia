@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { Calculator, ChevronLeft } from 'lucide-react';
+import { Calculator } from 'lucide-react';
 import { nutritionApi, type UserGoals } from '@fatia/api-client';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -69,13 +69,6 @@ export default function GoalsPage() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4 p-4">
-      <header className="flex items-center gap-2">
-        <Link href="/nutrition" className="rounded p-1 hover:bg-accent" aria-label="Voltar">
-          <ChevronLeft size={20} />
-        </Link>
-        <h1 className="text-xl font-semibold">Metas</h1>
-      </header>
-
       <Link
         href="/onboarding?refazer=1"
         className="flex min-h-12 items-center gap-3 rounded-xl border border-subtle bg-card px-4 py-3 text-sm hover:bg-card/80"

@@ -2,8 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import Link from 'next/link';
-import { ChevronLeft, Trophy, Dumbbell, Footprints } from 'lucide-react';
+import { Trophy, Dumbbell, Footprints } from 'lucide-react';
 import { workoutApi, type PersonalRecordEntry } from '@fatia/api-client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -65,17 +64,6 @@ export default function RecordsPage() {
 
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
-      <header className="flex items-center gap-3">
-        <Link
-          href="/progress"
-          aria-label="Voltar"
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground"
-        >
-          <ChevronLeft size={18} />
-        </Link>
-        <h1 className="text-2xl font-extrabold text-foreground">Recordes</h1>
-      </header>
-
       {/* Análise */}
       <div className="grid grid-cols-3 gap-2">
         <StatCard label="Exercícios" value={String(data.length)} />

@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Play, Clock, Dumbbell, Plus } from 'lucide-react';
+import { Pencil, Play, Clock, Dumbbell, Plus } from 'lucide-react';
 import {
   findQuickTemplate,
   isCardioExercise,
@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TopBarActions, topBarActionClass, useTopBarTitle } from '@/components/layout/app-top-bar';
 interface LocalExercise {
   localId: string;
   exercise: Exercise;
@@ -105,6 +106,8 @@ export default function QuickTemplatePage() {
     },
   });
 
+  useTopBarTitle(nameOverride || template?.title);
+
   if (!template) {
     return (
       <div className="p-4">
@@ -156,15 +159,19 @@ export default function QuickTemplatePage() {
 
   return (
     <div className="pb-4">
-      <header className="sticky top-0 z-10 flex h-14 items-center justify-between bg-background/90 px-4 backdrop-blur">
-        <Link
-          href="/workout"
-          aria-label="Voltar"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-foreground alvo-toque"
+      <TopBarActions>
+        <button
+          type="button"
+          onClick={() => setEditingName(true)}
+          aria-label="Renomear treino"
+          className={topBarActionClass}
         >
-          <ChevronLeft size={20} />
-        </Link>
-        {editingName ? (
+          <Pencil size={19} />
+        </button>
+      </TopBarActions>
+
+      {editingName && (
+        <div className="px-5 pt-1 pb-2">
           <Input
             aria-label="Nome do treino"
             autoFocus
@@ -174,19 +181,10 @@ export default function QuickTemplatePage() {
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === 'Escape') setEditingName(false);
             }}
-            className="mx-2 h-8 text-base font-bold"
+            className="h-10 text-base font-bold"
           />
-        ) : (
-          <button
-            type="button"
-            onClick={() => setEditingName(true)}
-            className="flex-1 truncate px-2 text-center text-base font-bold text-foreground hover:underline"
-          >
-            {planName}
-          </button>
-        )}
-        <div className="w-9" />
-      </header>
+        </div>
+      )}
 
       <div className="space-y-4 px-5 pt-2">
         <div className="relative overflow-hidden rounded-2xl border border-subtle bg-card">

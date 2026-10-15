@@ -1,14 +1,13 @@
 'use client';
 
 import { Suspense, useState } from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Plus, UtensilsCrossed } from 'lucide-react';
+import { ChevronRight, Plus, UtensilsCrossed } from 'lucide-react';
 import { customFoodSummary, nutritionApi, type Food } from '@fatia/api-client';
-import { Button } from '@/components/ui/button';
 import { CustomFoodDrawer } from '@/components/nutrition/custom-food-drawer';
 import { EmptyState } from '@/components/ui/empty-state';
+import { TopBarActions, topBarActionClass } from '@/components/layout/app-top-bar';
 
 /** `null` = drawer fechado; `'novo'` = cadastro; alimento = edição. */
 type Editing = Food | 'novo' | null;
@@ -31,16 +30,16 @@ function CustomFoodsContent() {
 
   return (
     <div className="space-y-5 p-4">
-      <header className="flex items-center gap-2">
-        <Link href="/nutrition" className="rounded p-1 hover:bg-accent" aria-label="Voltar">
-          <ChevronLeft size={20} />
-        </Link>
-        <h1 className="flex-1 text-xl font-semibold">Meus alimentos</h1>
-        <Button size="sm" onClick={() => setEditing('novo')}>
-          <Plus size={16} aria-hidden />
-          Novo alimento
-        </Button>
-      </header>
+      <TopBarActions>
+        <button
+          type="button"
+          className={topBarActionClass}
+          aria-label="Novo alimento"
+          onClick={() => setEditing('novo')}
+        >
+          <Plus size={22} aria-hidden />
+        </button>
+      </TopBarActions>
 
       <p className="text-sm text-muted-foreground">
         O que não está na busca: produto embalado, receita de casa, o pão da padaria. Cadastre uma

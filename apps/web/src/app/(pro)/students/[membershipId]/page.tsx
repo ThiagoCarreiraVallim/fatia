@@ -1,10 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, Lock } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import {
   professionalApi,
   SHARE_SCOPE_LABEL,
@@ -12,6 +11,7 @@ import {
   type StudentReading,
 } from '@fatia/api-client';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useTopBarTitle } from '@/components/layout/app-top-bar';
 
 const ORDEM: ShareScope[] = ['WORKOUT', 'NUTRITION', 'BODY', 'HABITS', 'GOALS'];
 
@@ -138,6 +138,7 @@ export default function StudentPage() {
     [alunos.data, membershipId],
   );
   const autorizados = aluno?.scopesGrantedToMe ?? [];
+  useTopBarTitle(aluno?.name);
   const ativo = scope ?? autorizados[0] ?? null;
 
   const leitura = useQuery({
@@ -154,21 +155,10 @@ export default function StudentPage() {
 
   return (
     <div className="space-y-4 px-5 pt-4">
-      <Link
-        href="/students"
-        className="inline-flex items-center gap-1 text-xs font-bold text-muted-foreground hover:text-foreground"
-      >
-        <ChevronLeft size={14} />
-        Alunos
-      </Link>
-
-      <header>
-        <h1 className="text-2xl font-extrabold text-foreground">{aluno?.name ?? '—'}</h1>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Somente leitura. Para entregar um plano, monte-o na sua conta e ofereça: ele só passa a
-          existir na conta do aluno quando ele aceitar, e a partir daí é dele.
-        </p>
-      </header>
+      <p className="text-xs text-muted-foreground">
+        Somente leitura. Para entregar um plano, monte-o na sua conta e ofereça: ele só passa a
+        existir na conta do aluno quando ele aceitar, e a partir daí é dele.
+      </p>
 
       {autorizados.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-white/10 bg-card/30 p-6 text-center">

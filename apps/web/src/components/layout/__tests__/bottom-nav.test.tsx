@@ -6,7 +6,8 @@ import type { ReactNode } from 'react';
 import { BottomNav } from '../bottom-nav';
 
 /**
- * A barra Início · Nutrição · [ + ] · Treino · Mais. O caso olha os links
+ * A barra Nutrição · Treino · [ + ] · Comunidade · Mais. Sem Início: quem
+ * volta a ele é a barra de topo. O caso olha os links
  * renderizados, e não o texto do arquivo — asserção que procura identificador
  * no fonte inteiro casa com a linha de `import` e passa sem provar nada.
  */
@@ -74,10 +75,10 @@ describe('BottomNav', () => {
 
   afterEach(() => vi.clearAllMocks());
 
-  it('tem Início, Nutrição e Treino, com o Registrar no meio e o Mais no fim', () => {
+  it('tem Nutrição, Treino e Comunidade, com o Registrar no meio e o Mais no fim', () => {
     renderNav();
     const nav = screen.getByRole('navigation', { name: 'Navegação principal' });
-    expect(hrefs(nav)).toEqual(['/', '/nutrition', '/workout']);
+    expect(hrefs(nav)).toEqual(['/nutrition', '/workout', '/community']);
     const botoes = within(nav)
       .getAllByRole('button')
       .map((b) => b.getAttribute('aria-label') ?? b.textContent);
@@ -94,14 +95,32 @@ describe('BottomNav', () => {
     pathname.atual = '/nutrition/foods';
     renderNav();
     expect(screen.getByRole('link', { name: 'Nutrição' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: 'Início' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: 'Treino' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('a Comunidade fica marcada também no detalhe de uma comunidade', () => {
+    pathname.atual = '/community/abc';
+    renderNav();
+    expect(screen.getByRole('link', { name: 'Comunidade' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  it('no Início nenhuma aba fica marcada', () => {
+    pathname.atual = '/';
+    renderNav();
+    for (const nome of ['Nutrição', 'Treino', 'Comunidade']) {
+      expect(screen.getByRole('link', { name: nome })).not.toHaveAttribute('aria-current');
+    }
+    expect(screen.getByText('Mais')).not.toHaveClass('text-primary');
   });
 
   it('numa tela que não está na barra, o Mais fica ativo', () => {
     pathname.atual = '/progress';
     renderNav();
     expect(screen.getByText('Mais')).toHaveClass('text-primary');
-    for (const nome of ['Início', 'Nutrição', 'Treino']) {
+    for (const nome of ['Nutrição', 'Treino', 'Comunidade']) {
       expect(screen.getByRole('link', { name: nome })).not.toHaveAttribute('aria-current');
     }
   });

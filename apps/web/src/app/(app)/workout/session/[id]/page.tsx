@@ -2,11 +2,11 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
-import { ChevronLeft, Clock, Dumbbell } from 'lucide-react';
+import { Clock, Dumbbell } from 'lucide-react';
 import { buildExerciseGroups, workoutApi } from '@fatia/api-client';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useTopBarTitle } from '@/components/layout/app-top-bar';
 function formatDuration(start: string, end: string): string {
   const ms = new Date(end).getTime() - new Date(start).getTime();
   const totalMinutes = Math.round(ms / 60000);
@@ -25,6 +25,16 @@ export default function SessionDetailPage() {
   });
 
   const session = query.data;
+  // O dia do treino é o título: "quarta-feira, 14 de out.".
+  useTopBarTitle(
+    session
+      ? new Date(session.startedAt).toLocaleDateString('pt-BR', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'short',
+        })
+      : null,
+  );
 
   if (query.isLoading) {
     return (
@@ -60,18 +70,6 @@ export default function SessionDetailPage() {
 
   return (
     <div className="pb-4">
-      <header className="sticky top-0 z-10 flex h-14 items-center justify-between bg-background/90 px-4 backdrop-blur">
-        <Link
-          href="/workout/history"
-          aria-label="Voltar"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-foreground alvo-toque"
-        >
-          <ChevronLeft size={20} />
-        </Link>
-        <h1 className="text-base font-bold capitalize text-foreground">{dateLabel}</h1>
-        <div className="w-9" />
-      </header>
-
       <div className="space-y-4 px-5 pt-2">
         <div className="relative overflow-hidden rounded-2xl border border-subtle bg-card">
           <div className="relative h-44 w-full overflow-hidden">

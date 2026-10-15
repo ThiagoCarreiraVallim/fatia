@@ -21,6 +21,7 @@ import {
 import { goalsApi, type Goal, type GoalKind } from '@fatia/api-client';
 import { NewGoalDrawer } from '@/components/goals/new-goal-drawer';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TopBarActions, topBarActionClass } from '@/components/layout/app-top-bar';
 
 const KIND_ICON: Record<GoalKind, LucideIcon> = {
   weight: Scale,
@@ -246,22 +247,17 @@ export default function GoalsPage() {
 
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
-      <header>
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-extrabold text-foreground">Metas</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Acompanhe seus objetivos ativos.</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setDrawerOpen(true)}
-            className="flex items-center gap-1.5 rounded-xl bg-primary px-4 py-3 text-[11px] font-extrabold text-primary-foreground"
-          >
-            <Plus size={14} strokeWidth={3} />
-            NOVA META
-          </button>
-        </div>
-      </header>
+      <TopBarActions>
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(true)}
+          aria-label="Nova meta"
+          className={topBarActionClass}
+        >
+          <Plus size={22} />
+        </button>
+      </TopBarActions>
+      <p className="text-sm text-muted-foreground">Acompanhe seus objetivos ativos.</p>
 
       {allGoals.isLoading && (
         <>

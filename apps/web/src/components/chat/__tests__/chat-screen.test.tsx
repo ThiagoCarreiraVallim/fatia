@@ -137,6 +137,7 @@ vi.mock('next/navigation', () => ({
 
 const { ChatRuntimeProvider } = await import('../chat-runtime-provider');
 const { ChatScreen } = await import('../chat-screen');
+const { AppTopBar, TopBarProvider } = await import('@/components/layout/app-top-bar');
 
 beforeAll(() => {
   // `use-stick-to-bottom` e o `SwapLabel` dos elements medem com `ResizeObserver`,
@@ -187,9 +188,13 @@ function montar() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <ChatRuntimeProvider>
-        <ChatScreen />
-      </ChatRuntimeProvider>
+      <TopBarProvider>
+        {/* O título e as gavetas moram na barra de topo do layout. */}
+        <AppTopBar />
+        <ChatRuntimeProvider>
+          <ChatScreen />
+        </ChatRuntimeProvider>
+      </TopBarProvider>
     </QueryClientProvider>,
   );
 }

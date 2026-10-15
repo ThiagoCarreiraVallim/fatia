@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Trash2, Plus, Dumbbell, ClipboardList } from 'lucide-react';
+import { ChevronRight, Trash2, Plus, Dumbbell, ClipboardList } from 'lucide-react';
 import { workoutApi } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,17 +44,6 @@ export default function PlansPage() {
 
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
-      <header className="flex items-center gap-3">
-        <Link
-          href="/workout"
-          aria-label="Voltar"
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground"
-        >
-          <ChevronLeft size={18} />
-        </Link>
-        <h1 className="text-3xl font-extrabold text-foreground">Planos de treino</h1>
-      </header>
-
       {showForm ? (
         <div className="flex gap-2">
           <Input

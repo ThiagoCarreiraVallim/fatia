@@ -17,13 +17,10 @@ export default function StudentsPage() {
 
   return (
     <div className="space-y-4 px-5 pt-4">
-      <header>
-        <h1 className="text-2xl font-extrabold text-foreground">Alunos</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Você vê de cada aluno apenas o que ele autorizou, e cada consulta fica registrada na
-          trilha dele.
-        </p>
-      </header>
+      <p className="text-sm text-muted-foreground">
+        Você vê de cada aluno apenas o que ele autorizou, e cada consulta fica registrada na trilha
+        dele.
+      </p>
 
       {alunos.isLoading && (
         <div className="space-y-3">

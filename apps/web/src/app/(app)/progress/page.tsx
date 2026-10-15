@@ -78,12 +78,9 @@ export default function ProgressPage() {
 
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
-      <header>
-        <h1 className="text-3xl font-extrabold text-foreground">Evolução</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Seus dados de performance dos últimos {days} dias.
-        </p>
-      </header>
+      <p className="text-sm text-muted-foreground">
+        Seus dados de performance dos últimos {days} dias.
+      </p>
 
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="grid w-full grid-cols-2 rounded-xl bg-muted p-1">

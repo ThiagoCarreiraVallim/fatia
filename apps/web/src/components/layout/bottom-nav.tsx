@@ -3,18 +3,20 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Apple, Dumbbell, Home, Menu, Plus } from 'lucide-react';
+import { Apple, Dumbbell, Menu, Plus, Users } from 'lucide-react';
 import { PRIMARY_TABS, activeNavKey, type NavTab } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
 import { MenuMais } from './menu-mais';
 import { useQuickAdd } from './quick-add';
-import { VariantBottomNav, useNavVariant } from './nav-variants';
 
-const ICON = { home: Home, nutrition: Apple, workout: Dumbbell } as const;
+const ICON = { nutrition: Apple, workout: Dumbbell, community: Users } as const;
 
 /**
- * Início · Nutrição · [ + ] · Treino · Mais — a mesma barra do app
+ * Nutrição · Treino · [ + ] · Comunidade · Mais — a mesma barra do app
  * (`navigation.ts` do api-client).
+ *
+ * Sem aba Início: o Início é a raiz, e a barra de topo (`app-top-bar.tsx`)
+ * leva de volta a ele de qualquer tela, como no iOS.
  *
  * O "+" no centro é o Registrar: o registro a um toque de qualquer tela, que é
  * o que o plano Free tem no lugar da IA. "Mais" abre o menu com todas as outras
@@ -25,7 +27,6 @@ export function BottomNav() {
   const pathname = usePathname();
   const quickAdd = useQuickAdd();
   const [menuOpen, setMenuOpen] = useState(false);
-  const variant = useNavVariant();
   const active = activeNavKey(pathname);
   const tab = (key: NavTab['key']) => PRIMARY_TABS.find((t) => t.key === key)!;
 
@@ -45,8 +46,6 @@ export function BottomNav() {
     );
   };
 
-  if (variant !== 'atual') return <VariantBottomNav variant={variant} />;
-
   return (
     <>
       <nav
@@ -54,8 +53,8 @@ export function BottomNav() {
         className="fixed bottom-0 left-0 right-0 z-50 h-[calc(5rem+env(safe-area-inset-bottom))] rounded-tl-xl rounded-tr-xl border-t border-white/10 bg-muted/80 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
       >
         <div className="flex h-full items-center justify-around px-1">
-          {link(tab('home'))}
           {link(tab('nutrition'))}
+          {link(tab('workout'))}
           <div className="flex flex-1 items-center justify-center">
             <button
               type="button"
@@ -66,7 +65,7 @@ export function BottomNav() {
               <Plus size={28} strokeWidth={2.5} />
             </button>
           </div>
-          {link(tab('workout'))}
+          {link(tab('community'))}
           <button
             type="button"
             aria-haspopup="dialog"
