@@ -34,12 +34,31 @@ export interface AsaasCobranca {
   /** Data de crédito efetivo, `YYYY-MM-DD`. */
   paymentDate?: string;
   confirmedDate?: string;
+  /** Id da assinatura quando a cobrança nasceu de uma (`sub_…`). */
+  subscription?: string;
+}
+
+/** Assinatura recorrente (`/v3/subscriptions`). */
+export interface AsaasAssinatura {
+  id: string;
+  status?: string;
+  cycle?: string;
+  nextDueDate?: string;
+  externalReference?: string;
+}
+
+/** Envelope das listagens paginadas. */
+export interface AsaasLista<T> {
+  data?: T[];
+  hasMore?: boolean;
 }
 
 export interface AsaasEventoDeWebhook {
   id?: string;
   event?: string;
   payment?: AsaasCobranca;
+  /** Presente nos eventos `SUBSCRIPTION_*`. */
+  subscription?: AsaasAssinatura;
 }
 
 /**

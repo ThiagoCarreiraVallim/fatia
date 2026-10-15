@@ -74,3 +74,58 @@ export interface BillingProvider {
    */
   verifyWebhook(headers: Record<string, string | undefined>, rawBody: string): ResultadoDeWebhook;
 }
+
+// ─── Assinatura PRO da pessoa (ADR 024) ──────────────────────────────────────
+
+export interface EntradaDeClientePessoa {
+  /** Vira `externalReference` (`user:<id>`) no provedor. */
+  userId: string;
+  name: string;
+  email: string;
+  /**
+   * CPF, só dígitos. O Asaas exige para emitir cobrança; o Fatia não guarda —
+   * passa adiante uma vez e fica só com o id do cliente.
+   */
+  cpf: string;
+}
+
+export interface EntradaDeAssinatura {
+  providerCustomerId: string;
+  valueCents: number;
+  cycle: 'MONTHLY' | 'YEARLY';
+  /** Vencimento da primeira cobrança. */
+  nextDueAt: Date;
+  description: string;
+  externalReference: string;
+}
+
+export type ResultadoDeWebhookDeAssinatura =
+  | { ok: false; motivo: 'token_invalido' | 'payload_invalido' }
+  | {
+      ok: true;
+      eventId: string;
+      event: string;
+      /** Assinatura a que o evento se refere; `null` = cobrança avulsa (B2B). */
+      subscriptionId: string | null;
+      status: StatusDaCobranca;
+      /** Vencimento da cobrança do evento, `YYYY-MM-DD`, no fuso do provedor. */
+      dueDate: string | null;
+    };
+
+/**
+ * O lado de assinatura recorrente do provedor. Separado de `BillingProvider`
+ * (cobrança avulsa do grupo) porque os consumidores são outros e o B2B não
+ * precisa saber de assinatura de pessoa.
+ */
+export interface SubscriptionProvider {
+  ensurePersonCustomer(entrada: EntradaDeClientePessoa): Promise<{ providerCustomerId: string }>;
+  createSubscription(entrada: EntradaDeAssinatura): Promise<{ providerSubscriptionId: string }>;
+  /** Página de pagamento da primeira cobrança (Pix, boleto ou cartão). */
+  firstPaymentUrl(providerSubscriptionId: string): Promise<string | null>;
+  /** Encerra a recorrência. Cobranças já pagas não são estornadas. */
+  cancelSubscription(providerSubscriptionId: string): Promise<void>;
+  verifySubscriptionWebhook(
+    headers: Record<string, string | undefined>,
+    rawBody: string,
+  ): ResultadoDeWebhookDeAssinatura;
+}
