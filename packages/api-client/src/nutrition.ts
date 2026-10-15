@@ -211,6 +211,18 @@ export interface UserGoals {
   dailyWaterTargetMl: number;
 }
 
+/** Resposta de `POST /nutrition/goals/suggestion` (e de `suggest_nutrition_goals`). */
+export interface GoalSuggestion {
+  age: number;
+  /** Metabolismo basal, kcal/dia. */
+  bmr: number;
+  /** Gasto total estimado, kcal/dia. */
+  tdee: number;
+  /** Centro da faixa de kcal, já ajustado ao objetivo. */
+  targetKcal: number;
+  goals: Omit<UserGoals, 'userId'>;
+}
+
 export interface FoodGroup {
   id: number;
   name: string;
@@ -382,6 +394,21 @@ export const nutritionApi = {
     apiFetch<UserGoals>('/api/nutrition/goals', {
       method: 'PUT',
       body: JSON.stringify(body),
+    }),
+  /** Só calcula. O que faltar vem do perfil salvo e da última pesagem. */
+  suggestGoals: (
+    input: Partial<{
+      sex: 'FEMALE' | 'MALE';
+      birthDate: string;
+      heightCm: number;
+      weightKg: number;
+      activityLevel: 'SEDENTARY' | 'LIGHT' | 'MODERATE' | 'ACTIVE' | 'VERY_ACTIVE';
+      objective: 'LOSE' | 'MAINTAIN' | 'GAIN';
+    }> = {},
+  ) =>
+    apiFetch<GoalSuggestion>('/api/nutrition/goals/suggestion', {
+      method: 'POST',
+      body: JSON.stringify(input),
     }),
   history: (days: number) =>
     apiFetch<{
