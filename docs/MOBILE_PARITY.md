@@ -158,26 +158,29 @@ esconde a diferença é exatamente o que este documento existe para impedir.
 | —                                    | `profile/export-data-button`                                     | ➕  | LGPD art. 18, V — ver abaixo                                             |
 | —                                    | `profile/delete-account-drawer`                                  | ➕  | LGPD art. 18, VI + exigência das lojas                                   |
 
-### Layout e UI base — 12 de 12
+### Layout e UI base — 15 de 15
 
-| PWA                   | App nativo               |     | Observação                                                                                                                                                                                                                              |
-| --------------------- | ------------------------ | :-: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `layout/bottom-nav`   | `layout/bottom-nav`      | ✅  | Início · Nutrição · [ + ] · Treino · Mais, de `navigation.ts` do api-client; o "+" central é o Registrar                                                                                                                                |
-| `layout/menu-mais`    | `layout/menu-mais`       | ✅  | mesmas seções de `menuSections`; o app não tem chat, e "Conectar sua IA" leva a `/profile/tokens`                                                                                                                                       |
-| `layout/side-nav`     | —                        | ⛔  | só o desktop do PWA                                                                                                                                                                                                                     |
-| `layout/quick-add`    | `layout/registro-rapido` | ✅  | o menu Registrar; refeição pela hora e treino que retoma vêm do `@fatia/api-client`. O gatilho é o "+" da barra (`useQuickAdd` no PWA, `useRegistroRapido` aqui). O treino retoma em `/workout/session/:id` aqui e em `/workout` no PWA |
-| —                     | `layout/top-bar`         | ✅  | só a barra de voltar das telas internas; o PWA não tem barra no topo (a seta é do navegador)                                                                                                                                            |
-| `ui/button`           | `ui/button`              | ✅  | todos os tamanhos com 44pt mínimos                                                                                                                                                                                                      |
-| `ui/card`             | `ui/card`                | ✅  |                                                                                                                                                                                                                                         |
-| `ui/carousel` (embla) | `ui/carousel`            | ✅  | `FlatList` paginada                                                                                                                                                                                                                     |
-| `ui/drawer` (vaul)    | `ui/drawer`              | ✅  | `@gorhom/bottom-sheet`                                                                                                                                                                                                                  |
-| `ui/form`             | `ui/form`                | ✅  | rótulo vira `accessibilityLabel`, não `<label for>`                                                                                                                                                                                     |
-| `ui/input`            | `ui/input`               | ✅  |                                                                                                                                                                                                                                         |
-| `ui/label`            | `ui/label`               | ✅  |                                                                                                                                                                                                                                         |
-| `ui/tabs`             | `ui/tabs`                | ✅  | implementação própria, sem `pager-view`                                                                                                                                                                                                 |
-| —                     | `ui/state`               | ➕  | carregamento, erro e vazio centralizados                                                                                                                                                                                                |
-| —                     | `layout/screen`          | ➕  | moldura com safe area e pull-to-refresh                                                                                                                                                                                                 |
-| `legal-doc`           | —                        | ⛔  | só serve às rotas legais, que abrem no navegador                                                                                                                                                                                        |
+| PWA                   | App nativo                  |     | Observação                                                                                                                                                                                                                              |
+| --------------------- | --------------------------- | :-: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `layout/bottom-nav`   | `layout/bottom-nav`         | ✅  | Início · Nutrição · [ + ] · Treino · Mais, de `navigation.ts` do api-client; o "+" central é o Registrar                                                                                                                                |
+| `layout/menu-mais`    | `layout/menu-mais`          | ✅  | mesmas seções de `menuSections`; o app não tem chat, e "Conectar sua IA" leva a `/profile/tokens`                                                                                                                                       |
+| `layout/side-nav`     | —                           | ⛔  | só o desktop do PWA                                                                                                                                                                                                                     |
+| `layout/quick-add`    | `layout/registro-rapido`    | ✅  | o menu Registrar; refeição pela hora e treino que retoma vêm do `@fatia/api-client`. O gatilho é o "+" da barra (`useQuickAdd` no PWA, `useRegistroRapido` aqui). O treino retoma em `/workout/session/:id` aqui e em `/workout` no PWA |
+| —                     | `layout/top-bar`            | ✅  | só a barra de voltar das telas internas; o PWA não tem barra no topo (a seta é do navegador)                                                                                                                                            |
+| `ui/button`           | `ui/button`                 | ✅  | todos os tamanhos com 44pt mínimos                                                                                                                                                                                                      |
+| `ui/card`             | `ui/card`                   | ✅  |                                                                                                                                                                                                                                         |
+| `ui/carousel` (embla) | `ui/carousel`               | ✅  | `FlatList` paginada                                                                                                                                                                                                                     |
+| `ui/drawer` (vaul)    | `ui/drawer`                 | ✅  | `@gorhom/bottom-sheet`                                                                                                                                                                                                                  |
+| `ui/form`             | `ui/form`                   | ✅  | rótulo vira `accessibilityLabel`, não `<label for>`                                                                                                                                                                                     |
+| `ui/input`            | `ui/input`                  | ✅  |                                                                                                                                                                                                                                         |
+| `ui/label`            | `ui/label`                  | ✅  |                                                                                                                                                                                                                                         |
+| `ui/tabs`             | `ui/tabs`                   | ✅  | implementação própria, sem `pager-view`                                                                                                                                                                                                 |
+| `ui/skeleton`         | `ui/state` (`LoadingState`) | ✅  | o PWA mostra o formato do conteúdo; o nativo, o indicador central                                                                                                                                                                       |
+| `ui/empty-state`      | `ui/state` (`EmptyState`)   | ✅  | título, texto com o próximo passo e ação                                                                                                                                                                                                |
+| `ui/toaster` (sonner) | `ui/toast`                  | ✅  | aviso com "Desfazer" (`UNDO_MS`). No PWA, dentro de drawer o "Desfazer" fica na lista (`useUndoSlot`): o vaul deixa a página inerte; o nativo usa sempre o `useToast`, acima dos sheets                                                 |
+| —                     | `ui/state`                  | ➕  | carregamento, erro e vazio centralizados                                                                                                                                                                                                |
+| —                     | `layout/screen`             | ➕  | moldura com safe area e pull-to-refresh                                                                                                                                                                                                 |
+| `legal-doc`           | —                           | ⛔  | só serve às rotas legais, que abrem no navegador                                                                                                                                                                                        |
 
 ---
 
@@ -226,10 +229,10 @@ gota e rótulo de água, abria o drawer de **passos**. Corrigido nos dois.
 
 **Ganho que voltou para o PWA:** editar e apagar registro de peso, passos e água
 (#116) nasceu aqui e foi portado de volta na direção inversa da habitual. O
-`log-history` do web é o mesmo componente traduzido para DOM, com uma diferença:
-a confirmação de exclusão é inline na própria linha, não um diálogo do sistema —
-`ui/` não tem `alert-dialog`, e um `window.confirm` sobre um sheet do vaul rouba
-o foco e, no iOS instalado como PWA, aparece com o nome do domínio.
+`log-history` do web é o mesmo componente traduzido para DOM. Desde a Fase 3 os
+dois apagam sem pergunta e oferecem "Desfazer" por 5 s (registros pequenos; ver
+`docs/DESIGN.md`): no PWA o aviso fica no topo da lista, porque o drawer modal
+deixa o resto da página inerte; no app é o `useToast`.
 
 **Reordenar exercício do plano saiu desta tabela (#183).** Estava listada como
 ganho do mobile — "existe na API e no MCP, não no PWA". Era falso: o PWA
@@ -311,6 +314,8 @@ rodando, e deve ser feito antes de publicar:
 - [ ] Dia de água, peso e passos: seta "Próximo dia" apagada em hoje, e o registro de ontem aparecendo na lista com a data certa
 - [ ] Barra nova: "+" central abrindo o Registrar (treino retomando a sessão aberta), "Mais" abrindo o menu com rolagem no sheet de 85%, e a aba acesa certa em Metas/Perfil/Progresso
 - [ ] Assistente de primeira vez: conta nova cai nele, "Pular por agora" não volta a perguntar, e "Recalcular com meus dados" volta às metas
+- [ ] "Desfazer" do aviso no rodapé: apagar água/peso/passos no sheet e item na timeline, tocar em Desfazer dentro de 5 s e o registro voltar (o aviso tem de ficar acima do sheet e da barra)
+- [ ] Cores dos macros e de erro (`cores.ts`) iguais às do PWA lado a lado
 - [ ] Diagrama muscular destacando os grupos certos
 - [ ] Aparelho de entrada, não só simulador — os gráficos são o ponto a observar
 - [ ] Leitor de tela e fonte ampliada nos dois sistemas

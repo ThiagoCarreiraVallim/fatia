@@ -106,6 +106,20 @@ Cada item = 1 commit pequeno + `pnpm ui:snap` antes/depois.
 - Reescrever `docs/DESIGN.md` com o sistema real; atualizar `docs/MOBILE_PARITY.md`.
 - Ferramentas MCP equivalentes para cada função nova (regra MCP-first), mantendo o Free 100% utilizável por IA externa.
 
+### Andamento da Fase 3 — concluída
+
+Entregue em `feat/comunidades-planos`, cada etapa com `ui:snap` antes/depois (`e2e/screenshots/compare-*.html`):
+
+- **Bugs:** refeição em dia passado, série fantasma no treino livre, exclusão sem confirmação, títulos e placeholders da timeline, saudação.
+- **Registro rápido:** recentes e favoritos, vários itens por abertura, medidas caseiras, copiar refeição/dia e refeições salvas, alimento próprio, código de barras na web, dia do registro em água/peso/passos, "+" global (Registrar).
+- **Onboarding com TDEE:** assistente de primeira vez (Mifflin-St Jeor), metas sugeridas e editáveis, "Recalcular com meus dados"; o PUT de metas passou a recusar min > max e valores absurdos.
+- **Navegação:** barra **Início · Nutrição · + · Treino · Mais**, igual no PWA e no app (`navigation.ts`); menu "Mais" com todas as telas; barra lateral no desktop; metas a um toque do Início. Chat no menu só com IA disponível (vira o critério do plano Pago na Fase 4). A aba Comunidade entra na Fase 5.
+- **Design e acessibilidade:** tokens de estado e de macros nas duas pontas (`cores.ts` no app, com teste), `Skeleton`/`EmptyState`/avisos, "Desfazer" para registros pequenos, alvos de 44 px, foco visível, rótulos, zoom liberado, drawers centralizados no desktop; `e2e/tests/a11y.spec.ts` (axe) verde nas 13 rotas, no menu e no Registrar, em celular e desktop. Sistema descrito em [`DESIGN.md`](./DESIGN.md).
+
+**Auditoria MCP-first (118 tools):** cada função nova tem tool — `list_my_foods`, `set_food_favorite`, `create_food_portion`/`delete_food_portion`, `copy_meal`, `copy_day`, `list_meal_templates`/`save_meal_template`/`log_meal_template`/`delete_meal_template`, `list_custom_foods` (+ `portions` em `create_custom_food`), `suggest_nutrition_goals` e os campos de perfil em `update_me`; o dia do registro já existia em `log_water`/`log_steps`/`log_weight`. Ficam sem tool, de propósito: o **leitor de código de barras** (uma IA externa não lê código; a consulta continua em REST), a **navegação** e o **desfazer** (são da interface; pelo MCP, desfazer é registrar de novo).
+
+**Fica para as próximas fases ou para aparelho:** checklist de aparelho em [`MOBILE_PARITY.md`](./MOBILE_PARITY.md) (o app nativo não roda neste ambiente); a API ainda aceita duas sessões de treino abertas (o "+" evita no cliente; uma trava no `start` muda plano, treino rápido e MCP e merece etapa própria); a data do mapa de intensidade da Progresso é calculada em UTC no servidor e diverge da do navegador à noite (aviso de hidratação no dev).
+
 ## Fase 4 — Plano Free/Pago e entitlements
 
 **Schema** (`packages/db/prisma/schema.prisma`, migration nova):
