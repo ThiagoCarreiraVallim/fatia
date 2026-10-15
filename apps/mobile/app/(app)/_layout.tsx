@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { View } from 'react-native';
 import { Slot, useRouter } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
+import { usersApi } from '@fatia/api-client';
 import { useAuth } from '@/auth/auth-context';
 import { BottomNav } from '@/components/layout/bottom-nav';
 import { RegistroRapido } from '@/components/layout/registro-rapido';
@@ -25,6 +27,19 @@ export default function AppLayout() {
     // volta para dentro do app sem sessão.
     if (status === 'signedOut') router.replace('/login');
   }, [status, router]);
+
+  // Quem ainda não passou pelo assistente vai para ele (mesma chave do
+  // dashboard: não custa requisição a mais). Erro ao ler o perfil não prende
+  // ninguém lá — só o `onboardedAt` nulo de verdade redireciona.
+  const eu = useQuery({
+    queryKey: ['users', 'me'],
+    queryFn: () => usersApi.me(),
+    enabled: status === 'signedIn',
+  });
+  const primeiraVez = eu.data !== undefined && eu.data.onboardedAt === null;
+  useEffect(() => {
+    if (primeiraVez) router.replace('/onboarding');
+  }, [primeiraVez, router]);
 
   if (status !== 'signedIn') {
     return (

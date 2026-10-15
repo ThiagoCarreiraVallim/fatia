@@ -3,6 +3,9 @@ import {
   ACTIVITY_OPTIONS,
   ONBOARDING_STEPS,
   ageFromBirthDate,
+  brDateToIso,
+  isoToBrDate,
+  maskBrDate,
   bodyFromForm,
   goalsFromForm,
   goalsToForm,
@@ -120,5 +123,14 @@ describe('onboarding', () => {
         dailyStepsTarget: 'Até 100.000.',
       },
     });
+  });
+
+  it('máscara de data brasileira, ida e volta', () => {
+    expect(maskBrDate('12')).toBe('12');
+    expect(maskBrDate('1203')).toBe('12/03');
+    expect(maskBrDate('12/03/1996x9')).toBe('12/03/1996');
+    expect(brDateToIso('12/03/1996')).toBe('1996-03-12');
+    expect(brDateToIso('12/03')).toBe('12/03');
+    expect(isoToBrDate('1996-03-12')).toBe('12/03/1996');
   });
 });

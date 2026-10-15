@@ -109,6 +109,29 @@ export function ageFromBirthDate(birthDate: string, today: string): number {
   return ty - by - (hadBirthday ? 0 : 1);
 }
 
+/**
+ * Máscara de "DD/MM/AAAA" enquanto se digita, para o app (sem seletor de data
+ * nativo como dependência): "12031996" → "12/03/1996".
+ */
+export function maskBrDate(text: string): string {
+  const digits = text.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
+/** "12/03/1996" → "1996-03-12"; incompleto fica como veio, e `bodyFromForm` aponta. */
+export function brDateToIso(text: string): string {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(text);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : text;
+}
+
+/** "1996-03-12" → "12/03/1996". */
+export function isoToBrDate(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+}
+
 function isCalendarDay(ymd: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return false;
   const [y, m, d] = ymd.split('-').map(Number);

@@ -46,6 +46,7 @@ Nenhum placeholder restante no código.
 | `(app)/workout/quick/[templateId]` | `app/(app)/workout/quick/[templateId].tsx` | ✅  |                                                                             |
 | `(app)/workout/session/[id]`       | `app/(app)/workout/session/[id].tsx`       | ✅  | uma rota para sessão ativa e concluída — o treino termina durante a visita  |
 | `(auth)/login`                     | `app/login.tsx`                            | ✅  | navegador do sistema em vez de redirect no servidor                         |
+| `(onboarding)/onboarding`          | `app/onboarding.tsx`                       | ✅  | assistente de primeira vez; nascimento digitado com máscara DD/MM/AAAA      |
 | `(public)/privacy`                 | —                                          | ⛔  | abre no navegador; ver "Fora de propósito"                                  |
 | `(public)/terms`                   | —                                          | ⛔  | idem                                                                        |
 
@@ -307,6 +308,7 @@ rodando, e deve ser feito antes de publicar:
 - [ ] "Mais ações" da refeição (copiar, salvar) e "Copiar dia": setas do dia de destino e "Ver dia" trocando a data da tela
 - [ ] Dia de água, peso e passos: seta "Próximo dia" apagada em hoje, e o registro de ontem aparecendo na lista com a data certa
 - [ ] Botão "+" acima da nav sem cobrir o fim da rolagem, coberto pelos drawers das telas, e o menu abrindo o drawer certo (treino retomando a sessão aberta)
+- [ ] Assistente de primeira vez: conta nova cai nele, "Pular por agora" não volta a perguntar, e "Recalcular com meus dados" volta às metas
 - [ ] Diagrama muscular destacando os grupos certos
 - [ ] Aparelho de entrada, não só simulador — os gráficos são o ponto a observar
 - [ ] Leitor de tela e fonte ampliada nos dois sistemas
