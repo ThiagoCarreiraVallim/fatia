@@ -25,6 +25,7 @@ const ROTAS = [
   '/goals',
   '/profile',
   '/profile/connect',
+  '/plan',
 ];
 
 async function auditar(page: Page) {

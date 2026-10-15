@@ -68,6 +68,7 @@ const STATIC_ROUTES: Array<[string, string]> = [
   ['/goals', '40-metas'],
   ['/profile', '50-perfil'],
   ['/profile/connect', '51-perfil-conectar-ia'],
+  ['/plan', '52-plano'],
   ['/chat', '60-chat'],
   ['/students', '70-pro-alunos'],
   ['/privacy', '90-privacidade'],
@@ -326,6 +327,77 @@ test.describe('assistente de primeira vez', () => {
     if (!(await appears(page.getByRole('button', { name: 'Usar estas metas' })))) return;
     await snap(page, '29-onboarding-metas');
     await page.getByRole('button', { name: 'Cancelar' }).click();
+  });
+});
+
+/** O plano como a API devolve (ADR 024); as fotos simulam os estados. */
+const PLANO_FREE = {
+  tier: 'FREE',
+  source: null,
+  reason: 'sem_assinatura',
+  degraded: false,
+  status: null,
+  interval: null,
+  currentPeriodEnd: null,
+  graceEndsAt: null,
+  cancelAtPeriodEnd: false,
+  paymentUrl: null,
+  manageUrl: null,
+  requiresPlan: true,
+  webCheckout: true,
+  prices: { monthlyCents: 1990, yearlyCents: 17900 },
+};
+
+test.describe('plano PRO', () => {
+  test('Meu plano: Free, aguardando pagamento e PRO', async ({ page }) => {
+    let plano: Record<string, unknown> = PLANO_FREE;
+    await page.route('**/api/proxy/billing/plan', (route) => route.fulfill({ json: plano }));
+    await page.goto('/plan?recurso=chat');
+    await appears(page.getByLabel('CPF'));
+    await snap(page, '37-plano-free');
+
+    plano = {
+      ...PLANO_FREE,
+      source: 'ASAAS',
+      reason: 'pendente',
+      status: 'PENDING',
+      interval: 'YEARLY',
+      paymentUrl: 'https://sandbox.asaas.com/i/exemplo',
+    };
+    await page.reload();
+    await appears(page.getByText(/aguardando a confirmação/i));
+    await snap(page, '38-plano-pagamento');
+
+    const fim = new Date(Date.now() + 30 * 86_400_000).toISOString();
+    plano = {
+      ...PLANO_FREE,
+      tier: 'PRO',
+      source: 'ASAAS',
+      reason: 'ativa',
+      status: 'ACTIVE',
+      interval: 'YEARLY',
+      currentPeriodEnd: fim,
+    };
+    await page.reload();
+    await appears(page.getByRole('button', { name: 'Cancelar assinatura' }));
+    await snap(page, '39-plano-pro');
+  });
+
+  test('chat no Free: upsell no lugar da conversa', async ({ page }) => {
+    await page.route('**/api/proxy/chat/availability', (route) =>
+      route.fulfill({
+        json: {
+          available: true,
+          photos: true,
+          dictation: true,
+          allowed: false,
+          reason: 'plan_required',
+        },
+      }),
+    );
+    await page.goto('/chat');
+    await appears(page.getByRole('heading', { name: /faz parte do PRO/ }));
+    await snap(page, '41-chat-upsell', false);
   });
 });
 

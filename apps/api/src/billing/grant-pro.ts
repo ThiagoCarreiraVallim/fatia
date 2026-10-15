@@ -5,11 +5,15 @@ import { PrismaClient } from '@fatia/db';
  *
  * Para a equipe dar PRO a quem precisa (parceiro, suporte, teste) e para o E2E
  * provar a tela do PRO sem passar por pagamento. `--revoke` expira toda
- * cortesia ativa da pessoa; assinatura paga nunca é tocada.
+ * cortesia ativa da pessoa; `--purge` apaga as cortesias, inclusive as
+ * expiradas — para o E2E devolver a conta demo ao estado em que estava (uma
+ * expirada faria a tela dizer "seu PRO venceu") e para cortesia lançada por
+ * engano. Assinatura paga nunca é tocada.
  *
  * ```
  * pnpm billing:grant-pro <email> [--days 30]
  * pnpm billing:grant-pro <email> --revoke
+ * pnpm billing:grant-pro <email> --purge
  * ```
  */
 
@@ -17,14 +21,19 @@ export interface Argumentos {
   email: string;
   dias: number | null;
   revogar: boolean;
+  apagar: boolean;
 }
+
+const USO = 'Uso: pnpm billing:grant-pro <email> [--days 30] | --revoke | --purge';
 
 export function leArgumentos(argv: string[]): Argumentos {
   const email = argv.find((a) => !a.startsWith('--'))?.trim();
   if (!email || !email.includes('@')) {
-    throw new Error('Uso: pnpm billing:grant-pro <email> [--days 30] | --revoke');
+    throw new Error(USO);
   }
   const revogar = argv.includes('--revoke');
+  const apagar = argv.includes('--purge');
+  if (revogar && apagar) throw new Error(USO);
   const i = argv.indexOf('--days');
   let dias: number | null = null;
   if (i >= 0) {
@@ -32,7 +41,7 @@ export function leArgumentos(argv: string[]): Argumentos {
     if (!Number.isInteger(dias) || dias <= 0)
       throw new Error('--days precisa ser um inteiro positivo');
   }
-  return { email: email.toLowerCase(), dias, revogar };
+  return { email: email.toLowerCase(), dias, revogar, apagar };
 }
 
 export async function concederOuRevogar(
@@ -42,6 +51,13 @@ export async function concederOuRevogar(
 ): Promise<string> {
   const user = await prisma.user.findUnique({ where: { email: args.email }, select: { id: true } });
   if (!user) throw new Error(`Nenhuma conta com o e-mail ${args.email}`);
+
+  if (args.apagar) {
+    const { count } = await prisma.userSubscription.deleteMany({
+      where: { userId: user.id, source: 'MANUAL' },
+    });
+    return `${count} cortesia(s) apagada(s) de ${args.email}`;
+  }
 
   if (args.revogar) {
     const { count } = await prisma.userSubscription.updateMany({

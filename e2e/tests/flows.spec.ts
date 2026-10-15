@@ -1,3 +1,5 @@
+import { execSync } from 'node:child_process';
+import { resolve } from 'node:path';
 import { expect, type Page, test } from '@playwright/test';
 
 /**
@@ -603,4 +605,116 @@ test('a barra leva a todas as telas: Mais → Metas do dia, Perfil, e Início �
   await page.getByRole('button', { name: 'Mais', exact: true }).click();
   await menu.getByRole('link', { name: /Ver perfil/ }).click();
   await expect(page).toHaveURL(/\/profile$/);
+});
+
+/** O plano como a API devolve (ADR 024), para os casos que a stack local não alcança. */
+const PLANO_FREE = {
+  tier: 'FREE',
+  source: null,
+  reason: 'sem_assinatura',
+  degraded: false,
+  status: null,
+  interval: null,
+  currentPeriodEnd: null,
+  graceEndsAt: null,
+  cancelAtPeriodEnd: false,
+  paymentUrl: null,
+  manageUrl: null,
+  requiresPlan: true,
+  webCheckout: true,
+  prices: { monthlyCents: 1990, yearlyCents: 17900 },
+};
+
+test('Free: o chat trancado leva ao plano, e assinar abre o pagamento e fica aguardando', async ({
+  page,
+}) => {
+  // A stack local não tem agente nem Asaas: a disponibilidade, o plano e o
+  // checkout são simulados. O que se prova é o caminho da tela.
+  await page.route('**/api/proxy/chat/availability', (route) =>
+    route.fulfill({
+      json: {
+        available: true,
+        photos: false,
+        dictation: false,
+        allowed: false,
+        reason: 'plan_required',
+      },
+    }),
+  );
+  let plano: Record<string, unknown> = PLANO_FREE;
+  const pagamento = 'https://sandbox.asaas.com/i/e2e-fatia';
+  const checkouts: unknown[] = [];
+  await page.route('**/api/proxy/billing/plan', (route) => route.fulfill({ json: plano }));
+  await page.route('**/api/proxy/billing/checkout', async (route) => {
+    checkouts.push(route.request().postDataJSON());
+    plano = {
+      ...PLANO_FREE,
+      source: 'ASAAS',
+      reason: 'pendente',
+      status: 'PENDING',
+      interval: 'YEARLY',
+      paymentUrl: pagamento,
+    };
+    await route.fulfill({ json: plano });
+  });
+  await page
+    .context()
+    .route('https://sandbox.asaas.com/**', (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<title>Fatura</title>Fatura de teste' }),
+    );
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Mais', exact: true }).click();
+  const chat = page.getByRole('dialog', { name: 'Menu' }).getByRole('link', { name: /Chat/ });
+  await expect(chat).toContainText('exige o plano PRO');
+  await chat.click();
+  await expect(page).toHaveURL(/\/plan\?recurso=chat$/);
+
+  const cpf = page.getByLabel('CPF');
+  await cpf.fill('111.111.111-11');
+  await page.getByRole('button', { name: 'Assinar PRO' }).click();
+  await expect(page.getByText('CPF inválido. Confira os números.')).toBeVisible();
+  expect(checkouts).toHaveLength(0);
+
+  await cpf.fill('');
+  await cpf.pressSequentially('52998224725');
+  await expect(cpf).toHaveValue('529.982.247-25');
+  const [aba] = await Promise.all([
+    page.waitForEvent('popup'),
+    page.getByRole('button', { name: 'Assinar PRO' }).click(),
+  ]);
+  await expect(aba).toHaveURL(pagamento);
+  await aba.close();
+  expect(checkouts).toEqual([{ interval: 'YEARLY', cpf: '529.982.247-25' }]);
+  await expect(page.getByText(/aguardando a confirmação do pagamento/i)).toBeVisible();
+
+  // O upsell do chat, com os dois caminhos.
+  await page.goto('/chat');
+  await expect(page.getByRole('heading', { name: /faz parte do PRO/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /sua própria IA pelo MCP/ })).toHaveAttribute(
+    'href',
+    '/profile/connect',
+  );
+});
+
+test('PRO de cortesia aparece no perfil e no plano, sem cancelar pela web', async ({ page }) => {
+  const raiz = resolve(__dirname, '../..');
+  const grantPro = (args: string) =>
+    execSync(`pnpm -s billing:grant-pro demo@fatia.local ${args}`, { cwd: raiz, stdio: 'ignore' });
+  grantPro('--purge'); // sobra de uma rodada interrompida
+  grantPro('--days 30');
+  try {
+    await page.goto('/profile');
+    await expect(page.getByRole('link', { name: /Meu plano: PRO cortesia até/ })).toBeVisible();
+
+    await page.goto('/plan');
+    await expect(page.getByRole('heading', { name: /PRO cortesia até/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Seu PRO inclui' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Cancelar assinatura' })).toHaveCount(0);
+    await expect(page.getByLabel('CPF')).toHaveCount(0);
+  } finally {
+    grantPro('--purge');
+  }
+  await page.goto('/plan');
+  await expect(page.getByRole('heading', { name: /^Free/ })).toBeVisible();
 });

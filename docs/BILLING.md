@@ -246,12 +246,12 @@ nunca em `/users/me` (os domínios do aluno não importam `billing/`).
 `UserSubscription` guarda a assinatura de qualquer origem; o direito sai da **leitura** das datas
 (`billing/ai-entitlement.ts`, função pura), sem job de expiração:
 
-| Origem   | Como entra                                                  | Como sai                                  |
-| -------- | ----------------------------------------------------------- | ----------------------------------------- |
-| `ASAAS`  | checkout web (`POST /billing/checkout`) + webhook           | `POST /billing/cancel` (fim do período)   |
-| `APPLE`  | compra no app (RevenueCat) + webhook ou sync                | só na App Store                           |
-| `GOOGLE` | compra no app (RevenueCat) + webhook ou sync                | só no Google Play                         |
-| `MANUAL` | `pnpm billing:grant-pro <email> [--days N]` (cortesia, E2E) | `pnpm billing:grant-pro <email> --revoke` |
+| Origem   | Como entra                                                  | Como sai                                      |
+| -------- | ----------------------------------------------------------- | --------------------------------------------- |
+| `ASAAS`  | checkout web (`POST /billing/checkout`) + webhook           | `POST /billing/cancel` (fim do período)       |
+| `APPLE`  | compra no app (RevenueCat) + webhook ou sync                | só na App Store                               |
+| `GOOGLE` | compra no app (RevenueCat) + webhook ou sync                | só no Google Play                             |
+| `MANUAL` | `pnpm billing:grant-pro <email> [--days N]` (cortesia, E2E) | `--revoke` (expira) ou `--purge` (apaga, E2E) |
 
 | Estado gravado                            | Direito                                                  |
 | ----------------------------------------- | -------------------------------------------------------- |
