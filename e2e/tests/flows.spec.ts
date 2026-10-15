@@ -496,3 +496,60 @@ test('código de barras desconhecido leva ao cadastro à mão', async ({ page })
 function escapeRegex(text: string) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+test('recalcular metas pelo assistente salva a sugestão e volta às metas', async ({ page }) => {
+  // O que o fluxo muda no demo, para devolver no fim: perfil, metas e pesagens.
+  const perfil = await (await page.request.get('/api/proxy/users/me')).json();
+  const metas = await (await page.request.get('/api/proxy/nutrition/goals')).json();
+  const pesagens = (await (await page.request.get('/api/proxy/weight-logs')).json()) as {
+    logs: { id: string }[];
+  };
+  const pesagensAntes = new Set(pesagens.logs.map((l) => l.id));
+
+  try {
+    await page.goto('/nutrition/goals');
+    await page.getByRole('link', { name: /Recalcular com meus dados/ }).click();
+    await expect(page).toHaveURL(/\/onboarding\?refazer=1$/);
+
+    await page.getByRole('radio', { name: /Manter o peso/ }).click();
+    await page.getByRole('button', { name: 'Continuar' }).click();
+    await page.getByRole('radio', { name: 'Masculino' }).click();
+    await page.getByLabel('Data de nascimento').fill('1990-05-20');
+    await page.getByLabel('Altura (cm)').fill('180');
+    await page.getByLabel('Peso (kg)').fill('80');
+    await page.getByRole('button', { name: 'Continuar' }).click();
+    await page.getByRole('radio', { name: /^Leve/ }).click();
+    await page.getByRole('button', { name: 'Calcular minhas metas' }).click();
+
+    // 36 anos: 10·80 + 6,25·180 − 5·36 + 5 = 1750; × 1,375 = 2406 kcal/dia.
+    await expect(page.getByText('2.406')).toBeVisible();
+    await expect(page.getByLabel('Calorias: mínimo')).toHaveValue('2300');
+    await page.getByRole('button', { name: 'Usar estas metas' }).click();
+
+    await expect(page).toHaveURL(/\/nutrition\/goals$/);
+    await expect(page.locator('#kcalMin')).toHaveValue('2300');
+    await expect(page.locator('#kcalMax')).toHaveValue('2550');
+  } finally {
+    await page.request.patch('/api/proxy/users/me', {
+      data: {
+        heightCm: perfil.heightCm,
+        sex: perfil.sex,
+        birthDate: perfil.birthDate?.slice(0, 10),
+        activityLevel: perfil.activityLevel,
+        objective: perfil.objective,
+      },
+    });
+    if (metas) {
+      const corpo = { ...metas };
+      delete corpo.userId;
+      delete corpo.updatedAt;
+      await page.request.put('/api/proxy/nutrition/goals', { data: corpo });
+    }
+    const depois = (await (await page.request.get('/api/proxy/weight-logs')).json()) as {
+      logs: { id: string }[];
+    };
+    for (const log of depois.logs.filter((l) => !pesagensAntes.has(l.id))) {
+      await page.request.delete(`/api/proxy/weight-logs/${log.id}`);
+    }
+  }
+});

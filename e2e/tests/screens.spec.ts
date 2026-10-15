@@ -292,6 +292,29 @@ test.describe('código de barras', () => {
   });
 });
 
+test.describe('assistente de primeira vez', () => {
+  // Pelo "refazer", que não depende de conta nova: o demo já tem perfil, então
+  // os campos vêm preenchidos. Cancela no fim: nada é gravado.
+  test('objetivo e metas sugeridas', async ({ page }) => {
+    await page.goto('/onboarding?refazer=1');
+    await appears(page.getByRole('radio', { name: /Perder peso/ }));
+    await snap(page, '28-onboarding-objetivo', false);
+    await page.getByRole('radio', { name: /Perder peso/ }).click();
+    await page.getByRole('button', { name: 'Continuar' }).click();
+    await appears(page.getByLabel('Altura (cm)'));
+    await page.getByRole('button', { name: 'Continuar' }).click();
+    const calcular = page.getByRole('button', { name: 'Calcular minhas metas' });
+    if (!(await appears(calcular))) return;
+    if (!(await page.getByRole('radio', { checked: true }).count())) {
+      await page.getByRole('radio', { name: /Moderado/ }).click();
+    }
+    await calcular.click();
+    if (!(await appears(page.getByRole('button', { name: 'Usar estas metas' })))) return;
+    await snap(page, '29-onboarding-metas');
+    await page.getByRole('button', { name: 'Cancelar' }).click();
+  });
+});
+
 test('login (sem sessão)', async ({ browser }, info) => {
   const context = await browser.newContext({
     ...info.project.use,
