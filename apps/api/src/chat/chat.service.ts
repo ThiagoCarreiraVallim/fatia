@@ -5,6 +5,8 @@ import {
   NotFoundException,
   PayloadTooLargeException,
 } from '@nestjs/common';
+import type { AiPaidBy } from '@prisma/client';
+import { AiAccessService } from '../ai/ai-access.service';
 import { AiUsageService } from '../ai/ai-usage.service';
 import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { AgentChatClient, ErroDeStreamDoAgente, type StreamDoAgente } from './agent-chat.client';
@@ -53,22 +55,24 @@ export class ChatService {
     private readonly agent: AgentChatClient,
     private readonly uso: AiUsageService,
     private readonly memorias: MemoryService,
+    private readonly acesso: AiAccessService,
   ) {}
 
   /**
-   * O ditado do composer (#141): cota, transcrição e o custo no livro-caixa.
+   * O ditado do composer (#141): plano e cota, transcrição e o custo no livro-caixa.
    *
    * O texto volta para o campo de mensagem e **não** vira turno: quem decide
    * mandar é a pessoa, depois de ler. Nada do áudio é gravado ou logado.
    */
   async transcrever(userId: string, audio: Buffer, contentType: string): Promise<{ text: string }> {
     if (audio.length === 0) throw new BadRequestException('O áudio veio vazio.');
-    await this.uso.assertDentroDaCota(userId);
+    const paidBy = AiAccessService.pagoPor(await this.acesso.assertPodeUsar(userId));
     const { texto, uso } = await this.agent.transcrever(audio, contentType);
     // Transcrição não tem saída cobrada: `0`, e não `undefined` — ver `AiCallUnits`.
     await this.uso
       .registrar(userId, {
         feature: 'transcription',
+        paidBy,
         model: uso.model || null,
         units: { inputUnits: uso.inputUnits, outputUnits: 0 },
       })
@@ -84,7 +88,8 @@ export class ChatService {
    * byte saiu: depois do primeiro `escrever`, o status já é 200.
    *
    * 1. **Conversa alheia recusa** — antes de gastar qualquer coisa.
-   * 2. **Cota** — antes de chamar o agente, que é onde o dinheiro sai.
+   * 2. **Plano e cota** — antes de chamar o agente, que é onde o dinheiro sai.
+   *    Free recebe 402 aqui (ADR 024).
    * 3. **Abre o upstream** — 401/409/503/504 do agente ainda viram status aqui.
    * 4. **Só então persiste** a mensagem da pessoa. Persistir antes deixaria uma
    *    conversa órfã, com a pergunta e nenhuma resposta, toda vez que o agente
@@ -109,7 +114,7 @@ export class ChatService {
     const existente = await this.conversas.encontrar(user.id, dto.conversationId);
     if (dto.resume && !existente) throw new NotFoundException('Conversa não encontrada.');
 
-    await this.uso.assertDentroDaCota(user.id);
+    const paidBy = AiAccessService.pagoPor(await this.acesso.assertPodeUsar(user.id));
 
     const historico =
       existente && dto.message !== undefined
@@ -143,7 +148,7 @@ export class ChatService {
       await this.conversas.iniciarTurno(user.id, dto.conversationId, dto.message, fotos.length);
       // Sem `await`: o nome é enfeite de lista, e esperar por ele atrasaria o
       // primeiro token da resposta, que é o que a pessoa está olhando.
-      if (!existente) void this.nomear(user.id, dto.conversationId, dto.message);
+      if (!existente) void this.nomear(user.id, dto.conversationId, dto.message, paidBy);
     }
 
     // Um comentário SSE, que todo leitor ignora, só para o cabeçalho sair agora:
@@ -178,7 +183,7 @@ export class ChatService {
       destino.escrever(formatarEventoSse('done', { status: 'error' }));
     } finally {
       const summary = markStoppedWhenClientLeft(turno.read(), clienteFoiEmbora);
-      const linha = await this.recordTurn(user.id, dto.conversationId, summary);
+      const linha = await this.recordTurn(user.id, dto.conversationId, summary, paidBy);
       // Depois do `done` do agente, e antes do fim: é o que liga o id que a tela
       // conhece (o da mensagem do LangChain) à linha do banco, onde o voto grava.
       if (linha && summary.ultimaMensagemId) {
@@ -200,7 +205,12 @@ export class ChatService {
    * depois de 200 não existe. Fica no log — sem o conteúdo, só o nome do erro.
    */
   /** Título pelo agente, com o custo no livro-caixa. Nunca derruba nada. */
-  private async nomear(userId: string, conversationId: string, primeira: string): Promise<void> {
+  private async nomear(
+    userId: string,
+    conversationId: string,
+    primeira: string,
+    paidBy: AiPaidBy,
+  ): Promise<void> {
     try {
       const gerado = await this.agent.titular(primeira);
       if (!gerado) return;
@@ -209,6 +219,7 @@ export class ChatService {
       }
       await this.uso.registrar(userId, {
         feature: 'chat_title',
+        paidBy,
         model: gerado.uso?.model ?? null,
         units: gerado.uso
           ? { inputUnits: gerado.uso.inputUnits, outputUnits: gerado.uso.outputUnits }
@@ -223,6 +234,7 @@ export class ChatService {
     userId: string,
     conversationId: string,
     turno: TurnSummary,
+    paidBy: AiPaidBy,
   ): Promise<string | null> {
     let linha: string | null = null;
     try {
@@ -245,10 +257,10 @@ export class ChatService {
 
     try {
       if (turno.usoPorModelo.size === 0) {
-        await this.uso.registrar(userId, { feature: 'chat', model: null, units: {} });
+        await this.uso.registrar(userId, { feature: 'chat', paidBy, model: null, units: {} });
       } else {
         for (const [model, units] of turno.usoPorModelo) {
-          await this.uso.registrar(userId, { feature: 'chat', model, units });
+          await this.uso.registrar(userId, { feature: 'chat', paidBy, model, units });
         }
       }
     } catch (erro) {

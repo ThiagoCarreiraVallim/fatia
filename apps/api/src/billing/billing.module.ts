@@ -1,6 +1,10 @@
 import { Module } from '@nestjs/common';
 import { BillingEntitlements } from './entitlements.port';
 import { StaticEntitlementsService } from './static-entitlements.service';
+import {
+  AiEntitlements,
+  SubscriptionEntitlementsService,
+} from './subscription-entitlements.service';
 
 /**
  * O mínimo de cobrança que a #160 precisa: uma porta e uma implementação.
@@ -12,7 +16,10 @@ import { StaticEntitlementsService } from './static-entitlements.service';
  * A troca, quando a #158 entrar, é uma linha: `useClass: SubscriptionEntitlements`.
  */
 @Module({
-  providers: [{ provide: BillingEntitlements, useClass: StaticEntitlementsService }],
-  exports: [BillingEntitlements],
+  providers: [
+    { provide: BillingEntitlements, useClass: StaticEntitlementsService },
+    { provide: AiEntitlements, useClass: SubscriptionEntitlementsService },
+  ],
+  exports: [BillingEntitlements, AiEntitlements],
 })
 export class BillingModule {}

@@ -17,6 +17,7 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
+import { AiAccessService } from '../ai/ai-access.service';
 import { AiUsageService } from '../ai/ai-usage.service';
 import { CurrentUser, type CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { ChatThrottlerGuard } from './chat-throttler.guard';
@@ -64,6 +65,7 @@ export class ChatController {
     private readonly checkpoints: CheckpointPurgeService,
     private readonly memorias: MemoryService,
     private readonly uso: AiUsageService,
+    private readonly acesso: AiAccessService,
     private readonly previas: PreviaDaAcaoService,
     private readonly registry: McpToolRegistry,
   ) {}
@@ -93,14 +95,18 @@ export class ChatController {
    * Mesma razão do `photo-recognition` da #139: uma funcionalidade que sempre
    * falha é pior que uma que não aparece. Instância auto-hospedada sem agente
    * continua um produto inteiro.
+   *
+   * `available` é da instância; `allowed`/`reason` são desta pessoa (ADR 024):
+   * no Free a aba aparece com cadeado e leva ao "Meu plano".
    */
   @Get('availability')
-  async availability() {
+  async availability(@CurrentUser() user: CurrentUserPayload) {
     const available = this.agent.configurado();
     const { fotos, ditado } = available
       ? await this.agent.capacidades()
       : { fotos: false, ditado: false };
-    return { available, photos: fotos, dictation: ditado };
+    const { allowed, reason } = await this.acesso.motivo(user.id, available);
+    return { available, photos: fotos, dictation: ditado, allowed, reason };
   }
 
   /**

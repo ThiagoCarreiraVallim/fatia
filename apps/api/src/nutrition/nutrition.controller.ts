@@ -21,6 +21,7 @@ import { CurrentUser, type CurrentUserPayload } from '../common/decorators/curre
 import { InferenceThrottlerGuard } from './inference-throttler.guard';
 import { FoodService } from './food.service';
 import { MealRecognitionService } from './meal-recognition.service';
+import { AiAccessService } from '../ai/ai-access.service';
 import { OffFoodService, atribuicaoDoOff } from './off-food.service';
 import { MealService } from './meal.service';
 import { MealItemService } from './meal-item.service';
@@ -79,6 +80,7 @@ export class NutritionController {
     private readonly goals: UserGoalsService,
     private readonly nutrientTargets: NutrientTargetService,
     private readonly recognition: MealRecognitionService,
+    private readonly acesso: AiAccessService,
     private readonly shortcuts: FoodShortcutsService,
     private readonly portions: FoodPortionService,
     private readonly copies: MealCopyService,
@@ -93,12 +95,13 @@ export class NutritionController {
    *
    * Existe para que a funcionalidade **suma** onde não há agente configurado, em
    * vez de aparecer e falhar: um botão que sempre erra é pior que um botão que
-   * não existe. Sem `@CurrentUser()` porque não lê nada do usuário — a rota
-   * continua atrás do guard global de autenticação.
+   * não existe. `allowed`/`reason` são desta pessoa (ADR 024): no Free o botão
+   * aparece com cadeado e leva ao "Meu plano".
    */
   @Get('photo-recognition')
-  async photoRecognitionStatus() {
-    return { available: await this.recognition.disponivel() };
+  async photoRecognitionStatus(@CurrentUser() user: CurrentUserPayload) {
+    const available = await this.recognition.disponivel();
+    return { available, ...(await this.acesso.motivo(user.id, available)) };
   }
 
   /**

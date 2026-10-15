@@ -8,6 +8,7 @@ import { CommonModule } from '../../common/common.module';
 import { PrismaService } from '../../common/prisma.service';
 import { MealRecognitionService } from '../meal-recognition.service';
 import { NutritionModule } from '../nutrition.module';
+import { AiEntitlements, INSTANCIA_LIBERADA, type AiEntitlement } from '../../ai/ai-access.service';
 
 /**
  * A rota `POST /api/nutrition/meals/recognize` pela **porta da frente**.
@@ -41,12 +42,16 @@ interface Cenario {
   app: INestApplication;
   url: string;
   reconhecer: jest.Mock;
+  aiTierForUser: jest.Mock<Promise<AiEntitlement>, [string]>;
   /** Quem o guard global de autenticação teria posto em `req.user`. */
   comoUsuario: (id: string) => void;
 }
 
 async function subirApp(): Promise<Cenario> {
   const reconhecer = jest.fn().mockResolvedValue({ itens: [], observacao: null });
+  const aiTierForUser = jest.fn(
+    async (_userId: string): Promise<AiEntitlement> => INSTANCIA_LIBERADA,
+  );
 
   const modulo = await Test.createTestingModule({
     imports: [
@@ -66,6 +71,8 @@ async function subirApp(): Promise<Cenario> {
     .useValue({})
     .overrideProvider(MealRecognitionService)
     .useValue({ reconhecer, disponivel: jest.fn().mockResolvedValue(true) })
+    .overrideProvider(AiEntitlements)
+    .useValue({ aiTierForUser, exigePlano: () => true })
     .compile();
 
   const app = modulo.createNestApplication({ logger: false });
@@ -95,6 +102,7 @@ async function subirApp(): Promise<Cenario> {
     app,
     url: `http://127.0.0.1:${port}/api/nutrition/meals/recognize`,
     reconhecer,
+    aiTierForUser,
     comoUsuario,
   };
 }
@@ -171,5 +179,35 @@ describe('POST /api/nutrition/meals/recognize', () => {
     cenario.comoUsuario(OUTRO_USER);
 
     expect((await postarFoto(cenario.url, FOTO_BASE64)).status).toBe(201);
+  });
+});
+
+describe('GET /api/nutrition/photo-recognition', () => {
+  let cenario: Cenario;
+
+  beforeEach(async () => {
+    cenario = await subirApp();
+  });
+
+  afterEach(async () => {
+    await cenario.app.close();
+  });
+
+  const status = () =>
+    fetch(cenario.url.replace('/meals/recognize', '/photo-recognition')).then((r) => r.json());
+
+  it('PRO: o botão existe e está liberado', async () => {
+    expect(await status()).toEqual({ available: true, allowed: true, reason: 'ok' });
+  });
+
+  it('Free: o botão existe com cadeado, e o motivo é o plano (ADR 024)', async () => {
+    cenario.aiTierForUser.mockResolvedValueOnce({
+      tier: 'FREE',
+      source: null,
+      motivo: 'sem_assinatura',
+      degraded: false,
+      subscription: null,
+    });
+    expect(await status()).toEqual({ available: true, allowed: false, reason: 'plan_required' });
   });
 });

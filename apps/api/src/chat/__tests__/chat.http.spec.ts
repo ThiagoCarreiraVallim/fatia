@@ -5,6 +5,8 @@ import { Test } from '@nestjs/testing';
 import { ThrottlerModule } from '@nestjs/throttler';
 import type { NextFunction, Request, Response } from 'express';
 import { AiUsageService } from '../../ai/ai-usage.service';
+import { INSTANCIA_LIBERADA, type AiEntitlement } from '../../billing/ai-entitlement';
+import { AiEntitlements } from '../../billing/subscription-entitlements.service';
 import { AiQuotaExceededException } from '../../ai/ai-quota';
 import { CommonModule } from '../../common/common.module';
 import { PrismaService } from '../../common/prisma.service';
@@ -121,8 +123,17 @@ interface Cenario {
   transcrever: jest.Mock;
   registrar: jest.Mock;
   assertDentroDaCota: jest.Mock<Promise<void>, [string]>;
+  aiTierForUser: jest.Mock<Promise<AiEntitlement>, [string]>;
   comoUsuario: (id: string) => void;
 }
+
+const FREE: AiEntitlement = {
+  tier: 'FREE',
+  source: null,
+  motivo: 'sem_assinatura',
+  degraded: false,
+  subscription: null,
+};
 
 async function subirApp(): Promise<Cenario> {
   const canal = canalDoAgente();
@@ -135,6 +146,9 @@ async function subirApp(): Promise<Cenario> {
     uso: { model: 'whisper-1', inputUnits: 3.4 },
   }));
   const registrar = jest.fn(async () => undefined);
+  const aiTierForUser = jest.fn(
+    async (_userId: string): Promise<AiEntitlement> => INSTANCIA_LIBERADA,
+  );
 
   const modulo = await Test.createTestingModule({
     imports: [
@@ -156,6 +170,8 @@ async function subirApp(): Promise<Cenario> {
     .useValue({ abrir, configurado, capacidades, transcrever })
     .overrideProvider(AiUsageService)
     .useValue({ assertDentroDaCota, registrar })
+    .overrideProvider(AiEntitlements)
+    .useValue({ aiTierForUser, exigePlano: () => true })
     .overrideProvider(ConversationService)
     .useValue({
       encontrar: jest.fn(async () => null),
@@ -205,6 +221,7 @@ async function subirApp(): Promise<Cenario> {
     transcrever,
     registrar,
     assertDentroDaCota,
+    aiTierForUser,
     comoUsuario: (id: string) => {
       usuarioAtual = id;
     },
@@ -320,6 +337,37 @@ describe('POST /api/chat', () => {
     expect(cenario.abrir).not.toHaveBeenCalled();
   });
 
+  it('Free recebe 402 AI_PLAN_REQUIRED antes da cota e sem chamar o agente (ADR 024)', async () => {
+    cenario.aiTierForUser.mockResolvedValueOnce(FREE);
+
+    const resposta = await conversar(cenario.url, { message: 'oi' });
+
+    expect(resposta.status).toBe(402);
+    expect(resposta.headers.get('content-type')).toContain('application/json');
+    expect(await resposta.json()).toMatchObject({ code: 'AI_PLAN_REQUIRED' });
+    expect(cenario.assertDentroDaCota).not.toHaveBeenCalled();
+    expect(cenario.abrir).not.toHaveBeenCalled();
+  });
+
+  it('o custo do turno sai como pago pelo usuário no PRO', async () => {
+    cenario.aiTierForUser.mockResolvedValueOnce({
+      ...FREE,
+      tier: 'PRO',
+      source: 'ASAAS',
+      motivo: 'ativa',
+    });
+
+    const resposta = conversar(cenario.url, { message: 'oi' });
+    cenario.canal.encerrar();
+    await (await resposta).text();
+
+    await new Promise((r) => setTimeout(r, 20));
+    expect(cenario.registrar).toHaveBeenCalledWith(
+      USER,
+      expect.objectContaining({ feature: 'chat', paidBy: 'USER' }),
+    );
+  });
+
   it('agente fora do ar é 503 com corpo JSON', async () => {
     const { ServiceUnavailableException } = await import('@nestjs/common');
     cenario.abrir.mockRejectedValueOnce(new ServiceUnavailableException('fora do ar'));
@@ -421,6 +469,18 @@ describe('GET /api/chat/availability', () => {
       available: true,
       photos: true,
       dictation: false,
+      allowed: true,
+      reason: 'ok',
+    });
+  });
+
+  it('no Free a aba existe, mas `allowed: false` com o motivo do plano', async () => {
+    cenario.aiTierForUser.mockResolvedValueOnce(FREE);
+
+    expect(await (await fetch(`${cenario.url}/availability`)).json()).toMatchObject({
+      available: true,
+      allowed: false,
+      reason: 'plan_required',
     });
   });
 
@@ -433,6 +493,8 @@ describe('GET /api/chat/availability', () => {
       available: false,
       photos: false,
       dictation: false,
+      allowed: false,
+      reason: 'not_configured',
     });
     expect(cenario.capacidades).not.toHaveBeenCalled();
   });
@@ -564,9 +626,10 @@ describe('POST /api/chat/transcribe', () => {
     const [bytes, tipo] = cenario.transcrever.mock.calls[0];
     expect(Buffer.compare(bytes, Buffer.from(audio))).toBe(0);
     expect(tipo).toBe('audio/webm;codecs=opus');
-    expect(cenario.assertDentroDaCota).toHaveBeenCalledWith(USER);
+    expect(cenario.assertDentroDaCota).toHaveBeenCalledWith(USER, expect.any(Date));
     expect(cenario.registrar).toHaveBeenCalledWith(USER, {
       feature: 'transcription',
+      paidBy: 'INSTANCE',
       model: 'whisper-1',
       units: { inputUnits: 3.4, outputUnits: 0 },
     });
@@ -583,6 +646,17 @@ describe('POST /api/chat/transcribe', () => {
     const resposta = await ditar(new Uint8Array(TETO_DO_AUDIO + 1), 'audio/webm');
 
     expect(resposta.status).toBe(413);
+    expect(cenario.transcrever).not.toHaveBeenCalled();
+  });
+
+  it('Free recebe 402 sem transcrever nem gastar cota', async () => {
+    cenario.aiTierForUser.mockResolvedValueOnce(FREE);
+
+    const resposta = await ditar(new Uint8Array([1, 2, 3]), 'audio/webm');
+
+    expect(resposta.status).toBe(402);
+    expect(await resposta.json()).toMatchObject({ code: 'AI_PLAN_REQUIRED' });
+    expect(cenario.assertDentroDaCota).not.toHaveBeenCalled();
     expect(cenario.transcrever).not.toHaveBeenCalled();
   });
 

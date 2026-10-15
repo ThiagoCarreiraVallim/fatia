@@ -113,3 +113,21 @@ describe('AppEnvSchema — cobrança (#158)', () => {
     expect(() => AppEnvSchema.parse({ ...BASE, ASAAS_BASE_URL: 'api.asaas.com' })).toThrow();
   });
 });
+
+describe('AppEnvSchema — plano Free/PRO (ADR 024)', () => {
+  it('sem nada preenchido, a IA não exige plano e o preço é o padrão', () => {
+    const env = AppEnvSchema.parse(BASE);
+    expect(env.AI_REQUIRES_PLAN).toBe(false);
+    expect(env.BILLING_PRO_MONTHLY_CENTS).toBe(1990);
+    expect(env.BILLING_PRO_YEARLY_CENTS).toBe(17900);
+    expect(env.REVENUECAT_ENTITLEMENT_ID).toBe('pro');
+  });
+
+  it('`AI_REQUIRES_PLAN` aceita true/1 e recusa o que não é booleano', () => {
+    expect(AppEnvSchema.parse({ ...BASE, AI_REQUIRES_PLAN: 'true' }).AI_REQUIRES_PLAN).toBe(true);
+    expect(AppEnvSchema.parse({ ...BASE, AI_REQUIRES_PLAN: '1' }).AI_REQUIRES_PLAN).toBe(true);
+    expect(AppEnvSchema.parse({ ...BASE, AI_REQUIRES_PLAN: 'false' }).AI_REQUIRES_PLAN).toBe(false);
+    // "yes" ligaria ou desligaria? Melhor o boot recusar do que adivinhar.
+    expect(() => AppEnvSchema.parse({ ...BASE, AI_REQUIRES_PLAN: 'yes' })).toThrow();
+  });
+});

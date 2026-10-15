@@ -7,6 +7,7 @@ import { FoodShortcutsService } from './food-shortcuts.service';
 import { FoodPortionService } from './food-portion.service';
 import { InferenceThrottlerGuard } from './inference-throttler.guard';
 import { MealRecognitionService } from './meal-recognition.service';
+import { AiModule } from '../ai/ai.module';
 import { OffFoodService } from './off-food.service';
 import { MealService } from './meal.service';
 import { MealItemService } from './meal-item.service';
@@ -65,6 +66,7 @@ const TETO_DA_FOTO_BASE64 = '6mb';
 const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 });
 
 @Module({
+  imports: [AiModule],
   controllers: [NutritionController, OnboardingController],
   providers: [
     FoodService,

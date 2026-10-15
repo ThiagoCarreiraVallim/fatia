@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { AiUsageService } from '../ai/ai-usage.service';
+import { AiModule } from '../ai/ai.module';
 import { AgentChatClient } from './agent-chat.client';
 import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
@@ -26,14 +26,13 @@ import { McpModule } from '../mcp/mcp.module';
  * valida os argumentos com o schema da própria tool (`previa/`).
  */
 @Module({
-  imports: [McpModule],
+  imports: [McpModule, AiModule],
   controllers: [ChatController],
   providers: [
     ChatService,
     ConversationService,
     AgentChatClient,
     ChatThrottlerGuard,
-    AiUsageService,
     CheckpointPurgeService,
     MemoryService,
     SaveMemoryTool,

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { AiPaidBy } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/prisma.service';
 import { estimateAiCost, type AiCallUnits, type AiPriceTable } from './ai-pricing';
@@ -111,7 +112,14 @@ export class AiUsageService {
    */
   async registrar(
     userId: string,
-    entrada: { feature: string; model: string | null; units: AiCallUnits },
+    entrada: {
+      feature: string;
+      model: string | null;
+      units: AiCallUnits;
+      /** Quem paga (ADR 024). Vem de `AiAccessService.pagoPor`. */
+      paidBy?: AiPaidBy;
+      groupId?: string | null;
+    },
   ): Promise<void> {
     const custo = entrada.model
       ? estimateAiCost(entrada.model, entrada.units, this.tabelaDePreco())
@@ -124,6 +132,8 @@ export class AiUsageService {
         model: entrada.model ?? '',
         costMicros: custo.costMicros,
         pricingKnown: custo.pricingKnown,
+        paidBy: entrada.paidBy ?? null,
+        groupId: entrada.groupId ?? null,
       },
     });
   }

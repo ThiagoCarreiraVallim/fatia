@@ -9,6 +9,13 @@ import type { ConfigService } from '@nestjs/config';
 import type { Food } from '@prisma/client';
 import { MAX_FOTO_BYTES, MealRecognitionService } from '../meal-recognition.service';
 import type { FoodService } from '../food.service';
+import {
+  AiAccessService,
+  AiPlanRequiredException,
+  INSTANCIA_LIBERADA,
+  type AiEntitlement,
+} from '../../ai/ai-access.service';
+import type { AiUsageService } from '../../ai/ai-usage.service';
 
 /**
  * O agente Python nunca é chamado de verdade aqui — `fetch` é sempre dublê.
@@ -126,6 +133,7 @@ const TACO: Food[] = [
 interface CenarioOpcoes {
   env?: Record<string, string>;
   catalogo?: Food[];
+  direito?: AiEntitlement;
 }
 
 function montar(opcoes: CenarioOpcoes = {}) {
@@ -153,10 +161,23 @@ function montar(opcoes: CenarioOpcoes = {}) {
   );
 
   const foods = { search } as unknown as FoodService;
-  const service = new MealRecognitionService(config, foods);
+  const uso = {
+    assertDentroDaCota: jest.fn(async (_userId: string, _agora?: Date) => undefined),
+    registrar: jest.fn(async (_userId: string, _entrada: unknown) => undefined),
+  };
+  const acesso = new AiAccessService(
+    { aiTierForUser: async () => opcoes.direito ?? INSTANCIA_LIBERADA, exigePlano: () => true },
+    uso as unknown as AiUsageService,
+  );
+  const service = new MealRecognitionService(
+    config,
+    foods,
+    acesso,
+    uso as unknown as AiUsageService,
+  );
   jest.spyOn(service['logger'], 'warn').mockImplementation(() => undefined);
 
-  return { service, search };
+  return { service, search, uso };
 }
 
 function respostaDoAgente(corpo: unknown, status = 200): Response {
@@ -177,6 +198,54 @@ describe('MealRecognitionService', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  describe('plano e cota (ADR 024)', () => {
+    it('Free recebe 402 AI_PLAN_REQUIRED sem chamar o agente nem gastar cota', async () => {
+      const { service, uso } = montar({
+        direito: {
+          tier: 'FREE',
+          source: null,
+          motivo: 'sem_assinatura',
+          degraded: false,
+          subscription: null,
+        },
+      });
+
+      const erro = await service.reconhecer(USER, JPEG_COM_EXIF_GPS).catch((e: unknown) => e);
+
+      expect(erro).toBeInstanceOf(AiPlanRequiredException);
+      expect((erro as AiPlanRequiredException).getStatus()).toBe(402);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(uso.assertDentroDaCota).not.toHaveBeenCalled();
+    });
+
+    it('passa pela cota antes do agente e lança o uso no livro-caixa', async () => {
+      const { service, uso } = montar();
+      fetchMock.mockResolvedValue(respostaDoAgente({ items: [] }));
+
+      await service.reconhecer(USER, JPEG_COM_EXIF_GPS);
+
+      expect(uso.assertDentroDaCota).toHaveBeenCalledWith(USER, expect.any(Date));
+      // O agente não reporta `usage` no /recognize-meal: entra como custo NÃO
+      // medido, que conta na tolerância `unpriced` em vez de sair de graça.
+      expect(uso.registrar).toHaveBeenCalledWith(USER, {
+        feature: 'meal_photo',
+        paidBy: 'INSTANCE',
+        model: null,
+        units: {},
+      });
+    });
+
+    it('agente que falha não gera lançamento', async () => {
+      const { service, uso } = montar();
+      fetchMock.mockRejectedValue(Object.assign(new Error('x'), { name: 'TypeError' }));
+
+      await expect(service.reconhecer(USER, JPEG_COM_EXIF_GPS)).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
+      );
+      expect(uso.registrar).not.toHaveBeenCalled();
+    });
   });
 
   describe('privacidade — o que sai daqui', () => {

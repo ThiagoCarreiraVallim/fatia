@@ -8,6 +8,8 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { AiAccessService } from '../ai/ai-access.service';
+import { AiUsageService } from '../ai/ai-usage.service';
 import { FoodService } from './food.service';
 import { calcMacrosFromFood } from './helpers/calc-macros';
 import { NaoEhJpegError, removerMetadadosDoJpeg } from './helpers/strip-exif';
@@ -133,6 +135,8 @@ export class MealRecognitionService {
   constructor(
     private readonly config: ConfigService,
     private readonly foods: FoodService,
+    private readonly acesso: AiAccessService,
+    private readonly uso: AiUsageService,
   ) {}
 
   /** `true` quando o app deve mostrar a entrada por foto. */
@@ -183,7 +187,21 @@ export class MealRecognitionService {
       throw erro;
     }
 
+    // Plano e cota antes do agente (ADR 024): Free recebe 402 e nada sai daqui.
+    // Até a Fase 4 a foto não passava por cota nenhuma — só pelo throttle.
+    const direito = await this.acesso.assertPodeUsar(userId);
+
     const resposta = await this.chamarAgente(semMetadados);
+    // O `/recognize-meal` não reporta `usage`: `model: null` grava custo NÃO
+    // medido, que conta na tolerância `unpriced` em vez de sair de graça.
+    await this.uso
+      .registrar(userId, {
+        feature: 'meal_photo',
+        paidBy: AiAccessService.pagoPor(direito),
+        model: null,
+        units: {},
+      })
+      .catch((erro: Error) => this.logger.error(`Uso da foto não gravado: ${erro.name}`));
     return {
       itens: await this.casarComOCatalogo(userId, resposta.items),
       observacao: resposta.note ?? null,

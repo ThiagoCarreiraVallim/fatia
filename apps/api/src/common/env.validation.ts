@@ -63,10 +63,10 @@ export const AppEnvSchema = z.object({
   // continua ligado até alguém editar o env. Sai quando a #158 entrar.
   INSIGHTS_ADDON_GROUP_IDS: z.string().default(''),
 
-  // Cobrança por aluno ativo (#158). As três são opcionais e a instância que não
-  // cobra ninguém — que é como o produto roda hoje — não preenche nenhuma: sem
-  // elas o motor de cobrança simplesmente não nasce (`AsaasProvider.fromEnv`
-  // recusa), e nada mais no app muda. Aluno nunca vê cobrança em caminho nenhum.
+  // Asaas: cobrança B2B (#158) e assinatura PRO pela web (ADR 024). As três são
+  // opcionais e a instância que não cobra ninguém não preenche nenhuma: sem elas
+  // o provedor não nasce (`AsaasProvider.fromEnv` recusa) e o checkout responde
+  // 503, sem mudar mais nada no app.
   //
   // A chave de PRODUÇÃO não vive no repositório nem no CI: o sandbox tem chave
   // própria, e o teste do adapter troca o `fetch` global — `fromEnv` recusa
@@ -78,6 +78,29 @@ export const AppEnvSchema = z.object({
   // header `asaas-access-token`. É a única autenticação do webhook, que é rota
   // pública por natureza.
   ASAAS_WEBHOOK_TOKEN: z.string().optional().or(z.literal('')),
+
+  // Plano Free/PRO (ADR 024). `false` (padrão) = a IA hospedada vale para todo
+  // mundo, que é o certo para instância auto-hospedada: quem roda o próprio
+  // modelo não tem o que vender. A instância pública liga com `true`, e aí só
+  // PRO (assinatura ou assento) usa chat, ditado e foto.
+  AI_REQUIRES_PLAN: z
+    .enum(['true', 'false', '1', '0', ''])
+    .default('false')
+    .transform((v) => v === 'true' || v === '1'),
+  // Preço do PRO em centavos. Mudar aqui vale para checkouts novos; quem já
+  // assina continua no valor da assinatura dele no Asaas. Nas lojas o preço é o
+  // do produto cadastrado lá.
+  BILLING_PRO_MONTHLY_CENTS: z.coerce.number().int().positive().default(1990),
+  BILLING_PRO_YEARLY_CENTS: z.coerce.number().int().positive().default(17900),
+
+  // RevenueCat (compra dentro do app, Apple e Google). Vazio = webhook recusa e
+  // o app não oferece compra. `REVENUECAT_WEBHOOK_AUTH` é o valor do header
+  // `Authorization` configurado no painel; `REVENUECAT_SECRET_KEY` (sk_…) lê o
+  // assinante na REST, que é a fonte da verdade do estado.
+  REVENUECAT_WEBHOOK_AUTH: z.string().optional().or(z.literal('')),
+  REVENUECAT_SECRET_KEY: z.string().optional().or(z.literal('')),
+  REVENUECAT_ENTITLEMENT_ID: z.string().min(1).default('pro'),
+  REVENUECAT_BASE_URL: z.string().url().default('https://api.revenuecat.com'),
 });
 
 export type AppEnv = z.infer<typeof AppEnvSchema>;

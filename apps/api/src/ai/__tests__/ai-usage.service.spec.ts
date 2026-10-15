@@ -207,7 +207,24 @@ describe('AiUsageService.registrar', () => {
         model: 'gateway/modelo',
         costMicros: 3_000_000,
         pricingKnown: true,
+        paidBy: null,
+        groupId: null,
       },
+    });
+  });
+
+  it('grava quem pagou quando o portão informa (ADR 024)', async () => {
+    const { service, create } = montar({});
+
+    await service.registrar('user-a', {
+      feature: 'meal_photo',
+      model: null,
+      units: {},
+      paidBy: 'USER',
+    });
+
+    expect(create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ feature: 'meal_photo', paidBy: 'USER', groupId: null }),
     });
   });
 

@@ -1,7 +1,9 @@
 import { BadRequestException, Logger, NotFoundException } from '@nestjs/common';
 import { MessageRole } from '@prisma/client';
 import { AiQuotaExceededException } from '../../ai/ai-quota';
+import { AiAccessService } from '../../ai/ai-access.service';
 import type { AiUsageService } from '../../ai/ai-usage.service';
+import { INSTANCIA_LIBERADA } from '../../billing/ai-entitlement';
 import type { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import {
   ErroDeStreamDoAgente,
@@ -208,11 +210,19 @@ function montar(
     ),
   } satisfies Partial<MemoryService>;
 
+  // O portão real (plano antes de cota) com a instância liberada: os testes
+  // daqui são do repasse; o 402 do Free está no `chat.http.spec.ts`.
+  const acesso = new AiAccessService(
+    { aiTierForUser: async () => INSTANCIA_LIBERADA, exigePlano: () => false },
+    uso as unknown as AiUsageService,
+  );
+
   const service = new ChatService(
     conversas as unknown as ConversationService,
     agent as unknown as AgentChatClient,
     uso as unknown as AiUsageService,
     memorias as unknown as MemoryService,
+    acesso,
   );
 
   return { service, conversas, agent, uso, canal, chamadasAoAgente: chamadas };
@@ -654,6 +664,7 @@ describe('ChatService — o título da conversa', () => {
     );
     expect(uso.registrar).toHaveBeenCalledWith('user-a', {
       feature: 'chat_title',
+      paidBy: 'INSTANCE',
       model: 'm',
       units: { inputUnits: 40, outputUnits: 5 },
     });
@@ -704,6 +715,7 @@ describe('ChatService — o que vai para o livro-caixa', () => {
 
     expect(livro.registrar).toHaveBeenCalledWith('user-a', {
       feature: 'chat',
+      paidBy: 'INSTANCE',
       model: 'gateway/modelo',
       units: { inputUnits: 1200, outputUnits: 300 },
     });
@@ -722,6 +734,7 @@ describe('ChatService — o que vai para o livro-caixa', () => {
     // `pricingKnown: false` — um turno caro não pode entrar como grátis.
     expect(livro.registrar).toHaveBeenCalledWith('user-a', {
       feature: 'chat',
+      paidBy: 'INSTANCE',
       model: null,
       units: {},
     });
@@ -739,8 +752,18 @@ describe('ChatService — o que vai para o livro-caixa', () => {
     await turno;
 
     expect(livro.registrar.mock.calls.map(([, entrada]) => entrada)).toEqual([
-      { feature: 'chat', model: 'm', units: { inputUnits: 6000, outputUnits: 450 } },
-      { feature: 'chat', model: 'caro', units: { inputUnits: 900, outputUnits: undefined } },
+      {
+        feature: 'chat',
+        paidBy: 'INSTANCE',
+        model: 'm',
+        units: { inputUnits: 6000, outputUnits: 450 },
+      },
+      {
+        feature: 'chat',
+        paidBy: 'INSTANCE',
+        model: 'caro',
+        units: { inputUnits: 900, outputUnits: undefined },
+      },
     ]);
   });
 
@@ -759,6 +782,7 @@ describe('ChatService — o que vai para o livro-caixa', () => {
 
     expect(livro.registrar).toHaveBeenCalledWith('user-a', {
       feature: 'chat',
+      paidBy: 'INSTANCE',
       model: 'gateway/modelo',
       units: { inputUnits: 900, outputUnits: undefined },
     });
