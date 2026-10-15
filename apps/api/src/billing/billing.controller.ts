@@ -5,6 +5,7 @@ import { CurrentUser, type CurrentUserPayload } from '../common/decorators/curre
 import { Public } from '../common/decorators/public.decorator';
 import { UserThrottlerGuard } from '../common/user-throttler.guard';
 import { CheckoutDto } from './dto/checkout.dto';
+import { RevenueCatService } from './revenuecat/revenuecat.service';
 import { UserSubscriptionService } from './user-subscription.service';
 
 /**
@@ -16,7 +17,10 @@ import { UserSubscriptionService } from './user-subscription.service';
  */
 @Controller('billing')
 export class BillingController {
-  constructor(private readonly assinaturas: UserSubscriptionService) {}
+  constructor(
+    private readonly assinaturas: UserSubscriptionService,
+    private readonly revenueCat: RevenueCatService,
+  ) {}
 
   /** O plano como a tela "Meu plano" mostra. */
   @Get('plan')
@@ -37,6 +41,27 @@ export class BillingController {
   @HttpCode(200)
   cancel(@CurrentUser() user: CurrentUserPayload) {
     return this.assinaturas.cancelar(user.id);
+  }
+
+  /**
+   * O app chama logo depois da compra na loja, para liberar o PRO na hora em
+   * vez de esperar o webhook. Só sincroniza a pessoa autenticada.
+   */
+  @Post('revenuecat/sync')
+  @HttpCode(200)
+  @UseGuards(UserThrottlerGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  async revenueCatSync(@CurrentUser() user: CurrentUserPayload) {
+    await this.revenueCat.sincronizar(user.id);
+    return this.assinaturas.plano(user.id);
+  }
+
+  /** Webhook da RevenueCat. Autenticado pelo header `Authorization` do painel. */
+  @Public()
+  @Post('webhooks/revenuecat')
+  @HttpCode(200)
+  revenueCatWebhook(@Headers('authorization') auth: string | undefined, @Req() req: Request) {
+    return this.revenueCat.processarWebhook(auth, corpoCru(req));
   }
 
   /**

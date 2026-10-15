@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AsaasProvider } from './asaas/asaas.provider';
 import { BillingController } from './billing.controller';
+import { RevenueCatService } from './revenuecat/revenuecat.service';
 import { SUBSCRIPTION_PROVIDER, UserSubscriptionService } from './user-subscription.service';
 import { BillingEntitlements } from './entitlements.port';
 import { StaticEntitlementsService } from './static-entitlements.service';
@@ -34,6 +35,7 @@ import {
       },
     },
     UserSubscriptionService,
+    RevenueCatService,
   ],
   exports: [BillingEntitlements, AiEntitlements, UserSubscriptionService],
 })
