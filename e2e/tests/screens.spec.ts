@@ -66,6 +66,7 @@ const STATIC_ROUTES: Array<[string, string]> = [
   ['/progress', '30-progresso'],
   ['/progress/records', '31-progresso-recordes'],
   ['/goals', '40-metas'],
+  ['/community', '41-comunidade'],
   ['/profile', '50-perfil'],
   ['/profile/connect', '51-perfil-conectar-ia'],
   ['/plan', '52-plano'],

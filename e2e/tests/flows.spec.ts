@@ -585,15 +585,16 @@ test('recalcular metas pelo assistente salva a sugestão e volta às metas', asy
   }
 });
 
-test('a barra leva a todas as telas: Mais → Metas do dia, Perfil, e Início → Metas', async ({
-  page,
-}) => {
+test('a barra leva a todas as telas, e o voltar do topo sobe até o Início', async ({ page }) => {
   await page.goto('/');
   const barra = page.getByRole('navigation', { name: 'Navegação principal' });
-  await expect(barra.getByRole('link')).toHaveText(['Início', 'Nutrição', 'Treino']);
+  await expect(barra.getByRole('link')).toHaveText(['Nutrição', 'Treino', 'Comunidade']);
+  // O Início é a raiz: sem barra de topo.
+  await expect(page.getByRole('link', { name: /^Voltar para/ })).toHaveCount(0);
 
   await page.getByRole('link', { name: 'Metas do dia' }).click();
   await expect(page).toHaveURL(/\/nutrition\/goals$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Metas do dia' })).toBeVisible();
 
   // Numa tela fora da barra, o "Mais" fica marcado e o menu chega a ela.
   await page.getByRole('button', { name: 'Mais', exact: true }).click();
@@ -605,6 +606,15 @@ test('a barra leva a todas as telas: Mais → Metas do dia, Perfil, e Início �
   await page.getByRole('button', { name: 'Mais', exact: true }).click();
   await menu.getByRole('link', { name: /Ver perfil/ }).click();
   await expect(page).toHaveURL(/\/profile$/);
+
+  // Rota funda aberta direto: o voltar segue o mapa, não o histórico.
+  await page.goto('/workout/plans');
+  await expect(page.getByRole('heading', { level: 1, name: 'Planos de treino' })).toBeVisible();
+  await page.getByRole('link', { name: 'Voltar para Treino' }).click();
+  await expect(page).toHaveURL(/\/workout$/);
+  await page.getByRole('link', { name: 'Voltar para Início' }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('link', { name: /^Voltar para/ })).toHaveCount(0);
 });
 
 /** O plano como a API devolve (ADR 024), para os casos que a stack local não alcança. */
