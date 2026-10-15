@@ -68,6 +68,7 @@ export class AccountService {
       accessLogs,
       conversations,
       memories,
+      subscriptions,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
       this.prisma.nutrientTarget.findMany({ where: { userId }, orderBy: { label: 'asc' } }),
@@ -204,6 +205,24 @@ export class AccountService {
         select: { content: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
       }),
+      // Histórico do plano (ADR 024). Sem `paymentUrl`, que é link de cobrança
+      // temporário, e sem nada do provedor além do id.
+      this.prisma.userSubscription.findMany({
+        where: { userId },
+        select: {
+          tier: true,
+          source: true,
+          status: true,
+          interval: true,
+          productId: true,
+          currentPeriodEnd: true,
+          cancelAtPeriodEnd: true,
+          canceledAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
     ]);
 
     // `ProfessionalAccessLog.professionalId` é string pura, sem FK — é o que faz
@@ -246,6 +265,7 @@ export class AccountService {
       professionalLinks,
       conversations,
       memories,
+      subscriptions,
       accessLogs: accessLogs.map(({ professionalId, ...linha }) => ({
         ...linha,
         professionalName: nomesDeProfissional.get(professionalId) ?? null,
@@ -254,6 +274,7 @@ export class AccountService {
         achievements: achievements.length,
         conversations: conversations.length,
         memories: memories.length,
+        subscriptions: subscriptions.length,
         professionalLinks: professionalLinks.length,
         accessLogs: accessLogs.length,
         meals: meals.length,

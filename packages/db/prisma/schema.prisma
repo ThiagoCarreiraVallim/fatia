@@ -35,6 +35,10 @@ model User {
   // definiu metas por outro caminho). O app redireciona enquanto for nulo.
   onboardedAt   DateTime?
 
+  // Cliente no Asaas (assinatura PRO pela web, ADR 024). Só o id do provedor:
+  // CPF e cartão ficam no Asaas, nunca aqui.
+  asaasCustomerId String? @unique
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -58,6 +62,7 @@ model User {
   conversations Conversation[]
   memories      UserMemory[]
   aiUsage       AiUsage[]
+  subscriptions UserSubscription[]
 
   // B2B (ADR 014). Nenhuma destas relações dá acesso a dado de saúde por si só —
   // quem autoriza leitura é exclusivamente uma linha de `ProfessionalLink`.
@@ -761,6 +766,7 @@ model Group {
   owner       User               @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   memberships GroupMembership[]
   links       ProfessionalLink[]
+  aiUsage     AiUsage[]
 
   @@index([ownerId])
   @@index([type])
@@ -971,6 +977,10 @@ model AiUsage {
 
   /// Micro-unidades da moeda, inteiro. Ver `ai-pricing.ts` para a escala.
   costMicros   Int
+  /// Quem paga esta chamada (ADR 024/025). Nulo nas linhas anteriores ao plano.
+  paidBy       AiPaidBy?
+  /// Comunidade que pagou, quando `paidBy = GROUP` (assentos, Fase 5).
+  groupId      String?
   /// `false` = este custo **não foi medido**, e o `0` ao lado não significa
   /// "grátis". É o que impede a cota de se desligar sozinha e em silêncio quando
   /// a medição se perde (`AiQuotaSpend.unpricedCalls`).
@@ -983,9 +993,102 @@ model AiUsage {
   /// gastasse o orçamento da instância e apagasse a conta em seguida devolveria a
   /// cota global ao zero. A linha órfã não guarda nada pessoal — id, papel e
   /// conteúdo vão embora com o usuário; aqui fica um custo e um modelo.
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user  User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  group Group? @relation(fields: [groupId], references: [id], onDelete: SetNull)
 
   /// Os dois `where` da janela: o do usuário e o da instância inteira.
   @@index([userId, createdAt])
   @@index([createdAt])
+  @@index([groupId])
+}
+
+// ─── Plano Free/PRO (ADR 024) ────────────────────────────────────────────────
+// O plano só governa a IA hospedada (chat, ditado, foto de refeição). Nenhum
+// registro, leitura ou exportação fica atrás de pagamento.
+
+enum PlanTier {
+  FREE
+  PRO
+}
+
+enum BillingInterval {
+  MONTHLY
+  YEARLY
+}
+
+/// De onde veio a assinatura. `MANUAL` é cortesia concedida pela equipe
+/// (`pnpm billing:grant-pro`), também usada pelo E2E. Assento de comunidade
+/// não entra aqui: tem tabelas próprias (ADR 025, Fase 5).
+enum SubscriptionSource {
+  ASAAS
+  APPLE
+  GOOGLE
+  MANUAL
+}
+
+/// `PENDING` = checkout aberto e ainda não pago, não dá direito à IA.
+/// `CANCELED` = encerrada pelo provedor. Cancelar pelo app só marca
+/// `cancelAtPeriodEnd`, e o PRO vale até `currentPeriodEnd`.
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum AiPaidBy {
+  USER
+  GROUP
+  FREE
+  /// Instância sem exigência de plano (`AI_REQUIRES_PLAN=false`, self-host).
+  INSTANCE
+}
+
+model UserSubscription {
+  id       String             @id @default(uuid())
+  userId   String
+  tier     PlanTier           @default(PRO)
+  source   SubscriptionSource
+  status   SubscriptionStatus
+  interval BillingInterval?
+
+  /// Id da assinatura no provedor (Asaas `sub_…`, RevenueCat original
+  /// transaction id). Nulo em `MANUAL`.
+  providerRef String?
+  /// Produto da loja (`fatia_pro_mensal`…). Nulo fora das lojas.
+  productId   String?
+
+  currentPeriodEnd  DateTime?
+  /// Fim da carência de inadimplência (`decideAiTier`).
+  graceEndsAt       DateTime?
+  cancelAtPeriodEnd Boolean   @default(false)
+  canceledAt        DateTime?
+  /// Link de pagamento do Asaas enquanto `PENDING`. Não vai no export.
+  paymentUrl        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([source, providerRef])
+  @@index([userId, status])
+}
+
+/// Idempotência dos webhooks: o mesmo evento entregue duas vezes é no-op.
+/// `payload` guarda só o necessário para auditar (ids, tipo, status, datas),
+/// nunca CPF, e-mail ou cartão.
+model BillingWebhookEvent {
+  id          String    @id @default(uuid())
+  provider    String
+  eventId     String
+  type        String
+  payload     Json
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+  error       String?
+
+  @@unique([provider, eventId])
+  @@index([receivedAt])
 }

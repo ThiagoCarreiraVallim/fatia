@@ -28,6 +28,7 @@ const makePrisma = () => ({
   favoriteFood: { findMany: jest.fn().mockResolvedValue([]) },
   foodPortion: { findMany: jest.fn().mockResolvedValue([]) },
   mealTemplate: { findMany: jest.fn().mockResolvedValue([]) },
+  userSubscription: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const SCHEMA = resolve(__dirname, '../../../../../packages/db/prisma/schema.prisma');
@@ -67,6 +68,8 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   conversations: 'conversations',
   // O que o assistente guardou sobre a pessoa, com o texto que ela aprovou.
   memories: 'memories',
+  // Plano Free/PRO (ADR 024): o histórico de assinatura é um contrato da pessoa.
+  subscriptions: 'subscriptions',
 };
 
 /**
