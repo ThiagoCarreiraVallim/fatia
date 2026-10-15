@@ -59,10 +59,11 @@ model User {
   achievements    UserAchievement[]
   trainingBlocks  TrainingBlock[]
 
-  conversations Conversation[]
-  memories      UserMemory[]
-  aiUsage       AiUsage[]
-  subscriptions UserSubscription[]
+  conversations  Conversation[]
+  memories       UserMemory[]
+  aiUsage        AiUsage[]
+  subscriptions  UserSubscription[]
+  invitesCreated GroupInvite[]      @relation("GroupInviteCreator")
 
   // B2B (ADR 014). Nenhuma destas relações dá acesso a dado de saúde por si só —
   // quem autoriza leitura é exclusivamente uma linha de `ProfessionalLink`.
@@ -718,11 +719,11 @@ enum GroupType {
 }
 
 enum GroupRole {
-  /// Gere grupo, membros e cobrança. NÃO lê dado de saúde de ninguém.
+  /// Gere grupo, membros e cobrança. Lê dado de saúde só com vínculo (ADR 026).
   OWNER
-  /// Pode receber vínculo de leitura e oferecer plano. Só isso.
+  /// Pode receber vínculo de leitura e oferecer plano.
   PROFESSIONAL
-  /// Publica conteúdo no grupo social. Nunca lê dado individual.
+  /// Publica conteúdo. Lê dado individual só com vínculo (ADR 026).
   CREATOR
   /// Aluno/fã. O próprio dado, sempre.
   MEMBER
@@ -733,6 +734,22 @@ enum MembershipStatus {
   ACTIVE
   LEFT
   REMOVED
+}
+
+/// Quem acha a comunidade (ADR 025/026). PRIVATE só por convite ou código.
+enum GroupVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+/// Como se entra pelo código (`slug`). Convite já é a aprovação: entra ACTIVE.
+enum JoinPolicy {
+  /// Entra na hora.
+  OPEN
+  /// Fica pendente até o dono aprovar (o comportamento de antes).
+  APPROVAL
+  /// O código não abre a porta; só convite.
+  INVITE_ONLY
 }
 
 /// Categorias de dado que podem ser consentidas, independentes entre si.
@@ -749,14 +766,19 @@ enum ShareScope {
 }
 
 model Group {
-  id        String    @id @default(uuid())
-  type      GroupType
-  name      String
+  id          String          @id @default(uuid())
+  type        GroupType
+  name        String
   /// Usado no link de convite e na URL do painel. Público por natureza.
-  slug      String    @unique
-  ownerId   String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  slug        String          @unique
+  ownerId     String
+  description String?
+  /// Fuso da comunidade (desafios e ranking, Fase 8).
+  timezone    String          @default("America/Sao_Paulo")
+  visibility  GroupVisibility @default(PRIVATE)
+  joinPolicy  JoinPolicy      @default(APPROVAL)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   // Cascade e não Restrict de propósito: com Restrict, `delete_my_account` de um
   // dono de academia falharia — um direito da LGPD travado por dívida comercial.
@@ -767,25 +789,34 @@ model Group {
   memberships GroupMembership[]
   links       ProfessionalLink[]
   aiUsage     AiUsage[]
+  invites     GroupInvite[]
+  seatPool    GroupSeatPool?
 
   @@index([ownerId])
   @@index([type])
 }
 
 model GroupMembership {
-  id        String           @id @default(uuid())
-  groupId   String
-  userId    String
-  role      GroupRole
-  status    MembershipStatus @default(INVITED)
-  invitedAt DateTime         @default(now())
-  joinedAt  DateTime?
-  leftAt    DateTime?
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  id            String           @id @default(uuid())
+  groupId       String
+  userId        String
+  role          GroupRole
+  status        MembershipStatus @default(INVITED)
+  invitedAt     DateTime         @default(now())
+  joinedAt      DateTime?
+  leftAt        DateTime?
+  /// O que a pessoa aceitou compartilhar com a equipe ao entrar (ADR 026).
+  /// Registro do aceite; a autorização de fato são os `ProfessionalLink`.
+  consentScopes ShareScope[]     @default([])
+  consentAt     DateTime?
+  /// Entra nas estatísticas agregadas da comunidade (opt-in, ADR 026 §6).
+  statsOptIn    Boolean          @default(false)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 
-  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group           Group                 @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  seatAssignments GroupSeatAssignment[]
 
   // Um papel por pessoa por grupo. É o que torna estruturalmente impossível
   // o acúmulo de papéis que a #156 pede para evitar: não existe linha em que
@@ -1091,4 +1122,92 @@ model BillingWebhookEvent {
 
   @@unique([provider, eventId])
   @@index([receivedAt])
+}
+
+/// Convite para a comunidade (Fase 5). Só o hash do token fica no banco: o link
+/// `/c/<token>` aparece uma vez, para quem criou. Com e-mail, vale só para a
+/// conta com aquele e-mail e uma vez; sem e-mail, é link compartilhável.
+model GroupInvite {
+  id          String    @id @default(uuid())
+  groupId     String
+  /// sha256 do token, em hex.
+  tokenHash   String    @unique
+  /// Apagado 30 dias depois do uso ou da expiração (DATA_RETENTION.md).
+  email       String?
+  role        GroupRole
+  createdById String?
+  /// null = sem limite até expirar.
+  maxUses     Int?
+  uses        Int       @default(0)
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  lastSentAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  group     Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdBy User? @relation("GroupInviteCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([groupId, revokedAt])
+  @@index([createdById])
+}
+
+/// Assentos de IA que a comunidade paga (ADR 025). Um pool por comunidade;
+/// mesma máquina de estados da assinatura pessoal.
+model GroupSeatPool {
+  id                String             @id @default(uuid())
+  groupId           String             @unique
+  seats             Int
+  /// Redução pedida: vale na próxima renovação.
+  nextPeriodSeats   Int?
+  unitPriceCents    Int
+  status            SubscriptionStatus
+  /// Id da assinatura no Asaas. null = pool de cortesia (script de dev).
+  providerRef       String?            @unique
+  currentPeriodEnd  DateTime?
+  graceEndsAt       DateTime?
+  cancelAtPeriodEnd Boolean            @default(false)
+  canceledAt        DateTime?
+  paymentUrl        String?
+  createdById       String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  group       Group                 @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  assignments GroupSeatAssignment[]
+  adjustments GroupSeatAdjustment[]
+}
+
+/// Quem recebeu um assento. No máximo um ativo por membership (índice único
+/// parcial `revokedAt IS NULL`, criado no SQL da migration).
+model GroupSeatAssignment {
+  id           String    @id @default(uuid())
+  poolId       String
+  membershipId String
+  assignedById String?
+  assignedAt   DateTime  @default(now())
+  revokedAt    DateTime?
+
+  pool       GroupSeatPool   @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  membership GroupMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([poolId, revokedAt])
+  @@index([membershipId, revokedAt])
+}
+
+/// Aumento de assentos no meio do ciclo: a cobrança avulsa proporcional.
+model GroupSeatAdjustment {
+  id               String             @id @default(uuid())
+  poolId           String
+  fromSeats        Int
+  toSeats          Int
+  amountCents      Int
+  /// Id da cobrança avulsa no Asaas. null = abaixo do mínimo, não cobrada.
+  providerChargeId String?            @unique
+  status           SubscriptionStatus
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  pool GroupSeatPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
+
+  @@index([poolId])
 }

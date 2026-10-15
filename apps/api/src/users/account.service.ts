@@ -80,6 +80,8 @@ export class AccountService {
       conversations,
       memories,
       subscriptions,
+      communityMemberships,
+      invitesCreated,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
       this.prisma.nutrientTarget.findMany({ where: { userId }, orderBy: { label: 'asc' } }),
@@ -234,6 +236,40 @@ export class AccountService {
         },
         orderBy: { createdAt: 'asc' },
       }),
+      // As próprias associações a comunidades, com o consentimento registrado
+      // (ADR 026) e o assento de IA (ADR 025). Só a linha da pessoa: quem mais
+      // está no grupo é dado de terceiro e não sai daqui.
+      this.prisma.groupMembership.findMany({
+        where: { userId },
+        select: {
+          group: { select: { name: true, slug: true } },
+          role: true,
+          status: true,
+          invitedAt: true,
+          joinedAt: true,
+          leftAt: true,
+          consentScopes: true,
+          consentAt: true,
+          statsOptIn: true,
+          seatAssignments: { select: { assignedAt: true, revokedAt: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      // Convites que a pessoa criou. Sem o e-mail do convidado (dado de
+      // terceiro) e sem o hash do token.
+      this.prisma.groupInvite.findMany({
+        where: { createdById: userId },
+        select: {
+          group: { select: { name: true } },
+          role: true,
+          maxUses: true,
+          uses: true,
+          expiresAt: true,
+          revokedAt: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
     ]);
 
     // `ProfessionalAccessLog.professionalId` é string pura, sem FK — é o que faz
@@ -277,6 +313,8 @@ export class AccountService {
       conversations,
       memories,
       subscriptions,
+      communityMemberships,
+      invitesCreated,
       accessLogs: accessLogs.map(({ professionalId, ...linha }) => ({
         ...linha,
         professionalName: nomesDeProfissional.get(professionalId) ?? null,
@@ -286,6 +324,8 @@ export class AccountService {
         conversations: conversations.length,
         memories: memories.length,
         subscriptions: subscriptions.length,
+        communityMemberships: communityMemberships.length,
+        invitesCreated: invitesCreated.length,
         professionalLinks: professionalLinks.length,
         accessLogs: accessLogs.length,
         meals: meals.length,

@@ -29,6 +29,8 @@ const makePrisma = () => ({
   foodPortion: { findMany: jest.fn().mockResolvedValue([]) },
   mealTemplate: { findMany: jest.fn().mockResolvedValue([]) },
   userSubscription: { findMany: jest.fn().mockResolvedValue([]) },
+  groupMembership: { findMany: jest.fn().mockResolvedValue([]) },
+  groupInvite: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const SCHEMA = resolve(__dirname, '../../../../../packages/db/prisma/schema.prisma');
@@ -63,6 +65,9 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   // dado". Os dois entram no export por LGPD art. 18 V — ficaram de fora na #153 com o argumento
   // de que seriam consultados na tela de compartilhamento, e "está na tela" não é portabilidade.
   linksAsSubject: 'professionalLinks',
+  // Só a linha da própria pessoa, com o consentimento e o assento (ADR 025/026).
+  memberships: 'communityMemberships',
+  invitesCreated: 'invitesCreated',
   accessLogs: 'accessLogs',
   // Chat com a IA hospedada (#249): o que a pessoa escreveu sobre a própria saúde, em prosa.
   conversations: 'conversations',
@@ -78,7 +83,6 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
  */
 const FORA_DO_EXPORT: Record<string, string> = {
   ownedGroups: 'B2B (ADR 014): o grupo é do profissional, não dado pessoal de saúde do titular.',
-  memberships: 'B2B: vínculo administrativo, e exportá-lo revelaria a composição do grupo.',
   linksAsProfessional: 'B2B: lista os PACIENTES do profissional — dado de terceiro.',
   aiUsage:
     'Livro-caixa da inferência que a Fatia pagou (#249): modelo e custo, nada do titular. ' +
