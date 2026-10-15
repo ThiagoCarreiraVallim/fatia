@@ -22,11 +22,31 @@ async function registrarPeloMais(page: Page, item: string) {
   await page.getByRole('dialog').getByRole('button', { name: item }).click();
 }
 
+/**
+ * Rede de segurança dos fluxos: apaga as refeições do dia que têm o item do
+ * teste. Uma sobra num dia antigo some o placeholder e quebra a rodada seguinte.
+ */
+async function apagarRefeicoesCom(page: Page, dia: string, nome: string) {
+  const res = await page.request.get(`/api/proxy/nutrition/meals?date=${dia}`);
+  if (!res.ok()) return;
+  const meals = (await res.json()) as { id: string; items: { foodName: string }[] }[];
+  for (const meal of meals.filter((m) => m.items.some((i) => i.foodName === nome))) {
+    await page.request.delete(`/api/proxy/nutrition/meals/${meal.id}`);
+  }
+}
+
 test('refeição lançada em dia passado fica naquele dia', async ({ page }) => {
   // Fora dos 30 dias do seed: o dia começa vazio e o placeholder existe.
   const dia = diasAtras(45);
   const nome = `E2E sopa ${Date.now()}`;
+  try {
+    await registrarEApagarNoDia(page, dia, nome);
+  } finally {
+    await apagarRefeicoesCom(page, dia, nome);
+  }
+});
 
+async function registrarEApagarNoDia(page: Page, dia: string, nome: string) {
   await page.goto(`/nutrition?date=${dia}`);
   await page.getByRole('button', { name: 'Registrar Lanche' }).click();
   await page.getByRole('button', { name: /só desta vez/i }).click();
@@ -51,7 +71,7 @@ test('refeição lançada em dia passado fica naquele dia', async ({ page }) => 
   await page.getByRole('button', { name: 'Remover refeição' }).click();
   await dialog.getByRole('button', { name: 'Remover' }).click();
   await expect(page.getByText(nome)).toHaveCount(0);
-});
+}
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
@@ -145,11 +165,7 @@ test('refeição pelo "+" atualiza o dashboard sem recarregar', async ({ page })
     await expect(kcal).toHaveText(new RegExp(`^${antes + 123}/`));
   } finally {
     // Limpa pelo nome: o dia de hoje do demo tem as refeições do seed.
-    const res = await page.request.get(`/api/proxy/nutrition/meals?date=${hoje}`);
-    const meals = (await res.json()) as { id: string; items: { foodName: string }[] }[];
-    for (const meal of meals.filter((m) => m.items.some((i) => i.foodName === nome))) {
-      await page.request.delete(`/api/proxy/nutrition/meals/${meal.id}`);
-    }
+    await apagarRefeicoesCom(page, hoje, nome);
   }
 });
 
