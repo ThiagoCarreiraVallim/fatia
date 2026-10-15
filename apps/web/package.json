@@ -42,6 +42,7 @@
     "react-dom": "19.2.3",
     "react-hook-form": "^7.83.0",
     "recharts": "^2.12.7",
+    "sonner": "1.7.4",
     "streamdown": "^2.5.0",
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",
