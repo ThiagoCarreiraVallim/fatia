@@ -1,7 +1,7 @@
 # ADR 024 — Plano Free e Pago do usuário: a IA hospedada passa a ser vendida
 
-**Status:** Proposed
-**Data:** 2026-10-13
+**Status:** Accepted
+**Data:** 2026-10-13 (aceita em 2026-10-15)
 
 ## Contexto
 
@@ -79,3 +79,31 @@ atualizados junto com a implementação.
   assinatura simples.
 - **Free com um pouco de IA hospedada:** fica em aberto como experimento de conversão, mas não
   é o default — vira só um número na cota do FREE, sem mudar este desenho.
+
+## Atualização — como foi implementada (2026-10-15)
+
+O desenho acima vale com estes ajustes, decididos na implementação:
+
+- **Preço:** PRO a R$ 19,90/mês ou R$ 179/ano (`BILLING_PRO_MONTHLY_CENTS`/`_YEARLY_CENTS`). O Free
+  não tem nenhuma IA hospedada.
+- **Carência:** 7 dias depois do vencimento (`CARENCIA_DIAS`). Uma `ACTIVE` cujo período venceu há
+  mais de 1 dia sem renovação é lida como `PAST_DUE` — protege contra webhook perdido sem precisar
+  de job de expiração.
+- **`AI_REQUIRES_PLAN`** (padrão `false`): self-host libera a IA para todos, com o direito saindo
+  `PRO`/`INSTANCE`. A instância pública liga `true`. Assim o projeto continua self-hostable sem
+  ninguém precisar de gateway de pagamento.
+- **Origem `MANUAL`:** cortesia e E2E, por `pnpm billing:grant-pro`. O enum não ganhou
+  `GROUP_SEAT`; o assento de comunidade fica em tabelas próprias na ADR 025, e `aiTierForUser`
+  passa a considerá-lo então.
+- **Porta própria:** o direito à IA não entrou em `BillingEntitlements` (que é do grupo), e sim numa
+  porta `AiEntitlements` (`billing/subscription-entitlements.service.ts`). O gate é o
+  `AiAccessService` em `ai/`, porque `nutrition/` e `users/` não podem importar `billing/`
+  (`no-billing-in-student-surface.spec.ts` ficou como estava). O plano é lido em
+  `GET /billing/plan`, não em `/users/me`; o cancelamento ao apagar a conta entra por um gancho
+  declarado em `users/` (`ACCOUNT_DELETION_HOOKS`).
+- **`AiUsage.paidBy`** ganhou também `INSTANCE`, para separar o uso da instância liberada.
+- **A foto de refeição** não passava pela cota; agora passa pelo portão e registra uso.
+- **MCP inalterado:** nenhuma tool nova, nenhum vocabulário de cobrança.
+
+Detalhes operacionais (estados, webhooks, sandbox, RevenueCat) em
+[`BILLING.md`](../BILLING.md#plano-pro-do-usuário-adr-024).

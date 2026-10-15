@@ -17,6 +17,7 @@
 | Exercícios custom (`Exercise` com `createdByUserId`) | Postgres | Enquanto a conta existir |
 | Planos, sessões e séries de treino                   | Postgres | Enquanto a conta existir |
 | Peso, passos, hidratação                             | Postgres | Enquanto a conta existir |
+| Assinatura do plano (`UserSubscription`)             | Postgres | Enquanto a conta existir |
 
 **Não há expiração automática.** O histórico é o produto: um registro de peso de dois anos atrás
 é exatamente o que dá valor ao gráfico de progresso. Apagar por idade seria destruir a
@@ -25,6 +26,23 @@ funcionalidade.
 Ao apagar a conta, tudo acima vai embora imediatamente, pelos `onDelete: Cascade` a partir de
 `User` em `packages/db/prisma/schema.prisma`. Não há soft delete, não há lixeira, não há período
 de carência.
+
+### Plano PRO e pagamento (ADR 024)
+
+- **`UserSubscription`** guarda origem, status, intervalo, datas e o id da assinatura no provedor.
+  Vai embora com a conta (`Cascade`) e sai no `export_my_data` (sem o link de pagamento, que é do
+  provedor). Antes de apagar, a recorrência do Asaas é cancelada; a de loja a pessoa cancela na
+  loja.
+- **`User.asaasCustomerId`** é o único elo com o cliente no Asaas. O **CPF** vai ao Asaas no
+  checkout (exigência para emitir cobrança) e **não é gravado** no Fatia; cartão nunca passa por
+  nós. Nome, e-mail e CPF ficam no Asaas sob a retenção fiscal dele.
+- **`BillingWebhookEvent`** guarda o id do evento, o tipo e um payload **mínimo** (id da
+  assinatura, status, data de vencimento) — nada de nome, e-mail ou CPF. Não tem `userId`, então
+  não vai embora com a conta e não entra no export: é a trilha de idempotência e de auditoria do
+  que o provedor disse. Sem expiração automática hoje; uma rotina de expurgo por idade é dívida
+  aberta, sem urgência porque a linha não identifica ninguém sem a assinatura apagada.
+- **`AiUsage.paidBy`** registra quem bancou a chamada (`USER`, `GROUP`, `INSTANCE`), sem nada do
+  conteúdo.
 
 ## Compartilhamento com profissional (B2B)
 

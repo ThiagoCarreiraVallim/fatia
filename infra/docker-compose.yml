@@ -89,6 +89,23 @@ services:
       AGENT_BASE_URL: ${AGENT_BASE_URL:-}
       AGENT_API_KEY: ${AGENT_API_KEY:-}
       AGENT_TIMEOUT_MS: ${AGENT_TIMEOUT_MS:-180000}
+      # Custo e cota da IA hospedada (#135). Vazio/0 = sem cota.
+      AI_PRICE_TABLE: ${AI_PRICE_TABLE:-}
+      AI_QUOTA_DAILY_MICROS: ${AI_QUOTA_DAILY_MICROS:-0}
+      AI_QUOTA_GLOBAL_DAILY_MICROS: ${AI_QUOTA_GLOBAL_DAILY_MICROS:-0}
+      AI_QUOTA_UNPRICED_DAILY_CALLS: ${AI_QUOTA_UNPRICED_DAILY_CALLS:-20}
+      # Plano Free/PRO (ADR 024). false = IA hospedada liberada para todos.
+      AI_REQUIRES_PLAN: ${AI_REQUIRES_PLAN:-false}
+      BILLING_PRO_MONTHLY_CENTS: ${BILLING_PRO_MONTHLY_CENTS:-1990}
+      BILLING_PRO_YEARLY_CENTS: ${BILLING_PRO_YEARLY_CENTS:-17900}
+      # Asaas (cobrança web). Vazio = cobrança desligada.
+      ASAAS_BASE_URL: ${ASAAS_BASE_URL:-}
+      ASAAS_API_KEY: ${ASAAS_API_KEY:-}
+      ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:-}
+      # RevenueCat (compra no app). Vazio = webhook e sync respondem 503.
+      REVENUECAT_WEBHOOK_AUTH: ${REVENUECAT_WEBHOOK_AUTH:-}
+      REVENUECAT_SECRET_KEY: ${REVENUECAT_SECRET_KEY:-}
+      REVENUECAT_ENTITLEMENT_ID: ${REVENUECAT_ENTITLEMENT_ID:-pro}
     ports:
       - "${API_PORT:-3000}:3000"
     profiles: ["full"]

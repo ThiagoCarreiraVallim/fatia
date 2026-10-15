@@ -87,8 +87,8 @@ describe('AppEnvSchema — IA hospedada', () => {
 describe('AppEnvSchema — cobrança (#158)', () => {
   it('instância que não cobra ninguém sobe sem preencher nada', () => {
     // É como a instância pública roda hoje. Tornar qualquer variável de cobrança
-    // obrigatória impediria de subir quem nunca vai faturar academia nenhuma —
-    // e o app é grátis para o aluno em qualquer cenário.
+    // obrigatória impediria de subir quem nunca vai cobrar nada — o self-host
+    // roda com AI_REQUIRES_PLAN=false e a IA liberada (ADR 024).
     const env = AppEnvSchema.parse(BASE);
 
     expect(env.ASAAS_BASE_URL).toBeUndefined();

@@ -142,6 +142,32 @@ Entregue em `feat/comunidades-planos`, cada etapa com `ui:snap` antes/depois (`e
 
 - Paywall/upgrade (web e mobile) quando 402; seção "Meu plano" no perfil; ocultar chat/foto/ditado no Free com CTA; badge PRO.
 
+### Andamento da Fase 4 — concluída
+
+Decisões com o usuário: PRO a **R$ 19,90/mês ou R$ 179/ano**; o Free **sem** IA hospedada; no app,
+**RevenueCat completo**. O desenho final está na atualização da
+[ADR 024](./ADR/024-plano-free-e-pago-do-usuario.md) e o operacional em
+[`BILLING.md`](./BILLING.md#plano-pro-do-usuário-adr-024).
+
+- [x] **Schema:** `UserSubscription` (origens `ASAAS`/`APPLE`/`GOOGLE`/`MANUAL`, status com
+      `PENDING`), `BillingWebhookEvent` idempotente, `User.asaasCustomerId`, `AiUsage.paidBy`/`groupId`;
+      assinatura no export LGPD.
+- [x] **Direito e portão:** `resolverDireitoIa` (função pura, carência de 7 dias, sem job),
+      `AiEntitlements` e `AiAccessService` em `ai/` → 402 `AI_PLAN_REQUIRED` antes da cota no chat,
+      ditado e foto (a foto passou a registrar uso). `AI_REQUIRES_PLAN=false` libera a IA no
+      self-host. Guarda estático `hosted-ai-requires-plan.spec.ts`.
+- [x] **Web/Asaas:** checkout com CPF não gravado, link reaproveitado, troca de intervalo,
+      cancelamento ao fim do período, webhook com corpo cru e idempotência; `billing:grant-pro`.
+- [x] **App/RevenueCat:** webhook autenticado em tempo constante e sync pela REST (fonte da
+      verdade); `POST /billing/revenuecat/sync` depois da compra.
+- [x] **Conta:** apagar a conta cancela a recorrência do Asaas antes (`ACCOUNT_DELETION_HOOKS`).
+- [x] **UI:** "Meu plano" na web e no app, selo FREE/PRO, cadeado no chat e na foto, upsell no chat,
+      402 tratado; Termos e Privacidade reescritos.
+- [x] **MCP inalterado** (118 tools, sem vocabulário de cobrança).
+
+**Não exercitado aqui:** o sandbox do Asaas e a compra nas lojas (precisam das chaves do dono, de
+dev build e de contas de teste). Os roteiros estão no `BILLING.md`.
+
 ## Fase 5 — Comunidades, convites, consentimento e assentos
 
 **Schema**

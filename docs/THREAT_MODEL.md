@@ -355,6 +355,35 @@ exemplos do `.env.example` são `http://` porque os dois ficam na mesma rede int
 sem porta publicada — apontar o `AGENT_BASE_URL` para outra máquina sem TLS põe o Bearer na rede
 em texto claro.
 
+### 11. Plano PRO — webhook forjado, PRO de graça e cobrança de quem saiu (ADR 024)
+
+O que um atacante ganharia: IA hospedada sem pagar (custo de inferência por conta do Fatia), ou
+fazer outra pessoa perder o PRO que pagou.
+
+- **Webhook forjado.** As duas rotas de webhook são públicas por natureza. O do Asaas só aceita o
+  `asaas-access-token` igual a `ASAAS_WEBHOOK_TOKEN`; o da RevenueCat, o header `Authorization`
+  igual a `REVENUECAT_WEBHOOK_AUTH`, comparado em **tempo constante**. Sem segredo configurado a
+  rota responde 503, nunca "aceita qualquer coisa". E o webhook da RevenueCat nem confia no corpo:
+  ele só diz **quem** mudou; o estado vem de `GET /v1/subscribers/:id` com a chave secreta. Forjar o
+  corpo, no máximo, faz o servidor reler a verdade.
+- **Reentrega e ordem.** `BillingWebhookEvent` tem `@@unique([provider, eventId])` e é gravado na
+  mesma transação do efeito: o mesmo evento duas vezes é no-op. O fim do período do Asaas só
+  avança, e um `PAYMENT_OVERDUE` de uma cobrança já superada é ignorado (`sem_efeito`).
+- **Conceder PRO a si mesmo.** Nenhuma rota recebe tier, status ou `userId`: o checkout cria
+  `PENDING` (Free) e só o webhook autenticado ativa; o sync da RevenueCat atua apenas no
+  `@CurrentUser()`, e o `app_user_id` da loja é o id do Fatia, que o app define depois do login. A
+  origem `MANUAL` só nasce pelo script `billing:grant-pro`, que exige acesso ao banco.
+- **Portão esquecido.** `ai/__tests__/hosted-ai-requires-plan.spec.ts` reprova qualquer arquivo que
+  chame o agente (chat, ditado, foto) sem `this.acesso.assertPodeUsar(`.
+- **Cobrança depois de apagar a conta.** `deleteAccount` cancela a recorrência no Asaas antes de
+  apagar o usuário e **aborta** se o Asaas falhar. Assinatura de loja não é cancelável por nós: o
+  aviso de exclusão manda a pessoa à loja.
+- **Dado de pagamento.** O CPF vai ao Asaas no checkout e não é gravado; cartão nunca passa pelo
+  Fatia. O payload guardado do webhook tem só ids, status e datas.
+
+**Não mitigado:** o portão é por usuário, e um PRO pode compartilhar a conta. A cota diária (#135)
+limita o custo; detectar compartilhamento não está no escopo.
+
 ## Matriz de cobertura
 
 Onde o escopo é aplicado, por domínio. Verificado por
@@ -393,6 +422,7 @@ dono do pai não autoriza escrever em qualquer filho.
 | Chat com IA          | `chat/conversation.service.ts`                | `where: { id, userId }`; `Message` não tem dono — quem tem é a conversa    |
 | Memórias do chat     | `chat/memory/memory.service.ts`               | `where: { userId }`; esquecer exige posse                                  |
 | Checkpoint do agente | `chat/checkpoint-purge.service.ts`            | thread `{userId}:{conversationId}`; dono vem do `get_me`, nunca do corpo   |
+| Plano / assinatura   | `billing/user-subscription.service.ts`        | `where: { userId }`; nenhuma rota recebe tier, status ou id de assinatura  |
 
 ## O que não está protegido
 

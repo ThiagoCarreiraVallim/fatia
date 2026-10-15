@@ -76,6 +76,38 @@ LOGTO_COOKIE_SECRET=$(openssl rand -base64 32)
 
 Salve. Os subdomínios e demais derivações ficam por conta do compose.
 
+### Opcional — IA hospedada e plano PRO (ADR 024)
+
+Sem nada disto a instância sobe com o app inteiro e o MCP; a IA hospedada some da interface.
+
+```env
+# IA hospedada (agente) e custo
+AGENT_BASE_URL=http://fatia-agent:8100
+AGENT_API_KEY=$(openssl rand -hex 32)
+AI_PRICE_TABLE={"gateway/modelo":{"in":3000000,"out":15000000}}
+AI_QUOTA_DAILY_MICROS=...
+AI_QUOTA_GLOBAL_DAILY_MICROS=...
+
+# Plano PRO: false libera a IA hospedada para todos (self-host)
+AI_REQUIRES_PLAN=true
+BILLING_PRO_MONTHLY_CENTS=1990
+BILLING_PRO_YEARLY_CENTS=17900
+
+# Asaas (assinatura pela web) — webhook em https://api.<DOMAIN>/api/billing/webhooks/asaas
+ASAAS_BASE_URL=https://api.asaas.com
+ASAAS_API_KEY=...
+ASAAS_WEBHOOK_TOKEN=$(openssl rand -hex 32)
+
+# RevenueCat (compra no app) — webhook em https://api.<DOMAIN>/api/billing/webhooks/revenuecat
+REVENUECAT_WEBHOOK_AUTH=$(openssl rand -hex 32)
+REVENUECAT_SECRET_KEY=sk_...
+REVENUECAT_ENTITLEMENT_ID=pro
+```
+
+Com `AI_REQUIRES_PLAN=true`, ligue a cota **antes** (o PRO tem preço fixo) e configure pelo menos
+o Asaas, senão ninguém consegue assinar pela web. Roteiro completo em
+[`docs/BILLING.md`](../../docs/BILLING.md#plano-pro-do-usuário-adr-024).
+
 ## Passo 4 — Primeiro deploy (Logto sobe sozinho)
 
 1. **Compose → Deploy**.
