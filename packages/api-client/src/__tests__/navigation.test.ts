@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { PRIMARY_TABS, activeNavKey, menuSections } from '../navigation';
+import { PRIMARY_TABS, ROUTES, activeNavKey, menuSections, routeInfo } from '../navigation';
 
 const hrefs = (s: ReturnType<typeof menuSections>) => s.flatMap((x) => x.items.map((i) => i.href));
 
 describe('navegação', () => {
-  it('a barra tem Início, Nutrição e Treino (o "+" e o "Mais" são botões)', () => {
+  it('a barra tem Nutrição, Treino e Comunidade; o Início é a raiz, não aba', () => {
     expect(PRIMARY_TABS.map((t) => [t.label, t.href])).toEqual([
-      ['Início', '/'],
       ['Nutrição', '/nutrition'],
       ['Treino', '/workout'],
+      ['Comunidade', '/community'],
     ]);
   });
 
@@ -59,6 +59,8 @@ describe('navegação', () => {
     ['/nutrition/foods', 'nutrition'],
     ['/nutrition/goals', 'nutrition'],
     ['/workout/session/abc', 'workout'],
+    ['/community', 'community'],
+    ['/community/g1', 'community'],
     ['/progress', 'more'],
     ['/goals', 'more'],
     ['/profile/connect', 'more'],
@@ -66,5 +68,44 @@ describe('navegação', () => {
     ['/nutritionx', 'more'],
   ])('%s acende %s', (path, key) => {
     expect(activeNavKey(path)).toBe(key);
+  });
+
+  describe('barra de topo: título e voltar', () => {
+    it('o Início não tem voltar', () => {
+      expect(routeInfo('/')).toEqual({ title: 'Início', parent: null, parentTitle: null });
+    });
+
+    it.each([
+      ['/nutrition', 'Nutrição', '/', 'Início'],
+      ['/nutrition/foods', 'Meus alimentos', '/nutrition', 'Nutrição'],
+      ['/nutrition/goals?from=home', 'Metas do dia', '/nutrition', 'Nutrição'],
+      ['/workout/plans/p1', 'Plano de treino', '/workout/plans', 'Planos de treino'],
+      ['/workout/session/s1', 'Treino', '/workout/history', 'Histórico de treino'],
+      ['/progress/records', 'Recordes', '/progress', 'Progresso'],
+      ['/plan', 'Meu plano', '/profile', 'Perfil'],
+      ['/chat/c1', 'Chat', '/', 'Início'],
+      ['/community/g1', 'Comunidade', '/community', 'Comunidade'],
+      ['/students/m1', 'Aluno', '/students', 'Alunos'],
+    ])('%s: "%s", volta para %s', (path, title, parent, parentTitle) => {
+      expect(routeInfo(path)).toEqual({ title, parent, parentTitle });
+    });
+
+    it('rota fora do mapa volta ao ancestral conhecido mais próximo', () => {
+      expect(routeInfo('/nutrition/xyz').parent).toBe('/nutrition');
+      expect(routeInfo('/desconhecida/a/b').parent).toBe('/');
+    });
+
+    it('voltar sempre chega ao Início, sem ciclo', () => {
+      for (const r of ROUTES) {
+        let path: string | null = r.pattern.replace(/:\w+/g, 'x');
+        const visitados = new Set<string>();
+        while (path !== null && path !== '/') {
+          expect(visitados.has(path)).toBe(false);
+          visitados.add(path);
+          path = routeInfo(path).parent;
+        }
+        expect(path).toBe('/');
+      }
+    });
   });
 });

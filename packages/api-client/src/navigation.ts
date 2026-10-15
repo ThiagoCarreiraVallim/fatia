@@ -1,24 +1,29 @@
 /**
  * Navegação comum ao PWA e ao app: a mesma barra e o mesmo menu nas duas pontas.
  *
- * Barra de baixo: Início · Nutrição · [ + ] · Treino · Mais. O "+" é o
+ * Barra de baixo: Nutrição · Treino · [ + ] · Comunidade · Mais. O "+" é o
  * Registrar (`quick-add.ts`); "Mais" abre o menu com todas as outras telas,
  * em seções. No desktop do PWA a barra lateral mostra tudo de uma vez.
+ *
+ * O Início não é aba: é a raiz. Toda outra tela tem a barra de topo com
+ * "voltar" e o título pequeno, como no iOS, e voltar sobe pelo mapa de rotas
+ * (`ROUTES`) até o Início — não pelo histórico, então um link aberto direto
+ * também volta pelo caminho certo.
  */
 
 export type NavPlatform = 'web' | 'mobile';
-export type NavKey = 'home' | 'nutrition' | 'workout' | 'more';
+export type NavKey = 'home' | 'nutrition' | 'workout' | 'community' | 'more';
 
 export interface NavTab {
-  key: Exclude<NavKey, 'more'>;
+  key: Exclude<NavKey, 'home' | 'more'>;
   label: string;
   href: string;
 }
 
 export const PRIMARY_TABS: NavTab[] = [
-  { key: 'home', label: 'Início', href: '/' },
   { key: 'nutrition', label: 'Nutrição', href: '/nutrition' },
   { key: 'workout', label: 'Treino', href: '/workout' },
+  { key: 'community', label: 'Comunidade', href: '/community' },
 ];
 
 export type MenuIcon =
@@ -173,13 +178,105 @@ export function menuSections(opts: {
 }
 
 /**
- * Aba acesa para a rota. Nutrição e Treino acendem em toda a subárvore (Meus
- * alimentos é Nutrição, Planos é Treino); o resto — Progresso, Metas, Perfil,
- * Chat — mora no "Mais".
+ * Aba acesa para a rota. Nutrição, Treino e Comunidade acendem em toda a
+ * subárvore (Meus alimentos é Nutrição, Planos é Treino); o Início não acende
+ * aba nenhuma, e o resto — Progresso, Metas, Perfil, Chat — mora no "Mais".
  */
 export function activeNavKey(pathname: string): NavKey {
   if (pathname === '/') return 'home';
   if (/^\/nutrition(\/|$)/.test(pathname)) return 'nutrition';
   if (/^\/workout(\/|$)/.test(pathname)) return 'workout';
+  if (/^\/community(\/|$)/.test(pathname)) return 'community';
   return 'more';
+}
+
+/** Uma tela no mapa: o título pequeno da barra de topo e para onde "voltar" leva. */
+interface RouteDef {
+  /** Segmentos com `:param` para os dinâmicos. */
+  pattern: string;
+  title: string;
+  /** null só no Início. */
+  parent: string | null;
+}
+
+export const HOME_TITLE = 'Início';
+
+/**
+ * Todas as telas do PWA e do app. Telas dinâmicas têm título genérico; a
+ * própria tela troca pelo nome (plano, conversa, comunidade) quando carrega.
+ */
+export const ROUTES: readonly RouteDef[] = [
+  { pattern: '/', title: HOME_TITLE, parent: null },
+  { pattern: '/nutrition', title: 'Nutrição', parent: '/' },
+  { pattern: '/nutrition/foods', title: 'Meus alimentos', parent: '/nutrition' },
+  { pattern: '/nutrition/goals', title: 'Metas do dia', parent: '/nutrition' },
+  { pattern: '/nutrition/nutrient-targets', title: 'Metas de nutrientes', parent: '/nutrition' },
+  { pattern: '/nutrition/scan', title: 'Escanear produto', parent: '/nutrition' },
+  { pattern: '/nutrition/photo', title: 'Registrar por foto', parent: '/nutrition' },
+  { pattern: '/workout', title: 'Treino', parent: '/' },
+  { pattern: '/workout/history', title: 'Histórico de treino', parent: '/workout' },
+  { pattern: '/workout/plans', title: 'Planos de treino', parent: '/workout' },
+  { pattern: '/workout/plans/:id', title: 'Plano de treino', parent: '/workout/plans' },
+  { pattern: '/workout/quick/:id', title: 'Treino rápido', parent: '/workout' },
+  { pattern: '/workout/session/:id', title: 'Treino', parent: '/workout/history' },
+  { pattern: '/progress', title: 'Progresso', parent: '/' },
+  { pattern: '/progress/records', title: 'Recordes', parent: '/progress' },
+  { pattern: '/goals', title: 'Metas pessoais', parent: '/' },
+  { pattern: '/profile', title: 'Perfil', parent: '/' },
+  { pattern: '/profile/connect', title: 'Conectar sua IA', parent: '/profile' },
+  { pattern: '/profile/tokens', title: 'Conectar sua IA', parent: '/profile' },
+  { pattern: '/plan', title: 'Meu plano', parent: '/profile' },
+  { pattern: '/chat', title: 'Chat', parent: '/' },
+  { pattern: '/chat/:id', title: 'Chat', parent: '/' },
+  { pattern: '/community', title: 'Comunidade', parent: '/' },
+  { pattern: '/community/:id', title: 'Comunidade', parent: '/community' },
+  { pattern: '/students', title: 'Alunos', parent: '/' },
+  { pattern: '/students/:id', title: 'Aluno', parent: '/students' },
+];
+
+export interface RouteInfo {
+  title: string;
+  /** Para onde "voltar" leva; null no Início. */
+  parent: string | null;
+  /** Título da tela de destino do "voltar" (para o rótulo acessível). */
+  parentTitle: string | null;
+}
+
+function segments(path: string): string[] {
+  return path.split(/[?#]/)[0]!.split('/').filter(Boolean);
+}
+
+function match(pattern: string, path: string[]): boolean {
+  const p = segments(pattern);
+  return p.length === path.length && p.every((seg, i) => seg.startsWith(':') || seg === path[i]);
+}
+
+function find(path: string[]): RouteDef | undefined {
+  return ROUTES.find((r) => match(r.pattern, path));
+}
+
+/**
+ * Título e "voltar" da tela. Rota fora do mapa volta ao ancestral conhecido
+ * mais próximo (no fim, o Início), nunca a lugar nenhum.
+ */
+export function routeInfo(pathname: string): RouteInfo {
+  const path = segments(pathname);
+  const def = find(path);
+  let parent: string | null;
+  let title: string;
+  if (def) {
+    parent = def.parent;
+    title = def.title;
+  } else {
+    title = '';
+    parent = '/';
+    for (let n = path.length - 1; n > 0; n--) {
+      if (find(path.slice(0, n))) {
+        parent = '/' + path.slice(0, n).join('/');
+        break;
+      }
+    }
+  }
+  const parentTitle = parent === null ? null : (find(segments(parent))?.title ?? HOME_TITLE);
+  return { title, parent, parentTitle };
 }
