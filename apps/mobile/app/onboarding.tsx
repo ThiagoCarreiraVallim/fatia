@@ -83,8 +83,10 @@ export default function OnboardingScreen() {
   if (eu.isFetched && pesos.isFetched && corpo === null) {
     const inicial = initialBodyForm(eu.data, pesos.data?.logs[0]?.weightKg ?? null);
     setCorpo({ ...inicial, birthDate: isoToBrDate(inicial.birthDate) });
-    if (eu.data?.objective) setObjetivo(eu.data.objective);
-    if (eu.data?.activityLevel) setAtividade(eu.data.activityLevel);
+    // Só se ainda não há escolha: um toque feito antes do perfil chegar manda.
+    const salvo = eu.data;
+    if (salvo?.objective) setObjetivo((atual) => atual ?? salvo.objective);
+    if (salvo?.activityLevel) setAtividade((atual) => atual ?? salvo.activityLevel);
   }
 
   const corpoValido = () =>

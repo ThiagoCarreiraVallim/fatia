@@ -61,11 +61,15 @@ export function OnboardingWizard({ redo = false }: { redo?: boolean }) {
   });
 
   // Preenche uma vez, quando os dois chegam: o que a pessoa digitar depois manda.
+  // Objetivo e atividade só entram se ainda não há escolha: o passo 1 aparece
+  // antes do perfil chegar, e um toque feito nesse meio-tempo não pode ser
+  // trocado pelo valor salvo.
   const ready = me.isFetched && weights.isFetched;
   if (ready && body === null) {
     setBody(initialBodyForm(me.data, weights.data?.logs[0]?.weightKg ?? null));
-    if (me.data?.objective) setObjective(me.data.objective);
-    if (me.data?.activityLevel) setActivity(me.data.activityLevel);
+    const salvo = me.data;
+    if (salvo?.objective) setObjective((atual) => atual ?? salvo.objective);
+    if (salvo?.activityLevel) setActivity((atual) => atual ?? salvo.activityLevel);
   }
 
   const done = () => {

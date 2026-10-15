@@ -95,6 +95,31 @@ describe('OnboardingWizard', () => {
     expect(continuar).toBeEnabled();
   });
 
+  it('o objetivo tocado antes do perfil chegar não é trocado pelo salvo', async () => {
+    let entregar!: (v: Awaited<ReturnType<typeof usersApi.me>>) => void;
+    vi.mocked(usersApi.me).mockReturnValue(new Promise((r) => (entregar = r)));
+    const user = userEvent.setup();
+    renderWizard();
+    await user.click(screen.getByRole('radio', { name: /Manter o peso/ }));
+
+    entregar({
+      id: 'u1',
+      email: 'a@b.c',
+      name: 'Ana',
+      role: 'USER',
+      timezone: 'America/Sao_Paulo',
+      heightCm: 168,
+      sex: 'FEMALE',
+      birthDate: '1994-03-12',
+      activityLevel: 'MODERATE',
+      objective: 'LOSE',
+      onboardedAt: null,
+    } as never);
+    await waitFor(() => expect(usersApi.me).toHaveBeenCalled());
+    await screen.findByRole('radio', { name: /Manter o peso/, checked: true });
+    expect(screen.getByRole('radio', { name: /Perder peso/ })).not.toBeChecked();
+  });
+
   it('o corpo vem preenchido com a altura e a última pesagem', async () => {
     await ateOCorpo();
     expect(await screen.findByLabelText('Altura (cm)')).toHaveValue('168');
