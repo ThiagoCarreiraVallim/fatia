@@ -1,7 +1,9 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import { Target } from 'lucide-react';
 import { greetingLine, progressApi, usersApi } from '@fatia/api-client';
 import { NutritionMacroCard } from '@/components/dashboard/nutrition-macro-card';
 import { NextWorkoutCard } from '@/components/dashboard/next-workout-card';
@@ -36,10 +38,20 @@ export default function HomePage() {
 
   return (
     <div className="space-y-5 px-5 pt-6 pb-4">
-      {/* Welcome */}
-      <section>
-        <h1 className="text-[18px] font-semibold text-foreground">{greeting ?? '\u00a0'}</h1>
-        <p className="text-sm text-muted-foreground">Pronto para dominar o dia?</p>
+      <section className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-[18px] font-semibold text-foreground">{greeting ?? '\u00a0'}</h1>
+          <p className="text-sm text-muted-foreground">Pronto para dominar o dia?</p>
+        </div>
+        {/* As metas do dia a um toque: antes eram Progresso → Perfil → Metas. */}
+        <Link
+          href="/nutrition/goals"
+          aria-label="Metas do dia"
+          className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-white/10 px-4 text-sm font-semibold text-foreground transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Target size={16} className="text-primary" aria-hidden />
+          Metas
+        </Link>
       </section>
 
       {isLoading && (

@@ -569,3 +569,25 @@ test('recalcular metas pelo assistente salva a sugestão e volta às metas', asy
     }
   }
 });
+
+test('a barra leva a todas as telas: Mais → Metas do dia, Perfil, e Início → Metas', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const barra = page.getByRole('navigation', { name: 'Navegação principal' });
+  await expect(barra.getByRole('link')).toHaveText(['Início', 'Nutrição', 'Treino']);
+
+  await page.getByRole('link', { name: 'Metas do dia' }).click();
+  await expect(page).toHaveURL(/\/nutrition\/goals$/);
+
+  // Numa tela fora da barra, o "Mais" fica marcado e o menu chega a ela.
+  await page.getByRole('button', { name: 'Mais', exact: true }).click();
+  const menu = page.getByRole('dialog', { name: 'Menu' });
+  await menu.getByRole('link', { name: /^Progresso/ }).click();
+  await expect(page).toHaveURL(/\/progress$/);
+  await expect(menu).toBeHidden();
+
+  await page.getByRole('button', { name: 'Mais', exact: true }).click();
+  await menu.getByRole('link', { name: /Ver perfil/ }).click();
+  await expect(page).toHaveURL(/\/profile$/);
+});

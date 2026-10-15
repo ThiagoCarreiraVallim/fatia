@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { QUICK_ADD_ITEMS, mealTypeForTime, showQuickAdd, workoutQuickLabel } from '../quick-add';
+import { QUICK_ADD_ITEMS, mealTypeForTime, workoutQuickLabel } from '../quick-add';
 
 const hora = (h: number, m = 0) => new Date(2026, 9, 14, h, m);
 
@@ -37,24 +37,5 @@ describe('workoutQuickLabel', () => {
   it('retoma a sessão aberta em vez de começar outra', () => {
     expect(workoutQuickLabel(true)).toBe('Continuar treino');
     expect(workoutQuickLabel(false)).toBe('Começar treino livre');
-  });
-});
-
-describe('showQuickAdd', () => {
-  it('aparece nas telas do app', () => {
-    for (const p of ['/', '/nutrition', '/progress', '/workout', '/workout/plans/1', '/profile']) {
-      expect(showQuickAdd(p)).toBe(true);
-    }
-  });
-
-  it('some no chat e na sessão de treino', () => {
-    for (const p of ['/chat', '/chat/abc', '/workout/session/xyz']) {
-      expect(showQuickAdd(p)).toBe(false);
-    }
-  });
-
-  it('não confunde rotas com o mesmo começo', () => {
-    expect(showQuickAdd('/chatter')).toBe(true);
-    expect(showQuickAdd('/workout/sessions')).toBe(true);
   });
 });

@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { QuickAdd } from '../quick-add';
+import { QuickAddProvider, useQuickAdd } from '../quick-add';
 
 const nav = vi.hoisted(() => ({ pathname: '/', push: vi.fn() }));
 vi.mock('next/navigation', () => ({
@@ -52,11 +52,23 @@ import { workoutApi } from '@fatia/api-client';
 const getActiveSession = vi.mocked(workoutApi.getActiveSession);
 const startSession = vi.mocked(workoutApi.startSession);
 
+// O gatilho de verdade mora na barra (`bottom-nav.tsx`); aqui basta quem chame `open`.
+function Gatilho() {
+  const { open } = useQuickAdd();
+  return (
+    <button type="button" onClick={open}>
+      Registrar
+    </button>
+  );
+}
+
 function renderQuickAdd() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <QuickAdd />
+      <QuickAddProvider>
+        <Gatilho />
+      </QuickAddProvider>
     </QueryClientProvider>,
   );
 }
@@ -68,7 +80,7 @@ async function abrirMenu() {
   return { user, menu: screen.getByRole('dialog') };
 }
 
-describe('QuickAdd', () => {
+describe('QuickAddProvider', () => {
   beforeEach(() => {
     nav.pathname = '/';
     getActiveSession.mockResolvedValue(null);
@@ -124,11 +136,5 @@ describe('QuickAdd', () => {
     await user.click(treino);
     await waitFor(() => expect(nav.push).toHaveBeenCalledWith('/workout'));
     expect(startSession).toHaveBeenCalledTimes(1);
-  });
-
-  it('não aparece no chat, onde o campo de mensagem ocupa o rodapé', () => {
-    nav.pathname = '/chat/abc';
-    renderQuickAdd();
-    expect(screen.queryByRole('button', { name: 'Registrar' })).not.toBeInTheDocument();
   });
 });

@@ -36,11 +36,3 @@ export function mealTypeForTime(now: Date): MealType {
 export function workoutQuickLabel(hasActiveSession: boolean): string {
   return hasActiveSession ? 'Continuar treino' : 'Começar treino livre';
 }
-
-/**
- * Onde o "+" não aparece: no chat o campo de mensagem ocupa o rodapé, e na
- * sessão de treino a tela tem os próprios controles embaixo.
- */
-export function showQuickAdd(pathname: string): boolean {
-  return !/^\/(chat|workout\/session)(\/|$)/.test(pathname);
-}

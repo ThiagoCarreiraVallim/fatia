@@ -1,13 +1,12 @@
 'use client';
 
-import { useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { createContext, useContext, useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Apple, Dumbbell, Droplet, Footprints, Plus, Scale, type LucideIcon } from 'lucide-react';
+import { Apple, Dumbbell, Droplet, Footprints, Scale, type LucideIcon } from 'lucide-react';
 import {
   QUICK_ADD_ITEMS,
   mealTypeForTime,
-  showQuickAdd,
   workoutApi,
   workoutQuickLabel,
   type MealType,
@@ -36,15 +35,21 @@ const ICON: Record<QuickAddKey, LucideIcon> = {
 
 type Target = 'water' | 'weight' | 'steps' | { meal: { date: string; mealType: MealType } };
 
+const QuickAddContext = createContext<{ open: () => void }>({ open: () => undefined });
+
+/** Abre o menu Registrar. Quem chama é o "+" da barra de baixo e o da barra lateral. */
+export function useQuickAdd() {
+  return useContext(QuickAddContext);
+}
+
 /**
- * O "+" global: qualquer registro a um toque, de qualquer tela. Sem IA no
+ * O menu Registrar: qualquer registro a um toque, de qualquer tela. Sem IA no
  * plano Free, é o caminho mais curto para registrar.
  *
  * O menu só escolhe; quem registra são os drawers de sempre, os mesmos da
- * Nutrição e do dashboard.
+ * Nutrição e do dashboard. O gatilho mora na navegação (`useQuickAdd`).
  */
-export function QuickAdd() {
-  const pathname = usePathname();
+export function QuickAddProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const qc = useQueryClient();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -71,8 +76,6 @@ export function QuickAdd() {
     },
   });
 
-  if (!showQuickAdd(pathname)) return null;
-
   const choose = (key: QuickAddKey) => {
     if (key === 'workout') {
       // Retoma a sessão aberta: a API criaria outra a cada toque.
@@ -94,21 +97,8 @@ export function QuickAdd() {
   const meal = typeof target === 'object' && target !== null ? target.meal : null;
 
   return (
-    <>
-      {/*
-        Respiro para o último card não ficar embaixo do "+". Mora aqui, e não no
-        `pb-*` do `<main>`, porque o chat calcula a altura a partir daquele padding
-        (`chat-cabe-na-tela.test.ts`) — e no chat o "+" não aparece.
-      */}
-      <div aria-hidden className="h-8 shrink-0" />
-      <button
-        type="button"
-        aria-label="Registrar"
-        onClick={() => setMenuOpen(true)}
-        className="fixed right-4 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-black/40 transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-      >
-        <Plus size={28} strokeWidth={2.5} />
-      </button>
+    <QuickAddContext.Provider value={{ open: () => setMenuOpen(true) }}>
+      {children}
 
       <Drawer open={menuOpen} onOpenChange={setMenuOpen}>
         <DrawerContent className="px-4 pb-6">
@@ -155,6 +145,6 @@ export function QuickAdd() {
       <LogWaterDrawer open={target === 'water'} onClose={close} />
       <LogWeightDrawer open={target === 'weight'} onClose={close} />
       <LogStepsDrawer open={target === 'steps'} onClose={close} />
-    </>
+    </QuickAddContext.Provider>
   );
 }

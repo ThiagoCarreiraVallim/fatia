@@ -118,6 +118,20 @@ test.describe('drawers de registro', () => {
     await snap(page, '27-registrar-menu', false);
   });
 
+  test('menu "Mais" (celular) e barra lateral (desktop)', async ({ page, isMobile }) => {
+    await page.goto('/progress');
+    await settle(page);
+    if (!isMobile) {
+      await snap(page, '36-barra-lateral', false);
+      return;
+    }
+    const mais = page.getByRole('button', { name: 'Mais', exact: true });
+    if (!(await appears(mais))) return;
+    await mais.click();
+    await appears(page.getByRole('dialog', { name: 'Menu' }));
+    await snap(page, '35-menu-mais', false);
+  });
+
   test('dashboard: água e peso', async ({ page }) => {
     await page.goto('/');
     await settle(page);
