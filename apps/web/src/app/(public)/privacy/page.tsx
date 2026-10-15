@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 };
 
 /** Atualizar sempre que o conteúdo mudar de forma material. */
-const LAST_UPDATED = '26 de setembro de 2026';
+const LAST_UPDATED = '15 de outubro de 2026';
 
 export default function PrivacyPage() {
   return (
@@ -51,6 +51,10 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Progresso:</strong> peso corporal, passos, hidratação e metas pessoais.
+          </li>
+          <li>
+            <strong>Plano:</strong> se você assina o PRO, a origem (web ou loja), o status, o
+            intervalo e as datas da assinatura. A base legal é a execução do contrato.
           </li>
         </ul>
         <p>
@@ -109,7 +113,9 @@ export default function PrivacyPage() {
             <strong>Senhas.</strong> Ficam no provedor de identidade, não conosco.
           </li>
           <li>
-            <strong>Meios de pagamento.</strong> A instância pública é gratuita.
+            <strong>Cartão e CPF.</strong> Se você assina o PRO pela web, o CPF vai ao processador
+            de pagamento para emitir a cobrança e não é guardado pelo Fatia; dados de cartão nunca
+            passam por nós. Guardamos só o identificador da assinatura, o status e as datas.
           </li>
           <li>
             <strong>Localização, contatos, agenda</strong> ou qualquer dado do seu dispositivo além
@@ -253,6 +259,16 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Provedor de infraestrutura</strong> — hospeda o servidor e o banco.
+          </li>
+          <li>
+            <strong>Asaas</strong> — processa a assinatura do PRO feita pela web. Recebe nome,
+            e-mail e CPF para emitir a cobrança, e os dados de pagamento você informa direto a ele.
+            Não recebe seus dados de saúde.
+          </li>
+          <li>
+            <strong>Apple, Google e RevenueCat</strong> — na assinatura feita pelo app, a loja
+            processa o pagamento e a RevenueCat nos informa o estado da compra. Recebem só o
+            identificador da sua conta no Fatia, sem e-mail e sem dados de saúde.
           </li>
           <li>
             <strong>Open Food Facts</strong> — consultado quando você escaneia o código de barras de

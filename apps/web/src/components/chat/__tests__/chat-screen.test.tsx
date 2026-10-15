@@ -70,6 +70,7 @@ let listaLiberada: Promise<void> = Promise.resolve();
 let cota: ChatQuota;
 let memorias: ChatMemory[] = [];
 let recursos = { photos: false, dictation: false };
+let acesso: { allowed?: boolean; reason?: string } = {};
 const transcribeAudioMock = vi.fn(async (_audio: Blob) => ({ text: 'registra 200 g de frango' }));
 const deleteChatMemoryMock = vi.fn(async (id: string) => {
   memorias = memorias.filter((m) => m.id !== id);
@@ -91,7 +92,7 @@ vi.mock('@fatia/api-client', async () => {
       await listaLiberada;
       return [];
     }),
-    getChatAvailability: vi.fn(async () => ({ available: true, ...recursos })),
+    getChatAvailability: vi.fn(async () => ({ available: true, ...recursos, ...acesso })),
     transcribeAudio: transcribeAudioMock,
     listChatToolTitles: vi.fn(async () => ({
       log_meal: 'Registrar refeição',
@@ -175,6 +176,7 @@ beforeEach(() => {
   };
   memorias = [];
   recursos = { photos: false, dictation: false };
+  acesso = {};
   deleteChatMemoryMock.mockClear();
   pushMock.mockClear();
   listaLiberada = Promise.resolve();
@@ -473,6 +475,43 @@ describe('ChatScreen', () => {
 
     expect(await screen.findByText(/Sua sessão expirou/)).toBeInTheDocument();
     expect(screen.queryByText(/Bearer recusado/)).not.toBeInTheDocument();
+  });
+
+  it('no Free, o chat mostra o que o PRO acrescenta e os dois caminhos, sem caixa de mensagem', async () => {
+    acesso = { allowed: false, reason: 'plan_required' };
+    montar();
+
+    expect(
+      await screen.findByRole('heading', { name: /o chat com a ia faz parte do pro/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /assinar pro/i })).toHaveAttribute(
+      'href',
+      '/plan?recurso=chat',
+    );
+    expect(screen.getByRole('link', { name: /sua própria ia pelo mcp/i })).toHaveAttribute(
+      'href',
+      '/profile/connect',
+    );
+    expect(
+      screen.queryByRole('textbox', { name: 'Mensagem para o Fatia' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('o plano que acaba no meio da conversa leva ao plano, sem "tentar de novo"', async () => {
+    montar();
+    await enviar('oi');
+    fontes[0].emitir(
+      { event: 'error', data: { code: 'AI_PLAN_REQUIRED', message: 'plano' } },
+      { event: 'done', data: { status: 'error' } },
+    );
+    fontes[0].fechar();
+
+    expect(await screen.findByText(/faz parte do plano PRO/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ver o plano PRO' })).toHaveAttribute(
+      'href',
+      '/plan?recurso=chat',
+    );
+    expect(screen.queryByRole('button', { name: 'Tentar de novo' })).not.toBeInTheDocument();
   });
 
   it('erro antes da primeira palavra aparece no turno de agora, e não na resposta anterior', async () => {

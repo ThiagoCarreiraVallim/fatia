@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Lock } from 'lucide-react';
 import { usersApi, type MenuSection } from '@fatia/api-client';
 import {
   Drawer,
@@ -13,6 +13,7 @@ import {
   DrawerTitle,
 } from '@/components/ui/drawer';
 import { cn } from '@/lib/utils';
+import { PlanBadge } from '@/components/billing/plan-badge';
 import { MENU_ICON } from './nav-icons';
 import { useNavMenu } from './use-nav-menu';
 
@@ -58,6 +59,17 @@ export function MenuLinks({
                         )}
                       >
                         {item.label}
+                        {item.locked && (
+                          <>
+                            <Lock
+                              size={12}
+                              className="ms-1.5 inline align-[-1px] text-muted-foreground"
+                              aria-hidden
+                            />
+                            <PlanBadge tier="PRO" className="ms-1.5 px-1.5 py-0 text-[10px]" />
+                            <span className="sr-only"> (exige o plano PRO)</span>
+                          </>
+                        )}
                       </span>
                       {!compact && (
                         <span className="block text-xs text-muted-foreground">

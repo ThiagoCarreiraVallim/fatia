@@ -70,3 +70,21 @@ describe('política de privacidade — reconhecimento por foto', () => {
     expect(ia).toMatch(/GPS/i);
   });
 });
+
+describe('política de privacidade — plano PRO (ADR 024)', () => {
+  it('não diz mais que a instância é gratuita sem meio de pagamento', () => {
+    render(<PrivacyPage />);
+    expect(secao('O que NÃO coletamos')).not.toMatch(/instância pública é gratuita/i);
+    // O que continua verdade: cartão nunca passa pelo Fatia e o CPF não fica.
+    expect(secao('O que NÃO coletamos')).toMatch(/cartão nunca/i);
+    expect(secao('O que NÃO coletamos')).toMatch(/não é guardado/i);
+  });
+
+  it('lista os processadores de pagamento e o que cada um recebe', () => {
+    render(<PrivacyPage />);
+    const terceiros = secao('Com quem compartilhamos');
+    expect(terceiros).toMatch(/Asaas.*nome, e-mail e CPF/s);
+    expect(terceiros).toMatch(/RevenueCat/);
+    expect(terceiros).toMatch(/só o identificador da sua conta/i);
+  });
+});

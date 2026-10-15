@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/lib/auth-server';
 import { ProfileMetrics } from '@/components/profile/profile-metrics';
 import { ProfessionalPanelLink } from '@/components/sharing/professional-panel-link';
 import { AccountSection } from '@/components/profile/account-section';
+import { PlanSection } from '@/components/billing/plan-section';
 
 interface MenuItemProps {
   href: string;
@@ -81,6 +82,8 @@ export default async function ProfilePage() {
           subtitle="O que guardamos, e como exportar ou apagar"
         />
       </nav>
+
+      <PlanSection />
 
       <AccountSection />
 

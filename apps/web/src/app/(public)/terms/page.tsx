@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: 'As regras de uso da instância pública do Fatia.',
 };
 
-const LAST_UPDATED = '3 de agosto de 2026';
+const LAST_UPDATED = '15 de outubro de 2026';
 
 export default function TermsPage() {
   return (
@@ -85,16 +85,30 @@ export default function TermsPage() {
 
       <LegalSection title="Custo e disponibilidade">
         <p>
-          A instância pública é <strong>gratuita</strong>. Não há plano pago, e nenhum custo de IA é
-          cobrado de você: o processamento do Claude corre na sua própria assinatura.
+          A instância pública tem dois planos. O <strong>Free</strong> é gratuito e inclui o app
+          inteiro — registro de refeições, treino, água, peso, passos, metas e progresso — e a
+          conexão com a sua própria IA pelo MCP, cujo processamento corre na sua assinatura dela.
         </p>
         <p>
-          Se a IA hospedada pelo Fatia for ativada na sua conta, quem paga a inferência é o projeto,
-          e não você. Por isso ela tem <strong>limite diário de uso</strong>. Ao atingir o limite, a
-          função de IA fica indisponível até o dia seguinte e o registro manual continua funcionando
-          normalmente —{' '}
-          <strong>em nenhuma hipótese isso vira cobrança ou oferta de plano pago</strong>. O limite
-          é uma contenção de custo do projeto, não um funil de vendas.
+          O <strong>PRO</strong> acrescenta a IA hospedada pelo Fatia: chat, ditado e registro de
+          refeição por foto. Custa <strong>R$ 19,90 por mês</strong> ou{' '}
+          <strong>R$ 179 por ano</strong>, com <strong>renovação automática</strong> ao fim de cada
+          período, até você cancelar. Nenhuma função de registro, leitura, exportação ou exclusão
+          dos seus dados depende do plano.
+        </p>
+        <p>
+          <strong>Assinatura pela web</strong> (Pix, boleto ou cartão, processados pelo Asaas): você
+          cancela em &ldquo;Meu plano&rdquo; quando quiser, e o PRO continua até o fim do período já
+          pago. Você tem <strong>7 dias de arrependimento</strong> a partir da contratação (Código
+          de Defesa do Consumidor, art. 49): pedindo nesse prazo, devolvemos o valor pago.{' '}
+          <strong>Assinatura pelo app</strong>: é feita e cancelada na App Store ou no Google Play,
+          e reembolso e arrependimento seguem a política da loja.
+        </p>
+        <p>
+          Se um pagamento atrasar, o PRO continua por <strong>7 dias de carência</strong>; depois a
+          conta volta ao Free, sem perder nenhum dado. A IA hospedada tem também um{' '}
+          <strong>limite diário de uso</strong>, inclusive no PRO: ao atingi-lo, ela fica
+          indisponível até o dia seguinte e o registro manual continua funcionando normalmente.
         </p>
         <p>
           Em contrapartida, e sendo direto: <strong>não há SLA.</strong> É um projeto mantido por

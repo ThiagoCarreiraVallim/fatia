@@ -21,7 +21,8 @@ import {
   useAuiState,
 } from '@assistant-ui/react';
 import { useLangGraphInterruptState } from '@assistant-ui/react-langgraph';
-import { erroDoChat, textoDeErroDoChat } from '@fatia/api-client';
+import Link from 'next/link';
+import { erroDoChat, planHref, textoDeErroDoChat } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
 import { field, ghostButton } from '@/components/elements/surfaces';
 import {
@@ -97,11 +98,23 @@ function useLastQuestion(): string {
 function FailedAnswer({ error }: { error: unknown }) {
   const lastQuestion = useLastQuestion();
   const aui = useAui();
+  const erro = erroDoChat(error);
+  // O plano acabou no meio da conversa (ADR 024): tentar de novo daria o mesmo 402.
+  if (erro.code === 'AI_PLAN_REQUIRED') {
+    return (
+      <div role="alert" className={cn(field, 'w-full space-y-2 rounded-2xl px-4 py-3 text-sm')}>
+        <p>{textoDeErroDoChat(erro)}</p>
+        <Link href={planHref('chat')} className="font-semibold text-primary underline">
+          Ver o plano PRO
+        </Link>
+      </div>
+    );
+  }
   return (
     <ErrorState
       className="max-w-none"
       title="A resposta falhou"
-      detail={textoDeErroDoChat(erroDoChat(error))}
+      detail={textoDeErroDoChat(erro)}
       retryLabel="Tentar de novo"
       // Reenvia a pergunta como mensagem nova: o estado da conversa está no
       // agente, e refazer "o turno do meio" exigiria bifurcar o checkpoint.

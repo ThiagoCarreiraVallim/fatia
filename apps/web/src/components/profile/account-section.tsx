@@ -149,6 +149,10 @@ export function AccountSection() {
               <p className="mt-1 text-xs text-muted-foreground">
                 Se quiser guardar uma cópia, exporte seus dados antes.
               </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Assinatura do PRO feita aqui na web é cancelada junto. Feita pelo app, cancele na
+                App Store ou no Google Play — a loja continua cobrando até você cancelar lá.
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="confirmar-exclusao">

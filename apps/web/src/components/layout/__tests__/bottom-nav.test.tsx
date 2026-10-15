@@ -124,6 +124,20 @@ describe('BottomNav', () => {
     expect(hrefs(menu)).not.toContain('/chat');
   });
 
+  it('no Free, o chat aparece com cadeado e selo PRO e leva ao plano', async () => {
+    availability.mockResolvedValue({
+      available: true,
+      allowed: false,
+      reason: 'plan_required',
+    } as never);
+    renderNav();
+    const menu = await abrirMais();
+    const chat = await within(menu).findByRole('link', { name: /Chat/ });
+    expect(chat).toHaveAttribute('href', '/plan?recurso=chat');
+    expect(chat).toHaveTextContent(/PRO/);
+    expect(chat).toHaveTextContent(/exige o plano PRO/);
+  });
+
   it('com IA disponível, o chat entra no menu', async () => {
     availability.mockResolvedValue({ available: true } as never);
     renderNav();

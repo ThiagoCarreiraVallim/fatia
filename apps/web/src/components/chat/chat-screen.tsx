@@ -11,6 +11,7 @@ import {
 } from './chat-runtime-provider';
 import { GavetaDeConversas } from './conversas';
 import { GavetaDeMemorias } from './memorias';
+import { UpsellIA } from './upsell-ia';
 import { ChatThread } from './thread';
 
 /**
@@ -69,6 +70,8 @@ export function ChatScreen() {
         <EmptyState className="my-auto max-w-none self-center">
           <EmptyStateGreeting>O chat com IA não está ligado nesta instância.</EmptyStateGreeting>
         </EmptyState>
+      ) : disponivel?.reason === 'plan_required' ? (
+        <UpsellIA />
       ) : (
         <ChatThread />
       )}
