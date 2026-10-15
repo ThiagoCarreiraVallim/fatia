@@ -1,6 +1,6 @@
 # ADR 026 — Consentimento por escopo ao entrar na comunidade
 
-**Status:** Proposed
+**Status:** Accepted
 **Data:** 2026-10-13
 
 ## Contexto
@@ -51,3 +51,16 @@ O dashboard da academia/influencer precisa mostrar dados dos membros. Dado de sa
 - **Só agregados:** rejeitado — não entrega o que o dono precisa para acompanhar o membro.
 - **Entrar implica compartilhar tudo:** rejeitado — consentimento genérico para dado sensível não
   atende a LGPD e destrói a confiança no app.
+
+## Atualização — decisões da implementação (2026-10-15)
+
+- A tela de consentimento aparece **no convite** (`/c/<token>`), **na entrada por código** e ao
+  **editar** o compartilhamento na tela da comunidade. Mostra quem da equipe vai ver cada escopo.
+- **Reescrever o consentimento da comunidade substitui** os vínculos da pessoa naquela comunidade;
+  o ajuste fino por pessoa da equipe (`grant_data_sharing`) continua existindo depois.
+- **O leque roda nos dois sentidos:** quando alguém entra (ou é promovido) na equipe, recebe os
+  vínculos de todo membro que já consentiu; quando sai, os vínculos dele são revogados.
+- Entrada com aprovação guarda o consentimento na membership pendente; os vínculos só nascem na
+  aprovação.
+- `assertReadable` passa a usar `canReceiveLink` (antes estava fixo em `PROFESSIONAL`). `MEMBER` e
+  `ADMIN` continuam nunca lendo; toda leitura continua registrada.

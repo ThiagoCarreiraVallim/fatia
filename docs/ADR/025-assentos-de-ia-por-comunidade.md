@@ -1,6 +1,6 @@
 # ADR 025 — Comunidades pagam a IA por assentos escolhidos
 
-**Status:** Proposed
+**Status:** Accepted
 **Data:** 2026-10-13
 
 ## Contexto
@@ -54,3 +54,24 @@ custo previsível por plano contratado.
   de quem recebe IA.
 - **Os dois modelos convivendo:** rejeitado por ora — dobra a superfície de cobrança sem demanda
   comprovada.
+
+## Atualização — decisões da implementação (2026-10-15)
+
+- **Preço:** R$ 14,90 por assento por mês (`BILLING_SEAT_MONTHLY_CENTS=1490`), 25% abaixo do PRO
+  individual, sem mínimo de assentos. Cobrança recorrente mensal no Asaas (Pix, boleto ou cartão),
+  com o CPF ou CNPJ de quem paga usado só na criação do cliente, sem ser guardado.
+- **Um pool por comunidade** (`GroupSeatPool.groupId` único). Reativar depois de cancelar reusa a
+  mesma linha.
+- **Aumento no meio do ciclo vale na hora** e gera uma cobrança avulsa proporcional aos dias que
+  faltam (`GroupSeatAdjustment`); a recorrente passa ao valor novo. Abaixo do mínimo do Asaas
+  (R$ 5,00) a diferença não é cobrada.
+- **Redução vale na renovação** (`nextPeriodSeats`) e só é aceita se os assentos atribuídos
+  couberem no total novo — o dono tira o assento de alguém antes, nunca o sistema.
+- **Assento só para membership `ACTIVE`.** Sair ou ser removido da comunidade revoga o assento na
+  mesma transação.
+- **Webhook único** (`/billing/webhooks/asaas`): o evento procura a assinatura pessoal, depois o
+  pool, depois o ajuste avulso; a regra de cada evento é a mesma do PRO pessoal (carência de 7 dias).
+- **PRO pessoal e assento:** a pessoa continua PRO; o uso de IA é atribuído à assinatura pessoal
+  (`paidBy=USER`), para a comunidade não pagar por quem já paga.
+- Criar a comunidade, convidar e comprar/atribuir assentos ficam na API nesta fase; as telas
+  chegam com o painel da Fase 6.
