@@ -373,6 +373,32 @@ describe('AccountService', () => {
       expect(order).toEqual(['checkpoint', 'prisma']);
     });
 
+    it('roda os ganchos antes de apagar, e um gancho que falha aborta tudo (ADR 024)', async () => {
+      prisma.user.findUnique.mockResolvedValue(USER);
+      const gancho = { antesDeApagar: jest.fn(async (_id: string) => undefined) };
+      const comGancho = new AccountService(
+        prisma as unknown as PrismaService,
+        logto as unknown as LogtoManagementService,
+        purga as unknown as CheckpointPurgeService,
+        [gancho],
+      );
+
+      await comGancho.deleteAccount('user-A', DELETE_CONFIRMATION);
+      expect(gancho.antesDeApagar).toHaveBeenCalledWith('user-A');
+      expect(prisma.user.delete).toHaveBeenCalled();
+
+      prisma.user.delete.mockClear();
+      logto.deleteUser.mockClear();
+      gancho.antesDeApagar.mockRejectedValueOnce(new Error('Asaas fora do ar'));
+      await expect(comGancho.deleteAccount('user-A', DELETE_CONFIRMATION)).rejects.toThrow(
+        'Asaas fora do ar',
+      );
+      // Nada foi apagado: nem identidade, nem dados. A assinatura continua
+      // cancelável e a pessoa tenta de novo.
+      expect(logto.deleteUser).not.toHaveBeenCalled();
+      expect(prisma.user.delete).not.toHaveBeenCalled();
+    });
+
     it('se a purga do agente falhar, a conta fica inteira e o erro sobe', async () => {
       prisma.user.findUnique.mockResolvedValue(USER);
       purga.apagarDoUsuario.mockRejectedValueOnce(new Error('banco fora'));

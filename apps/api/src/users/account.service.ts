@@ -1,7 +1,15 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { LogtoManagementService } from '../auth/logto-management.service';
 import { CheckpointPurgeService } from '../chat/checkpoint-purge.service';
+import { ACCOUNT_DELETION_HOOKS, type AccountDeletionHook } from './account-deletion.hook';
 
 /** Frase exata que o usuário precisa confirmar para apagar a conta. */
 export const DELETE_CONFIRMATION = 'DELETAR MINHA CONTA';
@@ -19,6 +27,9 @@ export class AccountService {
     private readonly prisma: PrismaService,
     private readonly logtoManagement: LogtoManagementService,
     private readonly checkpoints: CheckpointPurgeService,
+    @Optional()
+    @Inject(ACCOUNT_DELETION_HOOKS)
+    private readonly ganchos: AccountDeletionHook[] = [],
   ) {}
 
   /**
@@ -316,6 +327,11 @@ export class AccountService {
       select: { id: true, email: true, logtoSub: true },
     });
     if (!user) throw new NotFoundException('User not found');
+
+    // Antes de tudo, e podendo abortar: encerrar a assinatura paga (ADR 024).
+    // Se o provedor não responder, a conta fica inteira e o erro sobe — apagar
+    // a conta e seguir cobrando seria o pior resultado possível.
+    for (const gancho of this.ganchos ?? []) await gancho.antesDeApagar(userId);
 
     // Ordem deliberada: Logto primeiro. Se apagássemos o User local antes e o
     // Logto falhasse, a identidade órfã voltaria a provisionar um User novo no
