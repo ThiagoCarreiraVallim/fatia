@@ -114,12 +114,7 @@ export default function NutrientTargetsScreen() {
     ]);
 
   return (
-    <Screen
-      back
-      title="Metas personalizadas"
-      onRefresh={() => void metas.refetch()}
-      refreshing={metas.isRefetching}
-    >
+    <Screen onRefresh={() => void metas.refetch()} refreshing={metas.isRefetching}>
       <View className="gap-5 p-4">
         <Text className="text-sm text-muted-foreground">
           Controle nutrientes além dos macros — sódio, açúcar, fibra... Defina um limite (máx) e/ou

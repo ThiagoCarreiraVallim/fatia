@@ -52,12 +52,7 @@ export default function PlansScreen() {
   }
 
   return (
-    <Screen
-      back
-      title="Planos de treino"
-      refreshing={plans.isRefetching}
-      onRefresh={() => void plans.refetch()}
-    >
+    <Screen refreshing={plans.isRefetching} onRefresh={() => void plans.refetch()}>
       <View className="gap-5 px-5 pb-4 pt-4">
         {showForm ? (
           <View className="gap-2">

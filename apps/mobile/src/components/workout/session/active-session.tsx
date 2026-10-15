@@ -81,7 +81,7 @@ export function ActiveSession({
   return (
     <>
       <ExerciseDetailHost>
-        <Screen back title="Treino" scroll={false} onBack={confirmExit}>
+        <Screen title="Treino em andamento" scroll={false} onBack={confirmExit}>
           <SessionHeader
             startedAt={session.startedAt}
             progress={sessionProgress(groups)}

@@ -76,7 +76,7 @@ export default function ScanScreen() {
 
   return (
     <>
-      <Screen title="Escanear produto" back scroll={false}>
+      <Screen scroll={false}>
         <View className="flex-1 px-5 pb-4 pt-2">
           <View className="flex-1 overflow-hidden rounded-lg border border-border">
             <BarcodeCamera onLido={aoLer} ativo={resultado === null && !consultar.isPending} />

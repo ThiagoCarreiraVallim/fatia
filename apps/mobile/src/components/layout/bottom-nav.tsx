@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePathname, useRouter } from 'expo-router';
-import { Apple, Dumbbell, Home, Menu, Plus } from 'lucide-react-native';
+import { Apple, Dumbbell, Menu, Plus, Users } from 'lucide-react-native';
 import { PRIMARY_TABS, activeNavKey } from '@fatia/api-client';
 import { DrawerLayer } from '@/components/ui';
 import { cn } from '@/components/ui/utils';
@@ -10,11 +10,12 @@ import { MenuMais } from './menu-mais';
 import { useRegistroRapido } from './registro-rapido';
 import { cores } from '@/theme/cores';
 
-const ICONE = { home: Home, nutrition: Apple, workout: Dumbbell } as const;
+const ICONE = { nutrition: Apple, workout: Dumbbell, community: Users } as const;
 
 /**
- * Equivalente de `apps/web/src/components/layout/app-nav.tsx`: Início ·
- * Nutrição · [ + ] · Treino · Mais, de `@fatia/api-client`.
+ * Equivalente de `apps/web/src/components/layout/bottom-nav.tsx`: Nutrição ·
+ * Treino · [ + ] · Comunidade · Mais, de `@fatia/api-client`. Sem aba Início:
+ * a barra de topo (`top-bar.tsx`) volta a ele de qualquer tela, como no iOS.
  *
  * O "+" no centro é o Registrar — o registro a um toque de qualquer tela, que
  * é o que o plano Free tem no lugar da IA. "Mais" abre o menu com o resto.
@@ -27,7 +28,7 @@ export function BottomNav() {
   const [menuAberto, setMenuAberto] = useState(false);
   const ativa = activeNavKey(pathname);
 
-  const aba = (key: 'home' | 'nutrition' | 'workout') => {
+  const aba = (key: 'nutrition' | 'workout' | 'community') => {
     const tab = PRIMARY_TABS.find((t) => t.key === key)!;
     const Icone = ICONE[key];
     const acesa = ativa === key;
@@ -61,8 +62,8 @@ export function BottomNav() {
         className="absolute inset-x-0 bottom-0 z-50 rounded-t-xl border-t border-white/10 bg-muted"
       >
         <View className="h-20 flex-row items-center justify-around px-1">
-          {aba('home')}
           {aba('nutrition')}
+          {aba('workout')}
           <View className="flex-1 items-center justify-center">
             <Pressable
               accessibilityRole="button"
@@ -74,7 +75,7 @@ export function BottomNav() {
               <Plus size={28} strokeWidth={2.5} color={cores.background} />
             </Pressable>
           </View>
-          {aba('workout')}
+          {aba('community')}
           <Pressable
             accessibilityRole="tab"
             accessibilityLabel="Mais"

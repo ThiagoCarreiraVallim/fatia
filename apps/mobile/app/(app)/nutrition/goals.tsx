@@ -90,12 +90,7 @@ export default function NutritionGoalsScreen() {
   );
 
   return (
-    <Screen
-      back
-      title="Metas"
-      onRefresh={() => void metas.refetch()}
-      refreshing={metas.isRefetching}
-    >
+    <Screen onRefresh={() => void metas.refetch()} refreshing={metas.isRefetching}>
       <View className="gap-4 p-4">
         <Pressable
           accessibilityRole="link"

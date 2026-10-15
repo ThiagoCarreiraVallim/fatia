@@ -84,14 +84,14 @@ export default function PlanScreen() {
 
   if (plano.isPending) {
     return (
-      <Screen back title="Meu plano">
+      <Screen>
         <LoadingState />
       </Screen>
     );
   }
   if (plano.isError) {
     return (
-      <Screen back title="Meu plano">
+      <Screen>
         <ErrorState error={plano.error} onRetry={() => void plano.refetch()} />
       </Screen>
     );
@@ -101,12 +101,7 @@ export default function PlanScreen() {
   const pro = p.tier === 'PRO';
 
   return (
-    <Screen
-      back
-      title="Meu plano"
-      onRefresh={() => void plano.refetch()}
-      refreshing={plano.isRefetching}
-    >
+    <Screen onRefresh={() => void plano.refetch()} refreshing={plano.isRefetching}>
       <View className="gap-5 px-5 pb-4 pt-2">
         <View className="rounded-2xl border border-border bg-card p-4">
           <View className="flex-row items-center gap-2">

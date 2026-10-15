@@ -62,7 +62,7 @@ export default function PhotoScreen() {
 
   return (
     <>
-      <Screen title="Registrar por foto" back scroll={false}>
+      <Screen scroll={false}>
         <View className="flex-1 px-5 pb-4 pt-2">
           <View className="flex-1 overflow-hidden rounded-lg border border-border">
             <PhotoCapture

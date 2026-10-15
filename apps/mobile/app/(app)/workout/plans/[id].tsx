@@ -3,7 +3,7 @@ import { AccessibilityInfo, Alert, Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { Check, Clock, Dumbbell, Lightbulb, Play, Plus, Trash2 } from 'lucide-react-native';
+import { Check, Clock, Dumbbell, Lightbulb, Pencil, Play, Plus, Trash2 } from 'lucide-react-native';
 import {
   ApiError,
   isCardioExercise,
@@ -12,6 +12,7 @@ import {
   type WorkoutPlanExercise,
 } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
+import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
 import { Button, EmptyState, ErrorState, Input, LoadingState } from '@/components/ui';
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
@@ -168,7 +169,7 @@ export default function PlanDetailScreen() {
 
   if (plan.isLoading) {
     return (
-      <Screen back title="Plano">
+      <Screen>
         <LoadingState />
       </Screen>
     );
@@ -176,7 +177,7 @@ export default function PlanDetailScreen() {
 
   if (plan.isError) {
     return (
-      <Screen back title="Plano">
+      <Screen>
         <ErrorState error={plan.error} onRetry={() => void plan.refetch()} />
       </Screen>
     );
@@ -184,7 +185,7 @@ export default function PlanDetailScreen() {
 
   if (!plan.data) {
     return (
-      <Screen back title="Plano">
+      <Screen>
         <EmptyState title="Plano não encontrado." />
       </Screen>
     );
@@ -228,56 +229,54 @@ export default function PlanDetailScreen() {
   return (
     <ExerciseDetailHost>
       <Screen
-        back
-        title="Plano"
-        refreshing={plan.isRefetching}
-        onRefresh={() => void plan.refetch()}
-      >
-        <View className="gap-4 px-5 pb-4 pt-2">
-          <View className="flex-row items-center gap-2">
-            {editingName ? (
-              <>
-                <Input
-                  autoFocus
-                  value={nameEdit}
-                  onChangeText={setNameEdit}
-                  accessibilityLabel="Nome do plano"
-                  returnKeyType="done"
-                  onSubmitEditing={submitName}
-                  className="flex-1 text-base font-bold"
-                />
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Salvar nome"
-                  accessibilityState={{ disabled: !nameEdit.trim() || renamePlan.isPending }}
-                  disabled={!nameEdit.trim() || renamePlan.isPending}
-                  onPress={submitName}
-                  className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
-                >
-                  <Check size={20} color={cores.primary} />
-                </Pressable>
-              </>
-            ) : (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Renomear plano ${planData.name}`}
-                onPress={startEditName}
-                className="min-h-[44px] flex-1 justify-center"
-              >
-                <Text numberOfLines={1} className="text-2xl font-extrabold text-foreground">
-                  {planData.name}
-                </Text>
-              </Pressable>
-            )}
+        title={planData.name}
+        actions={
+          <>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Renomear plano"
+              onPress={startEditName}
+              className={TOP_BAR_ACTION}
+            >
+              <Pencil size={19} color={cores.primary} />
+            </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Excluir plano"
               onPress={confirmDelete}
-              className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
+              className={TOP_BAR_ACTION}
             >
-              <Trash2 size={18} color={cores.mutedForeground} />
+              <Trash2 size={19} color={cores.primary} />
             </Pressable>
-          </View>
+          </>
+        }
+        refreshing={plan.isRefetching}
+        onRefresh={() => void plan.refetch()}
+      >
+        <View className="gap-4 px-5 pb-4 pt-2">
+          {editingName ? (
+            <View className="flex-row items-center gap-2">
+              <Input
+                autoFocus
+                value={nameEdit}
+                onChangeText={setNameEdit}
+                accessibilityLabel="Nome do plano"
+                returnKeyType="done"
+                onSubmitEditing={submitName}
+                className="flex-1 text-base font-bold"
+              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Salvar nome"
+                accessibilityState={{ disabled: !nameEdit.trim() || renamePlan.isPending }}
+                disabled={!nameEdit.trim() || renamePlan.isPending}
+                onPress={submitName}
+                className={TOP_BAR_ACTION}
+              >
+                <Check size={20} color={cores.primary} />
+              </Pressable>
+            </View>
+          ) : null}
 
           <View className="overflow-hidden rounded-2xl border border-border bg-card">
             <View className="gap-1 bg-muted p-4 pt-10">

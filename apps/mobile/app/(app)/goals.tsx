@@ -11,6 +11,7 @@ import { NewGoalDrawer } from '@/components/goals/new-goal-drawer';
 import { RecentGoalRow } from '@/components/goals/recent-goal-row';
 import { SecondaryGoalCard } from '@/components/goals/secondary-goal-card';
 import { cores } from '@/theme/cores';
+import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
 
 export default function GoalsScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -61,28 +62,21 @@ export default function GoalsScreen() {
   return (
     <>
       <Screen
-        back
-        title="Metas"
+        actions={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Nova meta"
+            onPress={() => setDrawerOpen(true)}
+            className={TOP_BAR_ACTION}
+          >
+            <Plus size={22} color={cores.primary} />
+          </Pressable>
+        }
         onRefresh={() => void allGoals.refetch()}
         refreshing={allGoals.isRefetching}
       >
         <View className="gap-5 px-5 pb-4 pt-4">
-          <View className="flex-row items-end justify-between gap-3">
-            <View className="flex-1">
-              <Text className="text-sm text-muted-foreground">
-                Acompanhe seus objetivos ativos.
-              </Text>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Nova meta"
-              onPress={() => setDrawerOpen(true)}
-              className="min-h-[44px] flex-row items-center gap-1.5 rounded-xl bg-primary px-4 py-3 active:opacity-80"
-            >
-              <Plus size={14} strokeWidth={3} color={cores.background} />
-              <Text className="text-[11px] font-extrabold text-primary-foreground">NOVA META</Text>
-            </Pressable>
-          </View>
+          <Text className="text-sm text-muted-foreground">Acompanhe seus objetivos ativos.</Text>
 
           {allGoals.isLoading ? <LoadingState label="Carregando metas…" /> : null}
 

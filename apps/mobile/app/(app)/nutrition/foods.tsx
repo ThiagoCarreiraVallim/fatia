@@ -5,9 +5,10 @@ import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, Plus } from 'lucide-react-native';
 import { customFoodSummary, nutritionApi, type Food } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
-import { Button, ErrorState, LoadingState } from '@/components/ui';
+import { ErrorState, LoadingState } from '@/components/ui';
 import { AlimentoDrawer } from '@/components/nutrition/alimento-drawer';
 import { cores } from '@/theme/cores';
+import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
 
 /**
  * Réplica de `apps/web/src/app/(app)/nutrition/foods/page.tsx`.
@@ -37,8 +38,16 @@ export default function MeusAlimentosScreen() {
   return (
     <>
       <Screen
-        back
-        title="Meus alimentos"
+        actions={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Novo alimento"
+            onPress={() => setEditando('novo')}
+            className={TOP_BAR_ACTION}
+          >
+            <Plus size={22} color={cores.primary} />
+          </Pressable>
+        }
         onRefresh={() => void alimentos.refetch()}
         refreshing={alimentos.isRefetching}
       >
@@ -47,12 +56,6 @@ export default function MeusAlimentosScreen() {
             O que não está na busca: produto embalado, receita de casa, o pão da padaria. Cadastre
             uma vez e registre como qualquer alimento.
           </Text>
-          <Button onPress={() => setEditando('novo')}>
-            <View className="flex-row items-center gap-2">
-              <Plus size={16} color={cores.background} />
-              <Text className="text-sm font-medium text-primary-foreground">Novo alimento</Text>
-            </View>
-          </Button>
 
           {alimentos.isLoading ? <LoadingState label="Carregando seus alimentos…" /> : null}
           {alimentos.error ? (

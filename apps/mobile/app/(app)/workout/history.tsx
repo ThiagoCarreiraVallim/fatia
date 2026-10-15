@@ -57,12 +57,7 @@ export default function WorkoutHistoryScreen() {
   });
 
   return (
-    <Screen
-      back
-      title="Histórico"
-      refreshing={sessions.isRefetching}
-      onRefresh={() => void sessions.refetch()}
-    >
+    <Screen refreshing={sessions.isRefetching} onRefresh={() => void sessions.refetch()}>
       <View className="gap-2 px-5 pb-4 pt-4">
         {sessions.isLoading ? <LoadingState /> : null}
         {sessions.isError ? (

@@ -31,7 +31,7 @@ export default function WorkoutSessionScreen() {
 
   if (session.isLoading) {
     return (
-      <Screen back title="Treino">
+      <Screen>
         <LoadingState label="Carregando treino…" />
       </Screen>
     );
@@ -39,7 +39,7 @@ export default function WorkoutSessionScreen() {
 
   if (session.isError) {
     return (
-      <Screen back title="Treino">
+      <Screen>
         <ErrorState error={session.error} onRetry={() => void session.refetch()} />
       </Screen>
     );
@@ -47,7 +47,7 @@ export default function WorkoutSessionScreen() {
 
   if (!session.data) {
     return (
-      <Screen back title="Treino">
+      <Screen>
         <EmptyState
           title="Sessão não encontrada."
           action={

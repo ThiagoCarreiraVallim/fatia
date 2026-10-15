@@ -46,7 +46,7 @@ export function CompletedSession({
   return (
     <>
       <ExerciseDetailHost>
-        <Screen back title="Treino" refreshing={refreshing} onRefresh={onRefresh}>
+        <Screen title={dateLabel} refreshing={refreshing} onRefresh={onRefresh}>
           <View className="gap-4 px-5 pb-4 pt-2">
             <View className="overflow-hidden rounded-2xl border border-border bg-card">
               <View className="gap-1 bg-accent p-4 pt-10">

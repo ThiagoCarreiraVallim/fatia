@@ -29,10 +29,8 @@ export function SessionHeader({
     <View className="border-b border-border bg-background px-5 pb-3 pt-2">
       <View className="flex-row items-center justify-between gap-2">
         <View className="min-w-0 flex-1">
-          <Text accessibilityRole="header" className="text-lg font-extrabold text-foreground">
-            Treino em andamento
-          </Text>
-          <Text className="text-xs text-muted-foreground">
+          {/* O título "Treino em andamento" mora na barra de topo. */}
+          <Text className="text-sm text-muted-foreground">
             Iniciado às {formatTimeOfDay(startedAt)} · {elapsed}
           </Text>
         </View>

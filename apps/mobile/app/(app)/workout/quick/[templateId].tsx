@@ -3,7 +3,7 @@ import { AccessibilityInfo, Pressable, Text, View } from 'react-native';
 import { useMutation, useQueries, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { Clock, Dumbbell, Play, Plus } from 'lucide-react-native';
+import { Clock, Dumbbell, Pencil, Play, Plus } from 'lucide-react-native';
 import {
   findQuickTemplate,
   isCardioExercise,
@@ -12,6 +12,7 @@ import {
   type QuickTemplate,
 } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
+import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
 import { Button, EmptyState, Input, LoadingState } from '@/components/ui';
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
@@ -127,7 +128,7 @@ export default function QuickTemplateScreen() {
 
   if (!template) {
     return (
-      <Screen back title="Treino rápido">
+      <Screen>
         <EmptyState
           title="Template não encontrado."
           action={
@@ -179,7 +180,19 @@ export default function QuickTemplateScreen() {
 
   return (
     <ExerciseDetailHost>
-      <Screen back title="Treino rápido">
+      <Screen
+        title={planName}
+        actions={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Renomear treino"
+            onPress={() => setEditingName(true)}
+            className={TOP_BAR_ACTION}
+          >
+            <Pencil size={19} color={cores.primary} />
+          </Pressable>
+        }
+      >
         <View className="gap-4 px-5 pb-4 pt-2">
           {editingName ? (
             <Input
@@ -192,18 +205,7 @@ export default function QuickTemplateScreen() {
               onSubmitEditing={() => setEditingName(false)}
               className="text-base font-bold"
             />
-          ) : (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Renomear treino ${planName}`}
-              onPress={() => setEditingName(true)}
-              className="min-h-[44px] justify-center"
-            >
-              <Text numberOfLines={1} className="text-2xl font-extrabold text-foreground">
-                {planName}
-              </Text>
-            </Pressable>
-          )}
+          ) : null}
 
           <View className="overflow-hidden rounded-2xl border border-border bg-card">
             <View style={{ backgroundColor: tint }} className="gap-1 p-4 pt-12">

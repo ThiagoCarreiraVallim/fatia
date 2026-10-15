@@ -85,14 +85,9 @@ export default function ProgressScreen() {
     <>
       <Screen onRefresh={onRefresh} refreshing={refreshing}>
         <View className="gap-5 px-5 pb-4 pt-1">
-          <View className="gap-1">
-            <Text accessibilityRole="header" className="text-3xl font-extrabold text-foreground">
-              Evolução
-            </Text>
-            <Text className="text-sm text-muted-foreground">
-              Seus dados de performance dos últimos {days} dias.
-            </Text>
-          </View>
+          <Text className="text-sm text-muted-foreground">
+            Seus dados de performance dos últimos {days} dias.
+          </Text>
 
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList className="rounded-xl">

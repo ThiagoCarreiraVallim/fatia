@@ -12,6 +12,7 @@ import {
   type MealType,
 } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
+import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
 import { ErrorState, LoadingState } from '@/components/ui';
 import { CaloriesRingCard } from '@/components/nutrition/calories-ring-card';
 import { DateNavigator } from '@/components/nutrition/date-navigator';
@@ -90,20 +91,16 @@ export default function NutritionScreen() {
   return (
     <>
       <Screen
-        title="Nutrição"
-        onRefresh={atualizar}
-        refreshing={resumo.isRefetching || metas.isRefetching}
-      >
-        <View className="gap-5 px-5 pb-4 pt-4">
-          <View className="flex-row items-center justify-end">
+        actions={
+          <>
             {fotoTrava === 'open' ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Registrar refeição por foto"
                 onPress={() => router.push(`/nutrition/photo?date=${data}`)}
-                className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
+                className={TOP_BAR_ACTION}
               >
-                <Camera size={18} color={cores.mutedForeground} />
+                <Camera size={20} color={cores.primary} />
               </Pressable>
             ) : fotoTrava === 'locked' ? (
               // Free (ADR 024): o botão aparece com cadeado e leva ao plano, em vez
@@ -112,45 +109,49 @@ export default function NutritionScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Registrar refeição por foto, do plano PRO"
                 onPress={() => router.push(planHref('foto'))}
-                className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
+                className={TOP_BAR_ACTION}
               >
-                <Camera size={18} color={cores.mutedForeground} />
+                <Camera size={20} color={cores.primary} />
                 <View className="absolute bottom-1.5 right-1.5 rounded-full bg-background p-0.5">
                   <Lock size={10} color={cores.mutedForeground} />
                 </View>
               </Pressable>
             ) : null}
             {/* Escanear entra no cabeçalho, e não dentro do drawer de busca: o
-                caso é "estou com a embalagem na mão", e enterrá-lo atrás de dois
-                toques faria a pessoa digitar o nome do produto assim mesmo. */}
+              caso é "estou com a embalagem na mão", e enterrá-lo atrás de dois
+              toques faria a pessoa digitar o nome do produto assim mesmo. */}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Escanear código de barras"
               onPress={() => router.push(`/nutrition/scan?date=${data}`)}
-              className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
+              className={TOP_BAR_ACTION}
             >
-              <ScanBarcode size={18} color={cores.mutedForeground} />
+              <ScanBarcode size={20} color={cores.primary} />
             </Pressable>
             {refeicoesDoDia > 0 ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Copiar dia"
                 onPress={() => setCopiandoDia(true)}
-                className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
+                className={TOP_BAR_ACTION}
               >
-                <Copy size={18} color={cores.mutedForeground} />
+                <Copy size={20} color={cores.primary} />
               </Pressable>
             ) : null}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Metas"
               onPress={() => router.push('/nutrition/goals')}
-              className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
+              className={TOP_BAR_ACTION}
             >
-              <Settings size={18} color={cores.mutedForeground} />
+              <Settings size={20} color={cores.primary} />
             </Pressable>
-          </View>
-
+          </>
+        }
+        onRefresh={atualizar}
+        refreshing={resumo.isRefetching || metas.isRefetching}
+      >
+        <View className="gap-5 px-5 pb-4 pt-4">
           <DateNavigator date={data} onChange={setData} />
 
           {resumo.isLoading || metas.isLoading ? <LoadingState label="Carregando o dia…" /> : null}
