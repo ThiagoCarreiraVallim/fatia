@@ -30,6 +30,7 @@ import { dateInTz } from '../../progress/helpers/date-tz';
 import { NutrientTargetService } from '../../nutrition/nutrient-target.service';
 import { NutritionSummaryService } from '../../nutrition/nutrition-summary.service';
 import { UserGoalsService } from '../../nutrition/user-goals.service';
+import { OnboardingService } from '../../nutrition/onboarding.service';
 import { ProgressService } from '../../progress/progress.service';
 import { StepLogService } from '../../progress/step-log.service';
 import { WaterLogService } from '../../progress/water-log.service';
@@ -69,6 +70,7 @@ describe('isolamento entre usuários', () => {
   const mealTemplates = new MealTemplateService(prisma, meals);
   const nutrientTargets = new NutrientTargetService(prisma);
   const userGoals = new UserGoalsService(prisma);
+  const onboarding = new OnboardingService(prisma);
   const weights = new WeightLogService(prisma);
   const steps = new StepLogService(prisma);
   const waters = new WaterLogService(prisma);
@@ -2624,6 +2626,59 @@ describe('isolamento entre usuários', () => {
           items: [{ foodId: owned.customFoodId, grams: 100 }],
         }),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('sugestão de metas e onboarding', () => {
+    it('suggest_nutrition_goals do user-B não usa a pesagem do user-A', async () => {
+      // O user-A tem pesagem de 80 kg; o user-B não tem nenhuma.
+      await expect(
+        onboarding.suggest(
+          owned.userB,
+          {
+            sex: 'FEMALE',
+            birthDate: '1990-01-01',
+            heightCm: 165,
+            activityLevel: 'LIGHT',
+            objective: 'MAINTAIN',
+          },
+          TZ,
+        ),
+      ).rejects.toThrow('Faltam dados para calcular: peso.');
+    });
+
+    it('o onboarding do user-B não toca nas metas nem nas pesagens do user-A', async () => {
+      const metasA = await prisma.userGoals.findUnique({ where: { userId: owned.userA } });
+      const pesagensA = await prisma.weightLog.count({ where: { userId: owned.userA } });
+
+      await onboarding.complete(
+        owned.userB,
+        {
+          sex: 'MALE',
+          birthDate: '1990-01-01',
+          heightCm: 180,
+          weightKg: 77,
+          activityLevel: 'LIGHT',
+          objective: 'MAINTAIN',
+          goals: {
+            kcalMin: 2400,
+            kcalMax: 2600,
+            proteinMinG: 110,
+            proteinMaxG: 140,
+            carbsMinG: 250,
+            carbsMaxG: 350,
+            fatMinG: 60,
+            fatMaxG: 90,
+          },
+        },
+        TZ,
+      );
+
+      expect(await prisma.userGoals.findUnique({ where: { userId: owned.userA } })).toEqual(metasA);
+      expect(await prisma.weightLog.count({ where: { userId: owned.userA } })).toBe(pesagensA);
+      expect(await prisma.weightLog.count({ where: { userId: owned.userB, weightKg: 77 } })).toBe(
+        1,
+      );
     });
   });
 

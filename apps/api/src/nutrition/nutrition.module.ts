@@ -48,6 +48,9 @@ import { ListMealTemplatesTool } from './mcp/list-meal-templates.tool';
 import { SaveMealTemplateTool } from './mcp/save-meal-template.tool';
 import { LogMealTemplateTool } from './mcp/log-meal-template.tool';
 import { DeleteMealTemplateTool } from './mcp/delete-meal-template.tool';
+import { SuggestNutritionGoalsTool } from './mcp/suggest-nutrition-goals.tool';
+import { OnboardingService } from './onboarding.service';
+import { OnboardingController } from './onboarding.controller';
 
 /**
  * Teto do corpo da rota de reconhecimento (#139).
@@ -62,7 +65,7 @@ const TETO_DA_FOTO_BASE64 = '6mb';
 const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 });
 
 @Module({
-  controllers: [NutritionController],
+  controllers: [NutritionController, OnboardingController],
   providers: [
     FoodService,
     FoodShortcutsService,
@@ -76,6 +79,7 @@ const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 })
     MealTemplateService,
     NutritionSummaryService,
     UserGoalsService,
+    OnboardingService,
     NutrientTargetService,
     // MCP tools (auto-discovered by McpToolRegistry)
     SearchFoodTool,
@@ -107,6 +111,7 @@ const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 })
     GetNutritionHistoryTool,
     GetNutritionGoalsTool,
     SetNutritionGoalsTool,
+    SuggestNutritionGoalsTool,
     ListNutrientTargetsTool,
     SetNutrientTargetTool,
     DeleteNutrientTargetTool,

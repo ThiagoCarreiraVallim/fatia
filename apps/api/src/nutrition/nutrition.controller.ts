@@ -52,6 +52,8 @@ import {
   UpdateMealItemDto,
 } from './dto/meal.dto';
 import { UpsertGoalsDto } from './dto/goals.dto';
+import { SuggestGoalsDto } from './dto/onboarding.dto';
+import { OnboardingService } from './onboarding.service';
 import { UpsertNutrientTargetDto } from './dto/nutrient-target.dto';
 
 /**
@@ -81,6 +83,7 @@ export class NutritionController {
     private readonly portions: FoodPortionService,
     private readonly copies: MealCopyService,
     private readonly templates: MealTemplateService,
+    private readonly onboarding: OnboardingService,
   ) {}
 
   // -------- Reconhecimento por foto (#139) --------
@@ -361,6 +364,13 @@ export class NutritionController {
   @Put('goals')
   upsertGoals(@CurrentUser() user: CurrentUserPayload, @Body() dto: UpsertGoalsDto) {
     return this.goals.upsert(user.id, dto);
+  }
+
+  /** Só calcula; não grava. O que faltar no corpo vem do perfil e da última pesagem. */
+  @Post('goals/suggestion')
+  @HttpCode(200)
+  suggestGoals(@CurrentUser() user: CurrentUserPayload, @Body() dto: SuggestGoalsDto) {
+    return this.onboarding.suggest(user.id, dto, user.timezone);
   }
 
   // -------- Nutrient targets (metas personalizadas, ADR 009) --------

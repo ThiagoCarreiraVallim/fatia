@@ -104,8 +104,8 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **117 tools** declaram `false`, e é a resposta que
-pela Fatia** (visão, LLM, embedding). Hoje as **117 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **118 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **118 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -185,12 +185,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 117 tools): **91,9 k caracteres**
-hoje, dos quais **5.161 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 118 tools): **93,6 k caracteres**
+hoje, dos quais **5.217 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **87** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (74,5 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (76,0 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -248,6 +248,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `delete_my_account`          | D        |
 | **Metas (macros)**         | `get_nutrition_goals`        | R        |
 |                            | `set_nutrition_goals`        | C/U      |
+|                            | `suggest_nutrition_goals`    | R        |
 | **Metas pessoais**         | `create_goal`                | C        |
 |                            | `get_goal`                   | R        |
 |                            | `list_goals`                 | R        |
@@ -359,8 +360,8 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `save_memory`                | C        |
 |                            | `forget_memory`              | D        |
 
-Total: **117 tools**. Cada uma documentada abaixo.
-Total: **117 tools**. Cada uma documentada abaixo.
+Total: **118 tools**. Cada uma documentada abaixo.
+Total: **118 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -386,26 +387,37 @@ Retorna dados do usuário logado.
   name: string;
   timezone: string;
   role: 'USER' | 'ADMIN';
-  createdAt: string;
+  heightCm: number | null;
+  // Perfil da sugestão de metas (onboarding); nulos até a pessoa informar.
+  sex: 'FEMALE' | 'MALE' | null;
+  birthDate: string | null; // AAAA-MM-DD
+  activityLevel: 'SEDENTARY' | 'LIGHT' | 'MODERATE' | 'ACTIVE' | 'VERY_ACTIVE' | null;
+  objective: 'LOSE' | 'MAINTAIN' | 'GAIN' | null;
+  onboardedAt: string | null; // quando passou (ou pulou) o assistente de primeira vez
 }
 ```
 
 ### `update_me`
 
-Atualiza nome ou email do próprio usuário.
+Atualiza o perfil: nome, altura, fuso e os dados que alimentam `suggest_nutrition_goals`. Só o que vier é gravado.
 
 **Input:**
 
 ```typescript
 {
   name?: string;
-  email?: string;
+  heightCm?: number;
+  timezone?: string;
+  sex?: 'FEMALE' | 'MALE';
+  birthDate?: string; // AAAA-MM-DD, não pode ser futura
+  activityLevel?: 'SEDENTARY' | 'LIGHT' | 'MODERATE' | 'ACTIVE' | 'VERY_ACTIVE';
+  objective?: 'LOSE' | 'MAINTAIN' | 'GAIN';
 }
 ```
 
 **Output:** mesma forma de `get_me`.
 
-**Erros:** `CONFLICT` se email já em uso.
+**Erros:** `INVALID_INPUT` se a data de nascimento não existe ou é futura.
 
 ### `update_timezone`
 
@@ -552,7 +564,40 @@ Cria ou atualiza metas (upsert). Range com min ≤ max.
 
 **Output:** mesma forma de `get_nutrition_goals`.
 
-**Erros:** `INVALID_INPUT` se algum `min > max` ou valores negativos.
+**Erros:** `INVALID_INPUT` se algum `min > max`, valores negativos ou acima dos tetos (kcal 10.000; cada macro 1.000 g; água 10.000 mL; passos 100.000; treinos 14 por semana). Definir metas também marca o onboarding como feito.
+
+### `suggest_nutrition_goals`
+
+Calcula uma sugestão de metas **sem gravar nada** — o mesmo cálculo do assistente de primeira vez do app. Gasto pela Mifflin-St Jeor × fator de atividade (1,2 a 1,9); perder tira 20% (até 750 kcal), ganhar soma 10% (até 400 kcal), com piso de 1.200 kcal (mulher) e 1.500 kcal (homem). Proteína por kg (1,8–2,2 perdendo; 1,4–1,8 mantendo; 1,6–2,0 ganhando), gordura 25–35% das kcal, carboidrato fecha a conta; água 35 mL/kg; passos e treinos pelo nível de atividade. Para salvar, a IA chama `set_nutrition_goals` com o `goals` devolvido (ou ajustado).
+
+**Input:** todos opcionais; o que faltar vem do perfil (`update_me`) e da última pesagem.
+
+```typescript
+{
+  sex?: 'FEMALE' | 'MALE';
+  birthDate?: string; // AAAA-MM-DD, 16 a 100 anos
+  heightCm?: number; // 100 a 250
+  weightKg?: number; // 30 a 300
+  activityLevel?: 'SEDENTARY' | 'LIGHT' | 'MODERATE' | 'ACTIVE' | 'VERY_ACTIVE';
+  objective?: 'LOSE' | 'MAINTAIN' | 'GAIN';
+}
+```
+
+**Output:**
+
+```typescript
+{
+  age: number;
+  bmr: number; // metabolismo basal, kcal/dia
+  tdee: number; // gasto total estimado
+  targetKcal: number; // centro da faixa, já ajustado ao objetivo
+  goals: {
+    /* mesma forma do input de set_nutrition_goals, com água, passos e treinos */
+  }
+}
+```
+
+**Erros:** `INVALID_INPUT` com a lista do que falta ("Faltam dados para calcular: sexo, peso.") ou com o dado fora da faixa.
 
 ---
 

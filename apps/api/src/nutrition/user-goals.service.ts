@@ -55,10 +55,17 @@ export class UserGoalsService {
 
   async upsert(userId: string, dto: UpsertGoalsDto) {
     assertGoalsValid(dto);
-    return this.prisma.userGoals.upsert({
+    const goals = await this.prisma.userGoals.upsert({
       where: { userId },
       create: { userId, ...dto },
       update: dto,
     });
+    // Quem definiu metas por outro caminho (MCP, tela de metas) já passou da
+    // primeira vez: o app não deve mandá-lo ao assistente.
+    await this.prisma.user.updateMany({
+      where: { id: userId, onboardedAt: null },
+      data: { onboardedAt: new Date() },
+    });
+    return goals;
   }
 }

@@ -4,10 +4,12 @@ import type { PrismaService } from '../../common/prisma.service';
 
 type MockPrisma = {
   userGoals: { findUnique: jest.Mock; upsert: jest.Mock };
+  user: { updateMany: jest.Mock };
 };
 
 const makePrisma = (): MockPrisma => ({
   userGoals: { findUnique: jest.fn(), upsert: jest.fn() },
+  user: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
 });
 
 describe('UserGoalsService', () => {
@@ -62,6 +64,24 @@ describe('UserGoalsService', () => {
         where: { userId },
         create: { userId, ...dto },
         update: dto,
+      });
+    });
+
+    it('marca a primeira vez como feita, sem sobrescrever a data de quem já passou', async () => {
+      prisma.userGoals.upsert.mockResolvedValue({});
+      await service.upsert(userId, {
+        kcalMin: 1800,
+        kcalMax: 2200,
+        proteinMinG: 120,
+        proteinMaxG: 160,
+        carbsMinG: 200,
+        carbsMaxG: 280,
+        fatMinG: 50,
+        fatMaxG: 80,
+      });
+      expect(prisma.user.updateMany).toHaveBeenCalledWith({
+        where: { id: userId, onboardedAt: null },
+        data: { onboardedAt: expect.any(Date) },
       });
     });
   });

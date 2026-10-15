@@ -33,12 +33,12 @@ opções abaixo foram avaliadas com isso em mente.
 
 O que pesa no contexto não é a contagem de tools, é o payload. Medido no que o registry
 serve de fato — `name`, `title`, `description`, `annotations` e o JSON Schema do input das
-117 tools: **91,9 k caracteres**, enviados em toda sessão que lista as tools.
-O denominador importa. Contar só `name + description + inputSchema` dá 74,5 k e subestima o
+118 tools: **93,6 k caracteres**, enviados em toda sessão que lista as tools.
+O denominador importa. Contar só `name + description + inputSchema` dá 76,0 k e subestima o
 catálogo em ~20% — `title` e `annotations` também vão no fio, em toda tool.
 
 Dentro desse total, os exemplos de invocação que a #111 acrescentou às 62 tools de escrita
-valem **5.161 caracteres** — média de **83** caracteres por tool, algo em torno de 6% do
+valem **5.217 caracteres** — média de **83** caracteres por tool, algo em torno de 6% do
 catálogo. Os dois números são medidos no código pelo `tool-catalog.spec.ts`, junto com a
 contagem: a versão anterior desta frase dizia "4.110 caracteres, média de 91" — estagnada na
 medição da #111, feita quando o catálogo tinha 45 delas, e ainda por cima incoerente, porque
@@ -54,8 +54,8 @@ e não em campo separado — estão na §Convenções de [`docs/MCP.md`](./MCP.m
 Além da contagem, cada tool declara `hostedInference` — se a execução dispara inferência **paga
 pela Fatia**. É recorte de custo, não de tamanho, e por isso mora aqui junto do resto.
 
-Hoje são **117** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
-Hoje são **117** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
+Hoje são **118** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
+Hoje são **118** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
 **0** tools com inferência hospedada.
 
 O segundo número é o ponto inteiro. Chamada vinda do cliente MCP do usuário roda no

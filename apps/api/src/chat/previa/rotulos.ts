@@ -180,6 +180,27 @@ const MUSCULOS: Record<string, string> = {
   triceps: 'Tríceps',
 };
 
+const SEXO: Record<string, string> = { FEMALE: 'Feminino', MALE: 'Masculino' };
+const ATIVIDADE: Record<string, string> = {
+  SEDENTARY: 'Sedentário',
+  LIGHT: 'Leve',
+  MODERATE: 'Moderado',
+  ACTIVE: 'Ativo',
+  VERY_ACTIVE: 'Muito ativo',
+};
+const OBJETIVO: Record<string, string> = {
+  LOSE: 'Perder peso',
+  MAINTAIN: 'Manter o peso',
+  GAIN: 'Ganhar peso',
+};
+
+/** "1996-03-12" → "12/03/1996": nascimento não é "ontem" nem "terça". */
+const nascimento: Formato = (valor) => {
+  if (typeof valor !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(valor)) return null;
+  const [a, m, d] = valor.split('-');
+  return `${d}/${m}/${a}`;
+};
+
 /** "America/Sao_Paulo" → "São Paulo": o nome do fuso é o da cidade, sem o continente. */
 const fuso: Formato = (valor) => {
   if (typeof valor !== 'string' || !valor) return null;
@@ -236,6 +257,10 @@ export const CAMPOS: Record<string, Campo> = {
   max: { rotulo: 'Máximo', formato: semUnidade },
   period: { rotulo: 'Período', formato: deMapa({ daily: 'Por dia' }) },
   weightKg: { rotulo: 'Peso', formato: comUnidade('kg') },
+  sex: { rotulo: 'Sexo', formato: deMapa(SEXO) },
+  birthDate: { rotulo: 'Nascimento', formato: nascimento },
+  activityLevel: { rotulo: 'Atividade', formato: deMapa(ATIVIDADE) },
+  objective: { rotulo: 'Objetivo', formato: deMapa(OBJETIVO) },
   ml: { rotulo: 'Água', formato: comUnidade('ml', 0) },
   steps: { rotulo: 'Passos', formato: comUnidade('passos', 0) },
   source: { rotulo: 'Origem', formato: deMapa(ORIGEM_DOS_PASSOS) },

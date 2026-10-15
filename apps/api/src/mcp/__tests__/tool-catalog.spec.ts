@@ -321,22 +321,22 @@ const payload = tools.reduce(
  * número; o caso abaixo confere as duas pontas, então nem o texto some nem o número derrapa.
  */
 const PAYLOAD_CLAIMS: ReadonlyArray<{ file: string; text: string; medido: () => string }> = [
-  { file: 'docs/MCP.md', text: '**91,9 k caracteres**', medido: () => emK(payload.cheio) },
-  { file: 'docs/MCP.md', text: '(74,5 k)', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP.md', text: '**93,6 k caracteres**', medido: () => emK(payload.cheio) },
+  { file: 'docs/MCP.md', text: '(76,0 k)', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP.md',
-    text: '**5.161 são os exemplos**',
+    text: '**5.217 são os exemplos**',
     medido: () => emMilhar(payload.exemplos),
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**91,9 k caracteres**',
+    text: '**93,6 k caracteres**',
     medido: () => emK(payload.cheio),
   },
-  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 74,5 k', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 76,0 k', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**5.161 caracteres**',
+    text: '**5.217 caracteres**',
     medido: () => emMilhar(payload.exemplos),
   },
 ];
@@ -609,7 +609,8 @@ describe('catálogo de tools MCP', () => {
   });
 
   it('declara o hint coerente com o prefixo do nome', () => {
-    const READ = /^(get|list|search|explain|export)_/;
+    // `suggest_` só calcula: devolve uma proposta e não grava nada.
+    const READ = /^(get|list|search|explain|export|suggest)_/;
     const DESTRUCTIVE = /^delete_/;
     // Desfaz o vínculo e perde séries/reps configuradas naquele exercício.
     //
