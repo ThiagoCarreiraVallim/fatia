@@ -31,6 +31,6 @@ describe('termos de uso — custo', () => {
 
   it('o Free continua com o app inteiro e o MCP', () => {
     render(<TermsPage />);
-    expect(secao('Custo e disponibilidade')).toMatch(/Free.*gratuito.*MCP/s);
+    expect(secao('Custo e disponibilidade')).toMatch(/Free[\s\S]*gratuito[\s\S]*MCP/);
   });
 });

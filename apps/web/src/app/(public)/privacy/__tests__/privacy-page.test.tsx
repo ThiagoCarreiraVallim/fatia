@@ -83,7 +83,7 @@ describe('política de privacidade — plano PRO (ADR 024)', () => {
   it('lista os processadores de pagamento e o que cada um recebe', () => {
     render(<PrivacyPage />);
     const terceiros = secao('Com quem compartilhamos');
-    expect(terceiros).toMatch(/Asaas.*nome, e-mail e CPF/s);
+    expect(terceiros).toMatch(/Asaas[\s\S]*nome, e-mail e CPF/);
     expect(terceiros).toMatch(/RevenueCat/);
     expect(terceiros).toMatch(/só o identificador da sua conta/i);
   });

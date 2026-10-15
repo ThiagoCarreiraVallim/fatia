@@ -266,7 +266,7 @@ export default function PrivacyPage() {
             Não recebe seus dados de saúde.
           </li>
           <li>
-            <strong>Apple, Google e RevenueCat</strong> — na assinatura feita pelo app, a loja
+            <strong>Apple, Google e RevenueCat</strong> — na assinatura feita no aplicativo, a loja
             processa o pagamento e a RevenueCat nos informa o estado da compra. Recebem só o
             identificador da sua conta no Fatia, sem e-mail e sem dados de saúde.
           </li>
