@@ -16,14 +16,25 @@ datasource db {
 // ============================================================
 
 model User {
-  id        String   @id @default(uuid())
+  id       String @id @default(uuid())
   // Sub claim do JWT do Logto. Identidade externa estável (ver ADR 008).
-  logtoSub  String   @unique
-  email     String   @unique
-  name      String
-  role      Role     @default(USER)
-  timezone  String   @default("America/Sao_Paulo")
-  heightCm  Float?
+  logtoSub String @unique
+  email    String @unique
+  name     String
+  role     Role   @default(USER)
+  timezone String @default("America/Sao_Paulo")
+  heightCm Float?
+
+  // Perfil do onboarding: só alimentam a sugestão de metas (gasto pela
+  // Mifflin-St Jeor). Nenhum aparece para terceiros nem entra em comparação.
+  sex           BiologicalSex?
+  birthDate     DateTime?      @db.Date
+  activityLevel ActivityLevel?
+  objective     BodyObjective?
+  // Nulo = ainda não passou pelo assistente de primeira vez (nem o pulou, nem
+  // definiu metas por outro caminho). O app redireciona enquanto for nulo.
+  onboardedAt   DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -57,6 +68,25 @@ model User {
   accessLogs          ProfessionalAccessLog[] @relation("AccessLogSubject")
 
   @@index([logtoSub])
+}
+
+enum BiologicalSex {
+  FEMALE
+  MALE
+}
+
+enum ActivityLevel {
+  SEDENTARY
+  LIGHT
+  MODERATE
+  ACTIVE
+  VERY_ACTIVE
+}
+
+enum BodyObjective {
+  LOSE
+  MAINTAIN
+  GAIN
 }
 
 enum Role {

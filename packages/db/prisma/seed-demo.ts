@@ -146,7 +146,17 @@ async function main() {
 
   await prisma.user.update({
     where: { id: userId },
-    data: { name: 'Ana Demo', heightCm: 168, timezone: TIMEZONE },
+    data: {
+      name: 'Ana Demo',
+      heightCm: 168,
+      timezone: TIMEZONE,
+      sex: 'FEMALE',
+      birthDate: new Date('1994-03-12T00:00:00Z'),
+      activityLevel: 'MODERATE',
+      objective: 'LOSE',
+      // Já passou pelo assistente: o E2E entra direto no app.
+      onboardedAt: new Date(),
+    },
   });
   await prisma.userGoals.upsert({
     where: { userId },

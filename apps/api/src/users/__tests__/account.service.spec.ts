@@ -236,6 +236,21 @@ describe('AccountService', () => {
       expect(select).toMatchObject({ id: true, email: true, name: true });
     });
 
+    it('exporta o perfil do onboarding (sexo, nascimento, atividade, objetivo)', async () => {
+      prisma.user.findUnique.mockResolvedValue(USER);
+
+      await service.exportData('user-A');
+
+      const { select } = prisma.user.findUnique.mock.calls[0][0];
+      expect(select).toMatchObject({
+        sex: true,
+        birthDate: true,
+        activityLevel: true,
+        objective: true,
+        onboardedAt: true,
+      });
+    });
+
     it('exporta consentimento e trilha do titular, com nome em vez de id do profissional', async () => {
       prisma.user.findUnique.mockResolvedValue(USER);
       prisma.professionalLink.findMany.mockResolvedValue([
