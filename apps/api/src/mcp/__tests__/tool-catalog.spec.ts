@@ -75,7 +75,7 @@ const TOOL_COUNT_SLICES: ReadonlyArray<{ file: string; text: string; count: () =
     // Contagem do domínio Sharing, que fica fora do MCP na parte administrativa
     // (#154). Declarada como recorte, e não isenta: se uma tool de grupo nascer
     // ou morrer, a frase que explica a decisão tem de acompanhar.
-    text: 'entra com **9 tools**',
+    text: 'entra com **12 tools**',
     count: () => tools.filter(({ file }) => file.includes('/sharing/mcp/')).length,
   },
   {
@@ -88,7 +88,7 @@ const TOOL_COUNT_SLICES: ReadonlyArray<{ file: string; text: string; count: () =
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '62 tools de escrita',
+    text: '64 tools de escrita',
     // As de escrita que ganharam exemplo na #111 — `delete_my_account` é isenta,
     // e é por isso que o número não é o total de tools de escrita.
     count: () =>
@@ -321,22 +321,22 @@ const payload = tools.reduce(
  * número; o caso abaixo confere as duas pontas, então nem o texto some nem o número derrapa.
  */
 const PAYLOAD_CLAIMS: ReadonlyArray<{ file: string; text: string; medido: () => string }> = [
-  { file: 'docs/MCP.md', text: '**93,6 k caracteres**', medido: () => emK(payload.cheio) },
-  { file: 'docs/MCP.md', text: '(76,0 k)', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP.md', text: '**98,1 k caracteres**', medido: () => emK(payload.cheio) },
+  { file: 'docs/MCP.md', text: '(80,0 k)', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP.md',
-    text: '**5.217 são os exemplos**',
+    text: '**5.534 são os exemplos**',
     medido: () => emMilhar(payload.exemplos),
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**93,6 k caracteres**',
+    text: '**98,1 k caracteres**',
     medido: () => emK(payload.cheio),
   },
-  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 76,0 k', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 80,0 k', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**5.217 caracteres**',
+    text: '**5.534 caracteres**',
     medido: () => emMilhar(payload.exemplos),
   },
 ];

@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { GroupRole, MembershipStatus, type ShareScope } from '@fatia/db';
+import { MembershipStatus, type ShareScope } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { AccessAuditService } from './access-audit.service';
+import { canReceiveLink } from './permissions';
 
 /**
  * Resposta única de recusa. É a mesma string para "membership não existe",
@@ -88,15 +89,14 @@ export class ProfessionalAccessService {
           })
         : null;
 
-    // Só PROFESSIONAL. Não existe ADMIN no enum, e OWNER é justamente o papel
-    // que gere grupo, membros e cobrança **sem** ler dado de saúde de aluno
-    // (ADR 014) — aceitá-lo aqui daria ao dono da academia a leitura que a ADR
-    // nega. CREATOR e MEMBER, pela mesma razão, também não. O
-    // `@@unique([groupId, userId])` garante que ninguém acumula papéis para
-    // contornar isso: uma pessoa tem um papel só por grupo.
+    // Só a equipe (`canReceiveLink`: OWNER, PROFESSIONAL, CREATOR — ADR 026).
+    // MEMBER nunca, e não existe ADMIN no enum. Mesmo para a equipe o papel
+    // não autoriza nada: só a deixa chegar ao passo 3, onde quem decide é o
+    // vínculo. O `@@unique([groupId, userId])` garante que ninguém acumula
+    // papéis para contornar isso: uma pessoa tem um papel só por grupo.
     const professionalIsActive =
       professionalMembership?.status === MembershipStatus.ACTIVE &&
-      professionalMembership.role === GroupRole.PROFESSIONAL;
+      canReceiveLink(professionalMembership.role);
 
     // Passo 3 — a autorização propriamente dita. Papel no grupo nunca autoriza
     // sozinho: quem autoriza é o vínculo, e ele é procurado só depois de os

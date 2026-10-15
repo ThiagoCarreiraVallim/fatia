@@ -189,10 +189,10 @@ describe('ProfessionalAccessService.assertReadable', () => {
     expect(prisma.professionalLink.findFirst).not.toHaveBeenCalled();
   });
 
-  it('recusa todo papel que não seja PROFESSIONAL, inclusive OWNER', async () => {
-    // Dono de grupo gere academia, membros e cobrança — e não lê dado de saúde
-    // de aluno (ADR 014). CREATOR e MEMBER, pela mesma razão, também não.
-    for (const role of [GroupRole.OWNER, GroupRole.CREATOR, GroupRole.MEMBER]) {
+  it('recusa MEMBER mesmo com vínculo — só a equipe lê', async () => {
+    // ADR 026: a equipe (OWNER, PROFESSIONAL, CREATOR) pode receber vínculo; o
+    // aluno nunca. Um vínculo apontando para quem virou MEMBER não abre nada.
+    for (const role of [GroupRole.MEMBER]) {
       prisma.professionalLink.findFirst.mockClear();
       activeMembership({ profissional: { role, status: MembershipStatus.ACTIVE } });
       prisma.professionalLink.findFirst.mockResolvedValue({ id: 'link-1' });
@@ -201,6 +201,22 @@ describe('ProfessionalAccessService.assertReadable', () => {
         service.assertReadable(PRO, MEMBERSHIP, ShareScope.WORKOUT, 'x'),
       ).rejects.toThrow(NotFoundException);
       expect(prisma.professionalLink.findFirst).not.toHaveBeenCalled();
+    }
+  });
+
+  it('dono e criador leem com vínculo ativo, e só com ele (ADR 026)', async () => {
+    for (const role of [GroupRole.OWNER, GroupRole.CREATOR]) {
+      activeMembership({ profissional: { role, status: MembershipStatus.ACTIVE } });
+      prisma.professionalLink.findFirst.mockResolvedValue({ id: 'link-1' });
+      await expect(
+        service.assertReadable(PRO, MEMBERSHIP, ShareScope.WORKOUT, 'x'),
+      ).resolves.toBeDefined();
+
+      activeMembership({ profissional: { role, status: MembershipStatus.ACTIVE } });
+      prisma.professionalLink.findFirst.mockResolvedValue(null);
+      await expect(
+        service.assertReadable(PRO, MEMBERSHIP, ShareScope.WORKOUT, 'x'),
+      ).rejects.toThrow(NotFoundException);
     }
   });
 

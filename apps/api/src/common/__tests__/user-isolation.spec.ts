@@ -83,7 +83,7 @@ describe('isolamento entre usuários', () => {
   const sets = new SessionSetService(prisma);
   const links = new ProfessionalLinkService(prisma);
   const access = new ProfessionalAccessService(prisma, new AccessAuditService(prisma));
-  const groups = new GroupService(prisma);
+  const groups = new GroupService(prisma, links);
   const memberships = new MembershipService(prisma, links);
   const consent = new ConsentService(prisma, links);
   const conversas = new ConversationService(prisma);
@@ -224,7 +224,8 @@ describe('isolamento entre usuários', () => {
     // O grupo é do **user-B**, e o user-A é aluno dele. Isso é de propósito:
     // todos os casos deste arquivo passam a rodar com o user-B na posição de
     // dono da academia do user-A, e continuam exigindo recusa. Dono de grupo
-    // não lê dado de aluno — a garantia sai de graça em ~50 casos.
+    // só lê com o vínculo que o aluno consentiu (ADR 026), e os services de
+    // domínio nunca — a garantia sai de graça em ~50 casos.
     const group = await prisma.group.create({
       data: {
         type: GroupType.SPONSORED,
@@ -911,12 +912,14 @@ describe('isolamento entre usuários', () => {
       }
     });
 
-    it('DONO do grupo não lê nem com vínculo concedido em nome dele', async () => {
-      // O user-B é OWNER da academia. Se alguém (ou um bug de #154) criar um
-      // vínculo com ele na ponta do profissional, o papel ainda barra: dono
-      // gere grupo, membros e cobrança e não lê dado de saúde (ADR 014). É
-      // também o que mantém os ~50 casos deste arquivo válidos, já que todos
-      // rodam com o user-B nessa posição.
+    it('DONO do grupo lê só o escopo que o aluno consentiu a ele (ADR 026)', async () => {
+      // Sem vínculo, o dono é um estranho: gere grupo, membros e cobrança, e
+      // isso não abre dado de saúde. Com o consentimento do aluno, ele passa a
+      // ler — só aquele escopo, e a leitura entra na trilha do aluno.
+      await expect(
+        access.assertReadable(owned.userB, owned.membershipA, ShareScope.WORKOUT, 'probe'),
+      ).rejects.toThrow(NotFoundException);
+
       await links.grant({
         subjectUserId: owned.userA,
         professionalId: owned.userB,
@@ -926,6 +929,9 @@ describe('isolamento entre usuários', () => {
 
       await expect(
         access.assertReadable(owned.userB, owned.membershipA, ShareScope.WORKOUT, 'probe'),
+      ).resolves.toBe(owned.userA);
+      await expect(
+        access.assertReadable(owned.userB, owned.membershipA, ShareScope.NUTRITION, 'probe'),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -1253,11 +1259,18 @@ describe('isolamento entre usuários', () => {
         ShareScope.WORKOUT,
         ShareScope.BODY,
       ]);
-      expect(alunos.map((a) => a.name).sort()).toEqual(['Colega', 'User A']);
+      const daAcademia = alunos.filter((a) => a.groupId === owned.groupId);
+      expect(daAcademia.map((a) => a.name).sort()).toEqual(['Colega', 'User A']);
 
-      // A lista não é dado de saúde, mas também não pode virar diretório: o
-      // `pro` é dono de um segundo grupo, e ninguém de lá entra aqui.
-      expect(alunos.every((a) => a.groupId === owned.groupId)).toBe(true);
+      // A lista não é dado de saúde, mas também não pode virar diretório: só
+      // entram as comunidades em que o `pro` é equipe — a academia e o grupo
+      // de que ele é dono (ADR 026) —, e nunca a equipe como "aluno".
+      expect(
+        alunos.every((a) => a.groupId === owned.groupId || a.groupId === owned.grupoDoProId),
+      ).toBe(true);
+      expect(alunos.filter((a) => a.groupId === owned.grupoDoProId).map((a) => a.name)).toEqual([
+        'User B',
+      ]);
     });
 
     it('vínculo revogado some do consentimento da lista, e não só da leitura', async () => {
@@ -1300,7 +1313,9 @@ describe('isolamento entre usuários', () => {
           data: { status: MembershipStatus.LEFT, leftAt: new Date() },
         });
 
-        const depois = await studentView.listStudents(owned.pro);
+        const depois = (await studentView.listStudents(owned.pro)).filter(
+          (a) => a.groupId === owned.groupId,
+        );
         expect(depois.map((a) => a.membershipId)).not.toContain(owned.membershipA);
         // O colega continua — o filtro é por associação, não um apagão da lista.
         expect(depois.map((a) => a.name)).toEqual(['Colega']);
@@ -1312,13 +1327,17 @@ describe('isolamento entre usuários', () => {
       }
     });
 
-    it('quem não é PROFESSIONAL não tem lista de alunos, nem sendo dono da academia', async () => {
-      // O user-B é OWNER do grupo do user-A. Dono administra e cobra; não
-      // atende. Devolver a lista a ele daria ao painel de dono um caminho de
-      // aquisição de acesso que a ADR 014 nega.
-      await expect(studentView.listStudents(owned.userB)).resolves.toEqual([]);
-      await expect(studentView.listStudents(owned.creator)).resolves.toEqual([]);
+    it('MEMBER não tem lista de alunos; dono e criador têm, sem consentimento a mais', async () => {
+      // ADR 026: a equipe toda (dono, profissional, criador) recebe o que cada
+      // membro escolhe compartilhar, então todos têm a lista. A lista é nome e
+      // escopos consentidos — sem vínculo, vazia de escopos, e a leitura
+      // continua fechada. O aluno nunca vê outros alunos.
       await expect(studentView.listStudents(owned.colega)).resolves.toEqual([]);
+      for (const equipe of [owned.userB, owned.creator]) {
+        const lista = await studentView.listStudents(equipe);
+        expect(lista.map((a) => a.name).sort()).toEqual(['Colega', 'User A']);
+        expect(lista.every((a) => a.scopesGrantedToMe.length === 0)).toBe(true);
+      }
     });
 
     it('profissional DEMITIDO perde a lista e a leitura no mesmo instante', async () => {
@@ -1337,7 +1356,10 @@ describe('isolamento entre usuários', () => {
         });
         expect(vinculo?.revokedAt).toBeNull();
 
-        await expect(studentView.listStudents(owned.pro)).resolves.toEqual([]);
+        // Fica só o grupo de que ele é dono; da academia, nada.
+        expect(
+          (await studentView.listStudents(owned.pro)).filter((a) => a.groupId === owned.groupId),
+        ).toEqual([]);
         expect(await mensagemDaRecusa(owned.pro, owned.membershipA, ShareScope.WORKOUT)).toBe(
           await recusaDeEstranho(ShareScope.WORKOUT),
         );
@@ -2247,6 +2269,7 @@ describe('isolamento entre usuários', () => {
         'action',
         'at',
         'denied',
+        'groupId',
         'professionalName',
         'scope',
       ]);
@@ -2262,12 +2285,37 @@ describe('isolamento entre usuários', () => {
     });
 
     // --- #156: papel não lê, em nenhum escopo ---
+    //
+    // ADR 026: dono e criador passaram a ser equipe e podem receber vínculo
+    // (casos logo abaixo). MEMBER continua nunca lendo ninguém.
 
-    const papeisQueNaoLeem = [
+    const papeisQueNaoLeem = [{ papel: GroupRole.MEMBER, quem: () => owned.colega }];
+
+    it.each([
       { papel: GroupRole.OWNER, quem: () => owned.userB },
       { papel: GroupRole.CREATOR, quem: () => owned.creator },
-      { papel: GroupRole.MEMBER, quem: () => owned.colega },
-    ];
+    ])('$papel lê só com o consentimento do titular, e fica na trilha', async ({ quem }) => {
+      for (const scope of escopos) {
+        expect(await mensagemDaRecusa(quem(), owned.membershipA, scope)).toBe(
+          await recusaDeEstranho(scope),
+        );
+      }
+      const alvo = await prisma.groupMembership.findUnique({
+        where: { groupId_userId: { groupId: owned.groupId, userId: quem() } },
+      });
+      await consent.grant(owned.userA, alvo!.id, [ShareScope.HABITS]);
+
+      await expect(
+        access.assertReadable(quem(), owned.membershipA, ShareScope.HABITS, 'leu_habitos'),
+      ).resolves.toBe(owned.userA);
+      for (const scope of escopos.filter((s) => s !== ShareScope.HABITS)) {
+        expect(await mensagemDaRecusa(quem(), owned.membershipA, scope)).toBe(
+          await recusaDeEstranho(scope),
+        );
+      }
+      const trilha = await consent.listAccessLog(owned.userA);
+      expect(trilha.some((l) => l.action === 'leu_habitos' && !l.denied)).toBe(true);
+    });
 
     it.each(
       papeisQueNaoLeem.flatMap(({ papel, quem }) =>

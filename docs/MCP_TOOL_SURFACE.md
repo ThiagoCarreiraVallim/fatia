@@ -33,12 +33,12 @@ opções abaixo foram avaliadas com isso em mente.
 
 O que pesa no contexto não é a contagem de tools, é o payload. Medido no que o registry
 serve de fato — `name`, `title`, `description`, `annotations` e o JSON Schema do input das
-118 tools: **93,6 k caracteres**, enviados em toda sessão que lista as tools.
-O denominador importa. Contar só `name + description + inputSchema` dá 76,0 k e subestima o
+121 tools: **98,1 k caracteres**, enviados em toda sessão que lista as tools.
+O denominador importa. Contar só `name + description + inputSchema` dá 80,0 k e subestima o
 catálogo em ~20% — `title` e `annotations` também vão no fio, em toda tool.
 
-Dentro desse total, os exemplos de invocação que a #111 acrescentou às 62 tools de escrita
-valem **5.217 caracteres** — média de **83** caracteres por tool, algo em torno de 6% do
+Dentro desse total, os exemplos de invocação que a #111 acrescentou às 64 tools de escrita
+valem **5.534 caracteres** — média de **84** caracteres por tool, algo em torno de 6% do
 catálogo. Os dois números são medidos no código pelo `tool-catalog.spec.ts`, junto com a
 contagem: a versão anterior desta frase dizia "4.110 caracteres, média de 91" — estagnada na
 medição da #111, feita quando o catálogo tinha 45 delas, e ainda por cima incoerente, porque
@@ -54,8 +54,7 @@ e não em campo separado — estão na §Convenções de [`docs/MCP.md`](./MCP.m
 Além da contagem, cada tool declara `hostedInference` — se a execução dispara inferência **paga
 pela Fatia**. É recorte de custo, não de tamanho, e por isso mora aqui junto do resto.
 
-Hoje são **118** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
-Hoje são **118** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
+Hoje são **121** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
 **0** tools com inferência hospedada.
 
 O segundo número é o ponto inteiro. Chamada vinda do cliente MCP do usuário roda no
@@ -74,11 +73,13 @@ O campo é interno e não vai no fio, então o tamanho do catálogo servido, med
 
 ### Fica fora do MCP — administração de grupo (#154, #155)
 
-O domínio Sharing entra com **9 tools**. Sete são do lado do aluno: `list_my_groups`,
-`join_group`, `leave_group`, `list_data_sharing`, `grant_data_sharing`, `revoke_data_sharing` e
-`list_data_access_log`. As outras duas são o painel do profissional da #157 —
-`list_my_students` e `get_student_progress` —, e as duas **só leem**. Criar grupo, aprovar
-entrada e remover membro ficam só em REST.
+O domínio Sharing entra com **12 tools**. Dez são do lado do aluno: `list_my_groups`,
+`join_group`, `get_group_invite`, `accept_group_invite`, `leave_group`, `set_group_sharing`,
+`list_data_sharing`, `grant_data_sharing`, `revoke_data_sharing` e `list_data_access_log`. As
+outras duas são o painel do profissional da #157 — `list_my_students` e
+`get_student_progress` —, e as duas **só leem**. Criar comunidade, editá-la ou apagá-la, aprovar
+entrada, remover membro, convidar, revogar convite, transferir a comunidade e comprar ou
+atribuir assento ficam só em REST (Fase 5, ADR 025 e 026).
 
 A ADR 006 diz que tudo que o PWA faz o Claude faz, e a exceção é deliberada: o "PWA" em
 questão é o painel do dono da academia, superfície B2B que não é o app do usuário. Manter

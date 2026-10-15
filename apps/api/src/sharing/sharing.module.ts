@@ -4,9 +4,11 @@ import { GoalsModule } from '../goals/goals.module';
 import { NutritionModule } from '../nutrition/nutrition.module';
 import { ProgressModule } from '../progress/progress.module';
 import { WorkoutModule } from '../workout/workout.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { AccessAuditService } from './access-audit.service';
 import { ConsentService } from './consent.service';
 import { GroupService } from './group.service';
+import { InviteService } from './invite.service';
 import { MembershipService } from './membership.service';
 import { PlanMaterializerService } from './plan-materializer.service';
 import { ProfessionalAccessService } from './professional-access.service';
@@ -25,6 +27,9 @@ import { ListDataSharingTool } from './mcp/list-data-sharing.tool';
 import { ListMyGroupsTool } from './mcp/list-my-groups.tool';
 import { ListMyStudentsTool } from './mcp/list-my-students.tool';
 import { RevokeDataSharingTool } from './mcp/revoke-data-sharing.tool';
+import { GetGroupInviteTool } from './mcp/get-group-invite.tool';
+import { AcceptGroupInviteTool } from './mcp/accept-group-invite.tool';
+import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
 
 /**
  * Toda a lógica de grupo e vínculo profissional do produto (ADR 014).
@@ -60,7 +65,14 @@ import { RevokeDataSharingTool } from './mcp/revoke-data-sharing.tool';
  * mudou uma linha para isso acontecer.
  */
 @Module({
-  imports: [CommonModule, WorkoutModule, ProgressModule, NutritionModule, GoalsModule],
+  imports: [
+    CommonModule,
+    WorkoutModule,
+    ProgressModule,
+    NutritionModule,
+    GoalsModule,
+    NotificationsModule,
+  ],
   controllers: [SharingController, ConsentController, ProfessionalController],
   providers: [
     ProfessionalAccessService,
@@ -70,11 +82,15 @@ import { RevokeDataSharingTool } from './mcp/revoke-data-sharing.tool';
     ConsentService,
     GroupService,
     MembershipService,
+    InviteService,
     PlanMaterializerService,
     GroupRoleGuard,
     ListMyGroupsTool,
     JoinGroupTool,
     LeaveGroupTool,
+    GetGroupInviteTool,
+    AcceptGroupInviteTool,
+    SetGroupSharingTool,
     ListDataSharingTool,
     GrantDataSharingTool,
     RevokeDataSharingTool,
@@ -88,6 +104,7 @@ import { RevokeDataSharingTool } from './mcp/revoke-data-sharing.tool';
     ConsentService,
     GroupService,
     MembershipService,
+    InviteService,
     StudentViewService,
     PlanMaterializerService,
   ],

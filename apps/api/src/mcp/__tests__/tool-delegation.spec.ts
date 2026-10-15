@@ -191,15 +191,54 @@ describe('classificação de identidade das tools MCP', () => {
     //
     // `\.create\(` sozinho não serve — metade do catálogo cria alguma coisa. O
     // recorte é criar **grupo**: só reprova quem importa o `GroupService`.
+    //
+    // Fase 5 (ADR 025/026): convidar, revogar ou reenviar convite, transferir a
+    // comunidade, editá-la ou apagá-la e mexer em assento também são do painel.
+    // Do `InviteService` o MCP só usa o lado de quem é convidado.
     const offenders = tools
       .filter(
         (tool) =>
-          /\.(?:approve|removeMember)\(/.test(tool.source) ||
-          (tool.source.includes('GroupService') && /\.create\(/.test(tool.source)),
+          /\.(?:approve|removeMember|transferOwnership)\(/.test(tool.source) ||
+          /SeatPool|seat-pool/.test(tool.source) ||
+          (tool.source.includes('GroupService') &&
+            /\.(?:create|update|remove)\(/.test(tool.source)) ||
+          (tool.source.includes('InviteService') &&
+            /\.(?:create|list|revoke|resend)\(/.test(tool.source)),
       )
       .map((tool) => tool.def.name);
 
     expect(offenders).toEqual([]);
+  });
+
+  it('consentimento à equipe só nas tools da allowlist, e sempre pelo service que faz o leque', () => {
+    // ADR 026: `scopes` no input de uma tool abre o dado do titular para a
+    // equipe inteira de uma comunidade. Toda tool que aceita esse campo está
+    // listada aqui, e entrega a escolha a um dos services que gravam o
+    // consentimento e criam os vínculos na mesma transação — nunca a um
+    // `prisma` direto ou a um service que esqueça o leque.
+    const GROUP_CONSENT_TOOLS: Record<string, string> = {
+      accept_group_invite: 'InviteService',
+      join_group: 'MembershipService',
+      set_group_sharing: 'ConsentService',
+    };
+    const comEscopo = tools.filter(
+      (tool) => campos(tool).includes('scopes') && !consentimento.includes(tool),
+    );
+
+    expect(comEscopo.map((tool) => tool.def.name).sort()).toEqual(
+      Object.keys(GROUP_CONSENT_TOOLS).sort(),
+    );
+    for (const tool of comEscopo) {
+      expect([tool.def.name, tool.source.includes(GROUP_CONSENT_TOOLS[tool.def.name])]).toEqual([
+        tool.def.name,
+        true,
+      ]);
+      // Recusar tudo é uma resposta válida e é o padrão: nada vem marcado.
+      expect([tool.def.name, tool.source.includes('PrismaService')]).toEqual([
+        tool.def.name,
+        false,
+      ]);
+    }
   });
 
   it('toda tool self resolve o alvo pelo contexto, e não pela porta de leitura', () => {

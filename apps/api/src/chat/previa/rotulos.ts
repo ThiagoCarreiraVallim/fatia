@@ -208,7 +208,26 @@ const fuso: Formato = (valor) => {
   return cidade === 'Sao Paulo' ? 'São Paulo' : cidade;
 };
 
+/** As categorias do consentimento (ADR 026), como a tela de entrar na comunidade diz. */
+const ESCOPOS: Record<string, string> = {
+  WORKOUT: 'Treino',
+  NUTRITION: 'Alimentação',
+  BODY: 'Peso e medidas',
+  HABITS: 'Água e passos',
+  GOALS: 'Metas',
+};
+
+/** Lista vazia é uma escolha, e o cartão diz qual: não compartilhar nada. */
+const escopos: Formato = (valor, ctx) =>
+  Array.isArray(valor) ? (valor.length ? listaDeMapa(ESCOPOS)(valor, ctx) : 'Nada') : null;
+
 export const CAMPOS: Record<string, Campo> = {
+  scopes: { rotulo: 'Compartilha com a equipe', formato: escopos },
+  statsOptIn: {
+    rotulo: 'Estatísticas agregadas',
+    formato: (valor) =>
+      typeof valor === 'boolean' ? (valor ? 'Participa' : 'Não participa') : null,
+  },
   mealType: { rotulo: 'Refeição', formato: deMapa(TIPO_DA_REFEICAO) },
   eatenAt: { rotulo: 'Quando', formato: dataEHora },
   loggedAt: { rotulo: 'Quando', formato: dataEHora },
@@ -351,7 +370,18 @@ export const IDS = {
   templateId: 'modelo',
 } as const;
 
-export type TipoDeRegistro = (typeof IDS)[keyof typeof IDS] | 'itemDaRefeicao' | 'agua';
+export type TipoDeRegistro =
+  (typeof IDS)[keyof typeof IDS] | 'itemDaRefeicao' | 'agua' | 'comunidade' | 'convite';
+
+/**
+ * Campo cujo sentido muda com a tool. `groupId` é grupo de alimento em
+ * `create_custom_food` e comunidade em `set_group_sharing`: resolver o segundo
+ * pelo primeiro recusava todo cartão de consentimento.
+ */
+export const CAMPO_POR_TOOL: Record<string, Record<string, TipoDeRegistro>> = {
+  set_group_sharing: { groupId: 'comunidade' },
+  accept_group_invite: { token: 'convite' },
+};
 
 /** O `id` cru muda de sentido conforme a tool — ver `tipoDoCampoId`. */
 export const ID_POR_TOOL: Record<string, TipoDeRegistro> = {
@@ -382,12 +412,16 @@ export const ROTULO_DO_REGISTRO: Record<TipoDeRegistro, string> = {
   modelo: 'Refeição salva',
   itemDaRefeicao: 'Item',
   agua: 'Registro de água',
+  comunidade: 'Comunidade',
+  convite: 'Comunidade',
 };
 
 /** Campos com forma própria no cartão, montados pelo serviço. */
 export const COMPOSTOS = new Set(['items', 'exercises']);
 
 export function tipoDoCampo(tool: string, campo: string): TipoDeRegistro | null {
+  const proprio = CAMPO_POR_TOOL[tool]?.[campo];
+  if (proprio) return proprio;
   if (campo === 'id') return ID_POR_TOOL[tool] ?? null;
   return (IDS as Record<string, TipoDeRegistro>)[campo] ?? null;
 }

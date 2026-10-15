@@ -3,11 +3,7 @@ import { InsightsService } from '../insights.service';
 import { EngagementService } from '../engagement.service';
 import { RetentionService } from '../retention.service';
 import { BehaviorService } from '../behavior.service';
-import {
-  NoStatsParticipation,
-  type Participant,
-  StatsParticipation,
-} from '../stats-participation.port';
+import { type Participant, StatsParticipation } from '../stats-participation.port';
 import type { PrismaService } from '../../common/prisma.service';
 
 /**
@@ -129,30 +125,6 @@ describe('InsightsService — consentimento', () => {
     // métrica no caminho. Não perguntar é mais barato e mais seguro.
     expect(prisma.workoutSession.findMany).not.toHaveBeenCalled();
     expect(prisma.workoutSession.groupBy).not.toHaveBeenCalled();
-  });
-
-  it('a implementação de hoje (sem a coluna statsOptIn) não conta ninguém', async () => {
-    const prisma = makePrisma();
-    const engagement = new EngagementService(prisma as unknown as PrismaService);
-    const service = new InsightsService(
-      new NoStatsParticipation(),
-      engagement,
-      new RetentionService(engagement),
-      new BehaviorService(prisma as unknown as PrismaService),
-    );
-
-    const resposta = await service.aggregate(
-      'grupo-1',
-      'retention',
-      'sessions_by_week',
-      'last_30_days',
-      AGORA,
-    );
-
-    // Sem coluna de opt-in não há como saber quem consentiu, e a única resposta
-    // defensável para "não sei quem consentiu" é ninguém.
-    expect(resposta.insufficientSample).toBe(true);
-    expect(prisma.workoutSession.findMany).not.toHaveBeenCalled();
   });
 });
 

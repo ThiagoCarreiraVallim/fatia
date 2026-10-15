@@ -11,6 +11,7 @@ type MockPrisma = {
     findMany: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
+    upsert: jest.Mock;
   };
   professionalLink: { findMany: jest.Mock };
   $transaction: jest.Mock;
@@ -23,6 +24,7 @@ const makePrisma = (): MockPrisma => ({
     findMany: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+    upsert: jest.fn(),
   },
   professionalLink: { findMany: jest.fn() },
   // O service passa um ARRAY de operações; `Promise.all` reproduz o batch sem banco.
@@ -36,12 +38,20 @@ const PRO = 'pro-1';
 
 describe('MembershipService', () => {
   let prisma: MockPrisma;
-  let links: { revokeAllForMemberOp: jest.Mock };
+  let links: {
+    revokeAllForMemberOp: jest.Mock;
+    groupConsentOps: jest.Mock;
+    teamMemberLinksOps: jest.Mock;
+  };
   let service: MembershipService;
 
   beforeEach(() => {
     prisma = makePrisma();
-    links = { revokeAllForMemberOp: jest.fn(() => ({ count: 0 })) };
+    links = {
+      revokeAllForMemberOp: jest.fn(() => ({ count: 0 })),
+      groupConsentOps: jest.fn(() => []),
+      teamMemberLinksOps: jest.fn(() => []),
+    };
     service = new MembershipService(
       prisma as unknown as PrismaService,
       links as unknown as ProfessionalLinkService,
@@ -127,24 +137,69 @@ describe('MembershipService', () => {
       await expect(service.approve('estranho', GROUP, 'm2')).rejects.toThrow(NotFoundException);
     });
 
-    it('aprova com o papel escolhido pelo dono', async () => {
+    it('aprova com o papel escolhido pelo dono e o consentimento guardado no pedido', async () => {
       prisma.groupMembership.findUnique.mockResolvedValueOnce(donoAtivo).mockResolvedValueOnce({
         id: 'm2',
         groupId: GROUP,
+        userId: ALUNO,
         status: MembershipStatus.INVITED,
+        consentScopes: ['WORKOUT'],
+        statsOptIn: true,
       });
-      prisma.groupMembership.update.mockResolvedValue({
+      prisma.groupMembership.findMany.mockResolvedValue([
+        { userId: DONO, role: GroupRole.OWNER, consentScopes: [] },
+        { userId: 'aluno-2', role: GroupRole.MEMBER, consentScopes: ['NUTRITION'] },
+      ]);
+      prisma.groupMembership.upsert.mockResolvedValue({
         id: 'm2',
         status: MembershipStatus.ACTIVE,
         role: GroupRole.PROFESSIONAL,
       });
 
-      await service.approve(DONO, GROUP, 'm2', GroupRole.PROFESSIONAL);
+      const r = await service.approve(DONO, GROUP, 'm2', GroupRole.PROFESSIONAL);
 
-      expect(prisma.groupMembership.update.mock.calls[0][0].data).toMatchObject({
+      expect(r).toMatchObject({ status: MembershipStatus.ACTIVE, role: GroupRole.PROFESSIONAL });
+      expect(prisma.groupMembership.upsert.mock.calls[0][0].update).toMatchObject({
         status: MembershipStatus.ACTIVE,
         role: GroupRole.PROFESSIONAL,
+        consentScopes: ['WORKOUT'],
+        statsOptIn: true,
       });
+      // O que a pessoa consentiu vai só para a equipe (o dono), nunca para outro aluno.
+      expect(links.groupConsentOps.mock.calls[0][0]).toMatchObject({
+        subjectUserId: ALUNO,
+        scopes: ['WORKOUT'],
+        receivers: [DONO],
+      });
+      // Entrou como profissional: recebe o que cada membro já consentiu ao grupo.
+      expect(links.teamMemberLinksOps.mock.calls[0][0]).toMatchObject({
+        teamUserId: ALUNO,
+        subjects: [
+          { userId: DONO, scopes: [] },
+          { userId: 'aluno-2', scopes: ['NUTRITION'] },
+        ],
+      });
+    });
+
+    it('aprovado como membro não recebe o leque inverso', async () => {
+      prisma.groupMembership.findUnique.mockResolvedValueOnce(donoAtivo).mockResolvedValueOnce({
+        id: 'm2',
+        groupId: GROUP,
+        userId: ALUNO,
+        status: MembershipStatus.INVITED,
+        consentScopes: [],
+        statsOptIn: false,
+      });
+      prisma.groupMembership.findMany.mockResolvedValue([]);
+      prisma.groupMembership.upsert.mockResolvedValue({
+        id: 'm2',
+        status: 'ACTIVE',
+        role: 'MEMBER',
+      });
+
+      await service.approve(DONO, GROUP, 'm2');
+
+      expect(links.teamMemberLinksOps).not.toHaveBeenCalled();
     });
 
     // O alvo é um pedido VÁLIDO e o papel é OWNER: o único motivo de recusa

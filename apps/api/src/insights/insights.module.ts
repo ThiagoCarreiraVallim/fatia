@@ -9,7 +9,7 @@ import { InsightsService } from './insights.service';
 import { RetentionService } from './retention.service';
 import { GroupRoleGuard } from '../sharing/guards/group-role.guard';
 import { InsightsAddonGuard } from './guards/insights-addon.guard';
-import { NoStatsParticipation, StatsParticipation } from './stats-participation.port';
+import { OptInStatsParticipation, StatsParticipation } from './stats-participation.port';
 
 /**
  * Painel agregado do dono da academia (#159 e #160).
@@ -20,20 +20,17 @@ import { NoStatsParticipation, StatsParticipation } from './stats-participation.
  * caminho até o indivíduo — a dependência mais fácil de adicionar por engano
  * seria justamente a que quebra a promessa.
  *
- * Duas portas, as duas com implementação provisória e troca de uma linha:
+ * Duas portas:
  *
- * - `StatsParticipation` → `NoStatsParticipation` enquanto
- *   `GroupMembership.statsOptIn` não existir no schema (migration proposta na
- *   PR, não aplicada nesta rodada). Ninguém participa; todo painel responde
- *   "amostra insuficiente".
- * - `BillingEntitlements` → `StaticEntitlementsService` enquanto a #158 não
- *   existir.
+ * - `StatsParticipation` → `OptInStatsParticipation`: membros `ACTIVE` com
+ *   `GroupMembership.statsOptIn` (ADR 026). Quem não respondeu não entra.
+ * - `BillingEntitlements` → a implementação do `BillingModule`.
  */
 @Module({
   imports: [CommonModule, BillingModule],
   controllers: [InsightsController],
   providers: [
-    { provide: StatsParticipation, useClass: NoStatsParticipation },
+    { provide: StatsParticipation, useClass: OptInStatsParticipation },
     EngagementService,
     RetentionService,
     BehaviorService,

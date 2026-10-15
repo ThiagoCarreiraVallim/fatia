@@ -32,11 +32,19 @@ Um controller de `sharing/` declara a camada por decorator, e não existe rota s
 | `@RequireGroupAction` | administra o grupo; papel decide              | `GroupRoleGuard`, pelo `:groupId`      |
 | `@SelfOnly`           | age sobre quem chamou; papel não decide nada  | o próprio `userId` do contexto         |
 | `@ConsentGoverned`    | lê dado de outra pessoa; **o vínculo** decide | `assertReadable`, pelo `:membershipId` |
+| `@InvitePreview`      | cartão do convite, sem login                  | o próprio token, que é o segredo       |
 
 O terceiro entrou com o painel do profissional (#157). Ele não é um afrouxamento: continua não
 existindo rota sem declaração, e `permission-matrix.spec.ts` cobra de cada rota `@ConsentGoverned`
 que ela enderece o titular por `:membershipId` — porque a variante que a ADR 014 proíbe é
 justamente resolver o aluno por um identificador de usuário vindo de fora.
+
+O quarto, `@InvitePreview`, entrou com os convites (Fase 5) e é a única rota pública de
+`sharing/`: `GET /groups/invites/:token` mostra a quem recebeu o link **que comunidade** o
+convidou, antes de criar conta. Não lê dado de ninguém nem age sobre ninguém. O spec cobra que a
+rota tenha `:token` na URL — sem o token, uma rota pública de grupo seria um catálogo aberto — e
+o throttle da rota é baixo. Convite inválido, expirado, revogado, esgotado ou de outro e-mail
+responde o mesmo `NOT_FOUND`.
 
 ## Acúmulo de papéis é impossível por construção
 
@@ -60,6 +68,7 @@ aparece em `permissions.ts` e nenhum service consulta `role` para ampliar escopo
 | `group.read`       | sim   | sim          | sim     | sim    |
 | `group.update`     | sim   | não          | não     | não    |
 | `group.delete`     | sim   | não          | não     | não    |
+| `group.transfer`   | sim   | não          | não     | não    |
 | `invite.create`    | sim   | sim          | não     | não    |
 | `invite.revoke`    | sim   | sim          | não     | não    |
 | `member.list`      | sim   | sim          | sim     | sim    |
@@ -86,6 +95,10 @@ futura:
 - **`insights.read` é `OWNER` e só.** O painel agregado (#159/#160) é do dono. O profissional já
   tem o caminho individual, com consentimento; dar-lhe também o agregado seria dois caminhos para
   a mesma informação com regras diferentes.
+- **`invite.create` abre para `PROFESSIONAL`, mas só como `MEMBER`.** Quem define a equipe é
+  o dono: o `InviteService` recusa convite de profissional para papel de equipe, e ninguém é
+  convidado como `OWNER` — dono se transfere (`group.transfer`, o antigo dono fica na equipe
+  como `PROFESSIONAL`).
 - **`content.moderate` é `OWNER` e `CREATOR`.** `PROFESSIONAL` não modera: não é papel de
   moderação, e acumular seria a mesma armadilha que o resto do documento evita.
 
@@ -101,6 +114,7 @@ administrando. `ACTIVE` exerce o que a tabela acima permite. E a associação **
 | `group.read`       | sim                  |
 | `group.update`     | não                  |
 | `group.delete`     | não                  |
+| `group.transfer`   | não                  |
 | `invite.create`    | não                  |
 | `invite.revoke`    | não                  |
 | `member.list`      | não                  |
@@ -127,18 +141,25 @@ cobrança viva (#158).
 
 ## Leitura de dado de titular (papel NÃO decide — vínculo decide)
 
-| Escopo      | Quem pode receber vínculo | Quem NUNCA recebe             |
-| ----------- | ------------------------- | ----------------------------- |
-| `WORKOUT`   | PROFESSIONAL              | OWNER, CREATOR, MEMBER, ADMIN |
-| `NUTRITION` | PROFESSIONAL              | OWNER, CREATOR, MEMBER, ADMIN |
-| `BODY`      | PROFESSIONAL              | OWNER, CREATOR, MEMBER, ADMIN |
-| `HABITS`    | PROFESSIONAL              | OWNER, CREATOR, MEMBER, ADMIN |
-| `GOALS`     | PROFESSIONAL              | OWNER, CREATOR, MEMBER, ADMIN |
+| Escopo      | Quem pode receber vínculo    | Quem NUNCA recebe |
+| ----------- | ---------------------------- | ----------------- |
+| `WORKOUT`   | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
+| `NUTRITION` | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
+| `BODY`      | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
+| `HABITS`    | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
+| `GOALS`     | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
 
 Esta tabela é **igual em todas as linhas de propósito**, e é isso que ela tem a dizer: nenhum
-papel lê nada. `PROFESSIONAL` aparece só como "pode receber", que não é o mesmo que "tem" — sem
-uma linha de `ProfessionalLink` criada pelo titular, com aquele escopo, ativa, no mesmo grupo, a
-leitura responde o mesmo `NOT_FOUND` que um estranho receberia.
+papel lê nada. A equipe (`OWNER`, `PROFESSIONAL`, `CREATOR`) aparece só como "pode receber", que
+não é o mesmo que "tem" — sem uma linha de `ProfessionalLink` criada pelo titular, com aquele
+escopo, ativa, no mesmo grupo, a leitura responde o mesmo `NOT_FOUND` que um estranho receberia.
+
+A ADR 026 abriu a coluna para o dono e o criador: o consentimento passa a ser dado **ao entrar**
+(no convite ou no código), para a equipe toda de uma vez, e não mais um profissional por vez.
+Os escopos escolhidos ficam em `GroupMembership.consentScopes` e viram um vínculo para cada
+pessoa ativa da equipe; quem entra na equipe depois recebe os vínculos de quem já consentiu, e
+quem sai perde os seus. Reescrever o consentimento do grupo (`PUT /groups/:groupId/consent`)
+substitui os vínculos da pessoa naquele grupo. `MEMBER` continua nunca lendo ninguém.
 
 Consentir um escopo não abre outro: a porta confere `scopes: { has: scope }`, um escopo por
 chamada. `hasSome` com lista casaria com tudo, e consentir treino abriria a dieta.

@@ -1,5 +1,6 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { GroupRole, GroupType, MembershipStatus } from '@fatia/db';
+import { ProfessionalLinkService } from '../professional-link.service';
 import { GroupService } from '../group.service';
 import type { PrismaService } from '../../common/prisma.service';
 
@@ -22,7 +23,10 @@ describe('GroupService', () => {
 
   beforeEach(() => {
     prisma = makePrisma();
-    service = new GroupService(prisma as unknown as PrismaService);
+    service = new GroupService(
+      prisma as unknown as PrismaService,
+      new ProfessionalLinkService(prisma as unknown as PrismaService),
+    );
   });
 
   describe('create', () => {
@@ -96,6 +100,9 @@ describe('GroupService', () => {
             slug: 'x',
             createdAt: new Date(),
           },
+          consentScopes: [],
+          statsOptIn: false,
+          seatAssignments: [],
         });
 
         await expect(service.findByIdForMember(OUTRO, 'g1')).rejects.toThrow(NotFoundException);
@@ -119,6 +126,9 @@ describe('GroupService', () => {
             slug: 'x',
             createdAt: new Date(),
           },
+          consentScopes: [],
+          statsOptIn: false,
+          seatAssignments: [],
         });
 
         await expect(service.findByIdForMember(OUTRO, 'g1')).resolves.toMatchObject({
@@ -143,26 +153,43 @@ describe('GroupService', () => {
   });
 
   describe('previewBySlug', () => {
-    it('devolve metadado do grupo e a contagem, nunca a lista de membros', async () => {
+    it('devolve metadado, a contagem e a equipe — nunca a lista de membros', async () => {
       prisma.group.findUnique.mockResolvedValue({
         id: 'g1',
         type: GroupType.SPONSORED,
         name: 'Academia X',
         slug: 'academia-x',
+        description: null,
+        joinPolicy: 'APPROVAL',
       });
       prisma.groupMembership.count.mockResolvedValue(12);
+      prisma.groupMembership.findMany.mockResolvedValue([
+        { role: GroupRole.OWNER, user: { name: 'Dona' } },
+      ]);
 
       const preview = await service.previewBySlug('academia-x');
 
-      // Quem está numa academia é informação sobre pessoas, não sobre o grupo.
+      // A equipe aparece porque é ela quem vai receber o que a pessoa escolher
+      // compartilhar (ADR 026). Os outros alunos, nunca: quem está numa academia
+      // é informação sobre pessoas, não sobre o grupo.
       expect(preview).toEqual({
         id: 'g1',
         type: GroupType.SPONSORED,
         name: 'Academia X',
         slug: 'academia-x',
+        description: null,
+        joinPolicy: 'APPROVAL',
         memberCount: 12,
+        team: [{ name: 'Dona', role: GroupRole.OWNER }],
       });
-      expect(prisma.groupMembership.findMany).not.toHaveBeenCalled();
+      expect(prisma.groupMembership.findMany.mock.calls[0][0].where.role).toEqual({
+        in: [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR],
+      });
+    });
+
+    it('comunidade só por convite não aparece pelo código', async () => {
+      prisma.group.findUnique.mockResolvedValue({ id: 'g1', joinPolicy: 'INVITE_ONLY' });
+      await expect(service.previewBySlug('academia-x')).rejects.toThrow(NotFoundException);
     });
   });
 });

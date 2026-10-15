@@ -12,6 +12,11 @@ export const AppEnvSchema = z.object({
   LOGTO_MCP_APP_ID: z.string().min(1),
   LOGTO_MCP_APP_SECRET: z.string().min(1),
   WEB_ORIGIN: z.string().url().default('http://localhost:3030'),
+  // E-mail da própria API (convites de comunidade). Separado do conector SMTP do Logto
+  // (`EMAIL_SMTP_*`), que é configurado dentro do Logto e enxerga a rede do Docker; a API roda
+  // fora dela no dev. Vazio = não envia: o convite continua valendo pelo link copiado.
+  MAIL_SMTP_URL: z.string().url().optional().or(z.literal('')),
+  EMAIL_FROM: z.string().min(3).default('Fatia <nao-responda@fatia.local>'),
   // Observabilidade (issue #39). Vazio = instrumentação inerte: sem exportador, sem timer, sem
   // container extra. Quem sobe o stack do `infra/docker-compose.observability.yml` preenche.
   // Declarado aqui só para validar e documentar — o `tracing.ts` lê `process.env` direto,

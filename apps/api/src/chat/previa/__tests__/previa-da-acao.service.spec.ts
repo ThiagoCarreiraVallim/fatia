@@ -10,6 +10,9 @@ import { ForgetMemoryTool } from '../../../chat/memory/mcp/forget-memory.tool';
 import { CopyMealTool } from '../../../nutrition/mcp/copy-meal.tool';
 import { CopyDayTool } from '../../../nutrition/mcp/copy-day.tool';
 import { LogMealTemplateTool } from '../../../nutrition/mcp/log-meal-template.tool';
+import { SetGroupSharingTool } from '../../../sharing/mcp/set-group-sharing.tool';
+import { AcceptGroupInviteTool } from '../../../sharing/mcp/accept-group-invite.tool';
+import { hashInviteToken } from '../../../sharing/invite.service';
 import { PreviaDaAcaoService } from '../previa-da-acao.service';
 
 /**
@@ -34,6 +37,8 @@ describe('PreviaDaAcaoService', () => {
     CopyMealTool,
     CopyDayTool,
     LogMealTemplateTool,
+    SetGroupSharingTool,
+    AcceptGroupInviteTool,
   ];
   const discovery = {
     getProviders: () =>
@@ -51,6 +56,9 @@ describe('PreviaDaAcaoService', () => {
   let medidaDoOutro = '';
   let refeicaoDoDono = '';
   let modeloDoDono = '';
+  let comunidade = '';
+  const TOKEN = 'a'.repeat(40) + 'bcd';
+  const TOKEN_VENCIDO = 'z'.repeat(40) + 'xyw';
 
   beforeAll(async () => {
     const stamp = `previa-${Date.now()}`;
@@ -139,6 +147,36 @@ describe('PreviaDaAcaoService', () => {
         },
       })
     ).id;
+    comunidade = (
+      await prisma.group.create({
+        data: {
+          type: 'SPONSORED',
+          name: 'Academia da Prévia',
+          slug: `${stamp}-academia`,
+          ownerId: outro.id,
+          memberships: {
+            create: [
+              { userId: outro.id, role: 'OWNER', status: 'ACTIVE' },
+              { userId: dono.id, role: 'MEMBER', status: 'ACTIVE' },
+            ],
+          },
+          invites: {
+            create: [
+              {
+                tokenHash: hashInviteToken(TOKEN),
+                role: 'MEMBER',
+                expiresAt: new Date('2026-10-01T00:00:00.000Z'),
+              },
+              {
+                tokenHash: hashInviteToken(TOKEN_VENCIDO),
+                role: 'MEMBER',
+                expiresAt: new Date('2026-09-20T00:00:00.000Z'),
+              },
+            ],
+          },
+        },
+      })
+    ).id;
     metaDoOutro = (
       await prisma.goal.create({
         data: {
@@ -154,6 +192,7 @@ describe('PreviaDaAcaoService', () => {
   }, 60_000);
 
   afterAll(async () => {
+    await prisma.group.deleteMany({ where: { id: comunidade } });
     await prisma.food.deleteMany({ where: { id: alimentoDoDono } });
     await prisma.user.deleteMany({ where: { id: { in: [dono.id, outro.id] } } });
     await prisma.$disconnect();
@@ -336,6 +375,76 @@ describe('PreviaDaAcaoService', () => {
     );
     expect(alheia.valida).toBe(false);
     expect(JSON.stringify(alheia)).not.toContain('Café');
+  });
+
+  it('consentimento à comunidade: o nome dela e as categorias, nunca o grupo de alimento', async () => {
+    // `groupId` é grupo de alimento no resto do catálogo; aqui é a comunidade.
+    await expect(
+      previas.previa(dono, 'set_group_sharing', {
+        groupId: comunidade,
+        scopes: ['WORKOUT', 'HABITS'],
+        statsOptIn: false,
+      }),
+    ).resolves.toEqual({
+      valida: true,
+      linhas: [
+        { rotulo: 'Comunidade', valor: 'Academia da Prévia' },
+        { rotulo: 'Compartilha com a equipe', valor: 'Treino, Água e passos' },
+        { rotulo: 'Estatísticas agregadas', valor: 'Não participa' },
+      ],
+    });
+    const semNada = await previas.previa(dono, 'set_group_sharing', {
+      groupId: comunidade,
+      scopes: [],
+      statsOptIn: true,
+    });
+    expect(semNada.linhas).toContainEqual({ rotulo: 'Compartilha com a equipe', valor: 'Nada' });
+  });
+
+  it('comunidade de que a pessoa não é membro não ganha nome no cartão', async () => {
+    const estranho = await prisma.user.create({
+      data: {
+        logtoSub: `previa-estranho-${Date.now()}`,
+        email: `previa-estranho-${Date.now()}@test.local`,
+        name: 'estranho',
+      },
+    });
+    try {
+      const previa = await previas.previa({ id: estranho.id, timezone: TZ }, 'set_group_sharing', {
+        groupId: comunidade,
+        scopes: ['BODY'],
+        statsOptIn: false,
+      });
+      expect(previa.valida).toBe(false);
+      expect(JSON.stringify(previa)).not.toContain('Academia da Prévia');
+    } finally {
+      await prisma.user.delete({ where: { id: estranho.id } });
+    }
+  });
+
+  it('aceitar convite mostra a comunidade, e convite vencido recusa o resumo', async () => {
+    await expect(
+      previas.previa(
+        dono,
+        'accept_group_invite',
+        { token: TOKEN, scopes: ['NUTRITION'], statsOptIn: true },
+        AGORA,
+      ),
+    ).resolves.toEqual({
+      valida: true,
+      linhas: [
+        { rotulo: 'Comunidade', valor: 'Academia da Prévia' },
+        { rotulo: 'Compartilha com a equipe', valor: 'Alimentação' },
+        { rotulo: 'Estatísticas agregadas', valor: 'Participa' },
+      ],
+    });
+    const vencido = await previas.previa(
+      dono,
+      'accept_group_invite',
+      { token: TOKEN_VENCIDO, scopes: [], statsOptIn: false },
+      AGORA,
+    );
+    expect(vencido.valida).toBe(false);
   });
 
   it('tool que não pede confirmação não tem resumo', async () => {

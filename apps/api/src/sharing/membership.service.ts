@@ -4,8 +4,17 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { GroupRole, MembershipStatus, type ShareScope } from '@fatia/db';
+import {
+  GroupRole,
+  JoinPolicy,
+  MembershipStatus,
+  type GroupMembership,
+  type Prisma,
+  type ShareScope,
+} from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
+import { normalizarEscopos } from './consent-scopes';
+import { canReceiveLink } from './permissions';
 import { ProfessionalLinkService } from './professional-link.service';
 
 /** Mesma resposta para "grupo não existe" e "não sou membro dele" (#92). */
@@ -30,6 +39,12 @@ export interface MemberView {
   scopesGrantedToMe?: ShareScope[];
 }
 
+/** O que a pessoa escolheu compartilhar ao entrar (ADR 026). Nada por padrão. */
+export interface JoinConsent {
+  scopes: ShareScope[];
+  statsOptIn: boolean;
+}
+
 export interface MembershipResult {
   membershipId: string;
   groupId: string;
@@ -42,10 +57,12 @@ export interface MembershipResult {
 /**
  * Entrada, saída e composição do grupo.
  *
- * Duas invariantes governam este arquivo, e as duas vêm da ADR 014:
+ * Duas invariantes governam este arquivo (ADR 014, revista pela ADR 026):
  *
- * 1. **Entrar concede zero.** Nenhum caminho daqui cria `ProfessionalLink`.
- *    Quem lê dado de saúde é quem tem vínculo consentido pelo titular (#155).
+ * 1. **Entrar concede só o que a pessoa escolheu.** Os vínculos que nascem na
+ *    entrada são exatamente os escopos marcados na tela de consentimento —
+ *    nada vem marcado, e recusar tudo também entra. Quem lê dado de saúde é
+ *    sempre quem tem vínculo consentido pelo titular.
  * 2. **Sair revoga.** Perder o contexto do grupo encerra todo vínculo daquele
  *    `groupId`, na mesma transação da mudança de status — senão existe uma
  *    janela em que a membership já acabou e a permissão ainda vale.
@@ -58,20 +75,28 @@ export class MembershipService {
   ) {}
 
   /**
-   * Pedido de entrada do próprio usuário, pelo slug do grupo.
+   * Entrada do próprio usuário pelo código (`slug`) da comunidade.
    *
-   * O aceite é do aluno **e** do dono: a pessoa pede (ato explícito dela, nunca
-   * efeito de abrir um link) e o dono aprova. Ninguém entra em grupo sem saber,
-   * e ninguém coloca outra pessoa dentro de um grupo — a identidade de quem
-   * entra sai sempre do contexto autenticado, jamais do input.
+   * Ninguém coloca outra pessoa dentro de um grupo: a identidade de quem entra
+   * sai sempre do contexto autenticado, jamais do input. O papel é sempre
+   * `MEMBER` — papel de equipe, que recebe consentimento de leitura, nunca é
+   * autoatribuído (vem do convite ou da aprovação do dono).
    *
-   * O papel é sempre `MEMBER`. Quem vira `PROFESSIONAL` ou `CREATOR` é definido
-   * pelo dono no momento da aprovação: um papel que pode receber consentimento
-   * de leitura não pode ser autoatribuído.
+   * A política da comunidade decide o resto (ADR 026):
+   * - `OPEN`: entra na hora, e o consentimento escolhido já vira vínculo;
+   * - `APPROVAL`: fica pendente com o consentimento guardado, e os vínculos só
+   *   nascem na aprovação;
+   * - `INVITE_ONLY`: o código não abre a porta — responde como inexistente.
    */
-  async requestJoin(userId: string, slug: string): Promise<MembershipResult> {
+  async requestJoin(
+    userId: string,
+    slug: string,
+    consent: JoinConsent = { scopes: [], statsOptIn: false },
+  ): Promise<MembershipResult> {
     const group = await this.prisma.group.findUnique({ where: { slug } });
-    if (!group) throw new NotFoundException(NOT_FOUND);
+    if (!group || group.joinPolicy === JoinPolicy.INVITE_ONLY) {
+      throw new NotFoundException(NOT_FOUND);
+    }
 
     const existente = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId: group.id, userId } },
@@ -88,21 +113,36 @@ export class MembershipService {
       );
     }
 
-    // Reentrada é UPDATE, por causa do `@@unique([groupId, userId])`. O
-    // `leftAt` da saída anterior fica de pé até a aprovação e some no `joinedAt`
-    // novo: a trilha que importa é a do `ProfessionalLink`, que é imutável.
+    if (group.joinPolicy === JoinPolicy.OPEN) {
+      const ops = await this.activationOps({
+        groupId: group.id,
+        userId,
+        role: GroupRole.MEMBER,
+        consent,
+        at: new Date(),
+      });
+      const [membership] = (await this.prisma.$transaction(ops)) as [GroupMembership];
+      return {
+        membershipId: membership.id,
+        groupId: group.id,
+        status: membership.status,
+        role: membership.role,
+        revokedLinks: 0,
+      };
+    }
+
+    const escopos = normalizarEscopos(consent.scopes);
+    const pedido = {
+      status: MembershipStatus.INVITED,
+      role: GroupRole.MEMBER,
+      consentScopes: escopos,
+      consentAt: new Date(),
+      statsOptIn: consent.statsOptIn,
+    };
     const membership = existente
-      ? await this.prisma.groupMembership.update({
-          where: { id: existente.id },
-          data: { status: MembershipStatus.INVITED, role: GroupRole.MEMBER },
-        })
+      ? await this.prisma.groupMembership.update({ where: { id: existente.id }, data: pedido })
       : await this.prisma.groupMembership.create({
-          data: {
-            groupId: group.id,
-            userId,
-            role: GroupRole.MEMBER,
-            status: MembershipStatus.INVITED,
-          },
+          data: { groupId: group.id, userId, ...pedido },
         });
 
     return {
@@ -115,11 +155,9 @@ export class MembershipService {
   }
 
   /**
-   * O dono aprova um pedido de entrada e define o papel.
-   *
-   * `membershipId` vem do corpo/URL, e por isso é conferido contra o `groupId`
-   * já verificado — ser dono de um grupo não autoriza mexer na membership de
-   * outro (#204).
+   * Aprovação do dono. Define o papel de quem entra (nunca `OWNER`) e só aqui
+   * o consentimento guardado no pedido vira vínculo — junto com o leque inverso
+   * quando o papel é de equipe.
    */
   async approve(
     ownerId: string,
@@ -134,10 +172,14 @@ export class MembershipService {
       throw new NotFoundException(MEMBERSHIP_NOT_FOUND);
     }
 
-    const membership = await this.prisma.groupMembership.update({
-      where: { id: membershipId },
-      data: { status: MembershipStatus.ACTIVE, role, joinedAt: new Date(), leftAt: null },
+    const ops = await this.activationOps({
+      groupId,
+      userId: alvo.userId,
+      role,
+      consent: { scopes: alvo.consentScopes, statsOptIn: alvo.statsOptIn },
+      at: new Date(),
     });
+    const [membership] = (await this.prisma.$transaction(ops)) as [GroupMembership];
 
     return {
       membershipId: membership.id,
@@ -146,6 +188,68 @@ export class MembershipService {
       role: membership.role,
       revokedLinks: 0,
     };
+  }
+
+  /**
+   * As escritas de quem passa a ser membro ativo, **sem executar**, para um
+   * único `$transaction([...])` (ADR 010: sem transação interativa). A primeira
+   * operação é sempre o upsert da membership.
+   *
+   * 1. a membership fica `ACTIVE` com o papel e o registro do aceite;
+   * 2. o consentimento escolhido vira vínculo para cada pessoa ativa da equipe;
+   * 3. se o papel é de equipe, a pessoa recebe o vínculo de cada membro que já
+   *    consentiu (o leque inverso).
+   *
+   * Usado pela entrada aberta, pela aprovação e pelo aceite de convite.
+   */
+  async activationOps(params: {
+    groupId: string;
+    userId: string;
+    role: GroupRole;
+    consent: JoinConsent;
+    at: Date;
+  }): Promise<Prisma.PrismaPromise<unknown>[]> {
+    const { groupId, userId, role, at } = params;
+    const scopes = normalizarEscopos(params.consent.scopes);
+    const ativos = await this.prisma.groupMembership.findMany({
+      where: { groupId, status: MembershipStatus.ACTIVE, userId: { not: userId } },
+      select: { userId: true, role: true, consentScopes: true },
+    });
+
+    const dados = {
+      role,
+      status: MembershipStatus.ACTIVE,
+      joinedAt: at,
+      leftAt: null,
+      consentScopes: scopes,
+      consentAt: at,
+      statsOptIn: params.consent.statsOptIn,
+    };
+    const ops: Prisma.PrismaPromise<unknown>[] = [
+      this.prisma.groupMembership.upsert({
+        where: { groupId_userId: { groupId, userId } },
+        create: { groupId, userId, ...dados },
+        update: dados,
+      }),
+      ...this.links.groupConsentOps({
+        subjectUserId: userId,
+        groupId,
+        scopes,
+        receivers: ativos.filter((m) => canReceiveLink(m.role)).map((m) => m.userId),
+        at,
+      }),
+    ];
+    if (canReceiveLink(role)) {
+      ops.push(
+        ...this.links.teamMemberLinksOps({
+          groupId,
+          teamUserId: userId,
+          subjects: ativos.map((m) => ({ userId: m.userId, scopes: m.consentScopes })),
+          at,
+        }),
+      );
+    }
+    return ops;
   }
 
   /**

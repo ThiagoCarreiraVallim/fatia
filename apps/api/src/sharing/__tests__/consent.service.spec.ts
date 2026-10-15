@@ -154,7 +154,9 @@ describe('ConsentService', () => {
       expect(links.grant).not.toHaveBeenCalled();
     });
 
-    it.each([GroupRole.OWNER, GroupRole.CREATOR, GroupRole.MEMBER])(
+    // ADR 026: OWNER e CREATOR passaram a poder receber (são equipe); MEMBER
+    // continua nunca recebendo — outro aluno não lê ninguém.
+    it.each([GroupRole.MEMBER])(
       'recusa consentimento para %s — papel não elegível a vínculo',
       async (role) => {
         cenarioFeliz(membershipDoPro({ role }));
@@ -163,6 +165,16 @@ describe('ConsentService', () => {
           ConflictException,
         );
         expect(links.grant).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([GroupRole.OWNER, GroupRole.CREATOR])(
+      'aceita consentimento para %s, que é equipe (ADR 026)',
+      async (role) => {
+        cenarioFeliz(membershipDoPro({ role }));
+
+        await service.grant(SUBJECT, PRO_MEMBERSHIP, [ShareScope.WORKOUT]);
+        expect(links.grant).toHaveBeenCalled();
       },
     );
 

@@ -104,8 +104,7 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **118 tools** declaram `false`, e é a resposta que
-pela Fatia** (visão, LLM, embedding). Hoje as **118 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **121 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -185,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 118 tools): **93,6 k caracteres**
-hoje, dos quais **5.217 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 121 tools): **98,1 k caracteres**
+hoje, dos quais **5.534 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **87** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (76,0 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (80,0 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -349,6 +348,9 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `refresh_achievements`       | W        |
 | **Grupos (B2B)**           | `list_my_groups`             | R        |
 |                            | `join_group`                 | C        |
+|                            | `get_group_invite`           | R        |
+|                            | `accept_group_invite`        | C        |
+|                            | `set_group_sharing`          | C/U      |
 |                            | `leave_group`                | D        |
 | **Compartilhamento**       | `list_data_sharing`          | R        |
 |                            | `grant_data_sharing`         | C/U      |
@@ -360,8 +362,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `save_memory`                | C        |
 |                            | `forget_memory`              | D        |
 
-Total: **118 tools**. Cada uma documentada abaixo.
-Total: **118 tools**. Cada uma documentada abaixo.
+Total: **121 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -2507,16 +2508,20 @@ idempotente: o `@@unique([userId, key])` garante que reavaliar não duplica nem 
 ## Grupos (B2B)
 
 Academia, personal e nutricionista entram pela [ADR 014](./ADR/014-compartilhamento-b2b-copia-e-vinculo.md).
-Três coisas valem para todas as tools desta seção:
+Quatro coisas valem para todas as tools desta seção:
 
-1. **Estar num grupo não concede nada.** Quem lê dado de saúde do usuário é o profissional que
-   ele autorizou explicitamente, num ato separado (`ProfessionalLink`, #155). Não existe
-   "acesso da academia".
+1. **Estar num grupo não concede nada por si.** Quem lê dado de saúde do usuário é a equipe da
+   comunidade (dono, profissionais e criadores), e só nas categorias que ele escolheu ao entrar
+   ou depois (`scopes`, [ADR 026](./ADR/026-consentimento-ao-entrar-na-comunidade.md)). O
+   padrão é nada, recusar tudo também entra, e membros comuns nunca leem.
 2. **Ninguém coloca outra pessoa num grupo.** A identidade de quem entra sai sempre do token —
    nenhuma tool aceita id de usuário.
 3. **Sair revoga na hora.** A saída encerra, na mesma transação, todo vínculo daquele grupo.
+4. **Convite não diz por que falhou.** Token inválido, vencido, revogado, esgotado ou de outro
+   e-mail respondem o mesmo `NOT_FOUND`.
 
-Criar grupo, aprovar entrada e remover membro **não têm tool**: são só REST, no painel do dono.
+Criar, editar ou apagar a comunidade, aprovar entrada, remover membro, convidar, transferir e
+mexer em assento **não têm tool**: são só REST, no painel do dono.
 Ver [`docs/MCP_TOOL_SURFACE.md`](./MCP_TOOL_SURFACE.md).
 
 ### `list_my_groups`
@@ -2533,30 +2538,119 @@ Array<{
   type: 'SPONSORED' | 'SOCIAL';
   name: string;
   slug: string;
-  role: 'OWNER' | 'PROFESSIONAL' | 'CREATOR' | 'MEMBER';
+  description: string | null;
+  joinPolicy: 'OPEN' | 'APPROVAL' | 'INVITE_ONLY';
+  role: 'OWNER' | 'ADMIN' | 'PROFESSIONAL' | 'CREATOR' | 'MEMBER';
   status: 'INVITED' | 'ACTIVE';
   membershipId: string;
   joinedAt: string | null;
   createdAt: string;
+  /** O que a própria pessoa compartilha com a equipe (ADR 026). */
+  consentScopes: Array<'WORKOUT' | 'NUTRITION' | 'BODY' | 'HABITS' | 'GOALS'>;
+  consentAt: string | null;
+  statsOptIn: boolean;
+  /** A comunidade paga a IA hospedada desta pessoa (ADR 025). */
+  hasAiSeat: boolean;
 }>;
 ```
 
 ### `join_group`
 
-Pede para entrar num grupo pelo slug do convite. O pedido nasce `INVITED` e só vira `ACTIVE`
-quando o dono aprova — o papel também é dele, porque `PROFESSIONAL` é papel que pode receber
-consentimento de leitura e não pode ser autoatribuído.
+Pede para entrar numa comunidade pelo código público (slug). O que acontece depende da
+comunidade (`joinPolicy`): `OPEN` entra `ACTIVE` na hora; `APPROVAL` nasce `INVITED` e só vira
+`ACTIVE` quando o dono aprova; `INVITE_ONLY` não aceita código e responde `NOT_FOUND`. O papel
+é sempre `MEMBER`: papel de equipe recebe consentimento de leitura e não pode ser
+autoatribuído.
+
+O consentimento à equipe vai junto e é opcional: sem `scopes`, nada é compartilhado. Em
+`APPROVAL` ele fica guardado e só vira acesso quando o pedido é aprovado.
 
 **Input:**
 
 ```typescript
 {
   slug: string;
+  scopes?: Array<'WORKOUT' | 'NUTRITION' | 'BODY' | 'HABITS' | 'GOALS'>;
+  statsOptIn?: boolean;
 }
 ```
 
-**Erros:** `NOT_FOUND` se o slug não existe; `CONFLICT` se já é membro ou já existe pedido
-pendente.
+**Erros:** `NOT_FOUND` se o slug não existe ou a comunidade só aceita convite; `CONFLICT` se já
+é membro ou já existe pedido pendente.
+
+### `get_group_invite`
+
+Mostra a comunidade de um convite (`/c/<token>`) antes de aceitar. Só lê: não entra nem
+compartilha nada.
+
+**Input:**
+
+```typescript
+{
+  token: string; // 43 caracteres base64url
+}
+```
+
+**Output:**
+
+```typescript
+{
+  group: {
+    id: string;
+    name: string;
+    description: string | null;
+    type: 'SPONSORED' | 'SOCIAL';
+  }
+  role: 'PROFESSIONAL' | 'CREATOR' | 'MEMBER' | 'ADMIN';
+  invitedBy: string | null;
+  /** Quem da equipe veria o que for compartilhado: nome e papel, nada mais. */
+  team: Array<{ name: string; role: 'OWNER' | 'PROFESSIONAL' | 'CREATOR' }>;
+  memberCount: number;
+  /** O convite foi para um e-mail: só a conta com esse e-mail aceita. */
+  emailBound: boolean;
+  expiresAt: string;
+}
+```
+
+**Erros:** `NOT_FOUND` para qualquer convite que não vale mais, sem dizer o motivo.
+
+### `accept_group_invite`
+
+Aceita o convite e entra `ACTIVE` na hora, com o papel do convite — o convite já é a
+aprovação. Convite enviado a um e-mail só vale para a conta com esse e-mail. Na mesma
+transação grava o consentimento e cria os vínculos com a equipe.
+
+**Input:**
+
+```typescript
+{
+  token: string;
+  scopes: Array<'WORKOUT' | 'NUTRITION' | 'BODY' | 'HABITS' | 'GOALS'>; // [] não compartilha nada
+  statsOptIn: boolean;
+}
+```
+
+**Erros:** `NOT_FOUND` se o convite não vale (inclusive o de outro e-mail); `CONFLICT` com o
+`groupId` se já é membro ativo.
+
+### `set_group_sharing`
+
+Define o que a equipe de uma comunidade pode ver. A lista enviada é a lista inteira: substitui
+o consentimento anterior e as autorizações por profissional daquele grupo (`grant_data_sharing`
+continua servindo para ajuste fino depois). `scopes: []` revoga o acesso de toda a equipe, com
+`revokedAt` datado.
+
+**Input:**
+
+```typescript
+{
+  groupId: string;
+  scopes: Array<'WORKOUT' | 'NUTRITION' | 'BODY' | 'HABITS' | 'GOALS'>;
+  statsOptIn: boolean;
+}
+```
+
+**Erros:** `NOT_FOUND` se não é membro ativo do grupo.
 
 ### `leave_group`
 

@@ -9,7 +9,9 @@ import { GroupRole } from '@fatia/db';
  * ver fatura, publicar conteúdo — e é conferida no pipeline da requisição pelo
  * `GroupRoleGuard`. Ela **não** governa leitura de dado de saúde: quem governa
  * isso é `ProfessionalLink`, conferido por `ProfessionalAccessService`, e
- * nenhum papel — nem `OWNER`, nem `Role.ADMIN` da plataforma — concede leitura.
+ * nenhum papel — nem `OWNER`, nem `Role.ADMIN` da plataforma — concede leitura
+ * sozinho. A equipe (OWNER, PROFESSIONAL, CREATOR) só lê com o vínculo que o
+ * titular deu ao entrar ou depois (ADR 026).
  *
  * Fundir as duas coisas num guard único obrigaria toda rota de domínio a rodar
  * uma checagem de grupo para descobrir se aquela leitura é do próprio dono ou
@@ -32,6 +34,12 @@ export const GROUP_PERMISSIONS = {
   'group.read': [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR, GroupRole.MEMBER],
   'group.update': [GroupRole.OWNER],
   'group.delete': [GroupRole.OWNER],
+  /** Passar a comunidade (e a cobrança) para outra pessoa da equipe. */
+  'group.transfer': [GroupRole.OWNER],
+  /**
+   * `PROFESSIONAL` convida, mas só como `MEMBER` — quem define a equipe é o
+   * dono. A restrição por papel convidado fica no `InviteService`.
+   */
   'invite.create': [GroupRole.OWNER, GroupRole.PROFESSIONAL],
   'invite.revoke': [GroupRole.OWNER, GroupRole.PROFESSIONAL],
   /**
@@ -98,16 +106,24 @@ export function canWhilePending(action: GroupAction): boolean {
 }
 
 /**
- * Papéis que podem **receber** um `ProfessionalLink`.
+ * Papéis que podem **receber** um `ProfessionalLink`: a equipe da comunidade
+ * (ADR 026).
  *
- * "Pode receber" não é "tem": o vínculo só existe se o titular criar, e é ele
- * que autoriza a leitura. Esta lista é a trava mínima do outro lado — impedir
- * que `OWNER`, `CREATOR` ou `MEMBER` sequer figurem como destinatários de
- * consentimento, para que o painel do dono não vire caminho de aquisição de
- * acesso. `assertReadable` confere a mesma coisa de novo, na leitura: são duas
- * linhas de defesa contra o mesmo abuso, de propósito.
+ * "Pode receber" não é "tem": o vínculo só existe se o titular criar — ao
+ * entrar, escolhendo os escopos, ou depois —, e é ele que autoriza a leitura.
+ * Esta lista é a trava mínima do outro lado: `MEMBER` nunca figura como
+ * destinatário, para que estar no mesmo grupo não vire caminho de ver o dado
+ * de outro membro. `assertReadable` confere a mesma coisa de novo, na leitura:
+ * são duas linhas de defesa contra o mesmo abuso, de propósito.
  */
-export const ROLES_ELIGIBLE_FOR_LINK: readonly GroupRole[] = [GroupRole.PROFESSIONAL];
+export const ROLES_ELIGIBLE_FOR_LINK: readonly GroupRole[] = [
+  GroupRole.OWNER,
+  GroupRole.PROFESSIONAL,
+  GroupRole.CREATOR,
+];
+
+/** A equipe da comunidade: quem recebe o consentimento dado ao entrar. */
+export const TEAM_ROLES = ROLES_ELIGIBLE_FOR_LINK;
 
 /** O papel pode ser destinatário de consentimento de leitura? */
 export function canReceiveLink(role: GroupRole): boolean {

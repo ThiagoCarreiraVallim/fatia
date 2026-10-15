@@ -138,6 +138,82 @@ export class ProfessionalLinkService {
     return this.prisma.professionalLink.findFirst({ where: { id: vigente.id, subjectUserId } });
   }
 
+  /**
+   * O consentimento da comunidade (ADR 026), **sem executar**: substitui todos
+   * os vínculos vivos do titular naquele grupo por um vínculo com `scopes` para
+   * cada pessoa da equipe em `receivers`. Lista vazia de escopos só revoga.
+   *
+   * Operações para um `$transaction([...])` junto com a escrita da membership,
+   * pelo mesmo motivo de `revokeAllForMemberOp`: aceite e autorização no mesmo
+   * commit.
+   */
+  groupConsentOps(params: {
+    subjectUserId: string;
+    groupId: string;
+    scopes: ShareScope[];
+    receivers: string[];
+    at: Date;
+  }): Prisma.PrismaPromise<unknown>[] {
+    const { subjectUserId, groupId, scopes, at } = params;
+    const receivers = params.receivers.filter((id) => id !== subjectUserId);
+    const ops: Prisma.PrismaPromise<unknown>[] = [
+      this.prisma.professionalLink.updateMany({
+        where: { subjectUserId, groupId, revokedAt: null },
+        data: { revokedAt: at, revokedReason: 'superseded' satisfies RevokeReason },
+      }),
+    ];
+    if (scopes.length > 0 && receivers.length > 0) {
+      ops.push(
+        this.prisma.professionalLink.createMany({
+          data: receivers.map((professionalId) => ({
+            subjectUserId,
+            professionalId,
+            groupId,
+            scopes,
+            grantedAt: at,
+          })),
+        }),
+      );
+    }
+    return ops;
+  }
+
+  /**
+   * O leque inverso (ADR 026): quem acaba de entrar na equipe recebe o vínculo
+   * de cada membro que já consentiu à comunidade, com os escopos que ele
+   * escolheu. Sem executar, para o mesmo `$transaction` da entrada.
+   */
+  teamMemberLinksOps(params: {
+    groupId: string;
+    teamUserId: string;
+    subjects: { userId: string; scopes: ShareScope[] }[];
+    at: Date;
+  }): Prisma.PrismaPromise<unknown>[] {
+    const { groupId, teamUserId, at } = params;
+    const subjects = params.subjects.filter((s) => s.userId !== teamUserId && s.scopes.length > 0);
+    if (subjects.length === 0) return [];
+    return [
+      this.prisma.professionalLink.updateMany({
+        where: {
+          groupId,
+          professionalId: teamUserId,
+          subjectUserId: { in: subjects.map((s) => s.userId) },
+          revokedAt: null,
+        },
+        data: { revokedAt: at, revokedReason: 'superseded' satisfies RevokeReason },
+      }),
+      this.prisma.professionalLink.createMany({
+        data: subjects.map((s) => ({
+          subjectUserId: s.userId,
+          professionalId: teamUserId,
+          groupId,
+          scopes: s.scopes,
+          grantedAt: at,
+        })),
+      }),
+    ];
+  }
+
   /** Vínculos ativos que o titular concedeu. Base do painel de consentimento (#155). */
   async listActiveGrantedBy(subjectUserId: string): Promise<ProfessionalLink[]> {
     return this.prisma.professionalLink.findMany({

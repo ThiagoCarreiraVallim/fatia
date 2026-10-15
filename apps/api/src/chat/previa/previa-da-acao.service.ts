@@ -4,6 +4,7 @@ import { PrismaService } from '../../common/prisma.service';
 import { McpToolRegistry } from '../../mcp/mcp-tool.registry';
 import { TIPO_DA_REFEICAO } from '../../nutrition/mcp/list-meals.tool';
 import { gramsFromPortion, visiblePortions } from '../../nutrition/helpers/portion';
+import { hashInviteToken } from '../../sharing/invite.service';
 import {
   CAMPOS,
   COMPOSTOS,
@@ -229,6 +230,33 @@ export class PreviaDaAcaoService {
           select: { content: true },
         });
         return memoria?.content ?? null;
+      }
+      case 'comunidade': {
+        // Só a comunidade de que a pessoa é membro ativo: o nome de outra não vaza.
+        const membro = await this.prisma.groupMembership.findFirst({
+          where: { groupId: id, userId, status: 'ACTIVE' },
+          select: { group: { select: { name: true } } },
+        });
+        return membro?.group.name ?? null;
+      }
+      case 'convite': {
+        // Convite que não vale mais não ganha nome no cartão: o aceite falharia.
+        const convite = await this.prisma.groupInvite.findUnique({
+          where: { tokenHash: hashInviteToken(String(valor)) },
+          select: {
+            revokedAt: true,
+            expiresAt: true,
+            maxUses: true,
+            uses: true,
+            group: { select: { name: true } },
+          },
+        });
+        const vale =
+          convite &&
+          !convite.revokedAt &&
+          convite.expiresAt > ctx.agora &&
+          (convite.maxUses === null || convite.uses < convite.maxUses);
+        return vale ? convite.group.name : null;
       }
       case 'profissional': {
         const vinculo = await this.prisma.professionalLink.findFirst({

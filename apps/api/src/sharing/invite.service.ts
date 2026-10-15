@@ -1,0 +1,395 @@
+import {
+  ConflictException,
+  ForbiddenException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { createHash, randomBytes } from 'node:crypto';
+import { GroupRole, MembershipStatus, type GroupMembership } from '@fatia/db';
+import { PrismaService } from '../common/prisma.service';
+import { EmailService } from '../notifications/email.service';
+import { inviteEmail } from '../notifications/invite-email';
+import { TEAM_ROLES } from './permissions';
+import { MembershipService, type JoinConsent, type MembershipResult } from './membership.service';
+
+/** Resposta única de recusa: inválido, expirado, revogado, esgotado ou de outro e-mail. */
+const INVITE_NOT_FOUND = 'Invite not found';
+const NOT_FOUND = 'Group not found';
+
+export const INVITE_MAX_PER_DAY = 50;
+export const INVITE_DEFAULT_DAYS = 7;
+export const INVITE_MAX_DAYS = 30;
+const RESEND_MIN_INTERVAL_MS = 10 * 60 * 1000;
+/** O e-mail do convidado não fica além disto depois do uso ou da expiração. */
+export const INVITE_EMAIL_RETENTION_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export type InvitableRole = Exclude<GroupRole, 'OWNER'>;
+
+export interface CreateInviteInput {
+  role: InvitableRole;
+  email?: string;
+  maxUses?: number;
+  expiresInDays?: number;
+}
+
+export interface InviteView {
+  id: string;
+  role: GroupRole;
+  email: string | null;
+  maxUses: number | null;
+  uses: number;
+  expiresAt: Date;
+  createdAt: Date;
+  lastSentAt: Date | null;
+}
+
+export interface CreatedInvite {
+  invite: InviteView;
+  /** O link aparece só aqui: o banco guarda o hash do token. */
+  url: string;
+  emailSent: boolean;
+}
+
+export interface InvitePreview {
+  group: { id: string; name: string; description: string | null; type: string };
+  role: GroupRole;
+  invitedBy: string | null;
+  /** A equipe que vai receber o que a pessoa escolher compartilhar. */
+  team: { name: string; role: GroupRole }[];
+  memberCount: number;
+  emailBound: boolean;
+  expiresAt: Date;
+}
+
+export function hashInviteToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+function novoToken(): string {
+  return randomBytes(32).toString('base64url');
+}
+
+function view(i: {
+  id: string;
+  role: GroupRole;
+  email: string | null;
+  maxUses: number | null;
+  uses: number;
+  expiresAt: Date;
+  createdAt: Date;
+  lastSentAt: Date | null;
+}): InviteView {
+  return {
+    id: i.id,
+    role: i.role,
+    email: i.email,
+    maxUses: i.maxUses,
+    uses: i.uses,
+    expiresAt: i.expiresAt,
+    createdAt: i.createdAt,
+    lastSentAt: i.lastSentAt,
+  };
+}
+
+/**
+ * Convites da comunidade (Fase 5). O convite **é** a aprovação: quem aceita
+ * entra `ACTIVE`, com o papel do convite — e é o único caminho, além da
+ * aprovação do dono, para um papel de equipe.
+ *
+ * O token só existe no link; o banco guarda o sha256. Convite com e-mail é de
+ * uso único e vale só para a conta com aquele e-mail; sem e-mail, é link
+ * compartilhável (com limite de usos opcional).
+ */
+@Injectable()
+export class InviteService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly memberships: MembershipService,
+    private readonly email: EmailService,
+    private readonly config: ConfigService,
+  ) {}
+
+  async create(actorId: string, groupId: string, input: CreateInviteInput): Promise<CreatedInvite> {
+    const eu = await this.equipeAtiva(actorId, groupId);
+    if (eu.role === GroupRole.PROFESSIONAL && input.role !== GroupRole.MEMBER) {
+      throw new ForbiddenException(
+        'Profissionais convidam só membros; a equipe é o dono quem define',
+      );
+    }
+    if ((input.role as GroupRole) === GroupRole.OWNER) {
+      throw new ForbiddenException('Ninguém é convidado como dono');
+    }
+
+    const agora = new Date();
+    const doDia = await this.prisma.groupInvite.count({
+      where: { groupId, createdAt: { gt: new Date(agora.getTime() - DAY_MS) } },
+    });
+    if (doDia >= INVITE_MAX_PER_DAY) {
+      throw new HttpException(
+        `Limite de ${INVITE_MAX_PER_DAY} convites por dia nesta comunidade`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    await this.purgarEmailsAntigos(agora);
+
+    const email = input.email?.trim().toLowerCase() || null;
+    const dias = Math.min(Math.max(input.expiresInDays ?? INVITE_DEFAULT_DAYS, 1), INVITE_MAX_DAYS);
+    const token = novoToken();
+    const invite = await this.prisma.groupInvite.create({
+      data: {
+        groupId,
+        tokenHash: hashInviteToken(token),
+        email,
+        role: input.role,
+        createdById: actorId,
+        // Convite por e-mail é de uma pessoa só.
+        maxUses: email ? 1 : (input.maxUses ?? null),
+        expiresAt: new Date(agora.getTime() + dias * DAY_MS),
+        lastSentAt: email ? agora : null,
+      },
+    });
+    const url = this.url(token);
+    const emailSent = email ? await this.enviar(invite, url, actorId) : false;
+    return { invite: view(invite), url, emailSent };
+  }
+
+  /** Convites ainda utilizáveis. */
+  async list(actorId: string, groupId: string): Promise<InviteView[]> {
+    await this.equipeAtiva(actorId, groupId);
+    const convites = await this.prisma.groupInvite.findMany({
+      where: { groupId, revokedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+    });
+    return convites.filter((c) => c.maxUses === null || c.uses < c.maxUses).map(view);
+  }
+
+  async revoke(actorId: string, groupId: string, inviteId: string): Promise<InviteView> {
+    await this.equipeAtiva(actorId, groupId);
+    const revogado = await this.prisma.groupInvite.updateMany({
+      where: { id: inviteId, groupId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    if (revogado.count === 0) throw new NotFoundException(INVITE_NOT_FOUND);
+    const convite = await this.prisma.groupInvite.findFirstOrThrow({
+      where: { id: inviteId, groupId },
+    });
+    return view(convite);
+  }
+
+  /**
+   * Reenvia o convite por e-mail. Como o token não fica guardado, reenviar
+   * **troca** o token: o link do e-mail anterior deixa de valer.
+   */
+  async resend(actorId: string, groupId: string, inviteId: string): Promise<CreatedInvite> {
+    await this.equipeAtiva(actorId, groupId);
+    const agora = new Date();
+    const convite = await this.prisma.groupInvite.findFirst({
+      where: { id: inviteId, groupId, revokedAt: null, expiresAt: { gt: agora } },
+    });
+    if (
+      !convite ||
+      !convite.email ||
+      (convite.maxUses !== null && convite.uses >= convite.maxUses)
+    ) {
+      throw new NotFoundException(INVITE_NOT_FOUND);
+    }
+    if (
+      convite.lastSentAt &&
+      agora.getTime() - convite.lastSentAt.getTime() < RESEND_MIN_INTERVAL_MS
+    ) {
+      throw new HttpException('Espere alguns minutos para reenviar', HttpStatus.TOO_MANY_REQUESTS);
+    }
+    const token = novoToken();
+    const atualizado = await this.prisma.groupInvite.update({
+      where: { id: convite.id },
+      data: { tokenHash: hashInviteToken(token), lastSentAt: agora },
+    });
+    const url = this.url(token);
+    const emailSent = await this.enviar(atualizado, url, actorId);
+    return { invite: view(atualizado), url, emailSent };
+  }
+
+  /** O cartão da comunidade para quem tem o link — logado ou não. */
+  async preview(token: string): Promise<InvitePreview> {
+    const convite = await this.valido(token);
+    const [grupo, equipe, memberCount, autor] = await Promise.all([
+      this.prisma.group.findUniqueOrThrow({
+        where: { id: convite.groupId },
+        select: { id: true, name: true, description: true, type: true },
+      }),
+      this.prisma.groupMembership.findMany({
+        where: {
+          groupId: convite.groupId,
+          status: MembershipStatus.ACTIVE,
+          role: { in: [...TEAM_ROLES] },
+        },
+        select: { role: true, user: { select: { name: true } } },
+        orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+      }),
+      this.prisma.groupMembership.count({
+        where: { groupId: convite.groupId, status: MembershipStatus.ACTIVE },
+      }),
+      convite.createdById
+        ? this.prisma.user.findUnique({
+            where: { id: convite.createdById },
+            select: { name: true },
+          })
+        : null,
+    ]);
+    return {
+      group: grupo,
+      role: convite.role,
+      invitedBy: autor?.name ?? null,
+      team: equipe.map((m) => ({ name: m.user.name, role: m.role })),
+      memberCount,
+      emailBound: convite.email !== null,
+      expiresAt: convite.expiresAt,
+    };
+  }
+
+  /**
+   * Aceite: a pessoa entra `ACTIVE` com o papel do convite e o consentimento
+   * que escolheu, tudo num commit — membership, vínculos e o uso do convite.
+   */
+  async accept(userId: string, token: string, consent: JoinConsent): Promise<MembershipResult> {
+    const convite = await this.valido(token);
+    if (convite.email) {
+      const eu = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true },
+      });
+      if (!eu || eu.email.toLowerCase() !== convite.email)
+        throw new NotFoundException(INVITE_NOT_FOUND);
+    }
+    const existente = await this.prisma.groupMembership.findUnique({
+      where: { groupId_userId: { groupId: convite.groupId, userId } },
+      select: { status: true },
+    });
+    if (existente?.status === MembershipStatus.ACTIVE) {
+      throw new ConflictException({
+        message: 'Você já faz parte desta comunidade',
+        groupId: convite.groupId,
+      });
+    }
+
+    const agora = new Date();
+    const ops = await this.memberships.activationOps({
+      groupId: convite.groupId,
+      userId,
+      role: convite.role,
+      consent,
+      at: agora,
+    });
+    try {
+      const [membership] = (await this.prisma.$transaction([
+        ...ops,
+        // `update` com filtro além do id: se outro aceite levou o último uso
+        // entre a leitura e aqui, nada casa, o Prisma lança P2025 e o commit
+        // inteiro volta — ninguém entra por um convite já esgotado.
+        this.prisma.groupInvite.update({
+          where: {
+            id: convite.id,
+            revokedAt: null,
+            ...(convite.maxUses !== null ? { uses: { lt: convite.maxUses } } : {}),
+          },
+          data: { uses: { increment: 1 } },
+        }),
+      ])) as unknown as [GroupMembership, ...unknown[]];
+      return {
+        membershipId: membership.id,
+        groupId: convite.groupId,
+        status: membership.status,
+        role: membership.role,
+        revokedLinks: 0,
+      };
+    } catch (err) {
+      if ((err as { code?: string })?.code === 'P2025')
+        throw new NotFoundException(INVITE_NOT_FOUND);
+      throw err;
+    }
+  }
+
+  private async valido(token: string) {
+    const convite = await this.prisma.groupInvite.findUnique({
+      where: { tokenHash: hashInviteToken(token) },
+    });
+    if (
+      !convite ||
+      convite.revokedAt !== null ||
+      convite.expiresAt.getTime() <= Date.now() ||
+      (convite.maxUses !== null && convite.uses >= convite.maxUses)
+    ) {
+      throw new NotFoundException(INVITE_NOT_FOUND);
+    }
+    return convite;
+  }
+
+  /** Dono ou profissional ativo — o mesmo que o guarda confere, de novo no service. */
+  private async equipeAtiva(userId: string, groupId: string) {
+    const eu = await this.prisma.groupMembership.findUnique({
+      where: { groupId_userId: { groupId, userId } },
+      select: { role: true, status: true },
+    });
+    if (!eu || eu.status !== MembershipStatus.ACTIVE) throw new NotFoundException(NOT_FOUND);
+    if (eu.role !== GroupRole.OWNER && eu.role !== GroupRole.PROFESSIONAL) {
+      throw new ForbiddenException('Só o dono e os profissionais convidam');
+    }
+    return eu;
+  }
+
+  private url(token: string): string {
+    const origem = (this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:3030').replace(
+      /\/$/,
+      '',
+    );
+    return `${origem}/c/${token}`;
+  }
+
+  private async enviar(
+    convite: { email: string | null; role: GroupRole; expiresAt: Date; groupId: string },
+    url: string,
+    actorId: string,
+  ): Promise<boolean> {
+    if (!convite.email) return false;
+    const [grupo, autor] = await Promise.all([
+      this.prisma.group.findUniqueOrThrow({
+        where: { id: convite.groupId },
+        select: { name: true },
+      }),
+      this.prisma.user.findUnique({ where: { id: actorId }, select: { name: true } }),
+    ]);
+    return this.email.send(
+      inviteEmail({
+        to: convite.email,
+        groupName: grupo.name,
+        inviterName: autor?.name ?? 'A equipe',
+        role: convite.role,
+        url,
+        expiresAt: convite.expiresAt,
+      }),
+    );
+  }
+
+  /**
+   * Retenção (DATA_RETENTION.md): o e-mail de quem foi convidado some 30 dias
+   * depois de o convite expirar ou esgotar. Roda de carona na criação, sem job.
+   */
+  private async purgarEmailsAntigos(agora: Date): Promise<void> {
+    const limite = new Date(agora.getTime() - INVITE_EMAIL_RETENTION_DAYS * DAY_MS);
+    await this.prisma.groupInvite.updateMany({
+      where: {
+        email: { not: null },
+        OR: [
+          { expiresAt: { lt: limite } },
+          { revokedAt: { lt: limite } },
+          { uses: { gte: 1 }, maxUses: 1, createdAt: { lt: limite } },
+        ],
+      },
+      data: { email: null },
+    });
+  }
+}

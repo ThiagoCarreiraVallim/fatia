@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsOptional,
@@ -46,4 +47,23 @@ export class AccessLogQueryDto {
   @Min(1)
   @Max(200)
   limit?: number;
+
+  /** Só as leituras feitas por vínculo desta comunidade. */
+  @IsOptional()
+  @IsUUID()
+  groupId?: string;
+}
+
+/**
+ * O que compartilhar com a equipe da comunidade (ADR 026). Nada vem marcado:
+ * a lista vazia e o `false` são o padrão, e recusar tudo ainda entra.
+ */
+export class GroupConsentDto {
+  @IsArray()
+  @ArrayMaxSize(Object.keys(ShareScope).length)
+  @IsEnum(ShareScope, { each: true })
+  scopes!: ShareScope[];
+
+  @IsBoolean()
+  statsOptIn!: boolean;
 }
