@@ -1,3 +1,4 @@
+import type { AiAccessReason } from './chat';
 import { apiFetch } from './http';
 
 export type MealType = 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK';
@@ -298,7 +299,9 @@ export const nutritionApi = {
    * funcionalidade **some** em vez de aparecer e falhar.
    */
   photoRecognitionStatus: () =>
-    apiFetch<{ available: boolean }>('/api/nutrition/photo-recognition'),
+    apiFetch<{ available: boolean; allowed: boolean; reason: AiAccessReason }>(
+      '/api/nutrition/photo-recognition',
+    ),
 
   /**
    * Foto de refeição (JPEG em base64) → alimentos candidatos. **Não grava nada.**

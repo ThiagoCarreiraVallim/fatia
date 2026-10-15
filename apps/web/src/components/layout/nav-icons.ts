@@ -1,5 +1,6 @@
 import {
   ClipboardList,
+  Crown,
   Flag,
   FlaskConical,
   History,
@@ -26,4 +27,5 @@ export const MENU_ICON: Record<MenuIcon, LucideIcon> = {
   history: History,
   chat: MessageCircle,
   connect: Plug,
+  plan: Crown,
 };

@@ -32,6 +32,11 @@ export class ApiError extends Error {
   get isUnauthorized(): boolean {
     return this.status === 401;
   }
+
+  /** 402 `AI_PLAN_REQUIRED`: a função é do plano PRO (ADR 024). */
+  get isPlanRequired(): boolean {
+    return this.status === 402;
+  }
 }
 
 let transport: ApiTransport | null = null;

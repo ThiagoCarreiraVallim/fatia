@@ -47,6 +47,7 @@ export type ChatErrorCode =
   | 'MCP_REFUSED'
   | 'MCP_RESPONSE_UNPARSEABLE'
   // NestJS.
+  | 'AI_PLAN_REQUIRED'
   | 'AI_QUOTA_EXCEEDED'
   | 'AGENT_STREAM_INTERRUPTED'
   | 'CHAT_INTERNAL_ERROR'
@@ -176,6 +177,8 @@ const TEXTOS: Record<ChatErrorCode, string> = {
   MCP_UNAUTHENTICATED: SESSAO,
   MCP_UNAUTHORIZED: SESSAO,
   AI_UNAUTHORIZED: SESSAO,
+  AI_PLAN_REQUIRED:
+    'O chat com a IA do Fatia faz parte do plano PRO. O registro manual e a sua própria IA pelo MCP continuam livres.',
   AI_QUOTA_EXCEEDED: 'Você chegou ao limite de uso do assistente por hoje. Ele volta amanhã.',
   AGENT_STREAM_INTERRUPTED: 'A resposta foi interrompida antes de terminar. Tente enviar de novo.',
   AI_NETWORK_ERROR: 'A conexão caiu no meio da resposta. O que já chegou continua acima.',
@@ -279,6 +282,7 @@ async function erroDeResposta(res: Response): Promise<ChatStreamError> {
   const erro = erroDoChat(corpo);
   if (erro.code !== 'AI_UNKNOWN_ERROR') return erro;
   // Sem código nomeado, o status ainda distingue cota (429) de provedor fora.
+  if (res.status === 402) return { code: 'AI_PLAN_REQUIRED' };
   if (res.status === 429) return { code: 'AI_QUOTA_EXCEEDED' };
   if (res.status === 503 || res.status === 504) return { code: 'AI_PROVIDER_UNREACHABLE' };
   return erro;
@@ -432,11 +436,19 @@ export interface ChatFeedback {
   note?: string;
 }
 
-/** O chat existe nesta instância, e o que ele sabe fazer além de texto. */
+/**
+ * Por que a IA hospedada está (ou não) liberada para esta pessoa (ADR 024):
+ * `plan_required` = a instância tem a função, e ela é do plano PRO.
+ */
+export type AiAccessReason = 'ok' | 'plan_required' | 'not_configured';
+
+/** O chat existe nesta instância, o que ele sabe fazer e se esta pessoa pode usar. */
 export interface ChatAvailability {
   available: boolean;
   photos: boolean;
   dictation: boolean;
+  allowed: boolean;
+  reason: AiAccessReason;
 }
 
 export function getChatAvailability(): Promise<ChatAvailability> {

@@ -32,20 +32,26 @@ export type MenuIcon =
   | 'plans'
   | 'history'
   | 'chat'
-  | 'connect';
+  | 'connect'
+  | 'plan';
 
 export interface MenuItem {
   key: MenuIcon;
   label: string;
   description: string;
   href: string;
+  /** Função do plano PRO que esta pessoa não tem: mostra cadeado e leva ao plano. */
+  locked?: boolean;
 }
 
 interface MenuItemDef extends Omit<MenuItem, 'href'> {
   href: string | Record<NavPlatform, string>;
   /** Ausente = as duas pontas. */
   platforms?: NavPlatform[];
-  /** Só aparece quando a IA hospedada está disponível (na Fase 4, quando o plano a inclui). */
+  /**
+   * Só aparece quando a instância tem a IA hospedada; no Free (ADR 024) aparece
+   * com cadeado e leva ao "Meu plano".
+   */
   requires?: 'chat';
 }
 
@@ -136,6 +142,12 @@ const MENU: { title: string; items: MenuItemDef[] }[] = [
         description: 'Use o Claude ou outra IA com seus dados',
         href: { web: '/profile/connect', mobile: '/profile/tokens' },
       },
+      {
+        key: 'plan',
+        label: 'Meu plano',
+        description: 'Free ou PRO, e a IA do Fatia',
+        href: '/plan',
+      },
     ],
   },
 ];
@@ -143,16 +155,20 @@ const MENU: { title: string; items: MenuItemDef[] }[] = [
 export function menuSections(opts: {
   platform: NavPlatform;
   chatAvailable: boolean;
+  /** A instância tem o chat, mas ele é do PRO e a pessoa é Free. */
+  chatLocked?: boolean;
 }): MenuSection[] {
   return MENU.map((section) => ({
     title: section.title,
     items: section.items
       .filter((item) => !item.platforms || item.platforms.includes(opts.platform))
       .filter((item) => item.requires !== 'chat' || opts.chatAvailable)
-      .map(({ platforms: _p, requires: _r, ...item }) => ({
-        ...item,
-        href: typeof item.href === 'string' ? item.href : item.href[opts.platform],
-      })),
+      .map(({ platforms: _p, requires, ...item }) => {
+        const href = typeof item.href === 'string' ? item.href : item.href[opts.platform];
+        return requires === 'chat' && opts.chatLocked
+          ? { ...item, href: '/plan?recurso=chat', locked: true }
+          : { ...item, href };
+      }),
   })).filter((section) => section.items.length > 0);
 }
 

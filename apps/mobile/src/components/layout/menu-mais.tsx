@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   ChevronRight,
   ClipboardList,
+  Crown,
   Flag,
   FlaskConical,
   History,
@@ -32,6 +33,7 @@ const ICONE: Record<MenuIcon, LucideIcon> = {
   history: History,
   chat: MessageCircle,
   connect: Plug,
+  plan: Crown,
 };
 
 /**

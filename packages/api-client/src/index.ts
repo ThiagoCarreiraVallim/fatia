@@ -18,7 +18,9 @@ export {
   resetApiClient,
 } from './http';
 
+export * from './billing';
 export * from './chat';
+export * from './plan';
 export * from './food-shortcuts';
 export * from './portions';
 export * from './meal-templates';

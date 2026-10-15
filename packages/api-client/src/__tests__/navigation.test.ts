@@ -27,7 +27,19 @@ describe('navegação', () => {
       '/workout/history',
       '/chat',
       '/profile/connect',
+      '/plan',
     ]);
+  });
+
+  it('no Free o chat aparece com cadeado e leva ao plano (ADR 024)', () => {
+    const ia = menuSections({ platform: 'web', chatAvailable: true, chatLocked: true }).find(
+      (s) => s.title === 'IA',
+    );
+    expect(ia?.items.find((i) => i.key === 'chat')).toMatchObject({
+      href: '/plan?recurso=chat',
+      locked: true,
+    });
+    expect(ia?.items.find((i) => i.key === 'connect')?.locked).toBeUndefined();
   });
 
   it('o chat só aparece com a IA disponível', () => {
