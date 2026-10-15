@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Target } from 'lucide-react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { greetingLine, progressApi, usersApi } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
@@ -25,6 +27,7 @@ export default function DashboardScreen() {
   const [passosAberto, setPassosAberto] = useState(false);
   const [atualizando, setAtualizando] = useState(false);
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   const eu = useQuery({ queryKey: ['users', 'me'], queryFn: () => usersApi.me() });
   const hoje = useQuery({
@@ -53,11 +56,26 @@ export default function DashboardScreen() {
     <>
       <Screen onRefresh={atualizar} refreshing={atualizando}>
         <View className="gap-5 px-5 pb-4 pt-2">
-          <View>
-            <Text accessibilityRole="header" className="text-[18px] font-semibold text-foreground">
-              {greetingLine(eu.data?.name)}
-            </Text>
-            <Text className="text-sm text-muted-foreground">Pronto para dominar o dia?</Text>
+          <View className="flex-row items-center gap-3">
+            <View className="flex-1">
+              <Text
+                accessibilityRole="header"
+                className="text-[18px] font-semibold text-foreground"
+              >
+                {greetingLine(eu.data?.name)}
+              </Text>
+              <Text className="text-sm text-muted-foreground">Pronto para dominar o dia?</Text>
+            </View>
+            {/* As metas do dia a um toque: antes eram Progresso → Perfil → Metas. */}
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel="Metas do dia"
+              onPress={() => router.push('/nutrition/goals')}
+              className="min-h-11 flex-row items-center gap-1.5 rounded-full border border-border px-4"
+            >
+              <Target size={16} color="#2ce500" />
+              <Text className="text-sm font-semibold text-foreground">Metas</Text>
+            </Pressable>
           </View>
 
           {hoje.isLoading ? <LoadingState label="Carregando seu dia…" /> : null}

@@ -1,21 +1,11 @@
-import { useState, type ReactNode } from 'react';
+import { createContext, useContext, useState, type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { usePathname, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Apple,
-  Droplet,
-  Dumbbell,
-  Footprints,
-  Plus,
-  Scale,
-  type LucideIcon,
-} from 'lucide-react-native';
+import { Apple, Droplet, Dumbbell, Footprints, Scale, type LucideIcon } from 'lucide-react-native';
 import {
   QUICK_ADD_ITEMS,
   mealTypeForTime,
-  showQuickAdd,
   workoutApi,
   workoutQuickLabel,
   type MealType,
@@ -34,9 +24,6 @@ import { FoodSearchDrawer } from '@/components/nutrition/food-search-drawer';
 import { hojeIso } from '@/components/nutrition/helpers';
 import { LogStepsDrawer, LogWaterDrawer, LogWeightDrawer } from '@/components/progress';
 
-/** Altura da `BottomNav` sem o inset: o "+" flutua logo acima dela. */
-const ALTURA_DA_NAV = 80;
-
 const ICONE: Record<QuickAddKey, LucideIcon> = {
   meal: Apple,
   water: Droplet,
@@ -47,19 +34,24 @@ const ICONE: Record<QuickAddKey, LucideIcon> = {
 
 type Alvo = 'water' | 'weight' | 'steps' | { refeicao: { dia: string; tipo: MealType } };
 
+const RegistroContext = createContext<{ abrir: () => void }>({ abrir: () => undefined });
+
+/** Abre o menu Registrar. Quem chama é o "+" do centro da `BottomNav`. */
+export function useRegistroRapido() {
+  return useContext(RegistroContext);
+}
+
 /**
- * Réplica de `apps/web/src/components/layout/quick-add.tsx`: o "+" global, com
- * o mesmo menu e as mesmas regras (vêm de `@fatia/api-client`).
+ * Réplica de `apps/web/src/components/layout/quick-add.tsx`: o menu Registrar,
+ * com as mesmas regras (vêm de `@fatia/api-client`). O gatilho é o "+" da
+ * barra, que recebe `abrir` pelo contexto.
  *
  * Recebe a `BottomNav` como filho para acertar a ordem de pintura sem portal:
- * o botão vem **antes** da nav (os drawers das telas o cobrem do mesmo jeito
- * que cobrem a nav) e a camada dos drawers dele vem **depois** (abrem por cima
- * da nav, como os das telas).
+ * a camada dos drawers vem **depois** da nav e abre por cima dela, como os
+ * drawers das telas.
  */
 export function RegistroRapido({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const qc = useQueryClient();
   const [menuAberto, setMenuAberto] = useState(false);
   const [alvo, setAlvo] = useState<Alvo | null>(null);
@@ -107,19 +99,7 @@ export function RegistroRapido({ children }: { children: ReactNode }) {
   const refeicao = typeof alvo === 'object' && alvo !== null ? alvo.refeicao : null;
 
   return (
-    <>
-      {showQuickAdd(pathname) ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Registrar"
-          onPress={() => setMenuAberto(true)}
-          style={{ bottom: ALTURA_DA_NAV + insets.bottom + 16, zIndex: 40, elevation: 6 }}
-          className="absolute right-4 h-14 w-14 items-center justify-center rounded-full bg-primary active:opacity-80"
-        >
-          <Plus size={28} strokeWidth={2.5} color="#131313" />
-        </Pressable>
-      ) : null}
-
+    <RegistroContext.Provider value={{ abrir: () => setMenuAberto(true) }}>
       {children}
 
       <DrawerLayer>
@@ -173,6 +153,6 @@ export function RegistroRapido({ children }: { children: ReactNode }) {
         <LogWeightDrawer open={alvo === 'weight'} onClose={fechar} />
         <LogStepsDrawer open={alvo === 'steps'} onClose={fechar} />
       </DrawerLayer>
-    </>
+    </RegistroContext.Provider>
   );
 }

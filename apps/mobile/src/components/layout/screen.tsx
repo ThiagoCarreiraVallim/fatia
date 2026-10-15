@@ -3,11 +3,8 @@ import { RefreshControl, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TOP_BAR_HEIGHT, TopBar } from './top-bar';
 
-/**
- * A nav (80) e mais o "+" global, que flutua acima dela à direita
- * (`registro-rapido.tsx`): sem os 32 a mais, o último card ficava sob o botão.
- */
-const RESPIRO_INFERIOR = 128;
+/** A altura da `BottomNav` (80) e um respiro: o "+" mora dentro dela. */
+const RESPIRO_INFERIOR = 96;
 
 /**
  * Moldura das telas autenticadas.
