@@ -24,7 +24,13 @@ function shotPath(page: Page, name: string) {
 
 async function settle(page: Page) {
   await page.waitForLoadState('networkidle').catch(() => undefined);
-  // Skeletons e transições de drawer.
+  // `networkidle` não basta com a API ocupada: a foto saía só com skeletons.
+  await page
+    .locator('.animate-pulse')
+    .first()
+    .waitFor({ state: 'hidden', timeout: 15_000 })
+    .catch(() => undefined);
+  // Transições de drawer.
   await page.waitForTimeout(600);
 }
 
