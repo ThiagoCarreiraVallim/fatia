@@ -7,6 +7,10 @@ import { shiftDay } from '@fatia/api-client';
 import { hojeIso } from '@/lib/dias';
 import { LogStepsDrawer } from '../log-steps-drawer';
 
+// O aviso com "Desfazer" é do `sonner`; aqui importa o que ele recebe.
+const sonner = vi.hoisted(() => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
+vi.mock('sonner', () => sonner);
+
 vi.mock('@/components/ui/drawer', () => {
   const Passthrough = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
   return {
@@ -176,14 +180,11 @@ describe('LogStepsDrawer', () => {
     );
   });
 
-  it('deletes only after the confirmation, and refreshes every consumer', async () => {
+  it('deletes right away and refreshes every consumer', async () => {
     const user = userEvent.setup();
     const { invalidateQueries } = renderDrawer();
 
     await user.click(await screen.findByRole('button', { name: DELETE_S1 }));
-    expect(deleteStep).not.toHaveBeenCalled();
-
-    await user.click(screen.getByRole('button', { name: /^apagar$/i }));
 
     await waitFor(() => expect(deleteStep).toHaveBeenCalledWith('s1'));
     const keys = invalidateQueries.mock.calls.map((call) => call[0]?.queryKey);
@@ -209,5 +210,23 @@ describe('LogStepsDrawer', () => {
     await user.type(screen.getByLabelText(/^Passos$/), '1000');
     await user.click(screen.getByRole('button', { name: 'Salvar' }));
     await waitFor(() => expect(createStep).toHaveBeenLastCalledWith({ steps: 1000 }));
+  });
+  it('offers "Desfazer", which recreates the deleted log on the same day', async () => {
+    const user = userEvent.setup();
+    renderDrawer();
+
+    await user.click(await screen.findByRole('button', { name: DELETE_S1 }));
+    await waitFor(() => expect(sonner.toast).toHaveBeenCalledTimes(1));
+    const [message, options] = sonner.toast.mock.calls[0] as [
+      string,
+      { action: { label: string; onClick: () => void } },
+    ];
+    expect(message).toBe('Registro de passos apagado');
+    expect(options.action.label).toBe('Desfazer');
+
+    options.action.onClick();
+    await waitFor(() =>
+      expect(createStep).toHaveBeenCalledWith({ steps: 9500, date: '2026-05-19' }),
+    );
   });
 });

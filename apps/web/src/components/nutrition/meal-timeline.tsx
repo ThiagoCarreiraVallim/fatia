@@ -6,12 +6,15 @@ import { MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
 import {
   buildMealTimeline,
   itemAmountText,
+  mealItemRestoreInput,
   mealTimelineTitle,
   nutritionApi,
+  undoMessage,
   type Meal,
   type MealItem,
   type MealType,
 } from '@fatia/api-client';
+import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FoodSearchDrawer } from './food-search-drawer';
 import { EditMealItemDrawer } from './edit-meal-item-drawer';
@@ -33,32 +36,40 @@ interface Props {
   onAddMeal: (type: MealType) => void;
 }
 
-type PendingDelete = { kind: 'meal'; meal: Meal } | { kind: 'item'; item: MealItem };
-
 export function MealTimeline({ meals, date, today, onAddMeal }: Props) {
   const qc = useQueryClient();
   const [addingTo, setAddingTo] = useState<{ mealId?: string; mealType?: MealType } | null>(null);
   const [editing, setEditing] = useState<MealItem | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  // Só a refeição inteira pede confirmação; o item apaga na hora e oferece "Desfazer".
+  const [pendingDelete, setPendingDelete] = useState<Meal | null>(null);
   const [acting, setActing] = useState<Meal | null>(null);
 
-  const onDeleted = () => {
+  const refresh = () => {
     qc.invalidateQueries({ queryKey: ['nutrition', 'summary', date] });
-    setPendingDelete(null);
+    qc.invalidateQueries({ queryKey: ['dashboard'] });
   };
+  // A refeição não some com o último item, então o item volta para ela.
+  const restoreItem = useMutation({
+    mutationFn: (item: MealItem) => nutritionApi.addItem(item.mealId, mealItemRestoreInput(item)),
+    onSuccess: refresh,
+    onError: () => toast.error('Não deu para desfazer. Adicione o item de novo.'),
+  });
   const deleteItem = useMutation({
-    mutationFn: (id: string) => nutritionApi.deleteItem(id),
-    onSuccess: onDeleted,
+    mutationFn: (item: MealItem) => nutritionApi.deleteItem(item.id),
+    onSuccess: (_data, item) => {
+      refresh();
+      toast(`${undoMessage('mealItem')}: ${item.foodName}`, {
+        action: { label: 'Desfazer', onClick: () => restoreItem.mutate(item) },
+      });
+    },
   });
   const deleteMeal = useMutation({
     mutationFn: (id: string) => nutritionApi.deleteMeal(id),
-    onSuccess: onDeleted,
+    onSuccess: () => {
+      refresh();
+      setPendingDelete(null);
+    },
   });
-
-  const confirmDelete = () => {
-    if (pendingDelete?.kind === 'meal') deleteMeal.mutate(pendingDelete.meal.id);
-    if (pendingDelete?.kind === 'item') deleteItem.mutate(pendingDelete.item.id);
-  };
 
   return (
     <div>
@@ -77,8 +88,8 @@ export function MealTimeline({ meals, date, today, onAddMeal }: Props) {
                 meal={entry.meal}
                 onAddItem={() => setAddingTo({ mealId: entry.meal.id })}
                 onEditItem={setEditing}
-                onDeleteItem={(item) => setPendingDelete({ kind: 'item', item })}
-                onDeleteMeal={() => setPendingDelete({ kind: 'meal', meal: entry.meal })}
+                onDeleteItem={(item) => deleteItem.mutate(item)}
+                onDeleteMeal={() => setPendingDelete(entry.meal)}
                 onMore={() => setActing(entry.meal)}
               />
             ) : (
@@ -116,16 +127,14 @@ export function MealTimeline({ meals, date, today, onAddMeal }: Props) {
       <ConfirmDialog
         open={pendingDelete !== null}
         onOpenChange={(open) => !open && setPendingDelete(null)}
-        title={pendingDelete?.kind === 'item' ? 'Remover item' : 'Remover refeição'}
+        title="Remover refeição"
         description={
-          pendingDelete?.kind === 'item'
-            ? `${pendingDelete.item.foodName} sai desta refeição.`
-            : pendingDelete?.kind === 'meal'
-              ? `${mealTypeLabel[pendingDelete.meal.mealType]} e seus ${pendingDelete.meal.items.length} item(ns) serão apagados.`
-              : ''
+          pendingDelete
+            ? `${mealTypeLabel[pendingDelete.mealType]} e seus ${pendingDelete.items.length} item(ns) serão apagados.`
+            : ''
         }
-        pending={deleteMeal.isPending || deleteItem.isPending}
-        onConfirm={confirmDelete}
+        pending={deleteMeal.isPending}
+        onConfirm={() => pendingDelete && deleteMeal.mutate(pendingDelete.id)}
       />
     </div>
   );
@@ -159,7 +168,7 @@ function MealCard({
         {mealTypeEmoji[meal.mealType]}
       </div>
 
-      <div className="flex-1 overflow-hidden rounded-xl border border-white/5 bg-card">
+      <div className="flex-1 overflow-hidden rounded-xl border border-subtle bg-card">
         <div className="flex items-center justify-between px-4 py-3">
           <div>
             <span className="text-[14px] font-semibold text-foreground">
@@ -190,7 +199,7 @@ function MealCard({
             <button
               type="button"
               onClick={onDeleteMeal}
-              className="rounded p-1 text-muted-foreground hover:text-rose-500"
+              className="rounded p-1 text-muted-foreground hover:text-danger"
               aria-label="Remover refeição"
             >
               <Trash2 size={14} />
@@ -199,7 +208,7 @@ function MealCard({
         </div>
 
         {meal.items.length > 0 && (
-          <div className="divide-y divide-white/5 border-t border-white/5">
+          <div className="divide-y divide-white/5 border-t border-subtle">
             {meal.items.map((item) => (
               <div key={item.id} className="flex items-center justify-between px-4 py-2.5">
                 <div>
@@ -221,7 +230,7 @@ function MealCard({
                   <button
                     type="button"
                     onClick={() => onDeleteItem(item)}
-                    className="rounded p-1 text-muted-foreground hover:text-rose-500"
+                    className="rounded p-1 text-muted-foreground hover:text-danger"
                     aria-label={`Remover ${item.foodName}`}
                   >
                     <Trash2 size={12} />

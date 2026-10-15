@@ -11,7 +11,14 @@ import {
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { dayLabel, progressApi, type WaterLog } from '@fatia/api-client';
+import {
+  dayLabel,
+  progressApi,
+  undoMessage,
+  waterRestoreInput,
+  type WaterLog,
+} from '@fatia/api-client';
+import { toast } from 'sonner';
 import { hojeIso } from '@/lib/dias';
 import { LogDayField } from './log-day-field';
 import { LogHistory, type LogHistoryEntry } from './log-history';
@@ -90,11 +97,21 @@ export function LogWaterDrawer({ open, onClose, date }: Props) {
     },
   });
 
+  // Apaga sem perguntar; o aviso oferece "Desfazer" (`undo.ts` do api-client).
+  const restore = useMutation({
+    mutationFn: (log: WaterLog) => progressApi.createWater(waterRestoreInput(log)),
+    onSuccess: () => invalidate(),
+    onError: () => toast.error('Não deu para desfazer. Registre de novo.'),
+  });
+
   const remove = useMutation({
-    mutationFn: (id: string) => progressApi.deleteWater(id),
-    onSuccess: (_data, id) => {
+    mutationFn: (log: WaterLog) => progressApi.deleteWater(log.id),
+    onSuccess: (_data, log) => {
       invalidate();
-      if (editing?.id === id) clearForm();
+      toast(undoMessage('water'), {
+        action: { label: 'Desfazer', onClick: () => restore.mutate(log) },
+      });
+      if (editing?.id === log.id) clearForm();
       inputRef.current?.focus();
     },
   });
@@ -155,7 +172,7 @@ export function LogWaterDrawer({ open, onClose, date }: Props) {
                     type="button"
                     disabled={save.isPending}
                     onClick={() => save.mutate({ value: v, id: null })}
-                    className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-base font-bold text-blue-300 transition-colors hover:bg-blue-500/20 disabled:opacity-50"
+                    className="rounded-xl border border-water/30 bg-water/10 px-4 py-3 text-base font-bold text-water transition-colors hover:bg-water/20 disabled:opacity-50"
                   >
                     +{v} mL
                   </button>
@@ -179,10 +196,8 @@ export function LogWaterDrawer({ open, onClose, date }: Props) {
             />
           </div>
 
-          {error && <p className="text-sm text-rose-500">{error}</p>}
-          {remove.error && (
-            <p className="text-sm text-rose-500">{(remove.error as Error).message}</p>
-          )}
+          {error && <p className="text-sm text-danger">{error}</p>}
+          {remove.error && <p className="text-sm text-danger">{(remove.error as Error).message}</p>}
 
           <LogHistory
             entries={entries}
@@ -201,11 +216,13 @@ export function LogWaterDrawer({ open, onClose, date }: Props) {
               remove.reset();
               inputRef.current?.focus();
             }}
-            onDelete={(entry) => remove.mutate(entry.id)}
-            pendingId={remove.isPending ? (remove.variables ?? null) : null}
+            onDelete={(entry) => {
+              const log = logs.data?.logs.find((item) => item.id === entry.id);
+              if (log) remove.mutate(log);
+            }}
+            pendingId={remove.isPending ? (remove.variables?.id ?? null) : null}
             isDeleting={remove.isPending}
             emptyLabel="Nenhum registro de água nos últimos 7 dias."
-            confirmLabel="Apagar este registro de água?"
           />
 
           <div className="space-y-2">

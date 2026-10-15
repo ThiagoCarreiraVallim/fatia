@@ -7,6 +7,10 @@ import { shiftDay } from '@fatia/api-client';
 import { hojeIso } from '@/lib/dias';
 import { LogWaterDrawer } from '../log-water-drawer';
 
+// O aviso com "Desfazer" é do `sonner`; aqui importa o que ele recebe.
+const sonner = vi.hoisted(() => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
+vi.mock('sonner', () => sonner);
+
 vi.mock('@/components/ui/drawer', () => {
   const Passthrough = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
   return {
@@ -137,14 +141,11 @@ describe('LogWaterDrawer', () => {
     expect(screen.getByRole('heading', { name: 'Editar registro de água' })).toBeInTheDocument();
   });
 
-  it('deletes only after the confirmation and refreshes chart, list and dashboard', async () => {
+  it('deletes right away and refreshes chart, list and dashboard', async () => {
     const user = userEvent.setup();
     const { invalidateQueries } = renderDrawer();
 
     await user.click(await screen.findByRole('button', { name: DELETE_250 }));
-    expect(deleteWater).not.toHaveBeenCalled();
-
-    await user.click(screen.getByRole('button', { name: /^apagar$/i }));
 
     await waitFor(() => expect(deleteWater).toHaveBeenCalledWith('a2'));
     const keys = invalidateQueries.mock.calls.map((call) => call[0]?.queryKey);
@@ -171,7 +172,6 @@ describe('LogWaterDrawer', () => {
     renderDrawer();
 
     await user.click(await screen.findByRole('button', { name: DELETE_250 }));
-    await user.click(screen.getByRole('button', { name: /^apagar$/i }));
     await waitFor(() => expect(deleteWater).toHaveBeenCalledTimes(1));
 
     for (const button of screen.getAllByRole('button', { name: /^Apagar registro/ })) {
@@ -193,7 +193,6 @@ describe('LogWaterDrawer', () => {
     renderDrawer();
 
     await user.click(await screen.findByRole('button', { name: DELETE_250 }));
-    await user.click(screen.getByRole('button', { name: /^apagar$/i }));
 
     expect(await screen.findByText('Falha ao apagar')).toBeInTheDocument();
     expect(screen.getByText('250 mL')).toBeInTheDocument();
@@ -257,5 +256,21 @@ describe('LogWaterDrawer', () => {
 
       expect(screen.queryByLabelText('Dia')).not.toBeInTheDocument();
     });
+  });
+  it('offers "Desfazer", which recreates the deleted log on the same day', async () => {
+    const user = userEvent.setup();
+    renderDrawer();
+
+    await user.click(await screen.findByRole('button', { name: DELETE_250 }));
+    await waitFor(() => expect(sonner.toast).toHaveBeenCalledTimes(1));
+    const [message, options] = sonner.toast.mock.calls[0] as [
+      string,
+      { action: { label: string; onClick: () => void } },
+    ];
+    expect(message).toBe('Registro de água apagado');
+    expect(options.action.label).toBe('Desfazer');
+
+    options.action.onClick();
+    await waitFor(() => expect(createWater).toHaveBeenCalledWith({ ml: 250, date: '2026-05-17' }));
   });
 });

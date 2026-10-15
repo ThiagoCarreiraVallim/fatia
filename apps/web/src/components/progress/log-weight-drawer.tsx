@@ -11,7 +11,14 @@ import {
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { dayLabel, progressApi, type WeightLog } from '@fatia/api-client';
+import {
+  dayLabel,
+  progressApi,
+  undoMessage,
+  weightRestoreInput,
+  type WeightLog,
+} from '@fatia/api-client';
+import { toast } from 'sonner';
 import { hojeIso, instanteNoDia } from '@/lib/dias';
 import { LogDayField } from './log-day-field';
 import { LogHistory, type LogHistoryEntry } from './log-history';
@@ -98,11 +105,21 @@ export function LogWeightDrawer({ open, onClose, date }: Props) {
     },
   });
 
+  // Apaga sem perguntar; o aviso oferece "Desfazer" (`undo.ts` do api-client).
+  const restore = useMutation({
+    mutationFn: (log: WeightLog) => progressApi.createWeight(weightRestoreInput(log)),
+    onSuccess: () => invalidate(),
+    onError: () => toast.error('Não deu para desfazer. Registre de novo.'),
+  });
+
   const remove = useMutation({
-    mutationFn: (id: string) => progressApi.deleteWeight(id),
-    onSuccess: (_data, id) => {
+    mutationFn: (log: WeightLog) => progressApi.deleteWeight(log.id),
+    onSuccess: (_data, log) => {
       invalidate();
-      if (editing?.id === id) clearForm();
+      toast(undoMessage('weight'), {
+        action: { label: 'Desfazer', onClick: () => restore.mutate(log) },
+      });
+      if (editing?.id === log.id) clearForm();
       // A linha apagada sai do DOM levando o foco junto; sem isto a navegação
       // por teclado recomeçaria do `<body>`.
       inputRef.current?.focus();
@@ -167,10 +184,8 @@ export function LogWeightDrawer({ open, onClose, date }: Props) {
             />
           </div>
 
-          {error && <p className="text-sm text-rose-500">{error}</p>}
-          {remove.error && (
-            <p className="text-sm text-rose-500">{(remove.error as Error).message}</p>
-          )}
+          {error && <p className="text-sm text-danger">{error}</p>}
+          {remove.error && <p className="text-sm text-danger">{(remove.error as Error).message}</p>}
 
           <LogHistory
             entries={entries}
@@ -190,11 +205,13 @@ export function LogWeightDrawer({ open, onClose, date }: Props) {
               remove.reset();
               inputRef.current?.focus();
             }}
-            onDelete={(entry) => remove.mutate(entry.id)}
-            pendingId={remove.isPending ? (remove.variables ?? null) : null}
+            onDelete={(entry) => {
+              const log = logs.data?.logs.find((item) => item.id === entry.id);
+              if (log) remove.mutate(log);
+            }}
+            pendingId={remove.isPending ? (remove.variables?.id ?? null) : null}
             isDeleting={remove.isPending}
             emptyLabel="Nenhuma pesagem nos últimos 30 dias."
-            confirmLabel="Apagar esta pesagem?"
           />
 
           <div className="space-y-2">

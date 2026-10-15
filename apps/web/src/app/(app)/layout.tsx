@@ -1,3 +1,4 @@
+import { Toaster } from '@/components/ui/toaster';
 import { redirect } from 'next/navigation';
 import { BottomNav } from '@/components/layout/bottom-nav';
 import { QuickAddProvider } from '@/components/layout/quick-add';
@@ -27,6 +28,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <SideNav />
         <PwaInstallPrompt />
         <OnboardingGate />
+        <Toaster />
       </div>
     </QuickAddProvider>
   );

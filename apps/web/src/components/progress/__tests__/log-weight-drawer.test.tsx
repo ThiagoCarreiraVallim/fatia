@@ -7,6 +7,10 @@ import { shiftDay } from '@fatia/api-client';
 import { hojeIso } from '@/lib/dias';
 import { LogWeightDrawer } from '../log-weight-drawer';
 
+// O aviso com "Desfazer" é do `sonner`; aqui importa o que ele recebe.
+const sonner = vi.hoisted(() => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
+vi.mock('sonner', () => sonner);
+
 vi.mock('@/components/ui/drawer', () => {
   const Passthrough = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
   return {
@@ -158,16 +162,13 @@ describe('LogWeightDrawer', () => {
     expect(keys).toContainEqual(['goals']);
   });
 
-  it('deletes only after the confirmation, and invalidates the same three keys', async () => {
+  it('deletes right away and invalidates the same three keys', async () => {
     const user = userEvent.setup();
     const { invalidateQueries } = renderDrawer();
 
     await user.click(
       await screen.findByRole('button', { name: 'Apagar registro de 80,0 kg, 19 mai' }),
     );
-    expect(deleteWeight).not.toHaveBeenCalled();
-
-    await user.click(screen.getByRole('button', { name: /^apagar$/i }));
 
     await waitFor(() => expect(deleteWeight).toHaveBeenCalledWith('w1'));
     const keys = invalidateQueries.mock.calls.map((call) => call[0]?.queryKey);
@@ -187,7 +188,6 @@ describe('LogWeightDrawer', () => {
     expect(screen.getByLabelText(/Peso \(kg\)/)).toHaveValue(80);
 
     await user.click(screen.getByRole('button', { name: 'Apagar registro de 80,0 kg, 19 mai' }));
-    await user.click(screen.getByRole('button', { name: /^apagar$/i }));
 
     await waitFor(() => expect(screen.getByLabelText(/Peso \(kg\)/)).toHaveValue(null));
     expect(screen.getByRole('heading', { name: 'Logar peso' })).toBeInTheDocument();
@@ -298,5 +298,28 @@ describe('LogWeightDrawer', () => {
         else process.env.TZ = original;
       }
     });
+  });
+  it('offers "Desfazer", which recreates the deleted log on the same day', async () => {
+    const user = userEvent.setup();
+    renderDrawer();
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Apagar registro de 80,0 kg, 19 mai' }),
+    );
+    await waitFor(() => expect(sonner.toast).toHaveBeenCalledTimes(1));
+    const [message, options] = sonner.toast.mock.calls[0] as [
+      string,
+      { action: { label: string; onClick: () => void } },
+    ];
+    expect(message).toBe('Pesagem apagada');
+    expect(options.action.label).toBe('Desfazer');
+
+    options.action.onClick();
+    await waitFor(() =>
+      expect(createWeight).toHaveBeenCalledWith({
+        weightKg: 80,
+        loggedAt: '2026-05-19T09:00:00.000Z',
+      }),
+    );
   });
 });

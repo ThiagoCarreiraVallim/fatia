@@ -12,11 +12,14 @@ vi.mock('../meal-actions-drawer', () => ({
     meal ? <div role="dialog">{`Ações de ${meal.id}`}</div> : null,
 }));
 
+const sonner = vi.hoisted(() => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
+vi.mock('sonner', () => sonner);
+
 vi.mock('@fatia/api-client', async () => {
   const actual = await vi.importActual<typeof import('@fatia/api-client')>('@fatia/api-client');
   return {
     ...actual,
-    nutritionApi: { deleteMeal: vi.fn(), deleteItem: vi.fn() },
+    nutritionApi: { deleteMeal: vi.fn(), deleteItem: vi.fn(), addItem: vi.fn() },
   };
 });
 
@@ -31,6 +34,8 @@ const jantar: Meal = {
   items: [
     {
       id: 'item-1',
+      mealId: 'meal-1',
+      foodId: 7,
       foodName: 'Arroz',
       grams: 100,
       kcal: 128,
@@ -87,16 +92,32 @@ describe('MealTimeline', () => {
     await waitFor(() => expect(nutritionApi.deleteMeal).toHaveBeenCalledWith('meal-1'));
   });
 
-  it('asks before removing an item, and cancel keeps it', async () => {
+  // Item é registro pequeno: apaga na hora e o aviso oferece "Desfazer", que
+  // devolve o item à mesma refeição. Só a refeição inteira pede confirmação.
+  it('removes an item right away and "Desfazer" puts it back in the same meal', async () => {
+    vi.mocked(nutritionApi.deleteItem).mockResolvedValue(undefined);
+    vi.mocked(nutritionApi.addItem).mockResolvedValue(jantar.items[0]);
     const user = userEvent.setup();
     renderTimeline();
 
     await user.click(screen.getByRole('button', { name: 'Remover Arroz' }));
-    const dialog = await screen.findByRole('dialog');
-    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await waitFor(() => expect(nutritionApi.deleteItem).toHaveBeenCalledWith('item-1'));
+    await waitFor(() => expect(sonner.toast).toHaveBeenCalledTimes(1));
 
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(nutritionApi.deleteItem).not.toHaveBeenCalled();
+    const [message, options] = sonner.toast.mock.calls[0] as [
+      string,
+      { action: { label: string; onClick: () => void } },
+    ];
+    expect(message).toBe('Item apagado: Arroz');
+    options.action.onClick();
+    await waitFor(() =>
+      expect(nutritionApi.addItem).toHaveBeenCalledWith('meal-1', {
+        foodId: 7,
+        foodName: 'Arroz',
+        grams: 100,
+      }),
+    );
   });
 
   it('keeps empty meal slots before a logged dinner', () => {

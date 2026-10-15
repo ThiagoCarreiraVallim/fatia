@@ -11,7 +11,14 @@ import {
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { dayLabel, progressApi, type StepLog } from '@fatia/api-client';
+import {
+  dayLabel,
+  progressApi,
+  undoMessage,
+  stepsRestoreInput,
+  type StepLog,
+} from '@fatia/api-client';
+import { toast } from 'sonner';
 import { hojeIso } from '@/lib/dias';
 import { LogDayField } from './log-day-field';
 import { LogHistory, type LogHistoryEntry } from './log-history';
@@ -86,11 +93,21 @@ export function LogStepsDrawer({ open, onClose, date }: Props) {
     },
   });
 
+  // Apaga sem perguntar; o aviso oferece "Desfazer" (`undo.ts` do api-client).
+  const restore = useMutation({
+    mutationFn: (log: StepLog) => progressApi.createStep(stepsRestoreInput(log)),
+    onSuccess: () => invalidate(),
+    onError: () => toast.error('Não deu para desfazer. Registre de novo.'),
+  });
+
   const remove = useMutation({
-    mutationFn: (id: string) => progressApi.deleteStep(id),
-    onSuccess: (_data, id) => {
+    mutationFn: (log: StepLog) => progressApi.deleteStep(log.id),
+    onSuccess: (_data, log) => {
       invalidate();
-      if (editing?.id === id) clearForm();
+      toast(undoMessage('steps'), {
+        action: { label: 'Desfazer', onClick: () => restore.mutate(log) },
+      });
+      if (editing?.id === log.id) clearForm();
       inputRef.current?.focus();
     },
   });
@@ -156,10 +173,8 @@ export function LogStepsDrawer({ open, onClose, date }: Props) {
             />
           </div>
 
-          {error && <p className="text-sm text-rose-500">{error}</p>}
-          {remove.error && (
-            <p className="text-sm text-rose-500">{(remove.error as Error).message}</p>
-          )}
+          {error && <p className="text-sm text-danger">{error}</p>}
+          {remove.error && <p className="text-sm text-danger">{(remove.error as Error).message}</p>}
 
           <LogHistory
             entries={entries}
@@ -178,11 +193,13 @@ export function LogStepsDrawer({ open, onClose, date }: Props) {
               remove.reset();
               inputRef.current?.focus();
             }}
-            onDelete={(entry) => remove.mutate(entry.id)}
-            pendingId={remove.isPending ? (remove.variables ?? null) : null}
+            onDelete={(entry) => {
+              const log = logs.data?.logs.find((item) => item.id === entry.id);
+              if (log) remove.mutate(log);
+            }}
+            pendingId={remove.isPending ? (remove.variables?.id ?? null) : null}
             isDeleting={remove.isPending}
             emptyLabel="Nenhum registro de passos nos últimos 30 dias."
-            confirmLabel="Apagar este registro de passos?"
           />
 
           <div className="space-y-2">
