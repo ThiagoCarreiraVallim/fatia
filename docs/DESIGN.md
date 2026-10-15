@@ -57,32 +57,50 @@ Regras:
 
 - **Inter** (`font-sans`) no corpo; **Plus Jakarta Sans** (`font-jakarta`) nos títulos grandes.
 - Número que muda (kcal, peso, séries) usa `tabular-nums`, para não pular de largura.
-- Escala usada: título de tela `text-3xl font-extrabold`, título de cartão `text-[18px]
-font-semibold`, corpo `text-sm`, legenda `text-xs`. Rótulo da barra: 11 px, o mínimo.
+- Escala usada: título da barra de topo 17 px `font-semibold` (como no iOS), título de cartão
+  `text-[18px] font-semibold`, corpo `text-sm`, legenda `text-xs`. Rótulo da barra: 11 px, o mínimo.
 - Telas com `px-5`; cartões `rounded-xl p-5`; espaço entre cartões `space-y-5`.
 
 ## Navegação
 
 Fonte única: `packages/api-client/src/navigation.ts` (`PRIMARY_TABS`, `menuSections`,
-`activeNavKey`), com teste. Web e app montam a partir dela.
+`activeNavKey`, `ROUTES`/`routeInfo`), com teste. Web e app montam a partir dela.
 
 ```
-┌──────────────────────────────────────────┐
-│                conteúdo                  │
-├──────────────────────────────────────────┤
-│ Início · Nutrição · [ + ] · Treino · Mais│
-└──────────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│ ‹  Planos de treino                  [ações] │  ← barra de topo (fora do Início)
+├──────────────────────────────────────────────┤
+│                  conteúdo                    │
+├──────────────────────────────────────────────┤
+│ Nutrição · Treino · [ + ] · Comunidade · Mais│
+└──────────────────────────────────────────────┘
 ```
 
-- **Barra de baixo** (celular): três abas, o **"+" Registrar** no centro e **Mais**.
+- **Barra de topo** (`app-top-bar.tsx` no PWA, `layout/top-bar.tsx` no app), como no iOS, em
+  toda tela menos o Início: `‹` à esquerda (`aria-label="Voltar para <pai>"`), o título pequeno
+  da tela (o `h1`, 17 px, uma linha com reticências) e, à direita, as ações da tela (Copiar dia e
+  Metas na Nutrição, Histórico no Treino, Nova meta, Renomear/Excluir plano, Memórias e Conversas
+  no chat). Fixa no topo, com a área segura e fundo com blur.
+  - **Voltar é hierárquico, não histórico:** o pai vem do mapa `ROUTES`, então um link aberto
+    direto (convite, notificação) volta pelo caminho certo até o Início:
+    `/workout/plans/:id` → `/workout/plans` → `/workout` → `/`. Rota fora do mapa sobe ao
+    ancestral conhecido mais próximo. Teste: toda `page.tsx` de `(app)`/`(pro)` tem entrada.
+  - **Títulos** vêm do mapa; tela dinâmica troca pelo nome real (`useTopBarTitle` no PWA, prop
+    `title` do `Screen` no app): plano, treino rápido, conversa, sessão, aluno. Renomear fica
+    como ação da barra, com o campo no corpo.
+  - **Interceptar o voltar** (`useTopBarBack`, `onBack`): a sessão de treino ativa no app
+    confirma antes de sair.
+  - As telas não repetem o título grande: o que era subtítulo continua no corpo.
+- **Barra de baixo** (celular): Nutrição, Treino, o **"+" Registrar** no centro, Comunidade e
+  **Mais**. Não há aba Início: ele é a raiz, e chega-se a ele voltando de qualquer tela.
   - O "+" abre o menu Registrar: refeição (tipo pela hora), água, peso, passos e treino (retoma
     a sessão aberta). Ver `quick-add.ts` do api-client.
-  - "Mais" fica ativo em qualquer tela fora das três abas e abre o drawer **Menu**: o cartão do
+  - "Mais" fica ativo em qualquer tela fora das três abas e do Início e abre o drawer **Menu**: o cartão do
     perfil e as seções **Você** (Progresso, Metas do dia, Metas pessoais, Recordes, Perfil),
     **Registros** (Meus alimentos, Nutrientes, Planos, Histórico) e **IA** ("Chat com a IA", só
     no PWA e só quando `/chat/availability` diz que há IA; "Conectar sua IA", sempre).
-- **Barra lateral** (desktop, `md+`): logo, botão "Registrar", as três abas e as seções do menu
-  à vista. A barra de baixo some; o conteúdo ganha `md:pl-64` e fica em `max-w-3xl`.
+- **Barra lateral** (desktop, `md+`): logo (leva ao Início), botão "Registrar", as três abas e
+  as seções do menu à vista. A barra de baixo some; o conteúdo ganha `md:pl-64` e fica em `max-w-3xl`.
 - **Metas a um toque:** o pill "Metas" no Início e "Metas do dia" no primeiro nível do menu.
 - **Primeira vez:** quem ainda não tem `onboardedAt` vai para `/onboarding` (objetivo, dados,
   atividade, metas sugeridas por Mifflin-St Jeor). "Recalcular com meus dados" em Metas do dia
