@@ -6,8 +6,8 @@ import { SlidersHorizontal, ChevronRight } from 'lucide-react';
 import { nutritionApi, type NutrientProgress } from '@fatia/api-client';
 
 const STATUS_COLOR: Record<NutrientProgress['status'], string> = {
-  over: 'bg-rose-500',
-  under: 'bg-amber-400',
+  over: 'bg-danger',
+  under: 'bg-warning',
   ok: 'bg-primary',
   none: 'bg-muted-foreground',
 };
@@ -28,7 +28,7 @@ export function NutrientTargetsCard({ date }: { date: string }) {
   const nutrients = q.data?.nutrients ?? [];
 
   return (
-    <div className="space-y-3 rounded-2xl border border-white/5 bg-card p-4">
+    <div className="space-y-3 rounded-2xl border border-subtle bg-card p-4">
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
           <SlidersHorizontal size={15} className="text-primary" />
@@ -82,9 +82,9 @@ function NutrientBar({ n }: { n: NutrientProgress }) {
           <span
             className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-bold ${
               n.status === 'over'
-                ? 'bg-rose-500/15 text-rose-400'
+                ? 'bg-danger/15 text-danger'
                 : n.status === 'under'
-                  ? 'bg-amber-400/15 text-amber-400'
+                  ? 'bg-warning/15 text-warning'
                   : 'bg-primary/15 text-primary'
             }`}
           >

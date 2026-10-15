@@ -15,6 +15,7 @@ import { NutrientTargetsCard } from '@/components/nutrition/nutrient-targets-car
 import { CustomFoodsCard } from '@/components/nutrition/custom-foods-card';
 import { FoodSearchDrawer } from '@/components/nutrition/food-search-drawer';
 import { CopyDayDrawer } from '@/components/nutrition/copy-day-drawer';
+import { Skeleton } from '@/components/ui/skeleton';
 
 function todayIso(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -70,9 +71,9 @@ function NutritionPageContent() {
 
       {(summary.isLoading || goals.isLoading) && (
         <div className="space-y-4">
-          <div className="h-80 animate-pulse rounded-xl bg-card" />
-          <div className="h-28 animate-pulse rounded-xl bg-card" />
-          <div className="h-48 animate-pulse rounded-xl bg-card" />
+          <Skeleton className="h-80" />
+          <Skeleton className="h-28" />
+          <Skeleton className="h-48" />
         </div>
       )}
 
@@ -108,9 +109,7 @@ function NutritionPageContent() {
       />
 
       {summary.error && (
-        <p className="text-sm text-rose-500">
-          Erro ao carregar: {(summary.error as Error).message}
-        </p>
+        <p className="text-sm text-danger">Erro ao carregar: {(summary.error as Error).message}</p>
       )}
     </div>
   );

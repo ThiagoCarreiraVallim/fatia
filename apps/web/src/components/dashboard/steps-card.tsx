@@ -16,7 +16,7 @@ export function StepsCard({ data }: { data: TodaySummary['steps'] }) {
     <div className="rounded-lg border bg-card p-4 space-y-3">
       <div className="flex items-baseline justify-between">
         <h2 className="text-sm font-medium text-muted-foreground">Passos hoje</h2>
-        {data.goalReached && <span className="text-xs text-emerald-500">Meta batida</span>}
+        {data.goalReached && <span className="text-xs text-success">Meta batida</span>}
       </div>
       <div className="flex items-baseline gap-2">
         <span className="text-3xl font-semibold tabular-nums">

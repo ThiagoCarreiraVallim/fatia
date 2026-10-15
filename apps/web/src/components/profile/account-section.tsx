@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 const rowClass =
-  'flex w-full items-center gap-4 border-b border-white/5 px-4 py-4 text-left last:border-b-0 disabled:opacity-60';
+  'flex w-full items-center gap-4 border-b border-subtle px-4 py-4 text-left last:border-b-0 disabled:opacity-60';
 
 function RowIcon({ children, danger = false }: { children: React.ReactNode; danger?: boolean }) {
   return (
@@ -95,7 +95,7 @@ export function AccountSection() {
       >
         Conta e segurança
       </h2>
-      <div className="overflow-hidden rounded-2xl border border-white/5 bg-card">
+      <div className="overflow-hidden rounded-2xl border border-subtle bg-card">
         {/* prefetch={false}: o handler inicia o fluxo OAuth por redirect. */}
         <Link href="/api/logto/sign-in?tela=senha" prefetch={false} className={rowClass}>
           <RowIcon>

@@ -30,7 +30,7 @@ export function PlanoDoTurno() {
             )}
           >
             {passo.status === 'done' ? (
-              <Check size={14} aria-hidden className="shrink-0 text-emerald-500" />
+              <Check size={14} aria-hidden className="shrink-0 text-success" />
             ) : passo.status === 'running' ? (
               <LoaderCircle
                 size={14}

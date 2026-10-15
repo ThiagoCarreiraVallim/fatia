@@ -75,7 +75,7 @@ export function CustomFoodForm({
 
   const fieldError = (key: keyof CustomFoodErrors) =>
     errors[key] ? (
-      <p id={`${id}-${key}-erro`} className="text-xs text-rose-500">
+      <p id={`${id}-${key}-erro`} className="text-xs text-danger">
         {errors[key]}
       </p>
     ) : null;
@@ -154,7 +154,7 @@ export function CustomFoodForm({
         ))}
       </div>
       {errors.macros && (
-        <p role="alert" className="text-xs text-rose-500">
+        <p role="alert" className="text-xs text-danger">
           {errors.macros}
         </p>
       )}
@@ -166,7 +166,7 @@ export function CustomFoodForm({
       )}
 
       {error && (
-        <p role="alert" className="text-sm text-rose-500">
+        <p role="alert" className="text-sm text-danger">
           {error}
         </p>
       )}

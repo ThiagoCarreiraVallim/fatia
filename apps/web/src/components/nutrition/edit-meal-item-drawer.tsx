@@ -117,7 +117,7 @@ export function EditMealItemDrawer({ item, date, onClose }: Props) {
             </div>
           )}
           {mutation.error && (
-            <p className="text-sm text-rose-500">{(mutation.error as Error).message}</p>
+            <p className="text-sm text-danger">{(mutation.error as Error).message}</p>
           )}
           <div className="flex gap-2">
             <DrawerClose asChild>

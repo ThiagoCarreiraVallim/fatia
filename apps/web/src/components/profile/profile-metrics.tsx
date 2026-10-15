@@ -18,7 +18,7 @@ export function ProfileMetrics() {
   return (
     <>
       <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-2xl border border-white/5 bg-card p-4">
+        <div className="rounded-2xl border border-subtle bg-card p-4">
           <div className="flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground">
             <Weight size={12} />
             Peso Atual
@@ -30,7 +30,7 @@ export function ProfileMetrics() {
         <button
           type="button"
           onClick={() => setHeightOpen(true)}
-          className="rounded-2xl border border-white/5 bg-card p-4 text-left transition-colors hover:border-white/20"
+          className="rounded-2xl border border-subtle bg-card p-4 text-left transition-colors hover:border-white/20"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground">

@@ -24,7 +24,7 @@ export function ConnectTroubleshooting({ accountEmail }: { accountEmail?: string
   ];
 
   return (
-    <section className="rounded-2xl border border-white/5 bg-card p-4">
+    <section className="rounded-2xl border border-subtle bg-card p-4">
       <h2 className="text-base font-bold text-foreground">Não funcionou?</h2>
       <dl className="mt-3 space-y-4">
         {items.map(({ problem, fix }) => (

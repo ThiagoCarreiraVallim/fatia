@@ -78,7 +78,7 @@ function Header({ item, isCardio }: { item: PlanItemLike; isCardio?: boolean }) 
         <p className="mt-0.5 text-xs text-muted-foreground">{item.exercise.muscleGroup}</p>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {isCardio ? (
-            <span className="rounded-md bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-400">
+            <span className="rounded-md bg-water/15 px-2 py-0.5 text-[10px] font-bold text-water">
               CARDIO
             </span>
           ) : (
@@ -118,7 +118,7 @@ function SessionModeCard({
     : 'grid-cols-[40px_1fr_1fr_1fr]';
 
   return (
-    <div className="rounded-2xl border border-white/5 bg-card p-4">
+    <div className="rounded-2xl border border-subtle bg-card p-4">
       <Header item={item} isCardio={isCardio} />
       {loggedSets.length > 0 && (
         <div className="mt-4 space-y-1.5">
@@ -238,7 +238,7 @@ function PlanModeCard({
         : null;
 
   return (
-    <div className="rounded-2xl border border-white/5 bg-card p-4">
+    <div className="rounded-2xl border border-subtle bg-card p-4">
       <Header item={item} isCardio={isCardio} />
 
       {prLabel && (
@@ -320,7 +320,7 @@ function PlanModeCard({
             <button
               type="button"
               onClick={onRemove}
-              className="rounded p-1 text-muted-foreground hover:text-rose-500"
+              className="rounded p-1 text-muted-foreground hover:text-danger"
               aria-label={`Remover ${item.exercise.name} do plano`}
             >
               <Trash2 size={16} />

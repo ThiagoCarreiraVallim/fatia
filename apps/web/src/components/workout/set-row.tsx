@@ -94,7 +94,7 @@ export function SetRow({
           type="button"
           onClick={() => remove.mutate()}
           disabled={remove.isPending}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:text-rose-500 disabled:opacity-50"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:text-danger disabled:opacity-50"
           aria-label="Excluir série"
         >
           <Trash2 size={14} />

@@ -225,7 +225,7 @@ export function OnboardingWizard({ redo = false }: { redo?: boolean }) {
       )}
 
       {(suggest.error || complete.error || skip.error) && (
-        <p role="alert" className="text-sm text-rose-500">
+        <p role="alert" className="text-sm text-danger">
           {((suggest.error ?? complete.error ?? skip.error) as Error).message}
         </p>
       )}
@@ -277,7 +277,7 @@ function Choices<T extends string>({
             onClick={() => onChange(o.value)}
             className={cn(
               'flex w-full flex-col items-start gap-1 rounded-2xl border bg-card px-4 py-4 text-left transition-colors',
-              selected ? 'border-primary ring-1 ring-primary' : 'border-white/5 hover:bg-card/80',
+              selected ? 'border-primary ring-1 ring-primary' : 'border-subtle hover:bg-card/80',
             )}
           >
             <span className="text-base font-bold">{o.label}</span>
@@ -305,7 +305,7 @@ function Field({
       <Label htmlFor={id}>{label}</Label>
       {children}
       {error && (
-        <p id={`${id}-erro`} className="text-xs text-rose-500">
+        <p id={`${id}-erro`} className="text-xs text-danger">
           {error}
         </p>
       )}
@@ -346,14 +346,14 @@ function BodyStep({
               onClick={() => set({ sex: o.value })}
               className={cn(
                 'h-12 rounded-xl border bg-card text-sm font-semibold',
-                body.sex === o.value ? 'border-primary ring-1 ring-primary' : 'border-white/5',
+                body.sex === o.value ? 'border-primary ring-1 ring-primary' : 'border-subtle',
               )}
             >
               {o.label}
             </button>
           ))}
         </div>
-        {errors.sex && <p className="text-xs text-rose-500">{errors.sex}</p>}
+        {errors.sex && <p className="text-xs text-danger">{errors.sex}</p>}
       </fieldset>
       <Field id="birthDate" label="Data de nascimento" error={errors.birthDate}>
         <Input
@@ -414,7 +414,7 @@ function GoalsStep({
         onChange={(e) => set(key, e.target.value)}
       />
       {errors[key] && (
-        <p id={`${key}-erro`} className="text-xs text-rose-500">
+        <p id={`${key}-erro`} className="text-xs text-danger">
           {errors[key]}
         </p>
       )}
@@ -423,7 +423,7 @@ function GoalsStep({
 
   return (
     <div className="space-y-5">
-      <section aria-label="Estimativa" className="rounded-2xl border border-white/5 bg-card p-4">
+      <section aria-label="Estimativa" className="rounded-2xl border border-subtle bg-card p-4">
         <p className="text-xs font-bold tracking-wide text-muted-foreground">SEU GASTO ESTIMADO</p>
         <p className="mt-1 text-3xl font-extrabold">
           {kcal(suggestion.tdee)} <span className="text-base font-semibold">kcal/dia</span>

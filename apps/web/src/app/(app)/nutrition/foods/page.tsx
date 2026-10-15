@@ -47,7 +47,7 @@ function CustomFoodsContent() {
       </p>
 
       {foods.isError && (
-        <p role="alert" className="text-sm text-rose-500">
+        <p role="alert" className="text-sm text-danger">
           Não deu para carregar seus alimentos.{' '}
           <button type="button" className="underline" onClick={() => foods.refetch()}>
             Tentar novamente
@@ -62,7 +62,7 @@ function CustomFoodsContent() {
       {foods.data && foods.data.length > 0 && (
         <ul
           aria-label="Meus alimentos"
-          className="divide-y rounded-2xl border border-white/5 bg-card"
+          className="divide-y rounded-2xl border border-subtle bg-card"
         >
           {foods.data.map((food) => (
             <li key={food.id}>

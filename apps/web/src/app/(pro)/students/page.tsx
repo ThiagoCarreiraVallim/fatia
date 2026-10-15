@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, Users } from 'lucide-react';
 import { professionalApi } from '@fatia/api-client';
 import { ScopeChips } from '@/components/sharing/scope-chips';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function StudentsPage() {
   const alunos = useQuery({
@@ -26,8 +27,8 @@ export default function StudentsPage() {
 
       {alunos.isLoading && (
         <div className="space-y-3">
-          <div className="h-[104px] animate-pulse rounded-2xl bg-card" />
-          <div className="h-[104px] animate-pulse rounded-2xl bg-card" />
+          <Skeleton className="h-[104px] rounded-2xl bg-card" />
+          <Skeleton className="h-[104px] rounded-2xl bg-card" />
         </div>
       )}
 
@@ -46,7 +47,7 @@ export default function StudentsPage() {
         <Link
           key={aluno.membershipId}
           href={`/students/${aluno.membershipId}`}
-          className="flex items-start gap-3 rounded-2xl border border-white/5 bg-card p-4 hover:border-white/10"
+          className="flex items-start gap-3 rounded-2xl border border-subtle bg-card p-4 hover:border-white/10"
         >
           <div className="min-w-0 flex-1">
             <p className="truncate text-base font-bold text-foreground">{aluno.name}</p>

@@ -8,6 +8,7 @@ import { ChevronLeft, ChevronRight, Trash2, Plus, Dumbbell } from 'lucide-react'
 import { workoutApi } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function PlansPage() {
   const qc = useQueryClient();
@@ -90,7 +91,7 @@ export default function PlansPage() {
       {plans.isLoading && (
         <div className="space-y-2">
           {[1, 2].map((i) => (
-            <div key={i} className="h-20 animate-pulse rounded-2xl bg-muted" />
+            <Skeleton key={i} className="h-20 rounded-2xl bg-muted" />
           ))}
         </div>
       )}
@@ -103,7 +104,7 @@ export default function PlansPage() {
         {plans.data?.map((plan) => (
           <div
             key={plan.id}
-            className="flex items-center gap-3 rounded-2xl border border-white/5 bg-card p-4"
+            className="flex items-center gap-3 rounded-2xl border border-subtle bg-card p-4"
           >
             <Link
               href={`/workout/plans/${plan.id}`}
@@ -124,7 +125,7 @@ export default function PlansPage() {
             <button
               type="button"
               onClick={() => remove.mutate(plan.id)}
-              className="rounded p-1 text-muted-foreground hover:text-rose-500"
+              className="rounded p-1 text-muted-foreground hover:text-danger"
               aria-label="Excluir plano"
             >
               <Trash2 size={16} />

@@ -16,7 +16,7 @@ function MenuItem({ href, icon, title, subtitle }: MenuItemProps) {
   return (
     <Link
       href={href}
-      className="flex items-center gap-4 border-b border-white/5 px-4 py-4 last:border-b-0"
+      className="flex items-center gap-4 border-b border-subtle px-4 py-4 last:border-b-0"
     >
       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted/60">
         {icon}
@@ -50,7 +50,7 @@ export default async function ProfilePage() {
 
       <ProfileMetrics />
 
-      <nav className="overflow-hidden rounded-2xl border border-white/5 bg-card">
+      <nav className="overflow-hidden rounded-2xl border border-subtle bg-card">
         {/* Só rende algo para quem atende alguém — ver o componente. */}
         <ProfessionalPanelLink />
         <MenuItem

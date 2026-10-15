@@ -13,7 +13,7 @@ export function NextWorkoutCard({ workout }: Props) {
 
   return (
     <Link href={href} className="block">
-      <div className="relative overflow-hidden rounded-xl border border-white/5 bg-card">
+      <div className="relative overflow-hidden rounded-xl border border-subtle bg-card">
         {/* background image area */}
         <div className="relative h-32 w-full overflow-hidden bg-muted">
           {/* dark overlay gym texture using gradient */}

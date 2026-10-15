@@ -11,6 +11,7 @@ import {
   type ShareScope,
   type StudentReading,
 } from '@fatia/api-client';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const ORDEM: ShareScope[] = ['WORKOUT', 'NUTRITION', 'BODY', 'HABITS', 'GOALS'];
 
@@ -100,7 +101,7 @@ function Bloco({
   children: React.ReactNode[];
 }) {
   return (
-    <section className="rounded-2xl border border-white/5 bg-card p-4">
+    <section className="rounded-2xl border border-subtle bg-card p-4">
       <h2 className="text-sm font-bold text-foreground">{titulo}</h2>
       {children.length === 0 ? (
         <p className="mt-2 text-xs text-muted-foreground">{vazio}</p>
@@ -197,10 +198,10 @@ export default function StudentPage() {
             ))}
           </nav>
 
-          {leitura.isLoading && <div className="h-40 animate-pulse rounded-2xl bg-card" />}
+          {leitura.isLoading && <Skeleton className="h-40 rounded-2xl bg-card" />}
 
           {leitura.isError && (
-            <p className="rounded-2xl border border-white/5 bg-card p-4 text-xs text-muted-foreground">
+            <p className="rounded-2xl border border-subtle bg-card p-4 text-xs text-muted-foreground">
               Não foi possível ler esta categoria. Se o aluno revogou a autorização, ela some da
               lista assim que a página recarregar.
             </p>

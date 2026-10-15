@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, Dumbbell } from 'lucide-react';
 import { workoutApi, type WorkoutSession } from '@fatia/api-client';
+import { Skeleton } from '@/components/ui/skeleton';
 
 function formatDuration(start: string, end?: string): string {
   if (!end) return '—';
@@ -32,7 +33,7 @@ function SessionRow({ session }: { session: WorkoutSession }) {
   return (
     <Link
       href={`/workout/session/${session.id}`}
-      className="flex items-center gap-3 rounded-2xl border border-white/5 bg-card p-4"
+      className="flex items-center gap-3 rounded-2xl border border-subtle bg-card p-4"
     >
       <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
         <Dumbbell size={20} className="text-primary" />
@@ -75,7 +76,7 @@ export default function WorkoutHistoryPage() {
       {sessions.isLoading && (
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-20 animate-pulse rounded-2xl bg-muted" />
+            <Skeleton key={i} className="h-20 rounded-2xl bg-muted" />
           ))}
         </div>
       )}

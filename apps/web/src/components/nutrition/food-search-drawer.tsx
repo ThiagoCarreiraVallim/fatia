@@ -502,7 +502,7 @@ function SearchPanel({
         {isFetching && <li className="px-4 py-3 text-sm text-muted-foreground">Buscando...</li>}
         {!isFetching && isError && (
           <li className="flex items-center justify-between px-4 py-3 text-sm">
-            <span className="text-rose-500">Erro ao buscar alimentos.</span>
+            <span className="text-danger">Erro ao buscar alimentos.</span>
             <button type="button" onClick={onRetry} className="text-primary underline">
               Tentar novamente
             </button>
@@ -514,7 +514,7 @@ function SearchPanel({
           </li>
         )}
         {!typing && templateError && (
-          <li role="alert" className="px-4 py-3 text-sm text-rose-500">
+          <li role="alert" className="px-4 py-3 text-sm text-danger">
             {templateError}
           </li>
         )}
@@ -667,7 +667,7 @@ function TemplateRow({
           type="button"
           onClick={() => setConfirming(true)}
           aria-label={`Apagar ${template.name}`}
-          className="flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-rose-500"
+          className="flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-danger"
         >
           <Trash2 size={16} aria-hidden />
         </button>
@@ -727,11 +727,7 @@ function FavoriteButton({
       aria-pressed={favorite}
       className="flex h-12 w-12 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
     >
-      <Star
-        size={18}
-        className={favorite ? 'fill-amber-400 text-amber-400' : undefined}
-        aria-hidden
-      />
+      <Star size={18} className={favorite ? 'fill-warning text-warning' : undefined} aria-hidden />
     </button>
   );
 }
@@ -776,7 +772,7 @@ function SelectedFoodPanel({
           Total: {preview.kcal} kcal · P{preview.proteinG} · C{preview.carbsG} · G{preview.fatG}
         </p>
       )}
-      {error && <p className="text-sm text-rose-500">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
       <div className="flex gap-2">
         <Button variant="outline" className="flex-1" onClick={onBack}>
           Voltar
@@ -868,13 +864,13 @@ function ManualForm({
         <ManualMacro id="manual-g" label="G (g)" value={values.fatG} onChange={set('fatG')} />
       </div>
       {noKcal && (
-        <p className="text-xs text-amber-500">
+        <p className="text-xs text-warning">
           Sem calorias informadas — o item será salvo, mas não afetará seu resumo de kcal.
         </p>
       )}
 
       {nutrientTargets.length > 0 && (
-        <div className="space-y-2 rounded-lg border border-white/5 bg-muted/30 p-3">
+        <div className="space-y-2 rounded-lg border border-subtle bg-muted/30 p-3">
           <p className="text-xs font-bold text-muted-foreground">Metas personalizadas (opcional)</p>
           <div className="grid grid-cols-3 gap-2">
             {nutrientTargets.map((n) => (
@@ -900,7 +896,7 @@ function ManualForm({
         </div>
       )}
 
-      {error && <p className="text-sm text-rose-500">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
       <div className="flex gap-2">
         <Button variant="outline" className="flex-1" onClick={onBack}>
           Voltar

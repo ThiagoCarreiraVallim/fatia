@@ -158,7 +158,7 @@ export function BarcodeScanner({ onCode }: Props) {
           </Button>
         </div>
         {typedError && (
-          <p id={`${id}-code-erro`} className="text-xs text-rose-500">
+          <p id={`${id}-code-erro`} className="text-xs text-danger">
             {typedError}
           </p>
         )}

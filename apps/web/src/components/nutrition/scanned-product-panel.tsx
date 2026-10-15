@@ -103,7 +103,7 @@ function CompleteProduct({
       </div>
 
       {unit === 'ml' && (
-        <p className="text-xs text-amber-500">
+        <p className="text-xs text-warning">
           O rótulo é por 100 ml. O volume entra como gramas (1 ml ≈ 1 g).
         </p>
       )}
@@ -135,7 +135,7 @@ function CompleteProduct({
       <SaveOption id={id} saved={saved} save={save} onSaveChange={setSave} parsed={parsed} />
       <Attribution attribution={lookup.attribution} />
       {error && (
-        <p role="alert" className="text-sm text-rose-500">
+        <p role="alert" className="text-sm text-danger">
           {error}
         </p>
       )}
@@ -182,7 +182,7 @@ function IncompleteProduct({
 
   return (
     <div className="my-3 space-y-3">
-      <p role="status" className="rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-600">
+      <p role="status" className="rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning">
         {incompleteProductMessage(lookup.missing)}
       </p>
       <div className="space-y-1">
@@ -223,7 +223,7 @@ function IncompleteProduct({
       <SaveOption id={id} saved={saved} save={save} onSaveChange={setSave} parsed={parsed} />
       <Attribution attribution={lookup.attribution} />
       {error && (
-        <p role="alert" className="text-sm text-rose-500">
+        <p role="alert" className="text-sm text-danger">
           {error}
         </p>
       )}
@@ -287,7 +287,7 @@ function SaveOption({
         Na próxima vez, ele aparece na busca sem precisar ler o código.
       </p>
       {parsed && !parsed.ok && (
-        <p role="alert" className="text-xs text-rose-500">
+        <p role="alert" className="text-xs text-danger">
           {`Não dá para guardar: ${saveErrors(parsed.errors)}`}
         </p>
       )}

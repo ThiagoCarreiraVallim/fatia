@@ -38,7 +38,7 @@ export function ProfessionalPanelLink() {
   return (
     <Link
       href="/students"
-      className="flex items-center gap-4 border-b border-white/5 px-4 py-4 last:border-b-0"
+      className="flex items-center gap-4 border-b border-subtle px-4 py-4 last:border-b-0"
     >
       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted/60">
         <Users size={18} className="text-primary" />

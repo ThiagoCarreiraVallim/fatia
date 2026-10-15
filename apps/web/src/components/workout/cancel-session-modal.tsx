@@ -54,7 +54,7 @@ export function CancelSessionModal({ open, onOpenChange, session }: Props) {
 
         <div className="mt-4 space-y-2">
           {cancel.error && (
-            <p className="text-sm text-rose-500">
+            <p className="text-sm text-danger">
               Erro ao cancelar treino:{' '}
               {cancel.error instanceof Error ? cancel.error.message : 'Tente novamente.'}
             </p>

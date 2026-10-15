@@ -49,7 +49,7 @@ export function ConsistencyCard() {
   }, [sessions.data, nowMs]);
 
   return (
-    <div className="rounded-2xl border border-white/5 bg-card p-4">
+    <div className="rounded-2xl border border-subtle bg-card p-4">
       <p className="text-[10px] font-bold tracking-wide text-muted-foreground">CONSTÂNCIA</p>
       <p className="mt-1 text-xl font-extrabold text-foreground tabular-nums">
         {stats?.daysActive ?? 0}{' '}

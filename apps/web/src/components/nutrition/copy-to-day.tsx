@@ -58,7 +58,7 @@ export function CopyToDay({
         </Button>
       </div>
       {error && (
-        <p role="alert" className="text-sm text-rose-500">
+        <p role="alert" className="text-sm text-danger">
           {error}
         </p>
       )}

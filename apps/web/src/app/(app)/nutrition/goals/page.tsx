@@ -78,7 +78,7 @@ export default function GoalsPage() {
 
       <Link
         href="/onboarding?refazer=1"
-        className="flex min-h-12 items-center gap-3 rounded-xl border border-white/5 bg-card px-4 py-3 text-sm hover:bg-card/80"
+        className="flex min-h-12 items-center gap-3 rounded-xl border border-subtle bg-card px-4 py-3 text-sm hover:bg-card/80"
       >
         <Calculator size={18} className="text-primary" aria-hidden />
         <span className="flex-1">
@@ -127,7 +127,7 @@ export default function GoalsPage() {
       <Button type="submit" disabled={save.isPending} className="w-full">
         {save.isPending ? 'Salvando…' : 'Salvar metas'}
       </Button>
-      {save.error && <p className="text-sm text-rose-500">{(save.error as Error).message}</p>}
+      {save.error && <p className="text-sm text-danger">{(save.error as Error).message}</p>}
     </form>
   );
 }

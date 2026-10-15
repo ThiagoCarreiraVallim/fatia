@@ -18,7 +18,7 @@ export function CaloriesRingCard({ totals, goals }: Props) {
   const dashOffset = circumference * (1 - pct);
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-white/5 bg-card p-5">
+    <div className="relative overflow-hidden rounded-xl border border-subtle bg-card p-5">
       <div
         className="pointer-events-none absolute inset-0"
         style={{
@@ -67,7 +67,7 @@ export function CaloriesRingCard({ totals, goals }: Props) {
         </div>
 
         {goals ? (
-          <div className="flex w-full items-center justify-around border-t border-white/5 pt-4">
+          <div className="flex w-full items-center justify-around border-t border-subtle pt-4">
             <div className="flex flex-col items-center gap-0.5">
               <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
                 Meta

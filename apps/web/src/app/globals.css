@@ -62,6 +62,29 @@
   html {
     color-scheme: dark;
   }
+
+  /* Foco visível em todo controle, inclusive os que não são `Button`: o anel
+     do Tailwind (`ring`) só existe onde alguém o pôs na classe. */
+  a:focus-visible,
+  button:focus-visible,
+  [role='button']:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  /* Botão cru menor que 44 px: área de toque invisível em volta, sem mudar o
+     desenho. O elemento precisa ser `relative` (a utilidade já põe). */
+  .alvo-toque {
+    position: relative;
+  }
+  .alvo-toque::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
+  }
 }
 
 /*

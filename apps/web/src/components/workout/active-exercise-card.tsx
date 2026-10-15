@@ -160,7 +160,7 @@ export function ActiveExerciseCard({
   const restProgress = restRemaining != null ? Math.max(0, restRemaining) / restTarget : 0;
 
   return (
-    <div className="rounded-2xl border border-white/5 bg-card">
+    <div className="rounded-2xl border border-subtle bg-card">
       <div className="flex items-center justify-between px-4 pt-3">
         <button type="button" aria-label="Recolher" className="text-muted-foreground">
           <ChevronDown size={18} />

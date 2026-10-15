@@ -125,7 +125,7 @@ function Actions({ meal, date, today, onClose }: Props & { meal: Meal }) {
               </Button>
             </div>
             {save.error && (
-              <p role="alert" className="text-sm text-rose-500">
+              <p role="alert" className="text-sm text-danger">
                 {save.error.message}
               </p>
             )}

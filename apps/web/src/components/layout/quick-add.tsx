@@ -117,7 +117,7 @@ export function QuickAddProvider({ children }: { children: ReactNode }) {
                     type="button"
                     disabled={busy}
                     onClick={() => choose(key)}
-                    className="flex min-h-24 w-full flex-col items-center justify-center gap-2 rounded-xl border border-white/5 bg-card px-2 py-4 text-center text-[13px] font-semibold text-foreground transition-colors hover:bg-card/80 disabled:opacity-60"
+                    className="flex min-h-24 w-full flex-col items-center justify-center gap-2 rounded-xl border border-subtle bg-card px-2 py-4 text-center text-[13px] font-semibold text-foreground transition-colors hover:bg-card/80 disabled:opacity-60"
                   >
                     <Icon size={24} className="text-primary" />
                     {text}
@@ -127,7 +127,7 @@ export function QuickAddProvider({ children }: { children: ReactNode }) {
             })}
           </ul>
           {start.error && (
-            <p role="alert" className="mt-3 text-sm text-rose-500">
+            <p role="alert" className="mt-3 text-sm text-danger">
               Não deu para começar o treino. Tente de novo.
             </p>
           )}

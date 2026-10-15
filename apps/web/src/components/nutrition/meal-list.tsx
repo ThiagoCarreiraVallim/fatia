@@ -59,7 +59,7 @@ export function MealList({ meals, date }: { meals: Meal[]; date: string }) {
                 <button
                   type="button"
                   onClick={() => deleteMeal.mutate(meal.id)}
-                  className="rounded p-1 text-muted-foreground hover:text-rose-500"
+                  className="rounded p-1 text-muted-foreground hover:text-danger"
                   aria-label="Remover refeição"
                 >
                   <Trash2 size={16} />
@@ -88,7 +88,7 @@ export function MealList({ meals, date }: { meals: Meal[]; date: string }) {
                     <button
                       type="button"
                       onClick={() => deleteItem.mutate(item.id)}
-                      className="rounded p-1 text-muted-foreground hover:text-rose-500"
+                      className="rounded p-1 text-muted-foreground hover:text-danger"
                       aria-label="Remover item"
                     >
                       <Trash2 size={14} />

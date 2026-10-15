@@ -103,7 +103,7 @@ export default function ProgressPage() {
 
         <TabsContent value="overview" className="mt-4 space-y-4">
           {/* PESO CORPORAL CARD */}
-          <div className="rounded-2xl border border-white/5 bg-card p-4">
+          <div className="rounded-2xl border border-subtle bg-card p-4">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[10px] font-bold tracking-wide text-muted-foreground">
@@ -119,7 +119,7 @@ export default function ProgressPage() {
                   {weight.data && realWeightPoints.length >= 2 && (
                     <span
                       className={`flex items-center gap-0.5 text-xs font-bold ${
-                        weightDelta < 0 ? 'text-primary' : 'text-amber-400'
+                        weightDelta < 0 ? 'text-primary' : 'text-warning'
                       }`}
                     >
                       {weightDelta < 0 ? <TrendingDown size={12} /> : <TrendingUp size={12} />}

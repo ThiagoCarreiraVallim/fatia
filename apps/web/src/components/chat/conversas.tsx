@@ -151,7 +151,7 @@ function Item({
         className={cn(
           ghostButton,
           'rounded p-1.5',
-          confirmandoExclusao ? 'text-rose-500' : 'text-foreground/50',
+          confirmandoExclusao ? 'text-danger' : 'text-foreground/50',
         )}
       >
         {confirmandoExclusao ? (

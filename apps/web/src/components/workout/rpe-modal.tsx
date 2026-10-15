@@ -74,7 +74,7 @@ export function RpeModal({ open, onOpenChange, sessionId, set, onConfirmed }: Pr
                 className={`flex flex-col items-center gap-1 rounded-2xl border p-3 transition-colors ${
                   active
                     ? 'border-primary bg-primary/10 text-foreground'
-                    : 'border-white/5 bg-card text-muted-foreground hover:text-foreground'
+                    : 'border-subtle bg-card text-muted-foreground hover:text-foreground'
                 }`}
               >
                 <span className="text-3xl leading-none">{info.emoji}</span>
@@ -92,7 +92,7 @@ export function RpeModal({ open, onOpenChange, sessionId, set, onConfirmed }: Pr
         )}
 
         {save.error && (
-          <p className="mt-2 text-sm text-rose-500">
+          <p className="mt-2 text-sm text-danger">
             Erro: {save.error instanceof Error ? save.error.message : 'Tente novamente.'}
           </p>
         )}

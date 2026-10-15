@@ -41,7 +41,7 @@ export function AvisoDeCota() {
       <p
         className={cn(
           'text-xs',
-          cota?.allowed ? 'text-muted-foreground' : 'font-semibold text-rose-500',
+          cota?.allowed ? 'text-muted-foreground' : 'font-semibold text-danger',
         )}
       >
         {aviso}
@@ -52,7 +52,7 @@ export function AvisoDeCota() {
           className="mt-1 h-1 w-full overflow-hidden rounded-full bg-foreground/[0.08]"
         >
           <div
-            className={cn('h-full rounded-full', cota?.allowed ? 'bg-amber-500' : 'bg-rose-500')}
+            className={cn('h-full rounded-full', cota?.allowed ? 'bg-warning' : 'bg-danger')}
             style={{ width: `${Math.round(Math.min(1, ratio) * 100)}%` }}
           />
         </div>

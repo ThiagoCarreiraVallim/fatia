@@ -183,13 +183,13 @@ function BarraDeAcoes() {
       </ActionBarPrimitive.Copy>
       <ActionBarPrimitive.FeedbackPositive
         aria-label="Resposta boa"
-        className={cn(ghostButton, 'rounded-md p-1.5 data-[submitted]:text-emerald-500')}
+        className={cn(ghostButton, 'rounded-md p-1.5 data-[submitted]:text-success')}
       >
         <ThumbsUpIcon size={14} aria-hidden />
       </ActionBarPrimitive.FeedbackPositive>
       <ActionBarPrimitive.FeedbackNegative
         aria-label="Resposta ruim"
-        className={cn(ghostButton, 'rounded-md p-1.5 data-[submitted]:text-rose-500')}
+        className={cn(ghostButton, 'rounded-md p-1.5 data-[submitted]:text-danger')}
       >
         <ThumbsDownIcon size={14} aria-hidden />
       </ActionBarPrimitive.FeedbackNegative>
@@ -329,7 +329,7 @@ function BotaoDeDitado({
       className={cn(
         ghostButton,
         'size-9 shrink-0 rounded-full disabled:opacity-60',
-        gravando && 'text-rose-500 hover:text-rose-500',
+        gravando && 'text-danger hover:text-danger',
       )}
     >
       {gravando ? (
@@ -386,7 +386,7 @@ function Composer() {
   return (
     <>
       {aviso ? (
-        <p role="alert" className="shrink-0 px-5 pb-1 text-xs text-rose-500">
+        <p role="alert" className="shrink-0 px-5 pb-1 text-xs text-danger">
           {aviso}
         </p>
       ) : null}

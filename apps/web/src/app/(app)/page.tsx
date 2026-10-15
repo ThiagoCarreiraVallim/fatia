@@ -10,6 +10,7 @@ import { NextWorkoutCard } from '@/components/dashboard/next-workout-card';
 import { StepsCard } from '@/components/dashboard/steps-card';
 import { StreakCard } from '@/components/dashboard/streak-card';
 import { WaterCard } from '@/components/dashboard/water-card';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const noSubscription = () => () => undefined;
 
@@ -56,9 +57,9 @@ export default function HomePage() {
 
       {isLoading && (
         <div className="space-y-4">
-          <div className="h-[200px] animate-pulse rounded-xl bg-card" />
-          <div className="h-[160px] animate-pulse rounded-xl bg-card" />
-          <div className="h-20 animate-pulse rounded-xl bg-card" />
+          <Skeleton className="h-[200px]" />
+          <Skeleton className="h-[160px]" />
+          <Skeleton className="h-20" />
         </div>
       )}
 

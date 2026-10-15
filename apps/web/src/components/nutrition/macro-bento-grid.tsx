@@ -15,7 +15,7 @@ function MacroCard({
 }) {
   const pct = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
   return (
-    <div className={`rounded-xl border border-white/5 bg-card p-4 ${className ?? ''}`}>
+    <div className={`rounded-xl border border-subtle bg-card p-4 ${className ?? ''}`}>
       <div className="flex items-baseline justify-between">
         <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
           {label}
@@ -55,19 +55,19 @@ export function MacroBentoGrid({ totals, goals }: Props) {
         label="Proteína"
         current={totals.proteinG}
         target={protTarget}
-        color="bg-[#4b8eff]"
+        color="bg-protein"
       />
       <MacroCard
         label="Carboidratos"
         current={totals.carbsG}
         target={carbTarget}
-        color="bg-primary"
+        color="bg-carbs"
       />
       <MacroCard
         label="Gordura"
         current={totals.fatG}
         target={fatTarget}
-        color="bg-[#ffb4ab]"
+        color="bg-fat"
         className="col-span-2"
       />
     </div>

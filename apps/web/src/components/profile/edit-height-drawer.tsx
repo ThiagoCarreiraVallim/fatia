@@ -78,7 +78,7 @@ export function EditHeightDrawer({ open, onClose, currentHeightCm }: Props) {
             />
           </div>
           {mutation.error && (
-            <p className="text-sm text-rose-500">{(mutation.error as Error).message}</p>
+            <p className="text-sm text-danger">{(mutation.error as Error).message}</p>
           )}
           <Button
             className="w-full"

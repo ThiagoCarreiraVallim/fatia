@@ -21,6 +21,7 @@ import { ActiveCardioCard } from '@/components/workout/active-cardio-card';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { BlockTimeline } from '@/components/workout/block-timeline';
 import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel';
+import { Skeleton } from '@/components/ui/skeleton';
 
 function ActiveSession({ session }: { session: WorkoutSession }) {
   const [searchOpen, setSearchOpen] = useState(false);
@@ -194,7 +195,7 @@ function NoSession() {
           PERSONALIZAÇÃO
         </p>
         <div className="mt-2 grid grid-cols-2 gap-3">
-          <Link href="/workout/plans" className="rounded-2xl border border-white/5 bg-card p-4">
+          <Link href="/workout/plans" className="rounded-2xl border border-subtle bg-card p-4">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
               <Plus size={16} className="text-foreground" />
             </div>
@@ -204,7 +205,7 @@ function NoSession() {
               personalizado
             </p>
           </Link>
-          <Link href="/workout/plans" className="rounded-2xl border border-white/5 bg-card p-4">
+          <Link href="/workout/plans" className="rounded-2xl border border-subtle bg-card p-4">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
               <ListChecks size={16} className="text-foreground" />
             </div>
@@ -276,7 +277,7 @@ function NoSession() {
         {plans.isLoading && (
           <div className="mt-3 space-y-2">
             {[1, 2].map((i) => (
-              <div key={i} className="h-16 animate-pulse rounded-2xl bg-muted" />
+              <Skeleton key={i} className="h-16 rounded-2xl bg-muted" />
             ))}
           </div>
         )}
@@ -295,7 +296,7 @@ function NoSession() {
             <Link
               key={plan.id}
               href={`/workout/plans/${plan.id}`}
-              className="flex items-center gap-3 rounded-2xl border border-white/5 bg-card p-3"
+              className="flex items-center gap-3 rounded-2xl border border-subtle bg-card p-3"
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
                 <Dumbbell size={20} className="text-primary" />
@@ -329,8 +330,8 @@ export default function WorkoutPage() {
   if (active.isLoading) {
     return (
       <div className="space-y-3 p-4">
-        <div className="h-6 w-40 animate-pulse rounded bg-muted" />
-        <div className="h-24 animate-pulse rounded-lg bg-muted" />
+        <Skeleton className="h-6 w-40 rounded bg-muted" />
+        <Skeleton className="h-24 rounded-lg bg-muted" />
       </div>
     );
   }

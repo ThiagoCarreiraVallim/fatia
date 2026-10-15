@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
+import { Skeleton } from '@/components/ui/skeleton';
 interface LocalExercise {
   localId: string;
   exercise: Exercise;
@@ -187,7 +188,7 @@ export default function QuickTemplatePage() {
       </header>
 
       <div className="space-y-4 px-5 pt-2">
-        <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-card">
+        <div className="relative overflow-hidden rounded-2xl border border-subtle bg-card">
           <div className="relative h-44 w-full overflow-hidden">
             <div className={`absolute inset-0 bg-gradient-to-br ${template.gradient}`} />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
@@ -206,7 +207,7 @@ export default function QuickTemplatePage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-6 border-t border-white/5 px-5 py-3">
+          <div className="flex items-center gap-6 border-t border-subtle px-5 py-3">
             <div className="flex items-center gap-2">
               <Clock size={14} className="text-primary" />
               <div>
@@ -236,7 +237,7 @@ export default function QuickTemplatePage() {
         {loading && (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-32 animate-pulse rounded-2xl bg-muted" />
+              <Skeleton key={i} className="h-32 rounded-2xl bg-muted" />
             ))}
           </div>
         )}

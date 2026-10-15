@@ -151,13 +151,13 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
   });
 
   return (
-    <div className="rounded-2xl border border-white/5 bg-card">
+    <div className="rounded-2xl border border-subtle bg-card">
       <div className="flex items-center justify-between px-4 pt-3">
         <button type="button" aria-label="Recolher" className="text-muted-foreground">
           <ChevronDown size={18} />
         </button>
         <div className="text-center">
-          <p className="text-[10px] font-extrabold tracking-wide text-blue-400">CARDIO</p>
+          <p className="text-[10px] font-extrabold tracking-wide text-water">CARDIO</p>
           <h2 className="text-base font-extrabold text-foreground">{group.exerciseName}</h2>
         </div>
         <div className="w-5" />
@@ -248,7 +248,7 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
       </div>
 
       {pace && (
-        <p className="mt-2 px-4 text-center text-[11px] font-bold text-blue-400">
+        <p className="mt-2 px-4 text-center text-[11px] font-bold text-water">
           Pace estimado: <span className="tabular-nums">{pace}</span>
         </p>
       )}

@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface MoveVars {
   a: WorkoutPlanExercise;
@@ -165,9 +166,9 @@ export default function PlanDetailPage() {
   if (plan.isLoading) {
     return (
       <div className="space-y-3 px-5 pt-4">
-        <div className="h-6 w-32 animate-pulse rounded bg-muted" />
-        <div className="h-44 animate-pulse rounded-2xl bg-muted" />
-        <div className="h-32 animate-pulse rounded-2xl bg-muted" />
+        <Skeleton className="h-6 w-32 rounded bg-muted" />
+        <Skeleton className="h-44 rounded-2xl bg-muted" />
+        <Skeleton className="h-32 rounded-2xl bg-muted" />
       </div>
     );
   }
@@ -262,14 +263,14 @@ export default function PlanDetailPage() {
           type="button"
           onClick={handleDelete}
           aria-label="Excluir plano"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-rose-500"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-danger"
         >
           <Trash2 size={18} />
         </button>
       </header>
 
       <div className="space-y-4 px-5 pt-2">
-        <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-card">
+        <div className="relative overflow-hidden rounded-2xl border border-subtle bg-card">
           <div className="relative h-44 w-full overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-slate-700 via-stone-800 to-stone-900" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
@@ -285,7 +286,7 @@ export default function PlanDetailPage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-6 border-t border-white/5 px-5 py-3">
+          <div className="flex items-center gap-6 border-t border-subtle px-5 py-3">
             <div className="flex items-center gap-2">
               <Clock size={14} className="text-primary" />
               <div>
@@ -330,7 +331,7 @@ export default function PlanDetailPage() {
         {moveExercise.isError && (
           <p
             role="alert"
-            className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-400"
+            className="rounded-2xl border border-rose-500/30 bg-danger/10 px-4 py-3 text-xs text-danger"
           >
             {moveExercise.error instanceof ApiError && moveExercise.error.isNotFound ? (
               // A mensagem crua da API é "Plan exercise not found", em inglês e

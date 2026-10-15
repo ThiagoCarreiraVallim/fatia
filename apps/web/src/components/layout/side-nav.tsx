@@ -23,7 +23,7 @@ export function SideNav() {
   const active = activeNavKey(pathname);
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col gap-6 overflow-y-auto border-r border-white/5 bg-muted/40 px-4 py-6 md:flex">
+    <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col gap-6 overflow-y-auto border-r border-subtle bg-muted/40 px-4 py-6 md:flex">
       <Link href="/" className="px-2 text-2xl font-extrabold text-primary">
         Fatia
       </Link>

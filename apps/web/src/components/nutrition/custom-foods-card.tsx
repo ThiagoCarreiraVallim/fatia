@@ -17,7 +17,7 @@ export function CustomFoodsCard() {
   const rest = list.length - PREVIEW;
 
   return (
-    <div className="space-y-3 rounded-2xl border border-white/5 bg-card p-4">
+    <div className="space-y-3 rounded-2xl border border-subtle bg-card p-4">
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
           <Package size={15} className="text-primary" aria-hidden />

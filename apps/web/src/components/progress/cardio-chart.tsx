@@ -14,6 +14,7 @@ import {
 import { Search } from 'lucide-react';
 import { progressApi, type CardioProgress, type Exercise } from '@fatia/api-client';
 import { ExercisePickerDrawer } from './exercise-picker-drawer';
+import { Skeleton } from '@/components/ui/skeleton';
 type CardioMetric = 'duration' | 'distance' | 'pace' | 'kcal';
 
 const METRICS: Array<{ value: CardioMetric; label: string; unit: string }> = [
@@ -54,7 +55,7 @@ export function CardioChart({ days }: { days: number }) {
   });
 
   return (
-    <div className="space-y-3 rounded-2xl border border-white/5 bg-card p-4">
+    <div className="space-y-3 rounded-2xl border border-subtle bg-card p-4">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-bold text-foreground">Evolução de cardio</h3>
         <button
@@ -90,9 +91,7 @@ export function CardioChart({ days }: { days: number }) {
         </p>
       )}
 
-      {exercise && progress.isLoading && (
-        <div className="h-[180px] animate-pulse rounded-lg bg-muted/40" />
-      )}
+      {exercise && progress.isLoading && <Skeleton className="h-[180px] rounded-lg bg-muted/40" />}
 
       {exercise && progress.data && <ChartBody data={progress.data} metric={metric} />}
 

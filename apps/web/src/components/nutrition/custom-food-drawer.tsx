@@ -80,7 +80,7 @@ export function CustomFoodDrawer({ open, onOpenChange, food }: Props) {
           <>
             <Button
               variant="ghost"
-              className="w-full text-rose-500 hover:text-rose-500"
+              className="w-full text-danger hover:text-danger"
               onClick={() => setConfirming(true)}
             >
               Apagar alimento

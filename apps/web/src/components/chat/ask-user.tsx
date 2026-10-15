@@ -97,7 +97,7 @@ function Escrita({
             </dl>
           ) : null}
           {previa.valida === false ? (
-            <p role="alert" className="mt-2 text-xs text-rose-500">
+            <p role="alert" className="mt-2 text-xs text-danger">
               {previa.problema}
             </p>
           ) : null}
@@ -336,7 +336,7 @@ function Acoes({ pausa, ocupado, onResponder }: Props) {
     >
       {escritas.length > 0 ? (
         <div className="flex items-start gap-2">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" aria-hidden />
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-warning" aria-hidden />
           <div>
             <p className="text-sm font-bold text-foreground">
               {escritas.length > 1 ? 'Confirmar estas ações?' : 'Confirmar esta ação?'}

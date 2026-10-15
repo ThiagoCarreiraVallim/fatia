@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { ChevronLeft, Trophy, Dumbbell, Footprints } from 'lucide-react';
 import { workoutApi, type PersonalRecordEntry } from '@fatia/api-client';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type SortKey = 'recent' | 'weight';
 
@@ -108,7 +109,7 @@ export default function RecordsPage() {
       {records.isLoading && (
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-20 animate-pulse rounded-2xl bg-muted" />
+            <Skeleton key={i} className="h-20 rounded-2xl bg-muted" />
           ))}
         </div>
       )}
@@ -138,7 +139,7 @@ function StatCard({
   highlight?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-white/5 bg-card p-3 text-center">
+    <div className="rounded-2xl border border-subtle bg-card p-3 text-center">
       <p
         className={`text-2xl font-extrabold tabular-nums ${highlight ? 'text-primary' : 'text-foreground'}`}
       >
@@ -196,7 +197,7 @@ function SortBtn({
 function RecordRow({ record: r }: { record: PersonalRecordEntry }) {
   const isCardio = r.type === 'cardio';
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-white/5 bg-card p-4">
+    <div className="flex items-center gap-3 rounded-2xl border border-subtle bg-card p-4">
       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-muted">
         {isCardio ? (
           <Footprints size={18} className="text-primary" />
@@ -234,7 +235,7 @@ function RecordRow({ record: r }: { record: PersonalRecordEntry }) {
           </>
         )}
       </div>
-      <Trophy size={16} className="shrink-0 text-amber-400" />
+      <Trophy size={16} className="shrink-0 text-warning" />
     </div>
   );
 }

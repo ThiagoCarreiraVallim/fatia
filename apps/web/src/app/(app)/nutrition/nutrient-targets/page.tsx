@@ -105,7 +105,7 @@ export default function NutrientTargetsPage() {
       </div>
 
       {/* Adicionar */}
-      <div className="space-y-3 rounded-2xl border border-white/5 bg-card p-4">
+      <div className="space-y-3 rounded-2xl border border-subtle bg-card p-4">
         <h2 className="text-sm font-bold">Adicionar meta</h2>
 
         <div className="flex flex-wrap gap-1.5">
@@ -204,7 +204,7 @@ export default function NutrientTargetsPage() {
           <Plus size={16} />
           {save.isPending ? 'Salvando…' : 'Salvar meta'}
         </Button>
-        {save.error && <p className="text-sm text-rose-500">{(save.error as Error).message}</p>}
+        {save.error && <p className="text-sm text-danger">{(save.error as Error).message}</p>}
       </div>
     </div>
   );
@@ -220,7 +220,7 @@ function TargetRow({ target, onDelete }: { target: NutrientTarget; onDelete: () 
           ? `mín ${target.min} ${target.unit}`
           : '—';
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-white/5 bg-card p-4">
+    <div className="flex items-center gap-3 rounded-2xl border border-subtle bg-card p-4">
       <div className="min-w-0 flex-1">
         <p className="text-sm font-bold text-foreground">{target.label}</p>
         <p className="text-xs text-muted-foreground tabular-nums">{range}</p>
@@ -229,7 +229,7 @@ function TargetRow({ target, onDelete }: { target: NutrientTarget; onDelete: () 
         type="button"
         onClick={onDelete}
         aria-label={`Remover ${target.label}`}
-        className="rounded p-1 text-muted-foreground hover:text-rose-500"
+        className="rounded p-1 text-muted-foreground hover:text-danger"
       >
         <Trash2 size={16} />
       </button>

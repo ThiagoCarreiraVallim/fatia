@@ -100,7 +100,7 @@ export function MenuMais({
           <Link
             href="/profile"
             onClick={close}
-            className="flex min-h-14 items-center gap-3 rounded-2xl border border-white/5 bg-card px-4 py-3"
+            className="flex min-h-14 items-center gap-3 rounded-2xl border border-subtle bg-card px-4 py-3"
           >
             <span
               aria-hidden

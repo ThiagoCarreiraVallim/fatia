@@ -215,7 +215,7 @@ function NewPortionForm({
           />
         </div>
       </div>
-      {error && <p className="text-sm text-rose-500">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
       <div className="flex gap-2">
         <Button type="button" variant="ghost" size="sm" className="flex-1" onClick={onCancel}>
           Cancelar

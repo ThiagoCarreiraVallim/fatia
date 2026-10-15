@@ -92,7 +92,7 @@ export function TrainingIntensity() {
   const grid = useMemo(() => heatmapCells(sessions.data ?? [], new Date()), [sessions.data]);
 
   return (
-    <div className="rounded-2xl border border-white/5 bg-card p-4">
+    <div className="rounded-2xl border border-subtle bg-card p-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold text-foreground">Intensidade do Treino</h3>
         <Calendar size={16} className="text-muted-foreground" />
