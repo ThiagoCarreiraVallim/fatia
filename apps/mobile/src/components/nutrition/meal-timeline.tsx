@@ -20,6 +20,8 @@ import {
   resumoDoItem,
   totalKcal,
 } from './helpers';
+import { cores } from '@/theme/cores';
+import { useRemoverItem } from './use-remover-item';
 
 /**
  * Réplica de `apps/web/src/components/nutrition/meal-timeline.tsx`.
@@ -60,10 +62,7 @@ export function MealTimeline({
     void qc.invalidateQueries({ queryKey: ['nutrition', 'history', 7] });
   };
 
-  const removerItem = useMutation({
-    mutationFn: (id: string) => nutritionApi.deleteItem(id),
-    onSuccess: invalidar,
-  });
+  const removerItem = useRemoverItem(invalidar);
   const removerRefeicao = useMutation({
     mutationFn: (id: string) => nutritionApi.deleteMeal(id),
     onSuccess: invalidar,
@@ -84,13 +83,6 @@ export function MealTimeline({
         },
       ],
     );
-  };
-
-  const confirmarRemocaoDoItem = (item: MealItem) => {
-    Alert.alert('Remover item', `${item.foodName} sai desta refeição.`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Remover', style: 'destructive', onPress: () => removerItem.mutate(item.id) },
-    ]);
   };
 
   return (
@@ -120,7 +112,7 @@ export function MealTimeline({
                 meal={entry.meal}
                 onAddItem={() => onAddItem(entry.meal.id)}
                 onEditItem={onEditItem}
-                onDeleteItem={confirmarRemocaoDoItem}
+                onDeleteItem={(item) => removerItem.mutate(item)}
                 onDeleteMeal={() => confirmarRemocao(entry.meal)}
                 onMore={() => onMealActions(entry.meal)}
               />
@@ -139,7 +131,7 @@ export function MealTimeline({
                   <Text className="text-[13px] text-muted-foreground">
                     {ROTULO_REFEICAO[entry.mealType]}
                   </Text>
-                  <Plus size={14} color="#baccaf" />
+                  <Plus size={14} color={cores.mutedForeground} />
                 </View>
               </Pressable>
             ),
@@ -191,13 +183,13 @@ function MealCard({
               label={`Adicionar item em ${ROTULO_REFEICAO[meal.mealType]}`}
               onPress={onAddItem}
             >
-              <Plus size={16} color="#baccaf" />
+              <Plus size={16} color={cores.mutedForeground} />
             </AcaoDoIcone>
             <AcaoDoIcone label={`Mais ações de ${ROTULO_REFEICAO[meal.mealType]}`} onPress={onMore}>
-              <MoreHorizontal size={16} color="#baccaf" />
+              <MoreHorizontal size={16} color={cores.mutedForeground} />
             </AcaoDoIcone>
             <AcaoDoIcone label={`Remover ${ROTULO_REFEICAO[meal.mealType]}`} onPress={onDeleteMeal}>
-              <Trash2 size={16} color="#baccaf" />
+              <Trash2 size={16} color={cores.mutedForeground} />
             </AcaoDoIcone>
           </View>
         </View>
@@ -220,13 +212,13 @@ function MealCard({
                 </View>
                 <View className="flex-row items-center">
                   <AcaoDoIcone label={`Editar ${item.foodName}`} onPress={() => onEditItem(item)}>
-                    <Pencil size={14} color="#baccaf" />
+                    <Pencil size={14} color={cores.mutedForeground} />
                   </AcaoDoIcone>
                   <AcaoDoIcone
                     label={`Remover ${item.foodName}`}
                     onPress={() => onDeleteItem(item)}
                   >
-                    <Trash2 size={14} color="#baccaf" />
+                    <Trash2 size={14} color={cores.mutedForeground} />
                   </AcaoDoIcone>
                 </View>
               </View>

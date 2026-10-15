@@ -11,6 +11,8 @@ import {
   mensagemDeErro,
   resumoDoItem,
 } from './helpers';
+import { cores } from '@/theme/cores';
+import { useRemoverItem } from './use-remover-item';
 
 /**
  * Réplica de `apps/web/src/components/nutrition/meal-list.tsx`.
@@ -42,10 +44,7 @@ export function MealList({
     void qc.invalidateQueries({ queryKey: ['nutrition', 'history', 7] });
   };
 
-  const removerItem = useMutation({
-    mutationFn: (id: string) => nutritionApi.deleteItem(id),
-    onSuccess: invalidar,
-  });
+  const removerItem = useRemoverItem(invalidar);
   const removerRefeicao = useMutation({
     mutationFn: (id: string) => nutritionApi.deleteMeal(id),
     onSuccess: invalidar,
@@ -91,13 +90,13 @@ export function MealList({
                   label={`Adicionar item em ${ROTULO_REFEICAO[meal.mealType]}`}
                   onPress={() => onAddItem(meal.id)}
                 >
-                  <Plus size={16} color="#baccaf" />
+                  <Plus size={16} color={cores.mutedForeground} />
                 </AcaoDoIcone>
                 <AcaoDoIcone
                   label={`Remover ${ROTULO_REFEICAO[meal.mealType]}`}
                   onPress={() => confirmarRemocao(meal)}
                 >
-                  <Trash2 size={16} color="#baccaf" />
+                  <Trash2 size={16} color={cores.mutedForeground} />
                 </AcaoDoIcone>
               </View>
             </View>
@@ -119,13 +118,13 @@ export function MealList({
                   </View>
                   <View className="flex-row items-center">
                     <AcaoDoIcone label={`Editar ${item.foodName}`} onPress={() => onEditItem(item)}>
-                      <Pencil size={14} color="#baccaf" />
+                      <Pencil size={14} color={cores.mutedForeground} />
                     </AcaoDoIcone>
                     <AcaoDoIcone
                       label={`Remover ${item.foodName}`}
-                      onPress={() => removerItem.mutate(item.id)}
+                      onPress={() => removerItem.mutate(item)}
                     >
-                      <Trash2 size={14} color="#baccaf" />
+                      <Trash2 size={14} color={cores.mutedForeground} />
                     </AcaoDoIcone>
                   </View>
                 </View>

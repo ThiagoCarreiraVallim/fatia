@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { dayLabel, progressApi, type WeightLog } from '@fatia/api-client';
+import {
+  dayLabel,
+  progressApi,
+  undoMessage,
+  weightRestoreInput,
+  type WeightLog,
+} from '@fatia/api-client';
 import { hojeIso, instanteNoDia } from '@/components/nutrition/helpers';
 import {
   Button,
@@ -14,6 +20,7 @@ import {
   FormMessage,
 } from '@/components/ui';
 import { formatDecimal, instantDayMonth } from '@/components/charts';
+import { useToast } from '@/components/ui/toast';
 import { LogHistory, type LogHistoryEntry } from './log-history';
 import { SeletorDeDia } from './seletor-de-dia';
 import { SheetField } from './sheet-field';
@@ -41,6 +48,7 @@ export function LogWeightDrawer({
   const [editing, setEditing] = useState<WeightLog | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   // `useState` com inicializador preguiçoso, e não `useMemo(..., [])`: `useMemo`
   // é dica de performance, não garantia — o React pode descartar o valor e
@@ -93,11 +101,22 @@ export function LogWeightDrawer({
     },
   });
 
+  // Apaga sem perguntar; o aviso oferece "Desfazer" (`undo.ts` do api-client).
+  const restore = useMutation({
+    mutationFn: (log: WeightLog) => progressApi.createWeight(weightRestoreInput(log)),
+    onSuccess: invalidate,
+    onError: () => toast.show({ message: 'Não deu para desfazer. Registre de novo.' }),
+  });
+
   const remove = useMutation({
-    mutationFn: (id: string) => progressApi.deleteWeight(id),
-    onSuccess: (_result, id) => {
+    mutationFn: (log: WeightLog) => progressApi.deleteWeight(log.id),
+    onSuccess: (_result, log) => {
       invalidate();
-      if (editing?.id === id) {
+      toast.show({
+        message: undoMessage('weight'),
+        action: { label: 'Desfazer', onPress: () => restore.mutate(log) },
+      });
+      if (editing?.id === log.id) {
         setEditing(null);
         setWeight('');
       }
@@ -171,10 +190,12 @@ export function LogWeightDrawer({
               setWeight(formatDecimal(log.weightKg));
               setFormError(null);
             }}
-            onDelete={(entry) => remove.mutate(entry.id)}
-            pendingId={remove.isPending ? (remove.variables ?? null) : null}
+            onDelete={(entry) => {
+              const log = logs.data?.logs.find((item) => item.id === entry.id);
+              if (log) remove.mutate(log);
+            }}
+            pendingId={remove.isPending ? (remove.variables?.id ?? null) : null}
             emptyLabel="Nenhuma pesagem nos últimos 30 dias."
-            confirmTitle="Apagar esta pesagem?"
           />
         </View>
 

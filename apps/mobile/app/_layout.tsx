@@ -8,6 +8,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiError } from '@fatia/api-client';
 import { AuthProvider, useAuth } from '@/auth/auth-context';
 import { installMobileApiTransport } from '@/api/transport';
+import { cores } from '@/theme/cores';
+import { ToastProvider } from '@/components/ui/toast';
 
 /**
  * Raiz do app.
@@ -72,24 +74,26 @@ export default function RootLayout() {
   const [queryClient] = useState(makeQueryClient);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#131313' }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: cores.background }}>
       <SafeAreaProvider>
         <StatusBar style="light" />
         <AuthProvider>
           <ApiBridge>
             <QueryClientProvider client={queryClient}>
-              <Stack
-                screenOptions={{
-                  headerShown: false,
-                  contentStyle: { backgroundColor: '#131313' },
-                  // Gesto de voltar do iOS ligado em todas as telas; no Android
-                  // o botão físico é tratado pelo próprio Expo Router.
-                  gestureEnabled: true,
-                }}
-              >
-                <Stack.Screen name="(app)" />
-                <Stack.Screen name="login" options={{ gestureEnabled: false }} />
-              </Stack>
+              <ToastProvider>
+                <Stack
+                  screenOptions={{
+                    headerShown: false,
+                    contentStyle: { backgroundColor: cores.background },
+                    // Gesto de voltar do iOS ligado em todas as telas; no Android
+                    // o botão físico é tratado pelo próprio Expo Router.
+                    gestureEnabled: true,
+                  }}
+                >
+                  <Stack.Screen name="(app)" />
+                  <Stack.Screen name="login" options={{ gestureEnabled: false }} />
+                </Stack>
+              </ToastProvider>
             </QueryClientProvider>
           </ApiBridge>
         </AuthProvider>

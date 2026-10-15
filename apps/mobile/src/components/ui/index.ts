@@ -19,3 +19,4 @@ export { Label } from './label';
 export { EmptyState, ErrorState, LoadingState } from './state';
 export { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
 export { cn } from './utils';
+export { ToastProvider, useToast } from './toast';
