@@ -115,6 +115,10 @@ Estado vazio sempre diz o que fazer a seguir ("Toque em + para registrar a prime
   "… apagado · Desfazer". Desfazer recria o registro a partir do retrato tirado antes de apagar
   (`packages/api-client/src/undo.ts`): mesmo dia ou instante, mesmos valores, o item na mesma
   refeição. A medida caseira do item não volta (as gramas sim).
+  - No PWA, dentro de drawer o "Desfazer" fica na própria lista (`LogHistory`, `useUndoSlot`):
+    o drawer é modal e deixa a página inerte, então um `toast` fora dele não recebe toque. Fora
+    de drawer (item da refeição) é o `toast` do `sonner`.
+  - No app nativo é sempre o `useToast`, que fica acima dos sheets.
 - **Confirmar:** refeição inteira, plano, sessão de treino, alimento próprio, meta, conta.
 
 ## Acessibilidade

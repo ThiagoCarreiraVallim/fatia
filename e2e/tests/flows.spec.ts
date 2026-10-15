@@ -88,7 +88,8 @@ test('água, peso e passos registrados ontem ficam ontem', async ({ page }) => {
   /**
    * Abre o drawer pelo "+", volta um dia pela seta, registra e confere pela lista ao
    * reabrir (o dia voltou a hoje); depois apaga pela própria lista, para não
-   * sujar o seed. O valor é incomum para não confundir com o do seed.
+   * sujar o seed (na água, desfaz uma vez e apaga de novo, para provar o
+   * "Desfazer"). O valor é incomum para não confundir com o do seed.
    */
   async function registrarOntem(opts: {
     item: string;
@@ -96,6 +97,7 @@ test('água, peso e passos registrados ontem ficam ontem', async ({ page }) => {
     valor: string;
     salvar: string;
     titulo: string;
+    desfazer?: boolean;
   }) {
     await registrarPeloMais(page, opts.item);
     await expect(drawer.getByRole('button', { name: 'Próximo dia' })).toBeDisabled();
@@ -111,9 +113,16 @@ test('água, peso e passos registrados ontem ficam ontem', async ({ page }) => {
     const linha = `${opts.titulo}, ${ontem}`;
     const editar = drawer.getByRole('button', { name: `Editar registro de ${linha}` });
     await expect(editar).toBeVisible();
-    await drawer.getByRole('button', { name: `Apagar registro de ${linha}` }).click();
-    await drawer.getByRole('button', { name: 'Apagar', exact: true }).click();
+    const apagar = drawer.getByRole('button', { name: `Apagar registro de ${linha}` });
+    // Registro pequeno apaga sem pergunta; o aviso oferece "Desfazer".
+    await apagar.click();
     await expect(editar).toHaveCount(0);
+    if (opts.desfazer) {
+      await page.getByRole('button', { name: 'Desfazer' }).click();
+      await expect(editar).toBeVisible();
+      await apagar.click();
+      await expect(editar).toHaveCount(0);
+    }
     await page.keyboard.press('Escape');
     await expect(drawer).toHaveCount(0);
   }
@@ -124,6 +133,7 @@ test('água, peso e passos registrados ontem ficam ontem', async ({ page }) => {
     valor: '333',
     salvar: 'Adicionar em ontem',
     titulo: '333 mL',
+    desfazer: true,
   });
   await registrarOntem({
     item: 'Peso',

@@ -34,6 +34,8 @@ interface Props {
    */
   isDeleting: boolean;
   emptyLabel: string;
+  /** O último registro apagado, enquanto ainda dá para desfazer. */
+  undo?: { message: string; onUndo: () => void } | null;
 }
 
 /**
@@ -61,12 +63,32 @@ export function LogHistory({
   pendingId,
   isDeleting,
   emptyLabel,
+  undo = null,
 }: Props) {
   return (
     <div className="space-y-2">
       <p className="text-[11px] font-bold tracking-wide text-muted-foreground">
         REGISTROS RECENTES
       </p>
+
+      {/* Região viva montada sempre: um `aria-live` que nasce preenchido costuma
+          não ser anunciado. */}
+      <div role="status" aria-live="polite">
+        {undo && (
+          <div className="flex items-center gap-2 rounded-xl border border-subtle bg-popover px-3 py-1">
+            <p className="min-w-0 flex-1 text-sm">{undo.message}</p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="font-bold text-primary"
+              onClick={undo.onUndo}
+            >
+              Desfazer
+            </Button>
+          </div>
+        )}
+      </div>
 
       {isLoading && <p className="py-4 text-center text-xs text-muted-foreground">Carregando…</p>}
 

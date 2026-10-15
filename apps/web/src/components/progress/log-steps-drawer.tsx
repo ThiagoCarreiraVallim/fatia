@@ -18,7 +18,7 @@ import {
   stepsRestoreInput,
   type StepLog,
 } from '@fatia/api-client';
-import { toast } from 'sonner';
+import { useUndoSlot } from './use-undo-slot';
 import { hojeIso } from '@/lib/dias';
 import { LogDayField } from './log-day-field';
 import { LogHistory, type LogHistoryEntry } from './log-history';
@@ -69,6 +69,8 @@ export function LogStepsDrawer({ open, onClose, date }: Props) {
   }
 
   function resetAll() {
+    setUndone(null);
+    restore.reset();
     clearForm();
     setDay(date ?? hojeIso());
     save.reset();
@@ -97,16 +99,14 @@ export function LogStepsDrawer({ open, onClose, date }: Props) {
   const restore = useMutation({
     mutationFn: (log: StepLog) => progressApi.createStep(stepsRestoreInput(log)),
     onSuccess: () => invalidate(),
-    onError: () => toast.error('Não deu para desfazer. Registre de novo.'),
   });
+  const [undone, setUndone] = useUndoSlot<StepLog>();
 
   const remove = useMutation({
     mutationFn: (log: StepLog) => progressApi.deleteStep(log.id),
     onSuccess: (_data, log) => {
       invalidate();
-      toast(undoMessage('steps'), {
-        action: { label: 'Desfazer', onClick: () => restore.mutate(log) },
-      });
+      setUndone(log);
       if (editing?.id === log.id) clearForm();
       inputRef.current?.focus();
     },
@@ -175,6 +175,9 @@ export function LogStepsDrawer({ open, onClose, date }: Props) {
 
           {error && <p className="text-sm text-danger">{error}</p>}
           {remove.error && <p className="text-sm text-danger">{(remove.error as Error).message}</p>}
+          {restore.error && (
+            <p className="text-sm text-danger">Não deu para desfazer. Registre de novo.</p>
+          )}
 
           <LogHistory
             entries={entries}
@@ -199,6 +202,17 @@ export function LogStepsDrawer({ open, onClose, date }: Props) {
             }}
             pendingId={remove.isPending ? (remove.variables?.id ?? null) : null}
             isDeleting={remove.isPending}
+            undo={
+              undone
+                ? {
+                    message: undoMessage('steps'),
+                    onUndo: () => {
+                      restore.mutate(undone);
+                      setUndone(null);
+                    },
+                  }
+                : null
+            }
             emptyLabel="Nenhum registro de passos nos últimos 30 dias."
           />
 

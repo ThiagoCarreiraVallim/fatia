@@ -7,10 +7,6 @@ import { shiftDay } from '@fatia/api-client';
 import { hojeIso } from '@/lib/dias';
 import { LogWaterDrawer } from '../log-water-drawer';
 
-// O aviso com "Desfazer" é do `sonner`; aqui importa o que ele recebe.
-const sonner = vi.hoisted(() => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
-vi.mock('sonner', () => sonner);
-
 vi.mock('@/components/ui/drawer', () => {
   const Passthrough = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
   return {
@@ -262,15 +258,9 @@ describe('LogWaterDrawer', () => {
     renderDrawer();
 
     await user.click(await screen.findByRole('button', { name: DELETE_250 }));
-    await waitFor(() => expect(sonner.toast).toHaveBeenCalledTimes(1));
-    const [message, options] = sonner.toast.mock.calls[0] as [
-      string,
-      { action: { label: string; onClick: () => void } },
-    ];
-    expect(message).toBe('Registro de água apagado');
-    expect(options.action.label).toBe('Desfazer');
-
-    options.action.onClick();
+    // Dentro do drawer modal o aviso fica na própria lista: o resto da página é inerte.
+    expect(await screen.findByRole('status')).toHaveTextContent('Registro de água apagado');
+    await user.click(screen.getByRole('button', { name: 'Desfazer' }));
     await waitFor(() => expect(createWater).toHaveBeenCalledWith({ ml: 250, date: '2026-05-17' }));
   });
 });
