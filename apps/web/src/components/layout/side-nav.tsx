@@ -2,14 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Apple, Dumbbell, Home, Plus } from 'lucide-react';
+import { Apple, Dumbbell, Home, Plus, Users } from 'lucide-react';
 import { PRIMARY_TABS, activeNavKey } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
 import { MenuLinks } from './menu-mais';
 import { useQuickAdd } from './quick-add';
 import { useNavMenu } from './use-nav-menu';
+import { useNavVariant } from './nav-variants';
 
-const ICON = { home: Home, nutrition: Apple, workout: Dumbbell } as const;
+const ICON = { home: Home, nutrition: Apple, workout: Dumbbell, community: Users } as const;
 
 /**
  * Desktop (`md+`): a barra de baixo vira esta lateral, com tudo à vista — as
@@ -21,6 +22,11 @@ export function SideNav() {
   const quickAdd = useQuickAdd();
   const sections = useNavMenu();
   const active = activeNavKey(pathname);
+  const variant = useNavVariant();
+  const tabs =
+    variant === 'atual'
+      ? PRIMARY_TABS
+      : [...PRIMARY_TABS, { key: 'community' as const, href: '/community', label: 'Comunidade' }];
 
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col gap-6 overflow-y-auto border-r border-subtle bg-muted/40 px-4 py-6 md:flex">
@@ -38,9 +44,9 @@ export function SideNav() {
       </button>
       <nav aria-label="Navegação principal">
         <ul className="space-y-0.5">
-          {PRIMARY_TABS.map(({ key, href, label }) => {
+          {tabs.map(({ key, href, label }) => {
             const Icon = ICON[key];
-            const on = active === key;
+            const on = key === 'community' ? pathname.startsWith('/community') : active === key;
             return (
               <li key={key}>
                 <Link

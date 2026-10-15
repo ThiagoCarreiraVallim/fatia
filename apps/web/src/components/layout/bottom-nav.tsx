@@ -8,6 +8,7 @@ import { PRIMARY_TABS, activeNavKey, type NavTab } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
 import { MenuMais } from './menu-mais';
 import { useQuickAdd } from './quick-add';
+import { VariantBottomNav, useNavVariant } from './nav-variants';
 
 const ICON = { home: Home, nutrition: Apple, workout: Dumbbell } as const;
 
@@ -24,6 +25,7 @@ export function BottomNav() {
   const pathname = usePathname();
   const quickAdd = useQuickAdd();
   const [menuOpen, setMenuOpen] = useState(false);
+  const variant = useNavVariant();
   const active = activeNavKey(pathname);
   const tab = (key: NavTab['key']) => PRIMARY_TABS.find((t) => t.key === key)!;
 
@@ -42,6 +44,8 @@ export function BottomNav() {
       </Link>
     );
   };
+
+  if (variant !== 'atual') return <VariantBottomNav variant={variant} />;
 
   return (
     <>
