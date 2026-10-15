@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { BottomNav } from '@/components/layout/bottom-nav';
 import { QuickAdd } from '@/components/layout/quick-add';
+import { OnboardingGate } from '@/components/onboarding/onboarding-gate';
 import { PwaInstallPrompt } from '@/components/pwa-install-prompt';
 import { getCurrentUser } from '@/lib/auth-server';
 
@@ -20,6 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <BottomNav />
       <QuickAdd />
       <PwaInstallPrompt />
+      <OnboardingGate />
     </div>
   );
 }
