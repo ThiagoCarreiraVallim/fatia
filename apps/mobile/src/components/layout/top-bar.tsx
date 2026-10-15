@@ -2,6 +2,7 @@ import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
+import { cores } from '@/theme/cores';
 
 /** Altura da barra de voltar, sem a área segura. `Screen` reserva o mesmo. */
 export const TOP_BAR_HEIGHT = 64;
@@ -52,7 +53,7 @@ export function TopBar({
             }
             className="-ml-2 h-11 w-11 items-center justify-center"
           >
-            <ChevronLeft size={24} color="#e5e2e1" />
+            <ChevronLeft size={24} color={cores.foreground} />
           </Pressable>
           <Text
             accessibilityRole="header"

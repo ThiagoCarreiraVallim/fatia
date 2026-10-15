@@ -5,6 +5,7 @@ import Svg, { Path } from 'react-native-svg';
 import { nutritionApi } from '@fatia/api-client';
 import { ErrorState, LoadingState, cn } from '@/components/ui';
 import { NUMEROS_TABULARES, alturaDaBarra, caminhoDeBarra, inicialDoDia } from './helpers';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/components/nutrition/weekly-trend-chart.tsx`.
@@ -82,7 +83,7 @@ export function WeeklyTrendChart({ today }: { today: string }) {
                         larguraDaColuna,
                         altura,
                       )}
-                      fill={dia.date === today ? '#2ce500' : '#201f1f'}
+                      fill={dia.date === today ? cores.primary : cores.muted}
                     />
                   );
                 })}

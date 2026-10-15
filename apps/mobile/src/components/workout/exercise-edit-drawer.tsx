@@ -14,6 +14,7 @@ import {
   FormMessage,
   Label,
 } from '@/components/ui';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/components/workout/exercise-edit-drawer.tsx`.
@@ -91,7 +92,7 @@ export function ExerciseEditDrawer({ exercise, open, onOpenChange, onSaved }: Pr
               value={name}
               onChangeText={setName}
               accessibilityLabel="Nome"
-              placeholderTextColor="#8a8a8a"
+              placeholderTextColor={cores.placeholder}
               className={FIELD_CLASS}
             />
           </View>
@@ -103,7 +104,7 @@ export function ExerciseEditDrawer({ exercise, open, onOpenChange, onSaved }: Pr
               onChangeText={setEquipment}
               accessibilityLabel="Equipamento"
               placeholder="Ex.: barra, halteres, máquina"
-              placeholderTextColor="#8a8a8a"
+              placeholderTextColor={cores.placeholder}
               className={FIELD_CLASS}
             />
           </View>
@@ -117,7 +118,7 @@ export function ExerciseEditDrawer({ exercise, open, onOpenChange, onSaved }: Pr
               multiline
               numberOfLines={6}
               textAlignVertical="top"
-              placeholderTextColor="#8a8a8a"
+              placeholderTextColor={cores.placeholder}
               className={`${FIELD_CLASS} min-h-[140px]`}
             />
           </View>

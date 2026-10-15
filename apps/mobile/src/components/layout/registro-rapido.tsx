@@ -23,6 +23,7 @@ import {
 import { FoodSearchDrawer } from '@/components/nutrition/food-search-drawer';
 import { hojeIso } from '@/components/nutrition/helpers';
 import { LogStepsDrawer, LogWaterDrawer, LogWeightDrawer } from '@/components/progress';
+import { cores } from '@/theme/cores';
 
 const ICONE: Record<QuickAddKey, LucideIcon> = {
   meal: Apple,
@@ -125,7 +126,7 @@ export function RegistroRapido({ children }: { children: ReactNode }) {
                     className="min-h-24 w-[31%] items-center justify-center gap-2 rounded-xl border border-border bg-card px-2 py-4 active:opacity-80"
                     style={ocupado ? { opacity: 0.6 } : undefined}
                   >
-                    <Icone size={24} color="#2ce500" />
+                    <Icone size={24} color={cores.primary} />
                     <Text className="text-center text-[13px] font-semibold text-foreground">
                       {texto}
                     </Text>

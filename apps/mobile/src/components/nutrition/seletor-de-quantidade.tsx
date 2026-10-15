@@ -11,6 +11,7 @@ import {
 import { Button, cn } from '@/components/ui';
 import { DrawerInput } from './drawer-input';
 import { NUMEROS_TABULARES, parsePositivo } from './helpers';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/components/nutrition/amount-picker.tsx`: gramas
@@ -71,7 +72,7 @@ export function SeletorDeQuantidade({
             onPress={() => setCriando(true)}
             className="min-h-11 flex-row items-center gap-1 rounded-full border border-dashed border-border px-3"
           >
-            <Plus size={14} color="#8a8a8a" />
+            <Plus size={14} color={cores.placeholder} />
             <Text className="text-sm text-muted-foreground">Nova medida</Text>
           </Pressable>
         ) : null}
@@ -105,7 +106,7 @@ export function SeletorDeQuantidade({
               onChange({ ...quantidade, quantity: stepQuantity(quantidade.quantity, -1) })
             }
           >
-            <Minus size={18} color="#e5e2e1" />
+            <Minus size={18} color={cores.foreground} />
           </BotaoDoPasso>
           <Text
             accessibilityLabel={`Quantas medidas: ${formatQuantity(quantidade.quantity)}`}
@@ -120,7 +121,7 @@ export function SeletorDeQuantidade({
               onChange({ ...quantidade, quantity: stepQuantity(quantidade.quantity, 1) })
             }
           >
-            <Plus size={18} color="#e5e2e1" />
+            <Plus size={18} color={cores.foreground} />
           </BotaoDoPasso>
           {gramas !== null ? (
             <Text style={NUMEROS_TABULARES} className="text-sm text-muted-foreground">

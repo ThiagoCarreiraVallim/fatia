@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TOP_BAR_HEIGHT, TopBar } from './top-bar';
+import { cores } from '@/theme/cores';
 
 /** A altura da `BottomNav` (80) e um respiro: o "+" mora dentro dela. */
 const RESPIRO_INFERIOR = 96;
@@ -48,8 +49,8 @@ export function Screen({
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#2ce500"
-            colors={['#2ce500']}
+            tintColor={cores.primary}
+            colors={[cores.primary]}
             progressViewOffset={paddingTop}
           />
         ) : undefined

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react-native';
 import { menuSections, usersApi, type MenuIcon } from '@fatia/api-client';
 import { Drawer, DrawerHeader, DrawerScrollView, DrawerTitle } from '@/components/ui';
+import { cores } from '@/theme/cores';
 
 const ICONE: Record<MenuIcon, LucideIcon> = {
   progress: TrendingUp,
@@ -70,7 +71,7 @@ export function MenuMais({ aberto, onFechar }: { aberto: boolean; onFechar: () =
             <Text className="text-base font-bold text-foreground">{eu.data?.name ?? ''}</Text>
             <Text className="text-xs text-muted-foreground">Ver perfil</Text>
           </View>
-          <ChevronRight size={18} color="#baccaf" />
+          <ChevronRight size={18} color={cores.mutedForeground} />
         </Pressable>
         {secoes.map((secao) => (
           <View key={secao.title} className="mb-4 gap-1 px-4">
@@ -91,7 +92,7 @@ export function MenuMais({ aberto, onFechar }: { aberto: boolean; onFechar: () =
                   onPress={() => ir(item.href)}
                   className="min-h-14 flex-row items-center gap-3 rounded-xl px-2 py-2 active:bg-card"
                 >
-                  <Icone size={20} color="#2ce500" />
+                  <Icone size={20} color={cores.primary} />
                   <View className="flex-1">
                     <Text className="text-sm font-semibold text-foreground">{item.label}</Text>
                     <Text className="text-xs text-muted-foreground">{item.description}</Text>

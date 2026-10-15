@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { deslocarDia, formatarDiaCurto } from './helpers';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/components/nutrition/date-navigator.tsx`.
@@ -25,7 +26,7 @@ export function DateNavigator({
         onPress={() => onChange(deslocarDia(date, -1))}
         className="h-11 w-11 items-center justify-center rounded-md active:bg-accent"
       >
-        <ChevronLeft size={20} color="#e5e2e1" />
+        <ChevronLeft size={20} color={cores.foreground} />
       </Pressable>
       <Text className="text-sm font-medium capitalize text-foreground">
         {formatarDiaCurto(date)}
@@ -36,7 +37,7 @@ export function DateNavigator({
         onPress={() => onChange(deslocarDia(date, 1))}
         className="h-11 w-11 items-center justify-center rounded-md active:bg-accent"
       >
-        <ChevronRight size={20} color="#e5e2e1" />
+        <ChevronRight size={20} color={cores.foreground} />
       </Pressable>
     </View>
   );

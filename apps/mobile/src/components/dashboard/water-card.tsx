@@ -4,19 +4,19 @@ import { Droplet, MoreHorizontal } from 'lucide-react-native';
 import { progressApi, type TodaySummary } from '@fatia/api-client';
 import { Button, FormMessage } from '@/components/ui';
 import { NUMEROS_TABULARES, formatarVolume, percentualDaMeta } from './helpers';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/components/dashboard/water-card.tsx`.
  *
- * O azul da hidratação não é token do tema, então vem literal — e os tons
- * translúcidos do PWA (`bg-blue-500/10`) viram cores chapadas: o modificador de
- * opacidade não funciona nesta paleta, que declara `hsl(var(--x))` sem canal
- * alfa.
+ * O azul é o token `water`; os tons translúcidos do PWA (`bg-water/10`)
+ * viram cores chapadas: o modificador de opacidade não funciona nesta paleta,
+ * que declara `hsl(var(--x))` sem canal alfa.
  *
  * O drawer não é montado aqui: bottom sheet nativo não é portal e abriria com a
  * altura deste card. Ver o cabeçalho de `src/components/ui/drawer.tsx`.
  */
-const AZUL = '#4b8eff';
+const AZUL = cores.water;
 const AZUL_FUNDO = '#16233d';
 const AZUL_TEXTO = '#8ab4ff';
 const ATALHOS_ML = [250, 500, 750] as const;
@@ -61,7 +61,7 @@ export function WaterCard({
             onPress={onLogWater}
             className="h-11 w-11 items-center justify-center rounded-xl bg-muted"
           >
-            <MoreHorizontal size={16} color="#baccaf" />
+            <MoreHorizontal size={16} color={cores.mutedForeground} />
           </Pressable>
         </View>
 
@@ -109,7 +109,7 @@ export function WaterCard({
               key={ml}
               variant="outline"
               size="sm"
-              className="flex-1 border-[#4b8eff] bg-[#16233d]"
+              className="flex-1 border-water bg-[#16233d]"
               disabled={adicionar.isPending}
               accessibilityLabel={`Adicionar ${ml} mililitros de água`}
               onPress={() => adicionar.mutate(ml)}

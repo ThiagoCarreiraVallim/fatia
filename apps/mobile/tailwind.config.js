@@ -49,6 +49,13 @@ module.exports = {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
+        danger: 'hsl(var(--danger))',
+        success: 'hsl(var(--success))',
+        warning: 'hsl(var(--warning))',
+        protein: 'hsl(var(--protein))',
+        carbs: 'hsl(var(--carbs))',
+        fat: 'hsl(var(--fat))',
+        water: 'hsl(var(--water))',
       },
       borderRadius: {
         sm: 8,

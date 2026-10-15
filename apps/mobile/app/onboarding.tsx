@@ -33,6 +33,7 @@ import {
 import { useAuth } from '@/auth/auth-context';
 import { Button, Input, Label, LoadingState } from '@/components/ui';
 import { hojeIso, mensagemDeErro } from '@/components/nutrition/helpers';
+import { cores } from '@/theme/cores';
 
 const kcal = (n: number) => n.toLocaleString('pt-BR');
 
@@ -188,7 +189,7 @@ export default function OnboardingScreen() {
                   onPress={() => setPasso((p) => p - 1)}
                   className="h-11 w-11 items-center justify-center rounded-full"
                 >
-                  <ChevronLeft size={22} color="#baccaf" />
+                  <ChevronLeft size={22} color={cores.mutedForeground} />
                 </Pressable>
               ) : (
                 <View className="h-11 w-11" />

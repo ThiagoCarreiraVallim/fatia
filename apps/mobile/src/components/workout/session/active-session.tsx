@@ -25,6 +25,7 @@ import { sessionProgress } from './format';
 import { useCancelSession } from './use-cancel-session';
 import { useSessionExitGuard } from './use-exit-guard';
 import { useRestTimer } from './use-rest-timer';
+import { cores } from '@/theme/cores';
 
 /**
  * Sessão em andamento — o `ActiveSession` de `apps/web/src/app/(app)/workout/page.tsx`,
@@ -96,8 +97,8 @@ export function ActiveSession({
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                tintColor="#2ce500"
-                colors={['#2ce500']}
+                tintColor={cores.primary}
+                colors={[cores.primary]}
               />
             }
           >
@@ -153,7 +154,7 @@ export function ActiveSession({
             ))}
 
             <Button variant="outline" className="rounded-2xl" onPress={() => setSearchOpen(true)}>
-              <Plus size={16} color="#e5e2e1" />
+              <Plus size={16} color={cores.foreground} />
               <Text className="text-sm font-medium text-foreground">Adicionar exercício</Text>
             </Button>
           </ScrollView>

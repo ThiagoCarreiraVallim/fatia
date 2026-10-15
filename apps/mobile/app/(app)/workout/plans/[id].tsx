@@ -25,6 +25,7 @@ import {
   pluralize,
   type PlanMove,
 } from '@/components/workout/workout-stats';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/app/(app)/workout/plans/[id]/page.tsx`.
@@ -37,7 +38,7 @@ import {
 function Stat({ icon: Icon, label, value }: { icon: typeof Clock; label: string; value: string }) {
   return (
     <View className="flex-row items-center gap-2">
-      <Icon size={14} color="#2ce500" />
+      <Icon size={14} color={cores.primary} />
       <View>
         <Text className="text-[10px] font-bold tracking-wide text-muted-foreground">{label}</Text>
         <Text className="text-sm font-extrabold text-foreground">{value}</Text>
@@ -253,7 +254,7 @@ export default function PlanDetailScreen() {
                   onPress={submitName}
                   className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
                 >
-                  <Check size={20} color="#2ce500" />
+                  <Check size={20} color={cores.primary} />
                 </Pressable>
               </>
             ) : (
@@ -274,7 +275,7 @@ export default function PlanDetailScreen() {
               onPress={confirmDelete}
               className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
             >
-              <Trash2 size={18} color="#baccaf" />
+              <Trash2 size={18} color={cores.mutedForeground} />
             </Pressable>
           </View>
 
@@ -309,7 +310,7 @@ export default function PlanDetailScreen() {
               onPress={() => setAddOpen(true)}
               className="items-center gap-2 rounded-2xl border border-dashed border-border bg-accent p-6 active:opacity-80"
             >
-              <Plus size={20} color="#2ce500" />
+              <Plus size={20} color={cores.primary} />
               <Text className="text-center text-sm text-muted-foreground">
                 Plano criado! Agora{' '}
                 <Text className="font-bold text-primary">adicione seu primeiro exercício</Text>.
@@ -341,13 +342,13 @@ export default function PlanDetailScreen() {
           </View>
 
           <Button variant="outline" className="rounded-2xl" onPress={() => setAddOpen(true)}>
-            <Plus size={16} color="#e5e2e1" />
+            <Plus size={16} color={cores.foreground} />
             <Text className="text-sm font-medium text-foreground">Adicionar exercício</Text>
           </Button>
 
           <View className="rounded-2xl border border-border bg-accent p-4">
             <View className="flex-row items-center gap-2">
-              <Lightbulb size={16} color="#2ce500" />
+              <Lightbulb size={16} color={cores.primary} />
               <Text className="text-sm font-extrabold text-foreground">Foco na Excêntrica</Text>
             </View>
             <Text className="mt-1 text-xs leading-relaxed text-muted-foreground">
@@ -362,7 +363,7 @@ export default function PlanDetailScreen() {
             loading={start.isPending}
             onPress={() => start.mutate()}
           >
-            <Play size={16} color="#131313" fill="#131313" />
+            <Play size={16} color={cores.background} fill={cores.background} />
             <Text className="text-base font-extrabold text-primary-foreground">Iniciar Treino</Text>
           </Button>
         </View>

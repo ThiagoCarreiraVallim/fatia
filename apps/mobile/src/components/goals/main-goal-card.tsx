@@ -3,6 +3,7 @@ import Svg, { Circle, G } from 'react-native-svg';
 import { Flame } from 'lucide-react-native';
 import type { Goal } from '@fatia/api-client';
 import { formatValue } from './format';
+import { cores } from '@/theme/cores';
 
 const SIZE = 140;
 const STROKE = 10;
@@ -23,7 +24,7 @@ export function MainGoalCard({ goal }: { goal: Goal }) {
     <View className="overflow-hidden rounded-2xl border border-border bg-card p-5">
       <View className="flex-row">
         <View className="flex-row items-center gap-1.5 rounded-full bg-muted px-3 py-1">
-          <Flame size={12} color="#2ce500" />
+          <Flame size={12} color={cores.primary} />
           <Text className="text-[11px] font-bold text-foreground">META PRINCIPAL</Text>
         </View>
       </View>
@@ -56,7 +57,7 @@ export function MainGoalCard({ goal }: { goal: Goal }) {
                 cy={SIZE / 2}
                 r={RADIUS}
                 fill="transparent"
-                stroke="#201f1f"
+                stroke={cores.muted}
                 strokeWidth={STROKE}
               />
               <Circle
@@ -64,7 +65,7 @@ export function MainGoalCard({ goal }: { goal: Goal }) {
                 cy={SIZE / 2}
                 r={RADIUS}
                 fill="transparent"
-                stroke="#2ce500"
+                stroke={cores.primary}
                 strokeWidth={STROKE}
                 strokeLinecap="round"
                 strokeDasharray={CIRCUMFERENCE}

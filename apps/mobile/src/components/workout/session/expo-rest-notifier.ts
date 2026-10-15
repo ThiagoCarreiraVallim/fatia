@@ -6,6 +6,7 @@ import {
   REST_NOTIFICATION_KIND,
   type RestNotifier,
 } from './rest-notification';
+import { cores } from '@/theme/cores';
 
 /**
  * A ponta que fala com o sistema operacional (#182).
@@ -50,7 +51,7 @@ export const expoRestNotifier: RestNotifier = {
         importance: Notifications.AndroidImportance.HIGH,
         sound: 'default',
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#2ce500',
+        lightColor: cores.primary,
       });
     }
 

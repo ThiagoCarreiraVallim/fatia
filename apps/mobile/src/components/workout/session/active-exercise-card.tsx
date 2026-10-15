@@ -24,6 +24,7 @@ import {
 import { RestTimer } from './rest-timer';
 import { SetRow } from './set-row';
 import type { RestTimer as RestTimerState } from './use-rest-timer';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/components/workout/active-exercise-card.tsx`.
@@ -177,7 +178,7 @@ export function ActiveExerciseCard({
           className="min-h-[44px] flex-row items-center justify-center gap-1.5 px-2 active:opacity-80"
         >
           <Text className="text-base font-extrabold text-foreground">{group.exerciseName}</Text>
-          <Info size={14} color="#baccaf" />
+          <Info size={14} color={cores.mutedForeground} />
         </Pressable>
         <View className="mt-1 rounded-full bg-muted px-3 py-1">
           <Text className="text-[10px] font-extrabold text-foreground">
@@ -289,7 +290,7 @@ export function ActiveExerciseCard({
           loading={logSet.isPending}
           onPress={() => logSet.mutate()}
         >
-          <Check size={16} color="#131313" />
+          <Check size={16} color={cores.background} />
           <Text className="text-sm font-extrabold text-primary-foreground">
             {isComplete ? 'Exercício completo' : 'Concluir série'}
           </Text>
@@ -349,7 +350,7 @@ function Stepper({
           onPress={() => onChange(value - step)}
           className="h-11 w-11 items-center justify-center rounded-full bg-background active:opacity-80"
         >
-          <Minus size={16} color="#e5e2e1" />
+          <Minus size={16} color={cores.foreground} />
         </Pressable>
 
         {editing ? (
@@ -386,7 +387,7 @@ function Stepper({
           onPress={() => onChange(value + step)}
           className="h-11 w-11 items-center justify-center rounded-full bg-background active:opacity-80"
         >
-          <Plus size={16} color="#e5e2e1" />
+          <Plus size={16} color={cores.foreground} />
         </Pressable>
       </View>
 

@@ -8,6 +8,7 @@ import { DrawerLayer } from '@/components/ui';
 import { cn } from '@/components/ui/utils';
 import { MenuMais } from './menu-mais';
 import { useRegistroRapido } from './registro-rapido';
+import { cores } from '@/theme/cores';
 
 const ICONE = { home: Home, nutrition: Apple, workout: Dumbbell } as const;
 
@@ -39,7 +40,7 @@ export function BottomNav() {
         onPress={() => router.navigate(tab.href)}
         className="min-h-[44px] flex-1 items-center justify-center gap-1 py-2"
       >
-        <Icone size={20} color={acesa ? '#2ce500' : '#baccaf'} />
+        <Icone size={20} color={acesa ? cores.primary : cores.mutedForeground} />
         <Text
           className={cn('text-[11px]', acesa ? 'font-bold text-primary' : 'text-muted-foreground')}
         >
@@ -70,7 +71,7 @@ export function BottomNav() {
               style={{ elevation: 6 }}
               className="h-14 w-14 items-center justify-center rounded-full bg-primary active:opacity-80"
             >
-              <Plus size={28} strokeWidth={2.5} color="#131313" />
+              <Plus size={28} strokeWidth={2.5} color={cores.background} />
             </Pressable>
           </View>
           {aba('workout')}
@@ -81,7 +82,7 @@ export function BottomNav() {
             onPress={() => setMenuAberto(true)}
             className="min-h-[44px] flex-1 items-center justify-center gap-1 py-2"
           >
-            <Menu size={20} color={ativa === 'more' ? '#2ce500' : '#baccaf'} />
+            <Menu size={20} color={ativa === 'more' ? cores.primary : cores.mutedForeground} />
             <Text
               className={cn(
                 'text-[11px]',

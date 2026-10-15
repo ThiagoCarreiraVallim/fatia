@@ -7,6 +7,7 @@ import { workoutApi } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { Button, EmptyState, ErrorState, Input, LoadingState } from '@/components/ui';
 import { pluralize } from '@/components/workout/workout-stats';
+import { cores } from '@/theme/cores';
 
 /** Réplica de `apps/web/src/app/(app)/workout/plans/page.tsx`. */
 
@@ -88,7 +89,7 @@ export default function PlansScreen() {
           </View>
         ) : (
           <Button variant="outline" className="rounded-2xl" onPress={() => setShowForm(true)}>
-            <Plus size={16} color="#e5e2e1" />
+            <Plus size={16} color={cores.foreground} />
             <Text className="text-sm font-medium text-foreground">Novo plano</Text>
           </Button>
         )}
@@ -120,7 +121,7 @@ export default function PlansScreen() {
                   className="min-h-[44px] min-w-0 flex-1 flex-row items-center gap-3 active:opacity-80"
                 >
                   <View className="h-12 w-12 items-center justify-center rounded-lg bg-muted">
-                    <Dumbbell size={20} color="#2ce500" />
+                    <Dumbbell size={20} color={cores.primary} />
                   </View>
                   <View className="min-w-0 flex-1">
                     <Text numberOfLines={1} className="text-base font-bold text-foreground">
@@ -128,7 +129,7 @@ export default function PlansScreen() {
                     </Text>
                     <Text className="text-xs text-muted-foreground">{countLabel}</Text>
                   </View>
-                  <ChevronRight size={16} color="#baccaf" />
+                  <ChevronRight size={16} color={cores.mutedForeground} />
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
@@ -136,7 +137,7 @@ export default function PlansScreen() {
                   onPress={() => confirmRemove(plan.id, plan.name)}
                   className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
                 >
-                  <Trash2 size={16} color="#baccaf" />
+                  <Trash2 size={16} color={cores.mutedForeground} />
                 </Pressable>
               </View>
             );

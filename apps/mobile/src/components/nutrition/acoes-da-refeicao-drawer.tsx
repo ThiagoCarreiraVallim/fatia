@@ -21,6 +21,7 @@ import {
 import { CopiarParaDia } from './copiar-para-dia';
 import { DrawerInput } from './drawer-input';
 import { ROTULO_REFEICAO, formatarHora, hojeIso, mensagemDeErro } from './helpers';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/components/nutrition/meal-actions-drawer.tsx`: copiar
@@ -127,7 +128,7 @@ function Acoes({
           </Text>
           {salvar.data ? (
             <View className="flex-row items-center gap-2 rounded-lg bg-primary/10 px-3 py-2">
-              <Check size={16} color="#2ce500" />
+              <Check size={16} color={cores.primary} />
               <Text className="flex-1 text-sm text-primary">
                 {`"${salvar.data.name}" salva. Ela aparece ao registrar uma refeição.`}
               </Text>

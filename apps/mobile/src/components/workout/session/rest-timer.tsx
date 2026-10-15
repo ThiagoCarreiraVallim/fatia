@@ -3,6 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import { Pause, Play, Plus, SkipForward, Timer } from 'lucide-react-native';
 import { formatCountdown } from './format';
 import type { RestTimer as RestTimerState } from './use-rest-timer';
+import { cores } from '@/theme/cores';
 
 /**
  * Bloco de descanso do card de série — o mesmo lugar do PWA, com os controles
@@ -17,7 +18,7 @@ export function RestTimer({ timer }: { timer: RestTimerState }) {
   return (
     <View className="mt-4 rounded-xl bg-muted px-4 py-3">
       <View className="flex-row items-center justify-center gap-2">
-        <Timer size={16} color="#2ce500" />
+        <Timer size={16} color={cores.primary} />
         <Text className="text-[10px] font-bold tracking-wide text-muted-foreground">
           TEMPO DE DESCANSO
         </Text>
@@ -47,12 +48,12 @@ export function RestTimer({ timer }: { timer: RestTimerState }) {
       <View className="mt-2 flex-row items-center justify-center gap-2">
         {idle ? (
           <Control label="Iniciar descanso" onPress={() => timer.start()}>
-            <Play size={16} color="#e5e2e1" />
+            <Play size={16} color={cores.foreground} />
           </Control>
         ) : (
           <>
             <Control label="Somar 30 segundos ao descanso" onPress={() => timer.addTime(30)}>
-              <Plus size={16} color="#e5e2e1" />
+              <Plus size={16} color={cores.foreground} />
               <Text className="text-xs font-bold text-foreground">30s</Text>
             </Control>
             <Control
@@ -61,13 +62,13 @@ export function RestTimer({ timer }: { timer: RestTimerState }) {
               onPress={timer.toggle}
             >
               {timer.running ? (
-                <Pause size={16} color="#e5e2e1" />
+                <Pause size={16} color={cores.foreground} />
               ) : (
-                <Play size={16} color="#e5e2e1" />
+                <Play size={16} color={cores.foreground} />
               )}
             </Control>
             <Control label="Pular descanso" onPress={timer.stop}>
-              <SkipForward size={16} color="#e5e2e1" />
+              <SkipForward size={16} color={cores.foreground} />
             </Control>
           </>
         )}

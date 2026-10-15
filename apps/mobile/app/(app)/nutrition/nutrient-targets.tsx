@@ -18,6 +18,7 @@ import {
   cn,
 } from '@/components/ui';
 import { NUMEROS_TABULARES, mensagemDeErro } from '@/components/nutrition/helpers';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/app/(app)/nutrition/nutrient-targets/page.tsx`.
@@ -258,7 +259,7 @@ export default function NutrientTargetsScreen() {
               disabled={!podeSalvar || salvar.isPending}
               loading={salvar.isPending}
             >
-              <Plus size={16} color="#131313" />
+              <Plus size={16} color={cores.background} />
               <Text className="text-sm font-medium text-primary-foreground">Salvar meta</Text>
             </Button>
 
@@ -333,7 +334,7 @@ function LinhaDaMeta({ meta, onRemover }: { meta: NutrientTarget; onRemover: () 
         hitSlop={8}
         className="h-11 w-11 items-center justify-center rounded-md active:bg-accent"
       >
-        <Trash2 size={16} color="#baccaf" />
+        <Trash2 size={16} color={cores.mutedForeground} />
       </Pressable>
     </View>
   );

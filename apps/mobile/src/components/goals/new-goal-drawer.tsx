@@ -15,6 +15,7 @@ import {
   Label,
   cn,
 } from '@/components/ui';
+import { cores } from '@/theme/cores';
 
 interface KindOption {
   kind: GoalKind;
@@ -189,8 +190,8 @@ export function NewGoalDrawer({ open, onClose }: { open: boolean; onClose: () =>
             value={title}
             onChangeText={setTitle}
             placeholder="ex: Baixar para 12% de BF"
-            placeholderTextColor="#8a8a8a"
-            selectionColor="#2ce500"
+            placeholderTextColor={cores.placeholder}
+            selectionColor={cores.primary}
             maxLength={120}
             className={SHEET_INPUT_CLASS}
           />
@@ -205,8 +206,8 @@ export function NewGoalDrawer({ open, onClose }: { open: boolean; onClose: () =>
               onChangeText={setTarget}
               keyboardType="decimal-pad"
               placeholder={selected.placeholder}
-              placeholderTextColor="#8a8a8a"
-              selectionColor="#2ce500"
+              placeholderTextColor={cores.placeholder}
+              selectionColor={cores.primary}
               className={SHEET_INPUT_CLASS}
             />
           </View>
@@ -217,8 +218,8 @@ export function NewGoalDrawer({ open, onClose }: { open: boolean; onClose: () =>
               value={unit}
               onChangeText={setUnit}
               maxLength={30}
-              placeholderTextColor="#8a8a8a"
-              selectionColor="#2ce500"
+              placeholderTextColor={cores.placeholder}
+              selectionColor={cores.primary}
               className={SHEET_INPUT_CLASS}
             />
           </View>
@@ -233,8 +234,8 @@ export function NewGoalDrawer({ open, onClose }: { open: boolean; onClose: () =>
             onChangeText={setDeadline}
             keyboardType="numbers-and-punctuation"
             placeholder="AAAA-MM-DD"
-            placeholderTextColor="#8a8a8a"
-            selectionColor="#2ce500"
+            placeholderTextColor={cores.placeholder}
+            selectionColor={cores.primary}
             maxLength={10}
             className={SHEET_INPUT_CLASS}
           />

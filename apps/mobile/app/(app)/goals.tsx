@@ -10,6 +10,7 @@ import { MainGoalCard } from '@/components/goals/main-goal-card';
 import { NewGoalDrawer } from '@/components/goals/new-goal-drawer';
 import { RecentGoalRow } from '@/components/goals/recent-goal-row';
 import { SecondaryGoalCard } from '@/components/goals/secondary-goal-card';
+import { cores } from '@/theme/cores';
 
 export default function GoalsScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -78,7 +79,7 @@ export default function GoalsScreen() {
               onPress={() => setDrawerOpen(true)}
               className="min-h-[44px] flex-row items-center gap-1.5 rounded-xl bg-primary px-4 py-3 active:opacity-80"
             >
-              <Plus size={14} strokeWidth={3} color="#131313" />
+              <Plus size={14} strokeWidth={3} color={cores.background} />
               <Text className="text-[11px] font-extrabold text-primary-foreground">NOVA META</Text>
             </Pressable>
           </View>
@@ -132,7 +133,7 @@ export default function GoalsScreen() {
             className="min-h-[44px] flex-row items-center justify-between rounded-xl border border-border bg-card px-4 py-3"
           >
             <Text className="text-sm text-muted-foreground">Voltar ao perfil</Text>
-            <ChevronRight size={16} color="#baccaf" />
+            <ChevronRight size={16} color={cores.mutedForeground} />
           </Pressable>
         </View>
       </Screen>

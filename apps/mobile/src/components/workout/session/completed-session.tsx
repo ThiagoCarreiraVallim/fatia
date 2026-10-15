@@ -11,6 +11,7 @@ import { groupCardItem } from './exercise-card-item';
 import { RpeDrawer } from './rpe-drawer';
 import { SetRow } from './set-row';
 import { elapsedLabel, formatSessionDate, pluralize, totalVolumeKg } from './format';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/app/(app)/workout/session/[id]/page.tsx` — a mesma
@@ -125,7 +126,7 @@ export function CompletedSession({
 function Stat({ icon: Icon, label, value }: { icon: typeof Clock; label: string; value: string }) {
   return (
     <View className="flex-row items-center gap-2">
-      <Icon size={14} color="#2ce500" />
+      <Icon size={14} color={cores.primary} />
       <View>
         <Text className="text-[10px] font-bold tracking-wide text-muted-foreground">{label}</Text>
         <Text className="text-sm font-extrabold text-foreground">{value}</Text>

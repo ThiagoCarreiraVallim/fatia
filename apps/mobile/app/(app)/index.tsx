@@ -14,6 +14,7 @@ import {
   StreakCard,
   WaterCard,
 } from '@/components/dashboard';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/app/(app)/page.tsx`.
@@ -73,7 +74,7 @@ export default function DashboardScreen() {
               onPress={() => router.push('/nutrition/goals')}
               className="min-h-11 flex-row items-center gap-1.5 rounded-full border border-border px-4"
             >
-              <Target size={16} color="#2ce500" />
+              <Target size={16} color={cores.primary} />
               <Text className="text-sm font-semibold text-foreground">Metas</Text>
             </Pressable>
           </View>

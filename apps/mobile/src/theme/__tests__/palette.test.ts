@@ -57,6 +57,13 @@ describe('paleta', () => {
     'border',
     'input',
     'ring',
+    'danger',
+    'success',
+    'warning',
+    'protein',
+    'carbs',
+    'fat',
+    'water',
   ])('--%s bate com o do PWA', (token) => {
     expect(mobile[token]).toBeDefined();
     expect(mobile[token]).toBe(web[token]);

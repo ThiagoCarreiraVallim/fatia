@@ -18,6 +18,7 @@ import { WeeklyTrendChart } from '@/components/nutrition/weekly-trend-chart';
 import { hojeIso } from '@/components/nutrition/helpers';
 import { AcoesDaRefeicaoDrawer } from '@/components/nutrition/acoes-da-refeicao-drawer';
 import { CopiarDiaDrawer } from '@/components/nutrition/copiar-dia-drawer';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/app/(app)/nutrition/page.tsx`.
@@ -93,7 +94,7 @@ export default function NutritionScreen() {
                 onPress={() => router.push(`/nutrition/photo?date=${data}`)}
                 className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
               >
-                <Camera size={18} color="#baccaf" />
+                <Camera size={18} color={cores.mutedForeground} />
               </Pressable>
             ) : null}
             {/* Escanear entra no cabeçalho, e não dentro do drawer de busca: o
@@ -105,7 +106,7 @@ export default function NutritionScreen() {
               onPress={() => router.push(`/nutrition/scan?date=${data}`)}
               className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
             >
-              <ScanBarcode size={18} color="#baccaf" />
+              <ScanBarcode size={18} color={cores.mutedForeground} />
             </Pressable>
             {refeicoesDoDia > 0 ? (
               <Pressable
@@ -114,7 +115,7 @@ export default function NutritionScreen() {
                 onPress={() => setCopiandoDia(true)}
                 className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
               >
-                <Copy size={18} color="#baccaf" />
+                <Copy size={18} color={cores.mutedForeground} />
               </Pressable>
             ) : null}
             <Pressable
@@ -123,7 +124,7 @@ export default function NutritionScreen() {
               onPress={() => router.push('/nutrition/goals')}
               className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
             >
-              <Settings size={18} color="#baccaf" />
+              <Settings size={18} color={cores.mutedForeground} />
             </Pressable>
           </View>
 

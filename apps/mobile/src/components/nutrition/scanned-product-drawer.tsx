@@ -35,6 +35,7 @@ import {
 } from '@/components/ui';
 import { DrawerInput } from './drawer-input';
 import { NUMEROS_TABULARES, instanteNoDia, mensagemDeErro, parsePositivo } from './helpers';
+import { cores } from '@/theme/cores';
 
 /**
  * Confirmação do produto escaneado (#140).
@@ -219,7 +220,7 @@ function PainelDoProduto({
       </View>
 
       {product.basis === '100ml' ? (
-        <Text className="text-xs text-[#facc15]">
+        <Text className="text-xs text-warning">
           O rótulo é por 100 ml. O registro é em gramas, contando 1 ml como 1 g.
         </Text>
       ) : null}
@@ -318,12 +319,12 @@ function PainelIncompleto({
       contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, gap: 12 }}
       keyboardShouldPersistTaps="handled"
     >
-      <Text accessibilityRole="alert" className="text-sm text-[#facc15]">
+      <Text accessibilityRole="alert" className="text-sm text-warning">
         {incompleteProductMessage(resultado.missing)}
       </Text>
 
       {resultado.partial.basis === '100ml' ? (
-        <Text className="text-xs text-[#facc15]">
+        <Text className="text-xs text-warning">
           O rótulo é por 100 ml. O registro é em gramas, contando 1 ml como 1 g.
         </Text>
       ) : null}
@@ -436,7 +437,11 @@ function OpcaoDeGuardar({
         onPress={() => onGuardarChange(!guardar)}
         className="min-h-[44px] flex-row items-center gap-2"
       >
-        {guardar ? <Check size={20} color="#2ce500" /> : <Square size={20} color="#8a8a8a" />}
+        {guardar ? (
+          <Check size={20} color={cores.primary} />
+        ) : (
+          <Square size={20} color={cores.placeholder} />
+        )}
         <Text className="text-sm text-foreground">Guardar em Meus alimentos</Text>
       </Pressable>
       <Text className="text-xs text-muted-foreground">

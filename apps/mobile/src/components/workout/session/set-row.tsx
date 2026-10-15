@@ -7,6 +7,7 @@ import { getRpeInfo, workoutApi, type SessionSet } from '@fatia/api-client';
 import { Input } from '@/components/ui';
 import { formatClock, formatNumber, parseClock, parseDecimalInput } from './format';
 import { RpeBadge } from './rpe-badge';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/components/workout/set-row.tsx`.
@@ -138,7 +139,7 @@ export function SetRow({ set, index, isCardio, sessionId, showDelete, onEditRpe 
           style={remove.isPending ? { opacity: 0.5 } : undefined}
           className="h-11 w-10 items-center justify-center rounded-full active:bg-accent"
         >
-          <Trash2 size={16} color="#baccaf" />
+          <Trash2 size={16} color={cores.mutedForeground} />
         </Pressable>
       ) : null}
     </View>

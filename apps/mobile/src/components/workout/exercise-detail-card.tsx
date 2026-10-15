@@ -5,6 +5,7 @@ import { ChevronDown, ChevronUp, Play, Trash2, Trophy } from 'lucide-react-nativ
 import { workoutApi, type SessionSet, type WorkoutPlanExercise } from '@fatia/api-client';
 import { Input } from '@/components/ui';
 import { useOpenExerciseDetail } from './exercise-detail-host';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/components/workout/exercise-detail-card.tsx`.
@@ -77,7 +78,7 @@ function Header({ item, isCardio }: { item: PlanItemLike; isCardio?: boolean }) 
         onPress={() => openDetail(item.exercise.id)}
         className="h-20 w-24 items-center justify-center overflow-hidden rounded-xl bg-muted active:opacity-80"
       >
-        <Play size={20} color="#e5e2e1" fill="#e5e2e1" />
+        <Play size={20} color={cores.foreground} fill={cores.foreground} />
       </Pressable>
 
       <View className="min-w-0 flex-1">
@@ -286,7 +287,7 @@ function PlanModeCard({
 
       {prLabel ? (
         <View className="mt-3 flex-row items-center gap-1.5 self-start rounded-full bg-accent px-2.5 py-1">
-          <Trophy size={12} color="#2ce500" />
+          <Trophy size={12} color={cores.primary} />
           <Text className="text-[11px] font-bold text-primary">Recorde: {prLabel}</Text>
         </View>
       ) : null}
@@ -328,7 +329,10 @@ function PlanModeCard({
               disabled={isFirst || isMoving}
               onPress={onMoveUp}
             >
-              <ChevronUp size={18} color={isFirst || isMoving ? '#333333' : '#baccaf'} />
+              <ChevronUp
+                size={18}
+                color={isFirst || isMoving ? cores.border : cores.mutedForeground}
+              />
             </IconAction>
           ) : null}
           {onMoveDown ? (
@@ -337,12 +341,15 @@ function PlanModeCard({
               disabled={isLast || isMoving}
               onPress={onMoveDown}
             >
-              <ChevronDown size={18} color={isLast || isMoving ? '#333333' : '#baccaf'} />
+              <ChevronDown
+                size={18}
+                color={isLast || isMoving ? cores.border : cores.mutedForeground}
+              />
             </IconAction>
           ) : null}
           {onRemove ? (
             <IconAction label={`Remover ${item.exercise.name} do plano`} onPress={onRemove}>
-              <Trash2 size={18} color="#baccaf" />
+              <Trash2 size={18} color={cores.mutedForeground} />
             </IconAction>
           ) : null}
         </View>

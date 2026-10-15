@@ -14,6 +14,7 @@ import { MenuItem } from '@/components/profile/menu-item';
 import { openLegal } from '@/components/profile/legal';
 import { PrivacyCard } from '@/components/profile/privacy-card';
 import { ProfileMetrics } from '@/components/profile/profile-metrics';
+import { cores } from '@/theme/cores';
 
 export default function ProfileScreen() {
   const [heightOpen, setHeightOpen] = useState(false);
@@ -75,25 +76,25 @@ export default function ProfileScreen() {
 
           <View className="overflow-hidden rounded-2xl border border-border bg-card">
             <MenuItem
-              icon={<Flag size={18} color="#2ce500" />}
+              icon={<Flag size={18} color={cores.primary} />}
               title="Metas"
               subtitle="Acompanhe seus objetivos pessoais"
               onPress={() => router.push('/goals')}
             />
             <MenuItem
-              icon={<Settings size={18} color="#2ce500" />}
+              icon={<Settings size={18} color={cores.primary} />}
               title="Metas de nutrição"
               subtitle="Calorias e macros diários"
               onPress={() => router.push('/nutrition/goals')}
             />
             <MenuItem
-              icon={<Watch size={18} color="#2ce500" />}
+              icon={<Watch size={18} color={cores.primary} />}
               title="Dispositivos"
               subtitle="Integração com Apple Health e Garmin"
               onPress={() => router.push('/profile/tokens')}
             />
             <MenuItem
-              icon={<Shield size={18} color="#2ce500" />}
+              icon={<Shield size={18} color={cores.primary} />}
               title="Privacidade e dados"
               subtitle="O que guardamos, e como exportar ou apagar"
               onPress={() => openLegal('/privacy')}
@@ -110,7 +111,7 @@ export default function ProfileScreen() {
             onPress={confirmSignOut}
             accessibilityLabel="Sair da conta"
           >
-            <LogOut size={18} color="#93000a" />
+            <LogOut size={18} color={cores.destructive} />
             <Text className="text-base font-bold text-destructive">Sair da conta</Text>
           </Button>
 

@@ -14,6 +14,7 @@ import {
 } from '@/components/ui';
 import { ExerciseEditDrawer } from './exercise-edit-drawer';
 import { MuscleDiagram } from './muscle-diagram';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/components/workout/exercise-detail-drawer.tsx`.
@@ -93,7 +94,7 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
 
           <View className="px-4 pb-3">
             <Button variant="outline" loading={clone.isPending} onPress={handleEdit}>
-              <Pencil size={16} color="#e5e2e1" />
+              <Pencil size={16} color={cores.foreground} />
               <Text className="text-sm font-medium text-foreground">
                 {exercise.source === 'CUSTOM' ? 'Editar' : 'Editar (cria uma cópia sua)'}
               </Text>
@@ -166,7 +167,7 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
                       void Linking.openURL(`https://www.youtube.com/watch?v=${videoId}`);
                     }}
                   >
-                    <ExternalLink size={16} color="#e5e2e1" />
+                    <ExternalLink size={16} color={cores.foreground} />
                     <Text className="text-sm font-medium text-foreground">Assistir no YouTube</Text>
                   </Button>
                 </View>

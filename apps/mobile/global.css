@@ -33,5 +33,15 @@
     --border: 0 0% 20%;
     --input: 0 0% 20%;
     --ring: 108 100% 45%;
+
+    /* Cores de estado e de dado (Fase 3). Texto de erro usa --danger, legível no
+       escuro; --destructive continua só como fundo de botão perigoso. */
+    --danger: 351 95% 71%; /* #fb7185 */
+    --success: 160 84% 39%; /* #10b981 */
+    --warning: 43 96% 56%; /* #fbbf24 */
+    --protein: 218 100% 65%; /* #4b8eff */
+    --carbs: 108 100% 45%; /* #2ce500 */
+    --fat: 6 100% 84%; /* #ffb4ab */
+    --water: 213 94% 68%; /* #60a5fa */
   }
 }

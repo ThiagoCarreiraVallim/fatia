@@ -45,6 +45,7 @@ import {
 } from './helpers';
 import { FormularioDeAlimento } from './formulario-de-alimento';
 import { SeletorDeQuantidade } from './seletor-de-quantidade';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/components/nutrition/food-search-drawer.tsx`.
@@ -352,7 +353,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
             accessibilityLiveRegion="polite"
             className="mx-4 flex-row items-center gap-2 rounded-lg bg-primary/10 px-3 py-2"
           >
-            <Check size={16} color="#2ce500" />
+            <Check size={16} color={cores.primary} />
             <Text className="flex-1 text-sm text-primary">
               {`${adicionados[adicionados.length - 1]} adicionado`}
             </Text>
@@ -512,7 +513,7 @@ function PainelDeBusca({
           {/* `pointerEvents` desligado: o ícone cobre a borda esquerda do campo
               e sem isso o toque ali não abre o teclado. */}
           <View pointerEvents="none" className="absolute left-3 z-10">
-            <Search size={16} color="#baccaf" />
+            <Search size={16} color={cores.mutedForeground} />
           </View>
           <DrawerTextInput
             autoFocus
@@ -520,8 +521,8 @@ function PainelDeBusca({
             value={busca}
             onChangeText={onBuscaChange}
             placeholder="Ex.: arroz, frango, banana..."
-            placeholderTextColor="#8a8a8a"
-            selectionColor="#2ce500"
+            placeholderTextColor={cores.placeholder}
+            selectionColor={cores.primary}
             // Estilo em `style` e não em `className`: ver `drawer-input.tsx`.
             style={[estiloDoCampoDoDrawer, { paddingLeft: 36 }]}
           />
@@ -532,7 +533,7 @@ function PainelDeBusca({
           onPress={onLerCodigo}
           className="h-11 w-11 items-center justify-center rounded-md border border-border active:bg-accent"
         >
-          <ScanBarcode size={18} color="#baccaf" />
+          <ScanBarcode size={18} color={cores.mutedForeground} />
         </Pressable>
       </View>
 
@@ -589,7 +590,7 @@ function PainelDeBusca({
                 accessibilityLabel={`Criar "${buscaComAtraso.trim()}"`}
               >
                 <View className="flex-row items-center gap-1">
-                  <Plus size={14} color="#2ce500" />
+                  <Plus size={14} color={cores.primary} />
                   <Text className="text-sm text-foreground">{`Criar "${buscaComAtraso.trim()}"`}</Text>
                 </View>
               </Button>
@@ -680,7 +681,7 @@ function LinhaDeModelo({
         onPress={onApagar}
         className="h-11 w-11 items-center justify-center"
       >
-        <Trash2 size={16} color="#baccaf" />
+        <Trash2 size={16} color={cores.mutedForeground} />
       </Pressable>
     </View>
   );
@@ -744,8 +745,8 @@ function BotaoFavorito({
     >
       <Star
         size={18}
-        color={favorito ? '#fbbf24' : '#8a8a8a'}
-        fill={favorito ? '#fbbf24' : 'transparent'}
+        color={favorito ? cores.warning : cores.placeholder}
+        fill={favorito ? cores.warning : 'transparent'}
       />
     </Pressable>
   );
@@ -913,7 +914,7 @@ function FormularioManual({
       </View>
 
       {semKcal ? (
-        <Text className="text-xs text-[#facc15]">
+        <Text className="text-xs text-warning">
           Sem calorias informadas — o item será salvo, mas não afetará seu resumo de kcal.
         </Text>
       ) : null}

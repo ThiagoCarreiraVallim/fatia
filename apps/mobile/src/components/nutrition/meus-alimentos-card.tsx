@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, Package } from 'lucide-react-native';
 import { nutritionApi } from '@fatia/api-client';
+import { cores } from '@/theme/cores';
 
 /** Réplica de `apps/web/src/components/nutrition/custom-foods-card.tsx`. */
 
@@ -21,7 +22,7 @@ export function MeusAlimentosCard() {
     <View className="gap-3 rounded-xl border border-border bg-card p-4">
       <View className="flex-row items-center justify-between">
         <View className="flex-row items-center gap-2">
-          <Package size={15} color="#2ce500" />
+          <Package size={15} color={cores.primary} />
           <Text accessibilityRole="header" className="text-sm font-bold text-foreground">
             Meus alimentos
           </Text>
@@ -34,7 +35,7 @@ export function MeusAlimentosCard() {
           className="min-h-[44px] flex-row items-center gap-1"
         >
           <Text className="text-[11px] font-bold text-primary">Gerenciar</Text>
-          <ChevronRight size={12} color="#2ce500" />
+          <ChevronRight size={12} color={cores.primary} />
         </Pressable>
       </View>
       {lista.length === 0 ? (

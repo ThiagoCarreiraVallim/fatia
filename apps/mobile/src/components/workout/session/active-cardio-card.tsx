@@ -14,6 +14,7 @@ import {
   parseDecimalInput,
   parseIntegerInput,
 } from './format';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/components/workout/active-cardio-card.tsx`.
@@ -145,7 +146,7 @@ export function ActiveCardioCard({
           className="min-h-[44px] flex-row items-center justify-center gap-1.5 px-2 active:opacity-80"
         >
           <Text className="text-base font-extrabold text-foreground">{group.exerciseName}</Text>
-          <Info size={14} color="#baccaf" />
+          <Info size={14} color={cores.mutedForeground} />
         </Pressable>
         {previousLabel ? (
           <Text className="text-[11px] text-muted-foreground">Anterior: {previousLabel}</Text>
@@ -203,9 +204,9 @@ export function ActiveCardioCard({
             className="h-12 w-12 items-center justify-center rounded-full bg-primary active:opacity-80"
           >
             {running ? (
-              <Pause size={20} color="#131313" fill="#131313" />
+              <Pause size={20} color={cores.background} fill={cores.background} />
             ) : (
-              <Play size={20} color="#131313" fill="#131313" />
+              <Play size={20} color={cores.background} fill={cores.background} />
             )}
           </Pressable>
 
@@ -215,7 +216,7 @@ export function ActiveCardioCard({
             onPress={reset}
             className="h-11 w-11 items-center justify-center rounded-full bg-background active:opacity-80"
           >
-            <RotateCcw size={16} color="#baccaf" />
+            <RotateCcw size={16} color={cores.mutedForeground} />
           </Pressable>
         </View>
       </View>
@@ -260,7 +261,7 @@ export function ActiveCardioCard({
           loading={save.isPending}
           onPress={() => save.mutate()}
         >
-          <Check size={16} color="#131313" />
+          <Check size={16} color={cores.background} />
           <Text className="text-sm font-extrabold text-primary-foreground">
             {existing ? 'Atualizar sessão' : 'Salvar sessão'}
           </Text>

@@ -7,6 +7,7 @@ import { customFoodSummary, nutritionApi, type Food } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { Button, ErrorState, LoadingState } from '@/components/ui';
 import { AlimentoDrawer } from '@/components/nutrition/alimento-drawer';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/app/(app)/nutrition/foods/page.tsx`.
@@ -48,7 +49,7 @@ export default function MeusAlimentosScreen() {
           </Text>
           <Button onPress={() => setEditando('novo')}>
             <View className="flex-row items-center gap-2">
-              <Plus size={16} color="#131313" />
+              <Plus size={16} color={cores.background} />
               <Text className="text-sm font-medium text-primary-foreground">Novo alimento</Text>
             </View>
           </Button>
@@ -80,7 +81,7 @@ export default function MeusAlimentosScreen() {
                     </Text>
                     <Text className="text-xs text-muted-foreground">{customFoodSummary(food)}</Text>
                   </View>
-                  <ChevronRight size={16} color="#baccaf" />
+                  <ChevronRight size={16} color={cores.mutedForeground} />
                 </Pressable>
               ))}
             </View>

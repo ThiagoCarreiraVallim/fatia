@@ -25,6 +25,7 @@ import {
   ROTULO_DE_CONFIANCA,
   type ItemEditavel,
 } from './recognition-mapping';
+import { cores } from '@/theme/cores';
 
 /**
  * Tela de confirmação do reconhecimento por foto (#139). **Obrigatória.**
@@ -185,9 +186,9 @@ export function RecognitionReviewDrawer({
 
 /** Cores da faixa de confiança. Amarelo avisa; nunca esconde. */
 const COR_DA_CONFIANCA = {
-  alta: '#baccaf',
-  media: '#facc15',
-  baixa: '#facc15',
+  alta: cores.mutedForeground,
+  media: cores.warning,
+  baixa: cores.warning,
 } as const;
 
 function LinhaDoItem({
@@ -212,9 +213,9 @@ function LinhaDoItem({
           className="h-11 w-11 items-center justify-center"
         >
           {item.incluido ? (
-            <Check size={20} color="#2ce500" />
+            <Check size={20} color={cores.primary} />
           ) : (
-            <Square size={20} color="#8a8a8a" />
+            <Square size={20} color={cores.placeholder} />
           )}
         </Pressable>
 
@@ -229,7 +230,7 @@ function LinhaDoItem({
               Tabela TACO: {item.nomeDoCatalogo}
             </Text>
           ) : (
-            <Text className="text-xs text-[#facc15]">
+            <Text className="text-xs text-warning">
               Sem correspondência na tabela — macro estimado pela IA
             </Text>
           )}
