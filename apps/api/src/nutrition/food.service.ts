@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { FoodSource, type Food } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import type { CreateCustomFoodDto, SearchFoodDto, UpdateCustomFoodDto } from './dto/food.dto';
-import { normalizeSearchText, rankByRelevance } from '../common/search-text';
+import { MatchRank, matchRank, normalizeSearchText } from '../common/search-text';
 
 @Injectable()
 export class FoodService {
@@ -12,7 +12,9 @@ export class FoodService {
    * Busca alimentos no catálogo público (TACO/USDA) + customs do usuário.
    *
    * O filtro roda sobre `searchName` (sem acento, sem pontuação) para que
-   * "feijao" ache "Feijão" — no teclado do celular ninguém acentua.
+   * "feijao" ache "Feijão" — no teclado do celular ninguém acentua — e palavra por
+   * palavra: "ovo cozido" acha "Ovo, de galinha, inteiro, cozido/10minutos", que não
+   * contém o termo inteiro. A ordem está em `rankFoods`.
    *
    * Quando há termo, o `take` do banco é omitido de propósito e o corte acontece
    * depois do ranqueamento: limitar antes traria os 20 primeiros **em ordem
@@ -23,12 +25,13 @@ export class FoodService {
   async search(userId: string, params: SearchFoodDto): Promise<Food[]> {
     const limit = Math.min(params.limit ?? 20, 50);
     const term = params.q ? normalizeSearchText(params.q) : '';
+    const words = term ? term.split(' ') : [];
 
     const matches = await this.prisma.food.findMany({
       where: {
         AND: [
           { OR: [{ createdByUserId: null }, { createdByUserId: userId }] },
-          term ? { searchName: { contains: term } } : {},
+          { AND: words.map((word) => ({ searchName: { contains: word } })) },
           params.groupId ? { groupId: params.groupId } : {},
         ],
       },
@@ -36,7 +39,7 @@ export class FoodService {
       ...(term ? {} : { take: limit }),
     });
 
-    return term ? rankByRelevance(matches, term, (food) => food.name, limit) : matches;
+    return term ? rankFoods(matches, term, limit) : matches;
   }
 
   async get(userId: string, id: number): Promise<Food> {
@@ -94,4 +97,46 @@ export class FoodService {
   async listGroups() {
     return this.prisma.foodGroup.findMany({ orderBy: { name: 'asc' } });
   }
+}
+
+/**
+ * A relevância de `rankByRelevance` — exato, começa com, palavra que começa com, contém —, mais
+ * duas coisas que só o catálogo de alimentos pede.
+ *
+ * O termo com palavras fora de ordem ("ovo cozido") entra depois de tudo que contém o termo
+ * inteiro, com cada palavra começando uma palavra do nome.
+ *
+ * O empate não vai direto para o nome mais curto. Os nomes da TACO são segmentados por vírgula
+ * do geral para o particular, e quem busca só o geral ("ovo", "leite") quer a variante comum,
+ * que é a que o catálogo detalha mais: há cinco "Ovo, de galinha" e um "Ovo, de codorna", e o
+ * mais curto — com a ordem alfabética no desempate — era o de codorna. Por isso o empate vai
+ * primeiro para a família (os dois primeiros segmentos) com mais entradas no resultado.
+ */
+function rankFoods(foods: Food[], term: string, limit: number): Food[] {
+  const words = term.split(' ');
+  const scored = foods
+    .map((food) => {
+      const normalized = normalizeSearchText(food.name);
+      let rank = matchRank(normalized, term);
+      if (rank === MatchRank.None && words.every((w) => ` ${normalized}`.includes(` ${w}`))) {
+        rank = MatchRank.AllWords;
+      }
+      const family = normalizeSearchText(food.name.split(',').slice(0, 2).join(' '));
+      return { food, rank, family, length: normalized.length };
+    })
+    .filter((entry) => entry.rank !== MatchRank.None);
+
+  const familySize = new Map<string, number>();
+  for (const { family } of scored) familySize.set(family, (familySize.get(family) ?? 0) + 1);
+
+  return scored
+    .sort(
+      (a, b) =>
+        a.rank - b.rank ||
+        (familySize.get(b.family) ?? 0) - (familySize.get(a.family) ?? 0) ||
+        a.length - b.length ||
+        a.food.name.localeCompare(b.food.name, 'pt-BR'),
+    )
+    .slice(0, limit)
+    .map((entry) => entry.food);
 }

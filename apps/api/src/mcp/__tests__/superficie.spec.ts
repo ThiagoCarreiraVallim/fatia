@@ -19,11 +19,12 @@ import {
  * Os dois `sha256` abaixo são os publicados no doc, na mesma conta que o runner do eval faz
  * (`sha_do_catalogo` em `run_fronteira.py`): o de entidade é a linha de base do braço A, e
  * mudar uma descrição de tool de entidade **é** mudar o braço A — este caso quebra para que
- * isso não aconteça sem alguém ver. O de intenção é o do braço B congelado.
+ * isso não aconteça sem alguém ver. O de intenção é o do braço B de hoje: o congelado e medido
+ * é `92bc0392…`, e o exemplo do `record_meal` mudou depois da medição, sem medição nova.
  */
 
 const SHA_ENTIDADE = '3ef29a0d62b40d259f6d7051a67ce91f80b546b35be181af889c682d39e71879';
-const SHA_INTENCAO = '92bc039278336d9e4115eab510c1796c6c3137d7d3b84ecf3751b4b9a0fb5831';
+const SHA_INTENCAO = 'd1b7cbaecef9a37b8b66399ab81f4c812079583995e85aec6f6b8a209163c9a6';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */
 function comoPython(valor: unknown): string {

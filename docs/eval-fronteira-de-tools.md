@@ -83,6 +83,10 @@ tinha nenhum, e o `sha256` dele não mudou com isso: a linha da tabela é a do B
 ajuste no `dev` (antes dele, 8.343 e 5.904 tokens, `25531e4c…`). O conjunto RESTRICTED não mudou — as mesmas 18 —, e o piso
 da métrica 3 continua o mesmo.
 
+Depois da medição, o exemplo da descrição do `record_meal` mudou (ver "O `record_meal` no café", em
+Resultados), e o `tools/list` do B de hoje é `d1b7cbae…`, que nenhuma rodada mediu. A linha da tabela
+é a do B medido.
+
 Sem API no ar, `pnpm --filter @fatia/api catalogo:servido <superficie>` imprime o mesmo `tools/list`
 montado em processo, e `medir --de-arquivo` mede dele.
 
@@ -359,6 +363,11 @@ de novo, quem sabe melhora" é vazamento, e só vira visível se ficar no diff.
 
 ## Resultados
 
+Os números desta seção valem para o código do commit `bf03f7f` e para os catálogos medidos — o B
+congelado, `92bc0392…`, e o A de `3ef29a0d…`. O casamento de nomes do `record_meal` e da busca de
+alimentos foi corrigido depois, sem medição nova (ver "O `record_meal` no café"): o produto de hoje não
+é o que foi medido.
+
 Uma medição do `eval` por configuração, em 2026-10-14, com as linhas no
 [ledger](../apps/agent/eval/fronteira-runs.jsonl): 31 tarefas × 5 repetições por braço, conjunto
 `1844a46f…`, prompt `df0db022…`, braço A `3ef29a0d…`, braço B `92bc0392…`. Os dois modelos, pelo
@@ -450,6 +459,25 @@ com **Ovo, de codorna, inteiro, cru**: o glm percebe e corrige com `fix_meal` em
 nas outras, manda os macros que estimou. É o mesmo tipo de defeito que o exercício pelo nome tinha
 (ver [`ajustes-braco-b.md`](../apps/agent/eval/ajustes-braco-b.md)): a resposta da tool é que faz o
 modelo chamar de novo.
+
+**Corrigido depois da medição, sem medição nova.** Os números acima são do `record_meal` e da busca
+de `bf03f7f`. Depois deles, duas mudanças:
+
+- **o exemplo da descrição** passou a ser `{"food":"ovo cozido","grams":100}` e
+  `{"food":"café","grams":150}`, que casam com o catálogo. Isso muda o `tools/list` do B: o de hoje é
+  `d1b7cbae…`, e não o congelado `92bc0392…`;
+- **a busca de alimentos**, que o `record_meal` usa por ser a do `search_food`, filtra palavra por
+  palavra — "ovo cozido" acha "Ovo, de galinha, inteiro, cozido/10minutos", que não contém o termo
+  inteiro — e, no empate, prefere a família (os dois primeiros segmentos do nome da TACO) com mais
+  entradas: "ovo" é "Ovo, de galinha, inteiro, cru", e não o de codorna. A descrição do `search_food`
+  não mudou, e o `sha256` do A também não, mas o **comportamento** do A mudou junto: o
+  `search_food` dos dois braços, e a busca de alimentos do app, são a mesma.
+
+Um spec novo, `description-examples.spec.ts`, chama o exemplo de cada descrição das duas superfícies
+contra o seed da conta de avaliação, e reprova o que não funciona.
+
+O que a correção faria com o café não foi medido. Medir seria outra configuração dos dois braços, com
+linha nova no ledger.
 
 ## O que falta construir
 

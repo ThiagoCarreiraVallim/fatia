@@ -188,8 +188,8 @@ export const INTENT_TOOLS = [
       'Registra uma refeição a partir do nome dos alimentos. Cada item é casado pelo nome com o ' +
       'catálogo (TACO e alimentos próprios da pessoa) e a resposta diz com qual entrada casou; sem ' +
       'correspondência, usa os macros informados, e sem eles o item é recusado com o motivo. ' +
-      'Exemplo: {"mealType":"BREAKFAST","items":[{"food":"ovo mexido","grams":100},' +
-      '{"food":"café sem açúcar","grams":150}]}',
+      'Exemplo: {"mealType":"BREAKFAST","items":[{"food":"ovo cozido","grams":100},' +
+      '{"food":"café","grams":150}]}',
     compoe: ['search_food', 'log_meal'],
     inputSchema: {
       mealType: z.nativeEnum(MealType).describe('BREAKFAST, LUNCH, DINNER ou SNACK'),
@@ -198,7 +198,7 @@ export const INTENT_TOOLS = [
       items: z
         .array(
           z.object({
-            food: z.string().min(2).describe('Nome do alimento, com o preparo: "ovo mexido"'),
+            food: z.string().min(2).describe('Nome do alimento, com o preparo: "ovo cozido"'),
             grams: z.number().min(0.1).describe('Gramas estimados da porção'),
             ...macros,
           }),
