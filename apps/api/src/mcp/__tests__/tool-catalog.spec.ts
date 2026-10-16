@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import { z, type ZodTypeAny } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { MCP_TOOL_METADATA, type McpToolDef } from '../../common/decorators/tool.decorator';
+import { INTENT_TOOLS } from '../intent/intent-surface';
 import { servidaNa } from '../intent/superficie';
 
 /**
@@ -66,6 +67,14 @@ const TOOL_COUNT_PATTERN = /\*{0,2}(\d+)\*{0,2}\s+(?:tools|ferramentas|ações)\
  * carregadas. Contagem parcial apodrece igual à total.
  */
 const TOOL_COUNT_SLICES: ReadonlyArray<{ file: string; text: string; count: () => number }> = [
+  {
+    file: 'README.md',
+    text: '(**B**, 40 tools',
+    // O catálogo do braço B do eval da fronteira: as de intenção mais as de entidade que a
+    // superfície de intenção serve iguais.
+    count: () =>
+      INTENT_TOOLS.length + tools.filter(({ tool }) => servidaNa(tool, 'intencao')).length,
+  },
   {
     file: 'docs/SUBMISSION_CHECKLIST.md',
     text: '`delete_*` (14 tools)',
