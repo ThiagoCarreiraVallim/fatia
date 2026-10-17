@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, KeyRound, Plus, Users } from 'lucide-react';
 import { groupsApi, membershipBadge, teamRoleLabel } from '@fatia/api-client';
 import { PlanBadge } from '@/components/billing/plan-badge';
+import { GroupAvatar } from '@/components/community/group-avatar';
 import { JoinByCodeDrawer } from '@/components/community/join-by-code-drawer';
 import { communityKeys } from '@/components/community/query-keys';
 import { TopBarActions, topBarActionClass } from '@/components/layout/app-top-bar';
@@ -78,6 +79,7 @@ export default function CommunityPage() {
                   href={`/community/${g.id}`}
                   className="flex min-h-16 items-center gap-3 px-4 py-3 hover:bg-accent/40"
                 >
+                  <GroupAvatar name={g.name} url={g.avatarUrl} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{g.name}</span>
                     <span className="block text-xs text-muted-foreground">

@@ -46,6 +46,7 @@ const grupo = (p: Partial<MyGroup>): MyGroup => ({
   consentScopes: [],
   statsOptIn: false,
   hasAiSeat: false,
+  avatarUrl: null,
   ...p,
 });
 

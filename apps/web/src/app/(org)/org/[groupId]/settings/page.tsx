@@ -8,12 +8,14 @@ import { toast } from 'sonner';
 import { Copy } from 'lucide-react';
 import {
   ApiError,
+  contentApi,
   joinPolicyLabel,
   orgApi,
   panelHref,
   teamRoleLabel,
   type JoinPolicy,
 } from '@fatia/api-client';
+import { ImageField } from '@/components/content/image-field';
 import { useOrgGroup } from '@/components/org/org-shell';
 import { orgKeys } from '@/components/community/query-keys';
 import { Button } from '@/components/ui/button';
@@ -168,6 +170,8 @@ export default function OrgSettingsPage() {
       </form>
 
       <div className="space-y-4">
+        <AvatarSection />
+
         <section
           aria-labelledby="codigo"
           className="space-y-2 rounded-2xl border border-subtle bg-card p-4"
@@ -293,5 +297,37 @@ export default function OrgSettingsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+/** O avatar da comunidade: aparece em Minhas comunidades e no detalhe dela. */
+function AvatarSection() {
+  const g = useOrgGroup();
+  const qc = useQueryClient();
+  const trocar = useMutation({
+    mutationFn: (fileId: string | null) => contentApi.setAvatar(g.id, fileId),
+    onSuccess: (_, fileId) => {
+      toast(fileId ? 'Avatar atualizado.' : 'Avatar removido.');
+      void qc.invalidateQueries({ queryKey: ['community'] });
+    },
+    onError: (err) => toast(erroDaApi(err, 'Não deu para trocar o avatar agora.')),
+  });
+  return (
+    <section
+      aria-labelledby="avatar"
+      className="space-y-2 rounded-2xl border border-subtle bg-card p-4"
+    >
+      <h2 id="avatar" className="text-sm font-semibold">
+        Avatar
+      </h2>
+      <ImageField
+        groupId={g.id}
+        purpose="group_avatar"
+        label="Imagem da comunidade"
+        aspect="aspect-square max-w-32"
+        value={g.avatarUrl ? { fileId: 'atual', url: g.avatarUrl } : null}
+        onChange={(next) => trocar.mutate(next?.fileId ?? null)}
+      />
+    </section>
   );
 }

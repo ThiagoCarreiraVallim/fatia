@@ -18,6 +18,8 @@ import {
   type JoinConsent,
 } from '@fatia/api-client';
 import { ConsentForm } from '@/components/community/consent-form';
+import { GroupAvatar } from '@/components/community/group-avatar';
+import { CommunityContentPreview } from '@/components/content/community-content-preview';
 import { communityKeys } from '@/components/community/query-keys';
 import { useTopBarTitle } from '@/components/layout/app-top-bar';
 import { Button } from '@/components/ui/button';
@@ -115,11 +117,14 @@ export default function CommunityDetailPage() {
 
   return (
     <div className="space-y-6 p-4">
-      <section className="space-y-1">
-        {g.description && <p className="text-sm">{g.description}</p>}
-        <p className="text-xs text-muted-foreground">
-          {`${joinPolicyLabel(g.joinPolicy)} · seu papel: ${teamRoleLabel(g.role).toLowerCase()}`}
-        </p>
+      <section className="flex items-start gap-3">
+        <GroupAvatar name={g.name} url={g.avatarUrl} size={48} />
+        <div className="min-w-0 space-y-1">
+          {g.description && <p className="text-sm">{g.description}</p>}
+          <p className="text-xs text-muted-foreground">
+            {`${joinPolicyLabel(g.joinPolicy)} · seu papel: ${teamRoleLabel(g.role).toLowerCase()}`}
+          </p>
+        </div>
       </section>
 
       {canOpenPanel(g) && (
@@ -132,8 +137,8 @@ export default function CommunityDetailPage() {
             <span className="block font-medium">Abrir painel</span>
             <span className="block text-xs text-muted-foreground">
               {dono
-                ? 'Membros, convites, assentos e números da comunidade.'
-                : 'Membros, o que compartilham com você e convites.'}
+                ? 'Membros, convites, planos e dicas, assentos e números da comunidade.'
+                : 'Membros, o que compartilham com você, convites, planos e dicas.'}
             </span>
           </span>
           <ChevronRight size={16} className="text-muted-foreground" aria-hidden />
@@ -161,6 +166,8 @@ export default function CommunityDetailPage() {
           </span>
         </Link>
       )}
+
+      {ativo && <CommunityContentPreview groupId={g.id} />}
 
       {ativo && (
         <section className="space-y-2" aria-labelledby="equipe">
