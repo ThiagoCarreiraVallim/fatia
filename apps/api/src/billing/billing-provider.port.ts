@@ -114,6 +114,10 @@ export type ResultadoDeWebhookDeAssinatura =
       paymentId: string | null;
       /** A referência que mandamos ao criar (`user:<id>`, `group:<id>`, `seat-adjustment:<id>`). */
       externalReference: string | null;
+      /** Valor da cobrança do evento, em centavos. Vai ao histórico de faturas dos assentos. */
+      valueCents: number | null;
+      /** Página da fatura no provedor. */
+      invoiceUrl: string | null;
     };
 
 /**

@@ -379,9 +379,7 @@ export class UserSubscriptionService {
       if (!sub) {
         // Assentos de comunidade (ADR 025): a assinatura do pool ou a cobrança
         // avulsa de um aumento.
-        const assento = this.assentos
-          ? await this.assentos.aplicarEventoAsaas(tx, r)
-          : 'desconhecido';
+        const assento = this.assentos ? await this.assentos.applyAsaasEvent(tx, r) : 'desconhecido';
         if (assento !== 'desconhecido') {
           await marcar(assento);
           return { received: true as const };

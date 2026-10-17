@@ -71,7 +71,14 @@ const webhook = (s: UserSubscriptionService, corpo: object) =>
 let ev = 0;
 const pagamento = (
   event: string,
-  extra: { subscription?: string; id?: string; dueDate: string; externalReference?: string },
+  extra: {
+    subscription?: string;
+    id?: string;
+    dueDate: string;
+    externalReference?: string;
+    value?: number;
+    invoiceUrl?: string;
+  },
 ) => ({
   id: `evt_seat_${Date.now()}_${++ev}`,
   event,
@@ -237,6 +244,90 @@ describe('assentos de comunidade (banco real)', () => {
           pagamento('PAYMENT_CONFIRMED', { subscription: 'sub_de_ninguem', dueDate: diaIso(0) }),
         ),
       ).toEqual({ received: true, ignored: 'assinatura_desconhecida' });
+    });
+  });
+
+  describe('histórico de faturas', () => {
+    it('cada cobrança vira uma linha, atualizada pelos eventos dela; paga não volta a vencida', async () => {
+      const { groupId, providerRef, assinaturas, assentos } = await comunidadePaga(2);
+      const id = `pay_fatura_${Date.now()}`;
+      const ev = (event: string) =>
+        webhook(
+          assinaturas,
+          pagamento(event, {
+            id,
+            subscription: providerRef,
+            dueDate: diaIso(20),
+            value: 29.8,
+            invoiceUrl: `https://sandbox.asaas.com/i/${id}`,
+          }),
+        );
+
+      await ev('PAYMENT_CREATED');
+      await ev('PAYMENT_OVERDUE');
+      expect(
+        (await assentos.invoices(groupId)).find((f) => f.id && f.amountCents === 2980),
+      ).toMatchObject({ kind: 'SUBSCRIPTION', status: 'OVERDUE', paidAt: null });
+
+      await ev('PAYMENT_RECEIVED');
+      await ev('PAYMENT_OVERDUE');
+      const paga = await prisma.groupSeatInvoice.findUniqueOrThrow({
+        where: { providerPaymentId: id },
+      });
+      expect(paga).toMatchObject({
+        status: 'PAID',
+        amountCents: 2980,
+        dueDate: diaIso(20),
+        invoiceUrl: `https://sandbox.asaas.com/i/${id}`,
+      });
+      expect(paga.paidAt).not.toBeNull();
+
+      await ev('PAYMENT_REFUNDED');
+      expect(
+        (await prisma.groupSeatInvoice.findUniqueOrThrow({ where: { providerPaymentId: id } }))
+          .status,
+      ).toBe('VOID');
+      expect(await prisma.groupSeatInvoice.count({ where: { providerPaymentId: id } })).toBe(1);
+    });
+
+    it('o proporcional entra como avulso; link que não é https não é guardado', async () => {
+      const { groupId, assentos, assinaturas } = await comunidadePaga(1);
+      await assentos.changeSeats(groupId, 2);
+      const { providerChargeId } = await prisma.groupSeatAdjustment.findFirstOrThrow({
+        where: { pool: { groupId } },
+      });
+      await webhook(
+        assinaturas,
+        pagamento('PAYMENT_RECEIVED', {
+          id: providerChargeId as string,
+          dueDate: diaIso(0),
+          value: 9.93,
+          invoiceUrl: 'javascript:alert(1)',
+        }),
+      );
+      const faturas = await assentos.invoices(groupId);
+      expect(faturas.find((f) => f.kind === 'ADJUSTMENT')).toMatchObject({
+        amountCents: 993,
+        status: 'PAID',
+        invoiceUrl: null,
+      });
+    });
+
+    it('cada comunidade vê só as próprias faturas', async () => {
+      const a = await comunidadePaga(1);
+      const b = await comunidadePaga(1);
+      const id = `pay_iso_${Date.now()}`;
+      await webhook(
+        a.assinaturas,
+        pagamento('PAYMENT_RECEIVED', {
+          id,
+          subscription: a.providerRef,
+          dueDate: diaIso(30),
+          value: 14.9,
+        }),
+      );
+      expect((await a.assentos.invoices(a.groupId)).map((f) => f.amountCents)).toContain(1490);
+      expect(await b.assentos.invoices(b.groupId)).toEqual([]);
     });
   });
 

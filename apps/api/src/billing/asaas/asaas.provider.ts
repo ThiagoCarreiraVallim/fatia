@@ -322,6 +322,15 @@ export class AsaasProvider implements BillingProvider, SubscriptionProvider, Sea
       paymentId: evento.payment?.id ?? null,
       externalReference:
         evento.payment?.externalReference ?? evento.subscription?.externalReference ?? null,
+      valueCents:
+        typeof evento.payment?.value === 'number' && Number.isFinite(evento.payment.value)
+          ? Math.round(evento.payment.value * 100)
+          : null,
+      invoiceUrl:
+        typeof evento.payment?.invoiceUrl === 'string' &&
+        /^https:\/\//.test(evento.payment.invoiceUrl)
+          ? evento.payment.invoiceUrl
+          : null,
     };
   }
 

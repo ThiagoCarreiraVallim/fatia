@@ -1179,6 +1179,7 @@ model GroupSeatPool {
   group       Group                 @relation(fields: [groupId], references: [id], onDelete: Cascade)
   assignments GroupSeatAssignment[]
   adjustments GroupSeatAdjustment[]
+  invoices    GroupSeatInvoice[]
 }
 
 /// Quem recebeu um assento. No máximo um ativo por membership (índice único
@@ -1196,6 +1197,45 @@ model GroupSeatAssignment {
 
   @@index([poolId, revokedAt])
   @@index([membershipId, revokedAt])
+}
+
+enum SeatInvoiceKind {
+  /// Mensalidade da assinatura dos assentos.
+  SUBSCRIPTION
+  /// Cobrança avulsa proporcional de um aumento.
+  ADJUSTMENT
+}
+
+enum SeatInvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  /// Apagada, estornada ou contestada.
+  VOID
+}
+
+/// Histórico de cobranças dos assentos, para o painel do dono (Fase 6). Uma
+/// linha por cobrança do Asaas, atualizada a cada evento dela no webhook — é
+/// cópia do que o provedor diz, e não fonte de verdade de direito nenhum.
+model GroupSeatInvoice {
+  id                String            @id @default(uuid())
+  poolId            String
+  /// Id da cobrança no Asaas (`pay_…`).
+  providerPaymentId String            @unique
+  kind              SeatInvoiceKind
+  amountCents       Int
+  /// Vencimento, `YYYY-MM-DD` no fuso do provedor.
+  dueDate           String?
+  status            SeatInvoiceStatus
+  /// Página da fatura no Asaas.
+  invoiceUrl        String?
+  paidAt            DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  pool GroupSeatPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
+
+  @@index([poolId, createdAt])
 }
 
 /// Aumento de assentos no meio do ciclo: a cobrança avulsa proporcional.

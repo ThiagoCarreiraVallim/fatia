@@ -10,7 +10,13 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma, type GroupSeatPool, type SubscriptionStatus } from '@prisma/client';
+import {
+  Prisma,
+  type GroupSeatPool,
+  type SeatInvoiceKind,
+  type SeatInvoiceStatus,
+  type SubscriptionStatus,
+} from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { addDaysIso, dayBoundsInTz } from '../progress/helpers/date-tz';
 import { CARENCIA_DIAS, resolverDireitoIa } from './ai-entitlement';
@@ -74,6 +80,17 @@ export interface VisaoDosAssentos {
     status: SubscriptionStatus;
     createdAt: string;
   }>;
+}
+
+export interface SeatInvoiceView {
+  id: string;
+  kind: SeatInvoiceKind;
+  amountCents: number;
+  dueDate: string | null;
+  status: SeatInvoiceStatus;
+  invoiceUrl: string | null;
+  paidAt: string | null;
+  createdAt: string;
 }
 
 /**
@@ -495,25 +512,97 @@ export class SeatPoolService {
    * Devolve `null` se aplicou, `'sem_efeito'` para evento velho ou irrelevante,
    * e `'desconhecido'` quando não é nosso.
    */
-  async aplicarEventoAsaas(
+  async applyAsaasEvent(
     tx: Prisma.TransactionClient,
     r: Extract<ResultadoDeWebhookDeAssinatura, { ok: true }>,
   ): Promise<null | 'sem_efeito' | 'desconhecido'> {
     if (r.subscriptionId) {
       const pool = await tx.groupSeatPool.findUnique({ where: { providerRef: r.subscriptionId } });
-      if (pool) return this.aplicarNoPool(tx, pool, r);
+      if (pool) {
+        await this.recordInvoice(tx, pool.id, 'SUBSCRIPTION', r);
+        return this.applyToPool(tx, pool, r);
+      }
     }
     if (r.paymentId) {
       const ajuste = await tx.groupSeatAdjustment.findUnique({
         where: { providerChargeId: r.paymentId },
         include: { pool: true },
       });
-      if (ajuste) return this.aplicarNoAjuste(tx, ajuste, r);
+      if (ajuste) {
+        await this.recordInvoice(tx, ajuste.poolId, 'ADJUSTMENT', r);
+        return this.applyToAdjustment(tx, ajuste, r);
+      }
     }
     return 'desconhecido';
   }
 
-  private async aplicarNoPool(
+  /** As faturas dos assentos, mais recentes primeiro (Fase 6). */
+  async invoices(groupId: string, limit = 24): Promise<SeatInvoiceView[]> {
+    const faturas = await this.prisma.groupSeatInvoice.findMany({
+      where: { pool: { groupId } },
+      orderBy: [{ dueDate: 'desc' }, { createdAt: 'desc' }],
+      take: Math.min(Math.max(limit, 1), 100),
+    });
+    return faturas.map((f) => ({
+      id: f.id,
+      kind: f.kind,
+      amountCents: f.amountCents,
+      dueDate: f.dueDate,
+      status: f.status,
+      invoiceUrl: f.invoiceUrl,
+      paidAt: f.paidAt?.toISOString() ?? null,
+      createdAt: f.createdAt.toISOString(),
+    }));
+  }
+
+  /**
+   * Guarda a cobrança do evento no histórico de faturas. É cópia do que o
+   * Asaas diz, e só isso: o direito à IA continua decidido pelo pool e pelos
+   * ajustes. Evento fora de ordem não desfaz pagamento — uma fatura paga só
+   * muda para cancelada (estorno, contestação).
+   */
+  private async recordInvoice(
+    tx: Prisma.TransactionClient,
+    poolId: string,
+    kind: SeatInvoiceKind,
+    r: Extract<ResultadoDeWebhookDeAssinatura, { ok: true }>,
+  ): Promise<void> {
+    if (!r.paymentId) return;
+    const status = invoiceStatusOf(r);
+    const atual = await tx.groupSeatInvoice.findUnique({
+      where: { providerPaymentId: r.paymentId },
+    });
+    if (!atual) {
+      if (r.valueCents === null || status === null) return;
+      await tx.groupSeatInvoice.create({
+        data: {
+          poolId,
+          providerPaymentId: r.paymentId,
+          kind,
+          amountCents: r.valueCents,
+          dueDate: r.dueDate,
+          status,
+          invoiceUrl: r.invoiceUrl,
+          paidAt: status === 'PAID' ? new Date() : null,
+        },
+      });
+      return;
+    }
+    const novo =
+      status === null || (atual.status === 'PAID' && status !== 'VOID') ? atual.status : status;
+    await tx.groupSeatInvoice.update({
+      where: { id: atual.id },
+      data: {
+        status: novo,
+        ...(r.valueCents !== null ? { amountCents: r.valueCents } : {}),
+        ...(r.dueDate ? { dueDate: r.dueDate } : {}),
+        ...(r.invoiceUrl ? { invoiceUrl: r.invoiceUrl } : {}),
+        ...(novo === 'PAID' && !atual.paidAt ? { paidAt: new Date() } : {}),
+      },
+    });
+  }
+
+  private async applyToPool(
     tx: Prisma.TransactionClient,
     pool: GroupSeatPool,
     r: Extract<ResultadoDeWebhookDeAssinatura, { ok: true }>,
@@ -555,7 +644,7 @@ export class SeatPoolService {
     return null;
   }
 
-  private async aplicarNoAjuste(
+  private async applyToAdjustment(
     tx: Prisma.TransactionClient,
     ajuste: { id: string; status: SubscriptionStatus; pool: GroupSeatPool },
     r: Extract<ResultadoDeWebhookDeAssinatura, { ok: true }>,
@@ -663,6 +752,37 @@ export class SeatPoolService {
       );
     }
     return this.provedor;
+  }
+}
+
+/** O status da fatura a partir do evento; `null` = o evento não diz nada sobre ela. */
+function invoiceStatusOf(
+  r: Extract<ResultadoDeWebhookDeAssinatura, { ok: true }>,
+): SeatInvoiceStatus | null {
+  switch (r.event) {
+    case 'PAYMENT_CONFIRMED':
+    case 'PAYMENT_RECEIVED':
+      return 'PAID';
+    case 'PAYMENT_OVERDUE':
+      return 'OVERDUE';
+    case 'PAYMENT_DELETED':
+    case 'PAYMENT_REFUNDED':
+    case 'PAYMENT_CHARGEBACK_REQUESTED':
+      return 'VOID';
+    case 'PAYMENT_CREATED':
+      return 'PENDING';
+  }
+  switch (r.status) {
+    case 'PAID':
+      return 'PAID';
+    case 'OVERDUE':
+      return 'OVERDUE';
+    case 'VOID':
+      return 'VOID';
+    case 'PENDING':
+      return 'PENDING';
+    default:
+      return null;
   }
 }
 

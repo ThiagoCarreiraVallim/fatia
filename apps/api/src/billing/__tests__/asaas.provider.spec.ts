@@ -352,6 +352,8 @@ describe('AsaasProvider — assinatura PRO (ADR 024)', () => {
               status: 'RECEIVED',
               dueDate: '2026-10-15',
               subscription: 'sub_1',
+              value: 74.5,
+              invoiceUrl: 'https://www.asaas.com/i/pay_1',
             },
           }),
         ),
@@ -364,6 +366,8 @@ describe('AsaasProvider — assinatura PRO (ADR 024)', () => {
         dueDate: '2026-10-15',
         paymentId: 'pay_1',
         externalReference: null,
+        valueCents: 7450,
+        invoiceUrl: 'https://www.asaas.com/i/pay_1',
       });
     });
 
