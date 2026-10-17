@@ -172,6 +172,7 @@ export default function CommunityDetailPage() {
             initial={{ scopes: g.consentScopes, statsOptIn: g.statsOptIn }}
             team={equipe}
             submitLabel="Salvar"
+            editing
             pending={save.isPending}
             error={save.isError ? 'Não deu para salvar agora. Tente de novo.' : null}
             onSubmit={(consent) => save.mutate(consent)}

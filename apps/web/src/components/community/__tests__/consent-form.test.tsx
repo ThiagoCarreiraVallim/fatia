@@ -47,3 +47,20 @@ describe('ConsentForm', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Algo falhou');
   });
 });
+
+describe('ConsentForm editando', () => {
+  it('não repete o título da tela e não diz que nada vem marcado', () => {
+    render(
+      <ConsentForm
+        initial={{ scopes: ['GOALS'], statsOptIn: false }}
+        team={EQUIPE}
+        submitLabel="Salvar"
+        editing
+        onSubmit={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('O que a equipe pode ver de você')).toHaveClass('sr-only');
+    expect(screen.queryByText(/Nada vem marcado/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Desmarcar tira o acesso/)).toBeInTheDocument();
+  });
+});

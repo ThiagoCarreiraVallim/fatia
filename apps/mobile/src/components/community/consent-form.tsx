@@ -64,6 +64,7 @@ export function ConsentForm({
   error,
   onSubmit,
   secondary,
+  editing = false,
 }: {
   initial?: JoinConsent;
   team: TeamMember[];
@@ -72,6 +73,8 @@ export function ConsentForm({
   error?: string | null;
   onSubmit: (consent: JoinConsent) => void;
   secondary?: ReactNode;
+  /** Editando na tela da comunidade, que tem o próprio título: sem o título e o texto da entrada. */
+  editing?: boolean;
 }) {
   const [scopes, setScopes] = useState(initial.scopes);
   const [statsOptIn, setStatsOptIn] = useState(initial.statsOptIn);
@@ -79,11 +82,15 @@ export function ConsentForm({
   return (
     <View className="gap-4">
       <View className="gap-2">
-        <Text accessibilityRole="header" className="text-sm font-bold text-foreground">
-          O que a equipe pode ver de você
-        </Text>
+        {editing ? null : (
+          <Text accessibilityRole="header" className="text-sm font-bold text-foreground">
+            O que a equipe pode ver de você
+          </Text>
+        )}
         <Text className="text-xs text-muted-foreground">
-          {`Quem vê: ${whoSees(team)}. Nada vem marcado, e você muda isso quando quiser.`}
+          {editing
+            ? `Quem vê: ${whoSees(team)}. Desmarcar tira o acesso a partir da próxima consulta.`
+            : `Quem vê: ${whoSees(team)}. Nada vem marcado, e você muda isso quando quiser.`}
         </Text>
         {SHARE_SCOPES.map((scope) => (
           <Opcao

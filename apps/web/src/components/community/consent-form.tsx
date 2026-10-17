@@ -22,6 +22,11 @@ interface Props {
   onSubmit: (consent: JoinConsent) => void;
   /** Ação ao lado do botão principal (ex.: "Agora não"). */
   secondary?: ReactNode;
+  /**
+   * Editando o que já compartilha (a tela da comunidade, que tem o próprio título):
+   * a legenda fica só para leitor de tela e some o "nada vem marcado" da entrada.
+   */
+  editing?: boolean;
 }
 
 const NADA: JoinConsent = { scopes: [], statsOptIn: false };
@@ -39,6 +44,7 @@ export function ConsentForm({
   error,
   onSubmit,
   secondary,
+  editing = false,
 }: Props) {
   const id = useId();
   const [scopes, setScopes] = useState(initial.scopes);
@@ -53,11 +59,13 @@ export function ConsentForm({
       }}
     >
       <fieldset className="space-y-3">
-        <legend className="text-sm font-semibold text-foreground">
+        <legend className={editing ? 'sr-only' : 'text-sm font-semibold text-foreground'}>
           O que a equipe pode ver de você
         </legend>
         <p className="text-xs text-muted-foreground">
-          {`Quem vê: ${whoSees(team)}. Nada vem marcado, e você muda isso quando quiser.`}
+          {editing
+            ? `Quem vê: ${whoSees(team)}. Desmarcar tira o acesso a partir da próxima consulta.`
+            : `Quem vê: ${whoSees(team)}. Nada vem marcado, e você muda isso quando quiser.`}
         </p>
         <ul className="space-y-2">
           {SHARE_SCOPES.map((scope) => (
