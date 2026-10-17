@@ -18,8 +18,8 @@ export default function StudentsPage() {
   return (
     <div className="space-y-4 px-5 pt-4">
       <p className="text-sm text-muted-foreground">
-        Você vê de cada aluno apenas o que ele autorizou, e cada consulta fica registrada na trilha
-        dele.
+        De cada pessoa, você vê só o que ela autorizou, e cada consulta fica registrada na trilha
+        dela.
       </p>
 
       {alunos.isLoading && (
@@ -32,10 +32,9 @@ export default function StudentsPage() {
       {!alunos.isLoading && lista.length === 0 && (
         <div className="rounded-2xl border border-dashed border-white/10 bg-card/30 p-6 text-center">
           <Users size={20} className="mx-auto text-muted-foreground" />
-          <p className="mt-3 text-sm font-bold text-foreground">Nenhum aluno por aqui</p>
+          <p className="mt-3 text-sm font-bold text-foreground">Ninguém por aqui ainda</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Alunos aparecem depois que a academia aprova a entrada deles e define você como
-            profissional do grupo.
+            Membros aparecem quando entram na comunidade e escolhem compartilhar algo com a equipe.
           </p>
         </div>
       )}

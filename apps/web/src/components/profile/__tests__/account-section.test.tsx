@@ -4,9 +4,14 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const deleteMe = vi.fn();
+const mine = vi.fn();
 vi.mock('@fatia/api-client', async (importOriginal) => {
   const real = await importOriginal<typeof import('@fatia/api-client')>();
-  return { ...real, usersApi: { ...real.usersApi, deleteMe: (c: string) => deleteMe(c) } };
+  return {
+    ...real,
+    usersApi: { ...real.usersApi, deleteMe: (c: string) => deleteMe(c) },
+    groupsApi: { ...real.groupsApi, mine: () => mine() },
+  };
 });
 
 import { DELETE_ACCOUNT_CONFIRMATION } from '@fatia/api-client';
@@ -27,7 +32,26 @@ function renderSection() {
 }
 
 describe('AccountSection', () => {
-  beforeEach(() => deleteMe.mockReset());
+  beforeEach(() => {
+    deleteMe.mockReset();
+    mine.mockReset().mockResolvedValue([]);
+  });
+
+  it('a conta dona de comunidade avisa que ela some junto', async () => {
+    const user = userEvent.setup();
+    mine.mockResolvedValue([
+      { id: 'g1', name: 'Academia Demo', role: 'OWNER', status: 'ACTIVE' },
+      { id: 'g2', name: 'Corrida', role: 'MEMBER', status: 'ACTIVE' },
+    ]);
+    renderSection();
+    expect(mine).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: /apagar minha conta/i }));
+    expect(
+      await screen.findByText(/Academia Demo.*é apagada junto, com a cobrança dos assentos/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Corrida/)).not.toBeInTheDocument();
+  });
 
   it('trocar senha leva ao fluxo de redefinição do Logto', () => {
     renderSection();

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Flag, Sparkles, Settings, Shield, LogOut, ChevronRight } from 'lucide-react';
+import { Flag, Sparkles, Settings, Shield, LogOut, ChevronRight, Users } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth-server';
 import { ProfileMetrics } from '@/components/profile/profile-metrics';
 import { ProfessionalPanelLink } from '@/components/sharing/professional-panel-link';
@@ -55,6 +55,12 @@ export default async function ProfilePage() {
       <nav className="overflow-hidden rounded-2xl border border-subtle bg-card">
         {/* Só rende algo para quem atende alguém — ver o componente. */}
         <ProfessionalPanelLink />
+        <MenuItem
+          href="/community"
+          icon={<Users size={18} className="text-primary" />}
+          title="Comunidades"
+          subtitle="Suas comunidades e o que você compartilha"
+        />
         <MenuItem
           href="/goals"
           icon={<Flag size={18} className="text-primary" />}

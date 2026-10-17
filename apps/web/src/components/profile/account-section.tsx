@@ -2,9 +2,9 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Download, KeyRound, Trash2 } from 'lucide-react';
-import { DELETE_ACCOUNT_CONFIRMATION, usersApi } from '@fatia/api-client';
+import { DELETE_ACCOUNT_CONFIRMATION, groupsApi, usersApi } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -62,6 +62,13 @@ export function AccountSection() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [confirmation, setConfirmation] = useState('');
   const qc = useQueryClient();
+  // Só com o diálogo aberto: quem só passa pelo perfil não paga a requisição.
+  const groups = useQuery({
+    queryKey: ['community', 'mine'],
+    queryFn: () => groupsApi.mine(),
+    enabled: deleteOpen,
+  });
+  const owned = (groups.data ?? []).filter((g) => g.role === 'OWNER').map((g) => g.name);
 
   const exportData = useMutation({
     mutationFn: () => usersApi.exportMyData(),
@@ -153,6 +160,11 @@ export function AccountSection() {
                 Assinatura do PRO feita aqui na web é cancelada junto. Feita pelo app, cancele na
                 App Store ou no Google Play — a loja continua cobrando até você cancelar lá.
               </p>
+              {owned.length > 0 && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {`Esta conta é a dona de ${owned.join(', ')}: a comunidade é apagada junto, com a cobrança dos assentos. Para mantê-la, transfira a outra pessoa da equipe antes.`}
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="confirmar-exclusao">

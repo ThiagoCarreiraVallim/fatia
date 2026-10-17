@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: 'As regras de uso da instância pública do Fatia.',
 };
 
-const LAST_UPDATED = '15 de outubro de 2026';
+const LAST_UPDATED = '17 de outubro de 2026';
 
 export default function TermsPage() {
   return (
@@ -109,6 +109,13 @@ export default function TermsPage() {
           conta volta ao Free, sem perder nenhum dado. A IA hospedada tem também um{' '}
           <strong>limite diário de uso</strong>, inclusive no PRO: ao atingi-lo, ela fica
           indisponível até o dia seguinte e o registro manual continua funcionando normalmente.
+        </p>
+        <p>
+          <strong>PRO pago por uma comunidade:</strong> uma academia ou um treinador pode comprar
+          assentos e dar o PRO a quem escolher. Enquanto o assento for seu, a cobrança é da
+          comunidade, não sua. Ela pode retirar o assento a qualquer momento, e se deixar de pagar
+          ele vale até o fim da carência; nos dois casos você volta ao Free sem perder nenhum dado.
+          Se você já assina o PRO, a sua assinatura continua valendo e não é cancelada.
         </p>
         <p>
           Em contrapartida, e sendo direto: <strong>não há SLA.</strong> É um projeto mantido por

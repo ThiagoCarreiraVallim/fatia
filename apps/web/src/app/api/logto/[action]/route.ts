@@ -1,6 +1,7 @@
 import LogtoClient, { handleSignIn } from '@logto/next/server-actions';
 import { NextRequest, NextResponse } from 'next/server';
 import { logtoConfig } from '@/lib/logto';
+import { NEXT_COOKIE, NEXT_COOKIE_MAX_AGE_S, safeNextPath } from '@/lib/next-path';
 
 type RouteContext = { params: Promise<{ action: string }> };
 
@@ -26,7 +27,22 @@ export async function GET(request: NextRequest, ctx: RouteContext) {
       redirectUri: `${logtoConfig.baseUrl}/api/logto/callback`,
       firstScreen,
     });
-    return NextResponse.redirect(url);
+    const resposta = NextResponse.redirect(url);
+    // Para onde voltar depois do login (o link de convite, por exemplo). Fica num
+    // cookie porque o `redirectUri` do Logto é fixo, e só caminho deste app entra.
+    const next = safeNextPath(request.nextUrl.searchParams.get('next'));
+    if (next) {
+      resposta.cookies.set(NEXT_COOKIE, next, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: logtoConfig.baseUrl.startsWith('https://'),
+        path: '/',
+        maxAge: NEXT_COOKIE_MAX_AGE_S,
+      });
+    } else {
+      resposta.cookies.delete(NEXT_COOKIE);
+    }
+    return resposta;
   }
 
   if (action === 'sign-out') {
@@ -53,7 +69,10 @@ export async function GET(request: NextRequest, ctx: RouteContext) {
         { status: 500 },
       );
     }
-    return NextResponse.redirect(new URL('/', logtoConfig.baseUrl));
+    const destino = safeNextPath(request.cookies.get(NEXT_COOKIE)?.value) ?? '/';
+    const resposta = NextResponse.redirect(new URL(destino, logtoConfig.baseUrl));
+    resposta.cookies.delete(NEXT_COOKIE);
+    return resposta;
   }
 
   return NextResponse.json({ error: 'unknown action' }, { status: 404 });

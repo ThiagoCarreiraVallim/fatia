@@ -39,11 +39,11 @@ const SUGESTAO = {
   },
 };
 
-function renderWizard(redo = false) {
+function renderWizard(redo = false, returnTo: string | null = null) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <OnboardingWizard redo={redo} />
+      <OnboardingWizard redo={redo} returnTo={returnTo} />
     </QueryClientProvider>,
   );
 }
@@ -191,6 +191,13 @@ describe('OnboardingWizard', () => {
     await user.click(screen.getByRole('button', { name: 'Pular por agora' }));
     await waitFor(() => expect(usersApi.skipOnboarding).toHaveBeenCalled());
     await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/'));
+  });
+
+  it('quem veio de um link volta para ele ao pular', async () => {
+    const user = userEvent.setup();
+    renderWizard(false, '/c/tok');
+    await user.click(screen.getByRole('button', { name: 'Pular por agora' }));
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/c/tok'));
   });
 
   it('ao refazer, cancelar volta às metas sem chamar o skip', async () => {

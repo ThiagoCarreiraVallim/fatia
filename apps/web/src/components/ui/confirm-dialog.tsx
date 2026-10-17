@@ -16,6 +16,8 @@ interface Props {
   title: string;
   description: string;
   confirmLabel?: string;
+  /** O que o botão diz enquanto a ação roda; o padrão serve a quem remove. */
+  pendingLabel?: string;
   pending?: boolean;
   onConfirm: () => void;
 }
@@ -30,6 +32,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = 'Remover',
+  pendingLabel = 'Removendo...',
   pending = false,
   onConfirm,
 }: Props) {
@@ -45,7 +48,7 @@ export function ConfirmDialog({
             Cancelar
           </Button>
           <Button variant="destructive" disabled={pending} onClick={onConfirm}>
-            {pending ? 'Removendo...' : confirmLabel}
+            {pending ? pendingLabel : confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

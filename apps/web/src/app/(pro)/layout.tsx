@@ -14,8 +14,8 @@ import { getCurrentUser } from '@/lib/auth-server';
  * uma lista vazia — não um 403 que revelaria a existência do painel. Quem barra
  * de verdade é a API, uma leitura por vez.
  *
- * A barra de topo é a mesma do app (voltar + título): "Alunos" volta ao
- * Início, e o aluno volta para "Alunos".
+ * A barra de topo é a mesma do app (voltar + título): "Membros" volta ao
+ * Início, e o membro volta para "Membros".
  */
 export default async function ProLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();

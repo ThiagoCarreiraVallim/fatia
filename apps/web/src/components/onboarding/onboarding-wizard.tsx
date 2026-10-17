@@ -42,7 +42,14 @@ const kcal = (n: number) => n.toLocaleString('pt-BR');
  * dados e deixa a pessoa editar o resultado antes de salvar. "Pular" fica em
  * todo passo: ninguém é obrigado a informar nascimento para registrar um café.
  */
-export function OnboardingWizard({ redo = false }: { redo?: boolean }) {
+export function OnboardingWizard({
+  redo = false,
+  returnTo = null,
+}: {
+  redo?: boolean;
+  /** Para onde voltar no fim (o link que trouxe a pessoa), já validado. */
+  returnTo?: string | null;
+}) {
   const router = useRouter();
   const qc = useQueryClient();
   const [step, setStep] = useState(0);
@@ -74,7 +81,7 @@ export function OnboardingWizard({ redo = false }: { redo?: boolean }) {
 
   const done = () => {
     void qc.invalidateQueries({ queryKey: ['users', 'me'] });
-    router.replace(redo ? '/nutrition/goals' : '/');
+    router.replace(redo ? '/nutrition/goals' : (returnTo ?? '/'));
   };
 
   const suggest = useMutation({

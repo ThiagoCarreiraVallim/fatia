@@ -34,3 +34,14 @@ describe('termos de uso — custo', () => {
     expect(secao('Custo e disponibilidade')).toMatch(/Free[\s\S]*gratuito[\s\S]*MCP/);
   });
 });
+
+describe('termos de uso — PRO pago pela comunidade (ADR 025)', () => {
+  it('diz que a cobrança é da comunidade, que ela pode retirar e que a pessoa volta ao Free', () => {
+    render(<TermsPage />);
+    const custo = secao('Custo e disponibilidade');
+    expect(custo).toMatch(/PRO pago por uma comunidade/);
+    expect(custo).toMatch(/a cobrança é da\s+comunidade, não sua/);
+    expect(custo).toMatch(/retirar o assento/);
+    expect(custo).toMatch(/volta ao Free sem perder nenhum dado/);
+  });
+});

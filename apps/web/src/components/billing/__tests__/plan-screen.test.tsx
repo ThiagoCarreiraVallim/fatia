@@ -197,6 +197,27 @@ describe('PlanScreen', () => {
     expect(screen.queryByRole('button', { name: 'Cancelar assinatura' })).not.toBeInTheDocument();
   });
 
+  it('PRO pela comunidade: diz quem paga, sem cancelar nem cobrar a pessoa', async () => {
+    plan.mockResolvedValue({
+      ...FREE,
+      tier: 'PRO',
+      source: 'GROUP',
+      reason: 'carencia',
+      status: 'PAST_DUE',
+      groupName: 'Academia Demo',
+    });
+    renderScreen();
+
+    expect(
+      await screen.findByRole('heading', { name: /PRO pela comunidade Academia Demo/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/A comunidade Academia Demo paga seu PRO/)).toBeInTheDocument();
+    expect(screen.queryByText(/Pague a cobrança em aberto/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Assinatura pela/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancelar assinatura' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Assinar PRO' })).not.toBeInTheDocument();
+  });
+
   it('instância sem exigência de plano não vende nada', async () => {
     plan.mockResolvedValue({ ...FREE, tier: 'PRO', source: 'INSTANCE', requiresPlan: false });
     renderScreen();

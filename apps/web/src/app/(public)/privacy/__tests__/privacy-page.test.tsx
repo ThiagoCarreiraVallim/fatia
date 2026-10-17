@@ -88,3 +88,26 @@ describe('política de privacidade — plano PRO (ADR 024)', () => {
     expect(terceiros).toMatch(/só o identificador da sua conta/i);
   });
 });
+
+describe('política de privacidade — comunidades (ADR 026)', () => {
+  it('não afirma mais que o dono nunca vê dado de saúde', () => {
+    render(<PrivacyPage />);
+    expect(secao('Quais dados coletamos')).not.toMatch(/dono da academia não vê dado de saúde/i);
+  });
+
+  it('diz que o consentimento é dado à equipe, por categoria, com nada marcado', () => {
+    render(<PrivacyPage />);
+    const dados = secao('Quais dados coletamos');
+    expect(dados).toMatch(/o dono, os profissionais e os criadores de conteúdo/);
+    expect(dados).toMatch(/Nada vem marcado/);
+    expect(dados).toMatch(/Os outros membros nunca veem nada seu/);
+  });
+
+  it('diz onde cortar o acesso, e quanto tempo o e-mail do convite fica', () => {
+    render(<PrivacyPage />);
+    const dados = secao('Quais dados coletamos');
+    expect(dados).toMatch(/na tela da comunidade/);
+    expect(dados).not.toMatch(/a qualquer momento, pedindo ao Claude/);
+    expect(dados).toMatch(/30 dias depois de ele ser usado ou vencer/);
+  });
+});

@@ -85,7 +85,7 @@ describe('navegação', () => {
       ['/plan', 'Meu plano', '/profile', 'Perfil'],
       ['/chat/c1', 'Chat', '/', 'Início'],
       ['/community/g1', 'Comunidade', '/community', 'Comunidade'],
-      ['/students/m1', 'Aluno', '/students', 'Alunos'],
+      ['/students/m1', 'Membro', '/students', 'Membros'],
     ])('%s: "%s", volta para %s', (path, title, parent, parentTitle) => {
       expect(routeInfo(path)).toEqual({ title, parent, parentTitle });
     });

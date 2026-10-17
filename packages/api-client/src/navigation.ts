@@ -230,8 +230,8 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/chat/:id', title: 'Chat', parent: '/' },
   { pattern: '/community', title: 'Comunidade', parent: '/' },
   { pattern: '/community/:id', title: 'Comunidade', parent: '/community' },
-  { pattern: '/students', title: 'Alunos', parent: '/' },
-  { pattern: '/students/:id', title: 'Aluno', parent: '/students' },
+  { pattern: '/students', title: 'Membros', parent: '/' },
+  { pattern: '/students/:id', title: 'Membro', parent: '/students' },
 ];
 
 export interface RouteInfo {

@@ -93,7 +93,8 @@ function ResumoDoPlano({ plan, onChange }: { plan: MyPlan; onChange: (p: MyPlan)
     },
   });
   const pro = plan.tier === 'PRO';
-  const origem = sourceLabel(plan.source);
+  const origem = sourceLabel(plan.source, plan.groupName);
+  const daComunidade = plan.source === 'GROUP';
   const podeCancelar =
     pro && plan.source === 'ASAAS' && !plan.cancelAtPeriodEnd && plan.reason !== 'carencia';
 
@@ -105,8 +106,16 @@ function ResumoDoPlano({ plan, onChange }: { plan: MyPlan; onChange: (p: MyPlan)
           {planSummary(plan)}
         </h2>
       </div>
-      {pro && origem && plan.source !== 'INSTANCE' && (
+      {pro && origem && plan.source !== 'INSTANCE' && !daComunidade && (
         <p className="mt-1 text-sm text-muted-foreground">Assinatura {origem}.</p>
+      )}
+      {daComunidade && (
+        <p className="mt-1 text-sm text-muted-foreground">
+          {plan.groupName
+            ? `A comunidade ${plan.groupName} paga seu PRO.`
+            : 'A comunidade paga seu PRO.'}{' '}
+          Se ela retirar o assento, você volta ao Free sem perder nenhum registro.
+        </p>
       )}
       {!plan.requiresPlan && (
         <p className="mt-1 text-sm text-muted-foreground">
@@ -127,7 +136,12 @@ function ResumoDoPlano({ plan, onChange }: { plan: MyPlan; onChange: (p: MyPlan)
           </Button>
         </div>
       )}
-      {plan.reason === 'carencia' && (
+      {plan.reason === 'carencia' && daComunidade && (
+        <p className="mt-2 text-sm text-warning">
+          A comunidade está com o pagamento em atraso. A IA continua liberada por alguns dias.
+        </p>
+      )}
+      {plan.reason === 'carencia' && !daComunidade && (
         <p className="mt-2 text-sm text-warning">
           A IA continua liberada até a data acima. Pague a cobrança em aberto pelo link que o Asaas
           enviou ao seu e-mail.
@@ -157,6 +171,7 @@ function ResumoDoPlano({ plan, onChange }: { plan: MyPlan; onChange: (p: MyPlan)
             title="Cancelar o PRO?"
             description="A renovação para. Você continua PRO até o fim do período já pago, e depois volta ao Free sem perder nenhum registro."
             confirmLabel="Cancelar assinatura"
+            pendingLabel="Cancelando..."
             pending={cancelar.isPending}
             onConfirm={() => cancelar.mutate()}
           />

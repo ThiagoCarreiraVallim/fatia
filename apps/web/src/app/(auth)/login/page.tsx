@@ -1,9 +1,15 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { safeNextPath, signInHref } from '@/lib/next-path';
+
+type Props = { searchParams: Promise<{ next?: string }> };
 
 // prefetch={false} em todos os links: /api/logto/sign-in inicia o fluxo OAuth
-// por redirect, e um prefetch dispararia o fluxo antes do clique.
-export default function LoginPage() {
+// por redirect, e um prefetch dispararia o fluxo antes do clique. `?next=` (o link
+// de convite, por exemplo) segue junto para a pessoa voltar a ele depois.
+export default async function LoginPage({ searchParams }: Props) {
+  const next = safeNextPath((await searchParams).next);
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-8">
@@ -16,18 +22,18 @@ export default function LoginPage() {
 
         <div className="space-y-3">
           <Button asChild size="lg" className="w-full h-12 text-base">
-            <Link href="/api/logto/sign-in" prefetch={false}>
+            <Link href={signInHref(next)} prefetch={false}>
               Entrar
             </Link>
           </Button>
           <Button asChild size="lg" variant="outline" className="w-full h-12 text-base">
-            <Link href="/api/logto/sign-in?tela=cadastro" prefetch={false}>
+            <Link href={signInHref(next, 'cadastro')} prefetch={false}>
               Criar conta grátis
             </Link>
           </Button>
           <div className="text-center">
             <Button asChild variant="link" className="text-muted-foreground">
-              <Link href="/api/logto/sign-in?tela=senha" prefetch={false}>
+              <Link href={signInHref(next, 'senha')} prefetch={false}>
                 Esqueci minha senha
               </Link>
             </Button>

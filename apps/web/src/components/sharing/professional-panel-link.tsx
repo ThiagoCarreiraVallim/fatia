@@ -44,9 +44,10 @@ export function ProfessionalPanelLink() {
         <Users size={18} className="text-primary" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-base font-bold leading-tight text-foreground">Meus alunos</p>
+        <p className="text-base font-bold leading-tight text-foreground">Membros</p>
         <p className="text-xs text-muted-foreground">
-          {total === 1 ? '1 aluno atendido' : `${total} alunos atendidos`} — somente leitura
+          {total === 1 ? '1 pessoa compartilha com você' : `${total} pessoas compartilham com você`}{' '}
+          — somente leitura
         </p>
       </div>
       <ChevronRight size={18} className="text-muted-foreground" />
