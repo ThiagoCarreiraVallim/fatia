@@ -1,8 +1,10 @@
 import {
   BadGatewayException,
+  ConflictException,
   GatewayTimeoutException,
   Logger,
   ServiceUnavailableException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import { MessageRole } from '@prisma/client';
@@ -30,11 +32,14 @@ function montar(env: Record<string, string> = {}) {
   return new AgentChatClient(config);
 }
 
+const CONVERSA = '3f1c9a52-6b1e-4d8a-9c2f-0a5e7b3d1c44';
+
 const ENTRADA = {
   bearer: 'token-secreto-do-usuario',
-  conversationId: 'c1',
   timezone: 'America/Sao_Paulo',
-  messages: [{ role: MessageRole.user, content: 'tomei 3 insulinas hoje' }],
+  conversationId: CONVERSA,
+  mensagem: 'tomei 3 insulinas hoje',
+  historico: [{ role: MessageRole.assistant, content: 'oi, tudo bem?' }],
 };
 
 function respostaSse(texto: string, status = 200) {
@@ -104,17 +109,65 @@ describe('AgentChatClient.abrir', () => {
     );
   });
 
-  it('manda o histórico e o fuso no corpo, com `conversation_id` nulo quando é conversa nova', async () => {
+  /**
+   * O corpo **exato** que o agente declara, e não um parecido.
+   *
+   * Esta camada mandava `{conversation_id, timezone, messages}`, que o
+   * `ChatRequest` do `apps/agent` recusa com 422 (`extra: "forbid"`): todo turno
+   * chegava ao aluno como "o chat falhou". O teste que existia aqui afirmava o
+   * corpo errado contra um `fetch` dublê — verde dos dois lados, quebrado no
+   * meio. `toEqual` e não `toMatchObject` porque campo a mais é exatamente o que
+   * o outro lado recusa.
+   */
+  it('manda a mensagem, o histórico e o fuso no corpo que o agente declara', async () => {
     dublarFetch(respostaSse('event: done\ndata: {}\n\n'));
 
-    await montar().abrir({ ...ENTRADA, conversationId: null });
+    await montar().abrir(ENTRADA);
 
     const corpo: unknown = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
     expect(corpo).toEqual({
-      conversation_id: null,
+      conversationId: CONVERSA,
+      message: 'tomei 3 insulinas hoje',
       timezone: 'America/Sao_Paulo',
-      messages: [{ role: 'user', content: 'tomei 3 insulinas hoje' }],
+      history: [{ role: 'assistant', content: 'oi, tudo bem?' }],
+      memories: [],
     });
+  });
+
+  /**
+   * A resposta a uma pausa vai **sem** `message` e sem interpretação.
+   *
+   * O agente recusa com 422 um corpo com as duas coisas (`extra: forbid` e o
+   * "um dos dois" do `ChatRequest`), e é ele — não esta camada — quem sabe o que
+   * a pausa espera (ADR 023).
+   */
+  it('repassa a retomada no lugar da mensagem, sem tocar no valor', async () => {
+    dublarFetch(respostaSse('event: done\ndata: {}\n\n'));
+    await montar().abrir({
+      bearer: ENTRADA.bearer,
+      timezone: ENTRADA.timezone,
+      conversationId: ENTRADA.conversationId,
+      historico: [],
+      retomada: { interruptId: 'pausa-1', value: { approvals: { c1: true } } },
+    });
+
+    const corpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string) as Record<
+      string,
+      unknown
+    >;
+    expect(corpo).not.toHaveProperty('message');
+    expect(corpo.resume).toEqual({ interruptId: 'pausa-1', value: { approvals: { c1: true } } });
+  });
+
+  it('conversa nova vai com o histórico vazio, e não sem o campo', async () => {
+    dublarFetch(respostaSse('event: done\ndata: {}\n\n'));
+
+    await montar().abrir({ ...ENTRADA, historico: [] });
+
+    const corpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string) as {
+      history: unknown;
+    };
+    expect(corpo.history).toEqual([]);
   });
 
   it('sem AGENT_BASE_URL recusa 503 sem chamar ninguém', async () => {
@@ -125,6 +178,32 @@ describe('AgentChatClient.abrir', () => {
     );
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(montar({ AGENT_BASE_URL: '' }).configurado()).toBe(false);
+  });
+
+  it('401 do /mcp é o token da pessoa: sobe como 401, não como instância quebrada', async () => {
+    dublarFetch(
+      new Response(JSON.stringify({ error: { code: 'MCP_UNAUTHORIZED', message: 'x' } }), {
+        status: 401,
+      }),
+    );
+
+    await expect(montar().abrir(ENTRADA)).rejects.toThrow(UnauthorizedException);
+  });
+
+  it('retomada que não bate com a pausa pendente vira 409 com o code', async () => {
+    dublarFetch(
+      new Response(JSON.stringify({ error: { code: 'CHAT_RESUME_MISMATCH', message: 'x' } }), {
+        status: 409,
+      }),
+    );
+
+    const erro = await montar()
+      .abrir(ENTRADA)
+      .catch((e: unknown) => e);
+    expect(erro).toBeInstanceOf(ConflictException);
+    expect((erro as ConflictException).getResponse()).toMatchObject({
+      code: 'CHAT_RESUME_MISMATCH',
+    });
   });
 
   it('401 do agente é erro de configuração, e não "o modelo falhou"', async () => {
@@ -161,6 +240,37 @@ describe('AgentChatClient.abrir', () => {
   it('agente inacessível vira 503, não 500', async () => {
     dublarFetch(Object.assign(new Error('connect ECONNREFUSED'), { name: 'TypeError' }));
     await expect(montar().abrir(ENTRADA)).rejects.toThrow(ServiceUnavailableException);
+  });
+});
+
+describe('AgentChatClient.titular', () => {
+  it('pede o nome sem Bearer e devolve título e custo', async () => {
+    dublarFetch(
+      new Response(
+        JSON.stringify({ title: 'Almoço', usage: { model: 'm', inputUnits: 9, outputUnits: 2 } }),
+        { status: 200 },
+      ),
+    );
+
+    const gerado = await montar({ AGENT_API_KEY: 'k' }).titular('registra o almoço');
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://agent.local:8100/title');
+    expect(init.headers).not.toHaveProperty('Authorization');
+    expect(init.headers).toMatchObject({ 'X-Fatia-Agent-Key': 'k' });
+    expect(gerado).toEqual({
+      titulo: 'Almoço',
+      uso: { model: 'm', inputUnits: 9, outputUnits: 2 },
+    });
+  });
+
+  it('nunca lança: agente fora do ar ou status ruim viram null', async () => {
+    dublarFetch(Object.assign(new Error('boom'), { name: 'TypeError' }));
+    await expect(montar().titular('oi')).resolves.toBeNull();
+
+    fetchMock.mockRestore();
+    dublarFetch(new Response('{}', { status: 503 }));
+    await expect(montar().titular('oi')).resolves.toBeNull();
   });
 });
 

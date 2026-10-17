@@ -16,7 +16,7 @@ export class ExplainFormTool implements McpToolDef {
 
   readonly title = 'Explicar execução do exercício';
 
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
 
   readonly hostedInference = false;
   readonly description =
@@ -28,17 +28,7 @@ export class ExplainFormTool implements McpToolDef {
       .describe('Nome do exercício — busca parcial é suportada (ex.: "supino")'),
   } as const;
 
-  async execute(input: { exerciseName: string }, { userId }: McpToolContext) {
-    const matches = await this.exercises.findByName(userId, input.exerciseName);
-    return matches.map((ex) => ({
-      id: ex.id,
-      name: ex.name,
-      primaryMuscles: ex.primaryMuscles,
-      secondaryMuscles: ex.secondaryMuscles,
-      equipment: ex.equipment,
-      level: ex.level,
-      mechanic: ex.mechanic,
-      instructions: ex.instructions,
-    }));
+  execute(input: { exerciseName: string }, { userId }: McpToolContext) {
+    return this.exercises.explainForm(userId, input.exerciseName);
   }
 }

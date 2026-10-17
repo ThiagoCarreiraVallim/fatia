@@ -70,7 +70,50 @@ describe('FoodService', () => {
       await service.search(userId, { q: 'Feijão' });
 
       const where = prisma.food.findMany.mock.calls[0][0].where;
-      expect(where.AND[1]).toEqual({ searchName: { contains: 'feijao' } });
+      expect(where.AND[1]).toEqual({ AND: [{ searchName: { contains: 'feijao' } }] });
+    });
+
+    it('filtra palavra por palavra, e não pelo termo inteiro', async () => {
+      prisma.food.findMany.mockResolvedValue([]);
+
+      await service.search(userId, { q: 'Ovo cozido' });
+
+      const where = prisma.food.findMany.mock.calls[0][0].where;
+      expect(where.AND[1]).toEqual({
+        AND: [{ searchName: { contains: 'ovo' } }, { searchName: { contains: 'cozido' } }],
+      });
+    });
+
+    it('acha palavras fora de ordem depois do que contém o termo inteiro', async () => {
+      prisma.food.findMany.mockResolvedValue([
+        { id: 1, name: 'Ovo, de galinha, inteiro, cozido/10minutos' },
+        { id: 2, name: 'Ovo cozido temperado' },
+        { id: 3, name: 'Ovo, de galinha, clara, cozida/10minutos' },
+        { id: 4, name: 'Renovo, assado, cozido' },
+      ]);
+
+      const result = await service.search(userId, { q: 'ovo cozido' });
+
+      expect(result.map((f: { name: string }) => f.name)).toEqual([
+        'Ovo cozido temperado',
+        'Ovo, de galinha, inteiro, cozido/10minutos',
+      ]);
+    });
+
+    it('no empate, prefere a variante que o catálogo mais detalha: ovo é de galinha', async () => {
+      // O nome mais curto, com a ordem alfabética no desempate, era o de codorna — e o
+      // `record_meal` registrava "ovo" como ovo de codorna.
+      prisma.food.findMany.mockResolvedValue([
+        { id: 485, name: 'Ovo, de codorna, inteiro, cru' },
+        { id: 486, name: 'Ovo, de galinha, clara, cozida/10minutos' },
+        { id: 488, name: 'Ovo, de galinha, inteiro, cozido/10minutos' },
+        { id: 489, name: 'Ovo, de galinha, inteiro, cru' },
+        { id: 490, name: 'Ovo, de galinha, inteiro, frito' },
+      ]);
+
+      const [first] = await service.search(userId, { q: 'ovo', limit: 1 });
+
+      expect(first.name).toBe('Ovo, de galinha, inteiro, cru');
     });
 
     it('não corta no banco quando há termo — o corte é depois do ranqueamento', async () => {

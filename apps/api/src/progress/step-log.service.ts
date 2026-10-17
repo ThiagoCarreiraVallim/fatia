@@ -85,6 +85,56 @@ export class StepLogService {
   }
 
   /**
+   * O valor efetivo do dia contra a meta de passos. Sem dia, é hoje no fuso da pessoa; sem
+   * meta definida, `goalReached` e `goalTarget` são `null`.
+   */
+  async getStepsForDateWithGoal(date: string | undefined, userId: string, timezone: string) {
+    const result = await this.getStepsForDate(date ?? todayInTz(timezone), userId);
+    const target = await this.dailyTarget(userId);
+    return {
+      ...result,
+      goalReached: target !== null ? result.steps >= target : null,
+      goalTarget: target,
+    };
+  }
+
+  /**
+   * A série do histórico com a meta de cada dia, a média diária (sobre a janela inteira,
+   * dias sem log contam como zero), os dias que bateram a meta e os dias com algum registro.
+   */
+  async getHistoryWithGoal(days: number, userId: string, timezone: string) {
+    const series = await this.getHistory(days, userId, timezone);
+    const target = await this.dailyTarget(userId);
+    const withGoal = series.map((p) => ({
+      ...p,
+      goalReached: target !== null ? p.steps >= target : null,
+    }));
+    const totalDaysLogged = withGoal.filter((d) => d.steps > 0).length;
+    const totalSteps = withGoal.reduce((a, p) => a + p.steps, 0);
+    const averageDaily = withGoal.length ? totalSteps / withGoal.length : 0;
+    const daysWithGoalReached =
+      target !== null ? withGoal.filter((d) => d.steps >= target).length : 0;
+    return { days: withGoal, averageDaily, daysWithGoalReached, totalDaysLogged };
+  }
+
+  /** Registra e devolve o valor efetivo do dia do registro (o maior, ADR 007), contra a meta. */
+  async logWithDayTotal(dto: CreateStepLogDto, userId: string, timezone: string) {
+    const log = await this.create(dto, userId, timezone);
+    const effective = await this.getStepsForDate(log.date, userId);
+    const target = await this.dailyTarget(userId);
+    return {
+      stepLogId: log.id,
+      effectiveStepsForDate: effective.steps,
+      goalReached: target !== null ? effective.steps >= target : null,
+    };
+  }
+
+  private async dailyTarget(userId: string): Promise<number | null> {
+    const goals = await this.prisma.userGoals.findUnique({ where: { userId } });
+    return goals?.dailyStepsTarget ?? null;
+  }
+
+  /**
    * Histórico preenchendo dias sem log com 0.
    */
   async getHistory(days: number, userId: string, timezone: string) {

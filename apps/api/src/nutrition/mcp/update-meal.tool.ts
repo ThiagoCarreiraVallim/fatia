@@ -14,7 +14,7 @@ export class UpdateMealTool implements McpToolDef {
   constructor(private readonly meals: MealService) {}
   readonly name = 'update_meal';
   readonly title = 'Atualizar refeição';
-  readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
   readonly hostedInference = false;
   readonly description =
     'Atualiza metadados da refeição (mealType/eatenAt/notes). ' +

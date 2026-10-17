@@ -25,6 +25,12 @@ export class WeightLogService {
     });
   }
 
+  /** Registra e devolve só o id — o que a tool de registro responde. */
+  async log(dto: CreateWeightLogDto, userId: string) {
+    const log = await this.create(dto, userId);
+    return { weightLogId: log.id };
+  }
+
   async findById(id: string, userId: string) {
     const log = await this.prisma.weightLog.findUnique({ where: { id } });
     if (!log || log.userId !== userId) throw new NotFoundException('Weight log not found');

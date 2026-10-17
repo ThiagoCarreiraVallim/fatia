@@ -8,6 +8,8 @@ import { ObservabilityModule } from '../observability/observability.module';
 import { McpController } from './mcp.controller';
 import { McpThrottlerGuard } from './mcp-throttler.guard';
 import { McpToolRegistry } from './mcp-tool.registry';
+import { IntentToolsModule } from './intent/intent-tools.module';
+import { SuperficieDeIntencao } from './intent/superficie';
 import { GetMeTool } from './tools/meta/get-me.tool';
 import { UpdateTimezoneTool } from './tools/meta/update-timezone.tool';
 import { UpdateMeTool } from './tools/meta/update-me.tool';
@@ -20,8 +22,17 @@ import { UpdateMeTool } from './tools/meta/update-me.tool';
     WorkoutModule,
     GoalsModule,
     ObservabilityModule,
+    IntentToolsModule,
   ],
   controllers: [McpController],
-  providers: [McpThrottlerGuard, McpToolRegistry, GetMeTool, UpdateTimezoneTool, UpdateMeTool],
+  providers: [
+    McpThrottlerGuard,
+    McpToolRegistry,
+    SuperficieDeIntencao,
+    GetMeTool,
+    UpdateTimezoneTool,
+    UpdateMeTool,
+  ],
+  exports: [McpToolRegistry],
 })
 export class McpModule {}

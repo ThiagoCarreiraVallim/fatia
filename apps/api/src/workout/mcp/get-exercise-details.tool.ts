@@ -16,7 +16,7 @@ export class GetExerciseDetailsTool implements McpToolDef {
 
   readonly title = 'Ver detalhes do exercício';
 
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
 
   readonly hostedInference = false;
   readonly description =

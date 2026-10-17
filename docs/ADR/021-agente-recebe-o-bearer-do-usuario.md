@@ -3,6 +3,10 @@
 **Status:** Accepted
 **Data:** 2026-08-06
 
+**Checkpointer superado por:** [ADR 023](./023-checkpointer-no-postgres-da-fatia.md) — o agente
+passou a guardar o estado da conversa no schema `agent_checkpoint` do Postgres da Fatia; o Bearer
+continua só no `/mcp` e fora do estado.
+
 ## Contexto
 
 O chat hospedado (#247) precisa que o agente responda sobre **o dado de quem está conversando**:
@@ -56,6 +60,15 @@ criaria um segundo ponto de garantia, sem RLS embaixo para segurar erro
 ([ADR 010](./010-row-level-security.md)) e sem nenhum desses testes.
 
 ### O recorte: o chat hospedado só chama tool de **leitura**
+
+> **Superado pela [ADR 022](./022-classificacao-3-camadas-do-chat.md).** Esta seção descreve o
+> recorte de duas camadas, que valeu enquanto não havia onde confirmar. Com a tela da #250, o
+> recorte passou a ter três: leitura executa direto, escrita reversível vira proposta e só executa
+> após aprovação, e o que apaga continua fora. **O raciocínio abaixo não foi revogado** — ele é o
+> que a 022 preserva com um mecanismo a mais; o que mudou é que "sem tela" deixou de ser verdade.
+> O resto desta ADR (o Bearer, a ausência de `DATABASE_URL`, a ausência de checkpointer) continua
+> valendo inteiro, e é justamente a ausência de checkpointer que faz a 022 usar dois turnos HTTP em
+> vez de pausar o grafo.
 
 Das tools do catálogo, o agente recebe as que o próprio `/mcp` anuncia com
 `annotations.readOnlyHint === true` — hoje pouco menos da metade.

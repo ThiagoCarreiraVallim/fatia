@@ -392,3 +392,17 @@ def test_usable_models_segue_a_lista_revisada(gateway_settings, monkeypatch):
 
     assert usaveis["text"] == "ornith-1.0-9b"
     assert usaveis["vision"] is None
+
+
+def test_todo_gateway_revisado_tem_a_exigencia_de_retencao_no_corpo():
+    """Host na lista sem roteamento de retenção zero é promessa sem mecanismo.
+
+    Um gateway que roteia para vários fornecedores (o OpenRouter) só cumpre a
+    frase da `/privacy` se cada chamada disser que exige retenção zero. Quem
+    acrescenta um host em `ALLOWED_HOSTS` tem que dizer o que ele recebe em
+    `ZERO_RETENTION_ROUTING` — e este teste é onde o esquecimento aparece.
+    """
+    sem_roteamento = allowed_models.ALLOWED_HOSTS - set(allowed_models.ZERO_RETENTION_ROUTING)
+    assert not sem_roteamento, (
+        f"{sorted(sem_roteamento)} está em ALLOWED_HOSTS sem entrada em ZERO_RETENTION_ROUTING"
+    )

@@ -26,7 +26,9 @@ export const enum MatchRank {
   Prefix = 1,
   WordPrefix = 2,
   Contains = 3,
-  None = 4,
+  /** Cada palavra do termo começa uma palavra do nome, fora de ordem. Só a busca de alimentos. */
+  AllWords = 4,
+  None = 5,
 }
 
 /**
@@ -69,10 +71,7 @@ export function rankByRelevance<T>(
       return { item, rank: matchRank(normalized, needle), length: normalized.length, name };
     })
     .filter((entry) => entry.rank !== MatchRank.None)
-    .sort(
-      (a, b) =>
-        a.rank - b.rank || a.length - b.length || a.name.localeCompare(b.name, 'pt-BR'),
-    )
+    .sort((a, b) => a.rank - b.rank || a.length - b.length || a.name.localeCompare(b.name, 'pt-BR'))
     .slice(0, limit)
     .map((entry) => entry.item);
 }

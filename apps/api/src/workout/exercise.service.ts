@@ -80,6 +80,21 @@ export class ExerciseService {
     return rankByRelevance(results, name, (ex) => ex.name, 5);
   }
 
+  /** Como executar: os exercícios que casam com o nome, só com o que descreve a execução. */
+  async explainForm(userId: string, name: string) {
+    const matches = await this.findByName(userId, name);
+    return matches.map((ex) => ({
+      id: ex.id,
+      name: ex.name,
+      primaryMuscles: ex.primaryMuscles,
+      secondaryMuscles: ex.secondaryMuscles,
+      equipment: ex.equipment,
+      level: ex.level,
+      mechanic: ex.mechanic,
+      instructions: ex.instructions,
+    }));
+  }
+
   async createCustom(userId: string, dto: CreateCustomExerciseDto) {
     try {
       return await this.prisma.exercise.create({

@@ -81,6 +81,38 @@ export class WaterLogService {
   }
 
   /**
+   * O total do dia contra a meta de água. Sem dia, é hoje no fuso da pessoa; sem meta
+   * definida, `goalReached` e `goalTargetMl` são `null` — "não tem meta" não é "não bateu".
+   */
+  async getForDateWithGoal(date: string | undefined, userId: string, timezone: string) {
+    const result = await this.getForDate(date ?? todayInTz(timezone), userId);
+    const targetMl = await this.dailyTargetMl(userId);
+    return {
+      ...result,
+      goalReached: targetMl !== null ? result.totalMl >= targetMl : null,
+      goalTargetMl: targetMl,
+    };
+  }
+
+  /** Registra e devolve o total do dia do registro, contra a meta. */
+  async logWithDayTotal(dto: CreateWaterLogDto, userId: string, timezone: string) {
+    const log = await this.create(dto, userId, timezone);
+    const effective = await this.getForDate(log.date, userId);
+    const targetMl = await this.dailyTargetMl(userId);
+    return {
+      waterLogId: log.id,
+      totalMlForDate: effective.totalMl,
+      goalReached: targetMl !== null ? effective.totalMl >= targetMl : null,
+      goalTargetMl: targetMl,
+    };
+  }
+
+  private async dailyTargetMl(userId: string): Promise<number | null> {
+    const goals = await this.prisma.userGoals.findUnique({ where: { userId } });
+    return goals?.dailyWaterTargetMl ?? null;
+  }
+
+  /**
    * Histórico preenchendo dias sem log com 0.
    */
   async getHistory(days: number, userId: string, timezone: string) {

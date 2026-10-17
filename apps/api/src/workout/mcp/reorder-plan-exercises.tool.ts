@@ -16,7 +16,7 @@ export class ReorderPlanExercisesTool implements McpToolDef {
 
   readonly title = 'Reordenar exercícios do plano';
 
-  readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
 
   readonly hostedInference = false;
   // O contrato ("só os ids enviados") é o mesmo do JSDoc de

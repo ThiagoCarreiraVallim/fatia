@@ -1,0 +1,13 @@
+# Config do gitleaks: as regras padrão, mais exceções pontuais.
+#
+# Cada exceção é a string exata de um falso positivo, ancorada. Nada de
+# exceção por caminho ou por regra: elas também calariam um segredo de verdade
+# que caísse no mesmo arquivo ou na mesma regra.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Token de convite inventado, do exemplo das descrições de get_group_invite e accept_group_invite (d8c4c7d)"
+regexTarget = "secret"
+regexes = ['''^q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c$''']

@@ -12,7 +12,7 @@ export class ListDataSharingTool implements McpToolDef {
   constructor(private readonly consent: ConsentService) {}
   readonly name = 'list_data_sharing';
   readonly title = 'Ver quem tem acesso aos meus dados';
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
   readonly description =
     'Responde "quem consegue ver o quê de mim": lista cada profissional autorizado pelo usuário, ' +

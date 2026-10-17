@@ -15,7 +15,7 @@ export class ExportMyDataTool implements McpToolDef {
 
   readonly title = 'Exportar meus dados';
 
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
 
   readonly hostedInference = false;
   readonly description =

@@ -11,7 +11,9 @@
     "seed": "tsx prisma/seed.ts",
     "seed:admin": "tsx prisma/seed-admin.ts",
     "seed:taco": "tsx prisma/seed-taco.ts",
-    "seed:exercises": "tsx prisma/seed-exercises.ts"
+    "seed:exercises": "tsx prisma/seed-exercises.ts",
+    "seed:eval": "tsx prisma/seed-eval.ts",
+    "eval:contas": "tsx prisma/eval-contas.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3"

@@ -9,7 +9,8 @@
     "lint": "eslint \"{src,test}/**/*.ts\" --fix",
     "typecheck": "tsc --noEmit",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "catalogo:servido": "tsx scripts/catalogo-servido.ts"
   },
   "dependencies": {
     "@fatia/db": "workspace:*",

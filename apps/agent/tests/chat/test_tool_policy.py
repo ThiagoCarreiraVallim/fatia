@@ -11,9 +11,9 @@ from fatia_agent.chat.errors import McpToolArgumentsInvalid, McpToolNotAllowed
 from fatia_agent.chat.mcp_client import McpToolInfo
 from fatia_agent.chat.tool_policy import (
     argumentos_do_modelo,
+    camada_read_only,
     exigir_permitida,
     formato_openai,
-    somente_leitura,
 )
 
 
@@ -34,7 +34,7 @@ def test_so_as_de_leitura_entram_no_recorte():
         tool("get_me", {"readOnlyHint": True, "destructiveHint": False}),
     ]
 
-    assert [t.name for t in somente_leitura(catalogo)] == ["list_meals", "get_me"]
+    assert [t.name for t in camada_read_only(catalogo)] == ["list_meals", "get_me"]
 
 
 @pytest.mark.parametrize(
@@ -52,7 +52,7 @@ def test_so_as_de_leitura_entram_no_recorte():
 )
 def test_anotacao_ausente_ou_torta_fica_de_fora(annotations: dict[str, object]):
     """Falha fechada: o que não afirma ser leitura não é oferecido."""
-    assert somente_leitura([tool("suspeita", annotations)]) == []
+    assert camada_read_only([tool("suspeita", annotations)]) == []
 
 
 def test_o_criterio_nao_e_o_prefixo_do_nome():
@@ -68,7 +68,7 @@ def test_o_criterio_nao_e_o_prefixo_do_nome():
         tool("refresh_achievements", {"readOnlyHint": True, "destructiveHint": False}),
     ]
 
-    assert [t.name for t in somente_leitura(catalogo)] == ["refresh_achievements"]
+    assert [t.name for t in camada_read_only(catalogo)] == ["refresh_achievements"]
 
 
 def test_traducao_para_o_formato_do_endpoint_de_chat():
@@ -125,3 +125,121 @@ def test_argumentos_quebrados_viram_erro_recuperavel(bruto: str):
         argumentos_do_modelo(bruto)
 
     assert excinfo.value.code == "MCP_TOOL_ARGUMENTS_INVALID"
+
+
+# ------------------------------------------ o contorno do GBNF (llama.cpp)
+#
+# O reprodutor é o medido contra o LM Studio local, não um inventado: array de
+# string **com** `maxLength` derruba a compilação da grammar e a requisição
+# inteira é recusada, enquanto o mesmo teto fora de `items` compila. Ver
+# `_sem_teto_em_array`.
+
+
+def _parametros(tool_info: McpToolInfo) -> dict[str, object]:
+    return formato_openai([tool_info])[0]["function"]["parameters"]
+
+
+def test_teto_dentro_de_items_de_array_e_removido():
+    """Uma tool assim no catálogo derrubava **todas** as mensagens do chat."""
+    tool_info = tool("clone_exercise", {"readOnlyHint": False, "confirmableHint": True})
+    tool_info = McpToolInfo(
+        name=tool_info.name,
+        description=tool_info.description,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "instructions": {"type": "array", "items": {"type": "string", "maxLength": 2000}}
+            },
+        },
+        annotations=tool_info.annotations,
+    )
+
+    itens = _parametros(tool_info)["properties"]["instructions"]["items"]
+    assert itens == {"type": "string"}
+
+
+def test_teto_fora_de_items_fica_intacto():
+    """Corte cirúrgico: o que compila continua restringindo a geração."""
+    tool_info = McpToolInfo(
+        name="update_me",
+        description="atualiza o perfil",
+        input_schema={
+            "type": "object",
+            "properties": {"name": {"type": "string", "maxLength": 200, "minLength": 1}},
+        },
+        annotations={"readOnlyHint": False, "confirmableHint": True},
+    )
+
+    assert _parametros(tool_info)["properties"]["name"] == {
+        "type": "string",
+        "maxLength": 200,
+        "minLength": 1,
+    }
+
+
+def test_o_resto_do_item_sobrevive():
+    """Só os dois tetos saem — `enum`, `type` e `description` continuam guiando o modelo."""
+    tool_info = McpToolInfo(
+        name="clone_exercise",
+        description="copia um exercício",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "muscles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": ["chest", "lats"],
+                        "maxLength": 50,
+                        "description": "músculo",
+                    },
+                }
+            },
+        },
+        annotations={"readOnlyHint": True},
+    )
+
+    assert _parametros(tool_info)["properties"]["muscles"]["items"] == {
+        "type": "string",
+        "enum": ["chest", "lats"],
+        "description": "músculo",
+    }
+
+
+def test_teto_em_array_aninhado_tambem_sai():
+    """Array de array: a descida é recursiva, senão o defeito volta um nível abaixo."""
+    tool_info = McpToolInfo(
+        name="x",
+        description="d",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "grid": {
+                    "type": "array",
+                    "items": {"type": "array", "items": {"type": "string", "maxLength": 10}},
+                }
+            },
+        },
+        annotations={"readOnlyHint": True},
+    )
+
+    assert _parametros(tool_info)["properties"]["grid"]["items"]["items"] == {"type": "string"}
+
+
+def test_o_schema_original_nao_e_mutado():
+    """O `McpToolInfo` é compartilhado entre as duas camadas e o `exigir_permitida`.
+
+    Mutar no lugar faria o recorte depender da ordem em que alguém chamou
+    `formato_openai` — o tipo de defeito que só aparece no segundo turno.
+    """
+    schema = {
+        "type": "object",
+        "properties": {"p": {"type": "array", "items": {"type": "string", "maxLength": 5}}},
+    }
+    tool_info = McpToolInfo(
+        name="x", description="d", input_schema=schema, annotations={"readOnlyHint": True}
+    )
+
+    formato_openai([tool_info])
+
+    assert schema["properties"]["p"]["items"] == {"type": "string", "maxLength": 5}

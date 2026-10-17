@@ -32,6 +32,7 @@ método e status, nunca o header — é a mesma lição da #214, do lado Python.
 """
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -69,6 +70,9 @@ class McpToolInfo:
     description: str
     input_schema: dict[str, Any]
     annotations: dict[str, Any]
+    # O rótulo em português que a tela mostra ("Registrar refeição"). Vazio
+    # quando o servidor não manda — a tela cai no nome.
+    title: str = ""
 
 
 class McpClient:
@@ -81,10 +85,15 @@ class McpClient:
         bearer: str,
         timeout_s: float = 30.0,
         transport: httpx.AsyncBaseTransport | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> None:
+        # `headers` existe para o eval da fronteira escolher a superfície de tools
+        # (`x-fatia-superficie`). Os três de baixo vêm depois e não são
+        # sobrescrevíveis: o Bearer é de quem conversa, e só dele.
         self._client = httpx.AsyncClient(
             timeout=timeout_s,
             headers={
+                **(headers or {}),
                 "Authorization": f"Bearer {bearer}",
                 "Accept": ACCEPT,
                 "Content-Type": "application/json",
@@ -134,7 +143,12 @@ class McpClient:
         corrigir. Exceção aqui é falha de transporte ou de protocolo.
         """
         resultado = await self._rpc("tools/call", {"name": name, "arguments": arguments})
-        return McpToolResult(text=_texto_do_conteudo(resultado), is_error=_e_erro(resultado))
+        estruturado = resultado.get("structuredContent")
+        return McpToolResult(
+            text=_texto_do_conteudo(resultado),
+            is_error=_e_erro(resultado),
+            structured=estruturado if isinstance(estruturado, dict) else None,
+        )
 
     async def _rpc(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
         self._proximo_id += 1
@@ -180,6 +194,9 @@ class McpToolResult:
 
     text: str
     is_error: bool
+    # O `structuredContent` do MCP: a carga tipada que a tela desenha (artefato)
+    # e que **não** entra no contexto do modelo — ele lê `text`.
+    structured: dict[str, Any] | None = None
 
 
 def build_mcp_client(
@@ -295,6 +312,9 @@ def _tools_do_resultado(resultado: dict[str, Any]) -> list[McpToolInfo]:
         descricao = item.get("description")
         schema = item.get("inputSchema")
         anotacoes = item.get("annotations")
+        titulo = item.get("title")
+        if not isinstance(titulo, str) and isinstance(anotacoes, dict):
+            titulo = anotacoes.get("title")
         catalogo.append(
             McpToolInfo(
                 name=nome,
@@ -302,9 +322,10 @@ def _tools_do_resultado(resultado: dict[str, Any]) -> list[McpToolInfo]:
                 # Objeto vazio e não `None`: o formato de tool da OpenAI exige um
                 # schema, e o do JSON Schema para "nenhum parâmetro" é este.
                 input_schema=schema if isinstance(schema, dict) else {"type": "object"},
-                # Ausente vira `{}`, e `{}` **não** passa no recorte da ADR 021 —
+                # Ausente vira `{}`, e `{}` **não** passa no recorte da ADR 022 —
                 # falha fechada. Ver `tool_policy.py`.
                 annotations=anotacoes if isinstance(anotacoes, dict) else {},
+                title=titulo if isinstance(titulo, str) else "",
             )
         )
     return catalogo

@@ -12,7 +12,7 @@ export class ListAchievementsTool implements McpToolDef {
   constructor(private readonly achievements: AchievementService) {}
   readonly name = 'list_achievements';
   readonly title = 'Conquistas';
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
   readonly description =
     'Catálogo de conquistas do usuário. Devolve as sete chaves sempre, cada uma com `unlockedAt` ' +

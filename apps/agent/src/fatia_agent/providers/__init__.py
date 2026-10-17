@@ -66,6 +66,7 @@ def build_provider(
         text_model=settings.ai_model_text,
         vision_model=settings.ai_model_vision,
         embedding_model=settings.ai_model_embedding,
+        transcription_model=settings.ai_model_transcription,
         timeout_s=settings.ai_timeout_s,
         max_retries=settings.ai_max_retries,
         retry_backoff_s=settings.ai_retry_backoff_s,

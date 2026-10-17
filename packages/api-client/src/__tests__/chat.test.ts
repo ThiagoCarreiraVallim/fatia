@@ -3,13 +3,12 @@ import { configureApiClient, resetApiClient } from '../http';
 import type { ApiTransport } from '../transport';
 import {
   CHAT_ERROR_CODES,
+  erroDoChat,
   parseQuadro,
   recortarQuadros,
   streamChat,
   textoDeErroDoChat,
-  type ChatStreamError,
-  type ChatStreamEvent,
-  type ChatToolCall,
+  type ChatStreamFrame,
 } from '../chat';
 
 const fetchMock = vi.fn();
@@ -38,19 +37,24 @@ function sse(pedacos: string[], init: ResponseInit = {}): Response {
   });
 }
 
-async function coletar(gen: AsyncGenerator<ChatStreamEvent>): Promise<ChatStreamEvent[]> {
-  const eventos: ChatStreamEvent[] = [];
+async function coletar(gen: AsyncGenerator<ChatStreamFrame>): Promise<ChatStreamFrame[]> {
+  const eventos: ChatStreamFrame[] = [];
   for await (const evento of gen) eventos.push(evento);
   return eventos;
 }
 
-afterEach(() => resetApiClient());
+const CONVERSA = '3f1c9a52-6b1e-4d8a-9c2f-0a5e7b3d1c44';
+
+afterEach(() => {
+  resetApiClient();
+  fetchMock.mockReset();
+});
 
 describe('recortarQuadros', () => {
   it('só devolve quadro terminado, e guarda o resto', () => {
-    const { quadros, resto } = recortarQuadros('event: token\ndata: {"text":"a"}\n\nevent: tok');
-    expect(quadros).toEqual(['event: token\ndata: {"text":"a"}']);
-    expect(resto).toBe('event: tok');
+    const { quadros, resto } = recortarQuadros('event: done\ndata: {}\n\nevent: mess');
+    expect(quadros).toEqual(['event: done\ndata: {}']);
+    expect(resto).toBe('event: mess');
   });
 
   it('aceita CRLF, que é o que proxy reverso costuma entregar', () => {
@@ -60,214 +64,198 @@ describe('recortarQuadros', () => {
 });
 
 describe('parseQuadro', () => {
-  it('ignora comentário de keep-alive', () => {
-    expect(parseQuadro(': ping')).toBeNull();
+  it('ignora o comentário que a API manda para abrir o stream', () => {
+    expect(parseQuadro(': aberto')).toBeNull();
   });
 
   it('ignora JSON quebrado em vez de derrubar a conversa', () => {
-    expect(parseQuadro('event: token\ndata: {"text":')).toBeNull();
+    expect(parseQuadro('event: messages\ndata: {nao')).toBeNull();
   });
 
-  it('recusa tool sem nome — payload torto não vira bloco mudo na tela', () => {
-    expect(parseQuadro('event: tool\ndata: {"id":"t1","state":"output-available"}')).toBeNull();
-  });
-
-  it('recusa estado de tool que não existe no contrato', () => {
-    expect(parseQuadro('event: tool\ndata: {"id":"t1","name":"x","state":"voando"}')).toBeNull();
-  });
-
-  it('código desconhecido vira AI_UNKNOWN_ERROR e a mensagem do servidor não vem junto', () => {
-    // A `message` do agente é "para o humano que lê o log" (`errors.py:4-5`) e
-    // carrega endpoint, `AI_BASE_URL`, modelo e host do subprocessador (#136).
+  /**
+   * O `data` de `messages` é uma LISTA, e é o formato que o runtime do
+   * assistant-ui desserializa. Um parser que exigisse objeto — como o que
+   * existia aqui — descartaria justamente o texto da resposta.
+   */
+  it('entrega o `data` de `messages` como veio: a tupla mensagem + metadados', () => {
     const quadro =
-      'event: error\ndata: {"code":"AI_NOVIDADE","message":"Falha em POST chat/completions. Verifique AI_BASE_URL."}';
-    expect(parseQuadro(quadro)).toEqual({ type: 'error', error: { code: 'AI_UNKNOWN_ERROR' } });
+      'event: messages\ndata: [{"type":"AIMessageChunk","content":"Oi","id":"ai-1"},{"langgraph_node":"agente"}]';
+    expect(parseQuadro(quadro)).toEqual({
+      event: 'messages',
+      data: [{ type: 'AIMessageChunk', content: 'Oi', id: 'ai-1' }, { langgraph_node: 'agente' }],
+    });
+  });
+});
+
+describe('erroDoChat', () => {
+  it('código desconhecido vira AI_UNKNOWN_ERROR e a mensagem do servidor não vem junto', () => {
+    expect(
+      erroDoChat({ code: 'AI_NOVIDADE', message: 'Falha em POST chat/completions. AI_BASE_URL.' }),
+    ).toEqual({ code: 'AI_UNKNOWN_ERROR' });
+  });
+
+  it('mantém o resetsAt da cota', () => {
+    expect(erroDoChat({ code: 'AI_QUOTA_EXCEEDED', resetsAt: '2026-08-07T00:00:00Z' })).toEqual({
+      code: 'AI_QUOTA_EXCEEDED',
+      resetsAt: '2026-08-07T00:00:00Z',
+    });
   });
 });
 
 describe('streamChat', () => {
-  it('não corta o token quando o quadro chega partido entre dois chunks', async () => {
+  it('não corta o quadro que chega partido entre dois chunks', async () => {
     configure();
-    // O corte cai no meio do JSON — é o caso que um parser ingênuo transforma em
-    // "ol" seguido de nada, ou em exceção de JSON.
-    fetchMock.mockResolvedValueOnce(
-      sse(['event: token\ndata: {"te', 'xt":"Olá "}\n\nevent: token\ndata: {"text":"mundo"}\n\n']),
+    fetchMock.mockResolvedValue(
+      sse([
+        'event: messages\ndata: [{"type":"AIMessageChunk","content":"Boa ',
+        'tarde","id":"ai-1"},{}]\n\nevent: done\ndata: {"status":"completed"}\n\n',
+      ]),
     );
 
-    const esperado: ChatStreamEvent[] = [
-      { type: 'token', text: 'Olá ' },
-      { type: 'token', text: 'mundo' },
-    ];
-    await expect(coletar(streamChat({ message: 'oi' }))).resolves.toEqual(esperado);
+    const eventos = await coletar(streamChat({ conversationId: CONVERSA, message: 'oi' }));
+
+    expect(eventos).toEqual([
+      {
+        event: 'messages',
+        data: [{ type: 'AIMessageChunk', content: 'Boa tarde', id: 'ai-1' }, {}],
+      },
+      { event: 'done', data: { status: 'completed' } },
+    ]);
   });
 
   it('emite o último quadro mesmo sem linha em branco final', async () => {
     configure();
-    fetchMock.mockResolvedValueOnce(sse(['event: token\ndata: {"text":"fim"}']));
-    await expect(coletar(streamChat({ message: 'oi' }))).resolves.toEqual([
-      { type: 'token', text: 'fim' },
+    fetchMock.mockResolvedValue(sse(['event: done\ndata: {"status":"completed"}']));
+
+    expect(await coletar(streamChat({ conversationId: CONVERSA, message: 'oi' }))).toEqual([
+      { event: 'done', data: { status: 'completed' } },
     ]);
   });
 
-  it('entrega a chamada de tool com o mesmo id nos dois quadros', async () => {
+  it('manda a conversa e a mensagem, pelo proxy do Next, com Accept de event-stream', async () => {
     configure();
-    // Fixtures anotadas com o tipo do cliente: se o contrato mudar de forma, o
-    // erro aparece no `tsc` e não como bloco vazio na tela (lição da #157).
-    const chamada: ChatToolCall = {
-      id: 'call-1',
-      name: 'registrar_refeicao',
-      state: 'input-available',
-      input: { descricao: '2 ovos' },
-    };
-    const resultado: ChatToolCall = {
-      id: 'call-1',
-      name: 'registrar_refeicao',
-      state: 'output-available',
-      output: { mealId: 'm-1' },
-    };
-    fetchMock.mockResolvedValueOnce(
-      sse([
-        `event: tool\ndata: ${JSON.stringify(chamada)}\n\n`,
-        `event: tool\ndata: ${JSON.stringify(resultado)}\n\n`,
-      ]),
-    );
+    fetchMock.mockResolvedValue(sse([]));
 
-    await expect(coletar(streamChat({ message: 'registra 2 ovos' }))).resolves.toEqual([
-      { type: 'tool', tool: chamada },
-      { type: 'tool', tool: resultado },
-    ]);
-  });
+    await coletar(streamChat({ conversationId: CONVERSA, message: 'oi' }));
 
-  it('manda o conversationId no corpo — é o que continua a mesma conversa', async () => {
-    configure();
-    fetchMock.mockResolvedValueOnce(sse(['event: done\ndata: {}\n\n']));
-    await coletar(streamChat({ message: 'e depois?', conversationId: 'conv-9' }));
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(JSON.parse(String(init.body))).toEqual({
-      message: 'e depois?',
-      conversationId: 'conv-9',
-    });
-  });
-
-  it('vai pelo proxy do Next, com o Accept de event-stream', async () => {
-    configure();
-    fetchMock.mockResolvedValueOnce(sse(['event: done\ndata: {}\n\n']));
-    await coletar(streamChat({ message: 'oi' }));
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('/api/proxy/chat');
-    expect((init.headers as Headers).get('accept')).toBe('text/event-stream');
+    expect(new Headers(init.headers).get('Accept')).toBe('text/event-stream');
+    expect(JSON.parse(init.body as string)).toEqual({ conversationId: CONVERSA, message: 'oi' });
   });
 
-  it('falha de rede vira evento de erro — nunca exceção', async () => {
+  it('a retomada vai com o id da pausa e sem mensagem', async () => {
     configure();
-    fetchMock.mockRejectedValueOnce(new Error('Failed to fetch'));
-    const eventos = await coletar(streamChat({ message: 'oi' }));
-    expect(eventos).toEqual([{ type: 'error', error: { code: 'AI_NETWORK_ERROR' } }]);
-  });
+    fetchMock.mockResolvedValue(sse([]));
 
-  it('queda no meio do stream preserva o que já chegou', async () => {
-    configure();
-    const encoder = new TextEncoder();
-    let entregou = false;
-    // `pull` e não `start`: `controller.error()` descarta o que ainda está na
-    // fila, então errar no `start` simularia uma queda **antes** do primeiro
-    // token — que é outro caso, e o teste passaria sem provar nada.
-    const body = new ReadableStream<Uint8Array>({
-      pull(controller) {
-        if (entregou) {
-          controller.error(new Error('network error'));
-          return;
-        }
-        entregou = true;
-        controller.enqueue(encoder.encode('event: token\ndata: {"text":"come"}\n\n'));
-      },
-    });
-    fetchMock.mockResolvedValueOnce(
-      new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } }),
-    );
-
-    const eventos = await coletar(streamChat({ message: 'oi' }));
-    expect(eventos[0]).toEqual({ type: 'token', text: 'come' });
-    expect(eventos[1]).toMatchObject({ type: 'error', error: { code: 'AI_NETWORK_ERROR' } });
-  });
-
-  it.each([
-    [429, 'AI_QUOTA_EXCEEDED'],
-    [503, 'AI_PROVIDER_UNREACHABLE'],
-    [500, 'AI_UNKNOWN_ERROR'],
-  ])('status %i sem código nomeado ainda distingue o caso', async (status, code) => {
-    configure();
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ message: 'x' }), {
-        status,
-        headers: { 'content-type': 'application/json' },
+    await coletar(
+      streamChat({
+        conversationId: CONVERSA,
+        resume: { interruptId: 'p1', value: { approvals: { c1: true } } },
       }),
     );
-    const eventos = await coletar(streamChat({ message: 'oi' }));
-    expect(eventos).toHaveLength(1);
-    expect(eventos[0]).toMatchObject({ type: 'error', error: { code } });
-  });
 
-  it('respeita o código nomeado do corpo acima do status', async () => {
-    configure();
-    fetchMock.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({ code: 'AI_PROVIDER_NOT_CONFIGURED', message: 'sem provedor' }),
-        { status: 503, headers: { 'content-type': 'application/json' } },
-      ),
-    );
-    const eventos = await coletar(streamChat({ message: 'oi' }));
-    expect(eventos[0]).toEqual({
-      type: 'error',
-      error: { code: 'AI_PROVIDER_NOT_CONFIGURED' },
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
+      conversationId: CONVERSA,
+      resume: { interruptId: 'p1', value: { approvals: { c1: true } } },
     });
   });
 
-  it('código desconhecido não põe diagnóstico do servidor na tela', async () => {
+  it('falha de rede vira error + done — nunca exceção', async () => {
     configure();
-    // Payload real de `apps/agent/.../openai_compat.py:266` quando o provedor
-    // está fora do ar. A `message` nomeia endpoint e variável de ambiente, e —
-    // em `AIModelNotAllowed`/`AIEndpointNotAllowed` — modelo e host do
-    // subprocessador, que é o que a #136 controla.
-    const doServidor = {
-      code: 'AI_CODIGO_QUE_AINDA_NAO_EXISTE',
-      message:
-        'Falha de transporte em POST chat/completions: ConnectError. Verifique AI_BASE_URL e ' +
-        'se o provedor está no ar.',
-    };
-    fetchMock.mockResolvedValueOnce(sse([`event: error\ndata: ${JSON.stringify(doServidor)}\n\n`]));
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
 
-    const eventos = await coletar(streamChat({ message: 'oi' }));
-    const evento = eventos[0] as Extract<ChatStreamEvent, { type: 'error' }>;
-    expect(evento).toEqual({ type: 'error', error: { code: 'AI_UNKNOWN_ERROR' } });
+    expect(await coletar(streamChat({ conversationId: CONVERSA, message: 'oi' }))).toEqual([
+      { event: 'error', data: { code: 'AI_NETWORK_ERROR' } },
+      { event: 'done', data: { status: 'error' } },
+    ]);
+  });
 
-    const naTela = textoDeErroDoChat(evento.error);
-    expect(naTela).not.toContain('AI_BASE_URL');
-    expect(naTela).not.toContain('chat/completions');
+  it('queda no meio do stream preserva o que já chegou e termina com done', async () => {
+    configure();
+    const encoder = new TextEncoder();
+    let puxadas = 0;
+    // `pull`, e não `start`: um erro no `start` descarta o que já estava na fila,
+    // e o caso aqui é o oposto — o primeiro pedaço chegou, a conexão caiu depois.
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        puxadas += 1;
+        if (puxadas === 1)
+          controller.enqueue(encoder.encode('event: start\ndata: {"runId":"r"}\n\n'));
+        else controller.error(new Error('caiu'));
+      },
+    });
+    fetchMock.mockResolvedValue(new Response(body, { status: 200 }));
+
+    expect(await coletar(streamChat({ conversationId: CONVERSA, message: 'oi' }))).toEqual([
+      { event: 'start', data: { runId: 'r' } },
+      { event: 'error', data: { code: 'AI_NETWORK_ERROR' } },
+      { event: 'done', data: { status: 'error' } },
+    ]);
+  });
+
+  it('cota estourada chega como erro nomeado, com o horário em que volta', async () => {
+    configure();
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          code: 'AI_QUOTA_EXCEEDED',
+          resetsAt: '2026-08-07T00:00:00Z',
+          message: 'x',
+        }),
+        { status: 429 },
+      ),
+    );
+
+    const [erro] = await coletar(streamChat({ conversationId: CONVERSA, message: 'oi' }));
+    expect(erro).toEqual({
+      event: 'error',
+      data: { code: 'AI_QUOTA_EXCEEDED', resetsAt: '2026-08-07T00:00:00Z' },
+    });
+  });
+
+  it('retomada fora de hora é 409 com o código de lá', async () => {
+    configure();
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ code: 'CHAT_RESUME_MISMATCH', message: 'x' }), { status: 409 }),
+    );
+
+    const [erro] = await coletar(
+      streamChat({ conversationId: CONVERSA, resume: { interruptId: 'p', value: true } }),
+    );
+    expect(erro).toEqual({ event: 'error', data: { code: 'CHAT_RESUME_MISMATCH' } });
+  });
+
+  it('sem código nomeado, o status ainda separa cota de provedor fora', async () => {
+    configure();
+    fetchMock.mockResolvedValueOnce(new Response('{}', { status: 429 }));
+    fetchMock.mockResolvedValueOnce(new Response('{}', { status: 503 }));
+
+    const [cota] = await coletar(streamChat({ conversationId: CONVERSA, message: 'oi' }));
+    const [fora] = await coletar(streamChat({ conversationId: CONVERSA, message: 'oi' }));
+    expect(cota.data).toEqual({ code: 'AI_QUOTA_EXCEEDED' });
+    expect(fora.data).toEqual({ code: 'AI_PROVIDER_UNREACHABLE' });
   });
 
   it('401 avisa o transporte antes de emitir o erro', async () => {
     const onUnauthorized = vi.fn();
     configure({ onUnauthorized });
-    fetchMock.mockResolvedValueOnce(new Response('', { status: 401 }));
-    const eventos = await coletar(streamChat({ message: 'oi' }));
-    expect(onUnauthorized).toHaveBeenCalledOnce();
-    expect(eventos).toEqual([{ type: 'error', error: { code: 'AI_UNAUTHORIZED' } }]);
+    fetchMock.mockResolvedValue(new Response('{}', { status: 401 }));
+
+    const [erro] = await coletar(streamChat({ conversationId: CONVERSA, message: 'oi' }));
+
+    expect(onUnauthorized).toHaveBeenCalledWith({ path: '/api/chat', body: null });
+    expect(erro.data).toEqual({ code: 'AI_UNAUTHORIZED' });
   });
 });
 
 describe('textoDeErroDoChat', () => {
   it('separa os casos em que a ação de quem lê é diferente', () => {
-    const casos: ChatStreamError[] = [
-      { code: 'AI_PROVIDER_NOT_CONFIGURED' },
-      { code: 'AI_PROVIDER_UNREACHABLE' },
-      { code: 'AI_PROVIDER_TIMEOUT' },
-      { code: 'AI_RESPONSE_TRUNCATED' },
-      { code: 'AI_QUOTA_EXCEEDED' },
-      { code: 'AI_NETWORK_ERROR' },
-      { code: 'AI_UNAUTHORIZED' },
-    ];
-    expect(new Set(casos.map(textoDeErroDoChat)).size).toBe(casos.length);
+    const cota = textoDeErroDoChat({ code: 'AI_QUOTA_EXCEEDED' });
+    const fora = textoDeErroDoChat({ code: 'AI_PROVIDER_UNREACHABLE' });
+    const config = textoDeErroDoChat({ code: 'AI_PROVIDER_NOT_CONFIGURED' });
+    const sessao = textoDeErroDoChat({ code: 'MCP_UNAUTHORIZED' });
+    expect(new Set([cota, fora, config, sessao]).size).toBe(4);
   });
 
   it('todo código conhecido tem cópia', () => {
@@ -277,7 +265,7 @@ describe('textoDeErroDoChat', () => {
   });
 
   it('429 do provedor não vira cota — quem conversa não estourou limite nenhum', () => {
-    expect(textoDeErroDoChat({ code: 'AI_PROVIDER_REFUSED' })).not.toContain('limite diário');
+    expect(textoDeErroDoChat({ code: 'AI_PROVIDER_REFUSED' })).not.toContain('limite de uso');
   });
 
   it('a cota diz quando volta em data legível, e não em ISO', () => {
@@ -286,8 +274,6 @@ describe('textoDeErroDoChat', () => {
       resetsAt: '2026-08-07T00:00:00.000Z',
     });
     expect(texto).not.toContain('2026-08-07T00:00:00.000Z');
-    // Sem fuso fixo no caso: a data sai no do aparelho. O ano é o mesmo em
-    // qualquer fuso da Terra, e prova que a frase veio do `resetsAt`.
     expect(texto).toContain('2026');
     expect(texto).toMatch(/\d{2}\/\d{2}\/\d{4},? \d{2}:\d{2}/);
   });

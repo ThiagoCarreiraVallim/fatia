@@ -18,6 +18,8 @@ from fatia_agent.providers.errors import (
 from fatia_agent.providers.openai_compat import OpenAICompatProvider
 from tests.support import RecordingTransport, chat_response
 
+from ..chat.support import ProviderRecordingTransport, fragmento_de_texto
+
 PIXEL_PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 )
@@ -444,3 +446,61 @@ async def test_json_do_pedido_nao_carrega_campo_de_identidade(settings_factory):
     bruto = json.dumps(transport.last_json).lower()
     for proibido in ("userid", "user_id", "email", "bearer"):
         assert proibido not in bruto
+
+
+OPENROUTER = "https://openrouter.ai/api/v1"
+GLM = "z-ai/glm-5.3-flash"
+
+
+def _corpo(request: httpx.Request) -> dict[str, object]:
+    return json.loads(request.content)
+
+
+@pytest.mark.parametrize(
+    ("capacidade", "chamar"),
+    [
+        ("texto", lambda p: p.complete("comi arroz")),
+        (
+            "visão",
+            lambda p: p.describe(PIXEL_PNG, prompt="o que é isto?", media_type="image/png"),
+        ),
+    ],
+)
+async def test_no_openrouter_toda_chamada_exige_retencao_zero(capacidade, chamar):
+    """`provider: {zdr, data_collection: deny}` no corpo de toda chamada (#136).
+
+    O OpenRouter serve o mesmo modelo por dezenas de empresas, cada uma com a sua
+    política. Sem o campo, a foto do prato pode cair num endpoint que guarda o
+    prompt ou treina com ele — e a frase da `/privacy` vira mentira sem que uma
+    linha do repositório mude.
+    """
+    transport = RecordingTransport(lambda _r: chat_response("ok"))
+    async with make_provider(
+        transport, base_url=OPENROUTER, api_key="k", text_model=GLM, vision_model=GLM
+    ) as provider:
+        await chamar(provider)
+
+    assert _corpo(transport.requests[-1]).get("provider") == {
+        "zdr": True,
+        "data_collection": "deny",
+    }, f"a chamada de {capacidade} saiu para o OpenRouter sem exigir retenção zero"
+
+
+async def test_no_openrouter_o_stream_do_chat_exige_retencao_zero():
+    transport = ProviderRecordingTransport([[fragmento_de_texto("ok")]])
+    async with make_provider(
+        transport, base_url=OPENROUTER, api_key="k", text_model=GLM
+    ) as provider:
+        async for _ in provider.stream_chat([{"role": "user", "content": "oi"}]):
+            pass
+
+    assert transport.corpos[0].get("provider") == {"zdr": True, "data_collection": "deny"}
+
+
+async def test_fora_do_openrouter_o_campo_de_roteamento_nao_vai():
+    """A OpenAI recusa parâmetro desconhecido com 400: o campo quebraria o gateway."""
+    transport = RecordingTransport(lambda _r: chat_response("ok"))
+    async with make_provider(transport) as provider:
+        await provider.complete("oi")
+
+    assert "provider" not in _corpo(transport.requests[-1])

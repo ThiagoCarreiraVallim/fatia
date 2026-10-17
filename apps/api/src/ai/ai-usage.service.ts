@@ -2,7 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/prisma.service';
 import { estimateAiCost, type AiCallUnits, type AiPriceTable } from './ai-pricing';
-import { assertAiQuota, utcQuotaWindow, type AiQuotaLimits, type AiQuotaSpend } from './ai-quota';
+import {
+  assertAiQuota,
+  decideAiQuota,
+  utcQuotaWindow,
+  type AiQuotaLimits,
+  type AiQuotaSpend,
+} from './ai-quota';
 
 /**
  * A metade com I/O da cota da #135: soma a janela, decide, e grava o que gastou.
@@ -34,6 +40,26 @@ export class AiUsageService {
    */
   async assertDentroDaCota(userId: string, agora: Date = new Date()): Promise<void> {
     assertAiQuota(await this.gastoDaJanela(userId, agora), this.limites(), agora);
+  }
+
+  /**
+   * A cota do dia como a tela a mostra: quanto do teto **desta pessoa** já foi.
+   *
+   * `limitMicros: null` quando não há cota por usuário — o medidor some, em vez
+   * de mostrar uma barra que nunca enche. `allowed` é a mesma decisão que barra a
+   * próxima chamada (`decideAiQuota`), para a tela e o 429 nunca discordarem.
+   */
+  async cotaDoUsuario(userId: string, agora: Date = new Date()) {
+    const limites = this.limites();
+    const gasto = await this.gastoDaJanela(userId, agora);
+    const limite = limites.userDailyMicros > 0 ? limites.userDailyMicros : null;
+    return {
+      spentMicros: gasto.userMicros,
+      limitMicros: limite,
+      usedRatio: limite === null ? null : Math.min(1, gasto.userMicros / limite),
+      resetsAt: utcQuotaWindow(agora).resetsAt.toISOString(),
+      allowed: decideAiQuota(gasto, limites, agora).allowed,
+    };
   }
 
   /**

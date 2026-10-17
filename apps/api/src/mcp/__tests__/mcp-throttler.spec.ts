@@ -33,9 +33,9 @@ describe('McpThrottlerGuard', () => {
   }
 
   it('chaveia pelo id do usuário quando o McpAuthGuard já populou req.user', async () => {
-    await expect(
-      tracker({ user: { id: 'user-abc' }, ip: '203.0.113.7' }),
-    ).resolves.toBe('user-abc');
+    await expect(tracker({ user: { id: 'user-abc' }, ip: '203.0.113.7' })).resolves.toBe(
+      'user-abc',
+    );
   });
 
   it('dois usuários no mesmo IP recebem cotas separadas', async () => {

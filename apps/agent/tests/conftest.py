@@ -12,6 +12,7 @@ AI_ENV_VARS = (
     "AI_MODEL_TEXT",
     "AI_MODEL_VISION",
     "AI_MODEL_EMBEDDING",
+    "AI_MODEL_TRANSCRIPTION",
     "AI_TIMEOUT_S",
     "AI_MAX_RETRIES",
     "AGENT_API_KEY",
@@ -19,6 +20,8 @@ AI_ENV_VARS = (
     # o teste de degradação do chat passar por engano — o mesmo motivo das de IA.
     "MCP_BASE_URL",
     "MCP_TIMEOUT_S",
+    "AGENT_CHECKPOINT_DATABASE_URL",
+    "AGENT_CHAT_PLANNER",
 )
 
 

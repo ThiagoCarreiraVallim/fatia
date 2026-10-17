@@ -16,7 +16,7 @@ export class UpdatePlanExerciseTool implements McpToolDef {
 
   readonly title = 'Atualizar exercício do plano';
 
-  readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: true };
 
   readonly hostedInference = false;
   readonly description =

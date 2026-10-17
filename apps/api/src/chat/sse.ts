@@ -96,6 +96,21 @@ export function dadosDoEvento(evento: EventoSse): Record<string, unknown> | null
   }
 }
 
+/**
+ * `data` decodificado, **qualquer** JSON — ou `undefined` quando não é JSON.
+ *
+ * Existe ao lado de `dadosDoEvento` porque o protocolo nativo do LangGraph
+ * (ADR 023) manda lista no `data` de `messages` e de `messages/complete`, e o
+ * outro recusa lista de propósito.
+ */
+export function jsonDoEvento(evento: EventoSse): unknown {
+  try {
+    return JSON.parse(evento.data) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Serializa um evento nosso para o cliente. Usado só pelo que a API acrescenta. */
 export function formatarEventoSse(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;

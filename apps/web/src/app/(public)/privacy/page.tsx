@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 };
 
 /** Atualizar sempre que o conteúdo mudar de forma material. */
-const LAST_UPDATED = '3 de agosto de 2026';
+const LAST_UPDATED = '26 de setembro de 2026';
 
 export default function PrivacyPage() {
   return (
@@ -155,16 +155,24 @@ export default function PrivacyPage() {
           precisar de uma assinatura de IA própria. É o caso do{' '}
           <strong>reconhecimento de refeição por foto</strong>: a imagem sai do seu aparelho, passa
           pelo servidor do Fatia sem ser gravada, e chega a um <strong>provedor de visão</strong>{' '}
-          através do <strong>Cloudflare AI Gateway</strong>. O resultado volta como uma sugestão que{' '}
+          através do <strong>OpenRouter</strong>, que encaminha a chamada ao modelo{' '}
+          <strong>GLM 5.3 Flash</strong>, da Z.ai. O resultado volta como uma sugestão que{' '}
           <strong>você confirma antes de virar refeição</strong> — nada é registrado sem a sua
           revisão.
         </p>
 
         <p>
+          O <strong>assistente de chat</strong> do aplicativo usa o mesmo caminho. Nele, o que chega
+          ao modelo é o que você escreve na conversa e os dados da sua conta que o assistente
+          consulta para responder — o que você comeu, seu progresso, seus treinos. Registrar algo
+          pelo chat sempre passa pela sua confirmação.
+        </p>
+
+        <p>
           Esta segunda opção depende de configuração: cada instância decide se a liga. Na instância
-          pública ela só será ativada com <strong>consentimento específico seu</strong>, e o nome do
-          provedor de modelo entra nesta página antes disso. Se você auto-hospeda, quem decide é
-          você — e o endereço que você escolher está sujeito às mesmas regras abaixo.
+          pública ela só será ativada com <strong>consentimento específico seu</strong>. Se você
+          auto-hospeda, quem decide é você — e o endereço que você escolher está sujeito às mesmas
+          regras abaixo.
         </p>
 
         <p>Valem as regras abaixo — todas verificáveis no código aberto:</p>
@@ -181,19 +189,20 @@ export default function PrivacyPage() {
             coluna. Isso vale para o que <em>nós</em> operamos, e é verificável no código aberto.
           </li>
           <li>
-            <strong>O gateway é instruído, a cada chamada, a não registrar o conteúdo.</strong> O
-            Cloudflare AI Gateway grava corpo de requisição e de resposta <em>por padrão</em> —
-            registrar é o serviço que ele vende. Toda chamada do Fatia leva o cabeçalho{' '}
-            <code>cf-aig-collect-log: false</code>, que desliga esse registro para aquela chamada.
-            Está no código, e não numa caixa marcada no painel de alguém: a diferença é que uma
+            <strong>Cada chamada exige retenção zero.</strong> O OpenRouter é um roteador: o mesmo
+            modelo é servido por várias empresas, cada uma com a sua política. Toda chamada do Fatia
+            leva no próprio pedido <code>zdr: true</code>, que só aceita as empresas que não guardam
+            o conteúdo, e <code>data_collection: &quot;deny&quot;</code>, que só aceita as que não o
+            usam para treinar. Se nenhuma empresa que serve o modelo cumprir as duas, a chamada é{' '}
+            <em>recusada</em>. Está no código, e não numa caixa marcada no painel de alguém: uma
             promessa que depende de configuração de painel ninguém consegue conferir, e esta some do
             repositório se for removida.
           </li>
           <li>
-            <strong>Do provedor de modelo, quem responde é o contrato.</strong> Não temos como
-            executar código dentro dele, então não afirmamos aqui o que ele faz — afirmamos o que
-            exigimos: não-retenção e não-treinamento por escrito. O provedor será nomeado nesta
-            página, com essas cláusulas, antes de a funcionalidade existir.
+            <strong>Dentro do fornecedor, quem responde é a política dele.</strong> Não temos como
+            executar código no OpenRouter nem nas empresas para as quais ele encaminha, então não
+            afirmamos o que elas fazem por dentro — afirmamos o que o pedido exige, e que só são
+            aceitas as que declaram cumprir retenção zero e não-treinamento.
           </li>
           <li>
             <strong>A localização é removida antes do envio.</strong> Fotos carregam EXIF, que pode
@@ -201,14 +210,16 @@ export default function PrivacyPage() {
             no seu aparelho, antes de a imagem sair.
           </li>
           <li>
-            <strong>Você não vai junto.</strong> O que sai é a imagem (ou o áudio) e a pergunta. Não
-            vai seu e-mail, seu nome, nem qualquer identificador seu — do lado do provedor, uma
-            chamada é indistinguível da seguinte.
+            <strong>No reconhecimento por foto ou áudio, você não vai junto.</strong> O que sai é a
+            imagem (ou o áudio) e a pergunta. Não vai seu e-mail, seu nome, nem qualquer
+            identificador seu — do lado do provedor, uma chamada é indistinguível da seguinte. O
+            chat é diferente por natureza: para responder sobre a sua conta, o assistente precisa
+            ler dados dela, e o que ele lê vai junto da conversa.
           </li>
           <li>
-            <strong>Seus dados não são usados para treinar modelo.</strong> É condição para
-            contratar o provedor, e não uma expectativa: um fornecedor que não ofereça essa garantia
-            por escrito não entra.
+            <strong>Seus dados não são usados para treinar modelo.</strong> Não é uma expectativa: é
+            exigido em cada chamada, e um fornecedor que não declare essa garantia não recebe a
+            chamada.
           </li>
           <li>
             <strong>Transferência internacional.</strong> Os servidores do gateway e do provedor de
@@ -251,16 +262,15 @@ export default function PrivacyPage() {
             aparelho.
           </li>
           <li>
-            <strong>Cloudflare AI Gateway e o provedor de visão</strong> — somente quando a IA
-            hospedada está ativa nesta instância e você consentiu com ela. Recebem a imagem, o áudio
-            ou o texto da pergunta, <strong>sem nenhum identificador seu</strong>: não vai e-mail,
-            nome, nem id de conta, e do lado deles uma chamada é indistinguível da seguinte. A foto
-            vai <strong>sem os metadados que localizam a pessoa</strong> — o EXIF, que inclui as
-            coordenadas de onde você estava, é removido no seu aparelho antes do envio. O gateway
-            recebe, em cada chamada, a instrução de <strong>não registrar</strong> o conteúdo; do
-            lado do provedor de visão, quem responde pela retenção é o contrato com ele, que será
-            nomeado aqui — junto dessa cláusula — antes de a instância pública ligar a
-            funcionalidade. Veja <strong>Inteligência artificial</strong>.
+            <strong>OpenRouter e o provedor de visão</strong> (modelo GLM 5.3 Flash, da Z.ai) —
+            somente quando a IA hospedada está ativa nesta instância e você consentiu com ela. No
+            reconhecimento por foto, recebem a imagem e a pergunta,{' '}
+            <strong>sem nenhum identificador seu</strong>: não vai e-mail, nome, nem id de conta. No
+            chat, recebem a conversa e os dados da conta que o assistente consulta para responder. A
+            foto vai <strong>sem os metadados que localizam a pessoa</strong> — o EXIF, que inclui
+            as coordenadas de onde você estava, é removido no seu aparelho antes do envio. Cada
+            chamada exige <strong>retenção zero</strong> e proíbe o uso para treino; o fornecedor
+            que não cumprir não recebe a chamada. Veja <strong>Inteligência artificial</strong>.
           </li>
         </ul>
         <p>

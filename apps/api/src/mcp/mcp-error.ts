@@ -11,12 +11,7 @@ import { ZodError } from 'zod';
  * de "esse recurso não existe" e aja sozinho (issue #94).
  */
 export type McpErrorCategory =
-  | 'INVALID_INPUT'
-  | 'NOT_FOUND'
-  | 'CONFLICT'
-  | 'UNAUTHORIZED'
-  | 'RATE_LIMITED'
-  | 'INTERNAL';
+  'INVALID_INPUT' | 'NOT_FOUND' | 'CONFLICT' | 'UNAUTHORIZED' | 'RATE_LIMITED' | 'INTERNAL';
 
 /** Pista acionável por categoria — o que o cliente deve fazer, não só o que deu errado. */
 const HINT: Record<McpErrorCategory, string> = {

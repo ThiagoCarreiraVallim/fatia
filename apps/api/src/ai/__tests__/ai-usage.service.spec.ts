@@ -146,6 +146,50 @@ describe('AiUsageService.assertDentroDaCota', () => {
   });
 });
 
+describe('AiUsageService.cotaDoUsuario', () => {
+  it('sem cota por usuário não há teto nem proporção, e o medidor some', async () => {
+    const { service } = montar({ gastoDoUsuario: 40_000 });
+
+    await expect(service.cotaDoUsuario('user-a', AGORA)).resolves.toEqual({
+      spentMicros: 40_000,
+      limitMicros: null,
+      usedRatio: null,
+      resetsAt: '2026-08-07T00:00:00.000Z',
+      allowed: true,
+    });
+  });
+
+  it('mostra a proporção do teto e para no cheio, mesmo acima dele', async () => {
+    const meio = montar({ gastoDoUsuario: 50_000, env: { AI_QUOTA_DAILY_MICROS: 100_000 } });
+    const estourado = montar({ gastoDoUsuario: 130_000, env: { AI_QUOTA_DAILY_MICROS: 100_000 } });
+
+    await expect(meio.service.cotaDoUsuario('user-a', AGORA)).resolves.toMatchObject({
+      usedRatio: 0.5,
+      allowed: true,
+    });
+    await expect(estourado.service.cotaDoUsuario('user-a', AGORA)).resolves.toMatchObject({
+      usedRatio: 1,
+      allowed: false,
+    });
+  });
+
+  it('diz "barrado" quando o teto da instância estourou, como o 429 diria', async () => {
+    const { service } = montar({
+      gastoDoUsuario: 10_000,
+      gastoDaInstancia: 1_000_000,
+      env: { AI_QUOTA_DAILY_MICROS: 100_000, AI_QUOTA_GLOBAL_DAILY_MICROS: 1_000_000 },
+    });
+
+    await expect(service.cotaDoUsuario('user-a', AGORA)).resolves.toMatchObject({
+      usedRatio: 0.1,
+      allowed: false,
+    });
+    await expect(service.assertDentroDaCota('user-a', AGORA)).rejects.toThrow(
+      AiQuotaExceededException,
+    );
+  });
+});
+
 describe('AiUsageService.registrar', () => {
   it('precifica pelo modelo quando ele está na tabela', async () => {
     const { service, create } = montar({});

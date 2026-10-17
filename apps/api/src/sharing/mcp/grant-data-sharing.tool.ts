@@ -14,7 +14,7 @@ export class GrantDataSharingTool implements McpToolDef {
   constructor(private readonly consent: ConsentService) {}
   readonly name = 'grant_data_sharing';
   readonly title = 'Autorizar um profissional a ver meus dados';
-  readonly annotations = { readOnlyHint: false, destructiveHint: false };
+  readonly annotations = { readOnlyHint: false, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
   readonly description =
     'Autoriza UM profissional de um grupo a ler categorias específicas dos dados do usuário. ' +

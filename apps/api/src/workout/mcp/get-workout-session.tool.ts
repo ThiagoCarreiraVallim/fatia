@@ -16,7 +16,7 @@ export class GetWorkoutSessionTool implements McpToolDef {
 
   readonly title = 'Ver sessão de treino';
 
-  readonly annotations = { readOnlyHint: true, destructiveHint: false };
+  readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
 
   readonly hostedInference = false;
   readonly description =

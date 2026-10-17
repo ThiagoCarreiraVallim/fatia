@@ -20,7 +20,7 @@ Se você quer instalar um app na loja e não pensar em servidor, o Fatia ainda n
 
 |                                           |                                                                                                                                                                                                          |
 | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **MCP-first, não "com integração de IA"** | As **103 tools** MCP cobrem o CRUD inteiro da aplicação. Não existe operação que o PWA faça e o MCP não faça. A tela é a camada opcional, e não o contrário.                                             |     | **Os dados são seus** | Postgres seu, servidor seu, licença MIT. `export_my_data` devolve tudo, `delete_my_account` apaga tudo — as duas expostas como tool, para você exercer o direito sem pedir a ninguém. |
+| **MCP-first, não "com integração de IA"** | As **106 tools** MCP cobrem o CRUD inteiro da aplicação. Não existe operação que o PWA faça e o MCP não faça. A tela é a camada opcional, e não o contrário.                                             |     | **Os dados são seus** | Postgres seu, servidor seu, licença MIT. `export_my_data` devolve tudo, `delete_my_account` apaga tudo — as duas expostas como tool, para você exercer o direito sem pedir a ninguém. |
 | **Foto não vira arquivo**                 | O assistente analisa a imagem da refeição e manda **dados estruturados**. O Fatia nunca armazena a foto ([ADR 004](docs/ADR/004-sem-armazenamento-fotos.md)).                                            |
 | **Base nutricional brasileira**           | Os **597 alimentos da TACO** (NEPA/Unicamp) já vêm no seed, com macros e micronutrientes. Mais **873 exercícios** com músculos primários e secundários.                                                  |
 | **Identidade self-hosted**                | Auth via [Logto](https://logto.io) no seu próprio container — OAuth 2.1 com DCR e PKCE, exigência do conector remoto. A API só valida JWT, nunca emite ([ADR 008](docs/ADR/008-logto-oidc-provider.md)). |
@@ -30,7 +30,7 @@ Se você quer instalar um app na loja e não pensar em servidor, o Fatia ainda n
 
 ```mermaid
 flowchart TD
-    claude["Assistente de IA<br/>(MCP · 103 tools)"]    pwa["PWA Next.js<br/>navegador"]
+    claude["Assistente de IA<br/>(MCP · 106 tools)"]    pwa["PWA Next.js<br/>navegador"]
     mobile["App Expo<br/>iOS / Android"]
     logto["Logto<br/>Identity Provider<br/>OAuth 2.1 · DCR · PKCE"]
     api["API NestJS<br/>Controllers REST + Tools MCP<br/>→ mesmos Services"]
@@ -120,26 +120,54 @@ Parte deste repositório é escrita com assistentes de código, e os arquivos qu
 
 Contribuição gerada por IA é aceita nas mesmas condições de qualquer outra: você entende o que enviou, os testes provam o vermelho, e a PR passa pelo mesmo review.
 
+## Eval da fronteira de tools
+
+As 106 tools são o CRUD inteiro, e um agente que paga por token talvez pedisse outra fronteira. O
+[eval da fronteira](docs/eval-fronteira-de-tools.md) mede isso com uma variável só: o mesmo agente, o
+mesmo prompt e as mesmas 31 tarefas contra o catálogo de entidade (**A**, 106 tools) e contra um de
+intenção (**B**, 40 tools, das quais 18 compõem as de entidade sem lógica própria), escolhido por um
+header no `/mcp`. A superfície de intenção é instrumento de medição: só sobe com
+`MCP_SUPERFICIE_INTENCAO=1` e é recusada em produção.
+
+Medido em 2026-10-14, 5 repetições por tarefa, com dois modelos pelo OpenRouter
+(`z-ai/glm-5.3-flash` e `xiaomi/mimo-v2.6-pro`):
+
+|                            |       glm A |       glm B |      mimo A |      mimo B |
+| -------------------------- | ----------: | ----------: | ----------: | ----------: |
+| Acerto de seleção, de 31   |          29 |          30 |          27 |          30 |
+| Tokens de entrada/execução |      48.204 |      18.236 |      61.321 |      19.743 |
+| Custo real por execução    | US$ 0,00261 | US$ 0,00121 | US$ 0,00485 | US$ 0,00290 |
+
+O B acertou mais nos dois modelos e não errou nenhuma tarefa que o A acertou, mas com 1 e 3
+discordantes o teste do sinal não separa isso do acaso: **sem diferença detectável** de acerto. O que
+muda com folga é o custo, 54 % menor no glm e 40 % no mimo. Nas oito tarefas com uma destrutiva
+vizinha da certa, servidas sem a política de confirmação, nenhum modelo a chamou.
+
+Os números valem para o código de `bf03f7f` e para os catálogos medidos. O casamento de nomes do
+`record_meal` e da busca de alimentos foi corrigido depois, sem medição nova. Cada medição tem uma
+linha no [ledger](apps/agent/eval/fronteira-runs.jsonl), e o doc explica como rodar.
+
 ## Documentação
 
-| Arquivo                                          | Conteúdo                                                                           |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md)             | Como contribuir: setup, commits, branches, labels, review                          |
-| [`SECURITY.md`](SECURITY.md)                     | Política de segurança e como reportar vulnerabilidade                              |
-| [`docs/ONBOARDING.md`](docs/ONBOARDING.md)       | Setup local, scripts, modos de desenvolvimento, troubleshooting                    |
-| [`docs/LOCAL_AUTH.md`](docs/LOCAL_AUTH.md)       | Logto local: tenant, apps, API resource, `.env`                                    |
-| [`docs/MCP_LOCAL.md`](docs/MCP_LOCAL.md)         | Registrar o MCP local no Claude Desktop / Code / clientes open-source + smoke test |
-| [`docs/PRD.md`](docs/PRD.md)                     | Product Requirements — o que é o produto, escopo, não-escopo                       |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)   | Arquitetura técnica, stack, decisões                                               |
-| [`docs/DESIGN.md`](docs/DESIGN.md)               | UX, telas do PWA, fluxos                                                           |
-| [`apps/mobile/README.md`](apps/mobile/README.md) | Rodar o app nativo localmente, configuração, troubleshooting                       |
-| [`apps/agent/README.md`](apps/agent/README.md)   | Agente de IA em Python: rodar, lint, teste, configuração de provedor               |
-| [`docs/MOBILE_PARITY.md`](docs/MOBILE_PARITY.md) | Paridade entre o app nativo e o PWA, rota a rota e componente a componente         |
-| [`docs/MCP.md`](docs/MCP.md)                     | Especificação das tools MCP expostas                                               |
-| [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md)   | Modelo de ameaças e decisões de isolamento                                         |
-| [`docs/OPERATIONS.md`](docs/OPERATIONS.md)       | Runbook de produção, backup e recuperação de desastre                              |
-| [`docs/TASKS.md`](docs/TASKS.md)                 | Mapa das épicas — o planejamento em si vive nas Issues                             |
-| [`docs/ADR/`](docs/ADR/)                         | Architecture Decision Records                                                      |
+| Arquivo                                                              | Conteúdo                                                                           |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md)                                 | Como contribuir: setup, commits, branches, labels, review                          |
+| [`SECURITY.md`](SECURITY.md)                                         | Política de segurança e como reportar vulnerabilidade                              |
+| [`docs/ONBOARDING.md`](docs/ONBOARDING.md)                           | Setup local, scripts, modos de desenvolvimento, troubleshooting                    |
+| [`docs/LOCAL_AUTH.md`](docs/LOCAL_AUTH.md)                           | Logto local: tenant, apps, API resource, `.env`                                    |
+| [`docs/MCP_LOCAL.md`](docs/MCP_LOCAL.md)                             | Registrar o MCP local no Claude Desktop / Code / clientes open-source + smoke test |
+| [`docs/PRD.md`](docs/PRD.md)                                         | Product Requirements — o que é o produto, escopo, não-escopo                       |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)                       | Arquitetura técnica, stack, decisões                                               |
+| [`docs/DESIGN.md`](docs/DESIGN.md)                                   | UX, telas do PWA, fluxos                                                           |
+| [`apps/mobile/README.md`](apps/mobile/README.md)                     | Rodar o app nativo localmente, configuração, troubleshooting                       |
+| [`apps/agent/README.md`](apps/agent/README.md)                       | Agente de IA em Python: rodar, lint, teste, configuração de provedor               |
+| [`docs/MOBILE_PARITY.md`](docs/MOBILE_PARITY.md)                     | Paridade entre o app nativo e o PWA, rota a rota e componente a componente         |
+| [`docs/MCP.md`](docs/MCP.md)                                         | Especificação das tools MCP expostas                                               |
+| [`docs/eval-fronteira-de-tools.md`](docs/eval-fronteira-de-tools.md) | Eval da fronteira de tools: entidade × intenção, método e resultados               |
+| [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md)                       | Modelo de ameaças e decisões de isolamento                                         |
+| [`docs/OPERATIONS.md`](docs/OPERATIONS.md)                           | Runbook de produção, backup e recuperação de desastre                              |
+| [`docs/TASKS.md`](docs/TASKS.md)                                     | Mapa das épicas — o planejamento em si vive nas Issues                             |
+| [`docs/ADR/`](docs/ADR/)                                             | Architecture Decision Records                                                      |
 
 ## Estrutura
 
