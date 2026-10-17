@@ -32,6 +32,8 @@ export * from './progress';
 export * from './sharing';
 export * from './community';
 export * from './community-consent';
+export * from './community-admin';
+export * from './community-panel';
 export * from './users';
 export * from './workout';
 

@@ -229,7 +229,17 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/chat', title: 'Chat', parent: '/' },
   { pattern: '/chat/:id', title: 'Chat', parent: '/' },
   { pattern: '/community', title: 'Comunidade', parent: '/' },
+  // Antes de `/community/:id`: a primeira rota que casa é a que vale.
+  { pattern: '/community/new', title: 'Criar comunidade', parent: '/community' },
   { pattern: '/community/:id', title: 'Comunidade', parent: '/community' },
+  // O painel da equipe: voltar sai do painel para a comunidade, e a seção
+  // dentro dele volta à Visão geral. `:id` no `parent` é o mesmo da rota.
+  { pattern: '/org/:id', title: 'Painel', parent: '/community/:id' },
+  { pattern: '/org/:id/members', title: 'Membros', parent: '/org/:id' },
+  { pattern: '/org/:id/members/:membershipId', title: 'Membro', parent: '/org/:id/members' },
+  { pattern: '/org/:id/invites', title: 'Convites', parent: '/org/:id' },
+  { pattern: '/org/:id/seats', title: 'Assentos', parent: '/org/:id' },
+  { pattern: '/org/:id/settings', title: 'Configurações', parent: '/org/:id' },
   { pattern: '/students', title: 'Membros', parent: '/' },
   { pattern: '/students/:id', title: 'Membro', parent: '/students' },
 ];
@@ -255,6 +265,15 @@ function find(path: string[]): RouteDef | undefined {
   return ROUTES.find((r) => match(r.pattern, path));
 }
 
+/** Troca os `:param` do `parent` pelos valores que a rota casou com o mesmo nome. */
+function fillParams(parent: string, pattern: string, path: string[]): string {
+  const valores = new Map<string, string>();
+  segments(pattern).forEach((seg, i) => {
+    if (seg.startsWith(':')) valores.set(seg, path[i]!);
+  });
+  return parent.replace(/:[^/]+/g, (param) => valores.get(param) ?? param);
+}
+
 /**
  * Título e "voltar" da tela. Rota fora do mapa volta ao ancestral conhecido
  * mais próximo (no fim, o Início), nunca a lugar nenhum.
@@ -265,7 +284,7 @@ export function routeInfo(pathname: string): RouteInfo {
   let parent: string | null;
   let title: string;
   if (def) {
-    parent = def.parent;
+    parent = def.parent === null ? null : fillParams(def.parent, def.pattern, path);
     title = def.title;
   } else {
     title = '';
