@@ -19,8 +19,10 @@ chamadas de tool e os resultados que o `/mcp` devolveu ([ADR 023](./ADR/023-chec
 — e as **memórias** (`UserMemory`), que a pessoa pediu para o assistente guardar. Os três têm a
 mesma sensibilidade, e o vetor 10 descreve o que os protege.
 
-Não armazenamos: fotos (ADR 004), senhas (ADR 008 — a identidade vive no Logto), meios de
-pagamento.
+Não armazenamos: fotos de refeição (ADR 004), senhas (ADR 008 — a identidade vive no Logto),
+meios de pagamento. Desde a Fase 7a há um bucket de **mídia publicada** pela comunidade (imagens de
+dica, capa de plano, avatar; vídeo de exercício na 7b), privado e lido só por URL assinada
+([ADR 028](./ADR/028-imagens-de-posts-da-comunidade.md)); o vetor 13 descreve o que o protege.
 
 ## Camadas de defesa
 
@@ -426,6 +428,40 @@ depois do uso ou do vencimento. O teto diário limita quanto e-mail uma comunida
 impede que um dono mande convites a endereços que não pediram — o e-mail diz quem convidou e some
 sem resposta.
 
+### 13. Conteúdo e mídia da comunidade — upload, URL assinada e o texto de terceiros (Fase 7a, ADR 028)
+
+O que um atacante ganharia: hospedar arquivo arbitrário no nosso bucket, ler a imagem de uma
+comunidade de que não faz parte, pôr o conteúdo dele na comunidade de outra pessoa, injetar script
+pelo texto de uma dica, ou colocar dado de outra conta na cópia de quem adota um plano.
+
+- **Upload direto ao bucket.** A URL de envio é assinada com **tipo e tamanho exatos** (o storage
+  recusa outro corpo) e vale 10 minutos; só JPEG, PNG e WebP até 10 MB entram, e pedir a URL exige a
+  ação da tela que vai usar o arquivo (`content.publish`, ou `group.update` para o avatar) numa
+  associação ativa. Confirmar é só de quem enviou (arquivo alheio responde 404).
+- **Metadado e arquivo malformado.** Toda imagem é decodificada e regravada pelo `sharp`: sai em
+  WebP, sem EXIF nem GPS, no máximo 1600 px; o original é apagado. Mais de 40 megapixels é recusado
+  (bomba de descompressão), e o que não decodifica é apagado e recusado.
+- **Ler mídia de outra comunidade.** O bucket é privado. A URL de leitura (10 minutos) só sai dentro
+  da resposta de uma rota que já conferiu a associação; não existe rota de "arquivo por id". Um
+  `fileId` usado como capa, imagem ou avatar precisa ser da **mesma comunidade da URL**, do mesmo
+  propósito e já confirmado — o de outra comunidade responde como inexistente.
+- **Conteúdo de outra comunidade.** `templateId` e `tipId` são sempre buscados com o `groupId` da URL,
+  e para o membro só existe o publicado (rascunho responde 404, inclusive na adoção). O autor edita o
+  que é dele; quem modera (`content.moderate`) edita o de todos.
+- **Script na dica.** O corpo é markdown restrito, transformado em tokens (`parseMarkdownLite`) e
+  desenhado com componentes: nunca vira HTML, e link que não é `https:` vira texto. Nas tools MCP a
+  descrição avisa que o texto é da equipe, conteúdo a mostrar e não instrução.
+- **Dado de outra conta na cópia.** A adoção valida o retrato inteiro antes de escrever: exercício de
+  catálogo só se for público (o próprio do autor viaja por valor), alimento só mantém `foodId` se for
+  público, e um retrato forjado com id alheio é recusado ou limpo. Treino é adotado uma vez; as metas
+  só mudam com `applyGoals`.
+- **Lixo no bucket.** Arquivo pendente, ou confirmado e não usado, sai em 24 h; trocar ou apagar o
+  item apaga o arquivo; apagar a comunidade ou a conta da dona apaga os objetos antes do banco.
+
+**Não mitigado:** quem recebe a URL assinada pode repassá-la, e ela vale até expirar (10 minutos).
+Conteúdo impróprio publicado pela equipe só sai quando o dono tira; denúncia e moderação de membros
+são da Fase 8.
+
 ## Matriz de cobertura
 
 Onde o escopo é aplicado, por domínio. Verificado por
@@ -442,33 +478,35 @@ atacante manda um recurso **próprio** na URL — legítimo, passa no `assertOwn
 **corpo**. Endpoint que aceita id de recurso filho no payload precisa amarrá-lo ao pai da URL; ser
 dono do pai não autoriza escrever em qualquer filho.
 
-| Domínio              | Service                                       | Ponto de escopo                                                            |
-| -------------------- | --------------------------------------------- | -------------------------------------------------------------------------- |
-| Refeições            | `meal.service.ts`                             | `where: { userId }` nas leituras; `assertOwner` nas escritas               |
-| Itens de refeição    | `meal-item.service.ts`                        | posse via `item.meal.userId` / `meal.userId`                               |
-| Alimentos custom     | `food.service.ts`                             | `OR: [createdByUserId: null, createdByUserId: userId]`; custom exige posse |
-| Metas de nutriente   | `nutrient-target.service.ts`                  | `where: { userId }`; unique `[userId, nutrientKey]`                        |
-| Metas de macros      | `user-goals.service.ts`                       | `UserGoals.userId` é a própria PK                                          |
-| Metas pessoais       | `goals.service.ts`                            | `where: { userId }`; `assertOwned` nas escritas                            |
-| Peso                 | `weight-log.service.ts`                       | `where: { userId }`; posse no update/delete                                |
-| Passos               | `step-log.service.ts`                         | idem                                                                       |
-| Hidratação           | `water-log.service.ts`                        | idem                                                                       |
-| Exercícios           | `exercise.service.ts`                         | `accessFilter(userId)`; custom exige posse; base é só-leitura              |
-| Planos               | `workout-plan.service.ts`                     | `where: { userId }`; `assertOwner`                                         |
-| Sessões              | `workout-session.service.ts`                  | `where: { userId }`; `assertOwner`; delete idempotente                     |
-| Séries               | `session-set.service.ts`                      | posse via `set.session.userId`                                             |
-| Progresso/dashboard  | `progress.service.ts`, `dashboard.service.ts` | agregam sobre queries já escopadas                                         |
-| Grupos de alimento   | `food.service.ts#listGroups`                  | **sem escopo, de propósito** — `FoodGroup` não tem dono                    |
-| Leitura profissional | `sharing/professional-access.service.ts`      | `assertReadable` resolve o titular; a **única** leitura entre contas       |
-| Painel agregado      | `insights/insights.service.ts`                | opt-in + limiar + `suppress()`; nenhum id de pessoa sai do módulo          |
-| Chat com IA          | `chat/conversation.service.ts`                | `where: { id, userId }`; `Message` não tem dono — quem tem é a conversa    |
-| Memórias do chat     | `chat/memory/memory.service.ts`               | `where: { userId }`; esquecer exige posse                                  |
-| Checkpoint do agente | `chat/checkpoint-purge.service.ts`            | thread `{userId}:{conversationId}`; dono vem do `get_me`, nunca do corpo   |
-| Plano / assinatura   | `billing/user-subscription.service.ts`        | `where: { userId }`; nenhuma rota recebe tier, status ou id de assinatura  |
-| Convite              | `sharing/invite.service.ts`                   | token só por hash; aceite é sempre de quem chama; e-mail vinculado à conta |
-| Assentos             | `billing/seat-pool.service.ts`                | `groupId` da URL + associação ativa do mesmo grupo; só `billing.manage`    |
-| Papel no grupo       | `sharing/membership.service.ts#changeRole`    | só o dono; associação ativa do grupo da URL; vínculos no mesmo commit      |
-| Faturas dos assentos | `billing/seat-pool.service.ts#invoices`       | `where: { pool: { groupId } }` do grupo da URL; só `billing.read`          |
+| Domínio              | Service                                       | Ponto de escopo                                                                |
+| -------------------- | --------------------------------------------- | ------------------------------------------------------------------------------ |
+| Refeições            | `meal.service.ts`                             | `where: { userId }` nas leituras; `assertOwner` nas escritas                   |
+| Itens de refeição    | `meal-item.service.ts`                        | posse via `item.meal.userId` / `meal.userId`                                   |
+| Alimentos custom     | `food.service.ts`                             | `OR: [createdByUserId: null, createdByUserId: userId]`; custom exige posse     |
+| Metas de nutriente   | `nutrient-target.service.ts`                  | `where: { userId }`; unique `[userId, nutrientKey]`                            |
+| Metas de macros      | `user-goals.service.ts`                       | `UserGoals.userId` é a própria PK                                              |
+| Metas pessoais       | `goals.service.ts`                            | `where: { userId }`; `assertOwned` nas escritas                                |
+| Peso                 | `weight-log.service.ts`                       | `where: { userId }`; posse no update/delete                                    |
+| Passos               | `step-log.service.ts`                         | idem                                                                           |
+| Hidratação           | `water-log.service.ts`                        | idem                                                                           |
+| Exercícios           | `exercise.service.ts`                         | `accessFilter(userId)`; custom exige posse; base é só-leitura                  |
+| Planos               | `workout-plan.service.ts`                     | `where: { userId }`; `assertOwner`                                             |
+| Sessões              | `workout-session.service.ts`                  | `where: { userId }`; `assertOwner`; delete idempotente                         |
+| Séries               | `session-set.service.ts`                      | posse via `set.session.userId`                                                 |
+| Progresso/dashboard  | `progress.service.ts`, `dashboard.service.ts` | agregam sobre queries já escopadas                                             |
+| Grupos de alimento   | `food.service.ts#listGroups`                  | **sem escopo, de propósito** — `FoodGroup` não tem dono                        |
+| Leitura profissional | `sharing/professional-access.service.ts`      | `assertReadable` resolve o titular; a **única** leitura entre contas           |
+| Painel agregado      | `insights/insights.service.ts`                | opt-in + limiar + `suppress()`; nenhum id de pessoa sai do módulo              |
+| Chat com IA          | `chat/conversation.service.ts`                | `where: { id, userId }`; `Message` não tem dono — quem tem é a conversa        |
+| Memórias do chat     | `chat/memory/memory.service.ts`               | `where: { userId }`; esquecer exige posse                                      |
+| Checkpoint do agente | `chat/checkpoint-purge.service.ts`            | thread `{userId}:{conversationId}`; dono vem do `get_me`, nunca do corpo       |
+| Plano / assinatura   | `billing/user-subscription.service.ts`        | `where: { userId }`; nenhuma rota recebe tier, status ou id de assinatura      |
+| Convite              | `sharing/invite.service.ts`                   | token só por hash; aceite é sempre de quem chama; e-mail vinculado à conta     |
+| Assentos             | `billing/seat-pool.service.ts`                | `groupId` da URL + associação ativa do mesmo grupo; só `billing.manage`        |
+| Papel no grupo       | `sharing/membership.service.ts#changeRole`    | só o dono; associação ativa do grupo da URL; vínculos no mesmo commit          |
+| Faturas dos assentos | `billing/seat-pool.service.ts#invoices`       | `where: { pool: { groupId } }` do grupo da URL; só `billing.read`              |
+| Planos e dicas       | `sharing/content.service.ts`                  | `{ id, groupId }` da URL; membro só vê o publicado; autor ou moderador edita   |
+| Mídia                | `storage/media.service.ts`                    | envio pela ação da tela; confirmar só quem enviou; arquivo da mesma comunidade |
 
 ## O que não está protegido
 

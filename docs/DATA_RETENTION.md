@@ -51,17 +51,20 @@ a associação ao grupo, o **consentimento** que o titular concede a um profissi
 de quem leu o dado dele. Desenho em [ADR 014](./ADR/014-compartilhamento-b2b-copia-e-vinculo.md);
 quem pode o quê, em [PERMISSIONS.md](./PERMISSIONS.md).
 
-| Dado                                       | Onde               | Retenção                                                                                       |
-| ------------------------------------------ | ------------------ | ---------------------------------------------------------------------------------------------- |
-| Associação ao grupo (`GroupMembership`)    | Postgres           | Enquanto a conta existir. Sair marca `status` e `leftAt`                                       |
-| Consentimento (`ProfessionalLink`)         | Postgres           | Enquanto a conta existir — **revogar não apaga a linha**                                       |
-| Trilha de acesso (`ProfessionalAccessLog`) | Postgres           | Enquanto a conta existir                                                                       |
-| Consentimento à equipe (`consentScopes`)   | Postgres           | Na associação; reescrito quando a pessoa muda                                                  |
-| Convite (`GroupInvite`)                    | Postgres           | Enquanto a comunidade existir; só o hash do token                                              |
-| E-mail de quem foi convidado               | Postgres           | **30 dias** depois do uso, do vencimento ou da revogação                                       |
-| Assentos (`GroupSeatPool`, `…Assignment`)  | Postgres           | Enquanto a comunidade existir; atribuição tem `revokedAt`                                      |
-| Faturas dos assentos (`GroupSeatInvoice`)  | Postgres           | Enquanto a comunidade existir; valor, vencimento, status e o link do Asaas, sem dado de pessoa |
-| O que o profissional leu                   | **Não armazenado** | —                                                                                              |
+| Dado                                                               | Onde               | Retenção                                                                                                                            |
+| ------------------------------------------------------------------ | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Associação ao grupo (`GroupMembership`)                            | Postgres           | Enquanto a conta existir. Sair marca `status` e `leftAt`                                                                            |
+| Consentimento (`ProfessionalLink`)                                 | Postgres           | Enquanto a conta existir — **revogar não apaga a linha**                                                                            |
+| Trilha de acesso (`ProfessionalAccessLog`)                         | Postgres           | Enquanto a conta existir                                                                                                            |
+| Consentimento à equipe (`consentScopes`)                           | Postgres           | Na associação; reescrito quando a pessoa muda                                                                                       |
+| Convite (`GroupInvite`)                                            | Postgres           | Enquanto a comunidade existir; só o hash do token                                                                                   |
+| E-mail de quem foi convidado                                       | Postgres           | **30 dias** depois do uso, do vencimento ou da revogação                                                                            |
+| Assentos (`GroupSeatPool`, `…Assignment`)                          | Postgres           | Enquanto a comunidade existir; atribuição tem `revokedAt`                                                                           |
+| Faturas dos assentos (`GroupSeatInvoice`)                          | Postgres           | Enquanto a comunidade existir; valor, vencimento, status e o link do Asaas, sem dado de pessoa                                      |
+| Planos prontos e dicas (`GroupPlanTemplate`, `GroupTip`)           | Postgres           | Enquanto a comunidade existir. São da comunidade: quem publicou e apaga a conta vira "Equipe" (`authorId` nulo)                     |
+| Cópia adotada (`WorkoutPlan`, `MealTemplate` com `fromTemplateId`) | Postgres           | É da pessoa, como qualquer plano dela; apagar o modelo só tira a proveniência                                                       |
+| Mídia publicada (`MediaFile` + objeto no bucket)                   | Postgres + R2      | Enquanto o item que a usa existir. Sem EXIF/GPS. Pendente ou sem uso: 24 h. Apagar a comunidade ou a conta da dona apaga os objetos |
+| O que o profissional leu                                           | **Não armazenado** | —                                                                                                                                   |
 
 **Revogar preenche `revokedAt`, nunca apaga.** É a linha revogada que responde "quem teve acesso a
 quê, e quando" — apagá-la destruiria exatamente a prova que o titular pode querer depois. O mesmo
@@ -90,8 +93,10 @@ essa é a clientela dele, e é dado de terceiro.
 ## Dados que NÃO são armazenados
 
 - **Fotos de refeição.** Decisão registrada na [ADR 004](./ADR/004-sem-armazenamento-fotos.md) e
-  estendida pela [ADR 020](./ADR/020-foto-e-audio-trafegam-sem-persistencia.md). **Não há bucket,
-  não há disco, não há coluna** — em nenhum dos dois caminhos de IA. O que muda entre eles é se a
+  estendida pela [ADR 020](./ADR/020-foto-e-audio-trafegam-sem-persistencia.md). **Não há bucket
+  para elas, não há disco, não há coluna** — em nenhum dos dois caminhos de IA. O bucket que existe
+  desde a Fase 7a é só de mídia **publicada** pela comunidade
+  ([ADR 028](./ADR/028-imagens-de-posts-da-comunidade.md)), e foto de refeição nunca passa por ele. O que muda entre eles é se a
   imagem chega a atravessar o Fatia; ver a seção seguinte.
 - **Fotos de refeição.** Decisão registrada na [ADR 004](./ADR/004-sem-armazenamento-fotos.md).
   Continua valendo com o registro por foto do app nativo (#139): a imagem **transita**, é analisada

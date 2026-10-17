@@ -426,3 +426,10 @@ redução pedida, revogando as atribuições mais recentes se sobrar alguém (o 
 
 **Não exercitado aqui:** o sandbox real do Asaas (os testes usam um provedor falso). A tela do dono foi
 exercitada com o pool de cortesia do seed.
+
+## Custo da mídia da comunidade (Fase 7)
+
+As imagens e, na 7b, os vídeos que as comunidades publicam ficam no Cloudflare R2 (ADR 028). O R2 não
+cobra saída; o custo é armazenamento (US$ 0,015/GB-mês, com 10 GB grátis) e operações. Imagem sai do
+`sharp` com algumas centenas de KB; vídeo vai até 200 MB e não é convertido. Hoje nada disso entra no
+preço do assento: os limites por arquivo são o freio, e um teto por comunidade entra se o uso pedir.

@@ -197,6 +197,41 @@ o **Tempo** (o trace só passa a valer de verdade quando o `apps/agent` da ADR 0
 dois processos no caminho de uma requisição), depois o **Loki** — que economiza ~250 MiB e ainda
 deixa métrica, painel e o `docker logs` com rotação.
 
+## Mídia da comunidade — bucket R2 (ADR 028)
+
+Imagens publicadas pela comunidade (dica, capa de plano, avatar) e, a partir da Fase 7b, vídeos de
+exercício. Sem as variáveis abaixo a API sobe igual e o envio responde 503.
+
+1. No Cloudflare R2, crie um bucket **privado** (sem domínio público), por exemplo `fatia-media`.
+2. Gere um token de API S3 com permissão **Object Read & Write só nesse bucket** — a API não cria
+   bucket nem mexe em CORS em produção.
+3. Em _Settings › CORS policy_ do bucket, libere o app para enviar e ler direto:
+
+   ```json
+   [
+     {
+       "AllowedOrigins": ["https://app.<DOMAIN>"],
+       "AllowedMethods": ["PUT", "GET"],
+       "AllowedHeaders": ["*"],
+       "MaxAgeSeconds": 3600
+     }
+   ]
+   ```
+
+4. Preencha no Dokploy (estão no `docker-compose.prod.yml`): `MEDIA_S3_ENDPOINT`
+   (`https://<account>.r2.cloudflarestorage.com`), `MEDIA_S3_REGION=auto`, `MEDIA_S3_BUCKET`,
+   `MEDIA_S3_ACCESS_KEY_ID` e `MEDIA_S3_SECRET_ACCESS_KEY`.
+5. Confirme publicando uma dica com imagem pelo painel: a imagem aparece, e abrir o endereço dela sem
+   a parte depois do `?` responde 403.
+
+No dev, o `pnpm dev` sobe o SeaweedFS do compose (`media`, porta 8333) e a API cria o bucket e o CORS
+para `WEB_ORIGIN` ao subir. A faxina de arquivos pendentes ou sem uso roda de hora em hora dentro da
+API (24 h de tolerância).
+
+**Pendente:** o `infra/backup.sh` ainda não copia o bucket. Até entrar, a perda do bucket perde as
+imagens (os textos e planos ficam no Postgres, com backup); ligar o versionamento de objetos no R2
+reduz esse risco.
+
 ## Backup — setup do zero
 
 Tudo abaixo roda **no host**, via SSH. Leva ~15 minutos, quase todo em criar o bucket.
