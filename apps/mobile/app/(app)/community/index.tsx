@@ -8,6 +8,7 @@ import { JoinByCodeDrawer } from '@/components/community/join-by-code-drawer';
 import { Screen } from '@/components/layout/screen';
 import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
 import { Button, EmptyState, ErrorState, LoadingState, cn } from '@/components/ui';
+import { GroupAvatar } from '@/components/community/group-avatar';
 import { cores } from '@/theme/cores';
 
 /** Equivalente de `apps/web/src/app/(app)/community/page.tsx`. */
@@ -76,6 +77,7 @@ export default function CommunityScreen() {
                       i < groups.data.length - 1 && 'border-b border-border',
                     )}
                   >
+                    <GroupAvatar name={g.name} url={g.avatarUrl} />
                     <View className="min-w-0 flex-1">
                       <Text className="text-sm font-medium text-foreground">{g.name}</Text>
                       <Text className="text-xs text-muted-foreground">

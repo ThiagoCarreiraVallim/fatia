@@ -25,41 +25,46 @@ Nenhum placeholder restante no código.
 
 ## Rotas
 
-| PWA                                | App nativo                                           |     | Observação                                                                  |
-| ---------------------------------- | ---------------------------------------------------- | :-: | --------------------------------------------------------------------------- |
-| `(app)/page.tsx`                   | `app/(app)/index.tsx`                                | ✅  | dashboard                                                                   |
-| `(app)/community`                  | `app/(app)/community/index.tsx`                      | ✅  | minhas comunidades + "Entrar com código" (drawer)                           |
-| `(app)/community/[groupId]`        | `app/(app)/community/[groupId].tsx`                  | ✅  | equipe, o que compartilho, quem acessou, assento, sair (`Alert`)            |
-| `(invite)/c/[token]`               | `app/c/[token].tsx`                                  | ✅  | fora do `(app)`; deslogado guarda o token no cofre e retoma depois do login |
-| `(app)/community/new`              | `app/(app)/community/new.tsx`                        | ✅  | criar comunidade; leva aos convites do painel                               |
-| `(org)/org/[groupId]`              | `app/(app)/org/[groupId]/index.tsx`                  | ✅  | painel: visão geral e retenção agregada (dono)                              |
-| `(org)/org/[groupId]/members`      | `app/(app)/org/[groupId]/members/index.tsx`          | ✅  | aprovar, recusar; "Gerenciar" (`Alert`) muda papel, assento e remove        |
-| `(org)/…/members/[membershipId]`   | `app/(app)/org/[groupId]/members/[membershipId].tsx` | ✅  | leitura por categoria do que o membro compartilha                           |
-| `(org)/org/[groupId]/invites`      | `app/(app)/org/[groupId]/invites.tsx`                | ✅  | link com `Share` nativo; e-mail; lote colado (sem `.csv`)                   |
-| `(org)/org/[groupId]/seats`        | `app/(app)/org/[groupId]/seats.tsx`                  | ⚠️  | ver, tirar e faturas; compra, quantidade e cancelar só na web, ver abaixo   |
-| `(org)/org/[groupId]/settings`     | `app/(app)/org/[groupId]/settings.tsx`               | ✅  | perfil, código (`Share`), transferir e apagar digitando o nome              |
-| `(app)/goals`                      | `app/(app)/goals.tsx`                                | ✅  |                                                                             |
-| `(app)/nutrition`                  | `app/(app)/nutrition/index.tsx`                      | ✅  |                                                                             |
-| `(app)/nutrition/foods`            | `app/(app)/nutrition/foods.tsx`                      | ✅  | Meus alimentos; `?novo=1` abre o cadastro (card vazio e scanner)            |
-| `(app)/nutrition/goals`            | `app/(app)/nutrition/goals.tsx`                      | ✅  |                                                                             |
-| `(app)/nutrition/nutrient-targets` | `app/(app)/nutrition/nutrient-targets.tsx`           | ✅  |                                                                             |
-| —                                  | `app/(app)/nutrition/scan.tsx`                       | ➕  | scanner de código de barras (#140); no PWA o leitor mora no drawer de busca |
-| —                                  | `app/(app)/nutrition/photo.tsx`                      | ➕  | registro por foto (#139); o PWA não tem, ver abaixo                         |
-| `(app)/plan`                       | `app/(app)/plan.tsx`                                 | ⚠️  | Meu plano (ADR 024); o app vende só pela loja (RevenueCat), ver abaixo      |
-| `(app)/profile`                    | `app/(app)/profile/index.tsx`                        | ✅  |                                                                             |
-| `(app)/profile/connect`            | `app/(app)/profile/tokens.tsx`                       | ⚠️  | o PWA virou fluxo guiado (#164); o nativo ainda é a tela antiga, ver abaixo |
-| `(app)/progress`                   | `app/(app)/progress/index.tsx`                       | ✅  |                                                                             |
-| `(app)/progress/records`           | `app/(app)/progress/records.tsx`                     | ✅  |                                                                             |
-| `(app)/workout`                    | `app/(app)/workout/index.tsx`                        | ✅  | a sessão ativa vira aviso com "Continuar treino" em vez de tomar a tela     |
-| `(app)/workout/history`            | `app/(app)/workout/history.tsx`                      | ✅  |                                                                             |
-| `(app)/workout/plans`              | `app/(app)/workout/plans/index.tsx`                  | ✅  |                                                                             |
-| `(app)/workout/plans/[id]`         | `app/(app)/workout/plans/[id].tsx`                   | ✅  |                                                                             |
-| `(app)/workout/quick/[templateId]` | `app/(app)/workout/quick/[templateId].tsx`           | ✅  |                                                                             |
-| `(app)/workout/session/[id]`       | `app/(app)/workout/session/[id].tsx`                 | ✅  | uma rota para sessão ativa e concluída — o treino termina durante a visita  |
-| `(auth)/login`                     | `app/login.tsx`                                      | ✅  | navegador do sistema em vez de redirect no servidor                         |
-| `(onboarding)/onboarding`          | `app/onboarding.tsx`                                 | ✅  | assistente de primeira vez; nascimento digitado com máscara DD/MM/AAAA      |
-| `(public)/privacy`                 | —                                                    | ⛔  | abre no navegador; ver "Fora de propósito"                                  |
-| `(public)/terms`                   | —                                                    | ⛔  | idem                                                                        |
+| PWA                                  | App nativo                                               |     | Observação                                                                  |
+| ------------------------------------ | -------------------------------------------------------- | :-: | --------------------------------------------------------------------------- |
+| `(app)/page.tsx`                     | `app/(app)/index.tsx`                                    | ✅  | dashboard                                                                   |
+| `(app)/community`                    | `app/(app)/community/index.tsx`                          | ✅  | minhas comunidades + "Entrar com código" (drawer)                           |
+| `(app)/community/[groupId]`          | `app/(app)/community/[groupId]/index.tsx`                | ✅  | avatar, planos e dicas, equipe, o que compartilho, quem acessou, sair       |
+| `(app)/community/[groupId]/content`  | `app/(app)/community/[groupId]/content/index.tsx`        | ✅  | planos prontos e dicas publicados (pílulas Planos/Dicas)                    |
+| `(app)/…/content/[templateId]`       | `app/(app)/community/[groupId]/content/[templateId].tsx` | ✅  | prévia e "Adotar"; nutrição escolhe o que copiar, metas com a comparação    |
+| `(invite)/c/[token]`                 | `app/c/[token].tsx`                                      | ✅  | fora do `(app)`; deslogado guarda o token no cofre e retoma depois do login |
+| `(app)/community/new`                | `app/(app)/community/new.tsx`                            | ✅  | criar comunidade; leva aos convites do painel                               |
+| `(org)/org/[groupId]`                | `app/(app)/org/[groupId]/index.tsx`                      | ✅  | painel: visão geral e retenção agregada (dono)                              |
+| `(org)/org/[groupId]/members`        | `app/(app)/org/[groupId]/members/index.tsx`              | ✅  | aprovar, recusar; "Gerenciar" (`Alert`) muda papel, assento e remove        |
+| `(org)/…/members/[membershipId]`     | `app/(app)/org/[groupId]/members/[membershipId].tsx`     | ✅  | leitura por categoria do que o membro compartilha                           |
+| `(org)/org/[groupId]/invites`        | `app/(app)/org/[groupId]/invites.tsx`                    | ✅  | link com `Share` nativo; e-mail; lote colado (sem `.csv`)                   |
+| `(org)/org/[groupId]/seats`          | `app/(app)/org/[groupId]/seats.tsx`                      | ⚠️  | ver, tirar e faturas; compra, quantidade e cancelar só na web, ver abaixo   |
+| `(org)/org/[groupId]/settings`       | `app/(app)/org/[groupId]/settings.tsx`                   | ✅  | perfil, avatar (galeria), código (`Share`), transferir e apagar             |
+| `(org)/org/[groupId]/content`        | `app/(app)/org/[groupId]/content/index.tsx`              | ✅  | planos e dicas da equipe, rascunho e publicado                              |
+| `(org)/…/content/plans/[templateId]` | `app/(app)/org/[groupId]/content/plans/[templateId].tsx` | ✅  | treino a partir de um plano seu; nutrição com metas e refeições salvas      |
+| `(org)/…/content/tips/[tipId]`       | `app/(app)/org/[groupId]/content/tips/[tipId].tsx`       | ✅  | dica com prévia do markdown, imagem da galeria, fixar e publicar            |
+| `(app)/goals`                        | `app/(app)/goals.tsx`                                    | ✅  |                                                                             |
+| `(app)/nutrition`                    | `app/(app)/nutrition/index.tsx`                          | ✅  |                                                                             |
+| `(app)/nutrition/foods`              | `app/(app)/nutrition/foods.tsx`                          | ✅  | Meus alimentos; `?novo=1` abre o cadastro (card vazio e scanner)            |
+| `(app)/nutrition/goals`              | `app/(app)/nutrition/goals.tsx`                          | ✅  |                                                                             |
+| `(app)/nutrition/nutrient-targets`   | `app/(app)/nutrition/nutrient-targets.tsx`               | ✅  |                                                                             |
+| —                                    | `app/(app)/nutrition/scan.tsx`                           | ➕  | scanner de código de barras (#140); no PWA o leitor mora no drawer de busca |
+| —                                    | `app/(app)/nutrition/photo.tsx`                          | ➕  | registro por foto (#139); o PWA não tem, ver abaixo                         |
+| `(app)/plan`                         | `app/(app)/plan.tsx`                                     | ⚠️  | Meu plano (ADR 024); o app vende só pela loja (RevenueCat), ver abaixo      |
+| `(app)/profile`                      | `app/(app)/profile/index.tsx`                            | ✅  |                                                                             |
+| `(app)/profile/connect`              | `app/(app)/profile/tokens.tsx`                           | ⚠️  | o PWA virou fluxo guiado (#164); o nativo ainda é a tela antiga, ver abaixo |
+| `(app)/progress`                     | `app/(app)/progress/index.tsx`                           | ✅  |                                                                             |
+| `(app)/progress/records`             | `app/(app)/progress/records.tsx`                         | ✅  |                                                                             |
+| `(app)/workout`                      | `app/(app)/workout/index.tsx`                            | ✅  | a sessão ativa vira aviso com "Continuar treino" em vez de tomar a tela     |
+| `(app)/workout/history`              | `app/(app)/workout/history.tsx`                          | ✅  |                                                                             |
+| `(app)/workout/plans`                | `app/(app)/workout/plans/index.tsx`                      | ✅  |                                                                             |
+| `(app)/workout/plans/[id]`           | `app/(app)/workout/plans/[id].tsx`                       | ✅  |                                                                             |
+| `(app)/workout/quick/[templateId]`   | `app/(app)/workout/quick/[templateId].tsx`               | ✅  |                                                                             |
+| `(app)/workout/session/[id]`         | `app/(app)/workout/session/[id].tsx`                     | ✅  | uma rota para sessão ativa e concluída — o treino termina durante a visita  |
+| `(auth)/login`                       | `app/login.tsx`                                          | ✅  | navegador do sistema em vez de redirect no servidor                         |
+| `(onboarding)/onboarding`            | `app/onboarding.tsx`                                     | ✅  | assistente de primeira vez; nascimento digitado com máscara DD/MM/AAAA      |
+| `(public)/privacy`                   | —                                                        | ⛔  | abre no navegador; ver "Fora de propósito"                                  |
+| `(public)/terms`                     | —                                                        | ⛔  | idem                                                                        |
 
 ---
 
@@ -313,6 +318,9 @@ viram pílulas (`Choice`). Diferenças de propósito:
   link de pagamento externo (mesma regra do Plano PRO). Dar assento fica em Membros › Gerenciar.
 - **Convite em lote:** só colando a lista; subir `.csv` é da web.
 - **Comportamento (add-on):** o painel pago e o export CSV ficam na web; o app mostra a retenção.
+- **Planos e dicas (Fase 7a):** iguais à web. A imagem vem da galeria (`expo-image-picker`, que
+  reencoda em JPEG e resolve o HEIC) e vai direto ao bucket pela URL assinada, como no navegador;
+  o markdown das dicas é desenhado pelos mesmos tokens (`parseMarkdownLite`), nunca HTML.
 
 ## Plano PRO — a mesma tela, outro caixa
 
@@ -383,6 +391,7 @@ rodando, e deve ser feito antes de publicar:
 - [ ] Link universal (`APP_LINKS_HOST` no build, `APPLE_TEAM_ID`/`ANDROID_CERT_SHA256` na web): `https://<app>/c/<token>` abrindo o app em vez do navegador
 - [ ] Comunidade: checkboxes do consentimento com leitor de tela (estado marcado anunciado), "Entrar com código" com o teclado aberto no sheet, e "Sair" voltando à lista
 - [ ] Painel da comunidade (conta da equipe): abas no topo rolando sem cortar, "Aprovar" e "Gerenciar" com 44 pt, `Alert` de papel e assento, `Share` do link de convite e do código, lote colado com o teclado aberto, e o "voltar" do painel levando à comunidade
+- [ ] Planos e dicas: escolher imagem da galeria (iPhone com HEIC e Android sem tipo), ver a capa depois de enviar, publicar um treino e adotá-lo com outra conta, e o link de uma dica abrindo no navegador
 - [ ] Cores dos macros e de erro (`cores.ts`) iguais às do PWA lado a lado
 - [ ] Diagrama muscular destacando os grupos certos
 - [ ] Aparelho de entrada, não só simulador — os gráficos são o ponto a observar

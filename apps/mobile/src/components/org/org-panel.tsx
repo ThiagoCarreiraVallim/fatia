@@ -22,6 +22,10 @@ export const orgKeys = {
   invites: (groupId: string) => ['community', 'org', groupId, 'invites'] as const,
   seats: (groupId: string) => ['community', 'org', groupId, 'seats'] as const,
   invoices: (groupId: string) => ['community', 'org', groupId, 'invoices'] as const,
+  contentPlans: (groupId: string) => ['community', 'org', groupId, 'content', 'plans'] as const,
+  contentPlan: (groupId: string, id: string) =>
+    ['community', 'org', groupId, 'content', 'plans', id] as const,
+  contentTips: (groupId: string) => ['community', 'org', groupId, 'content', 'tips'] as const,
   insightsPanels: (groupId: string) => ['community', 'org', groupId, 'insights'] as const,
   insightsCuts: (groupId: string, panel: string) =>
     ['community', 'org', groupId, 'insights', panel] as const,

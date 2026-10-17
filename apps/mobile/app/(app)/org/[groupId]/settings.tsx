@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ApiError,
+  contentApi,
   joinPolicyLabel,
   orgApi,
   panelHref,
@@ -11,6 +12,7 @@ import {
   type JoinPolicy,
   type MyGroup,
 } from '@fatia/api-client';
+import { ImageField } from '@/components/content/image-field';
 import { apiMessage, Choice, OrgPanel, orgKeys, PanelCard } from '@/components/org/org-panel';
 import { Button, Input } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
@@ -74,6 +76,16 @@ function Configuracoes({ g }: { g: MyGroup }) {
       }),
   });
 
+  const avatar = useMutation({
+    mutationFn: (fileId: string | null) => contentApi.setAvatar(g.id, fileId),
+    onSuccess: (_, fileId) => {
+      toast.show({ message: fileId ? 'Avatar atualizado.' : 'Avatar removido.' });
+      void qc.invalidateQueries({ queryKey: ['community'] });
+    },
+    onError: (err) =>
+      toast.show({ message: apiMessage(err, 'Não deu para trocar o avatar agora.') }),
+  });
+
   const mudou =
     nome.trim() !== g.name ||
     (descricao.trim() || null) !== g.description ||
@@ -113,6 +125,17 @@ function Configuracoes({ g }: { g: MyGroup }) {
         >
           Salvar
         </Button>
+      </PanelCard>
+
+      <PanelCard title="Avatar">
+        <ImageField
+          groupId={g.id}
+          purpose="group_avatar"
+          label="Aparece em Minhas comunidades e no detalhe da comunidade."
+          square
+          value={g.avatarUrl ? { fileId: 'atual', url: g.avatarUrl } : null}
+          onChange={(next) => avatar.mutate(next?.fileId ?? null)}
+        />
       </PanelCard>
 
       <PanelCard title="Código de entrada">

@@ -14,6 +14,8 @@ import {
   type JoinConsent,
 } from '@fatia/api-client';
 import { ConsentForm } from '@/components/community/consent-form';
+import { GroupAvatar } from '@/components/community/group-avatar';
+import { CommunityContentPreview } from '@/components/content/community-content-preview';
 import { Screen } from '@/components/layout/screen';
 import { Button, EmptyState, ErrorState, LoadingState, cn } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
@@ -129,11 +131,16 @@ export default function CommunityDetailScreen() {
       refreshing={group.isRefetching}
     >
       <View className="gap-6 px-5 pb-4 pt-4">
-        <View className="gap-1">
-          {g.description ? <Text className="text-sm text-foreground">{g.description}</Text> : null}
-          <Text className="text-xs text-muted-foreground">
-            {`${joinPolicyLabel(g.joinPolicy)} · seu papel: ${teamRoleLabel(g.role).toLowerCase()}`}
-          </Text>
+        <View className="flex-row items-start gap-3">
+          <GroupAvatar name={g.name} url={g.avatarUrl} size={48} />
+          <View className="flex-1 gap-1">
+            {g.description ? (
+              <Text className="text-sm text-foreground">{g.description}</Text>
+            ) : null}
+            <Text className="text-xs text-muted-foreground">
+              {`${joinPolicyLabel(g.joinPolicy)} · seu papel: ${teamRoleLabel(g.role).toLowerCase()}`}
+            </Text>
+          </View>
         </View>
 
         {canOpenPanel(g) ? (
@@ -147,8 +154,8 @@ export default function CommunityDetailScreen() {
               <Text className="text-sm font-medium text-foreground">Abrir painel</Text>
               <Text className="text-xs text-muted-foreground">
                 {g.role === 'OWNER'
-                  ? 'Membros, convites, assentos e números da comunidade.'
-                  : 'Membros, o que compartilham com você e convites.'}
+                  ? 'Membros, convites, planos e dicas, assentos e números da comunidade.'
+                  : 'Membros, o que compartilham com você, convites, planos e dicas.'}
               </Text>
             </View>
             <ChevronRight size={18} color={cores.mutedForeground} />
@@ -176,6 +183,8 @@ export default function CommunityDetailScreen() {
             </View>
           </Pressable>
         ) : null}
+
+        {ativo ? <CommunityContentPreview groupId={g.id} /> : null}
 
         {ativo ? (
           <Secao titulo="Equipe">
