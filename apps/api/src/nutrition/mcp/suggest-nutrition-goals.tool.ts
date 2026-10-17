@@ -18,7 +18,7 @@ export class SuggestNutritionGoalsTool implements McpToolDef {
   readonly description =
     'Calcula metas sugeridas (gasto pela Mifflin-St Jeor × atividade, ajustado ao objetivo) sem gravar nada. ' +
     'Campos omitidos vêm do perfil e da última pesagem; para salvar, use set_nutrition_goals. ' +
-    'Exemplo: {"objective":"LOSE","activityLevel":"MODERATE"}';
+    'Exemplo: {"sex":"FEMALE","birthDate":"1994-05-10","objective":"LOSE","activityLevel":"MODERATE"}';
   readonly inputSchema = {
     sex: z.enum(['FEMALE', 'MALE']).optional().describe('Sexo biológico, usado só na fórmula'),
     birthDate: z.string().optional().describe('Data de nascimento AAAA-MM-DD (16 a 100 anos)'),

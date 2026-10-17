@@ -1,0 +1,531 @@
+{
+  "agua hoje": {
+    "tool": "get_water_for_date",
+    "saida": {
+      "date": "2026-09-23",
+      "totalMl": 900,
+      "logCount": 3,
+      "goalReached": false,
+      "goalTargetMl": 2500
+    }
+  },
+  "agua ontem": {
+    "tool": "get_water_for_date",
+    "saida": {
+      "date": "2026-09-22",
+      "totalMl": 2100,
+      "logCount": 7,
+      "goalReached": false,
+      "goalTargetMl": 2500
+    }
+  },
+  "agua sem meta": {
+    "tool": "get_water_for_date",
+    "saida": {
+      "date": "2026-09-23",
+      "totalMl": 0,
+      "logCount": 0,
+      "goalReached": null,
+      "goalTargetMl": null
+    }
+  },
+  "passos hoje": {
+    "tool": "get_steps_for_date",
+    "saida": {
+      "date": "2026-09-23",
+      "steps": 0,
+      "logCount": 0,
+      "sources": [],
+      "goalReached": false,
+      "goalTarget": 9000
+    }
+  },
+  "passos anteontem": {
+    "tool": "get_steps_for_date",
+    "saida": {
+      "date": "2026-09-21",
+      "steps": 9240,
+      "logCount": 1,
+      "sources": ["MANUAL"],
+      "goalReached": true,
+      "goalTarget": 9000
+    }
+  },
+  "passos sem meta": {
+    "tool": "get_steps_for_date",
+    "saida": {
+      "date": "2026-09-23",
+      "steps": 0,
+      "logCount": 0,
+      "sources": [],
+      "goalReached": null,
+      "goalTarget": null
+    }
+  },
+  "historico de passos 7": {
+    "tool": "get_steps_history",
+    "saida": {
+      "days": [
+        {
+          "date": "2026-09-17",
+          "steps": 9720,
+          "goalReached": true
+        },
+        {
+          "date": "2026-09-18",
+          "steps": 8350,
+          "goalReached": false
+        },
+        {
+          "date": "2026-09-19",
+          "steps": 6980,
+          "goalReached": false
+        },
+        {
+          "date": "2026-09-20",
+          "steps": 10610,
+          "goalReached": true
+        },
+        {
+          "date": "2026-09-21",
+          "steps": 9240,
+          "goalReached": true
+        },
+        {
+          "date": "2026-09-22",
+          "steps": 0,
+          "goalReached": false
+        },
+        {
+          "date": "2026-09-23",
+          "steps": 0,
+          "goalReached": false
+        }
+      ],
+      "averageDaily": 6414.285714285715,
+      "daysWithGoalReached": 3,
+      "totalDaysLogged": 5
+    }
+  },
+  "historico de passos 30": {
+    "tool": "get_steps_history",
+    "saida": {
+      "days": [
+        {
+          "date": "2026-08-25",
+          "steps": 0,
+          "goalReached": false
+        },
+        {
+          "date": "2026-08-26",
+          "steps": 0,
+          "goalReached": false
+        },
+        {
+          "date": "2026-08-27",
+          "steps": 0,
+          "goalReached": false
+        },
+        {
+          "date": "2026-08-28",
+          "steps": 0,
+          "goalReached": false
+        },
+        {
+          "date": "2026-08-29",
+          "steps": 0,
+          "goalReached": false
+        },
+        {
+          "date": "2026-08-30",
+          "steps": 0,
+          "goalReached": false
+        },
+        {
+          "date": "2026-08-31",
+          "steps": 0,
+          "goalReached": false
+        },
+        {
+          "date": "2026-09-01",
+          "steps": 0,
+          "goalReached": false
+        },
+        {
+          "date": "2026-09-02",
+          "steps": 0,
+          "goalReached": false
+        },
+        {
+          "date": "2026-09-03",
+          "steps": 0,
+          "goalReached": false
+        },
+        {
+          "date": "2026-09-04",
+          "steps": 0,
+          "goalReached": false
+        },
+        {
+          "date": "2026-09-05",
+          "steps": 0,
+          "goalReached": false
+        },
+        {
+          "date": "2026-09-06",
+          "steps": 0,
+          "goalReached": false
+        },
+        {
+          "date": "2026-09-07",
+          "steps": 0,
+          "goalReached": false
+        },
+        {
+          "date": "2026-09-08",
+          "steps": 0,
+          "goalReached": false
+        },
+        {
+          "date": "2026-09-09",
+          "steps": 0,
+          "goalReached": false
+        },
+        {
+          "date": "2026-09-10",
+          "steps": 9310,
+          "goalReached": true
+        },
+        {
+          "date": "2026-09-11",
+          "steps": 7940,
+          "goalReached": false
+        },
+        {
+          "date": "2026-09-12",
+          "steps": 6570,
+          "goalReached": false
+        },
+        {
+          "date": "2026-09-13",
+          "steps": 10200,
+          "goalReached": true
+        },
+        {
+          "date": "2026-09-14",
+          "steps": 8830,
+          "goalReached": false
+        },
+        {
+          "date": "2026-09-15",
+          "steps": 7460,
+          "goalReached": false
+        },
+        {
+          "date": "2026-09-16",
+          "steps": 11090,
+          "goalReached": true
+        },
+        {
+          "date": "2026-09-17",
+          "steps": 9720,
+          "goalReached": true
+        },
+        {
+          "date": "2026-09-18",
+          "steps": 8350,
+          "goalReached": false
+        },
+        {
+          "date": "2026-09-19",
+          "steps": 6980,
+          "goalReached": false
+        },
+        {
+          "date": "2026-09-20",
+          "steps": 10610,
+          "goalReached": true
+        },
+        {
+          "date": "2026-09-21",
+          "steps": 9240,
+          "goalReached": true
+        },
+        {
+          "date": "2026-09-22",
+          "steps": 0,
+          "goalReached": false
+        },
+        {
+          "date": "2026-09-23",
+          "steps": 0,
+          "goalReached": false
+        }
+      ],
+      "averageDaily": 3543.3333333333335,
+      "daysWithGoalReached": 6,
+      "totalDaysLogged": 12
+    }
+  },
+  "historico de passos sem meta": {
+    "tool": "get_steps_history",
+    "saida": {
+      "days": [
+        {
+          "date": "2026-09-10",
+          "steps": 0,
+          "goalReached": null
+        },
+        {
+          "date": "2026-09-11",
+          "steps": 0,
+          "goalReached": null
+        },
+        {
+          "date": "2026-09-12",
+          "steps": 0,
+          "goalReached": null
+        },
+        {
+          "date": "2026-09-13",
+          "steps": 0,
+          "goalReached": null
+        },
+        {
+          "date": "2026-09-14",
+          "steps": 0,
+          "goalReached": null
+        },
+        {
+          "date": "2026-09-15",
+          "steps": 0,
+          "goalReached": null
+        },
+        {
+          "date": "2026-09-16",
+          "steps": 0,
+          "goalReached": null
+        },
+        {
+          "date": "2026-09-17",
+          "steps": 0,
+          "goalReached": null
+        },
+        {
+          "date": "2026-09-18",
+          "steps": 0,
+          "goalReached": null
+        },
+        {
+          "date": "2026-09-19",
+          "steps": 0,
+          "goalReached": null
+        },
+        {
+          "date": "2026-09-20",
+          "steps": 0,
+          "goalReached": null
+        },
+        {
+          "date": "2026-09-21",
+          "steps": 0,
+          "goalReached": null
+        },
+        {
+          "date": "2026-09-22",
+          "steps": 0,
+          "goalReached": null
+        },
+        {
+          "date": "2026-09-23",
+          "steps": 0,
+          "goalReached": null
+        }
+      ],
+      "averageDaily": 0,
+      "daysWithGoalReached": 0,
+      "totalDaysLogged": 0
+    }
+  },
+  "forma do supino": {
+    "tool": "explain_form",
+    "saida": [
+      {
+        "id": "<id:1>",
+        "name": "Supino Reto com Barra - Pegada Média",
+        "primaryMuscles": ["chest"],
+        "secondaryMuscles": ["shoulders", "triceps"],
+        "equipment": "barra",
+        "level": "beginner",
+        "mechanic": "compound",
+        "instructions": [
+          "Deite-se em um banco reto. Com uma pegada média (que forme um ângulo de 90 graus no meio do movimento), levante a barra do rack e segure-a acima de você com os braços travados. Esta será sua posição inicial.",
+          "Da posição inicial, inspire e desça lentamente até a barra tocar o meio do seu peito.",
+          "Após uma breve pausa, empurre a barra de volta à posição inicial enquanto expira, focando nos músculos do peito. Trave os braços e contraia o peito no topo, segure por um segundo e desça novamente.",
+          "Repita pelo número prescrito de repetições.",
+          "Ao terminar, recoloque a barra no rack."
+        ]
+      },
+      {
+        "id": "<id:2>",
+        "name": "Supino Reto com Barra e Pegada Larga",
+        "primaryMuscles": ["chest"],
+        "secondaryMuscles": ["shoulders", "triceps"],
+        "equipment": "barra",
+        "level": "intermediate",
+        "mechanic": "compound",
+        "instructions": [
+          "Deite-se em um banco plano com os pés firmes no chão. Segure a barra com uma pegada pronada e larga (cerca de 3 polegadas além da largura dos ombros), levantando-a do suporte e mantendo os braços travados acima do peito. Esta é a posição inicial.",
+          "Inspire e desça a barra lentamente até tocar o meio do peito.",
+          "Após uma pausa de um segundo, empurre a barra de volta à posição inicial, expirando e contraindo o peito. Trave os braços e segure a contração por um segundo antes de descer novamente. Dica: A descida deve ser pelo menos duas vezes mais lenta que a subida.",
+          "Repita o movimento para o número de repetições prescrito."
+        ]
+      },
+      {
+        "id": "<id:3>",
+        "name": "Supino Reto com Barra em Pegada Fechada",
+        "primaryMuscles": ["triceps"],
+        "secondaryMuscles": ["chest", "shoulders"],
+        "equipment": "barra",
+        "level": "beginner",
+        "mechanic": "compound",
+        "instructions": [
+          "Deite-se de costas em um banco reto. Usando uma pegada fechada (aproximadamente na largura dos ombros), levante a barra do suporte e segure-a reta acima de você com os braços travados. Esta será sua posição inicial.",
+          "Enquanto inspira, desça lentamente até sentir a barra no meio do peito. Dica: Ao contrário do supino reto comum, mantenha os cotovelos próximos ao torso o tempo todo para maximizar o envolvimento do tríceps.",
+          "Após uma pausa de um segundo, traga a barra de volta à posição inicial enquanto expira e empurra a barra usando os músculos do tríceps. Trave os braços na posição contraída, segure por um segundo e então comece a descer lentamente novamente. Dica: Deve levar pelo menos o dobro do tempo para descer do que para subir.",
+          "Repita o movimento pelo número prescrito de repetições.",
+          "Ao terminar, coloque a barra de volta no suporte."
+        ]
+      }
+    ]
+  },
+  "forma inexistente": {
+    "tool": "explain_form",
+    "saida": {
+      "erro": "NotFoundException: Exercise not found: xyzzy"
+    }
+  },
+  "registra agua hoje": {
+    "tool": "log_water",
+    "saida": {
+      "waterLogId": "<id:4>",
+      "totalMlForDate": 1400,
+      "goalReached": false,
+      "goalTargetMl": 2500
+    }
+  },
+  "registra agua ontem": {
+    "tool": "log_water",
+    "saida": {
+      "waterLogId": "<id:5>",
+      "totalMlForDate": 5100,
+      "goalReached": true,
+      "goalTargetMl": 2500
+    }
+  },
+  "registra agua sem meta": {
+    "tool": "log_water",
+    "saida": {
+      "waterLogId": "<id:6>",
+      "totalMlForDate": 250,
+      "goalReached": null,
+      "goalTargetMl": null
+    }
+  },
+  "registra passos ontem": {
+    "tool": "log_steps",
+    "saida": {
+      "stepLogId": "<id:7>",
+      "effectiveStepsForDate": 12000,
+      "goalReached": true
+    }
+  },
+  "registra passos hoje": {
+    "tool": "log_steps",
+    "saida": {
+      "stepLogId": "<id:8>",
+      "effectiveStepsForDate": 100,
+      "goalReached": false
+    }
+  },
+  "registra passos sem meta": {
+    "tool": "log_steps",
+    "saida": {
+      "stepLogId": "<id:9>",
+      "effectiveStepsForDate": 5000,
+      "goalReached": null
+    }
+  },
+  "registra peso": {
+    "tool": "log_weight",
+    "saida": {
+      "weightLogId": "<id:10>"
+    }
+  },
+  "agua ontem depois": {
+    "tool": "get_water_for_date",
+    "saida": {
+      "date": "2026-09-22",
+      "totalMl": 5100,
+      "logCount": 8,
+      "goalReached": true,
+      "goalTargetMl": 2500
+    }
+  },
+  "passos ontem depois": {
+    "tool": "get_steps_for_date",
+    "saida": {
+      "date": "2026-09-22",
+      "steps": 12000,
+      "logCount": 1,
+      "sources": ["MANUAL"],
+      "goalReached": true,
+      "goalTarget": 9000
+    }
+  },
+  "historico de passos depois": {
+    "tool": "get_steps_history",
+    "saida": {
+      "days": [
+        {
+          "date": "2026-09-17",
+          "steps": 9720,
+          "goalReached": true
+        },
+        {
+          "date": "2026-09-18",
+          "steps": 8350,
+          "goalReached": false
+        },
+        {
+          "date": "2026-09-19",
+          "steps": 6980,
+          "goalReached": false
+        },
+        {
+          "date": "2026-09-20",
+          "steps": 10610,
+          "goalReached": true
+        },
+        {
+          "date": "2026-09-21",
+          "steps": 9240,
+          "goalReached": true
+        },
+        {
+          "date": "2026-09-22",
+          "steps": 12000,
+          "goalReached": true
+        },
+        {
+          "date": "2026-09-23",
+          "steps": 100,
+          "goalReached": false
+        }
+      ],
+      "averageDaily": 8142.857142857143,
+      "daysWithGoalReached": 4,
+      "totalDaysLogged": 7
+    }
+  }
+}

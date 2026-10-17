@@ -46,6 +46,14 @@ export interface McpToolAnnotations {
   confirmableHint: boolean;
 }
 
+/**
+ * Qual recorte do catálogo uma tool integra (eval da fronteira de tools,
+ * `docs/eval-fronteira-de-tools.md`). `entidade` é o catálogo de sempre, uma tool por
+ * entidade; `intencao` é o braço B, uma tool por intenção, servido só com o header
+ * `x-fatia-superficie: intencao` e a flag `MCP_SUPERFICIE_INTENCAO`.
+ */
+export type McpSurface = 'entidade' | 'intencao';
+
 export interface McpToolDef<S extends ZodRawShape = ZodRawShape> {
   name: string;
   /** Nome de exibição, legível por humano. Exigido pelo diretório. */
@@ -90,6 +98,13 @@ export interface McpToolDef<S extends ZodRawShape = ZodRawShape> {
    * o de `apps/agent/.../chat/artefatos.py`; o que não se encaixa é descartado lá.
    */
   artifact?(result: unknown, input: z.infer<z.ZodObject<S>>): Record<string, unknown> | null;
+  /**
+   * Ausente é `entidade`: as 100 e tantas tools do catálogo não declaram nada, e o
+   * recorte de sempre continua sendo o default. Só as tools de intenção declaram.
+   */
+  surface?: McpSurface;
+  /** Tool de intenção: as tools de entidade cujas pernas o `execute` percorre. */
+  compoe?: readonly string[];
 }
 
 export const MCP_TOOL_METADATA = 'mcp:tool';

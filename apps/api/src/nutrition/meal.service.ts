@@ -10,6 +10,7 @@ import { dayBoundsInTz } from '../progress/helpers/date-tz';
 import type { CreateMealDto, ListMealsDto, MealItemInputDto, UpdateMealDto } from './dto/meal.dto';
 import { calcMacrosFromFood, calcNutrientsFromFood, type ItemMacros } from './helpers/calc-macros';
 import { gramsFromPortion, visiblePortions } from './helpers/portion';
+import { ITENS_EM_ORDEM } from './itens-em-ordem';
 
 /** Item pronto para gravar: macros já calculados (ou copiados de um registro anterior). */
 export interface ResolvedItem extends ItemMacros {
@@ -89,7 +90,7 @@ export class MealService {
         notes,
         items: { create: items },
       },
-      include: { items: true },
+      include: ITENS_EM_ORDEM,
     });
   }
 
@@ -112,7 +113,7 @@ export class MealService {
   ) {
     const candidates = await this.prisma.meal.findMany({
       where: { userId, eatenAt, mealType },
-      include: { items: true },
+      include: ITENS_EM_ORDEM,
     });
     if (candidates.length === 0) return null;
 
@@ -123,7 +124,7 @@ export class MealService {
   async findById(userId: string, id: string) {
     const meal = await this.prisma.meal.findFirst({
       where: { id, userId },
-      include: { items: true },
+      include: ITENS_EM_ORDEM,
     });
     if (!meal) throw new NotFoundException('Meal not found');
     return meal;
@@ -142,7 +143,7 @@ export class MealService {
     }
     return this.prisma.meal.findMany({
       where,
-      include: { items: true },
+      include: ITENS_EM_ORDEM,
       orderBy: [{ eatenAt: 'desc' }, { id: 'desc' }],
       take: limit,
       ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
@@ -158,7 +159,7 @@ export class MealService {
         eatenAt: dto.eatenAt ? new Date(dto.eatenAt) : undefined,
         notes: dto.notes,
       },
-      include: { items: true },
+      include: ITENS_EM_ORDEM,
     });
   }
 

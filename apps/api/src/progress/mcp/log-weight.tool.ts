@@ -27,11 +27,10 @@ export class LogWeightTool implements McpToolDef {
       .optional()
       .describe('Observações da pesagem (ex.: "em jejum, pela manhã")'),
   } as const;
-  async execute(
+  execute(
     input: { weightKg: number; loggedAt?: string; notes?: string },
     { userId, timezone }: McpToolContext,
   ) {
-    const log = await this.weights.create(input, userId, timezone);
-    return { weightLogId: log.id };
+    return this.weights.log(input, userId, timezone);
   }
 }

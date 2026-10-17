@@ -220,6 +220,9 @@ describe('classificação de identidade das tools MCP', () => {
       accept_group_invite: 'InviteService',
       join_group: 'MembershipService',
       set_group_sharing: 'ConsentService',
+      // Não abre para a equipe: soma categorias a um vínculo que a pessoa já deu, escolhido
+      // entre os dela (`listMine`), pelo `ConsentService.grant`, que confere o recebedor.
+      share_my_data: 'ConsentService',
     };
     const comEscopo = tools.filter(
       (tool) => campos(tool).includes('scopes') && !consentimento.includes(tool),

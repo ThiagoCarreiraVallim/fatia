@@ -340,6 +340,72 @@ async def test_o_bloco_final_de_usage_vira_o_uso_do_turno(settings_factory):
     assert (fim_do_turno.usage.input_units, fim_do_turno.usage.output_units) == (812, 96)
 
 
+@pytest.mark.parametrize(
+    ("detalhes", "cache", "raciocinio"),
+    [
+        (
+            {
+                "prompt_tokens_details": {"cached_tokens": 700},
+                "completion_tokens_details": {"reasoning_tokens": 40},
+            },
+            700,
+            40,
+        ),
+        # Zero reportado é zero medido: cache frio, e não "não sei".
+        ({"prompt_tokens_details": {"cached_tokens": 0}}, 0, None),
+        # Ausente, nulo ou torto é `None`, nunca 0.
+        ({}, None, None),
+        ({"prompt_tokens_details": None, "completion_tokens_details": {}}, None, None),
+        ({"prompt_tokens_details": {"cached_tokens": "700"}}, None, None),
+    ],
+)
+async def test_cache_e_raciocinio_saem_dos_detalhes_do_usage(
+    settings_factory, detalhes, cache, raciocinio
+):
+    transport = ProviderRecordingTransport(
+        [[fragmento_de_texto("oi"), bloco_de_uso(detalhes=detalhes)]]
+    )
+    provider = build_provider(settings_factory(), transport=transport)
+
+    pedacos = await coletar(provider, [{"role": "user", "content": "oi"}])
+    await provider.aclose()
+
+    (fim_do_turno,) = [p for p in pedacos if isinstance(p, TurnEnd)]
+    assert fim_do_turno.usage is not None
+    assert fim_do_turno.usage.input_units == 812
+    assert (fim_do_turno.usage.cached_input_units, fim_do_turno.usage.reasoning_units) == (
+        cache,
+        raciocinio,
+    )
+
+
+@pytest.mark.parametrize(
+    ("usage_extra", "custo"),
+    [
+        ({"cost": 0.00042}, 0.00042),
+        # Zero cobrado é zero medido (modelo gratuito), e não "não sei".
+        ({"cost": 0}, 0.0),
+        ({}, None),
+        ({"cost": None}, None),
+        ({"cost": "0.00042"}, None),
+        ({"cost": True}, None),
+    ],
+)
+async def test_custo_sai_do_cost_do_usage(settings_factory, usage_extra, custo):
+    """`usage.cost` é o que o OpenRouter cobrou; o eval soma por tarefa."""
+    transport = ProviderRecordingTransport(
+        [[fragmento_de_texto("oi"), bloco_de_uso(detalhes=usage_extra)]]
+    )
+    provider = build_provider(settings_factory(), transport=transport)
+
+    pedacos = await coletar(provider, [{"role": "user", "content": "oi"}])
+    await provider.aclose()
+
+    (fim_do_turno,) = [p for p in pedacos if isinstance(p, TurnEnd)]
+    assert fim_do_turno.usage is not None
+    assert fim_do_turno.usage.cost_usd == custo
+
+
 async def test_sem_bloco_de_usage_o_turno_termina_sem_uso(settings_factory):
     transport = ProviderRecordingTransport([[fragmento_de_texto("oi")]])
     provider = build_provider(settings_factory(), transport=transport)

@@ -27,7 +27,11 @@ function confirmaveis(): McpToolDef[] {
       }
       const Ctor = exportado as new (...args: never[]) => McpToolDef;
       const tool = new Ctor(...(Array.from({ length: Ctor.length }, () => undefined) as never[]));
-      if (tool.annotations?.confirmableHint === true) tools.push(tool);
+      // Só a superfície de entidade: é a única que o chat do produto oferece e a prévia
+      // da ação desenha (`McpToolRegistry.buscar`). As de intenção são do eval da fronteira.
+      if (tool.surface === undefined && tool.annotations?.confirmableHint === true) {
+        tools.push(tool);
+      }
     }
   }
   return tools;

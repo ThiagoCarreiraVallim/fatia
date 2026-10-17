@@ -68,6 +68,10 @@ export const AppEnvSchema = z.object({
   // continua ligado até alguém editar o env. Sai quando a #158 entrar.
   INSIGHTS_ADDON_GROUP_IDS: z.string().default(''),
 
+  // Superfície de intenção do `/mcp` (eval da fronteira de tools). Desligada por padrão, e
+  // `SuperficieDeIntencao` recusa subir com ela ligada em produção.
+  MCP_SUPERFICIE_INTENCAO: z.enum(['', '0', '1', 'true', 'false']).default(''),
+
   // Asaas: cobrança B2B (#158) e assinatura PRO pela web (ADR 024). As três são
   // opcionais e a instância que não cobra ninguém não preenche nenhuma: sem elas
   // o provedor não nasce (`AsaasProvider.fromEnv` recusa) e o checkout responde

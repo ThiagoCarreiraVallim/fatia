@@ -115,6 +115,17 @@ export class SessionSetService {
     await this.prisma.sessionSet.delete({ where: { id } });
   }
 
+  /** Quais destes exercícios a pessoa já treinou — uma consulta, em vez de uma por exercício. */
+  async trainedAmong(userId: string, exerciseIds: number[]): Promise<Set<number>> {
+    if (exerciseIds.length === 0) return new Set();
+    const linhas = await this.prisma.sessionSet.findMany({
+      where: { exerciseId: { in: exerciseIds }, session: { userId } },
+      distinct: ['exerciseId'],
+      select: { exerciseId: true },
+    });
+    return new Set(linhas.map((l) => l.exerciseId));
+  }
+
   async getLastForExercise(userId: string, exerciseId: number, before?: string) {
     return this.prisma.sessionSet.findFirst({
       where: {

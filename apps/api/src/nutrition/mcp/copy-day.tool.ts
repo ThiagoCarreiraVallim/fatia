@@ -18,7 +18,7 @@ export class CopyDayTool implements McpToolDef {
   readonly hostedInference = false;
   readonly description =
     'Copia todas as refeições de um dia para outro. As que já estão no destino são puladas e contadas em skipped. ' +
-    'Exemplo: {"fromDate":"2026-07-29","toDate":"2026-07-30"}';
+    'Exemplo: {"fromDate":"2026-09-22","toDate":"2026-09-23"}';
   readonly inputSchema = {
     fromDate: z.string().regex(YMD).describe('Dia de origem, YYYY-MM-DD'),
     toDate: z.string().regex(YMD).describe('Dia de destino, YYYY-MM-DD'),

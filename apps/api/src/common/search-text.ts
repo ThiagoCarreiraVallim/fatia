@@ -26,7 +26,9 @@ export const enum MatchRank {
   Prefix = 1,
   WordPrefix = 2,
   Contains = 3,
-  None = 4,
+  /** Cada palavra do termo começa uma palavra do nome, fora de ordem. Só a busca de alimentos. */
+  AllWords = 4,
+  None = 5,
 }
 
 /**

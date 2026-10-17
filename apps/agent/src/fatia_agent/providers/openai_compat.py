@@ -10,7 +10,7 @@ import asyncio
 import base64
 import json as jsonlib
 import uuid
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Mapping, Sequence
 from typing import Any
 
 import httpx
@@ -71,8 +71,25 @@ class OpenAICompatProvider:
         max_retries: int = 2,
         retry_backoff_s: float = 0.5,
         transport: httpx.AsyncBaseTransport | None = None,
+        chat_extra: Mapping[str, Any] | None = None,
     ) -> None:
         self._text_model = text_model
+        # Campos a mais no corpo de `stream_chat` — temperatura, roteamento de provedor
+        # de um agregador. O produto não passa nada; o eval da fronteira passa, e grava
+        # o que passou no ledger, porque cada um deles muda o que está sendo medido.
+        self._chat_extra = dict(chat_extra or {})
+        sobrescritos = self._chat_extra.keys() & {
+            "model",
+            "messages",
+            "stream",
+            "stream_options",
+            "tools",
+        }
+        if sobrescritos:
+            raise ValueError(
+                f"chat_extra não pode trocar {', '.join(sorted(sobrescritos))}: o modelo e o "
+                "prompt registrados deixariam de ser os que rodaram."
+            )
         self._vision_model = vision_model
         self._embedding_model = embedding_model
         self._transcription_model = transcription_model
@@ -236,6 +253,9 @@ class OpenAICompatProvider:
         if tools:
             payload["tools"] = list(tools)
         payload = self._with_routing(payload)
+        # O `chat_extra` vem por último: um `provider` declarado ali troca o roteamento
+        # inteiro, e o que foi para o corpo é exatamente o que o ledger grava.
+        payload.update(self._chat_extra)
 
         acumulador = _ToolCallAccumulator()
         finish_reason = "stop"
@@ -661,7 +681,16 @@ def _uso_do_fragmento(fragmento: dict[str, Any], *, padrao: str) -> Usage | None
         model=modelo if isinstance(modelo, str) and modelo else padrao,
         input_units=_inteiro(uso.get("prompt_tokens")),
         output_units=_inteiro(uso.get("completion_tokens")),
+        cached_input_units=_detalhe(uso, "prompt_tokens_details", "cached_tokens"),
+        reasoning_units=_detalhe(uso, "completion_tokens_details", "reasoning_tokens"),
+        cost_usd=_numero(uso.get("cost")),
     )
+
+
+def _detalhe(uso: dict[str, Any], bloco: str, campo: str) -> int | None:
+    """`uso[bloco][campo]` quando é inteiro; `None` quando o provedor não o mandou."""
+    detalhes = uso.get(bloco)
+    return _inteiro(detalhes.get(campo)) if isinstance(detalhes, dict) else None
 
 
 def _inteiro(valor: object) -> int | None:
@@ -669,6 +698,13 @@ def _inteiro(valor: object) -> int | None:
     if isinstance(valor, bool) or not isinstance(valor, int):
         return None
     return valor
+
+
+def _numero(valor: object) -> float | None:
+    """Dólar vem fracionário (`0.00042`); `bool` fica fora pelo mesmo motivo de `_inteiro`."""
+    if isinstance(valor, bool) or not isinstance(valor, int | float):
+        return None
+    return float(valor)
 
 
 def _floats(embedding: list[Any]) -> list[float]:
