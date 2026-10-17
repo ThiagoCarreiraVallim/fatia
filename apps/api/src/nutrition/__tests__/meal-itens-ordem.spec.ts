@@ -66,13 +66,19 @@ describe('itens de refeição na ordem em que foram registrados', () => {
   });
 
   it('editar um item não o tira do lugar', async () => {
-    const [arroz] = await prisma.mealItem.findMany({ where: { mealId, foodName: 'Arroz' } });
-    for (let i = 0; i < 20 && (await ordemFisica())[2] !== 'Arroz'; i++) {
-      await prisma.mealItem.update({ where: { id: arroz.id }, data: { mealId: outraId } });
-      await prisma.mealItem.update({ where: { id: arroz.id }, data: { mealId, grams: 150 } });
+    const registrada = ['Arroz', 'Feijão', 'Frango'];
+    const itens = await prisma.mealItem.findMany({ where: { mealId } });
+    // Onde a tupla nova cai é decisão do Postgres: com espaço livre deixado por outras suítes
+    // numa página anterior, o item editado pode ir para *antes* dos outros, e insistir só no
+    // arroz deixava a lista na ordem registrada por 20 voltas seguidas no CI. Revezando o item
+    // editado, alguma volta tira a ordem física da registrada — e é só disso que o teste precisa.
+    for (let i = 0; i < 60 && (await ordemFisica()).join() === registrada.join(); i++) {
+      const { id } = itens[i % itens.length];
+      await prisma.mealItem.update({ where: { id }, data: { mealId: outraId } });
+      await prisma.mealItem.update({ where: { id }, data: { mealId, grams: 150 } });
     }
-    // A condição do defeito: fisicamente, o arroz editado agora vem por último.
-    expect(await ordemFisica()).toEqual(['Feijão', 'Frango', 'Arroz']);
+    // A condição do defeito: fisicamente, os itens editados já não estão na ordem registrada.
+    expect(await ordemFisica()).not.toEqual(registrada);
 
     const lida = await meals.findById(userId, mealId);
     expect(lida.items.map((i) => i.foodName)).toEqual(['Arroz', 'Feijão', 'Frango']);
