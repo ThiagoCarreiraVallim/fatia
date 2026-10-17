@@ -75,10 +75,26 @@ export class UserProvisioningService {
     }
   }
 
-  private async lookUpProfile(sub: string) {
-    if (!this.logto || this.profileLookedUp.has(sub)) return null;
+  /**
+   * Consultas em curso, por `sub`. O primeiro acesso dispara várias requisições
+   * juntas: sem isto, a que chegava durante a consulta da primeira via o `sub` já
+   * marcado, criava a conta com o e-mail provisório, e o backfill também não
+   * consultava mais — a conta ficava `<sub>@logto.local` até a API reiniciar.
+   */
+  private readonly profileLookups = new Map<
+    string,
+    ReturnType<LogtoManagementService['getUserProfile']>
+  >();
+
+  private lookUpProfile(sub: string): ReturnType<LogtoManagementService['getUserProfile']> {
+    if (!this.logto) return Promise.resolve(null);
+    const inFlight = this.profileLookups.get(sub);
+    if (inFlight) return inFlight;
+    if (this.profileLookedUp.has(sub)) return Promise.resolve(null);
     this.profileLookedUp.add(sub);
-    return this.logto.getUserProfile(sub);
+    const lookup = this.logto.getUserProfile(sub).finally(() => this.profileLookups.delete(sub));
+    this.profileLookups.set(sub, lookup);
+    return lookup;
   }
 
   /**

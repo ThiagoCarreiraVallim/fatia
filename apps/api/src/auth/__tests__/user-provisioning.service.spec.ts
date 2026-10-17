@@ -204,6 +204,39 @@ describe('UserProvisioningService', () => {
       });
     });
 
+    it('primeiro acesso em paralelo: quem chega durante a consulta espera o perfil, e não nasce provisório', async () => {
+      // O primeiro acesso dispara várias requisições juntas. Antes, a segunda via o
+      // `sub` já marcado como consultado, criava `<sub>@logto.local` sem esperar a
+      // primeira, e a conta ficava provisória até a API reiniciar.
+      let linha: { id: string; email: string; role: Role; timezone: string } | null = null;
+      prisma.user.findUnique.mockImplementation(() => Promise.resolve(linha));
+      prisma.user.create.mockImplementation(({ data }) => {
+        if (linha) {
+          return Promise.reject(
+            new Prisma.PrismaClientKnownRequestError('unique', {
+              code: 'P2002',
+              clientVersion: 'x',
+            }),
+          );
+        }
+        linha = { id: 'u', email: data.email, role: data.role, timezone: 'UTC' };
+        return Promise.resolve(linha);
+      });
+      let responder: (perfil: { email: string; name: string }) => void = () => undefined;
+      logto.getUserProfile.mockReturnValue(new Promise((resolve) => (responder = resolve)));
+
+      const payload = makePayload({ email: undefined, name: undefined });
+      const primeira = service.provision(payload);
+      const segunda = service.provision(payload);
+      await new Promise((resolve) => setImmediate(resolve));
+      responder({ email: 'ana@example.com', name: 'Ana' });
+
+      const [a, b] = await Promise.all([primeira, segunda]);
+      expect(a.email).toBe('ana@example.com');
+      expect(b.email).toBe('ana@example.com');
+      expect(logto.getUserProfile).toHaveBeenCalledTimes(1);
+    });
+
     it('não consulta o Logto quando o token já traz o e-mail', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
       prisma.user.create.mockResolvedValue({
