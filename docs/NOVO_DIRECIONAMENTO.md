@@ -256,11 +256,41 @@ instrutor que quase não usa computador no trabalho. Planos e dicas (Fase 7), de
 **Não exercitado aqui:** compra real de assentos e faturas no sandbox do Asaas (os testes usam um
 provedor falso e o pool de cortesia), e o painel no app em aparelho.
 
-## Fase 7 — Planos prontos e dicas
+## Fase 7 — Conteúdo da comunidade
 
-- Schema do PR #243: `PlanTemplate` (snapshot Json, autor), `PlanTemplatePublication` (template ↔ grupo), `WorkoutPlan.fromTemplateId`; + `NutritionPlanTemplate` (metas de kcal/macros + refeições sugeridas) e `GroupTip` (título, corpo markdown, imagem?, categoria, publishedAt, pinned).
-- Service reusa `plan-materializer.service.ts` (cópia no aceite). REST de CRUD para a equipe (`content.publish`), REST + MCP para o membro: `list_group_plans`, `adopt_group_plan`, `list_group_tips`.
-- UI: editor no dashboard (reusa componentes de plano de `workout/plans`); no app, aba Comunidade → Planos/Dicas com "Adotar".
+Ampliada em 17/10/2026: além de planos prontos e dicas, a comunidade terá **o próprio catálogo de
+exercícios** (só os aparelhos que a academia tem, com fotos, vídeos e dicas dela; o influencer com
+os tutoriais que gravou) e **o próprio agente** (nome, avatar e instruções). Três entregas:
+
+- **7a — Armazenamento, planos prontos e dicas.**
+- **7b — Catálogo de exercícios da comunidade:** `Exercise.groupId`, equipamentos da academia,
+  fotos e vídeo enviados ao R2, "comunidade primeiro" na busca e filtro "Na minha academia", o
+  tutorial da comunidade no lugar do vídeo padrão, `plan-snapshot` com exercício da comunidade.
+- **7c — Agente da comunidade:** `GroupAgent` (nome, avatar, instruções cercadas abaixo das regras
+  de segurança), escolha do agente no chat (padrão: a comunidade do assento), evals de injeção.
+
+Decisões do usuário: vídeo por **upload direto no R2** (não link do YouTube); a pessoa **escolhe o
+agente no chat**; no catálogo, **a comunidade aparece primeiro**, com filtro, e o catálogo geral
+continua acessível.
+
+### Andamento da Fase 7a — concluída
+
+- [x] **Mídia (ADR 028 aceita):** bucket S3 privado (R2 em produção, SeaweedFS no dev), envio direto
+      por URL assinada com tipo e tamanho na assinatura, `sharp` sem EXIF/GPS em WebP, leitura só
+      assinada (10 min), faxina de 24 h, exclusão com o item, a comunidade e a conta; avatar da
+      comunidade; envs `MEDIA_S3_*`.
+- [x] **API:** `GroupPlanTemplate` (treino e nutrição), `GroupTip`, `fromTemplateId`;
+      `content.publish` inclui o dono e `content.read` abre para todos; adoção pelo
+      `PlanMaterializerService`, uma vez por treino, metas só com `applyGoals`; tools
+      `list_group_plans`, `adopt_group_plan`, `list_group_tips` (124 tools); export LGPD.
+- [x] **api-client, web e app:** seção "Planos e dicas" no painel (editor de treino a partir de um
+      plano seu, de nutrição com metas e refeições salvas, de dica com prévia do markdown e imagem),
+      vitrine do membro com "Adotar", avatar; markdown por tokens, nunca HTML.
+- [x] **E2E e fotos:** seed com planos e dicas, `content.spec` (dica com imagem real, publicar,
+      adotar), fotos 88, 89 e 92–95, axe; `ui:snap 34-conteudo`.
+
+**Não exercitado aqui:** o R2 de produção (o dev usa SeaweedFS) e o envio de imagem no app em
+aparelho. **Pendente:** cópia do bucket no `infra/backup.sh`.
 
 ## Fase 8 — Gamificação e timeline moderada
 
