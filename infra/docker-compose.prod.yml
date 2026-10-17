@@ -41,6 +41,10 @@ services:
       WEB_ORIGIN: https://app.${DOMAIN}
       LOGTO_MCP_APP_ID: ${LOGTO_MCP_APP_ID}
       LOGTO_MCP_APP_SECRET: ${LOGTO_MCP_APP_SECRET}
+      # Management API do Logto: apagar a identidade junto da conta e ler o e-mail no
+      # primeiro acesso. Vazio = a conta nasce com e-mail provisório.
+      LOGTO_M2M_APP_ID: ${LOGTO_M2M_APP_ID:-}
+      LOGTO_M2M_APP_SECRET: ${LOGTO_M2M_APP_SECRET:-}
       # Observabilidade (#39). Vazio = instrumentação inerte, sem exportador e sem overhead:
       # a API sobe igual mesmo sem o stack de observabilidade implantado. Para ligar, aponte
       # para o collector na `dokploy-network` — ver `docs/OPERATIONS.md` §Observabilidade.
@@ -57,6 +61,22 @@ services:
       AI_QUOTA_DAILY_MICROS: ${AI_QUOTA_DAILY_MICROS:-0}
       AI_QUOTA_GLOBAL_DAILY_MICROS: ${AI_QUOTA_GLOBAL_DAILY_MICROS:-0}
       AI_QUOTA_UNPRICED_DAILY_CALLS: ${AI_QUOTA_UNPRICED_DAILY_CALLS:-20}
+      # Plano Free/PRO e assentos (ADR 024/025). A instância pública usa true.
+      AI_REQUIRES_PLAN: ${AI_REQUIRES_PLAN:-false}
+      BILLING_PRO_MONTHLY_CENTS: ${BILLING_PRO_MONTHLY_CENTS:-1990}
+      BILLING_PRO_YEARLY_CENTS: ${BILLING_PRO_YEARLY_CENTS:-17900}
+      BILLING_SEAT_MONTHLY_CENTS: ${BILLING_SEAT_MONTHLY_CENTS:-1490}
+      # Asaas (PRO pela web e assentos). Vazio = checkout responde 503.
+      ASAAS_BASE_URL: ${ASAAS_BASE_URL:-}
+      ASAAS_API_KEY: ${ASAAS_API_KEY:-}
+      ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:-}
+      # RevenueCat (compra no app). Vazio = webhook e sync respondem 503.
+      REVENUECAT_WEBHOOK_AUTH: ${REVENUECAT_WEBHOOK_AUTH:-}
+      REVENUECAT_SECRET_KEY: ${REVENUECAT_SECRET_KEY:-}
+      REVENUECAT_ENTITLEMENT_ID: ${REVENUECAT_ENTITLEMENT_ID:-pro}
+      # E-mail do convite de comunidade. Vazio = só o link, sem e-mail.
+      MAIL_SMTP_URL: ${MAIL_SMTP_URL:-}
+      EMAIL_FROM: ${EMAIL_FROM:-Fatia <nao-responda@fat.ia.br>}
     expose:
       - "3000"
     networks:
@@ -151,6 +171,9 @@ services:
       LOGTO_BASE_URL: https://app.${DOMAIN}
       LOGTO_AUDIENCE: ${LOGTO_AUDIENCE:-https://api.${DOMAIN}}
       NEXT_PUBLIC_API_URL: https://api.${DOMAIN}
+      # Link universal do convite no app (/.well-known/*). Vazio = 404, abre o PWA.
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
+      ANDROID_CERT_SHA256: ${ANDROID_CERT_SHA256:-}
     expose:
       - "3001"
     depends_on:

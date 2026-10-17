@@ -384,6 +384,35 @@ fazer outra pessoa perder o PRO que pagou.
 **Não mitigado:** o portão é por usuário, e um PRO pode compartilhar a conta. A cota diária (#135)
 limita o custo; detectar compartilhamento não está no escopo.
 
+### 12. Comunidades — convite vazado, entrada indevida e assento para quem não é membro (ADR 025/026)
+
+O que um atacante ganharia: entrar numa comunidade alheia (e ganhar o PRO de um assento), ver os
+dados de quem consentiu à equipe, ou fazer a comunidade pagar a IA de alguém de fora.
+
+- **Adivinhar ou vazar o token.** O token é `randomBytes(32)` em base64url; o banco guarda só o
+  sha256, então um dump não dá convite válido. A prévia pública tem throttle (20/min) e responde o
+  **mesmo 404** para inexistente, vencido, revogado, esgotado ou de outra conta — o link não ensina
+  qual era o motivo. O aceite exige login e tem throttle próprio.
+- **Link encaminhado.** Convite por e-mail é de **uso único** e só vale para a conta com aquele
+  e-mail; o de link compartilhável tem validade (até 30 dias) e limite opcional de usos, e a equipe
+  revoga quando quiser. O incremento de usos é condicional na mesma transação do aceite: dois aceites
+  simultâneos não passam do limite.
+- **Entrar quem não devia.** Comunidade "só por convite" responde ao código como se não existisse; a
+  "com aprovação" guarda o pedido sem vínculo nenhum até o dono aprovar. Profissional só convida
+  membro, e ninguém é convidado como dono.
+- **Ler sem consentimento.** O consentimento é por categoria e vale para a equipe (dono, profissionais
+  e criadores) só pelo `assertReadable`, com registro de toda leitura; membro comum nunca lê. Sair,
+  ser removido ou mudar o consentimento revoga os vínculos na mesma transação.
+- **Assento para quem não é membro.** Atribuir exige associação **ativa da mesma comunidade**, e
+  `unassign` filtra pelo grupo da URL (id do corpo amarrado ao pai da rota); só o dono tem
+  `billing.manage`. Quem sai perde o assento na mesma transação.
+- **Redirecionamento aberto.** O retorno depois do login (`?next=`) só aceita caminho relativo deste
+  app, revalidado no callback.
+
+**Não mitigado:** um link compartilhável sem limite de usos deixa entrar quem o recebeu de segunda
+mão, até a equipe revogá-lo — é o preço de ter link de convite. O e-mail do convidado fica até 30 dias
+depois do uso ou do vencimento.
+
 ## Matriz de cobertura
 
 Onde o escopo é aplicado, por domínio. Verificado por
@@ -423,6 +452,8 @@ dono do pai não autoriza escrever em qualquer filho.
 | Memórias do chat     | `chat/memory/memory.service.ts`               | `where: { userId }`; esquecer exige posse                                  |
 | Checkpoint do agente | `chat/checkpoint-purge.service.ts`            | thread `{userId}:{conversationId}`; dono vem do `get_me`, nunca do corpo   |
 | Plano / assinatura   | `billing/user-subscription.service.ts`        | `where: { userId }`; nenhuma rota recebe tier, status ou id de assinatura  |
+| Convite              | `sharing/invite.service.ts`                   | token só por hash; aceite é sempre de quem chama; e-mail vinculado à conta |
+| Assentos             | `billing/seat-pool.service.ts`                | `groupId` da URL + associação ativa do mesmo grupo; só `billing.manage`    |
 
 ## O que não está protegido
 

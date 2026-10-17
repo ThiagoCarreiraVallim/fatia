@@ -107,6 +107,10 @@ services:
       REVENUECAT_WEBHOOK_AUTH: ${REVENUECAT_WEBHOOK_AUTH:-}
       REVENUECAT_SECRET_KEY: ${REVENUECAT_SECRET_KEY:-}
       REVENUECAT_ENTITLEMENT_ID: ${REVENUECAT_ENTITLEMENT_ID:-pro}
+      # E-mail do convite de comunidade. Fixo: dentro deste compose o Mailpit é
+      # `mailpit`, e o MAIL_SMTP_URL do .env aponta para localhost (a API no host).
+      MAIL_SMTP_URL: smtp://fatia:fatia@mailpit:1025
+      EMAIL_FROM: ${EMAIL_FROM:-Fatia <nao-responda@fatia.local>}
     ports:
       - "${API_PORT:-3000}:3000"
     profiles: ["full"]
@@ -129,6 +133,9 @@ services:
       LOGTO_APP_SECRET: ${LOGTO_APP_SECRET}
       LOGTO_COOKIE_SECRET: ${LOGTO_COOKIE_SECRET}
       LOGTO_BASE_URL: ${LOGTO_BASE_URL:-http://localhost:3030}
+      # Link universal do convite (/.well-known/*). Vazio = 404, o link abre o PWA.
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
+      ANDROID_CERT_SHA256: ${ANDROID_CERT_SHA256:-}
       PORT: 3030
     ports:
       - "${WEB_PORT:-3030}:3030"

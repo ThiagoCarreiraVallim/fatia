@@ -108,6 +108,31 @@ Com `AI_REQUIRES_PLAN=true`, ligue a cota **antes** (o PRO tem preço fixo) e co
 o Asaas, senão ninguém consegue assinar pela web. Roteiro completo em
 [`docs/BILLING.md`](../../docs/BILLING.md#plano-pro-do-usuário-adr-024).
 
+### Opcional — comunidades: assentos, convite por e-mail e link universal (ADR 025/026)
+
+```env
+# Assento de IA pago pela comunidade, por mês (cobrado pelo mesmo Asaas)
+BILLING_SEAT_MONTHLY_CENTS=1490
+
+# E-mail do convite, mandado pela própria API. O mesmo SMTP do Logto, em URL.
+# Vazio = a equipe copia o link do convite.
+MAIL_SMTP_URL=smtps://resend:CHAVE@smtp.resend.com:465
+EMAIL_FROM=Fatia <nao-responda@fat.ia.br>
+
+# Apagar a conta remove a identidade no Logto, e o primeiro acesso lê o e-mail
+# real da pessoa (sem isso o convite por e-mail não a reconhece). App M2M com a
+# role "Logto Management API access".
+LOGTO_M2M_APP_ID=...
+LOGTO_M2M_APP_SECRET=...
+
+# Link universal do convite no app nativo (/.well-known/*). Vazio = abre o PWA.
+APPLE_TEAM_ID=...
+ANDROID_CERT_SHA256=AA:BB:...
+```
+
+Todas já estão listadas no `infra/docker-compose.prod.yml`: o container só recebe o que está lá,
+então preencher no painel basta.
+
 ## Passo 4 — Primeiro deploy (Logto sobe sozinho)
 
 1. **Compose → Deploy**.

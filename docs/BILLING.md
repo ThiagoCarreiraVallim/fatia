@@ -1,16 +1,20 @@
 # Cobrança — empacotamento
 
 > **Escopo deste documento:** o **add-on de insights** (#160), o **cálculo da cobrança por aluno
-> ativo** (#158) e o **plano PRO do usuário** ([ADR 024](./ADR/024-plano-free-e-pago-do-usuario.md),
-> seção [Plano PRO](#plano-pro-do-usuário-adr-024) no fim). O plano PRO tem persistência completa
-> (assinatura, webhook, idempotência); a cobrança de grupo ainda só tem o cálculo.
+> ativo** (#158, superado pelos assentos), o **plano PRO do usuário**
+> ([ADR 024](./ADR/024-plano-free-e-pago-do-usuario.md), seção
+> [Plano PRO](#plano-pro-do-usuário-adr-024)) e os **assentos de comunidade**
+> ([ADR 025](./ADR/025-assentos-de-ia-por-comunidade.md), seção
+> [Assentos](#assentos-de-comunidade-adr-025) no fim). PRO e assentos têm persistência completa
+> (assinatura, webhook, idempotência).
 
 ## Linhas de receita
 
-| Item                                | Cobrança                    | Cancelamento         | Estado               |
-| ----------------------------------- | --------------------------- | -------------------- | -------------------- |
-| Assinatura base (por aluno ativo)   | mensal, proporcional ao uso | encerra o grupo      | #158, cálculo pronto |
-| Add-on de insights de comportamento | mensal, **preço fixo**      | independente da base | #160, esta fatia     |
+| Item                                | Cobrança                    | Cancelamento         | Estado             |
+| ----------------------------------- | --------------------------- | -------------------- | ------------------ |
+| Assentos de IA da comunidade        | mensal, **por assento**     | no fim do período    | ADR 025, pronto    |
+| Assinatura base (por aluno ativo)   | mensal, proporcional ao uso | encerra o grupo      | superada (ADR 025) |
+| Add-on de insights de comportamento | mensal, **preço fixo**      | independente da base | #160, esta fatia   |
 
 **O add-on é vendido à parte, e cancelável à parte.** Cancelar os insights não mexe na assinatura
 base, e cancelar a base leva o add-on junto porque não sobra grupo a analisar.
@@ -51,6 +55,10 @@ estreito, e é essa a frase que precisa sobreviver à primeira negociação come
 ---
 
 # Cobrança por aluno ativo (#158)
+
+> **Superada pela [ADR 025](./ADR/025-assentos-de-ia-por-comunidade.md).** A comunidade paga por
+> assento escolhido, não por aluno ativo; ver [Assentos](#assentos-de-comunidade-adr-025). O cálculo
+> abaixo continua no código como **métrica** do painel (quem está ativo), não como base de cobrança.
 
 ## O que já existe, e o que ainda falta
 
@@ -328,3 +336,77 @@ RevenueCat é a fonte da verdade, então evento fora de ordem não importa. Prob
 `PAST_DUE`, `unsubscribe_detected_at` vira `cancelAtPeriodEnd`, estorno vira `EXPIRED`.
 
 **Não exercitado aqui:** a compra real exige build de desenvolvimento e contas de teste nas lojas.
+
+# Assentos de comunidade (ADR 025)
+
+A comunidade (academia, treinador, criador) compra **assentos** e dá o PRO a quem escolher. Para o
+membro, o assento é mais uma origem do mesmo direito: `aiTierForUser` lê a atribuição ativa como
+fonte `GROUP`, e o uso da IA fica registrado com `paidBy = GROUP` e o `groupId` de quem pagou. Se a
+pessoa também paga o próprio PRO, vale o dela — a comunidade não paga uso de quem já paga — e o dono
+vê isso na lista de assentos (`ownPro`).
+
+## Preço e ciclo
+
+- **R$ 14,90 por assento por mês** (`BILLING_SEAT_MONTHLY_CENTS=1490`), sem mínimo de assentos, numa
+  assinatura mensal do Asaas no valor `assentos × preço`. Um pool por comunidade
+  (`GroupSeatPool`), com cliente próprio no Asaas (`externalReference: group:<id>`); o CPF/CNPJ vai
+  ao Asaas e não é guardado.
+- **Aumento vale na hora.** A recorrente passa ao valor novo (`updatePendingPayments`) e a diferença
+  até o fim do período sai numa **cobrança avulsa proporcional** (`GroupSeatAdjustment`), contada em
+  dias locais de São Paulo, hoje incluído. Ex.: 2 assentos a mais com 15 de 31 dias restantes =
+  R$ 14,42. Abaixo de **R$ 5,00** (o mínimo do Asaas) os assentos valem sem cobrança avulsa.
+- **Redução vale na renovação** (`nextPeriodSeats`). Se há mais pessoas com assento do que o número
+  novo, o pedido é recusado (409) dizendo quantas retirar antes.
+
+## Regras que valem hoje
+
+1. **Se a cobrança avulsa do aumento falhar no Asaas, o aumento é desfeito** (o valor recorrente volta
+   e a API responde 502).
+2. **Avulsa vencida põe a comunidade em atraso**, com os mesmos 7 dias de carência da mensalidade; os
+   assentos continuam valendo durante a carência e depois os membros voltam ao Free, sem perder dado.
+3. **Com a comunidade em atraso, aumentar assentos é recusado** até regularizar.
+4. **Só dá para atribuir assento depois do primeiro pagamento** confirmado.
+5. Assento só para associação **ativa da própria comunidade**; sair ou ser removido revoga o assento
+   na mesma transação.
+6. Apagar a comunidade, ou a conta de quem é dona, **cancela os assentos no Asaas antes**; se o Asaas
+   não responder, nada é apagado (503) e o pedido pode ser repetido.
+
+## API (só o dono, `billing.read` / `billing.manage`)
+
+| Rota                                                            | O que faz                               |
+| --------------------------------------------------------------- | --------------------------------------- |
+| `GET /groups/:groupId/seats`                                    | pool, atribuições, preço, próximo valor |
+| `POST /groups/:groupId/seats/checkout` `{seats, taxId}`         | abre a assinatura (link de pagamento)   |
+| `PATCH /groups/:groupId/seats` `{seats}`                        | aumenta (na hora) ou reduz (renovação)  |
+| `POST /groups/:groupId/seats/cancel`                            | cancela no fim do período               |
+| `POST\|DELETE /groups/:groupId/seats/assignments/:membershipId` | dá ou retira um assento                 |
+
+A tela do dono é da Fase 6; o membro vê "PRO pela comunidade X" em "Meu plano" e o selo na lista de
+comunidades.
+
+## Webhook
+
+O mesmo `POST /billing/webhooks/asaas`, com a mesma tabela de idempotência (`BillingWebhookEvent`). A
+ordem de procura é **assinatura pessoal → pool de assentos (`providerRef`) → cobrança avulsa
+(`providerChargeId`)**; só então o evento é marcado como desconhecido. A renovação confirmada aplica a
+redução pedida, revogando as atribuições mais recentes se sobrar alguém (o 409 da redução evita isso).
+
+## Cortesia e testes
+
+`pnpm billing:grant-seat <email> <slug> [--seats N]` dá um assento de cortesia, sem cobrança (pool com
+`providerRef` nulo); `--purge` desfaz sem deixar rastro. É o que o E2E usa.
+
+### Roteiro de sandbox dos assentos
+
+1. `ASAAS_*` do sandbox no `.env`, a API de pé e o webhook do sandbox apontando para
+   `/api/billing/webhooks/asaas` (túnel em dev).
+2. Como dono, `POST /groups/<id>/seats/checkout {"seats": 2, "taxId": "<CNPJ de teste>"}` e pagar o
+   link no sandbox: o pool vira `ACTIVE`.
+3. Atribuir a um membro ativo (`POST …/assignments/<membershipId>`): o "Meu plano" dele mostra
+   "PRO pela comunidade".
+4. `PATCH {"seats": 4}`: confere a cobrança avulsa proporcional no painel do Asaas; pagar e ver o
+   ajuste `ACTIVE`. Deixar vencer outra para ver o atraso e a carência.
+5. `PATCH {"seats": 1}` com dois atribuídos: 409. Retirar um, reduzir, e conferir na renovação.
+
+**Não exercitado aqui:** o sandbox real do Asaas (os testes usam um provedor falso), e a tela do dono,
+que é da Fase 6.

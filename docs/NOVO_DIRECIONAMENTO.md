@@ -187,6 +187,39 @@ dev build e de contas de teste). Os roteiros estão no `BILLING.md`.
 - E-mail de convite via `email.service.ts`; link `fatia.app/c/<token>` com deep link no mobile.
 - MCP (membro): `list_my_groups` (já), `accept_group_invite`, `list_group_consents`; administração continua fora do MCP (decisão existente).
 
+### Andamento da Fase 5 — concluída
+
+Decisões com o usuário: assento a **R$ 14,90/mês**, sem mínimo; **aumento vale na hora** com
+cobrança proporcional e **redução na renovação**; nesta fase só **API e telas do membro** (as do
+dono são a Fase 6); navegação **C sem Início** com barra de topo estilo iOS. Desenho nas
+[ADR 025](./ADR/025-assentos-de-ia-por-comunidade.md) e
+[ADR 026](./ADR/026-consentimento-ao-entrar-na-comunidade.md); operacional em
+[`BILLING.md`](./BILLING.md#assentos-de-comunidade-adr-025).
+
+- [x] **Navegação:** Nutrição · Treino · [+] · Comunidade · Mais, e a barra de topo com voltar
+      hierárquico (`ROUTES`/`routeInfo`) em todas as telas, web e app.
+- [x] **Schema:** `joinPolicy`, `visibility`, consentimento na associação, `GroupInvite` (só o hash
+      do token), `GroupSeatPool`/`Assignment`/`Adjustment`; tudo no export LGPD.
+- [x] **Comunidade na API:** consentimento à equipe (dono, profissionais e criadores) por categoria,
+      nos dois sentidos; entrada por código conforme a regra; convites por link e por e-mail
+      (`nodemailer`, `MAIL_SMTP_URL`); transferir, editar e apagar; estatísticas com opt-in real.
+- [x] **MCP (118 → 121):** `get_group_invite`, `accept_group_invite`, `set_group_sharing`;
+      administração continua fora do MCP.
+- [x] **Assentos:** checkout, aumento proporcional, redução na renovação, atribuição, webhook nas três
+      tabelas, fonte `GROUP` no direito e `paidBy = GROUP`; `billing:grant-seat`.
+- [x] **Telas do membro (web e app):** `/c/<token>` (sem login, volta ao link depois do login e do
+      assistente), minhas comunidades, entrar com código, detalhe (equipe, o que compartilho, quem
+      acessou, assento, sair), "PRO pela comunidade" no plano, "Membros" para a equipe, Privacidade e
+      Termos; links universais por env.
+- [x] **E2E e fotos:** Academia Demo no seed e conta da equipe no bootstrap, `community:invite`,
+      fluxos de link, e-mail (Mailpit só lido), código e assento; `ui:snap 30-comunidade`.
+- [x] **Correções que a fase expôs:** o primeiro acesso em paralelo gravava a conta com e-mail
+      provisório; o expurgo do e-mail do convite só rodava quando alguém criava outro convite; o
+      compose de produção não repassava as envs de cobrança, e-mail e `LOGTO_M2M_*`.
+
+**Não exercitado aqui:** o sandbox do Asaas para assentos, os links universais (precisam de
+`APPLE_TEAM_ID`, `ANDROID_CERT_SHA256` e build assinado) e o app em aparelho.
+
 ## Fase 6 — Dashboard web da academia/influencer
 
 - Route group novo `apps/web/src/app/(org)/org/[groupId]/…` com layout desktop (sidebar), seletor de comunidade e verificação de papel (`GET /groups/:id` → role); reaproveita padrões de `(pro)/students`.
