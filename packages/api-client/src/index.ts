@@ -30,6 +30,8 @@ export * from './goals';
 export * from './nutrition';
 export * from './progress';
 export * from './sharing';
+export * from './community';
+export * from './community-consent';
 export * from './users';
 export * from './workout';
 

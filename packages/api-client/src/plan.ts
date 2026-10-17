@@ -43,12 +43,13 @@ export const FREE_INCLUDES = [
   'Exportar e apagar seus dados',
 ] as const;
 
-const NOME_DA_FONTE: Record<SubscriptionSource, string> = {
+const SOURCE_NAME: Record<SubscriptionSource, string> = {
   ASAAS: 'pela web',
   APPLE: 'pela App Store',
   GOOGLE: 'pelo Google Play',
   MANUAL: 'cortesia',
   INSTANCE: 'liberado nesta instância',
+  GROUP: 'pela comunidade',
 };
 
 function dia(iso: string | null): string | null {
@@ -76,6 +77,14 @@ export function planSummary(plan: MyPlan): string {
     if (plan.degraded) return 'Free · seu PRO terminou';
     return 'Free';
   }
+  if (plan.source === 'GROUP') {
+    // A cobrança é da comunidade: a pessoa não renova, não cancela e não regulariza nada.
+    const quem = plan.groupName ? `PRO pela comunidade ${plan.groupName}` : 'PRO pela comunidade';
+    if (plan.reason === 'carencia') return `${quem} · pagamento da comunidade em atraso`;
+    const fimDoAssento = dia(plan.currentPeriodEnd);
+    if (plan.cancelAtPeriodEnd && fimDoAssento) return `${quem} até ${fimDoAssento}`;
+    return quem;
+  }
   const tipo =
     plan.interval === 'YEARLY' ? 'PRO anual' : plan.interval === 'MONTHLY' ? 'PRO mensal' : 'PRO';
   const fim = dia(plan.currentPeriodEnd);
@@ -88,8 +97,12 @@ export function planSummary(plan: MyPlan): string {
   return fim ? `${tipo} · renova em ${fim}` : tipo;
 }
 
-export function sourceLabel(source: SubscriptionSource | null): string | null {
-  return source ? NOME_DA_FONTE[source] : null;
+export function sourceLabel(
+  source: SubscriptionSource | null,
+  groupName: string | null = null,
+): string | null {
+  if (source === 'GROUP' && groupName) return `${SOURCE_NAME.GROUP} ${groupName}`;
+  return source ? SOURCE_NAME[source] : null;
 }
 
 /** Só dígitos, com a máscara 000.000.000-00 enquanto a pessoa digita. */

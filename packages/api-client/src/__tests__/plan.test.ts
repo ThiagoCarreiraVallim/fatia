@@ -7,6 +7,7 @@ import {
   maskCpf,
   planHref,
   planSummary,
+  sourceLabel,
   yearlyPerMonthLabel,
   yearlySavingsLabel,
 } from '../plan';
@@ -25,6 +26,7 @@ const plano = (p: Partial<MyPlan>): MyPlan => ({
   cancelAtPeriodEnd: false,
   paymentUrl: null,
   manageUrl: null,
+  groupName: null,
   requiresPlan: true,
   webCheckout: true,
   prices: PRECOS,
@@ -81,6 +83,34 @@ describe('planSummary', () => {
     );
     expect(planSummary(plano({ tier: 'PRO', source: 'INSTANCE', reason: 'instancia' }))).toBe(
       'IA liberada nesta instância',
+    );
+  });
+});
+
+describe('PRO pago pela comunidade (ADR 025)', () => {
+  const assento = {
+    tier: 'PRO' as const,
+    source: 'GROUP' as const,
+    reason: 'ativa' as const,
+    groupName: 'Academia Demo',
+    currentPeriodEnd: '2026-11-15T15:00:00Z',
+  };
+
+  it('diz quem paga, sem renovação nem cobrança da própria pessoa', () => {
+    expect(planSummary(plano(assento))).toBe('PRO pela comunidade Academia Demo');
+    expect(sourceLabel('GROUP', 'Academia Demo')).toBe('pela comunidade Academia Demo');
+    expect(sourceLabel('GROUP')).toBe('pela comunidade');
+  });
+
+  it('a carência é da comunidade, e não pede à pessoa para regularizar', () => {
+    expect(
+      planSummary(plano({ ...assento, reason: 'carencia', graceEndsAt: '2026-11-22T15:00:00Z' })),
+    ).toBe('PRO pela comunidade Academia Demo · pagamento da comunidade em atraso');
+  });
+
+  it('assentos cancelados valem até o fim do período', () => {
+    expect(planSummary(plano({ ...assento, cancelAtPeriodEnd: true }))).toBe(
+      'PRO pela comunidade Academia Demo até 15 de nov',
     );
   });
 });

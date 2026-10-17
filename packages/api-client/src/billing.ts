@@ -2,7 +2,8 @@ import { apiFetch } from './http';
 
 export type PlanTier = 'FREE' | 'PRO';
 export type BillingInterval = 'MONTHLY' | 'YEARLY';
-export type SubscriptionSource = 'ASAAS' | 'APPLE' | 'GOOGLE' | 'MANUAL' | 'INSTANCE';
+/** `GROUP` = um assento que a comunidade paga (ADR 025). */
+export type SubscriptionSource = 'ASAAS' | 'APPLE' | 'GOOGLE' | 'MANUAL' | 'INSTANCE' | 'GROUP';
 export type SubscriptionStatus = 'PENDING' | 'ACTIVE' | 'PAST_DUE' | 'CANCELED' | 'EXPIRED';
 /** Espelha `MotivoDoDireito` da API (`billing/ai-entitlement.ts`). */
 export type PlanReason =
@@ -30,6 +31,8 @@ export interface MyPlan {
   paymentUrl: string | null;
   /** Onde gerenciar quando a assinatura é da loja. */
   manageUrl: string | null;
+  /** A comunidade que paga, quando o PRO é um assento (`source: 'GROUP'`). */
+  groupName: string | null;
   /** A instância exige plano para a IA? Sem exigência, não há o que vender. */
   requiresPlan: boolean;
   /** Assinatura pela web (Asaas) disponível nesta instância. */

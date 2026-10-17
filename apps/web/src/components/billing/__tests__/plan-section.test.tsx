@@ -24,6 +24,7 @@ const BASE: MyPlan = {
   cancelAtPeriodEnd: false,
   paymentUrl: null,
   manageUrl: null,
+  groupName: null,
   requiresPlan: true,
   webCheckout: true,
   prices: { monthlyCents: 1990, yearlyCents: 17900 },
