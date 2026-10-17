@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { Slot, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { usersApi } from '@fatia/api-client';
+import { takePendingInvite } from '@/community/pending-invite';
 import { useAuth } from '@/auth/auth-context';
 import { BottomNav } from '@/components/layout/bottom-nav';
 import { RegistroRapido } from '@/components/layout/registro-rapido';
@@ -40,6 +41,16 @@ export default function AppLayout() {
   useEffect(() => {
     if (primeiraVez) router.replace('/onboarding');
   }, [primeiraVez, router]);
+
+  // Convite aberto antes do login (ou antes do assistente): volta para ele uma
+  // vez, quando a pessoa já está dentro e passou pelo assistente.
+  const pronto = eu.data !== undefined && eu.data.onboardedAt !== null;
+  useEffect(() => {
+    if (!pronto) return;
+    void takePendingInvite().then((token) => {
+      if (token) router.push(`/c/${token}`);
+    });
+  }, [pronto, router]);
 
   if (status !== 'signedIn') {
     return (

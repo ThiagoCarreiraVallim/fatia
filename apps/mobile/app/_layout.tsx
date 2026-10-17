@@ -92,6 +92,8 @@ export default function RootLayout() {
                 >
                   <Stack.Screen name="(app)" />
                   <Stack.Screen name="login" options={{ gestureEnabled: false }} />
+                  {/* O link de convite abre sem sessão: fica fora do `(app)`, que exige login. */}
+                  <Stack.Screen name="c/[token]" />
                 </Stack>
               </ToastProvider>
             </QueryClientProvider>

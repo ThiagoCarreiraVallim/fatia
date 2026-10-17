@@ -126,6 +126,14 @@ export default function PlanScreen() {
               navegador.
             </Text>
           ) : null}
+          {p.source === 'GROUP' ? (
+            <Text className="mt-2 text-sm text-muted-foreground">
+              {p.groupName
+                ? `A comunidade ${p.groupName} paga seu PRO.`
+                : 'A comunidade paga seu PRO.'}{' '}
+              Se ela retirar o assento, você volta ao Free sem perder nenhum registro.
+            </Text>
+          ) : null}
           {p.manageUrl ? (
             <Button
               variant="outline"

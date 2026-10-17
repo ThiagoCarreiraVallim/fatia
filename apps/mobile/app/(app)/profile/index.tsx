@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { Alert, Text, View } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Crown, Flag, LogOut, Settings, Shield, Sparkles } from 'lucide-react-native';
+import { Crown, Flag, LogOut, Settings, Shield, Sparkles, Users } from 'lucide-react-native';
 import { billingApi, planSummary, usersApi } from '@fatia/api-client';
 import { useAuth } from '@/auth/auth-context';
 import { Screen } from '@/components/layout/screen';
@@ -82,6 +82,12 @@ export default function ProfileScreen() {
               title="Meu plano"
               subtitle={plano.data ? planSummary(plano.data) : 'Free ou PRO'}
               onPress={() => router.push('/plan')}
+            />
+            <MenuItem
+              icon={<Users size={18} color={cores.primary} />}
+              title="Comunidades"
+              subtitle="Suas comunidades e o que você compartilha"
+              onPress={() => router.push('/community')}
             />
             <MenuItem
               icon={<Flag size={18} color={cores.primary} />}

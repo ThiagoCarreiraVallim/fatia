@@ -12,6 +12,14 @@ import type { ExpoConfig } from 'expo/config';
 /** Scheme do deep link. Precisa bater com o redirect URI cadastrado no Logto. */
 const SCHEME = 'fatia';
 
+/**
+ * Domínio do link universal do convite (`https://<host>/c/<token>`), o mesmo do
+ * PWA. Vazio, o app só abre o `fatia://c/<token>`: o link universal exige que a
+ * web sirva `apple-app-site-association` e `assetlinks.json` (`APPLE_TEAM_ID`,
+ * `ANDROID_CERT_SHA256`), e um domínio declarado sem eles só confunde o sistema.
+ */
+const APP_LINKS_HOST = process.env.APP_LINKS_HOST;
+
 const config: ExpoConfig = {
   name: 'Fatia',
   slug: 'fatia',
@@ -29,9 +37,20 @@ const config: ExpoConfig = {
   ios: {
     supportsTablet: false,
     bundleIdentifier: 'br.ia.fat.app',
+    ...(APP_LINKS_HOST && { associatedDomains: [`applinks:${APP_LINKS_HOST}`] }),
   },
   android: {
     package: 'br.ia.fat.app',
+    ...(APP_LINKS_HOST && {
+      intentFilters: [
+        {
+          action: 'VIEW',
+          autoVerify: true,
+          data: [{ scheme: 'https', host: APP_LINKS_HOST, pathPrefix: '/c/' }],
+          category: ['BROWSABLE', 'DEFAULT'],
+        },
+      ],
+    }),
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#131313',

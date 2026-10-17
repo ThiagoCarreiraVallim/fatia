@@ -10,7 +10,7 @@
 componentes em `apps/web`. Paridade significa: qualquer coisa que a pessoa faz
 hoje em `app.fat.ia.br`, ela faz no app nativo.
 
-**Estado:** 15 de 15 rotas de aplicação replicadas, 3 fora de propósito.
+**Estado:** 17 de 17 rotas de aplicação replicadas, 3 fora de propósito.
 Nenhum placeholder restante no código.
 
 ## Legenda
@@ -28,7 +28,9 @@ Nenhum placeholder restante no código.
 | PWA                                | App nativo                                 |     | Observação                                                                  |
 | ---------------------------------- | ------------------------------------------ | :-: | --------------------------------------------------------------------------- |
 | `(app)/page.tsx`                   | `app/(app)/index.tsx`                      | ✅  | dashboard                                                                   |
-| `(app)/community`                  | `app/(app)/community/index.tsx`            | ✅  | provisória até as telas da comunidade (Fase 5)                              |
+| `(app)/community`                  | `app/(app)/community/index.tsx`            | ✅  | minhas comunidades + "Entrar com código" (drawer)                           |
+| `(app)/community/[groupId]`        | `app/(app)/community/[groupId].tsx`        | ✅  | equipe, o que compartilho, quem acessou, assento, sair (`Alert`)            |
+| `(invite)/c/[token]`               | `app/c/[token].tsx`                        | ✅  | fora do `(app)`; deslogado guarda o token no cofre e retoma depois do login |
 | `(app)/goals`                      | `app/(app)/goals.tsx`                      | ✅  |                                                                             |
 | `(app)/nutrition`                  | `app/(app)/nutrition/index.tsx`            | ✅  |                                                                             |
 | `(app)/nutrition/foods`            | `app/(app)/nutrition/foods.tsx`            | ✅  | Meus alimentos; `?novo=1` abre o cadastro (card vazio e scanner)            |
@@ -160,6 +162,14 @@ esconde a diferença é exatamente o que este documento existe para impedir.
 | —                                    | `profile/export-data-button`                                     | ➕  | LGPD art. 18, V — ver abaixo                                             |
 | —                                    | `profile/delete-account-drawer`                                  | ➕  | LGPD art. 18, VI + exigência das lojas                                   |
 
+### Comunidade — 3 de 3
+
+| PWA                                  | App nativo                      |     | Observação                                                |
+| ------------------------------------ | ------------------------------- | :-: | --------------------------------------------------------- |
+| `community/consent-form`             | `community/consent-form`        | ✅  | checkbox nativo no PWA; `Pressable` com papel de checkbox |
+| `community/join-by-code-drawer`      | `community/join-by-code-drawer` | ✅  | código → prévia → consentimento no mesmo sheet            |
+| `community/invite` (cartão e aceite) | dentro de `app/c/[token].tsx`   | ✅  | a prévia deslogada vem da API pública nas duas pontas     |
+
 ### Layout e UI base — 15 de 15
 
 | PWA                   | App nativo                  |     | Observação                                                                                                                                                                                                                              |
@@ -268,6 +278,19 @@ leitor de tela — o TalkBack e o VoiceOver anunciam a mudança pelo
 
 ---
 
+## Comunidade — o convite abre o app
+
+O convite é o mesmo link nas duas pontas: `https://<app>/c/<token>` no PWA e, no app, `fatia://c/<token>`
+ou o link universal quando o build tem `APP_LINKS_HOST` (e a web serve
+`/.well-known/apple-app-site-association` e `/.well-known/assetlinks.json` com `APPLE_TEAM_ID` e
+`ANDROID_CERT_SHA256`). Os textos e as regras (`groupsApi`, `community-consent`) vêm do api-client.
+
+A diferença é o login: no PWA o `?next=` passa por um cookie e volta ao link; no app o login abre o
+navegador do sistema e o app pode ser fechado no meio, então o token fica no cofre
+(`src/community/pending-invite.ts`) e o `(app)/_layout` volta ao convite quando a pessoa está dentro
+e já passou pelo assistente. O consentimento é um `Pressable` com papel de checkbox — não há
+Switch nem Checkbox no app.
+
 ## Plano PRO — a mesma tela, outro caixa
 
 A tela "Meu plano" mostra o mesmo plano que o PWA (`billingApi.plan`, `PRO_BENEFITS`,
@@ -333,6 +356,9 @@ rodando, e deve ser feito antes de publicar:
 - [ ] "Desfazer" do aviso no rodapé: apagar água/peso/passos no sheet e item na timeline, tocar em Desfazer dentro de 5 s e o registro voltar (o aviso tem de ficar acima do sheet e da barra)
 - [ ] Meu plano (dev build com `EXPO_PUBLIC_REVENUECAT_*` e conta de teste da loja): pacotes com o preço da loja, compra virando PRO na hora (`revenuecat/sync`), "Restaurar compras", "Gerenciar na loja", e a câmera da Nutrição saindo do cadeado
 - [ ] Logout trocando a conta da RevenueCat (`Purchases.logOut`) e o login seguinte com outra pessoa não herdando a compra
+- [ ] Convite: `fatia://c/<token>` abrindo a tela do convite; deslogado, entrar e voltar ao convite (inclusive fechando o app no meio do login e passando pelo assistente)
+- [ ] Link universal (`APP_LINKS_HOST` no build, `APPLE_TEAM_ID`/`ANDROID_CERT_SHA256` na web): `https://<app>/c/<token>` abrindo o app em vez do navegador
+- [ ] Comunidade: checkboxes do consentimento com leitor de tela (estado marcado anunciado), "Entrar com código" com o teclado aberto no sheet, e "Sair" voltando à lista
 - [ ] Cores dos macros e de erro (`cores.ts`) iguais às do PWA lado a lado
 - [ ] Diagrama muscular destacando os grupos certos
 - [ ] Aparelho de entrada, não só simulador — os gráficos são o ponto a observar
