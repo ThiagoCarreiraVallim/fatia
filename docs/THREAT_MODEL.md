@@ -409,9 +409,22 @@ dados de quem consentiu à equipe, ou fazer a comunidade pagar a IA de alguém d
 - **Redirecionamento aberto.** O retorno depois do login (`?next=`) só aceita caminho relativo deste
   app, revalidado no callback.
 
+- **Painel da equipe (Fase 6).** O painel é tela; quem decide é a matriz em cada rota. Mudar papel é
+  só do dono (`member.role`), com o id da associação amarrado ao grupo da URL, e rebaixar revoga na
+  mesma transação o que a pessoa recebia. A lista de membros mostra à equipe o que cada um
+  compartilha **com quem pergunta** e o assento; a participação individual nas estatísticas nunca
+  sai. O profissional lista, revoga e reenvia só convites de membro.
+- **Convite em lote como spam.** Até 50 e-mails por lote, o teto de 50 convites por dia conta o lote
+  inteiro **antes** de criar qualquer um (estourou, nada sai), a rota tem throttle próprio e quem já
+  é membro ou tem convite aberto é pulado.
+- **Link de fatura injetado.** O link da fatura vem do webhook autenticado do Asaas e só é guardado se
+  for `https`.
+
 **Não mitigado:** um link compartilhável sem limite de usos deixa entrar quem o recebeu de segunda
 mão, até a equipe revogá-lo — é o preço de ter link de convite. O e-mail do convidado fica até 30 dias
-depois do uso ou do vencimento.
+depois do uso ou do vencimento. O teto diário limita quanto e-mail uma comunidade dispara, mas não
+impede que um dono mande convites a endereços que não pediram — o e-mail diz quem convidou e some
+sem resposta.
 
 ## Matriz de cobertura
 
@@ -454,6 +467,8 @@ dono do pai não autoriza escrever em qualquer filho.
 | Plano / assinatura   | `billing/user-subscription.service.ts`        | `where: { userId }`; nenhuma rota recebe tier, status ou id de assinatura  |
 | Convite              | `sharing/invite.service.ts`                   | token só por hash; aceite é sempre de quem chama; e-mail vinculado à conta |
 | Assentos             | `billing/seat-pool.service.ts`                | `groupId` da URL + associação ativa do mesmo grupo; só `billing.manage`    |
+| Papel no grupo       | `sharing/membership.service.ts#changeRole`    | só o dono; associação ativa do grupo da URL; vínculos no mesmo commit      |
+| Faturas dos assentos | `billing/seat-pool.service.ts#invoices`       | `where: { pool: { groupId } }` do grupo da URL; só `billing.read`          |
 
 ## O que não está protegido
 

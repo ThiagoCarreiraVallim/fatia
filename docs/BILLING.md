@@ -380,9 +380,22 @@ vê isso na lista de assentos (`ownPro`).
 | `PATCH /groups/:groupId/seats` `{seats}`                        | aumenta (na hora) ou reduz (renovação)  |
 | `POST /groups/:groupId/seats/cancel`                            | cancela no fim do período               |
 | `POST\|DELETE /groups/:groupId/seats/assignments/:membershipId` | dá ou retira um assento                 |
+| `GET /groups/:groupId/seats/invoices`                           | histórico de faturas, mais novas antes  |
 
-A tela do dono é da Fase 6; o membro vê "PRO pela comunidade X" em "Meu plano" e o selo na lista de
-comunidades.
+A tela do dono é a seção **Assentos** do painel da comunidade (`/org/<id>/seats`, Fase 6): comprar
+com CPF/CNPJ (não guardado), aumentar e reduzir com a explicação da cobrança, cancelar, quem usa e as
+faturas. No app o painel mostra os assentos, tira assento e lista as faturas, mas **não compra, não
+muda a quantidade e não cancela** — é pagamento fora da loja. O membro vê "PRO pela comunidade X" em
+"Meu plano" e o selo na lista de comunidades.
+
+### Faturas
+
+`GroupSeatInvoice` guarda cada cobrança do Asaas da assinatura dos assentos (`SUBSCRIPTION`) e de cada
+proporcional (`ADJUSTMENT`), atualizada a cada evento dela no webhook. É **cópia** do que o provedor
+diz, para o dono ver; o direito à IA continua decidido pelo pool e pelos ajustes. Evento fora de ordem
+não desfaz pagamento (paga só vira cancelada, por estorno ou contestação), e o link da fatura só é
+guardado se for `https`. Cobranças anteriores à Fase 6 não aparecem: o histórico começa no primeiro
+evento depois dela.
 
 ## Webhook
 
@@ -408,5 +421,8 @@ redução pedida, revogando as atribuições mais recentes se sobrar alguém (o 
    ajuste `ACTIVE`. Deixar vencer outra para ver o atraso e a carência.
 5. `PATCH {"seats": 1}` com dois atribuídos: 409. Retirar um, reduzir, e conferir na renovação.
 
-**Não exercitado aqui:** o sandbox real do Asaas (os testes usam um provedor falso), e a tela do dono,
-que é da Fase 6.
+6. Pelo painel (`/org/<id>/seats`): repetir 2 a 5 pela tela e conferir as faturas aparecendo com o
+   link do Asaas a cada evento do webhook.
+
+**Não exercitado aqui:** o sandbox real do Asaas (os testes usam um provedor falso). A tela do dono foi
+exercitada com o pool de cortesia do seed.

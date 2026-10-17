@@ -51,16 +51,17 @@ a associação ao grupo, o **consentimento** que o titular concede a um profissi
 de quem leu o dado dele. Desenho em [ADR 014](./ADR/014-compartilhamento-b2b-copia-e-vinculo.md);
 quem pode o quê, em [PERMISSIONS.md](./PERMISSIONS.md).
 
-| Dado                                       | Onde               | Retenção                                                  |
-| ------------------------------------------ | ------------------ | --------------------------------------------------------- |
-| Associação ao grupo (`GroupMembership`)    | Postgres           | Enquanto a conta existir. Sair marca `status` e `leftAt`  |
-| Consentimento (`ProfessionalLink`)         | Postgres           | Enquanto a conta existir — **revogar não apaga a linha**  |
-| Trilha de acesso (`ProfessionalAccessLog`) | Postgres           | Enquanto a conta existir                                  |
-| Consentimento à equipe (`consentScopes`)   | Postgres           | Na associação; reescrito quando a pessoa muda             |
-| Convite (`GroupInvite`)                    | Postgres           | Enquanto a comunidade existir; só o hash do token         |
-| E-mail de quem foi convidado               | Postgres           | **30 dias** depois do uso, do vencimento ou da revogação  |
-| Assentos (`GroupSeatPool`, `…Assignment`)  | Postgres           | Enquanto a comunidade existir; atribuição tem `revokedAt` |
-| O que o profissional leu                   | **Não armazenado** | —                                                         |
+| Dado                                       | Onde               | Retenção                                                                                       |
+| ------------------------------------------ | ------------------ | ---------------------------------------------------------------------------------------------- |
+| Associação ao grupo (`GroupMembership`)    | Postgres           | Enquanto a conta existir. Sair marca `status` e `leftAt`                                       |
+| Consentimento (`ProfessionalLink`)         | Postgres           | Enquanto a conta existir — **revogar não apaga a linha**                                       |
+| Trilha de acesso (`ProfessionalAccessLog`) | Postgres           | Enquanto a conta existir                                                                       |
+| Consentimento à equipe (`consentScopes`)   | Postgres           | Na associação; reescrito quando a pessoa muda                                                  |
+| Convite (`GroupInvite`)                    | Postgres           | Enquanto a comunidade existir; só o hash do token                                              |
+| E-mail de quem foi convidado               | Postgres           | **30 dias** depois do uso, do vencimento ou da revogação                                       |
+| Assentos (`GroupSeatPool`, `…Assignment`)  | Postgres           | Enquanto a comunidade existir; atribuição tem `revokedAt`                                      |
+| Faturas dos assentos (`GroupSeatInvoice`)  | Postgres           | Enquanto a comunidade existir; valor, vencimento, status e o link do Asaas, sem dado de pessoa |
+| O que o profissional leu                   | **Não armazenado** | —                                                                                              |
 
 **Revogar preenche `revokedAt`, nunca apaga.** É a linha revogada que responde "quem teve acesso a
 quê, e quando" — apagá-la destruiria exatamente a prova que o titular pode querer depois. O mesmo

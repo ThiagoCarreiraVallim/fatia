@@ -64,3 +64,20 @@ O dashboard da academia/influencer precisa mostrar dados dos membros. Dado de sa
   aprovação.
 - `assertReadable` passa a usar `canReceiveLink` (antes estava fixo em `PROFESSIONAL`). `MEMBER` e
   `ADMIN` continuam nunca lendo; toda leitura continua registrada.
+
+## Atualização — mudar papel pelo painel (2026-10-17, Fase 6)
+
+O dono passou a mudar o papel de quem já está dentro (`PATCH /groups/:id/members/:membershipId`,
+ação `member.role`, só `OWNER`). Os vínculos seguem a mesma regra do leque, no mesmo commit da troca:
+
+- **De membro para a equipe** (profissional ou criador): a pessoa passa a receber o que cada membro
+  já consentiu à comunidade, como quem entra na equipe por convite.
+- **Da equipe para membro:** os vínculos que ela recebia ali são revogados
+  (`revokedReason = role_changed`); `assertReadable` passa a responder 404 na requisição seguinte.
+- **Entre papéis de equipe:** nada muda nos vínculos.
+- O que a própria pessoa compartilha com a equipe não muda em nenhum dos casos, e o dono não muda de
+  papel por aqui: transfere.
+
+O consentimento foi dado "à equipe", e a tela mostra quem é a equipe no momento. Quem entra depois
+recebe o mesmo que quem já estava — a pessoa vê a equipe atual e o registro de acessos na tela da
+comunidade, e pode mudar ou cortar quando quiser.

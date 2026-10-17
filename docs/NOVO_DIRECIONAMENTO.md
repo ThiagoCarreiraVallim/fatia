@@ -227,6 +227,35 @@ dono são a Fase 6); navegação **C sem Início** com barra de topo estilo iOS.
 - `packages/api-client`: `groupsApi`, `invitesApi`, `seatsApi`, `insightsApi`, `contentApi`, `socialApi`.
 - Login: mesmo Logto; a web detecta papel de equipe e oferece "Painel da comunidade". (Opcional: subdomínio `painel.` apontando para o mesmo app.)
 
+### Andamento da Fase 6 — concluída
+
+Decisões com o usuário: o painel é do **dono e do profissional** (cada um vê as seções do seu papel);
+fecham-se nesta fase **mudar papel, convite em lote, histórico de faturas e o aviso do add-on**;
+"Criar comunidade" nasce em Minhas comunidades; e o painel existe **também no app**, pensando no
+instrutor que quase não usa computador no trabalho. Planos e dicas (Fase 7), desafios e moderação
+(Fase 8) ficam para as próximas.
+
+- [x] **API:** `PATCH /groups/:id/members/:membershipId` (ação `member.role`, só o dono, vínculos no
+      mesmo commit, ADR 026); `POST /groups/:id/invites/batch` (até 50, teto do dia contando o lote
+      inteiro, pulados com o motivo); a lista de membros mostra à equipe o que cada um compartilha com
+      quem pergunta e o assento; o profissional mexe só em convites de membro;
+      `GET /groups/:id/insights/panels`; `GroupSeatInvoice` alimentada pelo webhook e
+      `GET /groups/:id/seats/invoices`.
+- [x] **api-client:** `orgApi`, `seatsApi`, `insightsApi` e as regras comuns do painel
+      (`community-panel.ts`); rotas `/org/:id/…` e `/community/new` no mapa, com `:param` no "voltar".
+- [x] **Web:** `/org/<id>` com barra lateral no desktop e abas no celular — visão geral (números,
+      retenção e comportamento com o add-on), membros (aprovar, recusar, papel, assento, remover, ver
+      dados), convites (link, e-mail, lote por colar ou `.csv`), assentos (comprar, ajustar, cancelar,
+      faturas) e configurações (perfil, código, transferir, apagar); criar comunidade; "Abrir painel"
+      no detalhe da comunidade.
+- [x] **App:** as mesmas seções, com `Share` nativo e `Alert`; assentos sem compra (regra das lojas).
+- [x] **E2E e fotos:** sessão da equipe no `auth.setup`, Academia Demo com pedidos, treinos e
+      assentos de cortesia no seed, `panel.spec` (aprovar, recusar, papel, assento, convite, lote,
+      criar e apagar), axe no painel; `ui:snap 32-painel`.
+
+**Não exercitado aqui:** compra real de assentos e faturas no sandbox do Asaas (os testes usam um
+provedor falso e o pool de cortesia), e o painel no app em aparelho.
+
 ## Fase 7 — Planos prontos e dicas
 
 - Schema do PR #243: `PlanTemplate` (snapshot Json, autor), `PlanTemplatePublication` (template ↔ grupo), `WorkoutPlan.fromTemplateId`; + `NutritionPlanTemplate` (metas de kcal/macros + refeições sugeridas) e `GroupTip` (título, corpo markdown, imagem?, categoria, publishedAt, pinned).
