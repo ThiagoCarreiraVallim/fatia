@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, KeyRound } from 'lucide-react-native';
+import { ChevronRight, KeyRound, Plus } from 'lucide-react-native';
 import { groupsApi, membershipBadge, teamRoleLabel } from '@fatia/api-client';
 import { JoinByCodeDrawer } from '@/components/community/join-by-code-drawer';
 import { Screen } from '@/components/layout/screen';
@@ -20,14 +20,24 @@ export default function CommunityScreen() {
     <>
       <Screen
         actions={
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Entrar com código"
-            onPress={() => setJoining(true)}
-            className={TOP_BAR_ACTION}
-          >
-            <KeyRound size={20} color={cores.primary} />
-          </Pressable>
+          <>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Entrar com código"
+              onPress={() => setJoining(true)}
+              className={TOP_BAR_ACTION}
+            >
+              <KeyRound size={20} color={cores.primary} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel="Criar comunidade"
+              onPress={() => router.push('/community/new')}
+              className={TOP_BAR_ACTION}
+            >
+              <Plus size={20} color={cores.primary} />
+            </Pressable>
+          </>
         }
         onRefresh={() => void groups.refetch()}
         refreshing={groups.isRefetching}
@@ -40,8 +50,15 @@ export default function CommunityScreen() {
           {groups.data && groups.data.length === 0 ? (
             <EmptyState
               title="Suas comunidades aparecem aqui"
-              description="Entre pelo convite da sua academia ou do seu treinador, ou pelo código que eles divulgam, e escolha o que compartilhar."
-              action={<Button onPress={() => setJoining(true)}>Entrar com código</Button>}
+              description="Entre pelo convite da sua academia ou do seu treinador, ou pelo código que eles divulgam, e escolha o que compartilhar. Se você atende ou tem uma academia, crie a sua."
+              action={
+                <View className="gap-2">
+                  <Button onPress={() => setJoining(true)}>Entrar com código</Button>
+                  <Button variant="outline" onPress={() => router.push('/community/new')}>
+                    Criar comunidade
+                  </Button>
+                </View>
+              }
             />
           ) : null}
           {groups.data && groups.data.length > 0 ? (

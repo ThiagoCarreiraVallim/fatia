@@ -1,12 +1,14 @@
 import { Alert, Pressable, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Crown } from 'lucide-react-native';
+import { ChevronRight, Crown, LayoutDashboard } from 'lucide-react-native';
 import {
   ApiError,
+  canOpenPanel,
   consentSummary,
   groupsApi,
   joinPolicyLabel,
+  panelHref,
   SHARE_SCOPE_LABEL,
   teamRoleLabel,
   type JoinConsent,
@@ -134,6 +136,25 @@ export default function CommunityDetailScreen() {
           </Text>
         </View>
 
+        {canOpenPanel(g) ? (
+          <Pressable
+            accessibilityRole="link"
+            onPress={() => router.push(panelHref(g.id))}
+            className="flex-row items-center gap-3 rounded-2xl border border-border bg-card p-4 active:opacity-80"
+          >
+            <LayoutDashboard size={20} color={cores.primary} />
+            <View className="flex-1">
+              <Text className="text-sm font-medium text-foreground">Abrir painel</Text>
+              <Text className="text-xs text-muted-foreground">
+                {g.role === 'OWNER'
+                  ? 'Membros, convites, assentos e números da comunidade.'
+                  : 'Membros, o que compartilham com você e convites.'}
+              </Text>
+            </View>
+            <ChevronRight size={18} color={cores.mutedForeground} />
+          </Pressable>
+        ) : null}
+
         {!ativo ? (
           <Text className="rounded-2xl border border-border bg-card p-4 text-sm text-foreground">
             {`Seu pedido está aguardando o dono aprovar. O que você escolheu compartilhar (${consentSummary(g.consentScopes).toLowerCase()}) passa a valer quando você entrar.`}
@@ -233,7 +254,7 @@ export default function CommunityDetailScreen() {
 
         {g.role === 'OWNER' ? (
           <Text className="text-xs text-muted-foreground">
-            Quem é dono não sai da comunidade: transfira-a a alguém da equipe pelo painel.
+            Quem é dono não sai da comunidade: transfira-a pelo painel, em Configurações.
           </Text>
         ) : (
           <Button variant="outline" loading={leave.isPending} onPress={confirmarSaida}>
