@@ -532,14 +532,235 @@ async function seedCommunity(demoUserId: string) {
     },
   });
 
+  const conteudo = await seedCommunityContent(group.id, dona.id, profissional.id);
+
   // Convites que o E2E deixou para trás (o painel cria e revoga): fora.
   await prisma.groupInvite.deleteMany({ where: { groupId: group.id } });
 
   // O demo entra pelo E2E: nenhuma associação (o assento cai junto, em cascata).
   await prisma.groupMembership.deleteMany({ where: { groupId: group.id, userId: demoUserId } });
   console.log(
-    `  ✓ Comunidade "${group.name}" (${COMMUNITY_SLUG}): dona ${dona.email}, 1 profissional, ${membros.length} membros, ${PENDING_REQUESTS.length} pedidos, ${sessoes.length} treinos, ${COMMUNITY_SEATS} assentos.`,
+    `  ✓ Comunidade "${group.name}" (${COMMUNITY_SLUG}): dona ${dona.email}, 1 profissional, ${membros.length} membros, ${PENDING_REQUESTS.length} pedidos, ${sessoes.length} treinos, ${COMMUNITY_SEATS} assentos, ${conteudo}.`,
   );
+}
+
+/**
+ * Planos prontos e dicas da Academia Demo (Fase 7a): dois treinos e um plano de
+ * nutrição publicados, um treino em rascunho, três dicas publicadas (uma
+ * fixada) e uma em rascunho. Recriados a cada execução; as cópias que alguém
+ * adotou ficam, só perdem a proveniência. Sem imagem: o envio é coberto pelo
+ * E2E, e o seed não fala com o bucket.
+ */
+async function seedCommunityContent(groupId: string, donaId: string, profissionalId: string) {
+  await prisma.groupPlanTemplate.deleteMany({ where: { groupId } });
+  await prisma.groupTip.deleteMany({ where: { groupId } });
+
+  const treinos: Array<{
+    title: string;
+    description: string;
+    level: string;
+    authorId: string;
+    published: boolean;
+    exercises: Array<[string, number, string]>;
+  }> = [
+    {
+      title: 'Corpo inteiro para começar',
+      description:
+        'Três vezes por semana, com um dia de descanso entre os treinos. Carga leve nas duas primeiras semanas.',
+      level: 'beginner',
+      authorId: profissionalId,
+      published: true,
+      exercises: [
+        ['Leg Press', 3, '12'],
+        ['Supino Máquina', 3, '10-12'],
+        ['Remada Alta no Cabo', 3, '12'],
+        ['Elevação Lateral', 3, '15'],
+        ['Prancha', 3, '30 s'],
+      ],
+    },
+    {
+      title: 'Pernas e glúteos',
+      description: 'Para quem já treina há alguns meses. Descanso de 90 s entre as séries.',
+      level: 'intermediate',
+      authorId: donaId,
+      published: true,
+      exercises: [
+        ['Agachamento Goblet', 4, '10'],
+        ['Leg Press', 4, '8-12'],
+        ['Elevação de Quadril', 4, '12'],
+        ['Agachamento no Smith', 3, '10'],
+      ],
+    },
+    {
+      title: 'Braços (rascunho)',
+      description: 'Ainda em revisão pela equipe.',
+      level: 'intermediate',
+      authorId: profissionalId,
+      published: false,
+      exercises: [
+        ['Rosca Scott', 3, '12'],
+        ['Rosca Martelo', 3, '12'],
+      ],
+    },
+  ];
+
+  let n = 0;
+  for (const [i, t] of treinos.entries()) {
+    const exercicios = [];
+    for (const [order, [nome, targetSets, targetReps]] of t.exercises.entries()) {
+      const ex = await prisma.exercise.findFirst({
+        where: { name: nome, createdByUserId: null },
+        select: { id: true },
+      });
+      if (ex)
+        exercicios.push({
+          source: 'catalog',
+          catalogExerciseId: ex.id,
+          order,
+          targetSets,
+          targetReps,
+        });
+    }
+    if (exercicios.length === 0) continue;
+    await prisma.groupPlanTemplate.create({
+      data: {
+        groupId,
+        authorId: t.authorId,
+        kind: 'WORKOUT',
+        title: t.title,
+        description: t.description,
+        level: t.level,
+        snapshot: { version: 1, name: t.title, exercises: exercicios },
+        snapshotVersion: 1,
+        publishedAt: t.published ? localInstant(10 - i * 3, 9) : null,
+      },
+    });
+    n += 1;
+  }
+
+  const item = (
+    foodName: string,
+    grams: number,
+    kcal: number,
+    p: number,
+    c: number,
+    f: number,
+  ) => ({
+    foodId: null,
+    groupId: null,
+    foodName,
+    grams,
+    kcal,
+    proteinG: p,
+    carbsG: c,
+    fatG: f,
+    nutrients: null,
+    portionLabel: null,
+    portionQuantity: null,
+  });
+  await prisma.groupPlanTemplate.create({
+    data: {
+      groupId,
+      authorId: profissionalId,
+      kind: 'NUTRITION',
+      title: 'Cutting 1.800 kcal',
+      description:
+        'Metas para perder gordura sem perder força, com dois cafés que cabem na rotina.',
+      level: 'beginner',
+      snapshot: {
+        version: 1,
+        goals: {
+          kcalMin: 1700,
+          kcalMax: 1900,
+          proteinMinG: 130,
+          proteinMaxG: 160,
+          carbsMinG: 150,
+          carbsMaxG: 200,
+          fatMinG: 45,
+          fatMaxG: 65,
+        },
+        meals: [
+          {
+            name: 'Café com ovos',
+            mealType: 'BREAKFAST',
+            items: [
+              item('Ovo cozido', 100, 146, 13.3, 0.6, 9.5),
+              item('Pão integral', 50, 127, 4.7, 24.6, 1.8),
+              item('Mamão papaia', 150, 60, 0.7, 15.6, 0.2),
+            ],
+          },
+          {
+            name: 'Pós-treino rápido',
+            mealType: 'SNACK',
+            items: [
+              item('Iogurte natural', 170, 104, 7, 8.3, 4.9),
+              item('Aveia em flocos', 30, 118, 4.2, 20, 2.6),
+              item('Banana prata', 90, 88, 1.2, 23.4, 0.1),
+            ],
+          },
+        ],
+      },
+      snapshotVersion: 1,
+      publishedAt: localInstant(2, 9),
+    },
+  });
+  n += 1;
+
+  const dicas: Array<{
+    title: string;
+    body: string;
+    category: string;
+    pinned: boolean;
+    published: boolean;
+    authorId: string;
+  }> = [
+    {
+      title: 'Água antes do treino',
+      body: 'Beba **500 ml de água** até uma hora antes de treinar. Na academia, o bebedouro fica ao lado da recepção.',
+      category: 'HABITS',
+      pinned: true,
+      published: true,
+      authorId: donaId,
+    },
+    {
+      title: 'Aquecimento de 5 minutos',
+      body: 'Antes da primeira série:\n\n- 2 minutos de bicicleta ou esteira\n- 10 agachamentos sem carga\n- 1 série leve do primeiro exercício',
+      category: 'WORKOUT',
+      pinned: false,
+      published: true,
+      authorId: profissionalId,
+    },
+    {
+      title: 'Proteína em cada refeição',
+      body: 'Distribuir a proteína ao longo do dia ajuda mais do que concentrar tudo no jantar. *Ovos, iogurte, frango e feijão* contam.',
+      category: 'NUTRITION',
+      pinned: false,
+      published: true,
+      authorId: profissionalId,
+    },
+    {
+      title: 'Horário do feriado',
+      body: 'Rascunho: confirmar com a recepção antes de publicar.',
+      category: 'GENERAL',
+      pinned: false,
+      published: false,
+      authorId: donaId,
+    },
+  ];
+  for (const [i, d] of dicas.entries()) {
+    await prisma.groupTip.create({
+      data: {
+        groupId,
+        authorId: d.authorId,
+        title: d.title,
+        body: d.body,
+        category: d.category,
+        pinned: d.pinned,
+        publishedAt: d.published ? localInstant(9 - i * 2, 8) : null,
+      },
+    });
+  }
+  return `${n} planos e ${dicas.length} dicas`;
 }
 
 main()

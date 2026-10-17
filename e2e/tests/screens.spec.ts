@@ -449,6 +449,22 @@ test.describe('comunidade', () => {
 
     await visit(page, '/community', '42-comunidades');
     await visit(page, '/plan', '46-plano-assento');
+
+    // Planos e dicas da comunidade, do lado do membro (Fase 7a).
+    const id = (await page.request.get('/api/proxy/groups').then((r) => r.json())).find(
+      (g: { slug: string }) => g.slug === COMMUNITY_SLUG,
+    ).id as string;
+    await page.goto(`/community/${id}/content`);
+    await appears(page.getByRole('link', { name: /Corpo inteiro para começar/ }));
+    await snap(page, '93-comunidade-planos');
+    await page.goto(`/community/${id}/content?tab=tips`);
+    await appears(page.getByRole('heading', { name: 'Água antes do treino' }));
+    await snap(page, '94-comunidade-dicas');
+    await page.goto(`/community/${id}/content`);
+    await page.getByRole('link', { name: /Cutting 1.800 kcal/ }).click();
+    await page.getByRole('button', { name: 'Adotar plano' }).click();
+    await appears(page.getByRole('checkbox', { name: /Trocar minhas metas/ }));
+    await snap(page, '95-adotar-nutricao');
   });
 });
 
@@ -502,6 +518,20 @@ test.describe('painel da comunidade', () => {
     await snap(page, '86-painel-configuracoes');
 
     await visit(page, '/community/new', '87-criar-comunidade');
+
+    // Planos e dicas, pela equipe (Fase 7a).
+    await page.goto(`/org/${id}/content`);
+    await appears(page.getByRole('link', { name: /Braços \(rascunho\)/ }));
+    await snap(page, '88-painel-planos');
+    await page.getByRole('link', { name: /Corpo inteiro para começar/ }).click();
+    await appears(page.getByRole('list', { name: 'Exercícios publicados' }));
+    await snap(page, '89-painel-plano');
+    await page.goto(`/org/${id}/content`);
+    await page.getByRole('tab', { name: 'Dicas' }).click();
+    await page.getByRole('link', { name: /Aquecimento de 5 minutos/ }).click();
+    await page.getByRole('button', { name: 'Ver prévia' }).click();
+    await appears(page.getByLabel('Prévia da dica'));
+    await snap(page, '92-painel-dica');
   });
 });
 

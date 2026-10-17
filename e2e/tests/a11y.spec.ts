@@ -87,6 +87,20 @@ test.describe('axe: comunidade', () => {
     await page.waitForURL(/\/community\/[0-9a-f-]{36}$/);
     await page.getByRole('heading', { name: 'O que eu compartilho' }).waitFor();
     expect(await auditar(page)).toEqual([]);
+
+    // Planos e dicas (Fase 7a): a lista, as dicas e o "o que entra na sua conta".
+    const comunidade = page.url();
+    await page.goto(`${comunidade}/content`);
+    await page.getByRole('link', { name: /Cutting 1.800 kcal/ }).waitFor();
+    expect(await auditar(page)).toEqual([]);
+    await page.goto(`${comunidade}/content?tab=tips`);
+    await page.getByRole('heading', { name: 'Água antes do treino' }).waitFor();
+    expect(await auditar(page)).toEqual([]);
+    await page.goto(`${comunidade}/content`);
+    await page.getByRole('link', { name: /Cutting 1.800 kcal/ }).click();
+    await page.getByRole('button', { name: 'Adotar plano' }).click();
+    await page.getByRole('dialog').waitFor();
+    expect(await auditar(page)).toEqual([]);
   });
 });
 
@@ -105,6 +119,9 @@ test.describe('axe: painel da comunidade', () => {
       [`/org/${id}/invites`, 'Link de convite'],
       [`/org/${id}/seats`, 'Assentos PRO'],
       [`/org/${id}/settings`, 'Código de entrada'],
+      [`/org/${id}/content`, 'Corpo inteiro para começar'],
+      [`/org/${id}/content/plans/new?kind=NUTRITION`, 'Metas diárias'],
+      [`/org/${id}/content/tips/new`, 'Categoria'],
       ['/community/new', 'Como se entra'],
     ];
     for (const [rota, marco] of secoes) {
