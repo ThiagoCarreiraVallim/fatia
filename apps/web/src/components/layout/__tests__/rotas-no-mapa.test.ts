@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { ROUTES } from '@fatia/api-client';
 
 /**
- * Toda tela de `(app)` e `(pro)` precisa estar no mapa de rotas: é dele que a
+ * Toda tela de `(app)`, `(pro)` e `(org)` precisa estar no mapa de rotas: é dele que a
  * barra de topo tira o título e o "voltar". Tela nova sem entrada cairia no
  * pai genérico, com título vazio — e ninguém repararia até abrir no celular.
  */
@@ -33,7 +33,7 @@ function normal(pattern: string): string {
 }
 
 describe('mapa de rotas', () => {
-  const telas = ['(app)', '(pro)'].flatMap((g) => paginas(join(APP, g))).map(rotaDe);
+  const telas = ['(app)', '(pro)', '(org)'].flatMap((g) => paginas(join(APP, g))).map(rotaDe);
 
   it('acha as telas (o teste não passa vazio)', () => {
     expect(telas).toContain('/nutrition/foods');

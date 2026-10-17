@@ -128,9 +128,19 @@ describe('/community/[groupId]', () => {
     expect(screen.getByRole('button', { name: 'Cancelar pedido' })).toBeInTheDocument();
   });
 
-  it('o dono não tem botão de sair', async () => {
+  it('o dono não tem botão de sair, e abre o painel daqui', async () => {
     renderPage(grupo({ role: 'OWNER' }));
-    expect(await screen.findByText(/transfira-a a alguém da equipe/)).toBeInTheDocument();
+    expect(await screen.findByText(/transfira-a pelo painel/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Sair da comunidade' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Abrir painel/ })).toHaveAttribute(
+      'href',
+      `/org/${grupo().id}`,
+    );
+  });
+
+  it('membro comum não vê o painel', async () => {
+    renderPage(grupo({ role: 'MEMBER' }));
+    expect(await screen.findByRole('button', { name: 'Sair da comunidade' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Abrir painel/ })).not.toBeInTheDocument();
   });
 });

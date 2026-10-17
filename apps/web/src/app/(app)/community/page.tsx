@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, KeyRound, Users } from 'lucide-react';
+import { ChevronRight, KeyRound, Plus, Users } from 'lucide-react';
 import { groupsApi, membershipBadge, teamRoleLabel } from '@fatia/api-client';
 import { PlanBadge } from '@/components/billing/plan-badge';
 import { JoinByCodeDrawer } from '@/components/community/join-by-code-drawer';
@@ -31,6 +31,9 @@ export default function CommunityPage() {
         >
           <KeyRound size={20} aria-hidden />
         </button>
+        <Link href="/community/new" className={topBarActionClass} aria-label="Criar comunidade">
+          <Plus size={20} aria-hidden />
+        </Link>
       </TopBarActions>
 
       {groups.isPending && (
@@ -51,8 +54,15 @@ export default function CommunityPage() {
         <EmptyState
           icon={Users}
           title="Suas comunidades aparecem aqui"
-          description="Entre pelo convite da sua academia ou do seu treinador, ou pelo código que eles divulgam, e escolha o que compartilhar."
-          action={<Button onClick={() => setJoining(true)}>Entrar com código</Button>}
+          description="Entre pelo convite da sua academia ou do seu treinador, ou pelo código que eles divulgam, e escolha o que compartilhar. Se você atende ou tem uma academia, crie a sua."
+          action={
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button onClick={() => setJoining(true)}>Entrar com código</Button>
+              <Button asChild variant="outline">
+                <Link href="/community/new">Criar comunidade</Link>
+              </Button>
+            </div>
+          }
         />
       )}
       {groups.data && groups.data.length > 0 && (

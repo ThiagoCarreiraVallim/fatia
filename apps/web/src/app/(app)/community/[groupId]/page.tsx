@@ -5,12 +5,14 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Crown, ShieldCheck } from 'lucide-react';
+import { ChevronRight, Crown, LayoutDashboard, ShieldCheck } from 'lucide-react';
 import {
   ApiError,
+  canOpenPanel,
   consentSummary,
   groupsApi,
   joinPolicyLabel,
+  panelHref,
   SHARE_SCOPE_LABEL,
   teamRoleLabel,
   type JoinConsent,
@@ -120,6 +122,24 @@ export default function CommunityDetailPage() {
         </p>
       </section>
 
+      {canOpenPanel(g) && (
+        <Link
+          href={panelHref(g.id)}
+          className="flex items-center gap-3 rounded-2xl border border-subtle bg-card p-4 hover:bg-accent/40"
+        >
+          <LayoutDashboard size={20} className="text-primary" aria-hidden />
+          <span className="flex-1 text-sm">
+            <span className="block font-medium">Abrir painel</span>
+            <span className="block text-xs text-muted-foreground">
+              {dono
+                ? 'Membros, convites, assentos e números da comunidade.'
+                : 'Membros, o que compartilham com você e convites.'}
+            </span>
+          </span>
+          <ChevronRight size={16} className="text-muted-foreground" aria-hidden />
+        </Link>
+      )}
+
       {!ativo && (
         <p className="rounded-2xl border border-subtle bg-card p-4 text-sm">
           Seu pedido está aguardando o dono aprovar. O que você escolheu compartilhar (
@@ -214,7 +234,7 @@ export default function CommunityDetailPage() {
 
       {dono ? (
         <p className="text-xs text-muted-foreground">
-          Quem é dono não sai da comunidade: transfira-a a alguém da equipe pelo painel.
+          Quem é dono não sai da comunidade: transfira-a pelo painel, em Configurações.
         </p>
       ) : (
         <Button variant="outline" className="w-full text-danger" onClick={() => setLeaving(true)}>

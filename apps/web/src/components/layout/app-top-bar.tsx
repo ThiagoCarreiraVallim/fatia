@@ -78,7 +78,8 @@ export function TopBarActions({ children }: { children: ReactNode }) {
   return slot ? createPortal(children, slot) : null;
 }
 
-export function AppTopBar() {
+/** `wide`: a coluna do painel da comunidade, mais larga que a do app no desktop. */
+export function AppTopBar({ wide = false }: { wide?: boolean }) {
   const pathname = usePathname();
   const ctx = useTopBarContext();
   const info = routeInfo(pathname);
@@ -90,7 +91,9 @@ export function AppTopBar() {
 
   return (
     <header className="sticky top-0 z-40 -mt-[env(safe-area-inset-top)] border-b border-subtle bg-background/85 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
-      <div className="mx-auto flex h-14 w-full max-w-3xl items-center gap-1 px-2">
+      <div
+        className={`mx-auto flex h-14 w-full items-center gap-1 px-2 ${wide ? 'max-w-6xl' : 'max-w-3xl'}`}
+      >
         <Link
           href={info.parent}
           aria-label={label}
