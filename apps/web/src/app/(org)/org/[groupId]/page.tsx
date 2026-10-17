@@ -119,8 +119,13 @@ export default function OrgOverviewPage() {
       )}
 
       {dono && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <InsightsCard groupId={g.id} panel="retention" title="Retenção" />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <InsightsCard
+            groupId={g.id}
+            panel="retention"
+            title="Retenção"
+            className={paineis.data?.behavior ? undefined : 'lg:col-span-2'}
+          />
           {paineis.data?.behavior && (
             <InsightsCard groupId={g.id} panel="behavior" title="Comportamento" exportable />
           )}

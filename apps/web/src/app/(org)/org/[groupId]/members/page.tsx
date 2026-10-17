@@ -178,7 +178,10 @@ export default function OrgMembersPage() {
       )}
 
       {lista.length > 0 && (
-        <ul className="divide-y divide-subtle rounded-2xl border border-subtle bg-card">
+        <ul
+          aria-label="Membros da comunidade"
+          className="divide-y divide-subtle rounded-2xl border border-subtle bg-card"
+        >
           {lista.map((m) => {
             const pendente = m.status === 'INVITED';
             const ehDono = m.role === 'OWNER';

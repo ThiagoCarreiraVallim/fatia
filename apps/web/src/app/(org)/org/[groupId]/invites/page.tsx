@@ -11,6 +11,7 @@ import {
   inviteSummary,
   orgApi,
   parseInviteEmails,
+  parsedEmailsSummary,
   teamRoleLabel,
   type BatchInviteResult,
   type GrantableRole,
@@ -187,7 +188,7 @@ export default function OrgInvitesPage() {
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Secao id="link" titulo="Link de convite" icone={Link2}>
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-1">
@@ -317,14 +318,7 @@ export default function OrgInvitesPage() {
         </div>
         {lote.trim() && (
           <p className="text-xs text-muted-foreground" aria-live="polite">
-            {[
-              `${lidos.valid.length} válidos`,
-              lidos.invalid.length ? `${lidos.invalid.length} inválidos` : null,
-              lidos.duplicates.length ? `${lidos.duplicates.length} repetidos` : null,
-              lidos.overLimit.length ? `${lidos.overLimit.length} além do limite de 50` : null,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
+            {parsedEmailsSummary(lidos)}
           </p>
         )}
         <p className="text-xs text-muted-foreground">Em lote, todos entram como membro.</p>

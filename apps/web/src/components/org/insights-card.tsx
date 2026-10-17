@@ -35,11 +35,13 @@ export function InsightsCard({
   panel,
   title,
   exportable = false,
+  className,
 }: {
   groupId: string;
   panel: InsightsPanel;
   title: string;
   exportable?: boolean;
+  className?: string;
 }) {
   const recortes = useQuery({
     queryKey: orgKeys.insightsCuts(groupId, panel),
@@ -61,7 +63,7 @@ export function InsightsCard({
   return (
     <section
       aria-labelledby={`${idBase}-titulo`}
-      className="space-y-3 rounded-2xl border border-subtle bg-card p-4"
+      className={cn('min-w-0 space-y-3 rounded-2xl border border-subtle bg-card p-4', className)}
     >
       <div className="flex flex-wrap items-center gap-2">
         <h2 id={`${idBase}-titulo`} className="flex-1 text-sm font-semibold">
@@ -115,8 +117,10 @@ export function InsightsCard({
         </p>
       )}
       {dados.data && !dados.data.insufficientSample && (
+        // Focável: no celular as barras rolam para o lado, e o teclado precisa chegar lá.
         <ul
-          className="flex items-end gap-1 overflow-x-auto pb-1"
+          tabIndex={0}
+          className="flex items-end gap-1 overflow-x-auto pb-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={`${cutLabel(dados.data.cut)}, ${INSIGHTS_PERIODS.find((p) => p.value === periodo)?.label.toLowerCase()}`}
         >
           {dados.data.cells.map((c) => {
@@ -127,7 +131,7 @@ export function InsightsCard({
             return (
               <li
                 key={c.key}
-                className="flex min-w-10 flex-1 flex-col items-center gap-1"
+                className="flex min-w-7 flex-1 flex-col items-center gap-1"
                 aria-label={`${cellKeyLabel(c.key)}: ${cellValueLabel(c)}`}
               >
                 <span
@@ -146,7 +150,7 @@ export function InsightsCard({
                       : 'bg-primary/80',
                   )}
                 />
-                <span aria-hidden className="text-[10px] text-muted-foreground">
+                <span aria-hidden className="whitespace-nowrap text-[10px] text-muted-foreground">
                   {cellKeyLabel(c.key)}
                 </span>
               </li>

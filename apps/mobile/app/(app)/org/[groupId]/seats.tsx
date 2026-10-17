@@ -51,7 +51,10 @@ function Assentos({ g }: { g: MyGroup }) {
         {vivo && pool ? (
           <View className="gap-1">
             <Text className="text-sm text-muted-foreground">{poolStatusLabel(pool.status)}</Text>
-            {pool.currentPeriodEnd ? (
+            {pool.manual ? (
+              <Text className="text-sm text-muted-foreground">Cortesia: sem cobrança.</Text>
+            ) : null}
+            {pool.currentPeriodEnd && !pool.manual ? (
               <Text className="text-sm text-muted-foreground">
                 {pool.cancelAtPeriodEnd
                   ? `Cancelados: valem até ${dia(pool.currentPeriodEnd)}.`

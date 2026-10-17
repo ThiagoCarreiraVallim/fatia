@@ -80,7 +80,7 @@ describe('painel › convites', () => {
     fireEvent.change(screen.getByLabelText(/E-mails \(um por linha/), {
       target: { value: 'email\nbia@x.com\nana@x.com\nbia@x.com\nruim' },
     });
-    expect(screen.getByText('2 válidos · 1 inválidos · 1 repetidos')).toBeInTheDocument();
+    expect(screen.getByText('2 válidos · 1 inválido · 1 repetido')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Convidar 2 pessoas' }));
     await waitFor(() =>
       expect(orgApi.createInviteBatch).toHaveBeenCalledWith('g1', {

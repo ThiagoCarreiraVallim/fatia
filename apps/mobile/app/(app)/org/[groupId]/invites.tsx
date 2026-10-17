@@ -9,6 +9,7 @@ import {
   inviteSummary,
   orgApi,
   parseInviteEmails,
+  parsedEmailsSummary,
   teamRoleLabel,
   type BatchInviteResult,
   type GrantableRole,
@@ -184,16 +185,7 @@ function Convites({ g }: { g: MyGroup }) {
           accessibilityLabel="E-mails para convidar"
         />
         {lote.trim() ? (
-          <Text className="text-xs text-muted-foreground">
-            {[
-              `${lidos.valid.length} válidos`,
-              lidos.invalid.length ? `${lidos.invalid.length} inválidos` : null,
-              lidos.duplicates.length ? `${lidos.duplicates.length} repetidos` : null,
-              lidos.overLimit.length ? `${lidos.overLimit.length} além do limite de 50` : null,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          </Text>
+          <Text className="text-xs text-muted-foreground">{parsedEmailsSummary(lidos)}</Text>
         ) : null}
         <Button
           disabled={lidos.valid.length === 0}

@@ -13,6 +13,7 @@ import {
   panelHref,
   panelSections,
   parseInviteEmails,
+  parsedEmailsSummary,
   pendingRequests,
   seatChangeHint,
   seatSummary,
@@ -92,6 +93,15 @@ describe('parseInviteEmails', () => {
     expect(r.overLimit).toEqual([`p${MAX_BATCH_INVITES}@x.com`, `p${MAX_BATCH_INVITES + 1}@x.com`]);
   });
 
+  it('resume a prévia no singular e no plural', () => {
+    expect(parsedEmailsSummary(parseInviteEmails('a@x.com\nruim\na@x.com'))).toBe(
+      '1 válido · 1 inválido · 1 repetido',
+    );
+    expect(parsedEmailsSummary(parseInviteEmails('a@x.com b@x.com x y'))).toBe(
+      '2 válidos · 2 inválidos',
+    );
+  });
+
   it('resultado do lote', () => {
     expect(batchResultMessage(1, 0)).toBe('1 convite enviado');
     expect(batchResultMessage(3, 2)).toBe('3 convites enviados · 2 pulados');
@@ -166,6 +176,12 @@ describe('membros', () => {
   it('filtra por aguardando, equipe e nome sem acento', () => {
     expect(pendingRequests(lista).map((x) => x.name)).toEqual(['Márcia']);
     expect(filterMembers(lista, 'team').map((x) => x.name)).toEqual(['Dona', 'Helena']);
+    expect(filterMembers(lista, 'all').map((x) => x.name)).toEqual([
+      'Márcia',
+      'Dona',
+      'Helena',
+      'João',
+    ]);
     expect(filterMembers(lista, 'all', 'joao').map((x) => x.name)).toEqual(['João']);
     expect(filterMembers(lista, 'pending', 'marc').map((x) => x.name)).toEqual(['Márcia']);
   });

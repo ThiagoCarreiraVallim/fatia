@@ -136,7 +136,7 @@ export default function OrgSeatsPage() {
   const ativos = (membros.data ?? []).filter((m) => m.status === 'ACTIVE');
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <section
         aria-labelledby="resumo"
         className="space-y-3 rounded-2xl border border-subtle bg-card p-4"
@@ -152,7 +152,8 @@ export default function OrgSeatsPage() {
                 {poolStatusLabel(pool.status)}
               </Badge>
             </p>
-            {pool.currentPeriodEnd && (
+            {pool.manual && <p>Cortesia: sem cobrança.</p>}
+            {pool.currentPeriodEnd && !pool.manual && (
               <p>
                 {pool.cancelAtPeriodEnd
                   ? `Cancelados: valem até ${dia(pool.currentPeriodEnd)}.`
@@ -286,7 +287,9 @@ export default function OrgSeatsPage() {
         )}
         {vivo && ativos.length > 0 && v.assigned < (pool?.seats ?? 0) && (
           <p className="text-xs text-muted-foreground">
-            {(pool?.seats ?? 0) - v.assigned} livre(s).
+            {(pool?.seats ?? 0) - v.assigned === 1
+              ? '1 livre.'
+              : `${(pool?.seats ?? 0) - v.assigned} livres.`}
           </p>
         )}
       </section>

@@ -121,7 +121,7 @@ export default function OrgSettingsPage() {
     politica !== g.joinPolicy;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <form
         aria-labelledby="perfil"
         className="space-y-3 rounded-2xl border border-subtle bg-card p-4"

@@ -107,6 +107,20 @@ export function parseInviteEmails(text: string): ParsedEmails {
   return out;
 }
 
+const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
+
+/** "2 válidos · 1 inválido · 1 repetido", para a prévia do lote. */
+export function parsedEmailsSummary(r: ParsedEmails): string {
+  return [
+    plural(r.valid.length, 'válido', 'válidos'),
+    r.invalid.length ? plural(r.invalid.length, 'inválido', 'inválidos') : null,
+    r.duplicates.length ? plural(r.duplicates.length, 'repetido', 'repetidos') : null,
+    r.overLimit.length ? `${r.overLimit.length} além do limite de ${MAX_BATCH_INVITES}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
 const SKIP_REASON: Record<BatchSkipReason, string> = {
   invalid: 'e-mail inválido',
   duplicate: 'repetido na lista',
@@ -219,7 +233,11 @@ export function filterMembers(
   query = '',
 ): PanelMember[] {
   const q = query.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
-  return members.filter((m) => {
+  // Pedidos aguardando primeiro: é o que pede ação de quem abre a lista.
+  const ordenados = [...members].sort(
+    (a, b) => Number(b.status === 'INVITED') - Number(a.status === 'INVITED'),
+  );
+  return ordenados.filter((m) => {
     if (filter === 'pending' && m.status !== 'INVITED') return false;
     if (filter === 'team' && (m.role === 'MEMBER' || m.status !== 'ACTIVE')) return false;
     if (!q) return true;
