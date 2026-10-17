@@ -1,5 +1,6 @@
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsEmail,
@@ -105,6 +106,23 @@ export class CreateInviteDto {
   @IsOptional() @IsInt() @Min(1) @Max(30) expiresInDays?: number;
 }
 
+/** Convite em lote: até um dia inteiro de convites numa chamada. */
+export class BatchInviteDto {
+  @IsIn(PAPEIS_CONVIDAVEIS as readonly string[])
+  role!: (typeof PAPEIS_CONVIDAVEIS)[number];
+
+  // Strings soltas, e não `@IsEmail({ each })`: o inválido volta em `skipped`
+  // com o motivo, em vez de recusar a lista inteira por um erro de digitação.
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(50)
+  @IsString({ each: true })
+  @MaxLength(254, { each: true })
+  emails!: string[];
+
+  @IsOptional() @IsInt() @Min(1) @Max(30) expiresInDays?: number;
+}
+
 /**
  * Token do convite na URL. Formato fechado (32 bytes em base64url = 43
  * caracteres): lixo nem chega a virar consulta.
@@ -127,6 +145,11 @@ export class PreviewGroupDto {
   @MinLength(3)
   @MaxLength(60)
   slug!: string;
+}
+
+export class ChangeRoleDto {
+  @IsIn(PAPEIS_CONCEDIVEIS as readonly string[])
+  role!: (typeof PAPEIS_CONCEDIVEIS)[number];
 }
 
 export class ApproveMemberDto {

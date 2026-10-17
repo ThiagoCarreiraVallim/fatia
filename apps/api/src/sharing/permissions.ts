@@ -53,6 +53,11 @@ export const GROUP_PERMISSIONS = {
   /** Aprovar pedido de entrada e definir o papel de quem entra. */
   'member.approve': [GroupRole.OWNER],
   'member.remove': [GroupRole.OWNER],
+  /**
+   * Mudar o papel de quem já está dentro. Só o dono, como aprovar: quem define a
+   * equipe é ele, e virar equipe é passar a receber o que os membros consentiram.
+   */
+  'member.role': [GroupRole.OWNER],
   /** Gerir o negócio não implica ver dado de saúde — e o inverso também. */
   'billing.read': [GroupRole.OWNER],
   'billing.manage': [GroupRole.OWNER],

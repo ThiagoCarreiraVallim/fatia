@@ -74,6 +74,7 @@ aparece em `permissions.ts` e nenhum service consulta `role` para ampliar escopo
 | `member.list`      | sim   | sim          | sim     | sim    |
 | `member.approve`   | sim   | não          | não     | não    |
 | `member.remove`    | sim   | não          | não     | não    |
+| `member.role`      | sim   | não          | não     | não    |
 | `billing.read`     | sim   | não          | não     | não    |
 | `billing.manage`   | sim   | não          | não     | não    |
 | `content.publish`  | não   | sim          | sim     | não    |
@@ -99,6 +100,10 @@ futura:
   o dono: o `InviteService` recusa convite de profissional para papel de equipe, e ninguém é
   convidado como `OWNER` — dono se transfere (`group.transfer`, o antigo dono fica na equipe
   como `PROFESSIONAL`).
+- **`member.role` é `OWNER` e só.** Virar equipe é passar a receber o que cada membro consentiu
+  à comunidade, então só quem define a equipe muda papel. Os vínculos acompanham no mesmo commit:
+  quem entra na equipe recebe o leque inverso, quem sai perde tudo que recebia ali
+  (`revokedReason = role_changed`), e o dono não muda de papel por aqui — transfere.
 - **`content.moderate` é `OWNER` e `CREATOR`.** `PROFESSIONAL` não modera: não é papel de
   moderação, e acumular seria a mesma armadilha que o resto do documento evita.
 
@@ -120,6 +125,7 @@ administrando. `ACTIVE` exerce o que a tabela acima permite. E a associação **
 | `member.list`      | não                  |
 | `member.approve`   | não                  |
 | `member.remove`    | não                  |
+| `member.role`      | não                  |
 | `billing.read`     | não                  |
 | `billing.manage`   | não                  |
 | `content.publish`  | não                  |

@@ -19,6 +19,8 @@ import { InviteService } from './invite.service';
 import { MembershipService } from './membership.service';
 import {
   ApproveMemberDto,
+  BatchInviteDto,
+  ChangeRoleDto,
   CreateGroupDto,
   CreateInviteDto,
   InviteTokenParamDto,
@@ -186,6 +188,18 @@ export class SharingController {
     return this.invites.create(user.id, groupId, dto);
   }
 
+  /** Convite em lote, por e-mail. O inválido volta em `skipped`, não derruba o lote. */
+  @Post(':groupId/invites/batch')
+  @RequireGroupAction('invite.create')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  createInviteBatch(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId') groupId: string,
+    @Body() dto: BatchInviteDto,
+  ) {
+    return this.invites.createBatch(user.id, groupId, dto);
+  }
+
   @Get(':groupId/invites')
   @RequireGroupAction('invite.create')
   listInvites(@CurrentUser() user: CurrentUserPayload, @Param('groupId') groupId: string) {
@@ -229,6 +243,18 @@ export class SharingController {
   @SelfOnly()
   leave(@CurrentUser() user: CurrentUserPayload, @Param('groupId') groupId: string) {
     return this.memberships.leave(user.id, groupId);
+  }
+
+  /** Mudar o papel de quem já está dentro; os vínculos acompanham (ADR 026). */
+  @Patch(':groupId/members/:membershipId')
+  @RequireGroupAction('member.role')
+  changeRole(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId') groupId: string,
+    @Param('membershipId') membershipId: string,
+    @Body() dto: ChangeRoleDto,
+  ) {
+    return this.memberships.changeRole(user.id, groupId, membershipId, dto.role);
   }
 
   @Delete(':groupId/members/:membershipId')

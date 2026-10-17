@@ -32,11 +32,18 @@ export interface MemberView {
   status: MembershipStatus;
   joinedAt: Date | null;
   /**
-   * Escopos que este aluno consentiu **a quem está perguntando**. Só aparece
-   * para o `PROFESSIONAL`, e só sobre o vínculo dele: ninguém vê o que o aluno
-   * consentiu a outro profissional.
+   * Escopos que este membro consentiu **a quem está perguntando**. Só aparece
+   * para quem vê o grupo inteiro (`OWNER` e `PROFESSIONAL`, que recebem vínculo
+   * desde a ADR 026), e só sobre o vínculo dele: ninguém vê o que o membro
+   * consentiu a outra pessoa da equipe.
    */
   scopesGrantedToMe?: ShareScope[];
+  /**
+   * A comunidade paga o PRO desta pessoa (ADR 025). Só para o `OWNER` e o
+   * `PROFESSIONAL`. A participação individual nas estatísticas (`statsOptIn`)
+   * **não** sai para ninguém: diria quem entra no agregado (THREAT_MODEL §9).
+   */
+  hasAiSeat?: boolean;
 }
 
 /** O que a pessoa escolheu compartilhar ao entrar (ADR 026). Nada por padrão. */
@@ -283,19 +290,21 @@ export class MembershipService {
               ],
             }),
       },
-      include: { user: { select: { name: true } } },
+      include: {
+        user: { select: { name: true } },
+        seatAssignments: { where: { revokedAt: null }, select: { id: true } },
+      },
       orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
     });
 
-    // Uma consulta só para todos os vínculos ativos concedidos a este
-    // profissional neste grupo — e não uma por membro.
-    const vinculos =
-      eu.role === GroupRole.PROFESSIONAL
-        ? await this.prisma.professionalLink.findMany({
-            where: { groupId, professionalId: userId, revokedAt: null },
-            select: { subjectUserId: true, scopes: true },
-          })
-        : [];
+    // Uma consulta só para todos os vínculos ativos concedidos a quem pergunta
+    // neste grupo — e não uma por membro.
+    const vinculos = veTodos
+      ? await this.prisma.professionalLink.findMany({
+          where: { groupId, professionalId: userId, revokedAt: null },
+          select: { subjectUserId: true, scopes: true },
+        })
+      : [];
     const porTitular = new Map(vinculos.map((v) => [v.subjectUserId, v.scopes]));
 
     return membros.map((m) => ({
@@ -304,10 +313,85 @@ export class MembershipService {
       role: m.role,
       status: m.status,
       joinedAt: m.joinedAt,
-      ...(eu.role === GroupRole.PROFESSIONAL
-        ? { scopesGrantedToMe: porTitular.get(m.userId) ?? [] }
+      ...(veTodos
+        ? {
+            scopesGrantedToMe: porTitular.get(m.userId) ?? [],
+            hasAiSeat: m.status === MembershipStatus.ACTIVE && m.seatAssignments.length > 0,
+          }
         : {}),
     }));
+  }
+
+  /**
+   * O dono muda o papel de quem já está dentro. Os vínculos acompanham, no
+   * mesmo commit (ADR 026):
+   *
+   * - virar equipe (de `MEMBER`) passa a receber o que cada membro já
+   *   consentiu à comunidade — o mesmo leque inverso da entrada pela equipe;
+   * - deixar a equipe (para `MEMBER`) revoga tudo que a pessoa recebia ali;
+   * - entre papéis de equipe, nada muda nos vínculos.
+   *
+   * O dono não muda de papel por aqui (transfere), e pedido pendente se aprova,
+   * não se promove.
+   */
+  async changeRole(
+    ownerId: string,
+    groupId: string,
+    membershipId: string,
+    role: GrantableRole,
+  ): Promise<MembershipResult> {
+    await this.assertOwner(ownerId, groupId);
+
+    const alvo = await this.prisma.groupMembership.findUnique({ where: { id: membershipId } });
+    // Amarrado ao grupo da URL (#204): ser dono daqui não muda papel em outro grupo.
+    if (!alvo || alvo.groupId !== groupId || alvo.status !== MembershipStatus.ACTIVE) {
+      throw new NotFoundException(MEMBERSHIP_NOT_FOUND);
+    }
+    if (alvo.role === GroupRole.OWNER) {
+      throw new ConflictException('O papel do dono não muda: transfira a comunidade.');
+    }
+    if (alvo.role === role) {
+      return {
+        membershipId: alvo.id,
+        groupId,
+        status: alvo.status,
+        role: alvo.role,
+        revokedLinks: 0,
+      };
+    }
+
+    const at = new Date();
+    const entra = !canReceiveLink(alvo.role) && canReceiveLink(role);
+    const sai = canReceiveLink(alvo.role) && !canReceiveLink(role);
+    const vinculos: Prisma.PrismaPromise<unknown>[] = [];
+    if (entra) {
+      const outros = await this.prisma.groupMembership.findMany({
+        where: { groupId, status: MembershipStatus.ACTIVE, userId: { not: alvo.userId } },
+        select: { userId: true, consentScopes: true },
+      });
+      vinculos.push(
+        ...this.links.teamMemberLinksOps({
+          groupId,
+          teamUserId: alvo.userId,
+          subjects: outros.map((m) => ({ userId: m.userId, scopes: m.consentScopes })),
+          at,
+        }),
+      );
+    }
+    if (sai) vinculos.push(this.links.revokeAsReceiverOp(groupId, alvo.userId, at));
+
+    const [membership, ...resto] = (await this.prisma.$transaction([
+      this.prisma.groupMembership.update({ where: { id: alvo.id }, data: { role } }),
+      ...vinculos,
+    ])) as [GroupMembership, ...unknown[]];
+
+    return {
+      membershipId: membership.id,
+      groupId,
+      status: membership.status,
+      role: membership.role,
+      revokedLinks: sai ? ((resto[0] as { count: number }).count ?? 0) : 0,
+    };
   }
 
   /**

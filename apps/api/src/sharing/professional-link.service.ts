@@ -4,7 +4,7 @@ import { PrismaService } from '../common/prisma.service';
 
 /** Motivos possíveis de revogação. Gravados em `ProfessionalLink.revokedReason`. */
 export type RevokeReason =
-  'subject' | 'group_owner' | 'left_group' | 'membership_removed' | 'superseded';
+  'subject' | 'group_owner' | 'left_group' | 'membership_removed' | 'superseded' | 'role_changed';
 
 /**
  * Escrita do consentimento. Separado do `ProfessionalAccessService` de
@@ -99,6 +99,23 @@ export class ProfessionalLinkService {
         OR: [{ subjectUserId: userId }, { professionalId: userId }],
       },
       data: { revokedAt: at, revokedReason: reason },
+    });
+  }
+
+  /**
+   * Quem sai da equipe deixa de receber: revoga os vínculos vivos em que a
+   * pessoa é destinatária naquele grupo, sem executar, para o mesmo
+   * `$transaction` da troca de papel. O que ela própria compartilha fica como
+   * está — continua membro, e o consentimento dela não mudou.
+   */
+  revokeAsReceiverOp(
+    groupId: string,
+    userId: string,
+    at: Date,
+  ): Prisma.PrismaPromise<{ count: number }> {
+    return this.prisma.professionalLink.updateMany({
+      where: { groupId, professionalId: userId, revokedAt: null },
+      data: { revokedAt: at, revokedReason: 'role_changed' satisfies RevokeReason },
     });
   }
 

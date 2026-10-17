@@ -385,6 +385,7 @@ describe('MembershipService', () => {
           status: MembershipStatus.ACTIVE,
           joinedAt: null,
           user: { name: 'Aluno' },
+          seatAssignments: [],
         },
         {
           id: 'm2',
@@ -393,6 +394,7 @@ describe('MembershipService', () => {
           status: MembershipStatus.ACTIVE,
           joinedAt: null,
           user: { name: 'Aluno 2' },
+          seatAssignments: [{ id: 'assento-1' }],
         },
       ]);
       prisma.professionalLink.findMany.mockResolvedValue([
@@ -409,6 +411,7 @@ describe('MembershipService', () => {
       // Quem não consentiu a ELE aparece com lista vazia — e nunca com o que
       // consentiu a outro profissional.
       expect(membros.map((m) => m.scopesGrantedToMe)).toEqual([[ShareScope.WORKOUT], []]);
+      expect(membros.map((m) => m.hasAiSeat)).toEqual([false, true]);
     });
 
     it('quem não é membro ativo recebe NOT_FOUND', async () => {
@@ -431,6 +434,7 @@ describe('MembershipService', () => {
         status: MembershipStatus.ACTIVE,
       });
       prisma.groupMembership.findMany.mockResolvedValue([]);
+      prisma.professionalLink.findMany.mockResolvedValue([]);
 
       await service.listMembers(quem, GROUP);
 

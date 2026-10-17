@@ -6,6 +6,7 @@ import { InsightsExportService } from './insights-export.service';
 import { InsightsService } from './insights.service';
 import { InsightsAddonGuard } from './guards/insights-addon.guard';
 import { cutsOf } from './cut-registry';
+import { BillingEntitlements } from '../billing/entitlements.port';
 
 /**
  * Superfície do painel agregado do dono (#159 e #160).
@@ -30,7 +31,19 @@ export class InsightsController {
   constructor(
     private readonly insights: InsightsService,
     private readonly exporter: InsightsExportService,
+    private readonly entitlements: BillingEntitlements,
   ) {}
+
+  /**
+   * Que painéis esta comunidade tem. O de comportamento responde 404 sem o
+   * add-on (o guarda não revela o produto), então a tela pergunta aqui antes,
+   * em vez de interpretar um 404.
+   */
+  @Get('panels')
+  @RequireGroupAction('insights.read')
+  async panels(@Param('groupId') groupId: string) {
+    return { retention: true, behavior: await this.entitlements.hasInsights(groupId) };
+  }
 
   /** Os recortes que este grupo pode pedir no painel de retenção. */
   @Get('retention/cuts')

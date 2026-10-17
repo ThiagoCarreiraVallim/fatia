@@ -62,6 +62,22 @@ export interface CreatedInvite {
   emailSent: boolean;
 }
 
+export type BatchSkipReason = 'invalid' | 'duplicate' | 'member' | 'pending_invite';
+
+export interface BatchInviteInput {
+  role: InvitableRole;
+  emails: string[];
+  expiresInDays?: number;
+}
+
+export interface BatchInviteResult {
+  created: { email: string; inviteId: string; emailSent: boolean }[];
+  skipped: { email: string; reason: BatchSkipReason }[];
+}
+
+/** O mesmo formato que o `@IsEmail` do DTO aceita, sem a dependência no service. */
+const EMAIL = /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>"]+$/;
+
 export interface InvitePreview {
   group: { id: string; name: string; description: string | null; type: string };
   role: GroupRole;
@@ -154,15 +170,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     }
 
     const agora = new Date();
-    const doDia = await this.prisma.groupInvite.count({
-      where: { groupId, createdAt: { gt: new Date(agora.getTime() - DAY_MS) } },
-    });
-    if (doDia >= INVITE_MAX_PER_DAY) {
-      throw new HttpException(
-        `Limite de ${INVITE_MAX_PER_DAY} convites por dia nesta comunidade`,
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
+    await this.assertDailyRoom(groupId, 1, agora);
     await this.purgeOldEmails(agora);
 
     const email = input.email?.trim().toLowerCase() || null;
@@ -186,20 +194,109 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     return { invite: view(invite), url, emailSent };
   }
 
-  /** Convites ainda utilizáveis. */
+  /**
+   * Convite em lote, por e-mail (Fase 6). Cada endereço vira um convite como o
+   * de `create`; o que não dá para convidar volta em `skipped` com o motivo, em
+   * vez de derrubar o lote. O teto do dia conta **o lote inteiro antes** de
+   * criar qualquer um: estourou, nada é criado — meio lote enviado deixaria o
+   * dono sem saber quem recebeu.
+   */
+  async createBatch(
+    actorId: string,
+    groupId: string,
+    input: BatchInviteInput,
+  ): Promise<BatchInviteResult> {
+    const eu = await this.equipeAtiva(actorId, groupId);
+    if (eu.role === GroupRole.PROFESSIONAL && input.role !== GroupRole.MEMBER) {
+      throw new ForbiddenException(
+        'Profissionais convidam só membros; a equipe é o dono quem define',
+      );
+    }
+    if ((input.role as GroupRole) === GroupRole.OWNER) {
+      throw new ForbiddenException('Ninguém é convidado como dono');
+    }
+
+    const skipped: BatchInviteResult['skipped'] = [];
+    const vistos = new Set<string>();
+    const candidatos: string[] = [];
+    for (const bruto of input.emails) {
+      const email = bruto.trim().toLowerCase();
+      if (!EMAIL.test(email) || email.length > 254) skipped.push({ email, reason: 'invalid' });
+      else if (vistos.has(email)) skipped.push({ email, reason: 'duplicate' });
+      else {
+        vistos.add(email);
+        candidatos.push(email);
+      }
+    }
+
+    const agora = new Date();
+    const [dentro, abertos] = await Promise.all([
+      this.prisma.groupMembership.findMany({
+        where: {
+          groupId,
+          status: MembershipStatus.ACTIVE,
+          user: { email: { in: candidatos, mode: 'insensitive' } },
+        },
+        select: { user: { select: { email: true } } },
+      }),
+      this.prisma.groupInvite.findMany({
+        where: {
+          groupId,
+          email: { in: candidatos },
+          revokedAt: null,
+          expiresAt: { gt: agora },
+        },
+        select: { email: true, uses: true, maxUses: true },
+      }),
+    ]);
+    const membros = new Set(dentro.map((m) => m.user.email.toLowerCase()));
+    const pendentes = new Set(
+      abertos.filter((c) => c.maxUses === null || c.uses < c.maxUses).map((c) => c.email),
+    );
+    const convidar: string[] = [];
+    for (const email of candidatos) {
+      if (membros.has(email)) skipped.push({ email, reason: 'member' });
+      else if (pendentes.has(email)) skipped.push({ email, reason: 'pending_invite' });
+      else convidar.push(email);
+    }
+
+    if (convidar.length > 0) await this.assertDailyRoom(groupId, convidar.length, agora);
+    await this.purgeOldEmails(agora);
+
+    const created: BatchInviteResult['created'] = [];
+    for (const email of convidar) {
+      const r = await this.create(actorId, groupId, {
+        role: input.role,
+        email,
+        expiresInDays: input.expiresInDays,
+      });
+      created.push({ email, inviteId: r.invite.id, emailSent: r.emailSent });
+    }
+    return { created, skipped };
+  }
+
+  /**
+   * Convites ainda utilizáveis. O profissional vê só os de membro: os de equipe
+   * são do dono, e ele não os revoga nem reenvia.
+   */
   async list(actorId: string, groupId: string): Promise<InviteView[]> {
-    await this.equipeAtiva(actorId, groupId);
+    const eu = await this.equipeAtiva(actorId, groupId);
     const convites = await this.prisma.groupInvite.findMany({
-      where: { groupId, revokedAt: null, expiresAt: { gt: new Date() } },
+      where: {
+        groupId,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+        ...this.alcance(eu.role),
+      },
       orderBy: { createdAt: 'desc' },
     });
     return convites.filter((c) => c.maxUses === null || c.uses < c.maxUses).map(view);
   }
 
   async revoke(actorId: string, groupId: string, inviteId: string): Promise<InviteView> {
-    await this.equipeAtiva(actorId, groupId);
+    const eu = await this.equipeAtiva(actorId, groupId);
     const revogado = await this.prisma.groupInvite.updateMany({
-      where: { id: inviteId, groupId, revokedAt: null },
+      where: { id: inviteId, groupId, revokedAt: null, ...this.alcance(eu.role) },
       data: { revokedAt: new Date() },
     });
     if (revogado.count === 0) throw new NotFoundException(INVITE_NOT_FOUND);
@@ -214,10 +311,16 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
    * **troca** o token: o link do e-mail anterior deixa de valer.
    */
   async resend(actorId: string, groupId: string, inviteId: string): Promise<CreatedInvite> {
-    await this.equipeAtiva(actorId, groupId);
+    const eu = await this.equipeAtiva(actorId, groupId);
     const agora = new Date();
     const convite = await this.prisma.groupInvite.findFirst({
-      where: { id: inviteId, groupId, revokedAt: null, expiresAt: { gt: agora } },
+      where: {
+        id: inviteId,
+        groupId,
+        revokedAt: null,
+        expiresAt: { gt: agora },
+        ...this.alcance(eu.role),
+      },
     });
     if (
       !convite ||
@@ -368,6 +471,27 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
       throw new ForbiddenException('Só o dono e os profissionais convidam');
     }
     return eu;
+  }
+
+  /** Que convites a pessoa da equipe administra: o dono, todos; o profissional, os de membro. */
+  private alcance(role: GroupRole): { role?: GroupRole } {
+    return role === GroupRole.OWNER ? {} : { role: GroupRole.MEMBER };
+  }
+
+  /** Cabem mais `quantos` convites hoje nesta comunidade? Senão, 429 dizendo quantos cabem. */
+  private async assertDailyRoom(groupId: string, quantos: number, agora: Date): Promise<void> {
+    const doDia = await this.prisma.groupInvite.count({
+      where: { groupId, createdAt: { gt: new Date(agora.getTime() - DAY_MS) } },
+    });
+    if (doDia + quantos > INVITE_MAX_PER_DAY) {
+      const cabem = Math.max(0, INVITE_MAX_PER_DAY - doDia);
+      throw new HttpException(
+        quantos === 1 || cabem === 0
+          ? `Limite de ${INVITE_MAX_PER_DAY} convites por dia nesta comunidade`
+          : `Limite de ${INVITE_MAX_PER_DAY} convites por dia nesta comunidade: hoje cabem mais ${cabem}`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
   }
 
   private url(token: string): string {

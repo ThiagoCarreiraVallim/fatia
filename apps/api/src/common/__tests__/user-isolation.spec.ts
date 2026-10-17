@@ -1996,8 +1996,19 @@ describe('isolamento entre usuários', () => {
       ).toEqual([segundoAluno.id]);
 
       // Metadado de associação, nunca dado de saúde — e nunca o `userId` de
-      // outra pessoa: tudo que sai daqui é referenciado por `membershipId`.
+      // outra pessoa: tudo que sai daqui é referenciado por `membershipId`. A
+      // equipe vê também o que cada um compartilha COM ELA e o assento (Fase 6);
+      // `statsOptIn` individual nunca sai.
       expect(Object.keys(peloDono[0]).sort()).toEqual([
+        'hasAiSeat',
+        'joinedAt',
+        'membershipId',
+        'name',
+        'role',
+        'scopesGrantedToMe',
+        'status',
+      ]);
+      expect(Object.keys(peloAluno[0]).sort()).toEqual([
         'joinedAt',
         'membershipId',
         'name',
