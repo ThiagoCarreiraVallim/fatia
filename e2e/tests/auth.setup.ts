@@ -1,8 +1,9 @@
 import { execSync } from 'node:child_process';
 import { resolve } from 'node:path';
-import { expect, test as setup } from '@playwright/test';
-import { STORAGE_STATE } from '../playwright.config';
+import { expect, test as setup, type Page } from '@playwright/test';
+import { STORAGE_STATE, TEAM_STORAGE_STATE } from '../playwright.config';
 import { ROUTES } from '../../packages/api-client/src/navigation';
+import { TEAM_EMAIL, TEAM_PASSWORD } from './community';
 import { logtoSignIn } from './logto';
 
 /**
@@ -15,11 +16,12 @@ import { logtoSignIn } from './logto';
 const DEMO_EMAIL = process.env.DEMO_EMAIL ?? 'demo@fatia.local';
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? 'Fatia-demo-2026!';
 
-setup('login do usuário demo', async ({ page }) => {
+/** Login de verdade no Logto, do botão "Entrar" até voltar ao app. */
+async function signIn(page: Page, email: string, password: string) {
   await page.goto('/login');
   await page.getByRole('link', { name: 'Entrar' }).click();
 
-  await logtoSignIn(page, DEMO_EMAIL, DEMO_PASSWORD);
+  await logtoSignIn(page, email, password);
 
   // Consentimento do app aparece só no primeiro login de cada cliente.
   const consent = page.getByRole('button', { name: /autorizar|authorize|continuar|continue/i });
@@ -30,6 +32,12 @@ setup('login do usuário demo', async ({ page }) => {
 
   await page.waitForURL('http://localhost:3030/**', { timeout: 30_000 });
   await expect(page).not.toHaveURL(/\/login/);
+}
+
+setup('login do usuário demo', async ({ page, browser }) => {
+  // Dois logins, o aquecimento de cada rota e o seed: passa fácil do minuto padrão.
+  setup.setTimeout(300_000);
+  await signIn(page, DEMO_EMAIL, DEMO_PASSWORD);
   // Uma chamada autenticada provisiona o User na API.
   const me = await page.request.get('/api/proxy/users/me');
   expect(me.ok()).toBeTruthy();
@@ -55,5 +63,17 @@ setup('login do usuário demo', async ({ page }) => {
       stdio: 'inherit',
       env: { ...process.env, DEMO_USER_ID: demoUserId },
     });
+  }
+
+  // A conta da equipe, dona da Academia Demo, para o painel da comunidade (Fase 6).
+  // Depois do seed: é ele que garante a associação de dona.
+  const equipe = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+  try {
+    const p = await equipe.newPage();
+    await signIn(p, TEAM_EMAIL, TEAM_PASSWORD);
+    expect((await p.request.get('/api/proxy/users/me')).ok()).toBeTruthy();
+    await equipe.storageState({ path: TEAM_STORAGE_STATE });
+  } finally {
+    await equipe.close();
   }
 });

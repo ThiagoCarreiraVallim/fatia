@@ -12,6 +12,8 @@ const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:3030';
 
 // Absoluto: rodado da raiz do repo, o relativo gravaria a sessão em `./.auth`, fora do .gitignore.
 export const STORAGE_STATE = path.join(__dirname, '.auth/demo.json');
+/** A conta da equipe (`equipe@fatia.local`), dona da Academia Demo: o painel da comunidade. */
+export const TEAM_STORAGE_STATE = path.join(__dirname, '.auth/equipe.json');
 
 export default defineConfig({
   testDir: './tests',

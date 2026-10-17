@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
-import { newInvitePath, purgeDemo } from './community';
+import { TEAM_STORAGE_STATE } from '../playwright.config';
+import { COMMUNITY_SLUG, newInvitePath, purgeDemo } from './community';
 
 /**
  * Acessibilidade automática (Fase 3): o axe roda nas telas do app, no menu
@@ -85,6 +86,38 @@ test.describe('axe: comunidade', () => {
     await page.getByRole('button', { name: 'Aceitar e entrar' }).click();
     await page.waitForURL(/\/community\/[0-9a-f-]{36}$/);
     await page.getByRole('heading', { name: 'O que eu compartilho' }).waitFor();
+    expect(await auditar(page)).toEqual([]);
+  });
+});
+
+test.describe('axe: painel da comunidade', () => {
+  test.use({ storageState: TEAM_STORAGE_STATE });
+
+  test('as seções do painel, o membro e criar comunidade', async ({ page }) => {
+    const grupos = (await (await page.request.get('/api/proxy/groups')).json()) as Array<{
+      id: string;
+      slug: string;
+    }>;
+    const id = grupos.find((g) => g.slug === COMMUNITY_SLUG)!.id;
+    const secoes: Array<[string, string]> = [
+      [`/org/${id}`, 'Membros ativos'],
+      [`/org/${id}/members`, 'Lara Mendes'],
+      [`/org/${id}/invites`, 'Link de convite'],
+      [`/org/${id}/seats`, 'Assentos PRO'],
+      [`/org/${id}/settings`, 'Código de entrada'],
+      ['/community/new', 'Como se entra'],
+    ];
+    for (const [rota, marco] of secoes) {
+      await page.goto(rota);
+      await page.getByText(marco).first().waitFor();
+      expect({ rota, violacoes: await auditar(page) }).toEqual({ rota, violacoes: [] });
+    }
+    await page.goto(`/org/${id}/members`);
+    await page
+      .getByRole('link', { name: /Ver dados/ })
+      .first()
+      .click();
+    await page.getByRole('navigation', { name: 'Categorias autorizadas' }).waitFor();
     expect(await auditar(page)).toEqual([]);
   });
 });

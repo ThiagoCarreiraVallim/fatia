@@ -1,7 +1,8 @@
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { type Locator, type Page, test } from '@playwright/test';
-import { grantSeatToDemo, newInvitePath, purgeDemo } from './community';
+import { TEAM_STORAGE_STATE } from '../playwright.config';
+import { COMMUNITY_SLUG, grantSeatToDemo, newInvitePath, purgeDemo } from './community';
 
 /**
  * `pnpm ui:snap <etapa>` (ADR 029): fotografa cada tela do PWA, em celular e
@@ -448,6 +449,59 @@ test.describe('comunidade', () => {
 
     await visit(page, '/community', '42-comunidades');
     await visit(page, '/plan', '46-plano-assento');
+  });
+});
+
+test.describe('painel da comunidade', () => {
+  // A conta da equipe, dona da Academia Demo. Só olha: nada muda aqui, e o que
+  // muda (fluxos) fica em `panel.spec.ts`, que desfaz o que fez.
+  test.use({ storageState: TEAM_STORAGE_STATE });
+
+  test('visão geral, membros, membro, convites, lote, assentos, configurações e criar', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const grupos = (await (await page.request.get('/api/proxy/groups')).json()) as Array<{
+      id: string;
+      slug: string;
+    }>;
+    const id = grupos.find((g) => g.slug === COMMUNITY_SLUG)!.id;
+
+    await page.goto(`/org/${id}`);
+    await appears(page.getByText('Membros ativos'));
+    await appears(page.getByLabel(/: \d+$/).first());
+    await snap(page, '80-painel-visao-geral');
+
+    await page.goto(`/org/${id}/members`);
+    await appears(page.getByText('Lara Mendes'));
+    await snap(page, '81-painel-membros');
+
+    await page
+      .getByRole('link', { name: /Ver dados/ })
+      .first()
+      .click();
+    await appears(page.getByRole('navigation', { name: 'Categorias autorizadas' }));
+    await snap(page, '82-painel-membro');
+
+    await page.goto(`/org/${id}/invites`);
+    await appears(page.getByRole('button', { name: 'Criar link' }));
+    await snap(page, '83-painel-convites');
+    await page
+      .getByLabel(/E-mails \(um por linha/)
+      .fill('email\nana@exemplo.com\nbia@exemplo.com\nana@exemplo.com\nsem-arroba');
+    // Preencher rola a página; a foto inteira com a barra fixa no meio confunde.
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await snap(page, '84-painel-convite-lote');
+
+    await page.goto(`/org/${id}/seats`);
+    await appears(page.getByText(/em uso/));
+    await snap(page, '85-painel-assentos');
+
+    await page.goto(`/org/${id}/settings`);
+    await appears(page.getByText(COMMUNITY_SLUG));
+    await snap(page, '86-painel-configuracoes');
+
+    await visit(page, '/community/new', '87-criar-comunidade');
   });
 });
 

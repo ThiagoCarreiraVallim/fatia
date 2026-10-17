@@ -364,7 +364,23 @@ const FAKE_MEMBERS: Array<{ name: string; scopes: ShareScope[]; statsOptIn: bool
   { name: 'Elisa Rocha', scopes: [], statsOptIn: false },
   { name: 'Fábio Nunes', scopes: ['HABITS', 'GOALS'], statsOptIn: true },
   { name: 'Gabi Torres', scopes: ['NUTRITION', 'BODY'], statsOptIn: false },
+  { name: 'Hugo Prado', scopes: ['WORKOUT', 'HABITS'], statsOptIn: true },
+  { name: 'Íris Campos', scopes: [], statsOptIn: true },
+  { name: 'Júlio Alves', scopes: ['WORKOUT'], statsOptIn: true },
 ];
+
+/** Pedidos de entrada esperando a dona aprovar (a Academia Demo é `APPROVAL`). */
+const PENDING_REQUESTS: Array<{ name: string; scopes: ShareScope[] }> = [
+  { name: 'Lara Mendes', scopes: ['WORKOUT'] },
+  { name: 'Marcos Reis', scopes: [] },
+];
+
+/** Marca dos treinos dos membros falsos, para o seed apagar só os dele. */
+const COMMUNITY_SESSION_NOTE = 'seed:academia-demo';
+/** Semanas de treino dos membros falsos: cobre a janela de 90 dias do painel. */
+const COMMUNITY_WEEKS = 13;
+/** Assentos de cortesia da Academia Demo, com o primeiro membro usando um. */
+const COMMUNITY_SEATS = 3;
 
 async function seedUser(logtoSub: string, email: string, name: string) {
   const bySub = await prisma.user.findUnique({ where: { logtoSub } });
@@ -406,7 +422,7 @@ async function seedCommunity(demoUserId: string) {
 
   const group = await prisma.group.upsert({
     where: { slug: COMMUNITY_SLUG },
-    update: { ownerId: dona.id },
+    update: { ownerId: dona.id, joinPolicy: 'APPROVAL' },
     create: {
       slug: COMMUNITY_SLUG,
       type: 'SPONSORED',
@@ -414,14 +430,16 @@ async function seedCommunity(demoUserId: string) {
       description: 'Musculação, corrida e acompanhamento de nutrição.',
       timezone: TIMEZONE,
       ownerId: dona.id,
+      joinPolicy: 'APPROVAL',
     },
   });
 
-  const joinedAt = localInstant(DAYS, 9);
+  // Membros entraram antes da janela do painel, para a retenção ter história.
+  const joinedAt = localInstant(COMMUNITY_WEEKS * 7 + 7, 9);
   const ativo = (userId: string, role: 'OWNER' | 'PROFESSIONAL' | 'MEMBER', extra = {}) =>
     prisma.groupMembership.upsert({
       where: { groupId_userId: { groupId: group.id, userId } },
-      update: { role, status: 'ACTIVE', leftAt: null, ...extra },
+      update: { role, status: 'ACTIVE', leftAt: null, joinedAt, ...extra },
       create: { groupId: group.id, userId, role, status: 'ACTIVE', joinedAt, ...extra },
     });
   await ativo(dona.id, 'OWNER');
@@ -444,10 +462,83 @@ async function seedCommunity(demoUserId: string) {
     });
   }
 
+  // Pedidos aguardando a dona: o painel mostra e o E2E aprova (e o seed devolve).
+  for (const [i, pedido] of PENDING_REQUESTS.entries()) {
+    const u = await seedUser(
+      `seed:academia-demo:pedido:${i}`,
+      `pedido-${i}@academia-demo.fatia.local`,
+      pedido.name,
+    );
+    const dados = {
+      role: 'MEMBER' as const,
+      status: 'INVITED' as const,
+      joinedAt: null,
+      leftAt: null,
+      consentScopes: pedido.scopes,
+      consentAt: localInstant(i + 1, 10),
+      statsOptIn: false,
+    };
+    await prisma.groupMembership.upsert({
+      where: { groupId_userId: { groupId: group.id, userId: u.id } },
+      update: dados,
+      create: { groupId: group.id, userId: u.id, ...dados },
+    });
+    await prisma.professionalLink.deleteMany({ where: { groupId: group.id, subjectUserId: u.id } });
+  }
+
+  // Treinos dos membros que aceitaram as estatísticas: o painel de retenção
+  // precisa de gente o bastante por semana para não suprimir tudo. Rng próprio
+  // para não mexer nos números do demo.
+  const r = rng(20261018);
+  const participantes = membros.filter((_, i) => FAKE_MEMBERS[i]!.statsOptIn);
+  await prisma.workoutSession.deleteMany({
+    where: { userId: { in: membros.map((m) => m.id) }, notes: COMMUNITY_SESSION_NOTE },
+  });
+  const sessoes: Array<{ userId: string; startedAt: Date; completedAt: Date; notes: string }> = [];
+  for (const membro of participantes) {
+    for (let semana = COMMUNITY_WEEKS - 1; semana >= 0; semana--) {
+      // Alguns somem em algumas semanas: é o que faz a curva (e a supressão) aparecer.
+      if (r() < 0.12) continue;
+      const vezes = 2 + Math.floor(r() * 3);
+      for (let v = 0; v < vezes; v++) {
+        const daysAgo = semana * 7 + 1 + Math.floor(r() * 6);
+        const hora = [6, 7, 12, 18, 19, 20][Math.floor(r() * 6)]!;
+        const startedAt = localInstant(daysAgo, hora, Math.floor(r() * 50));
+        sessoes.push({
+          userId: membro.id,
+          startedAt,
+          completedAt: new Date(startedAt.getTime() + (40 + Math.floor(r() * 30)) * 60_000),
+          notes: COMMUNITY_SESSION_NOTE,
+        });
+      }
+    }
+  }
+  await prisma.workoutSession.createMany({ data: sessoes });
+
+  // Assentos de cortesia (sem cobrança), com o primeiro membro usando um.
+  await prisma.groupSeatPool.deleteMany({ where: { groupId: group.id } });
+  const primeiro = await prisma.groupMembership.findUniqueOrThrow({
+    where: { groupId_userId: { groupId: group.id, userId: membros[0]!.id } },
+  });
+  await prisma.groupSeatPool.create({
+    data: {
+      groupId: group.id,
+      seats: COMMUNITY_SEATS,
+      unitPriceCents: 1490,
+      status: 'ACTIVE',
+      currentPeriodEnd: localInstant(-20, 0),
+      createdById: dona.id,
+      assignments: { create: { membershipId: primeiro.id, assignedById: dona.id } },
+    },
+  });
+
+  // Convites que o E2E deixou para trás (o painel cria e revoga): fora.
+  await prisma.groupInvite.deleteMany({ where: { groupId: group.id } });
+
   // O demo entra pelo E2E: nenhuma associação (o assento cai junto, em cascata).
   await prisma.groupMembership.deleteMany({ where: { groupId: group.id, userId: demoUserId } });
   console.log(
-    `  ✓ Comunidade "${group.name}" (${COMMUNITY_SLUG}): dona ${dona.email}, 1 profissional, ${membros.length} membros.`,
+    `  ✓ Comunidade "${group.name}" (${COMMUNITY_SLUG}): dona ${dona.email}, 1 profissional, ${membros.length} membros, ${PENDING_REQUESTS.length} pedidos, ${sessoes.length} treinos, ${COMMUNITY_SEATS} assentos.`,
   );
 }
 
