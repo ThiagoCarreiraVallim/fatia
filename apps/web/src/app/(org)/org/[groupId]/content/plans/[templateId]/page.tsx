@@ -262,9 +262,9 @@ function PlanEditor({
       >
         <fieldset
           disabled={!editavel}
+          aria-label="Dados do plano"
           className="space-y-4 rounded-2xl border border-subtle bg-card p-4"
         >
-          <legend className="sr-only">Dados do plano</legend>
           <div className="space-y-1">
             <Label htmlFor="titulo">Título</Label>
             <Input

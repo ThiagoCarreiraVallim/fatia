@@ -68,7 +68,7 @@ export function ImageField({
 
   return (
     <div className="space-y-2">
-      <label htmlFor={id} className="text-sm font-medium">
+      <label htmlFor={id} className="block text-sm font-medium">
         {label}
       </label>
       {value?.url ? (
