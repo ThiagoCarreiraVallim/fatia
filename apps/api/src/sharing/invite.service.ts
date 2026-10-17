@@ -4,7 +4,10 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  Logger,
   NotFoundException,
+  type OnModuleDestroy,
+  type OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes } from 'node:crypto';
@@ -25,6 +28,11 @@ export const INVITE_MAX_DAYS = 30;
 const RESEND_MIN_INTERVAL_MS = 10 * 60 * 1000;
 /** O e-mail do convidado não fica além disto depois do uso ou da expiração. */
 export const INVITE_EMAIL_RETENTION_DAYS = 30;
+/**
+ * De quanto em quanto tempo o expurgo roda sozinho. Antes ele só rodava ao criar
+ * convite, e a comunidade que parava de convidar guardava o e-mail para sempre.
+ */
+export const INVITE_EMAIL_PURGE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type InvitableRole = Exclude<GroupRole, 'OWNER'>;
@@ -105,13 +113,34 @@ function view(i: {
  * compartilhável (com limite de usos opcional).
  */
 @Injectable()
-export class InviteService {
+export class InviteService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(InviteService.name);
+  private purgeTimer: NodeJS.Timeout | null = null;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly memberships: MembershipService,
     private readonly email: EmailService,
     private readonly config: ConfigService,
   ) {}
+
+  onModuleInit(): void {
+    const run = () =>
+      void this.purgeOldEmails(new Date()).catch((err: unknown) =>
+        this.logger.warn(
+          `Expurgo de e-mails de convite falhou: ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
+    run();
+    // `unref`: o timer não segura o processo (nem o jest) só por existir.
+    this.purgeTimer = setInterval(run, INVITE_EMAIL_PURGE_INTERVAL_MS);
+    this.purgeTimer.unref();
+  }
+
+  onModuleDestroy(): void {
+    if (this.purgeTimer) clearInterval(this.purgeTimer);
+    this.purgeTimer = null;
+  }
 
   async create(actorId: string, groupId: string, input: CreateInviteInput): Promise<CreatedInvite> {
     const eu = await this.equipeAtiva(actorId, groupId);
@@ -134,7 +163,7 @@ export class InviteService {
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
-    await this.purgarEmailsAntigos(agora);
+    await this.purgeOldEmails(agora);
 
     const email = input.email?.trim().toLowerCase() || null;
     const dias = Math.min(Math.max(input.expiresInDays ?? INVITE_DEFAULT_DAYS, 1), INVITE_MAX_DAYS);
@@ -378,7 +407,8 @@ export class InviteService {
    * Retenção (DATA_RETENTION.md): o e-mail de quem foi convidado some 30 dias
    * depois de o convite expirar ou esgotar. Roda de carona na criação, sem job.
    */
-  private async purgarEmailsAntigos(agora: Date): Promise<void> {
+  /** Apaga o e-mail do convidado 30 dias depois de o convite vencer, ser revogado ou usado. */
+  async purgeOldEmails(agora: Date): Promise<void> {
     const limite = new Date(agora.getTime() - INVITE_EMAIL_RETENTION_DAYS * DAY_MS);
     await this.prisma.groupInvite.updateMany({
       where: {
