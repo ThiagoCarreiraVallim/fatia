@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { type Locator, type Page, test } from '@playwright/test';
+import { grantSeatToDemo, newInvitePath, purgeDemo } from './community';
 
 /**
  * `pnpm ui:snap <etapa>` (ADR 029): fotografa cada tela do PWA, em celular e
@@ -405,6 +406,48 @@ test.describe('plano PRO', () => {
     await page.goto('/chat');
     await appears(page.getByRole('heading', { name: /faz parte do PRO/ }));
     await snap(page, '41-chat-upsell', false);
+  });
+});
+
+test.describe('comunidade', () => {
+  // O demo entra por convite e sai pelo `--purge`: as fotos do resto do app
+  // continuam com o demo fora da Academia Demo.
+  test.beforeEach(() => purgeDemo());
+  test.afterEach(() => purgeDemo());
+
+  test('convite, minhas comunidades, detalhe e o PRO pela comunidade', async ({
+    page,
+    browser,
+  }, info) => {
+    test.setTimeout(120_000);
+    const convite = newInvitePath();
+
+    const anonimo = await browser.newContext({
+      ...info.project.use,
+      storageState: { cookies: [], origins: [] },
+    });
+    const fora = await anonimo.newPage();
+    await fora.goto(convite);
+    await appears(fora.getByRole('link', { name: 'Entrar para aceitar' }));
+    await snap(fora, '43-convite-deslogado');
+    await anonimo.close();
+
+    await page.goto(convite);
+    await appears(page.getByRole('button', { name: 'Aceitar e entrar' }));
+    await page.getByRole('checkbox', { name: /Treino/ }).click();
+    await page.getByRole('checkbox', { name: /Metas/ }).click();
+    await snap(page, '44-convite-consentimento');
+
+    await page.getByRole('button', { name: 'Aceitar e entrar' }).click();
+    await page.waitForURL(/\/community\/[0-9a-f-]{36}$/);
+    await appears(page.getByRole('heading', { name: 'O que eu compartilho' }));
+    grantSeatToDemo();
+    await page.reload();
+    await appears(page.getByText('A comunidade paga seu PRO'));
+    await snap(page, '45-comunidade-detalhe');
+
+    await visit(page, '/community', '42-comunidades');
+    await visit(page, '/plan', '46-plano-assento');
   });
 });
 

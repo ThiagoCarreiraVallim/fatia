@@ -14,9 +14,13 @@
  * gerador é semeado, então a mesma data produz os mesmos números — screenshots
  * comparáveis entre execuções.
  *
+ * Também monta a "Academia Demo" (Fase 5): a dona é a conta da equipe do
+ * `logto:bootstrap` (`EQUIPE_LOGTO_ID`), com um profissional e membros que só
+ * existem no banco. O demo fica de fora dela, para o E2E entrar por convite.
+ *
  * Uso: pnpm db:seed:demo
  */
-import { MealType, PrismaClient } from '@prisma/client';
+import { MealType, PrismaClient, type ShareScope } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -346,6 +350,104 @@ async function main() {
     console.warn(`  ⚠ não encontrados no catálogo (ignorados): ${missing.join('; ')}`);
   console.log(
     `  ✓ Demo ${DEMO_EMAIL}: ${DAYS} dias de refeições, água, passos, peso, ${plans.length} planos, treinos e metas.`,
+  );
+
+  await seedCommunity(user.id);
+}
+
+const COMMUNITY_SLUG = 'academia-demo';
+
+/** Membros que só existem no banco: nunca fazem login, então o `logtoSub` é inventado. */
+const FAKE_MEMBERS: Array<{ name: string; scopes: ShareScope[]; statsOptIn: boolean }> = [
+  { name: 'Carla Souza', scopes: ['WORKOUT', 'NUTRITION'], statsOptIn: true },
+  { name: 'Diego Lima', scopes: ['WORKOUT'], statsOptIn: true },
+  { name: 'Elisa Rocha', scopes: [], statsOptIn: false },
+  { name: 'Fábio Nunes', scopes: ['HABITS', 'GOALS'], statsOptIn: true },
+  { name: 'Gabi Torres', scopes: ['NUTRITION', 'BODY'], statsOptIn: false },
+];
+
+async function seedUser(logtoSub: string, email: string, name: string) {
+  const bySub = await prisma.user.findUnique({ where: { logtoSub } });
+  if (bySub) return bySub;
+  // Conta criada antes com outro `sub` (o Logto foi recriado): o e-mail manda.
+  const byEmail = await prisma.user.findUnique({ where: { email } });
+  if (byEmail) return prisma.user.update({ where: { id: byEmail.id }, data: { logtoSub } });
+  return prisma.user.create({
+    data: { logtoSub, email, name, timezone: TIMEZONE, onboardedAt: new Date() },
+  });
+}
+
+/**
+ * A "Academia Demo": dona (a conta da equipe), um profissional e membros com
+ * consentimentos variados — o bastante para a tela da comunidade e o painel de
+ * membros terem o que mostrar. O demo sai dela a cada execução.
+ */
+async function seedCommunity(demoUserId: string) {
+  const equipeSub = process.env.EQUIPE_LOGTO_ID;
+  if (!equipeSub) {
+    console.warn('  ⚠ EQUIPE_LOGTO_ID vazio — rode pnpm logto:bootstrap; Academia Demo pulada.');
+    return;
+  }
+  const dona = await seedUser(
+    equipeSub,
+    process.env.EQUIPE_EMAIL ?? 'equipe@fatia.local',
+    'Bruno Equipe',
+  );
+  const profissional = await seedUser(
+    'seed:academia-demo:pro',
+    'personal@academia-demo.fatia.local',
+    'Helena Personal',
+  );
+  const membros = await Promise.all(
+    FAKE_MEMBERS.map((m, i) =>
+      seedUser(`seed:academia-demo:${i}`, `membro-${i}@academia-demo.fatia.local`, m.name),
+    ),
+  );
+
+  const group = await prisma.group.upsert({
+    where: { slug: COMMUNITY_SLUG },
+    update: { ownerId: dona.id },
+    create: {
+      slug: COMMUNITY_SLUG,
+      type: 'SPONSORED',
+      name: 'Academia Demo',
+      description: 'Musculação, corrida e acompanhamento de nutrição.',
+      timezone: TIMEZONE,
+      ownerId: dona.id,
+    },
+  });
+
+  const joinedAt = localInstant(DAYS, 9);
+  const ativo = (userId: string, role: 'OWNER' | 'PROFESSIONAL' | 'MEMBER', extra = {}) =>
+    prisma.groupMembership.upsert({
+      where: { groupId_userId: { groupId: group.id, userId } },
+      update: { role, status: 'ACTIVE', leftAt: null, ...extra },
+      create: { groupId: group.id, userId, role, status: 'ACTIVE', joinedAt, ...extra },
+    });
+  await ativo(dona.id, 'OWNER');
+  await ativo(profissional.id, 'PROFESSIONAL');
+
+  // Vínculos refeitos do zero: o consentimento de cada membro vale para a equipe toda.
+  await prisma.professionalLink.deleteMany({ where: { groupId: group.id } });
+  for (const [i, membro] of membros.entries()) {
+    const { scopes, statsOptIn } = FAKE_MEMBERS[i]!;
+    await ativo(membro.id, 'MEMBER', { consentScopes: scopes, consentAt: joinedAt, statsOptIn });
+    if (scopes.length === 0) continue;
+    await prisma.professionalLink.createMany({
+      data: [dona.id, profissional.id].map((professionalId) => ({
+        subjectUserId: membro.id,
+        professionalId,
+        groupId: group.id,
+        scopes,
+        grantedAt: joinedAt,
+      })),
+    });
+  }
+
+  // O demo entra pelo E2E: nenhuma associação (o assento cai junto, em cascata).
+  await prisma.groupMembership.deleteMany({ where: { groupId: group.id, userId: demoUserId } });
+  console.log(
+    `  ✓ Comunidade "${group.name}" (${COMMUNITY_SLUG}): dona ${dona.email}, 1 profissional, ${membros.length} membros.`,
   );
 }
 

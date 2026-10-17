@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
+import { newInvitePath, purgeDemo } from './community';
 
 /**
  * Acessibilidade automática (Fase 3): o axe roda nas telas do app, no menu
@@ -64,4 +65,26 @@ test('axe: menu "Mais" e Registrar', async ({ page, isMobile }) => {
   await page.getByRole('button', { name: 'Registrar', exact: true }).click();
   await page.getByRole('dialog', { name: 'Registrar' }).waitFor();
   expect(await auditar(page)).toEqual([]);
+});
+
+test.describe('axe: comunidade', () => {
+  test.beforeEach(() => purgeDemo());
+  test.afterEach(() => purgeDemo());
+
+  test('convite inválido, convite com consentimento e a comunidade por dentro', async ({
+    page,
+  }) => {
+    await page.goto(`/c/${'x'.repeat(43)}`);
+    await page.getByRole('heading', { name: 'Convite indisponível' }).waitFor();
+    expect(await auditar(page)).toEqual([]);
+
+    await page.goto(newInvitePath());
+    await page.getByRole('button', { name: 'Aceitar e entrar' }).waitFor();
+    expect(await auditar(page)).toEqual([]);
+
+    await page.getByRole('button', { name: 'Aceitar e entrar' }).click();
+    await page.waitForURL(/\/community\/[0-9a-f-]{36}$/);
+    await page.getByRole('heading', { name: 'O que eu compartilho' }).waitFor();
+    expect(await auditar(page)).toEqual([]);
+  });
 });

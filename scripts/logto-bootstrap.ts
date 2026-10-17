@@ -8,7 +8,8 @@
  *   2. apps OIDC: Fatia Web (Traditional), Fatia MCP (Traditional), Fatia Mobile (Native);
  *   3. conector de e-mail (SMTP) com templates em pt-BR, se EMAIL_SMTP_HOST estiver definido;
  *   4. experiência de login: marca, pt-BR, termos, cadastro e "esqueci minha senha";
- *   5. usuário demo (só fora de produção), usado pelo Playwright e pelo seed-demo.
+ *   5. usuário demo e usuário da equipe (só fora de produção), usados pelo Playwright e
+ *      pelo seed-demo — a equipe é a dona da "Academia Demo" e grava `EQUIPE_LOGTO_ID`.
  *
  * Pré-requisito: um app M2M com a role "Logto Management API access" em
  * LOGTO_M2M_APP_ID/SECRET. Local: `bash scripts/logto-seed-m2m.sh`. Produção: console.
@@ -45,6 +46,14 @@ export const DEMO_USER = {
   name: 'Ana Demo',
 };
 
+/** Dona da "Academia Demo" do seed: convida, aprova e lê com consentimento no E2E. */
+export const TEAM_USER = {
+  username: env('EQUIPE_USERNAME', 'equipe'),
+  email: env('EQUIPE_EMAIL', 'equipe@fatia.local'),
+  password: env('EQUIPE_PASSWORD', 'Fatia-equipe-2026!'),
+  name: 'Bruno Equipe',
+};
+
 const PLACEHOLDER = /^(|replace_.*)$/;
 
 function say(msg: string) {
@@ -62,6 +71,16 @@ function readEnvFile(path: string): string {
 function envFileGet(content: string, key: string): string {
   const match = content.match(new RegExp(`^${key}=(.*)$`, 'm'));
   return match?.[1]?.trim() ?? '';
+}
+
+/** Grava sempre: para o que deriva do Logto (um id), e não para segredo escolhido à mão. */
+function envFileSet(path: string, key: string, value: string) {
+  let content = readEnvFile(path);
+  const line = `${key}=${value}`;
+  content = new RegExp(`^${key}=`, 'm').test(content)
+    ? content.replace(new RegExp(`^${key}=.*$`, 'm'), line)
+    : `${content.replace(/\n?$/, '\n')}${line}\n`;
+  writeFileSync(path, content);
 }
 
 /** Grava só quando o valor atual é vazio ou placeholder. Devolve o valor efetivo. */
@@ -305,27 +324,25 @@ async function configureSignInExperience(api: Api, hasEmail: boolean) {
   );
 }
 
-async function ensureDemoUser(api: Api) {
-  if (IS_PRODUCTION) {
-    say('NODE_ENV=production — usuário demo NÃO é criado');
-    return;
-  }
+/** Cria ou reaplica a senha de um usuário de teste. Devolve o id no Logto (o `sub`). */
+async function ensureUser(api: Api, user: typeof DEMO_USER, label: string): Promise<string> {
   const found = await api<Array<{ id: string }>>(
     'GET',
-    `/users?search=${encodeURIComponent(DEMO_USER.email)}&mode.primaryEmail=exact`,
+    `/users?search=${encodeURIComponent(user.email)}&mode.primaryEmail=exact`,
   );
   if (found.length > 0) {
-    await api('PATCH', `/users/${found[0]!.id}/password`, { password: DEMO_USER.password });
-    say(`Usuário demo ${DEMO_USER.email} já existe — senha reaplicada`);
-    return;
+    await api('PATCH', `/users/${found[0]!.id}/password`, { password: user.password });
+    say(`Usuário ${label} ${user.email} já existe — senha reaplicada`);
+    return found[0]!.id;
   }
-  await api('POST', '/users', {
-    username: DEMO_USER.username,
-    primaryEmail: DEMO_USER.email,
-    password: DEMO_USER.password,
-    name: DEMO_USER.name,
+  const created = await api<{ id: string }>('POST', '/users', {
+    username: user.username,
+    primaryEmail: user.email,
+    password: user.password,
+    name: user.name,
   });
-  say(`Usuário demo ${DEMO_USER.email} criado`);
+  say(`Usuário ${label} ${user.email} criado`);
+  return created.id;
 }
 
 async function main() {
@@ -362,7 +379,15 @@ async function main() {
   }
 
   await configureSignInExperience(api, await ensureEmailConnector(api));
-  await ensureDemoUser(api);
+  if (IS_PRODUCTION) {
+    say('NODE_ENV=production — usuários de teste NÃO são criados');
+  } else {
+    await ensureUser(api, DEMO_USER, 'demo');
+    // O seed cria a conta da equipe no banco antes do primeiro login dela, e o
+    // `logtoSub` tem de ser este id: com outro, o login dela bateria no e-mail
+    // já usado e não entraria.
+    envFileSet(ENV_PATH, 'EQUIPE_LOGTO_ID', await ensureUser(api, TEAM_USER, 'da equipe'));
+  }
 
   say('Logto pronto.');
 }

@@ -39,11 +39,14 @@ setup('login do usuário demo', async ({ page }) => {
 
   // O servidor de dev compila cada rota na primeira visita, e isso passa dos
   // 5 s do `expect` quando cai no meio de um fluxo (o "+" que leva ao
-  // `/workout`, o menu que leva ao `/profile`). Pedir cada rota fixa aqui tira a
+  // `/workout`, o menu que leva ao `/profile`). Pedir cada rota aqui tira a
   // compilação de dentro dos testes.
-  for (const { pattern } of ROUTES) {
-    if (pattern.includes(':')) continue;
-    await page.request.get(pattern, { timeout: 120_000 }).catch(() => undefined);
+  // Rotas dinâmicas também, com um parâmetro qualquer: compilar é o que demora, e
+  // o clique que chega antes da hidratação vira submit nativo do formulário. O
+  // convite (`/c/<token>`) fica fora do mapa da barra de topo, por isso à parte.
+  const paths = [...ROUTES.map(({ pattern }) => pattern.replace(/:[^/]+/g, 'x')), '/c/x'];
+  for (const path of paths) {
+    await page.request.get(path, { timeout: 120_000 }).catch(() => undefined);
   }
 
   if (!process.env.E2E_SKIP_SEED) {
