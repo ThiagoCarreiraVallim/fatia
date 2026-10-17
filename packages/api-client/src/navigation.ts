@@ -232,6 +232,12 @@ export const ROUTES: readonly RouteDef[] = [
   // Antes de `/community/:id`: a primeira rota que casa é a que vale.
   { pattern: '/community/new', title: 'Criar comunidade', parent: '/community' },
   { pattern: '/community/:id', title: 'Comunidade', parent: '/community' },
+  { pattern: '/community/:id/content', title: 'Planos e dicas', parent: '/community/:id' },
+  {
+    pattern: '/community/:id/content/:templateId',
+    title: 'Plano pronto',
+    parent: '/community/:id/content',
+  },
   // O painel da equipe: voltar sai do painel para a comunidade, e a seção
   // dentro dele volta à Visão geral. `:id` no `parent` é o mesmo da rota.
   { pattern: '/org/:id', title: 'Painel', parent: '/community/:id' },
@@ -240,6 +246,13 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/org/:id/invites', title: 'Convites', parent: '/org/:id' },
   { pattern: '/org/:id/seats', title: 'Assentos', parent: '/org/:id' },
   { pattern: '/org/:id/settings', title: 'Configurações', parent: '/org/:id' },
+  { pattern: '/org/:id/content', title: 'Planos e dicas', parent: '/org/:id' },
+  {
+    pattern: '/org/:id/content/plans/:templateId',
+    title: 'Plano pronto',
+    parent: '/org/:id/content',
+  },
+  { pattern: '/org/:id/content/tips/:tipId', title: 'Dica', parent: '/org/:id/content' },
   { pattern: '/students', title: 'Membros', parent: '/' },
   { pattern: '/students/:id', title: 'Membro', parent: '/students' },
 ];

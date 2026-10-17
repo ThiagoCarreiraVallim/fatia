@@ -27,7 +27,7 @@ export function groupTypeLabel(type: GroupType): string {
   return GROUP_TYPE_LABEL[type];
 }
 
-export type PanelSection = 'overview' | 'members' | 'invites' | 'seats' | 'settings';
+export type PanelSection = 'overview' | 'members' | 'invites' | 'content' | 'seats' | 'settings';
 
 export interface PanelLink {
   section: PanelSection;
@@ -40,6 +40,7 @@ const SECTIONS: Record<PanelSection, PanelLink> = {
   overview: { section: 'overview', label: 'Visão geral', path: '' },
   members: { section: 'members', label: 'Membros', path: '/members' },
   invites: { section: 'invites', label: 'Convites', path: '/invites' },
+  content: { section: 'content', label: 'Planos e dicas', path: '/content' },
   seats: { section: 'seats', label: 'Assentos', path: '/seats' },
   settings: { section: 'settings', label: 'Configurações', path: '/settings' },
 };
@@ -49,10 +50,12 @@ export function canOpenPanel(group: Pick<MyGroup, 'role' | 'status'>): boolean {
   return group.status === 'ACTIVE' && (group.role === 'OWNER' || group.role === 'PROFESSIONAL');
 }
 
-/** As seções do painel para o papel: o profissional cuida de membros e convites. */
+/** As seções do painel para o papel: o profissional cuida de membros, convites e conteúdo. */
 export function panelSections(role: GroupRole): PanelLink[] {
   if (role === 'OWNER') return Object.values(SECTIONS);
-  if (role === 'PROFESSIONAL') return [SECTIONS.overview, SECTIONS.members, SECTIONS.invites];
+  if (role === 'PROFESSIONAL') {
+    return [SECTIONS.overview, SECTIONS.members, SECTIONS.invites, SECTIONS.content];
+  }
   return [];
 }
 

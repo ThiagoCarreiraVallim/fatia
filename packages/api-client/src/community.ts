@@ -39,6 +39,8 @@ export interface MyGroup {
   statsOptIn: boolean;
   /** A comunidade paga o PRO desta pessoa. */
   hasAiSeat: boolean;
+  /** Avatar da comunidade, URL assinada de curta duração. */
+  avatarUrl: string | null;
 }
 
 /** Quem da equipe recebe o que a pessoa compartilhar. Só nome e papel. */
