@@ -239,6 +239,18 @@ export class PreviaDaAcaoService {
         });
         return membro?.group.name ?? null;
       }
+      case 'planoDaComunidade': {
+        // Só plano publicado de comunidade de que a pessoa é membro ativo.
+        const modelo = await this.prisma.groupPlanTemplate.findFirst({
+          where: {
+            id,
+            publishedAt: { not: null },
+            group: { memberships: { some: { userId, status: 'ACTIVE' } } },
+          },
+          select: { title: true },
+        });
+        return modelo?.title ?? null;
+      }
       case 'convite': {
         // Convite que não vale mais não ganha nome no cartão: o aceite falharia.
         const convite = await this.prisma.groupInvite.findUnique({

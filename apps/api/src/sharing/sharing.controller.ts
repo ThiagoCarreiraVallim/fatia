@@ -27,6 +27,7 @@ import {
   JoinConsentDto,
   JoinGroupDto,
   PreviewGroupDto,
+  SetAvatarDto,
   TransferOwnershipDto,
   UpdateGroupDto,
 } from './dto/group.dto';
@@ -145,6 +146,17 @@ export class SharingController {
     @Body() dto: UpdateGroupDto,
   ) {
     return this.groups.update(user.id, groupId, dto);
+  }
+
+  /** Troca (ou tira, com `null`) o avatar. O arquivo já foi enviado por `/media/uploads`. */
+  @Put(':groupId/avatar')
+  @RequireGroupAction('group.update')
+  setAvatar(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId') groupId: string,
+    @Body() dto: SetAvatarDto,
+  ) {
+    return this.groups.setAvatar(user.id, groupId, dto.fileId);
   }
 
   @Delete(':groupId')

@@ -77,7 +77,8 @@ aparece em `permissions.ts` e nenhum service consulta `role` para ampliar escopo
 | `member.role`      | sim   | não          | não     | não    |
 | `billing.read`     | sim   | não          | não     | não    |
 | `billing.manage`   | sim   | não          | não     | não    |
-| `content.publish`  | não   | sim          | sim     | não    |
+| `content.publish`  | sim   | sim          | sim     | não    |
+| `content.read`     | sim   | sim          | sim     | sim    |
 | `content.moderate` | sim   | não          | sim     | não    |
 | `offer.create`     | não   | sim          | não     | não    |
 | `insights.read`    | sim   | não          | não     | não    |
@@ -104,6 +105,11 @@ futura:
   à comunidade, então só quem define a equipe muda papel. Os vínculos acompanham no mesmo commit:
   quem entra na equipe recebe o leque inverso, quem sai perde tudo que recebia ali
   (`revokedReason = role_changed`), e o dono não muda de papel por aqui — transfere.
+- **`content.publish` inclui o `OWNER`.** Numa academia é a dona quem publica o treino e as dicas
+  da casa. Publicar é escrever para a comunidade, não ler dado de ninguém. O autor edita o que é
+  dele; quem tem `content.moderate` edita e tira do ar o de qualquer pessoa da equipe.
+- **`content.read` abre para todo mundo.** É a vitrine de planos prontos e dicas; o rascunho fica
+  de fora pelo `ContentService`, não por esta tabela.
 - **`content.moderate` é `OWNER` e `CREATOR`.** `PROFESSIONAL` não modera: não é papel de
   moderação, e acumular seria a mesma armadilha que o resto do documento evita.
 
@@ -129,6 +135,7 @@ administrando. `ACTIVE` exerce o que a tabela acima permite. E a associação **
 | `billing.read`     | não                  |
 | `billing.manage`   | não                  |
 | `content.publish`  | não                  |
+| `content.read`     | não                  |
 | `content.moderate` | não                  |
 | `offer.create`     | não                  |
 | `insights.read`    | não                  |

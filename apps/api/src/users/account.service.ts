@@ -83,6 +83,8 @@ export class AccountService {
       subscriptions,
       communityMemberships,
       invitesCreated,
+      contentPublished,
+      mediaUploaded,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
       this.prisma.nutrientTarget.findMany({ where: { userId }, orderBy: { label: 'asc' } }),
@@ -271,6 +273,44 @@ export class AccountService {
         },
         orderBy: { createdAt: 'asc' },
       }),
+      // O que a pessoa publicou numa comunidade (Fase 7): só os metadados. O
+      // conteúdo é da comunidade e fica lá depois que a conta some.
+      Promise.all([
+        this.prisma.groupPlanTemplate.findMany({
+          where: { authorId: userId },
+          select: {
+            group: { select: { name: true } },
+            kind: true,
+            title: true,
+            publishedAt: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        }),
+        this.prisma.groupTip.findMany({
+          where: { authorId: userId },
+          select: {
+            group: { select: { name: true } },
+            title: true,
+            publishedAt: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        }),
+      ]).then(([plans, tips]) => ({ plans, tips })),
+      // Os arquivos enviados (ADR 028): metadados, sem o arquivo.
+      this.prisma.mediaFile.findMany({
+        where: { uploaderId: userId },
+        select: {
+          group: { select: { name: true } },
+          purpose: true,
+          kind: true,
+          mime: true,
+          bytes: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
     ]);
 
     // `ProfessionalAccessLog.professionalId` é string pura, sem FK — é o que faz
@@ -316,6 +356,8 @@ export class AccountService {
       subscriptions,
       communityMemberships,
       invitesCreated,
+      contentPublished,
+      mediaUploaded,
       accessLogs: accessLogs.map(({ professionalId, ...linha }) => ({
         ...linha,
         professionalName: nomesDeProfissional.get(professionalId) ?? null,
@@ -327,6 +369,8 @@ export class AccountService {
         subscriptions: subscriptions.length,
         communityMemberships: communityMemberships.length,
         invitesCreated: invitesCreated.length,
+        contentPublished: contentPublished.plans.length + contentPublished.tips.length,
+        mediaUploaded: mediaUploaded.length,
         professionalLinks: professionalLinks.length,
         accessLogs: accessLogs.length,
         meals: meals.length,
@@ -372,7 +416,7 @@ export class AccountService {
     // Antes de tudo, e podendo abortar: encerrar a assinatura paga (ADR 024).
     // Se o provedor não responder, a conta fica inteira e o erro sobe — apagar
     // a conta e seguir cobrando seria o pior resultado possível.
-    for (const gancho of this.ganchos ?? []) await gancho.antesDeApagar(userId);
+    for (const gancho of this.ganchos ?? []) await gancho.beforeDelete(userId);
 
     // Ordem deliberada: Logto primeiro. Se apagássemos o User local antes e o
     // Logto falhasse, a identidade órfã voltaria a provisionar um User novo no

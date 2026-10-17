@@ -4,12 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, type MealType } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { MealService, type ResolvedItem } from './meal.service';
 import { snapshotOf } from './helpers/meal-snapshot';
 import {
   MAX_TEMPLATE_ITEMS,
+  MAX_TEMPLATE_NAME,
   MAX_TEMPLATES_PER_USER,
   type CreateMealTemplateDto,
   type LogMealTemplateDto,
@@ -90,6 +91,50 @@ export class MealTemplateService {
           name,
           mealType,
           items: { create: items.map((item, position) => ({ ...item, position })) },
+        },
+        include: TEMPLATE_INCLUDE,
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException(`Já existe uma refeição salva chamada "${name}".`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Refeição sugerida por um plano pronto da comunidade (Fase 7) vira refeição
+   * salva da pessoa. Os itens chegam já conferidos pelo `ContentService`; aqui
+   * valem o teto por pessoa e o nome único: se ela já tem uma com o mesmo
+   * nome, a cópia ganha " (Comunidade)" em vez de falhar a adoção.
+   */
+  async createFromSuggestion(
+    userId: string,
+    meal: { name: string; mealType: MealType | null; items: ResolvedItem[] },
+    fromTemplateId: string,
+  ): Promise<MealTemplateWithItems> {
+    const total = await this.prisma.mealTemplate.count({ where: { userId } });
+    if (total >= MAX_TEMPLATES_PER_USER) {
+      throw new BadRequestException(
+        `Limite de ${MAX_TEMPLATES_PER_USER} refeições salvas. Apague uma para salvar outra.`,
+      );
+    }
+    const existe = await this.prisma.mealTemplate.findFirst({
+      where: { userId, name: meal.name },
+      select: { id: true },
+    });
+    const sufixo = ' (Comunidade)';
+    const name = existe
+      ? `${meal.name.slice(0, MAX_TEMPLATE_NAME - sufixo.length)}${sufixo}`
+      : meal.name;
+    try {
+      return await this.prisma.mealTemplate.create({
+        data: {
+          userId,
+          name,
+          mealType: meal.mealType,
+          fromTemplateId,
+          items: { create: meal.items.map((item, position) => ({ ...item, position })) },
         },
         include: TEMPLATE_INCLUDE,
       });

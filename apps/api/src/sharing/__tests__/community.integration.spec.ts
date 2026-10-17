@@ -31,7 +31,7 @@ describe('comunidade (integração)', () => {
   const invites = new InviteService(prisma, memberships, email, config);
   const ganchos: string[] = [];
   const groups = new GroupService(prisma, links, [
-    { antesDeApagar: async (id: string) => void ganchos.push(id) },
+    { beforeDelete: async (id: string) => void ganchos.push(id) },
   ]);
 
   const stamp = `comunidade-${Date.now()}`;

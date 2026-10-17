@@ -5,6 +5,12 @@ import { NutritionModule } from '../nutrition/nutrition.module';
 import { ProgressModule } from '../progress/progress.module';
 import { WorkoutModule } from '../workout/workout.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { StorageModule } from '../storage/storage.module';
+import { ContentController } from './content.controller';
+import { ContentService } from './content.service';
+import { AdoptGroupPlanTool } from './mcp/adopt-group-plan.tool';
+import { ListGroupPlansTool } from './mcp/list-group-plans.tool';
+import { ListGroupTipsTool } from './mcp/list-group-tips.tool';
 import { AccessAuditService } from './access-audit.service';
 import { ConsentService } from './consent.service';
 import { GroupService } from './group.service';
@@ -45,7 +51,8 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
  *
  * A direção contrária — profissional/criador → aluno — é **cópia**, e quem a faz
  * é o `PlanMaterializerService` (#162), a única máquina de materialização do
- * repositório. Oferta aceita (#157) e plano pronto adotado (#162) são a mesma
+ * repositório. O `ContentService` (Fase 7) é a porta dos planos prontos e das
+ * dicas que a equipe publica; o membro adota pelo REST e pelas tools daqui. Oferta aceita (#157) e plano pronto adotado (#162) são a mesma
  * cópia com portas de entrada diferentes; duas implementações divergiriam no
  * primeiro campo novo de `WorkoutPlan`.
  *
@@ -72,8 +79,9 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
     NutritionModule,
     GoalsModule,
     NotificationsModule,
+    StorageModule,
   ],
-  controllers: [SharingController, ConsentController, ProfessionalController],
+  controllers: [SharingController, ConsentController, ProfessionalController, ContentController],
   providers: [
     ProfessionalAccessService,
     ProfessionalLinkService,
@@ -84,6 +92,7 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
     MembershipService,
     InviteService,
     PlanMaterializerService,
+    ContentService,
     GroupRoleGuard,
     ListMyGroupsTool,
     JoinGroupTool,
@@ -97,6 +106,9 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
     ListDataAccessLogTool,
     ListMyStudentsTool,
     GetStudentProgressTool,
+    ListGroupPlansTool,
+    AdoptGroupPlanTool,
+    ListGroupTipsTool,
   ],
   exports: [
     ProfessionalAccessService,
@@ -107,6 +119,7 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
     InviteService,
     StudentViewService,
     PlanMaterializerService,
+    ContentService,
   ],
 })
 export class SharingModule {}

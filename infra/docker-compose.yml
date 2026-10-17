@@ -64,6 +64,22 @@ services:
       - "${MAILPIT_SMTP_PORT:-1025}:1025"
       - "${MAILPIT_UI_PORT:-8025}:8025"
 
+  media:
+    # Armazenamento de mídia da comunidade no dev (ADR 028): SeaweedFS falando o
+    # mesmo protocolo S3 do Cloudflare R2 de produção. Bucket privado; quem lê
+    # recebe URL assinada. A API cria o bucket e o CORS no dev ao subir
+    # (`StorageService`); em produção isso é configuração do R2 (OPERATIONS.md).
+    # SeaweedFS e não MinIO: as imagens do MinIO saíram do Docker Hub.
+    image: chrislusf/seaweedfs:3.97
+    container_name: fatia-media
+    restart: unless-stopped
+    command: server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data
+    ports:
+      - "${MEDIA_S3_PORT:-8333}:8333"
+    volumes:
+      - fatia_media_data:/data
+      - ./media/s3.json:/etc/seaweedfs/s3.json:ro
+
   api:
     build:
       context: ..
@@ -183,3 +199,5 @@ services:
 volumes:
   fatia_pg_data:
     name: fatia_pg_data
+  fatia_media_data:
+    name: fatia_media_data

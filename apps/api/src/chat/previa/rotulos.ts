@@ -223,6 +223,14 @@ const escopos: Formato = (valor, ctx) =>
 
 export const CAMPOS: Record<string, Campo> = {
   scopes: { rotulo: 'Compartilha com a equipe', formato: escopos },
+  applyGoals: {
+    rotulo: 'Trocar minhas metas pelas do plano',
+    formato: (valor) => (typeof valor === 'boolean' ? (valor ? 'Sim' : 'Não') : null),
+  },
+  saveMeals: {
+    rotulo: 'Guardar as refeições sugeridas',
+    formato: (valor) => (typeof valor === 'boolean' ? (valor ? 'Sim' : 'Não') : null),
+  },
   statsOptIn: {
     rotulo: 'Estatísticas agregadas',
     formato: (valor) =>
@@ -371,7 +379,12 @@ export const IDS = {
 } as const;
 
 export type TipoDeRegistro =
-  (typeof IDS)[keyof typeof IDS] | 'itemDaRefeicao' | 'agua' | 'comunidade' | 'convite';
+  | (typeof IDS)[keyof typeof IDS]
+  | 'itemDaRefeicao'
+  | 'agua'
+  | 'comunidade'
+  | 'convite'
+  | 'planoDaComunidade';
 
 /**
  * Campo cujo sentido muda com a tool. `groupId` é grupo de alimento em
@@ -381,6 +394,8 @@ export type TipoDeRegistro =
 export const CAMPO_POR_TOOL: Record<string, Record<string, TipoDeRegistro>> = {
   set_group_sharing: { groupId: 'comunidade' },
   accept_group_invite: { token: 'convite' },
+  // `templateId` aqui é plano pronto da comunidade, não refeição salva.
+  adopt_group_plan: { groupId: 'comunidade', templateId: 'planoDaComunidade' },
 };
 
 /** O `id` cru muda de sentido conforme a tool — ver `tipoDoCampoId`. */
@@ -414,6 +429,7 @@ export const ROTULO_DO_REGISTRO: Record<TipoDeRegistro, string> = {
   agua: 'Registro de água',
   comunidade: 'Comunidade',
   convite: 'Comunidade',
+  planoDaComunidade: 'Plano da comunidade',
 };
 
 /** Campos com forma própria no cartão, montados pelo serviço. */

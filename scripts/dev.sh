@@ -24,8 +24,8 @@ die() { printf '\033[1;31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 
 command -v docker >/dev/null 2>&1 || die "docker not found. See docs/ONBOARDING.md."
 
-say "Ensuring Postgres + Logto + Mailpit are up"
-docker compose --env-file .env -f infra/docker-compose.yml up -d postgres logto mailpit >/dev/null
+say "Ensuring Postgres + Logto + Mailpit + media (S3) are up"
+docker compose --env-file .env -f infra/docker-compose.yml up -d postgres logto mailpit media >/dev/null
 
 say "Waiting for Postgres"
 for i in $(seq 1 30); do

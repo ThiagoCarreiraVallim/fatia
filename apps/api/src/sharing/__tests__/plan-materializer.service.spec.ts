@@ -308,7 +308,7 @@ describe('PlanMaterializerService.materialize', () => {
   });
 
   it('recusa o exercício de CATÁLOGO repetido, em vez de deixar o P2002 virar 500', async () => {
-    // O ramo `catalog:` do dedupe não tinha teste: `conferirCatalogo` faz
+    // O ramo `catalog:` do dedupe não tinha teste: `assertCatalogExercises` faz
     // `new Set(ids)` antes da query, então um id repetido atravessa a
     // pré-passada inteira e só morre no `create`, em
     // `@@unique([planId, exerciseId])` — P2002 sobe como "Internal server

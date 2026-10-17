@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { ExerciseService } from '../workout/exercise.service';
 import {
-  descreverProblemas,
+  describeIssues,
   PLAN_SNAPSHOT_VERSION,
   planSnapshotSchema,
   type DefinicaoCustom,
@@ -36,12 +36,11 @@ const PLAN_INCLUDE = {
  * isso e não cumpria: casava também `training-block.service.ts`, que só lê, e os
  * specs. Invariante que o comando escrito não confere apodrece calada.
  *
- * **Proveniência ainda não é gravada.** `fromOfferId`/`fromTemplateId` em
- * `WorkoutPlan` dependem de model novo, que esta fatia não abre (ver a proposta
- * de schema na PR). Enquanto a coluna não existe, a adoção **não é idempotente**:
- * é o chamador que precisa evitar materializar duas vezes. A consulta que resolve
- * isso — `workoutPlan.findFirst({ where: { userId, fromTemplateId } })` — entra
- * aqui junto com a coluna, e não antes.
+ * **Proveniência:** o plano pronto da comunidade (Fase 7) grava
+ * `fromTemplateId`, e é o `ContentService` que confere a cópia já existente
+ * (`workoutPlan.findFirst({ where: { userId, fromTemplateId } })`) antes de
+ * chamar esta máquina, que continua sem saber de onde o retrato veio. A oferta
+ * do profissional ainda não grava proveniência.
  */
 @Injectable()
 export class PlanMaterializerService {
@@ -68,9 +67,9 @@ export class PlanMaterializerService {
    * escrita possivelmente por uma versão anterior do produto, e o `as` que o
    * TypeScript aceitaria de graça não olharia o conteúdo.
    */
-  async materialize(userId: string, snapshot: unknown) {
-    const snap = this.validar(snapshot);
-    await this.conferirCatalogo(snap);
+  async materialize(userId: string, snapshot: unknown, fromTemplateId?: string) {
+    const snap = this.validate(snapshot);
+    await this.assertCatalogExercises(snap);
 
     const exercises: Array<{
       exerciseId: number;
@@ -83,7 +82,7 @@ export class PlanMaterializerService {
         exerciseId:
           item.source === 'catalog'
             ? item.catalogExerciseId
-            : await this.copiarCustom(userId, item.exercise),
+            : await this.copyCustomExercise(userId, item.exercise),
         order: item.order,
         targetSets: item.targetSets,
         targetReps: item.targetReps,
@@ -94,12 +93,12 @@ export class PlanMaterializerService {
     // saem numa transação só do lado do Prisma, sem segurar conexão entre
     // roundtrips — pgbouncer em transaction pooling (ADR 010).
     return this.prisma.workoutPlan.create({
-      data: { userId, name: snap.name, exercises: { create: exercises } },
+      data: { userId, name: snap.name, fromTemplateId, exercises: { create: exercises } },
       include: PLAN_INCLUDE,
     });
   }
 
-  private validar(snapshot: unknown): PlanSnapshot {
+  private validate(snapshot: unknown): PlanSnapshot {
     // A versão é conferida antes do schema para a mensagem dizer o que houve.
     // O `z.literal` sozinho reprovaria com "invalid literal value", e o
     // snapshot de um plano guardado meses atrás merece erro melhor do que isso.
@@ -114,7 +113,7 @@ export class PlanMaterializerService {
     const parsed = planSnapshotSchema.safeParse(snapshot);
     if (!parsed.success) {
       throw new BadRequestException(
-        `Snapshot de plano inválido (${descreverProblemas(parsed.error)}). Nada foi criado.`,
+        `Snapshot de plano inválido (${describeIssues(parsed.error)}). Nada foi criado.`,
       );
     }
     return parsed.data;
@@ -136,7 +135,7 @@ export class PlanMaterializerService {
    * na biblioteca de quem adota. Uma query só para todos os ids, antes de
    * qualquer escrita.
    */
-  private async conferirCatalogo(snap: PlanSnapshot): Promise<void> {
+  private async assertCatalogExercises(snap: PlanSnapshot): Promise<void> {
     const ids = [
       ...new Set(
         snap.exercises.flatMap((item) =>
@@ -172,7 +171,7 @@ export class PlanMaterializerService {
    * apontar para o que ela já tem. É a mesma escolha que `cloneForEdit` faz ao
    * devolver a cópia existente em vez de criar outra.
    */
-  private async copiarCustom(userId: string, definicao: DefinicaoCustom): Promise<number> {
+  private async copyCustomExercise(userId: string, definicao: DefinicaoCustom): Promise<number> {
     const { name, muscleGroup, ...enriquecimento } = definicao;
 
     const existente = await this.prisma.exercise.findFirst({

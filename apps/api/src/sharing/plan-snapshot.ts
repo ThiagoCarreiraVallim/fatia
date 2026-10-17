@@ -134,7 +134,7 @@ export const planSnapshotSchema = z
     // depois de já ter criado o exercício custom do adotante — sobra sujeira e
     // a mensagem sai como erro de banco.
     //
-    // A chave do custom é o nome **cru**, exatamente o que `copiarCustom` usa no
+    // A chave do custom é o nome **cru**, exatamente o que `copyCustomExercise` usa no
     // `findFirst` e o que o `@@unique([name, createdByUserId])` do Postgres
     // compara — e o Postgres é case-sensitive. Normalizar aqui
     // (`trim().toLowerCase()`) reprovava um plano legítimo: "Prancha" e
@@ -160,7 +160,7 @@ export const planSnapshotSchema = z
 export type PlanSnapshot = z.infer<typeof planSnapshotSchema>;
 
 /** `caminho: motivo; caminho: motivo` — o que o Zod reprovou, em uma linha. */
-export const descreverProblemas = (erro: z.ZodError): string =>
+export const describeIssues = (erro: z.ZodError): string =>
   erro.issues.map((i) => `${i.path.join('.') || 'snapshot'}: ${i.message}`).join('; ');
 
 /** A forma mínima de `WorkoutPlan` + exercícios que o snapshot sabe congelar. */
@@ -232,7 +232,7 @@ export function buildPlanSnapshot(plano: PlanoParaCongelar): PlanSnapshot {
   });
   if (!parsed.success) {
     throw new BadRequestException(
-      `Este plano não pode ser publicado (${descreverProblemas(parsed.error)}).`,
+      `Este plano não pode ser publicado (${describeIssues(parsed.error)}).`,
     );
   }
   return parsed.data;

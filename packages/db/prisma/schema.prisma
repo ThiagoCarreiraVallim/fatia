@@ -63,7 +63,10 @@ model User {
   memories       UserMemory[]
   aiUsage        AiUsage[]
   subscriptions  UserSubscription[]
-  invitesCreated GroupInvite[]      @relation("GroupInviteCreator")
+  invitesCreated GroupInvite[]       @relation("GroupInviteCreator")
+  mediaFiles     MediaFile[]         @relation("MediaUploader")
+  planTemplates  GroupPlanTemplate[] @relation("PlanTemplateAuthor")
+  tipsAuthored   GroupTip[]          @relation("TipAuthor")
 
   // B2B (ADR 014). Nenhuma destas relações dá acesso a dado de saúde por si só —
   // quem autoriza leitura é exclusivamente uma linha de `ProfessionalLink`.
@@ -306,16 +309,20 @@ model MealItem {
 // retrato dos itens como foram registrados, sem recalcular: o que a pessoa comeu
 // continua igual mesmo se o alimento personalizado for apagado depois.
 model MealTemplate {
-  id        String    @id @default(uuid())
-  userId    String
-  name      String
+  id             String    @id @default(uuid())
+  userId         String
+  name           String
   // Tipo sugerido ao registrar; null = quem registra escolhe.
-  mealType  MealType?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  mealType       MealType?
+  /// Plano pronto da comunidade de onde esta refeição veio (Fase 7). Só
+  /// proveniência: a cópia é da pessoa e não acompanha o modelo.
+  fromTemplateId String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  user  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  items MealTemplateItem[]
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items        MealTemplateItem[]
+  fromTemplate GroupPlanTemplate? @relation("MealFromTemplate", fields: [fromTemplateId], references: [id], onDelete: SetNull)
 
   @@unique([userId, name])
   @@index([userId])
@@ -387,17 +394,22 @@ model Exercise {
 }
 
 model WorkoutPlan {
-  id        String   @id @default(uuid())
-  userId    String
-  name      String // "Push", "Pull", "Leg"
-  createdAt DateTime @default(now())
+  id             String   @id @default(uuid())
+  userId         String
+  name           String // "Push", "Pull", "Leg"
+  /// Plano pronto da comunidade de onde este plano veio (Fase 7). Torna a
+  /// adoção idempotente; arquivar o modelo não mexe na cópia.
+  fromTemplateId String?
+  createdAt      DateTime @default(now())
 
   user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   exercises      WorkoutPlanExercise[]
   sessions       WorkoutSession[]
   trainingBlocks TrainingBlock[]
+  fromTemplate   GroupPlanTemplate?    @relation("PlanFromTemplate", fields: [fromTemplateId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@index([userId, fromTemplateId])
 }
 
 model WorkoutPlanExercise {
@@ -789,12 +801,18 @@ model Group {
   // Apagar a conta do dono apaga grupo, memberships e vínculos, e **nenhum dado
   // de aluno é tocado**, porque nunca esteve sob o grupo. Fatura em aberto é
   // problema da #158, não deste FK.
-  owner       User               @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  memberships GroupMembership[]
-  links       ProfessionalLink[]
-  aiUsage     AiUsage[]
-  invites     GroupInvite[]
-  seatPool    GroupSeatPool?
+  owner         User                @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  memberships   GroupMembership[]
+  links         ProfessionalLink[]
+  aiUsage       AiUsage[]
+  invites       GroupInvite[]
+  seatPool      GroupSeatPool?
+  /// Avatar da comunidade (ADR 028).
+  avatarFileId  String?             @unique
+  avatarFile    MediaFile?          @relation("GroupAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
+  mediaFiles    MediaFile[]         @relation("GroupMedia")
+  planTemplates GroupPlanTemplate[]
+  tips          GroupTip[]
 
   @@index([ownerId])
   @@index([type])
@@ -1254,4 +1272,121 @@ model GroupSeatAdjustment {
   pool GroupSeatPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
 
   @@index([poolId])
+}
+
+// ============================================================
+// MÍDIA (ADR 028)
+// ============================================================
+
+enum MediaKind {
+  IMAGE
+  VIDEO
+}
+
+enum MediaStatus {
+  /// URL de envio emitida, objeto ainda não conferido.
+  PENDING
+  READY
+}
+
+/// Um arquivo publicado no storage S3 (R2 em produção). O objeto mora no
+/// bucket; aqui fica quem enviou, a que comunidade pertence e o estado.
+/// Leitura só por URL assinada, emitida para quem pode ver o conteúdo.
+model MediaFile {
+  id          String      @id @default(uuid())
+  /// Quem enviou. Nulo depois que a pessoa apaga a conta: o arquivo de uma
+  /// comunidade é dela e fica.
+  uploaderId  String?
+  /// Comunidade dona do arquivo. Nulo = arquivo pessoal (Fase 8).
+  groupId     String?
+  /// Para que o arquivo foi enviado (`group_avatar`, `group_content`…). O
+  /// item que o referencia confere que o propósito bate.
+  purpose     String
+  kind        MediaKind
+  status      MediaStatus @default(PENDING)
+  /// Chave do objeto no bucket.
+  key         String      @unique
+  mime        String
+  bytes       Int
+  width       Int?
+  height      Int?
+  createdAt   DateTime    @default(now())
+  confirmedAt DateTime?
+
+  uploader       User?               @relation("MediaUploader", fields: [uploaderId], references: [id], onDelete: SetNull)
+  group          Group?              @relation("GroupMedia", fields: [groupId], references: [id], onDelete: Cascade)
+  groupAvatarOf  Group?              @relation("GroupAvatar")
+  templateCovers GroupPlanTemplate[] @relation("TemplateCover")
+  tipImages      GroupTip[]          @relation("TipImage")
+
+  @@index([groupId])
+  @@index([uploaderId])
+  @@index([status, createdAt])
+}
+
+// ============================================================
+// CONTEÚDO DA COMUNIDADE (Fase 7)
+// ============================================================
+
+enum PlanTemplateKind {
+  WORKOUT
+  NUTRITION
+}
+
+/// Plano pronto publicado pela equipe da comunidade. O conteúdo é um retrato
+/// congelado (`snapshot`): treino no formato de `plan-snapshot.ts`, nutrição em
+/// `nutrition-snapshot.ts`. Adotar copia para a conta do membro, e a cópia é
+/// dele (ADR 014).
+model GroupPlanTemplate {
+  id              String           @id @default(uuid())
+  groupId         String
+  /// Nulo quando o autor apaga a conta: o plano é da comunidade.
+  authorId        String?
+  kind            PlanTemplateKind
+  title           String
+  description     String?
+  /// "beginner" | "intermediate" | "advanced", como `Exercise.level`.
+  level           String?
+  coverFileId     String?
+  snapshot        Json
+  snapshotVersion Int
+  /// Plano do autor de onde o treino foi congelado, para "atualizar a partir
+  /// do plano". Sem chave estrangeira: é só conveniência do autor, e o plano
+  /// dele pode sumir sem mexer no modelo publicado.
+  sourcePlanId    String?
+  /// Nulo = rascunho, visível só para a equipe.
+  publishedAt     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  group         Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  author        User?          @relation("PlanTemplateAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  cover         MediaFile?     @relation("TemplateCover", fields: [coverFileId], references: [id], onDelete: SetNull)
+  workoutCopies WorkoutPlan[]  @relation("PlanFromTemplate")
+  mealCopies    MealTemplate[] @relation("MealFromTemplate")
+
+  @@index([groupId, publishedAt])
+}
+
+/// Dica publicada pela equipe da comunidade. Corpo em markdown restrito
+/// (parágrafo, negrito, itálico, lista e link https), renderizado sem HTML.
+model GroupTip {
+  id          String    @id @default(uuid())
+  groupId     String
+  authorId    String?
+  title       String
+  body        String
+  category    String
+  imageFileId String?
+  pinned      Boolean   @default(false)
+  /// Nulo = rascunho, visível só para a equipe.
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  group  Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  author User?      @relation("TipAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  image  MediaFile? @relation("TipImage", fields: [imageFileId], references: [id], onDelete: SetNull)
+
+  @@index([groupId, publishedAt])
 }

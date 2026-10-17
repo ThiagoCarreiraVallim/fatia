@@ -31,6 +31,9 @@ const makePrisma = () => ({
   userSubscription: { findMany: jest.fn().mockResolvedValue([]) },
   groupMembership: { findMany: jest.fn().mockResolvedValue([]) },
   groupInvite: { findMany: jest.fn().mockResolvedValue([]) },
+  groupPlanTemplate: { findMany: jest.fn().mockResolvedValue([]) },
+  groupTip: { findMany: jest.fn().mockResolvedValue([]) },
+  mediaFile: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const SCHEMA = resolve(__dirname, '../../../../../packages/db/prisma/schema.prisma');
@@ -68,6 +71,9 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   // Só a linha da própria pessoa, com o consentimento e o assento (ADR 025/026).
   memberships: 'communityMemberships',
   invitesCreated: 'invitesCreated',
+  planTemplates: 'contentPublished',
+  tipsAuthored: 'contentPublished',
+  mediaFiles: 'mediaUploaded',
   accessLogs: 'accessLogs',
   // Chat com a IA hospedada (#249): o que a pessoa escreveu sobre a própria saúde, em prosa.
   conversations: 'conversations',
@@ -379,7 +385,7 @@ describe('AccountService', () => {
 
     it('roda os ganchos antes de apagar, e um gancho que falha aborta tudo (ADR 024)', async () => {
       prisma.user.findUnique.mockResolvedValue(USER);
-      const gancho = { antesDeApagar: jest.fn(async (_id: string) => undefined) };
+      const gancho = { beforeDelete: jest.fn(async (_id: string) => undefined) };
       const comGancho = new AccountService(
         prisma as unknown as PrismaService,
         logto as unknown as LogtoManagementService,
@@ -388,12 +394,12 @@ describe('AccountService', () => {
       );
 
       await comGancho.deleteAccount('user-A', DELETE_CONFIRMATION);
-      expect(gancho.antesDeApagar).toHaveBeenCalledWith('user-A');
+      expect(gancho.beforeDelete).toHaveBeenCalledWith('user-A');
       expect(prisma.user.delete).toHaveBeenCalled();
 
       prisma.user.delete.mockClear();
       logto.deleteUser.mockClear();
-      gancho.antesDeApagar.mockRejectedValueOnce(new Error('Asaas fora do ar'));
+      gancho.beforeDelete.mockRejectedValueOnce(new Error('Asaas fora do ar'));
       await expect(comGancho.deleteAccount('user-A', DELETE_CONFIRMATION)).rejects.toThrow(
         'Asaas fora do ar',
       );

@@ -8,9 +8,11 @@ import {
   type GroupMembership,
   type GroupVisibility,
   type JoinPolicy,
+  type MediaFile,
   type ShareScope,
 } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
+import { MediaService } from '../storage/media.service';
 import { GROUP_DELETION_HOOKS, type GroupDeletionHook } from './group-deletion.hook';
 import { canReceiveLink, TEAM_ROLES } from './permissions';
 import { ProfessionalLinkService } from './professional-link.service';
@@ -67,6 +69,8 @@ export interface GroupSummary {
   statsOptIn: boolean;
   /** Se a comunidade paga o PRO desta pessoa (ADR 025). */
   hasAiSeat: boolean;
+  /** Avatar da comunidade, por URL assinada de curta duração (ADR 028). */
+  avatarUrl: string | null;
 }
 
 /** Preview mostrado a quem foi convidado, ANTES de decidir entrar. */
@@ -83,12 +87,13 @@ export interface GroupPreview {
 }
 
 const INCLUIR = {
-  group: true,
+  group: { include: { avatarFile: true } },
   seatAssignments: { where: { revokedAt: null }, select: { id: true } },
 } as const;
 
 function resumo(
   m: GroupMembership & { group: Group; seatAssignments: { id: string }[] },
+  avatarUrl: string | null,
 ): GroupSummary {
   return {
     id: m.group.id,
@@ -105,6 +110,7 @@ function resumo(
     consentScopes: m.consentScopes,
     statsOptIn: m.statsOptIn,
     hasAiSeat: m.status === MembershipStatus.ACTIVE && m.seatAssignments.length > 0,
+    avatarUrl,
   };
 }
 
@@ -123,7 +129,18 @@ export class GroupService {
     @Optional()
     @Inject(GROUP_DELETION_HOOKS)
     private readonly ganchos: GroupDeletionHook[] = [],
+    @Optional() private readonly media: MediaService | null = null,
   ) {}
+
+  private async summaryOf(
+    m: GroupMembership & {
+      group: Group & { avatarFile: MediaFile | null };
+      seatAssignments: { id: string }[];
+    },
+  ): Promise<GroupSummary> {
+    const avatar = this.media ? await this.media.viewOrNull(m.group.avatarFile) : null;
+    return resumo(m, avatar?.url ?? null);
+  }
 
   /**
    * Cria o grupo já com a membership de `OWNER`.
@@ -180,7 +197,7 @@ export class GroupService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return memberships.map(resumo);
+    return Promise.all(memberships.map((m) => this.summaryOf(m)));
   }
 
   /**
@@ -203,7 +220,7 @@ export class GroupService {
       throw new NotFoundException(NOT_FOUND);
     }
 
-    return resumo(membership);
+    return this.summaryOf(membership);
   }
 
   /**
@@ -252,13 +269,37 @@ export class GroupService {
   }
 
   /**
+   * Troca o avatar da comunidade. O arquivo precisa ter sido enviado para esta
+   * comunidade como avatar; o anterior é apagado do bucket.
+   */
+  async setAvatar(ownerId: string, groupId: string, fileId: string | null): Promise<GroupSummary> {
+    await this.assertOwner(ownerId, groupId);
+    if (fileId && !this.media) throw new NotFoundException('File not found');
+    const atual = await this.prisma.group.findUniqueOrThrow({
+      where: { id: groupId },
+      select: { avatarFileId: true },
+    });
+    if (fileId !== atual.avatarFileId) {
+      const novo = fileId
+        ? await this.media!.resolveForGroup(groupId, fileId, 'group_avatar')
+        : null;
+      await this.prisma.group.update({
+        where: { id: groupId },
+        data: { avatarFileId: novo?.id ?? null },
+      });
+      await this.media?.discardById(atual.avatarFileId);
+    }
+    return this.findByIdForMember(ownerId, groupId);
+  }
+
+  /**
    * Apaga a comunidade. Antes, os ganchos (cancelar os assentos no Asaas); a
    * cascata leva memberships, vínculos, convites e assentos — e nenhum dado de
    * saúde de ninguém, que nunca esteve sob o grupo.
    */
   async remove(ownerId: string, groupId: string): Promise<{ id: string }> {
     await this.assertOwner(ownerId, groupId);
-    for (const gancho of this.ganchos ?? []) await gancho.antesDeApagar(groupId);
+    for (const gancho of this.ganchos ?? []) await gancho.beforeDelete(groupId);
     await this.prisma.group.delete({ where: { id: groupId } });
     return { id: groupId };
   }

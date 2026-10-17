@@ -25,10 +25,11 @@ import {
  * Os dois são os de hoje, não os medidos: o braço A medido é `3ef29a0d…` (106 tools), e as
  * Fases 3 a 5 (comunidades e planos) acrescentaram 15 tools depois, duas delas destrutivas
  * (`delete_food_portion`, `delete_meal_template`) — que o braço B serve também, por ser
- * destrutivas. Sem medição nova.
+ * destrutivas. A Fase 7a acrescentou mais três (`list_group_plans`, `adopt_group_plan`,
+ * `list_group_tips`), nenhuma destrutiva. Sem medição nova.
  */
 
-const SHA_ENTIDADE = '8c8b4686d9aa55725ece1f60e1e16f0324b280380a5eca141ac3f6b24f7ad3d5';
+const SHA_ENTIDADE = 'fcbe246e66c30b968e6c736163d0364d709b35afa064e066c4b12d65f1076cef';
 const SHA_INTENCAO = '7c36e15630e05e7188964f8bc3fc7fadb66db106b3280448aeb98fbd2abf9c7f';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

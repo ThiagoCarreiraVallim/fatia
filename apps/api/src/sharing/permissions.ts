@@ -61,7 +61,14 @@ export const GROUP_PERMISSIONS = {
   /** Gerir o negócio não implica ver dado de saúde — e o inverso também. */
   'billing.read': [GroupRole.OWNER],
   'billing.manage': [GroupRole.OWNER],
-  'content.publish': [GroupRole.PROFESSIONAL, GroupRole.CREATOR],
+  /**
+   * Publicar planos prontos e dicas (Fase 7). O dono entra: numa academia é
+   * ela quem publica o conteúdo da casa. Publicar não dá leitura de dado de
+   * ninguém — é escrever para a comunidade, não ler dela.
+   */
+  'content.publish': [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR],
+  /** Ver e adotar o conteúdo publicado. Rascunho é da equipe, e o service filtra. */
+  'content.read': [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR, GroupRole.MEMBER],
   /** `PROFESSIONAL` não modera: acumular seria a mesma armadilha. */
   'content.moderate': [GroupRole.OWNER, GroupRole.CREATOR],
   'offer.create': [GroupRole.PROFESSIONAL],

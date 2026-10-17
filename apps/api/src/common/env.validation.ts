@@ -113,6 +113,16 @@ export const AppEnvSchema = z.object({
   REVENUECAT_SECRET_KEY: z.string().optional().or(z.literal('')),
   REVENUECAT_ENTITLEMENT_ID: z.string().min(1).default('pro'),
   REVENUECAT_BASE_URL: z.string().url().default('https://api.revenuecat.com'),
+
+  // Mídia publicada pela comunidade (ADR 028): bucket S3 privado — Cloudflare R2
+  // em produção, SeaweedFS no compose do dev. Vazio = o envio de imagem responde
+  // 503 e o resto do produto segue. Prefixo próprio para não colidir com o
+  // `S3_*` do backup offsite (`infra/backup.sh`).
+  MEDIA_S3_ENDPOINT: z.string().url().optional().or(z.literal('')),
+  MEDIA_S3_REGION: z.string().optional().or(z.literal('')),
+  MEDIA_S3_BUCKET: z.string().optional().or(z.literal('')),
+  MEDIA_S3_ACCESS_KEY_ID: z.string().optional().or(z.literal('')),
+  MEDIA_S3_SECRET_ACCESS_KEY: z.string().optional().or(z.literal('')),
 });
 
 export type AppEnv = z.infer<typeof AppEnvSchema>;

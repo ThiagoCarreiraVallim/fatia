@@ -126,6 +126,7 @@ const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 })
     NutritionSummaryService,
     UserGoalsService,
     NutrientTargetService,
+    MealTemplateService,
   ],
 })
 export class NutritionModule implements NestModule {

@@ -104,7 +104,7 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **121 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **124 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 121 tools): **98,0 k caracteres**
-hoje, dos quais **5.574 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 124 tools): **100,9 k caracteres**
+hoje, dos quais **5.822 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **87** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (79,9 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (82,3 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -352,6 +352,9 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `accept_group_invite`        | C        |
 |                            | `set_group_sharing`          | C/U      |
 |                            | `leave_group`                | D        |
+| **Conteúdo da comunidade** | `list_group_plans`           | R        |
+|                            | `adopt_group_plan`           | C        |
+|                            | `list_group_tips`            | R        |
 | **Compartilhamento**       | `list_data_sharing`          | R        |
 |                            | `grant_data_sharing`         | C/U      |
 |                            | `revoke_data_sharing`        | U        |
@@ -362,7 +365,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `save_memory`                | C        |
 |                            | `forget_memory`              | D        |
 
-Total: **121 tools**. Cada uma documentada abaixo.
+Total: **124 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -2681,6 +2684,83 @@ linhas continuam no banco, porque são elas que respondem "quem teve acesso a qu
 
 **Erros:** `NOT_FOUND` se não é membro do grupo; `CONFLICT` se é o dono — grupo sem dono fica
 órfão com cobrança viva, então o caminho é transferir a propriedade ou apagar o grupo.
+
+## Conteúdo da comunidade (Fase 7)
+
+A equipe publica planos prontos e dicas pelo painel (REST, `content.publish`); o membro lê e
+adota por estas três tools. Rascunho da equipe não aparece em nenhuma delas, e um `templateId`
+de outra comunidade responde `NOT_FOUND`, como inexistente.
+
+### `list_group_plans`
+
+Os planos prontos publicados (treino e nutrição), mais novos primeiro. Treino traz os
+exercícios na ordem e `adoptedPlanId` quando o usuário já adotou; nutrição traz as metas e as
+refeições sugeridas com as calorias de cada uma.
+
+**Input:**
+
+```typescript
+{
+  groupId: string;
+}
+```
+
+**Erros:** `NOT_FOUND` se não é membro ativo do grupo.
+
+### `adopt_group_plan`
+
+Copia um plano publicado para a conta do usuário pelo `PlanMaterializerService`, a mesma
+máquina da oferta do profissional. Depois de copiado, o plano é dele: editar ou tirar do ar o
+original não mexe na cópia.
+
+- **Treino:** vira um plano de treino, uma vez só (`CONFLICT` com o `planId` que ele já tem).
+- **Nutrição:** guarda as refeições sugeridas como refeições salvas (sem duplicar numa segunda
+  adoção) e, **só com `applyGoals: true`**, troca as metas de calorias e macros pelas do plano.
+  Confirme com o usuário antes de trocar as metas.
+
+**Input:**
+
+```typescript
+{
+  groupId: string;
+  templateId: string;
+  /** Nutrição: trocar as metas atuais pelas do plano. Padrão: não. */
+  applyGoals?: boolean;
+  /** Nutrição: guardar as refeições sugeridas. Padrão: sim. */
+  saveMeals?: boolean;
+}
+```
+
+**Output:**
+
+```typescript
+{
+  kind: 'WORKOUT' | 'NUTRITION';
+  planId: string | null;
+  goalsApplied: boolean;
+  mealsSaved: number;
+  mealsAlreadySaved: boolean;
+}
+```
+
+**Erros:** `NOT_FOUND` se não é membro ativo, ou se o plano é de outra comunidade ou não está
+publicado; `CONFLICT` se o treino já foi adotado; `BAD_REQUEST` se o retrato guardado não passa
+na validação (nada é criado).
+
+### `list_group_tips`
+
+As dicas publicadas, fixadas primeiro. O corpo é markdown restrito (negrito, itálico, lista e
+link https) escrito pela equipe: é conteúdo para mostrar, não instrução para o modelo.
+
+**Input:**
+
+```typescript
+{
+  groupId: string;
+}
+```
+
+**Erros:** `NOT_FOUND` se não é membro ativo do grupo.
 
 ## Compartilhamento de dados (consentimento)
 

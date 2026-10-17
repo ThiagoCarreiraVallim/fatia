@@ -66,6 +66,12 @@ export class UpdateGroupDto {
   @IsOptional() @IsString() @MinLength(3) @MaxLength(60) timezone?: string;
 }
 
+export class SetAvatarDto {
+  @IsOptional()
+  @IsUUID()
+  fileId!: string | null;
+}
+
 export class TransferOwnershipDto {
   @IsUUID()
   membershipId!: string;
