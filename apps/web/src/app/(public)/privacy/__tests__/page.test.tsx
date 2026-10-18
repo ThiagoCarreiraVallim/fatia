@@ -91,6 +91,16 @@ describe('/privacy — o que já era verdade e continua', () => {
     expect(texto).toMatch(/cada instância decide se a liga/i);
   });
 
+  it('declara o Langfuse como operador, com o que recebe e o que não recebe', () => {
+    // ADR 034: o trace do chat sai para um fornecedor. O que a página promete é o que o código do
+    // agente garante (`messages_for_trace`, `hashed_user_id`), e nada além.
+    const texto = textoDaPagina();
+
+    expect(texto).toMatch(/Langfuse/);
+    expect(texto).toMatch(/e-mail, CPF, CNPJ e telefone mascarados/i);
+    expect(texto).toMatch(/Não recebe o resultado dessas consultas, suas fotos, seus áudios/i);
+  });
+
   it('mostra a data da última atualização', () => {
     render(<PrivacyPage />);
     expect(screen.getByText(/Última atualização:/)).toBeInTheDocument();

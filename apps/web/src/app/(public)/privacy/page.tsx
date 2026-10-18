@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 };
 
 /** Atualizar sempre que o conteúdo mudar de forma material. */
-const LAST_UPDATED = '17 de outubro de 2026';
+const LAST_UPDATED = '18 de outubro de 2026';
 
 export default function PrivacyPage() {
   return (
@@ -294,6 +294,16 @@ export default function PrivacyPage() {
             as coordenadas de onde você estava, é removido no seu aparelho antes do envio. Cada
             chamada exige <strong>retenção zero</strong> e proíbe o uso para treino; o fornecedor
             que não cumprir não recebe a chamada. Veja <strong>Inteligência artificial</strong>.
+          </li>
+          <li>
+            <strong>Langfuse</strong> (servidores na União Europeia) — somente quando ativado nesta
+            instância, para investigarmos erros e respostas ruins do chat. Recebe o registro técnico
+            de cada resposta: a pergunta e a resposta com{' '}
+            <strong>e-mail, CPF, CNPJ e telefone mascarados</strong>, o modelo usado, o tempo, o
+            custo e o nome das consultas que o assistente fez. <strong>Não recebe</strong> o
+            resultado dessas consultas, suas fotos, seus áudios, nem seu e-mail ou id de conta — no
+            lugar do id vai um código que não leva ao seu cadastro. Os registros são apagados pelo
+            próprio Langfuse em até 30 dias.
           </li>
         </ul>
         <p>
