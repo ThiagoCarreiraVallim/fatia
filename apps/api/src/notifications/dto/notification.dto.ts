@@ -34,4 +34,8 @@ export class NotificationPreferencesDto {
   @IsOptional()
   @IsBoolean()
   MODERATION?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  CHAT?: boolean;
 }

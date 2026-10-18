@@ -7,7 +7,7 @@ import { isKnownRoute } from './navigation';
  * mostra as mesmas chaves e os celulares para quem quer mudar de lá.
  */
 
-export type NotificationKind = 'COMMUNITY' | 'CHALLENGES' | 'FEED' | 'MODERATION';
+export type NotificationKind = 'COMMUNITY' | 'CHALLENGES' | 'FEED' | 'MODERATION' | 'CHAT';
 export type DevicePlatform = 'IOS' | 'ANDROID';
 export type NotificationPreferences = Record<NotificationKind, boolean>;
 
@@ -24,6 +24,7 @@ export const NOTIFICATION_KINDS: readonly NotificationKind[] = [
   'CHALLENGES',
   'FEED',
   'MODERATION',
+  'CHAT',
 ];
 
 export const NOTIFICATION_KIND_INFO: Record<NotificationKind, { label: string; hint: string }> = {
@@ -42,6 +43,10 @@ export const NOTIFICATION_KIND_INFO: Record<NotificationKind, { label: string; h
   MODERATION: {
     label: 'Moderação',
     hint: 'Quando a equipe remove um post ou comentário seu.',
+  },
+  CHAT: {
+    label: 'Chat',
+    hint: 'Quando a resposta do assistente fica pronta com o app fechado.',
   },
 };
 

@@ -64,6 +64,11 @@ export class ChatRun {
     return this.finished;
   }
 
+  /** Quantas conexões estão ouvindo agora. Zero no fim: ninguém viu a resposta chegar. */
+  get listeners(): number {
+    return this.sinks.size;
+  }
+
   /** O número do último evento publicado. */
   get lastSeq(): number {
     return this.seq;

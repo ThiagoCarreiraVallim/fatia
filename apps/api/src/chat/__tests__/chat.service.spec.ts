@@ -13,6 +13,7 @@ import {
   type TituloDoAgente,
 } from '../agent-chat.client';
 import { ChatRunRegistry } from '../chat-run.registry';
+import type { NotificationService, Notice } from '../../notifications/notification.service';
 import { ChatService, type DestinoDoStream } from '../chat.service';
 import type { MemoryService } from '../memory/memory.service';
 import type { GroupAgentService } from '../../sharing/group-agent.service';
@@ -253,6 +254,7 @@ function montar(
   } satisfies Partial<GroupAgentService>;
 
   const runs = new ChatRunRegistry();
+  const avisos = { notify: jest.fn((_ids: readonly string[], _notice: Notice) => undefined) };
   const service = new ChatService(
     conversas as unknown as ConversationService,
     agent as unknown as AgentChatClient,
@@ -261,9 +263,20 @@ function montar(
     acesso,
     agentes as unknown as GroupAgentService,
     runs,
+    avisos as unknown as NotificationService,
   );
 
-  return { service, conversas, agent, uso, canal, agentes, runs, chamadasAoAgente: chamadas };
+  return {
+    service,
+    conversas,
+    agent,
+    uso,
+    canal,
+    agentes,
+    runs,
+    avisos,
+    chamadasAoAgente: chamadas,
+  };
 }
 
 beforeEach(() => {
@@ -380,6 +393,59 @@ describe('ChatService — repasse do SSE', () => {
     await turno;
     expect(recebidos.at(-1)).toBe('<fim>');
     expect(recebidos.join('')).toContain('event: persisted');
+  });
+
+  it('quem saiu antes do fim recebe o aviso de resposta pronta, sem nada da conversa', async () => {
+    const { service, canal, avisos } = montar();
+    const saida = destinoDeTeste();
+
+    const turno = service.converse(USUARIO, turnoNovo('quanto pesei?'), 'tok', saida.destino);
+    await respirar();
+    saida.simularClienteSaindo();
+    canal.emitir(fragmento('ai-1', 'Você pesou 82 kg.'));
+    canal.emitir(fim('completed'));
+    canal.encerrar();
+    await turno;
+
+    expect(avisos.notify).toHaveBeenCalledTimes(1);
+    const [ids, aviso] = avisos.notify.mock.calls[0];
+    expect(ids).toEqual([USUARIO.id]);
+    expect(aviso).toEqual({
+      kind: 'CHAT',
+      title: 'Fatia',
+      body: 'Sua resposta está pronta.',
+      url: `/chat/${CONVERSA}`,
+    });
+    expect(JSON.stringify(aviso)).not.toMatch(/82|pesei/);
+  });
+
+  it('quem ficou até o fim, ou parou, ou viu dar erro, não recebe aviso', async () => {
+    const ficou = montar();
+    const turno = ficou.service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    await respirar();
+    ficou.canal.emitir(fim('completed'));
+    ficou.canal.encerrar();
+    await turno;
+    expect(ficou.avisos.notify).not.toHaveBeenCalled();
+
+    const parou = montar();
+    const saida = destinoDeTeste();
+    const t2 = parou.service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
+    await respirar();
+    saida.simularClienteSaindo();
+    parou.service.stop(USUARIO.id, CONVERSA);
+    await t2;
+    expect(parou.avisos.notify).not.toHaveBeenCalled();
+
+    const erro = montar();
+    const saida3 = destinoDeTeste();
+    const t3 = erro.service.converse(USUARIO, turnoNovo('oi'), 'tok', saida3.destino);
+    await respirar();
+    saida3.simularClienteSaindo();
+    erro.canal.emitir(fim('error'));
+    erro.canal.encerrar();
+    await t3;
+    expect(erro.avisos.notify).not.toHaveBeenCalled();
   });
 
   it('parar corta o upstream, grava `stopped` e fecha o fio com done stopped', async () => {

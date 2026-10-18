@@ -1716,6 +1716,8 @@ enum NotificationKind {
   CHALLENGES
   FEED
   MODERATION
+  /// A resposta do chat ficou pronta com o app fora de vista (Fase 9e).
+  CHAT
 }
 
 /// Um celular em que a pessoa ligou os avisos. O token é da Expo e é único: o

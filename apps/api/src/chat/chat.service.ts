@@ -18,6 +18,7 @@ import { NaoEhJpegError, removerMetadadosDoJpeg } from '../nutrition/helpers/str
 import { type TurnSummary, createTurnReader } from './leitor-do-turno';
 import { criarLeitorSse, formatarEventoSse } from './sse';
 import { ChatRunRegistry, createSseFramer } from './chat-run.registry';
+import { NotificationService, type Notice } from '../notifications/notification.service';
 
 /**
  * O turno de conversa: cota, persistência e **repasse do SSE sem bufferizar**.
@@ -61,6 +62,7 @@ export class ChatService {
     private readonly acesso: AiAccessService,
     private readonly agentes: GroupAgentService,
     private readonly runs: ChatRunRegistry,
+    private readonly avisos: NotificationService,
   ) {}
 
   /** Os agentes que a pessoa pode escolher numa conversa nova, e o padrão. */
@@ -251,6 +253,12 @@ export class ChatService {
     } finally {
       const summary = markStoppedWhenRequested(turno.read(), run.stopRequested);
       const linha = await this.recordTurn(user.id, dto.conversationId, summary, pagador);
+      // Ninguém ouvindo no fim: a pessoa saiu do app (ou da tela) antes de a
+      // resposta chegar. O aviso diz só que ela está pronta — nada do conteúdo.
+      if (run.listeners === 0 && !run.stopRequested) {
+        const notice = chatReadyNotice(dto.conversationId, summary.status);
+        if (notice) this.avisos.notify([user.id], notice);
+      }
       // Depois do `done` do agente, e antes do fim: é o que liga o id que a tela
       // conhece (o da mensagem do LangChain) à linha do banco, onde o voto grava.
       if (linha && summary.ultimaMensagemId) {
@@ -404,4 +412,25 @@ export function fotosDoTurno(fotos: ChatPhotoDto[]): { mediaType: 'image/jpeg'; 
       throw erro;
     }
   });
+}
+
+/**
+ * O aviso de resposta pronta (Fase 9e). Texto fixo, sem nada da conversa: ele
+ * aparece na tela bloqueada, e o chat é dado de saúde em prosa. Erro não avisa —
+ * quem volta vê o erro na conversa.
+ */
+export function chatReadyNotice(
+  conversationId: string,
+  status: TurnSummary['status'],
+): Notice | null {
+  if (status !== 'completed' && status !== 'interrupted') return null;
+  return {
+    kind: 'CHAT',
+    title: 'Fatia',
+    body:
+      status === 'interrupted'
+        ? 'O assistente precisa da sua confirmação para continuar.'
+        : 'Sua resposta está pronta.',
+    url: `/chat/${conversationId}`,
+  };
 }

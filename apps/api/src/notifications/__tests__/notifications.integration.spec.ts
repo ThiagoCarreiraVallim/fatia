@@ -189,6 +189,7 @@ describe('avisos no celular (integração)', () => {
         CHALLENGES: true,
         FEED: true,
         MODERATION: true,
+        CHAT: true,
       });
       await notifications.setPreferences(c.membro, { FEED: false });
       const post = await posts.create(c.membro, c.groupId, { body: 'Oi', displayName: 'Ana' });
@@ -338,6 +339,7 @@ describe('avisos no celular (integração)', () => {
       'CHALLENGES',
       'FEED',
       'MODERATION',
+      'CHAT',
     ]);
   });
 });

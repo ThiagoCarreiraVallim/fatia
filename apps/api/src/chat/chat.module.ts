@@ -3,6 +3,7 @@ import { AiModule } from '../ai/ai.module';
 import { AgentChatClient } from './agent-chat.client';
 import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { ChatRunRegistry } from './chat-run.registry';
 import { ChatThrottlerGuard } from './chat-throttler.guard';
 import { CheckpointPurgeService } from './checkpoint-purge.service';
@@ -28,7 +29,7 @@ import { SharingModule } from '../sharing/sharing.module';
  * valida os argumentos com o schema da própria tool (`previa/`).
  */
 @Module({
-  imports: [McpModule, AiModule, SharingModule],
+  imports: [McpModule, AiModule, SharingModule, NotificationsModule],
   controllers: [ChatController],
   providers: [
     ChatRunRegistry,
