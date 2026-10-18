@@ -563,6 +563,33 @@ test.describe('painel da comunidade', () => {
     await appears(page.getByLabel('Orientações', { exact: true }));
     await snap(page, '100-painel-agente');
   });
+
+  test('desafios: o painel e, como participante, a lista e o ranking (Fase 8a)', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const grupos = (await (await page.request.get('/api/proxy/groups')).json()) as Array<{
+      id: string;
+      slug: string;
+    }>;
+    const id = grupos.find((g) => g.slug === COMMUNITY_SLUG)!.id;
+    await page.goto(`/org/${id}/challenges`);
+    await appears(page.getByText('Semana ativa'));
+    await snap(page, '102-painel-desafios');
+    await page.getByRole('button', { name: 'Novo desafio' }).click();
+    await appears(page.getByRole('radio', { name: /Calorias na meta/ }));
+    await snap(page, '103-painel-desafio-novo');
+    await page.goto(`/community/${id}/challenges`);
+    await appears(page.getByRole('link', { name: /Maratona de treinos/ }));
+    await snap(page, '104-desafios');
+    await page.getByRole('link', { name: /Semana ativa/ }).click();
+    await appears(page.getByRole('list', { name: 'Ranking' }));
+    await snap(page, '105-desafio-ranking');
+    await page.goto(`/community/${id}/challenges`);
+    await page.getByRole('link', { name: /Maratona de treinos/ }).click();
+    await appears(page.getByRole('list', { name: 'Ranking' }));
+    await snap(page, '106-desafio-encerrado');
+  });
 });
 
 test('login (sem sessão)', async ({ browser }, info) => {

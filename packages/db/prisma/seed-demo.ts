@@ -535,6 +535,11 @@ async function seedCommunity(demoUserId: string) {
   const conteudo = await seedCommunityContent(group.id, dona.id, profissional.id);
   const catalogo = await seedCommunityExercises(group.id, dona.id, profissional.id);
   const agente = await seedCommunityAgent(group.id);
+  const desafios = await seedCommunityChallenges(group.id, dona.id, [
+    dona.id,
+    profissional.id,
+    ...membros.slice(0, 4).map((m) => m.id),
+  ]);
 
   // Convites que o E2E deixou para trás (o painel cria e revoga): fora.
   await prisma.groupInvite.deleteMany({ where: { groupId: group.id } });
@@ -542,7 +547,7 @@ async function seedCommunity(demoUserId: string) {
   // O demo entra pelo E2E: nenhuma associação (o assento cai junto, em cascata).
   await prisma.groupMembership.deleteMany({ where: { groupId: group.id, userId: demoUserId } });
   console.log(
-    `  ✓ Comunidade "${group.name}" (${COMMUNITY_SLUG}): dona ${dona.email}, 1 profissional, ${membros.length} membros, ${PENDING_REQUESTS.length} pedidos, ${sessoes.length} treinos, ${COMMUNITY_SEATS} assentos, ${conteudo}, ${catalogo}, ${agente}.`,
+    `  ✓ Comunidade "${group.name}" (${COMMUNITY_SLUG}): dona ${dona.email}, 1 profissional, ${membros.length} membros, ${PENDING_REQUESTS.length} pedidos, ${sessoes.length} treinos, ${COMMUNITY_SEATS} assentos, ${conteudo}, ${catalogo}, ${agente}, ${desafios}.`,
   );
 }
 
@@ -791,6 +796,55 @@ async function seedCommunityAgent(groupId: string) {
     update: dados,
   });
   return `agente "${dados.name}" ligado`;
+}
+
+/**
+ * Desafios da Academia Demo (Fase 8a): um de dias ativos em andamento (de 3 dias
+ * atrás a 3 dias à frente) e um de treinos já encerrado na semana retrasada,
+ * com a dona, a personal e quatro membros participando. O placar sai dos treinos
+ * do seed, na primeira leitura. Recriados a cada execução, o que apaga também os
+ * que o E2E marcou.
+ */
+async function seedCommunityChallenges(groupId: string, donaId: string, participantes: string[]) {
+  await prisma.groupChallenge.deleteMany({ where: { groupId } });
+  const associacoes = await prisma.groupMembership.findMany({
+    where: { groupId, userId: { in: participantes } },
+    select: { id: true, user: { select: { name: true } } },
+  });
+  const inscricoes = associacoes.map((m) => ({
+    membershipId: m.id,
+    displayName: m.user.name.split(' ')[0]!,
+  }));
+  // O apelido fica na associação, como quando a pessoa entra pela tela.
+  for (const i of inscricoes) {
+    await prisma.groupMembership.update({
+      where: { id: i.membershipId },
+      data: { displayName: i.displayName },
+    });
+  }
+  const base = { groupId, authorId: donaId, timezone: TIMEZONE };
+  await prisma.groupChallenge.create({
+    data: {
+      ...base,
+      title: 'Semana ativa',
+      description: 'Treino, passos ou água: todo dia conta. Quem somar mais dias leva.',
+      metric: 'ACTIVE_DAYS',
+      startsAt: localInstant(3, 0),
+      endsAt: localInstant(-4, 0),
+      participants: { create: inscricoes },
+    },
+  });
+  await prisma.groupChallenge.create({
+    data: {
+      ...base,
+      title: 'Maratona de treinos',
+      metric: 'WORKOUT_SESSIONS',
+      startsAt: localInstant(14, 0),
+      endsAt: localInstant(7, 0),
+      participants: { create: inscricoes },
+    },
+  });
+  return `2 desafios (${inscricoes.length} participantes)`;
 }
 
 async function seedCommunityExercises(groupId: string, donaId: string, profissionalId: string) {

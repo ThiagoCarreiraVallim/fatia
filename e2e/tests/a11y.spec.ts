@@ -156,4 +156,24 @@ test.describe('axe: painel da comunidade', () => {
     await page.getByRole('navigation', { name: 'Categorias autorizadas' }).waitFor();
     expect(await auditar(page)).toEqual([]);
   });
+
+  test('desafios: o painel, a lista e o ranking (Fase 8a)', async ({ page }) => {
+    const grupos = (await (await page.request.get('/api/proxy/groups')).json()) as Array<{
+      id: string;
+      slug: string;
+    }>;
+    const id = grupos.find((g) => g.slug === COMMUNITY_SLUG)!.id;
+    for (const [rota, marco] of [
+      [`/org/${id}/challenges`, 'Semana ativa'],
+      [`/community/${id}/challenges`, 'Maratona de treinos'],
+    ] as const) {
+      await page.goto(rota);
+      await page.getByText(marco).first().waitFor();
+      expect({ rota, violacoes: await auditar(page) }).toEqual({ rota, violacoes: [] });
+    }
+    // O desafio com o ranking (a dona participa no seed).
+    await page.getByRole('link', { name: /Semana ativa/ }).click();
+    await page.getByRole('list', { name: 'Ranking' }).waitFor();
+    expect(await auditar(page)).toEqual([]);
+  });
 });
