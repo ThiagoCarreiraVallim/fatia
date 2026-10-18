@@ -31,8 +31,11 @@ Depois é abrir o **Expo Go** ([iOS](https://apps.apple.com/app/expo-go/id982107
 o QR Code que aparece no terminal. O celular e o computador precisam estar na
 mesma rede.
 
-Sem emulador, sem Xcode, sem Android Studio. Todos os módulos nativos que o app
-usa já vêm no Expo Go.
+Sem emulador, sem Xcode, sem Android Studio. O Expo Go cobre login, telas,
+câmera, galeria e chat; avisos (push), compra pela loja e o link `fatia://` pedem
+um [development build](#development-build). O passo a passo completo — contas,
+credenciais, permissões e roteiro — está em
+[docs/TESTAR_O_APP.md](../../docs/TESTAR_O_APP.md).
 
 > **O Expo Go precisa estar atualizado.** Ele suporta **um** SDK por vez — o mais
 > recente. Este projeto está no SDK 57, que exige Expo Go **57.0.2+** no Android e
@@ -156,14 +159,19 @@ match é exato — trocá-lo pelo IP faz o Logto recusar com `invalid_target`.
 ### Firewall
 
 Se o celular não conectar e o terminal do Metro ficar mudo, é o firewall da
-máquina. O celular precisa alcançar três portas:
+máquina. O celular precisa alcançar quatro portas:
 
 ```bash
 # ufw, liberando só para a sua sub-rede — é máquina de desenvolvimento
 sudo ufw allow from 192.168.0.0/16 to any port 8081 proto tcp   # Metro
 sudo ufw allow from 192.168.0.0/16 to any port 3000 proto tcp   # API
 sudo ufw allow from 192.168.0.0/16 to any port 3001 proto tcp   # Logto
+sudo ufw allow from 192.168.0.0/16 to any port 8333 proto tcp   # imagens e vídeos
 ```
+
+As imagens e vídeos só aparecem no celular se a API assinar os endereços com o
+IP: no `.env` da **raiz**, `MEDIA_S3_ENDPOINT=http://SEU_IP:8333`, e reinicie a
+API.
 
 Teste rápido antes de mexer em regra: abra `http://SEU_IP:8081` no navegador do
 celular. Se não carregar, é rede ou firewall; se carregar, o problema é outro.

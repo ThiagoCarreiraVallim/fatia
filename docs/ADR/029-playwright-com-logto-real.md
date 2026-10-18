@@ -1,6 +1,6 @@
 # ADR 029 — Testes de interface com Playwright e login real no Logto
 
-**Status:** Proposed
+**Status:** Accepted (em uso desde a Fase 1; formalizada em 18/10/2026)
 **Data:** 2026-10-13
 
 ## Contexto

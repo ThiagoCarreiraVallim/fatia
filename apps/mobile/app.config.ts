@@ -20,6 +20,14 @@ const SCHEME = 'fatia';
  */
 const APP_LINKS_HOST = process.env.APP_LINKS_HOST;
 
+/**
+ * `google-services.json` do Firebase: sem ele o Android não emite token de push
+ * (ADR 033) e Perfil → Notificações falha ao ligar. Não vai para o git; no build
+ * da EAS chega como variável do tipo arquivo, que entrega o caminho do arquivo
+ * — ver docs/TESTAR_O_APP.md.
+ */
+const GOOGLE_SERVICES_JSON = process.env.GOOGLE_SERVICES_JSON;
+
 const config: ExpoConfig = {
   name: 'Fatia',
   slug: 'fatia',
@@ -41,6 +49,7 @@ const config: ExpoConfig = {
   },
   android: {
     package: 'br.ia.fat.app',
+    ...(GOOGLE_SERVICES_JSON && { googleServicesFile: GOOGLE_SERVICES_JSON }),
     ...(APP_LINKS_HOST && {
       intentFilters: [
         {

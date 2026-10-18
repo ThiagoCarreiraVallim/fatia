@@ -55,6 +55,9 @@ apps/mobile/expo-env.d.ts
 # partir do app.config.ts, versioná-los faz o config divergir do que é buildado.
 apps/mobile/ios/
 apps/mobile/android/
+# Firebase do push Android: chega pela variável de arquivo da EAS
+google-services.json
+GoogleService-Info.plist
 
 # Fotos do conjunto de avaliação do reconhecimento (#138). Os **rótulos** são
 # versionados (apps/agent/eval/manifest.jsonl) e as imagens não: foto de refeição
