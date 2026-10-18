@@ -176,4 +176,20 @@ test.describe('axe: painel da comunidade', () => {
     await page.getByRole('list', { name: 'Ranking' }).waitFor();
     expect(await auditar(page)).toEqual([]);
   });
+
+  test('mural e moderação (Fase 8b)', async ({ page }) => {
+    const grupos = (await (await page.request.get('/api/proxy/groups')).json()) as Array<{
+      id: string;
+      slug: string;
+    }>;
+    const id = grupos.find((g) => g.slug === COMMUNITY_SLUG)!.id;
+    for (const [rota, marco] of [
+      [`/community/${id}/feed`, 'Fixado pela equipe'],
+      [`/org/${id}/moderation`, 'Quem publica no mural'],
+    ] as const) {
+      await page.goto(rota);
+      await page.getByText(marco).first().waitFor();
+      expect({ rota, violacoes: await auditar(page) }).toEqual({ rota, violacoes: [] });
+    }
+  });
 });

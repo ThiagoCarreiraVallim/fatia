@@ -540,6 +540,12 @@ async function seedCommunity(demoUserId: string) {
     profissional.id,
     ...membros.slice(0, 4).map((m) => m.id),
   ]);
+  const mural = await seedCommunityFeed(
+    group.id,
+    dona.id,
+    profissional.id,
+    membros.slice(0, 5).map((m) => m.id),
+  );
 
   // Convites que o E2E deixou para trás (o painel cria e revoga): fora.
   await prisma.groupInvite.deleteMany({ where: { groupId: group.id } });
@@ -547,7 +553,7 @@ async function seedCommunity(demoUserId: string) {
   // O demo entra pelo E2E: nenhuma associação (o assento cai junto, em cascata).
   await prisma.groupMembership.deleteMany({ where: { groupId: group.id, userId: demoUserId } });
   console.log(
-    `  ✓ Comunidade "${group.name}" (${COMMUNITY_SLUG}): dona ${dona.email}, 1 profissional, ${membros.length} membros, ${PENDING_REQUESTS.length} pedidos, ${sessoes.length} treinos, ${COMMUNITY_SEATS} assentos, ${conteudo}, ${catalogo}, ${agente}, ${desafios}.`,
+    `  ✓ Comunidade "${group.name}" (${COMMUNITY_SLUG}): dona ${dona.email}, 1 profissional, ${membros.length} membros, ${PENDING_REQUESTS.length} pedidos, ${sessoes.length} treinos, ${COMMUNITY_SEATS} assentos, ${conteudo}, ${catalogo}, ${agente}, ${desafios}, ${mural}.`,
   );
 }
 
@@ -845,6 +851,110 @@ async function seedCommunityChallenges(groupId: string, donaId: string, particip
     },
   });
   return `2 desafios (${inscricoes.length} participantes)`;
+}
+
+/**
+ * O mural da Academia Demo (Fase 8b): o recado fixado da dona, uma dica do
+ * profissional, posts de membros com reações e comentários, e uma propaganda
+ * com duas denúncias abertas, para a fila de Moderação ter o que mostrar.
+ * Recriado a cada execução. Sem imagem: o envio é coberto pelo E2E.
+ */
+async function seedCommunityFeed(
+  groupId: string,
+  donaId: string,
+  profissionalId: string,
+  membros: string[],
+) {
+  await prisma.groupPost.deleteMany({ where: { groupId } });
+  const associacoes = await prisma.groupMembership.findMany({
+    where: { groupId, userId: { in: [donaId, profissionalId, ...membros] } },
+    select: { id: true, userId: true, displayName: true, user: { select: { name: true } } },
+  });
+  const m = (userId: string) => {
+    const a = associacoes.find((x) => x.userId === userId)!;
+    return a.id;
+  };
+  // Quem ainda não tem apelido ganha o primeiro nome, como no primeiro post pela tela.
+  for (const a of associacoes.filter((x) => !x.displayName)) {
+    await prisma.groupMembership.update({
+      where: { id: a.id },
+      data: { displayName: a.user.name.split(' ')[0]! },
+    });
+  }
+  const [m1, m2, m3, m4, m5] = membros.map(m);
+
+  const post = (
+    membershipId: string,
+    body: string,
+    daysAgo: number,
+    hora: number,
+    extra: Record<string, unknown> = {},
+  ) =>
+    prisma.groupPost.create({
+      data: { groupId, membershipId, body, createdAt: localInstant(daysAgo, hora), ...extra },
+    });
+
+  const boasVindas = await post(
+    m(donaId),
+    '**Bem-vindos ao mural da Academia Demo!**\n\nContem os treinos, tirem dúvidas e se animem. Regras da casa:\n\n- respeito sempre;\n- nada de propaganda;\n- dúvida de saúde vai para o profissional.',
+    10,
+    9,
+    { pinnedAt: localInstant(10, 9) },
+  );
+  const dica = await post(
+    m(profissionalId),
+    'Dica da semana: 5 minutos de aquecimento antes do treino de pernas fazem diferença. Bicicleta leve e agachamento sem carga.',
+    2,
+    8,
+  );
+  const semana = await post(m1!, 'Primeira semana completa de treinos! 💪', 1, 19);
+  const receita = await post(
+    m2!,
+    'Alguém tem uma receita boa de panqueca de banana com aveia? Quero variar o café da manhã.',
+    0,
+    7,
+  );
+  const spam = await post(
+    m5 ?? m4!,
+    'Promoção imperdível de suplemento, chama no direct que eu passo o link.',
+    0,
+    10,
+  );
+
+  await prisma.groupPostReaction.createMany({
+    data: [
+      { postId: boasVindas.id, membershipId: m1!, kind: 'HEART' },
+      { postId: boasVindas.id, membershipId: m2!, kind: 'CLAP' },
+      { postId: dica.id, membershipId: m3!, kind: 'FIRE' },
+      { postId: semana.id, membershipId: m(donaId), kind: 'STRONG' },
+      { postId: semana.id, membershipId: m2!, kind: 'STRONG' },
+      { postId: semana.id, membershipId: m3!, kind: 'FIRE' },
+    ],
+  });
+  await prisma.groupPostComment.createMany({
+    data: [
+      {
+        postId: semana.id,
+        membershipId: m(profissionalId),
+        body: 'Boa! Agora é manter o ritmo.',
+        createdAt: localInstant(1, 20),
+      },
+      { postId: semana.id, membershipId: m3!, body: 'Arrasou!', createdAt: localInstant(1, 21) },
+      {
+        postId: receita.id,
+        membershipId: m4!,
+        body: '1 banana, 2 ovos e 3 colheres de aveia. Frigideira antiaderente, fogo baixo.',
+        createdAt: localInstant(0, 8),
+      },
+    ],
+  });
+  await prisma.groupPostReport.createMany({
+    data: [
+      { postId: spam.id, reporterId: m1!, reason: 'SPAM', note: 'Propaganda no mural.' },
+      { postId: spam.id, reporterId: m3!, reason: 'SPAM' },
+    ],
+  });
+  return '5 posts no mural (1 fixado, 1 denunciado)';
 }
 
 async function seedCommunityExercises(groupId: string, donaId: string, profissionalId: string) {

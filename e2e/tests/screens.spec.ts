@@ -590,6 +590,30 @@ test.describe('painel da comunidade', () => {
     await appears(page.getByRole('list', { name: 'Ranking' }));
     await snap(page, '106-desafio-encerrado');
   });
+
+  test('mural e moderação (Fase 8b)', async ({ page }) => {
+    test.setTimeout(120_000);
+    const grupos = (await (await page.request.get('/api/proxy/groups')).json()) as Array<{
+      id: string;
+      slug: string;
+    }>;
+    const id = grupos.find((g) => g.slug === COMMUNITY_SLUG)!.id;
+    await page.goto(`/community/${id}/feed`);
+    await appears(page.getByText('Fixado pela equipe').first());
+    await snap(page, '107-mural');
+    const semana = page.getByRole('article').filter({ hasText: 'Primeira semana completa' });
+    await semana.getByRole('button', { name: /comentários/ }).click();
+    await appears(semana.getByRole('list', { name: 'Comentários' }));
+    await snap(page, '108-mural-comentarios');
+    const spam = page.getByRole('article').filter({ hasText: 'chama no direct' });
+    await spam.getByRole('button', { name: /^Mais ações do post/ }).click();
+    await appears(page.getByRole('dialog', { name: 'Ações do post' }));
+    await snap(page, '109-mural-acoes');
+    await page.keyboard.press('Escape');
+    await page.goto(`/org/${id}/moderation`);
+    await appears(page.getByRole('list', { name: 'Denúncias abertas' }));
+    await snap(page, '110-painel-moderacao');
+  });
 });
 
 test('login (sem sessão)', async ({ browser }, info) => {
