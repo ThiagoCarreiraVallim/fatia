@@ -49,6 +49,7 @@ describe('quem abre o painel e com que seções', () => {
       'invites',
       'content',
       'exercises',
+      'agent',
       'seats',
       'settings',
     ]);

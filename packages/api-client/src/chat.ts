@@ -84,6 +84,12 @@ export interface ChatPhoto {
 export type ChatTurnRequest = {
   /** Gerado pelo PWA na primeira mensagem. É o endereço da conversa. */
   conversationId: string;
+  /**
+   * O agente de uma conversa nova (Fase 7c): o id da comunidade, ou `null` para
+   * o assistente da Fatia. Ausente é o padrão (a comunidade do assento). Numa
+   * conversa que já existe, a API usa o que foi gravado quando ela nasceu.
+   */
+  agentGroupId?: string | null;
 } & (
   | { message: string; resume?: undefined; photos?: ChatPhoto[] }
   | { message?: undefined; resume: { interruptId: string; value: unknown } }
@@ -373,6 +379,8 @@ export async function* streamChat(
 export interface ChatConversationSummary {
   id: string;
   title: string | null;
+  /** A comunidade cujo agente conduz a conversa; `null` é o assistente da Fatia. */
+  agentGroupId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -425,6 +433,36 @@ export interface ChatHistoryMessage {
 
 export interface ChatConversation extends ChatConversationSummary {
   messages: ChatHistoryMessage[];
+  /**
+   * Nome e avatar do agente da comunidade, para o cabeçalho. `null` também
+   * quando a pessoa saiu da comunidade ou o dono desligou o agente: a conversa
+   * segue com o assistente da Fatia.
+   */
+  agent: ChatAgentHeader | null;
+}
+
+export interface ChatAgentHeader {
+  groupId: string;
+  name: string;
+  avatarUrl: string | null;
+}
+
+/** Um agente que a pessoa pode escolher numa conversa nova. */
+export interface ChatAgentOption extends ChatAgentHeader {
+  communityName: string;
+}
+
+export interface ChatAgents {
+  /** O agente da comunidade que paga o assento, se ligado; `null` é o da Fatia. */
+  defaultGroupId: string | null;
+  agents: ChatAgentOption[];
+}
+
+/** Nome do assistente da Fatia, quando a conversa não é com o agente de uma comunidade. */
+export const FATIA_AGENT_NAME = 'Fatia';
+
+export function listChatAgents(): Promise<ChatAgents> {
+  return apiFetch('/api/chat/agents');
 }
 
 export type ChatReviewReason =

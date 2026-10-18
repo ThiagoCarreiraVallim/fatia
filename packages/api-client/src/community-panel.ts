@@ -28,7 +28,7 @@ export function groupTypeLabel(type: GroupType): string {
 }
 
 export type PanelSection =
-  'overview' | 'members' | 'invites' | 'content' | 'exercises' | 'seats' | 'settings';
+  'overview' | 'members' | 'invites' | 'content' | 'exercises' | 'agent' | 'seats' | 'settings';
 
 export interface PanelLink {
   section: PanelSection;
@@ -43,6 +43,7 @@ const SECTIONS: Record<PanelSection, PanelLink> = {
   invites: { section: 'invites', label: 'Convites', path: '/invites' },
   content: { section: 'content', label: 'Planos e dicas', path: '/content' },
   exercises: { section: 'exercises', label: 'Exercícios', path: '/exercises' },
+  agent: { section: 'agent', label: 'Agente', path: '/agent' },
   seats: { section: 'seats', label: 'Assentos', path: '/seats' },
   settings: { section: 'settings', label: 'Configurações', path: '/settings' },
 };

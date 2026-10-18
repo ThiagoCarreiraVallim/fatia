@@ -11,7 +11,8 @@ import type { MealType } from './nutrition';
 export type TemplateKind = 'WORKOUT' | 'NUTRITION';
 export type PlanLevel = 'beginner' | 'intermediate' | 'advanced';
 export type TipCategory = 'WORKOUT' | 'NUTRITION' | 'HABITS' | 'GENERAL';
-export type MediaPurpose = 'group_avatar' | 'group_content' | 'exercise_video' | 'exercise_photo';
+export type MediaPurpose =
+  'group_avatar' | 'group_content' | 'exercise_video' | 'exercise_photo' | 'agent_avatar';
 
 export interface MediaView {
   id: string;
