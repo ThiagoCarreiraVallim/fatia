@@ -8,6 +8,7 @@ import { useAuth } from '@/auth/auth-context';
 import { BottomNav } from '@/components/layout/bottom-nav';
 import { RegistroRapido } from '@/components/layout/registro-rapido';
 import { LoadingState } from '@/components/ui';
+import { usePush } from '@/notifications/use-push';
 
 /**
  * Guarda de sessão — equivalente de `apps/web/src/app/(app)/layout.tsx`, que
@@ -51,6 +52,9 @@ export default function AppLayout() {
       if (token) router.push(`/c/${token}`);
     });
   }, [pronto, router]);
+
+  // Avisos no celular (Fase 8c): refaz o cadastro e leva o toque à tela dele.
+  usePush(pronto);
 
   if (status !== 'signedIn') {
     return (

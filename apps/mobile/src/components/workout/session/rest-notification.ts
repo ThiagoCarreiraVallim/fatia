@@ -22,8 +22,8 @@ export const REST_NOTIFICATION_KIND = 'workout-rest';
  * É o aviso do fim do descanso?
  *
  * Existe porque `setNotificationHandler` é global do app: quem responde ali
- * responde por **toda** notificação em primeiro plano, inclusive as que a #148
- * (push remoto) ainda vai trazer. Silenciar em bloco resolveria o caso daqui —
+ * responde por **toda** notificação em primeiro plano, inclusive as da #148
+ * (push da comunidade, Fase 8c). Silenciar em bloco resolveria o caso daqui —
  * com a sessão aberta quem avisa é o cronômetro, o háptico e o leitor de tela,
  * e uma tarja cobriria o campo de carga sendo preenchido — mas deixaria o app
  * inteiro mudo para o próximo tipo de aviso, sem nada apontando para o

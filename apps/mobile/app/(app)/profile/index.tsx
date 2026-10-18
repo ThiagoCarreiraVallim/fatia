@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { Alert, Text, View } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Crown, Flag, LogOut, Settings, Shield, Sparkles, Users } from 'lucide-react-native';
+import { Bell, Crown, Flag, LogOut, Settings, Shield, Sparkles, Users } from 'lucide-react-native';
 import { billingApi, planSummary, usersApi } from '@fatia/api-client';
 import { useAuth } from '@/auth/auth-context';
 import { Screen } from '@/components/layout/screen';
@@ -14,6 +14,7 @@ import { MenuItem } from '@/components/profile/menu-item';
 import { openLegal } from '@/components/profile/legal';
 import { PrivacyCard } from '@/components/profile/privacy-card';
 import { ProfileMetrics } from '@/components/profile/profile-metrics';
+import { disablePush } from '@/notifications/push';
 import { cores } from '@/theme/cores';
 
 export default function ProfileScreen() {
@@ -46,7 +47,9 @@ export default function ProfileScreen() {
         style: 'destructive',
         onPress: () => {
           qc.clear();
-          void signOut();
+          // Antes de sair: com a sessão ainda viva, o aparelho sai da conta e
+          // os avisos dela param de chegar aqui.
+          void disablePush().finally(() => void signOut());
         },
       },
     ]);
@@ -108,6 +111,12 @@ export default function ProfileScreen() {
               title="Conectar sua IA"
               subtitle="Registre e consulte seu diário conversando com o Claude"
               onPress={() => router.push('/profile/tokens')}
+            />
+            <MenuItem
+              icon={<Bell size={18} color={cores.primary} />}
+              title="Notificações"
+              subtitle="Avisos das comunidades neste celular"
+              onPress={() => router.push('/profile/notifications')}
             />
             <MenuItem
               icon={<Shield size={18} color={cores.primary} />}
