@@ -81,6 +81,8 @@ aparece em `permissions.ts` e nenhum service consulta `role` para ampliar escopo
 | `content.read`     | sim   | sim          | sim     | sim    |
 | `content.moderate` | sim   | não          | sim     | não    |
 | `offer.create`     | não   | sim          | não     | não    |
+| `challenge.manage` | sim   | sim          | sim     | não    |
+| `challenge.join`   | sim   | sim          | sim     | sim    |
 | `insights.read`    | sim   | não          | não     | não    |
 
 Quatro linhas merecem justificativa, porque são as que alguém tentaria "corrigir" numa revisão
@@ -117,6 +119,10 @@ futura:
 - **O agente da comunidade no chat (Fase 7c, ADR 031) é do dono:** `group.update` configura nome,
   avatar e orientações. Não há ação nova para conversar com ele: qualquer membro ativo escolhe o
   agente ligado da comunidade no chat, e a API confere a associação a cada turno.
+- **Desafios (Fase 8a, ADR 027): `challenge.manage` é da equipe, `challenge.join` de todos.** A
+  equipe marca, muda antes de começar, encerra e apaga antes de começar; o autor mexe no dele e
+  quem tem `content.moderate` no de qualquer um. Participar é opt-in e o **ranking só vai para quem
+  participa** — a equipe vê quantos entraram, não o placar, a menos que entre também.
 - **`content.moderate` é `OWNER` e `CREATOR`.** `PROFESSIONAL` não modera: não é papel de
   moderação, e acumular seria a mesma armadilha que o resto do documento evita.
 
@@ -145,6 +151,8 @@ administrando. `ACTIVE` exerce o que a tabela acima permite. E a associação **
 | `content.read`     | não                  |
 | `content.moderate` | não                  |
 | `offer.create`     | não                  |
+| `challenge.manage` | não                  |
+| `challenge.join`   | não                  |
 | `insights.read`    | não                  |
 
 `group.read` é "sim" porque o grupo pendente **já aparece** em `GET /groups` (o `STATUS_VIVOS` de

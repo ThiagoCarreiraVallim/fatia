@@ -252,6 +252,14 @@ export class PreviaDaAcaoService {
         });
         return modelo?.title ?? null;
       }
+      case 'desafioDaComunidade': {
+        // Só desafio de comunidade de que a pessoa é membro ativo.
+        const desafio = await this.prisma.groupChallenge.findFirst({
+          where: { id, group: { memberships: { some: { userId, status: 'ACTIVE' } } } },
+          select: { title: true },
+        });
+        return desafio?.title ?? null;
+      }
       case 'convite': {
         // Convite que não vale mais não ganha nome no cartão: o aceite falharia.
         const convite = await this.prisma.groupInvite.findUnique({

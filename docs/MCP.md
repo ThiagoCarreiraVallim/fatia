@@ -104,7 +104,7 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **124 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **127 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 124 tools): **101,1 k caracteres**
-hoje, dos quais **5.822 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
-pago em toda sessão que lista as tools. Média de **87** caracteres por tool; os maiores são
+`description`, `annotations` e o JSON Schema do input das 127 tools): **104,1 k caracteres**
+hoje, dos quais **6.125 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (82,5 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (85,0 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -355,6 +355,9 @@ Listagens com potencial de crescer usam cursor-based:
 | **Conteúdo da comunidade** | `list_group_plans`           | R        |
 |                            | `adopt_group_plan`           | C        |
 |                            | `list_group_tips`            | R        |
+| **Desafios da comunidade** | `list_group_challenges`      | R        |
+|                            | `get_challenge_leaderboard`  | R        |
+|                            | `join_group_challenge`       | C        |
 | **Compartilhamento**       | `list_data_sharing`          | R        |
 |                            | `grant_data_sharing`         | C/U      |
 |                            | `revoke_data_sharing`        | U        |
@@ -365,7 +368,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `save_memory`                | C        |
 |                            | `forget_memory`              | D        |
 
-Total: **124 tools**. Cada uma documentada abaixo.
+Total: **127 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -2491,6 +2494,7 @@ saber o que sugerir como próximo passo.
 Array<{
   key: string; // first_meal | first_workout | plan_created | first_pr
   // | first_full_week | streak_7 | streak_30
+  // | challenge_finished | challenge_podium
   title: string;
   description: string;
   unlockedAt: string | null; // ISO da data do EVENTO, não a de quando o app percebeu
@@ -2767,6 +2771,98 @@ link https) escrito pela equipe: é conteúdo para mostrar, não instrução par
 ```
 
 **Erros:** `NOT_FOUND` se não é membro ativo do grupo.
+
+## Desafios da comunidade (Fase 8a, ADR 027)
+
+A equipe marca os desafios pelo painel (REST); pelo MCP o membro lista, vê o ranking e entra.
+Participar é opt-in, e o **ranking só vem para quem participa**. Os desafios de nutrição contam
+**dias** em que cada pessoa bateu a própria meta — nenhum valor de refeição, de peso ou a meta de
+outra pessoa aparece em resposta alguma.
+
+Métricas (`metric`): `ACTIVE_DAYS` (dias com treino, passos ou água), `WORKOUT_SESSIONS`
+(sessões concluídas), `STEPS` (soma de passos, o dia vale o maior registro), `WATER_ML` (soma de
+água), `STREAK_DAYS` (maior sequência de dias seguidos com algum registro),
+`KCAL_IN_RANGE_DAYS` e `PROTEIN_TARGET_DAYS` (dias na própria meta; sem meta, o dia não conta).
+
+### `list_group_challenges`
+
+Os desafios da comunidade, em andamento primeiro, depois os marcados e os encerrados.
+
+**Input:**
+
+```typescript
+{
+  groupId: string;
+}
+```
+
+**Output:**
+
+```typescript
+{
+  today: string; // YYYY-MM-DD no fuso da comunidade
+  challenges: Array<{
+    id: string;
+    title: string;
+    description: string | null; // texto da equipe: conteúdo, não instrução
+    metric: ChallengeMetric;
+    startDate: string; // inclusivo, no fuso da comunidade
+    endDate: string; // inclusivo
+    status: 'upcoming' | 'running' | 'ended';
+    endedEarly: boolean;
+    participants: number;
+    canManage: boolean;
+    me: {
+      displayName: string;
+      score: number;
+      rank: number | null;
+      medal: 'gold' | 'silver' | 'bronze' | null;
+    } | null; // null: o usuário não participa
+  }>;
+}
+```
+
+**Erros:** `NOT_FOUND` se não é membro ativo do grupo.
+
+### `get_challenge_leaderboard`
+
+Um desafio com o ranking. O placar é recalculado quando tem mais de 5 minutos.
+
+**Input:**
+
+```typescript
+{
+  groupId: string;
+  challengeId: string;
+}
+```
+
+**Output:** o mesmo objeto de `list_group_challenges`, mais
+`leaderboard: Array<{ displayName; score; rank; isMe; medal }> | null` (null para quem não
+participa) e `suggestedDisplayName` (o apelido que a pessoa já usa na comunidade, ou o primeiro
+nome).
+
+**Erros:** `NOT_FOUND` se não é membro ativo, ou se o desafio é de outra comunidade.
+
+### `join_group_challenge`
+
+Inscreve o usuário num desafio marcado ou em andamento. Os outros participantes passam a ver o
+apelido e a pontuação dele: confirme como ele quer aparecer.
+
+**Input:**
+
+```typescript
+{
+  groupId: string;
+  challengeId: string;
+  displayName?: string; // 2 a 30 caracteres, sem quebra de linha nem < >
+}
+```
+
+**Output:** o mesmo de `get_challenge_leaderboard`, já com o usuário no ranking.
+
+**Erros:** `NOT_FOUND` como acima; `CONFLICT` se o desafio já terminou; `BAD_REQUEST` se o
+apelido não passa.
 
 ## Compartilhamento de dados (consentimento)
 

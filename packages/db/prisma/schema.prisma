@@ -42,22 +42,23 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  goals           UserGoals?
-  personalGoals   Goal[]
-  meals           Meal[]
-  workoutPlans    WorkoutPlan[]
-  workoutSessions WorkoutSession[]
-  weightLogs      WeightLog[]
-  stepLogs        StepLog[]
-  waterLogs       WaterLog[]
-  customFoods     Food[]            @relation("UserCustomFoods")
-  favoriteFoods   FavoriteFood[]
-  foodPortions    FoodPortion[]
-  mealTemplates   MealTemplate[]
-  customExercises Exercise[]        @relation("UserCustomExercises")
-  nutrientTargets NutrientTarget[]
-  achievements    UserAchievement[]
-  trainingBlocks  TrainingBlock[]
+  goals              UserGoals?
+  authoredChallenges GroupChallenge[]  @relation("ChallengeAuthor")
+  personalGoals      Goal[]
+  meals              Meal[]
+  workoutPlans       WorkoutPlan[]
+  workoutSessions    WorkoutSession[]
+  weightLogs         WeightLog[]
+  stepLogs           StepLog[]
+  waterLogs          WaterLog[]
+  customFoods        Food[]            @relation("UserCustomFoods")
+  favoriteFoods      FavoriteFood[]
+  foodPortions       FoodPortion[]
+  mealTemplates      MealTemplate[]
+  customExercises    Exercise[]        @relation("UserCustomExercises")
+  nutrientTargets    NutrientTarget[]
+  achievements       UserAchievement[]
+  trainingBlocks     TrainingBlock[]
 
   conversations  Conversation[]
   memories       UserMemory[]
@@ -837,6 +838,8 @@ model Group {
   /// O agente da comunidade no chat (Fase 7c, ADR 031).
   agent          GroupAgent?
   agentChats     Conversation[]       @relation("ConversationAgent")
+  /// Desafios da comunidade (Fase 8a, ADR 027).
+  challenges     GroupChallenge[]
 
   @@index([ownerId])
   @@index([type])
@@ -857,12 +860,16 @@ model GroupMembership {
   consentAt     DateTime?
   /// Entra nas estatísticas agregadas da comunidade (opt-in, ADR 026 §6).
   statsOptIn    Boolean          @default(false)
+  /// Apelido na comunidade: como a pessoa aparece no ranking dos desafios
+  /// (Fase 8a). Nulo até a primeira vez que ela entra num desafio.
+  displayName   String?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
-  group           Group                 @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  seatAssignments GroupSeatAssignment[]
+  group            Group                       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user             User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  seatAssignments  GroupSeatAssignment[]
+  challengeEntries GroupChallengeParticipant[]
 
   // Um papel por pessoa por grupo. É o que torna estruturalmente impossível
   // o acúmulo de papéis que a #156 pede para evitar: não existe linha em que
@@ -1477,4 +1484,74 @@ model GroupAgent {
 
   group      Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
   avatarFile MediaFile? @relation("AgentAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
+}
+
+// ============================================================
+// DESAFIOS DA COMUNIDADE (Fase 8a, ADR 027)
+// ============================================================
+
+/// O que um desafio mede. Atividade (as quatro primeiras) ou aderência à
+/// PRÓPRIA meta, em dias (ADR 027) — nunca valor de corpo ou de alimentação.
+/// A lista é a de `apps/api/src/social/challenge-metric.ts`, conferida em teste.
+enum ChallengeMetric {
+  WORKOUT_SESSIONS
+  STEPS
+  WATER_ML
+  ACTIVE_DAYS
+  KCAL_IN_RANGE_DAYS
+  PROTEIN_TARGET_DAYS
+  STREAK_DAYS
+}
+
+/// Um desafio que a equipe marca. A janela é única para todo participante, no
+/// fuso da comunidade (`ScoreboardService`).
+model GroupChallenge {
+  id           String          @id @default(uuid())
+  groupId      String
+  /// Quem marcou. Sai da equipe ou apaga a conta: o desafio fica.
+  authorId     String?
+  title        String
+  description  String?
+  metric       ChallengeMetric
+  /// Meia-noite do primeiro dia, no fuso da comunidade (inclusivo).
+  startsAt     DateTime
+  /// Virada do último dia (exclusivo). Encerrar antes grava o instante.
+  endsAt       DateTime
+  /// Fuso da comunidade quando o desafio foi marcado.
+  timezone     String
+  endedEarlyAt DateTime?
+  /// Último recálculo do placar (recalcula na leitura quando fica velho).
+  scoredAt     DateTime?
+  /// Placar fechado e posições finais gravadas.
+  finalizedAt  DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  group        Group                       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  author       User?                       @relation("ChallengeAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  participants GroupChallengeParticipant[]
+
+  @@index([groupId, endsAt])
+  @@index([finalizedAt, endsAt])
+}
+
+/// Quem entrou no desafio (opt-in). A linha é a inscrição: sair apaga.
+model GroupChallengeParticipant {
+  id           String   @id @default(uuid())
+  challengeId  String
+  /// Pela associação, e não pelo usuário: sair da comunidade tira do placar.
+  membershipId String
+  /// Como a pessoa aparece no ranking.
+  displayName  String
+  /// Contagem da métrica. Nunca um valor de refeição ou de corpo (ADR 027).
+  score        Int      @default(0)
+  /// Posição gravada ao encerrar (empate divide a posição).
+  finalRank    Int?
+  joinedAt     DateTime @default(now())
+
+  challenge  GroupChallenge  @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  membership GroupMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, membershipId])
+  @@index([membershipId])
 }

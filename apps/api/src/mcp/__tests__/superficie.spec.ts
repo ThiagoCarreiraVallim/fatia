@@ -26,10 +26,11 @@ import {
  * Fases 3 a 5 (comunidades e planos) acrescentaram 15 tools depois, duas delas destrutivas
  * (`delete_food_portion`, `delete_meal_template`) — que o braço B serve também, por ser
  * destrutivas. A Fase 7a acrescentou mais três (`list_group_plans`, `adopt_group_plan`,
- * `list_group_tips`), nenhuma destrutiva. Sem medição nova.
+ * `list_group_tips`), e a Fase 8a mais três (`list_group_challenges`,
+ * `get_challenge_leaderboard`, `join_group_challenge`), nenhuma destrutiva. Sem medição nova.
  */
 
-const SHA_ENTIDADE = '838b0f28d8545b5adcaae87e7a2c01fc0850a90fdfb9ae6bf27fc21fbbb880d2';
+const SHA_ENTIDADE = 'c8f1b7370439e2e4db2d46a5bfb09ab728aa7b6003e2bfad1e2e2292913c4045';
 const SHA_INTENCAO = '7c36e15630e05e7188964f8bc3fc7fadb66db106b3280448aeb98fbd2abf9c7f';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

@@ -73,6 +73,13 @@ export const GROUP_PERMISSIONS = {
   'content.moderate': [GroupRole.OWNER, GroupRole.CREATOR],
   'offer.create': [GroupRole.PROFESSIONAL],
   /**
+   * Marcar, mudar antes de começar, encerrar e apagar desafios (Fase 8a). É
+   * a equipe que anima a comunidade; o ranking continua só de quem participa.
+   */
+  'challenge.manage': [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR],
+  /** Ver os desafios e entrar ou sair com um apelido (opt-in, ADR 027). */
+  'challenge.join': [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR, GroupRole.MEMBER],
+  /**
    * Painel agregado do dono. O profissional já tem o caminho individual, com
    * consentimento; dar-lhe também o agregado seria dois caminhos para a mesma
    * informação com regras diferentes.

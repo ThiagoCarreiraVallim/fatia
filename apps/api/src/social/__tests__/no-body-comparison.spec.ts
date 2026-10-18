@@ -13,7 +13,7 @@ import { RAIZ_SOCIAL, fontesDeSocial } from './fontes';
  */
 
 describe('nenhuma comparação corporal no social', () => {
-  it('as métricas de desafio são exatamente as quatro de atividade', () => {
+  it('as métricas são as quatro de atividade e as três de aderência da ADR 027', () => {
     // Lista literal, e não `toContain`: acrescentar `WEIGHT_LOSS` tem de falhar
     // aqui. Com `toContain`, o valor novo entraria calado.
     expect([...CHALLENGE_METRICS]).toEqual([
@@ -21,16 +21,28 @@ describe('nenhuma comparação corporal no social', () => {
       'STEPS',
       'WATER_ML',
       'ACTIVE_DAYS',
+      'KCAL_IN_RANGE_DAYS',
+      'PROTEIN_TARGET_DAYS',
+      'STREAK_DAYS',
     ]);
   });
 
-  it('nenhum nome de métrica fala de corpo, peso ou dieta', () => {
+  it('nenhum nome de métrica fala de corpo ou peso', () => {
     // Guarda de forma, para a métrica que passar pela revisão com outro nome:
     // `BODY_FAT_DROP` não está na lista literal acima, mas cair aqui explica
     // *por quê* está proibida, em vez de só dizer "a lista mudou".
-    const proibidos = /WEIGHT|BODY|FAT|BMI|MEASURE|WAIST|CALORIE|KCAL|MEAL|DIET/;
+    const proibidos = /WEIGHT|BODY|FAT|BMI|MEASURE|WAIST/;
     for (const metrica of CHALLENGE_METRICS) {
       expect(metrica).not.toMatch(proibidos);
+    }
+  });
+
+  it('métrica de nutrição só existe como contagem de dias na própria meta (ADR 027)', () => {
+    // `KCAL_IN_RANGE_DAYS` passa; `MOST_PROTEIN` ou `KCAL_TOTAL` — o valor
+    // comido, comparado entre pessoas — não.
+    const nutricao = /CALORIE|KCAL|PROTEIN|CARB|MEAL|DIET/;
+    for (const metrica of CHALLENGE_METRICS.filter((m) => nutricao.test(m))) {
+      expect(metrica).toMatch(/_(IN_RANGE|TARGET)_DAYS$/);
     }
   });
 

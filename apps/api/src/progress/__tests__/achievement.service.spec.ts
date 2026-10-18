@@ -39,6 +39,13 @@ describe('AchievementService', () => {
     sessoesConcluidas?: Date[];
     /** Dias da sequência que o `StreakService` devolve — `streak_7`/`streak_30` leem daqui. */
     streakDias?: number;
+    /** Participações em desafios da comunidade (Fase 8a). */
+    desafios?: Array<{
+      title: string;
+      finalizedAt: Date | null;
+      score: number;
+      finalRank: number | null;
+    }>;
   }) {
     const criadas: unknown[] = [];
     const prisma = {
@@ -75,6 +82,37 @@ describe('AchievementService', () => {
       },
       sessionSet: { groupBy: jest.fn().mockResolvedValue(dados.setsPorSessao ?? []) },
       exercise: { findUnique: jest.fn().mockResolvedValue({ name: 'Supino reto' }) },
+      // Filtra de verdade o que o service pede (pontuação, posição, fechamento) e ordena pelo
+      // fechamento: um fake que devolvesse a primeira linha deixaria passar um `where` sem
+      // `score > 0` ou sem `finalRank <= 3`.
+      groupChallengeParticipant: {
+        findFirst: jest.fn(
+          ({
+            where,
+          }: {
+            where: { score: { gt: number }; finalRank: { not?: null; lte?: number } };
+          }) => {
+            const candidatos = (dados.desafios ?? [])
+              .filter(
+                (d) =>
+                  d.finalizedAt !== null &&
+                  d.score > where.score.gt &&
+                  d.finalRank !== null &&
+                  (where.finalRank.lte === undefined || d.finalRank <= where.finalRank.lte),
+              )
+              .sort((a, b) => a.finalizedAt!.getTime() - b.finalizedAt!.getTime());
+            const d = candidatos[0];
+            return Promise.resolve(
+              d
+                ? {
+                    finalRank: d.finalRank,
+                    challenge: { title: d.title, finalizedAt: d.finalizedAt },
+                  }
+                : null,
+            );
+          },
+        ),
+      },
       userGoals: {
         findUnique: jest
           .fn()
@@ -394,6 +432,46 @@ describe('AchievementService', () => {
 
       expect(prisma.userAchievement.createMany).not.toHaveBeenCalled();
       expect(lista.find((a) => a.key === 'first_meal')?.unlockedAt).toBeNull();
+    });
+  });
+
+  describe('desafios da comunidade', () => {
+    const outubro = new Date('2026-10-12T03:00:00.000Z');
+    const novembro = new Date('2026-11-09T03:00:00.000Z');
+
+    it('concluir pontuando e subir ao pódio, com a data do fechamento', async () => {
+      const { service } = build({
+        desafios: [
+          { title: 'Novembro', finalizedAt: novembro, score: 9, finalRank: 2 },
+          { title: 'Outubro', finalizedAt: outubro, score: 4, finalRank: 5 },
+        ],
+      });
+
+      const lista = await service.evaluate(ctx);
+      const de = (key: string) => lista.find((a) => a.key === key);
+
+      expect(de('challenge_finished')).toMatchObject({
+        unlockedAt: outubro.toISOString(),
+        context: { challengeTitle: 'Outubro' },
+      });
+      expect(de('challenge_podium')).toMatchObject({
+        unlockedAt: novembro.toISOString(),
+        context: { challengeTitle: 'Novembro', rank: 2 },
+      });
+    });
+
+    it('entrar sem pontuar, ou num desafio ainda aberto, não conta', async () => {
+      const { service } = build({
+        desafios: [
+          { title: 'Zerado', finalizedAt: outubro, score: 0, finalRank: 1 },
+          { title: 'Aberto', finalizedAt: null, score: 30, finalRank: null },
+        ],
+      });
+
+      const lista = await service.evaluate(ctx);
+
+      expect(lista.find((a) => a.key === 'challenge_finished')?.unlockedAt).toBeNull();
+      expect(lista.find((a) => a.key === 'challenge_podium')?.unlockedAt).toBeNull();
     });
   });
 });

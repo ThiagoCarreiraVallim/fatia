@@ -256,7 +256,20 @@ export class AccountService {
           consentScopes: true,
           consentAt: true,
           statsOptIn: true,
+          displayName: true,
           seatAssignments: { select: { assignedAt: true, revokedAt: true } },
+          // Os desafios em que a pessoa entrou (Fase 8a): o apelido, a pontuação
+          // e a posição dela. O ranking dos outros é dado de terceiro.
+          challengeEntries: {
+            select: {
+              displayName: true,
+              score: true,
+              finalRank: true,
+              joinedAt: true,
+              challenge: { select: { title: true, metric: true, startsAt: true, endsAt: true } },
+            },
+            orderBy: { joinedAt: 'asc' },
+          },
         },
         orderBy: { createdAt: 'asc' },
       }),
@@ -310,7 +323,25 @@ export class AccountService {
           },
           orderBy: { createdAt: 'asc' },
         }),
-      ]).then(([plans, tips, exerciseGuides]) => ({ plans, tips, exerciseGuides })),
+        // Desafios que a pessoa marcou (Fase 8a). O ranking é dos participantes.
+        this.prisma.groupChallenge.findMany({
+          where: { authorId: userId },
+          select: {
+            group: { select: { name: true } },
+            title: true,
+            metric: true,
+            startsAt: true,
+            endsAt: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        }),
+      ]).then(([plans, tips, exerciseGuides, challenges]) => ({
+        plans,
+        tips,
+        exerciseGuides,
+        challenges,
+      })),
       // Os arquivos enviados (ADR 028): metadados, sem o arquivo.
       this.prisma.mediaFile.findMany({
         where: { uploaderId: userId },
@@ -381,11 +412,13 @@ export class AccountService {
         memories: memories.length,
         subscriptions: subscriptions.length,
         communityMemberships: communityMemberships.length,
+        challengeEntries: communityMemberships.reduce((n, m) => n + m.challengeEntries.length, 0),
         invitesCreated: invitesCreated.length,
         contentPublished:
           contentPublished.plans.length +
           contentPublished.tips.length +
-          contentPublished.exerciseGuides.length,
+          contentPublished.exerciseGuides.length +
+          contentPublished.challenges.length,
         mediaUploaded: mediaUploaded.length,
         professionalLinks: professionalLinks.length,
         accessLogs: accessLogs.length,

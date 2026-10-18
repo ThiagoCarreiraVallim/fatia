@@ -12,6 +12,7 @@ import { CopyDayTool } from '../../../nutrition/mcp/copy-day.tool';
 import { LogMealTemplateTool } from '../../../nutrition/mcp/log-meal-template.tool';
 import { SetGroupSharingTool } from '../../../sharing/mcp/set-group-sharing.tool';
 import { AcceptGroupInviteTool } from '../../../sharing/mcp/accept-group-invite.tool';
+import { JoinGroupChallengeTool } from '../../../sharing/mcp/join-group-challenge.tool';
 import { hashInviteToken } from '../../../sharing/invite.service';
 import { PreviaDaAcaoService } from '../previa-da-acao.service';
 
@@ -39,6 +40,7 @@ describe('PreviaDaAcaoService', () => {
     LogMealTemplateTool,
     SetGroupSharingTool,
     AcceptGroupInviteTool,
+    JoinGroupChallengeTool,
   ];
   const discovery = {
     getProviders: () =>
@@ -399,6 +401,65 @@ describe('PreviaDaAcaoService', () => {
       statsOptIn: true,
     });
     expect(semNada.linhas).toContainEqual({ rotulo: 'Compartilha com a equipe', valor: 'Nada' });
+  });
+
+  it('entrar num desafio: o nome do desafio e o apelido; de quem não é membro, nada', async () => {
+    const desafio = await prisma.groupChallenge.create({
+      data: {
+        groupId: comunidade,
+        title: 'Outubro ativo',
+        metric: 'ACTIVE_DAYS',
+        startsAt: new Date('2026-10-01T03:00:00.000Z'),
+        endsAt: new Date('2026-11-01T03:00:00.000Z'),
+        timezone: TZ,
+      },
+    });
+    const estranho = await prisma.user.create({
+      data: {
+        logtoSub: `previa-desafio-${Date.now()}`,
+        email: `previa-desafio-${Date.now()}@test.local`,
+        name: 'estranho',
+      },
+    });
+    try {
+      await expect(
+        previas.previa(dono, 'join_group_challenge', {
+          groupId: comunidade,
+          challengeId: desafio.id,
+          displayName: 'Ana',
+        }),
+      ).resolves.toEqual({
+        valida: true,
+        linhas: [
+          { rotulo: 'Comunidade', valor: 'Academia da Prévia' },
+          { rotulo: 'Desafio', valor: 'Outubro ativo' },
+          { rotulo: 'Apelido no ranking', valor: 'Ana' },
+        ],
+      });
+      // Membro de OUTRA comunidade, com o id do desafio desta: a comunidade dele
+      // resolve, o desafio não.
+      const daOutra = await prisma.group.create({
+        data: {
+          type: 'SPONSORED',
+          name: 'Outra Academia',
+          slug: `previa-outra-${Date.now()}`,
+          ownerId: estranho.id,
+          memberships: { create: [{ userId: estranho.id, role: 'OWNER', status: 'ACTIVE' }] },
+        },
+      });
+      const deFora = await previas.previa(
+        { id: estranho.id, timezone: TZ },
+        'join_group_challenge',
+        {
+          groupId: daOutra.id,
+          challengeId: desafio.id,
+        },
+      );
+      expect(deFora.valida).toBe(false);
+      expect(JSON.stringify(deFora)).not.toContain('Outubro ativo');
+    } finally {
+      await prisma.user.delete({ where: { id: estranho.id } });
+    }
   });
 
   it('comunidade de que a pessoa não é membro não ganha nome no cartão', async () => {

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
-import { dateInTz, dayBoundsInTz } from '../progress/helpers/date-tz';
+import { DailyAdherenceService, type AdherenceDays } from '../nutrition/daily-adherence.service';
+import { addDaysIso, dateInTz, dayBoundsInTz } from '../progress/helpers/date-tz';
 import type { ChallengeMetric } from './challenge-metric';
 
 /**
@@ -44,6 +45,11 @@ export interface ScoreboardEntry {
   score: number;
   /** Posição com empate na mesma colocação: 1, 1, 3. */
   rank: number;
+  /**
+   * É a linha de quem está vendo. Não identifica ninguém para os outros: cada
+   * leitor recebe `true` só na própria linha.
+   */
+  isMe: boolean;
 }
 
 /**
@@ -92,7 +98,10 @@ function localWindow({ startsAt, endsAt, timezone }: ChallengeWindow): {
  */
 @Injectable()
 export class ScoreboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly adherence: DailyAdherenceService,
+  ) {}
 
   /**
    * Recalcula a pontuação de cada participante.
@@ -104,10 +113,9 @@ export class ScoreboardService {
    * ## Pré-condição de quem chama (ADR 010: o isolamento é só da aplicação)
    *
    * `participants` roda sob **autoridade da plataforma**: este método lê
-   * `WorkoutSession`, `StepLog` e `WaterLog` de qualquer `userId` que receber,
-   * sem conferir posse. Isso é deliberado — ele não tem como conferir, porque
-   * `GroupChallengeParticipant` e `GroupMembership` ainda não existem nesta
-   * fatia —, mas transfere uma obrigação inteira para o chamador:
+   * `WorkoutSession`, `StepLog`, `WaterLog` e a aderência diária de qualquer
+   * `userId` que receber, sem conferir posse. Isso é deliberado — o placar não
+   * sabe de comunidade —, mas transfere uma obrigação inteira para o chamador:
    *
    * > cada `participants[i]` tem de vir de uma consulta que **parta do desafio
    * > da URL**, com `membershipId` amarrado ao `GroupMembership` daquele grupo e
@@ -115,8 +123,9 @@ export class ScoreboardService {
    *
    * A defesa "o que atravessa é só uma contagem" não cobre este método: com
    * `WATER_ML` e uma janela de um dia, o `score` **é** o valor exato de água
-   * daquele dia do usuário passado. Enquanto não há rota nem módulo, nada disto
-   * é alcançável; o amarrado nasce junto com o controller da segunda fatia.
+   * daquele dia do usuário passado. O chamador é `sharing/challenge.service.ts`
+   * (Fase 8a), que lê os participantes do desafio da URL e o `userId` da
+   * associação.
    */
   async recompute(
     challenge: ChallengeWindow,
@@ -150,6 +159,12 @@ export class ScoreboardService {
         return this.waterMl(challenge, participants);
       case 'ACTIVE_DAYS':
         return this.activeDays(challenge, participants);
+      case 'KCAL_IN_RANGE_DAYS':
+        return this.diasNaMeta(challenge, participants, 'kcalInRange');
+      case 'PROTEIN_TARGET_DAYS':
+        return this.diasNaMeta(challenge, participants, 'proteinTarget');
+      case 'STREAK_DAYS':
+        return this.maiorSequencia(challenge, participants);
       default: {
         const naoTratada: never = challenge.metric;
         throw new Error(`Métrica de desafio sem cálculo: ${String(naoTratada)}`);
@@ -255,6 +270,15 @@ export class ScoreboardService {
     challenge: ChallengeWindow,
     participants: readonly ChallengeParticipant[],
   ): Promise<Map<string, number>> {
+    const dias = await this.diasAtivos(challenge, participants);
+    return new Map([...dias].map(([userId, conjunto]) => [userId, conjunto.size]));
+  }
+
+  /** Os dias de `ACTIVE_DAYS` de cada participante — ver `activeDays`. */
+  private async diasAtivos(
+    challenge: ChallengeWindow,
+    participants: readonly ChallengeParticipant[],
+  ): Promise<Map<string, Set<string>>> {
     const where = this.whereDiaLocal(challenge, participants);
     const [sessoes, passos, agua] = await Promise.all([
       this.prisma.workoutSession.findMany({
@@ -278,7 +302,7 @@ export class ScoreboardService {
 
     const { first, last } = localWindow(challenge);
 
-    const porUsuario = new Map<string, number>();
+    const porUsuario = new Map<string, Set<string>>();
     for (const p of participants) {
       const dias = new Set<string>();
 
@@ -308,7 +332,53 @@ export class ScoreboardService {
         dias.add(log.date);
       }
 
-      porUsuario.set(p.userId, dias.size);
+      porUsuario.set(p.userId, dias);
+    }
+    return porUsuario;
+  }
+
+  /**
+   * Dias em que cada um bateu a PRÓPRIA meta de nutrição (ADR 027). O que chega
+   * aqui é um conjunto de datas: quanto a pessoa comeu, ou qual é a meta dela,
+   * nunca atravessa para esta pasta.
+   */
+  private async diasNaMeta(
+    challenge: ChallengeWindow,
+    participants: readonly ChallengeParticipant[],
+    qual: 'kcalInRange' | 'proteinTarget',
+  ): Promise<Map<string, number>> {
+    const { first, last } = localWindow(challenge);
+    const dias = await this.adherence.forDays(participants, first, last);
+    return new Map(participants.map((p) => [p.userId, dias.get(p.userId)?.[qual].size ?? 0]));
+  }
+
+  /**
+   * A maior sequência de dias seguidos, dentro do desafio, com algum registro:
+   * refeição, treino concluído, passos ou água. É a única métrica em que a
+   * refeição salva o dia — só o fato de haver registro, nunca o que tinha nele.
+   */
+  private async maiorSequencia(
+    challenge: ChallengeWindow,
+    participants: readonly ChallengeParticipant[],
+  ): Promise<Map<string, number>> {
+    const { first, last } = localWindow(challenge);
+    const [ativos, aderencia] = await Promise.all([
+      this.diasAtivos(challenge, participants),
+      this.adherence.forDays(participants, first, last),
+    ]);
+    const porUsuario = new Map<string, number>();
+    for (const p of participants) {
+      const comRegistro = new Set([
+        ...(ativos.get(p.userId) ?? []),
+        ...(aderencia.get(p.userId) ?? vazio()).mealLogged,
+      ]);
+      let maior = 0;
+      let atual = 0;
+      for (let dia = first; dia <= last; dia = addDaysIso(dia, 1)) {
+        atual = comRegistro.has(dia) ? atual + 1 : 0;
+        maior = Math.max(maior, atual);
+      }
+      porUsuario.set(p.userId, maior);
     }
     return porUsuario;
   }
@@ -357,11 +427,11 @@ export class ScoreboardService {
  *
  * A assinatura **não recebe** `membershipId` nem `userId` de propósito: o que
  * não entra não pode vazar. Ligar pontuação a pessoa é trabalho de quem chama,
- * dentro do grupo, e o que sai daqui é `{ displayName, score, rank }` e nada
- * mais.
+ * dentro do grupo, e o que sai daqui é `{ displayName, score, rank, isMe }` e
+ * nada mais — `isMe` é a marca de quem lê, decidida por quem chama.
  */
 export function buildScoreboard(
-  linhas: ReadonlyArray<{ displayName: string; score: number }>,
+  linhas: ReadonlyArray<{ displayName: string; score: number; isMe: boolean }>,
 ): ScoreboardEntry[] {
   // Desempate por nome só para a ordem ser determinística entre duas leituras
   // iguais — a posição de empatados é a mesma, o que muda é quem aparece antes.
@@ -376,6 +446,10 @@ export function buildScoreboard(
       posicao = indice + 1;
       pontuacaoAnterior = linha.score;
     }
-    return { displayName: linha.displayName, score: linha.score, rank: posicao };
+    return { displayName: linha.displayName, score: linha.score, rank: posicao, isMe: linha.isMe };
   });
+}
+
+function vazio(): AdherenceDays {
+  return { kcalInRange: new Set(), proteinTarget: new Set(), mealLogged: new Set() };
 }

@@ -5,7 +5,10 @@ import { NutritionModule } from '../nutrition/nutrition.module';
 import { ProgressModule } from '../progress/progress.module';
 import { WorkoutModule } from '../workout/workout.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { SocialModule } from '../social/social.module';
 import { StorageModule } from '../storage/storage.module';
+import { ChallengeController } from './challenge.controller';
+import { ChallengeService } from './challenge.service';
 import { ContentController } from './content.controller';
 import { ContentService } from './content.service';
 import { GroupExerciseController } from './group-exercise.controller';
@@ -15,6 +18,9 @@ import { GroupAgentService } from './group-agent.service';
 import { AdoptGroupPlanTool } from './mcp/adopt-group-plan.tool';
 import { ListGroupPlansTool } from './mcp/list-group-plans.tool';
 import { ListGroupTipsTool } from './mcp/list-group-tips.tool';
+import { GetChallengeLeaderboardTool } from './mcp/get-challenge-leaderboard.tool';
+import { JoinGroupChallengeTool } from './mcp/join-group-challenge.tool';
+import { ListGroupChallengesTool } from './mcp/list-group-challenges.tool';
 import { AccessAuditService } from './access-audit.service';
 import { ConsentService } from './consent.service';
 import { GroupService } from './group.service';
@@ -56,7 +62,9 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
  * A direção contrária — profissional/criador → aluno — é **cópia**, e quem a faz
  * é o `PlanMaterializerService` (#162), a única máquina de materialização do
  * repositório. O `ContentService` (Fase 7) é a porta dos planos prontos e das
- * dicas que a equipe publica; o membro adota pelo REST e pelas tools daqui. Oferta aceita (#157) e plano pronto adotado (#162) são a mesma
+ * dicas que a equipe publica; o membro adota pelo REST e pelas tools daqui. O
+ * `ChallengeService` (Fase 8a) é a porta dos desafios; o placar é calculado em
+ * `social/`, que só recebe os participantes do desafio da URL. Oferta aceita (#157) e plano pronto adotado (#162) são a mesma
  * cópia com portas de entrada diferentes; duas implementações divergiriam no
  * primeiro campo novo de `WorkoutPlan`.
  *
@@ -84,6 +92,7 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
     GoalsModule,
     NotificationsModule,
     StorageModule,
+    SocialModule,
   ],
   controllers: [
     SharingController,
@@ -92,6 +101,7 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
     ContentController,
     GroupExerciseController,
     GroupAgentController,
+    ChallengeController,
   ],
   providers: [
     ProfessionalAccessService,
@@ -106,6 +116,7 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
     ContentService,
     GroupExerciseService,
     GroupAgentService,
+    ChallengeService,
     GroupRoleGuard,
     ListMyGroupsTool,
     JoinGroupTool,
@@ -122,6 +133,9 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
     ListGroupPlansTool,
     AdoptGroupPlanTool,
     ListGroupTipsTool,
+    ListGroupChallengesTool,
+    GetChallengeLeaderboardTool,
+    JoinGroupChallengeTool,
   ],
   exports: [
     ProfessionalAccessService,
@@ -135,6 +149,7 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
     ContentService,
     GroupExerciseService,
     GroupAgentService,
+    ChallengeService,
   ],
 })
 export class SharingModule {}
