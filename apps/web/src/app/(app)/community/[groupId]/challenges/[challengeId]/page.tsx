@@ -171,7 +171,9 @@ export default function CommunityChallengePage() {
             <p className="text-xs text-muted-foreground">A contagem começa no primeiro dia.</p>
           )}
           <Leaderboard challenge={c} entries={c.leaderboard} />
-          <p className="text-xs text-muted-foreground">Atualiza a cada poucos minutos.</p>
+          {c.status === 'running' && (
+            <p className="text-xs text-muted-foreground">Atualiza a cada poucos minutos.</p>
+          )}
         </section>
       )}
 

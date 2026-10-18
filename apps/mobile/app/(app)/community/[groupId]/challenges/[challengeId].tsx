@@ -212,7 +212,9 @@ export default function CommunityChallengeScreen() {
               </Text>
             ) : null}
             <Leaderboard challenge={c} entries={c.leaderboard} />
-            <Text className="text-xs text-muted-foreground">Atualiza a cada poucos minutos.</Text>
+            {c.status === 'running' ? (
+              <Text className="text-xs text-muted-foreground">Atualiza a cada poucos minutos.</Text>
+            ) : null}
           </View>
         ) : null}
 

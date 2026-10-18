@@ -122,6 +122,8 @@ describe('desafio › membro', () => {
     expect(await screen.findByRole('list', { name: 'Ranking' })).toHaveTextContent('Ouro');
     expect(screen.queryByRole('button', { name: 'Sair do desafio' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Participar' })).not.toBeInTheDocument();
+    // O placar fechou: nada de "atualiza".
+    expect(screen.queryByText(/Atualiza a cada/)).not.toBeInTheDocument();
   });
 
   it('encerrado sem ter entrado: explica que o ranking ficou para quem participou', async () => {
