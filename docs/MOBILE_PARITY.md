@@ -329,6 +329,11 @@ viram pílulas (`Choice`). Diferenças de propósito:
 - **Agente da comunidade (Fase 7c):** o dono configura no app como na web (nome, avatar,
   orientações, ligar e desligar), com "Ligado / Desligado" em pílulas. Quem conversa com o agente
   é o chat, que é só da web: o app não ganha chat nesta fase.
+- **Desafios da comunidade (Fase 8a):** o membro vê a prévia na comunidade, a lista e o detalhe
+  com o ranking, entra com apelido e sai, como na web. No painel, marcar um desafio usa escolhas
+  prontas — começa hoje, amanhã ou na próxima segunda; dura 7, 14 ou 30 dias
+  (`components/challenges/window-choice.ts`) — em vez do calendário; datas livres e editar um
+  desafio marcado ficam na web. Encerrar e apagar existem nos dois.
 
 ## Plano PRO — a mesma tela, outro caixa
 
@@ -402,6 +407,7 @@ rodando, e deve ser feito antes de publicar:
 - [ ] Planos e dicas: escolher imagem da galeria (iPhone com HEIC e Android sem tipo), ver a capa depois de enviar, publicar um treino e adotá-lo com outra conta, e o link de uma dica abrindo no navegador
 - [ ] Exercícios da comunidade: enviar um vídeo MOV de iPhone e um MP4 de Android (com a barra de progresso andando e o app em primeiro plano), até 4 fotos de uma vez, "Assistir" abrindo o vídeo assinado, e "Na minha academia" nos seletores de exercício
 - [ ] Agente da comunidade: trocar o avatar pela galeria, salvar ligado e conferir no chat da web que o agente aparece para um membro
+- [ ] Desafios: marcar pelo painel (hoje, 7 dias), entrar com outra conta com apelido, ver a própria linha no ranking, puxar para atualizar, sair pelo `Alert` e encerrar pelo painel
 - [ ] Cores dos macros e de erro (`cores.ts`) iguais às do PWA lado a lado
 - [ ] Diagrama muscular destacando os grupos certos
 - [ ] Aparelho de entrada, não só simulador — os gráficos são o ponto a observar

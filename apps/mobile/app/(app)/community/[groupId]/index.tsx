@@ -15,6 +15,7 @@ import {
 } from '@fatia/api-client';
 import { ConsentForm } from '@/components/community/consent-form';
 import { GroupAvatar } from '@/components/community/group-avatar';
+import { CommunityChallengesPreview } from '@/components/challenges/community-challenges-preview';
 import { CommunityContentPreview } from '@/components/content/community-content-preview';
 import { Screen } from '@/components/layout/screen';
 import { Button, EmptyState, ErrorState, LoadingState, cn } from '@/components/ui';
@@ -183,6 +184,8 @@ export default function CommunityDetailScreen() {
             </View>
           </Pressable>
         ) : null}
+
+        {ativo ? <CommunityChallengesPreview groupId={g.id} /> : null}
 
         {ativo ? <CommunityContentPreview groupId={g.id} /> : null}
 
