@@ -391,6 +391,30 @@ aviso na web. Sem tool MCP nova (130).
 - UI no app (web+mobile): aba Comunidade com Feed, Desafios, Planos/Dicas; no dashboard, fila de moderação.
 - Notificações: registrar Expo push token (`UserDevice`), `notifications/push.service.ts`; eventos: convite, desafio novo/encerrado, ranking, resposta a post, post removido.
 
+## Fase 9 — Chat confiável, chat no app e as sobras da 8c
+
+Pedido de 18/10/2026: guia de testes do app, o erro instantâneo do chat em produção, Langfuse,
+o que serve da Lunia, o chat completo no app, o teste instável do painel e o que ficou fora da 8c.
+
+### Andamento da Fase 9 — concluída
+
+- **9a:** `docs/TESTAR_O_APP.md` (contas, variáveis, os três caminhos, permissões, roteiro);
+  `google-services.json` pela variável de arquivo da EAS; ADR 029 aceita.
+- **9b:** a causa reproduzida — conexão morta no pool do checkpointer cortava o stream. Pool com
+  conferência e keepalive, erro interno vira evento, nova tentativa antes do primeiro token, pool
+  HTTP do processo, uma nova tentativa da `api` em socket caído, healthcheck e 512M.
+- **9c:** Langfuse Cloud com máscara (ADR 034), voto como score, privacidade atualizada.
+- **9d:** a resposta corre no servidor; `live` com cursor, `stop` real, runtime no layout da web,
+  "Respondendo…" e "Resposta pronta" (ADR 035).
+- **9e:** chat completo no app (conversas, pausas, cartões, foto, ditado com `expo-audio`,
+  memórias, agente da comunidade) e push `CHAT` quando a resposta fica pronta sem ninguém olhando.
+- **9f:** painel estável nas rodadas cheias (espera a escrita da API, não o toast).
+- **9g:** recibos da Expo, comentários agrupados e Web Push com lista de serviços (ADR 036).
+
+Fica para o aparelho e para produção: o chat e o push no celular de verdade, as chaves do
+Langfuse e do VAPID, e a confirmação da causa do erro nos logs do agente (OPERATIONS → Chat e
+agente).
+
 ## Ordem de entrega sugerida (PRs pequenas, todas em `feat/comunidades-planos` ou sub-branches dela)
 
 0 → 1 → 2 → 3 (UI/UX em várias PRs, a mais longa) → 4 → 5 → 6 → 7 → 8. As Fases 2 e 3 já entregam valor ao Free sem depender de cobrança.
