@@ -601,6 +601,21 @@ cadastro dela, numa base fora da Fatia.
 **Não mitigado:** a pergunta e a resposta continuam sendo saúde em prosa, mascaradas só nos
 padrões de identificação; a retenção é a do projeto na Langfuse Cloud (UE).
 
+### 20. Resposta do chat desacoplada da requisição (Fase 9d, ADR 035)
+
+O que um atacante ganharia: assistir à resposta de outra pessoa pelo `live`, ou parar o turno
+dela.
+
+- **Dona da conversa primeiro.** `live` e `stop` passam por `assertDaPessoa` (404 para conversa
+  alheia), e o registro só devolve o turno a quem o abriu (`ChatRunRegistry.find`, testado com
+  outra pessoa).
+- **Nada novo em disco.** Os eventos ficam na memória do processo por no máximo 60 s depois do
+  fim, com teto de 8 MB por turno.
+- **Um turno por conversa** (409): duas abas não abrem duas execuções na mesma thread.
+
+**Não mitigado:** fechar a aba não para mais a inferência; o teto de turnos por minuto continua
+sendo o que limita o gasto.
+
 ## Matriz de cobertura
 
 Onde o escopo é aplicado, por domínio. Verificado por

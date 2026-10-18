@@ -4,42 +4,43 @@ Decisões arquiteturais relevantes do projeto. Cada ADR é imutável depois de a
 
 ## Index
 
-| #                                                                      | Título                                                     | Status                                 |
-| ---------------------------------------------------------------------- | ---------------------------------------------------------- | -------------------------------------- |
-| [001](./001-monorepo-pnpm-turborepo.md)                                | Monorepo com pnpm + Turborepo                              | Accepted                               |
-| [002](./002-mcp-no-mesmo-processo.md)                                  | MCP server no mesmo processo da API                        | Accepted                               |
-| [003](./003-auth-dupla-jwt-bearer.md)                                  | Auth dupla: JWT (web) + Bearer (MCP)                       | ⚠️ Superseded by 008                   |
-| [004](./004-sem-armazenamento-fotos.md)                                | Sem armazenamento de fotos de refeição                     | Accepted                               |
-| [005](./005-taco-sem-usda-v1.md)                                       | TACO como única base nutricional na v1                     | Accepted                               |
-| [006](./006-mcp-first.md)                                              | MCP como interface primária e completa                     | Accepted                               |
-| [007](./007-passos-manuais-com-schema-preparado.md)                    | Passos manuais na v1, integrações preparadas mas adiadas   | Accepted                               |
-| [008](./008-logto-oidc-provider.md)                                    | Logto como provider OIDC, substituindo auth manual         | Accepted                               |
-| [009](./009-metas-nutricionais-personalizadas.md)                      | Metas de nutrição personalizadas (nutrientes via Json)     | Accepted                               |
-| [010](./010-row-level-security.md)                                     | Row-Level Security no Postgres: não agora                  | Accepted                               |
-| [011](./011-dcr-vs-cimd.md)                                            | DCR com poda de clientes abandonados, em vez de CIMD       | Accepted                               |
-| [012](./012-graficos-no-mobile.md)                                     | Gráficos do app nativo com react-native-svg, sem Skia      | Accepted                               |
-| [013](./013-roadmap-supera-escopo-negativo-v1.md)                      | O roadmap pós-MVP supera o escopo negativo da v1           | Accepted                               |
-| [014](./014-compartilhamento-b2b-copia-e-vinculo.md)                   | B2B: cópia na ida, vínculo consentido na volta             | Accepted                               |
-| [015](./015-agente-python-langgraph-cliente-mcp.md)                    | Agente de IA em Python/LangGraph, cliente do MCP           | Accepted                               |
-| [016](./016-sem-expansao-internacional-da-base-nutricional.md)         | Sem expansão internacional da base nutricional             | Accepted                               |
-| [017](./017-open-food-facts-para-industrializado.md)                   | Open Food Facts sob demanda para produto industrializado   | Accepted                               |
-| [018](./018-inferencia-hospedada-fora-do-mcp.md)                       | Inferência paga pela Fatia não se expõe pelo MCP           | Accepted                               |
-| [019](./019-periodizacao-intencao-materializada-andamento-derivado.md) | Periodização: intenção materializada, andamento derivado   | Accepted                               |
-| [020](./020-foto-e-audio-trafegam-sem-persistencia.md)                 | Foto e áudio trafegam para a IA, sem persistência          | Accepted                               |
-| [021](./021-agente-recebe-o-bearer-do-usuario.md)                      | O agente recebe o Bearer do usuário, só para o `/mcp`      | Accepted (checkpointer: ver 023)       |
-| [022](./022-classificacao-3-camadas-do-chat.md)                        | Chat em 3 camadas: leitura, confirmável, restrita          | Accepted (mecanismo de pausa: ver 023) |
-| [023](./023-checkpointer-no-postgres-da-fatia.md)                      | Estado da conversa num checkpointer, no Postgres da Fatia  | Accepted                               |
-| [024](./024-plano-free-e-pago-do-usuario.md)                           | Plano Free e Pago: a IA hospedada passa a ser vendida      | Accepted                               |
-| [025](./025-assentos-de-ia-por-comunidade.md)                          | Comunidades pagam a IA por assentos escolhidos             | Accepted                               |
-| [026](./026-consentimento-ao-entrar-na-comunidade.md)                  | Consentimento por escopo ao entrar na comunidade           | Accepted                               |
-| [027](./027-desafios-por-aderencia-a-propria-meta.md)                  | Desafios de nutrição medem aderência, nunca o valor        | Accepted                               |
-| [028](./028-imagens-de-posts-da-comunidade.md)                         | Imagens de posts da comunidade são armazenadas             | Proposed                               |
-| [029](./029-playwright-com-logto-real.md)                              | Testes de interface com Playwright e login real no Logto   | Accepted                               |
-| [030](./030-catalogo-de-exercicios-da-comunidade.md)                   | Catálogo de exercícios da comunidade: tutorial por cima    | Accepted                               |
-| [031](./031-agente-da-comunidade.md)                                   | Agente da comunidade: persona por cima do mesmo assistente | Accepted                               |
-| [032](./032-mural-da-comunidade-e-moderacao.md)                        | Mural da comunidade com moderação pela equipe              | Accepted                               |
-| [033](./033-avisos-no-celular.md)                                      | Avisos no celular pela Expo, sem dado de saúde             | Accepted                               |
-| [034](./034-langfuse-cloud-com-mascara.md)                             | Langfuse Cloud para o chat, com máscara                    | Accepted                               |
+| #                                                                      | Título                                                          | Status                                 |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------- | -------------------------------------- |
+| [001](./001-monorepo-pnpm-turborepo.md)                                | Monorepo com pnpm + Turborepo                                   | Accepted                               |
+| [002](./002-mcp-no-mesmo-processo.md)                                  | MCP server no mesmo processo da API                             | Accepted                               |
+| [003](./003-auth-dupla-jwt-bearer.md)                                  | Auth dupla: JWT (web) + Bearer (MCP)                            | ⚠️ Superseded by 008                   |
+| [004](./004-sem-armazenamento-fotos.md)                                | Sem armazenamento de fotos de refeição                          | Accepted                               |
+| [005](./005-taco-sem-usda-v1.md)                                       | TACO como única base nutricional na v1                          | Accepted                               |
+| [006](./006-mcp-first.md)                                              | MCP como interface primária e completa                          | Accepted                               |
+| [007](./007-passos-manuais-com-schema-preparado.md)                    | Passos manuais na v1, integrações preparadas mas adiadas        | Accepted                               |
+| [008](./008-logto-oidc-provider.md)                                    | Logto como provider OIDC, substituindo auth manual              | Accepted                               |
+| [009](./009-metas-nutricionais-personalizadas.md)                      | Metas de nutrição personalizadas (nutrientes via Json)          | Accepted                               |
+| [010](./010-row-level-security.md)                                     | Row-Level Security no Postgres: não agora                       | Accepted                               |
+| [011](./011-dcr-vs-cimd.md)                                            | DCR com poda de clientes abandonados, em vez de CIMD            | Accepted                               |
+| [012](./012-graficos-no-mobile.md)                                     | Gráficos do app nativo com react-native-svg, sem Skia           | Accepted                               |
+| [013](./013-roadmap-supera-escopo-negativo-v1.md)                      | O roadmap pós-MVP supera o escopo negativo da v1                | Accepted                               |
+| [014](./014-compartilhamento-b2b-copia-e-vinculo.md)                   | B2B: cópia na ida, vínculo consentido na volta                  | Accepted                               |
+| [015](./015-agente-python-langgraph-cliente-mcp.md)                    | Agente de IA em Python/LangGraph, cliente do MCP                | Accepted                               |
+| [016](./016-sem-expansao-internacional-da-base-nutricional.md)         | Sem expansão internacional da base nutricional                  | Accepted                               |
+| [017](./017-open-food-facts-para-industrializado.md)                   | Open Food Facts sob demanda para produto industrializado        | Accepted                               |
+| [018](./018-inferencia-hospedada-fora-do-mcp.md)                       | Inferência paga pela Fatia não se expõe pelo MCP                | Accepted                               |
+| [019](./019-periodizacao-intencao-materializada-andamento-derivado.md) | Periodização: intenção materializada, andamento derivado        | Accepted                               |
+| [020](./020-foto-e-audio-trafegam-sem-persistencia.md)                 | Foto e áudio trafegam para a IA, sem persistência               | Accepted                               |
+| [021](./021-agente-recebe-o-bearer-do-usuario.md)                      | O agente recebe o Bearer do usuário, só para o `/mcp`           | Accepted (checkpointer: ver 023)       |
+| [022](./022-classificacao-3-camadas-do-chat.md)                        | Chat em 3 camadas: leitura, confirmável, restrita               | Accepted (mecanismo de pausa: ver 023) |
+| [023](./023-checkpointer-no-postgres-da-fatia.md)                      | Estado da conversa num checkpointer, no Postgres da Fatia       | Accepted                               |
+| [024](./024-plano-free-e-pago-do-usuario.md)                           | Plano Free e Pago: a IA hospedada passa a ser vendida           | Accepted                               |
+| [025](./025-assentos-de-ia-por-comunidade.md)                          | Comunidades pagam a IA por assentos escolhidos                  | Accepted                               |
+| [026](./026-consentimento-ao-entrar-na-comunidade.md)                  | Consentimento por escopo ao entrar na comunidade                | Accepted                               |
+| [027](./027-desafios-por-aderencia-a-propria-meta.md)                  | Desafios de nutrição medem aderência, nunca o valor             | Accepted                               |
+| [028](./028-imagens-de-posts-da-comunidade.md)                         | Imagens de posts da comunidade são armazenadas                  | Proposed                               |
+| [029](./029-playwright-com-logto-real.md)                              | Testes de interface com Playwright e login real no Logto        | Accepted                               |
+| [030](./030-catalogo-de-exercicios-da-comunidade.md)                   | Catálogo de exercícios da comunidade: tutorial por cima         | Accepted                               |
+| [031](./031-agente-da-comunidade.md)                                   | Agente da comunidade: persona por cima do mesmo assistente      | Accepted                               |
+| [032](./032-mural-da-comunidade-e-moderacao.md)                        | Mural da comunidade com moderação pela equipe                   | Accepted                               |
+| [033](./033-avisos-no-celular.md)                                      | Avisos no celular pela Expo, sem dado de saúde                  | Accepted                               |
+| [034](./034-langfuse-cloud-com-mascara.md)                             | Langfuse Cloud para o chat, com máscara                         | Accepted                               |
+| [035](./035-chat-desacoplado-da-requisicao.md)                         | A resposta do chat corre no servidor, desacoplada da requisição | Accepted                               |
 
 ## Template
 

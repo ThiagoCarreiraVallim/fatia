@@ -18,7 +18,7 @@ Decisões de direção:
   dedicado, coberto por `delete_my_account`/`export_my_data`/retenção; Bearer só no runtime
   context, nunca no state.
 - **Front:** migrar o PWA para `@assistant-ui/react` + `react-langgraph`.
-- **Superfície:** só PWA web (mobile Expo fora, como na ADR 022).
+- **Superfície:** só PWA web (mobile Expo fora, como na ADR 022). Revisto na Fase 9e: o app nativo ganha o chat completo.
 
 ## Estado
 
@@ -38,6 +38,9 @@ de cada camada: [`apps/agent/README.md`](../apps/agent/README.md),
 | 4    | Planejador opcional, pausa `continue` do orçamento, validação e reflexão por regra, evento `context`; artefatos por `structuredContent`; `UserMemory` com `list_memories`/`save_memory`/`forget_memory`; voto com motivos; aviso de cota     |
 | 5    | Foto no chat (recodificada no aparelho, limpa de novo na API, só no prompt do turno, marca no checkpoint) e ditado (`/transcribe`, áudio só em memória, texto no campo sem enviar)                                                           |
 | 6    | Benchmark do chat (`apps/agent/eval/chat/`, checks determinísticos, caso de injeção) e job `agent` no CI (ruff, format, mypy, pytest)                                                                                                        |
+| 9b   | Robustez portada e ampliada: pool do checkpointer com conferência e keepalive, erro inesperado vira evento, nova tentativa antes do primeiro token, pool HTTP do processo (ver OPERATIONS → Chat e agente)                                   |
+| 9c   | Langfuse Cloud com máscara, trace por `runId`, voto como score ([ADR 034](./ADR/034-langfuse-cloud-com-mascara.md)) — o "Langfuse" que ficou de fora na Fase 6                                                                               |
+| 9d   | Resposta desacoplada da requisição, `live` com cursor, `stop` no servidor, runtime no layout do app ([ADR 035](./ADR/035-chat-desacoplado-da-requisicao.md)) — a Lunia reenvia sem cursor e não para no servidor                             |
 
 **Onde a implementação divergiu do plano, e por quê:**
 
@@ -55,8 +58,7 @@ de cada camada: [`apps/agent/README.md`](../apps/agent/README.md),
 - **O evento de custo é o `usage`** que já existia, uma vez por chamada ao modelo.
 
 **O que ficou de fora de propósito:** os itens ⛔ da matriz (anexo PDF, busca na web, geração de
-imagem, painel Ctrl+J, créditos e o resto do B2B); prompts versionados, canary e Langfuse (opcionais
-na Fase 6, e mais um subprocessador a declarar); o contexto de tela (`extraContext`) e as citações de
+imagem, painel Ctrl+J, créditos e o resto do B2B); prompts versionados e canary (o Langfuse entrou na Fase 9c, ADR 034); o contexto de tela (`extraContext`) e as citações de
 entidade; os popovers de execução e de contexto na UI — o agente emite `context` e `usage`, mas a
 tela não os mostra; e o ledger de runs, porque `AiUsage` continua sem `runId`, `kind` e `status`.
 `revoke_data_sharing` segue CONFIRMABLE.
