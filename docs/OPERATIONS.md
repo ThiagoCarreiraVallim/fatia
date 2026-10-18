@@ -15,6 +15,7 @@
 | API (NestJS)   | container, `infra/docker-compose.prod.yml` | Aplica migrations no boot                     |
 | PWA (Next.js)  | container, mesmo compose                   | —                                             |
 | Logto          | container, mesmo compose                   | IdP (ADR 008)                                 |
+| Agente de IA   | container, mesmo compose, só rede interna  | Python (ADR 015); ver "Chat e agente"         |
 | Postgres       | "Database" do Dokploy, **fora** do compose | **Dois** clusters: `fatia` e `logto`          |
 | Traefik        | gerenciado pelo Dokploy                    | TLS via Let's Encrypt, `dokploy-network`      |
 | Backups        | `infra/backup.sh` via cron no host         | Local + offsite opcional                      |
@@ -540,6 +541,51 @@ A API valida JWT via JWKS com cache. Com o Logto fora:
 
 Não há fallback, e é uma dependência aceita conscientemente na ADR 008. Restaurar o Logto é a
 única saída: `docker compose logs logto` e confirmar que ele alcança a database `logto`.
+
+## Chat e agente
+
+O chat passa por três saltos: **PWA/app → `api` → `agent` → OpenRouter**, e o agente volta à
+`api` pelo `/mcp` (`http://api:3000/mcp`, rede interna) com o Bearer de quem conversa (ADR 021).
+O estado das conversas pausadas fica no schema `agent_checkpoint` do Postgres da Fatia (ADR 023).
+
+| Variável (serviço `agent`)      | Para quê                                                                    |
+| ------------------------------- | --------------------------------------------------------------------------- |
+| `AI_BASE_URL`, `AI_API_KEY`     | gateway (OpenRouter); host e modelo precisam estar em `allowed_models.py`   |
+| `AI_MODEL_TEXT`/`_VISION`/…     | modelo por capacidade                                                       |
+| `AI_TIMEOUT_S` (120)            | silêncio tolerado do provedor                                               |
+| `AI_MAX_RETRIES` (2)            | novas tentativas antes do primeiro token (429, 5xx, conexão caída)          |
+| `AGENT_API_KEY`                 | segredo compartilhado com a `api` (ADR 018)                                 |
+| `AGENT_CHECKPOINT_DATABASE_URL` | Postgres do estado das conversas; vazio = memória (não sobrevive a restart) |
+
+**Healthcheck:** `GET /health` responde 200 sempre que o processo está vivo. O campo
+`checkpointer.reachable` diz se o Postgres respondeu a um `SELECT 1` agora — `false` com o chat
+falhando é banco, não modelo:
+
+```bash
+docker exec $(docker ps -qf name=agent) python -c \
+  "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8100/health').read().decode())"
+```
+
+### Erro na hora, e o "tentar de novo" funciona
+
+Era o sintoma de produção até a Fase 9b. Três causas, todas tratadas, e como reconhecer cada uma
+se voltar:
+
+| No log do `agent`                                                        | Causa                                                                     | O que já faz                                                            |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `Turno de chat terminou em erro inesperado` + `psycopg…OperationalError` | conexão do checkpointer morta (rede do Swarm, restart ou backup do banco) | o pool confere a conexão antes de usar, keepalive TCP, `max_idle` 5 min |
+| `Stream do provedor falhou antes do primeiro token (…)`                  | 429/5xx ou conexão caída no OpenRouter                                    | repete até `AI_MAX_RETRIES` com backoff e `Retry-After`                 |
+| (no log da `api`) `Conexão com o agente caiu antes da resposta`          | socket reusado que o uvicorn fechou                                       | uma nova tentativa; uvicorn com `--timeout-keep-alive 30`               |
+
+Para olhar o passado (antes do deploy da 9b), procure no log do `agent`:
+
+```bash
+docker logs $(docker ps -qf name=agent) --since 72h 2>&1 \
+  | grep -E "Exception in ASGI application|OperationalError|server closed the connection" | tail -20
+```
+
+Se aparecer `Turno de chat terminou em erro inesperado` sem `psycopg`, é defeito nosso: o
+traceback está logo abaixo da linha.
 
 ## Avisos no celular — Expo push (ADR 033)
 

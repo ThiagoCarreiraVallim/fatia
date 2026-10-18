@@ -141,6 +141,8 @@ services:
       AI_MODEL_EMBEDDING: ${AI_MODEL_EMBEDDING:-}
       AI_MODEL_TRANSCRIPTION: ${AI_MODEL_TRANSCRIPTION:-}
       AI_TIMEOUT_S: ${AI_TIMEOUT_S:-120}
+      # Novas tentativas do provedor antes do primeiro token (429, 5xx, conexão).
+      AI_MAX_RETRIES: ${AI_MAX_RETRIES:-2}
       AGENT_API_KEY: ${AGENT_API_KEY:-}
       MCP_BASE_URL: ${MCP_BASE_URL:-http://api:3000/mcp}
       MCP_TIMEOUT_S: ${MCP_TIMEOUT_S:-30}
@@ -152,10 +154,24 @@ services:
       - api
     networks:
       - dokploy-network
+    # O `/health` responde 200 mesmo sem IA ou sem Postgres (ver api.py): o que
+    # isto pega é o processo travado ou morto, não a dependência fora do ar.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/health', timeout=5)"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     deploy:
       resources:
         limits:
-          memory: 384M
+          # 384M ficava no limite com o pool do checkpointer e um turno com
+          # foto em base64 na memória; um OOM derruba todos os turnos abertos.
+          memory: 512M
 
   # ============================================================
   # Frontend (Next.js PWA)

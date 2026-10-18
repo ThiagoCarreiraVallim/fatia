@@ -136,7 +136,7 @@ start_agent() {
   # turbo's own streaming output and neither would be readable.
   (
     cd "$ROOT/apps/agent" &&
-      exec uv run --quiet uvicorn fatia_agent.api:app --port "$AGENT_PORT" --reload
+      exec uv run --quiet uvicorn fatia_agent.api:app --port "$AGENT_PORT" --reload --timeout-keep-alive 30
   ) >"$AGENT_LOG" 2>&1 &
   AGENT_PID=$!
 

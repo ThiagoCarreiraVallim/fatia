@@ -27,4 +27,7 @@ ENV PATH="/app/.venv/bin:$PATH"
 # propósito: um default silencioso é como se aponta produção para o LM Studio
 # de alguém sem perceber.
 EXPOSE 8100
-CMD ["uvicorn", "fatia_agent.api:app", "--host", "0.0.0.0", "--port", "8100"]
+# `--timeout-keep-alive 30`: o padrão de 5 s ficava a 1 s do `keepAliveTimeout`
+# de 4 s do `fetch` do Node na `api`, e o socket reusado às vezes era um que o
+# uvicorn tinha acabado de fechar — o turno caía antes de começar.
+CMD ["uvicorn", "fatia_agent.api:app", "--host", "0.0.0.0", "--port", "8100", "--timeout-keep-alive", "30"]
