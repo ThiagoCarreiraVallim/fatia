@@ -94,7 +94,14 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
                   : 'Editar (cria uma cópia sua)'}
             </Button>
 
-            <div className="overflow-y-auto max-h-[68vh] space-y-5 py-2">
+            {/* Rolável e focável: sem vídeo, nada aqui dentro recebe foco, e quem
+                usa só o teclado não conseguiria rolar até as instruções. */}
+            <div
+              role="region"
+              aria-label={`Detalhes de ${exercise.name}`}
+              tabIndex={0}
+              className="max-h-[68vh] space-y-5 overflow-y-auto rounded-md py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
               {guia && <CommunityGuideSection guide={guia} exerciseName={exercise.name} />}
 
               {/* Muscle diagram */}
