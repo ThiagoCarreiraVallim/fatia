@@ -883,42 +883,40 @@ async function seedCommunityFeed(
   }
   const [m1, m2, m3, m4, m5] = membros.map(m);
 
+  // Em horas atrás, e não num horário do dia: rodado de madrugada, "hoje às 10h"
+  // seria um post do futuro.
+  const horasAtras = (h: number) => new Date(Date.now() - h * 60 * 60_000);
   const post = (
     membershipId: string,
     body: string,
-    daysAgo: number,
-    hora: number,
+    horas: number,
     extra: Record<string, unknown> = {},
   ) =>
     prisma.groupPost.create({
-      data: { groupId, membershipId, body, createdAt: localInstant(daysAgo, hora), ...extra },
+      data: { groupId, membershipId, body, createdAt: horasAtras(horas), ...extra },
     });
 
   const boasVindas = await post(
     m(donaId),
     '**Bem-vindos ao mural da Academia Demo!**\n\nContem os treinos, tirem dúvidas e se animem. Regras da casa:\n\n- respeito sempre;\n- nada de propaganda;\n- dúvida de saúde vai para o profissional.',
-    10,
-    9,
-    { pinnedAt: localInstant(10, 9) },
+    240,
+    { pinnedAt: horasAtras(240) },
   );
   const dica = await post(
     m(profissionalId),
     'Dica da semana: 5 minutos de aquecimento antes do treino de pernas fazem diferença. Bicicleta leve e agachamento sem carga.',
-    2,
-    8,
+    50,
   );
-  const semana = await post(m1!, 'Primeira semana completa de treinos! 💪', 1, 19);
+  const semana = await post(m1!, 'Primeira semana completa de treinos! 💪', 20);
   const receita = await post(
     m2!,
     'Alguém tem uma receita boa de panqueca de banana com aveia? Quero variar o café da manhã.',
-    0,
-    7,
+    5,
   );
   const spam = await post(
     m5 ?? m4!,
     'Promoção imperdível de suplemento, chama no direct que eu passo o link.',
-    0,
-    10,
+    2,
   );
 
   await prisma.groupPostReaction.createMany({
@@ -937,14 +935,14 @@ async function seedCommunityFeed(
         postId: semana.id,
         membershipId: m(profissionalId),
         body: 'Boa! Agora é manter o ritmo.',
-        createdAt: localInstant(1, 20),
+        createdAt: horasAtras(19),
       },
-      { postId: semana.id, membershipId: m3!, body: 'Arrasou!', createdAt: localInstant(1, 21) },
+      { postId: semana.id, membershipId: m3!, body: 'Arrasou!', createdAt: horasAtras(18) },
       {
         postId: receita.id,
         membershipId: m4!,
         body: '1 banana, 2 ovos e 3 colheres de aveia. Frigideira antiaderente, fogo baixo.',
-        createdAt: localInstant(0, 8),
+        createdAt: horasAtras(4),
       },
     ],
   });
