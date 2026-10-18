@@ -537,6 +537,28 @@ métrica de valor bruto ("mais proteína") para expor o que cada um comeu.
 027): num desafio de um dia, a pontuação de água **é** a água daquele dia, visível a quem participa.
 A pessoa entra sabendo o que conta (o texto da métrica está na tela de entrada).
 
+### 17. Mural da comunidade — conteúdo de qualquer membro (Fase 8b, ADR 032)
+
+O que um atacante ganharia: publicar ofensa, assédio, propaganda ou conselho de saúde perigoso
+para a comunidade inteira; ler ou mexer no mural de outra comunidade; descobrir quem o denunciou;
+voltar depois de banido; ou, pelo texto do post, mandar no assistente de quem lê o mural no chat.
+
+- **Isolamento pelo par da URL.** Post, comentário, denúncia e imagem são buscados com o
+  `groupId` da rota; post, cursor, denúncia e imagem de outra comunidade são 404. A imagem do post
+  tem de ser `post_image`, da mesma comunidade, pronta, **enviada pela própria pessoa** e sem outro
+  post (`post.integration.spec.ts`).
+- **Moderação humana com fila.** Quem tem `content.moderate` remove (o post some para todos menos
+  o autor), restaura em 30 dias e fixa. A fila agrupa as denúncias por alvo e não leva quem
+  denunciou. Limites por pessoa: 10 posts, 60 comentários e 30 denúncias por hora.
+- **Banimento.** `member.ban` (só o dono) encerra a associação com a revogação dos vínculos e do
+  assento na mesma transação, e `BANNED` barra o código e o convite.
+- **Prompt injection.** `list_group_posts` diz na descrição que o texto é de terceiros, devolve
+  as imagens como contagem e não traz URL. Publicar e comentar pelo chat são confirmáveis.
+- **Imagem.** O mesmo fluxo da ADR 028: reprocessada, sem EXIF e GPS, URL assinada de 10 min,
+  emitida só para quem vê o post. Apagar o post ou a conta apaga o arquivo.
+
+**Não mitigado:** não há filtro automático de conteúdo; até a equipe agir, o post está no ar.
+
 ## Matriz de cobertura
 
 Onde o escopo é aplicado, por domínio. Verificado por
@@ -585,6 +607,7 @@ dono do pai não autoriza escrever em qualquer filho.
 | Exercícios da comunidade | `workout/helpers/exercise-access.ts`, `sharing/group-exercise.service.ts` | membro ativo, ou já no plano/histórico; `{ groupId, exerciseId }` da URL; `groupOwned` imutável   |
 | Agente da comunidade     | `sharing/group-agent.service.ts`, `chat/chat.service.ts`                  | só o dono configura; escolha entre agentes ligados de comunidade ativa, conferida a cada turno    |
 | Desafios da comunidade   | `sharing/challenge.service.ts`, `social/scoreboard.service.ts`            | `{ groupId, id }` da URL; ranking só para participante ativo; placar só recebe datas de aderência |
+| Mural da comunidade      | `sharing/post.service.ts`, `storage/media.service.ts`                     | `{ groupId, id }` da URL; removido só para o autor; imagem só do próprio autor e da comunidade    |
 
 ## O que não está protegido
 

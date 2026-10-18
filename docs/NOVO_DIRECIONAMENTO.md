@@ -350,6 +350,23 @@ vídeo enviado de aparelho de verdade e o R2 de produção.
 **Fora desta entrega:** a 8b (timeline moderada) e a 8c (notificações push). "Aba Comunidade com
 Feed, Desafios, Planos/Dicas" fica para a 8b, quando o feed existir.
 
+### Andamento da Fase 8b — mural moderado, concluída
+
+- [x] **API (ADR 032):** `GroupPost` com autor pela associação e apelido da comunidade, até 4
+      imagens (`post_image`, só da própria pessoa), reações (uma por pessoa), comentários e
+      denúncias; `Group.postPolicy` (todos ou só a equipe, conferido também no envio da imagem);
+      moderação (`content.moderate`: remover, restaurar, fixar até 3, fila de denúncias sem quem
+      denunciou); banimento (`member.ban`, só o dono; `BANNED` barra código e convite); MCP
+      `list_group_posts`, `create_group_post` e `comment_on_group_post` (130 tools); export LGPD.
+- [x] **api-client, web e app:** abas da comunidade (Início, Mural, Desafios, Planos e dicas),
+      o mural e a seção "Moderação" do painel (só o dono).
+- [x] **E2E e fotos:** seed com o mural; `feed.spec` (o membro publica com imagem, comenta e
+      denuncia; a dona remove, trata a fila e restaura); fotos 107–110, axe;
+      `ui:snap 42-timeline`.
+
+**Fora desta entrega:** a 8c (notificações push), inclusive o aviso de resposta e de post
+removido.
+
 **Timeline**
 
 - `GroupPost` (texto, imagens[], autor, `removedAt/removedById`, pinned), `GroupPostReaction`, `GroupPostComment`, `GroupPostReport`.

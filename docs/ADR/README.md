@@ -37,6 +37,7 @@ Decisões arquiteturais relevantes do projeto. Cada ADR é imutável depois de a
 | [029](./029-playwright-com-logto-real.md)                              | Testes de interface com Playwright e login real no Logto   | Proposed                               |
 | [030](./030-catalogo-de-exercicios-da-comunidade.md)                   | Catálogo de exercícios da comunidade: tutorial por cima    | Accepted                               |
 | [031](./031-agente-da-comunidade.md)                                   | Agente da comunidade: persona por cima do mesmo assistente | Accepted                               |
+| [032](./032-mural-da-comunidade-e-moderacao.md)                        | Mural da comunidade com moderação pela equipe              | Accepted                               |
 
 ## Template
 

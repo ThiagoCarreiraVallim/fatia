@@ -334,6 +334,10 @@ viram pílulas (`Choice`). Diferenças de propósito:
   prontas — começa hoje, amanhã ou na próxima segunda; dura 7, 14 ou 30 dias
   (`components/challenges/window-choice.ts`) — em vez do calendário; datas livres e editar um
   desafio marcado ficam na web. Encerrar e apagar existem nos dois.
+- **Mural da comunidade (Fase 8b):** abas Início, Mural, Desafios e Planos e dicas no topo da
+  comunidade, como na web. Publicar com até 4 imagens da galeria, reagir, comentar e denunciar são
+  iguais; o menu do post é um `Alert` (a web abre um diálogo). A Moderação do painel (regra do
+  mural, denúncias, removidos e banidos) existe nos dois.
 
 ## Plano PRO — a mesma tela, outro caixa
 
@@ -408,6 +412,7 @@ rodando, e deve ser feito antes de publicar:
 - [ ] Exercícios da comunidade: enviar um vídeo MOV de iPhone e um MP4 de Android (com a barra de progresso andando e o app em primeiro plano), até 4 fotos de uma vez, "Assistir" abrindo o vídeo assinado, e "Na minha academia" nos seletores de exercício
 - [ ] Agente da comunidade: trocar o avatar pela galeria, salvar ligado e conferir no chat da web que o agente aparece para um membro
 - [ ] Desafios: marcar pelo painel (hoje, 7 dias), entrar com outra conta com apelido, ver a própria linha no ranking, puxar para atualizar, sair pelo `Alert` e encerrar pelo painel
+- [ ] Mural: publicar com 2 imagens da galeria (iPhone com HEIC), reagir, comentar com o teclado aberto, denunciar pelo `Alert`, e a dona removendo e restaurando pela Moderação
 - [ ] Cores dos macros e de erro (`cores.ts`) iguais às do PWA lado a lado
 - [ ] Diagrama muscular destacando os grupos certos
 - [ ] Aparelho de entrada, não só simulador — os gráficos são o ponto a observar
