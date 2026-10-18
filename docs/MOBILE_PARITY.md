@@ -326,6 +326,9 @@ viram pílulas (`Choice`). Diferenças de propósito:
   nativo (`expo-video`) é dependência nativa nova e pediria build novo. E o vídeo vem da galeria:
   gravar pela câmera do Fatia pediria a permissão de microfone. O envio lê o arquivo do disco
   (`createUploadTask`), com progresso, para um vídeo grande não ficar na memória.
+- **Agente da comunidade (Fase 7c):** o dono configura no app como na web (nome, avatar,
+  orientações, ligar e desligar), com "Ligado / Desligado" em pílulas. Quem conversa com o agente
+  é o chat, que é só da web: o app não ganha chat nesta fase.
 
 ## Plano PRO — a mesma tela, outro caixa
 
@@ -398,6 +401,7 @@ rodando, e deve ser feito antes de publicar:
 - [ ] Painel da comunidade (conta da equipe): abas no topo rolando sem cortar, "Aprovar" e "Gerenciar" com 44 pt, `Alert` de papel e assento, `Share` do link de convite e do código, lote colado com o teclado aberto, e o "voltar" do painel levando à comunidade
 - [ ] Planos e dicas: escolher imagem da galeria (iPhone com HEIC e Android sem tipo), ver a capa depois de enviar, publicar um treino e adotá-lo com outra conta, e o link de uma dica abrindo no navegador
 - [ ] Exercícios da comunidade: enviar um vídeo MOV de iPhone e um MP4 de Android (com a barra de progresso andando e o app em primeiro plano), até 4 fotos de uma vez, "Assistir" abrindo o vídeo assinado, e "Na minha academia" nos seletores de exercício
+- [ ] Agente da comunidade: trocar o avatar pela galeria, salvar ligado e conferir no chat da web que o agente aparece para um membro
 - [ ] Cores dos macros e de erro (`cores.ts`) iguais às do PWA lado a lado
 - [ ] Diagrama muscular destacando os grupos certos
 - [ ] Aparelho de entrada, não só simulador — os gráficos são o ponto a observar
