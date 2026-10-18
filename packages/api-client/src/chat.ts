@@ -70,6 +70,11 @@ export interface ChatStreamError {
 export interface ChatStreamFrame {
   event: string;
   data: unknown;
+  /**
+   * O número do evento na resposta (`id:` do SSE, ADR 035). É o cursor da
+   * reconexão: `GET …/live?after=<id>` reenvia só o que veio depois.
+   */
+  id?: number;
 }
 
 /**
@@ -268,6 +273,7 @@ export function recortarQuadros(buffer: string): { quadros: string[]; resto: str
  */
 export function parseQuadro(quadro: string): ChatStreamFrame | null {
   let nome = 'message';
+  let id: number | undefined;
   const dados: string[] = [];
   for (const linha of quadro.split('\n')) {
     if (linha.startsWith(':')) continue;
@@ -276,10 +282,13 @@ export function parseQuadro(quadro: string): ChatStreamFrame | null {
     const valor = sep === -1 ? '' : linha.slice(sep + 1).replace(/^ /, '');
     if (campo === 'event') nome = valor;
     else if (campo === 'data') dados.push(valor);
+    else if (campo === 'id' && /^\d+$/.test(valor)) id = Number(valor);
   }
   if (dados.length === 0) return null;
   try {
-    return { event: nome, data: JSON.parse(dados.join('\n')) as unknown };
+    const frame: ChatStreamFrame = { event: nome, data: JSON.parse(dados.join('\n')) as unknown };
+    if (id !== undefined) frame.id = id;
+    return frame;
   } catch {
     return null;
   }
@@ -307,6 +316,124 @@ export interface StreamChatInit {
   signal?: AbortSignal;
 }
 
+/** Quantas vezes a reconexão pelo `live` tenta antes de dar a queda como queda. */
+const RECONEXOES = 3;
+const ESPERA_DA_RECONEXAO_MS = [500, 1500, 4000];
+
+type Abertura = { ok: true; res: Response } | { ok: false; frames: ChatStreamFrame[] };
+
+async function abrirStream(
+  path: string,
+  init: RequestInit,
+  signal: AbortSignal | undefined,
+): Promise<Abertura | null> {
+  const transport: ApiTransport = getConfiguredTransport();
+  const headers = new Headers(init.headers);
+  headers.set('Accept', 'text/event-stream');
+  const extra = await transport.headers?.(path);
+  if (extra) new Headers(extra).forEach((valor, chave) => headers.set(chave, valor));
+  const doFetch = transport.fetch ?? fetch;
+  let res: Response;
+  try {
+    res = await doFetch(transport.resolveUrl(path), {
+      ...transport.requestInit?.(),
+      ...init,
+      headers,
+      signal,
+    });
+  } catch {
+    if (signal?.aborted) return null;
+    return { ok: false, frames: [...comoQuadros({ code: 'AI_NETWORK_ERROR' })] };
+  }
+  if (res.status === 204) return { ok: false, frames: [] };
+  if (!res.ok || !res.body) {
+    const error = await erroDeResposta(res);
+    if (error.code === 'AI_UNAUTHORIZED') await transport.onUnauthorized?.({ path, body: null });
+    return { ok: false, frames: [...comoQuadros(error)] };
+  }
+  return { ok: true, res };
+}
+
+/** Os quadros de um corpo SSE. **Lança** se a conexão cair no meio. */
+async function* lerQuadros(body: ReadableStream<Uint8Array>): AsyncGenerator<ChatStreamFrame> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const { quadros, resto } = recortarQuadros(buffer);
+    buffer = resto;
+    for (const quadro of quadros) {
+      const evento = parseQuadro(quadro);
+      if (evento) yield evento;
+    }
+  }
+  const ultimo = parseQuadro(buffer);
+  if (ultimo) yield ultimo;
+}
+
+/**
+ * Lê uma resposta até o `done`, reconectando pelo `live` se a conexão cair.
+ *
+ * O turno roda no servidor independente desta conexão (ADR 035): perder o
+ * socket no meio não perde a resposta. A reconexão pede só o que veio depois
+ * do último número recebido, então nada aparece duas vezes na tela.
+ */
+async function* acompanhar(
+  conversationId: string,
+  primeira: Response,
+  signal: AbortSignal | undefined,
+): AsyncGenerator<ChatStreamFrame> {
+  let ultimo = 0;
+  let body: ReadableStream<Uint8Array> | null = primeira.body;
+  for (let tentativa = 0; ; tentativa++) {
+    let terminou = false;
+    if (body) {
+      try {
+        for await (const frame of lerQuadros(body)) {
+          if (frame.id !== undefined) ultimo = frame.id;
+          if (frame.event === 'done') terminou = true;
+          yield frame;
+        }
+      } catch {
+        if (signal?.aborted) return;
+      }
+    }
+    if (terminou || signal?.aborted) return;
+    if (tentativa >= RECONEXOES) {
+      // Queda no meio do stream: o que já chegou fica na tela, e o erro diz isso.
+      yield* comoQuadros({ code: 'AI_NETWORK_ERROR' });
+      return;
+    }
+    await esperar(ESPERA_DA_RECONEXAO_MS[tentativa] ?? 4000, signal);
+    if (signal?.aborted) return;
+    const aberto = await abrirStream(
+      `/api/chat/conversations/${encodeURIComponent(conversationId)}/live?after=${ultimo}`,
+      { method: 'GET' },
+      signal,
+    );
+    if (aberto === null) return;
+    if (!aberto.ok) {
+      // 204: o turno não está mais no servidor (reinício) e o fim não chegou.
+      yield* aberto.frames.length ? aberto.frames : comoQuadros({ code: 'AI_NETWORK_ERROR' });
+      return;
+    }
+    body = aberto.res.body;
+  }
+}
+
+function esperar(ms: number, signal: AbortSignal | undefined): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
 /**
  * Envia um turno e emite os quadros do SSE conforme chegam.
  *
@@ -320,61 +447,50 @@ export async function* streamChat(
   body: ChatTurnRequest,
   init: StreamChatInit = {},
 ): AsyncGenerator<ChatStreamFrame> {
-  const transport: ApiTransport = getConfiguredTransport();
-  const path = '/api/chat';
-  const headers = new Headers({ 'Content-Type': 'application/json', Accept: 'text/event-stream' });
-  const extra = await transport.headers?.(path);
-  if (extra) new Headers(extra).forEach((valor, chave) => headers.set(chave, valor));
-
-  const doFetch = transport.fetch ?? fetch;
-  let res: Response;
-  try {
-    res = await doFetch(transport.resolveUrl(path), {
-      ...transport.requestInit?.(),
+  const aberto = await abrirStream(
+    '/api/chat',
+    {
       method: 'POST',
-      headers,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-      signal: init.signal,
-    });
-  } catch {
-    if (init.signal?.aborted) return;
-    yield* comoQuadros({ code: 'AI_NETWORK_ERROR' });
+    },
+    init.signal,
+  );
+  if (aberto === null) return;
+  if (!aberto.ok) {
+    yield* aberto.frames;
     return;
   }
+  yield* acompanhar(body.conversationId, aberto.res, init.signal);
+}
 
-  if (!res.ok || !res.body) {
-    const error = await erroDeResposta(res);
-    if (error.code === 'AI_UNAUTHORIZED') {
-      await transport.onUnauthorized?.({ path, body: null });
-    }
-    yield* comoQuadros(error);
+/**
+ * Volta a uma resposta que ainda corre no servidor (ADR 035): F5, outra aba, o
+ * app saindo do segundo plano. Reenvia o que veio depois de `after` e segue ao
+ * vivo até o `done`. Sem resposta rodando, termina sem emitir nada.
+ */
+export async function* joinChatRun(
+  conversationId: string,
+  init: StreamChatInit & { after?: number } = {},
+): AsyncGenerator<ChatStreamFrame> {
+  const aberto = await abrirStream(
+    `/api/chat/conversations/${encodeURIComponent(conversationId)}/live?after=${init.after ?? 0}`,
+    { method: 'GET' },
+    init.signal,
+  );
+  if (aberto === null) return;
+  if (!aberto.ok) {
+    yield* aberto.frames;
     return;
   }
+  yield* acompanhar(conversationId, aberto.res, init.signal);
+}
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const { quadros, resto } = recortarQuadros(buffer);
-      buffer = resto;
-      for (const quadro of quadros) {
-        const evento = parseQuadro(quadro);
-        if (evento) yield evento;
-      }
-    }
-  } catch {
-    if (init.signal?.aborted) return;
-    // Queda no meio do stream: o que já chegou fica na tela, e o erro diz isso.
-    yield* comoQuadros({ code: 'AI_NETWORK_ERROR' });
-    return;
-  }
-
-  const ultimo = parseQuadro(buffer);
-  if (ultimo) yield ultimo;
+/** Para a resposta em andamento — no servidor, e não só nesta tela. */
+export function stopChatRun(conversationId: string): Promise<void> {
+  return apiFetch(`/api/chat/conversations/${encodeURIComponent(conversationId)}/stop`, {
+    method: 'POST',
+  });
 }
 
 // ---------------------------------------------------------------- conversas
@@ -442,6 +558,8 @@ export interface ChatConversation extends ChatConversationSummary {
    * segue com o assistente da Fatia.
    */
   agent?: ChatAgentHeader | null;
+  /** Uma resposta ainda corre no servidor: a tela assina `joinChatRun` (ADR 035). */
+  running?: boolean;
 }
 
 export interface ChatAgentHeader {
