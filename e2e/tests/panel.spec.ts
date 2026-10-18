@@ -31,47 +31,77 @@ const linha = (page: Page, nome: string) =>
     .getByRole('listitem')
     .filter({ hasText: nome });
 
+/**
+ * Clica e espera a escrita da API voltar. Ler o toast logo depois do clique era
+ * o que fazia o teste cair nas rodadas cheias: com o servidor de dev lento, o
+ * aviso (4 s) aparecia e sumia fora da janela do `expect`, ou o clique chegava
+ * antes de a lista estar pronta. A resposta da rota e o estado da lista são o
+ * que importa; o toast é conferido onde ele é a única prova.
+ */
+async function clicarEEsperar(page: Page, clicar: () => Promise<void>): Promise<void> {
+  const escrita = page.waitForResponse(
+    (r) => r.url().includes('/api/proxy/groups/') && r.request().method() !== 'GET',
+  );
+  await clicar();
+  const resposta = await escrita;
+  expect(resposta.ok(), `${resposta.request().method()} ${resposta.url()}`).toBe(true);
+}
+
 test.describe('painel da comunidade', () => {
   test.skip(({ isMobile }) => !isMobile, 'fluxos rodam uma vez, no celular');
+
+  // Antes também: uma rodada interrompida no meio deixava a Academia Demo sem os
+  // pedidos pendentes e com assento a mais, e este teste caía na rodada seguinte.
+  test.beforeAll(() => {
+    execSync('pnpm -s db:seed:demo', { cwd: ROOT, stdio: 'ignore' });
+  });
 
   test.afterAll(() => {
     execSync('pnpm -s db:seed:demo', { cwd: ROOT, stdio: 'ignore' });
   });
 
   test('aprova um pedido, recusa outro, muda papel e dá e tira assento', async ({ page }) => {
+    test.setTimeout(120_000);
     const id = await groupId(page);
     await page.goto(`/org/${id}/members?filtro=pending`);
 
-    await linha(page, 'Lara Mendes').getByRole('button', { name: 'Aprovar' }).click();
-    await expect(page.getByText('Lara Mendes entrou na comunidade.')).toBeVisible();
+    await clicarEEsperar(page, () =>
+      linha(page, 'Lara Mendes').getByRole('button', { name: 'Aprovar' }).click(),
+    );
+    await expect(linha(page, 'Lara Mendes')).toHaveCount(0, { timeout: 15_000 });
 
     await linha(page, 'Marcos Reis').getByRole('button', { name: 'Recusar' }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Recusar' }).click();
-    await expect(page.getByText('Nenhum pedido aguardando')).toBeVisible();
+    await clicarEEsperar(page, () =>
+      page.getByRole('dialog').getByRole('button', { name: 'Recusar' }).click(),
+    );
+    await expect(page.getByText('Nenhum pedido aguardando')).toBeVisible({ timeout: 15_000 });
 
     await page.getByRole('button', { name: 'Todos' }).click();
+    await expect(linha(page, 'Lara Mendes')).toBeVisible({ timeout: 15_000 });
     const diego = linha(page, 'Diego Lima');
     await diego.getByRole('combobox', { name: 'Papel de Diego Lima' }).click();
-    await page.getByRole('option', { name: 'Profissional' }).click();
-    await expect(page.getByText('Diego Lima agora é profissional.')).toBeVisible();
+    await clicarEEsperar(page, () => page.getByRole('option', { name: 'Profissional' }).click());
+    await expect(page.getByRole('listbox')).toHaveCount(0);
     await page.getByRole('button', { name: 'Equipe' }).click();
-    await expect(linha(page, 'Diego Lima')).toBeVisible();
+    await expect(linha(page, 'Diego Lima')).toBeVisible({ timeout: 15_000 });
     await linha(page, 'Diego Lima').getByRole('combobox').click();
-    await page.getByRole('option', { name: 'Membro' }).click();
-    await expect(page.getByText('Diego Lima agora é membro.')).toBeVisible();
-    await expect(linha(page, 'Diego Lima')).toHaveCount(0);
+    await clicarEEsperar(page, () => page.getByRole('option', { name: 'Membro' }).click());
+    await expect(linha(page, 'Diego Lima')).toHaveCount(0, { timeout: 15_000 });
 
     await page.getByRole('button', { name: 'Todos' }).click();
-    await linha(page, 'Diego Lima').getByRole('button', { name: 'Dar assento' }).click();
-    await expect(page.getByText('Diego Lima ganhou um assento PRO.')).toBeVisible();
+    await clicarEEsperar(page, () =>
+      linha(page, 'Diego Lima').getByRole('button', { name: 'Dar assento' }).click(),
+    );
     await page.goto(`/org/${id}/seats`);
-    await expect(page.getByText('2 de 3 em uso · cortesia')).toBeVisible();
-    await page
-      .getByRole('listitem')
-      .filter({ hasText: 'Diego Lima' })
-      .getByRole('button', { name: 'Tirar' })
-      .click();
-    await expect(page.getByText('1 de 3 em uso · cortesia')).toBeVisible();
+    await expect(page.getByText('2 de 3 em uso · cortesia')).toBeVisible({ timeout: 15_000 });
+    await clicarEEsperar(page, () =>
+      page
+        .getByRole('listitem')
+        .filter({ hasText: 'Diego Lima' })
+        .getByRole('button', { name: 'Tirar' })
+        .click(),
+    );
+    await expect(page.getByText('1 de 3 em uso · cortesia')).toBeVisible({ timeout: 15_000 });
   });
 
   test('convite: link aparece uma vez e vai para a lista; revogado some; lote diz os pulados', async ({
