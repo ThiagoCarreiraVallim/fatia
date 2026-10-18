@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Flag, Sparkles, Settings, Shield, LogOut, ChevronRight, Users } from 'lucide-react';
+import { Bell, Flag, Sparkles, Settings, Shield, LogOut, ChevronRight, Users } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth-server';
 import { ProfileMetrics } from '@/components/profile/profile-metrics';
 import { ProfessionalPanelLink } from '@/components/sharing/professional-panel-link';
@@ -81,6 +81,12 @@ export default async function ProfilePage() {
           icon={<Sparkles size={18} className="text-primary" />}
           title="Conectar sua IA"
           subtitle="Registre e consulte seu diário conversando com o Claude"
+        />
+        <MenuItem
+          href="/profile/notifications"
+          icon={<Bell size={18} className="text-primary" />}
+          title="Notificações"
+          subtitle="O que chega no celular e onde"
         />
         <MenuItem
           href="/privacy"
