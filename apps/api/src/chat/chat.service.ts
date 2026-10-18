@@ -17,6 +17,7 @@ import { TETO_DA_FOTO_DO_CHAT } from './corpos-do-chat';
 import { NaoEhJpegError, removerMetadadosDoJpeg } from '../nutrition/helpers/strip-exif';
 import { type TurnSummary, createTurnReader } from './leitor-do-turno';
 import { criarLeitorSse, formatarEventoSse } from './sse';
+import { ChatRunRegistry, createSseFramer } from './chat-run.registry';
 
 /**
  * O turno de conversa: cota, persistência e **repasse do SSE sem bufferizar**.
@@ -38,6 +39,8 @@ import { criarLeitorSse, formatarEventoSse } from './sse';
  * em prosa o que as outras telas guardam em número.
  */
 
+const ENCODER = new TextEncoder();
+
 /** Um destino de bytes. Existe para o turno ser testável sem socket. */
 export interface DestinoDoStream {
   escrever(pedaco: Uint8Array | string): void;
@@ -57,6 +60,7 @@ export class ChatService {
     private readonly memorias: MemoryService,
     private readonly acesso: AiAccessService,
     private readonly agentes: GroupAgentService,
+    private readonly runs: ChatRunRegistry,
   ) {}
 
   /** Os agentes que a pessoa pode escolher numa conversa nova, e o padrão. */
@@ -140,44 +144,44 @@ export class ChatService {
     const existente = await this.conversas.encontrar(user.id, dto.conversationId);
     if (dto.resume && !existente) throw new NotFoundException('Conversa não encontrada.');
 
-    const pagador = AiAccessService.pagoPor(await this.acesso.assertPodeUsar(user.id));
-    const agentGroupId = await this.agentGroupOf(
-      user.id,
-      existente,
-      dto.agentGroupId,
-      pagador.groupId,
-    );
-    // Conferida a cada turno: saiu da comunidade, ou o dono desligou o agente,
-    // e a mesma conversa segue com o assistente da Fatia.
-    const persona = await this.agentes.personaFor(user.id, agentGroupId);
+    // Reservada já aqui: um segundo `POST` na mesma conversa recebe 409 em vez
+    // de abrir outro turno na mesma thread do agente.
+    const run = this.runs.start(user.id, dto.conversationId);
+    let stream: StreamDoAgente;
+    let pagador: Pagador;
+    let agentGroupId: string | null;
+    try {
+      pagador = AiAccessService.pagoPor(await this.acesso.assertPodeUsar(user.id));
+      agentGroupId = await this.agentGroupOf(user.id, existente, dto.agentGroupId, pagador.groupId);
+      // Conferida a cada turno: saiu da comunidade, ou o dono desligou o agente,
+      // e a mesma conversa segue com o assistente da Fatia.
+      const persona = await this.agentes.personaFor(user.id, agentGroupId);
 
-    const historico =
-      existente && dto.message !== undefined
-        ? await this.conversas.historicoParaOAgente(user.id, dto.conversationId)
-        : [];
+      const historico =
+        existente && dto.message !== undefined
+          ? await this.conversas.historicoParaOAgente(user.id, dto.conversationId)
+          : [];
 
-    let stream: StreamDoAgente | null = null;
-    let clienteFoiEmbora = false;
-    destino.aoFechar(() => {
-      clienteFoiEmbora = true;
-      stream?.cancelar();
-    });
-
-    const comum = {
-      bearer,
-      timezone: user.timezone,
-      conversationId: dto.conversationId,
-      historico,
-      memorias: (await this.memorias.listar(user.id)).map(({ id, content }) => ({ id, content })),
-      ...(persona ? { persona } : {}),
-    };
-    stream = await this.agent.openTurn(
-      dto.resume
-        ? { ...comum, retomada: { interruptId: dto.resume.interruptId, value: dto.resume.value } }
-        : { ...comum, mensagem: dto.message as string, ...(fotos.length ? { fotos } : {}) },
-    );
-
-    if (clienteFoiEmbora) stream.cancelar();
+      const comum = {
+        bearer,
+        timezone: user.timezone,
+        conversationId: dto.conversationId,
+        historico,
+        memorias: (await this.memorias.listar(user.id)).map(({ id, content }) => ({ id, content })),
+        ...(persona ? { persona } : {}),
+      };
+      stream = await this.agent.openTurn(
+        dto.resume
+          ? { ...comum, retomada: { interruptId: dto.resume.interruptId, value: dto.resume.value } }
+          : { ...comum, mensagem: dto.message as string, ...(fotos.length ? { fotos } : {}) },
+      );
+    } catch (erro) {
+      // Nada saiu ainda: o turno nem existiu, e a conversa fica livre.
+      this.runs.discard(run);
+      throw erro;
+    }
+    // Parar antes de o agente responder corta assim que o upstream existe.
+    run.bindUpstream(() => stream.cancelar());
 
     if (existente) await this.conversas.clearPauses(user.id, dto.conversationId);
     if (dto.message !== undefined) {
@@ -198,46 +202,75 @@ export class ChatService {
     // primeiro quadro do agente para saber que a conversa abriu.
     destino.escrever(': aberto\n\n');
 
+    // Quem pediu é só a primeira assinante. Ir embora tira a assinatura e **não**
+    // para o turno: a resposta termina, é gravada, e quem voltar a encontra.
+    const sairDaAssinatura = run.subscribe(0, {
+      write: (texto) => destino.escrever(texto),
+      end: () => destino.fim(),
+    });
+    destino.aoFechar(sairDaAssinatura);
+
+    const framer = createSseFramer();
     const leitorSse = criarLeitorSse();
     const turno = createTurnReader();
+    const publicar = (bloco: string) => {
+      // Escreve primeiro, examina depois — ver o comentário do topo.
+      run.publish(bloco);
+      for (const evento of leitorSse.push(ENCODER.encode(bloco))) turno.absorb(evento);
+    };
 
     try {
       for await (const pedaco of stream.pedacos()) {
-        destino.escrever(pedaco);
-        for (const evento of leitorSse.push(pedaco)) turno.absorb(evento);
+        for (const bloco of framer.push(pedaco)) publicar(bloco);
+      }
+      for (const bloco of framer.flush()) publicar(bloco);
+      // Só no fio, e não no leitor: o `stopped` do banco sai de
+      // `markStoppedWhenRequested`, que precisa ver que o agente não fechou.
+      if (run.stopRequested && !turno.read().sawDone) {
+        run.publish(formatarEventoSse('done', { status: 'stopped' }));
       }
     } catch (erro) {
-      const nomeado =
-        erro instanceof ErroDeStreamDoAgente
-          ? erro
-          : new ErroDeStreamDoAgente(
-              'CHAT_INTERNAL_ERROR',
-              'Algo deu errado no meio da resposta. Tente enviar de novo.',
-            );
-      if (!(erro instanceof ErroDeStreamDoAgente)) {
-        this.logger.error(`Erro inesperado no turno de chat: ${(erro as Error).name}`);
+      if (run.stopRequested) {
+        run.publish(formatarEventoSse('done', { status: 'stopped' }));
+      } else {
+        const nomeado =
+          erro instanceof ErroDeStreamDoAgente
+            ? erro
+            : new ErroDeStreamDoAgente(
+                'CHAT_INTERNAL_ERROR',
+                'Algo deu errado no meio da resposta. Tente enviar de novo.',
+              );
+        if (!(erro instanceof ErroDeStreamDoAgente)) {
+          this.logger.error(`Erro inesperado no turno de chat: ${(erro as Error).name}`);
+        }
+        publicar(formatarEventoSse('error', { code: nomeado.code, message: nomeado.message }));
+        // O `done` do agente não vai chegar, e a garantia do fio é que ele é sempre
+        // o último evento: sem ele, a tela ficaria girando esperando.
+        publicar(formatarEventoSse('done', { status: 'error' }));
       }
-      destino.escrever(
-        formatarEventoSse('error', { code: nomeado.code, message: nomeado.message }),
-      );
-      // O `done` do agente não vai chegar, e a garantia do fio é que ele é sempre
-      // o último evento: sem ele, a tela ficaria girando esperando.
-      destino.escrever(formatarEventoSse('done', { status: 'error' }));
     } finally {
-      const summary = markStoppedWhenClientLeft(turno.read(), clienteFoiEmbora);
+      const summary = markStoppedWhenRequested(turno.read(), run.stopRequested);
       const linha = await this.recordTurn(user.id, dto.conversationId, summary, pagador);
       // Depois do `done` do agente, e antes do fim: é o que liga o id que a tela
       // conhece (o da mensagem do LangChain) à linha do banco, onde o voto grava.
       if (linha && summary.ultimaMensagemId) {
-        destino.escrever(
+        run.publish(
           formatarEventoSse('persisted', {
             messageId: summary.ultimaMensagemId,
             assistantMessageId: linha,
           }),
         );
       }
-      destino.fim();
+      this.runs.finish(run);
     }
+  }
+
+  /** Para a resposta em andamento desta conversa. `false` quando não há nenhuma. */
+  stop(userId: string, conversationId: string): boolean {
+    const run = this.runs.find(userId, conversationId);
+    if (!run || run.done) return false;
+    run.stop();
+    return true;
   }
 
   /**
@@ -313,22 +346,17 @@ export class ChatService {
 }
 
 /**
- * O turno cortado porque o cliente foi embora é `stopped`, e não `error`.
- *
- * O caso de todo dia é o botão de parar: o `AbortController` do PWA fecha a
- * conexão, e o `aoFechar` cancela o agente. Mas fechar a aba, o celular suspender
- * o app ou a rede cair dão no mesmo, e daqui não há como separar um do outro — por
- * isso a tela diz "resposta interrompida", e não "você parou". Em todos, o `done`
- * do agente não chega, e sem isto o leitor ficava no `error` de partida.
+ * O turno que a pessoa parou é `stopped`, e não `error`, com o que já tinha chegado.
  *
  * Só quando o `done` **não** chegou: um turno que terminou do lado do agente —
- * inclusive com erro do provedor — antes de a conexão cair continua como estava.
+ * inclusive com erro do provedor — antes do pedido de parar continua como estava.
+ * Fechar a aba ou a rede cair **não** param mais o turno (ADR 035).
  */
-export function markStoppedWhenClientLeft(
+export function markStoppedWhenRequested(
   summary: TurnSummary,
-  clienteFoiEmbora: boolean,
+  stopRequested: boolean,
 ): TurnSummary {
-  if (!clienteFoiEmbora || summary.sawDone) return summary;
+  if (!stopRequested || summary.sawDone) return summary;
   return { ...summary, status: 'stopped' };
 }
 

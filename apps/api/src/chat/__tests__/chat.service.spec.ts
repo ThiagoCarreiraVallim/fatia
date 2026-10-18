@@ -1,4 +1,4 @@
-import { BadRequestException, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Logger, NotFoundException } from '@nestjs/common';
 import { MessageRole } from '@prisma/client';
 import { AiQuotaExceededException } from '../../ai/ai-quota';
 import { AiAccessService } from '../../ai/ai-access.service';
@@ -12,6 +12,7 @@ import {
   type StreamDoAgente,
   type TituloDoAgente,
 } from '../agent-chat.client';
+import { ChatRunRegistry } from '../chat-run.registry';
 import { ChatService, type DestinoDoStream } from '../chat.service';
 import type { MemoryService } from '../memory/memory.service';
 import type { GroupAgentService } from '../../sharing/group-agent.service';
@@ -251,6 +252,7 @@ function montar(
     ),
   } satisfies Partial<GroupAgentService>;
 
+  const runs = new ChatRunRegistry();
   const service = new ChatService(
     conversas as unknown as ConversationService,
     agent as unknown as AgentChatClient,
@@ -258,9 +260,10 @@ function montar(
     memorias as unknown as MemoryService,
     acesso,
     agentes as unknown as GroupAgentService,
+    runs,
   );
 
-  return { service, conversas, agent, uso, canal, agentes, chamadasAoAgente: chamadas };
+  return { service, conversas, agent, uso, canal, agentes, runs, chamadasAoAgente: chamadas };
 }
 
 beforeEach(() => {
@@ -321,24 +324,83 @@ describe('ChatService — repasse do SSE', () => {
     await turno;
 
     // Depois do `done` do agente: é o último quadro, e o voto da tela depende dele.
-    expect(saida.escritos.at(-1)).toBe(
-      quadro('persisted', { messageId: 'ai-1', assistantMessageId: 'linha-1' }),
-    );
+    expect(saida.escritos.at(-1)).toMatch(/^id: \d+\n/);
+    expect(
+      saida.escritos
+        .at(-1)
+        ?.endsWith(quadro('persisted', { messageId: 'ai-1', assistantMessageId: 'linha-1' })),
+    ).toBe(true);
   });
 
-  it('corta o upstream quando o cliente vai embora', async () => {
-    const { service, canal } = montar();
+  it('o cliente ir embora NÃO corta o turno: a resposta termina e é gravada (ADR 035)', async () => {
+    const { service, canal, conversas } = montar();
     const saida = destinoDeTeste();
 
     const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
     await respirar();
+    canal.emitir(fragmento('ai-1', 'Você comeu '));
+    await respirar();
     saida.simularClienteSaindo();
+    canal.emitir(fragmento('ai-1', 'arroz.'));
+    canal.emitir(fim('completed'));
+    canal.encerrar();
+    await turno;
+
+    expect(canal.foiCancelado()).toBe(false);
+    const [, , resposta] = conversas.completeTurn.mock.calls[0];
+    expect(resposta.status).toBe('completed');
+    expect(resposta.texto).toBe('Você comeu arroz.');
+    // Quem saiu não recebe mais nada depois de sair.
+    expect(saida.tudo()).not.toContain('arroz.');
+  });
+
+  it('quem volta pelo `live` recebe o que perdeu, a partir do último número que tinha', async () => {
+    const { service, canal, runs } = montar();
+    const primeira = destinoDeTeste();
+
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', primeira.destino);
+    await respirar();
+    canal.emitir(fragmento('ai-1', 'Você comeu '));
+    await respirar();
+    const ultimo = Number(/id: (\d+)/.exec(primeira.tudo())?.[1]);
+    primeira.simularClienteSaindo();
+    canal.emitir(fragmento('ai-1', 'arroz.'));
+    await respirar();
+
+    const recebidos: string[] = [];
+    runs.find(USUARIO.id, CONVERSA)!.subscribe(ultimo, {
+      write: (t) => recebidos.push(t),
+      end: () => recebidos.push('<fim>'),
+    });
+    expect(recebidos.join('')).toContain('"arroz."');
+    expect(recebidos.join('')).not.toContain('"Você comeu "');
+
+    canal.emitir(fim('completed'));
+    canal.encerrar();
+    await turno;
+    expect(recebidos.at(-1)).toBe('<fim>');
+    expect(recebidos.join('')).toContain('event: persisted');
+  });
+
+  it('parar corta o upstream, grava `stopped` e fecha o fio com done stopped', async () => {
+    const { service, canal, conversas } = montar();
+    const saida = destinoDeTeste();
+
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
+    await respirar();
+    canal.emitir(fragmento('ai-1', 'Você comeu '));
+    await respirar();
+    expect(service.stop(USUARIO.id, CONVERSA)).toBe(true);
     await turno;
 
     expect(canal.foiCancelado()).toBe(true);
+    const [, , resposta] = conversas.completeTurn.mock.calls[0];
+    expect(resposta.status).toBe('stopped');
+    expect(resposta.texto).toBe('Você comeu ');
+    expect(saida.tudo()).toContain(fim('stopped'));
   });
 
-  it('corta o upstream quando o cliente vai embora ANTES de o agente responder', async () => {
+  it('parar ANTES de o agente responder corta assim que ele abre', async () => {
     const canal = canalDoAgente();
     let aceitarOTurno!: () => void;
     const abriu = new Promise<void>((resolve) => {
@@ -350,19 +412,35 @@ describe('ChatService — repasse do SSE', () => {
     const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
     await respirar();
 
-    // Aba fechada com o `abrir` ainda pendurado. `res.on('close')` NÃO reentrega
-    // um evento já emitido: registrar o callback só depois do `await abrir`
-    // deixava esta janela inteira sem cancelamento nenhum.
-    saida.simularClienteSaindo();
+    service.stop(USUARIO.id, CONVERSA);
     aceitarOTurno();
-    await respirar();
-    await respirar();
-
-    const cancelou = canal.foiCancelado();
-    canal.encerrar();
     await turno;
 
-    expect(cancelou).toBe(true);
+    expect(canal.foiCancelado()).toBe(true);
+  });
+
+  it('segundo turno na mesma conversa enquanto a primeira responde é 409, sem chamar o agente', async () => {
+    const { service, canal, agent } = montar();
+
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    await respirar();
+    await expect(
+      service.converse(USUARIO, turnoNovo('de novo'), 'tok', destinoDeTeste().destino),
+    ).rejects.toThrow(ConflictException);
+    expect(agent.openTurn).toHaveBeenCalledTimes(1);
+
+    canal.encerrar();
+    await turno;
+  });
+
+  it('falha antes do primeiro byte libera a conversa para a próxima tentativa', async () => {
+    const { service, agent, runs } = montar();
+    agent.openTurn.mockRejectedValueOnce(new Error('fora do ar'));
+
+    await expect(
+      service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino),
+    ).rejects.toThrow('fora do ar');
+    expect(runs.find(USUARIO.id, CONVERSA)).toBeNull();
   });
 });
 
@@ -1051,7 +1129,7 @@ describe('ChatService — tempo do turno e resposta parada', () => {
     await respirar();
     canal.emitir(fragmento('ai-1', 'Você comeu '));
     await respirar();
-    saida.simularClienteSaindo();
+    service.stop(USUARIO.id, CONVERSA);
     await turno;
 
     const [, , resposta] = conversas.completeTurn.mock.calls[0];
@@ -1059,7 +1137,7 @@ describe('ChatService — tempo do turno e resposta parada', () => {
     expect(resposta.texto).toBe('Você comeu ');
   });
 
-  it('o cliente sair depois do fim não transforma a resposta completa em parada', async () => {
+  it('parar depois do fim não transforma a resposta completa em parada', async () => {
     const { service, canal, conversas } = montar();
     const saida = destinoDeTeste();
 
@@ -1068,13 +1146,13 @@ describe('ChatService — tempo do turno e resposta parada', () => {
     canal.emitir(fragmento('ai-1', 'Oi!'));
     canal.emitir(fim('completed'));
     await respirar();
-    saida.simularClienteSaindo();
+    service.stop(USUARIO.id, CONVERSA);
     await turno;
 
     expect(conversas.completeTurn.mock.calls[0][2].status).toBe('completed');
   });
 
-  it('erro do provedor que chegou antes de o cliente sair continua `error`, e não vira parada', async () => {
+  it('erro do provedor que chegou antes do pedido de parar continua `error`, e não vira parada', async () => {
     const { service, canal, conversas } = montar();
     const saida = destinoDeTeste();
 
@@ -1084,13 +1162,13 @@ describe('ChatService — tempo do turno e resposta parada', () => {
     canal.emitir(quadro('error', { code: 'AI_PROVIDER_TIMEOUT', message: 'demorou' }));
     canal.emitir(fim('error'));
     await respirar();
-    saida.simularClienteSaindo();
+    service.stop(USUARIO.id, CONVERSA);
     await turno;
 
     expect(conversas.completeTurn.mock.calls[0][2].status).toBe('error');
   });
 
-  it('o stream quebrar sem o cliente ter saído continua sendo `error`', async () => {
+  it('o stream quebrar sem pedido de parar continua sendo `error`', async () => {
     const { service, canal, conversas } = montar();
 
     const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);

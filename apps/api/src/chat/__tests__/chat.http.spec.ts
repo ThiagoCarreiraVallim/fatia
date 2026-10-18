@@ -1,5 +1,5 @@
 import type { AddressInfo } from 'node:net';
-import { ValidationPipe, type INestApplication } from '@nestjs/common';
+import { NotFoundException, ValidationPipe, type INestApplication } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { ThrottlerModule } from '@nestjs/throttler';
@@ -175,6 +175,11 @@ async function subirApp(): Promise<Cenario> {
     .useValue({ aiTierForUser, exigePlano: () => true })
     .overrideProvider(ConversationService)
     .useValue({
+      // Dona da conversa é só a USER: a OUTRO_USER recebe o 404 de sempre.
+      assertDaPessoa: jest.fn(async (userId: string, id: string) => {
+        if (userId !== USER) throw new NotFoundException('Conversa não encontrada.');
+        return { id };
+      }),
       encontrar: jest.fn(async () => null),
       historicoParaOAgente: jest.fn(async () => []),
       clearPauses: jest.fn(async () => undefined),
@@ -458,6 +463,87 @@ describe('POST /api/chat', () => {
     expect(doOutro.status).toBe(200);
     cenario.canal.encerrar();
     await doOutro.text();
+  });
+});
+
+describe('resposta desacoplada da requisição: live e stop (ADR 035)', () => {
+  let cenario: Cenario;
+
+  beforeEach(async () => {
+    cenario = await subirApp();
+  });
+
+  afterEach(async () => {
+    cenario.canal.encerrar();
+    await cenario.app.close();
+  });
+
+  const live = (after?: number, user = USER) => {
+    cenario.comoUsuario(user);
+    return fetch(
+      `${cenario.url}/conversations/${CONVERSA}/live${after !== undefined ? `?after=${after}` : ''}`,
+      { headers: { Authorization: 'Bearer token-do-usuario' } },
+    );
+  };
+
+  it('quem fecha a conexão volta pelo live e recebe só o que perdeu, até o fim', async () => {
+    const primeira = new AbortController();
+    const resposta = await fetch(cenario.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token-do-usuario' },
+      body: JSON.stringify({ conversationId: CONVERSA, message: 'oi' }),
+      signal: primeira.signal,
+    });
+    const leitor = resposta.body!.getReader();
+    expect(await lerPedaco(leitor)).toBe(': aberto\n\n');
+    cenario.canal.emitir('event: messages\ndata: [{"content":"Boa ","id":"ai-1"},{}]\n\n');
+    const recebido = await lerPedaco(leitor);
+    expect(recebido).toMatch(/^id: 1\n/);
+    primeira.abort();
+
+    // O agente segue falando com ninguém na escuta: não foi cortado.
+    cenario.canal.emitir('event: messages\ndata: [{"content":"tarde","id":"ai-1"},{}]\n\n');
+    await new Promise((r) => setTimeout(r, 20));
+
+    const retomada = await live(1);
+    expect(retomada.status).toBe(200);
+    expect(retomada.headers.get('content-type')).toContain('text/event-stream');
+    cenario.canal.emitir('event: done\ndata: {"status":"completed"}\n\n');
+    cenario.canal.encerrar();
+    const resto = await retomada.text();
+
+    expect(resto).toContain('id: 2\n');
+    expect(resto).toContain('"tarde"');
+    expect(resto).not.toContain('"Boa "');
+    expect(resto).toContain('"completed"');
+  });
+
+  it('sem resposta rodando, o live é 204', async () => {
+    expect((await live()).status).toBe(204);
+  });
+
+  it('live e stop de conversa alheia são 404', async () => {
+    expect((await live(0, OUTRO_USER)).status).toBe(404);
+    cenario.comoUsuario(OUTRO_USER);
+    const parar = await fetch(`${cenario.url}/conversations/${CONVERSA}/stop`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer token-do-usuario' },
+    });
+    expect(parar.status).toBe(404);
+  });
+
+  it('stop fecha o turno com done stopped para quem está ouvindo', async () => {
+    const resposta = await conversar(cenario.url, { message: 'oi' });
+    const corpo = resposta.text();
+    await new Promise((r) => setTimeout(r, 20));
+
+    const parar = await fetch(`${cenario.url}/conversations/${CONVERSA}/stop`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer token-do-usuario' },
+    });
+
+    expect(parar.status).toBe(204);
+    expect(await corpo).toContain('event: done\ndata: {"status":"stopped"}');
   });
 });
 

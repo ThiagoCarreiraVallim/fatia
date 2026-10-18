@@ -3,6 +3,7 @@ import { AiModule } from '../ai/ai.module';
 import { AgentChatClient } from './agent-chat.client';
 import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
+import { ChatRunRegistry } from './chat-run.registry';
 import { ChatThrottlerGuard } from './chat-throttler.guard';
 import { CheckpointPurgeService } from './checkpoint-purge.service';
 import { ConversationService } from './conversation.service';
@@ -30,6 +31,7 @@ import { SharingModule } from '../sharing/sharing.module';
   imports: [McpModule, AiModule, SharingModule],
   controllers: [ChatController],
   providers: [
+    ChatRunRegistry,
     ChatService,
     ConversationService,
     AgentChatClient,

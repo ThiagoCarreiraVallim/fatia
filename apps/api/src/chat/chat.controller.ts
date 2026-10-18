@@ -23,6 +23,7 @@ import { CurrentUser, type CurrentUserPayload } from '../common/decorators/curre
 import { ChatThrottlerGuard } from './chat-throttler.guard';
 import { AgentChatClient } from './agent-chat.client';
 import { ChatService, type DestinoDoStream } from './chat.service';
+import { ChatRunRegistry } from './chat-run.registry';
 import { CheckpointPurgeService } from './checkpoint-purge.service';
 import { ConversationService } from './conversation.service';
 import { MemoryService } from './memory/memory.service';
@@ -68,6 +69,7 @@ export class ChatController {
     private readonly uso: AiUsageService,
     private readonly acesso: AiAccessService,
     private readonly previas: PreviaDaAcaoService,
+    private readonly runs: ChatRunRegistry,
     private readonly agentes: GroupAgentService,
     private readonly registry: McpToolRegistry,
   ) {}
@@ -147,7 +149,53 @@ export class ChatController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     const conversa = await this.conversas.obterComMensagens(user.id, id);
-    return { ...conversa, agent: await this.agentes.headerFor(user.id, conversa.agentGroupId) };
+    return {
+      ...conversa,
+      agent: await this.agentes.headerFor(user.id, conversa.agentGroupId),
+      // Uma resposta ainda correndo no servidor: a tela assina o `live` em vez de
+      // mostrar o histórico parado (ADR 035).
+      running: this.runs.isRunning(user.id, id),
+    };
+  }
+
+  /**
+   * A resposta em andamento desta conversa, como SSE: reenvia o que veio
+   * depois de `after` (ou do `Last-Event-ID`) e segue ao vivo até o fim.
+   *
+   * 204 quando nada está rodando — inclusive no minuto seguinte ao fim, se o
+   * cursor já passou do último evento. Conversa alheia é 404, como em todo o
+   * resto do chat.
+   */
+  @Get('conversations/:id/live')
+  async live(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('after') after: string | undefined,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.conversas.assertDaPessoa(user.id, id);
+    const run = this.runs.find(user.id, id);
+    const desde = parseCursor(after ?? req.headers['last-event-id']);
+    if (!run || (run.done && run.lastSeq <= desde)) {
+      res.status(204).end();
+      return;
+    }
+    const destino = destinoSse(res);
+    destino.escrever(': aberto\n\n');
+    const sair = run.subscribe(desde, {
+      write: (texto) => destino.escrever(texto),
+      end: () => destino.fim(),
+    });
+    destino.aoFechar(sair);
+  }
+
+  /** Para a resposta em andamento. 204 mesmo sem resposta rodando: o efeito pedido já vale. */
+  @Post('conversations/:id/stop')
+  @HttpCode(204)
+  async stop(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseUUIDPipe) id: string) {
+    await this.conversas.assertDaPessoa(user.id, id);
+    this.chat.stop(user.id, id);
   }
 
   @Patch('conversations/:id')
@@ -237,6 +285,12 @@ export class ChatController {
 
     await this.chat.converse(user, dto, bearer, destinoSse(res));
   }
+}
+
+/** O cursor do `live`: o último evento que o cliente já tem. Inválido é "nenhum". */
+function parseCursor(bruto: string | string[] | undefined): number {
+  const valor = Number(Array.isArray(bruto) ? bruto[0] : bruto);
+  return Number.isInteger(valor) && valor > 0 ? valor : 0;
 }
 
 function extrairBearer(req: Request): string | null {
