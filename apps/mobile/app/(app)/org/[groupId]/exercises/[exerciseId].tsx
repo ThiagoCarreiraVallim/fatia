@@ -124,7 +124,10 @@ function Editor({
                 label="Equipamento"
                 options={[
                   { value: SEM, label: 'Não informar' },
-                  ...EXERCISE_EQUIPMENT.map((e) => ({ value: e, label: e })),
+                  ...EXERCISE_EQUIPMENT.map((e) => ({
+                    value: e,
+                    label: e.charAt(0).toUpperCase() + e.slice(1),
+                  })),
                 ]}
                 value={equipamento}
                 onChange={setEquipamento}

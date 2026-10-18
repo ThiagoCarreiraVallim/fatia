@@ -161,9 +161,9 @@ function EquipmentCard({
   return (
     <fieldset
       disabled={!canEdit}
+      aria-label="Equipamento da academia"
       className="space-y-3 rounded-2xl border border-subtle bg-card p-4"
     >
-      <legend className="sr-only">Equipamento da academia</legend>
       <div>
         <p className="text-sm font-semibold">Equipamento da academia</p>
         <p className="text-xs text-muted-foreground">

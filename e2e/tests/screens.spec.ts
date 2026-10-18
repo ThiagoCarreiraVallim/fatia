@@ -25,7 +25,10 @@ function shotPath(page: Page, name: string) {
 }
 
 async function settle(page: Page) {
-  await page.waitForLoadState('networkidle').catch(() => undefined);
+  // Com teto: sem ele a espera ia até o fim do teste. Na rodada completa a aba
+  // de exercícios da comunidade (Fase 7b) às vezes nunca fica ociosa no `next
+  // dev`, sem nenhuma requisição aberta; isolada, fica em 60 ms.
+  await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => undefined);
   // `networkidle` não basta com a API ocupada: a foto saía só com skeletons.
   await page
     .locator('.animate-pulse')

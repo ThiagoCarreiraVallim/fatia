@@ -231,8 +231,8 @@ function ExerciseEditor({
                   <SelectContent>
                     <SelectItem value={SEM_EQUIPAMENTO}>Não informar</SelectItem>
                     {EXERCISE_EQUIPMENT.map((e) => (
-                      <SelectItem key={e} value={e} className="capitalize">
-                        {e}
+                      <SelectItem key={e} value={e}>
+                        {e.charAt(0).toUpperCase() + e.slice(1)}
                       </SelectItem>
                     ))}
                   </SelectContent>
