@@ -101,6 +101,12 @@ test.describe('axe: comunidade', () => {
     await page.getByRole('button', { name: 'Adotar plano' }).click();
     await page.getByRole('dialog').waitFor();
     expect(await auditar(page)).toEqual([]);
+
+    // Catálogo da comunidade (Fase 7b): a lista e o detalhe com o tutorial.
+    await page.goto(`${comunidade}/content?tab=exercises`);
+    await page.getByRole('button', { name: /Supino Máquina/ }).click();
+    await page.getByRole('region', { name: 'Tutorial de Academia Demo' }).waitFor();
+    expect(await auditar(page)).toEqual([]);
   });
 });
 
@@ -122,6 +128,8 @@ test.describe('axe: painel da comunidade', () => {
       [`/org/${id}/content`, 'Corpo inteiro para começar'],
       [`/org/${id}/content/plans/new?kind=NUTRITION`, 'Metas diárias'],
       [`/org/${id}/content/tips/new`, 'Categoria'],
+      [`/org/${id}/exercises`, 'Equipamento da academia'],
+      [`/org/${id}/exercises/new`, 'Como executar'],
       ['/community/new', 'Como se entra'],
     ];
     for (const [rota, marco] of secoes) {

@@ -465,6 +465,14 @@ test.describe('comunidade', () => {
     await page.getByRole('button', { name: 'Adotar plano' }).click();
     await appears(page.getByRole('checkbox', { name: /Trocar minhas metas/ }));
     await snap(page, '95-adotar-nutricao');
+
+    // Catálogo da comunidade, do lado do membro (Fase 7b).
+    await page.goto(`/community/${id}/content?tab=exercises`);
+    await appears(page.getByRole('button', { name: /Leg press 45° da casa/ }));
+    await snap(page, '98-comunidade-exercicios');
+    await page.getByRole('button', { name: /Supino Máquina/ }).click();
+    await appears(page.getByRole('region', { name: 'Tutorial de Academia Demo' }));
+    await snap(page, '99-exercicio-tutorial');
   });
 });
 
@@ -532,6 +540,14 @@ test.describe('painel da comunidade', () => {
     await page.getByRole('button', { name: 'Ver prévia' }).click();
     await appears(page.getByLabel('Prévia da dica'));
     await snap(page, '92-painel-dica');
+
+    // Catálogo de exercícios, pela equipe (Fase 7b).
+    await page.goto(`/org/${id}/exercises`);
+    await appears(page.getByRole('link', { name: /Leg press 45° da casa/ }));
+    await snap(page, '96-painel-exercicios');
+    await page.getByRole('link', { name: /Leg press 45° da casa/ }).click();
+    await appears(page.getByLabel('Como executar'));
+    await snap(page, '97-painel-exercicio');
   });
 });
 

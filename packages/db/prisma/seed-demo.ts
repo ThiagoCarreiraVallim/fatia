@@ -256,7 +256,7 @@ async function main() {
   // --- Treino --------------------------------------------------------------
   const exerciseNames = PLANS.flatMap((p) => p.exercises.map(([name]) => name));
   const exercises = await prisma.exercise.findMany({
-    where: { name: { in: exerciseNames }, createdByUserId: null },
+    where: { name: { in: exerciseNames }, createdByUserId: null, groupOwned: false },
   });
   const exerciseByName = new Map(exercises.map((e) => [e.name, e]));
 
@@ -533,6 +533,7 @@ async function seedCommunity(demoUserId: string) {
   });
 
   const conteudo = await seedCommunityContent(group.id, dona.id, profissional.id);
+  const catalogo = await seedCommunityExercises(group.id, dona.id, profissional.id);
 
   // Convites que o E2E deixou para trás (o painel cria e revoga): fora.
   await prisma.groupInvite.deleteMany({ where: { groupId: group.id } });
@@ -540,7 +541,7 @@ async function seedCommunity(demoUserId: string) {
   // O demo entra pelo E2E: nenhuma associação (o assento cai junto, em cascata).
   await prisma.groupMembership.deleteMany({ where: { groupId: group.id, userId: demoUserId } });
   console.log(
-    `  ✓ Comunidade "${group.name}" (${COMMUNITY_SLUG}): dona ${dona.email}, 1 profissional, ${membros.length} membros, ${PENDING_REQUESTS.length} pedidos, ${sessoes.length} treinos, ${COMMUNITY_SEATS} assentos, ${conteudo}.`,
+    `  ✓ Comunidade "${group.name}" (${COMMUNITY_SLUG}): dona ${dona.email}, 1 profissional, ${membros.length} membros, ${PENDING_REQUESTS.length} pedidos, ${sessoes.length} treinos, ${COMMUNITY_SEATS} assentos, ${conteudo}, ${catalogo}.`,
   );
 }
 
@@ -609,7 +610,7 @@ async function seedCommunityContent(groupId: string, donaId: string, profissiona
     const exercicios = [];
     for (const [order, [nome, targetSets, targetReps]] of t.exercises.entries()) {
       const ex = await prisma.exercise.findFirst({
-        where: { name: nome, createdByUserId: null },
+        where: { name: nome, createdByUserId: null, groupOwned: false },
         select: { id: true },
       });
       if (ex)
@@ -761,6 +762,70 @@ async function seedCommunityContent(groupId: string, donaId: string, profissiona
     });
   }
   return `${n} planos e ${dicas.length} dicas`;
+}
+
+/**
+ * Catálogo de exercícios da Academia Demo (Fase 7b): o equipamento da casa,
+ * um exercício que só ela tem e o tutorial da equipe por cima de um exercício
+ * do catálogo geral. Sem vídeo nem foto, pelo mesmo motivo das dicas: o envio
+ * é coberto pelo E2E, e o seed não fala com o bucket.
+ */
+async function seedCommunityExercises(groupId: string, donaId: string, profissionalId: string) {
+  await prisma.group.update({
+    where: { id: groupId },
+    data: { equipment: ['barra', 'halteres', 'polia', 'máquina', 'elástico'] },
+  });
+  await prisma.groupExerciseGuide.deleteMany({ where: { groupId } });
+  // O exercício da casa que ninguém usa é recriado; o que alguém pôs no plano fica.
+  await prisma.exercise.deleteMany({
+    where: { groupId, groupOwned: true, planExercises: { none: {} }, sessionSets: { none: {} } },
+  });
+
+  const nome = 'Leg press 45° da casa';
+  const daCasa =
+    (await prisma.exercise.findFirst({ where: { name: nome, groupId, groupOwned: true } })) ??
+    (await prisma.exercise.create({
+      data: {
+        name: nome,
+        searchName: 'leg press 45 da casa',
+        muscleGroup: 'pernas',
+        equipment: 'máquina',
+        level: 'beginner',
+        mechanic: 'compound',
+        primaryMuscles: ['quadriceps', 'glutes'],
+        instructions: [
+          'Encoste as costas e o quadril no banco, pés na largura do quadril no meio da plataforma.',
+          'Destrave e desça até os joelhos formarem 90°, sem tirar o quadril do banco.',
+          'Empurre pelos calcanhares sem travar os joelhos no topo.',
+        ],
+        groupOwned: true,
+        groupId,
+      },
+    }));
+  await prisma.groupExerciseGuide.create({
+    data: {
+      groupId,
+      exerciseId: daCasa.id,
+      authorId: profissionalId,
+      tips: 'A nossa leg press fica no **fundo da sala**, ao lado do espelho. Comece com **dois discos de cada lado**.',
+    },
+  });
+
+  const supino = await prisma.exercise.findFirst({
+    where: { name: 'Supino Máquina', createdByUserId: null, groupOwned: false },
+    select: { id: true },
+  });
+  if (supino) {
+    await prisma.groupExerciseGuide.create({
+      data: {
+        groupId,
+        exerciseId: supino.id,
+        authorId: donaId,
+        tips: 'Ajuste o banco para a pegada ficar **na altura do meio do peito**.\n\n- Escápulas juntas\n- Expire ao empurrar',
+      },
+    });
+  }
+  return `${supino ? 2 : 1} exercícios no catálogo da comunidade`;
 }
 
 main()
