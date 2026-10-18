@@ -73,6 +73,8 @@ model User {
   // Avisos no celular (ADR 033).
   devices                 UserDevice[]
   notificationPreferences NotificationPreference[]
+  pendingNotices          PendingNotice[]
+  webPushSubscriptions    WebPushSubscription[]
 
   // B2B (ADR 014). Nenhuma destas relações dá acesso a dado de saúde por si só —
   // quem autoriza leitura é exclusivamente uma linha de `ProfessionalLink`.
@@ -1730,6 +1732,58 @@ model UserDevice {
   createdAt  DateTime       @default(now())
   /// Última vez que o app abriu e refez o cadastro.
   lastSeenAt DateTime       @default(now())
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tickets PushTicket[]
+
+  @@index([userId, lastSeenAt])
+}
+
+/// Um envio que a Expo aceitou e cujo recibo ainda não foi lido (Fase 9g). O
+/// recibo diz se a Apple ou o Google entregaram; `DeviceNotRegistered` nele
+/// apaga o aparelho. Vive no máximo 24 h.
+model PushTicket {
+  /// O id do ticket da Expo.
+  id        String   @id
+  deviceId  String
+  createdAt DateTime @default(now())
+
+  device UserDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+}
+
+/// Avisos em sequência viram um só (Fase 9g): o primeiro comentário num post
+/// avisa na hora; os seguintes, dentro da janela, saem juntos no fim dela.
+model PendingNotice {
+  /// O que agrupa, ex. `comment:<postId>`.
+  key          String
+  userId       String
+  kind         NotificationKind
+  /// Quantos chegaram depois do aviso que já saiu.
+  count        Int              @default(0)
+  /// Nome da comunidade e caminho do toque — nada do conteúdo.
+  community    String
+  url          String
+  windowEndsAt DateTime
+  createdAt    DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([key, userId])
+  @@index([windowEndsAt])
+}
+
+/// Um navegador em que a pessoa ligou os avisos (Web Push, Fase 9g). O endpoint
+/// é do serviço de push do navegador e é único.
+model WebPushSubscription {
+  id         String   @id @default(uuid())
+  userId     String
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

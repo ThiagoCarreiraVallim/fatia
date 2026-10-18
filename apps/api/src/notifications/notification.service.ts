@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import type { OnModuleDestroy } from '@nestjs/common';
+import type { OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { DevicePlatform, NotificationKind } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { EXPO_PUSH_TOKEN, PushService } from './push.service';
@@ -10,6 +10,15 @@ export const DEVICE_PLATFORMS = Object.values(DevicePlatform);
 export const MAX_DEVICES = 10;
 const TITLE_MAX = 80;
 const BODY_MAX = 160;
+
+/** A Expo pede para ler o recibo uns 15 minutos depois do envio. */
+export const RECEIPT_DELAY_MS = 15 * 60_000;
+/** Ticket sem recibo depois disto é esquecido: a Expo guarda recibo por 24 h. */
+export const TICKET_MAX_AGE_MS = 24 * 60 * 60_000;
+/** Janela em que avisos do mesmo tipo e assunto viram um só (comentários num post). */
+export const GROUP_WINDOW_MS = 10 * 60_000;
+const RECEIPTS_EVERY_MS = 15 * 60_000;
+const GROUPED_EVERY_MS = 60_000;
 
 /** Um aviso, já sem dado de saúde: aparece na tela bloqueada. */
 export interface Notice {
@@ -42,16 +51,38 @@ const cut = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1)
  * pendente (testes e desligamento da API).
  */
 @Injectable()
-export class NotificationService implements OnModuleDestroy {
+export class NotificationService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(NotificationService.name);
   private readonly pending = new Set<Promise<void>>();
+  private readonly timers: NodeJS.Timeout[] = [];
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly push: PushService,
   ) {}
 
+  onModuleInit(): void {
+    const tarefa = (nome: string, fn: () => Promise<unknown>) => () =>
+      void fn().catch((err: unknown) =>
+        this.logger.warn(`${nome} falhou: ${err instanceof Error ? err.message : String(err)}`),
+      );
+    // `unref`: os timers não seguram o processo (nem o jest) só por existir.
+    for (const [fn, ms] of [
+      [
+        tarefa('Leitura dos recibos de push', () => this.checkReceipts(new Date())),
+        RECEIPTS_EVERY_MS,
+      ],
+      [tarefa('Envio dos avisos agrupados', () => this.flushGrouped(new Date())), GROUPED_EVERY_MS],
+    ] as const) {
+      const t = setInterval(fn, ms);
+      t.unref();
+      this.timers.push(t);
+    }
+  }
+
   async onModuleDestroy(): Promise<void> {
+    for (const t of this.timers) clearInterval(t);
+    this.timers.length = 0;
     await this.drain();
   }
 
@@ -135,14 +166,102 @@ export class NotificationService implements OnModuleDestroy {
 
   /** Dispara e não espera. Lista vazia ou só gente com o tipo desligado não faz nada. */
   notify(userIds: readonly string[], notice: Notice): void {
-    const p = this.deliver([...new Set(userIds)], notice)
+    this.track(this.deliver([...new Set(userIds)], notice), notice.kind);
+  }
+
+  /**
+   * Avisos em sequência sobre a mesma coisa viram um só (Fase 9g). O primeiro
+   * sai na hora; os que chegam dentro da janela de `GROUP_WINDOW_MS` são
+   * contados e saem juntos no fim dela (`flushGrouped`), com `grouped(n)`.
+   */
+  notifyGrouped(userId: string, key: string, notice: Notice, community: string): void {
+    this.track(this.deliverGrouped(userId, key, notice, community), notice.kind);
+  }
+
+  private async deliverGrouped(
+    userId: string,
+    key: string,
+    notice: Notice,
+    community: string,
+  ): Promise<void> {
+    const agora = new Date();
+    // Atômico: dois comentários ao mesmo tempo não mandam dois avisos.
+    const contado = await this.prisma.pendingNotice.updateMany({
+      where: { key, userId, windowEndsAt: { gt: agora } },
+      data: { count: { increment: 1 } },
+    });
+    if (contado.count > 0) return;
+    const windowEndsAt = new Date(agora.getTime() + GROUP_WINDOW_MS);
+    await this.prisma.pendingNotice.upsert({
+      where: { key_userId: { key, userId } },
+      create: { key, userId, kind: notice.kind, community, url: notice.url, windowEndsAt },
+      update: { count: 0, community, url: notice.url, windowEndsAt },
+    });
+    await this.deliver([userId], notice);
+  }
+
+  /** Fecha as janelas vencidas: quem teve mais avisos nelas recebe um, com o total. */
+  async flushGrouped(now: Date): Promise<number> {
+    const vencidas = await this.prisma.pendingNotice.findMany({
+      where: { windowEndsAt: { lte: now } },
+      take: 500,
+    });
+    let enviados = 0;
+    for (const v of vencidas) {
+      if (v.count > 0) {
+        await this.deliver([v.userId], groupedNotice(v.kind, v.count, v.community, v.url));
+        enviados += 1;
+      }
+      await this.prisma.pendingNotice.deleteMany({
+        where: { key: v.key, userId: v.userId, windowEndsAt: { lte: now } },
+      });
+    }
+    return enviados;
+  }
+
+  /**
+   * Lê os recibos dos envios com mais de `RECEIPT_DELAY_MS` (Fase 9g):
+   * `DeviceNotRegistered` apaga o aparelho; credencial errada ou excesso de
+   * envio viram alerta no log. Ticket lido, ou velho demais, sai.
+   */
+  async checkReceipts(now: Date): Promise<{ read: number; removedDevices: number }> {
+    await this.prisma.pushTicket.deleteMany({
+      where: { createdAt: { lt: new Date(now.getTime() - TICKET_MAX_AGE_MS) } },
+    });
+    const tickets = await this.prisma.pushTicket.findMany({
+      where: { createdAt: { lte: new Date(now.getTime() - RECEIPT_DELAY_MS) } },
+      orderBy: { createdAt: 'asc' },
+      take: 5000,
+      select: { id: true, deviceId: true },
+    });
+    if (tickets.length === 0) return { read: 0, removedDevices: 0 };
+    const recibos = await this.push.receipts(tickets.map((t) => t.id));
+    const mortos = new Set<string>();
+    for (const t of tickets) {
+      const r = recibos[t.id];
+      if (r?.status !== 'error') continue;
+      const motivo = r.details?.error ?? r.message ?? 'sem motivo';
+      if (motivo === 'DeviceNotRegistered') mortos.add(t.deviceId);
+      // Sem o token no log, como no envio.
+      else this.logger.warn(`Recibo de push com erro: ${motivo}`);
+    }
+    if (mortos.size > 0) {
+      await this.prisma.userDevice.deleteMany({ where: { id: { in: [...mortos] } } });
+    }
+    const lidos = tickets.filter((t) => recibos[t.id]).map((t) => t.id);
+    if (lidos.length > 0) await this.prisma.pushTicket.deleteMany({ where: { id: { in: lidos } } });
+    return { read: lidos.length, removedDevices: mortos.size };
+  }
+
+  private track(p: Promise<void>, kind: NotificationKind): void {
+    const q = p
       .catch((err: unknown) =>
         this.logger.warn(
-          `Aviso "${notice.kind}" não saiu: ${err instanceof Error ? err.message : String(err)}`,
+          `Aviso "${kind}" não saiu: ${err instanceof Error ? err.message : String(err)}`,
         ),
       )
-      .finally(() => this.pending.delete(p));
-    this.pending.add(p);
+      .finally(() => this.pending.delete(q));
+    this.pending.add(q);
   }
 
   async drain(): Promise<void> {
@@ -160,7 +279,7 @@ export class NotificationService implements OnModuleDestroy {
     if (alvo.length === 0) return;
     const devices = await this.prisma.userDevice.findMany({
       where: { userId: { in: alvo } },
-      select: { token: true },
+      select: { id: true, token: true },
     });
     const title = cut(notice.title, TITLE_MAX);
     const body = cut(notice.body, BODY_MAX);
@@ -170,5 +289,28 @@ export class NotificationService implements OnModuleDestroy {
     if (r.unregistered.length > 0) {
       await this.prisma.userDevice.deleteMany({ where: { token: { in: r.unregistered } } });
     }
+    const porToken = new Map(devices.map((d) => [d.token, d.id]));
+    const tickets = r.tickets.flatMap((t) => {
+      const deviceId = porToken.get(t.to);
+      return deviceId ? [{ id: t.id, deviceId }] : [];
+    });
+    if (tickets.length > 0) {
+      await this.prisma.pushTicket.createMany({ data: tickets, skipDuplicates: true });
+    }
   }
+}
+
+/** O aviso que fecha uma janela: só a contagem, nunca o que foi escrito. */
+export function groupedNotice(
+  kind: NotificationKind,
+  count: number,
+  community: string,
+  url: string,
+): Notice {
+  return {
+    kind,
+    title: count === 1 ? 'Mais 1 comentário no seu post' : `Mais ${count} comentários no seu post`,
+    body: `No mural de ${community}.`,
+    url,
+  };
 }

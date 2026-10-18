@@ -2,6 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 export const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
+export const EXPO_RECEIPTS_URL = 'https://exp.host/--/api/v2/push/getReceipts';
+/** A Expo devolve até 1000 recibos por requisição. */
+export const EXPO_RECEIPTS_BATCH = 1000;
 /** A Expo aceita até 100 mensagens por requisição. */
 export const EXPO_BATCH_SIZE = 100;
 const TIMEOUT_MS = 10_000;
@@ -24,9 +27,19 @@ export interface PushOutcome {
   sent: number;
   /** Tokens que a Expo disse que não existem mais: o aparelho desinstalou ou trocou. */
   unregistered: string[];
+  /** Ticket de cada envio aceito, para ler o recibo depois (Fase 9g). */
+  tickets: { to: string; id: string }[];
 }
 
 interface ExpoTicket {
+  status: 'ok' | 'error';
+  id?: string;
+  message?: string;
+  details?: { error?: string };
+}
+
+/** O recibo de um ticket: se a Apple ou o Google aceitaram a entrega. */
+export interface ExpoReceipt {
   status: 'ok' | 'error';
   message?: string;
   details?: { error?: string };
@@ -40,9 +53,10 @@ interface ExpoTicket {
  * testes não mandam aviso para celular de ninguém. Falha de rede também não
  * derruba quem chamou — o aviso é complemento, a ação já aconteceu.
  *
- * Só a primeira etapa da Expo (os "tickets"). Os recibos, que dizem se a Apple
- * ou o Google entregaram, ficam de fora: o único efeito útil deles seria apagar
- * token morto, e o `DeviceNotRegistered` do ticket já cobre o caso comum.
+ * Duas etapas da Expo: o envio devolve um ticket por mensagem, e o recibo de
+ * cada ticket (lido uns 15 minutos depois, `receipts`) diz se a Apple ou o
+ * Google entregaram. `DeviceNotRegistered` pode chegar em qualquer das duas
+ * (Fase 9g; antes só a primeira era lida).
  */
 @Injectable()
 export class PushService {
@@ -56,7 +70,7 @@ export class PushService {
   }
 
   async send(messages: PushMessage[]): Promise<PushOutcome> {
-    const outcome: PushOutcome = { sent: 0, unregistered: [] };
+    const outcome: PushOutcome = { sent: 0, unregistered: [], tickets: [] };
     if (messages.length === 0) return outcome;
     if (!this.enabled) {
       this.logger.log(`Push não enviado (PUSH_ENABLED desligado): ${messages.length} aviso(s)`);
@@ -67,8 +81,10 @@ export class PushService {
       try {
         const tickets = await this.post(lote);
         tickets.forEach((t, j) => {
-          if (t.status === 'ok') outcome.sent += 1;
-          else if (t.details?.error === 'DeviceNotRegistered') {
+          if (t.status === 'ok') {
+            outcome.sent += 1;
+            if (t.id) outcome.tickets.push({ to: lote[j]!.to, id: t.id });
+          } else if (t.details?.error === 'DeviceNotRegistered') {
             outcome.unregistered.push(lote[j]!.to);
           } else {
             // Sem o token no log: ele é o endereço do celular de alguém.
@@ -82,6 +98,35 @@ export class PushService {
       }
     }
     return outcome;
+  }
+
+  /** Os recibos de tickets já enviados. Sem `PUSH_ENABLED`, nenhum. Não lança. */
+  async receipts(ids: string[]): Promise<Record<string, ExpoReceipt>> {
+    const todos: Record<string, ExpoReceipt> = {};
+    if (!this.enabled || ids.length === 0) return todos;
+    for (let i = 0; i < ids.length; i += EXPO_RECEIPTS_BATCH) {
+      const lote = ids.slice(i, i + EXPO_RECEIPTS_BATCH);
+      try {
+        const res = await fetch(EXPO_RECEIPTS_URL, {
+          method: 'POST',
+          headers: {
+            accept: 'application/json',
+            'content-type': 'application/json',
+            ...(this.accessToken ? { authorization: `Bearer ${this.accessToken}` } : {}),
+          },
+          body: JSON.stringify({ ids: lote }),
+          signal: AbortSignal.timeout(TIMEOUT_MS),
+        });
+        if (!res.ok) throw new Error(`Expo respondeu ${res.status}`);
+        const json = (await res.json()) as { data?: Record<string, ExpoReceipt> };
+        Object.assign(todos, json.data ?? {});
+      } catch (err) {
+        this.logger.warn(
+          `Falha ao ler ${lote.length} recibo(s): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+    return todos;
   }
 
   private async post(lote: PushMessage[]): Promise<ExpoTicket[]> {

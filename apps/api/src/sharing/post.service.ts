@@ -359,8 +359,11 @@ export class PostService {
       include: { author: AUTOR },
     });
     if (row.membershipId !== eu.membershipId) {
-      await this.notifyAuthor(row.membershipId, (groupName) =>
-        commentNotice({ groupId, groupName, author: nome }),
+      // Agrupado por post: uma conversa animada não vira um aviso por comentário.
+      await this.notifyAuthor(
+        row.membershipId,
+        (groupName) => commentNotice({ groupId, groupName, author: nome }),
+        `comment:${row.id}`,
       );
     }
     return {
@@ -630,12 +633,19 @@ export class PostService {
   private async notifyAuthor(
     membershipId: string,
     notice: (groupName: string) => Notice,
+    groupKey?: string,
   ): Promise<void> {
     const autor = await this.prisma.groupMembership.findFirst({
       where: { id: membershipId, status: MembershipStatus.ACTIVE },
       select: { userId: true, group: { select: { name: true } } },
     });
-    if (autor) this.notifications.notify([autor.userId], notice(autor.group.name));
+    if (!autor) return;
+    const aviso = notice(autor.group.name);
+    if (groupKey) {
+      this.notifications.notifyGrouped(autor.userId, groupKey, aviso, autor.group.name);
+    } else {
+      this.notifications.notify([autor.userId], aviso);
+    }
   }
 
   private canPost(role: GroupRole, policy: PostPolicy): boolean {

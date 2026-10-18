@@ -1,5 +1,11 @@
 import type { ConfigService } from '@nestjs/config';
-import { EXPO_PUSH_TOKEN, EXPO_PUSH_URL, PushService, type PushMessage } from '../push.service';
+import {
+  EXPO_PUSH_TOKEN,
+  EXPO_PUSH_URL,
+  EXPO_RECEIPTS_URL,
+  PushService,
+  type PushMessage,
+} from '../push.service';
 
 const config = (env: Record<string, string>) =>
   ({ get: (k: string) => env[k] }) as unknown as ConfigService;
@@ -31,7 +37,7 @@ describe('PushService', () => {
     fetchMock = jest.spyOn(globalThis, 'fetch');
     const r = await new PushService(config({})).send([msg(1)]);
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(r).toEqual({ sent: 0, unregistered: [] });
+    expect(r).toEqual({ sent: 0, unregistered: [], tickets: [] });
   });
 
   it('manda em lotes de 100, com o caminho em data.url e o canal dos avisos', async () => {
@@ -78,7 +84,11 @@ describe('PushService', () => {
       msg(1),
       msg(2),
     ]);
-    expect(r).toEqual({ sent: 1, unregistered: [msg(1).to] });
+    expect(r).toEqual({
+      sent: 1,
+      unregistered: [msg(1).to],
+      tickets: [{ to: msg(0).to, id: 't0' }],
+    });
   });
 
   it('falha de rede num lote não derruba quem chamou nem os outros lotes', async () => {
@@ -100,5 +110,23 @@ describe('PushService', () => {
     expect(EXPO_PUSH_TOKEN.test('https://evil.example/ExponentPushToken[x]')).toBe(false);
     expect(EXPO_PUSH_TOKEN.test('ExponentPushToken[abc]')).toBe(false);
     expect(EXPO_PUSH_TOKEN.test('ExponentPushToken[abcdEFGH1234] ')).toBe(false);
+  });
+
+  it('lê os recibos em lotes de 1000; desligado, não chama nada (Fase 9g)', async () => {
+    fetchMock = jest.spyOn(globalThis, 'fetch');
+    expect(await new PushService(config({})).receipts(['a'])).toEqual({});
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fetchMock.mockImplementation(async (_url, init) => {
+      const { ids } = JSON.parse((init as RequestInit).body as string) as { ids: string[] };
+      return new Response(
+        JSON.stringify({ data: Object.fromEntries(ids.map((id) => [id, { status: 'ok' }])) }),
+      );
+    });
+    const ids = Array.from({ length: 1500 }, (_, i) => `t${i}`);
+    const r = await new PushService(config({ PUSH_ENABLED: 'true' })).receipts(ids);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][0]).toBe(EXPO_RECEIPTS_URL);
+    expect(Object.keys(r)).toHaveLength(1500);
   });
 });

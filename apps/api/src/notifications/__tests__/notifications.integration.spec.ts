@@ -3,8 +3,13 @@ import { ChallengeMetric, NotificationKind } from '@fatia/db';
 import type { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma.service';
 import type { EmailService } from '../email.service';
-import { MAX_DEVICES, NotificationService } from '../notification.service';
-import type { PushMessage, PushService } from '../push.service';
+import {
+  GROUP_WINDOW_MS,
+  MAX_DEVICES,
+  NotificationService,
+  RECEIPT_DELAY_MS,
+} from '../notification.service';
+import type { ExpoReceipt, PushMessage, PushService } from '../push.service';
 import { DailyAdherenceService } from '../../nutrition/daily-adherence.service';
 import { addDaysIso, todayInTz } from '../../progress/helpers/date-tz';
 import { ScoreboardService } from '../../social/scoreboard.service';
@@ -26,12 +31,20 @@ describe('avisos no celular (integração)', () => {
   const prisma = new PrismaService();
   const enviados: PushMessage[] = [];
   let mortos: string[] = [];
+  let ticketSeq = 0;
+  /** Ticket → recibo que a "Expo" devolve na leitura (Fase 9g). */
+  let recibos: Record<string, ExpoReceipt> = {};
   const push = {
     send: async (m: PushMessage[]) => {
       enviados.push(...m);
       const unregistered = m.map((x) => x.to).filter((t) => mortos.includes(t));
-      return { sent: m.length - unregistered.length, unregistered };
+      const tickets = m
+        .filter((x) => !unregistered.includes(x.to))
+        .map((x) => ({ to: x.to, id: `tk-${Date.now()}-${++ticketSeq}` }));
+      return { sent: m.length - unregistered.length, unregistered, tickets };
     },
+    receipts: async (ids: string[]) =>
+      Object.fromEntries(ids.filter((id) => recibos[id]).map((id) => [id, recibos[id]])),
   } as unknown as PushService;
   const notifications = new NotificationService(prisma, push);
   const links = new ProfessionalLinkService(prisma);
@@ -178,6 +191,87 @@ describe('avisos no celular (integração)', () => {
       await prisma.user.delete({ where: { id: a } });
       expect(await prisma.userDevice.count({ where: { userId: a } })).toBe(0);
       expect(await prisma.notificationPreference.count({ where: { userId: a } })).toBe(0);
+    });
+  });
+
+  describe('agrupamento e recibos (Fase 9g)', () => {
+    it('comentários em sequência no mesmo post: o primeiro avisa, o resto sai junto no fim da janela', async () => {
+      const c = await comunidade();
+      const post = await posts.create(c.membro, c.groupId, { body: 'Oi', displayName: 'Ana' });
+      for (const body of ['Boa!', 'Muito bom', 'Parabéns']) {
+        await posts.comment(c.outro, c.groupId, post.id, { body, displayName: 'Bia' });
+      }
+      const agora = await recebidos();
+      expect(agora.map((r) => r.title)).toEqual(['Bia comentou seu post']);
+
+      // Antes do fim da janela, nada.
+      expect(await notifications.flushGrouped(new Date())).toBe(0);
+      expect(await recebidos()).toEqual([]);
+
+      const depois = new Date(Date.now() + GROUP_WINDOW_MS + 1000);
+      expect(await notifications.flushGrouped(depois)).toBe(1);
+      const juntos = await recebidos();
+      expect(juntos).toEqual([
+        expect.objectContaining({
+          userId: c.membro,
+          title: 'Mais 2 comentários no seu post',
+          body: expect.stringContaining('Academia'),
+        }),
+      ]);
+      // Nada do que foi escrito vai no aviso.
+      expect(JSON.stringify(juntos)).not.toMatch(/Parabéns|Muito bom/);
+
+      // Janela fechada: o próximo comentário avisa na hora de novo.
+      await posts.comment(c.outro, c.groupId, post.id, { body: 'Mais um', displayName: 'Bia' });
+      expect((await recebidos()).map((r) => r.title)).toEqual(['Bia comentou seu post']);
+    });
+
+    it('janela vencida sem comentário novo não manda nada', async () => {
+      const c = await comunidade();
+      const post = await posts.create(c.membro, c.groupId, { body: 'Oi', displayName: 'Ana' });
+      await posts.comment(c.outro, c.groupId, post.id, { body: 'Boa!', displayName: 'Bia' });
+      await recebidos();
+      await notifications.flushGrouped(new Date(Date.now() + GROUP_WINDOW_MS + 1000));
+      expect(await recebidos()).toEqual([]);
+      expect(await prisma.pendingNotice.count({ where: { userId: c.membro } })).toBe(0);
+    });
+
+    it('recibo DeviceNotRegistered apaga o aparelho; recibo lido sai da fila', async () => {
+      const c = await comunidade();
+      const post = await posts.create(c.membro, c.groupId, { body: 'Oi', displayName: 'Ana' });
+      await posts.comment(c.outro, c.groupId, post.id, { body: 'Boa!', displayName: 'Bia' });
+      await recebidos();
+      const [device] = await prisma.userDevice.findMany({ where: { userId: c.membro } });
+      const tickets = await prisma.pushTicket.findMany({ where: { deviceId: device!.id } });
+      expect(tickets).toHaveLength(1);
+
+      // Cedo demais: a Expo pede uns 15 minutos.
+      expect((await notifications.checkReceipts(new Date())).read).toBe(0);
+
+      recibos = {
+        [tickets[0]!.id]: { status: 'error', details: { error: 'DeviceNotRegistered' } },
+      };
+      const r = await notifications.checkReceipts(new Date(Date.now() + RECEIPT_DELAY_MS + 1000));
+      expect(r.removedDevices).toBeGreaterThanOrEqual(1);
+      expect(await notifications.listDevices(c.membro)).toEqual([]);
+      expect(await prisma.pushTicket.count({ where: { id: tickets[0]!.id } })).toBe(0);
+      tokenDe.delete(c.membro);
+      recibos = {};
+    });
+
+    it('ticket sem recibo há mais de 24 h é esquecido', async () => {
+      const c = await comunidade();
+      const [device] = await prisma.userDevice.findMany({ where: { userId: c.membro } });
+      await prisma.pushTicket.create({
+        data: {
+          id: `velho-${Date.now()}`,
+          deviceId: device!.id,
+          createdAt: new Date(Date.now() - 25 * 3_600_000),
+        },
+      });
+      await notifications.checkReceipts(new Date());
+      expect(await prisma.pushTicket.count({ where: { deviceId: device!.id } })).toBe(0);
+      expect(await notifications.listDevices(c.membro)).toHaveLength(1);
     });
   });
 
