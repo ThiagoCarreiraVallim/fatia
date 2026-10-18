@@ -12,7 +12,12 @@ export type TemplateKind = 'WORKOUT' | 'NUTRITION';
 export type PlanLevel = 'beginner' | 'intermediate' | 'advanced';
 export type TipCategory = 'WORKOUT' | 'NUTRITION' | 'HABITS' | 'GENERAL';
 export type MediaPurpose =
-  'group_avatar' | 'group_content' | 'exercise_video' | 'exercise_photo' | 'agent_avatar';
+  | 'group_avatar'
+  | 'group_content'
+  | 'exercise_video'
+  | 'exercise_photo'
+  | 'agent_avatar'
+  | 'post_image';
 
 export interface MediaView {
   id: string;

@@ -1,4 +1,5 @@
 import { apiFetch } from './http';
+import type { PostPolicy } from './community-feed';
 import type {
   GroupRole,
   GroupType,
@@ -35,6 +36,7 @@ export interface UpdateGroupInput {
   joinPolicy?: JoinPolicy;
   visibility?: GroupVisibility;
   timezone?: string;
+  postPolicy?: PostPolicy;
 }
 
 /** O grupo como a API devolve ao criar ou editar. */

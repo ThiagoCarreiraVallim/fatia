@@ -34,6 +34,7 @@ export type PanelSection =
   | 'content'
   | 'exercises'
   | 'challenges'
+  | 'moderation'
   | 'agent'
   | 'seats'
   | 'settings';
@@ -52,6 +53,7 @@ const SECTIONS: Record<PanelSection, PanelLink> = {
   content: { section: 'content', label: 'Planos e dicas', path: '/content' },
   exercises: { section: 'exercises', label: 'Exercícios', path: '/exercises' },
   challenges: { section: 'challenges', label: 'Desafios', path: '/challenges' },
+  moderation: { section: 'moderation', label: 'Moderação', path: '/moderation' },
   agent: { section: 'agent', label: 'Agente', path: '/agent' },
   seats: { section: 'seats', label: 'Assentos', path: '/seats' },
   settings: { section: 'settings', label: 'Configurações', path: '/settings' },

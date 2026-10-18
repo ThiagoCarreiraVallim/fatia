@@ -42,7 +42,7 @@ const visao = (extra: Partial<SeatsOverview> = {}): SeatsOverview => ({
 });
 
 describe('quem abre o painel e com que seções', () => {
-  it('dono vê tudo; profissional, membros, convites, conteúdo, exercícios e desafios; os demais, nada', () => {
+  it('dono vê tudo, inclusive a moderação; profissional, membros, convites, conteúdo, exercícios e desafios; os demais, nada', () => {
     expect(panelSections('OWNER').map((s) => s.section)).toEqual([
       'overview',
       'members',
@@ -50,6 +50,7 @@ describe('quem abre o painel e com que seções', () => {
       'content',
       'exercises',
       'challenges',
+      'moderation',
       'agent',
       'seats',
       'settings',

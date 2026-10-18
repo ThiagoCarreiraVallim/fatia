@@ -92,6 +92,8 @@ describe('navegação', () => {
       ['/org/g1/members/m9', 'Membro', '/org/g1/members', 'Membros'],
       ['/org/g1/seats', 'Assentos', '/org/g1', 'Painel'],
       ['/org/g1/settings?x=1', 'Configurações', '/org/g1', 'Painel'],
+      ['/community/g1/feed', 'Mural', '/community/g1', 'Comunidade'],
+      ['/org/g1/moderation', 'Moderação', '/org/g1', 'Painel'],
     ])('%s: "%s", volta para %s', (path, title, parent, parentTitle) => {
       expect(routeInfo(path)).toEqual({ title, parent, parentTitle });
     });

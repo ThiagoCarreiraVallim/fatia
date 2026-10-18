@@ -1,4 +1,5 @@
 import { apiFetch } from './http';
+import type { PostPolicy } from './community-feed';
 import type { ShareScope } from './sharing';
 
 /**
@@ -11,7 +12,7 @@ import type { ShareScope } from './sharing';
 
 export type GroupType = 'SPONSORED' | 'SOCIAL';
 export type GroupRole = 'OWNER' | 'PROFESSIONAL' | 'CREATOR' | 'MEMBER';
-export type MembershipStatus = 'INVITED' | 'ACTIVE' | 'LEFT' | 'REMOVED';
+export type MembershipStatus = 'INVITED' | 'ACTIVE' | 'LEFT' | 'REMOVED' | 'BANNED';
 export type JoinPolicy = 'OPEN' | 'APPROVAL' | 'INVITE_ONLY';
 
 /** O que a pessoa escolhe ao entrar: nada vem marcado, e recusar tudo ainda entra. */
@@ -41,6 +42,8 @@ export interface MyGroup {
   hasAiSeat: boolean;
   /** Avatar da comunidade, URL assinada de curta duração. */
   avatarUrl: string | null;
+  /** Quem publica no mural (Fase 8b). */
+  postPolicy: PostPolicy;
 }
 
 /** Quem da equipe recebe o que a pessoa compartilhar. Só nome e papel. */
