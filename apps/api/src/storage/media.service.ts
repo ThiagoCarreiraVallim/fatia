@@ -28,6 +28,8 @@ export const MEDIA_PURPOSES = {
   /** Tutorial da comunidade para um exercício (Fase 7b): o vídeo e as fotos. */
   exercise_video: { kinds: [MediaKind.VIDEO], action: 'content.publish' },
   exercise_photo: { kinds: [MediaKind.IMAGE], action: 'content.publish' },
+  /** O avatar do agente da comunidade no chat (Fase 7c). */
+  agent_avatar: { kinds: [MediaKind.IMAGE], action: 'group.update' },
 } as const satisfies Record<string, { kinds: readonly MediaKind[]; action: GroupAction }>;
 
 export type MediaPurpose = keyof typeof MEDIA_PURPOSES;
@@ -293,6 +295,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
           { status: MediaStatus.PENDING },
           {
             groupAvatarOf: { is: null },
+            agentAvatarOf: { is: null },
             templateCovers: { none: {} },
             tipImages: { none: {} },
             guideVideoOf: { is: null },

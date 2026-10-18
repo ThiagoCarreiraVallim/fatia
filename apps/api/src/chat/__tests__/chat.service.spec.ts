@@ -14,6 +14,7 @@ import {
 } from '../agent-chat.client';
 import { ChatService, type DestinoDoStream } from '../chat.service';
 import type { MemoryService } from '../memory/memory.service';
+import type { GroupAgentService } from '../../sharing/group-agent.service';
 import type {
   ConversationService,
   MensagemDoHistorico,
@@ -153,6 +154,10 @@ function montar(
     memorias?: { id: string; content: string }[];
     /** Segura o `abrir` até resolver — a janela em que o agente ainda pensa. */
     atrasarAbertura?: Promise<void>;
+    /** O agente gravado na conversa que já existe. */
+    agentGroupId?: string | null;
+    /** As comunidades com agente que esta pessoa pode escolher, e o padrão. */
+    agentes?: { padrao: string | null; disponiveis: string[] };
   } = {},
 ) {
   const canal = canalDoAgente();
@@ -163,16 +168,25 @@ function montar(
     encontrar: jest.fn(async (_userId: string, id: string) =>
       opcoes.existente === false
         ? null
-        : { id, userId: 'user-a', title: 't', createdAt: new Date(0), updatedAt: new Date(0) },
+        : {
+            id,
+            userId: 'user-a',
+            title: 't',
+            agentGroupId: opcoes.agentGroupId ?? null,
+            createdAt: new Date(0),
+            updatedAt: new Date(0),
+          },
     ),
     historicoParaOAgente: jest.fn(
       async (_userId: string, _id: string): Promise<MensagemDoHistorico[]> =>
         opcoes.historico ?? [],
     ),
     clearPauses: jest.fn(async (_userId: string, _id: string): Promise<void> => undefined),
-    iniciarTurno: jest.fn(async (_userId: string, id: string, _texto: string) => ({
-      conversationId: id,
-    })),
+    iniciarTurno: jest.fn(
+      async (_u: string, id: string, _t: string, _f?: number, _a?: string | null) => ({
+        conversationId: id,
+      }),
+    ),
     titularSeProvisorio: jest.fn(
       async (_u: string, _c: string, _p: string, _t: string): Promise<void> => undefined,
     ),
@@ -217,15 +231,36 @@ function montar(
     uso as unknown as AiUsageService,
   );
 
+  const disponiveis = opcoes.agentes?.disponiveis ?? [];
+  const persona = (groupId: string) => ({
+    groupId,
+    name: `Agente ${groupId}`,
+    community: `Comunidade ${groupId}`,
+    instructions: 'Fale de treino.',
+  });
+  const agentes = {
+    listForChat: jest.fn(async (_userId: string, _seat: string | null) => ({
+      defaultGroupId: opcoes.agentes?.padrao ?? null,
+      agents: [],
+    })),
+    assertSelectable: jest.fn(async (_userId: string, groupId: string) => {
+      if (!disponiveis.includes(groupId)) throw new NotFoundException('Agente não encontrado');
+    }),
+    personaFor: jest.fn(async (_userId: string, groupId: string | null) =>
+      groupId && disponiveis.includes(groupId) ? persona(groupId) : null,
+    ),
+  } satisfies Partial<GroupAgentService>;
+
   const service = new ChatService(
     conversas as unknown as ConversationService,
     agent as unknown as AgentChatClient,
     uso as unknown as AiUsageService,
     memorias as unknown as MemoryService,
     acesso,
+    agentes as unknown as GroupAgentService,
   );
 
-  return { service, conversas, agent, uso, canal, chamadasAoAgente: chamadas };
+  return { service, conversas, agent, uso, canal, agentes, chamadasAoAgente: chamadas };
 }
 
 beforeEach(() => {
@@ -446,7 +481,7 @@ describe('ChatService — ordem das guardas', () => {
 
     expect(chamadasAoAgente[0].historico).toEqual([]);
     expect(conversas.historicoParaOAgente).not.toHaveBeenCalled();
-    expect(conversas.iniciarTurno).toHaveBeenCalledWith('user-a', CONVERSA, 'oi', 0);
+    expect(conversas.iniciarTurno).toHaveBeenCalledWith('user-a', CONVERSA, 'oi', 0, null);
   });
 
   it('a retomada vai ao agente sem mensagem e não grava fala da pessoa', async () => {
@@ -472,6 +507,73 @@ describe('ChatService — ordem das guardas', () => {
     expect(conversas.iniciarTurno).not.toHaveBeenCalled();
     // A pausa anterior está resolvida: o card não pode voltar depois de um F5.
     expect(conversas.clearPauses).toHaveBeenCalledWith('user-a', CONVERSA);
+  });
+});
+
+describe('ChatService — o agente da comunidade (Fase 7c)', () => {
+  const ACADEMIA = '7b0e1c2d-3a4b-4c5d-8e6f-112233445566';
+  const OUTRA = '0a9b8c7d-6e5f-4a3b-9c2d-665544332211';
+
+  async function turno(
+    m: ReturnType<typeof montar>,
+    dto: { conversationId: string; message: string; agentGroupId?: string | null },
+  ) {
+    const t = m.service.converse(USUARIO, dto, 'tok', destinoDeTeste().destino);
+    await respirar();
+    m.canal.encerrar();
+    await t;
+  }
+
+  it('conversa nova sem escolha vai com o agente da comunidade do assento, e grava a escolha', async () => {
+    const m = montar({ existente: false, agentes: { padrao: ACADEMIA, disponiveis: [ACADEMIA] } });
+    await turno(m, turnoNovo('oi'));
+
+    expect(m.chamadasAoAgente[0].persona).toEqual(
+      expect.objectContaining({ groupId: ACADEMIA, instructions: 'Fale de treino.' }),
+    );
+    expect(m.conversas.iniciarTurno).toHaveBeenCalledWith('user-a', CONVERSA, 'oi', 0, ACADEMIA);
+  });
+
+  it('null escolhe o assistente da Fatia mesmo com um padrão, e o turno vai sem persona', async () => {
+    const m = montar({ existente: false, agentes: { padrao: ACADEMIA, disponiveis: [ACADEMIA] } });
+    await turno(m, { ...turnoNovo('oi'), agentGroupId: null });
+
+    expect(m.chamadasAoAgente[0]).not.toHaveProperty('persona');
+    expect(m.conversas.iniciarTurno).toHaveBeenCalledWith('user-a', CONVERSA, 'oi', 0, null);
+  });
+
+  it('agente de comunidade em que a pessoa não está é 404, antes de abrir o agente e de gravar', async () => {
+    const m = montar({ existente: false, agentes: { padrao: null, disponiveis: [ACADEMIA] } });
+
+    await expect(
+      m.service.converse(
+        USUARIO,
+        { ...turnoNovo('oi'), agentGroupId: OUTRA },
+        'tok',
+        destinoDeTeste().destino,
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(m.agent.abrir).not.toHaveBeenCalled();
+    expect(m.conversas.iniciarTurno).not.toHaveBeenCalled();
+  });
+
+  it('conversa que já existe segue com o agente gravado, e ignora outra escolha no corpo', async () => {
+    const m = montar({
+      agentGroupId: ACADEMIA,
+      agentes: { padrao: null, disponiveis: [ACADEMIA, OUTRA] },
+    });
+    await turno(m, { ...turnoNovo('e agora?'), agentGroupId: OUTRA });
+
+    expect(m.chamadasAoAgente[0].persona?.groupId).toBe(ACADEMIA);
+    expect(m.agentes.assertSelectable).not.toHaveBeenCalled();
+  });
+
+  it('quem saiu da comunidade (ou cujo dono desligou o agente) volta ao assistente da Fatia na mesma conversa', async () => {
+    const m = montar({ agentGroupId: ACADEMIA, agentes: { padrao: null, disponiveis: [] } });
+    await turno(m, turnoNovo('ainda está aí?'));
+
+    expect(m.agentes.personaFor).toHaveBeenCalledWith('user-a', ACADEMIA);
+    expect(m.chamadasAoAgente[0]).not.toHaveProperty('persona');
   });
 });
 

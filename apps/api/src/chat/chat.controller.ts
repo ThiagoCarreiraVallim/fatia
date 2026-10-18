@@ -27,6 +27,7 @@ import { CheckpointPurgeService } from './checkpoint-purge.service';
 import { ConversationService } from './conversation.service';
 import { MemoryService } from './memory/memory.service';
 import { PreviaDaAcaoService } from './previa/previa-da-acao.service';
+import { GroupAgentService } from '../sharing/group-agent.service';
 import { McpToolRegistry } from '../mcp/mcp-tool.registry';
 import {
   ChatActionPreviewDto,
@@ -67,6 +68,7 @@ export class ChatController {
     private readonly uso: AiUsageService,
     private readonly acesso: AiAccessService,
     private readonly previas: PreviaDaAcaoService,
+    private readonly agentes: GroupAgentService,
     private readonly registry: McpToolRegistry,
   ) {}
 
@@ -133,9 +135,19 @@ export class ChatController {
     return this.conversas.listar(user.id, query.q);
   }
 
+  /** Os agentes que a pessoa pode escolher numa conversa nova (Fase 7c), e o padrão. */
+  @Get('agents')
+  agents(@CurrentUser() user: CurrentUserPayload) {
+    return this.chat.agents(user.id);
+  }
+
   @Get('conversations/:id')
-  getConversation(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseUUIDPipe) id: string) {
-    return this.conversas.obterComMensagens(user.id, id);
+  async getConversation(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const conversa = await this.conversas.obterComMensagens(user.id, id);
+    return { ...conversa, agent: await this.agentes.headerFor(user.id, conversa.agentGroupId) };
   }
 
   @Patch('conversations/:id')

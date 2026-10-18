@@ -10,6 +10,8 @@ import { ContentController } from './content.controller';
 import { ContentService } from './content.service';
 import { GroupExerciseController } from './group-exercise.controller';
 import { GroupExerciseService } from './group-exercise.service';
+import { GroupAgentController } from './group-agent.controller';
+import { GroupAgentService } from './group-agent.service';
 import { AdoptGroupPlanTool } from './mcp/adopt-group-plan.tool';
 import { ListGroupPlansTool } from './mcp/list-group-plans.tool';
 import { ListGroupTipsTool } from './mcp/list-group-tips.tool';
@@ -89,6 +91,7 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
     ProfessionalController,
     ContentController,
     GroupExerciseController,
+    GroupAgentController,
   ],
   providers: [
     ProfessionalAccessService,
@@ -102,6 +105,7 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
     PlanMaterializerService,
     ContentService,
     GroupExerciseService,
+    GroupAgentService,
     GroupRoleGuard,
     ListMyGroupsTool,
     JoinGroupTool,
@@ -130,6 +134,7 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
     PlanMaterializerService,
     ContentService,
     GroupExerciseService,
+    GroupAgentService,
   ],
 })
 export class SharingModule {}

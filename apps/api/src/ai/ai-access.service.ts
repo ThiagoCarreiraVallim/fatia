@@ -81,6 +81,14 @@ export class AiAccessService {
   }
 
   /**
+   * A comunidade que paga o assento de IA desta pessoa, ou `null`. É o agente
+   * padrão do chat (Fase 7c): quem entrou pela academia conversa com o dela.
+   */
+  async seatGroupOf(userId: string): Promise<string | null> {
+    return AiAccessService.pagoPor(await this.direitos.aiTierForUser(userId)).groupId;
+  }
+
+  /**
    * Quem paga, para `AiUsage.paidBy` e `AiUsage.groupId`. Com assento, a
    * comunidade — e o uso entra na conta dela (ADR 025).
    */

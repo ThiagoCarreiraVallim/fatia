@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { MensagemDoHistorico } from './conversation.service';
+import type { ChatPersona } from '../sharing/group-agent.service';
 
 /**
  * Cliente do `apps/agent` para o chat, do lado do NestJS (#249, ADR 023).
@@ -85,6 +86,8 @@ export type EntradaDoTurno = {
   historico: MensagemDoHistorico[];
   /** O que a pessoa pediu para o assistente lembrar. Entra cercado no prompt. */
   memorias?: { id: string; content: string }[];
+  /** O agente da comunidade nesta conversa (Fase 7c). Ausente: o assistente da Fatia. */
+  persona?: ChatPersona;
 } & (
   | {
       mensagem: string;
@@ -282,6 +285,7 @@ export class AgentChatClient {
           timezone: entrada.timezone,
           history: entrada.historico.map((m) => ({ role: m.role, content: m.content })),
           memories: entrada.memorias ?? [],
+          ...(entrada.persona ? { persona: entrada.persona } : {}),
           ...(entrada.retomada
             ? { resume: entrada.retomada }
             : {

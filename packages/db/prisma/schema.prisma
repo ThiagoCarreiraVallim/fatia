@@ -397,15 +397,15 @@ model Exercise {
   groupGuides   GroupExerciseGuide[]
 
   @@unique([name, createdByUserId])
+  // Nome único dentro do catálogo da comunidade. `groupId` nulo (catálogo
+  // geral, exercício pessoal, exercício solto da comunidade) não colide: no
+  // Postgres, NULL é distinto de NULL.
+  @@unique([name, groupId])
   @@index([name])
   @@index([searchName])
   @@index([muscleGroup])
   @@index([createdByUserId])
   @@index([clonedFromId])
-  // Nome único dentro do catálogo da comunidade. `groupId` nulo (catálogo
-  // geral, exercício pessoal, exercício solto da comunidade) não colide: no
-  // Postgres, NULL é distinto de NULL.
-  @@unique([name, groupId])
   @@index([groupId])
 }
 
@@ -834,6 +834,9 @@ model Group {
   equipment      String[]             @default([])
   exercises      Exercise[]           @relation("GroupExercises")
   exerciseGuides GroupExerciseGuide[]
+  /// O agente da comunidade no chat (Fase 7c, ADR 031).
+  agent          GroupAgent?
+  agentChats     Conversation[]       @relation("ConversationAgent")
 
   @@index([ownerId])
   @@index([type])
@@ -940,20 +943,26 @@ model ProfessionalAccessLog {
 /// no agente: o `apps/agent` não tem credencial de Postgres e não vai ter
 /// (ADR 015), então quem guarda é quem já é dono do isolamento.
 model Conversation {
-  id     String  @id @default(uuid())
-  userId String
+  id           String  @id @default(uuid())
+  userId       String
   /// Derivado da primeira mensagem, para a lista de conversas ter o que mostrar.
   /// Nulo até o primeiro turno completar.
-  title  String?
+  title        String?
+  /// A comunidade cujo agente conduz a conversa (Fase 7c), escolhida quando a
+  /// conversa nasce. Nulo é o assistente da Fatia. `SetNull`: apagar a
+  /// comunidade devolve a conversa ao assistente da Fatia sem apagar nada.
+  agentGroupId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages Message[]
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agentGroup Group?    @relation("ConversationAgent", fields: [agentGroupId], references: [id], onDelete: SetNull)
+  messages   Message[]
 
   /// A listagem é sempre "minhas conversas, mais recente primeiro".
   @@index([userId, updatedAt])
+  @@index([agentGroupId])
 }
 
 /// Papel de quem falou. Minúsculo e com estes dois nomes de propósito: é o
@@ -1337,6 +1346,7 @@ model MediaFile {
   uploader       User?                    @relation("MediaUploader", fields: [uploaderId], references: [id], onDelete: SetNull)
   group          Group?                   @relation("GroupMedia", fields: [groupId], references: [id], onDelete: Cascade)
   groupAvatarOf  Group?                   @relation("GroupAvatar")
+  agentAvatarOf  GroupAgent?              @relation("AgentAvatar")
   templateCovers GroupPlanTemplate[]      @relation("TemplateCover")
   tipImages      GroupTip[]               @relation("TipImage")
   guideVideoOf   GroupExerciseGuide?      @relation("GuideVideo")
@@ -1449,4 +1459,22 @@ model GroupExerciseGuidePhoto {
   file  MediaFile          @relation(fields: [fileId], references: [id], onDelete: Cascade)
 
   @@index([guideId])
+}
+
+/// O agente da comunidade no chat (Fase 7c, ADR 031): nome, avatar e
+/// orientações de tom e foco, por cima do mesmo assistente. As orientações
+/// entram cercadas no prompt, abaixo das regras fixas, e nunca mudam o que as
+/// tools enxergam — elas continuam com o login de quem conversa.
+model GroupAgent {
+  groupId      String   @id
+  name         String
+  /// Até 2.000 caracteres, conferidos na API e no agente.
+  instructions String   @default("")
+  avatarFileId String?  @unique
+  enabled      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  group      Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  avatarFile MediaFile? @relation("AgentAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
 }

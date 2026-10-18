@@ -11,6 +11,7 @@ import type { CurrentUserPayload } from '../common/decorators/current-user.decor
 import { AgentChatClient, ErroDeStreamDoAgente, type StreamDoAgente } from './agent-chat.client';
 import { ConversationService } from './conversation.service';
 import { MemoryService } from './memory/memory.service';
+import { GroupAgentService } from '../sharing/group-agent.service';
 import type { ChatPhotoDto, SendChatMessageDto } from './dto/chat.dto';
 import { TETO_DA_FOTO_DO_CHAT } from './corpos-do-chat';
 import { NaoEhJpegError, removerMetadadosDoJpeg } from '../nutrition/helpers/strip-exif';
@@ -55,7 +56,33 @@ export class ChatService {
     private readonly uso: AiUsageService,
     private readonly memorias: MemoryService,
     private readonly acesso: AiAccessService,
+    private readonly agentes: GroupAgentService,
   ) {}
+
+  /** Os agentes que a pessoa pode escolher numa conversa nova, e o padrão. */
+  async agents(userId: string) {
+    return this.agentes.listForChat(userId, await this.acesso.seatGroupOf(userId));
+  }
+
+  /**
+   * De qual comunidade é o agente desta conversa. Gravado quando ela nasce:
+   * ausente é o padrão (a comunidade do assento), `null` é o assistente da
+   * Fatia, e um id fora das opções é 404 antes de qualquer gasto.
+   */
+  private async agentGroupOf(
+    userId: string,
+    existente: { agentGroupId: string | null } | null,
+    escolhido: string | null | undefined,
+    seatGroupId: string | null,
+  ): Promise<string | null> {
+    if (existente) return existente.agentGroupId;
+    if (escolhido === null) return null;
+    if (escolhido === undefined) {
+      return (await this.agentes.listForChat(userId, seatGroupId)).defaultGroupId;
+    }
+    await this.agentes.assertSelectable(userId, escolhido);
+    return escolhido;
+  }
 
   /**
    * O ditado do composer (#141): plano e cota, transcrição e o custo no livro-caixa.
@@ -114,6 +141,15 @@ export class ChatService {
     if (dto.resume && !existente) throw new NotFoundException('Conversa não encontrada.');
 
     const pagador = AiAccessService.pagoPor(await this.acesso.assertPodeUsar(user.id));
+    const agentGroupId = await this.agentGroupOf(
+      user.id,
+      existente,
+      dto.agentGroupId,
+      pagador.groupId,
+    );
+    // Conferida a cada turno: saiu da comunidade, ou o dono desligou o agente,
+    // e a mesma conversa segue com o assistente da Fatia.
+    const persona = await this.agentes.personaFor(user.id, agentGroupId);
 
     const historico =
       existente && dto.message !== undefined
@@ -133,6 +169,7 @@ export class ChatService {
       conversationId: dto.conversationId,
       historico,
       memorias: (await this.memorias.listar(user.id)).map(({ id, content }) => ({ id, content })),
+      ...(persona ? { persona } : {}),
     };
     stream = await this.agent.abrir(
       dto.resume
@@ -144,7 +181,13 @@ export class ChatService {
 
     if (existente) await this.conversas.clearPauses(user.id, dto.conversationId);
     if (dto.message !== undefined) {
-      await this.conversas.iniciarTurno(user.id, dto.conversationId, dto.message, fotos.length);
+      await this.conversas.iniciarTurno(
+        user.id,
+        dto.conversationId,
+        dto.message,
+        fotos.length,
+        agentGroupId,
+      );
       // Sem `await`: o nome é enfeite de lista, e esperar por ele atrasaria o
       // primeiro token da resposta, que é o que a pessoa está olhando.
       if (!existente) void this.nomear(user.id, dto.conversationId, dto.message, pagador);

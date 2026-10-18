@@ -198,6 +198,8 @@ export class AccountService {
         select: {
           id: true,
           title: true,
+          // De qual comunidade era o agente da conversa (Fase 7c); nulo é o da Fatia.
+          agentGroupId: true,
           createdAt: true,
           messages: {
             select: {

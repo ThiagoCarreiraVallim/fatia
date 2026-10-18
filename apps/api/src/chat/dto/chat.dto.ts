@@ -93,6 +93,16 @@ export class SendChatMessageDto {
   @ValidateNested({ each: true })
   @Type(() => ChatPhotoDto)
   photos?: ChatPhotoDto[];
+
+  /**
+   * O agente de uma conversa nova (Fase 7c): o id da comunidade, ou `null` para
+   * o assistente da Fatia. Ausente é o padrão. Numa conversa que já existe, vale
+   * o que foi gravado quando ela nasceu.
+   */
+  @IsOptional()
+  @ValidateIf((_: SendChatMessageDto, v: unknown) => v !== null)
+  @IsUUID()
+  agentGroupId?: string | null;
 }
 
 export class ListConversationsQueryDto {

@@ -14,6 +14,7 @@ import { AgentChatClient, type EntradaDoTurno, type StreamDoAgente } from '../ag
 import { ChatModule } from '../chat.module';
 import { CheckpointPurgeService } from '../checkpoint-purge.service';
 import { ConversationService } from '../conversation.service';
+import { GroupAgentService } from '../../sharing/group-agent.service';
 import { MemoryService } from '../memory/memory.service';
 import { registrarCorposDoChat, TETO_DO_AUDIO } from '../corpos-do-chat';
 import { JPEG_COM_EXIF_GPS } from '../../nutrition/helpers/jpeg-com-exif.fixture';
@@ -185,6 +186,13 @@ async function subirApp(): Promise<Cenario> {
     .useValue({ apagarConversa: jest.fn(async () => undefined) })
     .overrideProvider(MemoryService)
     .useValue({ listar: jest.fn(async () => []) })
+    .overrideProvider(GroupAgentService)
+    .useValue({
+      listForChat: jest.fn(async () => ({ defaultGroupId: null, agents: [] })),
+      assertSelectable: jest.fn(async () => undefined),
+      personaFor: jest.fn(async () => null),
+      headerFor: jest.fn(async () => null),
+    })
     .compile();
 
   const app = modulo.createNestApplication({ logger: false });

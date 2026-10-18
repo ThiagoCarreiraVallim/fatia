@@ -80,7 +80,7 @@ export class ConversationService {
         ...(termo ? { title: { contains: termo, mode: Prisma.QueryMode.insensitive } } : {}),
       },
       orderBy: { updatedAt: 'desc' },
-      select: { id: true, title: true, createdAt: true, updatedAt: true },
+      select: { id: true, title: true, agentGroupId: true, createdAt: true, updatedAt: true },
     });
   }
 
@@ -201,6 +201,7 @@ export class ConversationService {
     conversationId: string,
     texto: string,
     fotos = 0,
+    agentGroupId: string | null = null,
   ): Promise<{ conversationId: string }> {
     const conversa = await this.encontrar(userId, conversationId);
 
@@ -208,7 +209,7 @@ export class ConversationService {
       const alvo =
         conversa ??
         (await tx.conversation.create({
-          data: { id: conversationId, userId, title: tituloDe(texto) },
+          data: { id: conversationId, userId, title: tituloDe(texto), agentGroupId },
         }));
 
       await tx.message.create({

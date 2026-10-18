@@ -12,6 +12,7 @@ import { SaveMemoryTool } from './memory/mcp/save-memory.tool';
 import { MemoryService } from './memory/memory.service';
 import { PreviaDaAcaoService } from './previa/previa-da-acao.service';
 import { McpModule } from '../mcp/mcp.module';
+import { SharingModule } from '../sharing/sharing.module';
 
 /**
  * Chat com a IA hospedada (#249).
@@ -26,7 +27,7 @@ import { McpModule } from '../mcp/mcp.module';
  * valida os argumentos com o schema da própria tool (`previa/`).
  */
 @Module({
-  imports: [McpModule, AiModule],
+  imports: [McpModule, AiModule, SharingModule],
   controllers: [ChatController],
   providers: [
     ChatService,
