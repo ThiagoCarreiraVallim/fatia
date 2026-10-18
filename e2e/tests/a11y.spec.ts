@@ -107,6 +107,16 @@ test.describe('axe: comunidade', () => {
     await page.getByRole('button', { name: /Supino Máquina/ }).click();
     await page.getByRole('region', { name: 'Tutorial de Academia Demo' }).waitFor();
     expect(await auditar(page)).toEqual([]);
+
+    // O agente da comunidade (Fase 7c): a escolha na conversa nova. O demo é Free.
+    await page.route('**/api/proxy/chat/availability', (route) =>
+      route.fulfill({
+        json: { available: true, photos: false, dictation: false, allowed: true, reason: 'ok' },
+      }),
+    );
+    await page.goto('/chat');
+    await page.getByRole('radiogroup', { name: 'Com quem conversar' }).waitFor();
+    expect(await auditar(page)).toEqual([]);
   });
 });
 
@@ -130,6 +140,7 @@ test.describe('axe: painel da comunidade', () => {
       [`/org/${id}/content/tips/new`, 'Categoria'],
       [`/org/${id}/exercises`, 'Equipamento da academia'],
       [`/org/${id}/exercises/new`, 'Como executar'],
+      [`/org/${id}/agent`, 'Como aparece no chat'],
       ['/community/new', 'Como se entra'],
     ];
     for (const [rota, marco] of secoes) {

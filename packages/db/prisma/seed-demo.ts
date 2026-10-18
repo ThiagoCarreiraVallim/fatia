@@ -534,6 +534,7 @@ async function seedCommunity(demoUserId: string) {
 
   const conteudo = await seedCommunityContent(group.id, dona.id, profissional.id);
   const catalogo = await seedCommunityExercises(group.id, dona.id, profissional.id);
+  const agente = await seedCommunityAgent(group.id);
 
   // Convites que o E2E deixou para trás (o painel cria e revoga): fora.
   await prisma.groupInvite.deleteMany({ where: { groupId: group.id } });
@@ -541,7 +542,7 @@ async function seedCommunity(demoUserId: string) {
   // O demo entra pelo E2E: nenhuma associação (o assento cai junto, em cascata).
   await prisma.groupMembership.deleteMany({ where: { groupId: group.id, userId: demoUserId } });
   console.log(
-    `  ✓ Comunidade "${group.name}" (${COMMUNITY_SLUG}): dona ${dona.email}, 1 profissional, ${membros.length} membros, ${PENDING_REQUESTS.length} pedidos, ${sessoes.length} treinos, ${COMMUNITY_SEATS} assentos, ${conteudo}, ${catalogo}.`,
+    `  ✓ Comunidade "${group.name}" (${COMMUNITY_SLUG}): dona ${dona.email}, 1 profissional, ${membros.length} membros, ${PENDING_REQUESTS.length} pedidos, ${sessoes.length} treinos, ${COMMUNITY_SEATS} assentos, ${conteudo}, ${catalogo}, ${agente}.`,
   );
 }
 
@@ -770,6 +771,28 @@ async function seedCommunityContent(groupId: string, donaId: string, profissiona
  * do catálogo geral. Sem vídeo nem foto, pelo mesmo motivo das dicas: o envio
  * é coberto pelo E2E, e o seed não fala com o bucket.
  */
+/**
+ * O agente da Academia Demo no chat (Fase 7c), ligado e sem avatar próprio (usa
+ * o da comunidade). Recriado a cada execução: o E2E muda o nome e as orientações.
+ */
+async function seedCommunityAgent(groupId: string) {
+  const dados = {
+    name: 'Treinador Demo',
+    instructions:
+      'Fale como a equipe da Academia Demo: animado, direto e sem termos técnicos. ' +
+      'Quando perguntarem de treino, sugira primeiro os planos prontos da casa e os ' +
+      'exercícios que dá para fazer com os nossos aparelhos.',
+    enabled: true,
+    avatarFileId: null,
+  };
+  await prisma.groupAgent.upsert({
+    where: { groupId },
+    create: { groupId, ...dados },
+    update: dados,
+  });
+  return `agente "${dados.name}" ligado`;
+}
+
 async function seedCommunityExercises(groupId: string, donaId: string, profissionalId: string) {
   await prisma.group.update({
     where: { id: groupId },

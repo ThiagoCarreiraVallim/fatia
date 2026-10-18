@@ -476,6 +476,12 @@ test.describe('comunidade', () => {
     await page.getByRole('button', { name: /Supino Máquina/ }).click();
     await appears(page.getByRole('region', { name: 'Tutorial de Academia Demo' }));
     await snap(page, '99-exercicio-tutorial');
+
+    // O agente da comunidade no chat (Fase 7c): com o assento pago por ela, a
+    // conversa nova já começa com o agente dela marcado.
+    await page.goto('/chat');
+    await appears(page.getByRole('radio', { name: /Treinador Demo/ }));
+    await snap(page, '101-chat-agente');
   });
 });
 
@@ -551,6 +557,11 @@ test.describe('painel da comunidade', () => {
     await page.getByRole('link', { name: /Leg press 45° da casa/ }).click();
     await appears(page.getByLabel('Como executar'));
     await snap(page, '97-painel-exercicio');
+
+    // O agente da comunidade, pelo dono (Fase 7c).
+    await page.goto(`/org/${id}/agent`);
+    await appears(page.getByLabel('Orientações', { exact: true }));
+    await snap(page, '100-painel-agente');
   });
 });
 
