@@ -16,7 +16,14 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import { GroupRole, GroupType, GroupVisibility, JoinPolicy, ShareScope } from '@prisma/client';
+import {
+  GroupRole,
+  GroupType,
+  GroupVisibility,
+  JoinPolicy,
+  PostPolicy,
+  ShareScope,
+} from '@prisma/client';
 
 /**
  * Papéis que o dono pode conceder ao aprovar uma entrada.
@@ -64,6 +71,7 @@ export class UpdateGroupDto {
   @IsOptional() @IsEnum(JoinPolicy) joinPolicy?: JoinPolicy;
   @IsOptional() @IsEnum(GroupVisibility) visibility?: GroupVisibility;
   @IsOptional() @IsString() @MinLength(3) @MaxLength(60) timezone?: string;
+  @IsOptional() @IsEnum(PostPolicy) postPolicy?: PostPolicy;
 }
 
 export class SetAvatarDto {

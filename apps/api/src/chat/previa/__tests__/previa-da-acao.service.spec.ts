@@ -13,6 +13,7 @@ import { LogMealTemplateTool } from '../../../nutrition/mcp/log-meal-template.to
 import { SetGroupSharingTool } from '../../../sharing/mcp/set-group-sharing.tool';
 import { AcceptGroupInviteTool } from '../../../sharing/mcp/accept-group-invite.tool';
 import { JoinGroupChallengeTool } from '../../../sharing/mcp/join-group-challenge.tool';
+import { CommentOnGroupPostTool } from '../../../sharing/mcp/comment-on-group-post.tool';
 import { hashInviteToken } from '../../../sharing/invite.service';
 import { PreviaDaAcaoService } from '../previa-da-acao.service';
 
@@ -41,6 +42,7 @@ describe('PreviaDaAcaoService', () => {
     SetGroupSharingTool,
     AcceptGroupInviteTool,
     JoinGroupChallengeTool,
+    CommentOnGroupPostTool,
   ];
   const discovery = {
     getProviders: () =>
@@ -433,7 +435,7 @@ describe('PreviaDaAcaoService', () => {
         linhas: [
           { rotulo: 'Comunidade', valor: 'Academia da Prévia' },
           { rotulo: 'Desafio', valor: 'Outubro ativo' },
-          { rotulo: 'Apelido no ranking', valor: 'Ana' },
+          { rotulo: 'Apelido na comunidade', valor: 'Ana' },
         ],
       });
       // Membro de OUTRA comunidade, com o id do desafio desta: a comunidade dele
@@ -458,6 +460,67 @@ describe('PreviaDaAcaoService', () => {
       expect(deFora.valida).toBe(false);
       expect(JSON.stringify(deFora)).not.toContain('Outubro ativo');
     } finally {
+      await prisma.user.delete({ where: { id: estranho.id } });
+    }
+  });
+
+  it('comentar no mural: o trecho do post; removido ou de outra comunidade, nada', async () => {
+    const m = await prisma.groupMembership.findFirstOrThrow({
+      where: { groupId: comunidade, userId: dono.id },
+    });
+    const post = await prisma.groupPost.create({
+      data: { groupId: comunidade, membershipId: m.id, body: 'Treino de pernas hoje às 18h' },
+    });
+    const removido = await prisma.groupPost.create({
+      data: { groupId: comunidade, membershipId: m.id, body: 'Post tirado', removedAt: new Date() },
+    });
+    const estranho = await prisma.user.create({
+      data: {
+        logtoSub: `previa-post-${Date.now()}`,
+        email: `previa-post-${Date.now()}@test.local`,
+        name: 'estranho',
+      },
+    });
+    try {
+      await expect(
+        previas.previa(dono, 'comment_on_group_post', {
+          groupId: comunidade,
+          postId: post.id,
+          body: 'Bora!',
+        }),
+      ).resolves.toEqual({
+        valida: true,
+        linhas: [
+          { rotulo: 'Comunidade', valor: 'Academia da Prévia' },
+          { rotulo: 'Post', valor: 'Treino de pernas hoje às 18h' },
+          { rotulo: 'Texto', valor: 'Bora!' },
+        ],
+      });
+      const doRemovido = await previas.previa(dono, 'comment_on_group_post', {
+        groupId: comunidade,
+        postId: removido.id,
+        body: 'x',
+      });
+      expect(doRemovido.valida).toBe(false);
+
+      const daOutra = await prisma.group.create({
+        data: {
+          type: 'SPONSORED',
+          name: 'Outra Academia',
+          slug: `previa-post-outra-${Date.now()}`,
+          ownerId: estranho.id,
+          memberships: { create: [{ userId: estranho.id, role: 'OWNER', status: 'ACTIVE' }] },
+        },
+      });
+      const deFora = await previas.previa(
+        { id: estranho.id, timezone: TZ },
+        'comment_on_group_post',
+        { groupId: daOutra.id, postId: post.id, body: 'x' },
+      );
+      expect(deFora.valida).toBe(false);
+      expect(JSON.stringify(deFora)).not.toContain('Treino de pernas');
+    } finally {
+      await prisma.groupPost.deleteMany({ where: { id: { in: [post.id, removido.id] } } });
       await prisma.user.delete({ where: { id: estranho.id } });
     }
   });

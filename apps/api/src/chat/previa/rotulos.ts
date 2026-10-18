@@ -261,7 +261,9 @@ export const CAMPOS: Record<string, Campo> = {
   fatG: { rotulo: 'Gordura', formato: comUnidade('g') },
   name: { rotulo: 'Nome', formato: texto },
   title: { rotulo: 'Título', formato: texto },
-  displayName: { rotulo: 'Apelido no ranking', formato: texto },
+  // O apelido da comunidade vale para o ranking e para o mural.
+  displayName: { rotulo: 'Apelido na comunidade', formato: texto },
+  body: { rotulo: 'Texto', formato: texto },
   description: { rotulo: 'Descrição', formato: texto },
   content: { rotulo: 'O que lembrar', formato: texto },
   kcalPer100g: { rotulo: 'Calorias em 100 g', formato: comUnidade('kcal', 0) },
@@ -386,7 +388,8 @@ export type TipoDeRegistro =
   | 'comunidade'
   | 'convite'
   | 'planoDaComunidade'
-  | 'desafioDaComunidade';
+  | 'desafioDaComunidade'
+  | 'postDaComunidade';
 
 /**
  * Campo cujo sentido muda com a tool. `groupId` é grupo de alimento em
@@ -399,6 +402,8 @@ export const CAMPO_POR_TOOL: Record<string, Record<string, TipoDeRegistro>> = {
   // `templateId` aqui é plano pronto da comunidade, não refeição salva.
   adopt_group_plan: { groupId: 'comunidade', templateId: 'planoDaComunidade' },
   join_group_challenge: { groupId: 'comunidade', challengeId: 'desafioDaComunidade' },
+  create_group_post: { groupId: 'comunidade' },
+  comment_on_group_post: { groupId: 'comunidade', postId: 'postDaComunidade' },
 };
 
 /** O `id` cru muda de sentido conforme a tool — ver `tipoDoCampoId`. */
@@ -434,6 +439,7 @@ export const ROTULO_DO_REGISTRO: Record<TipoDeRegistro, string> = {
   convite: 'Comunidade',
   planoDaComunidade: 'Plano da comunidade',
   desafioDaComunidade: 'Desafio',
+  postDaComunidade: 'Post',
 };
 
 /** Campos com forma própria no cartão, montados pelo serviço. */

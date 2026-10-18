@@ -30,7 +30,7 @@ import {
  * `get_challenge_leaderboard`, `join_group_challenge`), nenhuma destrutiva. Sem medição nova.
  */
 
-const SHA_ENTIDADE = 'c8f1b7370439e2e4db2d46a5bfb09ab728aa7b6003e2bfad1e2e2292913c4045';
+const SHA_ENTIDADE = 'ac87d80707e5da39dd1cc4dc2c381d7a548b187f4087fdb6e3079279c74a4e40';
 const SHA_INTENCAO = '7c36e15630e05e7188964f8bc3fc7fadb66db106b3280448aeb98fbd2abf9c7f';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

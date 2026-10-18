@@ -15,10 +15,8 @@ import {
   CHALLENGE_DESCRIPTION_MAX,
   CHALLENGE_TITLE_MAX,
   CHALLENGE_TITLE_MIN,
-  DISPLAY_NAME_MAX,
-  DISPLAY_NAME_MIN,
-  DISPLAY_NAME_PATTERN,
 } from '../challenge.service';
+import { DISPLAY_NAME_MAX, DISPLAY_NAME_MIN, DISPLAY_NAME_PATTERN } from '../display-name';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 const DIA = /^\d{4}-\d{2}-\d{2}$/;

@@ -270,6 +270,34 @@ export class AccountService {
             },
             orderBy: { joinedAt: 'asc' },
           },
+          // O mural (Fase 8b): o que a pessoa escreveu, como reagiu e o que
+          // denunciou. Os posts e comentários dos outros são dado de terceiro.
+          posts: {
+            select: {
+              body: true,
+              createdAt: true,
+              pinnedAt: true,
+              removedAt: true,
+              removedReason: true,
+              _count: { select: { images: true } },
+            },
+            orderBy: { createdAt: 'asc' },
+          },
+          postComments: {
+            select: { body: true, createdAt: true, removedAt: true },
+            orderBy: { createdAt: 'asc' },
+          },
+          postReactions: { select: { kind: true, createdAt: true }, orderBy: { createdAt: 'asc' } },
+          reportsMade: {
+            select: {
+              reason: true,
+              note: true,
+              createdAt: true,
+              resolvedAt: true,
+              resolution: true,
+            },
+            orderBy: { createdAt: 'asc' },
+          },
         },
         orderBy: { createdAt: 'asc' },
       }),
@@ -413,6 +441,8 @@ export class AccountService {
         subscriptions: subscriptions.length,
         communityMemberships: communityMemberships.length,
         challengeEntries: communityMemberships.reduce((n, m) => n + m.challengeEntries.length, 0),
+        posts: communityMemberships.reduce((n, m) => n + m.posts.length, 0),
+        postComments: communityMemberships.reduce((n, m) => n + m.postComments.length, 0),
         invitesCreated: invitesCreated.length,
         contentPublished:
           contentPublished.plans.length +

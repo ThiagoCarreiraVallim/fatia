@@ -12,9 +12,16 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
-import { MediaKind, MediaStatus, MembershipStatus, type MediaFile } from '@fatia/db';
+import {
+  MediaKind,
+  MediaStatus,
+  MembershipStatus,
+  PostPolicy,
+  type GroupRole,
+  type MediaFile,
+} from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
-import { can, type GroupAction } from '../sharing/permissions';
+import { can, TEAM_ROLES, type GroupAction } from '../sharing/permissions';
 import { OBJECT_STORE, type ObjectStore } from './object-store.port';
 
 /**
@@ -30,6 +37,8 @@ export const MEDIA_PURPOSES = {
   exercise_photo: { kinds: [MediaKind.IMAGE], action: 'content.publish' },
   /** O avatar do agente da comunidade no chat (Fase 7c). */
   agent_avatar: { kinds: [MediaKind.IMAGE], action: 'group.update' },
+  /** Imagem de post no mural (Fase 8b). A política do mural vale aqui também. */
+  post_image: { kinds: [MediaKind.IMAGE], action: 'post.create' },
 } as const satisfies Record<string, { kinds: readonly MediaKind[]; action: GroupAction }>;
 
 export type MediaPurpose = keyof typeof MEDIA_PURPOSES;
@@ -138,7 +147,17 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
         `O arquivo passa do limite de ${Math.round(limite.maxBytes / 1024 / 1024)} MB.`,
       );
     }
-    await this.assertGroupAction(userId, input.groupId, regra.action);
+    const role = await this.assertGroupAction(userId, input.groupId, regra.action);
+    if (input.purpose === 'post_image' && !TEAM_ROLES.includes(role)) {
+      // Mural só da equipe: o bucket não guarda o que não vai virar post.
+      const g = await this.prisma.group.findUniqueOrThrow({
+        where: { id: input.groupId },
+        select: { postPolicy: true },
+      });
+      if (g.postPolicy === PostPolicy.TEAM_ONLY) {
+        throw new ForbiddenException('Nesta comunidade, só a equipe publica no mural');
+      }
+    }
 
     const id = randomUUID();
     const key = `groups/${input.groupId}/${id}/original`;
@@ -300,6 +319,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
             tipImages: { none: {} },
             guideVideoOf: { is: null },
             guidePhotoOf: { is: null },
+            postImageOf: { is: null },
           },
         ],
       },
@@ -330,14 +350,23 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
   async beforeDeleteAccount(userId: string): Promise<void> {
     const files = await this.prisma.mediaFile.findMany({
       where: {
-        OR: [{ uploaderId: userId, groupId: null }, { group: { ownerId: userId } }],
+        OR: [
+          { uploaderId: userId, groupId: null },
+          { group: { ownerId: userId } },
+          // As imagens dos posts dela: o post cai junto com a conta (ADR 032).
+          { postImageOf: { post: { author: { userId } } } },
+        ],
       },
       select: { id: true, key: true },
     });
     await this.discard(files);
   }
 
-  private async assertGroupAction(userId: string, groupId: string, action: GroupAction) {
+  private async assertGroupAction(
+    userId: string,
+    groupId: string,
+    action: GroupAction,
+  ): Promise<GroupRole> {
     const m = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId, userId } },
       select: { role: true, status: true },
@@ -345,5 +374,6 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
     // Não membro e grupo inexistente respondem igual (#92).
     if (!m || m.status !== MembershipStatus.ACTIVE) throw new NotFoundException('Group not found');
     if (!can(m.role, action)) throw new ForbiddenException('Seu papel não envia este arquivo');
+    return m.role;
   }
 }

@@ -9,6 +9,12 @@ import { SocialModule } from '../social/social.module';
 import { StorageModule } from '../storage/storage.module';
 import { ChallengeController } from './challenge.controller';
 import { ChallengeService } from './challenge.service';
+import { ModerationController } from './moderation.controller';
+import { PostController } from './post.controller';
+import { PostService } from './post.service';
+import { CommentOnGroupPostTool } from './mcp/comment-on-group-post.tool';
+import { CreateGroupPostTool } from './mcp/create-group-post.tool';
+import { ListGroupPostsTool } from './mcp/list-group-posts.tool';
 import { ContentController } from './content.controller';
 import { ContentService } from './content.service';
 import { GroupExerciseController } from './group-exercise.controller';
@@ -64,7 +70,8 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
  * repositório. O `ContentService` (Fase 7) é a porta dos planos prontos e das
  * dicas que a equipe publica; o membro adota pelo REST e pelas tools daqui. O
  * `ChallengeService` (Fase 8a) é a porta dos desafios; o placar é calculado em
- * `social/`, que só recebe os participantes do desafio da URL. Oferta aceita (#157) e plano pronto adotado (#162) são a mesma
+ * `social/`, que só recebe os participantes do desafio da URL. O `PostService`
+ * (Fase 8b) é o mural, e a moderação dele. Oferta aceita (#157) e plano pronto adotado (#162) são a mesma
  * cópia com portas de entrada diferentes; duas implementações divergiriam no
  * primeiro campo novo de `WorkoutPlan`.
  *
@@ -102,6 +109,8 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
     GroupExerciseController,
     GroupAgentController,
     ChallengeController,
+    PostController,
+    ModerationController,
   ],
   providers: [
     ProfessionalAccessService,
@@ -117,6 +126,7 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
     GroupExerciseService,
     GroupAgentService,
     ChallengeService,
+    PostService,
     GroupRoleGuard,
     ListMyGroupsTool,
     JoinGroupTool,
@@ -136,6 +146,9 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
     ListGroupChallengesTool,
     GetChallengeLeaderboardTool,
     JoinGroupChallengeTool,
+    ListGroupPostsTool,
+    CreateGroupPostTool,
+    CommentOnGroupPostTool,
   ],
   exports: [
     ProfessionalAccessService,

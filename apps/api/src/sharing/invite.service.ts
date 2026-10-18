@@ -16,7 +16,12 @@ import { PrismaService } from '../common/prisma.service';
 import { EmailService } from '../notifications/email.service';
 import { inviteEmail } from '../notifications/invite-email';
 import { TEAM_ROLES } from './permissions';
-import { MembershipService, type JoinConsent, type MembershipResult } from './membership.service';
+import {
+  assertNotBanned,
+  MembershipService,
+  type JoinConsent,
+  type MembershipResult,
+} from './membership.service';
 
 /** Resposta única de recusa: inválido, expirado, revogado, esgotado ou de outro e-mail. */
 const INVITE_NOT_FOUND = 'Invite not found';
@@ -401,6 +406,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
       where: { groupId_userId: { groupId: convite.groupId, userId } },
       select: { status: true },
     });
+    assertNotBanned(existente?.status);
     if (existente?.status === MembershipStatus.ACTIVE) {
       throw new ConflictException({
         message: 'Você já faz parte desta comunidade',

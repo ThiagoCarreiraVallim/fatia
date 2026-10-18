@@ -260,6 +260,21 @@ export class PreviaDaAcaoService {
         });
         return desafio?.title ?? null;
       }
+      case 'postDaComunidade': {
+        // Só post no ar de comunidade de que a pessoa é membro ativo: o
+        // comentário num post removido ou alheio falharia.
+        const post = await this.prisma.groupPost.findFirst({
+          where: {
+            id,
+            removedAt: null,
+            group: { memberships: { some: { userId, status: 'ACTIVE' } } },
+          },
+          select: { body: true },
+        });
+        if (!post) return null;
+        const linha = post.body.replace(/\s+/g, ' ').trim();
+        return linha.length > 60 ? `${linha.slice(0, 59)}…` : linha || 'Post com imagem';
+      }
       case 'convite': {
         // Convite que não vale mais não ganha nome no cartão: o aceite falharia.
         const convite = await this.prisma.groupInvite.findUnique({

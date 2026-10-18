@@ -20,7 +20,7 @@ Se você quer instalar um app na loja e não pensar em servidor, o Fatia ainda n
 
 |                                           |                                                                                                                                                                                                          |
 | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **MCP-first, não "com integração de IA"** | As **127 tools** MCP cobrem o CRUD inteiro da aplicação. Não existe operação que o PWA faça e o MCP não faça. A tela é a camada opcional, e não o contrário.                                             |     | **Os dados são seus** | Postgres seu, servidor seu, licença MIT. `export_my_data` devolve tudo, `delete_my_account` apaga tudo — as duas expostas como tool, para você exercer o direito sem pedir a ninguém. |
+| **MCP-first, não "com integração de IA"** | As **130 tools** MCP cobrem o CRUD inteiro da aplicação. Não existe operação que o PWA faça e o MCP não faça. A tela é a camada opcional, e não o contrário.                                             |     | **Os dados são seus** | Postgres seu, servidor seu, licença MIT. `export_my_data` devolve tudo, `delete_my_account` apaga tudo — as duas expostas como tool, para você exercer o direito sem pedir a ninguém. |
 | **Foto não vira arquivo**                 | O assistente analisa a imagem da refeição e manda **dados estruturados**. O Fatia nunca armazena a foto ([ADR 004](docs/ADR/004-sem-armazenamento-fotos.md)).                                            |
 | **Base nutricional brasileira**           | Os **597 alimentos da TACO** (NEPA/Unicamp) já vêm no seed, com macros e micronutrientes. Mais **873 exercícios** com músculos primários e secundários.                                                  |
 | **Identidade self-hosted**                | Auth via [Logto](https://logto.io) no seu próprio container — OAuth 2.1 com DCR e PKCE, exigência do conector remoto. A API só valida JWT, nunca emite ([ADR 008](docs/ADR/008-logto-oidc-provider.md)). |
@@ -30,7 +30,7 @@ Se você quer instalar um app na loja e não pensar em servidor, o Fatia ainda n
 
 ```mermaid
 flowchart TD
-    claude["Assistente de IA<br/>(MCP · 127 tools)"]    pwa["PWA Next.js<br/>navegador"]
+    claude["Assistente de IA<br/>(MCP · 130 tools)"]    pwa["PWA Next.js<br/>navegador"]
     mobile["App Expo<br/>iOS / Android"]
     logto["Logto<br/>Identity Provider<br/>OAuth 2.1 · DCR · PKCE"]
     api["API NestJS<br/>Controllers REST + Tools MCP<br/>→ mesmos Services"]
@@ -122,9 +122,9 @@ Contribuição gerada por IA é aceita nas mesmas condições de qualquer outra:
 
 ## Eval da fronteira de tools
 
-As 127 tools são o CRUD inteiro, e um agente que paga por token talvez pedisse outra fronteira. O
+As 130 tools são o CRUD inteiro, e um agente que paga por token talvez pedisse outra fronteira. O
 [eval da fronteira](docs/eval-fronteira-de-tools.md) mede isso com uma variável só: o mesmo agente, o
-mesmo prompt e as mesmas 31 tarefas contra o catálogo de entidade (**A**, hoje 127 tools) e contra um de
+mesmo prompt e as mesmas 31 tarefas contra o catálogo de entidade (**A**, hoje 130 tools) e contra um de
 intenção (**B**, hoje 42 tools, das quais 18 compõem as de entidade sem lógica própria), escolhido por um
 header no `/mcp`. A medição publicada é de antes das Fases 3 a 5, com 106 e 40. A superfície de intenção é instrumento de medição: só sobe com
 `MCP_SUPERFICIE_INTENCAO=1` e é recusada em produção.

@@ -22,6 +22,16 @@ const NOT_FOUND = 'Group not found';
 /** Mesma resposta para membership inexistente e de outro grupo (#204). */
 const MEMBERSHIP_NOT_FOUND = 'Membership not found';
 
+/**
+ * Quem foi banido não volta pelo código nem por convite (Fase 8b). A pessoa já
+ * sabe que a comunidade existe: a resposta diz o porquê, sem esconder.
+ */
+export function assertNotBanned(status: MembershipStatus | null | undefined): void {
+  if (status === MembershipStatus.BANNED) {
+    throw new ForbiddenException('Você não pode entrar nesta comunidade');
+  }
+}
+
 /** Papéis que um convite pode conceder. `OWNER` nunca entra por aqui. */
 export type GrantableRole = Exclude<GroupRole, 'OWNER'>;
 
@@ -108,6 +118,7 @@ export class MembershipService {
     const existente = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId: group.id, userId } },
     });
+    assertNotBanned(existente?.status);
 
     if (
       existente?.status === MembershipStatus.ACTIVE ||
@@ -461,6 +472,67 @@ export class MembershipService {
   }
 
   /**
+   * O dono bane alguém (Fase 8b, ADR 032): o mesmo encerramento da remoção —
+   * vínculos e assento revogados na mesma transação — e o status `BANNED`, que
+   * o código e o convite não reabrem. Vale também para quem já saiu: banir é
+   * sobre voltar.
+   */
+  async ban(ownerId: string, groupId: string, membershipId: string): Promise<MembershipResult> {
+    await this.assertOwner(ownerId, groupId);
+    const alvo = await this.prisma.groupMembership.findUnique({ where: { id: membershipId } });
+    // Amarrado ao grupo da URL (#204).
+    if (!alvo || alvo.groupId !== groupId) throw new NotFoundException(MEMBERSHIP_NOT_FOUND);
+    if (alvo.role === GroupRole.OWNER) {
+      throw new ConflictException('O dono não pode ser banido do próprio grupo');
+    }
+    if (alvo.status === MembershipStatus.BANNED) {
+      return {
+        membershipId: alvo.id,
+        groupId,
+        status: alvo.status,
+        role: alvo.role,
+        revokedLinks: 0,
+      };
+    }
+    return this.encerrar(
+      alvo.id,
+      groupId,
+      alvo.userId,
+      MembershipStatus.BANNED,
+      'membership_removed',
+    );
+  }
+
+  /** Desbanir não põe de volta: a associação fica `REMOVED`, e a pessoa pode pedir de novo. */
+  async unban(ownerId: string, groupId: string, membershipId: string): Promise<MembershipResult> {
+    await this.assertOwner(ownerId, groupId);
+    const alvo = await this.prisma.groupMembership.findUnique({ where: { id: membershipId } });
+    if (!alvo || alvo.groupId !== groupId || alvo.status !== MembershipStatus.BANNED) {
+      throw new NotFoundException(MEMBERSHIP_NOT_FOUND);
+    }
+    const m = await this.prisma.groupMembership.update({
+      where: { id: alvo.id },
+      data: { status: MembershipStatus.REMOVED },
+    });
+    return { membershipId: m.id, groupId, status: m.status, role: m.role, revokedLinks: 0 };
+  }
+
+  async listBanned(ownerId: string, groupId: string) {
+    await this.assertOwner(ownerId, groupId);
+    const rows = await this.prisma.groupMembership.findMany({
+      where: { groupId, status: MembershipStatus.BANNED },
+      select: { id: true, displayName: true, leftAt: true, user: { select: { name: true } } },
+      orderBy: { leftAt: 'desc' },
+    });
+    return rows.map((r) => ({
+      membershipId: r.id,
+      name: r.user.name,
+      displayName: r.displayName,
+      bannedAt: r.leftAt,
+    }));
+  }
+
+  /**
    * Fim da associação e revogação em massa, **na mesma transação**.
    *
    * Duas escritas separadas deixariam uma janela — curta, mas real — em que a
@@ -475,7 +547,7 @@ export class MembershipService {
     membershipId: string,
     groupId: string,
     userId: string,
-    status: Extract<MembershipStatus, 'LEFT' | 'REMOVED'>,
+    status: Extract<MembershipStatus, 'LEFT' | 'REMOVED' | 'BANNED'>,
     reason: 'left_group' | 'membership_removed',
   ): Promise<MembershipResult> {
     const agora = new Date();

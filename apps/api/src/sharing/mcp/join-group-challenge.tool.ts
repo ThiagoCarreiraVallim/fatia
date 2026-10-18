@@ -28,7 +28,7 @@ export class JoinGroupChallengeTool implements McpToolDef {
     displayName: z
       .string()
       .optional()
-      .describe('Apelido no ranking, de 2 a 30 caracteres. Padrão: o da comunidade'),
+      .describe('Apelido na comunidade, de 2 a 30 caracteres. Padrão: o da comunidade'),
   } as const;
   async execute(
     input: { groupId: string; challengeId: string; displayName?: string },

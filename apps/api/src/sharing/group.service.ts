@@ -9,6 +9,7 @@ import {
   type GroupVisibility,
   type JoinPolicy,
   type MediaFile,
+  type PostPolicy,
   type ShareScope,
 } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
@@ -49,6 +50,8 @@ export interface UpdateGroupInput {
   joinPolicy?: JoinPolicy;
   visibility?: GroupVisibility;
   timezone?: string;
+  /** Quem publica no mural (Fase 8b). */
+  postPolicy?: PostPolicy;
 }
 
 export interface GroupSummary {
@@ -71,6 +74,8 @@ export interface GroupSummary {
   hasAiSeat: boolean;
   /** Avatar da comunidade, por URL assinada de curta duração (ADR 028). */
   avatarUrl: string | null;
+  /** Quem publica no mural (Fase 8b). */
+  postPolicy: PostPolicy;
 }
 
 /** Preview mostrado a quem foi convidado, ANTES de decidir entrar. */
@@ -111,6 +116,7 @@ function resumo(
     statsOptIn: m.statsOptIn,
     hasAiSeat: m.status === MembershipStatus.ACTIVE && m.seatAssignments.length > 0,
     avatarUrl,
+    postPolicy: m.group.postPolicy,
   };
 }
 

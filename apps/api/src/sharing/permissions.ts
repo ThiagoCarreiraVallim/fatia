@@ -79,6 +79,15 @@ export const GROUP_PERMISSIONS = {
   'challenge.manage': [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR],
   /** Ver os desafios e entrar ou sair com um apelido (opt-in, ADR 027). */
   'challenge.join': [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR, GroupRole.MEMBER],
+  /** Ler o mural, reagir, comentar e denunciar (Fase 8b, ADR 032). */
+  'post.read': [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR, GroupRole.MEMBER],
+  /**
+   * Publicar no mural. A tabela abre para todos; a comunidade pode fechar para
+   * a equipe (`Group.postPolicy`), e quem confere é o `PostService`.
+   */
+  'post.create': [GroupRole.OWNER, GroupRole.PROFESSIONAL, GroupRole.CREATOR, GroupRole.MEMBER],
+  /** Banir é mais forte que remover membro: fica com quem remove. */
+  'member.ban': [GroupRole.OWNER],
   /**
    * Painel agregado do dono. O profissional já tem o caminho individual, com
    * consentimento; dar-lhe também o agregado seria dois caminhos para a mesma

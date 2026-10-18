@@ -767,6 +767,8 @@ enum MembershipStatus {
   ACTIVE
   LEFT
   REMOVED
+  /// Removido e barrado: o código e o convite não reabrem a porta (Fase 8b).
+  BANNED
 }
 
 /// Quem acha a comunidade (ADR 025/026). PRIVATE só por convite ou código.
@@ -840,6 +842,9 @@ model Group {
   agentChats     Conversation[]       @relation("ConversationAgent")
   /// Desafios da comunidade (Fase 8a, ADR 027).
   challenges     GroupChallenge[]
+  /// Quem publica no mural (Fase 8b, ADR 032).
+  postPolicy     PostPolicy           @default(ALL_MEMBERS)
+  posts          GroupPost[]
 
   @@index([ownerId])
   @@index([type])
@@ -870,6 +875,14 @@ model GroupMembership {
   user             User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
   seatAssignments  GroupSeatAssignment[]
   challengeEntries GroupChallengeParticipant[]
+  /// O mural (Fase 8b): o que a pessoa publicou, reagiu, comentou e denunciou.
+  posts            GroupPost[]                 @relation("PostAuthor")
+  postsRemoved     GroupPost[]                 @relation("PostRemovedBy")
+  postReactions    GroupPostReaction[]
+  postComments     GroupPostComment[]          @relation("CommentAuthor")
+  commentsRemoved  GroupPostComment[]          @relation("CommentRemovedBy")
+  reportsMade      GroupPostReport[]           @relation("ReportReporter")
+  reportsResolved  GroupPostReport[]           @relation("ReportResolvedBy")
 
   // Um papel por pessoa por grupo. É o que torna estruturalmente impossível
   // o acúmulo de papéis que a #156 pede para evitar: não existe linha em que
@@ -1358,6 +1371,7 @@ model MediaFile {
   tipImages      GroupTip[]               @relation("TipImage")
   guideVideoOf   GroupExerciseGuide?      @relation("GuideVideo")
   guidePhotoOf   GroupExerciseGuidePhoto?
+  postImageOf    GroupPostImage?          @relation("PostImage")
 
   @@index([groupId])
   @@index([uploaderId])
@@ -1554,4 +1568,131 @@ model GroupChallengeParticipant {
 
   @@unique([challengeId, membershipId])
   @@index([membershipId])
+}
+
+// ============================================================
+// MURAL DA COMUNIDADE (Fase 8b)
+// ============================================================
+
+/// Quem publica no mural. Reagir, comentar e denunciar é de todo membro ativo.
+enum PostPolicy {
+  ALL_MEMBERS
+  /// Só a equipe (dono, profissional, criador) publica.
+  TEAM_ONLY
+}
+
+enum PostReactionKind {
+  STRONG
+  FIRE
+  CLAP
+  HEART
+}
+
+enum ReportReason {
+  SPAM
+  OFFENSIVE
+  HARASSMENT
+  /// Informação de saúde enganosa ou perigosa.
+  MISINFORMATION
+  OTHER
+}
+
+/// Um post no mural. O autor é a associação, e não a conta: o apelido e o selo
+/// de equipe saem dela, e apagar a conta apaga o post junto (cascata).
+/// Removido pela moderação continua aqui, visível só ao autor (ADR 032).
+model GroupPost {
+  id            String        @id @default(uuid())
+  groupId       String
+  membershipId  String
+  /// Markdown-lite, até 2000 caracteres. Pode ser vazio quando há imagem.
+  body          String
+  pinnedAt      DateTime?
+  removedAt     DateTime?
+  removedById   String?
+  removedReason ReportReason?
+  createdAt     DateTime      @default(now())
+
+  group     Group               @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  author    GroupMembership     @relation("PostAuthor", fields: [membershipId], references: [id], onDelete: Cascade)
+  removedBy GroupMembership?    @relation("PostRemovedBy", fields: [removedById], references: [id], onDelete: SetNull)
+  images    GroupPostImage[]
+  reactions GroupPostReaction[]
+  comments  GroupPostComment[]
+  reports   GroupPostReport[]
+
+  @@index([groupId, createdAt])
+  @@index([groupId, pinnedAt])
+  @@index([membershipId])
+}
+
+/// Até quatro imagens por post (mídia `post_image`, ADR 028).
+model GroupPostImage {
+  id     String @id @default(uuid())
+  postId String
+  fileId String @unique
+  order  Int
+
+  post GroupPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  file MediaFile @relation("PostImage", fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+}
+
+/// Uma reação por pessoa por post; trocar de reação troca o `kind`.
+model GroupPostReaction {
+  id           String           @id @default(uuid())
+  postId       String
+  membershipId String
+  kind         PostReactionKind
+  createdAt    DateTime         @default(now())
+
+  post       GroupPost       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  membership GroupMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, membershipId])
+  @@index([membershipId])
+}
+
+/// Comentário: texto puro, até 500 caracteres.
+model GroupPostComment {
+  id           String    @id @default(uuid())
+  postId       String
+  membershipId String
+  body         String
+  removedAt    DateTime?
+  removedById  String?
+  createdAt    DateTime  @default(now())
+
+  post      GroupPost         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    GroupMembership   @relation("CommentAuthor", fields: [membershipId], references: [id], onDelete: Cascade)
+  removedBy GroupMembership?  @relation("CommentRemovedBy", fields: [removedById], references: [id], onDelete: SetNull)
+  reports   GroupPostReport[]
+
+  @@index([postId, createdAt])
+  @@index([membershipId])
+}
+
+/// Denúncia de um post (ou de um comentário dele). Quem denunciou não aparece
+/// para a equipe; a linha serve à fila e à trilha da decisão.
+model GroupPostReport {
+  id           String       @id @default(uuid())
+  postId       String
+  commentId    String?
+  reporterId   String
+  reason       ReportReason
+  note         String?
+  createdAt    DateTime     @default(now())
+  resolvedAt   DateTime?
+  resolvedById String?
+  /// "removed" | "dismissed"
+  resolution   String?
+
+  post       GroupPost         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment    GroupPostComment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  reporter   GroupMembership   @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  resolvedBy GroupMembership?  @relation("ReportResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([postId, resolvedAt])
+  @@index([commentId])
+  @@index([reporterId])
 }

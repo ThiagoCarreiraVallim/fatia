@@ -20,6 +20,7 @@ import {
   ScoreboardService,
   type ScoreboardEntry,
 } from '../social/scoreboard.service';
+import { cleanDisplayName, firstName } from './display-name';
 import { assertCanEditContent, canEditContent, requireContentRole } from './content-roles';
 import { can } from './permissions';
 
@@ -30,10 +31,6 @@ export const CHALLENGE_DESCRIPTION_MAX = 1000;
 export const CHALLENGE_MAX_DAYS = 90;
 /** Desafios marcados ou em andamento ao mesmo tempo, por comunidade. */
 export const CHALLENGE_MAX_OPEN = 10;
-export const DISPLAY_NAME_MIN = 2;
-export const DISPLAY_NAME_MAX = 30;
-/** O apelido sai para os outros participantes: uma linha, sem caractere de controle. */
-export const DISPLAY_NAME_PATTERN = /^[^\p{Cc}<>]+$/u;
 /** Placar mais velho que isto é recalculado na leitura. */
 export const SCORE_TTL_MS = 5 * 60_000;
 const FINALIZE_INTERVAL_MS = 60 * 60_000;
@@ -562,22 +559,4 @@ export function statusOf(
   if (now < row.startsAt) return 'upcoming';
   if (now >= row.endsAt) return 'ended';
   return 'running';
-}
-
-export function cleanDisplayName(raw: string): string {
-  const nome = raw.trim().replace(/\s+/g, ' ');
-  if (nome.length < DISPLAY_NAME_MIN || nome.length > DISPLAY_NAME_MAX) {
-    throw new BadRequestException(
-      `O apelido precisa ter de ${DISPLAY_NAME_MIN} a ${DISPLAY_NAME_MAX} caracteres`,
-    );
-  }
-  if (!DISPLAY_NAME_PATTERN.test(nome)) {
-    throw new BadRequestException('O apelido não pode ter quebra de linha nem < ou >');
-  }
-  return nome;
-}
-
-function firstName(name: string): string {
-  const primeiro = name.trim().split(/\s+/)[0] ?? '';
-  return primeiro.length >= DISPLAY_NAME_MIN ? primeiro.slice(0, DISPLAY_NAME_MAX) : 'Participante';
 }
