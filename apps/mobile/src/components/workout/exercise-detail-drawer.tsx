@@ -12,6 +12,7 @@ import {
   DrawerScrollView,
   DrawerTitle,
 } from '@/components/ui';
+import { CommunityGuideSection } from './community-guide';
 import { ExerciseEditDrawer } from './exercise-edit-drawer';
 import { MuscleDiagram } from './muscle-diagram';
 import { cores } from '@/theme/cores';
@@ -69,7 +70,12 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
     },
   });
 
-  const videoId = exercise ? (exercise.youtubeVideoIdPt ?? exercise.youtubeVideoId ?? null) : null;
+  const guia = exercise?.community ?? null;
+  // O vídeo da comunidade substitui o do YouTube (Fase 7b).
+  const videoId =
+    exercise && !guia?.video?.url
+      ? (exercise.youtubeVideoIdPt ?? exercise.youtubeVideoId ?? null)
+      : null;
 
   function handleEdit() {
     if (!exercise) return;
@@ -103,6 +109,8 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
 
           <DrawerScrollView className="flex-1 px-4">
             <View className="gap-5 pb-6">
+              {guia ? <CommunityGuideSection guide={guia} exerciseName={exercise.name} /> : null}
+
               {exercise.primaryMuscles && exercise.primaryMuscles.length > 0 ? (
                 <MuscleDiagram
                   primaryMuscles={exercise.primaryMuscles}

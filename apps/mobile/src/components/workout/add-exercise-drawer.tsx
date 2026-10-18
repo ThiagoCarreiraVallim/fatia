@@ -14,6 +14,7 @@ import {
   DrawerTitle,
 } from '@/components/ui';
 import { cores } from '@/theme/cores';
+import { CommunityBadge, MyGymToggle, useInCommunity } from './my-gym-filter';
 
 /**
  * Réplica de `apps/web/src/components/workout/add-exercise-drawer.tsx`.
@@ -43,6 +44,8 @@ export function AddExerciseDrawer({
   const qc = useQueryClient();
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
+  const [naAcademia, setNaAcademia] = useState(false);
+  const emComunidade = useInCommunity(open);
 
   // Ajuste durante o render, e não num efeito (#187). A comparação é a mesma que
   // estava no array de dependências, então a limpeza acontece no mesmo fechamento
@@ -54,6 +57,7 @@ export function AddExerciseDrawer({
     if (!open) {
       setQ('');
       setDebounced('');
+      setNaAcademia(false);
     }
   }
 
@@ -63,8 +67,9 @@ export function AddExerciseDrawer({
   }, [q]);
 
   const search = useQuery({
-    queryKey: ['workout', 'exercises', debounced],
-    queryFn: () => workoutApi.searchExercises(debounced || undefined),
+    queryKey: ['workout', 'exercises', debounced, naAcademia],
+    queryFn: () =>
+      workoutApi.searchExercises(debounced || undefined, undefined, { onlyMyGym: naAcademia }),
     enabled: open,
   });
 
@@ -118,6 +123,11 @@ export function AddExerciseDrawer({
             className="min-h-[44px] rounded-md border border-input bg-transparent py-2 pl-9 pr-3 text-sm text-foreground"
           />
         </View>
+        {emComunidade ? (
+          <View className="pt-2">
+            <MyGymToggle checked={naAcademia} onChange={setNaAcademia} />
+          </View>
+        ) : null}
       </View>
 
       <DrawerFlatList
@@ -147,7 +157,9 @@ export function AddExerciseDrawer({
               <Text className="text-sm font-medium text-foreground">{item.name}</Text>
               <Text className="text-xs text-muted-foreground">{item.muscleGroup}</Text>
             </View>
-            {item.source === 'CUSTOM' ? (
+            {item.communityName ? (
+              <CommunityBadge name={item.communityName} />
+            ) : item.source === 'CUSTOM' ? (
               <View className="rounded bg-muted px-2 py-0.5">
                 <Text className="text-xs text-foreground">custom</Text>
               </View>

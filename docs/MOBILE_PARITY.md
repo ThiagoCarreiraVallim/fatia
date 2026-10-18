@@ -321,6 +321,11 @@ viram pílulas (`Choice`). Diferenças de propósito:
 - **Planos e dicas (Fase 7a):** iguais à web. A imagem vem da galeria (`expo-image-picker`, que
   reencoda em JPEG e resolve o HEIC) e vai direto ao bucket pela URL assinada, como no navegador;
   o markdown das dicas é desenhado pelos mesmos tokens (`parseMarkdownLite`), nunca HTML.
+- **Exercícios da comunidade (Fase 7b):** iguais à web, com duas diferenças. O vídeo do tutorial
+  abre no navegador do sistema (`expo-web-browser`), não num player dentro do app: um player
+  nativo (`expo-video`) é dependência nativa nova e pediria build novo. E o vídeo vem da galeria:
+  gravar pela câmera do Fatia pediria a permissão de microfone. O envio lê o arquivo do disco
+  (`createUploadTask`), com progresso, para um vídeo grande não ficar na memória.
 
 ## Plano PRO — a mesma tela, outro caixa
 
@@ -392,6 +397,7 @@ rodando, e deve ser feito antes de publicar:
 - [ ] Comunidade: checkboxes do consentimento com leitor de tela (estado marcado anunciado), "Entrar com código" com o teclado aberto no sheet, e "Sair" voltando à lista
 - [ ] Painel da comunidade (conta da equipe): abas no topo rolando sem cortar, "Aprovar" e "Gerenciar" com 44 pt, `Alert` de papel e assento, `Share` do link de convite e do código, lote colado com o teclado aberto, e o "voltar" do painel levando à comunidade
 - [ ] Planos e dicas: escolher imagem da galeria (iPhone com HEIC e Android sem tipo), ver a capa depois de enviar, publicar um treino e adotá-lo com outra conta, e o link de uma dica abrindo no navegador
+- [ ] Exercícios da comunidade: enviar um vídeo MOV de iPhone e um MP4 de Android (com a barra de progresso andando e o app em primeiro plano), até 4 fotos de uma vez, "Assistir" abrindo o vídeo assinado, e "Na minha academia" nos seletores de exercício
 - [ ] Cores dos macros e de erro (`cores.ts`) iguais às do PWA lado a lado
 - [ ] Diagrama muscular destacando os grupos certos
 - [ ] Aparelho de entrada, não só simulador — os gráficos são o ponto a observar

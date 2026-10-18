@@ -26,6 +26,9 @@ export const orgKeys = {
   contentPlan: (groupId: string, id: string) =>
     ['community', 'org', groupId, 'content', 'plans', id] as const,
   contentTips: (groupId: string) => ['community', 'org', groupId, 'content', 'tips'] as const,
+  exercises: (groupId: string) => ['community', 'org', groupId, 'exercises'] as const,
+  exercise: (groupId: string, id: number) =>
+    ['community', 'org', groupId, 'exercises', id] as const,
   insightsPanels: (groupId: string) => ['community', 'org', groupId, 'insights'] as const,
   insightsCuts: (groupId: string, panel: string) =>
     ['community', 'org', groupId, 'insights', panel] as const,

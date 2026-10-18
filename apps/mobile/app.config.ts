@@ -85,10 +85,16 @@ const config: ExpoConfig = {
       // Galeria (#139): a issue pede câmera **e** galeria, para quem fotografou
       // o prato antes de abrir o app. Só leitura — o Fatia nunca escreve na
       // galeria, e por isso não pede a permissão de gravação.
+      //
+      // Desde a Fase 7 a galeria também serve à equipe de uma comunidade, que
+      // publica imagens e vídeos — e esses ficam guardados. O texto antigo
+      // ("a imagem é descartada") deixou de ser verdade para esse caso, e é o
+      // mesmo tipo de descrição errada do comentário da câmera acima. Entra no
+      // próximo build nativo.
       'expo-image-picker',
       {
         photosPermission:
-          'O Fatia acessa suas fotos para você escolher a imagem de uma refeição já fotografada. A imagem é analisada e descartada — ela não é salva no Fatia.',
+          'O Fatia acessa suas fotos e vídeos para você escolher a foto de uma refeição, que é analisada e descartada, ou, se você faz parte da equipe de uma comunidade, a imagem ou o vídeo que vai publicar nela.',
       },
     ],
     [

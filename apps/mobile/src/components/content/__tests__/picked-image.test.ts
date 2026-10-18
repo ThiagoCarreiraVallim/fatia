@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describePickedImage } from '../picked-image';
+import { describePickedImage, describePickedVideo } from '../picked-image';
 
 describe('imagem escolhida no aparelho', () => {
   it('usa o tipo e o tamanho que o seletor informou', () => {
@@ -26,5 +26,26 @@ describe('imagem escolhida no aparelho', () => {
         fileSize: 11 * 1024 * 1024,
       }),
     ).toEqual({ problem: 'A imagem passa de 10 MB. Escolha uma menor.' });
+  });
+});
+
+describe('vídeo escolhido no aparelho', () => {
+  it('MOV do iPhone e MP4 do Android, pelo tipo ou pela extensão', () => {
+    expect(
+      describePickedVideo({ uri: 'file:///IMG_1.MOV', mimeType: 'video/quicktime', fileSize: 9 }),
+    ).toEqual({ mime: 'video/quicktime', bytes: 9 });
+    expect(describePickedVideo({ uri: 'content://media/VID_2.mp4' }, 4096)).toEqual({
+      mime: 'video/mp4',
+      bytes: 4096,
+    });
+  });
+
+  it('outro formato ou mais de 200 MB vira recado', () => {
+    expect(describePickedVideo({ uri: 'file:///a.webm', fileSize: 9 })).toEqual({
+      problem: 'Escolha um vídeo MP4 ou MOV.',
+    });
+    expect(
+      describePickedVideo({ uri: 'file:///a.mp4', fileSize: 300 * 1024 * 1024 }),
+    ).toMatchObject({ problem: expect.stringMatching(/200 MB/) });
   });
 });
