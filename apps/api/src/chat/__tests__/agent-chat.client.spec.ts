@@ -272,6 +272,27 @@ describe('AgentChatClient.openTurn', () => {
   });
 });
 
+describe('AgentChatClient.sendFeedback', () => {
+  it('manda o sinal e os motivos com a chave, nunca o comentário livre', async () => {
+    dublarFetch(new Response(JSON.stringify({ recorded: true })));
+    await montar({ AGENT_API_KEY: 'segredo' }).sendFeedback('run-1', 'dislike', ['incorrect']);
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/feedback$/);
+    expect(init.headers).toMatchObject({ 'X-Fatia-Agent-Key': 'segredo' });
+    expect(JSON.parse(init.body as string)).toEqual({
+      runId: 'run-1',
+      review: 'dislike',
+      reasons: ['incorrect'],
+    });
+  });
+
+  it('nunca lança: agente fora do ar não desfaz o voto', async () => {
+    dublarFetch(Object.assign(new Error('connect ECONNREFUSED'), { name: 'TypeError' }));
+    await expect(montar().sendFeedback('run-1', 'like', [])).resolves.toBeUndefined();
+  });
+});
+
 describe('AgentChatClient.titular', () => {
   it('pede o nome sem Bearer e devolve título e custo', async () => {
     dublarFetch(

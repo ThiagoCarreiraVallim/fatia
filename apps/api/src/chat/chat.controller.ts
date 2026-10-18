@@ -206,7 +206,9 @@ export class ChatController {
     @Param('messageId', ParseUUIDPipe) messageId: string,
     @Body() dto: MessageFeedbackDto,
   ) {
-    await this.conversas.votar(user.id, id, messageId, dto);
+    const runId = await this.conversas.vote(user.id, id, messageId, dto);
+    // Espelho no Langfuse, sem esperar: o voto já está gravado aqui.
+    if (runId) void this.agent.sendFeedback(runId, dto.review, dto.reasons ?? []);
   }
 
   /**

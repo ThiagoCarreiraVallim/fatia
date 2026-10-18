@@ -2562,7 +2562,7 @@ describe('isolamento entre usuários', () => {
         where: { conversationId: owned.conversationId, role: 'assistant' },
       });
       await expect(
-        conversas.votar(owned.userB, owned.conversationId, resposta.id, { review: 'like' }),
+        conversas.vote(owned.userB, owned.conversationId, resposta.id, { review: 'like' }),
       ).rejects.toThrow(NotFoundException);
       await expect(conversas.clearPauses(owned.userB, owned.conversationId)).rejects.toThrow(
         NotFoundException,

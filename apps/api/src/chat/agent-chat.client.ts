@@ -124,6 +124,9 @@ const TIMEOUT_DE_OCIOSIDADE_MS = 90_000;
 /** O título não segura nada: quem espera é uma linha da lista de conversas. */
 const TIMEOUT_DO_TITULO_MS = 20_000;
 
+/** O voto é espelho; ninguém espera por ele. */
+const TIMEOUT_DO_VOTO_MS = 5_000;
+
 /** Ditado curto; quem espera é a pessoa olhando para o campo de mensagem. */
 const TIMEOUT_DA_TRANSCRICAO_MS = 60_000;
 
@@ -412,6 +415,35 @@ export class AgentChatClient {
     } catch (erro) {
       this.logger.warn(`Título de conversa não gerado: ${(erro as Error).name}`);
       return null;
+    }
+  }
+
+  /**
+   * O voto de uma resposta vai ao agente, que o grava como score no trace do
+   * turno (ADR 034). Só o sinal e os motivos fechados: o comentário livre fica
+   * aqui. **Nunca lança** — o Langfuse é espelho, não fonte.
+   */
+  async sendFeedback(
+    runId: string,
+    review: 'like' | 'dislike' | null,
+    reasons: string[],
+  ): Promise<void> {
+    const base = this.base();
+    if (!base) return;
+    const chave = this.config.get<string>('AGENT_API_KEY', '').trim();
+    try {
+      const http = await fetch(`${base}/feedback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(chave ? { 'X-Fatia-Agent-Key': chave } : {}),
+        },
+        body: JSON.stringify({ runId, review, reasons }),
+        signal: AbortSignal.timeout(TIMEOUT_DO_VOTO_MS),
+      });
+      if (!http.ok) this.logger.warn(`Voto no Langfuse: o agente respondeu ${http.status}`);
+    } catch (erro) {
+      this.logger.warn(`Voto no Langfuse não enviado: ${(erro as Error).name}`);
     }
   }
 

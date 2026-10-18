@@ -325,16 +325,22 @@ export class ConversationService {
     return linha.id;
   }
 
-  /** O voto da pessoa numa resposta do assistente **desta** conversa. */
-  async votar(
+  /**
+   * O voto da pessoa numa resposta do assistente **desta** conversa.
+   *
+   * Devolve o `runId` da resposta, que é como o voto acha o trace do turno no
+   * Langfuse (ADR 034); `null` em resposta anterior ao `runId`.
+   */
+  async vote(
     userId: string,
     conversationId: string,
     messageId: string,
     voto: VotoNaResposta,
-  ): Promise<void> {
+  ): Promise<string | null> {
     const conversa = await this.assertDaPessoa(userId, conversationId);
+    const where = { id: messageId, conversationId: conversa.id, role: MessageRole.assistant };
     const { count } = await this.prisma.message.updateMany({
-      where: { id: messageId, conversationId: conversa.id, role: MessageRole.assistant },
+      where,
       data: {
         review: voto.review,
         reviewReasons: voto.review === 'dislike' ? (voto.reasons ?? []) : [],
@@ -342,6 +348,8 @@ export class ConversationService {
       },
     });
     if (count === 0) throw new NotFoundException('Mensagem não encontrada.');
+    const linha = await this.prisma.message.findFirst({ where, select: { runId: true } });
+    return linha?.runId ?? null;
   }
 }
 
