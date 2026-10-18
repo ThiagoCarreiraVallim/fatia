@@ -18,6 +18,7 @@ from fatia_agent.chat.state import ContextoDoTurno, FotoDoTurno
 from fatia_agent.chat.tool_policy import todas_permitidas
 from fatia_agent.providers import build_provider
 from fatia_agent.settings import AgentSettings
+from fatia_agent.tracing import NOOP_TRACE, TracedProvider, TurnTrace
 
 from .support import ProviderRecordingTransport, duplo_do_mcp, tool_do_catalogo
 
@@ -128,6 +129,7 @@ async def turno(
     persona: dict[str, str] | None = None,
     planejar: bool = False,
     fotos: Sequence[FotoDoTurno] = (),
+    trace: TurnTrace = NOOP_TRACE,
 ) -> Resultado:
     """Um turno inteiro. Passe o `grafo` de um turno anterior para continuar a thread."""
     provider_transport = ProviderRecordingTransport(turnos_do_provedor)
@@ -137,8 +139,10 @@ async def turno(
     compilado = grafo if grafo is not None else montar_grafo(InMemorySaver())
 
     permitidas = todas_permitidas(await client.list_tools())
+    client.tool_tracer = trace.tool
     contexto = ContextoDoTurno(
-        provider=provider,
+        provider=provider if trace is NOOP_TRACE else TracedProvider(provider, trace, model="m"),
+        trace=trace,
         client=client,
         permitidas=tuple(permitidas),
         run_id="run-1",

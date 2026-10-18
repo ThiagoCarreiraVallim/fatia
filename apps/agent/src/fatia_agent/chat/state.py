@@ -21,6 +21,7 @@ from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
 
 from ..providers.base import ToolChatCapability
+from ..tracing import NOOP_TRACE, TurnTrace
 from .mcp_client import McpClient, McpToolInfo
 
 
@@ -72,6 +73,8 @@ class ContextoDoTurno:
     planejar: bool = False
     # Com foto, o turno inteiro vai para `AI_MODEL_VISION` — ver `FotoDoTurno`.
     fotos: Sequence[FotoDoTurno] = field(default=())
+    # O trace do turno no Langfuse (ADR 034); o no-op quando ele está desligado.
+    trace: TurnTrace = NOOP_TRACE
 
 
 class EstadoDaConversa(TypedDict, total=False):

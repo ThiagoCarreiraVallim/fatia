@@ -148,6 +148,12 @@ services:
       MCP_TIMEOUT_S: ${MCP_TIMEOUT_S:-30}
       # Mesmo Postgres da API; o agente cria o schema `agent_checkpoint` (ADR 023).
       AGENT_CHECKPOINT_DATABASE_URL: ${AGENT_CHECKPOINT_DATABASE_URL:-}
+      # Langfuse (ADR 034). Sem as chaves, nada sai.
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-https://cloud.langfuse.com}
+      LANGFUSE_SAMPLE_RATE: ${LANGFUSE_SAMPLE_RATE:-1.0}
+      LANGFUSE_ENVIRONMENT: ${LANGFUSE_ENVIRONMENT:-production}
     expose:
       - "8100"
     depends_on:

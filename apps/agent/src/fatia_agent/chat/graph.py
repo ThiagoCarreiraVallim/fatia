@@ -1005,13 +1005,16 @@ async def stream_chat_events(
                 quadro = events.atualizacoes(pacote, reasoning)
                 if quadro is not None:
                     yield quadro
+        final_text: str | None = None
         if not interrompido:
             estado = await grafo.aget_state(config)
             encontrada = _ultima_do_assistente(estado.values.get("messages") or [])
             if encontrada is not None:
+                final_text = _texto(encontrada[1])
                 yield events.completas([encontrada[1]], reasoning)
     except (AIProviderError, McpError) as exc:
         logger.warning("Turno de chat terminou em %s: %s", exc.code, exc.message)
+        contexto.trace.finish(status="error", error_code=exc.code)
         yield events.error(exc.code, exc.message).frame()
         yield events.done("error", **timing()).frame()
         return
@@ -1021,11 +1024,19 @@ async def stream_chat_events(
     # traceback continua indo para o log, que é onde a pista é útil.
     except Exception:
         logger.exception("Turno de chat terminou em erro inesperado.")
+        contexto.trace.finish(status="error", error_code=AGENT_INTERNAL_ERROR)
         yield events.error(AGENT_INTERNAL_ERROR, MENSAGEM_DE_ERRO_INTERNO).frame()
         yield events.done("error", **timing()).frame()
         return
+    # Cliente que foi embora (`GeneratorExit`) ou cancelamento: o trace fecha
+    # como parado, e o turno segue o caminho de sempre.
+    except BaseException:
+        contexto.trace.finish(status="stopped")
+        raise
 
-    yield events.done("interrupted" if interrompido else "completed", **timing()).frame()
+    status = "interrupted" if interrompido else "completed"
+    contexto.trace.finish(status=status, output=final_text)
+    yield events.done(status, **timing()).frame()
 
 
 def _ms_between(inicio: float, fim: float) -> int:

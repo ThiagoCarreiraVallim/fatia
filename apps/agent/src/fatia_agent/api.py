@@ -99,6 +99,14 @@ from .settings import (
     ai_unavailable_reason,
     endpoint_host,
 )
+from .tracing import (
+    NOOP_TRACE,
+    TracedProvider,
+    record_feedback,
+    record_generation,
+    shutdown_langfuse,
+    start_turn_trace,
+)
 
 # Teto do lado do agente. O `apps/api` já corta antes (é ele quem fala com o
 # aparelho), mas quem gasta a inferência é este serviço, e um teto que só existe
@@ -121,6 +129,20 @@ class TitleRequest(BaseModel):
     model_config = {"extra": "forbid"}
 
     text: Annotated[str, Field(min_length=1, max_length=MAX_CARACTERES_POR_MENSAGEM)]
+
+
+class FeedbackRequest(BaseModel):
+    """O voto da pessoa numa resposta, para o score do trace (ADR 034).
+
+    Sem o comentário livre: ele pode trazer dado de saúde, e o Langfuse só
+    precisa do sinal e dos motivos fechados.
+    """
+
+    model_config = {"extra": "forbid", "populate_by_name": True}
+
+    run_id: Annotated[str, Field(alias="runId", min_length=1, max_length=64)]
+    review: Annotated[str | None, Field(pattern="^(like|dislike)$")] = None
+    reasons: Annotated[list[Annotated[str, Field(max_length=40)]], Field(max_length=10)] = []
 
 
 class ChatMessage(BaseModel):
@@ -304,6 +326,7 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
         await checkpointer.close()
         await provider_transport.shutdown()
         await mcp_transport.shutdown()
+        shutdown_langfuse()
 
     app = FastAPI(title="Fatia Agent", version=__version__, lifespan=lifespan)
 
@@ -461,6 +484,17 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
         finally:
             await provider.aclose()
         usage = gerado.usage
+        record_generation(
+            resolved,
+            name="titulo",
+            model=usage.model if usage else resolved.ai_model_text,
+            input=payload.text,
+            output=gerado.titulo,
+            usage={
+                "input": usage.input_units if usage else None,
+                "output": usage.output_units if usage else None,
+            },
+        )
         return {
             "title": gerado.titulo,
             "usage": None
@@ -504,6 +538,14 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             transcricao = await provider.transcribe(audio, media_type=media_type)
         finally:
             await provider.aclose()
+        # O áudio não vai; o texto ditado, mascarado, sim — é o que a pessoa ia digitar.
+        record_generation(
+            resolved,
+            name="transcricao",
+            model=transcricao.model,
+            input={"media_type": media_type, "bytes": len(audio)},
+            output=transcricao.text,
+        )
         return {
             "text": transcricao.text,
             "usage": {
@@ -515,6 +557,18 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
                 ),
             },
         }
+
+    @app.post("/feedback")
+    async def feedback_route(
+        payload: FeedbackRequest,
+        x_fatia_agent_key: Annotated[str | None, Header()] = None,
+    ) -> dict[str, object]:
+        """O 👍/👎 de uma resposta vira score no trace do turno. Nunca falha por isso."""
+        _exigir_credencial(resolved, x_fatia_agent_key)
+        gravado = await record_feedback(
+            resolved, run_id=payload.run_id, review=payload.review, reasons=payload.reasons
+        )
+        return {"recorded": gravado}
 
     @app.post("/chat", response_model=None)
     async def chat_route(
@@ -560,7 +614,8 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             # O catálogo antes do stream: é a primeira chamada que exercita o
             # Bearer, e a única chance de um token inválido virar 401 de verdade.
             permitidas = todas_permitidas(await client.list_tools())
-            thread_id = thread_da_conversa(await _owner_id(client), str(payload.conversation_id))
+            owner_id = await _owner_id(client)
+            thread_id = thread_da_conversa(owner_id, str(payload.conversation_id))
             compilado = await compiled_graph()
             if payload.resume is not None:
                 recusa = await _recusa_de_retomada(
@@ -575,11 +630,30 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             await provider.aclose()
             raise
 
+        run_id = uuid.uuid4().hex
+        trace = start_turn_trace(
+            resolved,
+            run_id=run_id,
+            user_id=owner_id,
+            conversation_id=str(payload.conversation_id),
+            kind="chat" if payload.message is not None else "resume",
+            message=payload.message,
+            persona_group_id=str(payload.persona.group_id) if payload.persona else None,
+            model=resolved.ai_model_vision if fotos else resolved.ai_model_text,
+        )
+        client.tool_tracer = trace.tool
         contexto = ContextoDoTurno(
-            provider=provider,
+            provider=provider
+            if trace is NOOP_TRACE
+            else TracedProvider(
+                provider,
+                trace,
+                model=resolved.ai_model_vision if fotos else resolved.ai_model_text,
+            ),
             client=client,
             permitidas=tuple(permitidas),
-            run_id=uuid.uuid4().hex,
+            run_id=run_id,
+            trace=trace,
             timezone=payload.timezone,
             historico=tuple(mensagem.model_dump() for mensagem in payload.history),
             memorias=tuple(memoria.model_dump() for memoria in payload.memories),
