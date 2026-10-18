@@ -87,6 +87,7 @@ export class AccountService {
       mediaUploaded,
       devices,
       notificationPreferences,
+      webPushSubscriptions,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
       this.prisma.nutrientTarget.findMany({ where: { userId }, orderBy: { label: 'asc' } }),
@@ -397,6 +398,12 @@ export class AccountService {
         select: { kind: true, enabled: true, updatedAt: true },
         orderBy: { kind: 'asc' },
       }),
+      // Só as datas: o endpoint identifica o navegador e não serve a ninguém fora daqui.
+      this.prisma.webPushSubscription.findMany({
+        where: { userId },
+        select: { createdAt: true, lastSeenAt: true },
+        orderBy: { createdAt: 'asc' },
+      }),
     ]);
 
     // `ProfessionalAccessLog.professionalId` é string pura, sem FK — é o que faz
@@ -446,6 +453,7 @@ export class AccountService {
       mediaUploaded,
       devices,
       notificationPreferences,
+      webPushSubscriptions,
       accessLogs: accessLogs.map(({ professionalId, ...linha }) => ({
         ...linha,
         professionalName: nomesDeProfissional.get(professionalId) ?? null,
@@ -467,6 +475,7 @@ export class AccountService {
           contentPublished.challenges.length,
         mediaUploaded: mediaUploaded.length,
         devices: devices.length,
+        webPushSubscriptions: webPushSubscriptions.length,
         professionalLinks: professionalLinks.length,
         accessLogs: accessLogs.length,
         meals: meals.length,

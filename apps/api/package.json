@@ -49,6 +49,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "sharp": "^0.34.5",
+    "web-push": "^3.6.7",
     "zod": "^3.23.0"
   },
   "devDependencies": {
@@ -60,6 +61,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^20.0.0",
     "@types/nodemailer": "^8.0.2",
+    "@types/web-push": "^3.6.4",
     "jest": "^30.4.2",
     "source-map-support": "^0.5.21",
     "ts-jest": "^29.4.11",

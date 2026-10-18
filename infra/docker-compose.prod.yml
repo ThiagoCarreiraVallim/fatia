@@ -80,6 +80,10 @@ services:
       # Avisos no celular pela Expo (ADR 033). A instância pública usa true.
       PUSH_ENABLED: ${PUSH_ENABLED:-false}
       EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}
+      # Push no navegador (Fase 9g). As três juntas, ou nenhuma.
+      WEB_PUSH_VAPID_PUBLIC_KEY: ${WEB_PUSH_VAPID_PUBLIC_KEY:-}
+      WEB_PUSH_VAPID_PRIVATE_KEY: ${WEB_PUSH_VAPID_PRIVATE_KEY:-}
+      WEB_PUSH_SUBJECT: ${WEB_PUSH_SUBJECT:-}
       # Mídia da comunidade no Cloudflare R2 (ADR 028). Vazio = envio de imagem
       # responde 503. Bucket privado e CORS para https://app.${DOMAIN}: ver
       # docs/OPERATIONS.md §Mídia.

@@ -10,6 +10,7 @@ import {
   RECEIPT_DELAY_MS,
 } from '../notification.service';
 import type { ExpoReceipt, PushMessage, PushService } from '../push.service';
+import type { WebPushService, WebPushTarget } from '../web-push.service';
 import { DailyAdherenceService } from '../../nutrition/daily-adherence.service';
 import { addDaysIso, todayInTz } from '../../progress/helpers/date-tz';
 import { ScoreboardService } from '../../social/scoreboard.service';
@@ -46,7 +47,18 @@ describe('avisos no celular (integração)', () => {
     receipts: async (ids: string[]) =>
       Object.fromEntries(ids.filter((id) => recibos[id]).map((id) => [id, recibos[id]])),
   } as unknown as PushService;
-  const notifications = new NotificationService(prisma, push);
+  const naWeb: { endpoint: string; title: string; url: string }[] = [];
+  let webMortos: string[] = [];
+  const webPush = {
+    publicKey: () => 'chave-publica-de-teste',
+    send: async (alvos: WebPushTarget[], payload: { title: string; url: string }) => {
+      naWeb.push(
+        ...alvos.map((a) => ({ endpoint: a.endpoint, title: payload.title, url: payload.url })),
+      );
+      return { gone: alvos.map((a) => a.endpoint).filter((e) => webMortos.includes(e)) };
+    },
+  } as unknown as WebPushService;
+  const notifications = new NotificationService(prisma, push, webPush);
   const links = new ProfessionalLinkService(prisma);
   const memberships = new MembershipService(prisma, links, notifications);
   const groups = new GroupService(prisma, links, [], null as never);
@@ -272,6 +284,73 @@ describe('avisos no celular (integração)', () => {
       await notifications.checkReceipts(new Date());
       expect(await prisma.pushTicket.count({ where: { deviceId: device!.id } })).toBe(0);
       expect(await notifications.listDevices(c.membro)).toHaveLength(1);
+    });
+  });
+
+  describe('push no navegador (Fase 9g)', () => {
+    const endpoint = (n: string) => `https://fcm.googleapis.com/fcm/send/${stamp}-${n}`;
+
+    it('só aceita serviço de push conhecido: endereço interno ou qualquer outro é recusado', async () => {
+      const a = await pessoa('A', false);
+      for (const e of [
+        'http://fcm.googleapis.com/fcm/send/x',
+        'https://localhost:3000/api',
+        'https://169.254.169.254/latest',
+        'https://fcm.googleapis.com.evil.com/x',
+        'https://evil.com/fcm.googleapis.com',
+      ]) {
+        await expect(
+          notifications.subscribeWebPush(a, { endpoint: e, p256dh: 'k', auth: 'a' }),
+        ).rejects.toThrow(BadRequestException);
+      }
+      expect((await notifications.webPushStatus(a)).subscriptions).toBe(0);
+    });
+
+    it('o aviso chega ao navegador; endpoint que acabou sai do cadastro', async () => {
+      const c = await comunidade();
+      await notifications.subscribeWebPush(c.membro, {
+        endpoint: endpoint('m'),
+        p256dh: 'k',
+        auth: 'a',
+      });
+      const post = await posts.create(c.membro, c.groupId, { body: 'Oi', displayName: 'Ana' });
+      webMortos = [endpoint('m')];
+      await posts.comment(c.outro, c.groupId, post.id, { body: 'Boa!', displayName: 'Bia' });
+      await recebidos();
+      expect(naWeb.splice(0)).toEqual([
+        {
+          endpoint: endpoint('m'),
+          title: 'Bia comentou seu post',
+          url: `/community/${c.groupId}/feed`,
+        },
+      ]);
+      expect((await notifications.webPushStatus(c.membro)).subscriptions).toBe(0);
+      webMortos = [];
+    });
+
+    it('o mesmo navegador em outra conta passa para ela; tirar a inscrição de outra pessoa não faz nada', async () => {
+      const a = await pessoa('A', false);
+      const b = await pessoa('B', false);
+      await notifications.subscribeWebPush(a, {
+        endpoint: endpoint('troca'),
+        p256dh: 'k',
+        auth: 'a',
+      });
+      await notifications.subscribeWebPush(b, {
+        endpoint: endpoint('troca'),
+        p256dh: 'k2',
+        auth: 'a2',
+      });
+      expect((await notifications.webPushStatus(a)).subscriptions).toBe(0);
+      expect((await notifications.webPushStatus(b)).subscriptions).toBe(1);
+
+      expect(await notifications.unsubscribeWebPush(a, endpoint('troca'))).toEqual({
+        removed: false,
+      });
+      expect((await notifications.webPushStatus(b)).subscriptions).toBe(1);
+      expect(await notifications.unsubscribeWebPush(b, endpoint('troca'))).toEqual({
+        removed: true,
+      });
     });
   });
 

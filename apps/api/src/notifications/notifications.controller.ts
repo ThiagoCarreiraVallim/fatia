@@ -5,6 +5,8 @@ import {
   DeviceParamDto,
   NotificationPreferencesDto,
   RegisterDeviceDto,
+  WebPushSubscribeDto,
+  WebPushUnsubscribeDto,
 } from './dto/notification.dto';
 import { NotificationService } from './notification.service';
 
@@ -36,5 +38,22 @@ export class NotificationsController {
   @Put('notifications')
   setPreferences(@CurrentUser() user: CurrentUserPayload, @Body() dto: NotificationPreferencesDto) {
     return this.notifications.setPreferences(user.id, dto);
+  }
+
+  /** Push no navegador (Fase 9g): a chave pública e se esta conta já tem algum. */
+  @Get('web-push')
+  webPush(@CurrentUser() user: CurrentUserPayload) {
+    return this.notifications.webPushStatus(user.id);
+  }
+
+  @Post('web-push')
+  subscribeWebPush(@CurrentUser() user: CurrentUserPayload, @Body() dto: WebPushSubscribeDto) {
+    return this.notifications.subscribeWebPush(user.id, dto);
+  }
+
+  /** POST e não DELETE: o endpoint vai no corpo, e DELETE com corpo é frágil em proxy. */
+  @Post('web-push/unsubscribe')
+  unsubscribeWebPush(@CurrentUser() user: CurrentUserPayload, @Body() dto: WebPushUnsubscribeDto) {
+    return this.notifications.unsubscribeWebPush(user.id, dto.endpoint);
   }
 }

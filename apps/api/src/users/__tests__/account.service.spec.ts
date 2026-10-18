@@ -38,6 +38,7 @@ const makePrisma = () => ({
   mediaFile: { findMany: jest.fn().mockResolvedValue([]) },
   userDevice: { findMany: jest.fn().mockResolvedValue([]) },
   notificationPreference: { findMany: jest.fn().mockResolvedValue([]) },
+  webPushSubscription: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const SCHEMA = resolve(__dirname, '../../../../../packages/db/prisma/schema.prisma');
@@ -82,6 +83,8 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   mediaFiles: 'mediaUploaded',
   devices: 'devices',
   notificationPreferences: 'notificationPreferences',
+  // Só as datas de cada navegador; o endpoint fica de fora (Fase 9g).
+  webPushSubscriptions: 'webPushSubscriptions',
   accessLogs: 'accessLogs',
   // Chat com a IA hospedada (#249): o que a pessoa escreveu sobre a própria saúde, em prosa.
   conversations: 'conversations',
@@ -101,6 +104,9 @@ const FORA_DO_EXPORT: Record<string, string> = {
   aiUsage:
     'Livro-caixa da inferência que a Fatia pagou (#249): modelo e custo, nada do titular. ' +
     'A linha sobrevive à exclusão da conta de propósito — é fatura, não dado pessoal.',
+  pendingNotices:
+    'Contagem de avisos esperando o fim de uma janela de 10 minutos (Fase 9g): estado de ' +
+    'entrega que some sozinho, sem nada do conteúdo — e apaga com a conta.',
 };
 
 /** Nomes de model do schema, para separar campo de relação de campo escalar. */

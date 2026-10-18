@@ -21,6 +21,15 @@ export const AppEnvSchema = z.object({
   // aviso para o celular de ninguém. O token de acesso só vale se o projeto na Expo exigir.
   PUSH_ENABLED: z.enum(['true', 'false']).default('false'),
   EXPO_ACCESS_TOKEN: z.string().optional().or(z.literal('')),
+  // Push no navegador (Web Push, Fase 9g). As três juntas, ou nenhuma: sem elas o
+  // PWA não oferece a opção. Gerar com `npx web-push generate-vapid-keys`.
+  WEB_PUSH_VAPID_PUBLIC_KEY: z.string().optional().or(z.literal('')),
+  WEB_PUSH_VAPID_PRIVATE_KEY: z.string().optional().or(z.literal('')),
+  WEB_PUSH_SUBJECT: z
+    .string()
+    .regex(/^(mailto:|https:\/\/)/, 'WEB_PUSH_SUBJECT é mailto: ou https://')
+    .optional()
+    .or(z.literal('')),
   // Observabilidade (issue #39). Vazio = instrumentação inerte: sem exportador, sem timer, sem
   // container extra. Quem sobe o stack do `infra/docker-compose.observability.yml` preenche.
   // Declarado aqui só para validar e documentar — o `tracing.ts` lê `process.env` direto,

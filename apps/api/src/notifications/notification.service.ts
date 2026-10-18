@@ -3,11 +3,14 @@ import type { OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { DevicePlatform, NotificationKind } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { EXPO_PUSH_TOKEN, PushService } from './push.service';
+import { WebPushService, isPushEndpoint } from './web-push.service';
 
 export const NOTIFICATION_KINDS = Object.values(NotificationKind);
 export const DEVICE_PLATFORMS = Object.values(DevicePlatform);
 /** Aparelhos por pessoa. Passou disso, sai o que está há mais tempo sem abrir o app. */
 export const MAX_DEVICES = 10;
+/** Navegadores por pessoa, pela mesma regra dos aparelhos. */
+export const MAX_WEB_PUSH = 10;
 const TITLE_MAX = 80;
 const BODY_MAX = 160;
 
@@ -59,6 +62,7 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly push: PushService,
+    private readonly webPush: WebPushService,
   ) {}
 
   onModuleInit(): void {
@@ -131,6 +135,59 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
     const r = await this.prisma.userDevice.deleteMany({ where: { id: deviceId, userId } });
     if (r.count === 0) throw new NotFoundException('Device not found');
     return { removed: true };
+  }
+
+  // ---------------------------------------------------------------- navegadores
+
+  /** Se esta instância manda push na web, a chave que o navegador usa e quantos a pessoa tem. */
+  async webPushStatus(
+    userId: string,
+  ): Promise<{ publicKey: string | null; subscriptions: number }> {
+    return {
+      publicKey: this.webPush.publicKey(),
+      subscriptions: await this.prisma.webPushSubscription.count({ where: { userId } }),
+    };
+  }
+
+  /**
+   * Inscreve o navegador de quem está logado (Fase 9g). O endpoint é único: o
+   * mesmo navegador em outra conta passa para quem inscreveu por último, como o
+   * celular. Só serviço de push conhecido — ver `isPushEndpoint`.
+   */
+  async subscribeWebPush(
+    userId: string,
+    input: { endpoint: string; p256dh: string; auth: string },
+  ): Promise<{ subscribed: true }> {
+    if (!this.webPush.publicKey()) {
+      throw new BadRequestException('Os avisos no navegador não estão ligados nesta instância');
+    }
+    if (!isPushEndpoint(input.endpoint)) {
+      throw new BadRequestException('Endereço de push não reconhecido');
+    }
+    const agora = new Date();
+    await this.prisma.webPushSubscription.upsert({
+      where: { endpoint: input.endpoint },
+      create: { userId, ...input, lastSeenAt: agora },
+      update: { userId, p256dh: input.p256dh, auth: input.auth, lastSeenAt: agora },
+    });
+    const sobra = await this.prisma.webPushSubscription.findMany({
+      where: { userId },
+      orderBy: [{ lastSeenAt: 'desc' }, { id: 'asc' }],
+      skip: MAX_WEB_PUSH,
+      select: { id: true },
+    });
+    if (sobra.length > 0) {
+      await this.prisma.webPushSubscription.deleteMany({
+        where: { id: { in: sobra.map((d) => d.id) } },
+      });
+    }
+    return { subscribed: true };
+  }
+
+  /** Só a própria inscrição; a de outra pessoa não é tocada. */
+  async unsubscribeWebPush(userId: string, endpoint: string): Promise<{ removed: boolean }> {
+    const r = await this.prisma.webPushSubscription.deleteMany({ where: { endpoint, userId } });
+    return { removed: r.count > 0 };
   }
 
   // ---------------------------------------------------------------- preferências
@@ -288,6 +345,14 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
     );
     if (r.unregistered.length > 0) {
       await this.prisma.userDevice.deleteMany({ where: { token: { in: r.unregistered } } });
+    }
+    const navegadores = await this.prisma.webPushSubscription.findMany({
+      where: { userId: { in: alvo } },
+      select: { endpoint: true, p256dh: true, auth: true },
+    });
+    const web = await this.webPush.send(navegadores, { title, body, url: notice.url });
+    if (web.gone.length > 0) {
+      await this.prisma.webPushSubscription.deleteMany({ where: { endpoint: { in: web.gone } } });
     }
     const porToken = new Map(devices.map((d) => [d.token, d.id]));
     const tickets = r.tickets.flatMap((t) => {

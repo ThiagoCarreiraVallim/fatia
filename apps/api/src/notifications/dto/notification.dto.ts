@@ -39,3 +39,24 @@ export class NotificationPreferencesDto {
   @IsBoolean()
   CHAT?: boolean;
 }
+
+/** A inscrição que o `PushManager.subscribe` do navegador devolve, achatada. */
+export class WebPushSubscribeDto {
+  @IsString()
+  @MaxLength(1000)
+  endpoint!: string;
+
+  @IsString()
+  @MaxLength(200)
+  p256dh!: string;
+
+  @IsString()
+  @MaxLength(100)
+  auth!: string;
+}
+
+export class WebPushUnsubscribeDto {
+  @IsString()
+  @MaxLength(1000)
+  endpoint!: string;
+}
