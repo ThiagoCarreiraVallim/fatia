@@ -332,7 +332,7 @@ async function abrirStream(
   headers.set('Accept', 'text/event-stream');
   const extra = await transport.headers?.(path);
   if (extra) new Headers(extra).forEach((valor, chave) => headers.set(chave, valor));
-  const doFetch = transport.fetch ?? fetch;
+  const doFetch = transport.streamFetch ?? transport.fetch ?? fetch;
   let res: Response;
   try {
     res = await doFetch(transport.resolveUrl(path), {

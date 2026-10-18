@@ -228,6 +228,8 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/profile/notifications', title: 'Notificações', parent: '/profile' },
   { pattern: '/plan', title: 'Meu plano', parent: '/profile' },
   { pattern: '/chat', title: 'Chat', parent: '/' },
+  // Só no app: na web as memórias são uma gaveta da conversa. Antes do `:id`.
+  { pattern: '/chat/memories', title: 'Memórias', parent: '/chat' },
   { pattern: '/chat/:id', title: 'Chat', parent: '/' },
   { pattern: '/community', title: 'Comunidade', parent: '/' },
   // Antes de `/community/:id`: a primeira rota que casa é a que vale.
