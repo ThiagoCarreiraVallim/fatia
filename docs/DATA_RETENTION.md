@@ -65,6 +65,7 @@ quem pode o quê, em [PERMISSIONS.md](./PERMISSIONS.md).
 | Cópia adotada (`WorkoutPlan`, `MealTemplate` com `fromTemplateId`) | Postgres           | É da pessoa, como qualquer plano dela; apagar o modelo só tira a proveniência                                                       |
 | Mídia publicada (`MediaFile` + objeto no bucket)                   | Postgres + R2      | Enquanto o item que a usa existir. Sem EXIF/GPS. Pendente ou sem uso: 24 h. Apagar a comunidade ou a conta da dona apaga os objetos |
 | Catálogo da comunidade (`GroupExerciseGuide`, exercício da casa)   | Postgres + R2      | Enquanto a comunidade existir. Exercício da casa que alguém usa fica, sem comunidade, no plano e no histórico dessa pessoa          |
+| Agente da comunidade (`GroupAgent`)                                | Postgres + R2      | Enquanto a comunidade existir. A conversa guarda só qual comunidade (`agentGroupId`), que fica nula quando ela é apagada            |
 | O que o profissional leu                                           | **Não armazenado** | —                                                                                                                                   |
 
 **Revogar preenche `revokedAt`, nunca apaga.** É a linha revogada que responde "quem teve acesso a

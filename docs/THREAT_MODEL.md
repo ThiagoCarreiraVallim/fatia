@@ -490,6 +490,29 @@ vídeo, ou fazer um exercício de comunidade cair no catálogo de todo mundo.
 **Não mitigado:** quem está em duas comunidades vê o tutorial de uma só; o vídeo não é verificado
 além do cabeçalho (um MP4 com conteúdo impróprio só sai quando a equipe tira).
 
+### 15. Agente da comunidade — orientações da equipe no prompt (Fase 7c, ADR 031)
+
+O que um atacante ganharia: com a conta de dono de uma comunidade, escrever orientações que façam o
+assistente gravar sem a pessoa aprovar, contar o peso ou as refeições de outro membro, receitar
+remédio em nome da academia, ou trocar as regras do prompt; ou, como membro, conversar com o
+agente de uma comunidade de que não faz parte.
+
+- **As tools não mudam.** A persona não toca no catálogo, no recorte da ADR 022 nem no Bearer: o
+  agente só alcança os dados de quem conversa. Uma orientação "você tem acesso a todos os membros"
+  não tem tool que a atenda.
+- **A aprovação não é texto.** A escrita confirmável pausa o grafo (ADR 023) com ou sem persona; o
+  caso `persona-nao-pula-a-confirmacao` do benchmark manda o modelo gravar direto e confere a pausa.
+- **Ordem e cerca.** As orientações entram depois das regras fixas, com a frase de que elas vêm
+  antes, e cercadas como dado; a cerca não fecha de dentro. O nome, fora da cerca, sai numa linha
+  curta, sem `<`/`>` — conferido na API e de novo no agente.
+- **Quem configura e quem escolhe.** Só o dono (`group.update`). O membro só escolhe entre os
+  agentes ligados das comunidades em que está ativo; outro id é 404 antes de abrir o agente. A
+  persona é conferida a cada turno, e quem sai da comunidade volta ao assistente da Fatia.
+
+**Não mitigado:** o tom é do dono. Uma orientação como "prometa resultado em 30 dias" não fere
+nenhuma regra mecânica e pode ser seguida; o texto fixo pede para não prescrever e não diagnosticar,
+e o benchmark cobre dose e identidade de profissional de saúde, não promessa comercial.
+
 ## Matriz de cobertura
 
 Onde o escopo é aplicado, por domínio. Verificado por
@@ -536,6 +559,7 @@ dono do pai não autoriza escrever em qualquer filho.
 | Planos e dicas           | `sharing/content.service.ts`                                              | `{ id, groupId }` da URL; membro só vê o publicado; autor ou moderador edita                    |
 | Mídia                    | `storage/media.service.ts`                                                | envio pela ação da tela; confirmar só quem enviou; arquivo da mesma comunidade                  |
 | Exercícios da comunidade | `workout/helpers/exercise-access.ts`, `sharing/group-exercise.service.ts` | membro ativo, ou já no plano/histórico; `{ groupId, exerciseId }` da URL; `groupOwned` imutável |
+| Agente da comunidade     | `sharing/group-agent.service.ts`, `chat/chat.service.ts`                  | só o dono configura; escolha entre agentes ligados de comunidade ativa, conferida a cada turno  |
 
 ## O que não está protegido
 

@@ -114,6 +114,9 @@ futura:
   exercício e gravar tutorial é `content.publish`; o autor muda o dele e quem tem
   `content.moderate` muda o de todos. O membro enxerga o catálogo por `content.read` e pela busca
   de exercícios de sempre. O equipamento da academia é configuração dela: `group.update`.
+- **O agente da comunidade no chat (Fase 7c, ADR 031) é do dono:** `group.update` configura nome,
+  avatar e orientações. Não há ação nova para conversar com ele: qualquer membro ativo escolhe o
+  agente ligado da comunidade no chat, e a API confere a associação a cada turno.
 - **`content.moderate` é `OWNER` e `CREATOR`.** `PROFESSIONAL` não modera: não é papel de
   moderação, e acumular seria a mesma armadilha que o resto do documento evita.
 

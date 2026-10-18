@@ -309,6 +309,21 @@ aparelho. **Pendente:** cópia do bucket no `infra/backup.sh`.
 escolhe da galeria) e player dentro do app (abre no navegador do sistema). **Não exercitado aqui:**
 vídeo enviado de aparelho de verdade e o R2 de produção.
 
+### Andamento da Fase 7c — concluída
+
+- [x] **API (ADR 031):** `GroupAgent` (nome, avatar, orientações, ligado) configurado pelo dono;
+      `GET /chat/agents` com o agente da comunidade do assento como padrão; a escolha gravada na
+      conversa nova (`Conversation.agentGroupId`) e a persona conferida a cada turno.
+- [x] **Agente Python:** `persona` no `/chat`, depois das regras fixas, com as orientações cercadas;
+      quatro casos `persona-*` no benchmark (12 de 12 com `glm-5.3-flash`).
+- [x] **api-client, web e app:** seção "Agente" no painel (só o dono, web e app); no chat da web, a
+      escolha na conversa nova e o nome e o avatar do agente no topo e acima das respostas.
+- [x] **E2E e fotos:** seed com o "Treinador Demo"; `agent.spec` (o dono liga, o membro escolhe, o
+      dono desliga e ele some); fotos 100–101, axe; `ui:snap 38-agente`.
+
+**Fora desta entrega:** chat no app (continua só na web) e trocar de agente no meio de uma conversa
+(começa-se outra).
+
 ## Fase 8 — Gamificação e timeline moderada
 
 **Desafios**
