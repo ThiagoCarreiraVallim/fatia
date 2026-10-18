@@ -79,7 +79,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.runtime import Runtime
 from langgraph.types import Command, interrupt
 
-from ..prompts.chat_pt_br import cercar, sistema_do_turno
+from ..prompts.chat_pt_br import bloco_da_persona, cercar, sistema_do_turno
 from ..providers.base import ReasoningDelta, TextDelta, TurnEnd
 from ..providers.errors import AIProviderError
 from . import events, human
@@ -386,9 +386,11 @@ def _composicao_do_contexto(
     catalogo: Sequence[dict[str, Any]],
 ) -> events.ChatEvent:
     memoria = "\n".join(m["content"] for m in contexto.memorias)
+    persona = bloco_da_persona(contexto.persona) if contexto.persona else ""
     historico = "".join(str(m.get("content") or "") for m in conversa)
     segmentos: list[dict[str, Any]] = [
-        {"key": "system", "tokens": _tokens(sistema) - _tokens(memoria)},
+        {"key": "system", "tokens": _tokens(sistema) - _tokens(memoria) - _tokens(persona)},
+        {"key": "persona", "tokens": _tokens(persona)},
         {"key": "memory", "tokens": _tokens(memoria)},
         {"key": "history", "tokens": _tokens(historico)},
         {"key": "tools", "tokens": _tokens(json.dumps(list(catalogo), ensure_ascii=False))},
@@ -435,6 +437,7 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
         plano = state.get("plano") or []
         sistema = sistema_do_turno(
             contexto.timezone,
+            persona=contexto.persona,
             memorias=contexto.memorias,
             plano=plano,
             reflexoes=state.get("reflexoes") or [],

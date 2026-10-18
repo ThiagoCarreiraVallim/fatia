@@ -145,6 +145,30 @@ class ChatMemory(BaseModel):
     content: Annotated[str, Field(min_length=1, max_length=500)]
 
 
+class ChatPersona(BaseModel):
+    """O agente da comunidade nesta conversa (Fase 7c, ADR 031).
+
+    Os limites são os do `apps/api` (`group-agent.service.ts`), repetidos aqui
+    porque a garantia não pode depender de quem chama: o nome vai numa frase do
+    prompt, fora de cerca, e não pode trazer quebra de linha nem `<`/`>`.
+    """
+
+    model_config = {"extra": "forbid", "populate_by_name": True}
+
+    group_id: Annotated[UUID4, Field(alias="groupId")]
+    name: Annotated[str, Field(min_length=2, max_length=40, pattern=r"^[^\x00-\x1f\x7f<>]+$")]
+    community: Annotated[str, Field(min_length=1, max_length=120)]
+    instructions: Annotated[str, Field(max_length=2000)] = ""
+
+    def para_o_prompt(self) -> dict[str, str]:
+        return {
+            "groupId": str(self.group_id),
+            "name": self.name,
+            "community": self.community,
+            "instructions": self.instructions,
+        }
+
+
 MAX_FOTOS_POR_MENSAGEM = 3
 
 # O ditado é curto por natureza: dois minutos de opus mal passam de 1 MB. O teto
@@ -209,6 +233,9 @@ class ChatRequest(BaseModel):
     # prompt. Não é identidade: o nome de um fuso é grosso demais para apontar
     # para alguém.
     timezone: str | None = None
+    # Sem persona é o assistente da Fatia. Quem decide qual comunidade, e se a
+    # pessoa ainda é dela, é o `apps/api`, a cada turno.
+    persona: ChatPersona | None = None
     # Vivem só neste turno: o checkpoint recebe uma marca no lugar (ver
     # `FotoDoTurno` em `chat/state.py`).
     photos: Annotated[
@@ -542,6 +569,7 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             timezone=payload.timezone,
             historico=tuple(mensagem.model_dump() for mensagem in payload.history),
             memorias=tuple(memoria.model_dump() for memoria in payload.memories),
+            persona=payload.persona.para_o_prompt() if payload.persona is not None else None,
             planejar=resolved.agent_chat_planner,
             fotos=fotos,
         )

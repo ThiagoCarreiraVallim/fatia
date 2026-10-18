@@ -125,6 +125,7 @@ async def turno(
     thread: str = THREAD,
     token: str = TOKEN,
     memorias: Sequence[dict[str, str]] = (),
+    persona: dict[str, str] | None = None,
     planejar: bool = False,
     fotos: Sequence[FotoDoTurno] = (),
 ) -> Resultado:
@@ -144,6 +145,7 @@ async def turno(
         timezone=timezone,
         historico=tuple(historico),
         memorias=tuple(memorias),
+        persona=persona,
         planejar=planejar,
         fotos=tuple(fotos),
     )
