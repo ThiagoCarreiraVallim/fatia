@@ -589,7 +589,7 @@ traceback está logo abaixo da linha.
 
 ### Langfuse — o que cada turno fez (ADR 034)
 
-1. Conta em <https://cloud.langfuse.com> (região **EU**). Organização e projeto `fatia`.
+1. Conta em <https://us.cloud.langfuse.com> (região **US**; uma chave de outra região não funciona aqui). Organização e projeto `fatia`.
 2. **Settings → Data retention:** 30 dias (é o teto do plano Hobby; nos pagos, escolha).
 3. **Settings → API keys → Create:** copie a _public key_ (`pk-lf-…`) e a _secret key_
    (`sk-lf-…`).

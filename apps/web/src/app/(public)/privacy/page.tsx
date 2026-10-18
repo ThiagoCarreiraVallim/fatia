@@ -305,7 +305,7 @@ export default function PrivacyPage() {
             Desligar os avisos ou sair da conta no app apaga esse endereço.
           </li>
           <li>
-            <strong>Langfuse</strong> (servidores na União Europeia) — somente quando ativado nesta
+            <strong>Langfuse</strong> (servidores nos Estados Unidos) — somente quando ativado nesta
             instância, para investigarmos erros e respostas ruins do chat. Recebe o registro técnico
             de cada resposta: a pergunta e a resposta com{' '}
             <strong>e-mail, CPF, CNPJ e telefone mascarados</strong>, o modelo usado, o tempo, o

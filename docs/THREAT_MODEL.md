@@ -599,7 +599,7 @@ cadastro dela, numa base fora da Fatia.
 - **Desligável.** Sem as duas chaves, nada é enviado.
 
 **Não mitigado:** a pergunta e a resposta continuam sendo saúde em prosa, mascaradas só nos
-padrões de identificação; a retenção é a do projeto na Langfuse Cloud (UE).
+padrões de identificação; a retenção é a do projeto na Langfuse Cloud (EUA) — transferência internacional, declarada na política de privacidade.
 
 ### 20. Resposta do chat desacoplada da requisição (Fase 9d, ADR 035)
 

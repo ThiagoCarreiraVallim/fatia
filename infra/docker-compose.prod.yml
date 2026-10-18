@@ -155,7 +155,7 @@ services:
       # Langfuse (ADR 034). Sem as chaves, nada sai.
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      LANGFUSE_HOST: ${LANGFUSE_HOST:-https://cloud.langfuse.com}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-https://us.cloud.langfuse.com}
       LANGFUSE_SAMPLE_RATE: ${LANGFUSE_SAMPLE_RATE:-1.0}
       LANGFUSE_ENVIRONMENT: ${LANGFUSE_ENVIRONMENT:-production}
     expose:

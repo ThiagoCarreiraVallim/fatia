@@ -16,7 +16,7 @@ texto da conversa — é um operador de dados novo.
 
 ## Decisão
 
-1. **Langfuse Cloud, região UE**, pelo SDK v4 (OpenTelemetry). Self-host foi descartado: o
+1. **Langfuse Cloud, região EUA** (`us.cloud.langfuse.com`, onde a conta já existe), pelo SDK v4 (OpenTelemetry). Self-host foi descartado: o
    Langfuse v3+ exige ClickHouse, Redis e S3, pesado para o VPS atual. Sem `LANGFUSE_PUBLIC_KEY` e
    `LANGFUSE_SECRET_KEY`, nada é enviado.
 2. **Um trace por turno**, com id derivado do `runId` (`Langfuse.create_trace_id(seed=runId)`):

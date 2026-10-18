@@ -97,6 +97,8 @@ describe('/privacy — o que já era verdade e continua', () => {
     const texto = textoDaPagina();
 
     expect(texto).toMatch(/Langfuse/);
+    // A conta é da região EUA: a transferência internacional precisa estar dita.
+    expect(texto).toMatch(/Langfuse \(servidores nos Estados Unidos\)/);
     expect(texto).toMatch(/e-mail, CPF, CNPJ e telefone mascarados/i);
     expect(texto).toMatch(/Não recebe o resultado dessas consultas, suas fotos, seus áudios/i);
   });
