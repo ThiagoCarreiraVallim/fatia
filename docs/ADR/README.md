@@ -39,6 +39,7 @@ Decisões arquiteturais relevantes do projeto. Cada ADR é imutável depois de a
 | [031](./031-agente-da-comunidade.md)                                   | Agente da comunidade: persona por cima do mesmo assistente | Accepted                               |
 | [032](./032-mural-da-comunidade-e-moderacao.md)                        | Mural da comunidade com moderação pela equipe              | Accepted                               |
 | [033](./033-avisos-no-celular.md)                                      | Avisos no celular pela Expo, sem dado de saúde             | Accepted                               |
+| [034](./034-langfuse-cloud-com-mascara.md)                             | Langfuse Cloud para o chat, com máscara                    | Accepted                               |
 
 ## Template
 

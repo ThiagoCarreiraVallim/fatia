@@ -587,6 +587,23 @@ docker logs $(docker ps -qf name=agent) --since 72h 2>&1 \
 Se aparecer `Turno de chat terminou em erro inesperado` sem `psycopg`, é defeito nosso: o
 traceback está logo abaixo da linha.
 
+### Langfuse — o que cada turno fez (ADR 034)
+
+1. Conta em <https://cloud.langfuse.com> (região **EU**). Organização e projeto `fatia`.
+2. **Settings → Data retention:** 30 dias (é o teto do plano Hobby; nos pagos, escolha).
+3. **Settings → API keys → Create:** copie a _public key_ (`pk-lf-…`) e a _secret key_
+   (`sk-lf-…`).
+4. No Dokploy, serviço `agent` (já no `docker-compose.prod.yml`): `LANGFUSE_PUBLIC_KEY`,
+   `LANGFUSE_SECRET_KEY`; `LANGFUSE_ENVIRONMENT=production`. `LANGFUSE_SAMPLE_RATE` abaixo de 1
+   reduz o volume.
+5. Confirme mandando uma pergunta no chat: em **Tracing**, aparece `chat-chat` com a sessão igual
+   ao id da conversa, as gerações (`modelo`) com tokens e custo, e as tools com nome e duração.
+
+Para achar um turno: filtre por **Session** (id da conversa, que está na URL do chat) ou por
+horário. O `user_id` é um HMAC — para achar todos os turnos de uma pessoa, calcule-o com
+`hashed_user_id` do `apps/agent/src/fatia_agent/tracing.py`. Um 👎 aparece como score
+`user_feedback = 0` no trace, com os motivos em metadata.
+
 ## Avisos no celular — Expo push (ADR 033)
 
 Os avisos da comunidade saem pela API HTTP da Expo. Sem `PUSH_ENABLED=true` a API só registra no

@@ -389,19 +389,20 @@ a pessoa **escreveu** sobre a própria saúde, em prosa — e não um número. P
 aqui item a item. O fluxo está em [`ARCHITECTURE.md`](./ARCHITECTURE.md) §"Chat hospedado"; o estado
 do agente, na [ADR 023](./ADR/023-checkpointer-no-postgres-da-fatia.md).
 
-| Dado                                              | Onde                                                 | Retenção                                                                  |
-| ------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------- |
-| Conversas e mensagens (`Conversation`, `Message`) | Postgres                                             | Enquanto a pessoa não apagar a conversa, e enquanto a conta existir       |
-| Voto na resposta e motivos (`Message.review*`)    | Postgres, na própria mensagem                        | Igual à mensagem                                                          |
-| Pausa aberta — a escrita ou a pergunta à espera   | Postgres, `Message.metadata.interrupt`               | **Até o turno seguinte**, qualquer que seja a resposta                    |
-| Tools do turno e o desfecho de cada uma           | Postgres, `Message.metadata.toolCalls`/`toolResults` | Igual à mensagem. Nome, id e deu certo ou não — **nunca** o resultado     |
-| Cartão da tool (número, série, tabela)            | Postgres, `Message.metadata.artifacts`               | Igual à mensagem. Descartado acima de 32 mil caracteres                   |
-| Tempo e consumo do turno                          | Postgres, `Message.metadata`                         | Igual à mensagem                                                          |
-| Estado do grafo da conversa                       | Postgres, schema `agent_checkpoint`                  | Igual à conversa; apagado com ela e com a conta                           |
-| Memórias (`UserMemory`)                           | Postgres                                             | Até a pessoa esquecer, ou apagar a conta                                  |
-| Foto anexada a uma mensagem                       | Memória dos processos, durante o turno               | Nenhuma. Fica só **quantas** foram (`Message.metadata.photos`)            |
-| Áudio do ditado                                   | Memória da aba e dos processos, durante a chamada    | Nenhuma. Fica só a **duração**, como unidade de custo em `AiUsage`        |
-| Uso da inferência (`AiUsage`)                     | Postgres                                             | Sobrevive à conta **sem** o `userId` — ver "Registro de uso da IA", acima |
+| Dado                                              | Onde                                                 | Retenção                                                                                                         |
+| ------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Conversas e mensagens (`Conversation`, `Message`) | Postgres                                             | Enquanto a pessoa não apagar a conversa, e enquanto a conta existir                                              |
+| Voto na resposta e motivos (`Message.review*`)    | Postgres, na própria mensagem                        | Igual à mensagem                                                                                                 |
+| Pausa aberta — a escrita ou a pergunta à espera   | Postgres, `Message.metadata.interrupt`               | **Até o turno seguinte**, qualquer que seja a resposta                                                           |
+| Tools do turno e o desfecho de cada uma           | Postgres, `Message.metadata.toolCalls`/`toolResults` | Igual à mensagem. Nome, id e deu certo ou não — **nunca** o resultado                                            |
+| Cartão da tool (número, série, tabela)            | Postgres, `Message.metadata.artifacts`               | Igual à mensagem. Descartado acima de 32 mil caracteres                                                          |
+| Tempo e consumo do turno                          | Postgres, `Message.metadata`                         | Igual à mensagem                                                                                                 |
+| Estado do grafo da conversa                       | Postgres, schema `agent_checkpoint`                  | Igual à conversa; apagado com ela e com a conta                                                                  |
+| Trace do turno no Langfuse (ADR 034)              | Langfuse Cloud (UE), só com as chaves configuradas   | A do projeto no Langfuse (30 dias no Hobby). Texto mascarado; sem resultado de tool, foto, áudio nem id da conta |
+| Memórias (`UserMemory`)                           | Postgres                                             | Até a pessoa esquecer, ou apagar a conta                                                                         |
+| Foto anexada a uma mensagem                       | Memória dos processos, durante o turno               | Nenhuma. Fica só **quantas** foram (`Message.metadata.photos`)                                                   |
+| Áudio do ditado                                   | Memória da aba e dos processos, durante a chamada    | Nenhuma. Fica só a **duração**, como unidade de custo em `AiUsage`                                               |
+| Uso da inferência (`AiUsage`)                     | Postgres                                             | Sobrevive à conta **sem** o `userId` — ver "Registro de uso da IA", acima                                        |
 
 ### O checkpoint do agente
 

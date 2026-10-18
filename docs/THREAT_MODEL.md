@@ -583,6 +583,24 @@ um aviso, levar quem toca para fora do app.
 serviços vê o texto (que por isso é neutro) e o caminho, que no convite inclui o token do
 convite — o mesmo que já vai no e-mail, e que só vale para a conta do endereço convidado.
 
+### 19. Observabilidade do chat no Langfuse (Fase 9c, ADR 034)
+
+O que um atacante — ou o próprio fornecedor — ganharia: o registro de saúde de alguém, ligado ao
+cadastro dela, numa base fora da Fatia.
+
+- **O que não sai.** Resultado e argumentos das tools, fotos, áudio e o id da conta
+  (`messages_for_trace`, `hashed_user_id`; `tests/test_tracing.py` confere o texto de uma tool e o
+  id da pessoa ausentes de todos os spans exportados, com vermelho provado).
+- **O que sai mascarado.** Pergunta e resposta, sem e-mail, CPF, CNPJ e telefone (`mask`).
+- **O id é um HMAC** com a `AGENT_API_KEY`: o Langfuse agrupa os traces de uma pessoa sem ter como
+  chegar ao cadastro dela, e quem tem o banco da Fatia não precisa do Langfuse para nada.
+- **Voto sem comentário.** O comentário livre do 👎 fica no Postgres; ao Langfuse vão o sinal e os
+  motivos fechados.
+- **Desligável.** Sem as duas chaves, nada é enviado.
+
+**Não mitigado:** a pergunta e a resposta continuam sendo saúde em prosa, mascaradas só nos
+padrões de identificação; a retenção é a do projeto na Langfuse Cloud (UE).
+
 ## Matriz de cobertura
 
 Onde o escopo é aplicado, por domínio. Verificado por
