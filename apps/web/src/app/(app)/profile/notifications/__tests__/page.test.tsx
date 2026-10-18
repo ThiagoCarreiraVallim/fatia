@@ -12,6 +12,9 @@ vi.mock('@fatia/api-client', async () => {
       setPreferences: vi.fn(),
       devices: vi.fn(),
       removeDevice: vi.fn(),
+      webPushStatus: vi.fn(async () => ({ publicKey: null, subscriptions: 0 })),
+      subscribeWebPush: vi.fn(),
+      unsubscribeWebPush: vi.fn(),
     },
   };
 });
@@ -19,7 +22,7 @@ vi.mock('@fatia/api-client', async () => {
 import { notificationsApi } from '@fatia/api-client';
 import NotificationsPage from '../page';
 
-const tudo = { COMMUNITY: true, CHALLENGES: true, FEED: true, MODERATION: true };
+const tudo = { COMMUNITY: true, CHALLENGES: true, FEED: true, MODERATION: true, CHAT: true };
 
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -77,5 +80,30 @@ describe('Perfil → Notificações', () => {
     await userEvent.click(await screen.findByRole('switch', { name: /Desafios/ }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Não deu para salvar agora');
     expect(screen.getByRole('switch', { name: /Desafios/ })).toBeChecked();
+  });
+
+  it('sem chave de push na instância, a opção do navegador não aparece', async () => {
+    vi.mocked(notificationsApi.preferences).mockResolvedValue(tudo);
+    vi.mocked(notificationsApi.devices).mockResolvedValue([]);
+    renderPage();
+
+    await screen.findByRole('switch', { name: /Comentários/ });
+    expect(screen.queryByText('Neste navegador')).not.toBeInTheDocument();
+  });
+
+  it('navegador sem push (iPhone fora da tela de início) explica o porquê', async () => {
+    vi.mocked(notificationsApi.preferences).mockResolvedValue(tudo);
+    vi.mocked(notificationsApi.devices).mockResolvedValue([]);
+    vi.mocked(notificationsApi.webPushStatus).mockResolvedValue({
+      publicKey: 'BChave',
+      subscriptions: 0,
+    });
+    renderPage();
+
+    expect(await screen.findByText('Neste navegador')).toBeInTheDocument();
+    expect(screen.getByText(/tela\s+de início \(iOS 16\.4/)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('switch', { name: /Avisos neste navegador/ }),
+    ).not.toBeInTheDocument();
   });
 });

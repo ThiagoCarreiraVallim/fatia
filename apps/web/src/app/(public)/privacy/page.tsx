@@ -296,6 +296,15 @@ export default function PrivacyPage() {
             que não cumprir não recebe a chamada. Veja <strong>Inteligência artificial</strong>.
           </li>
           <li>
+            <strong>Serviços de aviso</strong> — somente se você ligar os avisos no app ou no
+            navegador. No celular, os avisos passam pela <strong>Expo</strong> e pela{' '}
+            <strong>Apple</strong> ou pelo <strong>Google</strong>; no navegador, pelo serviço de
+            push dele (Google, Mozilla, Apple ou Microsoft). Recebem o texto do aviso — que{' '}
+            <strong>nunca traz dado de saúde</strong> nem o que alguém escreveu, só coisas como
+            &quot;Sua resposta está pronta&quot; — e o endereço do aparelho ou do navegador.
+            Desligar os avisos ou sair da conta no app apaga esse endereço.
+          </li>
+          <li>
             <strong>Langfuse</strong> (servidores na União Europeia) — somente quando ativado nesta
             instância, para investigarmos erros e respostas ruins do chat. Recebe o registro técnico
             de cada resposta: a pergunta e a resposta com{' '}

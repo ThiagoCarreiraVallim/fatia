@@ -69,7 +69,28 @@ export const notificationsApi = {
     apiFetch<UserDevice>('/api/users/me/devices', json('POST', input)),
   removeDevice: (id: string) =>
     apiFetch<{ removed: true }>(`/api/users/me/devices/${id}`, json('DELETE')),
+  /** Push no navegador (Fase 9g): `publicKey: null` é "desligado nesta instância". */
+  webPushStatus: () =>
+    apiFetch<{ publicKey: string | null; subscriptions: number }>('/api/users/me/web-push'),
+  subscribeWebPush: (input: { endpoint: string; p256dh: string; auth: string }) =>
+    apiFetch<{ subscribed: true }>('/api/users/me/web-push', json('POST', input)),
+  unsubscribeWebPush: (endpoint: string) =>
+    apiFetch<{ removed: boolean }>(
+      '/api/users/me/web-push/unsubscribe',
+      json('POST', { endpoint }),
+    ),
 };
+
+/** A chave VAPID (base64url) no formato que o `PushManager.subscribe` pede. */
+export function vapidKeyBytes(base64url: string): Uint8Array {
+  const base64 = (base64url + '='.repeat((4 - (base64url.length % 4)) % 4))
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+  const bin = atob(base64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
 
 /**
  * Para onde o toque no aviso leva. O `url` vem do servidor, mas passa por aqui

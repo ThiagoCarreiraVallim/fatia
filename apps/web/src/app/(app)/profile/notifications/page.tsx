@@ -11,13 +11,15 @@ import {
 } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { WebPushToggle } from '@/components/profile/web-push-toggle';
 
 const PREFS_KEY = ['users', 'me', 'notifications'] as const;
 const DEVICES_KEY = ['users', 'me', 'devices'] as const;
 
 /**
- * Perfil → Notificações (Fase 8c, ADR 033). Os avisos chegam só pelo app;
- * daqui dá para escolher o que chega e tirar um celular que não é mais seu.
+ * Perfil → Notificações (Fase 8c, ADR 033). Os avisos chegam pelo app e, desde
+ * a Fase 9g, também por este navegador; daqui dá para escolher o que chega e
+ * tirar um celular que não é mais seu.
  */
 export default function NotificationsPage() {
   const qc = useQueryClient();
@@ -36,8 +38,9 @@ export default function NotificationsPage() {
   return (
     <div className="space-y-6 px-5 pt-4 pb-8">
       <p className="text-sm leading-relaxed text-muted-foreground">
-        Os avisos chegam pelo app do Fatia no celular, para convites, desafios e o mural das suas
-        comunidades. Eles nunca mostram dado de saúde nem o texto de um post.
+        Os avisos chegam pelo app do Fatia no celular e, se você ligar, por este navegador:
+        convites, desafios, o mural das suas comunidades e a resposta do chat. Eles nunca mostram
+        dado de saúde nem o texto de um post.
       </p>
 
       <section className="space-y-2" aria-labelledby="o-que-chega">
@@ -86,6 +89,8 @@ export default function NotificationsPage() {
           </div>
         )}
       </section>
+
+      <WebPushToggle />
 
       <section className="space-y-2" aria-labelledby="celulares">
         <h2 id="celulares" className="text-sm font-semibold">

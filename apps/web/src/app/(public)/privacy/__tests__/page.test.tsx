@@ -101,6 +101,13 @@ describe('/privacy — o que já era verdade e continua', () => {
     expect(texto).toMatch(/Não recebe o resultado dessas consultas, suas fotos, seus áudios/i);
   });
 
+  it('declara os serviços de aviso, e que o aviso nunca traz dado de saúde', () => {
+    const texto = textoDaPagina();
+    expect(texto).toMatch(/Serviços de aviso/);
+    expect(texto).toMatch(/Expo/);
+    expect(texto).toMatch(/nunca traz dado de saúde/i);
+  });
+
   it('mostra a data da última atualização', () => {
     render(<PrivacyPage />);
     expect(screen.getByText(/Última atualização:/)).toBeInTheDocument();

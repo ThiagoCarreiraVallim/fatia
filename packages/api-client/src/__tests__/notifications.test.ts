@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deviceLabel, notificationTarget } from '../notifications';
+import { deviceLabel, notificationTarget, vapidKeyBytes } from '../notifications';
 
 describe('avisos no celular (helpers)', () => {
   it('o toque leva às telas da comunidade e ao convite', () => {
@@ -41,5 +41,13 @@ describe('avisos no celular (helpers)', () => {
     expect(deviceLabel({ ...d('2026-10-08T09:00:00Z'), platform: 'IOS' }, agora)).toBe(
       'iPhone · usado há 10 dias',
     );
+  });
+});
+
+describe('vapidKeyBytes', () => {
+  it('base64url sem preenchimento vira os bytes da chave', () => {
+    // "Fatia?" em base64 é "RmF0aWE/", em base64url sem "=" é "RmF0aWE_".
+    expect(Array.from(vapidKeyBytes('RmF0aWE_'))).toEqual([70, 97, 116, 105, 97, 63]);
+    expect(Array.from(vapidKeyBytes('YQ'))).toEqual([97]);
   });
 });
