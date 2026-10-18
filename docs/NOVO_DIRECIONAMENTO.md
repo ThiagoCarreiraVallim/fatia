@@ -367,6 +367,22 @@ Feed, Desafios, Planos/Dicas" fica para a 8b, quando o feed existir.
 **Fora desta entrega:** a 8c (notificações push), inclusive o aviso de resposta e de post
 removido.
 
+### Andamento da Fase 8c — avisos no celular, concluída
+
+- [x] **API (ADR 033):** `UserDevice` (token da Expo único, até 10 por pessoa) e
+      `NotificationPreference` (sem linha = ligado); `PushService` pela API HTTP da Expo, em lotes
+      de 100, ligado por `PUSH_ENABLED`; `DeviceNotRegistered` apaga o aparelho. Gatilhos: convite
+      para a conta do e-mail, pedido de entrada (dono), entrada aprovada, desafio novo e
+      encerrado, comentário no meu post, post ou comentário removido. Texto sem dado de saúde nem
+      do post; export LGPD sem o token.
+- [x] **api-client, web e app:** `notificationsApi` e `notificationTarget`; Perfil →
+      Notificações nos dois (o app liga os avisos no celular; a web lista e tira celulares); o
+      toque abre a tela do aviso; sair da conta no app tira o aparelho.
+- [x] **E2E e fotos:** `notifications.spec`, foto 111, axe; `ui:snap 44-push`.
+
+**Fora desta entrega:** recibos da Expo (segunda etapa), agrupar comentários em sequência e
+aviso na web. Sem tool MCP nova (130).
+
 **Timeline**
 
 - `GroupPost` (texto, imagens[], autor, `removedAt/removedById`, pinned), `GroupPostReaction`, `GroupPostComment`, `GroupPostReport`.

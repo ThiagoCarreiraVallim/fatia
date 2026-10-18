@@ -541,6 +541,20 @@ A API valida JWT via JWKS com cache. Com o Logto fora:
 Não há fallback, e é uma dependência aceita conscientemente na ADR 008. Restaurar o Logto é a
 única saída: `docker compose logs logto` e confirmar que ele alcança a database `logto`.
 
+## Avisos no celular — Expo push (ADR 033)
+
+Os avisos da comunidade saem pela API HTTP da Expo. Sem `PUSH_ENABLED=true` a API só registra no
+log o que mandaria (é o padrão no dev).
+
+1. O app precisa do projeto EAS (`eas init`, `EAS_PROJECT_ID` no build): sem ele, Perfil →
+   Notificações diz que a versão não recebe avisos.
+2. Credenciais de push: no Android, a chave FCM v1 do projeto Firebase em `eas credentials`; no
+   iOS, a chave APNs, que o EAS gera no primeiro build.
+3. No Dokploy (estão no `docker-compose.prod.yml`): `PUSH_ENABLED=true`, e `EXPO_ACCESS_TOKEN` só
+   se o projeto tiver _Enhanced Security for Push Notifications_ ligado.
+4. Confirme ligando os avisos num celular e comentando, com outra conta, um post da primeira: o
+   aviso chega com o app fechado, e o log da API não mostra `Push recusado`.
+
 ## Release do app nativo
 
 O app (`apps/mobile`) não vai junto do deploy do backend — a distribuição é pelas

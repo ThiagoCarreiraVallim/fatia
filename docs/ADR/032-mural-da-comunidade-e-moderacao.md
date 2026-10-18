@@ -52,7 +52,7 @@ traz três riscos novos:
 
 - Moderação é trabalho humano da equipe; não há filtro automático. A fila e o limite por hora são
   o freio na v1.
-- Notificação de resposta e de post removido fica para a 8c.
+- Notificação de comentário e de post removido: entregue na 8c (ADR 033).
 
 ### Neutras
 

@@ -52,6 +52,7 @@ Nenhum placeholder restante no código.
 | —                                    | `app/(app)/nutrition/photo.tsx`                          | ➕  | registro por foto (#139); o PWA não tem, ver abaixo                         |
 | `(app)/plan`                         | `app/(app)/plan.tsx`                                     | ⚠️  | Meu plano (ADR 024); o app vende só pela loja (RevenueCat), ver abaixo      |
 | `(app)/profile`                      | `app/(app)/profile/index.tsx`                            | ✅  |                                                                             |
+| `(app)/profile/notifications`        | `app/(app)/profile/notifications.tsx`                    | ✅  | no app liga os avisos neste celular; a web lista os celulares e tira um     |
 | `(app)/profile/connect`              | `app/(app)/profile/tokens.tsx`                           | ⚠️  | o PWA virou fluxo guiado (#164); o nativo ainda é a tela antiga, ver abaixo |
 | `(app)/progress`                     | `app/(app)/progress/index.tsx`                           | ✅  |                                                                             |
 | `(app)/progress/records`             | `app/(app)/progress/records.tsx`                         | ✅  |                                                                             |
@@ -237,6 +238,7 @@ exigência de loja.
 | Confirmação antes de apagar                       | em tela de toque o alvo erra, e a API não desfaz                                       |
 | Estados de erro onde o web deixa a tela em branco | a auditoria pede estados equivalentes; "equivalente a nada" não serve                  |
 | Notificação local do fim do descanso              | #182 — o descanso é o momento em que o celular vai para o bolso                        |
+| Avisos da comunidade (push)                       | Fase 8c, ADR 033 — o PWA no iOS não entrega push com confiança                         |
 | Registro de refeição por foto                     | #139 — depende de câmera e galeria; ver abaixo                                         |
 
 **Registro por foto (#139) não é dívida de paridade — é dependência de aparelho.**
@@ -413,6 +415,7 @@ rodando, e deve ser feito antes de publicar:
 - [ ] Agente da comunidade: trocar o avatar pela galeria, salvar ligado e conferir no chat da web que o agente aparece para um membro
 - [ ] Desafios: marcar pelo painel (hoje, 7 dias), entrar com outra conta com apelido, ver a própria linha no ranking, puxar para atualizar, sair pelo `Alert` e encerrar pelo painel
 - [ ] Mural: publicar com 2 imagens da galeria (iPhone com HEIC), reagir, comentar com o teclado aberto, denunciar pelo `Alert`, e a dona removendo e restaurando pela Moderação
+- [ ] Avisos (build com `EAS_PROJECT_ID` e API com `PUSH_ENABLED=true`): ligar em Perfil → Notificações (diálogo do sistema no iOS e no Android 13+), receber o comentário de outra conta com o app fechado e em primeiro plano, o toque abrindo o mural, negar a permissão e ver "Abrir configurações", e sair da conta parando os avisos
 - [ ] Cores dos macros e de erro (`cores.ts`) iguais às do PWA lado a lado
 - [ ] Diagrama muscular destacando os grupos certos
 - [ ] Aparelho de entrada, não só simulador — os gráficos são o ponto a observar
