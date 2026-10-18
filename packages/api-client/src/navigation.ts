@@ -233,6 +233,12 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/community/new', title: 'Criar comunidade', parent: '/community' },
   { pattern: '/community/:id', title: 'Comunidade', parent: '/community' },
   { pattern: '/community/:id/content', title: 'Planos e dicas', parent: '/community/:id' },
+  { pattern: '/community/:id/challenges', title: 'Desafios', parent: '/community/:id' },
+  {
+    pattern: '/community/:id/challenges/:challengeId',
+    title: 'Desafio',
+    parent: '/community/:id/challenges',
+  },
   {
     pattern: '/community/:id/content/:templateId',
     title: 'Plano pronto',
@@ -255,6 +261,7 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/org/:id/content/tips/:tipId', title: 'Dica', parent: '/org/:id/content' },
   { pattern: '/org/:id/exercises', title: 'Exercícios', parent: '/org/:id' },
   { pattern: '/org/:id/exercises/:exerciseId', title: 'Exercício', parent: '/org/:id/exercises' },
+  { pattern: '/org/:id/challenges', title: 'Desafios', parent: '/org/:id' },
   { pattern: '/org/:id/agent', title: 'Agente', parent: '/org/:id' },
   { pattern: '/students', title: 'Membros', parent: '/' },
   { pattern: '/students/:id', title: 'Membro', parent: '/students' },

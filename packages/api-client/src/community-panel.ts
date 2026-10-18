@@ -28,7 +28,15 @@ export function groupTypeLabel(type: GroupType): string {
 }
 
 export type PanelSection =
-  'overview' | 'members' | 'invites' | 'content' | 'exercises' | 'agent' | 'seats' | 'settings';
+  | 'overview'
+  | 'members'
+  | 'invites'
+  | 'content'
+  | 'exercises'
+  | 'challenges'
+  | 'agent'
+  | 'seats'
+  | 'settings';
 
 export interface PanelLink {
   section: PanelSection;
@@ -43,6 +51,7 @@ const SECTIONS: Record<PanelSection, PanelLink> = {
   invites: { section: 'invites', label: 'Convites', path: '/invites' },
   content: { section: 'content', label: 'Planos e dicas', path: '/content' },
   exercises: { section: 'exercises', label: 'Exercícios', path: '/exercises' },
+  challenges: { section: 'challenges', label: 'Desafios', path: '/challenges' },
   agent: { section: 'agent', label: 'Agente', path: '/agent' },
   seats: { section: 'seats', label: 'Assentos', path: '/seats' },
   settings: { section: 'settings', label: 'Configurações', path: '/settings' },
@@ -53,7 +62,10 @@ export function canOpenPanel(group: Pick<MyGroup, 'role' | 'status'>): boolean {
   return group.status === 'ACTIVE' && (group.role === 'OWNER' || group.role === 'PROFESSIONAL');
 }
 
-/** As seções do painel para o papel: o profissional cuida de membros, convites, conteúdo e exercícios. */
+/**
+ * As seções do painel para o papel: o profissional cuida de membros, convites,
+ * conteúdo, exercícios e desafios.
+ */
 export function panelSections(role: GroupRole): PanelLink[] {
   if (role === 'OWNER') return Object.values(SECTIONS);
   if (role === 'PROFESSIONAL') {
@@ -63,6 +75,7 @@ export function panelSections(role: GroupRole): PanelLink[] {
       SECTIONS.invites,
       SECTIONS.content,
       SECTIONS.exercises,
+      SECTIONS.challenges,
     ];
   }
   return [];

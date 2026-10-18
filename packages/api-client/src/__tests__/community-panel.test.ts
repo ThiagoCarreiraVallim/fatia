@@ -42,13 +42,14 @@ const visao = (extra: Partial<SeatsOverview> = {}): SeatsOverview => ({
 });
 
 describe('quem abre o painel e com que seções', () => {
-  it('dono vê tudo; profissional, membros, convites, conteúdo e exercícios; os demais, nada', () => {
+  it('dono vê tudo; profissional, membros, convites, conteúdo, exercícios e desafios; os demais, nada', () => {
     expect(panelSections('OWNER').map((s) => s.section)).toEqual([
       'overview',
       'members',
       'invites',
       'content',
       'exercises',
+      'challenges',
       'agent',
       'seats',
       'settings',
@@ -59,6 +60,7 @@ describe('quem abre o painel e com que seções', () => {
       'invites',
       'content',
       'exercises',
+      'challenges',
     ]);
     expect(panelSections('CREATOR')).toEqual([]);
     expect(panelSections('MEMBER')).toEqual([]);
@@ -77,6 +79,7 @@ describe('quem abre o painel e com que seções', () => {
     expect(activePanelSection('/org/g1')).toBe('overview');
     expect(activePanelSection('/org/g1/members/m9')).toBe('members');
     expect(activePanelSection('/org/g1/invites?x=1')).toBe('invites');
+    expect(activePanelSection('/org/g1/challenges')).toBe('challenges');
   });
 });
 
