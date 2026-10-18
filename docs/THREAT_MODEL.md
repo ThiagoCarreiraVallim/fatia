@@ -513,6 +513,30 @@ agente de uma comunidade de que não faz parte.
 nenhuma regra mecânica e pode ser seguida; o texto fixo pede para não prescrever e não diagnosticar,
 e o benchmark cobre dose e identidade de profissional de saúde, não promessa comercial.
 
+### 16. Desafios da comunidade — o ranking como canal (Fase 8a, ADR 027)
+
+O que um atacante ganharia: como membro, ler pelo ranking quanto outra pessoa come, pesa ou bebe;
+ver o placar de um desafio em que não entrou ou de outra comunidade; ou, como equipe, usar uma
+métrica de valor bruto ("mais proteína") para expor o que cada um comeu.
+
+- **O placar não recebe refeição.** `social/` é proibido de tocar em refeição, peso e meta
+  (`no-body-comparison.spec.ts`); a aderência vem de `nutrition/daily-adherence.service.ts` como
+  conjunto de datas, e toda métrica de nutrição é contagem de dias na própria meta (sufixo `_DAYS`,
+  conferido no spec). Não há métrica de corpo.
+- **Ranking só para quem participa.** O detalhe devolve `leaderboard: null` a quem não entrou; a
+  linha do ranking tem `displayName`, `score`, `rank`, `isMe` e `medal`, e nada que identifique a
+  conta. Quem sai da comunidade some do placar.
+- **Isolamento pelo par da URL.** O desafio é buscado com `{ id, groupId }` da rota, e os
+  participantes que o `ScoreboardService` pontua saem desse desafio, com o `userId` lido da
+  associação — nunca de id vindo do corpo. Desafio de outra comunidade é 404, inclusive no cartão
+  de confirmação do chat.
+- **Apelido.** Até 30 caracteres, sem quebra de linha nem `<`/`>`; é o único texto da pessoa que
+  os outros participantes leem.
+
+**Não mitigado:** `STEPS` e `WATER_ML` pontuam pelo valor somado (decisão da #161, anterior à ADR
+027): num desafio de um dia, a pontuação de água **é** a água daquele dia, visível a quem participa.
+A pessoa entra sabendo o que conta (o texto da métrica está na tela de entrada).
+
 ## Matriz de cobertura
 
 Onde o escopo é aplicado, por domínio. Verificado por
@@ -529,37 +553,38 @@ atacante manda um recurso **próprio** na URL — legítimo, passa no `assertOwn
 **corpo**. Endpoint que aceita id de recurso filho no payload precisa amarrá-lo ao pai da URL; ser
 dono do pai não autoriza escrever em qualquer filho.
 
-| Domínio                  | Service                                                                   | Ponto de escopo                                                                                 |
-| ------------------------ | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Refeições                | `meal.service.ts`                                                         | `where: { userId }` nas leituras; `assertOwner` nas escritas                                    |
-| Itens de refeição        | `meal-item.service.ts`                                                    | posse via `item.meal.userId` / `meal.userId`                                                    |
-| Alimentos custom         | `food.service.ts`                                                         | `OR: [createdByUserId: null, createdByUserId: userId]`; custom exige posse                      |
-| Metas de nutriente       | `nutrient-target.service.ts`                                              | `where: { userId }`; unique `[userId, nutrientKey]`                                             |
-| Metas de macros          | `user-goals.service.ts`                                                   | `UserGoals.userId` é a própria PK                                                               |
-| Metas pessoais           | `goals.service.ts`                                                        | `where: { userId }`; `assertOwned` nas escritas                                                 |
-| Peso                     | `weight-log.service.ts`                                                   | `where: { userId }`; posse no update/delete                                                     |
-| Passos                   | `step-log.service.ts`                                                     | idem                                                                                            |
-| Hidratação               | `water-log.service.ts`                                                    | idem                                                                                            |
-| Exercícios               | `exercise.service.ts`                                                     | `readableExercises`/`searchableExercises`; custom exige posse; base só-leitura                  |
-| Planos                   | `workout-plan.service.ts`                                                 | `where: { userId }`; `assertOwner`                                                              |
-| Sessões                  | `workout-session.service.ts`                                              | `where: { userId }`; `assertOwner`; delete idempotente                                          |
-| Séries                   | `session-set.service.ts`                                                  | posse via `set.session.userId`                                                                  |
-| Progresso/dashboard      | `progress.service.ts`, `dashboard.service.ts`                             | agregam sobre queries já escopadas                                                              |
-| Grupos de alimento       | `food.service.ts#listGroups`                                              | **sem escopo, de propósito** — `FoodGroup` não tem dono                                         |
-| Leitura profissional     | `sharing/professional-access.service.ts`                                  | `assertReadable` resolve o titular; a **única** leitura entre contas                            |
-| Painel agregado          | `insights/insights.service.ts`                                            | opt-in + limiar + `suppress()`; nenhum id de pessoa sai do módulo                               |
-| Chat com IA              | `chat/conversation.service.ts`                                            | `where: { id, userId }`; `Message` não tem dono — quem tem é a conversa                         |
-| Memórias do chat         | `chat/memory/memory.service.ts`                                           | `where: { userId }`; esquecer exige posse                                                       |
-| Checkpoint do agente     | `chat/checkpoint-purge.service.ts`                                        | thread `{userId}:{conversationId}`; dono vem do `get_me`, nunca do corpo                        |
-| Plano / assinatura       | `billing/user-subscription.service.ts`                                    | `where: { userId }`; nenhuma rota recebe tier, status ou id de assinatura                       |
-| Convite                  | `sharing/invite.service.ts`                                               | token só por hash; aceite é sempre de quem chama; e-mail vinculado à conta                      |
-| Assentos                 | `billing/seat-pool.service.ts`                                            | `groupId` da URL + associação ativa do mesmo grupo; só `billing.manage`                         |
-| Papel no grupo           | `sharing/membership.service.ts#changeRole`                                | só o dono; associação ativa do grupo da URL; vínculos no mesmo commit                           |
-| Faturas dos assentos     | `billing/seat-pool.service.ts#invoices`                                   | `where: { pool: { groupId } }` do grupo da URL; só `billing.read`                               |
-| Planos e dicas           | `sharing/content.service.ts`                                              | `{ id, groupId }` da URL; membro só vê o publicado; autor ou moderador edita                    |
-| Mídia                    | `storage/media.service.ts`                                                | envio pela ação da tela; confirmar só quem enviou; arquivo da mesma comunidade                  |
-| Exercícios da comunidade | `workout/helpers/exercise-access.ts`, `sharing/group-exercise.service.ts` | membro ativo, ou já no plano/histórico; `{ groupId, exerciseId }` da URL; `groupOwned` imutável |
-| Agente da comunidade     | `sharing/group-agent.service.ts`, `chat/chat.service.ts`                  | só o dono configura; escolha entre agentes ligados de comunidade ativa, conferida a cada turno  |
+| Domínio                  | Service                                                                   | Ponto de escopo                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Refeições                | `meal.service.ts`                                                         | `where: { userId }` nas leituras; `assertOwner` nas escritas                                      |
+| Itens de refeição        | `meal-item.service.ts`                                                    | posse via `item.meal.userId` / `meal.userId`                                                      |
+| Alimentos custom         | `food.service.ts`                                                         | `OR: [createdByUserId: null, createdByUserId: userId]`; custom exige posse                        |
+| Metas de nutriente       | `nutrient-target.service.ts`                                              | `where: { userId }`; unique `[userId, nutrientKey]`                                               |
+| Metas de macros          | `user-goals.service.ts`                                                   | `UserGoals.userId` é a própria PK                                                                 |
+| Metas pessoais           | `goals.service.ts`                                                        | `where: { userId }`; `assertOwned` nas escritas                                                   |
+| Peso                     | `weight-log.service.ts`                                                   | `where: { userId }`; posse no update/delete                                                       |
+| Passos                   | `step-log.service.ts`                                                     | idem                                                                                              |
+| Hidratação               | `water-log.service.ts`                                                    | idem                                                                                              |
+| Exercícios               | `exercise.service.ts`                                                     | `readableExercises`/`searchableExercises`; custom exige posse; base só-leitura                    |
+| Planos                   | `workout-plan.service.ts`                                                 | `where: { userId }`; `assertOwner`                                                                |
+| Sessões                  | `workout-session.service.ts`                                              | `where: { userId }`; `assertOwner`; delete idempotente                                            |
+| Séries                   | `session-set.service.ts`                                                  | posse via `set.session.userId`                                                                    |
+| Progresso/dashboard      | `progress.service.ts`, `dashboard.service.ts`                             | agregam sobre queries já escopadas                                                                |
+| Grupos de alimento       | `food.service.ts#listGroups`                                              | **sem escopo, de propósito** — `FoodGroup` não tem dono                                           |
+| Leitura profissional     | `sharing/professional-access.service.ts`                                  | `assertReadable` resolve o titular; a **única** leitura entre contas                              |
+| Painel agregado          | `insights/insights.service.ts`                                            | opt-in + limiar + `suppress()`; nenhum id de pessoa sai do módulo                                 |
+| Chat com IA              | `chat/conversation.service.ts`                                            | `where: { id, userId }`; `Message` não tem dono — quem tem é a conversa                           |
+| Memórias do chat         | `chat/memory/memory.service.ts`                                           | `where: { userId }`; esquecer exige posse                                                         |
+| Checkpoint do agente     | `chat/checkpoint-purge.service.ts`                                        | thread `{userId}:{conversationId}`; dono vem do `get_me`, nunca do corpo                          |
+| Plano / assinatura       | `billing/user-subscription.service.ts`                                    | `where: { userId }`; nenhuma rota recebe tier, status ou id de assinatura                         |
+| Convite                  | `sharing/invite.service.ts`                                               | token só por hash; aceite é sempre de quem chama; e-mail vinculado à conta                        |
+| Assentos                 | `billing/seat-pool.service.ts`                                            | `groupId` da URL + associação ativa do mesmo grupo; só `billing.manage`                           |
+| Papel no grupo           | `sharing/membership.service.ts#changeRole`                                | só o dono; associação ativa do grupo da URL; vínculos no mesmo commit                             |
+| Faturas dos assentos     | `billing/seat-pool.service.ts#invoices`                                   | `where: { pool: { groupId } }` do grupo da URL; só `billing.read`                                 |
+| Planos e dicas           | `sharing/content.service.ts`                                              | `{ id, groupId }` da URL; membro só vê o publicado; autor ou moderador edita                      |
+| Mídia                    | `storage/media.service.ts`                                                | envio pela ação da tela; confirmar só quem enviou; arquivo da mesma comunidade                    |
+| Exercícios da comunidade | `workout/helpers/exercise-access.ts`, `sharing/group-exercise.service.ts` | membro ativo, ou já no plano/histórico; `{ groupId, exerciseId }` da URL; `groupOwned` imutável   |
+| Agente da comunidade     | `sharing/group-agent.service.ts`, `chat/chat.service.ts`                  | só o dono configura; escolha entre agentes ligados de comunidade ativa, conferida a cada turno    |
+| Desafios da comunidade   | `sharing/challenge.service.ts`, `social/scoreboard.service.ts`            | `{ groupId, id }` da URL; ranking só para participante ativo; placar só recebe datas de aderência |
 
 ## O que não está protegido
 

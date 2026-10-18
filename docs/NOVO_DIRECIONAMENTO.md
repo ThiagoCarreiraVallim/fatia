@@ -334,6 +334,22 @@ vídeo enviado de aparelho de verdade e o R2 de produção.
 - Ranking só para participantes (opt-in), apelido, medalhas → integra `achievement-catalog.ts` (conquistas de comunidade).
 - Equipe cria/encerra desafios no dashboard; membro entra/sai e vê ranking no app; MCP `list_group_challenges`, `join_group_challenge`, `get_challenge_leaderboard`.
 
+### Andamento da Fase 8a — desafios, concluída
+
+- [x] **API (ADR 027 aceita):** `GroupChallenge` e participações com apelido; sete métricas, as
+      três de nutrição como dias na própria meta (`nutrition/daily-adherence`, só datas); ranking
+      só para quem participa; recálculo na leitura e encerramento de hora em hora com claim
+      atômico (sem `@nestjs/schedule`); medalhas e as conquistas `challenge_finished` e
+      `challenge_podium`; MCP `list_group_challenges`, `get_challenge_leaderboard` e
+      `join_group_challenge` (127 tools); export LGPD.
+- [x] **api-client, web e app:** seção "Desafios" no painel (dono e profissional) e, para o
+      membro, prévia na comunidade, lista e detalhe com ranking; no app, início e duração prontos.
+- [x] **E2E e fotos:** seed com dois desafios; `challenges.spec` (a dona marca, o membro entra,
+      se vê no ranking e sai, a dona encerra); fotos 102–106, axe; `ui:snap 40-desafios`.
+
+**Fora desta entrega:** a 8b (timeline moderada) e a 8c (notificações push). "Aba Comunidade com
+Feed, Desafios, Planos/Dicas" fica para a 8b, quando o feed existir.
+
 **Timeline**
 
 - `GroupPost` (texto, imagens[], autor, `removedAt/removedById`, pinned), `GroupPostReaction`, `GroupPostComment`, `GroupPostReport`.

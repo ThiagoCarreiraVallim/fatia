@@ -66,6 +66,7 @@ quem pode o quê, em [PERMISSIONS.md](./PERMISSIONS.md).
 | Mídia publicada (`MediaFile` + objeto no bucket)                   | Postgres + R2      | Enquanto o item que a usa existir. Sem EXIF/GPS. Pendente ou sem uso: 24 h. Apagar a comunidade ou a conta da dona apaga os objetos |
 | Catálogo da comunidade (`GroupExerciseGuide`, exercício da casa)   | Postgres + R2      | Enquanto a comunidade existir. Exercício da casa que alguém usa fica, sem comunidade, no plano e no histórico dessa pessoa          |
 | Agente da comunidade (`GroupAgent`)                                | Postgres + R2      | Enquanto a comunidade existir. A conversa guarda só qual comunidade (`agentGroupId`), que fica nula quando ela é apagada            |
+| Desafios (`GroupChallenge`, participações, apelido)                | Postgres           | Enquanto a comunidade existir. Sair da comunidade tira a pessoa do ranking; apagar a conta apaga as participações e o apelido       |
 | O que o profissional leu                                           | **Não armazenado** | —                                                                                                                                   |
 
 **Revogar preenche `revokedAt`, nunca apaga.** É a linha revogada que responde "quem teve acesso a

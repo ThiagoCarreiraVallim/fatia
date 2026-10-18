@@ -32,7 +32,7 @@ Decisões arquiteturais relevantes do projeto. Cada ADR é imutável depois de a
 | [024](./024-plano-free-e-pago-do-usuario.md)                           | Plano Free e Pago: a IA hospedada passa a ser vendida      | Accepted                               |
 | [025](./025-assentos-de-ia-por-comunidade.md)                          | Comunidades pagam a IA por assentos escolhidos             | Accepted                               |
 | [026](./026-consentimento-ao-entrar-na-comunidade.md)                  | Consentimento por escopo ao entrar na comunidade           | Accepted                               |
-| [027](./027-desafios-por-aderencia-a-propria-meta.md)                  | Desafios de nutrição medem aderência, nunca o valor        | Proposed                               |
+| [027](./027-desafios-por-aderencia-a-propria-meta.md)                  | Desafios de nutrição medem aderência, nunca o valor        | Accepted                               |
 | [028](./028-imagens-de-posts-da-comunidade.md)                         | Imagens de posts da comunidade são armazenadas             | Proposed                               |
 | [029](./029-playwright-com-logto-real.md)                              | Testes de interface com Playwright e login real no Logto   | Proposed                               |
 | [030](./030-catalogo-de-exercicios-da-comunidade.md)                   | Catálogo de exercícios da comunidade: tutorial por cima    | Accepted                               |
