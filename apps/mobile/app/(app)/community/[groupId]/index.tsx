@@ -17,6 +17,7 @@ import { ConsentForm } from '@/components/community/consent-form';
 import { GroupAvatar } from '@/components/community/group-avatar';
 import { CommunityChallengesPreview } from '@/components/challenges/community-challenges-preview';
 import { CommunityContentPreview } from '@/components/content/community-content-preview';
+import { CommunityTabs } from '@/components/community/community-tabs';
 import { Screen } from '@/components/layout/screen';
 import { Button, EmptyState, ErrorState, LoadingState, cn } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
@@ -132,6 +133,7 @@ export default function CommunityDetailScreen() {
       refreshing={group.isRefetching}
     >
       <View className="gap-6 px-5 pb-4 pt-4">
+        {ativo ? <CommunityTabs groupId={g.id} /> : null}
         <View className="flex-row items-start gap-3">
           <GroupAvatar name={g.name} url={g.avatarUrl} size={48} />
           <View className="flex-1 gap-1">

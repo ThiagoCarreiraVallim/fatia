@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { challengesApi } from '@fatia/api-client';
 import { ChallengeCard } from '@/components/challenges/challenge-ui';
+import { CommunityTabs } from '@/components/community/community-tabs';
 import { Screen } from '@/components/layout/screen';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui';
 
@@ -37,6 +38,7 @@ export default function CommunityChallengesScreen() {
   return (
     <Screen onRefresh={() => void lista.refetch()} refreshing={lista.isRefetching}>
       <View className="gap-4 px-5 pb-6 pt-4">
+        <CommunityTabs groupId={groupId} />
         <Text className="text-sm text-muted-foreground">
           Participar é opcional. O ranking de cada desafio aparece só para quem entrou, com o
           apelido que a pessoa escolheu.

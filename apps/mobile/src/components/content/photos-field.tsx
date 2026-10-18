@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Image, Pressable, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { X } from 'lucide-react-native';
-import { ApiError, MAX_GUIDE_PHOTOS, uploadMedia } from '@fatia/api-client';
+import { ApiError, MAX_GUIDE_PHOTOS, uploadMedia, type MediaPurpose } from '@fatia/api-client';
 import { Button } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 import { cores } from '@/theme/cores';
@@ -10,21 +10,29 @@ import type { ImageValue } from './image-field';
 import { describePickedImage } from './picked-image';
 
 /**
- * Até quatro fotos do tutorial — equivalente de
+ * Até quatro fotos, do tutorial ou do post no mural — equivalente de
  * `apps/web/src/components/content/photos-field.tsx`.
  */
 export function PhotosField({
   groupId,
   value,
   onChange,
+  purpose = 'exercise_photo',
+  max = MAX_GUIDE_PHOTOS,
+  label = `Fotos (até ${MAX_GUIDE_PHOTOS})`,
+  addLabel = 'Adicionar fotos',
 }: {
   groupId: string;
   value: ImageValue[];
   onChange: (next: ImageValue[]) => void;
+  purpose?: MediaPurpose;
+  max?: number;
+  label?: string;
+  addLabel?: string;
 }) {
   const toast = useToast();
   const [enviando, setEnviando] = useState(false);
-  const vagas = MAX_GUIDE_PHOTOS - value.length;
+  const vagas = max - value.length;
 
   async function escolher() {
     const r = await ImagePicker.launchImageLibraryAsync({
@@ -45,7 +53,7 @@ export function PhotosField({
           toast.show({ message: info.problem });
           continue;
         }
-        const view = await uploadMedia({ purpose: 'exercise_photo', groupId, ...info }, (url, h) =>
+        const view = await uploadMedia({ purpose, groupId, ...info }, (url, h) =>
           fetch(url, { method: 'PUT', body: corpo, headers: h }),
         );
         novas.push({ fileId: view.id, url: view.url });
@@ -65,7 +73,7 @@ export function PhotosField({
 
   return (
     <View className="gap-2">
-      <Text className="text-xs text-muted-foreground">{`Fotos (até ${MAX_GUIDE_PHOTOS})`}</Text>
+      <Text className="text-xs text-muted-foreground">{label}</Text>
       {value.length > 0 ? (
         <View className="flex-row flex-wrap gap-2">
           {value.map((f, i) => (
@@ -97,7 +105,7 @@ export function PhotosField({
           loading={enviando}
           onPress={() => void escolher()}
         >
-          Adicionar fotos
+          {addLabel}
         </Button>
       ) : null}
     </View>

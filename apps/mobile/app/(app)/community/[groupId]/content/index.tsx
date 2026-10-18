@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Dumbbell, PlayCircle } from 'lucide-react-native';
 import { groupContentApi, groupExerciseApi, groupsApi, sortTips } from '@fatia/api-client';
 import { TemplateCard, TipCard } from '@/components/content/content-cards';
+import { CommunityTabs } from '@/components/community/community-tabs';
 import { Screen } from '@/components/layout/screen';
 import { Choice } from '@/components/org/org-panel';
 import { EmptyState, LoadingState } from '@/components/ui';
@@ -95,6 +96,7 @@ export default function CommunityContentScreen() {
         refreshing={planos.isRefetching || dicas.isRefetching}
       >
         <View className="gap-4 px-5 pb-4 pt-4">
+          <CommunityTabs groupId={groupId} />
           <Choice
             label=""
             options={[
