@@ -27,6 +27,7 @@ const ROTAS = [
   '/goals',
   '/profile',
   '/profile/connect',
+  '/profile/notifications',
   '/plan',
   '/community',
 ];

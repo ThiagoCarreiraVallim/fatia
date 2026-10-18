@@ -80,6 +80,7 @@ const STATIC_ROUTES: Array<[string, string]> = [
   ['/community', '41-comunidade'],
   ['/profile', '50-perfil'],
   ['/profile/connect', '51-perfil-conectar-ia'],
+  ['/profile/notifications', '111-perfil-notificacoes'],
   ['/plan', '52-plano'],
   ['/chat', '60-chat'],
   ['/students', '70-pro-alunos'],
