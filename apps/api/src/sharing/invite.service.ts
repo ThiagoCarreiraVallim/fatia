@@ -15,6 +15,8 @@ import { GroupRole, MembershipStatus, type GroupMembership } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { EmailService } from '../notifications/email.service';
 import { inviteEmail } from '../notifications/invite-email';
+import { NotificationService } from '../notifications/notification.service';
+import { inviteNotice } from './community-notices';
 import { TEAM_ROLES } from './permissions';
 import {
   assertNotBanned,
@@ -143,6 +145,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     private readonly memberships: MembershipService,
     private readonly email: EmailService,
     private readonly config: ConfigService,
+    private readonly notifications: NotificationService,
   ) {}
 
   onModuleInit(): void {
@@ -521,6 +524,22 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
       }),
       this.prisma.user.findUnique({ where: { id: actorId }, select: { name: true } }),
     ]);
+    // Quem já tem conta com este e-mail recebe também no celular. O caminho é
+    // o mesmo do link do e-mail: o convite só aceita a conta deste endereço.
+    const convidada = await this.prisma.user.findFirst({
+      where: { email: { equals: convite.email, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (convidada) {
+      this.notifications.notify(
+        [convidada.id],
+        inviteNotice({
+          groupName: grupo.name,
+          inviterName: autor?.name ?? 'A equipe',
+          token: new URL(url).pathname.replace(/^\/c\//, ''),
+        }),
+      );
+    }
     return this.email.send(
       inviteEmail({
         to: convite.email,

@@ -85,6 +85,8 @@ export class AccountService {
       invitesCreated,
       contentPublished,
       mediaUploaded,
+      devices,
+      notificationPreferences,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
       this.prisma.nutrientTarget.findMany({ where: { userId }, orderBy: { label: 'asc' } }),
@@ -383,6 +385,18 @@ export class AccountService {
         },
         orderBy: { createdAt: 'asc' },
       }),
+      // Avisos no celular (ADR 033): a plataforma e as datas. O token fica de
+      // fora: é o endereço do aparelho na Expo, sem uso para a pessoa.
+      this.prisma.userDevice.findMany({
+        where: { userId },
+        select: { platform: true, createdAt: true, lastSeenAt: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.notificationPreference.findMany({
+        where: { userId },
+        select: { kind: true, enabled: true, updatedAt: true },
+        orderBy: { kind: 'asc' },
+      }),
     ]);
 
     // `ProfessionalAccessLog.professionalId` é string pura, sem FK — é o que faz
@@ -430,6 +444,8 @@ export class AccountService {
       invitesCreated,
       contentPublished,
       mediaUploaded,
+      devices,
+      notificationPreferences,
       accessLogs: accessLogs.map(({ professionalId, ...linha }) => ({
         ...linha,
         professionalName: nomesDeProfissional.get(professionalId) ?? null,
@@ -450,6 +466,7 @@ export class AccountService {
           contentPublished.exerciseGuides.length +
           contentPublished.challenges.length,
         mediaUploaded: mediaUploaded.length,
+        devices: devices.length,
         professionalLinks: professionalLinks.length,
         accessLogs: accessLogs.length,
         meals: meals.length,

@@ -13,6 +13,7 @@ import { ScoreboardService } from '../../social/scoreboard.service';
 import { ChallengeService, SCORE_TTL_MS } from '../challenge.service';
 import { GroupService } from '../group.service';
 import { ProfessionalLinkService } from '../professional-link.service';
+import { silentNotifications } from '../../notifications/__tests__/silent-notifications';
 
 const SP = 'America/Sao_Paulo';
 
@@ -25,6 +26,7 @@ describe('desafios da comunidade (integração)', () => {
   const challenges = new ChallengeService(
     prisma,
     new ScoreboardService(prisma, new DailyAdherenceService(prisma)),
+    silentNotifications,
   );
   const groups = new GroupService(prisma, new ProfessionalLinkService(prisma), [], null as never);
 

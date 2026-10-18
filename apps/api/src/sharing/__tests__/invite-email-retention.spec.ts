@@ -4,6 +4,7 @@ import type { EmailService } from '../../notifications/email.service';
 import { INVITE_EMAIL_PURGE_INTERVAL_MS, InviteService } from '../invite.service';
 import { MembershipService } from '../membership.service';
 import { ProfessionalLinkService } from '../professional-link.service';
+import { silentNotifications } from '../../notifications/__tests__/silent-notifications';
 
 /**
  * O e-mail de quem foi convidado é dado de terceiro: a Privacidade promete que
@@ -15,9 +16,19 @@ const DIA = 86_400_000;
 
 describe('retenção do e-mail do convite', () => {
   const prisma = new PrismaService();
-  const memberships = new MembershipService(prisma, new ProfessionalLinkService(prisma));
+  const memberships = new MembershipService(
+    prisma,
+    new ProfessionalLinkService(prisma),
+    silentNotifications,
+  );
   const config = { get: () => undefined } as unknown as ConfigService;
-  const invites = new InviteService(prisma, memberships, {} as EmailService, config);
+  const invites = new InviteService(
+    prisma,
+    memberships,
+    {} as EmailService,
+    config,
+    silentNotifications,
+  );
   const stamp = `retencao-${Date.now()}`;
   let groupId: string;
   let dona: string;

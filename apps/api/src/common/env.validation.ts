@@ -17,6 +17,10 @@ export const AppEnvSchema = z.object({
   // fora dela no dev. Vazio = não envia: o convite continua valendo pelo link copiado.
   MAIL_SMTP_URL: z.string().url().optional().or(z.literal('')),
   EMAIL_FROM: z.string().min(3).default('Fatia <nao-responda@fatia.local>'),
+  // Avisos no celular pela Expo (ADR 033). Desligado por padrão: o dev e os testes não mandam
+  // aviso para o celular de ninguém. O token de acesso só vale se o projeto na Expo exigir.
+  PUSH_ENABLED: z.enum(['true', 'false']).default('false'),
+  EXPO_ACCESS_TOKEN: z.string().optional().or(z.literal('')),
   // Observabilidade (issue #39). Vazio = instrumentação inerte: sem exportador, sem timer, sem
   // container extra. Quem sobe o stack do `infra/docker-compose.observability.yml` preenche.
   // Declarado aqui só para validar e documentar — o `tracing.ts` lê `process.env` direto,

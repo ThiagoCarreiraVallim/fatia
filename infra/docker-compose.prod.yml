@@ -77,6 +77,9 @@ services:
       # E-mail do convite de comunidade. Vazio = só o link, sem e-mail.
       MAIL_SMTP_URL: ${MAIL_SMTP_URL:-}
       EMAIL_FROM: ${EMAIL_FROM:-Fatia <nao-responda@fat.ia.br>}
+      # Avisos no celular pela Expo (ADR 033). A instância pública usa true.
+      PUSH_ENABLED: ${PUSH_ENABLED:-false}
+      EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}
       # Mídia da comunidade no Cloudflare R2 (ADR 028). Vazio = envio de imagem
       # responde 503. Bucket privado e CORS para https://app.${DOMAIN}: ver
       # docs/OPERATIONS.md §Mídia.

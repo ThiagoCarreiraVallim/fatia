@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  MembershipStatus,
   PostPolicy,
   type GroupRole,
   type MediaFile,
@@ -14,7 +15,9 @@ import {
   type ReportReason,
 } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
+import { NotificationService, type Notice } from '../notifications/notification.service';
 import { MediaService, type MediaView } from '../storage/media.service';
+import { commentNotice, removedNotice } from './community-notices';
 import { requireContentRole } from './content-roles';
 import { cleanDisplayName, firstName } from './display-name';
 import { can, TEAM_ROLES } from './permissions';
@@ -175,6 +178,7 @@ export class PostService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly media: MediaService,
+    private readonly notifications: NotificationService,
   ) {}
 
   // ---------------------------------------------------------------- leitura
@@ -354,6 +358,11 @@ export class PostService {
       data: { postId: row.id, membershipId: eu.membershipId, body },
       include: { author: AUTOR },
     });
+    if (row.membershipId !== eu.membershipId) {
+      await this.notifyAuthor(row.membershipId, (groupName) =>
+        commentNotice({ groupId, groupName, author: nome }),
+      );
+    }
     return {
       id: c.id,
       body: c.body,
@@ -442,7 +451,7 @@ export class PostService {
     const eu = await this.me(userId, groupId, 'content.moderate');
     const row = await this.prisma.groupPost.findFirst({
       where: { id: postId, groupId },
-      select: { id: true, removedAt: true, pinnedAt: true },
+      select: { id: true, membershipId: true, removedAt: true, pinnedAt: true },
     });
     if (!row) throw new NotFoundException('Post not found');
     const agora = new Date();
@@ -460,6 +469,11 @@ export class PostService {
         }),
         this.resolveOp({ postId: row.id }, eu.membershipId, 'removed', agora),
       ]);
+      if (!row.removedAt) {
+        await this.notifyAuthor(row.membershipId, (groupName) =>
+          removedNotice({ groupId, groupName, what: 'post' }),
+        );
+      }
       return { id: row.id, pinned: false, removed: true };
     }
     if (action === 'restore') {
@@ -501,6 +515,11 @@ export class PostService {
       }),
       this.resolveOp({ commentId: c.id }, eu.membershipId, 'removed', agora),
     ]);
+    if (!c.removedAt) {
+      await this.notifyAuthor(c.membershipId, (groupName) =>
+        removedNotice({ groupId, groupName, what: 'comment' }),
+      );
+    }
     return { id: c.id, removed: true };
   }
 
@@ -603,6 +622,21 @@ export class PostService {
   }
 
   // ---------------------------------------------------------------- internos
+
+  /**
+   * Avisa o autor (Fase 8c) só se a associação dele ainda está ativa: quem
+   * saiu ou foi banido não recebe aviso de uma comunidade em que não está.
+   */
+  private async notifyAuthor(
+    membershipId: string,
+    notice: (groupName: string) => Notice,
+  ): Promise<void> {
+    const autor = await this.prisma.groupMembership.findFirst({
+      where: { id: membershipId, status: MembershipStatus.ACTIVE },
+      select: { userId: true, group: { select: { name: true } } },
+    });
+    if (autor) this.notifications.notify([autor.userId], notice(autor.group.name));
+  }
 
   private canPost(role: GroupRole, policy: PostPolicy): boolean {
     return policy === PostPolicy.ALL_MEMBERS || TEAM_ROLES.includes(role);

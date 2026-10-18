@@ -8,6 +8,7 @@ import { GroupService } from '../group.service';
 import { InviteService, hashInviteToken } from '../invite.service';
 import { MembershipService } from '../membership.service';
 import { ProfessionalLinkService } from '../professional-link.service';
+import { silentNotifications } from '../../notifications/__tests__/silent-notifications';
 
 /**
  * Comunidade de ponta a ponta no Postgres real (Fase 5, ADR 026): convite,
@@ -18,7 +19,7 @@ import { ProfessionalLinkService } from '../professional-link.service';
 describe('comunidade (integração)', () => {
   const prisma = new PrismaService();
   const links = new ProfessionalLinkService(prisma);
-  const memberships = new MembershipService(prisma, links);
+  const memberships = new MembershipService(prisma, links, silentNotifications);
   const consent = new ConsentService(prisma, links);
   const enviados: EmailMessage[] = [];
   const email = {
@@ -28,7 +29,7 @@ describe('comunidade (integração)', () => {
     },
   } as unknown as EmailService;
   const config = { get: () => 'https://fatia.test/' } as unknown as ConfigService;
-  const invites = new InviteService(prisma, memberships, email, config);
+  const invites = new InviteService(prisma, memberships, email, config, silentNotifications);
   const ganchos: string[] = [];
   const groups = new GroupService(prisma, links, [
     { beforeDelete: async (id: string) => void ganchos.push(id) },

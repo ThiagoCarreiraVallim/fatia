@@ -36,6 +36,8 @@ const makePrisma = () => ({
   groupExerciseGuide: { findMany: jest.fn().mockResolvedValue([]) },
   groupChallenge: { findMany: jest.fn().mockResolvedValue([]) },
   mediaFile: { findMany: jest.fn().mockResolvedValue([]) },
+  userDevice: { findMany: jest.fn().mockResolvedValue([]) },
+  notificationPreference: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const SCHEMA = resolve(__dirname, '../../../../../packages/db/prisma/schema.prisma');
@@ -78,6 +80,8 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   guidesAuthored: 'contentPublished',
   authoredChallenges: 'contentPublished',
   mediaFiles: 'mediaUploaded',
+  devices: 'devices',
+  notificationPreferences: 'notificationPreferences',
   accessLogs: 'accessLogs',
   // Chat com a IA hospedada (#249): o que a pessoa escreveu sobre a própria saúde, em prosa.
   conversations: 'conversations',

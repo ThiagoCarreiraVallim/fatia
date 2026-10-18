@@ -3,9 +3,11 @@ import { GroupRole, MembershipStatus, ShareScope } from '@fatia/db';
 import { MembershipService } from '../membership.service';
 import type { ProfessionalLinkService } from '../professional-link.service';
 import type { PrismaService } from '../../common/prisma.service';
+import { silentNotifications } from '../../notifications/__tests__/silent-notifications';
 
 type MockPrisma = {
-  group: { findUnique: jest.Mock };
+  group: { findUnique: jest.Mock; findUniqueOrThrow: jest.Mock };
+  user: { findUnique: jest.Mock };
   groupMembership: {
     findUnique: jest.Mock;
     findMany: jest.Mock;
@@ -19,7 +21,12 @@ type MockPrisma = {
 };
 
 const makePrisma = (): MockPrisma => ({
-  group: { findUnique: jest.fn() },
+  group: {
+    findUnique: jest.fn(),
+    // O nome da comunidade no aviso de aprovação (Fase 8c).
+    findUniqueOrThrow: jest.fn().mockResolvedValue({ name: 'Academia' }),
+  },
+  user: { findUnique: jest.fn().mockResolvedValue({ name: 'Ana' }) },
   groupMembership: {
     findUnique: jest.fn(),
     findMany: jest.fn(),
@@ -57,6 +64,7 @@ describe('MembershipService', () => {
     service = new MembershipService(
       prisma as unknown as PrismaService,
       links as unknown as ProfessionalLinkService,
+      silentNotifications,
     );
   });
 

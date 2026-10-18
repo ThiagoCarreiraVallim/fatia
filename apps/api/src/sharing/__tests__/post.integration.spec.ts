@@ -15,6 +15,7 @@ import { InviteService } from '../invite.service';
 import { MembershipService } from '../membership.service';
 import { FEED_PAGE_SIZE, POST_REACTIONS, PostService, REPORT_REASONS } from '../post.service';
 import { ProfessionalLinkService } from '../professional-link.service';
+import { silentNotifications } from '../../notifications/__tests__/silent-notifications';
 
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
@@ -29,15 +30,16 @@ describe('mural da comunidade (integração)', () => {
   const prisma = new PrismaService();
   const store = new MemoryObjectStore();
   const media = new MediaService(prisma, store);
-  const posts = new PostService(prisma, media);
+  const posts = new PostService(prisma, media, silentNotifications);
   const links = new ProfessionalLinkService(prisma);
-  const memberships = new MembershipService(prisma, links);
+  const memberships = new MembershipService(prisma, links, silentNotifications);
   const groups = new GroupService(prisma, links, [], media);
   const invites = new InviteService(
     prisma,
     memberships,
     { send: async () => true } as unknown as EmailService,
     { get: () => 'https://fatia.test/' } as unknown as ConfigService,
+    silentNotifications,
   );
 
   const stamp = `mural-${Date.now()}`;

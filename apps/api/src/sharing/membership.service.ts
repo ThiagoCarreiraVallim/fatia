@@ -13,6 +13,8 @@ import {
   type ShareScope,
 } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
+import { NotificationService } from '../notifications/notification.service';
+import { joinApprovedNotice, joinRequestNotice } from './community-notices';
 import { normalizarEscopos } from './consent-scopes';
 import { canReceiveLink } from './permissions';
 import { ProfessionalLinkService } from './professional-link.service';
@@ -89,6 +91,7 @@ export class MembershipService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly links: ProfessionalLinkService,
+    private readonly notifications: NotificationService,
   ) {}
 
   /**
@@ -163,6 +166,19 @@ export class MembershipService {
           data: { groupId: group.id, userId, ...pedido },
         });
 
+    const quem = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true },
+    });
+    this.notifications.notify(
+      [group.ownerId],
+      joinRequestNotice({
+        groupId: group.id,
+        groupName: group.name,
+        requesterName: quem?.name ?? 'Alguém',
+      }),
+    );
+
     return {
       membershipId: membership.id,
       groupId: group.id,
@@ -198,6 +214,14 @@ export class MembershipService {
       at: new Date(),
     });
     const [membership] = (await this.prisma.$transaction(ops)) as [GroupMembership];
+    const grupo = await this.prisma.group.findUniqueOrThrow({
+      where: { id: groupId },
+      select: { name: true },
+    });
+    this.notifications.notify(
+      [alvo.userId],
+      joinApprovedNotice({ groupId, groupName: grupo.name }),
+    );
 
     return {
       membershipId: membership.id,

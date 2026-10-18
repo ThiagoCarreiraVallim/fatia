@@ -39,6 +39,7 @@ import { ExerciseService } from '../../workout/exercise.service';
 import { SessionSetService } from '../../workout/session-set.service';
 import { WorkoutPlanService } from '../../workout/workout-plan.service';
 import { WorkoutSessionService } from '../../workout/workout-session.service';
+import { silentNotifications } from '../../notifications/__tests__/silent-notifications';
 
 /**
  * Isolamento multi-tenant, ponta a ponta contra Postgres real (issue #92).
@@ -84,7 +85,7 @@ describe('isolamento entre usuários', () => {
   const links = new ProfessionalLinkService(prisma);
   const access = new ProfessionalAccessService(prisma, new AccessAuditService(prisma));
   const groups = new GroupService(prisma, links);
-  const memberships = new MembershipService(prisma, links);
+  const memberships = new MembershipService(prisma, links, silentNotifications);
   const consent = new ConsentService(prisma, links);
   const conversas = new ConversationService(prisma);
   const memorias = new MemoryService(prisma);

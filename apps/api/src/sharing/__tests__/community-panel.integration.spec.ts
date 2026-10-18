@@ -8,6 +8,7 @@ import { MembershipService } from '../membership.service';
 import { ProfessionalAccessService } from '../professional-access.service';
 import { ProfessionalLinkService } from '../professional-link.service';
 import { AccessAuditService } from '../access-audit.service';
+import { silentNotifications } from '../../notifications/__tests__/silent-notifications';
 
 /**
  * O que o painel da equipe (Fase 6) faz no Postgres real: a lista de membros
@@ -17,7 +18,7 @@ import { AccessAuditService } from '../access-audit.service';
 describe('painel da comunidade (integração)', () => {
   const prisma = new PrismaService();
   const links = new ProfessionalLinkService(prisma);
-  const memberships = new MembershipService(prisma, links);
+  const memberships = new MembershipService(prisma, links, silentNotifications);
   const enviados: EmailMessage[] = [];
   const email = {
     send: async (m: EmailMessage) => {
@@ -26,7 +27,7 @@ describe('painel da comunidade (integração)', () => {
     },
   } as unknown as EmailService;
   const config = { get: () => 'https://fatia.test/' } as unknown as ConfigService;
-  const invites = new InviteService(prisma, memberships, email, config);
+  const invites = new InviteService(prisma, memberships, email, config, silentNotifications);
   const groups = new GroupService(prisma, links, []);
   const acesso = new ProfessionalAccessService(prisma, new AccessAuditService(prisma));
 

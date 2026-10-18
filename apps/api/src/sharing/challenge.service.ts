@@ -20,6 +20,8 @@ import {
   ScoreboardService,
   type ScoreboardEntry,
 } from '../social/scoreboard.service';
+import { NotificationService } from '../notifications/notification.service';
+import { challengeCreatedNotice, challengeEndedNotice } from './community-notices';
 import { cleanDisplayName, firstName } from './display-name';
 import { assertCanEditContent, canEditContent, requireContentRole } from './content-roles';
 import { can } from './permissions';
@@ -115,6 +117,7 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly scoreboard: ScoreboardService,
+    private readonly notifications: NotificationService,
   ) {}
 
   onModuleInit(): void {
@@ -269,6 +272,21 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
         ...janela,
       },
     });
+    const avisar = await this.prisma.groupMembership.findMany({
+      where: { groupId, status: MembershipStatus.ACTIVE, userId: { not: userId } },
+      select: { userId: true, group: { select: { name: true } } },
+    });
+    if (avisar.length > 0) {
+      this.notifications.notify(
+        avisar.map((m) => m.userId),
+        challengeCreatedNotice({
+          groupId,
+          groupName: avisar[0]!.group.name,
+          challengeId: criado.id,
+          title: criado.title,
+        }),
+      );
+    }
     return this.get(userId, groupId, criado.id, now);
   }
 
@@ -364,6 +382,22 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
       ),
       this.prisma.groupChallenge.update({ where: { id: row.id }, data: { scoredAt: now } }),
     ]);
+    // Só quem participou e ainda está na comunidade; a posição fica no app.
+    const quem = await this.prisma.groupChallengeParticipant.findMany({
+      where: { challengeId: row.id, membership: { status: MembershipStatus.ACTIVE } },
+      select: { membership: { select: { userId: true, group: { select: { name: true } } } } },
+    });
+    if (quem.length > 0) {
+      this.notifications.notify(
+        quem.map((q) => q.membership.userId),
+        challengeEndedNotice({
+          groupId: row.groupId,
+          groupName: quem[0]!.membership.group.name,
+          challengeId: row.id,
+          title: row.title,
+        }),
+      );
+    }
     return true;
   }
 
