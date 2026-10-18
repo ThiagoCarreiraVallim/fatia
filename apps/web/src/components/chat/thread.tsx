@@ -53,6 +53,7 @@ import {
 } from './chat-runtime-provider';
 import { timingStats } from './turn-timing';
 import { useDitado } from './use-ditado';
+import { AutorDaResposta, SeletorDeAgente } from './agente';
 
 /**
  * A conversa, sobre os primitivos do assistant-ui.
@@ -213,6 +214,7 @@ function BarraDeAcoes() {
 function MensagemDoAssistente() {
   return (
     <MessagePrimitive.Root className="flex w-full flex-col items-start gap-3">
+      <AutorDaResposta />
       <MessagePrimitive.Parts
         components={{
           Text: TextoDoAssistente,
@@ -234,6 +236,7 @@ function Boas() {
   return (
     <EmptyState className="my-auto max-w-none self-center">
       <EmptyStateGreeting>Por onde começamos?</EmptyStateGreeting>
+      <SeletorDeAgente />
       <EmptyStateSuggestions>
         {SUGESTOES.map((sugestao, indice) => (
           <EmptyStateSuggestion

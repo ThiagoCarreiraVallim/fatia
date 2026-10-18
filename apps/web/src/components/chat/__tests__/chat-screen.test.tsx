@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type {
+  ChatAgents,
   ChatConversation,
   ChatMemory,
   ChatQuota,
@@ -71,6 +72,7 @@ let cota: ChatQuota;
 let memorias: ChatMemory[] = [];
 let recursos = { photos: false, dictation: false };
 let acesso: { allowed?: boolean; reason?: string } = {};
+let agentes: ChatAgents = { defaultGroupId: null, agents: [] };
 const transcribeAudioMock = vi.fn(async (_audio: Blob) => ({ text: 'registra 200 g de frango' }));
 const deleteChatMemoryMock = vi.fn(async (id: string) => {
   memorias = memorias.filter((m) => m.id !== id);
@@ -93,6 +95,7 @@ vi.mock('@fatia/api-client', async () => {
       return [];
     }),
     getChatAvailability: vi.fn(async () => ({ available: true, ...recursos, ...acesso })),
+    listChatAgents: vi.fn(async () => agentes),
     transcribeAudio: transcribeAudioMock,
     listChatToolTitles: vi.fn(async () => ({
       log_meal: 'Registrar refeição',
@@ -178,6 +181,7 @@ beforeEach(() => {
   memorias = [];
   recursos = { photos: false, dictation: false };
   acesso = {};
+  agentes = { defaultGroupId: null, agents: [] };
   deleteChatMemoryMock.mockClear();
   pushMock.mockClear();
   listaLiberada = Promise.resolve();
@@ -1090,5 +1094,98 @@ describe('ChatScreen', () => {
     expect(pararTrilha).toHaveBeenCalled();
     expect(corpos).toHaveLength(0);
     vi.unstubAllGlobals();
+  });
+});
+
+describe('ChatScreen — o agente da comunidade (Fase 7c)', () => {
+  const ACADEMIA = '7b0e1c2d-3a4b-4c5d-8e6f-112233445566';
+  const comAgente = (): ChatAgents => ({
+    defaultGroupId: ACADEMIA,
+    agents: [
+      {
+        groupId: ACADEMIA,
+        name: 'Treinador Norte',
+        communityName: 'Studio Norte',
+        avatarUrl: null,
+      },
+    ],
+  });
+
+  it('sem agente de comunidade, não há escolha e o turno vai como sempre', async () => {
+    montar();
+    await enviar('oi');
+
+    expect(screen.queryByRole('radiogroup', { name: 'Com quem conversar' })).toBeNull();
+    expect(corpos[0]).toEqual({ conversationId: CONVERSA, message: 'oi' });
+  });
+
+  it('na conversa nova, o agente da comunidade do assento já vem marcado e o turno deixa a API usar o padrão', async () => {
+    agentes = comAgente();
+    montar();
+
+    const escolha = await screen.findByRole('radiogroup', { name: 'Com quem conversar' });
+    expect(within(escolha).getByRole('radio', { name: /Treinador Norte/ })).toBeChecked();
+    expect(await screen.findByText('Treinador Norte', { selector: 'strong' })).toBeInTheDocument();
+
+    await enviar('tem plano pra iniciante?');
+    expect(corpos[0]).toEqual({ conversationId: CONVERSA, message: 'tem plano pra iniciante?' });
+  });
+
+  it('escolher a Fatia manda null, e a conversa nasce com o assistente da Fatia', async () => {
+    agentes = comAgente();
+    montar();
+    const user = userEvent.setup();
+
+    const escolha = await screen.findByRole('radiogroup', { name: 'Com quem conversar' });
+    await user.click(within(escolha).getByRole('radio', { name: /Fatia/ }));
+    expect(
+      await screen.findByText(
+        'Peça para registrar refeição, consultar treino ou ver sua evolução.',
+      ),
+    ).toBeInTheDocument();
+
+    await enviar('oi');
+    expect(corpos[0]).toEqual({ conversationId: CONVERSA, message: 'oi', agentGroupId: null });
+  });
+
+  it('conversa gravada com o agente mostra o nome no topo e acima de cada resposta, sem escolha', async () => {
+    // Escolhido sem ser o padrão: quem diz o agente é a conversa gravada, não a escolha de hoje.
+    agentes = { ...comAgente(), defaultGroupId: null };
+    conversaGravada = {
+      id: CONVERSA,
+      title: 'Plano da academia',
+      createdAt: '2026-10-17T12:00:00Z',
+      updatedAt: '2026-10-17T12:00:00Z',
+      agentGroupId: ACADEMIA,
+      agent: { groupId: ACADEMIA, name: 'Treinador Norte', avatarUrl: null },
+      messages: [
+        {
+          id: 'm1',
+          role: 'user',
+          content: 'tem plano?',
+          tools: null,
+          metadata: null,
+          runId: null,
+          review: null,
+          createdAt: '2026-10-17T12:00:00Z',
+        },
+        {
+          id: 'm2',
+          role: 'assistant',
+          content: 'Tem o Iniciante 3x.',
+          tools: null,
+          metadata: { status: 'completed' },
+          runId: 'r1',
+          review: null,
+          createdAt: '2026-10-17T12:00:01Z',
+        },
+      ],
+    };
+    montar();
+
+    expect(await screen.findByText('Tem o Iniciante 3x.')).toBeInTheDocument();
+    expect(screen.getByText('Treinador Norte', { selector: 'strong' })).toBeInTheDocument();
+    expect(screen.getAllByText('Treinador Norte').length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByRole('radiogroup', { name: 'Com quem conversar' })).toBeNull();
   });
 });

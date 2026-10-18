@@ -1,10 +1,27 @@
 'use client';
 
-import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { AssistantRuntimeProvider } from '@assistant-ui/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getChatAvailability, listChatToolTitles, type ChatAvailability } from '@fatia/api-client';
+import {
+  ApiError,
+  getChatAvailability,
+  getConversation,
+  listChatAgents,
+  listChatToolTitles,
+  type ChatAgentHeader,
+  type ChatAvailability,
+} from '@fatia/api-client';
 import { useChatRuntime, useChatThreadList, type ChatRuntimeExtras } from './use-chat-runtime';
 
 /**
@@ -36,6 +53,64 @@ export function useDisponibilidadeDoChat(): ChatAvailability | undefined {
     queryFn: getChatAvailability,
     staleTime: 5 * 60_000,
   }).data;
+}
+
+/** Os agentes de comunidade que a pessoa pode escolher, e o padrão (Fase 7c). */
+export function useAgentesDoChat() {
+  return useQuery({
+    queryKey: ['chat', 'agents'],
+    queryFn: listChatAgents,
+    staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * Título e agente da conversa, do servidor. `null` quando a conversa ainda não
+ * existe lá — a nova, antes de a primeira mensagem criá-la. A chave fica sob a
+ * das conversas, que o fim de cada turno e o renomear já invalidam.
+ */
+export function useCabecalhoDaConversa(aberta: string | undefined) {
+  return useQuery({
+    queryKey: [...CHAVE_DAS_CONVERSAS, 'cabecalho', aberta],
+    queryFn: async () => {
+      try {
+        const c = await getConversation(aberta as string);
+        return { title: c.title, agent: c.agent ?? null };
+      } catch (erro) {
+        if (erro instanceof ApiError && erro.isNotFound) return null;
+        throw erro;
+      }
+    },
+    enabled: Boolean(aberta),
+  });
+}
+
+/**
+ * A escolha do agente numa conversa nova: `undefined` é o padrão (a comunidade
+ * do assento), `null` é o assistente da Fatia. Só vale para a conversa que ainda
+ * não existe — a API grava o agente quando ela nasce e ignora o resto.
+ */
+const EscolhaDoAgenteContext = createContext<{
+  escolhido: string | null | undefined;
+  escolher: (groupId: string | null) => void;
+}>({ escolhido: undefined, escolher: () => undefined });
+
+export const useEscolhaDoAgente = () => useContext(EscolhaDoAgenteContext);
+
+/**
+ * Quem responde nesta conversa: o agente da comunidade, `null` para o
+ * assistente da Fatia, ou `undefined` enquanto não se sabe (a conversa está
+ * carregando). Na conversa nova é o escolhido; depois, o que o servidor gravou.
+ */
+export function useAgenteDaConversa(): ChatAgentHeader | null | undefined {
+  const aberta = useConversaAberta();
+  const cabecalho = useCabecalhoDaConversa(aberta);
+  const agentes = useAgentesDoChat().data;
+  const { escolhido } = useEscolhaDoAgente();
+  if (aberta && cabecalho.isPending) return undefined;
+  if (cabecalho.data) return cabecalho.data.agent;
+  const id = escolhido === undefined ? (agentes?.defaultGroupId ?? null) : escolhido;
+  return agentes?.agents.find((a) => a.groupId === id) ?? null;
 }
 
 type Voto = ReturnType<typeof useChatRuntime>['voto'];
@@ -70,6 +145,22 @@ export function ChatRuntimeProvider({ children }: { children: ReactNode }) {
   const lista = useChatThreadList();
   const alvo = conversaDaRota(pathname);
   const disponivel = useDisponibilidadeDoChat();
+  const [escolhido, setEscolhido] = useState<string | null | undefined>(undefined);
+  // Conversa nova (sem id na rota) começa do padrão de novo. Passar da `/chat`
+  // para o id recém-criado não zera: a escolha é dessa conversa. Ajustado no
+  // render, e não num efeito, para a tela nova não piscar a escolha anterior.
+  const [alvoVisto, setAlvoVisto] = useState(alvo);
+  if (alvo !== alvoVisto) {
+    setAlvoVisto(alvo);
+    if (!alvo) setEscolhido(undefined);
+  }
+  // Em ref para o `stream`, que lê no envio: é o que vai no corpo do turno.
+  const agenteEscolhido = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    agenteEscolhido.current = escolhido;
+  }, [escolhido]);
+  const escolher = useCallback((groupId: string | null) => setEscolhido(groupId), []);
+  const escolha = useMemo(() => ({ escolhido, escolher }), [escolhido, escolher]);
 
   const aoTrocarDeConversa = useCallback(
     (threadId: string | undefined) => {
@@ -98,6 +189,7 @@ export function ChatRuntimeProvider({ children }: { children: ReactNode }) {
       threadListAdapter: lista.adapter,
       onThreadIdChange: aoTrocarDeConversa,
       fotos: disponivel?.photos ?? false,
+      agenteEscolhido,
       // O turno pode ter guardado uma memória e gastou cota: as três listas mudam juntas.
       onTurnEnd: () => {
         for (const queryKey of [CHAVE_DAS_CONVERSAS, CHAVE_DAS_MEMORIAS, CHAVE_DA_COTA]) {
@@ -124,11 +216,13 @@ export function ChatRuntimeProvider({ children }: { children: ReactNode }) {
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <ConversaContext.Provider value={alvo}>
-        <ExtrasContext.Provider value={extras}>
-          <MarkStoppedContext.Provider value={markStopped}>
-            <VotoContext.Provider value={voto}>{children}</VotoContext.Provider>
-          </MarkStoppedContext.Provider>
-        </ExtrasContext.Provider>
+        <EscolhaDoAgenteContext.Provider value={escolha}>
+          <ExtrasContext.Provider value={extras}>
+            <MarkStoppedContext.Provider value={markStopped}>
+              <VotoContext.Provider value={voto}>{children}</VotoContext.Provider>
+            </MarkStoppedContext.Provider>
+          </ExtrasContext.Provider>
+        </EscolhaDoAgenteContext.Provider>
       </ConversaContext.Provider>
     </AssistantRuntimeProvider>
   );

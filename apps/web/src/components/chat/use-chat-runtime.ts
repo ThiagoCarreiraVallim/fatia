@@ -157,8 +157,14 @@ export function useChatRuntime({
   onThreadIdChange,
   onTurnEnd,
   fotos = false,
+  agenteEscolhido,
 }: {
   conversationId: string | undefined;
+  /**
+   * O agente escolhido para a conversa nova (Fase 7c): `undefined` é o padrão,
+   * `null` o assistente da Fatia. Lido no envio; a API só usa na criação.
+   */
+  agenteEscolhido?: { readonly current: string | null | undefined };
   /** A instância tem modelo de visão: o composer aceita foto. */
   fotos?: boolean;
   threadListAdapter: RemoteThreadListAdapter;
@@ -192,37 +198,43 @@ export function useChatRuntime({
     aoFimDoTurno.current = onTurnEnd;
   }, [conversationId, onTurnEnd]);
 
-  const stream = useCallback(async function* (
-    messages: LangChainMessage[],
-    config: { command?: { resume: string }; abortSignal: AbortSignal },
-  ) {
-    const conversa = conversaAtual.current;
-    if (!conversa) return;
-    const ultima = messages.at(-1);
-    const anexadas = fotosDaMensagem(ultima);
-    const corpo = config.command?.resume
-      ? { conversationId: conversa, resume: decodificarRetomada(config.command.resume) }
-      : {
-          conversationId: conversa,
-          message: textoDaMensagem(ultima).trim() || PERGUNTA_DA_FOTO,
-          ...(anexadas.length ? { photos: anexadas } : {}),
-        };
-    // Aqui, e não no `start`: um turno parado ou recusado antes do `start` deixava
-    // o erro do turno anterior voltar para a tela, abaixo da pergunta nova.
-    setTurnError(null);
-    pendingTiming.current = null;
-    answerId.current = openAnswerId(messages);
-    try {
-      for await (const quadro of separateTurnError(
-        streamChat(corpo, { signal: config.abortSignal }),
-      )) {
-        answerId.current ??= aiMessageIdIn(quadro);
-        yield quadro;
+  const stream = useCallback(
+    async function* (
+      messages: LangChainMessage[],
+      config: { command?: { resume: string }; abortSignal: AbortSignal },
+    ) {
+      const conversa = conversaAtual.current;
+      if (!conversa) return;
+      const ultima = messages.at(-1);
+      const anexadas = fotosDaMensagem(ultima);
+      const corpo = config.command?.resume
+        ? { conversationId: conversa, resume: decodificarRetomada(config.command.resume) }
+        : {
+            conversationId: conversa,
+            message: textoDaMensagem(ultima).trim() || PERGUNTA_DA_FOTO,
+            ...(anexadas.length ? { photos: anexadas } : {}),
+            ...(agenteEscolhido?.current !== undefined
+              ? { agentGroupId: agenteEscolhido.current }
+              : {}),
+          };
+      // Aqui, e não no `start`: um turno parado ou recusado antes do `start` deixava
+      // o erro do turno anterior voltar para a tela, abaixo da pergunta nova.
+      setTurnError(null);
+      pendingTiming.current = null;
+      answerId.current = openAnswerId(messages);
+      try {
+        for await (const quadro of separateTurnError(
+          streamChat(corpo, { signal: config.abortSignal }),
+        )) {
+          answerId.current ??= aiMessageIdIn(quadro);
+          yield quadro;
+        }
+      } finally {
+        aoFimDoTurno.current?.();
       }
-    } finally {
-      aoFimDoTurno.current?.();
-    }
-  }, []);
+    },
+    [agenteEscolhido],
+  );
 
   /**
    * O histórico da conversa e a pausa pendente. Conversa que ainda não existe no

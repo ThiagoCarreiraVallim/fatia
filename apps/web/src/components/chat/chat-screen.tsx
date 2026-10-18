@@ -1,15 +1,14 @@
 'use client';
 
 import { useAuiState } from '@assistant-ui/react';
-import { useQuery } from '@tanstack/react-query';
-import { ApiError, getConversation } from '@fatia/api-client';
 import { EmptyState, EmptyStateGreeting } from '@/components/elements/empty-state';
 import { TopBarActions, useTopBarTitle } from '@/components/layout/app-top-bar';
 import {
-  CHAVE_DAS_CONVERSAS,
+  useCabecalhoDaConversa,
   useConversaAberta,
   useDisponibilidadeDoChat,
 } from './chat-runtime-provider';
+import { LinhaDoAgente } from './agente';
 import { GavetaDeConversas } from './conversas';
 import { GavetaDeMemorias } from './memorias';
 import { UpsellIA } from './upsell-ia';
@@ -26,20 +25,8 @@ import { ChatThread } from './thread';
 export function ChatScreen() {
   const aberta = useConversaAberta();
   // Do servidor, e não só da lista do runtime: o nome é gerado depois do primeiro
-  // turno, e a lista do runtime não é relida. A chave é a das conversas, que o fim
-  // de cada turno e o renomear já invalidam.
-  const { data: doServidor } = useQuery({
-    queryKey: [...CHAVE_DAS_CONVERSAS, 'titulo', aberta],
-    queryFn: async () => {
-      try {
-        return (await getConversation(aberta as string)).title;
-      } catch (erro) {
-        if (erro instanceof ApiError && erro.isNotFound) return null;
-        throw erro;
-      }
-    },
-    enabled: Boolean(aberta),
-  });
+  // turno, e a lista do runtime não é relida.
+  const doServidor = useCabecalhoDaConversa(aberta).data?.title;
   const doRuntime = useAuiState((s) => s.threadListItem?.title);
   const titulo = doServidor ?? doRuntime ?? 'Chat';
   const disponivel = useDisponibilidadeDoChat();
@@ -61,9 +48,7 @@ export function ChatScreen() {
         <GavetaDeMemorias />
         <GavetaDeConversas aberta={aberta} />
       </TopBarActions>
-      <p className="px-5 pb-2 text-sm text-muted-foreground">
-        Peça para registrar refeição, consultar treino ou ver sua evolução.
-      </p>
+      <LinhaDoAgente />
 
       {disponivel?.available === false ? (
         <EmptyState className="my-auto max-w-none self-center">

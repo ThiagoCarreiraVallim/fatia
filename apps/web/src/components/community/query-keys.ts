@@ -24,6 +24,7 @@ export const orgKeys = {
   exercises: (groupId: string) => ['community', 'org', groupId, 'exercises'] as const,
   exercise: (groupId: string, id: number) =>
     ['community', 'org', groupId, 'exercises', id] as const,
+  agent: (groupId: string) => ['community', 'org', groupId, 'agent'] as const,
   insightsPanels: (groupId: string) => ['community', 'org', groupId, 'insights'] as const,
   insightsCuts: (groupId: string, panel: string) =>
     ['community', 'org', groupId, 'insights', panel] as const,

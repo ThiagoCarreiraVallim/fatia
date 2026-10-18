@@ -438,7 +438,7 @@ export interface ChatConversation extends ChatConversationSummary {
    * quando a pessoa saiu da comunidade ou o dono desligou o agente: a conversa
    * segue com o assistente da Fatia.
    */
-  agent: ChatAgentHeader | null;
+  agent?: ChatAgentHeader | null;
 }
 
 export interface ChatAgentHeader {
