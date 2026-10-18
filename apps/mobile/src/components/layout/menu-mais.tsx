@@ -17,7 +17,7 @@ import {
   UtensilsCrossed,
   type LucideIcon,
 } from 'lucide-react-native';
-import { menuSections, usersApi, type MenuIcon } from '@fatia/api-client';
+import { getChatAvailability, menuSections, usersApi, type MenuIcon } from '@fatia/api-client';
 import { Drawer, DrawerHeader, DrawerScrollView, DrawerTitle } from '@/components/ui';
 import { cores } from '@/theme/cores';
 
@@ -38,13 +38,22 @@ const ICONE: Record<MenuIcon, LucideIcon> = {
 
 /**
  * Réplica do menu "Mais" do PWA: todas as telas que não estão na barra, nas
- * mesmas seções (`menuSections` do api-client). O app não tem chat, então a
- * seção IA leva só a "Conectar sua IA".
+ * mesmas seções (`menuSections` do api-client). O chat aparece quando a
+ * instância tem o assistente (Fase 9e), como na web.
  */
 export function MenuMais({ aberto, onFechar }: { aberto: boolean; onFechar: () => void }) {
   const router = useRouter();
   const eu = useQuery({ queryKey: ['users', 'me'], queryFn: () => usersApi.me() });
-  const secoes = menuSections({ platform: 'mobile', chatAvailable: false });
+  const chat = useQuery({
+    queryKey: ['chat', 'availability'],
+    queryFn: getChatAvailability,
+    staleTime: 5 * 60_000,
+  });
+  const secoes = menuSections({
+    platform: 'mobile',
+    chatAvailable: chat.data?.available ?? false,
+    chatLocked: chat.data ? chat.data.available && !chat.data.allowed : false,
+  });
 
   const ir = (href: string) => {
     onFechar();

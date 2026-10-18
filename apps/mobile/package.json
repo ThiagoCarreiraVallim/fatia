@@ -24,6 +24,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "expo": "~57.0.9",
+    "expo-audio": "~57.0.5",
     "expo-auth-session": "~57.0.5",
     "expo-camera": "~57.0.3",
     "expo-clipboard": "~57.0.1",

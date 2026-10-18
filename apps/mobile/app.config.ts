@@ -85,9 +85,21 @@ const config: ExpoConfig = {
       {
         cameraPermission:
           'O Fatia usa a câmera para ler códigos de barras e para reconhecer a refeição em uma foto do prato. A foto é analisada e descartada — ela não é salva no Fatia.',
-        // Nem o scanner nem o registro por foto gravam vídeo ou áudio; desligar
-        // aqui evita que o aplicativo peça microfone que nunca vai usar.
-        recordAudioAndroid: false,
+        // A câmera não grava áudio, mas `false` aqui **bloqueia** a permissão de
+        // microfone no manifesto do Android inteiro — e o ditado do chat (Fase
+        // 9e, `expo-audio`) precisa dela. A câmera continua sem pedir microfone.
+        recordAudioAndroid: true,
+      },
+    ],
+    [
+      // Ditado do chat (Fase 9e): o áudio vai à transcrição e é apagado do
+      // aparelho; o texto volta para o campo, e quem envia é a pessoa.
+      'expo-audio',
+      {
+        microphonePermission:
+          'O Fatia usa o microfone para você ditar mensagens ao assistente. O áudio é transcrito e descartado — ele não fica guardado.',
+        enableBackgroundPlayback: false,
+        enableBackgroundRecording: false,
       },
     ],
     [

@@ -9,6 +9,8 @@ import { BottomNav } from '@/components/layout/bottom-nav';
 import { RegistroRapido } from '@/components/layout/registro-rapido';
 import { LoadingState } from '@/components/ui';
 import { usePush } from '@/notifications/use-push';
+import { ChatProvider } from '@/chat/chat-provider';
+import { BackgroundReply } from '@/components/chat/background-reply';
 
 /**
  * Guarda de sessão — equivalente de `apps/web/src/app/(app)/layout.tsx`, que
@@ -65,12 +67,17 @@ export default function AppLayout() {
   }
 
   return (
-    <View className="flex-1 bg-background">
-      <Slot />
-      {/* O "+" global envolve a nav para acertar a ordem de pintura (ver o componente). */}
-      <RegistroRapido>
-        <BottomNav />
-      </RegistroRapido>
-    </View>
+    // O chat mora aqui, acima das abas: a resposta segue chegando enquanto a
+    // pessoa navega (ADR 035).
+    <ChatProvider>
+      <View className="flex-1 bg-background">
+        <Slot />
+        <BackgroundReply />
+        {/* O "+" global envolve a nav para acertar a ordem de pintura (ver o componente). */}
+        <RegistroRapido>
+          <BottomNav />
+        </RegistroRapido>
+      </View>
+    </ChatProvider>
   );
 }
