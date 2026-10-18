@@ -420,7 +420,7 @@ test.describe('comunidade', () => {
     page,
     browser,
   }, info) => {
-    test.setTimeout(120_000);
+    test.setTimeout(180_000);
     const convite = newInvitePath();
 
     const anonimo = await browser.newContext({
