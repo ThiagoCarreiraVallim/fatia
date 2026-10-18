@@ -42,12 +42,13 @@ const visao = (extra: Partial<SeatsOverview> = {}): SeatsOverview => ({
 });
 
 describe('quem abre o painel e com que seções', () => {
-  it('dono vê tudo; profissional, membros, convites e conteúdo; os demais, nada', () => {
+  it('dono vê tudo; profissional, membros, convites, conteúdo e exercícios; os demais, nada', () => {
     expect(panelSections('OWNER').map((s) => s.section)).toEqual([
       'overview',
       'members',
       'invites',
       'content',
+      'exercises',
       'seats',
       'settings',
     ]);
@@ -56,6 +57,7 @@ describe('quem abre o painel e com que seções', () => {
       'members',
       'invites',
       'content',
+      'exercises',
     ]);
     expect(panelSections('CREATOR')).toEqual([]);
     expect(panelSections('MEMBER')).toEqual([]);

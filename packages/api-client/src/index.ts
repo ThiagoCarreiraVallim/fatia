@@ -35,6 +35,7 @@ export * from './community-consent';
 export * from './community-admin';
 export * from './community-panel';
 export * from './community-content';
+export * from './community-exercises';
 export * from './content-panel';
 export * from './markdown-lite';
 export * from './users';

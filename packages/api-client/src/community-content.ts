@@ -11,7 +11,7 @@ import type { MealType } from './nutrition';
 export type TemplateKind = 'WORKOUT' | 'NUTRITION';
 export type PlanLevel = 'beginner' | 'intermediate' | 'advanced';
 export type TipCategory = 'WORKOUT' | 'NUTRITION' | 'HABITS' | 'GENERAL';
-export type MediaPurpose = 'group_avatar' | 'group_content';
+export type MediaPurpose = 'group_avatar' | 'group_content' | 'exercise_video' | 'exercise_photo';
 
 export interface MediaView {
   id: string;
@@ -217,6 +217,6 @@ export async function uploadMedia(
 ): Promise<MediaView> {
   const ticket = await mediaApi.requestUpload(input);
   const res = await put(ticket.uploadUrl, ticket.headers);
-  if (!res.ok) throw new Error(`O envio da imagem falhou (${res.status}).`);
+  if (!res.ok) throw new Error(`O envio do arquivo falhou (${res.status}).`);
   return mediaApi.confirm(ticket.fileId);
 }

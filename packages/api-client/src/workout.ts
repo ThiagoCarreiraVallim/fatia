@@ -1,4 +1,5 @@
 import { apiFetch } from './http';
+import type { MediaView } from './community-content';
 
 export type MuscleGroup =
   | 'peito'
@@ -31,6 +32,21 @@ export interface Exercise {
   instructions: string[];
   youtubeVideoId: string | null;
   youtubeVideoIdPt: string | null;
+  /** Criado por uma comunidade (Fase 7b). */
+  groupOwned?: boolean;
+  /** Na busca: a comunidade da pessoa que destaca este exercício. */
+  communityName?: string | null;
+  /** No detalhe: o tutorial da comunidade da pessoa, se houver. */
+  community?: CommunityGuide | null;
+}
+
+/** Vídeo, fotos e dicas que a comunidade da pessoa pôs no exercício (ADR 030). */
+export interface CommunityGuide {
+  groupId: string;
+  groupName: string;
+  video: MediaView | null;
+  photos: MediaView[];
+  tips: string | null;
 }
 
 // Campos editáveis de um exercício (custom ou cópia). Músculos devem usar as chaves
@@ -219,10 +235,11 @@ export const workoutApi = {
       body: JSON.stringify({ exercises }),
     }),
 
-  searchExercises: (q?: string, muscleGroup?: MuscleGroup) => {
+  searchExercises: (q?: string, muscleGroup?: MuscleGroup, opts: { onlyMyGym?: boolean } = {}) => {
     const qs = new URLSearchParams();
     if (q) qs.set('q', q);
     if (muscleGroup) qs.set('muscleGroup', muscleGroup);
+    if (opts.onlyMyGym) qs.set('onlyMyGym', 'true');
     const query = qs.toString();
     return apiFetch<Exercise[]>(`/api/workout/exercises${query ? `?${query}` : ''}`);
   },
