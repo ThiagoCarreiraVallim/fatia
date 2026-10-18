@@ -616,6 +616,11 @@ dela.
 **Não mitigado:** fechar a aba não para mais a inferência; o teto de turnos por minuto continua
 sendo o que limita o gasto.
 
+**Aviso de resposta pronta (Fase 9e).** Quando o turno termina sem ninguém ouvindo, a pessoa
+recebe um push de texto fixo ("Sua resposta está pronta.", ou o pedido de confirmação) com o
+caminho `/chat/<id>` — nada da conversa vai à tela bloqueada (`chatReadyNotice`, testado contra o
+conteúdo da resposta).
+
 ## Matriz de cobertura
 
 Onde o escopo é aplicado, por domínio. Verificado por

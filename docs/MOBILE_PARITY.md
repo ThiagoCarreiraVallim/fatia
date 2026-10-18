@@ -29,6 +29,9 @@ Nenhum placeholder restante no código.
 | ------------------------------------ | -------------------------------------------------------- | :-: | --------------------------------------------------------------------------- |
 | `(app)/page.tsx`                     | `app/(app)/index.tsx`                                    | ✅  | dashboard                                                                   |
 | `(app)/community`                    | `app/(app)/community/index.tsx`                          | ✅  | minhas comunidades + "Entrar com código" (drawer)                           |
+| `(app)/chat`                         | `app/(app)/chat/index.tsx`                               | ✅  | conversas; segurar renomeia ou apaga; "Nova conversa"; upsell no Free       |
+| `(app)/chat/[id]`                    | `app/(app)/chat/[id].tsx`                                | ✅  | a conversa (Fase 9e) — ver "Chat no app" abaixo                             |
+| gaveta "Memórias" do chat            | `app/(app)/chat/memories.tsx`                            | ✅  | tela própria no app; na web é uma gaveta da conversa                        |
 | `(app)/community/[groupId]`          | `app/(app)/community/[groupId]/index.tsx`                | ✅  | avatar, planos e dicas, equipe, o que compartilho, quem acessou, sair       |
 | `(app)/community/[groupId]/content`  | `app/(app)/community/[groupId]/content/index.tsx`        | ✅  | planos prontos e dicas publicados (pílulas Planos/Dicas)                    |
 | `(app)/…/content/[templateId]`       | `app/(app)/community/[groupId]/content/[templateId].tsx` | ✅  | prévia e "Adotar"; nutrição escolhe o que copiar, metas com a comparação    |
@@ -191,7 +194,7 @@ esconde a diferença é exatamente o que este documento existe para impedir.
 | PWA                   | App nativo                  |     | Observação                                                                                                                                                                                                                              |
 | --------------------- | --------------------------- | :-: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `layout/bottom-nav`   | `layout/bottom-nav`         | ✅  | Nutrição · Treino · [ + ] · Comunidade · Mais, de `navigation.ts` do api-client; o "+" central é o Registrar; sem aba Início (a barra de topo volta a ele)                                                                              |
-| `layout/menu-mais`    | `layout/menu-mais`          | ✅  | mesmas seções de `menuSections`; o app não tem chat, e "Conectar sua IA" leva a `/profile/tokens`                                                                                                                                       |
+| `layout/menu-mais`    | `layout/menu-mais`          | ✅  | mesmas seções de `menuSections`; o Chat aparece pela disponibilidade da instância (com cadeado no Free), e "Conectar sua IA" leva a `/profile/tokens`                                                                                   |
 | `layout/side-nav`     | —                           | ⛔  | só o desktop do PWA                                                                                                                                                                                                                     |
 | `layout/quick-add`    | `layout/registro-rapido`    | ✅  | o menu Registrar; refeição pela hora e treino que retoma vêm do `@fatia/api-client`. O gatilho é o "+" da barra (`useQuickAdd` no PWA, `useRegistroRapido` aqui). O treino retoma em `/workout/session/:id` aqui e em `/workout` no PWA |
 | `layout/app-top-bar`  | `layout/top-bar`            | ✅  | barra de topo estilo iOS em toda tela menos o Início: voltar hierárquico por `routeInfo` (api-client), título pequeno, ações à direita; `onBack` na sessão de treino                                                                    |
@@ -329,8 +332,8 @@ viram pílulas (`Choice`). Diferenças de propósito:
   gravar pela câmera do Fatia pediria a permissão de microfone. O envio lê o arquivo do disco
   (`createUploadTask`), com progresso, para um vídeo grande não ficar na memória.
 - **Agente da comunidade (Fase 7c):** o dono configura no app como na web (nome, avatar,
-  orientações, ligar e desligar), com "Ligado / Desligado" em pílulas. Quem conversa com o agente
-  é o chat, que é só da web: o app não ganha chat nesta fase.
+  orientações, ligar e desligar), com "Ligado / Desligado" em pílulas. Desde a Fase 9e o membro
+  escolhe o agente também no chat do app.
 - **Desafios da comunidade (Fase 8a):** o membro vê a prévia na comunidade, a lista e o detalhe
   com o ranking, entra com apelido e sai, como na web. No painel, marcar um desafio usa escolhas
   prontas — começa hoje, amanhã ou na próxima segunda; dura 7, 14 ou 30 dias
@@ -340,6 +343,30 @@ viram pílulas (`Choice`). Diferenças de propósito:
   comunidade, como na web. Publicar com até 4 imagens da galeria, reagir, comentar e denunciar são
   iguais; o menu do post é um `Alert` (a web abre um diálogo). A Moderação do painel (regra do
   mural, denúncias, removidos e banidos) existe nos dois.
+
+## Chat no app (Fase 9e)
+
+O app não tem o runtime do assistant-ui que a web usa. A conversa vira estado puro no api-client
+(`applyChatFrame`, `threadFromHistory`, testados sem tela) e a `ChatSession`
+(`src/chat/chat-session.ts`) cuida do fio: abrir, enviar, responder pausa, parar, reconectar.
+
+| Recurso da web                                               | No app | Como                                                                                        |
+| ------------------------------------------------------------ | :----: | ------------------------------------------------------------------------------------------- |
+| Resposta token a token                                       |   ✅   | `expo/fetch` só para o stream (`streamFetch` do transporte); o resto segue no `fetch` do RN |
+| Raciocínio recolhido, tools com estado e título              |   ✅   | `catalog` dá o título; ✓, girando ou ✗ com o motivo                                         |
+| Cartões das tools (métrica, evolução, relatório, comparação) |   ✅   | `ArtifactCard`, gráfico com o kit do ADR 012                                                |
+| Plano do turno                                               |   ✅   | `PlanCard`                                                                                  |
+| Pausas: confirmar escrita com resumo, pergunta, continuar    |   ✅   | `PauseCard`, mesmos ajudantes da web (`askFieldsOf`, `questionAnswer`)                      |
+| Parar, tentar de novo, erro com o caminho certo              |   ✅   | parar vai ao servidor (`stopChatRun`); 402 leva ao plano; cota diz quando volta             |
+| Voto 👍/👎, copiar, tempo da resposta                        |   ✅   | o motivo do 👎 fica só na web                                                               |
+| Agente da comunidade: escolha na conversa nova, nome no topo |   ✅   | pílulas "Quem responde"                                                                     |
+| Foto (câmera ou galeria, até 3)                              |   ✅   | JPEG `quality: 0.6`; a API tira o EXIF de novo                                              |
+| Ditado                                                       |   ✅   | `expo-audio` (módulo novo, permissão de microfone); o texto volta ao campo, não envia       |
+| Memórias                                                     |   ✅   | tela própria                                                                                |
+| Resposta segue ao trocar de aba / F5                         |   ✅   | sessão no layout; "Respondendo…" acima da barra; ao voltar do segundo plano, `live?after=`  |
+| Resposta pronta com o app fechado                            |   ➕   | push `CHAT` "Sua resposta está pronta." — a web não tem push                                |
+| Busca nas conversas                                          |   ❌   | a lista do app não filtra; fica para quando houver muitas                                   |
+| Motivo do 👎 e nota                                          |   ❌   | só na web                                                                                   |
 
 ## Plano PRO — a mesma tela, outro caixa
 
@@ -351,8 +378,8 @@ exigem compra in-app, então o app vende pela App Store / Google Play via Revenu
 tela diz que a assinatura não está disponível neste build.
 
 O cadeado: a câmera da Nutrição continua visível no Free, com cadeado, e leva a
-`/plan?recurso=foto`; a tela de foto trata o 402 com "Ver o plano PRO". O app não tem chat, então
-o menu não muda.
+`/plan?recurso=foto`; a tela de foto trata o 402 com "Ver o plano PRO". O Chat do menu leva a
+`/plan?recurso=chat` no Free, e o 402 dentro da conversa mostra "Ver o plano PRO".
 
 ## O que o React Native impôs
 
@@ -416,6 +443,9 @@ rodando, e deve ser feito antes de publicar:
 - [ ] Desafios: marcar pelo painel (hoje, 7 dias), entrar com outra conta com apelido, ver a própria linha no ranking, puxar para atualizar, sair pelo `Alert` e encerrar pelo painel
 - [ ] Mural: publicar com 2 imagens da galeria (iPhone com HEIC), reagir, comentar com o teclado aberto, denunciar pelo `Alert`, e a dona removendo e restaurando pela Moderação
 - [ ] Avisos (build com `EAS_PROJECT_ID` e API com `PUSH_ENABLED=true`): ligar em Perfil → Notificações (diálogo do sistema no iOS e no Android 13+), receber o comentário de outra conta com o app fechado e em primeiro plano, o toque abrindo o mural, negar a permissão e ver "Abrir configurações", e sair da conta parando os avisos
+- [ ] Chat: pergunta com resposta chegando aos pedaços, trocar de aba no meio e ver "Respondendo…", voltar e ver a resposta; mandar o app para o segundo plano no meio e voltar (a resposta continua de onde estava); "Parar resposta"
+- [ ] Chat: confirmar uma escrita (registrar refeição) com o resumo, responder uma pergunta do assistente, foto pela câmera e pela galeria, ditado (diálogo do microfone na primeira vez, recusar e ver o aviso), memórias e apagar uma
+- [ ] Chat com o app fechado (dev build com push): mandar pergunta, fechar o app e receber "Sua resposta está pronta."; o toque abre a conversa
 - [ ] Cores dos macros e de erro (`cores.ts`) iguais às do PWA lado a lado
 - [ ] Diagrama muscular destacando os grupos certos
 - [ ] Aparelho de entrada, não só simulador — os gráficos são o ponto a observar
