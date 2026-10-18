@@ -8,6 +8,7 @@ import {
   ApiError,
   deleteConversation,
   getConversation,
+  joinChatRun,
   listConversations,
   renameConversation,
   sendChatFeedback,
@@ -198,13 +199,39 @@ export function useChatRuntime({
     aoFimDoTurno.current = onTurnEnd;
   }, [conversationId, onTurnEnd]);
 
+  // A conversa aberta cuja resposta ainda corre no servidor (ADR 035): o `load`
+  // marca, o `LiveJoin` da tela assina quando o runtime fica livre.
+  const [paraAcompanhar, setParaAcompanhar] = useState<string | null>(null);
+  const acompanhouNada = useRef(false);
+
   const stream = useCallback(
     async function* (
       messages: LangChainMessage[],
-      config: { command?: { resume: string }; abortSignal: AbortSignal },
+      config: { command?: { resume: string }; abortSignal: AbortSignal; runConfig?: unknown },
     ) {
       const conversa = conversaAtual.current;
       if (!conversa) return;
+      if ((config.runConfig as { join?: boolean } | undefined)?.join) {
+        // Sem mensagem nova: é a mesma resposta, vista de novo. A tela é a de
+        // quem nunca saiu — indicador, tools, botão de parar.
+        setTurnError(null);
+        pendingTiming.current = null;
+        answerId.current = undefined;
+        let recebeu = false;
+        try {
+          for await (const quadro of separateTurnError(
+            joinChatRun(conversa, { signal: config.abortSignal }),
+          )) {
+            recebeu = true;
+            answerId.current ??= aiMessageIdIn(quadro);
+            yield quadro;
+          }
+        } finally {
+          acompanhouNada.current = !recebeu;
+          aoFimDoTurno.current?.();
+        }
+        return;
+      }
       const ultima = messages.at(-1);
       const anexadas = fotosDaMensagem(ultima);
       const corpo = config.command?.resume
@@ -243,6 +270,7 @@ export function useChatRuntime({
   const load = useCallback(async (threadId: string) => {
     try {
       const conversa = await getConversation(threadId);
+      if (conversa.running) setParaAcompanhar(threadId);
       const pausa = pausaPendente(conversa.messages);
       setTimings((antes) => ({ ...antes, ...timingsFromHistory(conversa.messages) }));
       setArtefatos((antes) => ({ ...antes, ...artifactsFromHistory(conversa.messages) }));
@@ -335,6 +363,12 @@ export function useChatRuntime({
 
   return {
     runtime,
+    liveJoin: {
+      pending: Boolean(conversationId) && paraAcompanhar === conversationId,
+      consume: () => setParaAcompanhar(null),
+      /** O turno acabou entre o `load` e o join: o histórico é que tem a resposta. */
+      missed: () => acompanhouNada.current,
+    },
     titulos,
     artefatos,
     plano: plano && plano.conversa === conversationId ? plano.passos : null,

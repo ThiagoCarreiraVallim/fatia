@@ -22,8 +22,9 @@ import {
 } from '@assistant-ui/react';
 import { useLangGraphInterruptState } from '@assistant-ui/react-langgraph';
 import Link from 'next/link';
-import { erroDoChat, planHref, textoDeErroDoChat } from '@fatia/api-client';
+import { erroDoChat, planHref, stopChatRun, textoDeErroDoChat } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
+import { LiveJoin } from './live-join';
 import { field, ghostButton } from '@/components/elements/surfaces';
 import {
   EmptyState,
@@ -434,6 +435,8 @@ function Composer() {
           // "terminou" (react-langgraph nunca marca `incomplete/cancelled`).
           const ultima = aui.thread().getState().messages.at(-1);
           if (ultima?.role === 'assistant') markStopped(ultima.id);
+          // Parar é no servidor (ADR 035): fechar a conexão não para mais o turno.
+          if (aberta) void stopChatRun(aberta).catch(() => undefined);
           aui.thread().cancelRun();
         }}
         className="shrink-0 bg-transparent shadow-none"
@@ -446,6 +449,7 @@ export function ChatThread() {
   const rodando = useAuiState((s) => s.thread.isRunning);
   return (
     <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
+      <LiveJoin />
       <Conversation aria-busy={rodando} className="min-h-0">
         <ConversationContent>
           <AuiIf condition={(s) => s.thread.isEmpty && !s.thread.isLoading}>

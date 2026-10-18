@@ -78,6 +78,14 @@ const deleteChatMemoryMock = vi.fn(async (id: string) => {
   memorias = memorias.filter((m) => m.id !== id);
 });
 
+let fontesDoLive: Fonte[] = [];
+const joinChatRunMock = vi.fn((_conversa: string, init?: StreamChatInit) => {
+  const fonte = new Fonte();
+  fontesDoLive.push(fonte);
+  return fonte.gerar(init?.signal);
+});
+const stopChatRunMock = vi.fn(async (_conversa: string) => undefined);
+
 const streamChatMock = vi.fn((corpo: ChatTurnRequest, init?: StreamChatInit) => {
   corpos.push(corpo);
   const fonte = new Fonte();
@@ -90,6 +98,8 @@ vi.mock('@fatia/api-client', async () => {
   return {
     ...actual,
     streamChat: streamChatMock,
+    joinChatRun: joinChatRunMock,
+    stopChatRun: stopChatRunMock,
     listConversations: vi.fn(async () => {
       await listaLiberada;
       return [];
@@ -169,6 +179,9 @@ beforeAll(() => {
 
 beforeEach(() => {
   fontes = [];
+  fontesDoLive = [];
+  joinChatRunMock.mockClear();
+  stopChatRunMock.mockClear();
   corpos.length = 0;
   conversaGravada = null;
   cota = {
@@ -662,6 +675,55 @@ describe('ChatScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Parar resposta' }));
 
     expect(await screen.findByText('Resposta interrompida')).toBeInTheDocument();
+  });
+
+  it('parar vai ao servidor, e não só fecha a conexão (ADR 035)', async () => {
+    montar();
+    const user = await enviar('me conta do meu almoço');
+    fontes[0].emitir(fragmento('ai-1', 'Seu almoço teve'));
+    expect(await screen.findByText('Seu almoço teve')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Parar resposta' }));
+
+    await waitFor(() => expect(stopChatRunMock).toHaveBeenCalledWith(CONVERSA));
+  });
+
+  it('conversa que ainda responde no servidor: ao abrir, acompanha a resposta ao vivo (ADR 035)', async () => {
+    conversaGravada = {
+      id: CONVERSA,
+      title: 'Almoço',
+      createdAt: '2026-09-25T12:00:00Z',
+      updatedAt: '2026-09-25T12:00:00Z',
+      running: true,
+      messages: [
+        {
+          id: 'm1',
+          role: 'user',
+          content: 'quanto de proteína hoje?',
+          tools: null,
+          metadata: null,
+          runId: null,
+          review: null,
+          createdAt: '2026-09-25T12:00:00Z',
+        },
+      ],
+    };
+    montar();
+
+    expect(await screen.findByText('quanto de proteína hoje?')).toBeInTheDocument();
+    await waitFor(() => expect(joinChatRunMock).toHaveBeenCalledWith(CONVERSA, expect.anything()));
+    // Nenhum turno novo: é a mesma resposta, vista de novo.
+    expect(streamChatMock).not.toHaveBeenCalled();
+
+    fontesDoLive[0].emitir(fragmento('ai-1', 'Você comeu 92 g.'));
+    expect(await screen.findByText('Você comeu 92 g.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Parar resposta' })).toBeInTheDocument();
+
+    fontesDoLive[0].emitir({ event: 'done', data: { status: 'completed' } });
+    fontesDoLive[0].fechar();
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Parar resposta' })).not.toBeInTheDocument(),
+    );
   });
 
   it('depois do F5, a resposta parada e o tempo gravado voltam', async () => {

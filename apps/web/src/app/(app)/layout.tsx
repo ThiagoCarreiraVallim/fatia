@@ -1,4 +1,5 @@
 import { Toaster } from '@/components/ui/toaster';
+import { ChatRuntimeProvider } from '@/components/chat/chat-runtime-provider';
 import { redirect } from 'next/navigation';
 import { AppTopBar, TopBarProvider } from '@/components/layout/app-top-bar';
 import { BottomNav } from '@/components/layout/bottom-nav';
@@ -20,20 +21,24 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       (`black-translucent` + `viewportFit: cover`); a barra cobre essa faixa.
     */
     <QuickAddProvider>
-      <TopBarProvider>
-        <div className="flex min-h-screen flex-col bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] md:pl-64">
-          <AppTopBar />
-          {/* No desktop o conteúdo fica numa coluna legível, ao lado da `SideNav`. */}
-          <main className="flex-1 pt-4 pb-24">
-            <div className="mx-auto w-full max-w-3xl">{children}</div>
-          </main>
-          <BottomNav />
-          <SideNav />
-          <PwaInstallPrompt />
-          <OnboardingGate />
-          <Toaster />
-        </div>
-      </TopBarProvider>
+      {/* O chat mora aqui, acima de todas as telas: a resposta continua
+          chegando enquanto a pessoa navega (ADR 035). */}
+      <ChatRuntimeProvider>
+        <TopBarProvider>
+          <div className="flex min-h-screen flex-col bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] md:pl-64">
+            <AppTopBar />
+            {/* No desktop o conteúdo fica numa coluna legível, ao lado da `SideNav`. */}
+            <main className="flex-1 pt-4 pb-24">
+              <div className="mx-auto w-full max-w-3xl">{children}</div>
+            </main>
+            <BottomNav />
+            <SideNav />
+            <PwaInstallPrompt />
+            <OnboardingGate />
+            <Toaster />
+          </div>
+        </TopBarProvider>
+      </ChatRuntimeProvider>
     </QuickAddProvider>
   );
 }
