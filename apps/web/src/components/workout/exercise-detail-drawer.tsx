@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { MuscleDiagram } from './muscle-diagram';
+import { CommunityGuideSection } from './community-guide';
 import { ExerciseEditDrawer } from './exercise-edit-drawer';
 import { workoutApi, type Exercise } from '@fatia/api-client';
 
@@ -49,7 +50,13 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
     },
   });
 
-  const videoId = exercise ? (exercise.youtubeVideoIdPt ?? exercise.youtubeVideoId ?? null) : null;
+  const guia = exercise?.community ?? null;
+  // O vídeo da comunidade substitui o do YouTube: é o tutorial que a academia
+  // (ou quem a pessoa segue) gravou para este exercício.
+  const videoId =
+    exercise && !guia?.video?.url
+      ? (exercise.youtubeVideoIdPt ?? exercise.youtubeVideoId ?? null)
+      : null;
 
   const handleEdit = () => {
     if (!exercise) return;
@@ -88,6 +95,8 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
             </Button>
 
             <div className="overflow-y-auto max-h-[68vh] space-y-5 py-2">
+              {guia && <CommunityGuideSection guide={guia} exerciseName={exercise.name} />}
+
               {/* Muscle diagram */}
               {exercise.primaryMuscles && exercise.primaryMuscles.length > 0 && (
                 <MuscleDiagram

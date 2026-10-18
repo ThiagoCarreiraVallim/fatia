@@ -11,6 +11,7 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from '@/components/ui/drawer';
+import { CommunityBadge, MyGymToggle, useInCommunity } from './my-gym-filter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { workoutApi, type Exercise } from '@fatia/api-client';
@@ -28,6 +29,8 @@ interface Props {
 export function ExerciseSearchDrawer({ open, onOpenChange, onPick }: Props) {
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
+  const [naAcademia, setNaAcademia] = useState(false);
+  const emComunidade = useInCommunity(open);
 
   // Ajuste durante o render, e não num efeito (#187). A comparação é a mesma que
   // estava no array de dependências, então a limpeza acontece no mesmo fechamento
@@ -39,6 +42,7 @@ export function ExerciseSearchDrawer({ open, onOpenChange, onPick }: Props) {
     if (!open) {
       setQ('');
       setDebounced('');
+      setNaAcademia(false);
     }
   }
 
@@ -48,8 +52,9 @@ export function ExerciseSearchDrawer({ open, onOpenChange, onPick }: Props) {
   }, [q]);
 
   const search = useQuery({
-    queryKey: ['workout', 'exercises', debounced],
-    queryFn: () => workoutApi.searchExercises(debounced || undefined),
+    queryKey: ['workout', 'exercises', debounced, naAcademia],
+    queryFn: () =>
+      workoutApi.searchExercises(debounced || undefined, undefined, { onlyMyGym: naAcademia }),
     enabled: open,
   });
 
@@ -80,6 +85,11 @@ export function ExerciseSearchDrawer({ open, onOpenChange, onPick }: Props) {
             className="pl-9"
           />
         </div>
+        {emComunidade && (
+          <div className="mb-2">
+            <MyGymToggle checked={naAcademia} onChange={setNaAcademia} />
+          </div>
+        )}
 
         <ul className="-mx-4 max-h-[55vh] divide-y overflow-y-auto">
           {search.isFetching && (
@@ -106,8 +116,12 @@ export function ExerciseSearchDrawer({ open, onOpenChange, onPick }: Props) {
                   <p className="text-sm font-medium">{exercise.name}</p>
                   <p className="text-xs text-muted-foreground">{exercise.muscleGroup}</p>
                 </div>
-                {exercise.source === 'CUSTOM' && (
-                  <span className="rounded bg-muted px-2 py-0.5 text-xs">custom</span>
+                {exercise.communityName ? (
+                  <CommunityBadge name={exercise.communityName} />
+                ) : (
+                  exercise.source === 'CUSTOM' && (
+                    <span className="rounded bg-muted px-2 py-0.5 text-xs">custom</span>
+                  )
                 )}
               </button>
             </li>
