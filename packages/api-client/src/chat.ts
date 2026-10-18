@@ -46,6 +46,8 @@ export type ChatErrorCode =
   | 'MCP_TIMEOUT'
   | 'MCP_REFUSED'
   | 'MCP_RESPONSE_UNPARSEABLE'
+  // Agente: falha nossa dentro do turno (banco do estado da conversa, defeito).
+  | 'AGENT_INTERNAL_ERROR'
   // NestJS.
   | 'AI_PLAN_REQUIRED'
   | 'AI_QUOTA_EXCEEDED'
@@ -193,6 +195,7 @@ const TEXTOS: Record<ChatErrorCode, string> = {
   CHAT_NOTHING_TO_RESUME:
     'Esta conversa não está mais esperando resposta. Recarregue para ver como ela ficou.',
   CHAT_INTERNAL_ERROR: 'Algo deu errado nesta resposta. Tente enviar de novo.',
+  AGENT_INTERNAL_ERROR: 'O assistente teve um problema nesta resposta. Tente enviar de novo.',
   AI_UNKNOWN_ERROR: 'Algo deu errado nesta resposta. Tente enviar de novo.',
 };
 

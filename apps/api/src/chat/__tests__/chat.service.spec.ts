@@ -200,7 +200,7 @@ function montar(
   } satisfies Partial<ConversationService>;
 
   const agent = {
-    abrir: jest.fn(async (entrada: EntradaDoTurno): Promise<StreamDoAgente> => {
+    openTurn: jest.fn(async (entrada: EntradaDoTurno): Promise<StreamDoAgente> => {
       chamadas.push(entrada);
       if (opcoes.atrasarAbertura) await opcoes.atrasarAbertura;
       return stream;
@@ -377,7 +377,7 @@ describe('ChatService — ordem das guardas', () => {
     );
 
     // Recusar depois de gastar seria recusar tarde: o dinheiro já teria saído.
-    expect(agent.abrir).not.toHaveBeenCalled();
+    expect(agent.openTurn).not.toHaveBeenCalled();
     expect(uso.assertDentroDaCota).not.toHaveBeenCalled();
     // A recusa chega como 404 de verdade, não como um 200 com erro dentro.
     expect(saida.escritos).toEqual([]);
@@ -395,7 +395,7 @@ describe('ChatService — ordem das guardas', () => {
         saida.destino,
       ),
     ).rejects.toThrow(NotFoundException);
-    expect(agent.abrir).not.toHaveBeenCalled();
+    expect(agent.openTurn).not.toHaveBeenCalled();
   });
 
   it('mensagem e retomada juntas é 400', async () => {
@@ -408,7 +408,7 @@ describe('ChatService — ordem das guardas', () => {
         destinoDeTeste().destino,
       ),
     ).rejects.toThrow(BadRequestException);
-    expect(agent.abrir).not.toHaveBeenCalled();
+    expect(agent.openTurn).not.toHaveBeenCalled();
   });
 
   it('cota estourada recusa antes de chamar o agente', async () => {
@@ -428,14 +428,14 @@ describe('ChatService — ordem das guardas', () => {
       AiQuotaExceededException,
     );
 
-    expect(agent.abrir).not.toHaveBeenCalled();
+    expect(agent.openTurn).not.toHaveBeenCalled();
     expect(conversas.iniciarTurno).not.toHaveBeenCalled();
     expect(saida.escritos).toEqual([]);
   });
 
   it('agente fora do ar não deixa a pergunta órfã no histórico', async () => {
     const { service, agent, conversas } = montar();
-    agent.abrir.mockRejectedValueOnce(new Error('conexão recusada'));
+    agent.openTurn.mockRejectedValueOnce(new Error('conexão recusada'));
 
     await expect(
       service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino),
@@ -553,7 +553,7 @@ describe('ChatService — o agente da comunidade (Fase 7c)', () => {
         destinoDeTeste().destino,
       ),
     ).rejects.toBeInstanceOf(NotFoundException);
-    expect(m.agent.abrir).not.toHaveBeenCalled();
+    expect(m.agent.openTurn).not.toHaveBeenCalled();
     expect(m.conversas.iniciarTurno).not.toHaveBeenCalled();
   });
 

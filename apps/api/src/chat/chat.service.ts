@@ -171,7 +171,7 @@ export class ChatService {
       memorias: (await this.memorias.listar(user.id)).map(({ id, content }) => ({ id, content })),
       ...(persona ? { persona } : {}),
     };
-    stream = await this.agent.abrir(
+    stream = await this.agent.openTurn(
       dto.resume
         ? { ...comum, retomada: { interruptId: dto.resume.interruptId, value: dto.resume.value } }
         : { ...comum, mensagem: dto.message as string, ...(fotos.length ? { fotos } : {}) },

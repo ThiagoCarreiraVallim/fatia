@@ -118,7 +118,7 @@ interface Cenario {
   app: INestApplication;
   url: string;
   canal: ReturnType<typeof canalDoAgente>;
-  abrir: jest.Mock<Promise<StreamDoAgente>, [EntradaDoTurno]>;
+  openTurn: jest.Mock<Promise<StreamDoAgente>, [EntradaDoTurno]>;
   configurado: jest.Mock<boolean, []>;
   capacidades: jest.Mock;
   transcrever: jest.Mock;
@@ -138,7 +138,7 @@ const FREE: AiEntitlement = {
 
 async function subirApp(): Promise<Cenario> {
   const canal = canalDoAgente();
-  const abrir = jest.fn(async (_entrada: EntradaDoTurno) => canal.stream);
+  const openTurn = jest.fn(async (_entrada: EntradaDoTurno) => canal.stream);
   const configurado = jest.fn(() => true);
   const assertDentroDaCota = jest.fn(async (_userId: string) => undefined);
   const capacidades = jest.fn(async () => ({ fotos: true, ditado: false }));
@@ -168,7 +168,7 @@ async function subirApp(): Promise<Cenario> {
     .overrideProvider(PrismaService)
     .useValue({})
     .overrideProvider(AgentChatClient)
-    .useValue({ abrir, configurado, capacidades, transcrever })
+    .useValue({ openTurn, configurado, capacidades, transcrever })
     .overrideProvider(AiUsageService)
     .useValue({ assertDentroDaCota, registrar })
     .overrideProvider(AiEntitlements)
@@ -223,7 +223,7 @@ async function subirApp(): Promise<Cenario> {
     app,
     url: `http://127.0.0.1:${port}/api/chat`,
     canal,
-    abrir,
+    openTurn,
     configurado,
     capacidades,
     transcrever,
@@ -309,8 +309,8 @@ describe('POST /api/chat', () => {
     cenario.canal.encerrar();
     await resposta.text();
 
-    expect(cenario.abrir).toHaveBeenCalledTimes(1);
-    expect(cenario.abrir.mock.calls[0][0].bearer).toBe('token-de-verdade');
+    expect(cenario.openTurn).toHaveBeenCalledTimes(1);
+    expect(cenario.openTurn.mock.calls[0][0].bearer).toBe('token-de-verdade');
   });
 
   it('sem `Authorization` recusa com 401 e não chama o agente', async () => {
@@ -320,7 +320,7 @@ describe('POST /api/chat', () => {
     const resposta = await conversar(cenario.url, { message: 'oi' }, { bearer: null });
 
     expect(resposta.status).toBe(401);
-    expect(cenario.abrir).not.toHaveBeenCalled();
+    expect(cenario.openTurn).not.toHaveBeenCalled();
   });
 
   it('cota estourada é 429 com corpo JSON, e não um stream vazio', async () => {
@@ -342,7 +342,7 @@ describe('POST /api/chat', () => {
     expect(resposta.status).toBe(429);
     expect(resposta.headers.get('content-type')).toContain('application/json');
     expect(await resposta.json()).toMatchObject({ code: 'AI_QUOTA_EXCEEDED', scope: 'user' });
-    expect(cenario.abrir).not.toHaveBeenCalled();
+    expect(cenario.openTurn).not.toHaveBeenCalled();
   });
 
   it('Free recebe 402 AI_PLAN_REQUIRED antes da cota e sem chamar o agente (ADR 024)', async () => {
@@ -354,7 +354,7 @@ describe('POST /api/chat', () => {
     expect(resposta.headers.get('content-type')).toContain('application/json');
     expect(await resposta.json()).toMatchObject({ code: 'AI_PLAN_REQUIRED' });
     expect(cenario.assertDentroDaCota).not.toHaveBeenCalled();
-    expect(cenario.abrir).not.toHaveBeenCalled();
+    expect(cenario.openTurn).not.toHaveBeenCalled();
   });
 
   it('o custo do turno sai como pago pelo usuário no PRO', async () => {
@@ -378,7 +378,7 @@ describe('POST /api/chat', () => {
 
   it('agente fora do ar é 503 com corpo JSON', async () => {
     const { ServiceUnavailableException } = await import('@nestjs/common');
-    cenario.abrir.mockRejectedValueOnce(new ServiceUnavailableException('fora do ar'));
+    cenario.openTurn.mockRejectedValueOnce(new ServiceUnavailableException('fora do ar'));
 
     const resposta = await conversar(cenario.url, { message: 'oi' });
 
@@ -390,14 +390,14 @@ describe('POST /api/chat', () => {
     const resposta = await conversar(cenario.url, { message: '' });
 
     expect(resposta.status).toBe(400);
-    expect(cenario.abrir).not.toHaveBeenCalled();
+    expect(cenario.openTurn).not.toHaveBeenCalled();
   });
 
   it('sem mensagem nem retomada é 400', async () => {
     const resposta = await conversar(cenario.url, {});
 
     expect(resposta.status).toBe(400);
-    expect(cenario.abrir).not.toHaveBeenCalled();
+    expect(cenario.openTurn).not.toHaveBeenCalled();
   });
 
   it('a retomada chega ao agente com o id da pausa e o valor intacto', async () => {
@@ -413,7 +413,7 @@ describe('POST /api/chat', () => {
     await resposta.text();
 
     expect(resposta.status).toBe(200);
-    expect(cenario.abrir.mock.calls[0][0]).toMatchObject({
+    expect(cenario.openTurn.mock.calls[0][0]).toMatchObject({
       retomada: { interruptId: 'pausa-1', value: { approvals: { c1: true } } },
     });
   });
@@ -422,7 +422,7 @@ describe('POST /api/chat', () => {
     const resposta = await conversar(cenario.url, { conversationId: 'nao-e-uuid', message: 'oi' });
 
     expect(resposta.status).toBe(400);
-    expect(cenario.abrir).not.toHaveBeenCalled();
+    expect(cenario.openTurn).not.toHaveBeenCalled();
   });
 
   it('passa do teto de turnos por minuto e o excedente vira 429 sem inferir', async () => {
@@ -438,7 +438,7 @@ describe('POST /api/chat', () => {
     expect(status.slice(0, 12)).toEqual(Array<number>(12).fill(200));
     expect(status[12]).toBe(429);
     // O 429 é barrado ANTES do serviço: o custo é a inferência, não o 200.
-    expect(cenario.abrir).toHaveBeenCalledTimes(12);
+    expect(cenario.openTurn).toHaveBeenCalledTimes(12);
   });
 
   it('o teto é por usuário, e não por IP', async () => {
@@ -576,7 +576,7 @@ describe('POST /api/chat com foto', () => {
     });
 
     expect(resposta.status).toBe(200);
-    const entrada = cenario.abrir.mock.calls[0][0] as { fotos?: { data: string }[] };
+    const entrada = cenario.openTurn.mock.calls[0][0] as { fotos?: { data: string }[] };
     const enviada = Buffer.from(entrada.fotos?.[0]?.data ?? '', 'base64');
     expect(enviada.length).toBeGreaterThan(150_000);
     expect(enviada.includes(Buffer.from('iPhone 15 Pro'))).toBe(false);
@@ -592,7 +592,7 @@ describe('POST /api/chat com foto', () => {
     });
 
     expect(resposta.status).toBe(400);
-    expect(cenario.abrir).not.toHaveBeenCalled();
+    expect(cenario.openTurn).not.toHaveBeenCalled();
   });
 
   it('recusa foto na resposta a uma pausa', async () => {
@@ -602,7 +602,7 @@ describe('POST /api/chat com foto', () => {
     });
 
     expect([400, 404]).toContain(resposta.status);
-    expect(cenario.abrir).not.toHaveBeenCalled();
+    expect(cenario.openTurn).not.toHaveBeenCalled();
   });
 });
 

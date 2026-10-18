@@ -13,7 +13,7 @@ import { join, relative } from 'node:path';
 const SRC = join(__dirname, '..', '..');
 
 const CHAMADAS_QUE_GASTAM = [
-  /this\.agent\.abrir\(/,
+  /this\.agent\.openTurn\(/,
   /this\.agent\.transcrever\(/,
   /\/recognize-meal`/,
 ];

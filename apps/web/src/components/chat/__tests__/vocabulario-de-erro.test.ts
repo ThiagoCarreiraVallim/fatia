@@ -40,7 +40,11 @@ function codigosDoAgente(): string[] {
   const mcp = declarados('chat/errors.py', 'MCP_').filter(
     (code) => !code.startsWith('MCP_TOOL_') && code !== 'MCP_ERROR',
   );
-  return [...declarados('providers/errors.py', 'AI_'), ...mcp];
+  // O erro interno do turno é constante do grafo, não classe de erro.
+  const grafo = readFileSync(resolve(AGENTE, 'chat/graph.py'), 'utf8');
+  const internos = [...grafo.matchAll(/^AGENT_[A-Z_]+ = "(AGENT_[A-Z_]+)"/gm)].map((m) => m[1]);
+  expect(internos).toContain('AGENT_INTERNAL_ERROR');
+  return [...declarados('providers/errors.py', 'AI_'), ...mcp, ...internos];
 }
 
 describe('vocabulário de erro do chat', () => {

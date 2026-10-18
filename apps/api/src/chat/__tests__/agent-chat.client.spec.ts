@@ -79,11 +79,11 @@ function dublarFetch(resposta: Response | Error) {
   return fetchMock;
 }
 
-describe('AgentChatClient.abrir', () => {
+describe('AgentChatClient.openTurn', () => {
   it('manda o Bearer do usuário intacto para o agente', async () => {
     dublarFetch(respostaSse('event: done\ndata: {}\n\n'));
 
-    await montar().abrir(ENTRADA);
+    await montar().openTurn(ENTRADA);
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('http://agent.local:8100/chat');
@@ -96,14 +96,14 @@ describe('AgentChatClient.abrir', () => {
 
   it('manda o segredo compartilhado quando configurado, e omite quando não', async () => {
     dublarFetch(respostaSse('event: done\ndata: {}\n\n'));
-    await montar({ AGENT_API_KEY: 'segredo-do-compose' }).abrir(ENTRADA);
+    await montar({ AGENT_API_KEY: 'segredo-do-compose' }).openTurn(ENTRADA);
     expect((fetchMock.mock.calls[0][1] as RequestInit).headers).toMatchObject({
       'X-Fatia-Agent-Key': 'segredo-do-compose',
     });
 
     fetchMock.mockRestore();
     dublarFetch(respostaSse('event: done\ndata: {}\n\n'));
-    await montar().abrir(ENTRADA);
+    await montar().openTurn(ENTRADA);
     expect((fetchMock.mock.calls[0][1] as RequestInit).headers).not.toHaveProperty(
       'X-Fatia-Agent-Key',
     );
@@ -122,7 +122,7 @@ describe('AgentChatClient.abrir', () => {
   it('manda a mensagem, o histórico e o fuso no corpo que o agente declara', async () => {
     dublarFetch(respostaSse('event: done\ndata: {}\n\n'));
 
-    await montar().abrir(ENTRADA);
+    await montar().openTurn(ENTRADA);
 
     const corpo: unknown = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
     expect(corpo).toEqual({
@@ -143,7 +143,7 @@ describe('AgentChatClient.abrir', () => {
    */
   it('repassa a retomada no lugar da mensagem, sem tocar no valor', async () => {
     dublarFetch(respostaSse('event: done\ndata: {}\n\n'));
-    await montar().abrir({
+    await montar().openTurn({
       bearer: ENTRADA.bearer,
       timezone: ENTRADA.timezone,
       conversationId: ENTRADA.conversationId,
@@ -162,7 +162,7 @@ describe('AgentChatClient.abrir', () => {
   it('conversa nova vai com o histórico vazio, e não sem o campo', async () => {
     dublarFetch(respostaSse('event: done\ndata: {}\n\n'));
 
-    await montar().abrir({ ...ENTRADA, historico: [] });
+    await montar().openTurn({ ...ENTRADA, historico: [] });
 
     const corpo = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string) as {
       history: unknown;
@@ -173,7 +173,7 @@ describe('AgentChatClient.abrir', () => {
   it('sem AGENT_BASE_URL recusa 503 sem chamar ninguém', async () => {
     const fetchSpy = dublarFetch(respostaSse(''));
 
-    await expect(montar({ AGENT_BASE_URL: '' }).abrir(ENTRADA)).rejects.toThrow(
+    await expect(montar({ AGENT_BASE_URL: '' }).openTurn(ENTRADA)).rejects.toThrow(
       ServiceUnavailableException,
     );
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -187,7 +187,7 @@ describe('AgentChatClient.abrir', () => {
       }),
     );
 
-    await expect(montar().abrir(ENTRADA)).rejects.toThrow(UnauthorizedException);
+    await expect(montar().openTurn(ENTRADA)).rejects.toThrow(UnauthorizedException);
   });
 
   it('retomada que não bate com a pausa pendente vira 409 com o code', async () => {
@@ -198,7 +198,7 @@ describe('AgentChatClient.abrir', () => {
     );
 
     const erro = await montar()
-      .abrir(ENTRADA)
+      .openTurn(ENTRADA)
       .catch((e: unknown) => e);
     expect(erro).toBeInstanceOf(ConflictException);
     expect((erro as ConflictException).getResponse()).toMatchObject({
@@ -211,7 +211,7 @@ describe('AgentChatClient.abrir', () => {
     // mandaria quem opera procurar defeito no modelo.
     dublarFetch(new Response('não autorizado', { status: 401 }));
 
-    await expect(montar().abrir(ENTRADA)).rejects.toThrow(
+    await expect(montar().openTurn(ENTRADA)).rejects.toThrow(
       /mal configurado.*autenticar no agente/is,
     );
   });
@@ -222,7 +222,7 @@ describe('AgentChatClient.abrir', () => {
         status: 504,
       }),
     );
-    await expect(montar().abrir(ENTRADA)).rejects.toThrow(GatewayTimeoutException);
+    await expect(montar().openTurn(ENTRADA)).rejects.toThrow(GatewayTimeoutException);
 
     fetchMock.mockRestore();
     dublarFetch(
@@ -230,16 +230,45 @@ describe('AgentChatClient.abrir', () => {
         status: 503,
       }),
     );
-    await expect(montar().abrir(ENTRADA)).rejects.toThrow(ServiceUnavailableException);
+    await expect(montar().openTurn(ENTRADA)).rejects.toThrow(ServiceUnavailableException);
 
     fetchMock.mockRestore();
     dublarFetch(new Response(JSON.stringify({ error: { code: 'DESCONHECIDO' } }), { status: 500 }));
-    await expect(montar().abrir(ENTRADA)).rejects.toThrow(BadGatewayException);
+    await expect(montar().openTurn(ENTRADA)).rejects.toThrow(BadGatewayException);
+  });
+
+  it('socket que cai antes da resposta é tentado de novo uma vez', async () => {
+    const caiu = Object.assign(new TypeError('fetch failed'), {
+      cause: Object.assign(new Error('other side closed'), { code: 'UND_ERR_SOCKET' }),
+    });
+    fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValueOnce(caiu)
+      .mockResolvedValueOnce(respostaSse('event: done\ndata: {}\n\n'));
+
+    await montar().openTurn(ENTRADA);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('não tenta de novo quando o agente recusa de novo, nem em timeout', async () => {
+    const recusado = Object.assign(new TypeError('fetch failed'), {
+      cause: Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }),
+    });
+    fetchMock = jest.spyOn(globalThis, 'fetch').mockRejectedValue(recusado);
+    await expect(montar().openTurn(ENTRADA)).rejects.toThrow(ServiceUnavailableException);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    fetchMock.mockRestore();
+    const timeout = Object.assign(new Error('timeout'), { name: 'TimeoutError' });
+    fetchMock = jest.spyOn(globalThis, 'fetch').mockRejectedValue(timeout);
+    await expect(montar().openTurn(ENTRADA)).rejects.toThrow(GatewayTimeoutException);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('agente inacessível vira 503, não 500', async () => {
     dublarFetch(Object.assign(new Error('connect ECONNREFUSED'), { name: 'TypeError' }));
-    await expect(montar().abrir(ENTRADA)).rejects.toThrow(ServiceUnavailableException);
+    await expect(montar().openTurn(ENTRADA)).rejects.toThrow(ServiceUnavailableException);
   });
 });
 
@@ -289,7 +318,7 @@ describe('AgentChatClient — o stream', () => {
       ),
     );
 
-    const stream = await montar().abrir(ENTRADA);
+    const stream = await montar().openTurn(ENTRADA);
     const recebidos: string[] = [];
     for await (const pedaco of stream.pedacos()) {
       recebidos.push(new TextDecoder().decode(pedaco));
@@ -310,7 +339,7 @@ describe('AgentChatClient — o stream', () => {
       ),
     );
 
-    const stream = await montar().abrir(ENTRADA);
+    const stream = await montar().openTurn(ENTRADA);
     const consumir = async () => {
       const lidos: Uint8Array[] = [];
       for await (const pedaco of stream.pedacos()) lidos.push(pedaco);
@@ -327,11 +356,11 @@ describe('AgentChatClient — o que NÃO pode vazar', () => {
     // Percorre os três caminhos que logam: falha de rede, status ruim e stream
     // quebrado. É o conjunto todo, porque basta um deles vazar.
     dublarFetch(Object.assign(new Error('boom'), { name: 'TypeError' }));
-    await expect(montar().abrir(ENTRADA)).rejects.toThrow();
+    await expect(montar().openTurn(ENTRADA)).rejects.toThrow();
 
     fetchMock.mockRestore();
     dublarFetch(new Response(JSON.stringify({ error: { code: 'X' } }), { status: 500 }));
-    await expect(montar().abrir(ENTRADA)).rejects.toThrow();
+    await expect(montar().openTurn(ENTRADA)).rejects.toThrow();
 
     fetchMock.mockRestore();
     dublarFetch(
@@ -342,7 +371,7 @@ describe('AgentChatClient — o que NÃO pode vazar', () => {
         { status: 200 },
       ),
     );
-    const stream = await montar().abrir(ENTRADA);
+    const stream = await montar().openTurn(ENTRADA);
     await expect(
       (async () => {
         const lidos: Uint8Array[] = [];

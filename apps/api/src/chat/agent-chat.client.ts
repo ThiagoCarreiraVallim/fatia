@@ -256,7 +256,7 @@ export class AgentChatClient {
    * o controller escrever um byte na resposta. Depois do primeiro `write` não
    * existe mais 503: existe um evento `error` dentro de um 200.
    */
-  async abrir(entrada: EntradaDoTurno): Promise<StreamDoAgente> {
+  async openTurn(entrada: EntradaDoTurno): Promise<StreamDoAgente> {
     const base = this.base();
     if (!base) {
       throw new ServiceUnavailableException(
@@ -268,10 +268,21 @@ export class AgentChatClient {
     const chave = this.config.get<string>('AGENT_API_KEY', '').trim();
     const abortador = new AbortController();
     const relogioDeAbertura = setTimeout(() => abortador.abort(), TIMEOUT_DE_ABERTURA_MS);
-
-    let http: Response;
-    try {
-      http = await fetch(`${base}/chat`, {
+    const corpo = JSON.stringify({
+      conversationId: entrada.conversationId,
+      timezone: entrada.timezone,
+      history: entrada.historico.map((m) => ({ role: m.role, content: m.content })),
+      memories: entrada.memorias ?? [],
+      ...(entrada.persona ? { persona: entrada.persona } : {}),
+      ...(entrada.retomada
+        ? { resume: entrada.retomada }
+        : {
+            message: entrada.mensagem,
+            ...(entrada.fotos?.length ? { photos: entrada.fotos } : {}),
+          }),
+    });
+    const enviar = () =>
+      fetch(`${base}/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -280,21 +291,22 @@ export class AgentChatClient {
           Authorization: `Bearer ${entrada.bearer}`,
           ...(chave ? { 'X-Fatia-Agent-Key': chave } : {}),
         },
-        body: JSON.stringify({
-          conversationId: entrada.conversationId,
-          timezone: entrada.timezone,
-          history: entrada.historico.map((m) => ({ role: m.role, content: m.content })),
-          memories: entrada.memorias ?? [],
-          ...(entrada.persona ? { persona: entrada.persona } : {}),
-          ...(entrada.retomada
-            ? { resume: entrada.retomada }
-            : {
-                message: entrada.mensagem,
-                ...(entrada.fotos?.length ? { photos: entrada.fotos } : {}),
-              }),
-        }),
+        body: corpo,
         signal: abortador.signal,
       });
+
+    let http: Response;
+    try {
+      try {
+        http = await enviar();
+      } catch (erro) {
+        // Uma vez, e só quando o socket caiu antes de qualquer cabeçalho: o
+        // agente reiniciando (recusa) ou uma conexão do pool que o outro lado
+        // fechou por ociosidade. Nos dois casos o turno não começou lá.
+        if (!isSocketFailure(erro)) throw erro;
+        this.logger.warn(`Conexão com o agente caiu antes da resposta; nova tentativa.`);
+        http = await enviar();
+      }
     } catch (erro) {
       clearTimeout(relogioDeAbertura);
       const causa = erro as Error;
@@ -459,4 +471,26 @@ export class AgentChatClient {
         return new BadGatewayException('O chat com IA falhou. Tente de novo em instantes.');
     }
   }
+}
+
+/** Códigos de socket do undici/Node que significam "nada chegou do outro lado". */
+const SOCKET_FAILURES = new Set([
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'EPIPE',
+  'UND_ERR_SOCKET',
+  'UND_ERR_CLOSED',
+]);
+
+/**
+ * O `fetch` do Node lança `TypeError('fetch failed')` com o motivo em `cause`.
+ * Timeout e abort ficam de fora: já gastaram o relógio de abertura.
+ */
+export function isSocketFailure(erro: unknown): boolean {
+  if (!(erro instanceof Error) || erro.name === 'TimeoutError' || erro.name === 'AbortError') {
+    return false;
+  }
+  const causa = (erro as { cause?: { code?: unknown; message?: unknown } }).cause;
+  if (causa && typeof causa.code === 'string' && SOCKET_FAILURES.has(causa.code)) return true;
+  return typeof causa?.message === 'string' && causa.message.includes('other side closed');
 }
