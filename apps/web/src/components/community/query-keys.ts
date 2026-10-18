@@ -8,6 +8,9 @@ export const communityKeys = {
   plan: (groupId: string, id: string) => ['community', 'plans', groupId, id] as const,
   tips: (groupId: string) => ['community', 'tips', groupId] as const,
   exercises: (groupId: string) => ['community', 'exercises', groupId] as const,
+  /** Desafios: a mesma lista serve ao membro e ao painel. */
+  challenges: (groupId: string) => ['community', 'challenges', groupId] as const,
+  challenge: (groupId: string, id: string) => ['community', 'challenges', groupId, id] as const,
 };
 /** Chaves do painel da equipe. Sob `['community', 'org', groupId]`: uma mudança invalida o painel inteiro. */
 export const orgKeys = {

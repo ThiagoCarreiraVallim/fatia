@@ -22,6 +22,7 @@ vi.mock('@fatia/api-client', async () => {
       setConsent: vi.fn(),
       leave: vi.fn(),
     },
+    challengesApi: { list: vi.fn().mockResolvedValue({ today: '2026-10-18', challenges: [] }) },
   };
 });
 

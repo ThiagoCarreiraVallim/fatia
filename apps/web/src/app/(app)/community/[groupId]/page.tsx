@@ -19,6 +19,7 @@ import {
 } from '@fatia/api-client';
 import { ConsentForm } from '@/components/community/consent-form';
 import { GroupAvatar } from '@/components/community/group-avatar';
+import { CommunityChallengesPreview } from '@/components/challenges/community-challenges-preview';
 import { CommunityContentPreview } from '@/components/content/community-content-preview';
 import { communityKeys } from '@/components/community/query-keys';
 import { useTopBarTitle } from '@/components/layout/app-top-bar';
@@ -166,6 +167,8 @@ export default function CommunityDetailPage() {
           </span>
         </Link>
       )}
+
+      {ativo && <CommunityChallengesPreview groupId={g.id} />}
 
       {ativo && <CommunityContentPreview groupId={g.id} />}
 
