@@ -20,6 +20,8 @@ export {
 
 export * from './billing';
 export * from './chat';
+export * from './chat-thread';
+export * from './chat-markdown';
 export * from './plan';
 export * from './food-shortcuts';
 export * from './portions';
