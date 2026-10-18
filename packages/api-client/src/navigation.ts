@@ -225,6 +225,7 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/profile', title: 'Perfil', parent: '/' },
   { pattern: '/profile/connect', title: 'Conectar sua IA', parent: '/profile' },
   { pattern: '/profile/tokens', title: 'Conectar sua IA', parent: '/profile' },
+  { pattern: '/profile/notifications', title: 'Notificações', parent: '/profile' },
   { pattern: '/plan', title: 'Meu plano', parent: '/profile' },
   { pattern: '/chat', title: 'Chat', parent: '/' },
   { pattern: '/chat/:id', title: 'Chat', parent: '/' },
@@ -288,6 +289,11 @@ function match(pattern: string, path: string[]): boolean {
 
 function find(path: string[]): RouteDef | undefined {
   return ROUTES.find((r) => match(r.pattern, path));
+}
+
+/** O caminho é de uma tela do mapa? Os `:param` casam qualquer segmento. */
+export function isKnownRoute(pathname: string): boolean {
+  return find(segments(pathname)) !== undefined;
 }
 
 /** Troca os `:param` do `parent` pelos valores que a rota casou com o mesmo nome. */
