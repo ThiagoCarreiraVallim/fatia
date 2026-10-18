@@ -33,6 +33,7 @@ const makePrisma = () => ({
   groupInvite: { findMany: jest.fn().mockResolvedValue([]) },
   groupPlanTemplate: { findMany: jest.fn().mockResolvedValue([]) },
   groupTip: { findMany: jest.fn().mockResolvedValue([]) },
+  groupExerciseGuide: { findMany: jest.fn().mockResolvedValue([]) },
   mediaFile: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
@@ -73,6 +74,7 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   invitesCreated: 'invitesCreated',
   planTemplates: 'contentPublished',
   tipsAuthored: 'contentPublished',
+  guidesAuthored: 'contentPublished',
   mediaFiles: 'mediaUploaded',
   accessLogs: 'accessLogs',
   // Chat com a IA hospedada (#249): o que a pessoa escreveu sobre a própria saúde, em prosa.

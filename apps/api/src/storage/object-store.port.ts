@@ -12,6 +12,8 @@ export interface ObjectStore {
   /** `null` quando o objeto não existe. */
   head(key: string): Promise<{ bytes: number; mime: string | null } | null>;
   get(key: string): Promise<Buffer>;
+  /** Os primeiros `bytes` do objeto, sem baixar o resto (vídeo de 200 MB). */
+  getStart(key: string, bytes: number): Promise<Buffer>;
   put(key: string, body: Buffer, mime: string): Promise<void>;
   /** Apagar o que não existe não é erro. */
   delete(keys: string[]): Promise<void>;

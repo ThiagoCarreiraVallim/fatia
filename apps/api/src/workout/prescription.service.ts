@@ -8,6 +8,7 @@ import {
   type PrescriptionOutcome,
   type PrescriptionSession,
 } from './helpers/prescribe-load';
+import { readableExercises } from './helpers/exercise-access';
 
 /**
  * Busca o histórico e delega a regra ao helper puro (#144).
@@ -31,7 +32,7 @@ export class PrescriptionService {
     const exercise = await this.prisma.exercise.findFirst({
       where: {
         id: exerciseId,
-        OR: [{ createdByUserId: null }, { createdByUserId: userId }],
+        ...readableExercises(userId),
       },
     });
     if (!exercise) throw new NotFoundException('Exercise not found');

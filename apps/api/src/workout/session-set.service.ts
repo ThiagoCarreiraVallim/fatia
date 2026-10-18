@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../common/prisma.service';
 import { isCardioExercise } from './helpers/is-cardio';
 import { estimate1RM } from './helpers/estimate-1rm';
+import { readableExercises } from './helpers/exercise-access';
 
 export interface PersonalRecordEntry {
   exerciseId: number;
@@ -58,7 +59,7 @@ export class SessionSetService {
     const exercise = await this.prisma.exercise.findFirst({
       where: {
         id: dto.exerciseId,
-        OR: [{ createdByUserId: null }, { createdByUserId: userId }],
+        ...readableExercises(userId),
       },
     });
     if (!exercise) throw new NotFoundException('Exercise not found');
@@ -144,7 +145,7 @@ export class SessionSetService {
     const exercise = await this.prisma.exercise.findFirst({
       where: {
         id: exerciseId,
-        OR: [{ createdByUserId: null }, { createdByUserId: userId }],
+        ...readableExercises(userId),
       },
     });
     if (!exercise) throw new NotFoundException('Exercise not found');

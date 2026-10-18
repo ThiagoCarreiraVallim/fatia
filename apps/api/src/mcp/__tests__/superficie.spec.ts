@@ -29,7 +29,7 @@ import {
  * `list_group_tips`), nenhuma destrutiva. Sem medição nova.
  */
 
-const SHA_ENTIDADE = 'fcbe246e66c30b968e6c736163d0364d709b35afa064e066c4b12d65f1076cef';
+const SHA_ENTIDADE = '838b0f28d8545b5adcaae87e7a2c01fc0850a90fdfb9ae6bf27fc21fbbb880d2';
 const SHA_INTENCAO = '7c36e15630e05e7188964f8bc3fc7fadb66db106b3280448aeb98fbd2abf9c7f';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

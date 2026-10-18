@@ -27,6 +27,10 @@ export class MemoryObjectStore implements ObjectStore {
     return o.body;
   }
 
+  async getStart(key: string, bytes: number) {
+    return (await this.get(key)).subarray(0, bytes);
+  }
+
   async put(key: string, body: Buffer, mime: string) {
     this.objects.set(key, { body, mime });
   }

@@ -297,7 +297,18 @@ export class AccountService {
           },
           orderBy: { createdAt: 'asc' },
         }),
-      ]).then(([plans, tips]) => ({ plans, tips })),
+        // Tutoriais de exercício do catálogo da comunidade (Fase 7b).
+        this.prisma.groupExerciseGuide.findMany({
+          where: { authorId: userId },
+          select: {
+            group: { select: { name: true } },
+            exercise: { select: { name: true } },
+            createdAt: true,
+            updatedAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        }),
+      ]).then(([plans, tips, exerciseGuides]) => ({ plans, tips, exerciseGuides })),
       // Os arquivos enviados (ADR 028): metadados, sem o arquivo.
       this.prisma.mediaFile.findMany({
         where: { uploaderId: userId },
@@ -369,7 +380,10 @@ export class AccountService {
         subscriptions: subscriptions.length,
         communityMemberships: communityMemberships.length,
         invitesCreated: invitesCreated.length,
-        contentPublished: contentPublished.plans.length + contentPublished.tips.length,
+        contentPublished:
+          contentPublished.plans.length +
+          contentPublished.tips.length +
+          contentPublished.exerciseGuides.length,
         mediaUploaded: mediaUploaded.length,
         professionalLinks: professionalLinks.length,
         accessLogs: accessLogs.length,

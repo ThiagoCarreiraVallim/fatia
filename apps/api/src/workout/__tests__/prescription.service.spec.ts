@@ -2,6 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import { PrescriptionService } from '../prescription.service';
 import type { PrismaService } from '../../common/prisma.service';
 import type { SessionSetService } from '../session-set.service';
+import { readableExercises } from '../helpers/exercise-access';
 
 type MockPrisma = {
   exercise: { findFirst: jest.Mock };
@@ -79,14 +80,11 @@ describe('PrescriptionService', () => {
     expect(JSON.stringify(where)).toContain(userId);
   });
 
-  it('só encontra exercício público ou do próprio usuário', async () => {
+  it('só encontra exercício que a pessoa pode ler (catálogo, dela, da comunidade)', async () => {
     await service.forExercise(userId, 1).catch(() => undefined);
 
     expect(prisma.exercise.findFirst).toHaveBeenCalledWith({
-      where: {
-        id: 1,
-        OR: [{ createdByUserId: null }, { createdByUserId: userId }],
-      },
+      where: { id: 1, ...readableExercises(userId) },
     });
   });
 

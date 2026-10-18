@@ -1,13 +1,11 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import {
   GroupRole,
-  MembershipStatus,
   PlanTemplateKind,
   Prisma,
   type GroupPlanTemplate,
@@ -27,7 +25,8 @@ import {
   type NutritionSnapshot,
   type SuggestedMealItem,
 } from './nutrition-snapshot';
-import { can } from './permissions';
+import { assertCanEditContent, canEditContent, requireContentRole } from './content-roles';
+import { CATALOG_EXERCISE } from '../workout/helpers/exercise-access';
 import { PlanMaterializerService } from './plan-materializer.service';
 import { buildPlanSnapshot, PLAN_SNAPSHOT_VERSION, planSnapshotSchema } from './plan-snapshot';
 
@@ -197,7 +196,7 @@ export class ContentService {
     const eu = await this.assertPublisher(userId, groupId);
     // `findById` com o `userId` de quem publica: plano de outra pessoa é 404.
     const plano = await this.plans.findById(userId, input.planId);
-    const snapshot = buildPlanSnapshot(plano);
+    const snapshot = buildPlanSnapshot(plano, groupId);
     const coverFileId = await this.resolveCover(groupId, input.coverFileId);
     const row = await this.prisma.groupPlanTemplate.create({
       data: {
@@ -268,7 +267,7 @@ export class ContentService {
       }
       if (input.planId !== undefined) {
         const plano = await this.plans.findById(userId, input.planId);
-        data.snapshot = buildPlanSnapshot(plano) as unknown as Prisma.InputJsonValue;
+        data.snapshot = buildPlanSnapshot(plano, groupId) as unknown as Prisma.InputJsonValue;
         data.snapshotVersion = PLAN_SNAPSHOT_VERSION;
         data.sourcePlanId = plano.id;
       }
@@ -474,7 +473,12 @@ export class ContentService {
           planId: existente.id,
         });
       }
-      const plano = await this.materializer.materialize(userId, modelo.snapshot, modelo.id);
+      const plano = await this.materializer.materialize(
+        userId,
+        modelo.snapshot,
+        modelo.id,
+        modelo.groupId,
+      );
       return {
         kind: modelo.kind,
         planId: plano.id,
@@ -524,39 +528,20 @@ export class ContentService {
 
   // ---------------------------------------------------------------- apoio
 
-  private async membership(userId: string, groupId: string) {
-    const m = await this.prisma.groupMembership.findUnique({
-      where: { groupId_userId: { groupId, userId } },
-      select: { role: true, status: true },
-    });
-    // Não membro, pendente e grupo inexistente respondem igual (#92).
-    if (!m || m.status !== MembershipStatus.ACTIVE) throw new NotFoundException('Group not found');
-    return m;
+  private assertMember(userId: string, groupId: string): Promise<GroupRole> {
+    return requireContentRole(this.prisma, userId, groupId, 'content.read', 'Forbidden');
   }
 
-  private async assertMember(userId: string, groupId: string): Promise<GroupRole> {
-    const m = await this.membership(userId, groupId);
-    if (!can(m.role, 'content.read')) throw new ForbiddenException();
-    return m.role;
+  private assertPublisher(userId: string, groupId: string): Promise<GroupRole> {
+    return requireContentRole(this.prisma, userId, groupId, 'content.publish');
   }
 
-  private async assertPublisher(userId: string, groupId: string): Promise<GroupRole> {
-    const m = await this.membership(userId, groupId);
-    if (!can(m.role, 'content.publish')) {
-      throw new ForbiddenException('Seu papel não publica conteúdo nesta comunidade');
-    }
-    return m.role;
-  }
-
-  /** O autor edita o que é dele; quem modera edita o de todo mundo. */
   private assertCanEdit(role: GroupRole, userId: string, authorId: string | null) {
-    if (authorId === userId || can(role, 'content.moderate')) return;
-    throw new ForbiddenException('Só quem publicou, ou o dono, muda este conteúdo');
+    assertCanEditContent(role, userId, authorId);
   }
 
   private canEdit(role: GroupRole | null, userId: string, authorId: string | null): boolean {
-    if (!role) return false;
-    return authorId === userId || can(role, 'content.moderate');
+    return canEditContent(role, userId, authorId);
   }
 
   private async findTemplate(groupId: string, id: string, onlyPublished = false) {
@@ -721,7 +706,7 @@ export class ContentService {
       });
       return {
         ...base,
-        exercises: await this.exercisesOf(row.snapshot),
+        exercises: await this.exercisesOf(row.snapshot, row.groupId),
         goals: null,
         meals: [],
         adoptedPlanId: adotado?.id ?? null,
@@ -744,18 +729,27 @@ export class ContentService {
   }
 
   /** Os exercícios do retrato com nome, para a prévia. Retrato inválido mostra lista vazia. */
-  private async exercisesOf(snapshot: unknown): Promise<TemplateExerciseView[]> {
+  private async exercisesOf(snapshot: unknown, groupId: string): Promise<TemplateExerciseView[]> {
     const parsed = planSnapshotSchema.safeParse(snapshot);
     if (!parsed.success) return [];
     const ids = parsed.data.exercises.flatMap((e) =>
       e.source === 'catalog' ? [e.catalogExerciseId] : [],
     );
-    const catalogo = ids.length
-      ? await this.prisma.exercise.findMany({
-          where: { id: { in: ids }, createdByUserId: null },
-          select: { id: true, name: true, muscleGroup: true },
-        })
-      : [];
+    const daComunidade = parsed.data.exercises.flatMap((e) =>
+      e.source === 'group' ? [e.groupExerciseId] : [],
+    );
+    const catalogo =
+      ids.length || daComunidade.length
+        ? await this.prisma.exercise.findMany({
+            where: {
+              OR: [
+                { id: { in: ids }, ...CATALOG_EXERCISE },
+                { id: { in: daComunidade }, groupOwned: true, groupId },
+              ],
+            },
+            select: { id: true, name: true, muscleGroup: true },
+          })
+        : [];
     const porId = new Map(catalogo.map((e) => [e.id, e]));
     return [...parsed.data.exercises]
       .sort((a, b) => a.order - b.order)
@@ -763,7 +757,9 @@ export class ContentService {
         const ex =
           e.source === 'catalog'
             ? porId.get(e.catalogExerciseId)
-            : { name: e.exercise.name, muscleGroup: e.exercise.muscleGroup };
+            : e.source === 'group'
+              ? porId.get(e.groupExerciseId)
+              : { name: e.exercise.name, muscleGroup: e.exercise.muscleGroup };
         return {
           name: ex?.name ?? 'Exercício',
           muscleGroup: ex?.muscleGroup ?? null,

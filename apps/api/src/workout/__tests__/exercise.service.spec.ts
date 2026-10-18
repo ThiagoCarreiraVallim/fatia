@@ -1,5 +1,6 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ExerciseService } from '../exercise.service';
+import { searchableExercises } from '../helpers/exercise-access';
 import type { PrismaService } from '../../common/prisma.service';
 
 type MockPrisma = {
@@ -12,6 +13,8 @@ type MockPrisma = {
     delete: jest.Mock;
   };
   sessionSet: { count: jest.Mock };
+  groupMembership: { findMany: jest.Mock };
+  groupExerciseGuide: { findMany: jest.Mock };
 };
 
 const makePrisma = (): MockPrisma => ({
@@ -24,6 +27,10 @@ const makePrisma = (): MockPrisma => ({
     delete: jest.fn(),
   },
   sessionSet: { count: jest.fn() },
+  // Sem comunidade: a busca de sempre. Os casos com comunidade estão no
+  // teste de integração (`group-exercises.integration.spec.ts`).
+  groupMembership: { findMany: jest.fn().mockResolvedValue([]) },
+  groupExerciseGuide: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const makeExercise = (overrides: Partial<Record<string, unknown>> = {}) => ({
@@ -45,17 +52,13 @@ describe('ExerciseService', () => {
   });
 
   describe('search', () => {
-    it('applies the OR(createdByUserId) filter so a user only sees public + own exercises', async () => {
+    it('applies the access filter so a user only sees public, own and community exercises', async () => {
       prisma.exercise.findMany.mockResolvedValue([]);
 
       await service.search(userId, { q: 'bench' });
 
-      expect(prisma.exercise.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            OR: [{ createdByUserId: null }, { createdByUserId: userId }],
-          }),
-        }),
+      expect(prisma.exercise.findMany.mock.calls[0][0].where.AND).toContainEqual(
+        searchableExercises(userId),
       );
     });
 
@@ -67,8 +70,8 @@ describe('ExerciseService', () => {
       await service.search(userId, { q: 'Agachamento Búlgaro' });
 
       const where = prisma.exercise.findMany.mock.calls[0][0].where;
-      expect(where.name).toBeUndefined();
-      expect(where.searchName).toEqual({ contains: 'agachamento bulgaro' });
+      expect(JSON.stringify(where)).not.toContain('"name"');
+      expect(where.AND).toContainEqual({ searchName: { contains: 'agachamento bulgaro' } });
     });
 
     it('não corta no banco quando há termo — o corte é depois do ranqueamento', () => {
@@ -100,7 +103,7 @@ describe('ExerciseService', () => {
       await service.search(userId, { muscleGroup: 'cardio' });
 
       const where = prisma.exercise.findMany.mock.calls[0][0].where;
-      expect(where.muscleGroup).toBe('cardio');
+      expect(where.AND).toContainEqual({ muscleGroup: 'cardio' });
     });
 
     it('caps limit at 50 even when a higher value is requested', async () => {
@@ -172,7 +175,7 @@ describe('ExerciseService', () => {
 
   describe('updateCustom', () => {
     it('updates a custom exercise the user owns', async () => {
-      prisma.exercise.findUnique.mockResolvedValue(makeExercise({ createdByUserId: userId }));
+      prisma.exercise.findFirst.mockResolvedValue(makeExercise({ createdByUserId: userId }));
       prisma.exercise.update.mockResolvedValue(makeExercise({ name: 'New Name' }));
 
       await service.updateCustom(userId, 1, { name: 'New Name' });
@@ -186,7 +189,7 @@ describe('ExerciseService', () => {
     });
 
     it('throws NotFoundException when exercise does not exist', async () => {
-      prisma.exercise.findUnique.mockResolvedValue(null);
+      prisma.exercise.findFirst.mockResolvedValue(null);
 
       await expect(service.updateCustom(userId, 999, { name: 'X' })).rejects.toThrow(
         NotFoundException,
@@ -194,7 +197,7 @@ describe('ExerciseService', () => {
     });
 
     it('throws NotFoundException when the exercise belongs to another user', async () => {
-      prisma.exercise.findUnique.mockResolvedValue(makeExercise({ createdByUserId: 'user-B' }));
+      prisma.exercise.findFirst.mockResolvedValue(makeExercise({ createdByUserId: 'user-B' }));
 
       await expect(service.updateCustom(userId, 1, { name: 'X' })).rejects.toThrow(
         NotFoundException,
@@ -204,7 +207,7 @@ describe('ExerciseService', () => {
     // Base é catálogo público: não há existência a esconder, e apontar o
     // clone_exercise evita o cliente insistir num caminho que nunca vai funcionar.
     it('throws ConflictException for a base (public) exercise — base é só-leitura', async () => {
-      prisma.exercise.findUnique.mockResolvedValue(makeExercise({ createdByUserId: null }));
+      prisma.exercise.findFirst.mockResolvedValue(makeExercise({ createdByUserId: null }));
 
       await expect(service.updateCustom(userId, 1, { name: 'X' })).rejects.toThrow(
         ConflictException,
@@ -216,7 +219,7 @@ describe('ExerciseService', () => {
     });
 
     it('fully edits the own custom exercise (enrichment fields)', async () => {
-      prisma.exercise.findUnique.mockResolvedValue(makeExercise({ createdByUserId: userId }));
+      prisma.exercise.findFirst.mockResolvedValue(makeExercise({ createdByUserId: userId }));
       prisma.exercise.update.mockResolvedValue(makeExercise({ createdByUserId: userId }));
 
       await service.updateCustom(userId, 1, {
@@ -237,7 +240,7 @@ describe('ExerciseService', () => {
     });
 
     it('throws ConflictException when renaming to a name already in use', async () => {
-      prisma.exercise.findUnique.mockResolvedValue(makeExercise({ createdByUserId: userId }));
+      prisma.exercise.findFirst.mockResolvedValue(makeExercise({ createdByUserId: userId }));
       prisma.exercise.update.mockRejectedValue({ code: 'P2002' });
 
       await expect(service.updateCustom(userId, 1, { name: 'Dup' })).rejects.toThrow(
@@ -269,6 +272,22 @@ describe('ExerciseService', () => {
       expect(arg.data.id).toBeUndefined();
     });
 
+    it('a cópia de um exercício da comunidade é da pessoa, sem a marca da comunidade', async () => {
+      prisma.exercise.findFirst
+        .mockResolvedValueOnce(
+          makeExercise({ id: 7, createdByUserId: null, groupOwned: true, groupId: 'g1' }),
+        )
+        .mockResolvedValueOnce(null);
+      prisma.exercise.create.mockResolvedValue(makeExercise({ id: 10, createdByUserId: userId }));
+
+      await service.cloneForEdit(userId, 7);
+
+      const { data } = prisma.exercise.create.mock.calls[0][0];
+      expect(data).toMatchObject({ createdByUserId: userId, clonedFromId: 7 });
+      expect(data.groupOwned).toBeUndefined();
+      expect(data.groupId).toBeUndefined();
+    });
+
     it('returns the existing copy if the user already cloned that base', async () => {
       prisma.exercise.findFirst
         .mockResolvedValueOnce(makeExercise({ id: 5, createdByUserId: null })) // base
@@ -293,19 +312,15 @@ describe('ExerciseService', () => {
 
       await service.search(userId, {});
 
-      expect(prisma.exercise.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            NOT: { clones: { some: { createdByUserId: userId } } },
-          }),
-        }),
-      );
+      expect(prisma.exercise.findMany.mock.calls[0][0].where.AND).toContainEqual({
+        NOT: { clones: { some: { createdByUserId: userId } } },
+      });
     });
   });
 
   describe('deleteCustom', () => {
     it('deletes the exercise when the user owns it and no session sets reference it', async () => {
-      prisma.exercise.findUnique.mockResolvedValue(makeExercise({ createdByUserId: userId }));
+      prisma.exercise.findFirst.mockResolvedValue(makeExercise({ createdByUserId: userId }));
       prisma.sessionSet.count.mockResolvedValue(0);
       prisma.exercise.delete.mockResolvedValue({});
 
@@ -315,26 +330,26 @@ describe('ExerciseService', () => {
     });
 
     it('throws NotFoundException when exercise does not exist', async () => {
-      prisma.exercise.findUnique.mockResolvedValue(null);
+      prisma.exercise.findFirst.mockResolvedValue(null);
 
       await expect(service.deleteCustom(userId, 999)).rejects.toThrow(NotFoundException);
     });
 
     it('throws NotFoundException when the exercise belongs to another user', async () => {
-      prisma.exercise.findUnique.mockResolvedValue(makeExercise({ createdByUserId: 'user-B' }));
+      prisma.exercise.findFirst.mockResolvedValue(makeExercise({ createdByUserId: 'user-B' }));
 
       await expect(service.deleteCustom(userId, 1)).rejects.toThrow(NotFoundException);
     });
 
     it('throws ConflictException for a base (public) exercise — é compartilhado', async () => {
-      prisma.exercise.findUnique.mockResolvedValue(makeExercise({ createdByUserId: null }));
+      prisma.exercise.findFirst.mockResolvedValue(makeExercise({ createdByUserId: null }));
 
       await expect(service.deleteCustom(userId, 1)).rejects.toThrow(ConflictException);
       expect(prisma.exercise.delete).not.toHaveBeenCalled();
     });
 
     it('throws ConflictException when session sets reference the exercise', async () => {
-      prisma.exercise.findUnique.mockResolvedValue(makeExercise({ createdByUserId: userId }));
+      prisma.exercise.findFirst.mockResolvedValue(makeExercise({ createdByUserId: userId }));
       prisma.sessionSet.count.mockResolvedValue(3);
 
       await expect(service.deleteCustom(userId, 1)).rejects.toThrow(ConflictException);

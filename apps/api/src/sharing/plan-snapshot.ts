@@ -25,6 +25,12 @@ import { muscleGroupSchema, muscleListSchema } from '../workout/helpers/muscle-g
  *
  * Exercício do catálogo público continua por **id**: ele não é de ninguém,
  * é o mesmo para todo mundo, e copiá-lo criaria lixo duplicado no catálogo.
+ *
+ * Exercício **da comunidade** (Fase 7b, ADR 030) também vai por id
+ * (`source: 'group'`), mas só no plano pronto daquela comunidade: quem adota é
+ * membro dela e enxerga o exercício, com o tutorial que a equipe gravou. Fora
+ * dela (oferta do profissional, plano pronto de outra comunidade) ele viaja por
+ * valor, como o custom, e perde o vínculo — o vídeo é da comunidade.
  */
 export const PLAN_SNAPSHOT_VERSION = 1;
 
@@ -113,6 +119,13 @@ const itemSchema = z.discriminatedUnion('source', [
     exercise: definicaoCustomSchema,
     ...prescricao,
   }),
+  // Variante nova dentro da v1: snapshot antigo continua válido, e só o
+  // materializador desta versão em diante sabe adotar esta.
+  z.object({
+    source: z.literal('group'),
+    groupExerciseId: z.number().int().positive(),
+    ...prescricao,
+  }),
 ]);
 
 export const planSnapshotSchema = z
@@ -145,7 +158,9 @@ export const planSnapshotSchema = z
       const chave =
         item.source === 'catalog'
           ? `catalog:${item.catalogExerciseId}`
-          : `custom:${item.exercise.name}`;
+          : item.source === 'group'
+            ? `group:${item.groupExerciseId}`
+            : `custom:${item.exercise.name}`;
       if (vistos.has(chave)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -175,6 +190,8 @@ export type PlanoParaCongelar = {
       name: string;
       muscleGroup: string;
       createdByUserId: string | null;
+      groupOwned: boolean;
+      groupId: string | null;
       equipment: string | null;
       level: string | null;
       mechanic: string | null;
@@ -208,20 +225,35 @@ const semVazios = <T extends object>(obj: T): Partial<T> =>
  * aqui é um plano que o autor montou (51 exercícios, nome longo demais), então
  * o erro é dele para corrigir. `ZodError` escapando pela rota vira 500
  * "Internal server error", que não diz o que arrumar.
+ *
+ * `groupId` é a comunidade onde o plano vai ser publicado: só o exercício
+ * dela viaja por referência.
  */
-export function buildPlanSnapshot(plano: PlanoParaCongelar): PlanSnapshot {
+export function buildPlanSnapshot(plano: PlanoParaCongelar, groupId?: string): PlanSnapshot {
   const exercises = plano.exercises.map((item) => {
     const base = {
       order: item.order,
       targetSets: item.targetSets,
       targetReps: item.targetReps,
     };
-    if (item.exercise.createdByUserId === null) {
+    if (item.exercise.groupOwned) {
+      if (groupId && item.exercise.groupId === groupId) {
+        return { source: 'group' as const, groupExerciseId: item.exercise.id, ...base };
+      }
+    } else if (item.exercise.createdByUserId === null) {
       return { source: 'catalog' as const, catalogExerciseId: item.exercise.id, ...base };
     }
-    const { id: _id, createdByUserId: _dono, ...definicao } = item.exercise;
+    const {
+      id: _id,
+      createdByUserId: _dono,
+      groupOwned: _daComunidade,
+      groupId: _comunidade,
+      ...definicao
+    } = item.exercise;
     void _id;
     void _dono;
+    void _daComunidade;
+    void _comunidade;
     return { source: 'custom' as const, exercise: semVazios(definicao), ...base };
   });
 

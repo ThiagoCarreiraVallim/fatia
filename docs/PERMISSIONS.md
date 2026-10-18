@@ -110,6 +110,10 @@ futura:
   dele; quem tem `content.moderate` edita e tira do ar o de qualquer pessoa da equipe.
 - **`content.read` abre para todo mundo.** É a vitrine de planos prontos e dicas; o rascunho fica
   de fora pelo `ContentService`, não por esta tabela.
+- **O catálogo de exercícios da comunidade (Fase 7b, ADR 030) usa as mesmas ações.** Criar
+  exercício e gravar tutorial é `content.publish`; o autor muda o dele e quem tem
+  `content.moderate` muda o de todos. O membro enxerga o catálogo por `content.read` e pela busca
+  de exercícios de sempre. O equipamento da academia é configuração dela: `group.update`.
 - **`content.moderate` é `OWNER` e `CREATOR`.** `PROFESSIONAL` não modera: não é papel de
   moderação, e acumular seria a mesma armadilha que o resto do documento evita.
 

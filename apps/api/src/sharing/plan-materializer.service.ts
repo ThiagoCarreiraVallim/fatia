@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { ExerciseService } from '../workout/exercise.service';
+import { CATALOG_EXERCISE } from '../workout/helpers/exercise-access';
 import {
   describeIssues,
   PLAN_SNAPSHOT_VERSION,
@@ -66,10 +67,14 @@ export class PlanMaterializerService {
    * O snapshot chega como `unknown` de propósito: ele vem de coluna `Json`,
    * escrita possivelmente por uma versão anterior do produto, e o `as` que o
    * TypeScript aceitaria de graça não olharia o conteúdo.
+   *
+   * `groupId` é a comunidade do plano pronto. Sem ela (oferta do profissional),
+   * item `source: 'group'` é recusado.
    */
-  async materialize(userId: string, snapshot: unknown, fromTemplateId?: string) {
+  async materialize(userId: string, snapshot: unknown, fromTemplateId?: string, groupId?: string) {
     const snap = this.validate(snapshot);
     await this.assertCatalogExercises(snap);
+    await this.assertGroupExercises(snap, groupId);
 
     const exercises: Array<{
       exerciseId: number;
@@ -82,7 +87,9 @@ export class PlanMaterializerService {
         exerciseId:
           item.source === 'catalog'
             ? item.catalogExerciseId
-            : await this.copyCustomExercise(userId, item.exercise),
+            : item.source === 'group'
+              ? item.groupExerciseId
+              : await this.copyCustomExercise(userId, item.exercise),
         order: item.order,
         targetSets: item.targetSets,
         targetReps: item.targetReps,
@@ -146,7 +153,7 @@ export class PlanMaterializerService {
     if (ids.length === 0) return;
 
     const publicos = await this.prisma.exercise.findMany({
-      where: { id: { in: ids }, createdByUserId: null },
+      where: { id: { in: ids }, ...CATALOG_EXERCISE },
       select: { id: true },
     });
 
@@ -156,6 +163,34 @@ export class PlanMaterializerService {
       throw new BadRequestException(
         `O exercício ${forasteiro} não está no catálogo público e por isso não pode vir de um plano ` +
           'de outra pessoa. Nada foi criado.',
+      );
+    }
+  }
+
+  /**
+   * Exercício da comunidade entra por referência, e só o da comunidade do
+   * plano pronto: um snapshot forjado com o id do exercício de outra academia
+   * poria no plano de quem adota uma linha que ele não enxerga. Pré-passada
+   * pelo mesmo motivo de `assertCatalogExercises`.
+   */
+  private async assertGroupExercises(snap: PlanSnapshot, groupId?: string): Promise<void> {
+    const ids = [
+      ...new Set(
+        snap.exercises.flatMap((item) => (item.source === 'group' ? [item.groupExerciseId] : [])),
+      ),
+    ];
+    if (ids.length === 0) return;
+    const daComunidade = groupId
+      ? await this.prisma.exercise.findMany({
+          where: { id: { in: ids }, groupOwned: true, groupId },
+          select: { id: true },
+        })
+      : [];
+    const encontrados = new Set(daComunidade.map((ex) => ex.id));
+    const forasteiro = ids.find((id) => !encontrados.has(id));
+    if (forasteiro !== undefined) {
+      throw new BadRequestException(
+        `O exercício ${forasteiro} não é do catálogo desta comunidade. Nada foi criado.`,
       );
     }
   }

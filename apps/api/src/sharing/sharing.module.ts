@@ -8,6 +8,8 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { StorageModule } from '../storage/storage.module';
 import { ContentController } from './content.controller';
 import { ContentService } from './content.service';
+import { GroupExerciseController } from './group-exercise.controller';
+import { GroupExerciseService } from './group-exercise.service';
 import { AdoptGroupPlanTool } from './mcp/adopt-group-plan.tool';
 import { ListGroupPlansTool } from './mcp/list-group-plans.tool';
 import { ListGroupTipsTool } from './mcp/list-group-tips.tool';
@@ -81,7 +83,13 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
     NotificationsModule,
     StorageModule,
   ],
-  controllers: [SharingController, ConsentController, ProfessionalController, ContentController],
+  controllers: [
+    SharingController,
+    ConsentController,
+    ProfessionalController,
+    ContentController,
+    GroupExerciseController,
+  ],
   providers: [
     ProfessionalAccessService,
     ProfessionalLinkService,
@@ -93,6 +101,7 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
     InviteService,
     PlanMaterializerService,
     ContentService,
+    GroupExerciseService,
     GroupRoleGuard,
     ListMyGroupsTool,
     JoinGroupTool,
@@ -120,6 +129,7 @@ import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
     StudentViewService,
     PlanMaterializerService,
     ContentService,
+    GroupExerciseService,
   ],
 })
 export class SharingModule {}

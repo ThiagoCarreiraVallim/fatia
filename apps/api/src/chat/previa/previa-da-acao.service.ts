@@ -16,6 +16,7 @@ import {
   type ContextoDoFormato,
   type TipoDeRegistro,
 } from './rotulos';
+import { readableExercises } from '../../workout/helpers/exercise-access';
 
 export interface LinhaDaPrevia {
   rotulo: string;
@@ -181,7 +182,7 @@ export class PreviaDaAcaoService {
       }
       case 'exercicio': {
         const exercicio = await this.prisma.exercise.findFirst({
-          where: { id, OR: [{ createdByUserId: null }, { createdByUserId: userId }] },
+          where: { id, ...readableExercises(userId) },
           select: { name: true },
         });
         return exercicio?.name ?? null;

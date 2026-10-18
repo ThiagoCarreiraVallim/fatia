@@ -25,6 +25,9 @@ import { OBJECT_STORE, type ObjectStore } from './object-store.port';
 export const MEDIA_PURPOSES = {
   group_avatar: { kinds: [MediaKind.IMAGE], action: 'group.update' },
   group_content: { kinds: [MediaKind.IMAGE], action: 'content.publish' },
+  /** Tutorial da comunidade para um exercício (Fase 7b): o vídeo e as fotos. */
+  exercise_video: { kinds: [MediaKind.VIDEO], action: 'content.publish' },
+  exercise_photo: { kinds: [MediaKind.IMAGE], action: 'content.publish' },
 } as const satisfies Record<string, { kinds: readonly MediaKind[]; action: GroupAction }>;
 
 export type MediaPurpose = keyof typeof MEDIA_PURPOSES;
@@ -121,7 +124,11 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
     if (!regra) throw new BadRequestException('Propósito de envio desconhecido.');
     const kind = kindOf(input.mime);
     if (!kind || !(regra.kinds as readonly MediaKind[]).includes(kind)) {
-      throw new BadRequestException('Envie uma imagem JPEG, PNG ou WebP.');
+      throw new BadRequestException(
+        (regra.kinds as readonly MediaKind[]).includes(MediaKind.VIDEO)
+          ? 'Envie um vídeo MP4 ou MOV.'
+          : 'Envie uma imagem JPEG, PNG ou WebP.',
+      );
     }
     const limite = MEDIA_LIMITS[kind];
     if (!Number.isInteger(input.bytes) || input.bytes <= 0 || input.bytes > limite.maxBytes) {
@@ -171,6 +178,15 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (file.kind === MediaKind.VIDEO) {
+      // Vídeo é servido como chegou, sem conversão (ADR 028). O tipo declarado
+      // não prova nada: os bytes iniciais têm de ser os de um MP4/MOV (a caixa
+      // `ftyp` do ISO BMFF), senão um HTML qualquer ficaria no bucket da
+      // comunidade com cara de vídeo.
+      const inicio = await store.getStart(file.key, 12);
+      if (inicio.subarray(4, 8).toString('latin1') !== 'ftyp') {
+        await this.discard([file]);
+        throw new BadRequestException('Não deu para ler este vídeo. Envie um MP4 ou MOV.');
+      }
       const pronto = await this.prisma.mediaFile.update({
         where: { id: file.id },
         data: { status: MediaStatus.READY, confirmedAt: new Date() },
@@ -279,6 +295,8 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
             groupAvatarOf: { is: null },
             templateCovers: { none: {} },
             tipImages: { none: {} },
+            guideVideoOf: { is: null },
+            guidePhotoOf: { is: null },
           },
         ],
       },

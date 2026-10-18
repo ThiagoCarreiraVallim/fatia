@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 124 tools): **100,9 k caracteres**
+`description`, `annotations` e o JSON Schema do input das 124 tools): **101,1 k caracteres**
 hoje, dos quais **5.822 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **87** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (82,3 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (82,5 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -1123,6 +1123,7 @@ Resumo agregado por dia em um período.
   query: string;
   muscleGroup?: string;
   limit?: number;
+  onlyMyGym?: boolean; // Fase 7b: só o que a comunidade destaca e o equipamento dela
 }
 ```
 
@@ -1135,9 +1136,12 @@ Resumo agregado por dia em um período.
     name: string;
     muscleGroup: string;
     isCustom: boolean;
+    communityName: string | null; // a comunidade que criou o exercício ou gravou o tutorial
   }>;
 }
 ```
+
+Os exercícios da comunidade da pessoa (academia ou criador) vêm primeiro (ADR 030).
 
 ### `list_exercises_by_muscle`
 
@@ -1212,6 +1216,8 @@ Aceita overrides opcionais para já editar no mesmo passo, evitando um `clone_ex
 ### `get_exercise_details`
 
 Detalhes completos de um exercício por ID: músculos primários/secundários, equipamento, nível, mecânica e passos de execução. Use quando já tiver o ID — para buscar por nome, use `search_exercise` ou `explain_form`.
+
+Quando a comunidade da pessoa tem tutorial para o exercício, vem `community: { groupName, tips, hasVideo, photoCount }` — sem URL: o vídeo e as fotos abrem nas telas, com URL assinada (ADR 030).
 
 **Input:** `{ exerciseId: number }`
 

@@ -16,6 +16,8 @@ type LinhaExercise = {
   name: string;
   muscleGroup: string;
   createdByUserId: string | null;
+  groupOwned: boolean;
+  groupId: string | null;
   equipment: string | null;
   level: string | null;
   mechanic: string | null;
@@ -29,6 +31,8 @@ type LinhaExercise = {
 const exercicio = (over: Partial<LinhaExercise> & { id: number; name: string }): LinhaExercise => ({
   muscleGroup: 'peito',
   createdByUserId: null,
+  groupOwned: false,
+  groupId: null,
   equipment: null,
   level: null,
   mechanic: null,
@@ -42,6 +46,23 @@ const exercicio = (over: Partial<LinhaExercise> & { id: number; name: string }):
 
 /** Catálogo público. */
 const SUPINO = exercicio({ id: 10, name: 'Supino reto', muscleGroup: 'peito' });
+/** Da Academia Demo (Fase 7b): sem dono pessoa, fora do catálogo público. */
+const ACADEMIA = 'grupo-academia';
+const OUTRA_ACADEMIA = 'grupo-outra';
+const LEG_PRESS_DA_CASA = exercicio({
+  id: 300,
+  name: 'Leg press da casa',
+  muscleGroup: 'pernas',
+  groupOwned: true,
+  groupId: ACADEMIA,
+});
+const MAQUINA_DA_OUTRA = exercicio({
+  id: 301,
+  name: 'Máquina da outra academia',
+  muscleGroup: 'costas',
+  groupOwned: true,
+  groupId: OUTRA_ACADEMIA,
+});
 /** Custom DO AUTOR — invisível para o adotante, como qualquer custom de terceiro. */
 const CRUCIFIXO_DO_AUTOR = exercicio({
   id: 77,
@@ -90,13 +111,24 @@ describe('PlanMaterializerService.materialize', () => {
         // que devolvesse `tabela` inteira daria verde com o `createdByUserId:
         // null` removido do `where`.
         findMany: jest.fn(
-          ({ where }: { where: { id?: { in: number[] }; createdByUserId?: string | null } }) =>
+          ({
+            where,
+          }: {
+            where: {
+              id?: { in: number[] };
+              createdByUserId?: string | null;
+              groupOwned?: boolean;
+              groupId?: string;
+            };
+          }) =>
             Promise.resolve(
               tabela.filter(
                 (ex) =>
                   (where.id === undefined || where.id.in.includes(ex.id)) &&
                   (where.createdByUserId === undefined ||
-                    ex.createdByUserId === where.createdByUserId),
+                    ex.createdByUserId === where.createdByUserId) &&
+                  (where.groupOwned === undefined || ex.groupOwned === where.groupOwned) &&
+                  (where.groupId === undefined || ex.groupId === where.groupId),
               ),
             ),
         ),
@@ -375,6 +407,72 @@ describe('PlanMaterializerService.materialize', () => {
     expect(new Set(criados).size).toBe(2);
   });
 
+  describe('exercício da comunidade (Fase 7b)', () => {
+    const comItem = (item: Record<string, unknown>) => ({
+      version: PLAN_SNAPSHOT_VERSION,
+      name: 'Plano da academia',
+      exercises: [
+        {
+          source: 'catalog',
+          catalogExerciseId: SUPINO.id,
+          order: 1,
+          targetSets: 3,
+          targetReps: '10',
+        },
+        { order: 2, targetSets: 3, targetReps: '12', ...item },
+      ],
+    });
+
+    beforeEach(() => {
+      tabela.push(LEG_PRESS_DA_CASA, MAQUINA_DA_OUTRA);
+    });
+
+    it('entra por referência no plano pronto da própria comunidade', async () => {
+      await service.materialize(
+        ADOTANTE,
+        comItem({ source: 'group', groupExerciseId: LEG_PRESS_DA_CASA.id }),
+        undefined,
+        ACADEMIA,
+      );
+      expect(dadosDoPlanoCriado().data.exercises.create.map((e) => e.exerciseId)).toEqual([
+        SUPINO.id,
+        LEG_PRESS_DA_CASA.id,
+      ]);
+    });
+
+    it('recusa o exercício de outra comunidade e não cria nada', async () => {
+      await expect(
+        service.materialize(
+          ADOTANTE,
+          comItem({ source: 'group', groupExerciseId: MAQUINA_DA_OUTRA.id }),
+          undefined,
+          ACADEMIA,
+        ),
+      ).rejects.toThrow(/não é do catálogo desta comunidade/);
+      expect(prisma.workoutPlan.create).not.toHaveBeenCalled();
+    });
+
+    it('recusa item de comunidade fora de plano pronto (oferta do profissional)', async () => {
+      await expect(
+        service.materialize(
+          ADOTANTE,
+          comItem({ source: 'group', groupExerciseId: LEG_PRESS_DA_CASA.id }),
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.workoutPlan.create).not.toHaveBeenCalled();
+    });
+
+    it('não aceita exercício da comunidade disfarçado de catálogo — ele não tem dono, mas não é público', async () => {
+      await expect(
+        service.materialize(
+          ADOTANTE,
+          comItem({ source: 'catalog', catalogExerciseId: MAQUINA_DA_OUTRA.id }),
+        ),
+      ).rejects.toThrow(/não está no catálogo público/);
+      expect(prisma.workoutPlan.create).not.toHaveBeenCalled();
+    });
+  });
+
   it('preserva ordem, séries e repetições prescritas pelo autor', async () => {
     await service.materialize(ADOTANTE, snapshotDoAutor());
 
@@ -387,6 +485,27 @@ describe('PlanMaterializerService.materialize', () => {
 });
 
 describe('buildPlanSnapshot', () => {
+  it('congela o exercício da comunidade por id só no plano pronto dela; fora, por valor', () => {
+    const plano = {
+      name: 'Pernas',
+      exercises: [{ order: 1, targetSets: 3, targetReps: '12', exercise: LEG_PRESS_DA_CASA }],
+    };
+    expect(buildPlanSnapshot(plano, ACADEMIA).exercises[0]).toEqual({
+      source: 'group',
+      groupExerciseId: LEG_PRESS_DA_CASA.id,
+      order: 1,
+      targetSets: 3,
+      targetReps: '12',
+    });
+    for (const fora of [buildPlanSnapshot(plano, OUTRA_ACADEMIA), buildPlanSnapshot(plano)]) {
+      expect(fora.exercises[0]).toMatchObject({
+        source: 'custom',
+        exercise: { name: 'Leg press da casa', muscleGroup: 'pernas' },
+      });
+      expect(JSON.stringify(fora)).not.toContain(ACADEMIA);
+    }
+  });
+
   it('congela o exercício custom por valor e o de catálogo por id', () => {
     const snap = buildPlanSnapshot({
       name: 'Push',

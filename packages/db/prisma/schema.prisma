@@ -63,10 +63,11 @@ model User {
   memories       UserMemory[]
   aiUsage        AiUsage[]
   subscriptions  UserSubscription[]
-  invitesCreated GroupInvite[]       @relation("GroupInviteCreator")
-  mediaFiles     MediaFile[]         @relation("MediaUploader")
-  planTemplates  GroupPlanTemplate[] @relation("PlanTemplateAuthor")
-  tipsAuthored   GroupTip[]          @relation("TipAuthor")
+  invitesCreated GroupInvite[]        @relation("GroupInviteCreator")
+  mediaFiles     MediaFile[]          @relation("MediaUploader")
+  planTemplates  GroupPlanTemplate[]  @relation("PlanTemplateAuthor")
+  tipsAuthored   GroupTip[]           @relation("TipAuthor")
+  guidesAuthored GroupExerciseGuide[] @relation("GuideAuthor")
 
   // B2B (ADR 014). Nenhuma destas relações dá acesso a dado de saúde por si só —
   // quem autoriza leitura é exclusivamente uma linha de `ProfessionalLink`.
@@ -377,13 +378,23 @@ model Exercise {
   // Se esta é uma cópia editável de um exercício base, aponta para o base de origem.
   // A base correspondente é escondida das listagens do usuário (a cópia a substitui).
   clonedFromId     Int?
+  /// Exercício criado por uma comunidade (Fase 7b, ADR 030), como a máquina da
+  /// casa. **Imutável**: é ele, e não `groupId`, que tira o exercício do
+  /// catálogo público. `groupId` cai em SetNull quando a comunidade some ou
+  /// quando a equipe apaga um exercício que alguém já usa, e sem esta marca a
+  /// linha (sem dono e sem comunidade) viraria catálogo de todo mundo.
+  groupOwned       Boolean  @default(false)
+  /// Comunidade dona, enquanto o exercício estiver no catálogo dela.
+  groupId          String?
   createdAt        DateTime @default(now())
 
   createdBy     User?                 @relation("UserCustomExercises", fields: [createdByUserId], references: [id], onDelete: Cascade)
   clonedFrom    Exercise?             @relation("ExerciseClones", fields: [clonedFromId], references: [id], onDelete: SetNull)
   clones        Exercise[]            @relation("ExerciseClones")
+  group         Group?                @relation("GroupExercises", fields: [groupId], references: [id], onDelete: SetNull)
   planExercises WorkoutPlanExercise[]
   sessionSets   SessionSet[]
+  groupGuides   GroupExerciseGuide[]
 
   @@unique([name, createdByUserId])
   @@index([name])
@@ -391,6 +402,11 @@ model Exercise {
   @@index([muscleGroup])
   @@index([createdByUserId])
   @@index([clonedFromId])
+  // Nome único dentro do catálogo da comunidade. `groupId` nulo (catálogo
+  // geral, exercício pessoal, exercício solto da comunidade) não colide: no
+  // Postgres, NULL é distinto de NULL.
+  @@unique([name, groupId])
+  @@index([groupId])
 }
 
 model WorkoutPlan {
@@ -801,18 +817,23 @@ model Group {
   // Apagar a conta do dono apaga grupo, memberships e vínculos, e **nenhum dado
   // de aluno é tocado**, porque nunca esteve sob o grupo. Fatura em aberto é
   // problema da #158, não deste FK.
-  owner         User                @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  memberships   GroupMembership[]
-  links         ProfessionalLink[]
-  aiUsage       AiUsage[]
-  invites       GroupInvite[]
-  seatPool      GroupSeatPool?
+  owner          User                 @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  memberships    GroupMembership[]
+  links          ProfessionalLink[]
+  aiUsage        AiUsage[]
+  invites        GroupInvite[]
+  seatPool       GroupSeatPool?
   /// Avatar da comunidade (ADR 028).
-  avatarFileId  String?             @unique
-  avatarFile    MediaFile?          @relation("GroupAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
-  mediaFiles    MediaFile[]         @relation("GroupMedia")
-  planTemplates GroupPlanTemplate[]
-  tips          GroupTip[]
+  avatarFileId   String?              @unique
+  avatarFile     MediaFile?           @relation("GroupAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
+  mediaFiles     MediaFile[]          @relation("GroupMedia")
+  planTemplates  GroupPlanTemplate[]
+  tips           GroupTip[]
+  /// Equipamentos que a academia tem (Fase 7b), da lista do catálogo. Serve
+  /// ao filtro "Na minha academia".
+  equipment      String[]             @default([])
+  exercises      Exercise[]           @relation("GroupExercises")
+  exerciseGuides GroupExerciseGuide[]
 
   @@index([ownerId])
   @@index([type])
@@ -1313,11 +1334,13 @@ model MediaFile {
   createdAt   DateTime    @default(now())
   confirmedAt DateTime?
 
-  uploader       User?               @relation("MediaUploader", fields: [uploaderId], references: [id], onDelete: SetNull)
-  group          Group?              @relation("GroupMedia", fields: [groupId], references: [id], onDelete: Cascade)
-  groupAvatarOf  Group?              @relation("GroupAvatar")
-  templateCovers GroupPlanTemplate[] @relation("TemplateCover")
-  tipImages      GroupTip[]          @relation("TipImage")
+  uploader       User?                    @relation("MediaUploader", fields: [uploaderId], references: [id], onDelete: SetNull)
+  group          Group?                   @relation("GroupMedia", fields: [groupId], references: [id], onDelete: Cascade)
+  groupAvatarOf  Group?                   @relation("GroupAvatar")
+  templateCovers GroupPlanTemplate[]      @relation("TemplateCover")
+  tipImages      GroupTip[]               @relation("TipImage")
+  guideVideoOf   GroupExerciseGuide?      @relation("GuideVideo")
+  guidePhotoOf   GroupExerciseGuidePhoto?
 
   @@index([groupId])
   @@index([uploaderId])
@@ -1389,4 +1412,41 @@ model GroupTip {
   image  MediaFile? @relation("TipImage", fields: [imageFileId], references: [id], onDelete: SetNull)
 
   @@index([groupId, publishedAt])
+}
+
+/// O tutorial da comunidade para um exercício (Fase 7b, ADR 030): vídeo,
+/// fotos e dicas dela por cima do exercício, seja do catálogo geral ou da
+/// própria comunidade. É sobreposição, não cópia: o plano e o histórico de
+/// quem treina continuam apontando para o mesmo `exerciseId`.
+model GroupExerciseGuide {
+  id          String   @id @default(uuid())
+  groupId     String
+  exerciseId  Int
+  authorId    String?
+  videoFileId String?  @unique
+  /// Markdown restrito (`markdown-lite`), como as dicas.
+  tips        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  group    Group                     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  exercise Exercise                  @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  author   User?                     @relation("GuideAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  video    MediaFile?                @relation("GuideVideo", fields: [videoFileId], references: [id], onDelete: SetNull)
+  photos   GroupExerciseGuidePhoto[]
+
+  @@unique([groupId, exerciseId])
+  @@index([exerciseId])
+}
+
+model GroupExerciseGuidePhoto {
+  id      String @id @default(uuid())
+  guideId String
+  fileId  String @unique
+  order   Int
+
+  guide GroupExerciseGuide @relation(fields: [guideId], references: [id], onDelete: Cascade)
+  file  MediaFile          @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([guideId])
 }

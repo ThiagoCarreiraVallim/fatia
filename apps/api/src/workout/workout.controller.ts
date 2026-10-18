@@ -75,7 +75,7 @@ export class WorkoutController {
 
   @Get('exercises/:id')
   getExercise(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseIntPipe) id: number) {
-    return this.exercises.get(user.id, id);
+    return this.exercises.getWithMedia(user.id, id);
   }
 
   @Post('exercises')
