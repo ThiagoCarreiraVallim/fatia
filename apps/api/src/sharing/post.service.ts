@@ -4,7 +4,6 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-  Optional,
 } from '@nestjs/common';
 import {
   PostPolicy,
@@ -175,7 +174,7 @@ function excerpt(body: string): string {
 export class PostService {
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() private readonly media: MediaService | null,
+    private readonly media: MediaService,
   ) {}
 
   // ---------------------------------------------------------------- leitura
@@ -309,7 +308,7 @@ export class PostService {
     }
     const arquivos = row.images.map((i) => i.file);
     await this.prisma.groupPost.delete({ where: { id: row.id } });
-    await this.media?.discard(arquivos);
+    await this.media.discard(arquivos);
     return { deleted: true };
   }
 
@@ -664,7 +663,6 @@ export class PostService {
    */
   private async ownImages(userId: string, groupId: string, ids: string[]): Promise<MediaFile[]> {
     if (ids.length === 0) return [];
-    if (!this.media) throw new NotFoundException('File not found');
     const arquivos: MediaFile[] = [];
     for (const id of ids) {
       const f = await this.media.resolveForGroup(groupId, id, 'post_image');
@@ -721,15 +719,20 @@ export class PostService {
     });
   }
 
+  /** O motivo mais denunciado; no empate, o que chegou primeiro. */
   private async topReason(r: { postId: string }): Promise<ReportReason | null> {
-    const grupos = await this.prisma.groupPostReport.groupBy({
-      by: ['reason'],
+    const abertas = await this.prisma.groupPostReport.findMany({
       where: { postId: r.postId, commentId: null, resolvedAt: null },
-      _count: { reason: true },
-      orderBy: { _count: { reason: 'desc' } },
-      take: 1,
+      select: { reason: true },
+      orderBy: { createdAt: 'asc' },
     });
-    return grupos[0]?.reason ?? null;
+    const contagem = new Map<ReportReason, number>();
+    for (const a of abertas) contagem.set(a.reason, (contagem.get(a.reason) ?? 0) + 1);
+    let melhor: ReportReason | null = null;
+    for (const [motivo, n] of contagem) {
+      if (melhor === null || n > contagem.get(melhor)!) melhor = motivo;
+    }
+    return melhor;
   }
 
   /** Comentários que quem pergunta enxerga, contados numa consulta só. */
@@ -771,7 +774,7 @@ export class PostService {
       body: r.body,
       createdAt: r.createdAt,
       author: this.author(r.author, eu),
-      images: this.media ? await Promise.all(r.images.map((i) => this.media!.view(i.file))) : [],
+      images: await Promise.all(r.images.map((i) => this.media.view(i.file))),
       pinned: r.pinnedAt !== null && r.removedAt === null,
       removed: r.removedAt ? { reason: r.removedReason } : null,
       reactions: {
