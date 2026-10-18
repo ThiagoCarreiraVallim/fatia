@@ -8,6 +8,7 @@ const nav = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock('next/navigation', () => ({
   useRouter: () => nav,
   useParams: () => ({ groupId: 'g1' }),
+  usePathname: () => '/community/g1',
 }));
 vi.mock('@/components/layout/app-top-bar', () => ({ useTopBarTitle: vi.fn() }));
 vi.mock('sonner', () => ({ toast: vi.fn() }));
@@ -46,6 +47,7 @@ const grupo = (p: Partial<MyGroup> = {}): MyGroup => ({
   statsOptIn: false,
   hasAiSeat: true,
   avatarUrl: null,
+  postPolicy: 'ALL_MEMBERS',
   ...p,
 });
 

@@ -11,6 +11,9 @@ export const communityKeys = {
   /** Desafios: a mesma lista serve ao membro e ao painel. */
   challenges: (groupId: string) => ['community', 'challenges', groupId] as const,
   challenge: (groupId: string, id: string) => ['community', 'challenges', groupId, id] as const,
+  /** O mural: a lista paginada, e cada post aberto com os comentários. */
+  feed: (groupId: string) => ['community', 'feed', groupId] as const,
+  post: (groupId: string, id: string) => ['community', 'feed', groupId, id] as const,
 };
 /** Chaves do painel da equipe. Sob `['community', 'org', groupId]`: uma mudança invalida o painel inteiro. */
 export const orgKeys = {
@@ -28,6 +31,11 @@ export const orgKeys = {
   exercise: (groupId: string, id: number) =>
     ['community', 'org', groupId, 'exercises', id] as const,
   agent: (groupId: string) => ['community', 'org', groupId, 'agent'] as const,
+  moderation: (groupId: string) => ['community', 'org', groupId, 'moderation'] as const,
+  reports: (groupId: string) => ['community', 'org', groupId, 'moderation', 'reports'] as const,
+  removedPosts: (groupId: string) =>
+    ['community', 'org', groupId, 'moderation', 'removed'] as const,
+  bans: (groupId: string) => ['community', 'org', groupId, 'moderation', 'bans'] as const,
   insightsPanels: (groupId: string) => ['community', 'org', groupId, 'insights'] as const,
   insightsCuts: (groupId: string, panel: string) =>
     ['community', 'org', groupId, 'insights', panel] as const,

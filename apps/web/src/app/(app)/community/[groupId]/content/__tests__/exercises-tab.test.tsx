@@ -7,6 +7,7 @@ import type { Exercise, GroupExercise } from '@fatia/api-client';
 vi.mock('next/navigation', () => ({
   useParams: () => ({ groupId: 'g1' }),
   useSearchParams: () => new URLSearchParams('tab=exercises'),
+  usePathname: () => '/community/g1/content',
 }));
 vi.mock('next/link', () => ({
   default: ({ href, children }: { href: string; children: ReactNode }) => (

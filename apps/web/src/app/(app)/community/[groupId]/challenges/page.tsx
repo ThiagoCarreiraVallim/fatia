@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Trophy } from 'lucide-react';
 import { challengesApi } from '@fatia/api-client';
 import { ChallengeCard } from '@/components/challenges/challenge-ui';
+import { CommunityTabs } from '@/components/community/community-tabs';
 import { communityKeys } from '@/components/community/query-keys';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -41,6 +42,7 @@ export default function CommunityChallengesPage() {
 
   return (
     <div className="space-y-6 p-4">
+      <CommunityTabs groupId={groupId} />
       <p className="text-sm text-muted-foreground">
         Participar é opcional. O ranking de cada desafio aparece só para quem entrou, com o apelido
         que a pessoa escolheu.

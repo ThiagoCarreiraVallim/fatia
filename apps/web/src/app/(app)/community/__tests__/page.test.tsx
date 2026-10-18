@@ -47,6 +47,7 @@ const grupo = (p: Partial<MyGroup>): MyGroup => ({
   statsOptIn: false,
   hasAiSeat: false,
   avatarUrl: null,
+  postPolicy: 'ALL_MEMBERS',
   ...p,
 });
 

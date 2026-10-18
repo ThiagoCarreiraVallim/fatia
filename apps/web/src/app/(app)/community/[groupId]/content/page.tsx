@@ -11,6 +11,7 @@ import {
   sortTips,
   workoutApi,
 } from '@fatia/api-client';
+import { CommunityTabs } from '@/components/community/community-tabs';
 import { communityKeys } from '@/components/community/query-keys';
 import { TemplateCard, TipCard } from '@/components/content/content-cards';
 import { ExerciseDetailDrawer } from '@/components/workout/exercise-detail-drawer';
@@ -42,6 +43,7 @@ export default function CommunityContentPage() {
 
   return (
     <div className="space-y-4 p-4">
+      <CommunityTabs groupId={groupId} />
       <Tabs defaultValue={aba}>
         <TabsList>
           <TabsTrigger value="plans">Planos</TabsTrigger>

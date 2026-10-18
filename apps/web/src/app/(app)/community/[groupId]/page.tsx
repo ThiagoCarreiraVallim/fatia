@@ -21,6 +21,7 @@ import { ConsentForm } from '@/components/community/consent-form';
 import { GroupAvatar } from '@/components/community/group-avatar';
 import { CommunityChallengesPreview } from '@/components/challenges/community-challenges-preview';
 import { CommunityContentPreview } from '@/components/content/community-content-preview';
+import { CommunityTabs } from '@/components/community/community-tabs';
 import { communityKeys } from '@/components/community/query-keys';
 import { useTopBarTitle } from '@/components/layout/app-top-bar';
 import { Button } from '@/components/ui/button';
@@ -118,6 +119,7 @@ export default function CommunityDetailPage() {
 
   return (
     <div className="space-y-6 p-4">
+      {ativo && <CommunityTabs groupId={g.id} />}
       <section className="flex items-start gap-3">
         <GroupAvatar name={g.name} url={g.avatarUrl} size={48} />
         <div className="min-w-0 space-y-1">

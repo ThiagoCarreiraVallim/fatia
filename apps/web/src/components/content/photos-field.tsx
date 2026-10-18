@@ -9,28 +9,44 @@ import {
   imageProblem,
   MAX_GUIDE_PHOTOS,
   uploadMedia,
+  type MediaPurpose,
 } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import type { ImageValue } from './image-field';
 
-/** Até quatro fotos do tutorial, na ordem em que foram escolhidas. */
+/**
+ * Até quatro fotos, na ordem em que foram escolhidas: as do tutorial (Fase 7b)
+ * e as do post no mural (Fase 8b).
+ */
 export function PhotosField({
   groupId,
   value,
   onChange,
+  purpose = 'exercise_photo',
+  max = MAX_GUIDE_PHOTOS,
+  label = 'Fotos',
+  listLabel = 'Fotos do tutorial',
+  addLabel = 'Adicionar fotos',
+  hint = `Até ${MAX_GUIDE_PHOTOS} fotos, JPEG, PNG ou WebP. Localização e dados da câmera são apagados.`,
 }: {
   groupId: string;
   value: ImageValue[];
   onChange: (next: ImageValue[]) => void;
+  purpose?: MediaPurpose;
+  max?: number;
+  label?: string;
+  listLabel?: string;
+  addLabel?: string;
+  hint?: string;
 }) {
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
   const [enviando, setEnviando] = useState(false);
-  const cheio = value.length >= MAX_GUIDE_PHOTOS;
+  const cheio = value.length >= max;
 
   async function enviar(files: File[]) {
-    const vagas = files.slice(0, MAX_GUIDE_PHOTOS - value.length);
-    if (vagas.length < files.length) toast(`Até ${MAX_GUIDE_PHOTOS} fotos por exercício.`);
+    const vagas = files.slice(0, max - value.length);
+    if (vagas.length < files.length) toast(`Até ${max} imagens.`);
     setEnviando(true);
     const novas: ImageValue[] = [];
     try {
@@ -41,7 +57,7 @@ export function PhotosField({
           continue;
         }
         const view = await uploadMedia(
-          { purpose: 'exercise_photo', groupId, mime: file.type, bytes: file.size },
+          { purpose, groupId, mime: file.type, bytes: file.size },
           (url, headers) => fetch(url, { method: 'PUT', body: file, headers }),
         );
         novas.push({ fileId: view.id, url: view.url });
@@ -62,13 +78,10 @@ export function PhotosField({
   return (
     <div className="space-y-2">
       <label htmlFor={id} className="block text-sm font-medium">
-        Fotos
+        {label}
       </label>
       {value.length > 0 && (
-        <ul
-          className="grid max-w-md grid-cols-2 gap-2 sm:grid-cols-4"
-          aria-label="Fotos do tutorial"
-        >
+        <ul className="grid max-w-md grid-cols-2 gap-2 sm:grid-cols-4" aria-label={listLabel}>
           {value.map((f, i) => (
             <li key={f.fileId} className="relative">
               {/* eslint-disable-next-line @next/next/no-img-element -- URL assinada e curta, fora do otimizador */}
@@ -98,7 +111,7 @@ export function PhotosField({
           onClick={() => input.current?.click()}
         >
           <ImagePlus className="h-4 w-4" aria-hidden />
-          {enviando ? 'Enviando…' : 'Adicionar fotos'}
+          {enviando ? 'Enviando…' : addLabel}
         </Button>
       )}
       <input
@@ -114,9 +127,7 @@ export function PhotosField({
           if (files.length) void enviar(files);
         }}
       />
-      <p className="text-xs text-muted-foreground">
-        Até {MAX_GUIDE_PHOTOS} fotos, JPEG, PNG ou WebP. Localização e dados da câmera são apagados.
-      </p>
+      <p className="text-xs text-muted-foreground">{hint}</p>
     </div>
   );
 }
