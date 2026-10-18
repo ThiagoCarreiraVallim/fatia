@@ -39,6 +39,27 @@ export const EQUIPMENT_LABEL: Record<GymEquipment, string> = {
 /** O equipamento de um exercício da casa: o da academia, peso corporal ou outro. */
 export const EXERCISE_EQUIPMENT = [...GYM_EQUIPMENT, 'peso corporal', 'outro'] as const;
 
+/** Os grupos musculares do catálogo, na ordem do editor (os mesmos da API). */
+export const MUSCLE_GROUPS = [
+  'peito',
+  'costas',
+  'pernas',
+  'ombro',
+  'braço',
+  'core',
+  'cardio',
+] as const;
+
+export const MUSCLE_GROUP_LABEL: Record<(typeof MUSCLE_GROUPS)[number], string> = {
+  peito: 'Peito',
+  costas: 'Costas',
+  pernas: 'Pernas',
+  ombro: 'Ombro',
+  braço: 'Braço',
+  core: 'Core',
+  cardio: 'Cardio',
+};
+
 export const MAX_GUIDE_PHOTOS = 4;
 export const MAX_GUIDE_TIPS = 2000;
 
