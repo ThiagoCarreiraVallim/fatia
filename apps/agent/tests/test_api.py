@@ -35,8 +35,9 @@ def test_health_diz_se_o_estado_do_chat_sobrevive_a_um_restart(settings_factory)
         .json()
     )
 
-    assert em_memoria["checkpointer"] == {"persistent": False}
-    assert persistente["checkpointer"] == {"persistent": True}
+    assert em_memoria["checkpointer"] == {"persistent": False, "reachable": None}
+    # O DSN aponta para um banco que não aceita a conexão: persistente, e fora.
+    assert persistente["checkpointer"] == {"persistent": True, "reachable": False}
 
 
 def test_health_com_provedor_configurado_nao_traz_motivo(settings_factory):

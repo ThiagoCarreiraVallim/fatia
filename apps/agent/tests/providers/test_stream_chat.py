@@ -249,17 +249,92 @@ async def test_falha_de_transporte_no_stream_vira_erro_nomeado(
     await provider.aclose()
 
 
-async def test_stream_nao_repete_a_chamada(settings_factory):
-    """Repetir um POST que já entregou tokens duplicaria a resposta na tela.
+@pytest.mark.parametrize(
+    "falha",
+    [
+        httpx.Response(429, json={"error": "slow down"}),
+        httpx.Response(502, json={"error": "upstream"}),
+        httpx.ConnectError("recusou"),
+        httpx.RemoteProtocolError("fechou"),
+    ],
+)
+async def test_falha_antes_do_primeiro_token_e_repetida(settings_factory, falha):
+    """Era o "toda pergunta falha na hora, e o tentar de novo resolve" de produção.
 
-    O `_request` (não-streaming) repete em 429; este caminho **não** repete, e é
-    decisão, não esquecimento.
+    Antes de qualquer pedaço visível, repetir não duplica nada na tela.
     """
     tentativas: list[int] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         tentativas.append(1)
-        return httpx.Response(429, json={"error": "slow down"})
+        if len(tentativas) == 1:
+            if isinstance(falha, Exception):
+                raise falha
+            return falha
+        return stream_do_provedor([fragmento_de_texto("Oi.")])
+
+    provider = build_provider(
+        settings_factory(ai_max_retries=2), transport=httpx.MockTransport(handler)
+    )
+
+    pedacos = await coletar(provider, [{"role": "user", "content": "oi"}])
+    await provider.aclose()
+
+    assert len(tentativas) == 2
+    assert [p.text for p in pedacos if isinstance(p, TextDelta)] == ["Oi."]
+
+
+async def test_erro_dentro_do_stream_antes_do_conteudo_e_repetido(settings_factory):
+    transport = ProviderRecordingTransport(
+        [[{"error": {"message": "provider overloaded"}}], [fragmento_de_texto("Oi.")]]
+    )
+    provider = build_provider(settings_factory(ai_max_retries=1), transport=transport)
+
+    pedacos = await coletar(provider, [{"role": "user", "content": "oi"}])
+
+    assert len(transport.requests) == 2
+    assert [p.text for p in pedacos if isinstance(p, TextDelta)] == ["Oi."]
+
+
+async def test_depois_do_primeiro_token_nao_repete(settings_factory):
+    """Repetir um POST que já entregou tokens duplicaria a resposta na tela."""
+    transport = ProviderRecordingTransport(
+        [[fragmento_de_texto("Vou consultar"), {"error": {"message": "engine morreu"}}]]
+    )
+    provider = build_provider(settings_factory(ai_max_retries=2), transport=transport)
+
+    with pytest.raises(AIProviderRefused, match="engine morreu"):
+        await coletar(provider, [{"role": "user", "content": "oi"}])
+
+    assert len(transport.requests) == 1
+
+
+async def test_desiste_depois_de_ai_max_retries(settings_factory):
+    tentativas: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        tentativas.append(1)
+        return httpx.Response(503, json={"error": "fora"})
+
+    provider = build_provider(
+        settings_factory(ai_max_retries=2), transport=httpx.MockTransport(handler)
+    )
+
+    with pytest.raises(AIProviderRefused) as excinfo:
+        await coletar(provider, [{"role": "user", "content": "oi"}])
+    await provider.aclose()
+
+    assert len(tentativas) == 3
+    assert excinfo.value.status_code == 503
+
+
+async def test_erro_do_cliente_nao_repete(settings_factory):
+    """400 e 401 são defeito de requisição ou de chave: repetir só gasta."""
+    tentativas: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        tentativas.append(1)
+        return httpx.Response(401, json={"error": "chave"})
 
     provider = build_provider(
         settings_factory(ai_max_retries=2), transport=httpx.MockTransport(handler)
@@ -270,6 +345,35 @@ async def test_stream_nao_repete_a_chamada(settings_factory):
     await provider.aclose()
 
     assert len(tentativas) == 1
+
+
+async def test_retry_after_e_respeitado_com_teto(settings_factory, monkeypatch):
+    esperas: list[float] = []
+
+    async def dormir(segundos: float) -> None:
+        esperas.append(segundos)
+
+    monkeypatch.setattr("fatia_agent.providers.openai_compat.asyncio.sleep", dormir)
+    respostas = iter(
+        [
+            httpx.Response(429, headers={"Retry-After": "3"}),
+            httpx.Response(429, headers={"Retry-After": "120"}),
+        ]
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return next(respostas, None) or stream_do_provedor([fragmento_de_texto("Oi.")])
+
+    provider = build_provider(
+        settings_factory(ai_max_retries=2, ai_retry_backoff_s=0.01),
+        transport=httpx.MockTransport(handler),
+    )
+
+    await coletar(provider, [{"role": "user", "content": "oi"}])
+    await provider.aclose()
+
+    assert esperas[0] == pytest.approx(3.0)
+    assert esperas[1] == pytest.approx(8.0)
 
 
 async def test_modelo_nao_revisado_recusa_antes_de_qualquer_byte(settings_factory):

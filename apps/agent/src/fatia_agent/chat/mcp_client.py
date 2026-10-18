@@ -126,7 +126,7 @@ class McpClient:
         # mesmo cursor. 20 páginas é muito mais do que o catálogo inteiro cabe.
         for _ in range(20):
             params: dict[str, Any] = {"cursor": cursor} if cursor else {}
-            resultado = await self._rpc("tools/list", params)
+            resultado = await self._rpc("tools/list", params, read_only=True)
             tools.extend(_tools_do_resultado(resultado))
             proximo = resultado.get("nextCursor")
             if not isinstance(proximo, str) or not proximo:
@@ -134,7 +134,9 @@ class McpClient:
             cursor = proximo
         raise McpResponseUnparseable("'tools/list' não parou de paginar depois de 20 páginas.")
 
-    async def call_tool(self, name: str, arguments: dict[str, Any]) -> "McpToolResult":
+    async def call_tool(
+        self, name: str, arguments: dict[str, Any], *, read_only: bool = False
+    ) -> "McpToolResult":
         """Executa a tool e devolve o texto que ela produziu.
 
         Erro **de execução** da tool volta como `isError: true` com texto, e não
@@ -142,7 +144,9 @@ class McpClient:
         `mcp-tool.registry.ts`), e o modelo precisa poder ler a categoria e se
         corrigir. Exceção aqui é falha de transporte ou de protocolo.
         """
-        resultado = await self._rpc("tools/call", {"name": name, "arguments": arguments})
+        resultado = await self._rpc(
+            "tools/call", {"name": name, "arguments": arguments}, read_only=read_only
+        )
         estruturado = resultado.get("structuredContent")
         return McpToolResult(
             text=_texto_do_conteudo(resultado),
@@ -150,7 +154,16 @@ class McpClient:
             structured=estruturado if isinstance(estruturado, dict) else None,
         )
 
-    async def _rpc(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+    async def _rpc(
+        self, method: str, params: dict[str, Any], *, read_only: bool = False
+    ) -> dict[str, Any]:
+        """Uma chamada JSON-RPC.
+
+        `read_only` repete **uma vez** a falha de transporte (conexão que caiu
+        no meio). Só leitura: repetir um `tools/call` de escrita poderia gravar
+        duas vezes uma refeição cuja primeira gravação chegou e só a resposta se
+        perdeu.
+        """
         self._proximo_id += 1
         corpo = {
             "jsonrpc": "2.0",
@@ -160,7 +173,12 @@ class McpClient:
         }
 
         try:
-            response = await self._client.post(self._url, json=corpo)
+            try:
+                response = await self._client.post(self._url, json=corpo)
+            except httpx.TransportError:
+                if not read_only:
+                    raise
+                response = await self._client.post(self._url, json=corpo)
         except httpx.TimeoutException as exc:
             raise McpTimeout(
                 f"O /mcp não respondeu '{method}' dentro de MCP_TIMEOUT_S ({exc})."

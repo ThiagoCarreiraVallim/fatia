@@ -93,9 +93,13 @@ class AIProviderRefused(AIProviderError):
 
     code = "AI_PROVIDER_REFUSED"
 
-    def __init__(self, message: str, *, status_code: int) -> None:
+    def __init__(
+        self, message: str, *, status_code: int, retry_after_s: float | None = None
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
+        # O `Retry-After` do 429/503, em segundos, quando o provedor manda.
+        self.retry_after_s = retry_after_s
 
 
 class AIResponseUnparseable(AIProviderError):

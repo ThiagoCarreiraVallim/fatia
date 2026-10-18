@@ -80,6 +80,7 @@ from .chat.errors import (
 from .chat.graph import MAX_CARACTERES_POR_MENSAGEM
 from .chat.state import FotoDoTurno
 from .chat.titulo import gerar_titulo
+from .http_pool import SharedTransport
 from .providers import build_provider
 from .providers.errors import (
     AgentKeyRejected,
@@ -283,18 +284,26 @@ _STATUS_BY_MCP_ERROR: dict[type[McpError], int] = {
 def create_app(settings: AgentSettings | None = None) -> FastAPI:
     resolved = settings if settings is not None else AgentSettings()
     checkpointer = Checkpointer(resolved.agent_checkpoint_database_url)
+    # O gateway mantém conexão ociosa por minutos; o Node do `apps/api` fecha a
+    # dele em 5 s (`keepAliveTimeout` padrão). Abaixo disso, o socket reusado
+    # nunca é um que o outro lado acabou de fechar.
+    provider_transport = SharedTransport(keepalive_expiry_s=30.0)
+    mcp_transport = SharedTransport(keepalive_expiry_s=4.0)
     grafos: list[GrafoDaConversa] = []
 
-    async def grafo() -> GrafoDaConversa:
+    async def compiled_graph() -> GrafoDaConversa:
         """O grafo do processo, compilado com o checkpointer na primeira conversa."""
         if not grafos:
-            grafos.append(montar_grafo(await checkpointer.obter()))
+            grafos.append(montar_grafo(await checkpointer.get()))
         return grafos[0]
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
+        await checkpointer.warm_up()
         yield
-        await checkpointer.fechar()
+        await checkpointer.close()
+        await provider_transport.shutdown()
+        await mcp_transport.shutdown()
 
     app = FastAPI(title="Fatia Agent", version=__version__, lifespan=lifespan)
 
@@ -385,7 +394,12 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
                 "unreviewed_models": unreviewed_models(resolved),
             },
             # Em memória, uma pausa do chat não sobrevive a um restart (ADR 023).
-            "checkpointer": {"persistent": checkpointer.persistente},
+            # `reachable` é o `SELECT 1` de verdade: o healthcheck do compose lê
+            # o status, e o operador lê aqui se é o banco que está fora.
+            "checkpointer": {
+                "persistent": checkpointer.persistente,
+                "reachable": await checkpointer.ping(),
+            },
         }
 
     @app.get("/capabilities")
@@ -423,7 +437,7 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
 
         imagem = _decodificar_imagem(payload.image_base64, payload.media_type, "image_base64")
 
-        provider = build_provider(resolved)
+        provider = build_provider(resolved, transport=provider_transport)
         try:
             return await recognize_meal(provider, imagem, media_type=payload.media_type)
         finally:
@@ -441,7 +455,7 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
         comprometimento. A chave do agente continua exigida — é inferência paga.
         """
         _exigir_credencial(resolved, x_fatia_agent_key)
-        provider = build_provider(resolved)
+        provider = build_provider(resolved, transport=provider_transport)
         try:
             gerado = await gerar_titulo(provider, payload.text)
         finally:
@@ -485,7 +499,7 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
         if not audio:
             raise HTTPException(status_code=400, detail="O corpo veio sem áudio.")
 
-        provider = build_provider(resolved)
+        provider = build_provider(resolved, transport=provider_transport)
         try:
             transcricao = await provider.transcribe(audio, media_type=media_type)
         finally:
@@ -539,15 +553,15 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
                 "(AI_MODEL_VISION), que também aceite tools."
             )
 
-        provider = build_provider(resolved)
-        client = build_mcp_client(resolved, bearer=bearer)
+        provider = build_provider(resolved, transport=provider_transport)
+        client = build_mcp_client(resolved, bearer=bearer, transport=mcp_transport)
 
         try:
             # O catálogo antes do stream: é a primeira chamada que exercita o
             # Bearer, e a única chance de um token inválido virar 401 de verdade.
             permitidas = todas_permitidas(await client.list_tools())
-            thread_id = thread_da_conversa(await _dono(client), str(payload.conversation_id))
-            compilado = await grafo()
+            thread_id = thread_da_conversa(await _owner_id(client), str(payload.conversation_id))
+            compilado = await compiled_graph()
             if payload.resume is not None:
                 recusa = await _recusa_de_retomada(
                     compilado, thread_id, payload.resume.interrupt_id
@@ -678,14 +692,14 @@ def _exigir_credencial(settings: AgentSettings, oferecida: str | None) -> None:
         )
 
 
-async def _dono(client: McpClient) -> str:
+async def _owner_id(client: McpClient) -> str:
     """O id de quem está conversando, segundo o próprio `/mcp`.
 
     Pelo token, e não pelo corpo: é o `/mcp` que valida o Bearer, e ele devolve
     o usuário que o token representa. Um `userId` no corpo seria a thread de
     outra pessoa a um campo adulterado de distância (ADR 023).
     """
-    resultado = await client.call_tool("get_me", {})
+    resultado = await client.call_tool("get_me", {}, read_only=True)
     try:
         perfil: object = json.loads(resultado.text)
     except ValueError:

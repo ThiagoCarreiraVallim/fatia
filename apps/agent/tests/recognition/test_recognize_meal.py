@@ -226,7 +226,7 @@ def client_com_visao(settings_factory, monkeypatch):
     def _factory(resposta: str | Exception, **overrides: object) -> TestClient:
         import fatia_agent.api as modulo
 
-        monkeypatch.setattr(modulo, "build_provider", lambda _settings: VisaoFalsa(resposta))
+        monkeypatch.setattr(modulo, "build_provider", lambda _settings, **_kw: VisaoFalsa(resposta))
         return TestClient(create_app(settings_factory(**overrides)))
 
     return _factory
