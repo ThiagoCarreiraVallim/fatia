@@ -618,6 +618,18 @@ log o que mandaria (é o padrão no dev).
 4. Confirme ligando os avisos num celular e comentando, com outra conta, um post da primeira: o
    aviso chega com o app fechado, e o log da API não mostra `Push recusado`.
 
+### Avisos no navegador — Web Push (ADR 036)
+
+1. Gere o par de chaves uma vez: `npx web-push generate-vapid-keys`. Trocar o par desfaz todas
+   as inscrições (cada navegador precisa ligar de novo).
+2. No Dokploy, serviço `api` (já no `docker-compose.prod.yml`): `WEB_PUSH_VAPID_PUBLIC_KEY`,
+   `WEB_PUSH_VAPID_PRIVATE_KEY` (segredo) e `WEB_PUSH_SUBJECT` (`mailto:` de quem opera).
+3. Confirme em Perfil → Notificações, num Chrome de desktop: ligue "Avisos neste navegador" e
+   comente, com outra conta, um post da primeira. O aviso chega com a aba fechada, e o toque abre
+   o mural.
+4. Recibos da Expo e janelas de agrupamento rodam sozinhos na API (15 min e 1 min). No log,
+   `Recibo de push com erro: InvalidCredentials` pede revisar a chave FCM/APNs em `eas credentials`.
+
 ## Release do app nativo
 
 O app (`apps/mobile`) não vai junto do deploy do backend — a distribuição é pelas

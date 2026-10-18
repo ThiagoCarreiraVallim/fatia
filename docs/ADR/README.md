@@ -41,6 +41,7 @@ Decisões arquiteturais relevantes do projeto. Cada ADR é imutável depois de a
 | [033](./033-avisos-no-celular.md)                                      | Avisos no celular pela Expo, sem dado de saúde                  | Accepted                               |
 | [034](./034-langfuse-cloud-com-mascara.md)                             | Langfuse Cloud para o chat, com máscara                         | Accepted                               |
 | [035](./035-chat-desacoplado-da-requisicao.md)                         | A resposta do chat corre no servidor, desacoplada da requisição | Accepted                               |
+| [036](./036-push-na-web.md)                                            | Avisos também no navegador (Web Push), recibos e agrupamento    | Accepted                               |
 
 ## Template
 

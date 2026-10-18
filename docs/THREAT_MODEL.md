@@ -621,6 +621,25 @@ recebe um push de texto fixo ("Sua resposta está pronta.", ou o pedido de confi
 caminho `/chat/<id>` — nada da conversa vai à tela bloqueada (`chatReadyNotice`, testado contra o
 conteúdo da resposta).
 
+### 21. Push no navegador, recibos e agrupamento (Fase 9g, ADR 036)
+
+O que um atacante ganharia: usar a API para fazer requisições a endereços internos (o endpoint de
+push é escolhido pelo cliente), receber os avisos de outra conta num navegador, ou ler conteúdo
+num aviso agrupado.
+
+- **SSRF fechado por lista.** `isPushEndpoint` só aceita `https`, sem porta, nos hosts dos
+  serviços de push dos navegadores. `localhost`, IP, porta e domínio parecido são recusados
+  (`web-push.service.spec`, `notifications.integration.spec`, com vermelho provado).
+- **Inscrição de uma conta só.** O endpoint é único e passa para quem inscreveu por último; tirar
+  a inscrição de outra pessoa não faz nada.
+- **Toque só para dentro.** O service worker abre apenas caminho interno (`/` sem `//` nem
+  esquema), a mesma regra do app.
+- **Agrupado sem conteúdo.** "Mais N comentários no seu post" leva só a contagem e o nome da
+  comunidade.
+- **Recibos sem token no log.** O alerta de recibo com erro registra o motivo, nunca o token.
+
+**Não mitigado:** o serviço de push do navegador vê o texto (neutro) e o caminho do aviso.
+
 ## Matriz de cobertura
 
 Onde o escopo é aplicado, por domínio. Verificado por

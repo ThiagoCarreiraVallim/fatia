@@ -1,6 +1,6 @@
 # ADR 033 — Avisos no celular pela Expo, sem dado de saúde
 
-**Status:** Accepted (Fase 8c, 18/10/2026)
+**Status:** Accepted (Fase 8c, 18/10/2026) — complementada pela [ADR 036](./036-push-na-web.md): recibos, agrupamento e push na web
 **Data:** 2026-10-18
 
 ## Contexto
