@@ -42,7 +42,8 @@ enviada para reconhecimento.
        apaga o original. Imagem com mais de 40 megapixels é recusada (bomba de descompressão).
      - **Vídeo** (MP4 ou MOV, até 200 MB, só na 7b): guardado como enviado, **sem conversão**.
        Converter exigiria fila e worker de vídeo, e o celular já grava em H.264/HEVC, que web e
-       app tocam.
+       app tocam. A confirmação lê só os primeiros bytes (`Range`) e exige a caixa `ftyp` do
+       MP4/MOV; o tipo declarado sozinho não prova nada (ADR 030).
    - Pendente sem confirmação em 24 h é apagado por uma faxina periódica.
 4. **Ciclo de vida.**
    - Trocar ou apagar o item (dica, capa, avatar) apaga o arquivo.

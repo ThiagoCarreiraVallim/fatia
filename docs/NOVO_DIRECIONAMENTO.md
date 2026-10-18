@@ -292,6 +292,23 @@ continua acessível.
 **Não exercitado aqui:** o R2 de produção (o dev usa SeaweedFS) e o envio de imagem no app em
 aparelho. **Pendente:** cópia do bucket no `infra/backup.sh`.
 
+### Andamento da Fase 7b — concluída
+
+- [x] **API (ADR 030):** `Exercise.groupOwned` + `groupId`, `GroupExerciseGuide` (vídeo, até 4 fotos,
+      dicas) por cima de qualquer exercício, `Group.equipment`; helper único de acesso a exercício;
+      busca com a comunidade primeiro e `onlyMyGym`; vídeo conferido pela caixa `ftyp`; snapshot com
+      `source: 'group'`; exercício em uso sai da comunidade sem virar catálogo público; `CHECK` no
+      banco. Corrige `addExercise`, que aceitava o exercício pessoal de outra pessoa (#92).
+- [x] **api-client, web e app:** seção "Exercícios" no painel (equipamento, exercício da casa,
+      tutorial do catálogo, vídeo com progresso), tutorial no detalhe do exercício no lugar do
+      YouTube, "Na minha academia" nos seletores, aba "Exercícios" para o membro.
+- [x] **E2E e fotos:** seed com equipamento, exercício da casa e tutorial; `exercises.spec` (vídeo
+      real no bucket, tutorial assinado, filtro); fotos 96–99, axe; `ui:snap 36-catalogo`.
+
+**Fora desta entrega:** gravar vídeo pela câmera do Fatia (pede microfone e build nativo; o app
+escolhe da galeria) e player dentro do app (abre no navegador do sistema). **Não exercitado aqui:**
+vídeo enviado de aparelho de verdade e o R2 de produção.
+
 ## Fase 8 — Gamificação e timeline moderada
 
 **Desafios**

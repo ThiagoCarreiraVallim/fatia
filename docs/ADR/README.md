@@ -35,6 +35,7 @@ Decisões arquiteturais relevantes do projeto. Cada ADR é imutável depois de a
 | [027](./027-desafios-por-aderencia-a-propria-meta.md)                  | Desafios de nutrição medem aderência, nunca o valor       | Proposed                               |
 | [028](./028-imagens-de-posts-da-comunidade.md)                         | Imagens de posts da comunidade são armazenadas            | Proposed                               |
 | [029](./029-playwright-com-logto-real.md)                              | Testes de interface com Playwright e login real no Logto  | Proposed                               |
+| [030](./030-catalogo-de-exercicios-da-comunidade.md)                   | Catálogo de exercícios da comunidade: tutorial por cima   | Accepted                               |
 
 ## Template
 
