@@ -294,7 +294,6 @@ For deeper context, read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/
 They are welcome, under the same bar as anything else: you understand what you are submitting, the tests prove red without the fix, and the PR goes through the same review.
 
 - [`docs/CLAUDE.md`](docs/CLAUDE.md) holds the repository conventions in the format coding assistants load automatically. It is a machine-facing restatement of this guide plus the ADRs — **optional reading for humans**.
-- [`docs/_archive/`](docs/_archive) keeps finished agent-generated plans and specs as a historical record. Nothing in there describes the current state of the project.
 - `.claude/` is not versioned; it is the maintainer's personal tooling.
 
 ---

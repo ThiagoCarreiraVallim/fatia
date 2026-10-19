@@ -24,7 +24,7 @@ Fatia é um rastreador self-hosted de nutrição e treino, multiusuário. Backen
    trabalho de **v1**; para trabalho de **roadmap pós-MVP**, a épica manda e o PRD registra a
    exceção. Item com issue aberta e priorizada não é fora de escopo, mesmo que a lista o cite.
 2. Leia `docs/ARCHITECTURE.md` para decisões técnicas já tomadas
-3. Confira as [Issues](https://github.com/ThiagoCarreiraVallim/fatia/issues) para ver onde a tarefa se encaixa (`docs/TASKS.md` tem o mapa das épicas)
+3. Confira as [Issues](https://github.com/ThiagoCarreiraVallim/fatia/issues) para ver onde a tarefa se encaixa (a épica #275 reúne o que falta antes do piloto)
 4. Se vai mudar schema, leia `packages/db/prisma/schema.prisma` inteiro primeiro
 
 ## Princípios de código

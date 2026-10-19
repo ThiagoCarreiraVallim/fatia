@@ -14,7 +14,7 @@ lugares que se reforçam:
 
 E um teste a protege: `billing/__tests__/no-billing-in-student-surface.spec.ts`.
 
-O novo direcionamento ([`NOVO_DIRECIONAMENTO.md`](../NOVO_DIRECIONAMENTO.md)) muda o modelo de
+O novo direcionamento (o plano das Fases 0–9, concluído; registro no histórico do git em `docs/NOVO_DIRECIONAMENTO.md`) muda o modelo de
 negócio: o usuário comum também pode pagar, um valor baixo, para ter a IA hospedada. Quem não paga
 continua com o app inteiro e com o MCP — a IA dele, na assinatura dele (ADR 006, ADR 018).
 

@@ -76,22 +76,19 @@ Próximos passos:
 
 ## Roadmap
 
-O planejamento é público e vive nas **[Issues](https://github.com/ThiagoCarreiraVallim/fatia/issues)**, organizadas em épicas com sub-issues nativas (o painel de progresso de cada épica é gerado pelo próprio GitHub). Nada de checklist em markdown — [já tentamos, e apodreceu](docs/TASKS.md).
+O planejamento é público e vive nas **[Issues](https://github.com/ThiagoCarreiraVallim/fatia/issues)**, organizadas em épicas com sub-issues nativas (o painel de progresso de cada épica é gerado pelo próprio GitHub). Nada de checklist em markdown — já tentamos, e apodreceu.
 
 Em andamento:
 
-| Épica                                                            | Assunto                                                              |
-| ---------------------------------------------------------------- | -------------------------------------------------------------------- |
-| [#38](https://github.com/ThiagoCarreiraVallim/fatia/issues/38)   | Virar conector oficial do Claude — OAuth, hardening, LGPD, submissão |
-| [#133](https://github.com/ThiagoCarreiraVallim/fatia/issues/133) | Fundação de IA — gateway, custo e privacidade                        |
-| [#137](https://github.com/ThiagoCarreiraVallim/fatia/issues/137) | Nutrição com IA — foto, código de barras, voz, porção                |
-| [#143](https://github.com/ThiagoCarreiraVallim/fatia/issues/143) | Treino inteligente — prescrição adaptativa e periodização            |
-| [#146](https://github.com/ThiagoCarreiraVallim/fatia/issues/146) | Engajamento — streaks, conquistas, notificações                      |
-| [#149](https://github.com/ThiagoCarreiraVallim/fatia/issues/149) | Dados e integrações — base internacional e wearables                 |
-| [#152](https://github.com/ThiagoCarreiraVallim/fatia/issues/152) | Camada B2B — grupos, academias, papéis e cobrança                    |
-| [#163](https://github.com/ThiagoCarreiraVallim/fatia/issues/163) | BYO-AI — o usuário traz a própria IA                                 |
+| Épica                                                            | Assunto                                                                                  |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| [#275](https://github.com/ThiagoCarreiraVallim/fatia/issues/275) | Pronto para academias, personais e influencers — o que falta antes do piloto (10 épicas) |
+| [#38](https://github.com/ThiagoCarreiraVallim/fatia/issues/38)   | Virar conector oficial do Claude — OAuth, hardening, LGPD, submissão                     |
+| [#137](https://github.com/ThiagoCarreiraVallim/fatia/issues/137) | Nutrição com IA — foto, código de barras, voz, porção                                    |
+| [#146](https://github.com/ThiagoCarreiraVallim/fatia/issues/146) | Engajamento — streaks, conquistas, notificações                                          |
+| [#149](https://github.com/ThiagoCarreiraVallim/fatia/issues/149) | Dados e integrações — base internacional e wearables                                     |
 
-O mapa completo, incluindo o que já foi entregue, está em [`docs/TASKS.md`](docs/TASKS.md).
+O que já foi entregue está nas [épicas fechadas](https://github.com/ThiagoCarreiraVallim/fatia/issues?q=is%3Aissue+is%3Aclosed+Epic) e, as decisões, nas [ADRs](docs/ADR/).
 
 ## Contribuindo
 
@@ -110,11 +107,9 @@ Duas regras da casa que economizam ida e volta no review:
 
 Parte deste repositório é escrita com assistentes de código, e os arquivos que os configuram são versionados de propósito — quem quiser reproduzir o fluxo consegue; quem não usa, ignora.
 
-| Caminho                                                   | O que é                                                                             | Preciso ler?                                                |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| [`docs/CLAUDE.md`](docs/CLAUDE.md)                        | Regras de código, arquitetura e teste, no formato que assistentes carregam sozinhos | Não. É um recorte do `CONTRIBUTING.md` + ADRs, para máquina |
-| [`docs/_archive/superpowers/`](docs/_archive/superpowers) | Planos e specs gerados por agente em refatorações já concluídas                     | Não. Registro histórico                                     |
-| [`docs/_archive/plans/`](docs/_archive/plans)             | Planos de fase escritos à mão, todos concluídos                                     | Não. Registro histórico                                     |
+| Caminho                            | O que é                                                                             | Preciso ler?                                                |
+| ---------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| [`docs/CLAUDE.md`](docs/CLAUDE.md) | Regras de código, arquitetura e teste, no formato que assistentes carregam sozinhos | Não. É um recorte do `CONTRIBUTING.md` + ADRs, para máquina |
 
 `.claude/` **não é versionado** — é ferramenta pessoal do mantenedor e não está no repositório.
 
@@ -166,7 +161,10 @@ linha no [ledger](apps/agent/eval/fronteira-runs.jsonl), e o doc explica como ro
 | [`docs/eval-fronteira-de-tools.md`](docs/eval-fronteira-de-tools.md) | Eval da fronteira de tools: entidade × intenção, método e resultados               |
 | [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md)                       | Modelo de ameaças e decisões de isolamento                                         |
 | [`docs/OPERATIONS.md`](docs/OPERATIONS.md)                           | Runbook de produção, backup e recuperação de desastre                              |
-| [`docs/TASKS.md`](docs/TASKS.md)                                     | Mapa das épicas — o planejamento em si vive nas Issues                             |
+| [`docs/BILLING.md`](docs/BILLING.md)                                 | Plano PRO, assentos de comunidade, webhooks e roteiro de sandbox                   |
+| [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md)                         | Papéis da comunidade e o que cada um pode fazer                                    |
+| [`docs/DATA_RETENTION.md`](docs/DATA_RETENTION.md)                   | O que é guardado, por quanto tempo, e como sai no export e na exclusão             |
+| [`docs/TESTAR_O_APP.md`](docs/TESTAR_O_APP.md)                       | Testar o app no celular, do cadastro ao roteiro                                    |
 | [`docs/ADR/`](docs/ADR/)                                             | Architecture Decision Records                                                      |
 
 ## Estrutura

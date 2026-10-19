@@ -22,9 +22,8 @@ const rootPackage = JSON.parse(readFileSync(resolve(REPO_ROOT, 'package.json'), 
 };
 
 /**
- * Docs que um contribuidor de fora lê: a raiz do repositório e `docs/`. O
- * `_archive` fica de fora — é histórico declarado como não-atual — e os READMEs
- * de pacote também, porque `pnpm <script>` lá dentro resolve contra o
+ * Docs que um contribuidor de fora lê: a raiz do repositório e `docs/`. Os
+ * READMEs de pacote ficam de fora, porque `pnpm <script>` lá dentro resolve contra o
  * `package.json` do próprio pacote, não contra o da raiz.
  */
 function entryDocs(): string[] {
@@ -32,7 +31,6 @@ function entryDocs(): string[] {
 
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (entry.name === '_archive') continue;
       const full = join(dir, entry.name);
       if (entry.isDirectory()) walk(full);
       else if (entry.name.endsWith('.md')) found.push(full.slice(REPO_ROOT.length + 1));

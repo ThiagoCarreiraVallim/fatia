@@ -134,7 +134,7 @@ O log da consulta não registra o código escaneado. Registrado em `docs/DATA_RE
 
 ## Atualização — leitor no PWA e "Guardar em Meus alimentos" (2026-10)
 
-Duas coisas mudaram na Fase 3 do novo direcionamento ([`NOVO_DIRECIONAMENTO.md`](../NOVO_DIRECIONAMENTO.md)),
+Duas coisas mudaram na Fase 3 do novo direcionamento (plano concluído, no histórico do git em `docs/NOVO_DIRECIONAMENTO.md`),
 sem mexer na decisão principal: a consulta continua sob demanda, por código, e o catálogo continua
 sem cache do OFF.
 

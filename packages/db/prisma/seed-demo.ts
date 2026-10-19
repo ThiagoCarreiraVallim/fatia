@@ -126,7 +126,7 @@ const PLANS: Array<{ name: string; exercises: Array<[string, number, string, num
 async function main() {
   // O setup do e2e passa o id que a API devolveu em /users/me. Pelo e-mail nem
   // sempre acha: o access token do Logto não traz `email`, e a API provisiona
-  // `<sub>@logto.local` (ver NOVO_DIRECIONAMENTO.md, Fase 2).
+  // `<sub>@logto.local` até o primeiro login com e-mail.
   const user = process.env.DEMO_USER_ID
     ? await prisma.user.findUnique({ where: { id: process.env.DEMO_USER_ID } })
     : await prisma.user.findUnique({ where: { email: DEMO_EMAIL } });
