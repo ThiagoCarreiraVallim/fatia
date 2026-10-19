@@ -1,6 +1,6 @@
 # ADR 013 — O roadmap pós-MVP supera o escopo negativo da v1
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 037](./037-prd-descreve-o-produto-atual.md)
 **Data:** 2026-08-01
 
 ## Contexto

@@ -18,7 +18,7 @@ Decisões arquiteturais relevantes do projeto. Cada ADR é imutável depois de a
 | [010](./010-row-level-security.md)                                     | Row-Level Security no Postgres: não agora                       | Accepted                               |
 | [011](./011-dcr-vs-cimd.md)                                            | DCR com poda de clientes abandonados, em vez de CIMD            | Accepted                               |
 | [012](./012-graficos-no-mobile.md)                                     | Gráficos do app nativo com react-native-svg, sem Skia           | Accepted                               |
-| [013](./013-roadmap-supera-escopo-negativo-v1.md)                      | O roadmap pós-MVP supera o escopo negativo da v1                | Accepted                               |
+| [013](./013-roadmap-supera-escopo-negativo-v1.md)                      | O roadmap pós-MVP supera o escopo negativo da v1                | ⚠️ Superseded by 037                   |
 | [014](./014-compartilhamento-b2b-copia-e-vinculo.md)                   | B2B: cópia na ida, vínculo consentido na volta                  | Accepted                               |
 | [015](./015-agente-python-langgraph-cliente-mcp.md)                    | Agente de IA em Python/LangGraph, cliente do MCP                | Accepted                               |
 | [016](./016-sem-expansao-internacional-da-base-nutricional.md)         | Sem expansão internacional da base nutricional                  | Accepted                               |
@@ -42,6 +42,7 @@ Decisões arquiteturais relevantes do projeto. Cada ADR é imutável depois de a
 | [034](./034-langfuse-cloud-com-mascara.md)                             | Langfuse Cloud para o chat, com máscara                         | Accepted                               |
 | [035](./035-chat-desacoplado-da-requisicao.md)                         | A resposta do chat corre no servidor, desacoplada da requisição | Accepted                               |
 | [036](./036-push-na-web.md)                                            | Avisos também no navegador (Web Push), recibos e agrupamento    | Accepted                               |
+| [037](./037-prd-descreve-o-produto-atual.md)                           | O PRD descreve o produto atual; só ADR muda o escopo negativo   | Accepted                               |
 
 ## Template
 
