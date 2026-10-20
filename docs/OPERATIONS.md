@@ -571,11 +571,11 @@ docker exec $(docker ps -qf name=agent) python -c \
 Era o sintoma de produção até a Fase 9b. Três causas, todas tratadas, e como reconhecer cada uma
 se voltar:
 
-| No log do `agent`                                                        | Causa                                                                     | O que já faz                                                            |
-| ------------------------------------------------------------------------ | ------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `Turno de chat terminou em erro inesperado` + `psycopg…OperationalError` | conexão do checkpointer morta (rede do Swarm, restart ou backup do banco) | o pool confere a conexão antes de usar, keepalive TCP, `max_idle` 5 min |
-| `Stream do provedor falhou antes do primeiro token (…)`                  | 429/5xx ou conexão caída no OpenRouter                                    | repete até `AI_MAX_RETRIES` com backoff e `Retry-After`                 |
-| (no log da `api`) `Conexão com o agente caiu antes da resposta`          | socket reusado que o uvicorn fechou                                       | uma nova tentativa; uvicorn com `--timeout-keep-alive 30`               |
+| No log do `agent`                                                        | Causa                                                                     | O que já faz                                                                            |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `Turno de chat terminou em erro inesperado` + `psycopg…OperationalError` | conexão do checkpointer morta (rede do Swarm, restart ou backup do banco) | o pool confere a conexão antes de usar, keepalive TCP, `max_idle` 5 min                 |
+| `Stream do provedor falhou antes do primeiro token (…)`                  | 429/5xx ou conexão caída no OpenRouter                                    | repete até `AI_MAX_RETRIES` com backoff e `Retry-After`                                 |
+| (no log da `api`) `Conexão com o agente caiu antes da resposta`          | socket reusado que o uvicorn fechou                                       | uma nova tentativa (chat, foto, ditado e título); uvicorn com `--timeout-keep-alive 30` |
 
 Para olhar o passado (antes do deploy da 9b), procure no log do `agent`:
 
@@ -586,6 +586,46 @@ docker logs $(docker ps -qf name=agent) --since 72h 2>&1 \
 
 Se aparecer `Turno de chat terminou em erro inesperado` sem `psycopg`, é defeito nosso: o
 traceback está logo abaixo da linha.
+
+### Custo e cota da IA
+
+A `api` grava cada chamada ao agente em `AiUsage` (turno, título, ditado e foto) com o modelo, o
+custo estimado pela `AI_PRICE_TABLE` e quem pagou (`paidBy`: `USER`, `GROUP`, `INSTANCE`). Todas as
+rotas de inferência do agente devolvem `usage`; a foto passou a devolver em outubro de 2026, e antes
+disso entrava sempre como custo não medido.
+
+**Tabela de preço.** Micro-dólares por milhão de tokens, inteiros, com a chave igual ao `model` que
+o provedor devolve. Para o GLM 5.3 Flash no OpenRouter (preço de 19/10/2026, o mesmo para texto e
+foto): `AI_PRICE_TABLE={"z-ai/glm-5.3-flash":{"in":47076,"out":160000}}`. Confira o preço em
+<https://openrouter.ai/z-ai/glm-5.3-flash> quando trocar de modelo ou de provedor.
+
+**Quanto custa, medido no formato da tabela:**
+
+| Chamada                                                 | Tokens (entrada / saída) | Custo                         |
+| ------------------------------------------------------- | ------------------------ | ----------------------------- |
+| Foto de refeição                                        | ~1 200 / ~90             | ~71 micro-dólares             |
+| Turno de chat com três voltas de tool (~20 k por volta) | ~60 000 / ~1 500         | ~3 065 micro-dólares          |
+| Título da conversa                                      | ~300 / ~15               | ~16 micro-dólares (arredonda) |
+
+**Cotas sugeridas para o piloto:** `AI_QUOTA_DAILY_MICROS=60000` (US$ 0,06 por pessoa por dia, ~20
+turnos longos; no pior caso ~US$ 1,80/mês por PRO, abaixo do preço do plano) e
+`AI_QUOTA_GLOBAL_DAILY_MICROS=3000000` (US$ 3/dia, ~US$ 90/mês de teto para a instância).
+`AI_QUOTA_UNPRICED_DAILY_CALLS=20` fica: ela só fecha se a medição se perder.
+
+**Depois de ligar, confira que nada sai sem preço.** Chamada com `pricingKnown = false` conta na
+tolerância **da instância inteira**; a 20ª do dia fecha a IA de todo mundo até a meia-noite UTC.
+O motivo mais provável é o `model` da resposta não bater com a chave da tabela:
+
+```bash
+docker exec -i $(docker ps -qf name=postgres) psql -U fatia -d fatia -c "
+  SELECT feature, model, \"pricingKnown\", count(*), sum(\"costMicros\")
+  FROM \"AiUsage\" WHERE \"createdAt\" >= date_trunc('day', now() at time zone 'utc')
+  GROUP BY 1, 2, 3 ORDER BY 1;"
+```
+
+Linha com `pricingKnown = f` e `model` preenchido: acrescente esse nome à `AI_PRICE_TABLE`. Com
+`model` vazio: o agente não devolveu `usage` (versão antiga do agente, ou o provedor não mandou o
+bloco).
 
 ### Langfuse — o que cada turno fez (ADR 034)
 

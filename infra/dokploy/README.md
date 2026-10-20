@@ -84,9 +84,11 @@ Sem nada disto a instância sobe com o app inteiro e o MCP; a IA hospedada some 
 # IA hospedada (agente) e custo
 AGENT_BASE_URL=http://fatia-agent:8100
 AGENT_API_KEY=$(openssl rand -hex 32)
-AI_PRICE_TABLE={"gateway/modelo":{"in":3000000,"out":15000000}}
-AI_QUOTA_DAILY_MICROS=...
-AI_QUOTA_GLOBAL_DAILY_MICROS=...
+# micro-dólares por milhão de tokens; preço do OpenRouter em 19/10/2026
+AI_PRICE_TABLE={"z-ai/glm-5.3-flash":{"in":47076,"out":160000}}
+# micro-dólares por dia (UTC): US$ 0,06 por pessoa, US$ 3 na instância
+AI_QUOTA_DAILY_MICROS=60000
+AI_QUOTA_GLOBAL_DAILY_MICROS=3000000
 
 # Plano PRO: false libera a IA hospedada para todos (self-host)
 AI_REQUIRES_PLAN=true
@@ -105,7 +107,9 @@ REVENUECAT_ENTITLEMENT_ID=pro
 ```
 
 Com `AI_REQUIRES_PLAN=true`, ligue a cota **antes** (o PRO tem preço fixo) e configure pelo menos
-o Asaas, senão ninguém consegue assinar pela web. Roteiro completo em
+o Asaas, senão ninguém consegue assinar pela web. Depois do primeiro uso, confira que o chat e a foto
+saem precificados (`pricingKnown = true`) — a conta e a consulta estão em
+[`docs/OPERATIONS.md`](../../docs/OPERATIONS.md#custo-e-cota-da-ia). Roteiro completo em
 [`docs/BILLING.md`](../../docs/BILLING.md#plano-pro-do-usuário-adr-024).
 
 ### Opcional — comunidades: assentos, convite por e-mail e link universal (ADR 025/026)
