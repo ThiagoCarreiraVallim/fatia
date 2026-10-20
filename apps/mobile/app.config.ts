@@ -28,9 +28,14 @@ const APP_LINKS_HOST = process.env.APP_LINKS_HOST;
  */
 const GOOGLE_SERVICES_JSON = process.env.GOOGLE_SERVICES_JSON;
 
+/** O projeto `@fat.ia.br/fatia` na EAS. */
+const EAS_PROJECT_ID = 'f2f556bd-db04-4057-a788-246f00c145df';
+
 const config: ExpoConfig = {
   name: 'Fatia',
   slug: 'fatia',
+  // A conta da EAS dona do projeto (organização), e não a de quem roda o build.
+  owner: process.env.EAS_OWNER ?? 'fat.ia.br',
   version: '0.1.0',
   orientation: 'portrait',
   scheme: SCHEME,
@@ -143,9 +148,11 @@ const config: ExpoConfig = {
   extra: {
     router: {},
     eas: {
-      // Preenchido por `eas init`. Sem isto o EAS Build não sabe a qual projeto
-      // o app pertence — ver apps/mobile/README.md.
-      projectId: process.env.EAS_PROJECT_ID,
+      // O projeto da EAS. Fixo, e não só do ambiente: o `eas build` avalia esta
+      // configuração sem carregar o `.env`, e sem o id ele tenta "ligar" o
+      // projeto escrevendo aqui — o que falha num `app.config.ts`. O id não é
+      // segredo. `EAS_PROJECT_ID` ainda vence, para um fork usar o próprio.
+      projectId: process.env.EAS_PROJECT_ID ?? EAS_PROJECT_ID,
     },
   },
 };
