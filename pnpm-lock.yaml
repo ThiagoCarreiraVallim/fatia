@@ -162,7 +162,7 @@ importers:
         specifier: ^0.34.5
         version: 0.34.5
       web-push:
-        specifier: 3.6.7
+        specifier: ^3.6.7
         version: 3.6.7
       zod:
         specifier: ^3.23.0
@@ -193,7 +193,7 @@ importers:
         specifier: ^8.0.2
         version: 8.0.2
       '@types/web-push':
-        specifier: 3.6.4
+        specifier: ^3.6.4
         version: 3.6.4
       jest:
         specifier: ^30.4.2
