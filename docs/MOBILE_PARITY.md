@@ -407,7 +407,7 @@ por `style`.
 formatados à mão ou com `date-fns` + locale `ptBR`, nunca com `toLocaleString`.
 
 **Cores fora da paleta, de propósito.** Os macros mantêm o código de cor do
-produto (proteína `#4b8eff`, gordura `#f43f5e`) e os estados de aviso usam
+produto (proteína `#4b8eff`, gordura `#ffb4ab`) e os estados de aviso usam
 âmbar/vermelho claros: `--destructive` é `#93000a`, que some como preenchimento
 de barra sobre `#131313`. Texto de erro continua em `text-destructive`.
 

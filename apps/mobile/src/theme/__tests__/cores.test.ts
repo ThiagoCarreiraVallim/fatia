@@ -57,3 +57,32 @@ describe('cores', () => {
     atual.forEach((canal, i) => expect(Math.abs(canal - esperado[i])).toBeLessThanOrEqual(2));
   });
 });
+
+/**
+ * As docs citam as cores em hex. `docs/MOBILE_PARITY.md` dizia gordura `#f43f5e`
+ * enquanto o código, o PWA e o `DESIGN.md` usam `#ffb4ab`: quem seguisse a doc
+ * pintaria a gordura de outra cor.
+ */
+describe('cores nas docs', () => {
+  const docs = resolve(__dirname, '../../../../../docs');
+  const design = readFileSync(resolve(docs, 'DESIGN.md'), 'utf8');
+  const paridade = readFileSync(resolve(docs, 'MOBILE_PARITY.md'), 'utf8');
+
+  it.each(Object.entries(TOKEN))('DESIGN.md: %s é o mesmo hex de cores.ts', (chave, nome) => {
+    const linha = new RegExp(`^\\| \`${nome}\`[^|]*\\| \`(#[0-9a-f]{6})\``, 'im').exec(design);
+    if (!linha) return; // token que a tabela não lista
+    expect(linha[1].toLowerCase()).toBe(cores[chave as keyof typeof TOKEN].toLowerCase());
+  });
+
+  it('MOBILE_PARITY.md: as cores dos macros citadas são as de cores.ts', () => {
+    const citadas = [...paridade.matchAll(/(proteína|carboidrato|gordura) `(#[0-9a-f]{6})`/gi)];
+    expect(citadas.length).toBeGreaterThan(0);
+    const porMacro = { proteína: cores.protein, carboidrato: cores.carbs, gordura: cores.fat };
+    for (const [, macro, hex] of citadas) {
+      expect({ macro, hex: hex.toLowerCase() }).toEqual({
+        macro,
+        hex: porMacro[macro.toLowerCase() as keyof typeof porMacro].toLowerCase(),
+      });
+    }
+  });
+});
