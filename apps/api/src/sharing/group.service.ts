@@ -1,4 +1,11 @@
-import { ConflictException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import {
   GroupRole,
@@ -364,12 +371,19 @@ export class GroupService {
     return this.findByIdForMember(ownerId, groupId);
   }
 
+  /**
+   * Só o dono administra. Não-membro recebe `NOT_FOUND` (não pode descobrir que
+   * o grupo existe); membro comum recebe `FORBIDDEN`, porque para ele não há
+   * existência a esconder. A mesma regra do `GroupRoleGuard` e do
+   * `MembershipService` (`docs/PERMISSIONS.md`).
+   */
   private async assertOwner(userId: string, groupId: string): Promise<GroupMembership> {
     const eu = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId, userId } },
     });
-    if (!eu || eu.status !== MembershipStatus.ACTIVE || eu.role !== GroupRole.OWNER) {
-      throw new NotFoundException(NOT_FOUND);
+    if (!eu || eu.status !== MembershipStatus.ACTIVE) throw new NotFoundException(NOT_FOUND);
+    if (eu.role !== GroupRole.OWNER) {
+      throw new ForbiddenException('Apenas o dono do grupo pode fazer isso');
     }
     return eu;
   }

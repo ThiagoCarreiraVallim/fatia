@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { GroupRole, GroupType, MembershipStatus } from '@fatia/db';
 import { ProfessionalLinkService } from '../professional-link.service';
 import { GroupService } from '../group.service';
@@ -29,6 +29,31 @@ describe('GroupService', () => {
       prisma as unknown as PrismaService,
       new ProfessionalLinkService(prisma as unknown as PrismaService),
     );
+  });
+
+  describe('ações do dono: membro recebe 403, não-membro 404 (como o GroupRoleGuard)', () => {
+    const acoes: Array<[string, (s: GroupService) => Promise<unknown>]> = [
+      ['update', (s) => s.update(OUTRO, 'g1', { name: 'Outra' })],
+      ['setAvatar', (s) => s.setAvatar(OUTRO, 'g1', null)],
+      ['remove', (s) => s.remove(OUTRO, 'g1')],
+      ['transferOwnership', (s) => s.transferOwnership(OUTRO, 'g1', 'm-x')],
+    ];
+
+    it.each(acoes)('%s por membro comum é FORBIDDEN', async (_nome, acao) => {
+      // Para quem já está dentro não há existência a esconder (docs/PERMISSIONS.md):
+      // o MembershipService e o guard respondem 403, e este service respondia 404.
+      prisma.groupMembership.findUnique.mockResolvedValue({
+        id: 'm-outro',
+        role: GroupRole.MEMBER,
+        status: MembershipStatus.ACTIVE,
+      });
+      await expect(acao(service)).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it.each(acoes)('%s por quem não é membro é NOT_FOUND', async (_nome, acao) => {
+      prisma.groupMembership.findUnique.mockResolvedValue(null);
+      await expect(acao(service)).rejects.toBeInstanceOf(NotFoundException);
+    });
   });
 
   describe('create', () => {

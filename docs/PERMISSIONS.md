@@ -135,6 +135,12 @@ futura:
 - **`content.moderate` é `OWNER` e `CREATOR`.** `PROFESSIONAL` não modera: não é papel de
   moderação, e acumular seria a mesma armadilha que o resto do documento evita.
 
+**Recusa: 403 para quem é de dentro, 404 para quem é de fora.** Quem não tem associação viva no
+grupo recebe `NOT_FOUND`, igual a um grupo inexistente — não pode descobrir que a comunidade existe.
+Membro ativo cujo papel não alcança a ação recebe `FORBIDDEN`: ele já está lá dentro, e não há o que
+esconder. A regra é uma só no `GroupRoleGuard` e no `assertOwner` do `GroupService` e do
+`MembershipService`, que repetem a checagem para quando o service é chamado sem passar pela rota.
+
 ### Status da associação (papel só vale com associação viva)
 
 Papel é uma das duas condições; a outra é o **status** da associação. `LEFT`, `REMOVED` e

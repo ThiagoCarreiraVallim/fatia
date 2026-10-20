@@ -348,13 +348,17 @@ describe('comunidade (integração)', () => {
       const proDeA = await prisma.groupMembership.findFirstOrThrow({
         where: { groupId: a.grupo.id, userId: a.pro },
       });
+      // O profissional é membro: não há existência a esconder dele, e a resposta é
+      // FORBIDDEN, a mesma do GroupRoleGuard e do MembershipService.
       await expect(groups.transferOwnership(a.pro, a.grupo.id, proDeA.id)).rejects.toThrow(
-        NotFoundException,
+        ForbiddenException,
       );
       await expect(groups.update(a.pro, a.grupo.id, { name: 'Tomada' })).rejects.toThrow(
-        NotFoundException,
+        ForbiddenException,
       );
-      await expect(groups.remove(a.pro, a.grupo.id)).rejects.toThrow(NotFoundException);
+      await expect(groups.remove(a.pro, a.grupo.id)).rejects.toThrow(ForbiddenException);
+      // Quem não é de lá continua sem saber que o grupo existe.
+      await expect(groups.remove(b.dono, a.grupo.id)).rejects.toThrow(NotFoundException);
 
       await expect(
         groups.update(a.dono, a.grupo.id, { name: 'Academia Nova', joinPolicy: 'OPEN' }),
