@@ -42,19 +42,24 @@ EOF
 fi
 
 say "POST $MCP_URL  (tools/list)"
-curl -fsS -X POST "$MCP_URL" \
+# A resposta inteira numa variável antes de cortar: com `pipefail`, um `head`
+# que fecha o pipe no meio derrubava o `curl` (saída 23) e o script falhava
+# justamente quando a lista de tools era grande — ou seja, sempre.
+resposta=$(curl -fsS -X POST "$MCP_URL" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | head -c 800
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
+printf '%s' "${resposta:0:800}"
 printf '\n'
 ok "tools/list returned"
 
 say "POST $MCP_URL  (tools/call get_me)"
-curl -fsS -X POST "$MCP_URL" \
+resposta=$(curl -fsS -X POST "$MCP_URL" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_me","arguments":{}}}' | head -c 800
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_me","arguments":{}}}')
+printf '%s' "${resposta:0:800}"
 printf '\n'
 ok "tools/call get_me returned"
