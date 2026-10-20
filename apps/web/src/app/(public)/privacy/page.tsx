@@ -1,5 +1,10 @@
 import type { Metadata } from 'next';
 import { LegalDoc, LegalSection } from '@/components/legal-doc';
+import { legalEntity } from '@/lib/legal-entity';
+
+// O controlador vem do ambiente da instância (`LEGAL_ENTITY_*`), lido a cada
+// requisição: trocar no painel vale sem novo build.
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Política de Privacidade — Fatia',
@@ -7,9 +12,10 @@ export const metadata: Metadata = {
 };
 
 /** Atualizar sempre que o conteúdo mudar de forma material. */
-const LAST_UPDATED = '18 de outubro de 2026';
+const LAST_UPDATED = '19 de outubro de 2026';
 
 export default function PrivacyPage() {
+  const controlador = legalEntity();
   return (
     <LegalDoc title="Política de Privacidade" lastUpdated={LAST_UPDATED}>
       <LegalSection title="Resumo">
@@ -25,11 +31,26 @@ export default function PrivacyPage() {
       </LegalSection>
 
       <LegalSection title="Quem é o controlador">
-        <p>
-          O mantenedor do projeto Fatia, responsável pela instância pública. Contato pelas{' '}
-          <a href="https://github.com/ThiagoCarreiraVallim/fatia/issues">issues do GitHub</a> ou
-          pelo e-mail de suporte publicado no repositório.
-        </p>
+        {controlador ? (
+          <p>
+            <strong>{controlador.name}</strong>
+            {controlador.document ? <>, CNPJ {controlador.document}</> : null}, responsável por esta
+            instância e pelas decisões sobre os seus dados.
+            {controlador.dpoEmail ? (
+              <>
+                {' '}
+                Encarregado de dados (DPO):{' '}
+                <a href={`mailto:${controlador.dpoEmail}`}>{controlador.dpoEmail}</a>.
+              </>
+            ) : null}
+          </p>
+        ) : (
+          <p>
+            Quem opera esta instância do Fatia. Contato pelas{' '}
+            <a href="https://github.com/ThiagoCarreiraVallim/fatia/issues">issues do GitHub</a> ou
+            pelo e-mail de suporte publicado no repositório.
+          </p>
+        )}
       </LegalSection>
 
       <LegalSection title="Quais dados coletamos">

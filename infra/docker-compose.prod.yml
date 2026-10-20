@@ -211,6 +211,10 @@ services:
       # Link universal do convite no app (/.well-known/*). Vazio = 404, abre o PWA.
       APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
       ANDROID_CERT_SHA256: ${ANDROID_CERT_SHA256:-}
+      # Controlador dos dados (LGPD), nas páginas /privacy e /terms.
+      LEGAL_ENTITY_NAME: ${LEGAL_ENTITY_NAME:-}
+      LEGAL_ENTITY_DOCUMENT: ${LEGAL_ENTITY_DOCUMENT:-}
+      DPO_EMAIL: ${DPO_EMAIL:-}
     expose:
       - "3001"
     depends_on:

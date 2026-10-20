@@ -1,14 +1,19 @@
 import type { Metadata } from 'next';
 import { LegalDoc, LegalSection } from '@/components/legal-doc';
+import { legalEntity } from '@/lib/legal-entity';
+
+// Quem opera a instância vem do ambiente (`LEGAL_ENTITY_*`), lido por requisição.
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Termos de Serviço — Fatia',
   description: 'As regras de uso da instância pública do Fatia.',
 };
 
-const LAST_UPDATED = '17 de outubro de 2026';
+const LAST_UPDATED = '19 de outubro de 2026';
 
 export default function TermsPage() {
+  const operador = legalEntity();
   return (
     <LegalDoc title="Termos de Serviço" lastUpdated={LAST_UPDATED}>
       <LegalSection title="O que é o Fatia">
@@ -20,6 +25,12 @@ export default function TermsPage() {
           Estes termos regem o uso da <strong>instância pública oficial</strong>. Se você
           auto-hospeda, sua relação é com a licença do software, não com estes termos.
         </p>
+        {operador ? (
+          <p>
+            Esta instância é operada por <strong>{operador.name}</strong>
+            {operador.document ? <>, CNPJ {operador.document}</> : null}.
+          </p>
+        ) : null}
       </LegalSection>
 
       <LegalSection title="Isto não é orientação médica">
@@ -191,6 +202,13 @@ export default function TermsPage() {
         <p>
           Pelas <a href="https://github.com/ThiagoCarreiraVallim/fatia/issues">issues do GitHub</a>{' '}
           ou pelo e-mail de suporte publicado no repositório.
+          {operador?.dpoEmail ? (
+            <>
+              {' '}
+              Sobre os seus dados pessoais, o encarregado (DPO) atende em{' '}
+              <a href={`mailto:${operador.dpoEmail}`}>{operador.dpoEmail}</a>.
+            </>
+          ) : null}
         </p>
       </LegalSection>
     </LegalDoc>
