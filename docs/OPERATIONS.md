@@ -765,6 +765,9 @@ vê é a `version` do `app.config.ts`, e sobe junto do resto do monorepo.
       barra final: o Logto faz match exato e recusa com `invalid_target`
 - [ ] Apagar conta funciona de dentro do app — Apple e Google **rejeitam** app que
       permite criar conta e não permite apagá-la
+- [ ] Conta de revisão das lojas criada ou atualizada com `pnpm store:review-account`
+      (ver [TESTAR_O_APP.md §7](./TESTAR_O_APP.md#7-conta-de-revisão-das-lojas)) e a senha
+      colada no formulário de cada loja
 - [ ] [Auditoria de paridade](./MOBILE_PARITY.md) sem linha pendente
 
 ### Quando um build quebra e o backend não

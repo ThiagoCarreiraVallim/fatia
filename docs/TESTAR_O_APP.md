@@ -271,3 +271,37 @@ chat item por item. Uma ordem que rende:
 
 Achou algo? Anote o aparelho, o sistema, o caminho (A, B ou C) e o horário — o horário é o que
 permite achar a requisição nos logs da API e o trace no Langfuse.
+
+---
+
+## 7. Conta de revisão das lojas
+
+A Apple e o Google pedem, no envio, uma conta com tudo que o app faz liberado. O comando abaixo cria
+ou atualiza essa conta **em produção**, e pode ser rodado de novo quantas vezes for preciso (antes
+de cada envio, por exemplo):
+
+```bash
+# No host, com o .env de produção (DATABASE_URL e o app M2M do Logto)
+REVIEW_EMAIL=revisao@fat.ia.br REVIEW_PASSWORD='<senha forte, 12+ caracteres>' \
+  pnpm store:review-account
+```
+
+O que ele faz (`apps/api/src/billing/store-review-account.ts`):
+
+1. cria a pessoa no Logto, ou reaplica a senha se ela já existe;
+2. cria ou atualiza a conta no Fatia, com perfil preenchido e o onboarding dado como feito — o
+   revisor cai direto no app;
+3. garante **uma** cortesia PRO ativa e sem prazo (fonte `MANUAL`, como o `billing:grant-pro`), que
+   libera chat, foto e ditado sem compra — o piloto não vende nada no app
+   (`EXPO_PUBLIC_IAP_ENABLED`);
+4. apaga e recria três dias de refeições, água, peso e passos, e as metas: o revisor vê um diário com
+   conteúdo, e o que ele registrar some na próxima execução.
+
+Pré-requisitos: o app M2M do Logto (`LOGTO_M2M_APP_ID`/`SECRET`) com a role _Logto Management API
+access_ — o mesmo do `logto:bootstrap`. A senha **não tem padrão** e não vai para o repositório:
+guarde-a no gerenciador de senhas e cole no formulário de cada loja (App Store Connect → _App Review
+Information → Sign-in required_; Play Console → _Conteúdo do app → Acesso ao app_). Se já existir
+outra conta do Fatia com o mesmo e-mail ligada a outro login, o comando recusa e não mexe nela.
+
+A conta usa a IA hospedada de verdade, e o uso entra no livro-caixa com `paidBy = USER` (cortesia):
+conte com a cota diária por pessoa (`AI_QUOTA_DAILY_MICROS`) valendo para o revisor também.
