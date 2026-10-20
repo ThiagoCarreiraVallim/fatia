@@ -7,6 +7,8 @@
  * usuários, que é o tipo de defeito que ninguém reproduz.
  */
 
+import { formatDecimal, formatInteger } from '@fatia/api-client';
+
 const MONTHS_SHORT = [
   'jan',
   'fev',
@@ -54,18 +56,8 @@ export function instantDayMonth(iso: string | null): string {
   return dayMonth(`${parsed.getFullYear()}-${month}-${day}`);
 }
 
-export function formatInteger(value: number): string {
-  if (!Number.isFinite(value)) return '—';
-  const rounded = Math.round(value);
-  const sign = rounded < 0 ? '-' : '';
-  const digits = Math.abs(rounded).toString();
-  return sign + digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-}
-
-export function formatDecimal(value: number, digits = 1): string {
-  if (!Number.isFinite(value)) return '—';
-  return value.toFixed(digits).replace('.', ',');
-}
+// Os mesmos do PWA, num lugar só (`@fatia/api-client`, `format.ts`).
+export { formatDecimal, formatInteger };
 
 /** Eixo de celular não comporta "12.500"; vira "12,5k". */
 export function formatCompact(value: number): string {

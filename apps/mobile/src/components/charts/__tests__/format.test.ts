@@ -5,7 +5,6 @@ import {
   formatCompact,
   formatDecimal,
   formatDuration,
-  formatInteger,
   instantDayMonth,
   shortDate,
 } from '../format';
@@ -39,25 +38,6 @@ describe('dayMonth', () => {
   it('devolve travessão para nulo ou mês inválido', () => {
     expect(dayMonth(null)).toBe('—');
     expect(dayMonth('2026-13-05')).toBe('—');
-  });
-});
-
-describe('formatInteger', () => {
-  it('agrupa milhares com ponto', () => {
-    expect(formatInteger(9500)).toBe('9.500');
-    expect(formatInteger(1_234_567)).toBe('1.234.567');
-    expect(formatInteger(999)).toBe('999');
-  });
-
-  it('preserva o sinal', () => {
-    expect(formatInteger(-4200)).toBe('-4.200');
-  });
-});
-
-describe('formatDecimal', () => {
-  it('usa vírgula como separador decimal', () => {
-    expect(formatDecimal(78.45)).toBe('78,5');
-    expect(formatDecimal(78, 2)).toBe('78,00');
   });
 });
 

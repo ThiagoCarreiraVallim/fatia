@@ -23,12 +23,8 @@ export function percentualDaMeta(atual: number, alvo: number | null): number | n
   return Math.min(100, Math.max(0, Math.round((atual / alvo) * 100)));
 }
 
-/** Acima de um litro o número em mL fica longo demais para a linha do card. */
-export function formatarVolume(ml: number): string {
-  if (!Number.isFinite(ml)) return '—';
-  if (Math.abs(ml) >= 1000) return `${(ml / 1000).toFixed(1).replace('.', ',')} L`;
-  return `${Math.round(ml)} mL`;
-}
+// O volume de água é o mesmo do PWA (`@fatia/api-client`, `format.ts`).
+export { formatVolume } from '@fatia/api-client';
 
 /** Ponto médio de uma meta declarada como faixa (mín–máx), como no PWA. */
 export function alvoMedio(minimo: number, maximo: number): number {

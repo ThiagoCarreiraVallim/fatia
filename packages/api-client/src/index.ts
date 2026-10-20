@@ -58,5 +58,6 @@ export * from './dashboard-copy';
 export * from './quick-add';
 export * from './onboarding';
 export * from './navigation';
+export * from './format';
 export * from './notifications';
 export * from './undo';

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Pause, Play, RotateCcw } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { workoutApi, type ExerciseGroup } from '@fatia/api-client';
+import { parseClock, workoutApi, type ExerciseGroup } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 interface Props {
@@ -22,26 +22,6 @@ function fmtClock(s: number): string {
     return `${sign}${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   }
   return `${sign}${m}:${String(sec).padStart(2, '0')}`;
-}
-
-function parseMmss(input: string): number | null {
-  const trimmed = input.trim();
-  if (!trimmed) return null;
-  const parts = trimmed.split(':').map((p) => p.trim());
-  if (parts.length === 2) {
-    const m = parseInt(parts[0], 10);
-    const s = parseInt(parts[1], 10);
-    if (!isNaN(m) && !isNaN(s) && s >= 0 && s < 60) return m * 60 + s;
-  } else if (parts.length === 3) {
-    const h = parseInt(parts[0], 10);
-    const m = parseInt(parts[1], 10);
-    const s = parseInt(parts[2], 10);
-    if (!isNaN(h) && !isNaN(m) && !isNaN(s)) return h * 3600 + m * 60 + s;
-  } else {
-    const n = parseInt(trimmed, 10);
-    if (!isNaN(n)) return n;
-  }
-  return null;
 }
 
 function calcPace(seconds: number, meters: number): string | null {
@@ -103,7 +83,7 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
   }
 
   function commitDurationInput() {
-    const parsed = parseMmss(durationInput);
+    const parsed = parseClock(durationInput);
     if (parsed != null) {
       setSeconds(parsed);
     } else {

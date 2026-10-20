@@ -4,10 +4,4 @@ export { NutritionMacroCard } from './nutrition-macro-card';
 export { StepsCard } from './steps-card';
 export { StreakCard } from './streak-card';
 export { WaterCard } from './water-card';
-export {
-  NUMEROS_TABULARES,
-  alvoMedio,
-  formatarVolume,
-  horaDoDia,
-  percentualDaMeta,
-} from './helpers';
+export { NUMEROS_TABULARES, alvoMedio, formatVolume, horaDoDia, percentualDaMeta } from './helpers';

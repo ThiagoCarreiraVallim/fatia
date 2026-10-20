@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Droplet, MoreHorizontal } from 'lucide-react-native';
 import { progressApi, type TodaySummary } from '@fatia/api-client';
 import { Button, FormMessage } from '@/components/ui';
-import { NUMEROS_TABULARES, formatarVolume, percentualDaMeta } from './helpers';
+import { NUMEROS_TABULARES, formatVolume, percentualDaMeta } from './helpers';
 import { cores } from '@/theme/cores';
 
 /**
@@ -68,11 +68,11 @@ export function WaterCard({
         <View>
           <View className="flex-row items-baseline gap-2">
             <Text style={NUMEROS_TABULARES} className="text-3xl font-extrabold text-foreground">
-              {formatarVolume(data.todayMl)}
+              {formatVolume(data.todayMl)}
             </Text>
             {data.targetMl !== null ? (
               <Text style={NUMEROS_TABULARES} className="text-sm text-muted-foreground">
-                / {formatarVolume(data.targetMl)}
+                / {formatVolume(data.targetMl)}
               </Text>
             ) : null}
             {data.goalReached ? (

@@ -3,15 +3,10 @@
 import { useState } from 'react';
 import { Droplet, MoreHorizontal } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { progressApi, type TodaySummary } from '@fatia/api-client';
+import { formatVolume, progressApi, type TodaySummary } from '@fatia/api-client';
 import { LogWaterDrawer } from '@/components/progress/log-water-drawer';
 
 const QUICK_ML = [250, 500, 750] as const;
-
-function formatVolume(ml: number): string {
-  if (ml >= 1000) return `${(ml / 1000).toFixed(1)} L`;
-  return `${ml} mL`;
-}
 
 export function WaterCard({ data }: { data: TodaySummary['water'] }) {
   const [drawerOpen, setDrawerOpen] = useState(false);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alvoMedio, formatarVolume, horaDoDia, percentualDaMeta } from '../helpers';
+import { alvoMedio, horaDoDia, percentualDaMeta } from '../helpers';
 
 describe('percentualDaMeta', () => {
   it('devolve a fração arredondada', () => {
@@ -19,19 +19,6 @@ describe('percentualDaMeta', () => {
 
   it('não deixa valor negativo virar barra invertida', () => {
     expect(percentualDaMeta(-100, 2000)).toBe(0);
-  });
-});
-
-describe('formatarVolume', () => {
-  it('usa mL abaixo de um litro', () => {
-    expect(formatarVolume(0)).toBe('0 mL');
-    expect(formatarVolume(350)).toBe('350 mL');
-    expect(formatarVolume(999)).toBe('999 mL');
-  });
-
-  it('vira litro com vírgula decimal a partir de mil', () => {
-    expect(formatarVolume(1000)).toBe('1,0 L');
-    expect(formatarVolume(2450)).toBe('2,5 L');
   });
 });
 

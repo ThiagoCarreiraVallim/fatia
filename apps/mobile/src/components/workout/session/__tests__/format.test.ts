@@ -9,7 +9,6 @@ import {
   formatPace,
   formatPreviousSet,
   isExerciseComplete,
-  parseClock,
   parseDecimalInput,
   parseFirstRep,
   parseIntegerInput,
@@ -85,24 +84,6 @@ describe('formatCountdown', () => {
     expect(formatCountdown(90)).toBe('01:30');
     expect(formatCountdown(0)).toBe('00:00');
     expect(formatCountdown(-5)).toBe('00:00');
-  });
-});
-
-describe('parseClock', () => {
-  it('lê segundos puros', () => {
-    expect(parseClock('90')).toBe(90);
-  });
-
-  it('lê m:ss e h:mm:ss', () => {
-    expect(parseClock('1:30')).toBe(90);
-    expect(parseClock('1:02:03')).toBe(3723);
-  });
-
-  it('recusa o que não é tempo', () => {
-    expect(parseClock('')).toBeNull();
-    expect(parseClock('abc')).toBeNull();
-    expect(parseClock('1:75')).toBeNull();
-    expect(parseClock('1:2:3:4')).toBeNull();
   });
 });
 

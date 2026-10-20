@@ -38,35 +38,8 @@ export function formatCountdown(totalSeconds: number): string {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
-/** `90` → 90s, `1:30` → 90s, `1:02:03` → 3723s. `null` quando não dá para ler. */
-export function parseClock(input: string): number | null {
-  const trimmed = input.trim();
-  if (!trimmed) return null;
-  const parts = trimmed.split(':').map((part) => part.trim());
-  if (parts.some((part) => part !== '' && !/^\d+$/.test(part))) return null;
-
-  if (parts.length === 1) {
-    const seconds = Number(parts[0]);
-    return Number.isFinite(seconds) ? seconds : null;
-  }
-  if (parts.length === 2) {
-    const minutes = Number(parts[0] || 0);
-    const seconds = Number(parts[1] || 0);
-    if (!Number.isFinite(minutes) || !Number.isFinite(seconds) || seconds >= 60) return null;
-    return minutes * 60 + seconds;
-  }
-  if (parts.length === 3) {
-    const hours = Number(parts[0] || 0);
-    const minutes = Number(parts[1] || 0);
-    const seconds = Number(parts[2] || 0);
-    if (!Number.isFinite(hours) || !Number.isFinite(minutes) || !Number.isFinite(seconds)) {
-      return null;
-    }
-    if (minutes >= 60 || seconds >= 60) return null;
-    return hours * 3600 + minutes * 60 + seconds;
-  }
-  return null;
-}
+// A leitura de duração é a mesma do PWA (`@fatia/api-client`, `format.ts`).
+export { parseClock } from '@fatia/api-client';
 
 /**
  * Aceita vírgula e ponto. O teclado decimal do iOS em pt-BR entrega vírgula, e
