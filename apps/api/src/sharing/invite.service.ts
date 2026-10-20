@@ -17,7 +17,7 @@ import { EmailService } from '../notifications/email.service';
 import { inviteEmail } from '../notifications/invite-email';
 import { NotificationService } from '../notifications/notification.service';
 import { inviteNotice } from './community-notices';
-import { TEAM_ROLES } from './permissions';
+import { can, TEAM_ROLES, type GroupAction } from './permissions';
 import {
   assertNotBanned,
   MembershipService,
@@ -167,7 +167,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
   }
 
   async create(actorId: string, groupId: string, input: CreateInviteInput): Promise<CreatedInvite> {
-    const eu = await this.equipeAtiva(actorId, groupId);
+    const eu = await this.assertCan(actorId, groupId, 'invite.create');
     if (eu.role === GroupRole.PROFESSIONAL && input.role !== GroupRole.MEMBER) {
       throw new ForbiddenException(
         'Profissionais convidam só membros; a equipe é o dono quem define',
@@ -214,7 +214,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     groupId: string,
     input: BatchInviteInput,
   ): Promise<BatchInviteResult> {
-    const eu = await this.equipeAtiva(actorId, groupId);
+    const eu = await this.assertCan(actorId, groupId, 'invite.create');
     if (eu.role === GroupRole.PROFESSIONAL && input.role !== GroupRole.MEMBER) {
       throw new ForbiddenException(
         'Profissionais convidam só membros; a equipe é o dono quem define',
@@ -288,7 +288,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
    * são do dono, e ele não os revoga nem reenvia.
    */
   async list(actorId: string, groupId: string): Promise<InviteView[]> {
-    const eu = await this.equipeAtiva(actorId, groupId);
+    const eu = await this.assertCan(actorId, groupId, 'invite.create');
     const convites = await this.prisma.groupInvite.findMany({
       where: {
         groupId,
@@ -302,7 +302,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
   }
 
   async revoke(actorId: string, groupId: string, inviteId: string): Promise<InviteView> {
-    const eu = await this.equipeAtiva(actorId, groupId);
+    const eu = await this.assertCan(actorId, groupId, 'invite.revoke');
     const revogado = await this.prisma.groupInvite.updateMany({
       where: { id: inviteId, groupId, revokedAt: null, ...this.alcance(eu.role) },
       data: { revokedAt: new Date() },
@@ -319,7 +319,7 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
    * **troca** o token: o link do e-mail anterior deixa de valer.
    */
   async resend(actorId: string, groupId: string, inviteId: string): Promise<CreatedInvite> {
-    const eu = await this.equipeAtiva(actorId, groupId);
+    const eu = await this.assertCan(actorId, groupId, 'invite.create');
     const agora = new Date();
     const convite = await this.prisma.groupInvite.findFirst({
       where: {
@@ -469,15 +469,19 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     return convite;
   }
 
-  /** Dono ou profissional ativo — o mesmo que o guarda confere, de novo no service. */
-  private async equipeAtiva(userId: string, groupId: string) {
+  /**
+   * Associação ativa cujo papel a matriz (`sharing/permissions.ts`) deixa fazer
+   * `action` — a mesma pergunta que o `GroupRoleGuard` faz na rota, de novo no
+   * service. Não-membro recebe 404; membro sem o papel, 403.
+   */
+  private async assertCan(userId: string, groupId: string, action: GroupAction) {
     const eu = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId, userId } },
       select: { role: true, status: true },
     });
     if (!eu || eu.status !== MembershipStatus.ACTIVE) throw new NotFoundException(NOT_FOUND);
-    if (eu.role !== GroupRole.OWNER && eu.role !== GroupRole.PROFESSIONAL) {
-      throw new ForbiddenException('Só o dono e os profissionais convidam');
+    if (!can(eu.role, action)) {
+      throw new ForbiddenException('Seu papel nesta comunidade não permite cuidar de convites');
     }
     return eu;
   }
