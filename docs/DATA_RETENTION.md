@@ -582,7 +582,14 @@ backups.** Isso é aceitável e usual — a LGPD admite retenção em backup por
 significa que "eliminação imediata" vale para o banco em produção, não para as cópias de
 segurança, que rotacionam.
 
-O envio dos backups para storage offsite cifrado é acompanhado na issue #93.
+Os dumps vão também para storage offsite cifrado, com retenção de **30 dias** lá.
+
+**A mídia da comunidade** (imagens e vídeos publicados, `MediaFile`) é copiada para o mesmo
+offsite, cifrada, mas não por data: a cópia **espelha o bucket de produção** a cada execução, e o
+que foi apagado em produção — pela pessoa, pela comunidade, pela exclusão da conta ou pela faxina de
+24 h — **some da cópia no backup seguinte, em até 24 horas**. O bucket de produção tem
+versionamento, com as versões antigas expiradas em 7 dias: um arquivo apagado pode sobreviver até 7
+dias como versão antiga, o mesmo prazo dos dumps locais.
 
 ## Como o usuário exerce os direitos
 

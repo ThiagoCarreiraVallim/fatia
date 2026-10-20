@@ -38,6 +38,14 @@
 #                         qualquer chamada sem região, mesmo com endpoint próprio
 #   S3_RETENTION_DAYS     Retenção offsite em dias  (default 30)
 #
+#   Mídia da comunidade (opcional; só ativa se MEDIA_S3_BUCKET estiver definido,
+#   e exige o offsite acima — a cópia vai para $S3_BUCKET/media/):
+#   MEDIA_S3_BUCKET            nome do bucket de produção (ex.: fatia-media)
+#   MEDIA_S3_ENDPOINT          ex.: https://<account-id>.r2.cloudflarestorage.com
+#   MEDIA_S3_ACCESS_KEY_ID     credencial de LEITURA nesse bucket
+#   MEDIA_S3_SECRET_ACCESS_KEY
+#   MEDIA_S3_REGION            `auto` no R2 (default auto)
+#
 #   ALERT_WEBHOOK    URL que recebe POST JSON em caso de falha (opcional).
 #
 #   BACKUP_PING_URL  URL pingada (GET) SÓ quando o backup termina inteiro e
@@ -70,7 +78,8 @@ _OVERRIDES=()
 for _v in PG_INSTANCES CONTAINER POSTGRES_USER BACKUP_DIR RETENTION_DAYS \
           BACKUP_PASSPHRASE S3_BUCKET S3_ENDPOINT S3_RETENTION_DAYS \
           AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION ALERT_WEBHOOK \
-          BACKUP_PING_URL; do
+          BACKUP_PING_URL MEDIA_S3_BUCKET MEDIA_S3_ENDPOINT MEDIA_S3_ACCESS_KEY_ID \
+          MEDIA_S3_SECRET_ACCESS_KEY MEDIA_S3_REGION; do
   # `+set` e não `:-`: precisa distinguir "não definida" de "definida vazia",
   # senão não dá para desligar a cifra ou o offsite pela linha de comando.
   [ -n "${!_v+set}" ] && _OVERRIDES+=("$_v=${!_v}")
@@ -168,6 +177,12 @@ if [ -n "${S3_BUCKET:-}" ]; then
   fi
   [ -n "${S3_ENDPOINT:-}" ] && ENDPOINT_ARG=(--endpoint-url "$S3_ENDPOINT")
 fi
+if [ -n "${MEDIA_S3_BUCKET:-}" ]; then
+  # A cópia da mídia só tem sentido offsite: um espelho só no host morreria
+  # junto com o VPS, e não protegeria contra perder o bucket de produção.
+  [ -n "${S3_BUCKET:-}" ] || fail 'MEDIA_S3_BUCKET definido sem S3_BUCKET: a cópia da mídia vai para o offsite'
+  [ -n "${MEDIA_S3_ENDPOINT:-}" ] || fail 'MEDIA_S3_BUCKET definido sem MEDIA_S3_ENDPOINT'
+fi
 
 # --- Uma passada por cluster ---
 for instance in $PG_INSTANCES; do
@@ -224,6 +239,79 @@ for instance in $PG_INSTANCES; do
     log "[$label] Offsite OK"
   fi
 done
+
+# --- Mídia da comunidade (#349) ---
+#
+# Imagens de posts, capas, avatares e vídeos vivem no bucket (ADR 028), não no
+# Postgres: o dump traz as linhas de `MediaFile` e nenhum byte delas. A cópia é
+# INCREMENTAL, em três passos:
+#
+# 1. espelho local do bucket de produção (`aws s3 sync --delete`);
+# 2. cada arquivo novo ou alterado é cifrado com a MESMA passphrase dos dumps,
+#    num segundo diretório; o cifrado de arquivo que sumiu do espelho é apagado;
+# 3. o diretório cifrado é sincronizado para $S3_BUCKET/media/, também com
+#    `--delete`.
+#
+# O `--delete` nas duas pontas é a exclusão LGPD (docs/DATA_RETENTION.md): o que
+# a pessoa ou a faxina apagou do bucket some da cópia offsite na execução
+# seguinte — em até 24 h —, e não fica 30 dias como os dumps. Por isso a mídia
+# não tem retenção por data: ela espelha o estado de hoje.
+#
+# Nada vai ao offsite em claro. O espelho local fica em claro, no mesmo host que
+# já guarda os dumps antes da cifra e o próprio Postgres.
+if [ -n "${MEDIA_S3_BUCKET:-}" ]; then
+  MEDIA_MIRROR="$BACKUP_DIR/media-mirror"
+  MEDIA_SEALED="$BACKUP_DIR/media-sealed"
+  mkdir -p "$MEDIA_MIRROR" "$MEDIA_SEALED"
+
+  log "[media] Espelhando s3://$MEDIA_S3_BUCKET"
+  AWS_ACCESS_KEY_ID="${MEDIA_S3_ACCESS_KEY_ID:-}" \
+  AWS_SECRET_ACCESS_KEY="${MEDIA_S3_SECRET_ACCESS_KEY:-}" \
+  AWS_DEFAULT_REGION="${MEDIA_S3_REGION:-auto}" \
+    aws --endpoint-url "$MEDIA_S3_ENDPOINT" s3 sync "s3://$MEDIA_S3_BUCKET" "$MEDIA_MIRROR" \
+      --delete --only-show-errors \
+    || fail "[media] leitura recusada em s3://$MEDIA_S3_BUCKET (credencial de leitura no bucket de mídia?)"
+
+  cifrados=0
+  while IFS= read -r -d '' arquivo; do
+    rel="${arquivo#"$MEDIA_MIRROR"/}"
+    destino="$MEDIA_SEALED/$rel.gpg"
+    # `-nt`: o sync grava a data do objeto no arquivo, então objeto reescrito no
+    # bucket volta a ser cifrado; o que não mudou não é cifrado de novo.
+    if [ ! -f "$destino" ] || [ "$arquivo" -nt "$destino" ]; then
+      mkdir -p "$(dirname "$destino")"
+      printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --yes --quiet \
+        --passphrase-fd 0 --symmetric --cipher-algo AES256 \
+        --output "$destino" "$arquivo"
+      cifrados=$((cifrados + 1))
+    fi
+  done < <(find "$MEDIA_MIRROR" -type f -print0)
+
+  apagados=0
+  while IFS= read -r -d '' selado; do
+    rel="${selado#"$MEDIA_SEALED"/}"
+    if [ ! -f "$MEDIA_MIRROR/${rel%.gpg}" ]; then
+      rm -f "$selado"
+      apagados=$((apagados + 1))
+    fi
+  done < <(find "$MEDIA_SEALED" -type f -name '*.gpg' -print0)
+  find "$MEDIA_SEALED" -mindepth 1 -type d -empty -delete
+
+  no_espelho=$(find "$MEDIA_MIRROR" -type f | wc -l | tr -d ' ')
+  no_selado=$(find "$MEDIA_SEALED" -type f -name '*.gpg' | wc -l | tr -d ' ')
+  [ "$no_espelho" = "$no_selado" ] \
+    || fail "[media] $no_espelho arquivo(s) no espelho e $no_selado cifrado(s): a cópia não fecha"
+
+  log "[media] Enviando para $S3_BUCKET/media ($cifrados cifrado(s) agora, $apagados apagado(s))"
+  aws "${ENDPOINT_ARG[@]}" s3 sync "$MEDIA_SEALED" "$S3_BUCKET/media" --delete --only-show-errors \
+    || fail "[media] envio recusado por $S3_BUCKET (o token tem permissão de ESCRITA e de APAGAR?)"
+
+  # Confere do outro lado: a mesma quantidade de objetos que há no espelho.
+  no_offsite=$(aws "${ENDPOINT_ARG[@]}" s3 ls "$S3_BUCKET/media/" --recursive | grep -c . || true)
+  [ "$no_offsite" = "$no_espelho" ] \
+    || fail "[media] $no_espelho arquivo(s) no espelho e $no_offsite no offsite"
+  log "[media] Offsite OK ($no_offsite objeto(s))"
+fi
 
 # --- Retenção offsite (uma vez, cobre todos os rótulos) ---
 if [ -n "${S3_BUCKET:-}" ]; then

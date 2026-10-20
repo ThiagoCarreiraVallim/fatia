@@ -229,9 +229,12 @@ No dev, o `pnpm dev` sobe o SeaweedFS do compose (`media`, porta 8333) e a API c
 para `WEB_ORIGIN` ao subir. A faxina de arquivos pendentes ou sem uso roda de hora em hora dentro da
 API (24 h de tolerância).
 
-**Pendente:** o `infra/backup.sh` ainda não copia o bucket. Até entrar, a perda do bucket perde as
-imagens (os textos e planos ficam no Postgres, com backup); ligar o versionamento de objetos no R2
-reduz esse risco.
+**Backup do bucket:** o `infra/backup.sh` copia a mídia para o offsite, cifrada (`MEDIA_S3_*` no
+`.env.backup`; ver [Backup — setup do zero](#backup--setup-do-zero) e o
+[drill](#drill-de-restore)). Ligue também o **versionamento de objetos** no bucket de produção, com
+uma regra de ciclo de vida que **expira as versões antigas em 7 dias**: o versionamento desfaz uma
+exclusão por engano no próprio R2, e a expiração mantém a exclusão LGPD dentro do prazo do
+`DATA_RETENTION.md` (uma versão antiga é uma cópia do arquivo apagado).
 
 ## Backup — setup do zero
 
@@ -288,6 +291,14 @@ PG_INSTANCES="fatia:<container-da-app>:postgres logto:<container-do-logto>:postg
 Dumpar só um traria os dados sem as contas (ou o contrário), e isso só apareceria na hora do
 restore. Se qualquer instância falhar, o backup inteiro falha.
 
+**A mídia da comunidade** (imagens de posts, capas, avatares, vídeos) não está no dump: preencha
+`MEDIA_S3_*` com um token **só de leitura** no bucket R2 de mídia. O backup mantém um espelho em
+`$BACKUP_DIR/media-mirror` (em claro, no host) e a cópia cifrada em `$BACKUP_DIR/media-sealed`, que
+vai para `$S3_BUCKET/media/`. É incremental: só arquivo novo ou alterado é cifrado e enviado de
+novo. O `--delete` nas duas pontas faz o que foi apagado em produção sair da cópia na execução
+seguinte, e por isso o token do offsite precisa poder apagar. Conte com o espaço do espelho mais o
+da cópia cifrada no disco do host.
+
 O `backup.sh` carrega o `.env.backup` sozinho — não é preciso repetir variável nenhuma
 na crontab (e credencial em crontab ficaria legível por qualquer `crontab -l`).
 
@@ -297,7 +308,8 @@ na crontab (e credencial em crontab ficaria legível por qualquer `crontab -l`).
 /opt/fatia/infra/backup.sh
 ```
 
-Esperado: `Dump OK`, `Cifrando com AES-256`, `Offsite OK`, `Concluído`. Se algum passo
+Esperado: `Dump OK`, `Cifrando com AES-256`, `Offsite OK` e, com a mídia configurada,
+`[media] Offsite OK (N objeto(s))`, e por fim `Concluído`. Se algum passo
 falhar, o script sai com código 1 e dispara o `ALERT_WEBHOOK`.
 
 ### 6. Agendar
@@ -422,6 +434,8 @@ dados conferidos — ver [Histórico de drills](#histórico-de-drills).
   endpoint é S3-compatível de terceiro.
 - Sai com código 1 em qualquer falha e chama `ALERT_WEBHOOK`.
 - Sem `S3_BUCKET`, avisa em log que o backup só existe naquele host.
+- Mídia (`MEDIA_S3_BUCKET`): só com o offsite ligado; nada vai em claro; confere que o espelho, a
+  cópia cifrada e o offsite têm o mesmo número de objetos, e falha se não fecharem.
 - Pinga `BACKUP_PING_URL` **só no fim**, depois de tudo verificado — e um ping que falhe nunca
   derruba um backup que deu certo. Com a variável vazia, o comportamento é no-op silencioso.
 
@@ -464,6 +478,30 @@ rm -f /tmp/restore-test.sql.gz.gpg
 Se as contagens vierem zeradas ou muito abaixo do esperado, **o backup não serve** — investigue
 antes de precisar dele.
 
+### A mídia, junto com o banco
+
+Com o banco do passo 3 de pé, restaure a mídia num bucket **descartável** (nunca no de produção) e
+confira que toda `MediaFile` pronta do banco restaurado tem o objeto:
+
+```bash
+# 6. Um bucket vazio para o teste, no R2 ou no B2, com um token de escrita nele
+RESTORE_S3_BUCKET=fatia-media-drill \
+RESTORE_S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com \
+RESTORE_S3_ACCESS_KEY_ID=... RESTORE_S3_SECRET_ACCESS_KEY=... \
+DATABASE_CONTAINER=fatia-restore-test DATABASE_USER=fatia \
+  /opt/fatia/infra/restore-media.sh
+```
+
+O `restore-media.sh` lê o offsite e a passphrase do `.env.backup`, baixa `media/`, decifra cada
+objeto e o sobe na mesma chave. Esperado: `Conferido: as N MediaFile READY do banco existem no
+bucket`. Se faltar alguma, ele lista as chaves e sai com erro: é imagem que voltaria quebrada.
+
+Diferença de idade esperada: a mídia espelha o **último** backup, e o dump pode ser mais antigo. Um
+dump de dias atrás pode citar imagem que a pessoa apagou depois — essa chave aparece como faltando, e
+está certo que falte. Para o drill, use o dump da mesma execução.
+
+Depois do drill, apague o bucket descartável.
+
 Para backup local não cifrado, pule o passo 2 e o `gpg`:
 
 ```bash
@@ -484,17 +522,20 @@ Tempo estimado: **1 a 2 horas**, dominado por propagação de DNS e emissão de 
    `fatia-logto-<TS>` para as contas — porque são **dois clusters distintos**.
    ⚠️ Restaurar só o da aplicação devolve os dados sem nenhuma conta: todo mundo perde o acesso
    ao próprio histórico. Restaurar só o do Logto devolve as contas vazias. Os dois, sempre.
-5. **Recriar o Compose service** apontando para `infra/docker-compose.prod.yml`.
-6. **Repor as variáveis de ambiente** no painel do Dokploy (ver `.env.production.example`).
+5. **Restaurar a mídia** no bucket R2 de produção (recrie-o se ele se perdeu, com o CORS da seção
+   [Mídia da comunidade](#mídia-da-comunidade--bucket-r2-adr-028)): `infra/restore-media.sh` com
+   `RESTORE_S3_*` apontando para ele e `DATABASE_CONTAINER` no Postgres restaurado, para conferir.
+6. **Recriar o Compose service** apontando para `infra/docker-compose.prod.yml`.
+7. **Repor as variáveis de ambiente** no painel do Dokploy (ver `.env.production.example`).
    Precisam ser as **mesmas** de antes, em especial `LOGTO_COOKIE_SECRET` — trocá-la invalida as
    sessões do PWA.
-7. **Deploy.** A API aplica migrations no boot; o dump restaurado já está na versão correta, então
+8. **Deploy.** A API aplica migrations no boot; o dump restaurado já está na versão correta, então
    é no-op.
-8. **Confirmar o TLS.** O Traefik pede certificado ao Let's Encrypt no primeiro acesso a cada
+9. **Confirmar o TLS.** O Traefik pede certificado ao Let's Encrypt no primeiro acesso a cada
    subdomínio. Se falhar, quase sempre é DNS ainda não propagado — espere e tente de novo, com
    atenção ao rate limit do Let's Encrypt.
-9. **Reinstalar o cron de backup** e rodar `backup.sh` na mão uma vez.
-10. **Smoke test:**
+10. **Reinstalar o cron de backup** e rodar `backup.sh` na mão uma vez.
+11. **Smoke test:**
     - `curl https://api.fat.ia.br/health`
     - `curl https://api.fat.ia.br/.well-known/oauth-authorization-server`
     - `curl -I https://fat.ia.br/claude-connect/`
