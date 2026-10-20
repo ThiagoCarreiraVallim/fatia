@@ -50,7 +50,7 @@ async def test_visao_aceita_imagem(provider):
     resposta = await provider.describe(
         PIXEL_PNG, prompt="Descreva em uma frase.", media_type="image/png"
     )
-    assert resposta.strip()
+    assert resposta.text.strip()
 
 
 async def test_embedding_devolve_um_vetor_por_texto(provider):

@@ -28,7 +28,14 @@ curl -s localhost:8100/recognize-meal \
   -H 'Content-Type: application/json' \
   -H "X-Fatia-Agent-Key: $AGENT_API_KEY" \
   -d "{\"image_base64\":\"$(base64 -w0 prato.jpg)\",\"media_type\":\"image/jpeg\"}"
+# {"items":[{"name":"arroz branco cozido","grams":150,"confidence":0.82,…}],"note":null,
+#  "usage":{"model":"z-ai/glm-5.3-flash","inputUnits":1200,"outputUnits":90}}
 ```
+
+O `usage` tem o formato do `/title` (unidade que o provedor não mandou fica de fora, e `usage: null`
+quando não veio bloco nenhum). É com ele que o `apps/api` precifica a foto; antes ela entrava como
+custo não medido, e a tolerância desses custos é da instância inteira — a vigésima foto do dia
+fechava a IA de todo mundo.
 
 Três propriedades que valem mais que o código:
 

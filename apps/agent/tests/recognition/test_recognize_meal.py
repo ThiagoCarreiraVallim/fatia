@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from fatia_agent.api import MAX_IMAGEM_BYTES, create_app
+from fatia_agent.providers.base import Description, Usage
 from fatia_agent.providers.errors import AIProviderRefused, AIResponseUnparseable
 from fatia_agent.recognition import recognize_meal
 from fatia_agent.schemas.recognized_meal import parse_recognized_meal
@@ -44,15 +45,18 @@ RESPOSTA_BOA = json.dumps(
 class VisaoFalsa:
     """Duplo da `VisionCapability`. Guarda o que recebeu, para poder afirmar."""
 
-    def __init__(self, resposta: str | Exception) -> None:
+    def __init__(self, resposta: str | Exception, usage: Usage | None = None) -> None:
         self._resposta = resposta
+        self._usage = usage
         self.chamadas: list[tuple[bytes, str, str]] = []
 
-    async def describe(self, image: bytes, *, prompt: str, media_type: str = "image/jpeg") -> str:
+    async def describe(
+        self, image: bytes, *, prompt: str, media_type: str = "image/jpeg"
+    ) -> Description:
         self.chamadas.append((image, prompt, media_type))
         if isinstance(self._resposta, Exception):
             raise self._resposta
-        return self._resposta
+        return Description(text=self._resposta, usage=self._usage)
 
     async def aclose(self) -> None:  # pragma: no cover - simetria com o provedor real
         return None
@@ -62,7 +66,7 @@ class VisaoFalsa:
 
 
 async def test_resposta_bem_formada_vira_itens():
-    meal = await recognize_meal(VisaoFalsa(RESPOSTA_BOA), JPEG_MINIMO)
+    meal = (await recognize_meal(VisaoFalsa(RESPOSTA_BOA), JPEG_MINIMO)).meal
 
     assert [item.name for item in meal.items] == ["arroz branco cozido", "feijão carioca cozido"]
     assert meal.items[0].grams == 150
@@ -84,7 +88,7 @@ async def test_itens_saem_do_mais_confiavel_para_o_menos():
         }
     )
 
-    meal = await recognize_meal(VisaoFalsa(resposta), JPEG_MINIMO)
+    meal = (await recognize_meal(VisaoFalsa(resposta), JPEG_MINIMO)).meal
 
     assert [item.name for item in meal.items] == [
         "arroz branco cozido",
@@ -112,7 +116,7 @@ async def test_json_embrulhado_em_markdown_e_aceito():
     """Crase é o embrulho mais comum, e recusá-lo seria recusar resposta certa."""
     resposta = f"Claro! Aqui está:\n\n```json\n{RESPOSTA_BOA}\n```\n\nEspero ter ajudado."
 
-    meal = await recognize_meal(VisaoFalsa(resposta), JPEG_MINIMO)
+    meal = (await recognize_meal(VisaoFalsa(resposta), JPEG_MINIMO)).meal
 
     assert len(meal.items) == 2
 
@@ -140,7 +144,7 @@ async def test_foto_sem_comida_devolve_lista_vazia_e_nao_erro():
     """
     resposta = json.dumps({"items": [], "note": "não identifiquei alimentos na foto"})
 
-    meal = await recognize_meal(VisaoFalsa(resposta), JPEG_MINIMO)
+    meal = (await recognize_meal(VisaoFalsa(resposta), JPEG_MINIMO)).meal
 
     assert meal.items == []
     assert meal.note is not None
@@ -223,10 +227,14 @@ def _corpo(imagem: bytes = JPEG_MINIMO, media_type: str = "image/jpeg") -> dict[
 def client_com_visao(settings_factory, monkeypatch):
     """App com o provedor trocado por um duplo, sem mexer no transporte HTTP."""
 
-    def _factory(resposta: str | Exception, **overrides: object) -> TestClient:
+    def _factory(
+        resposta: str | Exception, usage: Usage | None = None, **overrides: object
+    ) -> TestClient:
         import fatia_agent.api as modulo
 
-        monkeypatch.setattr(modulo, "build_provider", lambda _settings, **_kw: VisaoFalsa(resposta))
+        monkeypatch.setattr(
+            modulo, "build_provider", lambda _settings, **_kw: VisaoFalsa(resposta, usage)
+        )
         return TestClient(create_app(settings_factory(**overrides)))
 
     return _factory
@@ -241,6 +249,42 @@ def test_rota_devolve_os_itens_reconhecidos(client_com_visao):
         "arroz branco cozido",
         "feijão carioca cozido",
     ]
+
+
+async def test_o_consumo_da_chamada_sai_junto_dos_itens():
+    """A foto precisa sair precificada: o `usage` acompanha a resposta, inclusive vazia."""
+    uso = Usage(model="z-ai/glm-5.3-flash", input_units=1200, output_units=90)
+    vazia = json.dumps({"items": []})
+
+    medido = await recognize_meal(VisaoFalsa(vazia, uso), JPEG_MINIMO)
+
+    assert medido.meal.items == []
+    assert medido.usage == uso
+
+
+def test_rota_devolve_o_consumo_no_formato_do_title(client_com_visao):
+    """Mesmo formato do `/title`: o `apps/api` lê `usage` igual nas duas rotas."""
+    uso = Usage(model="z-ai/glm-5.3-flash", input_units=1200, output_units=90)
+
+    resposta = client_com_visao(RESPOSTA_BOA, uso).post("/recognize-meal", json=_corpo())
+
+    assert resposta.status_code == 200
+    assert resposta.json()["usage"] == {
+        "model": "z-ai/glm-5.3-flash",
+        "inputUnits": 1200,
+        "outputUnits": 90,
+    }
+
+
+def test_rota_sem_consumo_reportado_devolve_usage_nulo(client_com_visao):
+    """Unidade que o provedor não mandou é ausência, e o `apps/api` grava como não medida."""
+    sem_saida = Usage(model="m", input_units=10)
+
+    nulo = client_com_visao(RESPOSTA_BOA).post("/recognize-meal", json=_corpo())
+    parcial = client_com_visao(RESPOSTA_BOA, sem_saida).post("/recognize-meal", json=_corpo())
+
+    assert nulo.json()["usage"] is None
+    assert parcial.json()["usage"] == {"model": "m", "inputUnits": 10}
 
 
 def test_rota_nao_aceita_campo_de_identidade_no_corpo(client_com_visao):

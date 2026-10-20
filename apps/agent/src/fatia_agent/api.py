@@ -82,6 +82,7 @@ from .chat.state import FotoDoTurno
 from .chat.titulo import gerar_titulo
 from .http_pool import SharedTransport
 from .providers import build_provider
+from .providers.base import Usage
 from .providers.errors import (
     AgentKeyRejected,
     AIEndpointNotAllowed,
@@ -92,7 +93,6 @@ from .providers.errors import (
     AIProviderTimeout,
 )
 from .recognition import MEDIA_TYPES_ACEITOS, recognize_meal
-from .schemas.recognized_meal import RecognizedMeal
 from .settings import (
     AgentSettings,
     agent_auth_unavailable_reason,
@@ -447,12 +447,16 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
     async def recognize_meal_route(
         payload: RecognizeMealRequest,
         x_fatia_agent_key: Annotated[str | None, Header()] = None,
-    ) -> RecognizedMeal:
-        """Foto de refeição → alimentos candidatos (#139).
+    ) -> dict[str, object]:
+        """Foto de refeição → alimentos candidatos (#139), e o que a chamada custou.
 
         **Não grava nada e não devolve refeição.** O que sai daqui é sugestão: a
         gravação continua sendo o caminho manual do `apps/api`, que é o que faz da
         tela de confirmação a única forma de registrar, e não uma disciplina.
+
+        Devolve `usage` como o `/title` e o `/transcribe`: é com ele que o
+        `apps/api` precifica a foto. Sem ele, cada foto entrava como custo não
+        medido, e a tolerância desses custos é da instância inteira.
 
         A imagem vive em memória e morre com a requisição — ADR 004.
         """
@@ -462,9 +466,10 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
 
         provider = build_provider(resolved, transport=provider_transport)
         try:
-            return await recognize_meal(provider, imagem, media_type=payload.media_type)
+            medido = await recognize_meal(provider, imagem, media_type=payload.media_type)
         finally:
             await provider.aclose()
+        return {**medido.meal.model_dump(), "usage": _usage_body(medido.usage)}
 
     @app.post("/title")
     async def title_route(
@@ -495,16 +500,7 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
                 "output": usage.output_units if usage else None,
             },
         )
-        return {
-            "title": gerado.titulo,
-            "usage": None
-            if usage is None
-            else {
-                "model": usage.model,
-                **({"inputUnits": usage.input_units} if usage.input_units is not None else {}),
-                **({"outputUnits": usage.output_units} if usage.output_units is not None else {}),
-            },
-        }
+        return {"title": gerado.titulo, "usage": _usage_body(usage)}
 
     @app.post("/transcribe")
     async def transcribe_route(
@@ -739,6 +735,21 @@ async def _ler_audio(request: Request) -> bytes:
                 detail=f"O áudio passa de {MAX_AUDIO_BYTES} bytes. Grave um trecho mais curto.",
             )
     return bytes(lido)
+
+
+def _usage_body(usage: Usage | None) -> dict[str, object] | None:
+    """O `usage` das rotas auxiliares, no formato que o `apps/api` lê.
+
+    Unidade ausente fica fora do objeto, e não vira `0`: o `apps/api` trata
+    ausência como custo não medido, e zero como medida.
+    """
+    if usage is None:
+        return None
+    return {
+        "model": usage.model,
+        **({"inputUnits": usage.input_units} if usage.input_units is not None else {}),
+        **({"outputUnits": usage.output_units} if usage.output_units is not None else {}),
+    }
 
 
 def _exigir_credencial(settings: AgentSettings, oferecida: str | None) -> None:

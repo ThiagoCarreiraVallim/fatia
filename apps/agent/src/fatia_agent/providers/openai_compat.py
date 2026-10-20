@@ -28,6 +28,7 @@ from ..allowed_models import (
 from ..settings import endpoint_host
 from .base import (
     ChatCapability,
+    Description,
     EmbeddingCapability,
     ReasoningDelta,
     TextCapability,
@@ -165,9 +166,11 @@ class OpenAICompatProvider:
         if system is not None:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
-        return await self._chat(model, messages)
+        return (await self._chat(model, messages)).text
 
-    async def describe(self, image: bytes, *, prompt: str, media_type: str = "image/jpeg") -> str:
+    async def describe(
+        self, image: bytes, *, prompt: str, media_type: str = "image/jpeg"
+    ) -> Description:
         model = self._require_model("vision", self._vision_model)
         data_uri = f"data:{media_type};base64,{base64.b64encode(image).decode('ascii')}"
         messages: list[dict[str, Any]] = [
@@ -458,7 +461,7 @@ class OpenAICompatProvider:
             return payload
         return {**payload, "provider": dict(self._routing)}
 
-    async def _chat(self, model: str, messages: list[dict[str, Any]]) -> str:
+    async def _chat(self, model: str, messages: list[dict[str, Any]]) -> Description:
         response = await self._request(
             "POST",
             "chat/completions",
@@ -486,7 +489,9 @@ class OpenAICompatProvider:
             raise AIResponseTruncated(
                 f"O modelo '{model}' parou por limite de tokens; a resposta veio pela metade."
             )
-        return content
+        # A resposta não-streaming traz `usage` e `model` na raiz, como o último
+        # fragmento do stream: o mesmo leitor serve aos dois.
+        return Description(text=content, usage=_uso_do_fragmento(body, padrao=model))
 
     async def _request(
         self,

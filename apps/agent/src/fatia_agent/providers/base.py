@@ -122,13 +122,28 @@ class ToolChatCapability(Protocol):
     ) -> AsyncIterator[TextDelta | ReasoningDelta | TurnEnd]: ...
 
 
+@dataclass(frozen=True)
+class Description:
+    """O texto que o modelo de visão devolveu, e o que a chamada consumiu.
+
+    O `usage` vem junto, e não num canal à parte, porque é por ele que o
+    `apps/api` precifica a foto: sem ele, toda foto entrava como custo não medido
+    e a tolerância de chamadas sem preço, que é da instância inteira, fechava a
+    IA de todo mundo na vigésima foto do dia.
+    """
+
+    text: str
+    # `None` quando o provedor não mandou bloco de `usage`. Ver `Usage`.
+    usage: Usage | None = None
+
+
 @runtime_checkable
 class VisionCapability(Protocol):
-    """Imagem + pergunta entram, texto sai."""
+    """Imagem + pergunta entram, texto (e o consumo) sai."""
 
     async def describe(
         self, image: bytes, *, prompt: str, media_type: str = "image/jpeg"
-    ) -> str: ...
+    ) -> Description: ...
 
 
 @runtime_checkable

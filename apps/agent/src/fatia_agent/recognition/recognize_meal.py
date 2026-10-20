@@ -14,8 +14,10 @@ dentro do provedor e some com o fim da requisição. Sem arquivo temporário, se
 log do conteúdo, sem cache — ADR 004.
 """
 
+from dataclasses import dataclass
+
 from ..prompts.recognize_meal_pt_br import INSTRUCAO, SISTEMA
-from ..providers.base import VisionCapability
+from ..providers.base import Usage, VisionCapability
 from ..schemas.recognized_meal import RecognizedMeal, parse_recognized_meal
 
 # Formatos que um aparelho produz e que os provedores de visão aceitam. HEIC
@@ -33,12 +35,24 @@ MEDIA_TYPES_ACEITOS = frozenset({"image/jpeg", "image/png", "image/webp"})
 PROMPT = f"{SISTEMA}\n\n{INSTRUCAO}"
 
 
+@dataclass(frozen=True)
+class MeasuredMeal:
+    """O que a foto rendeu e o que a chamada custou.
+
+    O `usage` sai mesmo quando `meal.items` vem vazio: a foto de um gato custa
+    a mesma inferência que a de um prato.
+    """
+
+    meal: RecognizedMeal
+    usage: Usage | None
+
+
 async def recognize_meal(
     provider: VisionCapability,
     image: bytes,
     *,
     media_type: str = "image/jpeg",
-) -> RecognizedMeal:
+) -> MeasuredMeal:
     """Descreve a foto pela capacidade de visão e valida a saída.
 
     O prompt de sistema e a instrução são passados como um bloco de texto só:
@@ -51,4 +65,4 @@ async def recognize_meal(
         prompt=PROMPT,
         media_type=media_type,
     )
-    return parse_recognized_meal(resposta)
+    return MeasuredMeal(meal=parse_recognized_meal(resposta.text), usage=resposta.usage)

@@ -55,7 +55,7 @@ def provider():
 async def test_reconhece_pelo_menos_um_alimento_num_prato(provider):
     imagem = Path(FOTO).expanduser().read_bytes()
 
-    meal = await recognize_meal(provider, imagem, media_type="image/jpeg")
+    meal = (await recognize_meal(provider, imagem, media_type="image/jpeg")).meal
 
     assert meal.items, "o modelo não devolveu nenhum item para uma foto de prato"
     assert all(item.grams > 0 for item in meal.items)
