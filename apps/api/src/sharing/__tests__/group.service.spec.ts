@@ -7,11 +7,13 @@ import type { PrismaService } from '../../common/prisma.service';
 type MockPrisma = {
   group: { create: jest.Mock; findUnique: jest.Mock };
   groupMembership: { findMany: jest.Mock; findUnique: jest.Mock; count: jest.Mock };
+  groupSeatAssignment: { findMany: jest.Mock };
 };
 
 const makePrisma = (): MockPrisma => ({
   group: { create: jest.fn(), findUnique: jest.fn() },
   groupMembership: { findMany: jest.fn(), findUnique: jest.fn(), count: jest.fn() },
+  groupSeatAssignment: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const OWNER = 'dono-1';
@@ -102,7 +104,6 @@ describe('GroupService', () => {
           },
           consentScopes: [],
           statsOptIn: false,
-          seatAssignments: [],
         });
 
         await expect(service.findByIdForMember(OUTRO, 'g1')).rejects.toThrow(NotFoundException);
@@ -128,7 +129,6 @@ describe('GroupService', () => {
           },
           consentScopes: [],
           statsOptIn: false,
-          seatAssignments: [],
         });
 
         await expect(service.findByIdForMember(OUTRO, 'g1')).resolves.toMatchObject({

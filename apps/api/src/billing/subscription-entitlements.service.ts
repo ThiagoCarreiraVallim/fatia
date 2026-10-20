@@ -20,6 +20,43 @@ export const ASSINATURA_LIDA = {
   createdAt: true,
 } as const;
 
+/** O que se lê de uma atribuição de assento para tratá-la como assinatura. */
+const SEAT_AS_SUBSCRIPTION = {
+  membershipId: true,
+  assignedAt: true,
+  pool: {
+    select: {
+      id: true,
+      status: true,
+      currentPeriodEnd: true,
+      graceEndsAt: true,
+      cancelAtPeriodEnd: true,
+      group: { select: { id: true, name: true } },
+    },
+  },
+} as const;
+
+type SeatRow = {
+  assignedAt: Date;
+  pool: Omit<AssinaturaLida, 'source' | 'interval' | 'createdAt'> & {
+    group: { id: string; name: string };
+  };
+};
+
+function seatAsSubscription({ assignedAt, pool }: SeatRow): AssinaturaLida {
+  return {
+    id: pool.id,
+    source: 'GROUP',
+    status: pool.status,
+    interval: 'MONTHLY',
+    currentPeriodEnd: pool.currentPeriodEnd,
+    graceEndsAt: pool.graceEndsAt,
+    cancelAtPeriodEnd: pool.cancelAtPeriodEnd,
+    createdAt: assignedAt,
+    group: pool.group,
+  };
+}
+
 /**
  * Assentos ativos da pessoa, lidos como assinatura (ADR 025): atribuição não
  * revogada, numa membership ACTIVE. Quem sai da comunidade perde o assento
@@ -31,31 +68,39 @@ export async function assentosComoAssinatura(
 ): Promise<AssinaturaLida[]> {
   const assentos = await prisma.groupSeatAssignment.findMany({
     where: { revokedAt: null, membership: { userId, status: 'ACTIVE' } },
-    select: {
-      assignedAt: true,
-      pool: {
-        select: {
-          id: true,
-          status: true,
-          currentPeriodEnd: true,
-          graceEndsAt: true,
-          cancelAtPeriodEnd: true,
-          group: { select: { id: true, name: true } },
-        },
-      },
-    },
+    select: SEAT_AS_SUBSCRIPTION,
   });
-  return assentos.map(({ assignedAt, pool }) => ({
-    id: pool.id,
-    source: 'GROUP' as const,
-    status: pool.status,
-    interval: 'MONTHLY' as const,
-    currentPeriodEnd: pool.currentPeriodEnd,
-    graceEndsAt: pool.graceEndsAt,
-    cancelAtPeriodEnd: pool.cancelAtPeriodEnd,
-    createdAt: assignedAt,
-    group: pool.group,
-  }));
+  return assentos.map(seatAsSubscription);
+}
+
+/**
+ * Das memberships pedidas, as que têm assento de IA **valendo agora**.
+ *
+ * É a consulta que a comunidade usa para mostrar "tem assento" (`hasAiSeat`), e
+ * a regra é a do portão (`resolverDireitoIa`): atribuição não revogada **e** pool
+ * que ainda vale. Cancelar o pool ou deixá-lo vencer não revoga as atribuições —
+ * o dono pode reativar e elas voltam —, então contar só a atribuição dizia que a
+ * pessoa tinha IA paga pela comunidade quando o portão já respondia FREE.
+ */
+export async function membershipsWithEffectiveSeat(
+  prisma: Pick<PrismaService, 'groupSeatAssignment'>,
+  membershipIds: string[],
+  now: Date = new Date(),
+): Promise<Set<string>> {
+  if (membershipIds.length === 0) return new Set();
+  const seats = await prisma.groupSeatAssignment.findMany({
+    where: {
+      revokedAt: null,
+      membershipId: { in: membershipIds },
+      membership: { status: 'ACTIVE' },
+    },
+    select: SEAT_AS_SUBSCRIPTION,
+  });
+  return new Set(
+    seats
+      .filter((seat) => resolverDireitoIa([seatAsSubscription(seat)], now).tier === 'PRO')
+      .map((seat) => seat.membershipId),
+  );
 }
 
 /**

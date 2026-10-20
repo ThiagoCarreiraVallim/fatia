@@ -95,6 +95,60 @@ describe('painel da comunidade (integração)', () => {
       expect(JSON.stringify(lista)).not.toContain('statsOptIn');
     });
 
+    it('assento de pool cancelado ou vencido não conta, igual ao portão da IA', async () => {
+      // `cancel` e a expiração não revogam as atribuições: o pool é que deixa de
+      // valer. O portão (`aiTierForUser`) já lia FREE nesse caso; a lista dizia
+      // que a pessoa ainda tinha IA paga pela comunidade.
+      const ontem = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+      const casos = [
+        { nome: 'cortesia cancelada', pool: { status: 'CANCELED' as const } },
+        {
+          nome: 'pago, cancelado e vencido',
+          pool: {
+            status: 'ACTIVE' as const,
+            cancelAtPeriodEnd: true,
+            currentPeriodEnd: ontem,
+            graceEndsAt: null,
+          },
+        },
+      ];
+      for (const caso of casos) {
+        const { dono, grupo } = await comunidade();
+        const ana = await membro(grupo.id, 'Ana');
+        const pool = await prisma.groupSeatPool.create({
+          data: { groupId: grupo.id, seats: 1, unitPriceCents: 1490, ...caso.pool },
+        });
+        await prisma.groupSeatAssignment.create({
+          data: { poolId: pool.id, membershipId: ana.membershipId },
+        });
+
+        const lista = await memberships.listMembers(dono, grupo.id);
+        expect({ caso: caso.nome, seat: lista.find((m) => m.name === 'Ana')?.hasAiSeat }).toEqual({
+          caso: caso.nome,
+          seat: false,
+        });
+        const daAna = await groups.findByIdForMember(ana.userId, grupo.id);
+        expect({ caso: caso.nome, seat: daAna.hasAiSeat }).toEqual({
+          caso: caso.nome,
+          seat: false,
+        });
+        expect((await groups.listMine(ana.userId))[0].hasAiSeat).toBe(false);
+      }
+    });
+
+    it('assento de pool ativo aparece na lista da própria pessoa', async () => {
+      const { grupo } = await comunidade();
+      const ana = await membro(grupo.id, 'Ana');
+      const pool = await prisma.groupSeatPool.create({
+        data: { groupId: grupo.id, seats: 1, unitPriceCents: 1490, status: 'ACTIVE' },
+      });
+      await prisma.groupSeatAssignment.create({
+        data: { poolId: pool.id, membershipId: ana.membershipId },
+      });
+
+      expect((await groups.findByIdForMember(ana.userId, grupo.id)).hasAiSeat).toBe(true);
+    });
+
     it('membro comum não recebe escopo nem assento de ninguém', async () => {
       const { grupo } = await comunidade();
       const ana = await membro(grupo.id, 'Ana', ['WORKOUT']);

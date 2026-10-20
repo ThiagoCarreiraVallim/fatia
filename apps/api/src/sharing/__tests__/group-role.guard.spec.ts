@@ -16,7 +16,10 @@ const makeContext = (request: Record<string, unknown>): ExecutionContext =>
   }) as unknown as ExecutionContext;
 
 describe('GroupRoleGuard', () => {
-  const prisma = { groupMembership: { findUnique: jest.fn() } };
+  const prisma = {
+    groupMembership: { findUnique: jest.fn() },
+    groupSeatAssignment: { findMany: jest.fn().mockResolvedValue([]) },
+  };
   const reflector = { get: jest.fn() };
   const guard = new GroupRoleGuard(
     reflector as unknown as Reflector,
@@ -125,7 +128,6 @@ describe('GroupRoleGuard', () => {
         },
         consentScopes: [],
         statsOptIn: false,
-        seatAssignments: [],
       });
       const service = new GroupService(
         prisma as unknown as PrismaService,

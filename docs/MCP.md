@@ -2565,7 +2565,10 @@ Array<{
   consentScopes: Array<'WORKOUT' | 'NUTRITION' | 'BODY' | 'HABITS' | 'GOALS'>;
   consentAt: string | null;
   statsOptIn: boolean;
-  /** A comunidade paga a IA hospedada desta pessoa (ADR 025). */
+  /**
+   * A comunidade paga a IA hospedada desta pessoa agora (ADR 025): assento atribuído num pool
+   * que ainda vale — a mesma regra do portão da IA. Pool cancelado ou vencido responde `false`.
+   */
   hasAiSeat: boolean;
 }>;
 ```

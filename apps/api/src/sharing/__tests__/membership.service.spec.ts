@@ -16,7 +16,7 @@ type MockPrisma = {
     upsert: jest.Mock;
   };
   professionalLink: { findMany: jest.Mock };
-  groupSeatAssignment: { updateMany: jest.Mock };
+  groupSeatAssignment: { updateMany: jest.Mock; findMany: jest.Mock };
   $transaction: jest.Mock;
 };
 
@@ -35,7 +35,10 @@ const makePrisma = (): MockPrisma => ({
     upsert: jest.fn(),
   },
   professionalLink: { findMany: jest.fn() },
-  groupSeatAssignment: { updateMany: jest.fn().mockReturnValue({ count: 0 }) },
+  groupSeatAssignment: {
+    updateMany: jest.fn().mockReturnValue({ count: 0 }),
+    findMany: jest.fn().mockResolvedValue([]),
+  },
   // O service passa um ARRAY de operações; `Promise.all` reproduz o batch sem banco.
   $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
 });
@@ -393,7 +396,6 @@ describe('MembershipService', () => {
           status: MembershipStatus.ACTIVE,
           joinedAt: null,
           user: { name: 'Aluno' },
-          seatAssignments: [],
         },
         {
           id: 'm2',
@@ -402,7 +404,21 @@ describe('MembershipService', () => {
           status: MembershipStatus.ACTIVE,
           joinedAt: null,
           user: { name: 'Aluno 2' },
-          seatAssignments: [{ id: 'assento-1' }],
+        },
+      ]);
+      // A atribuição do m2, num pool que vale agora (a regra é a do portão).
+      prisma.groupSeatAssignment.findMany.mockResolvedValue([
+        {
+          membershipId: 'm2',
+          assignedAt: new Date(0),
+          pool: {
+            id: 'pool',
+            status: 'ACTIVE',
+            currentPeriodEnd: null,
+            graceEndsAt: null,
+            cancelAtPeriodEnd: false,
+            group: { id: GROUP, name: 'Academia' },
+          },
         },
       ]);
       prisma.professionalLink.findMany.mockResolvedValue([

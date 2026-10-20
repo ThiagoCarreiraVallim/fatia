@@ -12,6 +12,7 @@ import {
   type Prisma,
   type ShareScope,
 } from '@fatia/db';
+import { membershipsWithEffectiveSeat } from '../billing/subscription-entitlements.service';
 import { PrismaService } from '../common/prisma.service';
 import { NotificationService } from '../notifications/notification.service';
 import { joinApprovedNotice, joinRequestNotice } from './community-notices';
@@ -327,7 +328,6 @@ export class MembershipService {
       },
       include: {
         user: { select: { name: true } },
-        seatAssignments: { where: { revokedAt: null }, select: { id: true } },
       },
       orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
     });
@@ -341,6 +341,13 @@ export class MembershipService {
         })
       : [];
     const porTitular = new Map(vinculos.map((v) => [v.subjectUserId, v.scopes]));
+    // O assento que vale, pela regra do portão da IA — e não só "atribuído".
+    const withSeat = veTodos
+      ? await membershipsWithEffectiveSeat(
+          this.prisma,
+          membros.map((m) => m.id),
+        )
+      : new Set<string>();
 
     return membros.map((m) => ({
       membershipId: m.id,
@@ -351,7 +358,7 @@ export class MembershipService {
       ...(veTodos
         ? {
             scopesGrantedToMe: porTitular.get(m.userId) ?? [],
-            hasAiSeat: m.status === MembershipStatus.ACTIVE && m.seatAssignments.length > 0,
+            hasAiSeat: withSeat.has(m.id),
           }
         : {}),
     }));

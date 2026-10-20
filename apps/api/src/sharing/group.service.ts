@@ -12,6 +12,7 @@ import {
   type PostPolicy,
   type ShareScope,
 } from '@fatia/db';
+import { membershipsWithEffectiveSeat } from '../billing/subscription-entitlements.service';
 import { PrismaService } from '../common/prisma.service';
 import { MediaService } from '../storage/media.service';
 import { GROUP_DELETION_HOOKS, type GroupDeletionHook } from './group-deletion.hook';
@@ -93,12 +94,12 @@ export interface GroupPreview {
 
 const INCLUIR = {
   group: { include: { avatarFile: true } },
-  seatAssignments: { where: { revokedAt: null }, select: { id: true } },
 } as const;
 
 function resumo(
-  m: GroupMembership & { group: Group; seatAssignments: { id: string }[] },
+  m: GroupMembership & { group: Group },
   avatarUrl: string | null,
+  hasAiSeat: boolean,
 ): GroupSummary {
   return {
     id: m.group.id,
@@ -114,7 +115,7 @@ function resumo(
     createdAt: m.group.createdAt,
     consentScopes: m.consentScopes,
     statsOptIn: m.statsOptIn,
-    hasAiSeat: m.status === MembershipStatus.ACTIVE && m.seatAssignments.length > 0,
+    hasAiSeat,
     avatarUrl,
     postPolicy: m.group.postPolicy,
   };
@@ -139,13 +140,11 @@ export class GroupService {
   ) {}
 
   private async summaryOf(
-    m: GroupMembership & {
-      group: Group & { avatarFile: MediaFile | null };
-      seatAssignments: { id: string }[];
-    },
+    m: GroupMembership & { group: Group & { avatarFile: MediaFile | null } },
+    withSeat: ReadonlySet<string>,
   ): Promise<GroupSummary> {
     const avatar = this.media ? await this.media.viewOrNull(m.group.avatarFile) : null;
-    return resumo(m, avatar?.url ?? null);
+    return resumo(m, avatar?.url ?? null, withSeat.has(m.id));
   }
 
   /**
@@ -203,7 +202,12 @@ export class GroupService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return Promise.all(memberships.map((m) => this.summaryOf(m)));
+    // O assento que vale, pela regra do portão da IA — e não só "atribuído".
+    const withSeat = await membershipsWithEffectiveSeat(
+      this.prisma,
+      memberships.map((m) => m.id),
+    );
+    return Promise.all(memberships.map((m) => this.summaryOf(m, withSeat)));
   }
 
   /**
@@ -226,7 +230,10 @@ export class GroupService {
       throw new NotFoundException(NOT_FOUND);
     }
 
-    return this.summaryOf(membership);
+    return this.summaryOf(
+      membership,
+      await membershipsWithEffectiveSeat(this.prisma, [membership.id]),
+    );
   }
 
   /**
