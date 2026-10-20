@@ -2,6 +2,7 @@ import {
   BadGatewayException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -291,8 +292,8 @@ describe('assentos de comunidade (banco real)', () => {
     });
 
     it('o proporcional entra como avulso; link que não é https não é guardado', async () => {
-      const { groupId, assentos, assinaturas } = await comunidadePaga(1);
-      await assentos.changeSeats(groupId, 2);
+      const { dona, groupId, assentos, assinaturas } = await comunidadePaga(1);
+      await assentos.changeSeats(dona, groupId, 2);
       const { providerChargeId } = await prisma.groupSeatAdjustment.findFirstOrThrow({
         where: { pool: { groupId } },
       });
@@ -378,9 +379,9 @@ describe('assentos de comunidade (banco real)', () => {
     it('retirar o assento devolve ao Free; retirar de quem não tem é 404', async () => {
       const { dona, groupId, membros, assentos, direitos } = await comunidadePaga(1);
       await assentos.assign(dona, groupId, membros[0].membershipId);
-      await assentos.unassign(groupId, membros[0].membershipId);
+      await assentos.unassign(dona, groupId, membros[0].membershipId);
       expect(await direitos.aiTierForUser(membros[0].userId)).toMatchObject({ tier: 'FREE' });
-      await expect(assentos.unassign(groupId, membros[0].membershipId)).rejects.toThrow(
+      await expect(assentos.unassign(dona, groupId, membros[0].membershipId)).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -414,6 +415,34 @@ describe('assentos de comunidade (banco real)', () => {
     });
   });
 
+  describe('quem gerencia os assentos (o service é a porta que vale)', () => {
+    it('membro comum recebe 403 e quem é de fora 404, sem passar pela rota', async () => {
+      // O papel era conferido só pelo GroupRoleGuard da rota. Chamado de outro
+      // lugar, o service deixava um membro dar assento a si mesmo.
+      const { groupId, membros, assentos } = await comunidadePaga(2);
+      const membro = membros[0];
+      const estranho = await pessoa('Estranho');
+
+      const acoes = (quem: string) => [
+        assentos.assign(quem, groupId, membro.membershipId),
+        assentos.unassign(quem, groupId, membro.membershipId),
+        assentos.changeSeats(quem, groupId, 3),
+        assentos.cancel(quem, groupId),
+        assentos.checkout(quem, groupId, { seats: 1, taxId: CNPJ }),
+      ];
+      for (const resultado of acoes(membro.userId)) {
+        await expect(resultado).rejects.toThrow(ForbiddenException);
+      }
+      for (const resultado of acoes(estranho)) {
+        await expect(resultado).rejects.toThrow(NotFoundException);
+      }
+      expect((await assentos.overview(groupId)).assigned).toBe(0);
+      expect(await assentos.overview(groupId)).toMatchObject({
+        pool: { seats: 2, status: 'ACTIVE' },
+      });
+    });
+  });
+
   describe('isolamento entre comunidades', () => {
     it('não atribui nem retira assento de membro de outra comunidade', async () => {
       const a = await comunidadePaga(2);
@@ -423,9 +452,9 @@ describe('assentos de comunidade (banco real)', () => {
       await expect(a.assentos.assign(a.dona, a.groupId, b.membros[0].membershipId)).rejects.toThrow(
         NotFoundException,
       );
-      await expect(a.assentos.unassign(b.groupId, a.membros[0].membershipId)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        a.assentos.unassign(a.dona, b.groupId, a.membros[0].membershipId),
+      ).rejects.toThrow(NotFoundException);
       expect(await a.direitos.aiTierForUser(a.membros[0].userId)).toMatchObject({ tier: 'PRO' });
       expect((await a.assentos.overview(b.groupId)).assigned).toBe(0);
     });
@@ -442,9 +471,9 @@ describe('assentos de comunidade (banco real)', () => {
 
   describe('mudar a quantidade', () => {
     it('aumento vale na hora: recorrente no valor novo e pró-rata avulso', async () => {
-      const { groupId, providerRef, assentos, provedor } = await comunidadePaga(2);
+      const { dona, groupId, providerRef, assentos, provedor } = await comunidadePaga(2);
 
-      const visao = await assentos.changeSeats(groupId, 5);
+      const visao = await assentos.changeSeats(dona, groupId, 5);
 
       expect(visao.pool).toMatchObject({ seats: 5, monthlyCents: 5 * 1490 });
       expect(provedor.updateSubscriptionValue).toHaveBeenCalledWith(providerRef, 5 * 1490);
@@ -465,10 +494,10 @@ describe('assentos de comunidade (banco real)', () => {
     });
 
     it('cobrança avulsa que falha desfaz o aumento', async () => {
-      const { groupId, providerRef, assentos, provedor } = await comunidadePaga(2);
+      const { dona, groupId, providerRef, assentos, provedor } = await comunidadePaga(2);
       provedor.createSubscriptionCharge.mockRejectedValueOnce(new Error('asaas fora'));
 
-      await expect(assentos.changeSeats(groupId, 4)).rejects.toThrow(BadGatewayException);
+      await expect(assentos.changeSeats(dona, groupId, 4)).rejects.toThrow(BadGatewayException);
       expect(provedor.updateSubscriptionValue).toHaveBeenLastCalledWith(providerRef, 2 * 1490);
       const pool = await prisma.groupSeatPool.findUniqueOrThrow({ where: { groupId } });
       expect(pool.seats).toBe(2);
@@ -478,7 +507,7 @@ describe('assentos de comunidade (banco real)', () => {
       const { groupId, assentos, provedor, assinaturas, direitos, dona, membros } =
         await comunidadePaga(1);
       await assentos.assign(dona, groupId, membros[0].membershipId);
-      await assentos.changeSeats(groupId, 3);
+      await assentos.changeSeats(dona, groupId, 3);
       const { providerChargeId } = await prisma.groupSeatAdjustment.findFirstOrThrow({
         where: { pool: { groupId } },
       });
@@ -515,9 +544,9 @@ describe('assentos de comunidade (banco real)', () => {
       await assentos.assign(dona, groupId, membros[0].membershipId);
       await assentos.assign(dona, groupId, membros[1].membershipId);
 
-      await expect(assentos.changeSeats(groupId, 1)).rejects.toThrow(ConflictException);
+      await expect(assentos.changeSeats(dona, groupId, 1)).rejects.toThrow(ConflictException);
 
-      const visao = await assentos.changeSeats(groupId, 2);
+      const visao = await assentos.changeSeats(dona, groupId, 2);
       expect(visao.pool).toMatchObject({ seats: 3, nextPeriodSeats: 2, nextMonthlyCents: 2980 });
       expect(provedor.updateSubscriptionValue).toHaveBeenLastCalledWith(providerRef, 2980);
       expect(provedor.createSubscriptionCharge).not.toHaveBeenCalled();
@@ -534,12 +563,12 @@ describe('assentos de comunidade (banco real)', () => {
     });
 
     it('aumento com a comunidade em atraso é 409', async () => {
-      const { groupId, assentos } = await comunidadePaga(1);
+      const { dona, groupId, assentos } = await comunidadePaga(1);
       await prisma.groupSeatPool.update({
         where: { groupId },
         data: { status: 'PAST_DUE', graceEndsAt: new Date(Date.now() + DIA) },
       });
-      await expect(assentos.changeSeats(groupId, 2)).rejects.toThrow(ConflictException);
+      await expect(assentos.changeSeats(dona, groupId, 2)).rejects.toThrow(ConflictException);
     });
   });
 
@@ -549,7 +578,7 @@ describe('assentos de comunidade (banco real)', () => {
         await comunidadePaga(1);
       await assentos.assign(dona, groupId, membros[0].membershipId);
 
-      const visao = await assentos.cancel(groupId);
+      const visao = await assentos.cancel(dona, groupId);
       expect(provedor.cancelSubscription).toHaveBeenCalledWith(providerRef);
       expect(visao.pool).toMatchObject({ status: 'ACTIVE', cancelAtPeriodEnd: true });
       expect(await direitos.aiTierForUser(membros[0].userId)).toMatchObject({ tier: 'PRO' });

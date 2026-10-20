@@ -58,15 +58,19 @@ export class SeatController {
   @RequireGroupAction('billing.manage')
   @UseGuards(UserThrottlerGuard)
   @Throttle({ default: { ttl: 60_000, limit: 10 } })
-  change(@Param('groupId') groupId: string, @Body() dto: ChangeSeatsDto) {
-    return this.assentos.changeSeats(groupId, dto.seats);
+  change(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('groupId') groupId: string,
+    @Body() dto: ChangeSeatsDto,
+  ) {
+    return this.assentos.changeSeats(user.id, groupId, dto.seats);
   }
 
   @Post('cancel')
   @HttpCode(200)
   @RequireGroupAction('billing.manage')
-  cancel(@Param('groupId') groupId: string) {
-    return this.assentos.cancel(groupId);
+  cancel(@CurrentUser() user: CurrentUserPayload, @Param('groupId') groupId: string) {
+    return this.assentos.cancel(user.id, groupId);
   }
 
   @Post('assignments/:membershipId')
@@ -78,7 +82,7 @@ export class SeatController {
 
   @Delete('assignments/:membershipId')
   @RequireGroupAction('billing.manage')
-  unassign(@Param() p: SeatMembershipParamDto) {
-    return this.assentos.unassign(p.groupId, p.membershipId);
+  unassign(@CurrentUser() user: CurrentUserPayload, @Param() p: SeatMembershipParamDto) {
+    return this.assentos.unassign(user.id, p.groupId, p.membershipId);
   }
 }

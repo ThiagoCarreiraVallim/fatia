@@ -3,6 +3,7 @@ import {
   BadGatewayException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -18,6 +19,7 @@ import {
   type SubscriptionStatus,
 } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
+import { can } from '../sharing/permissions';
 import { addDaysIso, dayBoundsInTz } from '../progress/helpers/date-tz';
 import { CARENCIA_DIAS, resolverDireitoIa } from './ai-entitlement';
 import type { ResultadoDeWebhookDeAssinatura, SeatProvider } from './billing-provider.port';
@@ -198,6 +200,7 @@ export class SeatPoolService {
     groupId: string,
     entrada: { seats: number; taxId: string },
   ): Promise<VisaoDosAssentos> {
+    await this.assertManager(actorId, groupId);
     validarAssentos(entrada.seats);
     if (!documentoValido(entrada.taxId)) {
       throw new BadRequestException('CPF ou CNPJ inválido. Confira os números e tente de novo.');
@@ -287,10 +290,12 @@ export class SeatPoolService {
    * - Antes de pagar (PENDING), só muda o valor da primeira cobrança.
    */
   async changeSeats(
+    actorId: string,
     groupId: string,
     seats: number,
     agora: Date = new Date(),
   ): Promise<VisaoDosAssentos> {
+    await this.assertManager(actorId, groupId);
     validarAssentos(seats);
     const pool = await this.poolVivo(groupId);
     const atribuidos = await this.contarAtribuidos(pool.id);
@@ -419,6 +424,7 @@ export class SeatPoolService {
 
   /** Dá um assento a um membro ACTIVE da comunidade. Idempotente. */
   async assign(actorId: string, groupId: string, membershipId: string): Promise<VisaoDosAssentos> {
+    await this.assertManager(actorId, groupId);
     const pool = await this.poolVivo(groupId);
     if (!ATRIBUIVEIS.includes(pool.status)) {
       throw new ConflictException('Os assentos ficam disponíveis depois do primeiro pagamento.');
@@ -460,7 +466,12 @@ export class SeatPoolService {
     return this.overview(groupId);
   }
 
-  async unassign(groupId: string, membershipId: string): Promise<VisaoDosAssentos> {
+  async unassign(
+    actorId: string,
+    groupId: string,
+    membershipId: string,
+  ): Promise<VisaoDosAssentos> {
+    await this.assertManager(actorId, groupId);
     const { count } = await this.prisma.groupSeatAssignment.updateMany({
       where: { membershipId, revokedAt: null, pool: { groupId } },
       data: { revokedAt: new Date() },
@@ -473,7 +484,8 @@ export class SeatPoolService {
    * Encerra a recorrência. Assentos pagos valem até o fim do período;
    * checkout não pago fecha na hora; cortesia acaba na hora.
    */
-  async cancel(groupId: string): Promise<VisaoDosAssentos> {
+  async cancel(actorId: string, groupId: string): Promise<VisaoDosAssentos> {
+    await this.assertManager(actorId, groupId);
     const pool = await this.poolVivo(groupId);
     if (pool.providerRef) {
       if (pool.cancelAtPeriodEnd && pool.status !== 'PENDING') return this.overview(groupId);
@@ -489,6 +501,25 @@ export class SeatPoolService {
     });
     this.logger.log({ event: 'assentos_cancelados', groupId, status: pool.status });
     return this.overview(groupId);
+  }
+
+  /**
+   * Comprar, ajustar, cancelar e atribuir assentos é `billing.manage`
+   * (`sharing/permissions.ts`). O `GroupRoleGuard` já confere na rota; aqui é a
+   * porta que vale quando o service é chamado de outro lugar. Mesma resposta do
+   * guarda: quem não é do grupo recebe 404, membro sem o papel recebe 403.
+   */
+  private async assertManager(actorId: string, groupId: string): Promise<void> {
+    const membership = await this.prisma.groupMembership.findUnique({
+      where: { groupId_userId: { groupId, userId: actorId } },
+      select: { role: true, status: true },
+    });
+    if (!membership || membership.status !== 'ACTIVE') {
+      throw new NotFoundException('Comunidade não encontrada.');
+    }
+    if (!can(membership.role, 'billing.manage')) {
+      throw new ForbiddenException('Só o dono da comunidade gerencia os assentos.');
+    }
   }
 
   /**

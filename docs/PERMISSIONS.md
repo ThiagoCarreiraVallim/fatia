@@ -138,8 +138,10 @@ futura:
 **Recusa: 403 para quem é de dentro, 404 para quem é de fora.** Quem não tem associação viva no
 grupo recebe `NOT_FOUND`, igual a um grupo inexistente — não pode descobrir que a comunidade existe.
 Membro ativo cujo papel não alcança a ação recebe `FORBIDDEN`: ele já está lá dentro, e não há o que
-esconder. A regra é uma só no `GroupRoleGuard` e no `assertOwner` do `GroupService` e do
-`MembershipService`, que repetem a checagem para quando o service é chamado sem passar pela rota.
+esconder. A regra é uma só no `GroupRoleGuard`, no `assertOwner` do `GroupService` e do
+`MembershipService` e no `assertManager` do `SeatPoolService` (`billing.manage`: comprar, ajustar,
+cancelar, atribuir e retirar assento), que repetem a checagem para quando o service é chamado sem
+passar pela rota.
 
 ### Status da associação (papel só vale com associação viva)
 
