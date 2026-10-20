@@ -8,6 +8,7 @@ import {
 import { FileSystemUploadType, deleteAsync, uploadAsync } from 'expo-file-system/legacy';
 import { useAuth } from '@/auth/auth-context';
 import { env } from '@/env';
+import { readDictationResponse } from './dictation-response';
 
 /**
  * O ditado do chat no app (Fase 9e): grava, manda o áudio ao `/chat/transcribe`
@@ -51,16 +52,9 @@ export function useDictation(onText: (texto: string) => void) {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       });
-      if (resposta.status >= 400) {
-        setError(
-          resposta.status === 402
-            ? 'O ditado faz parte do plano PRO.'
-            : 'Não deu para transcrever agora. Tente de novo ou digite.',
-        );
-      } else {
-        const corpo = JSON.parse(resposta.body) as { text?: unknown };
-        if (typeof corpo.text === 'string' && corpo.text.trim()) onText(corpo.text.trim());
-      }
+      const { text, error: falha } = await readDictationResponse(resposta.status, resposta.body);
+      if (falha) setError(falha);
+      else if (text) onText(text);
     } catch {
       setError('Não deu para transcrever agora. Tente de novo ou digite.');
     } finally {
