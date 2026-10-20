@@ -1,9 +1,9 @@
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
 import { REST_CHANNEL_ID, REST_NOTIFICATION_KIND, type RestNotifier } from './rest-notification';
 import { cores } from '@/theme/cores';
 // O handler de primeiro plano é global e silencia só o descanso; mora lá.
 import '@/notifications/foreground-handler';
+import { Notifications } from '@/notifications/native';
 
 /**
  * A ponta que fala com o sistema operacional (#182).
@@ -17,6 +17,8 @@ import '@/notifications/foreground-handler';
 
 export const expoRestNotifier: RestNotifier = {
   async ensurePermission() {
+    // Expo Go do Android: sem o módulo, o descanso fica só na tela (`native.ts`).
+    if (!Notifications) return false;
     if (Platform.OS === 'android') {
       // Antes de pedir a permissão, e não depois: no Android o diálogo é do
       // canal. Sem canal, o sistema entrega o aviso mudo e sem vibrar, que é o
@@ -41,6 +43,7 @@ export const expoRestNotifier: RestNotifier = {
   },
 
   async schedule(seconds: number) {
+    if (!Notifications) throw new Error('Avisos indisponíveis neste app.');
     return Notifications.scheduleNotificationAsync({
       content: {
         title: 'Descanso terminado',
@@ -59,6 +62,6 @@ export const expoRestNotifier: RestNotifier = {
   },
 
   async cancel(id: string) {
-    await Notifications.cancelScheduledNotificationAsync(id);
+    await Notifications?.cancelScheduledNotificationAsync(id);
   },
 };

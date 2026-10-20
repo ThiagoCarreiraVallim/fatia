@@ -1,10 +1,10 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import { notificationsApi } from '@fatia/api-client';
 import { cores } from '@/theme/cores';
 import './foreground-handler';
+import { Notifications as NotificationsModule } from './native';
 
 /**
  * O push da comunidade (Fase 8c, ADR 033) do lado do aparelho: permissão,
@@ -30,6 +30,9 @@ export type PushSetup = 'enabled' | 'denied' | 'unavailable';
  * é o caminho de quem já autorizou e só está abrindo o app.
  */
 export async function enablePush(ask: boolean): Promise<PushSetup> {
+  // Expo Go do Android: sem push remoto (ver `native.ts`).
+  const Notifications = NotificationsModule;
+  if (!Notifications) return 'unavailable';
   if (Platform.OS === 'android') {
     // Antes de pedir a permissão: no Android 13+ o diálogo só aparece depois
     // de existir um canal.

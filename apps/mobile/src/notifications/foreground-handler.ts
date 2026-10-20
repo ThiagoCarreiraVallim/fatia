@@ -1,4 +1,4 @@
-import * as Notifications from 'expo-notifications';
+import { Notifications } from './native';
 import { isRestNotification } from '@/components/workout/session/rest-notification';
 
 /**
@@ -11,7 +11,7 @@ import { isRestNotification } from '@/components/workout/session/rest-notificati
  * háptico e o leitor de tela: uma tarja por cima cobriria o campo de carga.
  * Todo o resto aparece normalmente.
  */
-Notifications.setNotificationHandler({
+Notifications?.setNotificationHandler({
   handleNotification: async (notification) => {
     const doDescanso = isRestNotification(notification.request.content.data);
     return {

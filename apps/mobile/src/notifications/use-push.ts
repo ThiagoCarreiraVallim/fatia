@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
-import * as Notifications from 'expo-notifications';
 import { notificationTarget } from '@fatia/api-client';
+import { Notifications, useLastNotificationResponse } from './native';
 import { enablePush, pushDeviceId } from './push';
 
 /**
@@ -11,7 +11,7 @@ import { enablePush, pushDeviceId } from './push';
  */
 export function usePush(ready: boolean) {
   const router = useRouter();
-  const ultimo = Notifications.useLastNotificationResponse();
+  const ultimo = useLastNotificationResponse();
 
   useEffect(() => {
     if (!ready) return;
@@ -24,7 +24,7 @@ export function usePush(ready: boolean) {
     if (!ready || !ultimo) return;
     const destino = notificationTarget(ultimo.notification.request.content.data);
     // Limpa para o mesmo toque não abrir a tela de novo no próximo início.
-    Notifications.clearLastNotificationResponse();
+    Notifications?.clearLastNotificationResponse();
     if (destino) router.push(destino as never);
   }, [ready, ultimo, router]);
 }
