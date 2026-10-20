@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 130 tools): **107,3 k caracteres**
+`description`, `annotations` e o JSON Schema do input das 130 tools): **107,6 k caracteres**
 hoje, dos quais **6.403 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (87,8 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (88,0 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -1018,24 +1018,26 @@ Corrige um item já logado. **Caso de uso central:** "na verdade era 200g, não 
 
 ```typescript
 {
-  itemId: string;
+  id: string;               // ID do item (MealItem)
   // Para item vinculado a Food: basta atualizar grams; servidor recalcula macros
   grams?: number;
   // ...ou a medida caseira: servidor converte em gramas e guarda "2 × colher de sopa"
   portionId?: string;
   quantity?: number;
-  foodId?: number;          // permite trocar o food
-  foodName?: string;
-  // Para item livre: pode atualizar macros diretamente
+  // Macros explícitos sobrescrevem o recálculo (item livre ou ajuste manual)
   kcal?: number;
   proteinG?: number;
   carbsG?: number;
   fatG?: number;
-  groupId?: number;
+  // Micronutrientes por chave (ADR 009). Substitui os que o item tinha; {} apaga
+  nutrients?: Record<string, number>;
 }
 ```
 
-**Output:** item atualizado + totais da refeição.
+Os mesmos campos do `PATCH /meal-items/:id` do REST (ADR 006). Trocar o alimento de um item não é
+edição: apague o item e adicione outro (`delete_meal_item` + `add_meal_item`).
+
+**Output:** o item atualizado.
 
 ### `delete_meal_item`
 

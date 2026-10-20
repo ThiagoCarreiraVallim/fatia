@@ -28,9 +28,10 @@ import {
  * destrutivas. A Fase 7a acrescentou mais três (`list_group_plans`, `adopt_group_plan`,
  * `list_group_tips`), e a Fase 8a mais três (`list_group_challenges`,
  * `get_challenge_leaderboard`, `join_group_challenge`), nenhuma destrutiva. Sem medição nova.
+ * O `update_meal_item` ganhou `nutrients` (paridade com o REST, ADR 006): muda o braço A.
  */
 
-const SHA_ENTIDADE = 'ac87d80707e5da39dd1cc4dc2c381d7a548b187f4087fdb6e3079279c74a4e40';
+const SHA_ENTIDADE = '6791f0872ca2bf0ff1793ef59678d9bac1bd701ee6fb3a4e68c4702d3cebeba4';
 const SHA_INTENCAO = '7c36e15630e05e7188964f8bc3fc7fadb66db106b3280448aeb98fbd2abf9c7f';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */
