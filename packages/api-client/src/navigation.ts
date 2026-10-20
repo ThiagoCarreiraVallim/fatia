@@ -138,7 +138,6 @@ const MENU: { title: string; items: MenuItemDef[] }[] = [
         label: 'Chat com a IA',
         description: 'Pergunte e registre conversando',
         href: '/chat',
-        platforms: ['web'],
         requires: 'chat',
       },
       {

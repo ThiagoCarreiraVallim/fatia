@@ -46,11 +46,18 @@ describe('navegação', () => {
     expect(hrefs(menuSections({ platform: 'web', chatAvailable: false }))).not.toContain('/chat');
   });
 
-  it('no app não há chat, e "Conectar sua IA" vai para a tela de lá', () => {
+  it('no app o chat aparece como na web (Fase 9e), e "Conectar sua IA" vai para a tela de lá', () => {
     const app = hrefs(menuSections({ platform: 'mobile', chatAvailable: true }));
-    expect(app).not.toContain('/chat');
+    expect(app).toContain('/chat');
     expect(app).toContain('/profile/tokens');
     expect(app).not.toContain('/profile/connect');
+    expect(hrefs(menuSections({ platform: 'mobile', chatAvailable: false }))).not.toContain(
+      '/chat',
+    );
+    const travado = menuSections({ platform: 'mobile', chatAvailable: true, chatLocked: true })
+      .flatMap((s) => s.items)
+      .find((i) => i.key === 'chat');
+    expect(travado).toMatchObject({ href: '/plan?recurso=chat', locked: true });
   });
 
   it.each([
