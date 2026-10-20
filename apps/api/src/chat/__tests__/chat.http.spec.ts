@@ -10,7 +10,7 @@ import { AiEntitlements } from '../../billing/subscription-entitlements.service'
 import { AiQuotaExceededException } from '../../ai/ai-quota';
 import { CommonModule } from '../../common/common.module';
 import { PrismaService } from '../../common/prisma.service';
-import { AgentChatClient, type EntradaDoTurno, type StreamDoAgente } from '../agent-chat.client';
+import { AgentAdapter, type AgentStream, type TurnInput } from '../../ai/agent.adapter';
 import { ChatModule } from '../chat.module';
 import { CheckpointPurgeService } from '../checkpoint-purge.service';
 import { ConversationService } from '../conversation.service';
@@ -96,9 +96,9 @@ function canalDoAgente() {
       else aguardando.push(resolve);
     });
 
-  const stream: StreamDoAgente = {
-    cancelar: () => entregar(null),
-    async *pedacos() {
+  const stream: AgentStream = {
+    cancel: () => entregar(null),
+    async *chunks() {
       for (;;) {
         const valor = await proximo();
         if (valor === null) return;
@@ -118,11 +118,11 @@ interface Cenario {
   app: INestApplication;
   url: string;
   canal: ReturnType<typeof canalDoAgente>;
-  openTurn: jest.Mock<Promise<StreamDoAgente>, [EntradaDoTurno]>;
-  configurado: jest.Mock<boolean, []>;
-  capacidades: jest.Mock;
-  transcrever: jest.Mock;
-  registrar: jest.Mock;
+  openTurn: jest.Mock<Promise<AgentStream>, [TurnInput]>;
+  configured: jest.Mock<boolean, []>;
+  capabilities: jest.Mock;
+  transcribe: jest.Mock;
+  record: jest.Mock;
   assertDentroDaCota: jest.Mock<Promise<void>, [string]>;
   aiTierForUser: jest.Mock<Promise<AiEntitlement>, [string]>;
   comoUsuario: (id: string) => void;
@@ -138,15 +138,15 @@ const FREE: AiEntitlement = {
 
 async function subirApp(): Promise<Cenario> {
   const canal = canalDoAgente();
-  const openTurn = jest.fn(async (_entrada: EntradaDoTurno) => canal.stream);
-  const configurado = jest.fn(() => true);
+  const openTurn = jest.fn(async (_entrada: TurnInput) => canal.stream);
+  const configured = jest.fn(() => true);
   const assertDentroDaCota = jest.fn(async (_userId: string) => undefined);
-  const capacidades = jest.fn(async () => ({ fotos: true, ditado: false }));
-  const transcrever = jest.fn(async (_audio: Buffer, _tipo: string) => ({
-    texto: 'registra 200 g de frango',
-    uso: { model: 'whisper-1', inputUnits: 3.4 },
+  const capabilities = jest.fn(async () => ({ vision: true, transcription: false }));
+  const transcribe = jest.fn(async (_audio: Buffer, _tipo: string) => ({
+    text: 'registra 200 g de frango',
+    usage: { model: 'whisper-1', inputUnits: 3.4 },
   }));
-  const registrar = jest.fn(async () => undefined);
+  const record = jest.fn(async () => undefined);
   const aiTierForUser = jest.fn(
     async (_userId: string): Promise<AiEntitlement> => INSTANCIA_LIBERADA,
   );
@@ -167,10 +167,17 @@ async function subirApp(): Promise<Cenario> {
     // Nenhum teste daqui toca o banco; o Postgres de teste é compartilhado.
     .overrideProvider(PrismaService)
     .useValue({})
-    .overrideProvider(AgentChatClient)
-    .useValue({ openTurn, configurado, capacidades, transcrever })
+    .overrideProvider(AgentAdapter)
+    .useValue({
+      openTurn,
+      configured,
+      capabilities,
+      transcribe,
+      title: jest.fn(async () => null),
+      sendFeedback: jest.fn(async () => undefined),
+    })
     .overrideProvider(AiUsageService)
-    .useValue({ assertDentroDaCota, registrar })
+    .useValue({ assertDentroDaCota, record })
     .overrideProvider(AiEntitlements)
     .useValue({ aiTierForUser, exigePlano: () => true })
     .overrideProvider(ConversationService)
@@ -229,10 +236,10 @@ async function subirApp(): Promise<Cenario> {
     url: `http://127.0.0.1:${port}/api/chat`,
     canal,
     openTurn,
-    configurado,
-    capacidades,
-    transcrever,
-    registrar,
+    configured,
+    capabilities,
+    transcribe,
+    record,
     assertDentroDaCota,
     aiTierForUser,
     comoUsuario: (id: string) => {
@@ -375,7 +382,7 @@ describe('POST /api/chat', () => {
     await (await resposta).text();
 
     await new Promise((r) => setTimeout(r, 20));
-    expect(cenario.registrar).toHaveBeenCalledWith(
+    expect(cenario.record).toHaveBeenCalledWith(
       USER,
       expect.objectContaining({ feature: 'chat', paidBy: 'USER' }),
     );
@@ -419,7 +426,7 @@ describe('POST /api/chat', () => {
 
     expect(resposta.status).toBe(200);
     expect(cenario.openTurn.mock.calls[0][0]).toMatchObject({
-      retomada: { interruptId: 'pausa-1', value: { approvals: { c1: true } } },
+      resume: { interruptId: 'pausa-1', value: { approvals: { c1: true } } },
     });
   });
 
@@ -581,7 +588,7 @@ describe('GET /api/chat/availability', () => {
   it('instância sem agente responde `available: false` em vez de deixar a aba quebrar', async () => {
     // Uma funcionalidade que sempre falha é pior que uma que não aparece: é o
     // que permite o auto-hospedado sem agente continuar um produto inteiro.
-    cenario.configurado.mockReturnValueOnce(false);
+    cenario.configured.mockReturnValueOnce(false);
 
     expect(await (await fetch(`${cenario.url}/availability`)).json()).toEqual({
       available: false,
@@ -590,7 +597,7 @@ describe('GET /api/chat/availability', () => {
       allowed: false,
       reason: 'not_configured',
     });
-    expect(cenario.capacidades).not.toHaveBeenCalled();
+    expect(cenario.capabilities).not.toHaveBeenCalled();
   });
 });
 
@@ -662,8 +669,8 @@ describe('POST /api/chat com foto', () => {
     });
 
     expect(resposta.status).toBe(200);
-    const entrada = cenario.openTurn.mock.calls[0][0] as { fotos?: { data: string }[] };
-    const enviada = Buffer.from(entrada.fotos?.[0]?.data ?? '', 'base64');
+    const entrada = cenario.openTurn.mock.calls[0][0] as { photos?: { data: string }[] };
+    const enviada = Buffer.from(entrada.photos?.[0]?.data ?? '', 'base64');
     expect(enviada.length).toBeGreaterThan(150_000);
     expect(enviada.includes(Buffer.from('iPhone 15 Pro'))).toBe(false);
     expect(enviada.includes(Buffer.from('F2LZQ8XKJC'))).toBe(false);
@@ -717,11 +724,11 @@ describe('POST /api/chat/transcribe', () => {
 
     expect(resposta.status).toBe(200);
     expect(await resposta.json()).toEqual({ text: 'registra 200 g de frango' });
-    const [bytes, tipo] = cenario.transcrever.mock.calls[0];
+    const [bytes, tipo] = cenario.transcribe.mock.calls[0];
     expect(Buffer.compare(bytes, Buffer.from(audio))).toBe(0);
     expect(tipo).toBe('audio/webm;codecs=opus');
     expect(cenario.assertDentroDaCota).toHaveBeenCalledWith(USER, expect.any(Date));
-    expect(cenario.registrar).toHaveBeenCalledWith(USER, {
+    expect(cenario.record).toHaveBeenCalledWith(USER, {
       feature: 'transcription',
       paidBy: 'INSTANCE',
       groupId: null,
@@ -734,14 +741,14 @@ describe('POST /api/chat/transcribe', () => {
     const resposta = await ditar(enc('{"oi":1}'), 'application/json');
 
     expect(resposta.status).toBe(415);
-    expect(cenario.transcrever).not.toHaveBeenCalled();
+    expect(cenario.transcribe).not.toHaveBeenCalled();
   });
 
   it('recusa áudio acima do teto sem chamar o agente', async () => {
     const resposta = await ditar(new Uint8Array(TETO_DO_AUDIO + 1), 'audio/webm');
 
     expect(resposta.status).toBe(413);
-    expect(cenario.transcrever).not.toHaveBeenCalled();
+    expect(cenario.transcribe).not.toHaveBeenCalled();
   });
 
   it('Free recebe 402 sem transcrever nem gastar cota', async () => {
@@ -752,7 +759,7 @@ describe('POST /api/chat/transcribe', () => {
     expect(resposta.status).toBe(402);
     expect(await resposta.json()).toMatchObject({ code: 'AI_PLAN_REQUIRED' });
     expect(cenario.assertDentroDaCota).not.toHaveBeenCalled();
-    expect(cenario.transcrever).not.toHaveBeenCalled();
+    expect(cenario.transcribe).not.toHaveBeenCalled();
   });
 
   it('cota estourada barra antes do agente', async () => {
@@ -769,6 +776,6 @@ describe('POST /api/chat/transcribe', () => {
     const resposta = await ditar(new Uint8Array([1, 2, 3]), 'audio/webm');
 
     expect(resposta.status).toBe(429);
-    expect(cenario.transcrever).not.toHaveBeenCalled();
+    expect(cenario.transcribe).not.toHaveBeenCalled();
   });
 });

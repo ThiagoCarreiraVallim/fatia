@@ -5,10 +5,10 @@ import {
   NotFoundException,
   PayloadTooLargeException,
 } from '@nestjs/common';
-import { AiAccessService, type Pagador } from '../ai/ai-access.service';
-import { AiUsageService } from '../ai/ai-usage.service';
+import { AiAccessService } from '../ai/ai-access.service';
+import { AgentStreamError } from '../ai/agent.adapter';
+import { HostedAiService, type HostedTurn } from '../ai/hosted-ai.service';
 import type { CurrentUserPayload } from '../common/decorators/current-user.decorator';
-import { AgentChatClient, ErroDeStreamDoAgente, type StreamDoAgente } from './agent-chat.client';
 import { ConversationService } from './conversation.service';
 import { MemoryService } from './memory/memory.service';
 import { GroupAgentService } from '../sharing/group-agent.service';
@@ -56,8 +56,7 @@ export class ChatService {
 
   constructor(
     private readonly conversas: ConversationService,
-    private readonly agent: AgentChatClient,
-    private readonly uso: AiUsageService,
+    private readonly hostedAi: HostedAiService,
     private readonly memorias: MemoryService,
     private readonly acesso: AiAccessService,
     private readonly agentes: GroupAgentService,
@@ -91,25 +90,14 @@ export class ChatService {
   }
 
   /**
-   * O ditado do composer (#141): plano e cota, transcrição e o custo no livro-caixa.
+   * O ditado do composer (#141). Plano, cota e custo ficam no `HostedAiService`.
    *
    * O texto volta para o campo de mensagem e **não** vira turno: quem decide
    * mandar é a pessoa, depois de ler. Nada do áudio é gravado ou logado.
    */
-  async transcrever(userId: string, audio: Buffer, contentType: string): Promise<{ text: string }> {
+  async transcribe(userId: string, audio: Buffer, contentType: string): Promise<{ text: string }> {
     if (audio.length === 0) throw new BadRequestException('O áudio veio vazio.');
-    const pagador = AiAccessService.pagoPor(await this.acesso.assertPodeUsar(userId));
-    const { texto, uso } = await this.agent.transcrever(audio, contentType);
-    // Transcrição não tem saída cobrada: `0`, e não `undefined` — ver `AiCallUnits`.
-    await this.uso
-      .registrar(userId, {
-        feature: 'transcription',
-        ...pagador,
-        model: uso.model || null,
-        units: { inputUnits: uso.inputUnits, outputUnits: 0 },
-      })
-      .catch((erro: Error) => this.logger.error(`Uso da transcrição não gravado: ${erro.name}`));
-    return { text: texto };
+    return this.hostedAi.transcribe(userId, audio, contentType);
   }
 
   /**
@@ -149,41 +137,48 @@ export class ChatService {
     // Reservada já aqui: um segundo `POST` na mesma conversa recebe 409 em vez
     // de abrir outro turno na mesma thread do agente.
     const run = this.runs.start(user.id, dto.conversationId);
-    let stream: StreamDoAgente;
-    let pagador: Pagador;
-    let agentGroupId: string | null;
+    let hosted: HostedTurn;
+    let agentGroupId: string | null = null;
     try {
-      pagador = AiAccessService.pagoPor(await this.acesso.assertPodeUsar(user.id));
-      agentGroupId = await this.agentGroupOf(user.id, existente, dto.agentGroupId, pagador.groupId);
-      // Conferida a cada turno: saiu da comunidade, ou o dono desligou o agente,
-      // e a mesma conversa segue com o assistente da Fatia.
-      const persona = await this.agentes.personaFor(user.id, agentGroupId);
+      // Plano e cota rodam no `openTurn`, antes deste callback e do agente.
+      hosted = await this.hostedAi.openTurn(user.id, async (seatGroupId) => {
+        agentGroupId = await this.agentGroupOf(user.id, existente, dto.agentGroupId, seatGroupId);
+        // Conferida a cada turno: saiu da comunidade, ou o dono desligou o agente,
+        // e a mesma conversa segue com o assistente da Fatia.
+        const persona = await this.agentes.personaFor(user.id, agentGroupId);
 
-      const historico =
-        existente && dto.message !== undefined
-          ? await this.conversas.historicoParaOAgente(user.id, dto.conversationId)
-          : [];
+        const history =
+          existente && dto.message !== undefined
+            ? await this.conversas.historicoParaOAgente(user.id, dto.conversationId)
+            : [];
 
-      const comum = {
-        bearer,
-        timezone: user.timezone,
-        conversationId: dto.conversationId,
-        historico,
-        memorias: (await this.memorias.listar(user.id)).map(({ id, content }) => ({ id, content })),
-        ...(persona ? { persona } : {}),
-      };
-      stream = await this.agent.openTurn(
-        dto.resume
-          ? { ...comum, retomada: { interruptId: dto.resume.interruptId, value: dto.resume.value } }
-          : { ...comum, mensagem: dto.message as string, ...(fotos.length ? { fotos } : {}) },
-      );
+        const common = {
+          bearer,
+          timezone: user.timezone,
+          conversationId: dto.conversationId,
+          history,
+          memories: (await this.memorias.listar(user.id)).map(({ id, content }) => ({
+            id,
+            content,
+          })),
+          ...(persona ? { persona } : {}),
+        };
+        return dto.resume
+          ? { ...common, resume: { interruptId: dto.resume.interruptId, value: dto.resume.value } }
+          : {
+              ...common,
+              message: dto.message as string,
+              ...(fotos.length ? { photos: fotos } : {}),
+            };
+      });
     } catch (erro) {
       // Nada saiu ainda: o turno nem existiu, e a conversa fica livre.
       this.runs.discard(run);
       throw erro;
     }
+    const stream = hosted.stream;
     // Parar antes de o agente responder corta assim que o upstream existe.
-    run.bindUpstream(() => stream.cancelar());
+    run.bindUpstream(() => stream.cancel());
 
     if (existente) await this.conversas.clearPauses(user.id, dto.conversationId);
     if (dto.message !== undefined) {
@@ -196,7 +191,7 @@ export class ChatService {
       );
       // Sem `await`: o nome é enfeite de lista, e esperar por ele atrasaria o
       // primeiro token da resposta, que é o que a pessoa está olhando.
-      if (!existente) void this.nomear(user.id, dto.conversationId, dto.message, pagador);
+      if (!existente) void this.nameConversation(user.id, dto.conversationId, dto.message, hosted);
     }
 
     // Um comentário SSE, que todo leitor ignora, só para o cabeçalho sair agora:
@@ -222,7 +217,7 @@ export class ChatService {
     };
 
     try {
-      for await (const pedaco of stream.pedacos()) {
+      for await (const pedaco of stream.chunks()) {
         for (const bloco of framer.push(pedaco)) publicar(bloco);
       }
       for (const bloco of framer.flush()) publicar(bloco);
@@ -236,13 +231,13 @@ export class ChatService {
         run.publish(formatarEventoSse('done', { status: 'stopped' }));
       } else {
         const nomeado =
-          erro instanceof ErroDeStreamDoAgente
+          erro instanceof AgentStreamError
             ? erro
-            : new ErroDeStreamDoAgente(
+            : new AgentStreamError(
                 'CHAT_INTERNAL_ERROR',
                 'Algo deu errado no meio da resposta. Tente enviar de novo.',
               );
-        if (!(erro instanceof ErroDeStreamDoAgente)) {
+        if (!(erro instanceof AgentStreamError)) {
           this.logger.error(`Erro inesperado no turno de chat: ${(erro as Error).name}`);
         }
         publicar(formatarEventoSse('error', { code: nomeado.code, message: nomeado.message }));
@@ -252,7 +247,7 @@ export class ChatService {
       }
     } finally {
       const summary = markStoppedWhenRequested(turno.read(), run.stopRequested);
-      const linha = await this.recordTurn(user.id, dto.conversationId, summary, pagador);
+      const linha = await this.recordTurn(user.id, dto.conversationId, summary, hosted);
       // Ninguém ouvindo no fim: a pessoa saiu do app (ou da tela) antes de a
       // resposta chegar. O aviso diz só que ela está pronta — nada do conteúdo.
       if (run.listeners === 0 && !run.stopRequested) {
@@ -281,43 +276,32 @@ export class ChatService {
     return true;
   }
 
+  /** Título pelo agente, com o custo no livro-caixa do turno. Nunca derruba nada. */
+  private async nameConversation(
+    userId: string,
+    conversationId: string,
+    first: string,
+    hosted: HostedTurn,
+  ): Promise<void> {
+    try {
+      const title = await hosted.title(first);
+      if (title) await this.conversas.titularSeProvisorio(userId, conversationId, first, title);
+    } catch (erro) {
+      this.logger.warn(`Falha ao nomear a conversa: ${(erro as Error).name}`);
+    }
+  }
+
   /**
    * Persiste a resposta e lança o custo no livro-caixa.
    *
    * Erro aqui não derruba o turno: a resposta já foi lida pela pessoa, e um 500
    * depois de 200 não existe. Fica no log — sem o conteúdo, só o nome do erro.
    */
-  /** Título pelo agente, com o custo no livro-caixa. Nunca derruba nada. */
-  private async nomear(
-    userId: string,
-    conversationId: string,
-    primeira: string,
-    pagador: Pagador,
-  ): Promise<void> {
-    try {
-      const gerado = await this.agent.titular(primeira);
-      if (!gerado) return;
-      if (gerado.titulo) {
-        await this.conversas.titularSeProvisorio(userId, conversationId, primeira, gerado.titulo);
-      }
-      await this.uso.registrar(userId, {
-        feature: 'chat_title',
-        ...pagador,
-        model: gerado.uso?.model ?? null,
-        units: gerado.uso
-          ? { inputUnits: gerado.uso.inputUnits, outputUnits: gerado.uso.outputUnits }
-          : {},
-      });
-    } catch (erro) {
-      this.logger.warn(`Falha ao nomear a conversa: ${(erro as Error).name}`);
-    }
-  }
-
   private async recordTurn(
     userId: string,
     conversationId: string,
     turno: TurnSummary,
-    pagador: Pagador,
+    hosted: HostedTurn,
   ): Promise<string | null> {
     let linha: string | null = null;
     try {
@@ -337,18 +321,8 @@ export class ChatService {
     } catch (erro) {
       this.logger.error(`Falha ao gravar a resposta do chat: ${(erro as Error).name}`);
     }
-
-    try {
-      if (turno.usoPorModelo.size === 0) {
-        await this.uso.registrar(userId, { feature: 'chat', ...pagador, model: null, units: {} });
-      } else {
-        for (const [model, units] of turno.usoPorModelo) {
-          await this.uso.registrar(userId, { feature: 'chat', ...pagador, model, units });
-        }
-      }
-    } catch (erro) {
-      this.logger.error(`Falha ao registrar o custo do chat: ${(erro as Error).name}`);
-    }
+    // Sempre, inclusive quando o stream quebrou: o dinheiro já saiu.
+    await hosted.finish(turno.usoPorModelo);
     return linha;
   }
 }

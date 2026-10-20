@@ -19,9 +19,9 @@ import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AiAccessService } from '../ai/ai-access.service';
 import { AiUsageService } from '../ai/ai-usage.service';
+import { HostedAiService } from '../ai/hosted-ai.service';
 import { CurrentUser, type CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { ChatThrottlerGuard } from './chat-throttler.guard';
-import { AgentChatClient } from './agent-chat.client';
 import { ChatService, type DestinoDoStream } from './chat.service';
 import { ChatRunRegistry } from './chat-run.registry';
 import { CheckpointPurgeService } from './checkpoint-purge.service';
@@ -63,7 +63,7 @@ export class ChatController {
   constructor(
     private readonly chat: ChatService,
     private readonly conversas: ConversationService,
-    private readonly agent: AgentChatClient,
+    private readonly hostedAi: HostedAiService,
     private readonly checkpoints: CheckpointPurgeService,
     private readonly memorias: MemoryService,
     private readonly uso: AiUsageService,
@@ -105,12 +105,12 @@ export class ChatController {
    */
   @Get('availability')
   async availability(@CurrentUser() user: CurrentUserPayload) {
-    const available = this.agent.configurado();
-    const { fotos, ditado } = available
-      ? await this.agent.capacidades()
-      : { fotos: false, ditado: false };
+    const available = this.hostedAi.configured();
+    const { vision, transcription } = available
+      ? await this.hostedAi.capabilities()
+      : { vision: false, transcription: false };
     const { allowed, reason } = await this.acesso.motivo(user.id, available);
-    return { available, photos: fotos, dictation: ditado, allowed, reason };
+    return { available, photos: vision, dictation: transcription, allowed, reason };
   }
 
   /**
@@ -126,7 +126,7 @@ export class ChatController {
     if (!Buffer.isBuffer(req.body)) {
       throw new UnsupportedMediaTypeException('Envie o áudio cru, com Content-Type audio/*.');
     }
-    return this.chat.transcrever(user.id, req.body, req.headers['content-type'] ?? '');
+    return this.chat.transcribe(user.id, req.body, req.headers['content-type'] ?? '');
   }
 
   @Get('conversations')
@@ -256,7 +256,7 @@ export class ChatController {
   ) {
     const runId = await this.conversas.vote(user.id, id, messageId, dto);
     // Espelho no Langfuse, sem esperar: o voto já está gravado aqui.
-    if (runId) void this.agent.sendFeedback(runId, dto.review, dto.reasons ?? []);
+    if (runId) void this.hostedAi.sendFeedback(runId, dto.review, dto.reasons ?? []);
   }
 
   /**

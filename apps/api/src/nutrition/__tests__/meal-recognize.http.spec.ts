@@ -41,14 +41,14 @@ const FOTO_BASE64 = Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64');
 interface Cenario {
   app: INestApplication;
   url: string;
-  reconhecer: jest.Mock;
+  recognize: jest.Mock;
   aiTierForUser: jest.Mock<Promise<AiEntitlement>, [string]>;
   /** Quem o guard global de autenticação teria posto em `req.user`. */
   comoUsuario: (id: string) => void;
 }
 
 async function subirApp(): Promise<Cenario> {
-  const reconhecer = jest.fn().mockResolvedValue({ itens: [], observacao: null });
+  const recognize = jest.fn().mockResolvedValue({ itens: [], observacao: null });
   const aiTierForUser = jest.fn(
     async (_userId: string): Promise<AiEntitlement> => INSTANCIA_LIBERADA,
   );
@@ -70,7 +70,7 @@ async function subirApp(): Promise<Cenario> {
     .overrideProvider(PrismaService)
     .useValue({})
     .overrideProvider(MealRecognitionService)
-    .useValue({ reconhecer, disponivel: jest.fn().mockResolvedValue(true) })
+    .useValue({ recognize, isAvailable: jest.fn().mockResolvedValue(true) })
     .overrideProvider(AiEntitlements)
     .useValue({ aiTierForUser, exigePlano: () => true })
     .compile();
@@ -101,7 +101,7 @@ async function subirApp(): Promise<Cenario> {
   return {
     app,
     url: `http://127.0.0.1:${port}/api/nutrition/meals/recognize`,
-    reconhecer,
+    recognize,
     aiTierForUser,
     comoUsuario,
   };
@@ -132,9 +132,9 @@ describe('POST /api/nutrition/meals/recognize', () => {
     const resposta = await postarFoto(cenario.url, FOTO_BASE64);
 
     expect(resposta.status).toBe(201);
-    expect(cenario.reconhecer).toHaveBeenCalledTimes(1);
+    expect(cenario.recognize).toHaveBeenCalledTimes(1);
 
-    const [userId, foto] = cenario.reconhecer.mock.calls[0] as [string, Buffer];
+    const [userId, foto] = cenario.recognize.mock.calls[0] as [string, Buffer];
     // O `userId` é o do `@CurrentUser()`, nunca algo vindo do corpo (ADR 010).
     expect(userId).toBe(USER);
     // E o corpo não chegou vazio — que é como a fiação quebrada se manifesta.
@@ -146,14 +146,14 @@ describe('POST /api/nutrition/meals/recognize', () => {
     const resposta = await postarFoto(cenario.url, 'isto não é base64!!');
 
     expect(resposta.status).toBe(400);
-    expect(cenario.reconhecer).not.toHaveBeenCalled();
+    expect(cenario.recognize).not.toHaveBeenCalled();
   });
 
-  it('corpo vazio vira 400 em vez de reconhecer uma foto de zero byte', async () => {
+  it('corpo vazio vira 400 em vez de recognize uma foto de zero byte', async () => {
     const resposta = await postarFoto(cenario.url, '   ');
 
     expect(resposta.status).toBe(400);
-    expect(cenario.reconhecer).not.toHaveBeenCalled();
+    expect(cenario.recognize).not.toHaveBeenCalled();
   });
 
   it('passa do teto por minuto e o excedente vira 429 sem inferir', async () => {
@@ -166,7 +166,7 @@ describe('POST /api/nutrition/meals/recognize', () => {
 
     expect(status).toEqual([201, 201, 201, 201, 201, 429]);
     // O 429 é barrado **antes** do serviço: o custo é a inferência, não o 201.
-    expect(cenario.reconhecer).toHaveBeenCalledTimes(5);
+    expect(cenario.recognize).toHaveBeenCalledTimes(5);
   });
 
   it('o teto é por usuário, e não por IP', async () => {

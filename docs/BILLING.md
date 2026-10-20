@@ -238,11 +238,12 @@ dono fazer isso com a chave dele.
 | Free  | o app inteiro (registro, metas, treino, progresso) + MCP com a IA da própria pessoa | grátis                            |
 | PRO   | o Free + a IA hospedada do Fatia: chat, ditado e foto de refeição                   | R$ 19,90/mês ou R$ 179/ano (−25%) |
 
-**O portão é um só e fica em `ai/`.** `AiAccessService.assertPodeUsar` roda antes de qualquer
-chamada ao agente (`chat.service.ts` e `meal-recognition.service.ts`) e responde 402
-`AI_PLAN_REQUIRED` a quem está no Free; depois dele vem a cota (#135), que vale também para o PRO. O
-guarda estático `ai/__tests__/hosted-ai-requires-plan.spec.ts` falha se um caminho novo chamar o
-agente sem passar pelo portão. As telas leem `allowed` + `reason` de `/chat/availability` e
+**O portão é um só e fica em `ai/`.** Toda chamada ao agente passa pelo `HostedAiService`
+(`ai/hosted-ai.service.ts`): `AiAccessService.assertPodeUsar` responde 402 `AI_PLAN_REQUIRED` a quem
+está no Free, depois vem a cota (#135), que vale também para o PRO, e o uso é gravado com quem pagou.
+O cliente HTTP do agente (`AgentAdapter`) não é exportado pelo `AiModule`, então um caminho novo não
+tem como chamar o agente sem passar por ali; `ai/__tests__/hosted-ai.service.spec.ts` prova, com um
+adapter falso, que sem direito o agente não é chamado e que toda chamada grava o uso. As telas leem `allowed` + `reason` de `/chat/availability` e
 `/nutrition/photo-recognition` e mostram o cadeado; o plano em si é lido em `GET /billing/plan`,
 nunca em `/users/me` (os domínios do aluno não importam `billing/`).
 

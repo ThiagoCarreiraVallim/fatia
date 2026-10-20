@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { AiModule } from '../ai/ai.module';
-import { AgentChatClient } from './agent-chat.client';
 import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -35,7 +34,6 @@ import { SharingModule } from '../sharing/sharing.module';
     ChatRunRegistry,
     ChatService,
     ConversationService,
-    AgentChatClient,
     ChatThrottlerGuard,
     CheckpointPurgeService,
     MemoryService,

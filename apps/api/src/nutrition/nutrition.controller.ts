@@ -100,7 +100,7 @@ export class NutritionController {
    */
   @Get('photo-recognition')
   async photoRecognitionStatus(@CurrentUser() user: CurrentUserPayload) {
-    const available = await this.recognition.disponivel();
+    const available = await this.recognition.isAvailable();
     return { available, ...(await this.acesso.motivo(user.id, available)) };
   }
 
@@ -133,7 +133,7 @@ export class NutritionController {
       throw new BadRequestException('O corpo não é base64 válido.');
     }
 
-    return this.recognition.reconhecer(user.id, Buffer.from(corpo, 'base64'));
+    return this.recognition.recognize(user.id, Buffer.from(corpo, 'base64'));
   }
 
   // -------- Foods --------

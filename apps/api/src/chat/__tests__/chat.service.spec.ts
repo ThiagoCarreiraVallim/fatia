@@ -3,15 +3,11 @@ import { MessageRole } from '@prisma/client';
 import { AiQuotaExceededException } from '../../ai/ai-quota';
 import { AiAccessService } from '../../ai/ai-access.service';
 import type { AiUsageService } from '../../ai/ai-usage.service';
+import { AgentStreamError, type AgentStream, type TurnInput } from '../../ai/agent.adapter';
+import { HostedAiService } from '../../ai/hosted-ai.service';
+import { FakeAgentAdapter } from '../../ai/__tests__/fake-agent.adapter';
 import { INSTANCIA_LIBERADA } from '../../billing/ai-entitlement';
 import type { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
-import {
-  ErroDeStreamDoAgente,
-  type AgentChatClient,
-  type EntradaDoTurno,
-  type StreamDoAgente,
-  type TituloDoAgente,
-} from '../agent-chat.client';
 import { ChatRunRegistry } from '../chat-run.registry';
 import type { NotificationService, Notice } from '../../notifications/notification.service';
 import { ChatService, type DestinoDoStream } from '../chat.service';
@@ -105,12 +101,12 @@ function canalDoAgente() {
       else aguardando.push(resolve);
     });
 
-  const stream: StreamDoAgente = {
-    cancelar: () => {
+  const stream: AgentStream = {
+    cancel: () => {
       cancelado = true;
       entregar(null);
     },
-    async *pedacos() {
+    async *chunks() {
       for (;;) {
         const valor = await proximo();
         if (valor === null) return;
@@ -149,7 +145,7 @@ function destinoDeTeste() {
 
 function montar(
   opcoes: {
-    stream?: StreamDoAgente;
+    stream?: AgentStream;
     historico?: MensagemDoHistorico[];
     /** `false` = a conversa ainda não existe (primeira mensagem). */
     existente?: boolean;
@@ -164,7 +160,7 @@ function montar(
 ) {
   const canal = canalDoAgente();
   const stream = opcoes.stream ?? canal.stream;
-  const chamadas: EntradaDoTurno[] = [];
+  const chamadas: TurnInput[] = [];
 
   const conversas = {
     encontrar: jest.fn(async (_userId: string, id: string) =>
@@ -201,21 +197,25 @@ function montar(
     ),
   } satisfies Partial<ConversationService>;
 
-  const agent = {
-    openTurn: jest.fn(async (entrada: EntradaDoTurno): Promise<StreamDoAgente> => {
-      chamadas.push(entrada);
-      if (opcoes.atrasarAbertura) await opcoes.atrasarAbertura;
-      return stream;
-    }),
-    titular: jest.fn(async (_texto: string): Promise<TituloDoAgente | null> => null),
-  } satisfies Partial<AgentChatClient>;
+  const agent = new FakeAgentAdapter();
+  agent.openTurn.mockImplementation(async (entrada: TurnInput): Promise<AgentStream> => {
+    chamadas.push(entrada);
+    if (opcoes.atrasarAbertura) await opcoes.atrasarAbertura;
+    return stream;
+  });
 
   const uso = {
     assertDentroDaCota: jest.fn(async (_userId: string): Promise<void> => undefined),
-    registrar: jest.fn(
+    record: jest.fn(
       async (
         _userId: string,
-        _entrada: { feature: string; model: string | null; units: Record<string, unknown> },
+        _entrada: {
+          feature: string;
+          model: string | null;
+          units: Record<string, unknown>;
+          paidBy: string;
+          groupId: string | null;
+        },
       ): Promise<void> => undefined,
     ),
   } satisfies Partial<AiUsageService>;
@@ -255,10 +255,10 @@ function montar(
 
   const runs = new ChatRunRegistry();
   const avisos = { notify: jest.fn((_ids: readonly string[], _notice: Notice) => undefined) };
+  const hostedAi = new HostedAiService(acesso, uso as unknown as AiUsageService, agent);
   const service = new ChatService(
     conversas as unknown as ConversationService,
-    agent as unknown as AgentChatClient,
-    uso as unknown as AiUsageService,
+    hostedAi,
     memorias as unknown as MemoryService,
     acesso,
     agentes as unknown as GroupAgentService,
@@ -609,9 +609,9 @@ describe('ChatService — ordem das guardas', () => {
       bearer: 'token-do-usuario',
       timezone: 'America/Sao_Paulo',
       conversationId: CONVERSA,
-      mensagem: 'e agora?',
-      historico: [{ role: MessageRole.user, content: 'anterior' }],
-      memorias: [{ id: 'm1', content: 'É vegetariana.' }],
+      message: 'e agora?',
+      history: [{ role: MessageRole.user, content: 'anterior' }],
+      memories: [{ id: 'm1', content: 'É vegetariana.' }],
     });
   });
 
@@ -623,7 +623,7 @@ describe('ChatService — ordem das guardas', () => {
     canal.encerrar();
     await turno;
 
-    expect(chamadasAoAgente[0].historico).toEqual([]);
+    expect(chamadasAoAgente[0].history).toEqual([]);
     expect(conversas.historicoParaOAgente).not.toHaveBeenCalled();
     expect(conversas.iniciarTurno).toHaveBeenCalledWith('user-a', CONVERSA, 'oi', 0, null);
   });
@@ -645,9 +645,9 @@ describe('ChatService — ordem das guardas', () => {
     await turno;
 
     expect(chamadasAoAgente[0]).toMatchObject({
-      retomada: { interruptId: 'p1', value: { approvals: { c0: true } } },
+      resume: { interruptId: 'p1', value: { approvals: { c0: true } } },
     });
-    expect(chamadasAoAgente[0].mensagem).toBeUndefined();
+    expect(chamadasAoAgente[0].message).toBeUndefined();
     expect(conversas.iniciarTurno).not.toHaveBeenCalled();
     // A pausa anterior está resolvida: o card não pode voltar depois de um F5.
     expect(conversas.clearPauses).toHaveBeenCalledWith('user-a', CONVERSA);
@@ -827,10 +827,10 @@ describe('ChatService — o que fica no banco', () => {
   it('grava o parcial e fecha com error + done quando o stream quebra no meio', async () => {
     const { service, conversas } = montar({
       stream: {
-        cancelar: () => undefined,
-        async *pedacos() {
+        cancel: () => undefined,
+        async *chunks() {
           yield enc(fragmento('ai-1', 'Você comeu'));
-          throw new ErroDeStreamDoAgente('AGENT_STREAM_INTERRUPTED', 'Interrompida.');
+          throw new AgentStreamError('AGENT_STREAM_INTERRUPTED', 'Interrompida.');
         },
       },
     });
@@ -853,8 +853,8 @@ describe('ChatService — o que fica no banco', () => {
   it('erro inesperado no meio do stream vira evento, e não exceção relançada', async () => {
     const { service } = montar({
       stream: {
-        cancelar: () => undefined,
-        async *pedacos() {
+        cancel: () => undefined,
+        async *chunks() {
           yield enc(fragmento('ai-1', 'a'));
           throw new TypeError('defeito');
         },
@@ -885,9 +885,9 @@ describe('ChatService — o que fica no banco', () => {
 describe('ChatService — o título da conversa', () => {
   it('conversa nova ganha o nome do agente, com o custo no livro-caixa', async () => {
     const { service, canal, agent, conversas, uso } = montar({ existente: false });
-    agent.titular.mockResolvedValueOnce({
-      titulo: 'Almoço com frango',
-      uso: { model: 'm', inputUnits: 40, outputUnits: 5 },
+    agent.title.mockResolvedValueOnce({
+      title: 'Almoço com frango',
+      usage: { model: 'm', inputUnits: 40, outputUnits: 5 },
     });
 
     const turno = service.converse(
@@ -901,14 +901,14 @@ describe('ChatService — o título da conversa', () => {
     await turno;
     await respirar();
 
-    expect(agent.titular).toHaveBeenCalledWith('registra 200 g de frango');
+    expect(agent.title).toHaveBeenCalledWith('registra 200 g de frango');
     expect(conversas.titularSeProvisorio).toHaveBeenCalledWith(
       'user-a',
       CONVERSA,
       'registra 200 g de frango',
       'Almoço com frango',
     );
-    expect(uso.registrar).toHaveBeenCalledWith('user-a', {
+    expect(uso.record).toHaveBeenCalledWith('user-a', {
       feature: 'chat_title',
       paidBy: 'INSTANCE',
       groupId: null,
@@ -930,12 +930,12 @@ describe('ChatService — o título da conversa', () => {
     canal.encerrar();
     await turno;
 
-    expect(agent.titular).not.toHaveBeenCalled();
+    expect(agent.title).not.toHaveBeenCalled();
   });
 
   it('falha no título não derruba o turno', async () => {
     const { service, canal, agent } = montar({ existente: false });
-    agent.titular.mockRejectedValueOnce(new Error('agente caiu'));
+    agent.title.mockRejectedValueOnce(new Error('agente caiu'));
     const saida = destinoDeTeste();
 
     const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
@@ -960,7 +960,7 @@ describe('ChatService — o que vai para o livro-caixa', () => {
     canal.encerrar();
     await turno;
 
-    expect(livro.registrar).toHaveBeenCalledWith('user-a', {
+    expect(livro.record).toHaveBeenCalledWith('user-a', {
       feature: 'chat',
       paidBy: 'INSTANCE',
       groupId: null,
@@ -978,9 +978,9 @@ describe('ChatService — o que vai para o livro-caixa', () => {
     canal.encerrar();
     await turno;
 
-    // `model: null` é o que faz `AiUsageService.registrar` gravar
+    // `model: null` é o que faz `AiUsageService.record` gravar
     // `pricingKnown: false` — um turno caro não pode entrar como grátis.
-    expect(livro.registrar).toHaveBeenCalledWith('user-a', {
+    expect(livro.record).toHaveBeenCalledWith('user-a', {
       feature: 'chat',
       paidBy: 'INSTANCE',
       groupId: null,
@@ -1000,7 +1000,7 @@ describe('ChatService — o que vai para o livro-caixa', () => {
     canal.encerrar();
     await turno;
 
-    expect(livro.registrar.mock.calls.map(([, entrada]) => entrada)).toEqual([
+    expect(livro.record.mock.calls.map(([, entrada]) => entrada)).toEqual([
       {
         feature: 'chat',
         paidBy: 'INSTANCE',
@@ -1021,17 +1021,17 @@ describe('ChatService — o que vai para o livro-caixa', () => {
   it('registra o custo mesmo quando o stream quebrou — o dinheiro já saiu', async () => {
     const { service, uso: livro } = montar({
       stream: {
-        cancelar: () => undefined,
-        async *pedacos() {
+        cancel: () => undefined,
+        async *chunks() {
           yield enc(uso({ model: 'gateway/modelo', inputUnits: 900 }));
-          throw new ErroDeStreamDoAgente('AGENT_STREAM_INTERRUPTED', 'Interrompida.');
+          throw new AgentStreamError('AGENT_STREAM_INTERRUPTED', 'Interrompida.');
         },
       },
     });
 
     await service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
 
-    expect(livro.registrar).toHaveBeenCalledWith('user-a', {
+    expect(livro.record).toHaveBeenCalledWith('user-a', {
       feature: 'chat',
       paidBy: 'INSTANCE',
       groupId: null,
@@ -1052,10 +1052,10 @@ describe('ChatService — o que NÃO pode vazar', () => {
 
     const { service, conversas } = montar({
       stream: {
-        cancelar: () => undefined,
-        async *pedacos() {
+        cancel: () => undefined,
+        async *chunks() {
           yield enc(fragmento('ai-1', 'sua glicemia está alta'));
-          throw new ErroDeStreamDoAgente('AGENT_STREAM_INTERRUPTED', 'Interrompida.');
+          throw new AgentStreamError('AGENT_STREAM_INTERRUPTED', 'Interrompida.');
         },
       },
     });

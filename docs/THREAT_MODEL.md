@@ -284,7 +284,7 @@ já que a metodologia é publicada.
 Até a #249 o `apps/agent` **deliberadamente não recebia** token de usuário; o docstring de
 `apps/agent/src/fatia_agent/api.py` registrava o porquê: "mandar um Bearer de usuário para um serviço que
 não precisa dele só aumentaria o estrago de um comprometimento". O chat com IA hospedada inverte
-isso, e a inversão é uma decisão, não um descuido: `agent-chat.client.ts` manda
+isso, e a inversão é uma decisão, não um descuido: `ai/http-agent.adapter.ts` manda
 `Authorization: Bearer <token do usuário>` para o agente, que o reusa no `/mcp`.
 
 **Por que a inversão vale a pena.** É o desenho da [ADR 015](./ADR/015-agente-python-langgraph-cliente-mcp.md):
@@ -305,15 +305,15 @@ processo Node; o `apps/agent` é Python, com outro toolchain de log e outra pilh
 A mesma superfície da #215 existe lá e **aquele conserto não vale ali** — por isso a varredura de
 vazamento do agente é um teste próprio, que olha stdout e stderr e tem controle negativo.
 
-| Onde o token poderia escapar        | O que impede                                                                                                                                                                                                                                                                 |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Log da requisição                   | `log-serializers.ts` é **lista de permissão** e `authorization` não está nela (§6)                                                                                                                                                                                           |
-| Log do proxy de chat                | `agent-chat.client.ts` e `chat.service.ts` só logam status e **nome** de classe de erro — nunca header, corpo ou resposta. Os dois specs têm um bloco "o que NÃO pode vazar" que percorre todos os caminhos que logam e falha se o token ou o que a pessoa escreveu aparecer |
-| Span                                | `headersToSpanAttributes` fica não configurado (§6b), e a chamada ao agente sai por `fetch`/undici, que **não** está na lista de instrumentações: ela não gera span nenhum                                                                                                   |
-| Banco                               | `Message` guarda texto, nomes de tool, `metadata`, `runId` e o voto. Não há coluna de token, aqui nem em `Conversation`                                                                                                                                                      |
-| Estado do grafo e checkpoint        | O `McpClient` com o Bearer viaja no **runtime context** do LangGraph, que o checkpointer não serializa. `tests/chat/test_sem_vazamento.py` lê o checkpoint gravado e procura o token, com controle negativo                                                                  |
-| Corpo de erro                       | `traduzirErro` traduz pelo `code` do agente, sem eco do que foi mandado: token recusado pelo `/mcp` vira 401 (a sessão da pessoa expirou); outro 401/403 do agente vira "instância mal configurada"                                                                          |
-| Confusão com o segredo da instância | O que autentica **a API no agente** é o `X-Fatia-Agent-Key`, um header separado. Por isso 401/403 do agente é problema de configuração, e nunca o token da pessoa                                                                                                            |
+| Onde o token poderia escapar        | O que impede                                                                                                                                                                                                                                                                     |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Log da requisição                   | `log-serializers.ts` é **lista de permissão** e `authorization` não está nela (§6)                                                                                                                                                                                               |
+| Log do proxy de chat                | `ai/http-agent.adapter.ts` e `chat.service.ts` só logam status e **nome** de classe de erro — nunca header, corpo ou resposta. Os dois specs têm um bloco "o que NÃO pode vazar" que percorre todos os caminhos que logam e falha se o token ou o que a pessoa escreveu aparecer |
+| Span                                | `headersToSpanAttributes` fica não configurado (§6b), e a chamada ao agente sai por `fetch`/undici, que **não** está na lista de instrumentações: ela não gera span nenhum                                                                                                       |
+| Banco                               | `Message` guarda texto, nomes de tool, `metadata`, `runId` e o voto. Não há coluna de token, aqui nem em `Conversation`                                                                                                                                                          |
+| Estado do grafo e checkpoint        | O `McpClient` com o Bearer viaja no **runtime context** do LangGraph, que o checkpointer não serializa. `tests/chat/test_sem_vazamento.py` lê o checkpoint gravado e procura o token, com controle negativo                                                                      |
+| Corpo de erro                       | `translateError` traduz pelo `code` do agente, sem eco do que foi mandado: token recusado pelo `/mcp` vira 401 (a sessão da pessoa expirou); outro 401/403 do agente vira "instância mal configurada"                                                                            |
+| Confusão com o segredo da instância | O que autentica **a API no agente** é o `X-Fatia-Agent-Key`, um header separado. Por isso 401/403 do agente é problema de configuração, e nunca o token da pessoa                                                                                                                |
 
 **O estado da conversa, desde a ADR 023.** O agente passou a guardar a conversa num checkpointer
 para poder pausar e retomar. Isso abre cinco perguntas, e cada uma tem resposta verificável:
@@ -375,8 +375,10 @@ fazer outra pessoa perder o PRO que pagou.
   `PENDING` (Free) e só o webhook autenticado ativa; o sync da RevenueCat atua apenas no
   `@CurrentUser()`, e o `app_user_id` da loja é o id do Fatia, que o app define depois do login. A
   origem `MANUAL` só nasce pelo script `billing:grant-pro`, que exige acesso ao banco.
-- **Portão esquecido.** `ai/__tests__/hosted-ai-requires-plan.spec.ts` reprova qualquer arquivo que
-  chame o agente (chat, ditado, foto) sem `this.acesso.assertPodeUsar(`.
+- **Portão esquecido.** O cliente do agente (`AgentAdapter`) só é injetável no `HostedAiService`, que
+  passa pelo portão e pela cota antes de chamar e grava o uso depois; o `AiModule` não o exporta, e
+  o Nest recusa a injeção em outro módulo. `ai/__tests__/hosted-ai.service.spec.ts` prova que, sem
+  direito, nenhuma chamada sai (turno, ditado, foto).
 - **Cobrança depois de apagar a conta.** `deleteAccount` cancela a recorrência no Asaas antes de
   apagar o usuário e **aborta** se o Asaas falhar. Assinatura de loja não é cancelável por nós: o
   aviso de exclusão manda a pessoa à loja.

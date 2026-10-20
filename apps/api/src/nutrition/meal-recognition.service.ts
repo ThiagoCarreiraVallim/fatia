@@ -1,15 +1,6 @@
-import {
-  BadGatewayException,
-  BadRequestException,
-  GatewayTimeoutException,
-  Injectable,
-  Logger,
-  PayloadTooLargeException,
-  ServiceUnavailableException,
-} from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { AiAccessService } from '../ai/ai-access.service';
-import { AiUsageService } from '../ai/ai-usage.service';
+import { BadRequestException, Injectable, PayloadTooLargeException } from '@nestjs/common';
+import type { AgentRecognizedItem } from '../ai/agent.adapter';
+import { HostedAiService } from '../ai/hosted-ai.service';
 import { FoodService } from './food.service';
 import { calcMacrosFromFood } from './helpers/calc-macros';
 import { NaoEhJpegError, removerMetadadosDoJpeg } from './helpers/strip-exif';
@@ -30,6 +21,9 @@ import { normalizeSearchText } from '../common/search-text';
  *
  * **A foto nunca toca disco.** Chega como Buffer, é limpa de metadados, vira
  * base64 na chamada ao agente e some com o fim da requisição — ADR 004.
+ *
+ * Plano, cota, a chamada ao agente e o custo no livro-caixa são do
+ * `HostedAiService` (`ai/`), o mesmo do chat e do ditado.
  *
  * **O casamento com a TACO acontece aqui, e não no agente.** O plano da issue
  * previa o grafo chamando `search_food` pelo MCP com o Bearer do usuário; ficou
@@ -72,38 +66,11 @@ export interface ReconhecimentoDaFoto {
   observacao: string | null;
 }
 
-/** Resposta do agente, antes do catálogo. Espelha `schemas/recognized_meal.py`. */
-interface ItemDoAgente {
-  name: string;
-  grams: number;
-  confidence: number;
-  kcal?: number | null;
-  protein_g?: number | null;
-  carbs_g?: number | null;
-  fat_g?: number | null;
-}
-
-interface RespostaDoAgente {
-  items: ItemDoAgente[];
-  note?: string | null;
-}
-
 /**
  * Teto da imagem **já decodificada**. Foto de celular reduzida para 1024 px de
  * lado dá algumas centenas de kB; 4 MB é folga para quem manda a original.
  */
 export const MAX_FOTO_BYTES = 4 * 1024 * 1024;
-
-/**
- * Visão em CPU local leva de 20 a 60 s, e o gemma local já passou de 100 s com
- * uma foto de 342×268. Um timeout curto aqui vira "a IA falhou" com a inferência
- * paga do mesmo jeito — o risco de timeout em cascata registrado na issue. O
- * cliente e o proxy reverso precisam acomodar este número, não o contrário.
- */
-const TIMEOUT_PADRAO_MS = 180_000;
-
-/** `/capabilities` não faz inferência: pode (e deve) desistir rápido. */
-const TIMEOUT_DE_STATUS_MS = 3_000;
 
 /**
  * Quantos candidatos pedir ao catálogo — o teto que `FoodService.search` aceita.
@@ -130,56 +97,34 @@ function identidadeDoCatalogo(nome: string): string {
 
 @Injectable()
 export class MealRecognitionService {
-  private readonly logger = new Logger(MealRecognitionService.name);
-
   constructor(
-    private readonly config: ConfigService,
     private readonly foods: FoodService,
-    private readonly acesso: AiAccessService,
-    private readonly uso: AiUsageService,
+    private readonly hostedAi: HostedAiService,
   ) {}
 
   /** `true` quando o app deve mostrar a entrada por foto. */
-  async disponivel(): Promise<boolean> {
-    const base = this.baseDoAgente();
-    if (!base) return false;
-
-    try {
-      const resposta = await fetch(`${base}/capabilities`, {
-        headers: { Accept: 'application/json' },
-        signal: AbortSignal.timeout(TIMEOUT_DE_STATUS_MS),
-      });
-      if (!resposta.ok) return false;
-      const corpo: unknown = await resposta.json();
-      // Não basta o agente estar no ar: sem `AI_MODEL_VISION` ele sobe saudável
-      // e recusa toda inferência. Mostrar o botão nesse estado leva a pessoa a
-      // tirar uma foto para receber um erro.
-      const modelo = (corpo as { capabilities?: { vision?: unknown } })?.capabilities?.vision;
-      return typeof modelo === 'string' && modelo.length > 0;
-    } catch (erro) {
-      this.logger.warn(`Agente de IA inacessível: ${(erro as Error).message}`);
-      return false;
-    }
+  async isAvailable(): Promise<boolean> {
+    return this.hostedAi.configured() && (await this.hostedAi.capabilities()).vision;
   }
 
   /**
    * Foto → alimentos candidatos, já casados com a TACO quando houve
    * correspondência. **Não persiste nada.**
    */
-  async reconhecer(userId: string, foto: Buffer): Promise<ReconhecimentoDaFoto> {
-    if (foto.length === 0) {
+  async recognize(userId: string, photo: Buffer): Promise<ReconhecimentoDaFoto> {
+    if (photo.length === 0) {
       throw new BadRequestException('Nenhuma imagem foi enviada.');
     }
-    if (foto.length > MAX_FOTO_BYTES) {
+    if (photo.length > MAX_FOTO_BYTES) {
       throw new PayloadTooLargeException(
-        `A foto tem ${foto.length} bytes e o limite é ${MAX_FOTO_BYTES}. Reduza a resolução.`,
+        `A foto tem ${photo.length} bytes e o limite é ${MAX_FOTO_BYTES}. Reduza a resolução.`,
       );
     }
 
     // Antes de qualquer coisa que saia daqui: metadados fora. Ver strip-exif.ts.
-    let semMetadados: Buffer;
+    let withoutMetadata: Buffer;
     try {
-      semMetadados = removerMetadadosDoJpeg(foto);
+      withoutMetadata = removerMetadadosDoJpeg(photo);
     } catch (erro) {
       if (erro instanceof NaoEhJpegError) {
         throw new BadRequestException('A imagem precisa ser um JPEG.');
@@ -187,127 +132,13 @@ export class MealRecognitionService {
       throw erro;
     }
 
-    // Plano e cota antes do agente (ADR 024): Free recebe 402 e nada sai daqui.
-    // Até a Fase 4 a foto não passava por cota nenhuma — só pelo throttle.
-    const direito = await this.acesso.assertPodeUsar(userId);
-
-    const resposta = await this.chamarAgente(semMetadados);
-    // O `/recognize-meal` não reporta `usage`: `model: null` grava custo NÃO
-    // medido, que conta na tolerância `unpriced` em vez de sair de graça.
-    await this.uso
-      .registrar(userId, {
-        feature: 'meal_photo',
-        ...AiAccessService.pagoPor(direito),
-        model: null,
-        units: {},
-      })
-      .catch((erro: Error) => this.logger.error(`Uso da foto não gravado: ${erro.name}`));
+    // Plano e cota antes do agente (ADR 024), e o custo depois: Free recebe 402
+    // e nada sai daqui.
+    const { items, note } = await this.hostedAi.recognizeMeal(userId, withoutMetadata);
     return {
-      itens: await this.casarComOCatalogo(userId, resposta.items),
-      observacao: resposta.note ?? null,
+      itens: await this.casarComOCatalogo(userId, items),
+      observacao: note,
     };
-  }
-
-  private baseDoAgente(): string | null {
-    const bruto = this.config.get<string>('AGENT_BASE_URL', '').trim();
-    return bruto ? bruto.replace(/\/+$/, '') : null;
-  }
-
-  private async chamarAgente(foto: Buffer): Promise<RespostaDoAgente> {
-    const base = this.baseDoAgente();
-    if (!base) {
-      throw new ServiceUnavailableException(
-        'O reconhecimento por foto não está configurado nesta instância. ' +
-          'Registre a refeição manualmente — nada do produto depende de IA.',
-      );
-    }
-
-    const chave = this.config.get<string>('AGENT_API_KEY', '').trim();
-    const timeout = Number(this.config.get<string>('AGENT_TIMEOUT_MS', '')) || TIMEOUT_PADRAO_MS;
-
-    let http: Response;
-    try {
-      http = await fetch(`${base}/recognize-meal`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          ...(chave ? { 'X-Fatia-Agent-Key': chave } : {}),
-        },
-        // Só a foto e o formato. **Nada do usuário viaja** — nem id, nem token,
-        // nem o dia da refeição. Há teste fixando isso.
-        body: JSON.stringify({
-          image_base64: foto.toString('base64'),
-          media_type: 'image/jpeg',
-        }),
-        signal: AbortSignal.timeout(timeout),
-      });
-    } catch (erro) {
-      const causa = erro as Error;
-      // Sem nada da foto na mensagem: ela vai para log.
-      this.logger.warn(`Agente de IA falhou: ${causa.name}: ${causa.message}`);
-      if (causa.name === 'TimeoutError' || causa.name === 'AbortError') {
-        throw new GatewayTimeoutException(
-          'O reconhecimento demorou demais. Tente de novo ou registre manualmente.',
-        );
-      }
-      throw new ServiceUnavailableException(
-        'O reconhecimento por foto está fora do ar. Registre manualmente — o caminho continua o mesmo.',
-      );
-    }
-
-    if (!http.ok) throw await this.traduzirErroDoAgente(http);
-
-    const corpo: unknown = await http.json().catch(() => null);
-    const itens = (corpo as RespostaDoAgente | null)?.items;
-    if (!Array.isArray(itens)) {
-      throw new BadGatewayException('O reconhecimento devolveu uma resposta inesperada.');
-    }
-    return corpo as RespostaDoAgente;
-  }
-
-  /**
-   * `code` do agente → exceção do Nest.
-   *
-   * A tradução é pelo **código**, nunca pela mensagem: o código é contrato
-   * estável do `apps/agent`, a mensagem em prosa muda sem aviso.
-   */
-  private async traduzirErroDoAgente(http: Response): Promise<Error> {
-    const corpo = (await http.json().catch(() => null)) as {
-      error?: { code?: string; message?: string };
-    } | null;
-    const code = corpo?.error?.code ?? '';
-    this.logger.warn(`Agente de IA respondeu ${http.status} (${code || 'sem code'})`);
-
-    const manual = 'Registre a refeição manualmente enquanto isso.';
-
-    // 401/403 do agente é **erro de configuração**, e ele chega sem `code`
-    // porque quem recusa é a camada de credencial, antes do handler. Caindo no
-    // `default`, virava "o reconhecimento por foto falhou" — uma falha de
-    // operação vestida de falha do modelo, que manda quem opera procurar no
-    // lugar errado. Os dois lados precisam concordar sobre `AGENT_API_KEY`.
-    if (http.status === 401 || http.status === 403) {
-      return new ServiceUnavailableException(
-        'O reconhecimento por foto está mal configurado nesta instância: a API não conseguiu ' +
-          `se autenticar no agente de IA. ${manual}`,
-      );
-    }
-
-    switch (code) {
-      case 'AI_PROVIDER_NOT_CONFIGURED':
-        return new ServiceUnavailableException(
-          `O reconhecimento por foto não está configurado nesta instância. ${manual}`,
-        );
-      case 'AI_PROVIDER_TIMEOUT':
-        return new GatewayTimeoutException(`O modelo não respondeu a tempo. ${manual}`);
-      case 'AI_RESPONSE_UNPARSEABLE':
-      case 'AI_RESPONSE_TRUNCATED':
-        return new BadGatewayException(
-          `Não consegui entender o que o modelo devolveu para esta foto. ${manual}`,
-        );
-      default:
-        return new BadGatewayException(`O reconhecimento por foto falhou. ${manual}`);
-    }
   }
 
   /**
@@ -319,7 +150,7 @@ export class MealRecognitionService {
    */
   private async casarComOCatalogo(
     userId: string,
-    itens: ItemDoAgente[],
+    itens: AgentRecognizedItem[],
   ): Promise<ItemReconhecido[]> {
     const casados: ItemReconhecido[] = [];
 

@@ -22,8 +22,8 @@ import {
  * serviço fecham, para que a #249 **reuse** a cota em vez de inventar a segunda.
  *
  * Fica em `ai/` e não em `chat/` de propósito: o chat é o primeiro a gastar, não
- * o único. Quando a #139 (visão) passar a registrar, ela grava aqui e o teto do
- * dia continua sendo um só.
+ * o único: quem grava é o `HostedAiService`, para chat, ditado, título e foto, e o
+ * teto do dia continua sendo um só.
  */
 @Injectable()
 export class AiUsageService {
@@ -110,30 +110,33 @@ export class AiUsageService {
    * Aqui está o encaixe com o `apps/agent`: se ele parar de emitir `usage`, a
    * cota fecha pela tolerância em vez de liberar para sempre em silêncio.
    */
-  async registrar(
+  async record(
     userId: string,
-    entrada: {
+    entry: {
       feature: string;
       model: string | null;
       units: AiCallUnits;
-      /** Quem paga (ADR 024). Vem de `AiAccessService.pagoPor`. */
-      paidBy?: AiPaidBy;
-      groupId?: string | null;
+      /**
+       * Quem paga (ADR 024). Obrigatório: um lançamento sem pagador some da margem
+       * por origem (`AiUsage.paidBy`), que é a métrica de custo do PRD.
+       */
+      paidBy: AiPaidBy;
+      groupId: string | null;
     },
   ): Promise<void> {
-    const custo = entrada.model
-      ? estimateAiCost(entrada.model, entrada.units, this.tabelaDePreco())
+    const cost = entry.model
+      ? estimateAiCost(entry.model, entry.units, this.tabelaDePreco())
       : { costMicros: 0, pricingKnown: false };
 
     await this.prisma.aiUsage.create({
       data: {
         userId,
-        feature: entrada.feature,
-        model: entrada.model ?? '',
-        costMicros: custo.costMicros,
-        pricingKnown: custo.pricingKnown,
-        paidBy: entrada.paidBy ?? null,
-        groupId: entrada.groupId ?? null,
+        feature: entry.feature,
+        model: entry.model ?? '',
+        costMicros: cost.costMicros,
+        pricingKnown: cost.pricingKnown,
+        paidBy: entry.paidBy,
+        groupId: entry.groupId,
       },
     });
   }

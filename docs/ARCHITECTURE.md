@@ -131,6 +131,19 @@ apps/agent  /chat        hidratar → [planejar] → agente ⇄ ferramentas → 
   `{userId}:{conversationId}`, e o `userId` sai do `get_me` chamado com o Bearer, nunca do corpo.
   Dado de domínio, ele alcança só pelo `/mcp`.
 
+**A IA hospedada passa por um módulo só** (`apps/api/src/ai/`). Turno, ditado, título e foto de
+refeição chamam o `HostedAiService`, e cada método faz, nesta ordem: portão de plano e cota
+(`AiAccessService`, ADR 024) → quem paga (`AiUsage.paidBy`, ADR 025) → agente → uso gravado. A
+gravação nunca derruba a resposta, mas não é opcional: o turno grava um lançamento por modelo ao
+fim do stream (`HostedTurn.finish`), inclusive quando ele quebrou, e um turno sem `usage` vira
+lançamento **não medido**. O título herda o direito do turno que o abriu — só existe pela
+`HostedTurn` — e grava com o mesmo pagador. O cliente HTTP do agente é um adapter só
+(`AgentAdapter`, implementado por `HttpAgentAdapter`): base, `X-Fatia-Agent-Key`, timeouts, uma nova
+tentativa quando o socket caiu antes da resposta, a tabela `code` do agente → exceção do Nest e o
+`/capabilities` em cache. O `AiModule` **não exporta** o adapter, então nenhum outro módulo chama o
+agente sem passar pelo portão e pelo livro-caixa; os testes usam um adapter falso. Todas as rotas
+de inferência do agente devolvem `usage` (modelo e tokens), e é por ele que a foto sai precificada.
+
 **O chat lê e escreve, com confirmação.** O recorte é o das três camadas da
 [ADR 022](ADR/022-classificacao-3-camadas-do-chat.md), derivado das anotações que o `/mcp` serve:
 READ_ONLY executa direto, CONFIRMABLE pausa e só executa com o sim da pessoa, RESTRICTED (inclusive
