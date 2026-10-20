@@ -28,7 +28,29 @@ import type {
 } from './chat';
 import { erroDoChat } from './chat';
 
-export type ChatToolStatus = 'running' | 'success' | 'error';
+/**
+ * `refused` e `not_run` não são falha da tool: a pessoa recusou a escrita, ou a
+ * conversa seguiu antes de ela rodar. A tela não os mostra como "não deu certo".
+ */
+export type ChatToolStatus = 'running' | 'success' | 'error' | 'refused' | 'not_run';
+
+/**
+ * Os desfechos que o próprio agente escreve (`RECUSADA` e `NAO_EXECUTADA` em
+ * `apps/agent/.../chat/graph.py`), reconhecidos pelo começo do texto — é o que
+ * atravessa o fio. Os mesmos prefixos do PWA (`components/chat/partes.tsx`), e
+ * um teste lê o agente para o texto daqui não ficar para trás.
+ */
+export const TOOL_REFUSED_PREFIX = 'A pessoa recusou';
+export const TOOL_NOT_RUN_PREFIX = 'Não executada';
+
+/** O desfecho de uma chamada, a partir do que o agente gravou. */
+function toolOutcome(erro: boolean, content: unknown): Pick<ChatToolPart, 'status' | 'errorText'> {
+  if (!erro) return { status: 'success' };
+  const texto = typeof content === 'string' ? content : '';
+  if (texto.startsWith(TOOL_REFUSED_PREFIX)) return { status: 'refused' };
+  if (texto.startsWith(TOOL_NOT_RUN_PREFIX)) return { status: 'not_run' };
+  return { status: 'error', ...(texto ? { errorText: texto } : {}) };
+}
 
 export interface ChatToolPart {
   /** O `toolCallId`: é por ele que o desfecho e o cartão (`artifact`) se penduram. */
@@ -184,13 +206,7 @@ function applyToolResult(messages: ChatThreadMessage[], m: WireMessage): ChatThr
     return {
       ...msg,
       tools: msg.tools.map((t) =>
-        t.id === id
-          ? {
-              ...t,
-              status: erro ? 'error' : 'success',
-              ...(erro && typeof m.content === 'string' ? { errorText: m.content } : {}),
-            }
-          : t,
+        t.id === id ? { id: t.id, name: t.name, ...toolOutcome(erro, m.content) } : t,
       ),
     };
   });
@@ -363,9 +379,9 @@ export function threadFromHistory(rows: readonly ChatHistoryMessage[]): ChatThre
     const aberta = row.metadata?.status === 'interrupted';
     const tools = chamadas.map((c): ChatToolPart => {
       const d = desfechos.get(c.id);
-      if (d) return { id: c.id, name: c.name, status: d.status, errorText: d.errorText };
+      if (d) return { id: c.id, name: c.name, ...toolOutcome(d.status === 'error', d.errorText) };
       // Sem desfecho: espera a pausa (aberta) ou nunca rodou — não é "feito".
-      return { id: c.id, name: c.name, status: aberta ? 'running' : 'error' };
+      return { id: c.id, name: c.name, status: aberta ? 'running' : 'not_run' };
     });
     if (!row.content && tools.length === 0) continue;
     artifacts = { ...artifacts, ...(row.metadata?.artifacts ?? {}) };

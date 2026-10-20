@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { TOOL_NOT_RUN_PREFIX, TOOL_REFUSED_PREFIX } from '@fatia/api-client';
 import { NEVER_RAN } from '../historico';
 import { NOT_RUN_PREFIX, REFUSED_PREFIX } from '../partes';
 
@@ -27,6 +28,11 @@ describe('contrato dos desfechos de tool com o agente', () => {
 
   it('a não executada começa com o que a tela procura', () => {
     expect(constante('NAO_EXECUTADA').startsWith(NOT_RUN_PREFIX)).toBe(true);
+  });
+
+  it('o app (chat-thread do api-client) procura os mesmos começos', () => {
+    expect(constante('RECUSADA').startsWith(TOOL_REFUSED_PREFIX)).toBe(true);
+    expect(constante('NAO_EXECUTADA').startsWith(TOOL_NOT_RUN_PREFIX)).toBe(true);
   });
 
   it('o "não executada" que a tela escreve é o mesmo do agente', () => {

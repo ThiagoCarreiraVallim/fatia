@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import {
+  Ban,
   Check,
   ChevronDown,
   ChevronRight,
@@ -20,6 +21,7 @@ import {
   type ChatPlanStep,
   type ChatStreamError,
   type ChatThreadState,
+  type ChatToolStatus,
 } from '@fatia/api-client';
 import { Button, cn } from '@/components/ui';
 import { cores } from '@/theme/cores';
@@ -27,6 +29,19 @@ import { ArtifactCard } from './artifact-card';
 import { ChatMarkdown } from './chat-markdown';
 
 /** Uma fala da pessoa. A foto não fica guardada (ADR 004): sobra o aviso. */
+
+/**
+ * O desfecho de cada chamada, em português e como no PWA (`partes.tsx`): recusar
+ * uma escrita ou a conversa seguir antes não é "não deu certo".
+ */
+const TOOL_STATUS_LABEL: Record<ChatToolStatus, string> = {
+  running: 'em andamento',
+  success: 'feito',
+  error: 'não deu certo',
+  refused: 'você recusou, nada foi gravado',
+  not_run: 'não chegou a rodar',
+};
+
 export function UserBubble({ text, photos }: { text: string; photos: number }) {
   return (
     <View className="max-w-[85%] self-end rounded-2xl rounded-br-md bg-secondary px-4 py-2.5">
@@ -88,24 +103,23 @@ export function AssistantBlock({
       {message.tools.map((tool) => (
         <View key={tool.id} className="gap-2">
           <View
-            accessibilityLabel={`${thread.toolTitles[tool.name] ?? tool.name}: ${
-              tool.status === 'running'
-                ? 'em andamento'
-                : tool.status === 'success'
-                  ? 'feito'
-                  : 'não deu certo'
-            }`}
+            accessibilityLabel={`${thread.toolTitles[tool.name] ?? tool.name}: ${TOOL_STATUS_LABEL[tool.status]}`}
             className="flex-row items-center gap-2 self-start rounded-full border border-border px-3 py-1"
           >
             {tool.status === 'running' ? (
               <ActivityIndicator size="small" color={cores.primary} />
             ) : tool.status === 'success' ? (
               <Check size={14} color={cores.primary} />
-            ) : (
+            ) : tool.status === 'error' ? (
               <CircleX size={14} color={cores.mutedForeground} />
+            ) : (
+              <Ban size={14} color={cores.mutedForeground} />
             )}
             <Text className="text-xs text-foreground">
               {thread.toolTitles[tool.name] ?? tool.name}
+              {tool.status === 'refused' || tool.status === 'not_run'
+                ? `: ${TOOL_STATUS_LABEL[tool.status]}`
+                : ''}
             </Text>
           </View>
           {tool.status === 'error' && tool.errorText ? (

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   EMPTY_CHAT_THREAD,
+  TOOL_NOT_RUN_PREFIX,
+  TOOL_REFUSED_PREFIX,
   appendUserMessage,
   applyChatFrame,
   askFieldsOf,
@@ -209,11 +211,47 @@ describe('threadFromHistory', () => {
     expect(s.messages[0]).toEqual({ role: 'user', id: 'u1', text: 'almocei', photos: 1 });
     const a1 = s.messages[1] as ChatAssistantMessage;
     // Sem desfecho fora de uma pausa aberta: nunca rodou, e não vira "feito".
-    expect(a1.tools.map((t) => t.status)).toEqual(['success', 'error']);
+    expect(a1.tools.map((t) => t.status)).toEqual(['success', 'not_run']);
     expect(a1).toMatchObject({ rowId: 'a1', review: 'like' });
     expect((s.messages[2] as ChatAssistantMessage).tools[0].status).toBe('running');
     expect(s.interrupt?.id).toBe('p1');
     expect(s.artifacts.c1).toBeDefined();
+  });
+});
+
+describe('recusa e "não executada" não são erro (como no PWA)', () => {
+  const desfecho = (content: string): ChatStreamFrame => ({
+    event: 'updates',
+    data: {
+      ferramentas: {
+        messages: [{ type: 'tool', tool_call_id: 'c1', status: 'error', content }],
+      },
+    },
+  });
+  const pedido: ChatStreamFrame = {
+    event: 'updates',
+    data: {
+      agente: {
+        messages: [
+          { type: 'ai', id: 'ai-1', content: '', tool_calls: [{ id: 'c1', name: 'log_meal' }] },
+        ],
+      },
+    },
+  };
+
+  it('a pessoa recusou: refused, sem texto de erro', () => {
+    const s = aplicar([pedido, desfecho(`${TOOL_REFUSED_PREFIX} esta alteração na tela.`)]);
+    expect(resposta(s).tools[0]).toEqual({ id: 'c1', name: 'log_meal', status: 'refused' });
+  });
+
+  it('a conversa seguiu antes: not_run', () => {
+    const s = aplicar([pedido, desfecho(`${TOOL_NOT_RUN_PREFIX}: a conversa seguiu.`)]);
+    expect(resposta(s).tools[0].status).toBe('not_run');
+  });
+
+  it('falha de verdade continua error, com o texto', () => {
+    const s = aplicar([pedido, desfecho('sem acesso')]);
+    expect(resposta(s).tools[0]).toMatchObject({ status: 'error', errorText: 'sem acesso' });
   });
 });
 
