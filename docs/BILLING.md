@@ -320,6 +320,14 @@ ambiente). Os testes cobrem o adapter com `fetch` simulado e o service contra o 
 A compra no app é obrigatoriamente pela loja. O app nunca mostra link de compra externa; quem
 assinou pela web vê o plano e é orientado a gerenciar pela web.
 
+**A compra no app é desligável por build** (`EXPO_PUBLIC_IAP_ENABLED`, ligada só com `true` e com
+as chaves da RevenueCat no build). O piloto vai às lojas com ela **desligada**: a IA chega pelo
+assento da comunidade ou pela cortesia (`billing:grant-pro`). Desligada, a RevenueCat nem é
+configurada, e "Meu plano" mostra o plano e diz que o PRO chega pela comunidade — sem pacote, sem
+"restaurar compras", sem preço e sem mandar gerenciar ou comprar pela web (as lojas proíbem, num app
+que não vende pela loja, apontar para a compra fora dele). A web continua vendendo pelo Asaas. A
+decisão do que aparecer está em `apps/mobile/src/billing/plan-offer.ts`, com teste.
+
 Configuração (uma vez, no painel da RevenueCat):
 
 1. Produtos nas lojas: `fatia_pro_mensal` e `fatia_pro_anual` (assinatura auto-renovável), com os

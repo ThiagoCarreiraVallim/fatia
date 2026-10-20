@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import Purchases, { type PurchasesPackage } from 'react-native-purchases';
+import { iapEnabled } from './plan-offer';
 
 /**
  * Compra do PRO dentro do app, pela RevenueCat (ADR 024).
@@ -9,8 +10,9 @@ import Purchases, { type PurchasesPackage } from 'react-native-purchases';
  * login aqui usa o **id do usuário do Fatia**: é assim que o webhook e o
  * `sync` sabem de quem é a compra.
  *
- * Sem a chave da loja no build (`EXPO_PUBLIC_REVENUECAT_*`), a compra não é
- * oferecida — a tela explica, em vez de um botão que sempre falha.
+ * A compra só existe com `EXPO_PUBLIC_IAP_ENABLED=true` **e** a chave da loja no
+ * build (`EXPO_PUBLIC_REVENUECAT_*`). Desligada, a RevenueCat nem é configurada,
+ * e a tela não vende o PRO (ver `plan-offer.ts`).
  */
 
 const CHAVE =
@@ -22,13 +24,13 @@ const CHAVE =
 
 let usuarioConfigurado: string | null = null;
 
-export function compraNoAppDisponivel(): boolean {
-  return Boolean(CHAVE);
+export function inAppPurchaseAvailable(): boolean {
+  return iapEnabled(process.env.EXPO_PUBLIC_IAP_ENABLED, CHAVE);
 }
 
 /** Liga a RevenueCat à conta do Fatia. Idempotente. */
-export async function entrarNaLoja(userId: string): Promise<void> {
-  if (!CHAVE || usuarioConfigurado === userId) return;
+export async function storeLogIn(userId: string): Promise<void> {
+  if (!inAppPurchaseAvailable() || !CHAVE || usuarioConfigurado === userId) return;
   if (usuarioConfigurado === null) {
     Purchases.configure({ apiKey: CHAVE, appUserID: userId });
   } else {

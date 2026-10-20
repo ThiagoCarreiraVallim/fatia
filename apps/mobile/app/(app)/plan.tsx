@@ -15,12 +15,13 @@ import { Screen } from '@/components/layout/screen';
 import { Button, cn, ErrorState, LoadingState } from '@/components/ui';
 import {
   comprar,
-  compraNoAppDisponivel,
-  entrarNaLoja,
+  inAppPurchaseAvailable,
+  storeLogIn,
   pacotesDoPro,
   restaurarCompras,
   type PurchasesPackage,
 } from '@/billing/purchases';
+import { planOffer } from '@/billing/plan-offer';
 import { mensagemDeErro } from '@/components/nutrition/helpers';
 import { cores } from '@/theme/cores';
 
@@ -29,8 +30,9 @@ import { cores } from '@/theme/cores';
  *
  * Réplica de `apps/web/src/app/(app)/plan/page.tsx`, com uma diferença de
  * propósito: aqui a compra é **só** pela App Store / Google Play (regra das
- * lojas). Quem assinou pela web vê o plano e gerencia pela web, sem link de
- * compra externa.
+ * lojas), e só quando o build liga a compra (`EXPO_PUBLIC_IAP_ENABLED`). Sem
+ * ela, a tela mostra o plano e diz que o PRO chega pela comunidade — sem preço
+ * e sem apontar para a web. O que aparece sai de `planOffer`.
  */
 export default function PlanScreen() {
   const { recurso } = useLocalSearchParams<{ recurso?: ProFeature }>();
@@ -39,16 +41,13 @@ export default function PlanScreen() {
 
   const plano = useQuery({ queryKey: ['billing', 'plan'], queryFn: () => billingApi.plan() });
   const me = useQuery({ queryKey: ['users', 'me'], queryFn: () => usersApi.me() });
-  const podeComprar =
-    compraNoAppDisponivel() &&
-    plano.data?.tier === 'FREE' &&
-    plano.data.requiresPlan &&
-    Boolean(me.data?.id);
+  const oferta = plano.data ? planOffer(plano.data, inAppPurchaseAvailable()) : null;
+  const podeComprar = Boolean(oferta?.purchase && me.data?.id);
 
   const pacotes = useQuery({
     queryKey: ['billing', 'store-packages', me.data?.id],
     queryFn: async () => {
-      await entrarNaLoja(me.data!.id);
+      await storeLogIn(me.data!.id);
       return pacotesDoPro();
     },
     enabled: podeComprar,
@@ -73,7 +72,7 @@ export default function PlanScreen() {
 
   const restaurar = useMutation({
     mutationFn: async () => {
-      await entrarNaLoja(me.data!.id);
+      await storeLogIn(me.data!.id);
       await restaurarCompras();
       return billingApi.revenueCatSync();
     },
@@ -120,7 +119,7 @@ export default function PlanScreen() {
               {planSummary(p)}
             </Text>
           </View>
-          {p.source === 'ASAAS' && pro ? (
+          {oferta?.webManageNote ? (
             <Text className="mt-2 text-sm text-muted-foreground">
               Assinatura feita pela web. Para cancelar ou trocar o plano, entre no Fatia pelo
               navegador.
@@ -188,13 +187,13 @@ export default function PlanScreen() {
           </View>
         </View>
 
-        {!pro && p.requiresPlan ? (
+        {oferta?.notice ? (
+          <Text className="text-center text-sm text-muted-foreground">{oferta.notice}</Text>
+        ) : null}
+
+        {oferta?.purchase ? (
           <View className="gap-3">
-            {!compraNoAppDisponivel() ? (
-              <Text className="text-center text-sm text-muted-foreground">
-                A assinatura não está disponível nesta versão do app.
-              </Text>
-            ) : pacotes.isPending ? (
+            {pacotes.isPending ? (
               <LoadingState label="Buscando os planos da loja…" />
             ) : pacotes.isError || (pacotes.data?.length ?? 0) === 0 ? (
               <Text className="text-center text-sm text-muted-foreground">
@@ -223,7 +222,7 @@ export default function PlanScreen() {
                 </Pressable>
               ))
             )}
-            {compraNoAppDisponivel() ? (
+            {oferta.restore ? (
               <Button
                 variant="ghost"
                 loading={restaurar.isPending}
@@ -232,9 +231,11 @@ export default function PlanScreen() {
                 Restaurar compras
               </Button>
             ) : null}
-            <Text className="text-center text-xs text-muted-foreground">
-              A assinatura renova sozinha e pode ser cancelada a qualquer momento na loja.
-            </Text>
+            {oferta.renewalNote ? (
+              <Text className="text-center text-xs text-muted-foreground">
+                A assinatura renova sozinha e pode ser cancelada a qualquer momento na loja.
+              </Text>
+            ) : null}
           </View>
         ) : null}
 

@@ -374,8 +374,9 @@ A tela "Meu plano" mostra o mesmo plano que o PWA (`billingApi.plan`, `PRO_BENEF
 `FREE_INCLUDES`, `planSummary` do api-client), mas a compra é diferente de propósito: as lojas
 exigem compra in-app, então o app vende pela App Store / Google Play via RevenueCat
 (`src/billing/purchases.ts`) e **nunca mostra link de pagamento externo**. Quem assinou pela web vê
-"gerencie pela web", sem link. Sem as chaves `EXPO_PUBLIC_REVENUECAT_*` (Expo Go, por exemplo) a
-tela diz que a assinatura não está disponível neste build.
+"gerencie pela web", sem link. A compra só aparece com `EXPO_PUBLIC_IAP_ENABLED=true` e as chaves
+`EXPO_PUBLIC_REVENUECAT_*` no build; sem isso (o piloto, o Expo Go) a tela não vende nada e diz que o
+PRO chega pela comunidade, sem preço e sem apontar para a web (`src/billing/plan-offer.ts`).
 
 O cadeado: a câmera da Nutrição continua visível no Free, com cadeado, e leva a
 `/plan?recurso=foto`; a tela de foto trata o 402 com "Ver o plano PRO". O Chat do menu leva a

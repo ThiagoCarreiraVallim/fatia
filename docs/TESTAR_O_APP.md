@@ -170,6 +170,7 @@ vem das **Environment variables** do projeto na Expo:
 | `EXPO_PUBLIC_LOGTO_APP_ID`           | Logto (§2.6)                     | a tela de login lista o que falta       |
 | `EAS_PROJECT_ID`                     | `eas init` (§2.1)                | sem push                                |
 | `GOOGLE_SERVICES_JSON` (arquivo)     | Firebase (§2.4)                  | sem push no Android                     |
+| `EXPO_PUBLIC_IAP_ENABLED`            | `true` para vender PRO no app    | sem compra no app (o padrão do piloto)  |
 | `EXPO_PUBLIC_REVENUECAT_IOS_KEY`     | RevenueCat (§2.5)                | sem compra no iPhone                    |
 | `EXPO_PUBLIC_REVENUECAT_ANDROID_KEY` | RevenueCat (§2.5)                | sem compra no Android                   |
 | `APP_LINKS_HOST`                     | domínio da web (`app.fat.ia.br`) | o convite abre no navegador, não no app |
