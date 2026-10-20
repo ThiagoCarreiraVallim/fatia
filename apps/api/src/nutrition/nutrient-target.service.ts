@@ -3,6 +3,7 @@ import { Prisma, type NutrientTarget } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { dayBoundsInTz } from '../progress/helpers/date-tz';
 import type { UpsertNutrientTargetDto } from './dto/nutrient-target.dto';
+import { assertDay } from '../common/dates';
 
 export type NutrientStatus = 'under' | 'ok' | 'over' | 'none';
 
@@ -62,6 +63,7 @@ export class NutrientTargetService {
     date: string,
     timezone: string,
   ): Promise<{ date: string; nutrients: NutrientProgress[] }> {
+    assertDay(date, 'date');
     const [targets, totals] = await Promise.all([
       this.list(userId),
       this.sumDayNutrients(userId, date, timezone),

@@ -3,6 +3,7 @@ import { PrismaService } from '../common/prisma.service';
 import { dayBoundsInTz, todayInTz, addDaysIso } from '../progress/helpers/date-tz';
 import { sumMacros, type ItemMacros } from './helpers/calc-macros';
 import { ITENS_EM_ORDEM } from './itens-em-ordem';
+import { assertDay } from '../common/dates';
 
 export interface DayTotals extends ItemMacros {
   date: string;
@@ -15,7 +16,7 @@ export class NutritionSummaryService {
 
   /** Resumo do dia no fuso do usuário. `date` em formato YYYY-MM-DD. */
   async getDay(userId: string, date: string, timezone: string) {
-    const { start, end } = dayBoundsInTz(date, timezone);
+    const { start, end } = dayBoundsInTz(assertDay(date, 'date'), timezone);
     const meals = await this.prisma.meal.findMany({
       where: { userId, eatenAt: { gte: start, lt: end } },
       include: ITENS_EM_ORDEM,

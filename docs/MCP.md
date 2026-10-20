@@ -219,7 +219,11 @@ Quando o item é livre (sem `foodId`), o cliente (Claude) **deve** enviar todos 
 
 Todas as tools retornam erros MCP padrão. Categorias:
 
-- `INVALID_INPUT`: validação Zod falhou (detalha o campo)
+- `INVALID_INPUT`: validação Zod falhou, ou o service recusou o valor (detalha o campo). Datas
+  das tools de nutrição são conferidas no service, que vale também para o REST: instante
+  (`eatenAt`) em ISO 8601, de preferência com o fuso (`2026-07-29T12:30:00-03:00`); dia (`date`,
+  `toDate`, `fromDate`) em `YYYY-MM-DD` e existente no calendário (`2026-02-31` é recusado, e não
+  vira 3 de março)
 - `NOT_FOUND`: recurso não existe ou não pertence ao usuário
 - `CONFLICT`: violação de constraint (ex: nome duplicado, sessão já finalizada)
 - `UNAUTHORIZED`: token inválido/revogado

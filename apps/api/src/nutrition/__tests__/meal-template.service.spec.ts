@@ -208,6 +208,13 @@ describe('MealTemplateService', () => {
       expect(data.items.create[0]).not.toHaveProperty('templateId');
     });
 
+    it('eatenAt inválido é 400 sem gravar', async () => {
+      await expect(service.log(userId, 't1', { eatenAt: 'agora' })).rejects.toThrow(
+        /eatenAt não é uma data válida/,
+      );
+      expect(prisma.meal.create).not.toHaveBeenCalled();
+    });
+
     it('tipo pedido vence o do modelo; modelo sem tipo vira lanche', async () => {
       await service.log(userId, 't1', { eatenAt: '2026-10-14T10:00:00Z', mealType: 'DINNER' });
       expect(prisma.meal.create.mock.calls[0][0].data.mealType).toBe('DINNER');

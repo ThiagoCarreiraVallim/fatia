@@ -11,6 +11,7 @@ import type { CreateMealDto, ListMealsDto, MealItemInputDto, UpdateMealDto } fro
 import { calcMacrosFromFood, calcNutrientsFromFood, type ItemMacros } from './helpers/calc-macros';
 import { gramsFromPortion, visiblePortions } from './helpers/portion';
 import { ITENS_EM_ORDEM } from './itens-em-ordem';
+import { assertDay, parseInstant } from '../common/dates';
 
 /** Item pronto para gravar: macros já calculados (ou copiados de um registro anterior). */
 export interface ResolvedItem extends ItemMacros {
@@ -54,10 +55,12 @@ export class MealService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(userId: string, dto: CreateMealDto) {
+    // Aqui, e não só no DTO: a tool MCP chega com `z.string()`.
+    const eatenAt = parseInstant(dto.eatenAt, 'eatenAt');
     const items = await this.resolveItems(userId, dto.items);
     return this.createResolved(
       userId,
-      { mealType: dto.mealType, eatenAt: new Date(dto.eatenAt), notes: dto.notes },
+      { mealType: dto.mealType, eatenAt, notes: dto.notes },
       items,
     );
   }
@@ -138,7 +141,7 @@ export class MealService {
     const limit = Math.min(params.limit ?? 20, 50);
     const where: Prisma.MealWhereInput = { userId };
     if (params.date) {
-      const { start, end } = dayBoundsInTz(params.date, timezone);
+      const { start, end } = dayBoundsInTz(assertDay(params.date, 'date'), timezone);
       where.eatenAt = { gte: start, lt: end };
     }
     return this.prisma.meal.findMany({
@@ -151,12 +154,13 @@ export class MealService {
   }
 
   async update(userId: string, id: string, dto: UpdateMealDto) {
+    const eatenAt = dto.eatenAt ? parseInstant(dto.eatenAt, 'eatenAt') : undefined;
     await this.assertOwner(userId, id);
     return this.prisma.meal.update({
       where: { id },
       data: {
         mealType: dto.mealType,
-        eatenAt: dto.eatenAt ? new Date(dto.eatenAt) : undefined,
+        eatenAt,
         notes: dto.notes,
       },
       include: ITENS_EM_ORDEM,

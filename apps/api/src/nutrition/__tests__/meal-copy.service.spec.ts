@@ -55,6 +55,18 @@ describe('MealCopyService', () => {
     service = new MealCopyService(prisma as unknown as PrismaService, meals);
   });
 
+  describe('dias que não existem', () => {
+    it('copiar para 31/02 é 400, e não 3 de março em silêncio', async () => {
+      await expect(service.copyMeal(userId, 'm1', { toDate: '2026-02-31' }, SP)).rejects.toThrow(
+        /toDate não é um dia válido/,
+      );
+      await expect(service.copyDay(userId, '2026-02-30', '2026-03-01', SP)).rejects.toThrow(
+        /fromDate não é um dia válido/,
+      );
+      expect(prisma.meal.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe('copyMeal', () => {
     it('grava no dia pedido, no mesmo horário local, com o retrato dos itens', async () => {
       await service.copyMeal(userId, 'm1', { toDate: '2026-10-14' }, SP);

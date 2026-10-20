@@ -8,6 +8,7 @@ import { Prisma, type MealType } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { MealService, type ResolvedItem } from './meal.service';
 import { snapshotOf } from './helpers/meal-snapshot';
+import { parseInstant } from '../common/dates';
 import {
   MAX_TEMPLATE_ITEMS,
   MAX_TEMPLATE_NAME,
@@ -157,7 +158,7 @@ export class MealTemplateService {
       userId,
       {
         mealType: dto.mealType ?? template.mealType ?? 'SNACK',
-        eatenAt: new Date(dto.eatenAt),
+        eatenAt: parseInstant(dto.eatenAt, 'eatenAt'),
       },
       template.items.map(snapshotOf),
     );

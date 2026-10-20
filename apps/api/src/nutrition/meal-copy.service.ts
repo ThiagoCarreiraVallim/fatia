@@ -9,6 +9,7 @@ import { dateInTz, dayBoundsInTz, sameLocalTimeOn } from '../progress/helpers/da
 import { MealService } from './meal.service';
 import { snapshotOf } from './helpers/meal-snapshot';
 import type { CopyMealDto } from './dto/meal-template.dto';
+import { assertDay } from '../common/dates';
 
 type Meal = Awaited<ReturnType<MealService['findById']>>;
 
@@ -34,6 +35,7 @@ export class MealCopyService {
     dto: CopyMealDto,
     timezone: string,
   ): Promise<Meal> {
+    assertDay(dto.toDate, 'toDate');
     const source = await this.meals.findById(userId, mealId);
     if (source.items.length === 0) {
       throw new BadRequestException('A refeição está vazia: não há o que copiar.');
@@ -63,6 +65,8 @@ export class MealCopyService {
     toDate: string,
     timezone: string,
   ): Promise<{ created: Meal[]; skipped: number }> {
+    assertDay(fromDate, 'fromDate');
+    assertDay(toDate, 'toDate');
     if (fromDate === toDate) {
       throw new BadRequestException('Escolha um dia diferente do de origem.');
     }

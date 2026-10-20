@@ -29,6 +29,12 @@ describe('NutritionSummaryService', () => {
     service = new NutritionSummaryService(prisma as unknown as PrismaService);
   });
 
+  it('getDay com um dia que não existe é 400 (era INTERNAL pelo MCP)', async () => {
+    await expect(service.getDay(userId, '2026-02-30', 'UTC')).rejects.toThrow(
+      /date não é um dia válido/,
+    );
+  });
+
   describe('getDay', () => {
     it('queries meals within the day window [00:00, next-day-00:00) in the given timezone', async () => {
       prisma.meal.findMany.mockResolvedValue([]);

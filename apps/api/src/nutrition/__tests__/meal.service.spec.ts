@@ -242,6 +242,20 @@ describe('MealService', () => {
       expect(createdItems[0].kcal).toBe(130);
     });
 
+    it('data inválida é 400 com o formato esperado, antes de tocar o banco (REST e MCP)', async () => {
+      // A tool MCP declara `z.string()`: "ontem" chegava ao `new Date()` e estourava
+      // no Prisma como INTERNAL, sem pista para o modelo corrigir.
+      await expect(
+        service.create(userId, {
+          mealType: MealType.LUNCH,
+          eatenAt: 'ontem',
+          items: [{ foodName: 'arroz', grams: 100 }],
+        }),
+      ).rejects.toThrow(/eatenAt não é uma data válida.*ISO 8601/);
+      expect(prisma.meal.findMany).not.toHaveBeenCalled();
+      expect(prisma.meal.create).not.toHaveBeenCalled();
+    });
+
     // Idempotência (issue #94): logar a mesma refeição 2× não deve duplicar em silêncio.
     describe('deduplicação por chave natural', () => {
       const lunchAtNoon = {
@@ -437,6 +451,23 @@ describe('MealService', () => {
       const callArg = prisma.meal.findMany.mock.calls[0][0];
       expect(callArg.cursor).toEqual({ id: 'meal-50' });
       expect(callArg.skip).toBe(1);
+    });
+  });
+
+  describe('datas inválidas na listagem e na edição', () => {
+    it('list com um dia que não existe é 400, e não outro dia', async () => {
+      await expect(service.list(userId, { date: '2026-02-31' }, 'UTC')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prisma.meal.findMany).not.toHaveBeenCalled();
+    });
+
+    it('update com eatenAt inválido é 400 sem gravar', async () => {
+      prisma.meal.findFirst.mockResolvedValue({ id: 'meal-1', userId });
+      await expect(service.update(userId, 'meal-1', { eatenAt: '29/07/2026' })).rejects.toThrow(
+        /eatenAt não é uma data válida/,
+      );
+      expect(prisma.meal.update).not.toHaveBeenCalled();
     });
   });
 
