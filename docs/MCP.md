@@ -1382,7 +1382,10 @@ que o app pode ter acabado de gravar. Mesmo contrato do
 
 ### `start_workout_session`
 
-Inicia uma sessão. Pode ser livre ou baseada em plano.
+Inicia uma sessão. Pode ser livre ou baseada em plano. **Uma sessão aberta por pessoa** (#350):
+com outra já aberta, responde `CONFLICT` com o id dela — retome registrando séries nela, ou encerre
+com `finish_workout_session` antes de abrir outra. Vale igual para a REST, o app e o
+`start_workout` da superfície de intenção.
 
 **Input:**
 

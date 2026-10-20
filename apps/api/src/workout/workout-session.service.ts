@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import type {
@@ -38,15 +43,36 @@ export interface PlannedExerciseView {
 export class WorkoutSessionService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Abre uma sessão. **Uma aberta por pessoa** (#350): quem garante é o índice
+   * único parcial do banco, e não uma checagem antes do `create` — duas chamadas
+   * concorrentes (duas abas, o MCP, o treino rápido) passariam juntas nela.
+   * A segunda recebe 409 dizendo qual sessão está aberta e como seguir.
+   */
   async start(userId: string, dto: StartSessionDto) {
-    return this.prisma.workoutSession.create({
-      data: {
-        userId,
-        planId: dto.planId ?? null,
-        startedAt: dto.startedAt ? new Date(dto.startedAt) : new Date(),
-        notes: dto.notes,
-      },
-    });
+    try {
+      return await this.prisma.workoutSession.create({
+        data: {
+          userId,
+          planId: dto.planId ?? null,
+          startedAt: dto.startedAt ? new Date(dto.startedAt) : new Date(),
+          notes: dto.notes,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const aberta = await this.prisma.workoutSession.findFirst({
+          where: { userId, completedAt: null },
+          select: { id: true },
+        });
+        throw new ConflictException(
+          `Já existe uma sessão de treino aberta (id ${aberta?.id ?? 'desconhecido'}). ` +
+            'Retome-a registrando séries nela, ou encerre com finish_workout_session antes de ' +
+            'abrir outra.',
+        );
+      }
+      throw error;
+    }
   }
 
   async findById(userId: string, id: string) {

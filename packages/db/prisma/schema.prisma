@@ -463,6 +463,9 @@ model WorkoutSession {
   sets SessionSet[]
 
   @@index([userId, startedAt])
+  // E um índice único PARCIAL em (userId) onde completedAt é nulo — uma sessão
+  // aberta por pessoa (#350). O Prisma não o descreve: está na migration
+  // 20261026120000_one_open_workout_session.
 }
 
 model SessionSet {
