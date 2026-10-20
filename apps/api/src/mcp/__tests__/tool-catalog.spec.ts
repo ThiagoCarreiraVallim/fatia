@@ -370,6 +370,90 @@ const summaryTableEntries = new Set(
   Array.from(doc.matchAll(/^\|[^|]*\|\s*`([a-z_]+)`\s*\|/gm), (match) => match[1]),
 );
 
+/**
+ * Campos de input que `docs/MCP.md` descreve diferente do schema da tool hoje: nome que não
+ * existe, campo que falta, ou opcional × obrigatório trocado. É dívida de documentação, não
+ * comportamento — a lista só pode **encolher**: um campo novo divergente reprova, e um campo
+ * corrigido também, para sair daqui no mesmo commit.
+ */
+const DIVERGENCIAS_CONHECIDAS_DA_DOC = [
+  'add_exercise_to_plan.order',
+  'create_custom_food.carbsPer100g',
+  'create_custom_food.fatPer100g',
+  'create_custom_food.kcalPer100g',
+  'create_custom_food.proteinPer100g',
+  'finish_workout_session.completedAt',
+  'get_last_set_for_exercise.before',
+  'get_last_set_for_exercise.beforeDate',
+  'get_nutrition_history.days',
+  'get_nutrition_summary.date',
+  'get_personal_record.metric',
+  'list_meals.from',
+  'list_meals.mealType',
+  'list_meals.to',
+  'list_workout_sessions.date',
+  'list_workout_sessions.from',
+  'list_workout_sessions.to',
+  'search_exercise.q',
+  'search_exercise.query',
+  'search_food.groupId',
+  'search_food.q',
+  'search_food.query',
+  'search_food.source',
+  'set_nutrition_goals.dailyStepsTarget',
+  'set_nutrition_goals.dailyWaterTargetMl',
+  'set_nutrition_goals.weeklyWorkouts',
+  'update_custom_exercise.equipment',
+  'update_custom_exercise.exerciseId',
+  'update_custom_exercise.id',
+  'update_custom_exercise.instructions',
+  'update_custom_exercise.level',
+  'update_custom_exercise.mechanic',
+  'update_custom_exercise.primaryMuscles',
+  'update_custom_exercise.secondaryMuscles',
+  'update_custom_exercise.youtubeVideoId',
+  'update_custom_exercise.youtubeVideoIdPt',
+  'update_custom_food.carbsPer100g',
+  'update_custom_food.fatPer100g',
+  'update_custom_food.foodId',
+  'update_custom_food.id',
+  'update_custom_food.kcalPer100g',
+  'update_custom_food.proteinPer100g',
+  'update_meal.id',
+  'update_meal.mealId',
+  'update_plan_exercise.planId',
+  'update_set.setNumber',
+  'update_workout_plan.name',
+];
+
+/**
+ * Lê o bloco `**Input:**` de cada seção (`typescript`, nível de topo, dois espaços de recuo) e
+ * compara com o `inputSchema`: o campo existe dos dois lados, e com a mesma opcionalidade.
+ */
+function divergenciasDaDoc(): string[] {
+  const out: string[] = [];
+  for (const { tool } of todas) {
+    const secao = doc.split(/^### `/m).find((s) => s.startsWith(`${tool.name}\``));
+    const bloco = secao
+      ? /\*\*Input:\*\*\s*\n+```typescript\n\{\n([\s\S]*?)\n\}/.exec(secao.split(/^## /m)[0])
+      : null;
+    if (!bloco) continue;
+    const naDoc = new Map<string, boolean>();
+    for (const linha of bloco[1].split('\n')) {
+      const campo = /^ {2}([a-zA-Z]+)(\??):/.exec(linha);
+      if (campo) naDoc.set(campo[1], campo[2] === '?');
+    }
+    const shape = tool.inputSchema as unknown as Record<string, ZodTypeAny>;
+    for (const [nome, opcional] of naDoc) {
+      if (!shape[nome] || shape[nome].isOptional() !== opcional) out.push(`${tool.name}.${nome}`);
+    }
+    for (const nome of Object.keys(shape)) {
+      if (!naDoc.has(nome)) out.push(`${tool.name}.${nome}`);
+    }
+  }
+  return out.sort();
+}
+
 describe('catálogo de tools MCP', () => {
   it('descobre as tools do código', () => {
     // Sanidade: se a descoberta quebrar, os testes abaixo passariam vazios.
@@ -383,6 +467,12 @@ describe('catálogo de tools MCP', () => {
       .sort();
 
     expect(undocumented).toEqual([]);
+  });
+
+  it('descreve o input de cada tool como o schema, sem divergência nova', () => {
+    // O `log_meal` documentava `eatenAt` como opcional, "default agora", e o Zod, o DTO e o
+    // service exigem: o Claude que lesse a doc mandaria sem e receberia INVALID_INPUT.
+    expect(divergenciasDaDoc()).toEqual([...DIVERGENCIAS_CONHECIDAS_DA_DOC].sort());
   });
 
   it('tem uma linha na tabela-resumo para cada tool registrada', () => {

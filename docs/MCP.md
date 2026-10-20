@@ -802,7 +802,7 @@ Cria uma refeição com seus itens em uma única chamada. Tool principal usada p
 ```typescript
 {
   mealType: "BREAKFAST" | "LUNCH" | "DINNER" | "SNACK";
-  eatenAt?: string;     // ISO datetime; default: agora no fuso do user
+  eatenAt: string;      // obrigatório; ISO 8601 com o fuso (ex.: "2026-07-29T12:30:00-03:00")
   notes?: string;
   items: Array<
     | {
