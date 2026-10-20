@@ -35,6 +35,7 @@ import { instanteNoDia } from '@/lib/dias';
 import { AmountPicker } from './amount-picker';
 import { BarcodeFlow } from './barcode-flow';
 import { CustomFoodForm } from './custom-food-form';
+import { invalidateNutritionDay } from '@/lib/nutrition-cache';
 
 interface Props {
   open: boolean;
@@ -159,10 +160,9 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
         mealType,
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['nutrition', 'summary', date] });
+      // O dashboard entra junto: a refeição pode vir do "+", fora da Nutrição.
+      invalidateNutritionDay(qc, date);
       qc.invalidateQueries({ queryKey: ['nutrition', 'my-foods'] });
-      // O card de macros do dashboard: a refeição pode vir do "+", fora da Nutrição.
-      qc.invalidateQueries({ queryKey: ['dashboard'] });
       onOpenChange(false);
     },
   });
@@ -195,10 +195,9 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
         const id = (result as { id?: string } | undefined)?.id;
         if (id) setCreatedMealId(id);
       }
-      qc.invalidateQueries({ queryKey: ['nutrition', 'summary', date] });
+      // O dashboard entra junto: a refeição pode vir do "+", fora da Nutrição.
+      invalidateNutritionDay(qc, date);
       qc.invalidateQueries({ queryKey: ['nutrition', 'my-foods'] });
-      // O card de macros do dashboard: a refeição pode vir do "+", fora da Nutrição.
-      qc.invalidateQueries({ queryKey: ['dashboard'] });
       setAdded((prev) => [...prev, label]);
       // De volta aos atalhos, pronto para o próximo item.
       setMode('search');

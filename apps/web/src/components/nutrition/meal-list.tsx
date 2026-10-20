@@ -6,6 +6,7 @@ import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { nutritionApi, type Meal, type MealItem, type MealType } from '@fatia/api-client';
 import { FoodSearchDrawer } from './food-search-drawer';
 import { EditMealItemDrawer } from './edit-meal-item-drawer';
+import { invalidateNutritionDay } from '@/lib/nutrition-cache';
 
 const mealTypeLabel: Record<MealType, string> = {
   BREAKFAST: 'Café da manhã',
@@ -21,11 +22,11 @@ export function MealList({ meals, date }: { meals: Meal[]; date: string }) {
 
   const deleteItem = useMutation({
     mutationFn: (id: string) => nutritionApi.deleteItem(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['nutrition', 'summary', date] }),
+    onSuccess: () => invalidateNutritionDay(qc, date),
   });
   const deleteMeal = useMutation({
     mutationFn: (id: string) => nutritionApi.deleteMeal(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['nutrition', 'summary', date] }),
+    onSuccess: () => invalidateNutritionDay(qc, date),
   });
 
   return (

@@ -20,6 +20,7 @@ import { FoodSearchDrawer } from './food-search-drawer';
 import { EditMealItemDrawer } from './edit-meal-item-drawer';
 import { MealActionsDrawer } from './meal-actions-drawer';
 import { MEAL_TYPE_LABEL as mealTypeLabel } from './meal-labels';
+import { invalidateNutritionDay } from '@/lib/nutrition-cache';
 
 const mealTypeEmoji: Record<MealType, string> = {
   BREAKFAST: '☀️',
@@ -44,10 +45,7 @@ export function MealTimeline({ meals, date, today, onAddMeal }: Props) {
   const [pendingDelete, setPendingDelete] = useState<Meal | null>(null);
   const [acting, setActing] = useState<Meal | null>(null);
 
-  const refresh = () => {
-    qc.invalidateQueries({ queryKey: ['nutrition', 'summary', date] });
-    qc.invalidateQueries({ queryKey: ['dashboard'] });
-  };
+  const refresh = () => invalidateNutritionDay(qc, date);
   // A refeição não some com o último item, então o item volta para ela.
   const restoreItem = useMutation({
     mutationFn: (item: MealItem) => nutritionApi.addItem(item.mealId, mealItemRestoreInput(item)),

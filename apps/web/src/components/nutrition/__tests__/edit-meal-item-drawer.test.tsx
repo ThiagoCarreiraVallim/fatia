@@ -50,6 +50,7 @@ const item = (extra: Partial<MealItem> = {}): MealItem => ({
 
 function renderDrawer(value: MealItem) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  invalidate = vi.spyOn(client, 'invalidateQueries');
   return render(
     <QueryClientProvider client={client}>
       <EditMealItemDrawer item={value} date="2026-05-19" onClose={() => undefined} />
@@ -57,7 +58,32 @@ function renderDrawer(value: MealItem) {
   );
 }
 
+let invalidate: { mock: { calls: ReadonlyArray<ReadonlyArray<unknown>> } };
+
 describe('EditMealItemDrawer', () => {
+  it('salvar atualiza o resumo, os nutrientes, o gráfico da semana e o dashboard', async () => {
+    // Só o resumo do dia era invalidado: o gráfico semanal e o card de metas de
+    // nutrientes continuavam com o valor de antes da edição.
+    const user = userEvent.setup();
+    renderDrawer(item());
+    await screen.findByRole('radio', { name: /colher de sopa/ });
+    await user.click(screen.getByRole('button', { name: 'Mais' }));
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+
+    await waitFor(() => expect(updateItem).toHaveBeenCalled());
+    const chaves = invalidate.mock.calls.map(
+      ([filtro]) => (filtro as { queryKey: unknown }).queryKey,
+    );
+    expect(chaves).toEqual(
+      expect.arrayContaining([
+        ['nutrition', 'summary', '2026-05-19'],
+        ['nutrition', 'nutrient-summary', '2026-05-19'],
+        ['nutrition', 'history'],
+        ['dashboard'],
+      ]),
+    );
+  });
+
   beforeEach(() => {
     updateItem.mockReset().mockResolvedValue({} as MealItem);
     portions

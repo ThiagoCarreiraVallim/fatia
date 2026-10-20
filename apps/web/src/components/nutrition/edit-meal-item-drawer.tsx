@@ -21,6 +21,7 @@ import {
   type MealItem,
 } from '@fatia/api-client';
 import { AmountPicker } from './amount-picker';
+import { invalidateNutritionDay } from '@/lib/nutrition-cache';
 
 interface Props {
   item: MealItem | null;
@@ -69,7 +70,7 @@ export function EditMealItemDrawer({ item, date, onClose }: Props) {
       return nutritionApi.updateItem(item.id, amountPayload(amount));
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['nutrition', 'summary', date] });
+      invalidateNutritionDay(qc, date);
       onClose();
     },
   });

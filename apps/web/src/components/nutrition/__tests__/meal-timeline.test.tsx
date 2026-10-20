@@ -46,8 +46,10 @@ const jantar: Meal = {
   ],
 };
 
+let client: QueryClient;
+
 function renderTimeline(date = '2026-05-19', meals: Meal[] = [jantar]) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
       <MealTimeline meals={meals} date={date} today="2026-05-19" onAddMeal={() => undefined} />
@@ -117,6 +119,24 @@ describe('MealTimeline', () => {
         foodName: 'Arroz',
         grams: 100,
       }),
+    );
+  });
+
+  it('apagar item atualiza também o gráfico da semana e as metas de nutrientes', async () => {
+    vi.mocked(nutritionApi.deleteItem).mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderTimeline();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+
+    await user.click(screen.getByRole('button', { name: 'Remover Arroz' }));
+
+    await waitFor(() =>
+      expect(invalidate.mock.calls.map(([f]) => f?.queryKey)).toEqual(
+        expect.arrayContaining([
+          ['nutrition', 'nutrient-summary', '2026-05-19'],
+          ['nutrition', 'history'],
+        ]),
+      ),
     );
   });
 
