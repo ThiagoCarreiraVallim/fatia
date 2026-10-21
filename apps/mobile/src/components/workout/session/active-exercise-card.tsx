@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { AccessibilityInfo, Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
-import { Check, Info, Minus, Plus } from 'lucide-react-native';
+import { Check, Minus, Plus } from 'lucide-react-native';
 import {
   describePrescription,
   prefillForNextSet,
@@ -12,7 +12,6 @@ import {
   type SessionSet,
 } from '@fatia/api-client';
 import { Button, Input } from '@/components/ui';
-import { useOpenExerciseDetail } from '@/components/workout/exercise-detail-host';
 import {
   formatNumber,
   formatPreviousSet,
@@ -21,6 +20,7 @@ import {
   previousCells,
   targetSetsOf,
 } from './format';
+import { ExerciseTitle } from './exercise-title';
 import { RestTimer } from './rest-timer';
 import { SetRow } from './set-row';
 import type { RestTimer as RestTimerState } from './use-rest-timer';
@@ -58,7 +58,6 @@ export function ActiveExerciseCard({
   onAskRpe: (set: SessionSet) => void;
 }) {
   const qc = useQueryClient();
-  const openDetail = useOpenExerciseDetail();
 
   const targetSets = targetSetsOf(group);
   const doneSets = group.sets.length;
@@ -170,17 +169,12 @@ export function ActiveExerciseCard({
   return (
     <View className="rounded-2xl border border-border bg-card p-4">
       <View className="items-center">
-        <Text className="text-[10px] font-extrabold tracking-wide text-primary">EM ANDAMENTO</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Ver detalhes de ${group.exerciseName}`}
-          onPress={() => openDetail(group.exerciseId)}
-          className="min-h-[44px] flex-row items-center justify-center gap-1.5 px-2 active:opacity-80"
-        >
-          <Text className="text-base font-extrabold text-foreground">{group.exerciseName}</Text>
-          <Info size={14} color={cores.mutedForeground} />
-        </Pressable>
-        <View className="mt-1 rounded-full bg-muted px-3 py-1">
+        <ExerciseTitle
+          kicker="EM ANDAMENTO"
+          exerciseId={group.exerciseId}
+          exerciseName={group.exerciseName}
+        />
+        <View className="mt-2 rounded-full bg-muted px-3 py-1">
           <Text className="text-[10px] font-extrabold text-foreground">
             SÉRIE {Math.min(doneSets + 1, targetSets)} DE {targetSets}
           </Text>

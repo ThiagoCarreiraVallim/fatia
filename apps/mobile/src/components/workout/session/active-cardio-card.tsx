@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
-import { Check, Info, Pause, Play, RotateCcw } from 'lucide-react-native';
+import { Check, Pause, Play, RotateCcw } from 'lucide-react-native';
 import { workoutApi, type ExerciseGroup } from '@fatia/api-client';
 import { Button, Input } from '@/components/ui';
-import { useOpenExerciseDetail } from '@/components/workout/exercise-detail-host';
+import { ExerciseTitle } from './exercise-title';
 import {
   formatClock,
   formatPace,
@@ -38,7 +38,6 @@ export function ActiveCardioCard({
   onFinishExercise: () => void;
 }) {
   const qc = useQueryClient();
-  const openDetail = useOpenExerciseDetail();
   const existing = group.sets[0];
 
   const [running, setRunning] = useState(false);
@@ -138,16 +137,11 @@ export function ActiveCardioCard({
   return (
     <View className="rounded-2xl border border-border bg-card p-4">
       <View className="items-center">
-        <Text className="text-[10px] font-extrabold tracking-wide text-primary">CARDIO</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Ver detalhes de ${group.exerciseName}`}
-          onPress={() => openDetail(group.exerciseId)}
-          className="min-h-[44px] flex-row items-center justify-center gap-1.5 px-2 active:opacity-80"
-        >
-          <Text className="text-base font-extrabold text-foreground">{group.exerciseName}</Text>
-          <Info size={14} color={cores.mutedForeground} />
-        </Pressable>
+        <ExerciseTitle
+          kicker="CARDIO"
+          exerciseId={group.exerciseId}
+          exerciseName={group.exerciseName}
+        />
         {previousLabel ? (
           <Text className="text-[11px] text-muted-foreground">Anterior: {previousLabel}</Text>
         ) : null}
