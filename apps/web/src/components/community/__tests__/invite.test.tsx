@@ -22,6 +22,7 @@ const PREVIEW: InvitePreview = {
   memberCount: 12,
   emailBound: false,
   expiresAt: '2026-10-24T00:00:00Z',
+  requiredSharingScopes: [],
 };
 const TOKEN = 'a'.repeat(43);
 

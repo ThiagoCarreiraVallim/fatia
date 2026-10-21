@@ -21,6 +21,7 @@ export const grupo = (p: Partial<MyGroup> = {}): MyGroup => ({
   hasAiSeat: false,
   avatarUrl: null,
   postPolicy: 'ALL_MEMBERS',
+  requiredSharingScopes: [],
   ...p,
 });
 

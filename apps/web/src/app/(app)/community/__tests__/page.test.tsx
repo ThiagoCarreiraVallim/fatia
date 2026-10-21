@@ -48,6 +48,7 @@ const grupo = (p: Partial<MyGroup>): MyGroup => ({
   hasAiSeat: false,
   avatarUrl: null,
   postPolicy: 'ALL_MEMBERS',
+  requiredSharingScopes: [],
   ...p,
 });
 
@@ -88,6 +89,7 @@ describe('/community', () => {
       description: null,
       joinPolicy: 'APPROVAL',
       team: [{ name: 'Ana', role: 'OWNER' }],
+      requiredSharingScopes: [],
     });
     vi.mocked(groupsApi.join).mockResolvedValue({
       membershipId: 'm1',

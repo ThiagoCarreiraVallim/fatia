@@ -235,7 +235,11 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/community/new', title: 'Criar comunidade', parent: '/community' },
   { pattern: '/community/:id', title: 'Comunidade', parent: '/community' },
   { pattern: '/community/:id/content', title: 'Planos e dicas', parent: '/community/:id' },
+  // Na web o mural é uma aba; no app ele é o próprio `/community/:id`, e este
+  // caminho (que os avisos do mural usam) só redireciona para lá.
   { pattern: '/community/:id/feed', title: 'Mural', parent: '/community/:id' },
+  // Só no app: o que era a tela principal da comunidade, atrás da engrenagem do mural.
+  { pattern: '/community/:id/settings', title: 'Sobre a comunidade', parent: '/community/:id' },
   { pattern: '/community/:id/challenges', title: 'Desafios', parent: '/community/:id' },
   {
     pattern: '/community/:id/challenges/:challengeId',

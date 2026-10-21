@@ -4,6 +4,7 @@ import {
   consentSummary,
   joinPolicyLabel,
   joinResultMessage,
+  lockedScopes,
   membershipBadge,
   SCOPE_DETAILS,
   SHARE_SCOPES,
@@ -24,6 +25,14 @@ describe('consentimento ao entrar na comunidade', () => {
     expect(toggleScope([], 'GOALS')).toEqual(['GOALS']);
     expect(toggleScope(['GOALS'], 'WORKOUT')).toEqual(['WORKOUT', 'GOALS']);
     expect(toggleScope(['WORKOUT', 'GOALS'], 'WORKOUT')).toEqual(['GOALS']);
+  });
+
+  it('trava o obrigatório que a pessoa compartilha, e não cobra o que ela nunca deu', () => {
+    // Entrando: os obrigatórios vêm marcados e travados, na ordem canônica.
+    expect(lockedScopes(['GOALS', 'WORKOUT'], ['GOALS', 'WORKOUT'])).toEqual(['WORKOUT', 'GOALS']);
+    // Editando: quem entrou antes da exigência de Metas só tem Treino travado.
+    expect(lockedScopes(['GOALS', 'WORKOUT'], ['WORKOUT', 'BODY'])).toEqual(['WORKOUT']);
+    expect(lockedScopes([], ['WORKOUT'])).toEqual([]);
   });
 
   it.each([

@@ -65,6 +65,24 @@ function joinWithAnd(parts: string[]): string {
   return `${parts.slice(0, -1).join(', ')} e ${parts[parts.length - 1]}`;
 }
 
+/** O aviso ao lado de um escopo que a comunidade exige. */
+export const REQUIRED_SCOPE_NOTE = 'Obrigatório nesta comunidade';
+
+/**
+ * Os escopos que aparecem marcados e travados na tela de consentimento: os
+ * obrigatórios que a pessoa compartilha (ou passa a compartilhar ao entrar).
+ *
+ * Ao entrar, `current` são os próprios obrigatórios — vêm marcados. Ao editar,
+ * só trava o que já se compartilha: quem entrou antes de o dono exigir algo
+ * não deve o que nunca deu, e a API recusa do mesmo jeito.
+ */
+export function lockedScopes(
+  required: readonly ShareScope[],
+  current: readonly ShareScope[],
+): ShareScope[] {
+  return SHARE_SCOPES.filter((s) => required.includes(s) && current.includes(s));
+}
+
 /** "Treino, Alimentação e Metas", ou "Nada" quando a pessoa não compartilha nada. */
 export function consentSummary(scopes: readonly ShareScope[]): string {
   const labels = SHARE_SCOPES.filter((s) => scopes.includes(s)).map((s) => SHARE_SCOPE_LABEL[s]);

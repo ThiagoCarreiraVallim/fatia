@@ -28,6 +28,8 @@ export interface CreateGroupInput {
   joinPolicy?: JoinPolicy;
   visibility?: GroupVisibility;
   timezone?: string;
+  /** O que quem entra como membro precisa compartilhar. Ausente = nada obrigatório. */
+  requiredSharingScopes?: ShareScope[];
 }
 
 export interface UpdateGroupInput {
@@ -37,6 +39,8 @@ export interface UpdateGroupInput {
   visibility?: GroupVisibility;
   timezone?: string;
   postPolicy?: PostPolicy;
+  /** Vale para quem entrar dali em diante: quem já está dentro não passa a dever nada. */
+  requiredSharingScopes?: ShareScope[];
 }
 
 /** O grupo como a API devolve ao criar ou editar. */
@@ -50,6 +54,7 @@ export interface GroupRecord {
   visibility: GroupVisibility;
   timezone: string | null;
   createdAt: string;
+  requiredSharingScopes: ShareScope[];
 }
 
 /** Uma pessoa na lista de membros, vista pela equipe (dono ou profissional). */

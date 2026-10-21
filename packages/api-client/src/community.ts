@@ -44,6 +44,8 @@ export interface MyGroup {
   avatarUrl: string | null;
   /** Quem publica no mural (Fase 8b). */
   postPolicy: PostPolicy;
+  /** O que a comunidade exige que membros compartilhem (vale para quem entra como membro). */
+  requiredSharingScopes: ShareScope[];
 }
 
 /** Quem da equipe recebe o que a pessoa compartilhar. Só nome e papel. */
@@ -62,6 +64,8 @@ export interface GroupPreview {
   description: string | null;
   joinPolicy: JoinPolicy;
   team: TeamMember[];
+  /** O que é obrigatório compartilhar para entrar pelo código. */
+  requiredSharingScopes: ShareScope[];
 }
 
 /** `GET /groups/invites/:token`, sem login: o cartão do convite. */
@@ -74,6 +78,8 @@ export interface InvitePreview {
   /** O convite foi para um e-mail: só a conta com esse e-mail aceita. */
   emailBound: boolean;
   expiresAt: string;
+  /** O que é obrigatório compartilhar para entrar por este convite; vazio em convite de equipe. */
+  requiredSharingScopes: ShareScope[];
 }
 
 /** Resposta de entrar, aceitar ou sair. `INVITED` = aguardando o dono aprovar. */

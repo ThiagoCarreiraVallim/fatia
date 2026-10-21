@@ -48,6 +48,7 @@ const grupo = (p: Partial<MyGroup> = {}): MyGroup => ({
   hasAiSeat: true,
   avatarUrl: null,
   postPolicy: 'ALL_MEMBERS',
+  requiredSharingScopes: [],
   ...p,
 });
 

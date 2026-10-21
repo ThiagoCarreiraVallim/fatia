@@ -67,4 +67,14 @@ describe('mural da comunidade (helpers)', () => {
     expect(activeCommunityTab('/community/g1/challenges/c1?x=1')).toBe('challenges');
     expect(activeCommunityTab('/community/g1/content/plans/t1')).toBe('content');
   });
+
+  it('no app o mural é a comunidade, sem aba Início', () => {
+    expect(communityTabs('g1', 'mobile').map((t) => [t.tab, t.label, t.href])).toEqual([
+      ['feed', 'Mural', '/community/g1'],
+      ['challenges', 'Desafios', '/community/g1/challenges'],
+      ['content', 'Planos e dicas', '/community/g1/content'],
+    ]);
+    expect(activeCommunityTab('/community/g1', 'mobile')).toBe('feed');
+    expect(activeCommunityTab('/community/g1/challenges/c1', 'mobile')).toBe('challenges');
+  });
 });
