@@ -3,10 +3,13 @@ import { usePathname, useRouter } from 'expo-router';
 import { activeCommunityTab, communityTabs } from '@fatia/api-client';
 import { cn } from '@/components/ui';
 
-/** As abas da comunidade — equivalente de `apps/web/src/components/community/community-tabs.tsx`. */
+/**
+ * As abas da comunidade — equivalente de `apps/web/src/components/community/community-tabs.tsx`,
+ * menos o Início: no app o mural é a raiz da comunidade, e o resto mora na engrenagem.
+ */
 export function CommunityTabs({ groupId }: { groupId: string }) {
   const router = useRouter();
-  const ativa = activeCommunityTab(usePathname() ?? '');
+  const ativa = activeCommunityTab(usePathname() ?? '', 'mobile');
   return (
     <ScrollView
       horizontal
@@ -14,7 +17,7 @@ export function CommunityTabs({ groupId }: { groupId: string }) {
       accessibilityRole="tablist"
       contentContainerClassName="gap-1 border-b border-border"
     >
-      {communityTabs(groupId).map((t) => {
+      {communityTabs(groupId, 'mobile').map((t) => {
         const on = ativa === t.tab;
         return (
           <Pressable

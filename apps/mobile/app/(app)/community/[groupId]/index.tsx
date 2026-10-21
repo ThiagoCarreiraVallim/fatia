@@ -1,95 +1,124 @@
-import { Alert, Pressable, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, Crown, LayoutDashboard } from 'lucide-react-native';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { LayoutDashboard, Settings } from 'lucide-react-native';
 import {
   ApiError,
   canOpenPanel,
   consentSummary,
+  displayNameProblem,
+  feedApi,
   groupsApi,
-  joinPolicyLabel,
   panelHref,
-  SHARE_SCOPE_LABEL,
-  teamRoleLabel,
-  type JoinConsent,
+  POST_BODY_MAX,
+  POST_MAX_IMAGES,
+  postProblem,
 } from '@fatia/api-client';
-import { ConsentForm } from '@/components/community/consent-form';
-import { GroupAvatar } from '@/components/community/group-avatar';
-import { CommunityChallengesPreview } from '@/components/challenges/community-challenges-preview';
-import { CommunityContentPreview } from '@/components/content/community-content-preview';
 import { CommunityTabs } from '@/components/community/community-tabs';
+import type { ImageValue } from '@/components/content/image-field';
+import { PhotosField } from '@/components/content/photos-field';
+import { feedKey, NicknameField, PostCard, type MyName } from '@/components/feed/feed-ui';
 import { Screen } from '@/components/layout/screen';
-import { Button, EmptyState, ErrorState, LoadingState, cn } from '@/components/ui';
+import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
+import { apiMessage } from '@/components/org/org-panel';
+import { Button, EmptyState, ErrorState, Input, LoadingState } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 import { cores } from '@/theme/cores';
 
-const quando = (iso: string) =>
-  new Intl.DateTimeFormat('pt-BR', {
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-    .format(new Date(iso))
-    .replace('.', '');
+function Composer({ groupId, me }: { groupId: string; me: MyName }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [texto, setTexto] = useState('');
+  const [imagens, setImagens] = useState<ImageValue[]>([]);
+  const [apelido, setApelido] = useState(me.suggested);
+  const publicar = useMutation({
+    mutationFn: () =>
+      feedApi.create(groupId, {
+        body: texto.trim(),
+        imageFileIds: imagens.map((i) => i.fileId),
+        ...(me.displayName ? {} : { displayName: apelido.trim() }),
+      }),
+    onSuccess: () => {
+      setTexto('');
+      setImagens([]);
+      toast.show({ message: 'Publicado no mural.' });
+      void qc.invalidateQueries({ queryKey: feedKey(groupId) });
+    },
+    onError: (err) => toast.show({ message: apiMessage(err, 'Não deu para publicar agora.') }),
+  });
+  const escreveu = texto.trim().length > 0 || imagens.length > 0;
+  const problema =
+    postProblem(texto, imagens.length) ?? (me.displayName ? null : displayNameProblem(apelido));
 
-function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
-    <View className="gap-2">
-      <Text accessibilityRole="header" className="text-sm font-bold text-foreground">
-        {titulo}
-      </Text>
-      {children}
+    <View className="gap-3 rounded-2xl border border-border bg-card p-4">
+      <Input
+        value={texto}
+        onChangeText={setTexto}
+        maxLength={POST_BODY_MAX}
+        multiline
+        className="min-h-[80px]"
+        textAlignVertical="top"
+        accessibilityLabel="O que você quer contar para a comunidade?"
+        placeholder="O que você quer contar para a comunidade?"
+      />
+      <PhotosField
+        groupId={groupId}
+        value={imagens}
+        onChange={setImagens}
+        purpose="post_image"
+        max={POST_MAX_IMAGES}
+        label={`Imagens (até ${POST_MAX_IMAGES})`}
+        addLabel="Adicionar imagens"
+      />
+      {!me.displayName && escreveu ? <NicknameField value={apelido} onChange={setApelido} /> : null}
+      {problema && escreveu ? (
+        <Text accessibilityRole="alert" className="text-sm text-destructive">
+          {problema}
+        </Text>
+      ) : null}
+      <Button
+        disabled={Boolean(problema)}
+        loading={publicar.isPending}
+        onPress={() => publicar.mutate()}
+      >
+        Publicar
+      </Button>
     </View>
   );
 }
 
-/** Equivalente de `apps/web/src/app/(app)/community/[groupId]/page.tsx`. */
-export default function CommunityDetailScreen() {
+/**
+ * A comunidade abre no mural (equivalente de
+ * `apps/web/src/app/(app)/community/[groupId]/feed/page.tsx`). O resto do que
+ * era a tela principal — sobre, o que eu compartilho, quem acessou, sair — fica
+ * atrás da engrenagem, em `settings.tsx`; o painel da equipe, no ícone ao lado.
+ */
+export default function CommunityFeedScreen() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   const router = useRouter();
-  const qc = useQueryClient();
-  const toast = useToast();
-
   const group = useQuery({
     queryKey: ['community', 'group', groupId],
     queryFn: () => groupsApi.get(groupId),
   });
+  // Pedido pendente não lê o mural (a API responde 404): espera o grupo dizer
+  // que a pessoa está dentro.
   const ativo = group.data?.status === 'ACTIVE';
-  const members = useQuery({
-    queryKey: ['community', 'members', groupId],
-    queryFn: () => groupsApi.members(groupId),
+  const feed = useInfiniteQuery({
+    queryKey: feedKey(groupId),
+    queryFn: ({ pageParam }) => feedApi.list(groupId, pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (ultima) => ultima.nextCursor,
     enabled: ativo,
   });
-  const log = useQuery({
-    queryKey: ['community', 'access-log', groupId],
-    queryFn: () => groupsApi.accessLog({ groupId, limit: 20 }),
-    enabled: ativo,
-  });
+  const primeira = feed.data?.pages[0];
+  const posts = feed.data?.pages.flatMap((p) => p.posts) ?? [];
+  const me = primeira
+    ? { displayName: primeira.displayName, suggested: primeira.suggestedDisplayName }
+    : null;
+  const settingsHref = `/community/${groupId}/settings`;
 
-  const save = useMutation({
-    mutationFn: (consent: JoinConsent) => groupsApi.setConsent(groupId, consent),
-    onSuccess: (r) => {
-      void qc.invalidateQueries({ queryKey: ['community'] });
-      toast.show({ message: `Compartilhando: ${consentSummary(r.scopes)}.` });
-    },
-  });
-  const leave = useMutation({
-    mutationFn: () => groupsApi.leave(groupId),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['community'] });
-      void qc.invalidateQueries({ queryKey: ['billing'] });
-      router.replace('/community');
-    },
-  });
-
-  if (group.isPending) {
-    return (
-      <Screen>
-        <LoadingState label="Carregando a comunidade…" />
-      </Screen>
-    );
-  }
   if (group.isError) {
     const sumiu = group.error instanceof ApiError && group.error.isNotFound;
     return (
@@ -108,173 +137,85 @@ export default function CommunityDetailScreen() {
     );
   }
 
-  const g = group.data;
-  const equipe = (members.data ?? []).filter((m) => m.role !== 'MEMBER');
-  const confirmarSaida = () =>
-    Alert.alert(
-      ativo ? `Sair de ${g.name}?` : 'Cancelar o pedido?',
-      ativo
-        ? `A equipe perde o acesso ao que você compartilhava${g.hasAiSeat ? ', e o PRO pago pela comunidade acaba' : ''}. Seus registros continuam com você.`
-        : 'Você pode pedir de novo depois, pelo código ou por um convite.',
-      [
-        { text: 'Voltar', style: 'cancel' },
-        {
-          text: ativo ? 'Sair' : 'Cancelar pedido',
-          style: 'destructive',
-          onPress: () => leave.mutate(),
-        },
-      ],
-    );
-
   return (
     <Screen
-      title={g.name}
-      onRefresh={() => void Promise.all([group.refetch(), members.refetch(), log.refetch()])}
-      refreshing={group.isRefetching}
+      title={group.data?.name ?? 'Mural'}
+      onRefresh={() => void Promise.all([group.refetch(), ativo ? feed.refetch() : null])}
+      refreshing={feed.isRefetching || group.isRefetching}
+      actions={
+        group.data ? (
+          <>
+            {canOpenPanel(group.data) ? (
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel="Abrir painel da equipe"
+                onPress={() => router.push(panelHref(groupId))}
+                className={TOP_BAR_ACTION}
+              >
+                <LayoutDashboard size={20} color={cores.mutedForeground} />
+              </Pressable>
+            ) : null}
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel="Sobre a comunidade e o que você compartilha"
+              onPress={() => router.push(settingsHref)}
+              className={TOP_BAR_ACTION}
+            >
+              <Settings size={20} color={cores.mutedForeground} />
+            </Pressable>
+          </>
+        ) : undefined
+      }
     >
-      <View className="gap-6 px-5 pb-4 pt-4">
-        {ativo ? <CommunityTabs groupId={g.id} /> : null}
-        <View className="flex-row items-start gap-3">
-          <GroupAvatar name={g.name} url={g.avatarUrl} size={48} />
-          <View className="flex-1 gap-1">
-            {g.description ? (
-              <Text className="text-sm text-foreground">{g.description}</Text>
-            ) : null}
-            <Text className="text-xs text-muted-foreground">
-              {`${joinPolicyLabel(g.joinPolicy)} · seu papel: ${teamRoleLabel(g.role).toLowerCase()}`}
+      <View className="gap-4 px-5 pb-6 pt-4">
+        {group.isPending ? <LoadingState label="Carregando a comunidade…" /> : null}
+        {group.data && !ativo ? (
+          <View className="gap-3 rounded-2xl border border-border bg-card p-4">
+            <Text className="text-sm text-foreground">
+              {`Seu pedido está aguardando o dono aprovar. O mural abre quando você entrar, e o que você escolheu compartilhar (${consentSummary(group.data.consentScopes).toLowerCase()}) passa a valer.`}
             </Text>
+            <Button variant="outline" onPress={() => router.push(settingsHref)}>
+              Ver ou cancelar o pedido
+            </Button>
           </View>
-        </View>
-
-        {canOpenPanel(g) ? (
-          <Pressable
-            accessibilityRole="link"
-            onPress={() => router.push(panelHref(g.id))}
-            className="flex-row items-center gap-3 rounded-2xl border border-border bg-card p-4 active:opacity-80"
-          >
-            <LayoutDashboard size={20} color={cores.primary} />
-            <View className="flex-1">
-              <Text className="text-sm font-medium text-foreground">Abrir painel</Text>
-              <Text className="text-xs text-muted-foreground">
-                {g.role === 'OWNER'
-                  ? 'Membros, convites, planos e dicas, assentos e números da comunidade.'
-                  : 'Membros, o que compartilham com você, convites, planos e dicas.'}
-              </Text>
-            </View>
-            <ChevronRight size={18} color={cores.mutedForeground} />
-          </Pressable>
         ) : null}
-
-        {!ativo ? (
-          <Text className="rounded-2xl border border-border bg-card p-4 text-sm text-foreground">
-            {`Seu pedido está aguardando o dono aprovar. O que você escolheu compartilhar (${consentSummary(g.consentScopes).toLowerCase()}) passa a valer quando você entrar.`}
-          </Text>
+        {ativo ? <CommunityTabs groupId={groupId} /> : null}
+        {feed.isPending && ativo ? <LoadingState label="Carregando o mural…" /> : null}
+        {feed.isError ? (
+          <ErrorState error={feed.error} onRetry={() => void feed.refetch()} />
         ) : null}
-
-        {g.hasAiSeat ? (
-          <Pressable
-            accessibilityRole="link"
-            onPress={() => router.push('/plan')}
-            className="flex-row items-center gap-3 rounded-2xl border border-border bg-card p-4 active:opacity-80"
-          >
-            <Crown size={20} color={cores.primary} />
-            <View className="flex-1">
-              <Text className="text-sm font-medium text-foreground">A comunidade paga seu PRO</Text>
-              <Text className="text-xs text-muted-foreground">
-                Chat, foto e ditado com a IA. Se o assento sair, você volta ao Free sem perder nada.
-              </Text>
-            </View>
-          </Pressable>
-        ) : null}
-
-        {ativo ? <CommunityChallengesPreview groupId={g.id} /> : null}
-
-        {ativo ? <CommunityContentPreview groupId={g.id} /> : null}
-
-        {ativo ? (
-          <Secao titulo="Equipe">
-            {equipe.length === 0 ? (
-              <Text className="text-xs text-muted-foreground">
-                Ninguém da equipe, por enquanto.
-              </Text>
+        {primeira && me ? (
+          <>
+            {primeira.canPost ? (
+              <Composer groupId={groupId} me={me} />
             ) : (
-              <View className="overflow-hidden rounded-2xl border border-border bg-card">
-                {equipe.map((m, i) => (
-                  <View
-                    key={m.membershipId}
-                    className={cn(
-                      'flex-row justify-between px-4 py-3',
-                      i < equipe.length - 1 && 'border-b border-border',
-                    )}
-                  >
-                    <Text className="text-sm text-foreground">{m.name}</Text>
-                    <Text className="text-xs text-muted-foreground">{teamRoleLabel(m.role)}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-          </Secao>
-        ) : null}
-
-        {ativo ? (
-          <Secao titulo="O que eu compartilho">
-            <ConsentForm
-              key={`${g.consentScopes.join()}|${g.statsOptIn}`}
-              initial={{ scopes: g.consentScopes, statsOptIn: g.statsOptIn }}
-              team={equipe}
-              submitLabel="Salvar"
-              editing
-              pending={save.isPending}
-              error={save.isError ? 'Não deu para salvar agora. Tente de novo.' : null}
-              onSubmit={(consent) => save.mutate(consent)}
-            />
-          </Secao>
-        ) : null}
-
-        {ativo ? (
-          <Secao titulo="Quem acessou seus dados">
-            {log.data && log.data.length === 0 ? (
-              <Text className="text-xs text-muted-foreground">
-                Ninguém da equipe olhou seus dados ainda.
+              <Text className="rounded-2xl border border-border bg-card p-4 text-xs text-muted-foreground">
+                Nesta comunidade, só a equipe publica no mural. Você pode reagir e comentar.
               </Text>
+            )}
+            {posts.length === 0 ? (
+              <EmptyState
+                title="O mural está vazio"
+                description={
+                  primeira.canPost
+                    ? 'Conte um treino, uma receita ou uma conquista para a comunidade.'
+                    : 'Quando a equipe publicar, aparece aqui.'
+                }
+              />
+            ) : (
+              posts.map((p) => <PostCard key={p.id} groupId={groupId} post={p} me={me} />)
+            )}
+            {feed.hasNextPage ? (
+              <Button
+                variant="outline"
+                loading={feed.isFetchingNextPage}
+                onPress={() => void feed.fetchNextPage()}
+              >
+                Ver posts mais antigos
+              </Button>
             ) : null}
-            {log.data && log.data.length > 0 ? (
-              <View className="overflow-hidden rounded-2xl border border-border bg-card">
-                {log.data.map((linha, i) => (
-                  <View
-                    key={`${linha.at}-${i}`}
-                    className={cn(
-                      'flex-row justify-between gap-3 px-4 py-3',
-                      i < log.data.length - 1 && 'border-b border-border',
-                    )}
-                  >
-                    <View className="min-w-0 flex-1">
-                      <Text className="text-sm text-foreground">
-                        {linha.professionalName ?? 'Conta apagada'}
-                      </Text>
-                      <Text className="text-xs text-muted-foreground">
-                        {linha.denied
-                          ? `${SHARE_SCOPE_LABEL[linha.scope]} · barrado`
-                          : SHARE_SCOPE_LABEL[linha.scope]}
-                      </Text>
-                    </View>
-                    <Text className="text-xs text-muted-foreground">{quando(linha.at)}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-          </Secao>
+          </>
         ) : null}
-
-        {g.role === 'OWNER' ? (
-          <Text className="text-xs text-muted-foreground">
-            Quem é dono não sai da comunidade: transfira-a pelo painel, em Configurações.
-          </Text>
-        ) : (
-          <Button variant="outline" loading={leave.isPending} onPress={confirmarSaida}>
-            {ativo ? 'Sair da comunidade' : 'Cancelar pedido'}
-          </Button>
-        )}
       </View>
     </Screen>
   );
