@@ -11,6 +11,12 @@ import {
   type MyGroup,
   type TipCategory,
 } from '@fatia/api-client';
+import {
+  CheckableRow,
+  DeleteButton,
+  PublishCard,
+  WritePreviewTabs,
+} from '@/components/content/content-ui';
 import { ImageField, type ImageValue } from '@/components/content/image-field';
 import { MarkdownLite } from '@/components/content/markdown-lite';
 import { apiMessage, Choice, OrgPanel, orgKeys, PanelCard } from '@/components/org/org-panel';
@@ -29,10 +35,13 @@ function Editor({ g, tip }: { g: MyGroup; tip: GroupTip | null }) {
     tip?.image ? { fileId: tip.image.id, url: tip.image.url } : null,
   );
   const [previa, setPrevia] = useState(false);
+  const snapshot = JSON.stringify([titulo, categoria, corpo, imagem?.fileId]);
+  const [savedSnapshot, setSavedSnapshot] = useState(snapshot);
+  const dirty = snapshot !== savedSnapshot;
   const invalidar = () => qc.invalidateQueries({ queryKey: orgKeys.all(g.id) });
 
   const salvar = useMutation({
-    mutationFn: () => {
+    mutationFn: (_saved: string) => {
       const input = {
         title: titulo.trim(),
         body: corpo.trim(),
@@ -41,7 +50,8 @@ function Editor({ g, tip }: { g: MyGroup; tip: GroupTip | null }) {
       };
       return tip ? contentApi.updateTip(g.id, tip.id, input) : contentApi.createTip(g.id, input);
     },
-    onSuccess: (d) => {
+    onSuccess: (d, saved) => {
+      setSavedSnapshot(saved);
       toast.show({
         message: tip ? 'Dica salva.' : 'Rascunho criado. Publique quando estiver pronta.',
       });
@@ -56,6 +66,9 @@ function Editor({ g, tip }: { g: MyGroup; tip: GroupTip | null }) {
     onSuccess: (d, s) => {
       if (s.published !== undefined) {
         toast.show({ message: d.publishedAt ? 'Publicada para os membros.' : 'Saiu do ar.' });
+      } else if (s.pinned !== undefined) {
+        // Fixar vale na hora, sem "Salvar": o aviso é o que confirma que valeu.
+        toast.show({ message: d.pinned ? 'Fixada no topo das dicas.' : 'Não está mais fixada.' });
       }
       void invalidar();
     },
@@ -66,7 +79,9 @@ function Editor({ g, tip }: { g: MyGroup; tip: GroupTip | null }) {
     onSuccess: () => {
       toast.show({ message: 'Dica apagada.' });
       void invalidar();
-      router.replace(`/org/${g.id}/content`);
+      // Voltar à lista que já está atrás, na aba de dicas; recriá-la abria em Planos.
+      if (router.canGoBack()) router.back();
+      else router.replace(`/org/${g.id}/content?tab=tips`);
     },
     onError: (err) => toast.show({ message: apiMessage(err, 'Não deu para apagar agora.') }),
   });
@@ -74,9 +89,40 @@ function Editor({ g, tip }: { g: MyGroup; tip: GroupTip | null }) {
   return (
     <>
       {tip ? (
-        <Text className="text-xs text-muted-foreground">
-          {`${tip.publishedAt ? 'Publicada' : 'Rascunho'}${tip.pinned ? ' · fixada' : ''} · por ${tip.authorName}`}
-        </Text>
+        <PublishCard
+          published={Boolean(tip.publishedAt)}
+          feminine
+          authorName={tip.authorName}
+          canEdit={editavel}
+          dirty={dirty}
+          loading={estado.isPending && estado.variables?.published !== undefined}
+          publishedHint="Os membros veem esta dica na comunidade."
+          draftHint="Só a equipe vê. Publique quando estiver pronta."
+          onPublish={() => estado.mutate({ published: true })}
+          onUnpublish={() =>
+            Alert.alert('Tirar esta dica do ar?', 'Ela some para os membros na hora.', [
+              { text: 'Cancelar', style: 'cancel' },
+              {
+                text: 'Tirar do ar',
+                style: 'destructive',
+                onPress: () => estado.mutate({ published: false }),
+              },
+            ])
+          }
+        >
+          {/* Interruptor, e não um terceiro botão empilhado igual a "Publicar":
+              fixar é um estado ligado/desligado, e vale na hora. */}
+          {editavel ? (
+            <CheckableRow
+              role="switch"
+              label="Fixar no topo"
+              detail="Aparece antes das outras"
+              checked={tip.pinned}
+              disabled={estado.isPending}
+              onPress={() => estado.mutate({ pinned: !tip.pinned })}
+            />
+          ) : null}
+        </PublishCard>
       ) : null}
       {!editavel ? (
         <Text className="rounded-xl bg-muted p-3 text-sm text-foreground">
@@ -100,6 +146,7 @@ function Editor({ g, tip }: { g: MyGroup; tip: GroupTip | null }) {
             onChange={setCategoria}
           />
         ) : null}
+        <WritePreviewTabs preview={previa} onPreviewChange={setPrevia} />
         {previa ? (
           <View
             accessibilityLabel="Prévia da dica"
@@ -120,59 +167,42 @@ function Editor({ g, tip }: { g: MyGroup; tip: GroupTip | null }) {
             placeholder="Texto da dica"
           />
         )}
-        <View className="flex-row items-center justify-between gap-2">
-          <Text className="flex-1 text-xs text-muted-foreground">
-            {`**negrito**, *itálico*, listas com "- ". ${corpo.length}/${MAX_TIP_BODY}`}
-          </Text>
-          <Button size="sm" variant="ghost" onPress={() => setPrevia(!previa)}>
-            {previa ? 'Editar' : 'Ver prévia'}
-          </Button>
-        </View>
+        <Text className="text-xs text-muted-foreground">
+          {`**negrito**, *itálico*, listas com "- ". ${corpo.length}/${MAX_TIP_BODY}`}
+        </Text>
         {editavel ? (
           <ImageField groupId={g.id} label="Imagem" value={imagem} onChange={setImagem} />
         ) : null}
       </PanelCard>
 
       {editavel ? (
-        <View className="gap-2">
+        <View className="gap-6">
           <Button
             loading={salvar.isPending}
+            disabled={tip !== null && !dirty}
             onPress={() => {
               if (!titulo.trim() || !corpo.trim()) {
                 toast.show({ message: 'Preencha o título e o texto da dica.' });
-              } else salvar.mutate();
+              } else salvar.mutate(snapshot);
             }}
           >
-            {tip ? 'Salvar' : 'Criar rascunho'}
+            {tip === null ? 'Criar rascunho' : dirty ? 'Salvar mudanças' : 'Tudo salvo'}
           </Button>
           {tip ? (
-            <>
-              <Button
-                variant="outline"
-                loading={estado.isPending}
-                onPress={() => estado.mutate({ published: !tip.publishedAt })}
-              >
-                {tip.publishedAt ? 'Tirar do ar' : 'Publicar'}
-              </Button>
-              <Button variant="outline" onPress={() => estado.mutate({ pinned: !tip.pinned })}>
-                {tip.pinned ? 'Desafixar' : 'Fixar no topo'}
-              </Button>
-              <Button
-                variant="ghost"
-                onPress={() =>
-                  Alert.alert(
-                    'Apagar esta dica?',
-                    'Ela some para os membros, e a imagem é apagada junto.',
-                    [
-                      { text: 'Voltar', style: 'cancel' },
-                      { text: 'Apagar', style: 'destructive', onPress: () => apagar.mutate() },
-                    ],
-                  )
-                }
-              >
-                Apagar
-              </Button>
-            </>
+            <DeleteButton
+              label="Apagar dica"
+              loading={apagar.isPending}
+              onPress={() =>
+                Alert.alert(
+                  'Apagar esta dica?',
+                  'Ela some para os membros, e a imagem é apagada junto.',
+                  [
+                    { text: 'Cancelar', style: 'cancel' },
+                    { text: 'Apagar', style: 'destructive', onPress: () => apagar.mutate() },
+                  ],
+                )
+              }
+            />
           ) : null}
         </View>
       ) : null}
