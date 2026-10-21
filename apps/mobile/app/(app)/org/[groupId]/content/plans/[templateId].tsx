@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -26,7 +26,7 @@ import {
 } from '@/components/content/content-ui';
 import { ImageField, type ImageValue } from '@/components/content/image-field';
 import { apiMessage, Choice, OrgPanel, orgKeys, PanelCard } from '@/components/org/org-panel';
-import { Button, EmptyState, Input, LoadingState } from '@/components/ui';
+import { Button, EmptyState, Input, LoadingState, useConfirm } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 
 type GoalsForm = Record<keyof NutritionGoalsInput, string>;
@@ -62,6 +62,7 @@ function Editor({
 }) {
   const router = useRouter();
   const qc = useQueryClient();
+  const confirm = useConfirm();
   const toast = useToast();
   const editavel = template === null || template.canEdit !== false;
 
@@ -196,18 +197,13 @@ function Editor({
           draftHint="Só a equipe vê. Publique quando estiver pronto."
           onPublish={() => publicar.mutate(true)}
           onUnpublish={() =>
-            Alert.alert(
-              'Tirar este plano do ar?',
-              'Ele some para os membros. Quem já adotou continua com a cópia.',
-              [
-                { text: 'Cancelar', style: 'cancel' },
-                {
-                  text: 'Tirar do ar',
-                  style: 'destructive',
-                  onPress: () => publicar.mutate(false),
-                },
-              ],
-            )
+            confirm({
+              title: 'Tirar este plano do ar?',
+              description: 'Ele some para os membros. Quem já adotou continua com a cópia.',
+              confirmLabel: 'Tirar do ar',
+              destructive: true,
+              onConfirm: () => publicar.mutate(false),
+            })
           }
         />
       ) : null}
@@ -435,14 +431,13 @@ function Editor({
               label="Apagar plano"
               loading={apagar.isPending}
               onPress={() =>
-                Alert.alert(
-                  'Apagar este plano?',
-                  'Ele some para os membros. Quem já adotou continua com a cópia.',
-                  [
-                    { text: 'Cancelar', style: 'cancel' },
-                    { text: 'Apagar', style: 'destructive', onPress: () => apagar.mutate() },
-                  ],
-                )
+                confirm({
+                  title: 'Apagar este plano?',
+                  description: 'Ele some para os membros. Quem já adotou continua com a cópia.',
+                  confirmLabel: 'Apagar',
+                  destructive: true,
+                  onConfirm: () => apagar.mutate(),
+                })
               }
             />
           ) : null}

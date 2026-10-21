@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -20,12 +20,13 @@ import {
 import { ImageField, type ImageValue } from '@/components/content/image-field';
 import { MarkdownLite } from '@/components/content/markdown-lite';
 import { apiMessage, Choice, OrgPanel, orgKeys, PanelCard } from '@/components/org/org-panel';
-import { Button, EmptyState, Input, LoadingState } from '@/components/ui';
+import { Button, EmptyState, Input, LoadingState, useConfirm } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 
 function Editor({ g, tip }: { g: MyGroup; tip: GroupTip | null }) {
   const router = useRouter();
   const qc = useQueryClient();
+  const confirm = useConfirm();
   const toast = useToast();
   const editavel = tip === null || tip.canEdit !== false;
   const [titulo, setTitulo] = useState(tip?.title ?? '');
@@ -100,14 +101,13 @@ function Editor({ g, tip }: { g: MyGroup; tip: GroupTip | null }) {
           draftHint="Só a equipe vê. Publique quando estiver pronta."
           onPublish={() => estado.mutate({ published: true })}
           onUnpublish={() =>
-            Alert.alert('Tirar esta dica do ar?', 'Ela some para os membros na hora.', [
-              { text: 'Cancelar', style: 'cancel' },
-              {
-                text: 'Tirar do ar',
-                style: 'destructive',
-                onPress: () => estado.mutate({ published: false }),
-              },
-            ])
+            confirm({
+              title: 'Tirar esta dica do ar?',
+              description: 'Ela some para os membros na hora.',
+              confirmLabel: 'Tirar do ar',
+              destructive: true,
+              onConfirm: () => estado.mutate({ published: false }),
+            })
           }
         >
           {/* Interruptor, e não um terceiro botão empilhado igual a "Publicar":
@@ -193,14 +193,13 @@ function Editor({ g, tip }: { g: MyGroup; tip: GroupTip | null }) {
               label="Apagar dica"
               loading={apagar.isPending}
               onPress={() =>
-                Alert.alert(
-                  'Apagar esta dica?',
-                  'Ela some para os membros, e a imagem é apagada junto.',
-                  [
-                    { text: 'Cancelar', style: 'cancel' },
-                    { text: 'Apagar', style: 'destructive', onPress: () => apagar.mutate() },
-                  ],
-                )
+                confirm({
+                  title: 'Apagar esta dica?',
+                  description: 'Ela some para os membros, e a imagem é apagada junto.',
+                  confirmLabel: 'Apagar',
+                  destructive: true,
+                  onConfirm: () => apagar.mutate(),
+                })
               }
             />
           ) : null}

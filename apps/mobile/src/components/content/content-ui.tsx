@@ -118,7 +118,7 @@ export function IconLabel({
 /**
  * Apagar: contorno e texto vermelhos com a lixeira. O `ghost` de antes era um
  * "Apagar" em texto branco, igual a qualquer outro texto da tela.
- * A confirmação fica com quem chama (`Alert.alert`, como no resto do app).
+ * A confirmação fica com quem chama (`useConfirm`, um drawer no visual do app).
  */
 export function DeleteButton({
   label,

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { Button } from './button';
 import {
@@ -7,6 +7,7 @@ import {
   DrawerDescription,
   DrawerFooter,
   DrawerHeader,
+  DrawerLayer,
   DrawerTitle,
 } from './drawer';
 import { FormMessage } from './form';
@@ -74,5 +75,62 @@ export function ConfirmDrawer({
         </DrawerFooter>
       </DrawerContent>
     </Drawer>
+  );
+}
+
+export interface ConfirmRequest {
+  title: string;
+  description?: string;
+  confirmLabel: string;
+  cancelLabel?: string;
+  destructive?: boolean;
+  onConfirm: () => void;
+}
+
+const ConfirmContext = createContext<((request: ConfirmRequest) => void) | null>(null);
+
+/**
+ * `useConfirm()` substitui o `Alert.alert` de confirmação em qualquer tela.
+ *
+ * Existe porque montar um `ConfirmDrawer` por pergunta exige subir o estado
+ * até o irmão do `<Screen>` — e nas telas da organização a pergunta nasce
+ * dentro do `OrgPanel`, longe de lá. O provider mora no layout do app, numa
+ * `DrawerLayer` própria, e qualquer componente só pede.
+ */
+export function ConfirmProvider({ children }: { children: ReactNode }) {
+  const [request, setRequest] = useState<ConfirmRequest | null>(null);
+
+  return (
+    <ConfirmContext.Provider value={setRequest}>
+      {children}
+      <DrawerLayer>
+        <ConfirmDrawer
+          open={request != null}
+          onOpenChange={(open) => {
+            if (!open) setRequest(null);
+          }}
+          title={request?.title ?? ''}
+          description={request?.description}
+          confirmLabel={request?.confirmLabel ?? ''}
+          cancelLabel={request?.cancelLabel}
+          destructive={request?.destructive}
+          onConfirm={() => {
+            setRequest(null);
+            request?.onConfirm();
+          }}
+        />
+      </DrawerLayer>
+    </ConfirmContext.Provider>
+  );
+}
+
+export function useConfirm(): (request: ConfirmRequest) => void {
+  const confirm = useContext(ConfirmContext);
+  return useCallback(
+    (request: ConfirmRequest) => {
+      if (confirm) confirm(request);
+      else if (__DEV__) console.warn('useConfirm fora de <ConfirmProvider>: nada foi perguntado.');
+    },
+    [confirm],
   );
 }

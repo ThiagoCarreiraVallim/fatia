@@ -7,7 +7,7 @@ import { takePendingInvite } from '@/community/pending-invite';
 import { useAuth } from '@/auth/auth-context';
 import { BottomNav } from '@/components/layout/bottom-nav';
 import { RegistroRapido } from '@/components/layout/registro-rapido';
-import { LoadingState } from '@/components/ui';
+import { ConfirmProvider, LoadingState } from '@/components/ui';
 import { usePush } from '@/notifications/use-push';
 import { ChatProvider } from '@/chat/chat-provider';
 import { BackgroundReply } from '@/components/chat/background-reply';
@@ -70,14 +70,16 @@ export default function AppLayout() {
     // O chat mora aqui, acima das abas: a resposta segue chegando enquanto a
     // pessoa navega (ADR 035).
     <ChatProvider>
-      <View className="flex-1 bg-background">
-        <Slot />
-        <BackgroundReply />
-        {/* O "+" global envolve a nav para acertar a ordem de pintura (ver o componente). */}
-        <RegistroRapido>
-          <BottomNav />
-        </RegistroRapido>
-      </View>
+      <ConfirmProvider>
+        <View className="flex-1 bg-background">
+          <Slot />
+          <BackgroundReply />
+          {/* O "+" global envolve a nav para acertar a ordem de pintura (ver o componente). */}
+          <RegistroRapido>
+            <BottomNav />
+          </RegistroRapido>
+        </View>
+      </ConfirmProvider>
     </ChatProvider>
   );
 }

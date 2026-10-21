@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -21,7 +21,7 @@ import { MarkdownLite } from '@/components/content/markdown-lite';
 import { PhotosField } from '@/components/content/photos-field';
 import { VideoField, type VideoValue } from '@/components/content/video-field';
 import { apiMessage, Choice, OrgPanel, orgKeys, PanelCard } from '@/components/org/org-panel';
-import { Button, EmptyState, Input, LoadingState } from '@/components/ui';
+import { Button, EmptyState, Input, LoadingState, useConfirm } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 
 const SEM = 'nenhum';
@@ -37,6 +37,7 @@ function Editor({
 }) {
   const router = useRouter();
   const qc = useQueryClient();
+  const confirm = useConfirm();
   const toast = useToast();
   const daCasa = item ? item.ownedByCommunity : catalog === null;
   const editavel = item === null || item.canEdit !== false;
@@ -209,16 +210,15 @@ function Editor({
               label={daCasa ? 'Apagar exercício' : 'Apagar tutorial'}
               loading={apagar.isPending}
               onPress={() =>
-                Alert.alert(
-                  daCasa ? 'Apagar este exercício?' : 'Apagar este tutorial?',
-                  daCasa
+                confirm({
+                  title: daCasa ? 'Apagar este exercício?' : 'Apagar este tutorial?',
+                  description: daCasa
                     ? 'Ele sai do catálogo da comunidade, com o vídeo e as fotos. Quem já treinou com ele continua vendo o que fez.'
                     : 'O vídeo, as fotos e as dicas saem. O exercício continua no catálogo geral.',
-                  [
-                    { text: 'Cancelar', style: 'cancel' },
-                    { text: 'Apagar', style: 'destructive', onPress: () => apagar.mutate() },
-                  ],
-                )
+                  confirmLabel: 'Apagar',
+                  destructive: true,
+                  onConfirm: () => apagar.mutate(),
+                })
               }
             />
           ) : null}
