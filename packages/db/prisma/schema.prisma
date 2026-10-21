@@ -468,11 +468,11 @@ model WorkoutSession {
   user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan WorkoutPlan? @relation(fields: [planId], references: [id])
   sets SessionSet[]
-
-  @@index([userId, startedAt])
   // E um índice único PARCIAL em (userId) onde completedAt é nulo — uma sessão
   // aberta por pessoa (#350). O Prisma não o descreve: está na migration
   // 20261026120000_one_open_workout_session.
+
+  @@index([userId, startedAt])
 }
 
 model SessionSet {
@@ -836,35 +836,39 @@ model Group {
   // Apagar a conta do dono apaga grupo, memberships e vínculos, e **nenhum dado
   // de aluno é tocado**, porque nunca esteve sob o grupo. Fatura em aberto é
   // problema da #158, não deste FK.
-  owner          User                 @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  memberships    GroupMembership[]
-  links          ProfessionalLink[]
-  aiUsage        AiUsage[]
-  invites        GroupInvite[]
-  seatPool       GroupSeatPool?
+  owner                 User                 @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  memberships           GroupMembership[]
+  links                 ProfessionalLink[]
+  aiUsage               AiUsage[]
+  invites               GroupInvite[]
+  seatPool              GroupSeatPool?
   /// Avatar da comunidade (ADR 028).
-  avatarFileId   String?              @unique
-  avatarFile     MediaFile?           @relation("GroupAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
-  mediaFiles     MediaFile[]          @relation("GroupMedia")
-  planTemplates  GroupPlanTemplate[]
-  tips           GroupTip[]
+  avatarFileId          String?              @unique
+  avatarFile            MediaFile?           @relation("GroupAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
+  mediaFiles            MediaFile[]          @relation("GroupMedia")
+  planTemplates         GroupPlanTemplate[]
+  tips                  GroupTip[]
   /// Equipamentos que a academia tem (Fase 7b), da lista do catálogo. Serve
   /// ao filtro "Na minha academia".
-  equipment      String[]             @default([])
-  exercises      Exercise[]           @relation("GroupExercises")
-  exerciseGuides GroupExerciseGuide[]
+  equipment             String[]             @default([])
+  /// Equipamentos que a academia nomeou por conta própria ("Hack 45° da casa"),
+  /// fora da lista. Valem no filtro "Na minha academia" contra o equipamento
+  /// gravado no exercício, e aparecem no editor de exercício.
+  customEquipment       String[]             @default([])
+  exercises             Exercise[]           @relation("GroupExercises")
+  exerciseGuides        GroupExerciseGuide[]
   /// O agente da comunidade no chat (Fase 7c, ADR 031).
-  agent          GroupAgent?
-  agentChats     Conversation[]       @relation("ConversationAgent")
+  agent                 GroupAgent?
+  agentChats            Conversation[]       @relation("ConversationAgent")
   /// Desafios da comunidade (Fase 8a, ADR 027).
-  challenges     GroupChallenge[]
+  challenges            GroupChallenge[]
   /// Quem publica no mural (Fase 8b, ADR 032).
-  postPolicy     PostPolicy           @default(ALL_MEMBERS)
-  posts          GroupPost[]
+  postPolicy            PostPolicy           @default(ALL_MEMBERS)
+  posts                 GroupPost[]
   /// O que quem entra como membro precisa compartilhar com a equipe. Cobrado
   /// na entrada (código ou convite) e ao tirar um escopo já compartilhado;
   /// quem entrou antes de o dono mudar a lista não deve o que nunca compartilhou.
-  requiredSharingScopes ShareScope[] @default([])
+  requiredSharingScopes ShareScope[]         @default([])
 
   @@index([ownerId])
   @@index([type])
