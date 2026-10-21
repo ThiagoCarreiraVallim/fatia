@@ -7,7 +7,7 @@ import { PRIMARY_TABS, activeNavKey } from '@fatia/api-client';
 import { DrawerLayer } from '@/components/ui';
 import { cn } from '@/components/ui/utils';
 import { MoreMenu } from './more-menu';
-import { useRegistroRapido } from './registro-rapido';
+import { useQuickAdd } from './quick-add';
 import { cores } from '@/theme/cores';
 
 const ICONE = { nutrition: Apple, workout: Dumbbell, community: Users } as const;
@@ -24,7 +24,7 @@ export function BottomNav() {
   const pathname = usePathname();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const registro = useRegistroRapido();
+  const quickAdd = useQuickAdd();
   const [menuAberto, setMenuAberto] = useState(false);
   const ativa = activeNavKey(pathname);
 
@@ -68,7 +68,7 @@ export function BottomNav() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Registrar"
-              onPress={registro.abrir}
+              onPress={quickAdd.open}
               style={{ elevation: 6 }}
               className="h-14 w-14 items-center justify-center rounded-full bg-primary active:opacity-80"
             >

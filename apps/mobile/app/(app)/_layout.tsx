@@ -6,7 +6,7 @@ import { usersApi } from '@fatia/api-client';
 import { takePendingInvite } from '@/community/pending-invite';
 import { useAuth } from '@/auth/auth-context';
 import { BottomNav } from '@/components/layout/bottom-nav';
-import { RegistroRapido } from '@/components/layout/registro-rapido';
+import { QuickAdd } from '@/components/layout/quick-add';
 import { ConfirmProvider, LoadingState } from '@/components/ui';
 import { usePush } from '@/notifications/use-push';
 import { ChatProvider } from '@/chat/chat-provider';
@@ -75,9 +75,9 @@ export default function AppLayout() {
           <Slot />
           <BackgroundReply />
           {/* O "+" global envolve a nav para acertar a ordem de pintura (ver o componente). */}
-          <RegistroRapido>
+          <QuickAdd>
             <BottomNav />
-          </RegistroRapido>
+          </QuickAdd>
         </View>
       </ConfirmProvider>
     </ChatProvider>
