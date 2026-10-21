@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Check, Plus, ScanBarcode, Search, Star, Trash2 } from 'lucide-react-native';
@@ -33,6 +33,7 @@ import {
   DrawerScrollView,
   DrawerTextInput,
   DrawerTitle,
+  useConfirm,
 } from '@/components/ui';
 import { DrawerInput, estiloDoCampoDoDrawer } from './drawer-input';
 import {
@@ -86,6 +87,7 @@ const MANUAL_INICIAL = { name: '', grams: '100', kcal: '', proteinG: '', carbsG:
 type ValoresManuais = typeof MANUAL_INICIAL;
 
 export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }: Props) {
+  const confirm = useConfirm();
   const [modo, setModo] = useState<Modo>('busca');
   const [busca, setBusca] = useState('');
   const [buscaComAtraso, setBuscaComAtraso] = useState('');
@@ -197,14 +199,13 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
   });
 
   const confirmarApagarModelo = (modelo: MealTemplate) => {
-    Alert.alert(
-      'Apagar refeição salva',
-      `"${modelo.name}" sai da lista. O que já foi registrado fica.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Apagar', style: 'destructive', onPress: () => apagarModelo.mutate(modelo.id) },
-      ],
-    );
+    confirm({
+      title: 'Apagar refeição salva',
+      description: `"${modelo.name}" sai da lista. O que já foi registrado fica.`,
+      confirmLabel: 'Apagar',
+      destructive: true,
+      onConfirm: () => apagarModelo.mutate(modelo.id),
+    });
   };
 
   const erroDoModelo = registrarModelo.error ?? apagarModelo.error;

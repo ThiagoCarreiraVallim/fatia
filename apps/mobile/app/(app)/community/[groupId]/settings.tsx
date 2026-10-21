@@ -1,4 +1,4 @@
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Crown, LayoutDashboard } from 'lucide-react-native';
@@ -17,7 +17,7 @@ import { ConsentForm } from '@/components/community/consent-form';
 import { GroupAvatar } from '@/components/community/group-avatar';
 import { Screen } from '@/components/layout/screen';
 import { apiMessage } from '@/components/org/org-panel';
-import { Button, EmptyState, ErrorState, LoadingState, cn } from '@/components/ui';
+import { Button, EmptyState, ErrorState, LoadingState, cn, useConfirm } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 import { cores } from '@/theme/cores';
 
@@ -49,6 +49,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
  * sair. Desafios e Planos e dicas são abas do mural.
  */
 export default function CommunitySettingsScreen() {
+  const confirm = useConfirm();
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   const router = useRouter();
   const qc = useQueryClient();
@@ -114,20 +115,16 @@ export default function CommunitySettingsScreen() {
   const g = group.data;
   const equipe = (members.data ?? []).filter((m) => m.role !== 'MEMBER');
   const confirmLeave = () =>
-    Alert.alert(
-      ativo ? `Sair de ${g.name}?` : 'Cancelar o pedido?',
-      ativo
+    confirm({
+      title: ativo ? `Sair de ${g.name}?` : 'Cancelar o pedido?',
+      description: ativo
         ? `A equipe perde o acesso ao que você compartilhava${g.hasAiSeat ? ', e o PRO pago pela comunidade acaba' : ''}. Seus registros continuam com você.`
         : 'Você pode pedir de novo depois, pelo código ou por um convite.',
-      [
-        { text: 'Voltar', style: 'cancel' },
-        {
-          text: ativo ? 'Sair' : 'Cancelar pedido',
-          style: 'destructive',
-          onPress: () => leave.mutate(),
-        },
-      ],
-    );
+      confirmLabel: ativo ? 'Sair' : 'Cancelar pedido',
+      cancelLabel: 'Voltar',
+      destructive: true,
+      onConfirm: () => leave.mutate(),
+    });
 
   return (
     <Screen

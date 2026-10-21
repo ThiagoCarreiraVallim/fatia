@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Share, Text, View } from 'react-native';
+import { Share, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -16,7 +16,7 @@ import {
 import { RequiredScopesField } from '@/components/community/required-scopes-field';
 import { ImageField } from '@/components/content/image-field';
 import { apiMessage, Choice, OrgPanel, orgKeys, PanelCard } from '@/components/org/org-panel';
-import { Button, Input } from '@/components/ui';
+import { Button, Input, useConfirm } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 
 const POLITICAS: JoinPolicy[] = ['OPEN', 'APPROVAL', 'INVITE_ONLY'];
@@ -54,6 +54,7 @@ function RequiredScopesCard({ g }: { g: MyGroup }) {
 }
 
 function GroupSettings({ g }: { g: MyGroup }) {
+  const confirm = useConfirm();
   const router = useRouter();
   const qc = useQueryClient();
   const toast = useToast();
@@ -210,14 +211,14 @@ function GroupSettings({ g }: { g: MyGroup }) {
           disabled={!alvo}
           loading={transferir.isPending}
           onPress={() =>
-            Alert.alert(
-              'Transferir a comunidade?',
-              `${alvo?.name ?? 'A pessoa'} passa a ser dona, com a cobrança dos assentos. Você continua na equipe como profissional.`,
-              [
-                { text: 'Voltar', style: 'cancel' },
-                { text: 'Transferir', style: 'destructive', onPress: () => transferir.mutate() },
-              ],
-            )
+            confirm({
+              title: 'Transferir a comunidade?',
+              description: `${alvo?.name ?? 'A pessoa'} passa a ser dona, com a cobrança dos assentos. Você continua na equipe como profissional.`,
+              confirmLabel: 'Transferir',
+              cancelLabel: 'Voltar',
+              destructive: true,
+              onConfirm: () => transferir.mutate(),
+            })
           }
         >
           Transferir

@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarRange } from 'lucide-react-native';
 import { workoutApi, type TrainingBlock, type TrainingBlockWeek } from '@fatia/api-client';
-import { Button, LoadingState } from '@/components/ui';
+import { Button, LoadingState, useConfirm } from '@/components/ui';
 import { cores } from '@/theme/cores';
 
 /** Réplica de `apps/web/src/components/workout/block-timeline.tsx` (#145). */
@@ -15,6 +15,7 @@ const FOCO_CURTO: Record<TrainingBlockWeek['focus'], string> = {
 };
 
 export function BlockTimeline() {
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const [planId, setPlanId] = useState<string | undefined>(undefined);
 
@@ -93,10 +94,14 @@ export function BlockTimeline() {
   // Encerrar apaga o combinado das 4 semanas e não tem desfazer — o mesmo motivo
   // pelo qual a tool equivalente é `destructiveHint`.
   const confirmarEncerrar = () =>
-    Alert.alert('Encerrar o bloco?', 'As 4 semanas planejadas somem e não dá para voltar atrás.', [
-      { text: 'Manter', style: 'cancel' },
-      { text: 'Encerrar', style: 'destructive', onPress: () => encerrar.mutate(ativo.id) },
-    ]);
+    confirm({
+      title: 'Encerrar o bloco?',
+      description: 'As 4 semanas planejadas somem e não dá para voltar atrás.',
+      confirmLabel: 'Encerrar',
+      cancelLabel: 'Manter',
+      destructive: true,
+      onConfirm: () => encerrar.mutate(ativo.id),
+    });
 
   return <BlockCard block={ativo} onEncerrar={confirmarEncerrar} />;
 }

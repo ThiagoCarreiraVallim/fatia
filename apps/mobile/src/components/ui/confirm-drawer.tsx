@@ -87,7 +87,23 @@ export interface ConfirmRequest {
   onConfirm: () => void;
 }
 
-const ConfirmContext = createContext<((request: ConfirmRequest) => void) | null>(null);
+export interface ActionSheetOption {
+  label: string;
+  /** Apaga ou tira algo: texto vermelho. */
+  destructive?: boolean;
+  onPress: () => void;
+}
+
+export interface ActionSheetRequest {
+  title: string;
+  description?: string;
+  options: ActionSheetOption[];
+}
+
+const ConfirmContext = createContext<{
+  confirm: (request: ConfirmRequest) => void;
+  actionSheet: (request: ActionSheetRequest) => void;
+} | null>(null);
 
 /**
  * `useConfirm()` substitui o `Alert.alert` de confirmação em qualquer tela.
@@ -96,14 +112,54 @@ const ConfirmContext = createContext<((request: ConfirmRequest) => void) | null>
  * até o irmão do `<Screen>` — e nas telas da organização a pergunta nasce
  * dentro do `OrgPanel`, longe de lá. O provider mora no layout do app, numa
  * `DrawerLayer` própria, e qualquer componente só pede.
+ *
+ * O mesmo provider serve o `useActionSheet()`, que substitui o `Alert` usado
+ * como menu ("Renomear / Apagar / Cancelar"). Escolher uma opção fecha o menu
+ * antes de rodar a ação, então a ação pode abrir uma confirmação em seguida.
  */
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [request, setRequest] = useState<ConfirmRequest | null>(null);
+  const [sheet, setSheet] = useState<ActionSheetRequest | null>(null);
+  const [value] = useState(() => ({ confirm: setRequest, actionSheet: setSheet }));
 
   return (
-    <ConfirmContext.Provider value={setRequest}>
+    <ConfirmContext.Provider value={value}>
       {children}
       <DrawerLayer>
+        <Drawer
+          open={sheet != null}
+          onOpenChange={(open) => {
+            if (!open) setSheet(null);
+          }}
+        >
+          <DrawerContent className="px-4">
+            <DrawerHeader className="px-0">
+              <DrawerTitle>{sheet?.title ?? ''}</DrawerTitle>
+              {sheet?.description ? (
+                <DrawerDescription>{sheet.description}</DrawerDescription>
+              ) : null}
+            </DrawerHeader>
+            <View className="gap-2 pt-2">
+              {sheet?.options.map((option) => (
+                <Button
+                  key={option.label}
+                  variant="outline"
+                  className="justify-start rounded-xl"
+                  textClassName={option.destructive ? 'text-danger' : undefined}
+                  onPress={() => {
+                    setSheet(null);
+                    option.onPress();
+                  }}
+                >
+                  {option.label}
+                </Button>
+              ))}
+              <Button variant="ghost" onPress={() => setSheet(null)}>
+                Cancelar
+              </Button>
+            </View>
+          </DrawerContent>
+        </Drawer>
         <ConfirmDrawer
           open={request != null}
           onOpenChange={(open) => {
@@ -125,12 +181,23 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
 }
 
 export function useConfirm(): (request: ConfirmRequest) => void {
-  const confirm = useContext(ConfirmContext);
+  const context = useContext(ConfirmContext);
   return useCallback(
     (request: ConfirmRequest) => {
-      if (confirm) confirm(request);
+      if (context) context.confirm(request);
       else if (__DEV__) console.warn('useConfirm fora de <ConfirmProvider>: nada foi perguntado.');
     },
-    [confirm],
+    [context],
+  );
+}
+
+export function useActionSheet(): (request: ActionSheetRequest) => void {
+  const context = useContext(ConfirmContext);
+  return useCallback(
+    (request: ActionSheetRequest) => {
+      if (context) context.actionSheet(request);
+      else if (__DEV__) console.warn('useActionSheet fora de <ConfirmProvider>.');
+    },
+    [context],
   );
 }

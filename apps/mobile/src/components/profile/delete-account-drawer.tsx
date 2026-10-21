@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { DELETE_ACCOUNT_CONFIRMATION, usersApi } from '@fatia/api-client';
 import { useAuth } from '@/auth/auth-context';
@@ -13,6 +13,7 @@ import {
   DrawerTitle,
   FormMessage,
   Label,
+  useToast,
 } from '@/components/ui';
 import { cores } from '@/theme/cores';
 
@@ -27,6 +28,7 @@ export function DeleteAccountDrawer({ open, onClose }: { open: boolean; onClose:
   const [confirmation, setConfirmation] = useState('');
   const { signOut } = useAuth();
   const qc = useQueryClient();
+  const toast = useToast();
 
   // Ajuste durante o render, e não num efeito (#187). A comparação é a mesma que
   // estava no array de dependências: a confirmação digitada some na mesma
@@ -46,7 +48,8 @@ export function DeleteAccountDrawer({ open, onClose }: { open: boolean; onClose:
       // de existir. Sem limpar, a próxima sessão nesse aparelho abriria com os
       // dados de quem saiu.
       qc.clear();
-      Alert.alert('Conta apagada', result.message);
+      // Toast, e não diálogo: ele mora na raiz e continua na tela de login.
+      toast.show({ message: result.message });
       await signOut();
     },
   });

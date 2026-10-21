@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { ChevronRight, Plus } from 'lucide-react-native';
 import { goalsApi } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui';
+import { EmptyState, ErrorState, LoadingState, useConfirm } from '@/components/ui';
 import { MainGoalCard } from '@/components/goals/main-goal-card';
 import { NewGoalDrawer } from '@/components/goals/new-goal-drawer';
 import { RecentGoalRow } from '@/components/goals/recent-goal-row';
@@ -14,6 +14,7 @@ import { cores } from '@/theme/cores';
 import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
 
 export default function GoalsScreen() {
+  const confirm = useConfirm();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const router = useRouter();
   const qc = useQueryClient();
@@ -47,10 +48,13 @@ export default function GoalsScreen() {
   // Remover é irreversível e, no toque, um erro de alvo custa uma meta. O PWA
   // apaga direto porque o clique de mouse é preciso; aqui vale a confirmação.
   const confirmDelete = (id: string, title: string) => {
-    Alert.alert('Remover meta', `Apagar "${title}"? Essa ação não pode ser desfeita.`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Remover', style: 'destructive', onPress: () => deleteMutation.mutate(id) },
-    ]);
+    confirm({
+      title: 'Remover meta',
+      description: `Apagar "${title}"? Essa ação não pode ser desfeita.`,
+      confirmLabel: 'Remover',
+      destructive: true,
+      onConfirm: () => deleteMutation.mutate(id),
+    });
   };
 
   const busyId = completeMutation.isPending

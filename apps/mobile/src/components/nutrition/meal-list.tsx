@@ -1,8 +1,8 @@
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Plus, Trash2 } from 'lucide-react-native';
 import { nutritionApi, type Meal, type MealItem, type MealType } from '@fatia/api-client';
-import { EmptyState, cn } from '@/components/ui';
+import { EmptyState, cn, useConfirm } from '@/components/ui';
 import {
   NUMEROS_TABULARES,
   ROTULO_REFEICAO,
@@ -36,6 +36,7 @@ export function MealList({
   onAddItem: (mealId: string) => void;
   onEditItem: (item: MealItem) => void;
 }) {
+  const confirm = useConfirm();
   const qc = useQueryClient();
 
   const invalidar = () => {
@@ -54,14 +55,13 @@ export function MealList({
 
   // Mesma razão da timeline: apagar refeição é irreversível e o alvo é pequeno.
   const confirmarRemocao = (meal: Meal) =>
-    Alert.alert(
-      'Remover refeição',
-      `${ROTULO_REFEICAO[meal.mealType]} e seus ${meal.items.length} item(ns) serão apagados.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Remover', style: 'destructive', onPress: () => removerRefeicao.mutate(meal.id) },
-      ],
-    );
+    confirm({
+      title: 'Remover refeição',
+      description: `${ROTULO_REFEICAO[meal.mealType]} e seus ${meal.items.length} item(ns) serão apagados.`,
+      confirmLabel: 'Remover',
+      destructive: true,
+      onConfirm: () => removerRefeicao.mutate(meal.id),
+    });
 
   return (
     <View className="gap-3">

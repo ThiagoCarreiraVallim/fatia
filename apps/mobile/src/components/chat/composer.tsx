@@ -1,9 +1,9 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { ArrowUp, Camera, Mic, Square, X } from 'lucide-react-native';
 import type { ChatPhoto } from '@fatia/api-client';
-import { cn } from '@/components/ui';
+import { cn, useActionSheet, useToast } from '@/components/ui';
 import { useDictation } from '@/chat/dictation';
 import { cores } from '@/theme/cores';
 
@@ -32,6 +32,8 @@ export function Composer({
   onSend: (text: string, photos: ChatPhoto[]) => void;
   onStop: () => void;
 }) {
+  const toast = useToast();
+  const actionSheet = useActionSheet();
   const [texto, setTexto] = useState('');
   const [fotos, setFotos] = useState<{ uri: string; data: string }[]>([]);
   const aoDitar = useCallback(
@@ -52,7 +54,7 @@ export function Composer({
     setFotos([]);
   };
 
-  const escolher = async (fonte: 'camera' | 'galeria') => {
+  const pickPhoto = async (fonte: 'camera' | 'galeria') => {
     const opcoes: ImagePicker.ImagePickerOptions = {
       mediaTypes: ['images'],
       base64: true,
@@ -62,10 +64,7 @@ export function Composer({
     if (fonte === 'camera') {
       const p = await ImagePicker.requestCameraPermissionsAsync();
       if (!p.granted) {
-        Alert.alert(
-          'Câmera bloqueada',
-          'Libere a câmera para o Fatia nas configurações do sistema.',
-        );
+        toast.show({ message: 'Câmera bloqueada. Libere para o Fatia nos ajustes do sistema.' });
         return;
       }
     }
@@ -78,12 +77,14 @@ export function Composer({
       setFotos((f) => [...f, { uri: foto.uri, data: foto.base64! }].slice(0, MAX_FOTOS));
   };
 
-  const anexar = () =>
-    Alert.alert('Anexar foto', undefined, [
-      { text: 'Câmera', onPress: () => void escolher('camera') },
-      { text: 'Galeria', onPress: () => void escolher('galeria') },
-      { text: 'Cancelar', style: 'cancel' },
-    ]);
+  const attachPhoto = () =>
+    actionSheet({
+      title: 'Anexar foto',
+      options: [
+        { label: 'Câmera', onPress: () => void pickPhoto('camera') },
+        { label: 'Galeria', onPress: () => void pickPhoto('galeria') },
+      ],
+    });
 
   return (
     <View className="gap-2 border-t border-border bg-background px-3 pt-2 pb-2">
@@ -119,7 +120,7 @@ export function Composer({
             accessibilityRole="button"
             accessibilityLabel="Anexar foto"
             disabled={disabled || running || fotos.length >= MAX_FOTOS}
-            onPress={anexar}
+            onPress={attachPhoto}
             className={cn(
               'h-11 w-11 items-center justify-center',
               (disabled || running || fotos.length >= MAX_FOTOS) && 'opacity-40',

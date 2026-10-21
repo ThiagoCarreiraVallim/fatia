@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AccessibilityInfo, Alert, Pressable, Text, View } from 'react-native';
+import { AccessibilityInfo, Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -13,7 +13,15 @@ import {
 } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
-import { Button, EmptyState, ErrorState, Input, LoadingState } from '@/components/ui';
+import {
+  Button,
+  EmptyState,
+  ErrorState,
+  Input,
+  LoadingState,
+  useConfirm,
+  useToast,
+} from '@/components/ui';
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { ExerciseDetailHost } from '@/components/workout/exercise-detail-host';
@@ -52,6 +60,8 @@ export default function PlanDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const qc = useQueryClient();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [addOpen, setAddOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameEdit, setNameEdit] = useState('');
@@ -146,16 +156,15 @@ export default function PlanDetailScreen() {
       // velho. A mensagem crua seria "Plan exercise not found", em inglês e sem
       // dizer o que fazer.
       if (error instanceof ApiError && error.isNotFound) {
-        Alert.alert(
-          'Este plano mudou',
-          'Um exercício saiu do plano em outro lugar. Atualizamos a lista — tente mover de novo.',
-        );
+        toast.show({
+          message:
+            'Um exercício saiu do plano em outro lugar. Atualizamos a lista — tente mover de novo.',
+        });
         return;
       }
-      Alert.alert(
-        'Não foi possível mover',
-        error instanceof Error ? error.message : 'Tente novamente.',
-      );
+      toast.show({
+        message: `Não foi possível mover. ${error instanceof Error ? error.message : 'Tente novamente.'}`,
+      });
     },
   });
 
@@ -220,10 +229,13 @@ export default function PlanDetailScreen() {
   }
 
   function confirmDelete() {
-    Alert.alert('Excluir plano', 'Excluir este plano de treino?', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Excluir', style: 'destructive', onPress: () => deletePlan.mutate() },
-    ]);
+    confirm({
+      title: 'Excluir plano?',
+      description: 'Os treinos já feitos com ele continuam no histórico.',
+      confirmLabel: 'Excluir',
+      destructive: true,
+      onConfirm: () => deletePlan.mutate(),
+    });
   }
 
   return (

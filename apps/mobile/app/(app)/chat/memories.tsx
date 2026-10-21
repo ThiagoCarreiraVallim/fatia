@@ -1,9 +1,9 @@
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react-native';
 import { deleteChatMemory, listChatMemories } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui';
+import { EmptyState, ErrorState, LoadingState, useConfirm } from '@/components/ui';
 import { CHAT_KEYS } from '@/chat/chat-provider';
 import { cores } from '@/theme/cores';
 
@@ -12,6 +12,7 @@ import { cores } from '@/theme/cores';
  * mesma lista que o assistente lê; apagar aqui vale para a próxima conversa.
  */
 export default function MemoriesScreen() {
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const memorias = useQuery({ queryKey: CHAT_KEYS.memories, queryFn: listChatMemories });
   const esquecer = useMutation({
@@ -47,10 +48,13 @@ export default function MemoriesScreen() {
               accessibilityLabel={`Esquecer: ${m.content}`}
               disabled={esquecer.isPending}
               onPress={() =>
-                Alert.alert('Esquecer isto?', m.content, [
-                  { text: 'Cancelar', style: 'cancel' },
-                  { text: 'Esquecer', style: 'destructive', onPress: () => esquecer.mutate(m.id) },
-                ])
+                confirm({
+                  title: 'Esquecer isto?',
+                  description: m.content,
+                  confirmLabel: 'Esquecer',
+                  destructive: true,
+                  onConfirm: () => esquecer.mutate(m.id),
+                })
               }
               className="h-11 w-11 items-center justify-center"
             >

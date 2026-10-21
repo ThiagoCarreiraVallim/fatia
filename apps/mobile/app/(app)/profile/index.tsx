@@ -1,12 +1,12 @@
 import { useCallback, useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Bell, Crown, Flag, LogOut, Settings, Shield, Sparkles, Users } from 'lucide-react-native';
 import { billingApi, planSummary, usersApi } from '@fatia/api-client';
 import { useAuth } from '@/auth/auth-context';
 import { Screen } from '@/components/layout/screen';
-import { Button } from '@/components/ui';
+import { Button, useConfirm } from '@/components/ui';
 import { DeleteAccountDrawer } from '@/components/profile/delete-account-drawer';
 import { EditHeightDrawer } from '@/components/profile/edit-height-drawer';
 import { McpSection } from '@/components/profile/mcp-section';
@@ -18,6 +18,7 @@ import { disablePush } from '@/notifications/push';
 import { cores } from '@/theme/cores';
 
 export default function ProfileScreen() {
+  const confirm = useConfirm();
   const [heightOpen, setHeightOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -40,19 +41,18 @@ export default function ProfileScreen() {
   }, [qc]);
 
   const confirmSignOut = () => {
-    Alert.alert('Sair da conta', 'Você vai precisar entrar de novo para usar o app.', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Sair',
-        style: 'destructive',
-        onPress: () => {
-          qc.clear();
-          // Antes de sair: com a sessão ainda viva, o aparelho sai da conta e
-          // os avisos dela param de chegar aqui.
-          void disablePush().finally(() => void signOut());
-        },
+    confirm({
+      title: 'Sair da conta',
+      description: 'Você vai precisar entrar de novo para usar o app.',
+      confirmLabel: 'Sair',
+      destructive: true,
+      onConfirm: () => {
+        qc.clear();
+        // Antes de sair: com a sessão ainda viva, o aparelho sai da conta e
+        // os avisos dela param de chegar aqui.
+        void disablePush().finally(() => void signOut());
       },
-    ]);
+    });
   };
 
   const name = me.data?.name;

@@ -1,4 +1,4 @@
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -13,12 +13,13 @@ import {
   type ReportQueueItem,
 } from '@fatia/api-client';
 import { apiMessage, Choice, OrgPanel, PanelCard } from '@/components/org/org-panel';
-import { Button, EmptyState, LoadingState } from '@/components/ui';
+import { Button, EmptyState, LoadingState, useConfirm } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 
 const chave = (groupId: string) => ['community', 'org', groupId, 'moderation'] as const;
 
 function Moderacao({ g }: { g: MyGroup }) {
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const toast = useToast();
   const fila = useQuery({
@@ -87,18 +88,14 @@ function Moderacao({ g }: { g: MyGroup }) {
   });
 
   const confirmarBan = (item: ReportQueueItem) =>
-    Alert.alert(
-      `Banir ${item.author.displayName}?`,
-      'A pessoa sai da comunidade, a equipe perde o acesso ao que ela compartilhava, e o código e os convites não a deixam voltar.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Banir',
-          style: 'destructive',
-          onPress: () => ban.mutate(item.author.membershipId),
-        },
-      ],
-    );
+    confirm({
+      title: `Banir ${item.author.displayName}?`,
+      description:
+        'A pessoa sai da comunidade, a equipe perde o acesso ao que ela compartilhava, e o código e os convites não a deixam voltar.',
+      confirmLabel: 'Banir',
+      destructive: true,
+      onConfirm: () => ban.mutate(item.author.membershipId),
+    });
 
   if (fila.isPending) return <LoadingState />;
 

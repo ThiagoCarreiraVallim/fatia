@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -22,7 +22,7 @@ import {
   type StartChoice,
 } from '@/components/challenges/window-choice';
 import { apiMessage, Choice, OrgPanel, PanelCard } from '@/components/org/org-panel';
-import { Button, EmptyState, Input, LoadingState } from '@/components/ui';
+import { Button, EmptyState, Input, LoadingState, useConfirm } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 
 /**
@@ -125,6 +125,7 @@ function NovoDesafio({ g, hoje, onDone }: { g: MyGroup; hoje: string; onDone: ()
 }
 
 function Desafios({ g }: { g: MyGroup }) {
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const toast = useToast();
   const [criando, setCriando] = useState(false);
@@ -154,20 +155,16 @@ function Desafios({ g }: { g: MyGroup }) {
   if (lista.isPending) return <LoadingState />;
   const desafios = lista.data?.challenges ?? [];
   const confirmar = (c: Challenge, acao: 'end' | 'remove') =>
-    Alert.alert(
-      acao === 'end' ? `Encerrar ${c.title}?` : `Apagar ${c.title}?`,
-      acao === 'end'
-        ? 'O ranking fecha com o que foi registrado até agora e as medalhas são entregues. Não dá para reabrir.'
-        : 'Ele ainda não começou: quem já entrou deixa de ver o desafio.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: acao === 'end' ? 'Encerrar' : 'Apagar',
-          style: 'destructive',
-          onPress: () => (acao === 'end' ? fim.mutate(c.id) : remover.mutate(c.id)),
-        },
-      ],
-    );
+    confirm({
+      title: acao === 'end' ? `Encerrar ${c.title}?` : `Apagar ${c.title}?`,
+      description:
+        acao === 'end'
+          ? 'O ranking fecha com o que foi registrado até agora e as medalhas são entregues. Não dá para reabrir.'
+          : 'Ele ainda não começou: quem já entrou deixa de ver o desafio.',
+      confirmLabel: acao === 'end' ? 'Encerrar' : 'Apagar',
+      destructive: true,
+      onConfirm: () => (acao === 'end' ? fim.mutate(c.id) : remover.mutate(c.id)),
+    });
 
   return (
     <>

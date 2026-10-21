@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Image, Pressable, Text, View } from 'react-native';
+import { Image, Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MessageCircle, MoreHorizontal, Pin } from 'lucide-react-native';
 import {
@@ -25,7 +25,14 @@ import {
 } from '@fatia/api-client';
 import { MarkdownLite } from '@/components/content/markdown-lite';
 import { apiMessage, Choice } from '@/components/org/org-panel';
-import { Button, Input, cn } from '@/components/ui';
+import {
+  Button,
+  Input,
+  cn,
+  useActionSheet,
+  useConfirm,
+  type ActionSheetOption,
+} from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 import { cores } from '@/theme/cores';
 
@@ -254,6 +261,8 @@ function Comentarios({ groupId, post, me }: { groupId: string; post: Post; me: M
 
 /** Um post no mural — equivalente de `apps/web/src/components/feed/feed-ui.tsx`. */
 export function PostCard({ groupId, post, me }: { groupId: string; post: Post; me: MyName }) {
+  const confirm = useConfirm();
+  const actionSheet = useActionSheet();
   const qc = useQueryClient();
   const toast = useToast();
   const [abertos, setAbertos] = useState(false);
@@ -289,49 +298,44 @@ export function PostCard({ groupId, post, me }: { groupId: string; post: Post; m
   });
 
   const confirmar = (a: 'delete' | 'remove') =>
-    Alert.alert(
-      a === 'delete' ? 'Apagar o post?' : 'Remover do mural?',
-      a === 'delete'
-        ? 'O post, as imagens e os comentários somem para todo mundo. Não dá para desfazer.'
-        : 'O post some para os membros. Quem publicou ainda vê, com o aviso de que a equipe removeu.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: a === 'delete' ? 'Apagar' : 'Remover',
-          style: 'destructive',
-          onPress: () => acao.mutate(a),
-        },
-      ],
-    );
+    confirm({
+      title: a === 'delete' ? 'Apagar o post?' : 'Remover do mural?',
+      description:
+        a === 'delete'
+          ? 'O post, as imagens e os comentários somem para todo mundo. Não dá para desfazer.'
+          : 'O post some para os membros. Quem publicou ainda vê, com o aviso de que a equipe removeu.',
+      confirmLabel: a === 'delete' ? 'Apagar' : 'Remover',
+      destructive: true,
+      onConfirm: () => acao.mutate(a),
+    });
 
   const menu = () => {
-    const botoes: { text: string; style?: 'destructive' | 'cancel'; onPress?: () => void }[] = [];
+    const options: ActionSheetOption[] = [];
     if (post.canModerate) {
-      botoes.push(
+      options.push(
         post.pinned
-          ? { text: 'Desafixar', onPress: () => acao.mutate('unpin') }
-          : { text: 'Fixar no topo', onPress: () => acao.mutate('pin') },
+          ? { label: 'Desafixar', onPress: () => acao.mutate('unpin') }
+          : { label: 'Fixar no topo', onPress: () => acao.mutate('pin') },
       );
     }
     if (!post.author.isMe && !post.removed) {
-      botoes.push({ text: 'Denunciar', onPress: () => setDenunciando(true) });
+      options.push({ label: 'Denunciar', onPress: () => setDenunciando(true) });
     }
     if (post.canModerate && !post.author.isMe) {
-      botoes.push({
-        text: 'Remover do mural',
-        style: 'destructive',
+      options.push({
+        label: 'Remover do mural',
+        destructive: true,
         onPress: () => confirmar('remove'),
       });
     }
     if (post.canDelete) {
-      botoes.push({
-        text: 'Apagar post',
-        style: 'destructive',
-        onPress: () => confirmar('delete'),
-      });
+      options.push({ label: 'Apagar post', destructive: true, onPress: () => confirmar('delete') });
     }
-    botoes.push({ text: 'Cancelar', style: 'cancel' });
-    Alert.alert('Ações do post', `Post de ${post.author.displayName}`, botoes);
+    actionSheet({
+      title: 'Ações do post',
+      description: `Post de ${post.author.displayName}`,
+      options,
+    });
   };
 
   const imagens = post.images.filter((i) => i.url);

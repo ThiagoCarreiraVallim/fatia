@@ -1,4 +1,4 @@
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   customFoodToForm,
@@ -7,7 +7,14 @@ import {
   type CustomFoodInput,
   type Food,
 } from '@fatia/api-client';
-import { Button, Drawer, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui';
+import {
+  Button,
+  Drawer,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+  useConfirm,
+} from '@/components/ui';
 import { FormularioDeAlimento } from './formulario-de-alimento';
 import { mensagemDeErro } from './helpers';
 
@@ -24,6 +31,7 @@ export function AlimentoDrawer({
   onOpenChange: (open: boolean) => void;
   food: Food | null;
 }) {
+  const confirm = useConfirm();
   const qc = useQueryClient();
 
   const concluir = () => {
@@ -46,14 +54,14 @@ export function AlimentoDrawer({
   });
 
   const confirmarApagar = (alvo: Food) =>
-    Alert.alert(
-      `Apagar "${alvo.name}"?`,
-      'Some da busca e dos atalhos. As refeições já registradas continuam com o nome e os valores.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Apagar', style: 'destructive', onPress: () => apagar.mutate(alvo.id) },
-      ],
-    );
+    confirm({
+      title: `Apagar "${alvo.name}"?`,
+      description:
+        'Some da busca e dos atalhos. As refeições já registradas continuam com o nome e os valores.',
+      confirmLabel: 'Apagar',
+      destructive: true,
+      onConfirm: () => apagar.mutate(alvo.id),
+    });
 
   const falha = salvar.error ?? apagar.error;
 

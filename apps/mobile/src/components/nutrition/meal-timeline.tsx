@@ -1,4 +1,4 @@
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react-native';
 import {
@@ -9,7 +9,7 @@ import {
   type MealItem,
   type MealType,
 } from '@fatia/api-client';
-import { cn } from '@/components/ui';
+import { cn, useConfirm } from '@/components/ui';
 import {
   EMOJI_REFEICAO,
   NUMEROS_TABULARES,
@@ -54,6 +54,7 @@ export function MealTimeline({
   onEditItem,
   onMealActions,
 }: Props) {
+  const confirm = useConfirm();
   const qc = useQueryClient();
 
   const invalidar = () => {
@@ -71,18 +72,13 @@ export function MealTimeline({
   const erro = removerItem.error ?? removerRefeicao.error;
 
   const confirmarRemocao = (meal: Meal) => {
-    Alert.alert(
-      'Remover refeição',
-      `${ROTULO_REFEICAO[meal.mealType]} e seus ${meal.items.length} item(ns) serão apagados.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Remover',
-          style: 'destructive',
-          onPress: () => removerRefeicao.mutate(meal.id),
-        },
-      ],
-    );
+    confirm({
+      title: 'Remover refeição',
+      description: `${ROTULO_REFEICAO[meal.mealType]} e seus ${meal.items.length} item(ns) serão apagados.`,
+      confirmLabel: 'Remover',
+      destructive: true,
+      onConfirm: () => removerRefeicao.mutate(meal.id),
+    });
   };
 
   return (

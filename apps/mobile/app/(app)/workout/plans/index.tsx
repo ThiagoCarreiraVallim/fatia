@@ -1,17 +1,18 @@
 import { useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { ChevronRight, Dumbbell, Plus, Trash2 } from 'lucide-react-native';
 import { workoutApi } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
-import { Button, EmptyState, ErrorState, Input, LoadingState } from '@/components/ui';
+import { Button, EmptyState, ErrorState, Input, LoadingState, useConfirm } from '@/components/ui';
 import { pluralize } from '@/components/workout/workout-stats';
 import { cores } from '@/theme/cores';
 
 /** Réplica de `apps/web/src/app/(app)/workout/plans/page.tsx`. */
 
 export default function PlansScreen() {
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const router = useRouter();
   const [newName, setNewName] = useState('');
@@ -45,10 +46,13 @@ export default function PlansScreen() {
   // O `confirm()` do PWA não existe no React Native, e apagar um plano sem
   // confirmação a um toque de distância é destrutivo demais.
   function confirmRemove(id: string, name: string) {
-    Alert.alert('Excluir plano', `Excluir "${name}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Excluir', style: 'destructive', onPress: () => remove.mutate(id) },
-    ]);
+    confirm({
+      title: 'Excluir plano',
+      description: `Excluir "${name}"?`,
+      confirmLabel: 'Excluir',
+      destructive: true,
+      onConfirm: () => remove.mutate(id),
+    });
   }
 
   return (

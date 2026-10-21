@@ -1,7 +1,15 @@
 export { Button, buttonVariants, type ButtonProps } from './button';
 export { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './card';
 export { Carousel } from './carousel';
-export { ConfirmDrawer, ConfirmProvider, useConfirm, type ConfirmRequest } from './confirm-drawer';
+export {
+  ConfirmDrawer,
+  ConfirmProvider,
+  useActionSheet,
+  useConfirm,
+  type ActionSheetOption,
+  type ActionSheetRequest,
+  type ConfirmRequest,
+} from './confirm-drawer';
 export {
   Drawer,
   DrawerContent,

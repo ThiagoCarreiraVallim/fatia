@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Crown } from 'lucide-react-native';
@@ -17,7 +17,16 @@ import {
   type PanelMember,
 } from '@fatia/api-client';
 import { apiMessage, Choice, OrgPanel, orgKeys } from '@/components/org/org-panel';
-import { Button, EmptyState, Input, LoadingState, cn } from '@/components/ui';
+import {
+  Button,
+  EmptyState,
+  Input,
+  LoadingState,
+  cn,
+  useActionSheet,
+  useConfirm,
+  type ActionSheetOption,
+} from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 import { cores } from '@/theme/cores';
 
@@ -32,6 +41,8 @@ function Membros({ g, inicial }: { g: MyGroup; inicial?: string }) {
   const router = useRouter();
   const qc = useQueryClient();
   const toast = useToast();
+  const confirm = useConfirm();
+  const actionSheet = useActionSheet();
   const dono = g.role === 'OWNER';
   const [filtro, setFiltro] = useState<MemberFilter>(
     inicial === 'pending' || inicial === 'team' ? inicial : 'all',
@@ -92,32 +103,33 @@ function Membros({ g, inicial }: { g: MyGroup; inicial?: string }) {
 
   const vaga = assentos.data ? hasFreeSeat(assentos.data) : false;
 
-  const gerenciar = (m: PanelMember) => {
-    const botoes: { text: string; style?: 'destructive' | 'cancel'; onPress?: () => void }[] =
-      PAPEIS.filter((r) => r !== m.role).map((r) => ({
-        text: `Tornar ${teamRoleLabel(r).toLowerCase()}`,
-        onPress: () => papel.mutate({ m, role: r }),
-      }));
+  const manageMember = (m: PanelMember) => {
+    const options: ActionSheetOption[] = PAPEIS.filter((r) => r !== m.role).map((r) => ({
+      label: `Tornar ${teamRoleLabel(r).toLowerCase()}`,
+      onPress: () => papel.mutate({ m, role: r }),
+    }));
     if (m.hasAiSeat) {
-      botoes.push({ text: 'Tirar assento PRO', onPress: () => assento.mutate({ m, dar: false }) });
+      options.push({
+        label: 'Tirar assento PRO',
+        onPress: () => assento.mutate({ m, dar: false }),
+      });
     } else if (vaga) {
-      botoes.push({ text: 'Dar assento PRO', onPress: () => assento.mutate({ m, dar: true }) });
+      options.push({ label: 'Dar assento PRO', onPress: () => assento.mutate({ m, dar: true }) });
     }
-    botoes.push({
-      text: 'Remover da comunidade',
-      style: 'destructive',
+    options.push({
+      label: 'Remover da comunidade',
+      destructive: true,
       onPress: () =>
-        Alert.alert(
-          `Remover ${m.name}?`,
-          `A equipe perde o acesso ao que essa pessoa compartilhava${m.hasAiSeat ? ', e o assento PRO volta para a comunidade' : ''}. Os registros dela continuam com ela.`,
-          [
-            { text: 'Voltar', style: 'cancel' },
-            { text: 'Remover', style: 'destructive', onPress: () => remover.mutate(m) },
-          ],
-        ),
+        confirm({
+          title: `Remover ${m.name}?`,
+          description: `A equipe perde o acesso ao que essa pessoa compartilhava${m.hasAiSeat ? ', e o assento PRO volta para a comunidade' : ''}. Os registros dela continuam com ela.`,
+          confirmLabel: 'Remover',
+          cancelLabel: 'Voltar',
+          destructive: true,
+          onConfirm: () => remover.mutate(m),
+        }),
     });
-    botoes.push({ text: 'Fechar', style: 'cancel' });
-    Alert.alert(m.name, teamRoleLabel(m.role), botoes);
+    actionSheet({ title: m.name, description: teamRoleLabel(m.role), options });
   };
 
   const lista = filterMembers(membros.data ?? [], filtro, busca);
@@ -185,18 +197,15 @@ function Membros({ g, inicial }: { g: MyGroup; inicial?: string }) {
                       size="sm"
                       variant="outline"
                       onPress={() =>
-                        Alert.alert(
-                          `Recusar o pedido de ${m.name}?`,
-                          'A pessoa pode pedir de novo depois, pelo código ou por um convite.',
-                          [
-                            { text: 'Voltar', style: 'cancel' },
-                            {
-                              text: 'Recusar',
-                              style: 'destructive',
-                              onPress: () => remover.mutate(m),
-                            },
-                          ],
-                        )
+                        confirm({
+                          title: `Recusar o pedido de ${m.name}?`,
+                          description:
+                            'A pessoa pode pedir de novo depois, pelo código ou por um convite.',
+                          confirmLabel: 'Recusar',
+                          cancelLabel: 'Voltar',
+                          destructive: true,
+                          onConfirm: () => remover.mutate(m),
+                        })
                       }
                     >
                       Recusar
@@ -204,7 +213,7 @@ function Membros({ g, inicial }: { g: MyGroup; inicial?: string }) {
                   </View>
                 ) : null}
                 {!pendente && dono && m.role !== 'OWNER' ? (
-                  <Button size="sm" variant="outline" onPress={() => gerenciar(m)}>
+                  <Button size="sm" variant="outline" onPress={() => manageMember(m)}>
                     Gerenciar
                   </Button>
                 ) : null}

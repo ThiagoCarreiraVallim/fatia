@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react-native';
 import { nutritionApi, type NutrientTarget } from '@fatia/api-client';
@@ -16,6 +16,7 @@ import {
   Label,
   LoadingState,
   cn,
+  useConfirm,
 } from '@/components/ui';
 import { NUMEROS_TABULARES, mensagemDeErro } from '@/components/nutrition/helpers';
 import { cores } from '@/theme/cores';
@@ -49,6 +50,7 @@ const PRESETS: Preset[] = [
 const CHAVE_LIVRE = '__custom__';
 
 export default function NutrientTargetsScreen() {
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const metas = useQuery({
     queryKey: ['nutrition', 'nutrient-targets'],
@@ -108,10 +110,13 @@ export default function NutrientTargetsScreen() {
     : Boolean(minimo.trim() || maximo.trim());
 
   const confirmarRemocao = (meta: NutrientTarget) =>
-    Alert.alert('Remover meta', `A meta de ${meta.label} será apagada.`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Remover', style: 'destructive', onPress: () => remover.mutate(meta.nutrientKey) },
-    ]);
+    confirm({
+      title: 'Remover meta',
+      description: `A meta de ${meta.label} será apagada.`,
+      confirmLabel: 'Remover',
+      destructive: true,
+      onConfirm: () => remover.mutate(meta.nutrientKey),
+    });
 
   return (
     <Screen onRefresh={() => void metas.refetch()} refreshing={metas.isRefetching}>

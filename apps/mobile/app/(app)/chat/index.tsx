@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MessageCircle, SquarePen } from 'lucide-react-native';
@@ -22,6 +22,8 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
+  useActionSheet,
+  useConfirm,
 } from '@/components/ui';
 import { DrawerInput } from '@/components/nutrition/drawer-input';
 import { CHAT_KEYS, useChatSession } from '@/chat/chat-provider';
@@ -44,6 +46,8 @@ export default function ConversationsScreen() {
   const router = useRouter();
   const qc = useQueryClient();
   const sessao = useChatSession();
+  const confirm = useConfirm();
+  const actionSheet = useActionSheet();
   const conversas = useQuery({
     queryKey: CHAT_KEYS.conversations,
     queryFn: () => listConversations(),
@@ -66,30 +70,31 @@ export default function ConversationsScreen() {
 
   const nova = () => router.push(`/chat/${sessao.startNew()}`);
 
-  const opcoes = (c: ChatConversationSummary) =>
-    Alert.alert(c.title ?? 'Conversa', undefined, [
-      {
-        text: 'Renomear',
-        onPress: () => {
-          setTitulo(c.title ?? '');
-          setRenomeando(c);
+  const showOptions = (c: ChatConversationSummary) =>
+    actionSheet({
+      title: c.title ?? 'Conversa',
+      options: [
+        {
+          label: 'Renomear',
+          onPress: () => {
+            setTitulo(c.title ?? '');
+            setRenomeando(c);
+          },
         },
-      },
-      {
-        text: 'Apagar',
-        style: 'destructive',
-        onPress: () =>
-          Alert.alert(
-            'Apagar esta conversa?',
-            'Ela some daqui e do assistente. Não dá para desfazer.',
-            [
-              { text: 'Cancelar', style: 'cancel' },
-              { text: 'Apagar', style: 'destructive', onPress: () => apagar.mutate(c.id) },
-            ],
-          ),
-      },
-      { text: 'Cancelar', style: 'cancel' },
-    ]);
+        {
+          label: 'Apagar',
+          destructive: true,
+          onPress: () =>
+            confirm({
+              title: 'Apagar esta conversa?',
+              description: 'Ela some daqui e do assistente. Não dá para desfazer.',
+              confirmLabel: 'Apagar',
+              destructive: true,
+              onConfirm: () => apagar.mutate(c.id),
+            }),
+        },
+      ],
+    });
 
   const semAcesso = disponivel.data && (!disponivel.data.available || !disponivel.data.allowed);
 
@@ -150,7 +155,7 @@ export default function ConversationsScreen() {
               accessibilityRole="link"
               accessibilityHint="Segure para renomear ou apagar"
               onPress={() => router.push(`/chat/${c.id}`)}
-              onLongPress={() => opcoes(c)}
+              onLongPress={() => showOptions(c)}
               className="min-h-[56px] flex-row items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 active:opacity-80"
             >
               <MessageCircle size={18} color={cores.mutedForeground} />

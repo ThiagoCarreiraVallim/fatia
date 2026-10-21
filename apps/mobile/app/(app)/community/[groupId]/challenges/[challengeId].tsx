@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -20,7 +20,7 @@ import {
 } from '@/components/challenges/challenge-ui';
 import { Screen } from '@/components/layout/screen';
 import { apiMessage } from '@/components/org/org-panel';
-import { Button, EmptyState, Input, LoadingState } from '@/components/ui';
+import { Button, EmptyState, Input, LoadingState, useConfirm } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 
 const chave = (groupId: string, id: string) => ['community', 'challenges', groupId, id] as const;
@@ -83,6 +83,7 @@ function Entrar({
 
 /** Equivalente de `apps/web/src/app/(app)/community/[groupId]/challenges/[challengeId]/page.tsx`. */
 export default function CommunityChallengeScreen() {
+  const confirm = useConfirm();
   const { groupId, challengeId } = useLocalSearchParams<{ groupId: string; challengeId: string }>();
   const qc = useQueryClient();
   const toast = useToast();
@@ -223,14 +224,14 @@ export default function CommunityChallengeScreen() {
             variant="outline"
             loading={sair.isPending}
             onPress={() =>
-              Alert.alert(
-                'Sair do desafio?',
-                'Seu apelido e sua pontuação saem do ranking. Dá para entrar de novo enquanto ele não acabar.',
-                [
-                  { text: 'Cancelar', style: 'cancel' },
-                  { text: 'Sair', style: 'destructive', onPress: () => sair.mutate() },
-                ],
-              )
+              confirm({
+                title: 'Sair do desafio?',
+                description:
+                  'Seu apelido e sua pontuação saem do ranking. Dá para entrar de novo enquanto ele não acabar.',
+                confirmLabel: 'Sair',
+                destructive: true,
+                onConfirm: () => sair.mutate(),
+              })
             }
           >
             Sair do desafio
