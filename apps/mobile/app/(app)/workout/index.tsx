@@ -19,6 +19,10 @@ import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
  * (`/workout/session/[id]`), então aqui a sessão aberta aparece como um aviso no
  * topo que leva até ela. Assim o botão voltar do Android sai da sessão para o
  * seletor, em vez de sair do app.
+ *
+ * A ordem também é outra: os planos da pessoa vêm primeiro, que é o que ela
+ * abre a tela para achar, e a periodização — consultada uma vez por bloco, não
+ * a cada treino — desce para o fim.
  */
 
 function SectionLabel({ children }: { children: string }) {
@@ -152,46 +156,6 @@ export default function WorkoutScreen() {
         ) : null}
 
         <View className="gap-2">
-          <SectionLabel>PERIODIZAÇÃO</SectionLabel>
-          <BlockTimeline />
-        </View>
-
-        <View className="gap-2">
-          <SectionLabel>PERSONALIZAÇÃO</SectionLabel>
-          <View className="flex-row gap-3">
-            <ShortcutCard
-              label="Criar um treino personalizado"
-              icon={Plus}
-              onPress={() => router.push('/workout/plans')}
-            />
-            <ShortcutCard
-              label="Meus planos de treino"
-              icon={ListChecks}
-              onPress={() => router.push('/workout/plans')}
-            />
-          </View>
-        </View>
-
-        <View className="gap-2">
-          <SectionLabel>TREINOS RÁPIDOS</SectionLabel>
-          <Carousel
-            data={QUICK_TEMPLATES}
-            itemWidth={quickCardWidth}
-            keyExtractor={(t) => t.id}
-            renderItem={({ item }) => <QuickCard template={item} width={quickCardWidth} />}
-          />
-        </View>
-
-        <Button
-          className="h-14 rounded-2xl"
-          textClassName="text-base font-extrabold tracking-wide"
-          loading={start.isPending}
-          onPress={() => start.mutate()}
-        >
-          INICIAR TREINO LIVRE
-        </Button>
-
-        <View className="gap-2">
           <View className="flex-row items-center justify-between">
             <SectionLabel>MEUS PLANOS</SectionLabel>
             <Pressable
@@ -246,6 +210,46 @@ export default function WorkoutScreen() {
               </Pressable>
             );
           })}
+        </View>
+
+        <View className="gap-2">
+          <SectionLabel>PERSONALIZAÇÃO</SectionLabel>
+          <View className="flex-row gap-3">
+            <ShortcutCard
+              label="Criar um treino personalizado"
+              icon={Plus}
+              onPress={() => router.push('/workout/plans')}
+            />
+            <ShortcutCard
+              label="Meus planos de treino"
+              icon={ListChecks}
+              onPress={() => router.push('/workout/plans')}
+            />
+          </View>
+        </View>
+
+        <Button
+          className="h-14 rounded-2xl"
+          textClassName="text-base font-extrabold tracking-wide"
+          loading={start.isPending}
+          onPress={() => start.mutate()}
+        >
+          INICIAR TREINO LIVRE
+        </Button>
+
+        <View className="gap-2">
+          <SectionLabel>TREINOS RÁPIDOS</SectionLabel>
+          <Carousel
+            data={QUICK_TEMPLATES}
+            itemWidth={quickCardWidth}
+            keyExtractor={(t) => t.id}
+            renderItem={({ item }) => <QuickCard template={item} width={quickCardWidth} />}
+          />
+        </View>
+
+        <View className="gap-2">
+          <SectionLabel>PERIODIZAÇÃO</SectionLabel>
+          <BlockTimeline />
         </View>
       </View>
     </Screen>
