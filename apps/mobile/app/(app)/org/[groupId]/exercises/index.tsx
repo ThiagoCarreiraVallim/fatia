@@ -1,23 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BookOpen, Check, ChevronDown, ChevronUp, Plus, Search } from 'lucide-react-native';
-import {
-  EQUIPMENT_LABEL,
-  GYM_EQUIPMENT,
-  groupExerciseApi,
-  workoutApi,
-  type Exercise,
-  type MyGroup,
-} from '@fatia/api-client';
+import { useQuery } from '@tanstack/react-query';
+import { BookOpen, Plus, Search } from 'lucide-react-native';
+import { groupExerciseApi, workoutApi, type Exercise, type MyGroup } from '@fatia/api-client';
 import {
   DrawerOption,
   NewButton,
   RowChevron,
   SectionHeader,
 } from '@/components/content/content-ui';
-import { OrgPanel, orgKeys, apiMessage } from '@/components/org/org-panel';
+import { GymEquipmentDrawer } from '@/components/org/gym-equipment-drawer';
+import { OrgPanel, orgKeys, PanelCard } from '@/components/org/org-panel';
 import {
   Button,
   Drawer,
@@ -31,114 +25,35 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
-  cn,
 } from '@/components/ui';
-import { useToast } from '@/components/ui/toast';
+import { EquipmentSummary } from '@/components/workout/equipment-chooser';
 import { cores } from '@/theme/cores';
 
-/**
- * Equipamento da academia, recolhido por padrão.
- *
- * Antes era o primeiro cartão da tela, aberto, com 15 chips antes da lista de
- * exercícios — uma configuração que muda uma vez na vida empurrando para baixo
- * o conteúdo que a equipe abre todo dia. Recolhido, mostra o resumo; aberto, os
- * chips com a marca de "escolhido" desenhada.
- */
-function GymEquipment({ g, equipment }: { g: MyGroup; equipment: string[] }) {
-  const qc = useQueryClient();
-  const toast = useToast();
+/** O resumo do equipamento da academia; a lista inteira abre no drawer. */
+function GymEquipmentCard({
+  g,
+  equipment,
+  customEquipment,
+  onOpen,
+}: {
+  g: MyGroup;
+  equipment: string[];
+  customEquipment: string[];
+  onOpen: () => void;
+}) {
   const dono = g.role === 'OWNER';
-  const [aberto, setAberto] = useState(false);
-  const [marcados, setMarcados] = useState(new Set(equipment));
-  // Ajuste durante o render, e não num efeito (#187).
-  const [salvo, setSalvo] = useState(equipment);
-  if (salvo !== equipment) {
-    setSalvo(equipment);
-    setMarcados(new Set(equipment));
-  }
-  const mudou = marcados.size !== equipment.length || equipment.some((e) => !marcados.has(e));
-  const salvar = useMutation({
-    mutationFn: () => groupExerciseApi.setEquipment(g.id, [...marcados]),
-    onSuccess: () => {
-      toast.show({ message: 'Equipamento salvo.' });
-      void qc.invalidateQueries({ queryKey: orgKeys.exercises(g.id) });
-    },
-    onError: (err) => toast.show({ message: apiMessage(err, 'Não deu para salvar agora.') }),
-  });
-  const resumo = equipment.length
-    ? `${equipment.length} ${equipment.length === 1 ? 'item marcado' : 'itens marcados'}`
-    : 'Nada marcado';
-  const Seta = aberto ? ChevronUp : ChevronDown;
-
   return (
-    <View className="rounded-2xl border border-border bg-card">
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ expanded: aberto }}
-        accessibilityLabel={`Equipamento da academia, ${resumo}`}
-        onPress={() => setAberto(!aberto)}
-        className="min-h-[56px] flex-row items-center gap-3 px-4 py-3 active:opacity-80"
-      >
-        <View className="flex-1">
-          <Text accessibilityRole="header" className="text-sm font-bold text-foreground">
-            Equipamento da academia
-          </Text>
-          <Text className="text-xs text-muted-foreground">{resumo}</Text>
-        </View>
-        <Seta size={18} color={cores.mutedForeground} />
-      </Pressable>
-      {aberto ? (
-        <View className="gap-3 px-4 pb-4">
-          <Text className="text-xs text-muted-foreground">
-            {dono
-              ? 'O filtro "Na minha academia" mostra o que dá para fazer com isto. Peso corporal vale sempre.'
-              : 'Só o dono muda. O filtro "Na minha academia" usa esta lista.'}
-          </Text>
-          <View className="flex-row flex-wrap gap-2">
-            {GYM_EQUIPMENT.map((e) => {
-              const on = marcados.has(e);
-              return (
-                <Pressable
-                  key={e}
-                  disabled={!dono}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: on, disabled: !dono }}
-                  accessibilityLabel={EQUIPMENT_LABEL[e]}
-                  onPress={() => {
-                    const proximo = new Set(marcados);
-                    if (on) proximo.delete(e);
-                    else proximo.add(e);
-                    setMarcados(proximo);
-                  }}
-                  className={cn(
-                    'min-h-[44px] flex-row items-center gap-1.5 rounded-full border px-3 active:opacity-80',
-                    on ? 'border-primary bg-accent' : 'border-border',
-                  )}
-                >
-                  {on ? <Check size={14} color={cores.primary} /> : null}
-                  <Text
-                    className={cn('text-xs font-semibold', on ? 'text-primary' : 'text-foreground')}
-                  >
-                    {EQUIPMENT_LABEL[e]}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          {dono ? (
-            <Button
-              size="sm"
-              className="self-start"
-              disabled={!mudou}
-              loading={salvar.isPending}
-              onPress={() => salvar.mutate()}
-            >
-              {mudou ? 'Salvar equipamento' : 'Equipamento salvo'}
-            </Button>
-          ) : null}
-        </View>
-      ) : null}
-    </View>
+    <PanelCard title="Equipamento da academia">
+      <Text className="text-xs text-muted-foreground">
+        {dono
+          ? 'O filtro "Na minha academia" mostra o que dá para fazer com isto. Peso corporal vale sempre.'
+          : 'Só o dono muda. O filtro "Na minha academia" usa esta lista.'}
+      </Text>
+      <EquipmentSummary equipment={equipment} custom={customEquipment} />
+      <Button size="sm" variant="outline" className="self-start" onPress={onOpen}>
+        {dono ? 'Editar equipamento' : 'Ver equipamento'}
+      </Button>
+    </PanelCard>
   );
 }
 
@@ -272,7 +187,15 @@ function CatalogPickerDrawer({
   );
 }
 
-function ExerciseList({ g, onNew }: { g: MyGroup; onNew: () => void }) {
+function ExerciseList({
+  g,
+  onNew,
+  onEditEquipment,
+}: {
+  g: MyGroup;
+  onNew: () => void;
+  onEditEquipment: () => void;
+}) {
   const router = useRouter();
   const lista = useQuery({
     queryKey: orgKeys.exercises(g.id),
@@ -329,7 +252,14 @@ function ExerciseList({ g, onNew }: { g: MyGroup; onNew: () => void }) {
           action={<NewButton label="Novo exercício" onPress={onNew} />}
         />
       )}
-      {lista.data ? <GymEquipment g={g} equipment={lista.data.equipment} /> : null}
+      {lista.data ? (
+        <GymEquipmentCard
+          g={g}
+          equipment={lista.data.equipment}
+          customEquipment={lista.data.customEquipment}
+          onOpen={onEditEquipment}
+        />
+      ) : null}
     </>
   );
 }
@@ -340,6 +270,7 @@ export default function OrgExercisesScreen() {
   const router = useRouter();
   const [novoAberto, setNovoAberto] = useState(false);
   const [catalogoAberto, setCatalogoAberto] = useState(false);
+  const [equipmentOpen, setEquipmentOpen] = useState(false);
   // A mesma consulta da lista (o React Query não repete a requisição): o drawer
   // mora fora dela e precisa saber o que já tem tutorial.
   const lista = useQuery({
@@ -375,11 +306,22 @@ export default function OrgExercisesScreen() {
                 router.push(existentes.has(e.id) ? `${base}/${e.id}` : `${base}/${e.id}?catalog=1`);
               }}
             />
+            <GymEquipmentDrawer
+              groupId={g.id}
+              open={equipmentOpen}
+              onOpenChange={setEquipmentOpen}
+            />
           </>
         );
       }}
     >
-      {(g) => <ExerciseList g={g} onNew={() => setNovoAberto(true)} />}
+      {(g) => (
+        <ExerciseList
+          g={g}
+          onNew={() => setNovoAberto(true)}
+          onEditEquipment={() => setEquipmentOpen(true)}
+        />
+      )}
     </OrgPanel>
   );
 }

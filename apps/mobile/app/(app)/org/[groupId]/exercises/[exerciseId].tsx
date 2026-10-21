@@ -1,15 +1,17 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  EXERCISE_EQUIPMENT,
+  BODYWEIGHT_EQUIPMENT,
+  equipmentLabel,
   groupExerciseApi,
   groupExerciseProblem,
   instructionsFromText,
   MAX_GUIDE_TIPS,
   MUSCLE_GROUP_LABEL,
   MUSCLE_GROUPS,
+  OTHER_EQUIPMENT,
   workoutApi,
   type Exercise,
   type GroupExercise,
@@ -23,8 +25,75 @@ import { VideoField, type VideoValue } from '@/components/content/video-field';
 import { apiMessage, Choice, OrgPanel, orgKeys, PanelCard } from '@/components/org/org-panel';
 import { Button, EmptyState, Input, LoadingState, useConfirm } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
+import { EquipmentChooser } from '@/components/workout/equipment-chooser';
 
 const SEM = 'nenhum';
+
+/**
+ * O equipamento do exercício da casa: o escolhido à mostra e, ao tocar, a lista
+ * inteira com busca — a da academia primeiro, depois a geral por categoria.
+ * Na tela, e não num drawer, porque o editor é uma tela comum que já rola.
+ */
+function EquipmentField({
+  groupId,
+  value,
+  onChange,
+}: {
+  groupId: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const [busca, setBusca] = useState('');
+  const bancada = useQuery({
+    queryKey: orgKeys.exercises(groupId),
+    queryFn: () => groupExerciseApi.list(groupId),
+  });
+  const proprios = bancada.data?.customEquipment ?? [];
+  const escolhido = value === SEM ? 'Não informar' : equipmentLabel(value);
+
+  return (
+    <View className="gap-2">
+      <Text className="text-xs text-muted-foreground">Equipamento</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Equipamento: ${escolhido}. Trocar`}
+        accessibilityState={{ expanded: aberto }}
+        onPress={() => setAberto(!aberto)}
+        className="min-h-[44px] flex-row items-center justify-between rounded-md border border-input px-3 active:opacity-80"
+      >
+        <Text className="text-sm text-foreground">{escolhido}</Text>
+        <Text className="text-xs font-semibold text-primary">{aberto ? 'Fechar' : 'Trocar'}</Text>
+      </Pressable>
+      {aberto ? (
+        <View className="gap-3">
+          <Input
+            value={busca}
+            onChangeText={setBusca}
+            accessibilityLabel="Buscar equipamento"
+            placeholder="Buscar: smith, polia, esteira…"
+          />
+          <EquipmentChooser
+            single
+            query={busca}
+            custom={proprios}
+            extra={[
+              { key: SEM, label: 'Não informar' },
+              { key: BODYWEIGHT_EQUIPMENT, label: 'Peso corporal' },
+              { key: OTHER_EQUIPMENT, label: 'Outro' },
+            ]}
+            isSelected={(k) => k === value}
+            onPick={(k) => {
+              onChange(k);
+              setAberto(false);
+              setBusca('');
+            }}
+          />
+        </View>
+      ) : null}
+    </View>
+  );
+}
 
 function Editor({
   g,
@@ -124,18 +193,7 @@ function Editor({
                 value={grupo as (typeof MUSCLE_GROUPS)[number]}
                 onChange={setGrupo}
               />
-              <Choice
-                label="Equipamento"
-                options={[
-                  { value: SEM, label: 'Não informar' },
-                  ...EXERCISE_EQUIPMENT.map((e) => ({
-                    value: e,
-                    label: e.charAt(0).toUpperCase() + e.slice(1),
-                  })),
-                ]}
-                value={equipamento}
-                onChange={setEquipamento}
-              />
+              <EquipmentField groupId={g.id} value={equipamento} onChange={setEquipamento} />
             </>
           ) : null}
           <Input
