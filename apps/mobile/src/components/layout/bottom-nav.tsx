@@ -6,7 +6,7 @@ import { Apple, Dumbbell, Menu, Plus, Users } from 'lucide-react-native';
 import { PRIMARY_TABS, activeNavKey } from '@fatia/api-client';
 import { DrawerLayer } from '@/components/ui';
 import { cn } from '@/components/ui/utils';
-import { MenuMais } from './menu-mais';
+import { MoreMenu } from './more-menu';
 import { useRegistroRapido } from './registro-rapido';
 import { cores } from '@/theme/cores';
 
@@ -96,7 +96,7 @@ export function BottomNav() {
         </View>
       </View>
       <DrawerLayer>
-        <MenuMais aberto={menuAberto} onFechar={() => setMenuAberto(false)} />
+        <MoreMenu open={menuAberto} onClose={() => setMenuAberto(false)} />
       </DrawerLayer>
     </>
   );
