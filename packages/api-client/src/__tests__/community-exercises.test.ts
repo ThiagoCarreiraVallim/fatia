@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  customEquipmentProblem,
+  EQUIPMENT_CATEGORIES,
+  equipmentLabel,
+  filterCustomEquipment,
   formatBytes,
+  groupedEquipmentOptions,
+  GYM_EQUIPMENT,
   groupExerciseApi,
   groupExerciseProblem,
   instructionsFromText,
@@ -48,6 +54,13 @@ describe('catálogo de exercícios da comunidade no cliente', () => {
     expect(pedido(2).body).toEqual({ equipment: ['halteres'] });
   });
 
+  it('os equipamentos próprios vão junto só quando a tela manda', async () => {
+    await groupExerciseApi.setEquipment('g1', ['smith'], ['Hack 45° da casa']);
+    await workoutApi.gymEquipment();
+    expect(pedido(0).body).toEqual({ equipment: ['smith'], customEquipment: ['Hack 45° da casa'] });
+    expect(`${pedido(1).method} ${pedido(1).url}`).toBe('GET /api/workout/equipment');
+  });
+
   it('"Na minha academia" vira onlyMyGym na busca, e some quando desligado', async () => {
     await workoutApi.searchExercises('supino', undefined, { onlyMyGym: true });
     await workoutApi.searchExercises('supino');
@@ -93,5 +106,51 @@ describe('regras do catálogo', () => {
       parent: '/org/g1/exercises',
     });
     expect(routeInfo('/org/g1/exercises')).toMatchObject({ parent: '/org/g1' });
+  });
+});
+
+describe('lista de equipamentos', () => {
+  it('cobre os valores do catálogo e vai muito além deles, sem repetir', () => {
+    for (const v of ['barra', 'barra W', 'halteres', 'polia', 'máquina', 'kettlebell']) {
+      expect(GYM_EQUIPMENT).toContain(v);
+    }
+    expect(GYM_EQUIPMENT.length).toBeGreaterThanOrEqual(50);
+    expect(new Set(GYM_EQUIPMENT).size).toBe(GYM_EQUIPMENT.length);
+  });
+
+  it('agrupa por categoria e busca sem acento nem caixa', () => {
+    expect(groupedEquipmentOptions().map((c) => c.key)).toEqual(
+      EQUIPMENT_CATEGORIES.map((c) => c.key),
+    );
+    const achados = groupedEquipmentOptions('ELIPTICO');
+    expect(achados).toEqual([
+      { key: 'cardio', label: 'Cardio', items: [{ key: 'elíptico', label: 'Elíptico' }] },
+    ]);
+    expect(groupedEquipmentOptions('nada disso')).toEqual([]);
+    expect(filterCustomEquipment(['Hack 45° da casa', 'Remada articulada'], 'hack')).toEqual([
+      'Hack 45° da casa',
+    ]);
+  });
+
+  it('rótulo: o da lista, peso corporal, outro ou o próprio nome', () => {
+    expect(equipmentLabel('voador')).toBe('Voador (peck deck)');
+    expect(equipmentLabel('peso corporal')).toBe('Peso corporal');
+    expect(equipmentLabel('Hack da casa')).toBe('Hack da casa');
+    expect(equipmentLabel('toString')).toBe('toString');
+  });
+
+  it('equipamento próprio: nome, tamanho, fora da lista e sem repetir', () => {
+    expect(customEquipmentProblem('  ', [])).toMatch(/nome/);
+    expect(customEquipmentProblem('x'.repeat(41), [])).toMatch(/40/);
+    expect(customEquipmentProblem('Leg Press', [])).toMatch(/lista/);
+    expect(customEquipmentProblem('Peso Corporal', [])).toMatch(/lista/);
+    expect(customEquipmentProblem('hack  da CASA', ['Hack da casa'])).toMatch(/já foi/);
+    expect(
+      customEquipmentProblem(
+        'Novo',
+        Array.from({ length: 30 }, (_, i) => `e${i}`),
+      ),
+    ).toMatch(/30/);
+    expect(customEquipmentProblem('Hack 45° da casa', [])).toBeNull();
   });
 });

@@ -77,6 +77,7 @@ describe('painel › exercícios', () => {
     ctx.group = grupo({ role: 'OWNER' });
     vi.mocked(groupExerciseApi.list).mockResolvedValue({
       equipment: ['halteres'],
+      customEquipment: [],
       items: [
         item(),
         item({
@@ -89,6 +90,7 @@ describe('painel › exercícios', () => {
     });
     vi.mocked(groupExerciseApi.setEquipment).mockResolvedValue({
       equipment: ['halteres', 'polia'],
+      customEquipment: [],
     });
     renderWithClient(<OrgExercisesPage />);
 
@@ -107,7 +109,11 @@ describe('painel › exercícios', () => {
 
   it('o profissional vê o equipamento, mas não muda', async () => {
     ctx.group = grupo({ role: 'PROFESSIONAL' });
-    vi.mocked(groupExerciseApi.list).mockResolvedValue({ equipment: [], items: [] });
+    vi.mocked(groupExerciseApi.list).mockResolvedValue({
+      equipment: [],
+      customEquipment: [],
+      items: [],
+    });
     renderWithClient(<OrgExercisesPage />);
     expect(await screen.findByText(/Só o dono muda/)).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Halteres' })).toBeDisabled();

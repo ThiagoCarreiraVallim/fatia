@@ -1,5 +1,6 @@
 import { apiFetch } from './http';
 import type { MediaView } from './community-content';
+import type { GymEquipmentState } from './community-exercises';
 
 export type MuscleGroup =
   | 'peito'
@@ -255,6 +256,8 @@ export const workoutApi = {
     const query = qs.toString();
     return apiFetch<Exercise[]>(`/api/workout/exercises${query ? `?${query}` : ''}`);
   },
+  /** O equipamento das academias da pessoa (marcado e próprio), para o editor de exercício. */
+  gymEquipment: () => apiFetch<GymEquipmentState>('/api/workout/equipment'),
   getExercise: (id: number) => apiFetch<Exercise>(`/api/workout/exercises/${id}`),
   updateExercise: (id: number, body: ExerciseEditInput) =>
     apiFetch<Exercise>(`/api/workout/exercises/${id}`, {

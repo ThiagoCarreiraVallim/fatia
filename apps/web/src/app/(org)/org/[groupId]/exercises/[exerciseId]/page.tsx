@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import {
   ApiError,
   EXERCISE_EQUIPMENT,
+  equipmentLabel,
   groupExerciseApi,
   groupExerciseProblem,
   instructionsFromText,
@@ -230,9 +231,16 @@ function ExerciseEditor({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={SEM_EQUIPAMENTO}>Não informar</SelectItem>
-                    {EXERCISE_EQUIPMENT.map((e) => (
+                    {/* O equipamento próprio da academia que o exercício já tem fica na
+                        lista, para não sumir ao salvar. O app oferece os próprios todos. */}
+                    {[
+                      ...EXERCISE_EQUIPMENT,
+                      ...(item?.equipment && !EXERCISE_EQUIPMENT.includes(item.equipment)
+                        ? [item.equipment]
+                        : []),
+                    ].map((e) => (
                       <SelectItem key={e} value={e}>
-                        {e.charAt(0).toUpperCase() + e.slice(1)}
+                        {equipmentLabel(e)}
                       </SelectItem>
                     ))}
                   </SelectContent>
