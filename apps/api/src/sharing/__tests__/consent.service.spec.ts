@@ -15,7 +15,13 @@ const GROUP = 'grupo-1';
 const PRO_MEMBERSHIP = 'membership-pro';
 
 const makePrisma = () => ({
-  groupMembership: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+  groupMembership: {
+    findUnique: jest.fn(),
+    findMany: jest.fn().mockResolvedValue([]),
+    update: jest.fn().mockReturnValue({}),
+  },
+  professionalLink: { findFirst: jest.fn().mockResolvedValue(null) },
+  $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
   group: { findUnique: jest.fn().mockResolvedValue({ name: 'Academia' }), findMany: jest.fn() },
   user: { findUnique: jest.fn().mockResolvedValue({ name: 'Personal' }), findMany: jest.fn() },
   professionalAccessLog: { findMany: jest.fn().mockResolvedValue([]) },
@@ -31,6 +37,7 @@ const makeLinks = () => ({
   revokeAsSubject: jest.fn(),
   revokeLiveGrant: jest.fn().mockResolvedValue(null),
   listActiveGrantedBy: jest.fn().mockResolvedValue([]),
+  groupConsentOps: jest.fn(() => []),
 });
 
 /** A associação do profissional, no estado que autoriza receber consentimento. */
@@ -57,11 +64,19 @@ describe('ConsentService', () => {
     );
   });
 
+  /** A associação do titular, membro ativo de uma comunidade que exige `required`. */
+  const titular = (required: ShareScope[] = [], over: Record<string, unknown> = {}) => ({
+    id: 'membership-aluno',
+    status: MembershipStatus.ACTIVE,
+    role: GroupRole.MEMBER,
+    consentScopes: [] as ShareScope[],
+    group: { requiredSharingScopes: required },
+    ...over,
+  });
+
   /** Alvo encontrado + titular ativo no mesmo grupo. */
-  const cenarioFeliz = (alvo = membershipDoPro()) => {
-    prisma.groupMembership.findUnique
-      .mockResolvedValueOnce(alvo)
-      .mockResolvedValueOnce({ status: MembershipStatus.ACTIVE });
+  const cenarioFeliz = (alvo = membershipDoPro(), eu = titular()) => {
+    prisma.groupMembership.findUnique.mockResolvedValueOnce(alvo).mockResolvedValueOnce(eu);
   };
 
   describe('grant', () => {
@@ -132,7 +147,7 @@ describe('ConsentService', () => {
       // associação de outro contexto criaria vínculo onde o titular não está.
       expect(prisma.groupMembership.findUnique).toHaveBeenNthCalledWith(2, {
         where: { groupId_userId: { groupId: GROUP, userId: SUBJECT } },
-        select: { status: true },
+        select: { status: true, role: true, group: { select: { requiredSharingScopes: true } } },
       });
     });
 
@@ -194,6 +209,141 @@ describe('ConsentService', () => {
         ConflictException,
       );
       expect(links.grant).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * O obrigatório da comunidade vale no servidor, nas três portas por onde o
+   * titular tira um escopo: o consentimento à comunidade, o ajuste por pessoa e
+   * a revogação de um vínculo. A tela trava o toggle; o MCP não tem tela.
+   */
+  describe('escopos obrigatórios da comunidade', () => {
+    const OBRIGATORIOS = [ShareScope.WORKOUT, ShareScope.NUTRITION];
+
+    describe('setGroupConsent', () => {
+      it('recusa tirar um obrigatório que a pessoa compartilha, sem gravar nada', async () => {
+        prisma.groupMembership.findUnique.mockResolvedValueOnce(
+          titular(OBRIGATORIOS, { consentScopes: [ShareScope.WORKOUT, ShareScope.NUTRITION] }),
+        );
+
+        const erro = await service
+          .setGroupConsent(SUBJECT, GROUP, { scopes: [ShareScope.WORKOUT], statsOptIn: false })
+          .catch((e: Error) => e);
+
+        expect(erro).toBeInstanceOf(ConflictException);
+        expect((erro as Error).message).toBe(
+          'Alimentação é obrigatório nesta comunidade. Para parar de compartilhar, saia da comunidade.',
+        );
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+        expect(prisma.groupMembership.update).not.toHaveBeenCalled();
+      });
+
+      it('mantendo os obrigatórios, troca o resto à vontade', async () => {
+        prisma.groupMembership.findUnique.mockResolvedValueOnce(
+          titular(OBRIGATORIOS, {
+            consentScopes: [ShareScope.WORKOUT, ShareScope.NUTRITION, ShareScope.BODY],
+          }),
+        );
+
+        await expect(
+          service.setGroupConsent(SUBJECT, GROUP, {
+            scopes: [ShareScope.NUTRITION, ShareScope.WORKOUT, ShareScope.GOALS],
+            statsOptIn: true,
+          }),
+        ).resolves.toMatchObject({
+          scopes: [ShareScope.WORKOUT, ShareScope.NUTRITION, ShareScope.GOALS],
+        });
+        expect(prisma.$transaction).toHaveBeenCalled();
+      });
+
+      it('quem entrou antes da exigência não passa a dever o que nunca compartilhou', async () => {
+        // Entrou quando nada era obrigatório e só compartilha Metas; o dono
+        // passou a exigir Treino e Alimentação depois.
+        prisma.groupMembership.findUnique.mockResolvedValueOnce(
+          titular(OBRIGATORIOS, { consentScopes: [ShareScope.GOALS] }),
+        );
+
+        await expect(
+          service.setGroupConsent(SUBJECT, GROUP, { scopes: [], statsOptIn: false }),
+        ).resolves.toMatchObject({ scopes: [] });
+      });
+
+      it('a equipe não deve o obrigatório: ela recebe, não é cobrada', async () => {
+        prisma.groupMembership.findUnique.mockResolvedValueOnce(
+          titular(OBRIGATORIOS, {
+            role: GroupRole.PROFESSIONAL,
+            consentScopes: [ShareScope.WORKOUT, ShareScope.NUTRITION],
+          }),
+        );
+
+        await expect(
+          service.setGroupConsent(SUBJECT, GROUP, { scopes: [], statsOptIn: false }),
+        ).resolves.toMatchObject({ scopes: [] });
+      });
+    });
+
+    describe('grant (ajuste por pessoa)', () => {
+      it('recusa tirar de um profissional um obrigatório que ele recebe hoje', async () => {
+        cenarioFeliz(membershipDoPro(), titular(OBRIGATORIOS));
+        prisma.professionalLink.findFirst.mockResolvedValueOnce({
+          scopes: [ShareScope.WORKOUT, ShareScope.NUTRITION],
+        });
+
+        await expect(
+          service.grant(SUBJECT, PRO_MEMBERSHIP, [ShareScope.NUTRITION]),
+        ).rejects.toThrow(ConflictException);
+        expect(links.grant).not.toHaveBeenCalled();
+        expect(prisma.professionalLink.findFirst).toHaveBeenCalledWith({
+          where: { subjectUserId: SUBJECT, professionalId: PRO, groupId: GROUP, revokedAt: null },
+          select: { scopes: true },
+        });
+      });
+
+      it('lista vazia (que revoga) também não fura o obrigatório', async () => {
+        cenarioFeliz(membershipDoPro(), titular(OBRIGATORIOS));
+        prisma.professionalLink.findFirst.mockResolvedValueOnce({ scopes: [ShareScope.WORKOUT] });
+
+        await expect(service.grant(SUBJECT, PRO_MEMBERSHIP, [])).rejects.toThrow(ConflictException);
+        expect(links.revokeLiveGrant).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('revoke', () => {
+      const vinculo = (scopes: ShareScope[]) => ({ scopes, groupId: GROUP });
+
+      it('recusa revogar vínculo que carrega um obrigatório', async () => {
+        prisma.professionalLink.findFirst.mockResolvedValueOnce(
+          vinculo([ShareScope.BODY, ShareScope.WORKOUT]),
+        );
+        prisma.groupMembership.findUnique.mockResolvedValueOnce(titular(OBRIGATORIOS));
+
+        await expect(service.revoke(SUBJECT, 'link-1')).rejects.toThrow(
+          'Treino é obrigatório nesta comunidade. Para parar de compartilhar, saia da comunidade.',
+        );
+        expect(links.revokeAsSubject).not.toHaveBeenCalled();
+      });
+
+      it('vínculo só com escopos livres revoga normalmente', async () => {
+        prisma.professionalLink.findFirst.mockResolvedValueOnce(vinculo([ShareScope.BODY]));
+        prisma.groupMembership.findUnique.mockResolvedValueOnce(titular(OBRIGATORIOS));
+        const revokedAt = new Date('2026-10-01');
+        links.revokeAsSubject.mockResolvedValue({ id: 'link-1', revokedAt });
+
+        await expect(service.revoke(SUBJECT, 'link-1')).resolves.toEqual({
+          linkId: 'link-1',
+          revokedAt,
+        });
+      });
+
+      it('a leitura do vínculo é escopada pelo titular', async () => {
+        links.revokeAsSubject.mockRejectedValue(new NotFoundException('Link not found'));
+
+        await expect(service.revoke(SUBJECT, 'link-alheio')).rejects.toThrow(NotFoundException);
+        expect(prisma.professionalLink.findFirst).toHaveBeenCalledWith({
+          where: { id: 'link-alheio', subjectUserId: SUBJECT, revokedAt: null },
+          select: { scopes: true, groupId: true },
+        });
+      });
     });
   });
 

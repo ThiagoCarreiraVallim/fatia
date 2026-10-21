@@ -81,3 +81,24 @@ ação `member.role`, só `OWNER`). Os vínculos seguem a mesma regra do leque, 
 O consentimento foi dado "à equipe", e a tela mostra quem é a equipe no momento. Quem entra depois
 recebe o mesmo que quem já estava — a pessoa vê a equipe atual e o registro de acessos na tela da
 comunidade, e pode mudar ou cortar quando quiser.
+
+## Atualização — escopos obrigatórios da comunidade (2026-10-21)
+
+O dono passa a poder escolher, ao criar a comunidade (e depois, no perfil dela), o que **quem entra
+como membro precisa compartilhar** (`Group.requiredSharingScopes`). Nada obrigatório é o padrão, e
+as comunidades que já existiam continuam assim.
+
+- **Vale no servidor**, em `sharing/consent-scopes.ts`: entrar pelo código (aberta ou com aprovação)
+  e aceitar convite sem um escopo obrigatório respondem 409 com o nome do que falta, sem gravar
+  pedido nem gastar o convite. A tela trava os toggles, mas o MCP chega às mesmas portas.
+- **Só para `MEMBER`.** A equipe é quem recebe; um personal convidado não deve abrir o próprio
+  treino para trabalhar na academia. O cartão do convite de equipe mostra a lista vazia.
+- **Tirar um obrigatório que já se compartilha é recusado** nas três portas do titular: o
+  consentimento à comunidade, o ajuste por pessoa (`grant_data_sharing`) e a revogação de um vínculo.
+  Para parar de compartilhar, a pessoa sai da comunidade — sair continua livre e revoga tudo, então o
+  consentimento segue revogável (LGPD), só que junto com a participação.
+- **Quem já está dentro não é cobrado** quando o dono passa a exigir algo novo: a exigência vale
+  para entradas dali em diante, e mexer no consentimento depois não vira porta para cobrar o antigo.
+  O que a pessoa já compartilhava e passou a ser obrigatório fica travado. Pedido pendente feito
+  antes da mudança é aprovado com o que tinha. É a regra mais simples sem expulsar ninguém nem
+  mudar consentimento sem ato do titular.

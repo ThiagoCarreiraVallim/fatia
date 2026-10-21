@@ -308,6 +308,101 @@ describe('comunidade (integração)', () => {
     });
   });
 
+  describe('o que a comunidade exige que se compartilhe', () => {
+    /** Comunidade que exige Treino; criada e lida como o app cria e lê. */
+    async function exigente(joinPolicy: JoinPolicy = 'OPEN') {
+      const dono = await pessoa('Dona');
+      const grupo = await groups.create(dono, {
+        type: 'SPONSORED',
+        name: 'Academia',
+        joinPolicy,
+        requiredSharingScopes: ['WORKOUT', 'WORKOUT'],
+      });
+      grupos.push(grupo.id);
+      return { dono, grupo };
+    }
+
+    it('nasce normalizada e aparece no cartão do código e na leitura do dono', async () => {
+      const { dono, grupo } = await exigente();
+      expect(grupo.requiredSharingScopes).toEqual(['WORKOUT']);
+      expect((await groups.previewBySlug(grupo.slug)).requiredSharingScopes).toEqual(['WORKOUT']);
+      expect((await groups.findByIdForMember(dono, grupo.id)).requiredSharingScopes).toEqual([
+        'WORKOUT',
+      ]);
+    });
+
+    it('convite de membro: sem o obrigatório não entra, nem gasta o convite', async () => {
+      const { dono, grupo } = await exigente();
+      const { url, invite } = await invites.create(dono, grupo.id, { role: 'MEMBER' });
+      expect((await invites.preview(token(url))).requiredSharingScopes).toEqual(['WORKOUT']);
+
+      const aluna = await pessoa('Aluna');
+      await expect(
+        invites.accept(aluna, token(url), { scopes: ['NUTRITION'], statsOptIn: false }),
+      ).rejects.toThrow('Para entrar nesta comunidade é preciso compartilhar: Treino.');
+      expect(
+        await prisma.groupMembership.findUnique({
+          where: { groupId_userId: { groupId: grupo.id, userId: aluna } },
+        }),
+      ).toBeNull();
+      expect(
+        await prisma.groupInvite.findUniqueOrThrow({ where: { id: invite.id } }),
+      ).toMatchObject({ uses: 0 });
+
+      await expect(
+        invites.accept(aluna, token(url), { scopes: ['WORKOUT'], statsOptIn: false }),
+      ).resolves.toMatchObject({ status: 'ACTIVE' });
+    });
+
+    it('convite de equipe não deve o obrigatório', async () => {
+      const { dono, grupo } = await exigente();
+      const { url } = await invites.create(dono, grupo.id, { role: 'PROFESSIONAL' });
+      expect((await invites.preview(token(url))).requiredSharingScopes).toEqual([]);
+      const pro = await pessoa('Pro');
+      await expect(
+        invites.accept(pro, token(url), { scopes: [], statsOptIn: false }),
+      ).resolves.toMatchObject({ status: 'ACTIVE', role: 'PROFESSIONAL' });
+    });
+
+    it.each(['OPEN', 'APPROVAL'] as const)(
+      'código (%s): sem o obrigatório, nem o pedido fica gravado',
+      async (joinPolicy) => {
+        const { grupo } = await exigente(joinPolicy);
+        const aluno = await pessoa('Aluno');
+        await expect(
+          memberships.requestJoin(aluno, grupo.slug, { scopes: [], statsOptIn: false }),
+        ).rejects.toThrow(ConflictException);
+        expect(
+          await prisma.groupMembership.count({ where: { groupId: grupo.id, userId: aluno } }),
+        ).toBe(0);
+      },
+    );
+
+    it('quem está dentro não tira o obrigatório; quem entrou antes da exigência, sim', async () => {
+      const { dono, grupo } = await exigente();
+      const aluna = await pessoa('Aluna');
+      await memberships.requestJoin(aluna, grupo.slug, {
+        scopes: ['WORKOUT', 'BODY'],
+        statsOptIn: false,
+      });
+      await expect(
+        consent.setGroupConsent(aluna, grupo.id, { scopes: ['BODY'], statsOptIn: false }),
+      ).rejects.toThrow('Treino é obrigatório nesta comunidade');
+      const [link] = await prisma.professionalLink.findMany({
+        where: { groupId: grupo.id, subjectUserId: aluna, revokedAt: null },
+      });
+      await expect(consent.revoke(aluna, link!.id)).rejects.toThrow(ConflictException);
+      expect((await vivos(grupo.id)).every((v) => v.scopes.includes('WORKOUT'))).toBe(true);
+
+      // O dono passa a exigir Metas também: a aluna não compartilha Metas e
+      // continua dentro, sem ser cobrada — mas segue sem poder tirar Treino.
+      await groups.update(dono, grupo.id, { requiredSharingScopes: ['GOALS', 'WORKOUT'] });
+      await expect(
+        consent.setGroupConsent(aluna, grupo.id, { scopes: ['WORKOUT'], statsOptIn: false }),
+      ).resolves.toMatchObject({ scopes: ['WORKOUT'] });
+    });
+  });
+
   describe('dono', () => {
     it('transfere para um membro, que passa a receber o que os outros consentiram', async () => {
       const { dono, grupo } = await comunidade('OPEN');

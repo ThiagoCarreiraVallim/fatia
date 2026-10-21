@@ -11,12 +11,13 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes } from 'node:crypto';
-import { GroupRole, MembershipStatus, type GroupMembership } from '@fatia/db';
+import { GroupRole, MembershipStatus, type GroupMembership, type ShareScope } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { EmailService } from '../notifications/email.service';
 import { inviteEmail } from '../notifications/invite-email';
 import { NotificationService } from '../notifications/notification.service';
 import { inviteNotice } from './community-notices';
+import { assertJoinMeetsRequiredScopes } from './consent-scopes';
 import { can, TEAM_ROLES, type GroupAction } from './permissions';
 import {
   assertNotBanned,
@@ -94,6 +95,11 @@ export interface InvitePreview {
   memberCount: number;
   emailBound: boolean;
   expiresAt: Date;
+  /**
+   * O que é obrigatório compartilhar para entrar **por este convite**: vazio
+   * quando o convite é de equipe, que não deve a exigência (`consent-scopes.ts`).
+   */
+  requiredSharingScopes: ShareScope[];
 }
 
 export function hashInviteToken(token: string): string {
@@ -359,7 +365,13 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
     const [grupo, equipe, memberCount, autor] = await Promise.all([
       this.prisma.group.findUniqueOrThrow({
         where: { id: convite.groupId },
-        select: { id: true, name: true, description: true, type: true },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          type: true,
+          requiredSharingScopes: true,
+        },
       }),
       this.prisma.groupMembership.findMany({
         where: {
@@ -380,14 +392,16 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
           })
         : null,
     ]);
+    const { requiredSharingScopes, ...group } = grupo;
     return {
-      group: grupo,
+      group,
       role: convite.role,
       invitedBy: autor?.name ?? null,
       team: equipe.map((m) => ({ name: m.user.name, role: m.role })),
       memberCount,
       emailBound: convite.email !== null,
       expiresAt: convite.expiresAt,
+      requiredSharingScopes: convite.role === GroupRole.MEMBER ? requiredSharingScopes : [],
     };
   }
 
@@ -416,6 +430,11 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
         groupId: convite.groupId,
       });
     }
+    const { requiredSharingScopes } = await this.prisma.group.findUniqueOrThrow({
+      where: { id: convite.groupId },
+      select: { requiredSharingScopes: true },
+    });
+    assertJoinMeetsRequiredScopes(convite.role, requiredSharingScopes, consent.scopes);
 
     const agora = new Date();
     const ops = await this.memberships.activationOps({

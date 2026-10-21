@@ -3,7 +3,7 @@ import { MembershipStatus, ShareScope } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { ProfessionalLinkService } from './professional-link.service';
 import { canReceiveLink } from './permissions';
-import { normalizarEscopos } from './consent-scopes';
+import { assertKeepsRequiredScopes, normalizarEscopos } from './consent-scopes';
 
 /** Mesma resposta para membership inexistente, de outro grupo e de grupo alheio (#92, #204). */
 const NOT_FOUND = 'Membership not found';
@@ -110,7 +110,7 @@ export class ConsentService {
     // associações de grupos de que não faz parte, uma sondagem por vez.
     const eu = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId: alvo.groupId, userId: subjectUserId } },
-      select: { status: true },
+      select: { status: true, role: true, group: { select: { requiredSharingScopes: true } } },
     });
     if (!eu || eu.status !== MembershipStatus.ACTIVE) throw new NotFoundException(NOT_FOUND);
 
@@ -131,6 +131,21 @@ export class ConsentService {
       professionalId: alvo.userId,
       groupId: alvo.groupId,
     };
+
+    // O ajuste por pessoa não é atalho para fugir do obrigatório da comunidade:
+    // o que este profissional já recebe e é exigido continua na lista.
+    if (eu.group.requiredSharingScopes.length > 0) {
+      const atual = await this.prisma.professionalLink.findFirst({
+        where: { ...vinculo, revokedAt: null },
+        select: { scopes: true },
+      });
+      assertKeepsRequiredScopes(
+        eu.role,
+        eu.group.requiredSharingScopes,
+        atual?.scopes ?? [],
+        escopos,
+      );
+    }
 
     // Lista vazia **revoga**, e não grava concessão de nada: é o que
     // `grant_data_sharing` promete ("enviar [] equivale a revogar") e o que
@@ -179,11 +194,18 @@ export class ConsentService {
   ): Promise<GroupConsentView> {
     const eu = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId, userId: subjectUserId } },
-      select: { id: true, status: true },
+      select: {
+        id: true,
+        status: true,
+        role: true,
+        consentScopes: true,
+        group: { select: { requiredSharingScopes: true } },
+      },
     });
     if (!eu || eu.status !== MembershipStatus.ACTIVE) throw new NotFoundException(NOT_FOUND);
 
     const scopes = normalizarEscopos(consent.scopes);
+    assertKeepsRequiredScopes(eu.role, eu.group.requiredSharingScopes, eu.consentScopes, scopes);
     const equipe = await this.prisma.groupMembership.findMany({
       where: { groupId, status: MembershipStatus.ACTIVE, userId: { not: subjectUserId } },
       select: { userId: true, role: true },
@@ -217,6 +239,22 @@ export class ConsentService {
     subjectUserId: string,
     linkId: string,
   ): Promise<{ linkId: string; revokedAt: Date }> {
+    // Revogar o vínculo inteiro tira todos os escopos dele: se algum é
+    // obrigatório na comunidade, a resposta é a mesma de desmarcá-lo. Lido pelo
+    // titular — vínculo de outra pessoa cai no 404 do `revokeAsSubject`.
+    const alvo = await this.prisma.professionalLink.findFirst({
+      where: { id: linkId, subjectUserId, revokedAt: null },
+      select: { scopes: true, groupId: true },
+    });
+    if (alvo) {
+      const eu = await this.prisma.groupMembership.findUnique({
+        where: { groupId_userId: { groupId: alvo.groupId, userId: subjectUserId } },
+        select: { role: true, group: { select: { requiredSharingScopes: true } } },
+      });
+      if (eu) {
+        assertKeepsRequiredScopes(eu.role, eu.group.requiredSharingScopes, alvo.scopes, []);
+      }
+    }
     const link = await this.links.revokeAsSubject(subjectUserId, linkId);
     // `revokedAt` acabou de ser preenchido pelo service; o `??` existe só para
     // o tipo, e um `new Date()` aqui seria uma data inventada.

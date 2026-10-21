@@ -62,6 +62,13 @@ export class CreateGroupDto {
   @IsOptional() @IsEnum(JoinPolicy) joinPolicy?: JoinPolicy;
   @IsOptional() @IsEnum(GroupVisibility) visibility?: GroupVisibility;
   @IsOptional() @IsString() @MinLength(3) @MaxLength(60) timezone?: string;
+
+  /** O que quem entra como membro precisa compartilhar. Ausente = nada obrigatório. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(Object.keys(ShareScope).length)
+  @IsEnum(ShareScope, { each: true })
+  requiredSharingScopes?: ShareScope[];
 }
 
 /** Perfil da comunidade. Tipo e slug não mudam: o slug já está em links distribuídos. */
@@ -72,6 +79,13 @@ export class UpdateGroupDto {
   @IsOptional() @IsEnum(GroupVisibility) visibility?: GroupVisibility;
   @IsOptional() @IsString() @MinLength(3) @MaxLength(60) timezone?: string;
   @IsOptional() @IsEnum(PostPolicy) postPolicy?: PostPolicy;
+
+  /** Vale para quem entrar dali em diante; ver `consent-scopes.ts`. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(Object.keys(ShareScope).length)
+  @IsEnum(ShareScope, { each: true })
+  requiredSharingScopes?: ShareScope[];
 }
 
 export class SetAvatarDto {

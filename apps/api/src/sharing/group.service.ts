@@ -23,6 +23,7 @@ import { membershipsWithEffectiveSeat } from '../billing/subscription-entitlemen
 import { PrismaService } from '../common/prisma.service';
 import { MediaService } from '../storage/media.service';
 import { GROUP_DELETION_HOOKS, type GroupDeletionHook } from './group-deletion.hook';
+import { normalizarEscopos } from './consent-scopes';
 import { canReceiveLink, TEAM_ROLES } from './permissions';
 import { ProfessionalLinkService } from './professional-link.service';
 
@@ -49,6 +50,8 @@ export interface CreateGroupInput {
   joinPolicy?: JoinPolicy;
   visibility?: GroupVisibility;
   timezone?: string;
+  /** O que quem entra como membro precisa compartilhar. Ausente = nada. */
+  requiredSharingScopes?: ShareScope[];
 }
 
 /** O que o dono pode mudar no perfil. Tipo e slug ficam: o slug está em links já distribuídos. */
@@ -60,6 +63,11 @@ export interface UpdateGroupInput {
   timezone?: string;
   /** Quem publica no mural (Fase 8b). */
   postPolicy?: PostPolicy;
+  /**
+   * Mudar a lista vale para quem entrar dali em diante: quem já está dentro
+   * não passa a dever o que nunca compartilhou (`consent-scopes.ts`).
+   */
+  requiredSharingScopes?: ShareScope[];
 }
 
 export interface GroupSummary {
@@ -84,6 +92,8 @@ export interface GroupSummary {
   avatarUrl: string | null;
   /** Quem publica no mural (Fase 8b). */
   postPolicy: PostPolicy;
+  /** O que a comunidade exige que membros compartilhem para entrar. */
+  requiredSharingScopes: ShareScope[];
 }
 
 /** Preview mostrado a quem foi convidado, ANTES de decidir entrar. */
@@ -97,13 +107,15 @@ export interface GroupPreview {
   joinPolicy: JoinPolicy;
   /** Quem vai receber o que a pessoa escolher compartilhar. Só nome e papel. */
   team: { name: string; role: GroupRole }[];
+  /** O que é obrigatório compartilhar para entrar pelo código (sempre como membro). */
+  requiredSharingScopes: ShareScope[];
 }
 
 const INCLUIR = {
   group: { include: { avatarFile: true } },
 } as const;
 
-function resumo(
+function toSummary(
   m: GroupMembership & { group: Group },
   avatarUrl: string | null,
   hasAiSeat: boolean,
@@ -125,6 +137,7 @@ function resumo(
     hasAiSeat,
     avatarUrl,
     postPolicy: m.group.postPolicy,
+    requiredSharingScopes: m.group.requiredSharingScopes,
   };
 }
 
@@ -151,7 +164,7 @@ export class GroupService {
     withSeat: ReadonlySet<string>,
   ): Promise<GroupSummary> {
     const avatar = this.media ? await this.media.viewOrNull(m.group.avatarFile) : null;
-    return resumo(m, avatar?.url ?? null, withSeat.has(m.id));
+    return toSummary(m, avatar?.url ?? null, withSeat.has(m.id));
   }
 
   /**
@@ -176,6 +189,7 @@ export class GroupService {
           joinPolicy: input.joinPolicy,
           visibility: input.visibility,
           timezone: input.timezone,
+          requiredSharingScopes: normalizarEscopos(input.requiredSharingScopes ?? []),
           memberships: {
             create: {
               userId: ownerId,
@@ -279,13 +293,23 @@ export class GroupService {
       description: group.description,
       joinPolicy: group.joinPolicy,
       team: equipe.map((m) => ({ name: m.user.name, role: m.role })),
+      requiredSharingScopes: group.requiredSharingScopes,
     };
   }
 
   /** Perfil da comunidade. O guarda já conferiu `group.update`; o dono de novo aqui. */
   async update(ownerId: string, groupId: string, input: UpdateGroupInput): Promise<Group> {
     await this.assertOwner(ownerId, groupId);
-    return this.prisma.group.update({ where: { id: groupId }, data: input });
+    const { requiredSharingScopes, ...resto } = input;
+    return this.prisma.group.update({
+      where: { id: groupId },
+      data: {
+        ...resto,
+        ...(requiredSharingScopes
+          ? { requiredSharingScopes: normalizarEscopos(requiredSharingScopes) }
+          : {}),
+      },
+    });
   }
 
   /**

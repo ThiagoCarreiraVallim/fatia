@@ -16,7 +16,7 @@ import { membershipsWithEffectiveSeat } from '../billing/subscription-entitlemen
 import { PrismaService } from '../common/prisma.service';
 import { NotificationService } from '../notifications/notification.service';
 import { joinApprovedNotice, joinRequestNotice } from './community-notices';
-import { normalizarEscopos } from './consent-scopes';
+import { assertJoinMeetsRequiredScopes, normalizarEscopos } from './consent-scopes';
 import { canReceiveLink } from './permissions';
 import { ProfessionalLinkService } from './professional-link.service';
 
@@ -134,6 +134,9 @@ export class MembershipService {
           : 'Seu pedido para entrar neste grupo já está aguardando aprovação',
       );
     }
+    // Também no pedido que espera aprovação: o dono aprova o que viu, e o
+    // consentimento guardado no pedido é o que vira vínculo na aprovação.
+    assertJoinMeetsRequiredScopes(GroupRole.MEMBER, group.requiredSharingScopes, consent.scopes);
 
     if (group.joinPolicy === JoinPolicy.OPEN) {
       const ops = await this.activationOps({

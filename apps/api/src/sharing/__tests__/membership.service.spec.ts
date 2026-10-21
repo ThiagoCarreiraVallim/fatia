@@ -73,7 +73,7 @@ describe('MembershipService', () => {
 
   describe('requestJoin', () => {
     it('entra sempre como MEMBER e aguardando aprovação', async () => {
-      prisma.group.findUnique.mockResolvedValue({ id: GROUP });
+      prisma.group.findUnique.mockResolvedValue({ id: GROUP, requiredSharingScopes: [] });
       prisma.groupMembership.findUnique.mockResolvedValue(null);
       prisma.groupMembership.create.mockResolvedValue({
         id: 'm1',
@@ -94,7 +94,7 @@ describe('MembershipService', () => {
     });
 
     it('não cria nenhum ProfessionalLink ao entrar', async () => {
-      prisma.group.findUnique.mockResolvedValue({ id: GROUP });
+      prisma.group.findUnique.mockResolvedValue({ id: GROUP, requiredSharingScopes: [] });
       prisma.groupMembership.findUnique.mockResolvedValue(null);
       prisma.groupMembership.create.mockResolvedValue({
         id: 'm1',
@@ -116,13 +116,65 @@ describe('MembershipService', () => {
     });
 
     it('pedido repetido responde CONFLICT', async () => {
-      prisma.group.findUnique.mockResolvedValue({ id: GROUP });
+      prisma.group.findUnique.mockResolvedValue({ id: GROUP, requiredSharingScopes: [] });
       prisma.groupMembership.findUnique.mockResolvedValue({
         id: 'm1',
         status: MembershipStatus.ACTIVE,
       });
 
       await expect(service.requestJoin(ALUNO, 'academia-x')).rejects.toThrow(ConflictException);
+    });
+
+    describe('escopos obrigatórios da comunidade', () => {
+      const exige = (joinPolicy: 'OPEN' | 'APPROVAL') =>
+        prisma.group.findUnique.mockResolvedValue({
+          id: GROUP,
+          ownerId: DONO,
+          name: 'Academia',
+          joinPolicy,
+          requiredSharingScopes: [ShareScope.WORKOUT, ShareScope.GOALS],
+        });
+
+      it.each(['OPEN', 'APPROVAL'] as const)(
+        '%s: sem um obrigatório, recusa com o nome do que falta e não grava nada',
+        async (joinPolicy) => {
+          exige(joinPolicy);
+          prisma.groupMembership.findUnique.mockResolvedValue(null);
+
+          const erro = await service
+            .requestJoin(ALUNO, 'academia-x', { scopes: [ShareScope.WORKOUT], statsOptIn: false })
+            .catch((e: Error) => e);
+
+          expect(erro).toBeInstanceOf(ConflictException);
+          expect((erro as Error).message).toBe(
+            'Para entrar nesta comunidade é preciso compartilhar: Metas.',
+          );
+          expect(prisma.groupMembership.create).not.toHaveBeenCalled();
+          expect(prisma.groupMembership.upsert).not.toHaveBeenCalled();
+          expect(prisma.$transaction).not.toHaveBeenCalled();
+        },
+      );
+
+      it('com os obrigatórios (e mais), o pedido segue com tudo o que a pessoa marcou', async () => {
+        exige('APPROVAL');
+        prisma.groupMembership.findUnique.mockResolvedValue(null);
+        prisma.groupMembership.create.mockResolvedValue({
+          id: 'm1',
+          status: MembershipStatus.INVITED,
+          role: GroupRole.MEMBER,
+        });
+
+        await service.requestJoin(ALUNO, 'academia-x', {
+          scopes: [ShareScope.GOALS, ShareScope.BODY, ShareScope.WORKOUT],
+          statsOptIn: false,
+        });
+
+        expect(prisma.groupMembership.create.mock.calls[0][0].data.consentScopes).toEqual([
+          ShareScope.WORKOUT,
+          ShareScope.BODY,
+          ShareScope.GOALS,
+        ]);
+      });
     });
   });
 
