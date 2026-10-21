@@ -458,6 +458,13 @@ model WorkoutSession {
   completedAt DateTime?
   notes       String?
 
+  // Ajustes desta sessão sobre o plano, sem mexer no plano: a ordem em que a
+  // pessoa decidiu fazer os exercícios (ids, na ordem; vazio = a do plano) e os
+  // exercícios do plano que ela tirou deste treino. Vale só aqui — o plano
+  // segue igual para a próxima vez.
+  exerciseOrder      Int[] @default([])
+  removedExerciseIds Int[] @default([])
+
   user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan WorkoutPlan? @relation(fields: [planId], references: [id])
   sets SessionSet[]

@@ -153,9 +153,19 @@ export class WorkoutSessionService {
     });
   }
 
+  /**
+   * Devolve a sessão no mesmo formato do `findById`: quem reordena ou tira um
+   * exercício no meio do treino precisa dos `plannedExercises` já recortados
+   * para redesenhar a tela sem uma segunda ida ao servidor.
+   */
   async update(userId: string, id: string, dto: UpdateSessionDto) {
     await this.assertOwner(userId, id);
-    return this.prisma.workoutSession.update({ where: { id }, data: dto });
+    const session = await this.prisma.workoutSession.update({
+      where: { id },
+      data: dto,
+      include: SESSION_INCLUDE,
+    });
+    return this.shapeSession(session);
   }
 
   async delete(userId: string, id: string): Promise<void> {
@@ -184,15 +194,21 @@ export class WorkoutSessionService {
 
   private shapeSession(session: SessionWithRelations) {
     const { plan, ...rest } = session;
+    // O que a pessoa tirou deste treino some daqui, e não só da tela do app:
+    // web, MCP e o resumo do fim leem a mesma lista, e o progresso "3/5
+    // exercícios" contaria o removido como pendente para sempre.
+    const removed = new Set(session.removedExerciseIds ?? []);
     const plannedExercises: PlannedExerciseView[] = plan
-      ? plan.exercises.map((pe) => ({
-          exerciseId: pe.exerciseId,
-          exerciseName: pe.exercise.name,
-          muscleGroup: pe.exercise.muscleGroup,
-          order: pe.order,
-          targetSets: pe.targetSets,
-          targetReps: pe.targetReps,
-        }))
+      ? plan.exercises
+          .filter((pe) => !removed.has(pe.exerciseId))
+          .map((pe) => ({
+            exerciseId: pe.exerciseId,
+            exerciseName: pe.exercise.name,
+            muscleGroup: pe.exercise.muscleGroup,
+            order: pe.order,
+            targetSets: pe.targetSets,
+            targetReps: pe.targetReps,
+          }))
       : [];
     return { ...rest, plannedExercises };
   }

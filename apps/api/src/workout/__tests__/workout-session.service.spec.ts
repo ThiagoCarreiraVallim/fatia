@@ -67,6 +67,27 @@ describe('WorkoutSessionService', () => {
   });
 
   describe('findById', () => {
+    it('leaves out plan exercises removed from this session', async () => {
+      prisma.workoutSession.findFirst.mockResolvedValue({
+        id: 'sess-1',
+        sets: [],
+        removedExerciseIds: [7],
+        plan: {
+          exercises: [7, 8].map((exerciseId) => ({
+            exerciseId,
+            order: exerciseId,
+            targetSets: 3,
+            targetReps: '10',
+            exercise: { name: `Ex ${exerciseId}`, muscleGroup: 'costas' },
+          })),
+        },
+      });
+
+      const result = await service.findById(userId, 'sess-1');
+
+      expect(result.plannedExercises.map((p) => p.exerciseId)).toEqual([8]);
+    });
+
     it('scopes the lookup by userId', async () => {
       prisma.workoutSession.findFirst.mockResolvedValue({ id: 'sess-1', sets: [], plan: null });
 
@@ -296,14 +317,44 @@ describe('WorkoutSessionService', () => {
   describe('update', () => {
     it('updates the session when the user owns it', async () => {
       prisma.workoutSession.findUnique.mockResolvedValue({ id: 'sess-1', userId });
-      prisma.workoutSession.update.mockResolvedValue({});
+      prisma.workoutSession.update.mockResolvedValue({ id: 'sess-1', sets: [], plan: null });
 
       await service.update(userId, 'sess-1', { notes: 'edit' });
 
-      expect(prisma.workoutSession.update).toHaveBeenCalledWith({
-        where: { id: 'sess-1' },
-        data: { notes: 'edit' },
+      expect(prisma.workoutSession.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'sess-1' }, data: { notes: 'edit' } }),
+      );
+    });
+
+    it('stores the per-session order and removals and returns the shaped session', async () => {
+      prisma.workoutSession.findUnique.mockResolvedValue({ id: 'sess-1', userId });
+      prisma.workoutSession.update.mockResolvedValue({
+        id: 'sess-1',
+        sets: [],
+        exerciseOrder: [2, 1],
+        removedExerciseIds: [3],
+        plan: {
+          exercises: [1, 2, 3].map((exerciseId) => ({
+            exerciseId,
+            order: exerciseId,
+            targetSets: 3,
+            targetReps: '10',
+            exercise: { name: `Ex ${exerciseId}`, muscleGroup: 'peito' },
+          })),
+        },
       });
+
+      const result = await service.update(userId, 'sess-1', {
+        exerciseOrder: [2, 1],
+        removedExerciseIds: [3],
+      });
+
+      expect(prisma.workoutSession.update.mock.calls[0][0].data).toEqual({
+        exerciseOrder: [2, 1],
+        removedExerciseIds: [3],
+      });
+      expect(result.exerciseOrder).toEqual([2, 1]);
+      expect(result.plannedExercises.map((p) => p.exerciseId)).toEqual([1, 2]);
     });
 
     it('throws NotFoundException when the session does not exist', async () => {

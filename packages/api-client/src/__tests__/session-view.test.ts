@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildExerciseGroups, pickFocusedGroup } from '../session-view';
+import {
+  buildExerciseGroups,
+  moveExerciseInOrder,
+  orderExerciseGroups,
+  pickFocusedGroup,
+} from '../session-view';
 import type { SessionSet } from '../workout';
 
 const supino = { id: 1, name: 'Supino reto', muscleGroup: 'peito' };
@@ -53,5 +58,29 @@ describe('pickFocusedGroup', () => {
     const groups = buildExerciseGroups([], [setOf(supino)], [esteira]);
 
     expect(pickFocusedGroup(groups, new Set([2]), 2)?.exerciseId).toBe(1);
+  });
+});
+
+describe('per-session exercise order', () => {
+  const remada = { id: 3, name: 'Remada', muscleGroup: 'costas' };
+  const groups = buildExerciseGroups([], [], [supino, esteira, remada]);
+  const ids = (list: { exerciseId: number }[]) => list.map((g) => g.exerciseId);
+
+  it('keeps the natural order when nothing was reordered', () => {
+    expect(ids(orderExerciseGroups(groups, []))).toEqual([1, 2, 3]);
+  });
+
+  it('follows the saved order and sends exercises added later to the end', () => {
+    expect(ids(orderExerciseGroups(groups, [3, 1]))).toEqual([3, 1, 2]);
+  });
+
+  it('moving swaps neighbours and returns every visible id', () => {
+    expect(moveExerciseInOrder(groups, 2, 'up')).toEqual([2, 1, 3]);
+    expect(moveExerciseInOrder(groups, 2, 'down')).toEqual([1, 3, 2]);
+  });
+
+  it('does not move past the ends', () => {
+    expect(moveExerciseInOrder(groups, 1, 'up')).toEqual([1, 2, 3]);
+    expect(moveExerciseInOrder(groups, 3, 'down')).toEqual([1, 2, 3]);
   });
 });

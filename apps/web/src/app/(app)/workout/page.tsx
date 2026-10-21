@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Plus, History, ListChecks, ChevronRight, Dumbbell } from 'lucide-react';
 import {
   buildExerciseGroups,
+  orderExerciseGroups,
   pickFocusedGroup,
   QUICK_TEMPLATES,
   workoutApi,
@@ -32,7 +33,10 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
   // Escolhidos na busca e ainda sem série: vivem só na tela (ver `buildExerciseGroups`).
   const [pending, setPending] = useState<PendingExercise[]>([]);
   const [pickedId, setPickedId] = useState<number | null>(null);
-  const groups = buildExerciseGroups(session.plannedExercises, session.sets, pending);
+  const groups = orderExerciseGroups(
+    buildExerciseGroups(session.plannedExercises, session.sets, pending),
+    session.exerciseOrder,
+  );
   const focused = pickFocusedGroup(groups, skippedExerciseIds, pickedId);
 
   const others = groups.filter((g) => g.exerciseId !== focused?.exerciseId);

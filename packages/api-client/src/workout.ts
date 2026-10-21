@@ -98,6 +98,10 @@ export interface WorkoutSession {
   notes: string | null;
   sets?: SessionSet[];
   plannedExercises?: PlannedExercise[];
+  /** Ordem dos exercícios escolhida nesta sessão (ids). Vazia = a do plano. */
+  exerciseOrder?: number[];
+  /** Exercícios do plano tirados desta sessão — já fora de `plannedExercises`. */
+  removedExerciseIds?: number[];
 }
 
 export interface WorkoutPlanExercise {
@@ -137,6 +141,14 @@ export const workoutApi = {
     apiFetch<WorkoutSession>(`/api/workout/sessions/${id}/finish`, {
       method: 'POST',
       body: JSON.stringify(body ?? {}),
+    }),
+  updateSession: (
+    id: string,
+    body: { notes?: string; exerciseOrder?: number[]; removedExerciseIds?: number[] },
+  ) =>
+    apiFetch<WorkoutSession>(`/api/workout/sessions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
     }),
   deleteSession: (id: string) =>
     apiFetch<void>(`/api/workout/sessions/${id}`, { method: 'DELETE' }),

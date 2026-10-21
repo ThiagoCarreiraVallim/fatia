@@ -1,4 +1,15 @@
-import { IsISO8601, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayUnique,
+  IsArray,
+  IsISO8601,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class StartSessionDto {
@@ -18,6 +29,27 @@ export class FinishSessionDto {
 
 export class UpdateSessionDto {
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
+
+  /**
+   * Ordem dos exercícios nesta sessão, por id. Substitui a anterior inteira.
+   * Ids que não estão na sessão são inofensivos: só servem para ordenar.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  exerciseOrder?: number[];
+
+  /** Exercícios do plano tirados desta sessão. Substitui a lista anterior. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  removedExerciseIds?: number[];
 }
 
 export class ListSessionsDto {

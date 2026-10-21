@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { Clock, Dumbbell } from 'lucide-react';
-import { buildExerciseGroups, workoutApi } from '@fatia/api-client';
+import { buildExerciseGroups, orderExerciseGroups, workoutApi } from '@fatia/api-client';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTopBarTitle } from '@/components/layout/app-top-bar';
@@ -50,7 +50,10 @@ export default function SessionDetailPage() {
     return <p className="px-5 pt-4 text-sm text-muted-foreground">Sessão não encontrada.</p>;
   }
 
-  const groups = buildExerciseGroups(session.plannedExercises, session.sets);
+  const groups = orderExerciseGroups(
+    buildExerciseGroups(session.plannedExercises, session.sets),
+    session.exerciseOrder,
+  );
   const totalSets = session.sets?.length ?? 0;
   const totalVolume =
     session.sets?.reduce((acc, s) => {

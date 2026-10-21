@@ -1,7 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Clock, Dumbbell } from 'lucide-react-native';
-import { buildExerciseGroups, type SessionSet, type WorkoutSession } from '@fatia/api-client';
+import {
+  buildExerciseGroups,
+  orderExerciseGroups,
+  type SessionSet,
+  type WorkoutSession,
+} from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { DrawerLayer } from '@/components/ui';
 import { formatInteger } from '@/components/charts';
@@ -32,8 +37,12 @@ export function CompletedSession({
   const [rpeTarget, setRpeTarget] = useState<SessionSet | null>(null);
 
   const groups = useMemo(
-    () => buildExerciseGroups(session.plannedExercises, session.sets),
-    [session.plannedExercises, session.sets],
+    () =>
+      orderExerciseGroups(
+        buildExerciseGroups(session.plannedExercises, session.sets),
+        session.exerciseOrder,
+      ),
+    [session.plannedExercises, session.sets, session.exerciseOrder],
   );
 
   const totalSets = session.sets?.length ?? 0;
