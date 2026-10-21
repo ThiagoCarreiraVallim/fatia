@@ -5,10 +5,10 @@ import { useQuery } from '@tanstack/react-query';
 import { Dumbbell, PlayCircle } from 'lucide-react-native';
 import { groupContentApi, groupExerciseApi, groupsApi, sortTips } from '@fatia/api-client';
 import { TemplateCard, TipCard } from '@/components/content/content-cards';
+import { RowChevron } from '@/components/content/content-ui';
 import { CommunityTabs } from '@/components/community/community-tabs';
 import { Screen } from '@/components/layout/screen';
-import { Choice } from '@/components/org/org-panel';
-import { EmptyState, LoadingState } from '@/components/ui';
+import { EmptyState, ErrorState, LoadingState, Tabs, TabsList, TabsTrigger } from '@/components/ui';
 import {
   ExerciseDetailHost,
   useOpenExerciseDetail,
@@ -19,14 +19,17 @@ type Aba = 'plans' | 'tips' | 'exercises';
 const ABAS: Aba[] = ['plans', 'tips', 'exercises'];
 
 /** O catálogo da comunidade (Fase 7b); tocar abre o detalhe com o tutorial dela. */
-function Exercicios({ groupId }: { groupId: string }) {
+function CommunityExercises({ groupId }: { groupId: string }) {
   const abrir = useOpenExerciseDetail();
   const lista = useQuery({
     queryKey: ['community', 'exercises', groupId],
     queryFn: () => groupExerciseApi.forMember(groupId),
   });
   if (lista.isPending) return <LoadingState label="Carregando os exercícios…" />;
-  if (!lista.data?.length) {
+  if (lista.isError) {
+    return <ErrorState error={lista.error} onRetry={() => void lista.refetch()} />;
+  }
+  if (!lista.data.length) {
     return (
       <EmptyState
         title="Nenhum exercício ainda"
@@ -64,6 +67,7 @@ function Exercicios({ groupId }: { groupId: string }) {
             </Text>
           </View>
           {e.video ? <PlayCircle size={20} color={cores.primary} /> : null}
+          <RowChevron />
         </Pressable>
       ))}
     </>
@@ -75,6 +79,14 @@ export default function CommunityContentScreen() {
   const { groupId, tab } = useLocalSearchParams<{ groupId: string; tab?: string }>();
   const router = useRouter();
   const [aba, setAba] = useState<Aba>(ABAS.find((a) => a === tab) ?? 'plans');
+  // O "?tab=tips" do atalho da dica fixada também vale com a tela já aberta
+  // atrás na pilha (ajuste durante o render, e não num efeito — #187).
+  const [tabParam, setTabParam] = useState(tab);
+  if (tabParam !== tab) {
+    setTabParam(tab);
+    const nova = ABAS.find((a) => a === tab);
+    if (nova) setAba(nova);
+  }
   const grupo = useQuery({
     queryKey: ['community', 'group', groupId],
     queryFn: () => groupsApi.get(groupId),
@@ -97,22 +109,23 @@ export default function CommunityContentScreen() {
       >
         <View className="gap-4 px-5 pb-4 pt-4">
           <CommunityTabs groupId={groupId} />
-          <Choice
-            label=""
-            options={[
-              { value: 'plans', label: 'Planos' },
-              { value: 'tips', label: 'Dicas' },
-              { value: 'exercises', label: 'Exercícios' },
-            ]}
-            value={aba}
-            onChange={setAba}
-          />
+          {/* Abas segmentadas, e não pílulas de `Choice`: as pílulas logo abaixo
+              das abas da comunidade pareciam filtro ou escolha de formulário. */}
+          <Tabs value={aba} onValueChange={(v) => setAba(v as Aba)}>
+            <TabsList>
+              <TabsTrigger value="plans">Planos</TabsTrigger>
+              <TabsTrigger value="tips">Dicas</TabsTrigger>
+              <TabsTrigger value="exercises">Exercícios</TabsTrigger>
+            </TabsList>
+          </Tabs>
           {aba === 'exercises' ? (
-            <Exercicios groupId={groupId} />
+            <CommunityExercises groupId={groupId} />
           ) : aba === 'plans' ? (
             planos.isPending ? (
               <LoadingState label="Carregando os planos…" />
-            ) : planos.data?.length ? (
+            ) : planos.isError ? (
+              <ErrorState error={planos.error} onRetry={() => void planos.refetch()} />
+            ) : planos.data.length ? (
               planos.data.map((t) => (
                 <TemplateCard
                   key={t.id}
@@ -128,7 +141,9 @@ export default function CommunityContentScreen() {
             )
           ) : dicas.isPending ? (
             <LoadingState label="Carregando as dicas…" />
-          ) : dicas.data?.length ? (
+          ) : dicas.isError ? (
+            <ErrorState error={dicas.error} onRetry={() => void dicas.refetch()} />
+          ) : dicas.data.length ? (
             sortTips(dicas.data).map((d) => <TipCard key={d.id} tip={d} />)
           ) : (
             <EmptyState
