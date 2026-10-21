@@ -11,7 +11,9 @@ import {
   teamRoleLabel,
   type JoinPolicy,
   type MyGroup,
+  type ShareScope,
 } from '@fatia/api-client';
+import { RequiredScopesField } from '@/components/community/required-scopes-field';
 import { ImageField } from '@/components/content/image-field';
 import { apiMessage, Choice, OrgPanel, orgKeys, PanelCard } from '@/components/org/org-panel';
 import { Button, Input } from '@/components/ui';
@@ -19,7 +21,39 @@ import { useToast } from '@/components/ui/toast';
 
 const POLITICAS: JoinPolicy[] = ['OPEN', 'APPROVAL', 'INVITE_ONLY'];
 
-function Configuracoes({ g }: { g: MyGroup }) {
+/**
+ * O que a comunidade exige. Card à parte, com o próprio Salvar: mudar a
+ * exigência tem consequência diferente de mudar o nome, e o aviso diz qual.
+ */
+function RequiredScopesCard({ g }: { g: MyGroup }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [escopos, setEscopos] = useState<ShareScope[]>(g.requiredSharingScopes);
+  const salvar = useMutation({
+    mutationFn: () => orgApi.update(g.id, { requiredSharingScopes: escopos }),
+    onSuccess: () => {
+      toast.show({ message: 'Exigência atualizada.' });
+      void qc.invalidateQueries({ queryKey: ['community'] });
+    },
+    onError: (err) => toast.show({ message: apiMessage(err, 'Não deu para salvar agora.') }),
+  });
+  const mudou = escopos.join() !== g.requiredSharingScopes.join();
+
+  return (
+    <PanelCard title="Compartilhamento obrigatório">
+      <RequiredScopesField
+        value={escopos}
+        onChange={setEscopos}
+        hint="Vale para quem entrar daqui em diante. Quem já está dentro não passa a ser cobrado pelo que não compartilha; só não consegue tirar o que já compartilha e passou a ser obrigatório. A equipe não precisa."
+      />
+      <Button disabled={!mudou} loading={salvar.isPending} onPress={() => salvar.mutate()}>
+        Salvar exigência
+      </Button>
+    </PanelCard>
+  );
+}
+
+function GroupSettings({ g }: { g: MyGroup }) {
   const router = useRouter();
   const qc = useQueryClient();
   const toast = useToast();
@@ -127,6 +161,8 @@ function Configuracoes({ g }: { g: MyGroup }) {
         </Button>
       </PanelCard>
 
+      <RequiredScopesCard g={g} />
+
       <PanelCard title="Avatar">
         <ImageField
           groupId={g.id}
@@ -216,5 +252,5 @@ function Configuracoes({ g }: { g: MyGroup }) {
 /** Equivalente de `apps/web/src/app/(org)/org/[groupId]/settings/page.tsx`. */
 export default function OrgSettingsScreen() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
-  return <OrgPanel groupId={groupId}>{(g) => <Configuracoes g={g} />}</OrgPanel>;
+  return <OrgPanel groupId={groupId}>{(g) => <GroupSettings g={g} />}</OrgPanel>;
 }

@@ -10,7 +10,9 @@ import {
   panelHref,
   type GroupType,
   type JoinPolicy,
+  type ShareScope,
 } from '@fatia/api-client';
+import { RequiredScopesField } from '@/components/community/required-scopes-field';
 import { Screen } from '@/components/layout/screen';
 import { apiMessage, Choice } from '@/components/org/org-panel';
 import { Button, Input } from '@/components/ui';
@@ -25,6 +27,7 @@ export default function NewCommunityScreen() {
   const [tipo, setTipo] = useState<GroupType>('SPONSORED');
   const [politica, setPolitica] = useState<JoinPolicy>('APPROVAL');
   const [descricao, setDescricao] = useState('');
+  const [obrigatorios, setObrigatorios] = useState<ShareScope[]>([]);
 
   const criar = useMutation({
     mutationFn: () =>
@@ -33,6 +36,7 @@ export default function NewCommunityScreen() {
         type: tipo,
         joinPolicy: politica,
         ...(descricao.trim() ? { description: descricao.trim() } : {}),
+        requiredSharingScopes: obrigatorios,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       }),
     onSuccess: (g) => {
@@ -75,6 +79,11 @@ export default function NewCommunityScreen() {
           textAlignVertical="top"
           placeholder="Descrição (opcional)"
           accessibilityLabel="Descrição (opcional)"
+        />
+        <RequiredScopesField
+          value={obrigatorios}
+          onChange={setObrigatorios}
+          hint="Quem entrar como membro já vem com isso marcado e não consegue desmarcar; o resto continua escolha de cada um. A equipe (profissionais e criadores) não precisa. Nada marcado: ninguém é obrigado a compartilhar."
         />
         {criar.isError ? (
           <Text accessibilityRole="alert" className="text-sm text-destructive">
