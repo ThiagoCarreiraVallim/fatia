@@ -109,7 +109,11 @@ export default function InviteScreen() {
     accept.isError && !alreadyMemberGroupId(accept.error)
       ? accept.error instanceof ApiError && accept.error.isNotFound
         ? INDISPONIVEL
-        : 'Não deu para aceitar agora. Tente de novo.'
+        : // 409 diz o que falta compartilhar, se o dono mudou a exigência
+          // depois que o convite abriu.
+          accept.error instanceof ApiError && accept.error.isConflict
+          ? accept.error.message
+          : 'Não deu para aceitar agora. Tente de novo.'
       : null;
 
   return (
@@ -119,6 +123,7 @@ export default function InviteScreen() {
         {status === 'signedIn' ? (
           <ConsentForm
             team={preview.data.team}
+            required={preview.data.requiredSharingScopes}
             submitLabel="Aceitar e entrar"
             pending={accept.isPending}
             error={erro}

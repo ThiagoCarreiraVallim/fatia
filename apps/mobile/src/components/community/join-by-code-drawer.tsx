@@ -88,6 +88,7 @@ export function JoinByCodeDrawer({
           ) : null}
           <ConsentForm
             team={preview.team}
+            required={preview.requiredSharingScopes}
             submitLabel={preview.joinPolicy === 'OPEN' ? 'Entrar' : 'Pedir para entrar'}
             pending={join.isPending}
             error={erroDaEntrada}

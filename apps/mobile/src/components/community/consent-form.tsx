@@ -2,12 +2,15 @@ import { useState, type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Check } from 'lucide-react-native';
 import {
+  lockedScopes,
+  REQUIRED_SCOPE_NOTE,
   SCOPE_DETAILS,
   SHARE_SCOPE_LABEL,
   SHARE_SCOPES,
   toggleScope,
   whoSees,
   type JoinConsent,
+  type ShareScope,
   type TeamMember,
 } from '@fatia/api-client';
 import { Button, cn } from '@/components/ui';
@@ -17,38 +20,48 @@ import { cores } from '@/theme/cores';
  * Réplica de `apps/web/src/components/community/consent-form.tsx`: o que a
  * equipe pode ver, nada marcado, opt-in das estatísticas à parte. Sem Switch
  * nem Checkbox no app, cada opção é um `Pressable` com papel de checkbox.
+ *
+ * `locked` é o escopo que a comunidade exige: aparece marcado, não desmarca e
+ * diz por quê. A API recusa do mesmo jeito; travar aqui só poupa o erro.
  */
-function Opcao({
+export function ScopeOption({
   label,
-  detalhe,
-  marcado,
+  detail,
+  checked,
   onToggle,
+  locked = false,
 }: {
   label: string;
-  detalhe: string;
-  marcado: boolean;
+  detail: string;
+  checked: boolean;
   onToggle: () => void;
+  locked?: boolean;
 }) {
   return (
     <Pressable
       accessibilityRole="checkbox"
-      accessibilityState={{ checked: marcado }}
+      accessibilityState={{ checked, disabled: locked }}
       accessibilityLabel={label}
-      accessibilityHint={detalhe}
+      accessibilityHint={locked ? `${detail}. ${REQUIRED_SCOPE_NOTE}.` : detail}
+      disabled={locked}
       onPress={onToggle}
       className="min-h-[44px] flex-row items-start gap-3 rounded-xl border border-border bg-card p-3 active:opacity-80"
     >
       <View
         className={cn(
           'mt-0.5 h-5 w-5 items-center justify-center rounded border',
-          marcado ? 'border-primary bg-primary' : 'border-muted-foreground',
+          checked ? 'border-primary bg-primary' : 'border-muted-foreground',
+          locked && 'opacity-60',
         )}
       >
-        {marcado ? <Check size={14} color={cores.primaryForeground} /> : null}
+        {checked ? <Check size={14} color={cores.primaryForeground} /> : null}
       </View>
       <View className="flex-1 gap-0.5">
         <Text className="text-sm font-medium text-foreground">{label}</Text>
-        <Text className="text-xs text-muted-foreground">{detalhe}</Text>
+        <Text className="text-xs text-muted-foreground">{detail}</Text>
+        {locked ? (
+          <Text className="text-xs font-semibold text-primary">{REQUIRED_SCOPE_NOTE}</Text>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -65,6 +78,7 @@ export function ConsentForm({
   onSubmit,
   secondary,
   editing = false,
+  required = [],
 }: {
   initial?: JoinConsent;
   team: TeamMember[];
@@ -75,9 +89,19 @@ export function ConsentForm({
   secondary?: ReactNode;
   /** Editando na tela da comunidade, que tem o próprio título: sem o título e o texto da entrada. */
   editing?: boolean;
+  /** O que a comunidade exige de quem entra como membro (`requiredSharingScopes`). */
+  required?: readonly ShareScope[];
 }) {
-  const [scopes, setScopes] = useState(initial.scopes);
+  // Entrando, os obrigatórios já vêm marcados; editando, vale o que está gravado.
+  const [scopes, setScopes] = useState(() =>
+    editing
+      ? initial.scopes
+      : SHARE_SCOPES.filter((s) => initial.scopes.includes(s) || required.includes(s)),
+  );
   const [statsOptIn, setStatsOptIn] = useState(initial.statsOptIn);
+  // Calculado sobre o que estava gravado, e não sobre o estado: o que trava é o
+  // que a pessoa já compartilha (ou passa a compartilhar ao entrar).
+  const travados = lockedScopes(required, editing ? initial.scopes : required);
 
   return (
     <View className="gap-4">
@@ -90,23 +114,31 @@ export function ConsentForm({
         <Text className="text-xs text-muted-foreground">
           {editing
             ? `Quem vê: ${whoSees(team)}. Desmarcar tira o acesso a partir da próxima consulta.`
-            : `Quem vê: ${whoSees(team)}. Nada vem marcado, e você muda isso quando quiser.`}
+            : travados.length > 0
+              ? `Quem vê: ${whoSees(team)}. O que a comunidade exige vem marcado; o resto é com você, e muda quando quiser.`
+              : `Quem vê: ${whoSees(team)}. Nada vem marcado, e você muda isso quando quiser.`}
         </Text>
+        {editing && travados.length > 0 ? (
+          <Text className="text-xs text-muted-foreground">
+            Para parar de compartilhar o que é obrigatório, é preciso sair da comunidade.
+          </Text>
+        ) : null}
         {SHARE_SCOPES.map((scope) => (
-          <Opcao
+          <ScopeOption
             key={scope}
             label={SHARE_SCOPE_LABEL[scope]}
-            detalhe={SCOPE_DETAILS[scope]}
-            marcado={scopes.includes(scope)}
+            detail={SCOPE_DETAILS[scope]}
+            checked={scopes.includes(scope)}
+            locked={travados.includes(scope)}
             onToggle={() => setScopes((atual) => toggleScope(atual, scope))}
           />
         ))}
       </View>
 
-      <Opcao
+      <ScopeOption
         label="Entrar nas estatísticas da comunidade"
-        detalhe="Só números agregados, sem seu nome; grupos com menos de 5 pessoas não aparecem."
-        marcado={statsOptIn}
+        detail="Só números agregados, sem seu nome; grupos com menos de 5 pessoas não aparecem."
+        checked={statsOptIn}
         onToggle={() => setStatsOptIn((v) => !v)}
       />
 
