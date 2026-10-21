@@ -63,6 +63,8 @@ interface SessionCardProps {
     sessionId?: string;
     showDelete: boolean;
   }) => ReactNode;
+  /** Ações no pé do card (a sessão ativa põe "Fazer agora", mover e tirar). */
+  footer?: ReactNode;
 }
 
 type Props = PlanCardProps | SessionCardProps;
@@ -135,6 +137,7 @@ function SessionModeCard({
   sessionId,
   canDeleteSet = true,
   renderSet,
+  footer,
 }: SessionCardProps) {
   const showDelete = Boolean(sessionId) && canDeleteSet;
 
@@ -179,6 +182,8 @@ function SessionModeCard({
           )}
         </View>
       ) : null}
+
+      {footer}
     </View>
   );
 }

@@ -4,12 +4,12 @@ import { Button } from '@/components/ui';
 import { elapsedLabel, formatTimeOfDay, pluralize, type SessionProgress } from './format';
 
 /**
- * Cabeçalho fixo da sessão — o progresso e as duas saídas ficam sempre à vista.
+ * Cabeçalho da sessão: horário de início, as duas saídas e o progresso.
  *
- * No PWA isso rola com a página: a tela do navegador é alta e a pessoa está
- * sentada. Aqui o card do exercício ocupa quase tudo, e "quantos exercícios
- * faltam" é a pergunta que se faz a cada série; se precisar rolar para cima para
- * responder, ninguém rola.
+ * Já foi fixo acima da lista, para o "quantos faltam" ficar sempre à vista.
+ * Na prática ele roubava uma faixa da tela inteira o treino todo, e o que se
+ * olha a cada série é o card do exercício. Agora rola com o conteúdo, como no
+ * PWA; o progresso continua sendo a primeira coisa ao abrir a sessão.
  */
 export function SessionHeader({
   startedAt,
@@ -26,7 +26,7 @@ export function SessionHeader({
   const progressLabel = `${progress.done}/${progress.total} ${pluralize(progress.total, 'exercício', 'exercícios')}`;
 
   return (
-    <View className="border-b border-border bg-background px-5 pb-3 pt-2">
+    <View>
       <View className="flex-row items-center justify-between gap-2">
         <View className="min-w-0 flex-1">
           {/* O título "Treino em andamento" mora na barra de topo. */}

@@ -1,5 +1,5 @@
-import { useCallback } from 'react';
-import { Alert, BackHandler } from 'react-native';
+import { useCallback, useState } from 'react';
+import { BackHandler } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 
 /**
@@ -17,37 +17,32 @@ import { useFocusEffect, useRouter } from 'expo-router';
  * Sair não cancela nada — a sessão vive no servidor e volta pelo "Continuar
  * treino" da tela de treinos. O texto diz isso, em vez de assustar.
  *
- * @returns `confirmExit`, para ligar no `onBack` do `Screen`.
+ * A pergunta é um `ConfirmDrawer`, montado pela tela: o `Alert` do sistema
+ * destoava do resto do app. Por isso o hook devolve o estado do drawer em vez
+ * de abrir o diálogo ele mesmo.
  */
-export function useSessionExitGuard(): () => void {
+export function useSessionExitGuard() {
   const router = useRouter();
+  const [exitOpen, setExitOpen] = useState(false);
 
-  const confirmExit = useCallback(() => {
-    Alert.alert(
-      'Sair da sessão?',
-      'O treino continua em andamento — dá para voltar a ele pelo botão "Continuar treino" na tela de treinos.',
-      [
-        { text: 'Ficar no treino', style: 'cancel' },
-        {
-          text: 'Sair',
-          onPress: () => {
-            if (router.canGoBack()) router.back();
-            else router.replace('/workout');
-          },
-        },
-      ],
-    );
+  const requestExit = useCallback(() => setExitOpen(true), []);
+
+  const leave = useCallback(() => {
+    setExitOpen(false);
+    if (router.canGoBack()) router.back();
+    else router.replace('/workout');
   }, [router]);
 
   useFocusEffect(
     useCallback(() => {
       const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-        confirmExit();
+        // Voltar com o drawer aberto fecha o drawer, como em todo sheet.
+        setExitOpen((open) => !open);
         return true;
       });
       return () => subscription.remove();
-    }, [confirmExit]),
+    }, []),
   );
 
-  return confirmExit;
+  return { exitOpen, setExitOpen, requestExit, leave };
 }

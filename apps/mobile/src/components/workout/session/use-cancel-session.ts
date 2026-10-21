@@ -1,22 +1,20 @@
-import { useCallback } from 'react';
-import { Alert } from 'react-native';
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { workoutApi } from '@fatia/api-client';
 
 /**
- * `apps/web/src/components/workout/cancel-session-modal.tsx` vira `Alert` do
- * sistema, não drawer.
+ * `apps/web/src/components/workout/cancel-session-modal.tsx`.
  *
- * É uma pergunta de sim ou não sobre apagar tudo: o `Alert` nativo já traz o
- * botão vermelho de ação destrutiva, prende o toque na decisão e é o diálogo que
- * a pessoa reconhece de todo outro app. Um sheet bonito aqui só adicionaria a
- * chance de fechar por arrasto sem querer.
+ * Já foi `Alert` do sistema; virou `ConfirmDrawer`, montado pela tela, porque o
+ * diálogo nativo destoava do resto do app (o "Finalizar" ao lado já era drawer).
+ * O hook guarda o estado do drawer e a mutação; a tela só desenha.
  */
 export function useCancelSession(sessionId: string) {
   const qc = useQueryClient();
   const router = useRouter();
+  const [cancelOpen, setCancelOpen] = useState(false);
 
   const cancel = useMutation({
     mutationFn: async () => {
@@ -33,26 +31,16 @@ export function useCancelSession(sessionId: string) {
       qc.setQueryData(['workout', 'active'], null);
       qc.invalidateQueries({ queryKey: ['workout', 'active'] });
       qc.invalidateQueries({ queryKey: ['workout', 'sessions'] });
+      setCancelOpen(false);
       router.replace('/workout');
-    },
-    onError: (error) => {
-      Alert.alert(
-        'Não foi possível cancelar',
-        error instanceof Error ? error.message : 'Tente novamente.',
-      );
     },
   });
 
-  const confirmCancel = useCallback(() => {
-    Alert.alert(
-      'Cancelar treino',
-      'Isso apaga a sessão e todos os exercícios registrados. Não dá para desfazer.',
-      [
-        { text: 'Continuar treinando', style: 'cancel' },
-        { text: 'Cancelar treino', style: 'destructive', onPress: () => cancel.mutate() },
-      ],
-    );
-  }, [cancel]);
-
-  return { confirmCancel, isPending: cancel.isPending };
+  return {
+    cancelOpen,
+    setCancelOpen,
+    cancel: () => cancel.mutate(),
+    isPending: cancel.isPending,
+    error: cancel.error instanceof Error ? cancel.error.message : null,
+  };
 }
