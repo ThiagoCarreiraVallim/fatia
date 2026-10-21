@@ -84,14 +84,16 @@ export function PhotosField({
                 accessibilityIgnoresInvertColors
                 className="h-20 w-20 rounded-xl"
               />
+              {/* 28 pt visíveis + 8 de folga em cada lado = 44 de alvo. O "x" de
+                  20 pt de antes, com a mesma folga, ficava em 36. */}
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Tirar a foto ${i + 1}`}
+                accessibilityLabel={`Remover a foto ${i + 1}`}
                 hitSlop={8}
                 onPress={() => onChange(value.filter((x) => x.fileId !== f.fileId))}
-                className="absolute right-1 top-1 rounded-full bg-background p-1"
+                className="absolute right-1 top-1 h-7 w-7 items-center justify-center rounded-full border border-border bg-background active:opacity-80"
               >
-                <X size={12} color={cores.foreground} />
+                <X size={14} color={cores.foreground} />
               </Pressable>
             </View>
           ))}

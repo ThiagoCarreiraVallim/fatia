@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { Image, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { ImagePlus, X } from 'lucide-react-native';
 import { ApiError, uploadMedia, type MediaPurpose } from '@fatia/api-client';
 import { Button } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
+import { cores } from '@/theme/cores';
+import { IconLabel } from './content-ui';
 import { describePickedImage } from './picked-image';
 
 export interface ImageValue {
@@ -78,13 +81,26 @@ export function ImageField({
           className={square ? 'h-24 w-24 rounded-xl' : 'aspect-video w-full rounded-xl'}
         />
       ) : null}
-      <View className="flex-row gap-2">
-        <Button size="sm" variant="outline" loading={enviando} onPress={() => void escolher()}>
-          {value?.url ? 'Trocar imagem' : 'Escolher imagem'}
+      {/* Ícone e rótulo nos dois: "Tirar imagem" em `ghost` era texto solto. Só
+          tira do formulário e vale ao salvar, por isso não pede confirmação. */}
+      <View className="flex-row flex-wrap gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          loading={enviando}
+          accessibilityLabel={`${value?.url ? 'Trocar' : 'Escolher'} ${label.toLowerCase()}`}
+          onPress={() => void escolher()}
+        >
+          <IconLabel icon={ImagePlus} label={value?.url ? 'Trocar imagem' : 'Escolher imagem'} />
         </Button>
         {value?.url ? (
-          <Button size="sm" variant="ghost" onPress={() => onChange(null)}>
-            Tirar imagem
+          <Button
+            size="sm"
+            variant="outline"
+            accessibilityLabel={`Remover ${label.toLowerCase()}`}
+            onPress={() => onChange(null)}
+          >
+            <IconLabel icon={X} label="Remover" color={cores.mutedForeground} />
           </Button>
         ) : null}
       </View>

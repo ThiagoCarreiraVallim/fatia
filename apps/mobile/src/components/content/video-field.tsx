@@ -4,9 +4,12 @@ import * as ImagePicker from 'expo-image-picker';
 import { File } from 'expo-file-system';
 import { createUploadTask, FileSystemUploadType } from 'expo-file-system/legacy';
 import * as WebBrowser from 'expo-web-browser';
+import { Play, Video, X } from 'lucide-react-native';
 import { ApiError, formatBytes, uploadMedia } from '@fatia/api-client';
 import { Button } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
+import { cores } from '@/theme/cores';
+import { IconLabel } from './content-ui';
 import { describePickedVideo } from './picked-image';
 
 export interface VideoValue {
@@ -102,17 +105,29 @@ export function VideoField({
             <Button
               size="sm"
               variant="outline"
+              accessibilityLabel="Assistir o vídeo"
               onPress={() => void WebBrowser.openBrowserAsync(value.url!)}
             >
-              Assistir
+              <IconLabel icon={Play} label="Assistir" />
             </Button>
           ) : null}
-          <Button size="sm" variant="outline" onPress={() => void escolher()}>
-            {value ? 'Trocar vídeo' : 'Escolher vídeo'}
+          <Button
+            size="sm"
+            variant="outline"
+            accessibilityLabel={value ? 'Trocar vídeo' : 'Escolher vídeo'}
+            onPress={() => void escolher()}
+          >
+            <IconLabel icon={Video} label={value ? 'Trocar vídeo' : 'Escolher vídeo'} />
           </Button>
+          {/* Era um "Tirar vídeo" em texto solto; só tira do formulário, vale ao salvar. */}
           {value ? (
-            <Button size="sm" variant="ghost" onPress={() => onChange(null)}>
-              Tirar vídeo
+            <Button
+              size="sm"
+              variant="outline"
+              accessibilityLabel="Remover o vídeo"
+              onPress={() => onChange(null)}
+            >
+              <IconLabel icon={X} label="Remover" color={cores.mutedForeground} />
             </Button>
           ) : null}
         </View>

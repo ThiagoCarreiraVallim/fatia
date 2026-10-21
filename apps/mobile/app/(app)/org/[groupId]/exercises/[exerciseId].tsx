@@ -15,6 +15,7 @@ import {
   type GroupExercise,
   type MyGroup,
 } from '@fatia/api-client';
+import { DeleteButton, WritePreviewTabs } from '@/components/content/content-ui';
 import type { ImageValue } from '@/components/content/image-field';
 import { MarkdownLite } from '@/components/content/markdown-lite';
 import { PhotosField } from '@/components/content/photos-field';
@@ -86,7 +87,9 @@ function Editor({
     onSuccess: () => {
       toast.show({ message: daCasa ? 'Exercício tirado do catálogo.' : 'Tutorial apagado.' });
       void invalidar();
-      router.replace(`/org/${g.id}/exercises`);
+      // Voltar à lista que já está atrás, e não empilhar outra por cima.
+      if (router.canGoBack()) router.back();
+      else router.replace(`/org/${g.id}/exercises`);
     },
     onError: (err) => toast.show({ message: apiMessage(err, 'Não deu para apagar agora.') }),
   });
@@ -161,6 +164,7 @@ function Editor({
             <PhotosField groupId={g.id} value={fotos} onChange={setFotos} />
           </>
         ) : null}
+        <WritePreviewTabs preview={previa} onPreviewChange={setPrevia} />
         {previa ? (
           <View
             accessibilityLabel="Prévia das dicas"
@@ -181,18 +185,13 @@ function Editor({
             placeholder="Dicas da equipe"
           />
         )}
-        <View className="flex-row items-center justify-between gap-2">
-          <Text className="flex-1 text-xs text-muted-foreground">
-            {`**negrito**, *itálico*, listas com "- ". ${dicas.length}/${MAX_GUIDE_TIPS}`}
-          </Text>
-          <Button size="sm" variant="ghost" onPress={() => setPrevia(!previa)}>
-            {previa ? 'Editar' : 'Ver prévia'}
-          </Button>
-        </View>
+        <Text className="text-xs text-muted-foreground">
+          {`**negrito**, *itálico*, listas com "- ". ${dicas.length}/${MAX_GUIDE_TIPS}`}
+        </Text>
       </PanelCard>
 
       {editavel ? (
-        <View className="gap-2">
+        <View className="gap-6">
           <Button
             loading={salvar.isPending}
             onPress={() => {
@@ -201,11 +200,14 @@ function Editor({
               else salvar.mutate();
             }}
           >
-            {item ? 'Salvar' : 'Pôr no catálogo'}
+            {item ? 'Salvar' : daCasa ? 'Criar exercício' : 'Salvar tutorial'}
           </Button>
+          {/* Longe do "Salvar", com cor e ícone de perigo — antes era texto
+              branco logo abaixo dele. */}
           {item ? (
-            <Button
-              variant="ghost"
+            <DeleteButton
+              label={daCasa ? 'Apagar exercício' : 'Apagar tutorial'}
+              loading={apagar.isPending}
               onPress={() =>
                 Alert.alert(
                   daCasa ? 'Apagar este exercício?' : 'Apagar este tutorial?',
@@ -213,14 +215,12 @@ function Editor({
                     ? 'Ele sai do catálogo da comunidade, com o vídeo e as fotos. Quem já treinou com ele continua vendo o que fez.'
                     : 'O vídeo, as fotos e as dicas saem. O exercício continua no catálogo geral.',
                   [
-                    { text: 'Voltar', style: 'cancel' },
+                    { text: 'Cancelar', style: 'cancel' },
                     { text: 'Apagar', style: 'destructive', onPress: () => apagar.mutate() },
                   ],
                 )
               }
-            >
-              {daCasa ? 'Apagar exercício' : 'Apagar tutorial'}
-            </Button>
+            />
           ) : null}
         </View>
       ) : null}
