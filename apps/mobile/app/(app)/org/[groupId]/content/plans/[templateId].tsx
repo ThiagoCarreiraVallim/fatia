@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Alert, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -17,9 +17,16 @@ import {
   type PlanTemplate,
   type TemplateKind,
 } from '@fatia/api-client';
+import { Download } from 'lucide-react-native';
+import {
+  CheckableRow,
+  DeleteButton,
+  IconLabel,
+  PublishCard,
+} from '@/components/content/content-ui';
 import { ImageField, type ImageValue } from '@/components/content/image-field';
 import { apiMessage, Choice, OrgPanel, orgKeys, PanelCard } from '@/components/org/org-panel';
-import { Button, EmptyState, Input, LoadingState, cn } from '@/components/ui';
+import { Button, EmptyState, Input, LoadingState } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 
 type GoalsForm = Record<keyof NutritionGoalsInput, string>;
@@ -43,50 +50,6 @@ const formToGoals = (f: GoalsForm) =>
   Object.fromEntries(
     Object.entries(f).map(([k, v]) => [k, v.trim() === '' ? null : Number(v)]),
   ) as Partial<Record<keyof NutritionGoalsInput, number | null>>;
-
-/** Linha marcável (radio ou checkbox) com 44 pt de altura. */
-function Marcavel({
-  label,
-  detalhe,
-  marcada,
-  papel,
-  desabilitada,
-  onPress,
-}: {
-  label: string;
-  detalhe?: string;
-  marcada: boolean;
-  papel: 'radio' | 'checkbox';
-  desabilitada?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole={papel}
-      accessibilityState={{ checked: marcada, disabled: desabilitada }}
-      accessibilityLabel={detalhe ? `${label}, ${detalhe}` : label}
-      disabled={desabilitada}
-      onPress={onPress}
-      className={cn(
-        'min-h-[44px] flex-row items-center gap-3 rounded-xl border px-3 py-2 active:opacity-80',
-        marcada ? 'border-primary bg-primary/10' : 'border-border',
-        desabilitada && 'opacity-50',
-      )}
-    >
-      <View
-        className={cn(
-          'h-4 w-4 border-2',
-          papel === 'radio' ? 'rounded-full' : 'rounded',
-          marcada ? 'border-primary bg-primary' : 'border-muted-foreground',
-        )}
-      />
-      <Text className="flex-1 text-sm text-foreground" numberOfLines={1}>
-        {label}
-      </Text>
-      {detalhe ? <Text className="text-xs text-muted-foreground">{detalhe}</Text> : null}
-    </Pressable>
-  );
-}
 
 function Editor({
   g,
@@ -112,6 +75,21 @@ function Editor({
   const [comMetas, setComMetas] = useState(template === null || template.goals !== null);
   const [metas, setMetas] = useState<GoalsForm>(goalsToForm(template?.goals));
   const [refeicoes, setRefeicoes] = useState<string[]>([]);
+
+  // O que está na tela, comparado com o que foi salvo por último: liga o
+  // "Salvar" só quando há o que salvar, e segura "Publicar" até salvar.
+  const snapshot = JSON.stringify([
+    titulo,
+    descricao,
+    nivel,
+    capa?.fileId,
+    planoFonte,
+    comMetas,
+    metas,
+    refeicoes,
+  ]);
+  const [savedSnapshot, setSavedSnapshot] = useState(snapshot);
+  const dirty = snapshot !== savedSnapshot;
 
   const meusPlanos = useQuery({
     queryKey: ['workout', 'plans'],
@@ -143,7 +121,9 @@ function Editor({
   }
 
   const salvar = useMutation({
-    mutationFn: async () => {
+    // O retrato vai como variável para marcar como salvo o que foi enviado, e
+    // não o que a pessoa digitou enquanto a resposta não chegava.
+    mutationFn: async (_saved: string) => {
       const meta = {
         title: titulo.trim() || undefined,
         description: descricao.trim() || null,
@@ -168,7 +148,8 @@ function Editor({
         ? contentApi.createNutrition(g.id, nutricao)
         : contentApi.updatePlan(g.id, template.id, nutricao);
     },
-    onSuccess: (t) => {
+    onSuccess: (t, saved) => {
+      setSavedSnapshot(saved);
       toast.show({
         message:
           template === null ? 'Rascunho criado. Publique quando estiver pronto.' : 'Plano salvo.',
@@ -195,7 +176,9 @@ function Editor({
     onSuccess: () => {
       toast.show({ message: 'Plano apagado. As cópias de quem adotou continuam.' });
       void invalidar();
-      router.replace(`/org/${g.id}/content`);
+      // Voltar, e não empilhar outra lista por cima da que já está atrás.
+      if (router.canGoBack()) router.back();
+      else router.replace(`/org/${g.id}/content`);
     },
     onError: (err) => toast.show({ message: apiMessage(err, 'Não deu para apagar agora.') }),
   });
@@ -203,9 +186,30 @@ function Editor({
   return (
     <>
       {template ? (
-        <Text className="text-xs text-muted-foreground">
-          {`${template.publishedAt ? 'Publicado' : 'Rascunho'} · por ${template.authorName}`}
-        </Text>
+        <PublishCard
+          published={Boolean(template.publishedAt)}
+          authorName={template.authorName}
+          canEdit={editavel}
+          dirty={dirty}
+          loading={publicar.isPending}
+          publishedHint="Os membros veem e podem adotar. Mudanças salvas valem para quem adotar daqui em diante."
+          draftHint="Só a equipe vê. Publique quando estiver pronto."
+          onPublish={() => publicar.mutate(true)}
+          onUnpublish={() =>
+            Alert.alert(
+              'Tirar este plano do ar?',
+              'Ele some para os membros. Quem já adotou continua com a cópia.',
+              [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                  text: 'Tirar do ar',
+                  style: 'destructive',
+                  onPress: () => publicar.mutate(false),
+                },
+              ],
+            )
+          }
+        />
       ) : null}
       {!editavel ? (
         <Text className="rounded-xl bg-muted p-3 text-sm text-foreground">
@@ -255,28 +259,46 @@ function Editor({
         <PanelCard title="Exercícios">
           {editavel ? (
             meusPlanos.data?.length === 0 ? (
-              <Text className="text-sm text-muted-foreground">
-                Você ainda não tem planos de treino. Monte um em Treino e volte para publicar.
-              </Text>
+              <View className="gap-2">
+                <Text className="text-sm text-muted-foreground">
+                  Você ainda não tem planos de treino. Monte um em Treino e volte para publicar.
+                </Text>
+                <Button
+                  variant="outline"
+                  className="self-start"
+                  onPress={() => router.push('/workout/plans')}
+                >
+                  Ir para Treino
+                </Button>
+              </View>
             ) : (
               <View
                 className="gap-2"
                 accessibilityRole="radiogroup"
                 accessibilityLabel="A partir do seu plano"
               >
-                <Text className="text-xs text-muted-foreground">A partir do seu plano</Text>
+                <Text className="text-xs text-muted-foreground">
+                  {template
+                    ? 'A partir do seu plano. Trocar substitui os exercícios ao salvar.'
+                    : 'A partir do seu plano'}
+                </Text>
                 {(meusPlanos.data ?? []).map((p) => (
-                  <Marcavel
+                  <CheckableRow
                     key={p.id}
-                    papel="radio"
+                    role="radio"
                     label={p.name}
-                    detalhe={`${p.exercises.length} exercícios`}
-                    marcada={planoFonte === p.id}
+                    detail={`${p.exercises.length} exercícios`}
+                    checked={planoFonte === p.id}
                     onPress={() => setPlanoFonte(p.id)}
                   />
                 ))}
               </View>
             )
+          ) : null}
+          {template ? (
+            <Text className="pt-1 text-xs text-muted-foreground">
+              {editavel ? 'Exercícios publicados agora' : 'Exercícios'}
+            </Text>
           ) : null}
           {template
             ? template.exercises.map((e, i) => (
@@ -293,16 +315,20 @@ function Editor({
         <>
           <PanelCard title="Metas diárias">
             {editavel ? (
-              <View className="flex-row flex-wrap gap-2">
-                <Marcavel
-                  papel="checkbox"
+              <View className="gap-2">
+                <CheckableRow
+                  role="checkbox"
                   label="Incluir metas de calorias e macros"
-                  marcada={comMetas}
+                  checked={comMetas}
                   onPress={() => setComMetas(!comMetas)}
                 />
+                {/* Contorno com ícone: o `ghost` de antes era texto solto, e o toque
+                    sobrescreve os seis campos abaixo — tem que parecer ação. */}
                 <Button
                   size="sm"
-                  variant="ghost"
+                  variant="outline"
+                  className="self-start"
+                  accessibilityLabel="Preencher com as minhas metas"
                   onPress={async () => {
                     const minhas = await nutritionApi.goals().catch(() => null);
                     if (!minhas) {
@@ -313,7 +339,7 @@ function Editor({
                     setMetas(goalsToForm(minhas));
                   }}
                 >
-                  Usar as minhas metas
+                  <IconLabel icon={Download} label="Preencher com as minhas metas" />
                 </Button>
               </View>
             ) : null}
@@ -360,16 +386,21 @@ function Editor({
                     ? 'Para trocar as refeições, marque as refeições salvas que entram no lugar.'
                     : `Escolha até ${MAX_SUGGESTED_MEALS} das suas refeições salvas.`}
                 </Text>
+                {minhasRefeicoes.data?.length === 0 ? (
+                  <Text className="text-sm text-muted-foreground">
+                    Você ainda não tem refeições salvas. Salve uma em Nutrição e volte aqui.
+                  </Text>
+                ) : null}
                 {(minhasRefeicoes.data ?? []).map((m) => {
                   const marcada = refeicoes.includes(m.id);
                   return (
-                    <Marcavel
+                    <CheckableRow
                       key={m.id}
-                      papel="checkbox"
+                      role="checkbox"
                       label={m.name}
-                      detalhe={`${Math.round(m.items.reduce((s, i) => s + i.kcal, 0))} kcal`}
-                      marcada={marcada}
-                      desabilitada={!marcada && refeicoes.length >= MAX_SUGGESTED_MEALS}
+                      detail={`${Math.round(m.items.reduce((s, i) => s + i.kcal, 0))} kcal`}
+                      checked={marcada}
+                      disabled={!marcada && refeicoes.length >= MAX_SUGGESTED_MEALS}
                       onPress={() =>
                         setRefeicoes(
                           marcada ? refeicoes.filter((id) => id !== m.id) : [...refeicoes, m.id],
@@ -385,42 +416,35 @@ function Editor({
       )}
 
       {editavel ? (
-        <View className="gap-2">
+        <View className="gap-6">
           <Button
             loading={salvar.isPending}
+            disabled={template !== null && !dirty}
             onPress={() => {
               const p = problema();
               if (p) toast.show({ message: p });
-              else salvar.mutate();
+              else salvar.mutate(snapshot);
             }}
           >
-            {template === null ? 'Criar rascunho' : 'Salvar'}
+            {template === null ? 'Criar rascunho' : dirty ? 'Salvar mudanças' : 'Tudo salvo'}
           </Button>
+          {/* Longe do "Salvar", com cor e ícone de perigo: antes era um "Apagar"
+              em texto branco colado nele. */}
           {template ? (
-            <Button
-              variant="outline"
-              loading={publicar.isPending}
-              onPress={() => publicar.mutate(!template.publishedAt)}
-            >
-              {template.publishedAt ? 'Tirar do ar' : 'Publicar'}
-            </Button>
-          ) : null}
-          {template ? (
-            <Button
-              variant="ghost"
+            <DeleteButton
+              label="Apagar plano"
+              loading={apagar.isPending}
               onPress={() =>
                 Alert.alert(
                   'Apagar este plano?',
                   'Ele some para os membros. Quem já adotou continua com a cópia.',
                   [
-                    { text: 'Voltar', style: 'cancel' },
+                    { text: 'Cancelar', style: 'cancel' },
                     { text: 'Apagar', style: 'destructive', onPress: () => apagar.mutate() },
                   ],
                 )
               }
-            >
-              Apagar
-            </Button>
+            />
           ) : null}
         </View>
       ) : null}
