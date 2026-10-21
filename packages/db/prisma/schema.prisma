@@ -861,6 +861,10 @@ model Group {
   /// Quem publica no mural (Fase 8b, ADR 032).
   postPolicy     PostPolicy           @default(ALL_MEMBERS)
   posts          GroupPost[]
+  /// O que quem entra como membro precisa compartilhar com a equipe. Cobrado
+  /// na entrada (código ou convite) e ao tirar um escopo já compartilhado;
+  /// quem entrou antes de o dono mudar a lista não deve o que nunca compartilhou.
+  requiredSharingScopes ShareScope[] @default([])
 
   @@index([ownerId])
   @@index([type])
