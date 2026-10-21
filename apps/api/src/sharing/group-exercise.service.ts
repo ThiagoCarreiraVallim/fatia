@@ -8,7 +8,14 @@ import { Prisma, type GroupRole, type MediaFile } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { normalizeSearchText } from '../common/search-text';
 import { MediaService, type MediaView } from '../storage/media.service';
-import { GYM_EQUIPMENT } from '../workout/helpers/equipment';
+import {
+  BODYWEIGHT,
+  cleanCustomEquipment,
+  equipmentKey,
+  GYM_EQUIPMENT,
+  MAX_CUSTOM_EQUIPMENT,
+  OTHER_EQUIPMENT,
+} from '../workout/helpers/equipment';
 import { CATALOG_EXERCISE } from '../workout/helpers/exercise-access';
 import { assertCanEditContent, canEditContent, requireContentRole } from './content-roles';
 import { planSnapshotSchema } from './plan-snapshot';
@@ -95,7 +102,10 @@ export class GroupExerciseService {
   async listForTeam(userId: string, groupId: string) {
     const eu = await requireContentRole(this.prisma, userId, groupId, 'content.publish');
     const [grupo, guias] = await Promise.all([
-      this.prisma.group.findUniqueOrThrow({ where: { id: groupId }, select: { equipment: true } }),
+      this.prisma.group.findUniqueOrThrow({
+        where: { id: groupId },
+        select: { equipment: true, customEquipment: true },
+      }),
       this.prisma.groupExerciseGuide.findMany({
         where: { groupId },
         include: GUIDE_INCLUDE,
@@ -104,6 +114,7 @@ export class GroupExerciseService {
     ]);
     return {
       equipment: grupo.equipment,
+      customEquipment: grupo.customEquipment,
       items: await Promise.all(guias.map((g) => this.view(g, userId, eu))),
     };
   }
@@ -120,6 +131,7 @@ export class GroupExerciseService {
     input: GroupExerciseInput & GuideInput,
   ): Promise<GroupExerciseView> {
     const eu = await requireContentRole(this.prisma, userId, groupId, 'content.publish');
+    const equipment = await this.resolveEquipment(groupId, input.equipment);
     const midia = await this.resolveMedia(groupId, input);
     // Exercício e tutorial numa escrita só (`create` aninhado): exercício da
     // comunidade sem tutorial ficaria sem autor e sem como ser editado.
@@ -127,7 +139,7 @@ export class GroupExerciseService {
     try {
       exercicio = await this.prisma.exercise.create({
         data: {
-          ...this.exerciseData(input),
+          ...this.exerciseData({ ...input, equipment }),
           name: input.name.trim(),
           searchName: normalizeSearchText(input.name),
           muscleGroup: input.muscleGroup,
@@ -168,11 +180,17 @@ export class GroupExerciseService {
         'Exercício do catálogo geral não muda: a comunidade muda o tutorial dele.',
       );
     }
+    // O equipamento que já está fica, mesmo que a academia o tenha tirado da
+    // lista própria depois: salvar o nome sem mexer nele não pode falhar.
+    const equipment =
+      input.equipment === guia.exercise.equipment
+        ? undefined
+        : await this.resolveEquipment(groupId, input.equipment);
     try {
       await this.prisma.exercise.update({
         where: { id: exerciseId },
         data: {
-          ...this.exerciseData(input),
+          ...this.exerciseData({ ...input, equipment }),
           ...(input.name !== undefined
             ? { name: input.name.trim(), searchName: normalizeSearchText(input.name) }
             : {}),
@@ -301,8 +319,17 @@ export class GroupExerciseService {
     return { id: exerciseId };
   }
 
-  /** O equipamento que a academia tem, para o filtro "Na minha academia". */
-  async setEquipment(userId: string, groupId: string, equipment: string[]) {
+  /**
+   * O equipamento que a academia tem, para o filtro "Na minha academia": o da
+   * lista e o que ela nomeou por conta própria. `customEquipment` ausente mantém
+   * os próprios que já estão.
+   */
+  async setEquipment(
+    userId: string,
+    groupId: string,
+    equipment: string[],
+    customEquipment?: string[],
+  ): Promise<{ equipment: string[]; customEquipment: string[] }> {
     await requireContentRole(
       this.prisma,
       userId,
@@ -315,12 +342,28 @@ export class GroupExerciseService {
     if (desconhecido !== undefined) {
       throw new BadRequestException(`Equipamento desconhecido: ${desconhecido}`);
     }
+    let proprios: string[] | undefined;
+    if (customEquipment !== undefined) {
+      const limpos = cleanCustomEquipment(customEquipment);
+      if (limpos.inList !== null) {
+        throw new BadRequestException(
+          `"${limpos.inList}" já está na lista de equipamentos: marque por lá.`,
+        );
+      }
+      if (limpos.names.length > MAX_CUSTOM_EQUIPMENT) {
+        throw new BadRequestException(`Até ${MAX_CUSTOM_EQUIPMENT} equipamentos próprios.`);
+      }
+      proprios = limpos.names;
+    }
     const g = await this.prisma.group.update({
       where: { id: groupId },
-      data: { equipment: [...new Set(equipment)] },
-      select: { equipment: true },
+      data: {
+        equipment: [...new Set(equipment)],
+        ...(proprios !== undefined ? { customEquipment: proprios } : {}),
+      },
+      select: { equipment: true, customEquipment: true },
     });
-    return { equipment: g.equipment };
+    return { equipment: g.equipment, customEquipment: g.customEquipment };
   }
 
   // ---------------------------------------------------------------- membro
@@ -362,6 +405,32 @@ export class GroupExerciseService {
         );
       })
       .map((m) => m.title);
+  }
+
+  /**
+   * O equipamento do exercício da casa: da lista, peso corporal, outro ou um
+   * equipamento próprio **desta** academia (a da URL). Volta na grafia
+   * guardada, para o filtro casar; vazio vira `null`.
+   */
+  private async resolveEquipment(
+    groupId: string,
+    equipment: string | null | undefined,
+  ): Promise<string | null | undefined> {
+    if (equipment === undefined || equipment === null) return equipment;
+    const chave = equipmentKey(equipment);
+    if (!chave) return null;
+    const lista = [...GYM_EQUIPMENT, BODYWEIGHT, OTHER_EQUIPMENT];
+    const daLista = lista.find((e) => equipmentKey(e) === chave);
+    if (daLista) return daLista;
+    const g = await this.prisma.group.findUniqueOrThrow({
+      where: { id: groupId },
+      select: { customEquipment: true },
+    });
+    const proprio = g.customEquipment.find((e) => equipmentKey(e) === chave);
+    if (proprio) return proprio;
+    throw new BadRequestException(
+      `Equipamento desconhecido: ${equipment}. Cadastre-o no equipamento da academia antes.`,
+    );
   }
 
   /** Vídeo e fotos: prontos, desta comunidade e enviados para isto. */

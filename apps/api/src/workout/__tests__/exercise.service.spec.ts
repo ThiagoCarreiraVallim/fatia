@@ -121,6 +121,32 @@ describe('ExerciseService', () => {
 
       expect(prisma.exercise.findMany.mock.calls[0][0].take).toBe(20);
     });
+
+    it('"Na minha academia" usa o equipamento próprio e o recorte por nome do item fino', async () => {
+      prisma.groupMembership.findMany.mockResolvedValue([
+        {
+          groupId: 'g1',
+          group: { name: 'Academia', equipment: ['smith'], customEquipment: ['Hack da casa'] },
+        },
+      ]);
+      prisma.exercise.findMany.mockResolvedValue([]);
+
+      await service.search(userId, { onlyMyGym: true });
+
+      // A primeira chamada é a dos exercícios da comunidade; a busca é a última.
+      const where = prisma.exercise.findMany.mock.calls.at(-1)[0].where;
+      const filtro = where.AND[where.AND.length - 1];
+      expect(filtro.OR).toContainEqual({
+        equipment: {
+          in: expect.arrayContaining(['peso corporal', 'Hack da casa', 'smith']),
+          mode: 'insensitive',
+        },
+      });
+      expect(filtro.OR).toContainEqual({
+        equipment: 'máquina',
+        OR: [{ searchName: { contains: 'smith' } }],
+      });
+    });
   });
 
   describe('get', () => {

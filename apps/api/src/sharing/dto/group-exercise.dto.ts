@@ -12,7 +12,11 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import { GYM_EQUIPMENT } from '../../workout/helpers/equipment';
+import {
+  CUSTOM_EQUIPMENT_MAX_LENGTH,
+  GYM_EQUIPMENT,
+  MAX_CUSTOM_EQUIPMENT,
+} from '../../workout/helpers/equipment';
 import {
   ANATOMICAL_MUSCLES,
   MUSCLE_GROUP_MAX_LENGTH,
@@ -24,8 +28,6 @@ import { PLAN_LEVELS } from '../content.service';
 const normalizeMuscleGroup = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().toLowerCase() : value;
 const MUSCLES = ANATOMICAL_MUSCLES as unknown as string[];
-/** O equipamento de um exercício: o da academia, ou peso corporal. */
-const EQUIPMENT = [...GYM_EQUIPMENT, 'peso corporal', 'outro', null];
 
 /** Rota de um exercício da comunidade: o id é amarrado ao `groupId` no service. */
 export class GroupExerciseParamDto {
@@ -61,7 +63,15 @@ export class UpdateGroupExerciseDto {
   @Matches(MUSCLE_GROUP_PATTERN)
   muscleGroup?: string;
 
-  @IsOptional() @IsIn(EQUIPMENT) equipment?: string | null;
+  /**
+   * Da lista, peso corporal, outro ou um equipamento próprio da academia. Quem
+   * confere é o service, contra a academia da URL: a lista própria é de cada uma.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(CUSTOM_EQUIPMENT_MAX_LENGTH)
+  equipment?: string | null;
+
   @IsOptional() @IsIn([...PLAN_LEVELS, null]) level?: string | null;
   @IsOptional() @IsIn(['compound', 'isolation', null]) mechanic?: string | null;
 
@@ -100,6 +110,18 @@ export class CreateGroupExerciseDto extends UpdateGroupExerciseDto {
 export class EquipmentDto {
   @IsArray()
   @ArrayMaxSize(GYM_EQUIPMENT.length)
-  @IsIn(GYM_EQUIPMENT as unknown as string[], { each: true })
+  @IsIn(GYM_EQUIPMENT as string[], { each: true })
   equipment!: string[];
+
+  /**
+   * Os equipamentos que a academia nomeia por conta própria. Ausente = mantém os
+   * que já estão (o cliente antigo só manda `equipment`); `[]` apaga todos.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_CUSTOM_EQUIPMENT)
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  @MaxLength(CUSTOM_EQUIPMENT_MAX_LENGTH, { each: true })
+  customEquipment?: string[];
 }

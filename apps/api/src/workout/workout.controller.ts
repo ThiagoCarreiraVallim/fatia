@@ -68,6 +68,12 @@ export class WorkoutController {
 
   // -------- Exercises --------
 
+  /** O equipamento das academias da pessoa, para o editor de exercício. */
+  @Get('equipment')
+  gymEquipment(@CurrentUser() user: CurrentUserPayload) {
+    return this.exercises.gymEquipment(user.id);
+  }
+
   @Get('exercises')
   searchExercises(@CurrentUser() user: CurrentUserPayload, @Query() q: SearchExercisesDto) {
     return this.exercises.search(user.id, q);

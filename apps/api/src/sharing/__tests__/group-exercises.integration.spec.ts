@@ -320,6 +320,69 @@ describe('catálogo de exercícios da comunidade (integração)', () => {
       expect(tudo.some((e) => e.equipment === 'barra')).toBe(true);
     });
 
+    it('o item fino libera só o exercício do catálogo que fala dele', async () => {
+      const a = await comunidade();
+      await catalog.setEquipment(a.dono, a.groupId, ['smith']);
+      const smith = await exercises.search(a.membro, { q: 'smith', onlyMyGym: true, limit: 50 });
+      expect(smith.length).toBeGreaterThan(5);
+      expect(smith.every((e) => /smith/i.test(e.name) && e.equipment === 'máquina')).toBe(true);
+      // O leg press do Smith entra; o leg press comum, que é outra máquina, não.
+      const leg = await exercises.search(a.membro, { q: 'leg press', onlyMyGym: true, limit: 50 });
+      expect(leg.map((e) => e.name)).toEqual(['Leg Press no Smith Machine']);
+    });
+
+    it('o equipamento próprio da academia vale para o exercício pessoal do membro', async () => {
+      const a = await comunidade();
+      const doMembro = async (name: string, equipment: string) => {
+        const ex = await exercises.createCustom(a.membro, {
+          name: nome(name),
+          muscleGroup: 'pernas',
+        });
+        await exercises.updateCustom(a.membro, ex.id, { equipment });
+        return ex.id;
+      };
+      const noHack = await doMembro('Agachamento no hack da casa', 'HACK 45° da casa');
+      // Equipamento que a academia não tem: fica de fora o tempo todo.
+      await doMembro('Remada no aparelho X', 'aparelho X');
+      const busca = () =>
+        exercises
+          .search(a.membro, { q: stamp, onlyMyGym: true, limit: 50 })
+          .then((r) => r.map((e) => e.id));
+
+      expect(await busca()).toEqual([]);
+      await catalog.setEquipment(a.dono, a.groupId, [], ['Hack 45° da casa']);
+      expect(await busca()).toEqual([noHack]);
+
+      // O exercício da casa também usa o equipamento próprio, e o membro o vê.
+      const daCasa = await catalog.create(a.prof, a.groupId, {
+        name: nome('Hack da casa'),
+        muscleGroup: 'pernas',
+        equipment: 'hack 45° da casa',
+      });
+      expect(daCasa.equipment).toBe('Hack 45° da casa');
+      await expect(exercises.gymEquipment(a.membro)).resolves.toEqual({
+        equipment: [],
+        customEquipment: ['Hack 45° da casa'],
+      });
+
+      // Tirado da lista própria, deixa de valer no filtro.
+      await catalog.setEquipment(a.dono, a.groupId, [], []);
+      expect(await busca()).toEqual([daCasa.exerciseId]);
+    });
+
+    it('o equipamento próprio de uma academia não vale no exercício da casa de outra', async () => {
+      const a = await comunidade();
+      const b = await comunidade('Outra');
+      await catalog.setEquipment(b.dono, b.groupId, [], ['Remo da casa B']);
+      await expect(
+        catalog.create(a.dono, a.groupId, {
+          name: nome('Remo'),
+          muscleGroup: 'costas',
+          equipment: 'Remo da casa B',
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
     it('só o dono marca o equipamento, e só da lista', async () => {
       const a = await comunidade();
       await expect(catalog.setEquipment(a.prof, a.groupId, ['halteres'])).rejects.toBeInstanceOf(

@@ -8,7 +8,7 @@ import type {
   SearchExercisesDto,
   UpdateCustomExerciseDto,
 } from './dto/exercise.dto';
-import { BODYWEIGHT } from './helpers/equipment';
+import { gymEquipmentFilter } from './helpers/equipment';
 import { readableExercises, searchableExercises } from './helpers/exercise-access';
 
 /** O tutorial que a comunidade da pessoa pôs no exercício (Fase 7b, ADR 030). */
@@ -36,7 +36,10 @@ export type ExerciseListItem = Exercise & {
 /** As comunidades ativas da pessoa, na ordem em que ela entrou, e o que elas destacam. */
 interface CommunityContext {
   groupIds: string[];
+  /** As chaves da lista que as academias marcaram. */
   equipment: string[];
+  /** Os equipamentos que elas nomearam por conta própria. */
+  customEquipment: string[];
   /** Exercício → nome da primeira comunidade (na ordem de entrada) que o destaca. */
   featured: Map<number, string>;
 }
@@ -176,12 +179,15 @@ export class ExerciseService {
   private async communityContext(userId: string): Promise<CommunityContext> {
     const vinculos = await this.prisma.groupMembership.findMany({
       where: { userId, status: MembershipStatus.ACTIVE },
-      select: { groupId: true, group: { select: { name: true, equipment: true } } },
+      select: {
+        groupId: true,
+        group: { select: { name: true, equipment: true, customEquipment: true } },
+      },
       orderBy: { createdAt: 'asc' },
     });
     const groupIds = vinculos.map((v) => v.groupId);
     const featured = new Map<number, string>();
-    if (groupIds.length === 0) return { groupIds, equipment: [], featured };
+    if (groupIds.length === 0) return { groupIds, equipment: [], customEquipment: [], featured };
 
     const [proprios, guias] = await Promise.all([
       this.prisma.exercise.findMany({
@@ -203,16 +209,46 @@ export class ExerciseService {
       if (!featured.has(par.exerciseId)) featured.set(par.exerciseId, nomePor.get(par.groupId)!);
     }
     const equipment = [...new Set(vinculos.flatMap((v) => v.group.equipment))];
-    return { groupIds, equipment, featured };
+    const customEquipment = [...new Set(vinculos.flatMap((v) => v.group.customEquipment))];
+    return { groupIds, equipment, customEquipment, featured };
   }
 
-  /** "Na minha academia": o que ela destaca, mais o que dá para fazer com o equipamento dela. */
+  /**
+   * "Na minha academia": o que ela destaca, mais o que dá para fazer com o
+   * equipamento dela — ver `gymEquipmentFilter`.
+   *
+   * O valor exato é comparado sem caixa: o exercício pessoal tem equipamento em
+   * texto livre, e quem digitou "Leg Press" treina na mesma máquina que a
+   * academia marcou como "leg press". Acento continua contando; o editor
+   * oferece a lista justamente para a grafia sair igual.
+   */
   private myGymFilter(ctx: CommunityContext): Prisma.ExerciseWhereInput {
+    const filtro = gymEquipmentFilter(ctx.equipment, ctx.customEquipment);
     return {
       OR: [
         { id: { in: [...ctx.featured.keys()] } },
-        { equipment: { in: [...ctx.equipment, BODYWEIGHT] } },
+        { equipment: { in: filtro.exact, mode: 'insensitive' } },
+        ...filtro.byName.map((b) => ({
+          equipment: b.equipment,
+          OR: b.names.map((n) => ({ searchName: { contains: n } })),
+        })),
       ],
+    };
+  }
+
+  /**
+   * O equipamento das academias da pessoa, para o editor de exercício oferecer
+   * o que ela tem: as chaves marcadas e os nomes próprios.
+   */
+  async gymEquipment(userId: string): Promise<{ equipment: string[]; customEquipment: string[] }> {
+    const vinculos = await this.prisma.groupMembership.findMany({
+      where: { userId, status: MembershipStatus.ACTIVE },
+      select: { group: { select: { equipment: true, customEquipment: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+    return {
+      equipment: [...new Set(vinculos.flatMap((v) => v.group.equipment))],
+      customEquipment: [...new Set(vinculos.flatMap((v) => v.group.customEquipment))],
     };
   }
 

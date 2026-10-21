@@ -98,7 +98,7 @@ export class GroupExerciseController {
     @Param('groupId', ParseUUIDPipe) groupId: string,
     @Body() dto: EquipmentDto,
   ) {
-    return this.exercises.setEquipment(user.id, groupId, dto.equipment);
+    return this.exercises.setEquipment(user.id, groupId, dto.equipment, dto.customEquipment);
   }
 
   // ---- membro
