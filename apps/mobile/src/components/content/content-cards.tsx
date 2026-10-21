@@ -1,14 +1,13 @@
 import { Image, Pressable, Text, View } from 'react-native';
 import { Dumbbell, Pin, Salad } from 'lucide-react-native';
 import {
-  contentStatusLabel,
   planTemplateSummary,
   TIP_CATEGORY_LABEL,
   type GroupTip,
   type PlanTemplate,
 } from '@fatia/api-client';
-import { cn } from '@/components/ui';
 import { cores } from '@/theme/cores';
+import { RowChevron, StatusBadge } from './content-ui';
 import { MarkdownLite } from './markdown-lite';
 
 /** Cartão de plano pronto, como na web. */
@@ -22,12 +21,21 @@ export function TemplateCard({
   showStatus?: boolean;
 }) {
   const Icone = template.kind === 'WORKOUT' ? Dumbbell : Salad;
+  const resumo = planTemplateSummary(template);
   return (
     <Pressable
       accessibilityRole="link"
-      accessibilityLabel={template.title}
+      // O leitor de tela lia só o título; o tipo e o estado são o que decide
+      // se vale abrir.
+      accessibilityLabel={[
+        template.title,
+        resumo,
+        showStatus ? (template.publishedAt ? 'publicado' : 'rascunho') : null,
+      ]
+        .filter(Boolean)
+        .join(', ')}
       onPress={onPress}
-      className="flex-row gap-3 rounded-2xl border border-border bg-card p-3 active:opacity-80"
+      className="flex-row items-center gap-3 rounded-2xl border border-border bg-card p-3 active:opacity-80"
     >
       {template.cover?.url ? (
         <Image
@@ -41,28 +49,18 @@ export function TemplateCard({
         </View>
       )}
       <View className="flex-1 gap-1">
-        <View className="flex-row items-start justify-between gap-2">
-          <Text numberOfLines={1} className="flex-1 text-sm font-semibold text-foreground">
-            {template.title}
-          </Text>
-          {showStatus ? (
-            <Text
-              className={cn(
-                'rounded-full px-2 py-0.5 text-xs font-semibold',
-                template.publishedAt
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-foreground',
-              )}
-            >
-              {contentStatusLabel(template)}
-            </Text>
-          ) : null}
-        </View>
-        <Text className="text-xs text-muted-foreground">{planTemplateSummary(template)}</Text>
+        <Text numberOfLines={1} className="text-sm font-semibold text-foreground">
+          {template.title}
+        </Text>
+        <Text className="text-xs text-muted-foreground">{resumo}</Text>
         <Text numberOfLines={1} className="text-xs text-muted-foreground">
           {`Por ${template.authorName}`}
         </Text>
+        {/* Selo de contorno, embaixo: o pílula verde cheio ao lado do título
+            tinha a cara do botão primário e atraía o toque. */}
+        {showStatus ? <StatusBadge published={Boolean(template.publishedAt)} /> : null}
       </View>
+      <RowChevron />
     </Pressable>
   );
 }

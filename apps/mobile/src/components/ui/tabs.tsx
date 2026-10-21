@@ -85,8 +85,10 @@ export function TabsTrigger({
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
       onPress={() => ctx.onValueChange(value)}
+      // 44 pt, o alvo mínimo de toque das diretrizes da Apple e do Material — o
+      // mesmo do `Button`. Com 40 a aba ficava a única coisa da tela abaixo dele.
       className={cn(
-        'min-h-[40px] flex-1 items-center justify-center rounded-md px-3 py-2',
+        'min-h-[44px] flex-1 items-center justify-center rounded-md px-3 py-2',
         active && 'bg-background',
         className,
       )}

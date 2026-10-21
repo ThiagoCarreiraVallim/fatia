@@ -12,7 +12,7 @@ import {
   type MyGroup,
 } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
-import { Button, EmptyState, ErrorState, LoadingState, cn } from '@/components/ui';
+import { Button, DrawerLayer, EmptyState, ErrorState, LoadingState, cn } from '@/components/ui';
 
 /** Chaves do painel: tudo sob `['community', 'org', groupId]`, como na web. */
 export const orgKeys = {
@@ -52,11 +52,18 @@ export function OrgPanel({
   groupId,
   title,
   children,
+  drawers,
 }: {
   groupId: string;
   /** Título da barra; o padrão é o do mapa de rotas. */
   title?: string | ((group: MyGroup) => string | undefined);
   children: (group: MyGroup) => ReactNode;
+  /**
+   * Drawers da tela. Ficam numa `DrawerLayer` irmã do `<Screen>`, e não em
+   * `children`, que mora dentro do `ScrollView` — lá o sheet abriria do tamanho
+   * do conteúdo e rolaria junto (ver `drawer.tsx`).
+   */
+  drawers?: (group: MyGroup) => ReactNode;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -104,49 +111,52 @@ export function OrgPanel({
   const ativa = activePanelSection(pathname);
 
   return (
-    <Screen
-      title={typeof title === 'function' ? title(g) : title}
-      onRefresh={() => {
-        void qc.invalidateQueries({ queryKey: orgKeys.all(groupId) });
-        void group.refetch();
-      }}
-      refreshing={group.isRefetching}
-    >
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerClassName="gap-2 px-5 pt-3"
-        accessibilityRole="tablist"
+    <>
+      <Screen
+        title={typeof title === 'function' ? title(g) : title}
+        onRefresh={() => {
+          void qc.invalidateQueries({ queryKey: orgKeys.all(groupId) });
+          void group.refetch();
+        }}
+        refreshing={group.isRefetching}
       >
-        {panelSections(g.role).map((s) => {
-          const on = s.section === ativa;
-          return (
-            <Pressable
-              key={s.section}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: on }}
-              onPress={() => {
-                if (!on) router.replace(panelHref(g.id, s.section));
-              }}
-              className={cn(
-                'min-h-[44px] justify-center rounded-full px-4 active:opacity-80',
-                on ? 'bg-primary' : 'bg-muted',
-              )}
-            >
-              <Text
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerClassName="gap-2 px-5 pt-3"
+          accessibilityRole="tablist"
+        >
+          {panelSections(g.role).map((s) => {
+            const on = s.section === ativa;
+            return (
+              <Pressable
+                key={s.section}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: on }}
+                onPress={() => {
+                  if (!on) router.replace(panelHref(g.id, s.section));
+                }}
                 className={cn(
-                  'text-sm font-semibold',
-                  on ? 'text-primary-foreground' : 'text-foreground',
+                  'min-h-[44px] justify-center rounded-full px-4 active:opacity-80',
+                  on ? 'bg-primary' : 'bg-muted',
                 )}
               >
-                {s.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-      <View className="gap-4 px-5 pb-4 pt-4">{children(g)}</View>
-    </Screen>
+                <Text
+                  className={cn(
+                    'text-sm font-semibold',
+                    on ? 'text-primary-foreground' : 'text-foreground',
+                  )}
+                >
+                  {s.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        <View className="gap-4 px-5 pb-4 pt-4">{children(g)}</View>
+      </Screen>
+      {drawers ? <DrawerLayer>{drawers(g)}</DrawerLayer> : null}
+    </>
   );
 }
 
