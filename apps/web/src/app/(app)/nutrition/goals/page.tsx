@@ -8,6 +8,9 @@ import { nutritionApi, type UserGoals } from '@fatia/api-client';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { LoadError } from '@/components/nutrition/load-error';
+import { errorMessage } from '@/components/nutrition/error-message';
 
 type FormState = Omit<UserGoals, 'userId'>;
 
@@ -29,6 +32,9 @@ export default function GoalsPage() {
   const qc = useQueryClient();
   const goals = useQuery({ queryKey: ['nutrition', 'goals'], queryFn: () => nutritionApi.goals() });
   const [form, setForm] = useState<FormState>(empty);
+  // Como no app: sem um "salvo", o botão voltava ao normal e a pessoa não sabia
+  // se tinha gravado. Mexer num campo apaga o aviso.
+  const [saved, setSaved] = useState(false);
 
   // Ajuste durante o render, e não num efeito (#187). A comparação é a mesma que
   // estava no array de dependências — identidade do objeto do React Query, que
@@ -46,7 +52,10 @@ export default function GoalsPage() {
 
   const save = useMutation({
     mutationFn: (body: FormState) => nutritionApi.putGoals(body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['nutrition', 'goals'] }),
+    onSuccess: () => {
+      setSaved(true);
+      void qc.invalidateQueries({ queryKey: ['nutrition', 'goals'] });
+    },
   });
 
   const onSubmit = (e: FormEvent) => {
@@ -60,9 +69,13 @@ export default function GoalsPage() {
       <Input
         id={key}
         type="number"
+        inputMode="numeric"
         min={0}
         value={form[key]}
-        onChange={(e) => setForm((f) => ({ ...f, [key]: Number(e.target.value) }))}
+        onChange={(e) => {
+          setSaved(false);
+          setForm((f) => ({ ...f, [key]: Number(e.target.value) }));
+        }}
       />
     </div>
   );
@@ -81,6 +94,9 @@ export default function GoalsPage() {
           </span>
         </span>
       </Link>
+
+      {goals.isLoading && <Skeleton className="h-16" />}
+      {goals.error && <LoadError error={goals.error} onRetry={() => void goals.refetch()} />}
 
       <fieldset className="grid grid-cols-2 gap-3">
         <legend className="col-span-2 text-sm font-medium">Calorias (kcal/dia)</legend>
@@ -120,7 +136,19 @@ export default function GoalsPage() {
       <Button type="submit" disabled={save.isPending} className="w-full">
         {save.isPending ? 'Salvando…' : 'Salvar metas'}
       </Button>
-      {save.error && <p className="text-sm text-danger">{(save.error as Error).message}</p>}
+      {save.error && (
+        <p role="alert" className="text-sm text-danger">
+          {errorMessage(save.error, {
+            conflict: 'Suas metas já foram atualizadas.',
+            fallback: 'Não foi possível salvar as metas. Tente de novo.',
+          })}
+        </p>
+      )}
+      {saved && !save.isPending && !save.error && (
+        <p role="status" className="text-sm text-primary">
+          Metas salvas.
+        </p>
+      )}
     </form>
   );
 }
