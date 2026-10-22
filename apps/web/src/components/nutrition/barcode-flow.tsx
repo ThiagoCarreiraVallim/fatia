@@ -65,6 +65,8 @@ export function BarcodeFlow({
   const lastCode = useRef<string | null>(null);
   const [result, setResult] = useState<BarcodeLookup | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  /** Painel fechado sem registrar. A trava do código continua valendo. */
+  const [dismissed, setDismissed] = useState(false);
 
   // Ajuste durante o render, e não num efeito (#187). A trava do último código
   // fica: a embalagem que acabou de entrar costuma seguir enquadrada, e relê-la
@@ -104,12 +106,14 @@ export function BarcodeFlow({
     // O digitado é gesto explícito: vale mesmo repetindo o último código.
     if (source === 'camera' && !canProcessScan(code, lastCode.current)) return;
     lastCode.current = code;
+    setDismissed(false);
     setFailure(null);
     lookup.mutate(code);
   };
 
   const close = (reason: ScanCloseReason) => {
     lastCode.current = lockAfterClose(lastCode.current, reason);
+    setDismissed(reason === 'dismissed');
     setResult(null);
     setFailure(null);
     lookup.reset();
@@ -163,6 +167,19 @@ export function BarcodeFlow({
   return (
     <>
       <BarcodeScanner onCode={handleCode} />
+      {dismissed && (
+        // O código descartado segue travado, senão a câmera o releria na hora.
+        // Como a embalagem costuma seguir enquadrada, sem este botão quem voltou
+        // por engano ficaria sem como reler o mesmo produto. Como no app.
+        <div className="my-2 space-y-2 text-center">
+          <p className="text-xs text-muted-foreground">
+            Leitura descartada. Aponte para outro produto ou toque abaixo.
+          </p>
+          <Button variant="outline" className="w-full" onClick={() => close('rescan')}>
+            Ler de novo
+          </Button>
+        </div>
+      )}
       <Button variant="ghost" className="w-full" onClick={onBack}>
         Voltar para a busca
       </Button>

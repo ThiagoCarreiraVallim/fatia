@@ -82,6 +82,12 @@ describe('Meus alimentos', () => {
     expect(within(lista).getByText('450 kcal · P 10 · C 60 · G 18 por 100 g')).toBeInTheDocument();
   });
 
+  it('carregando diz que está carregando', () => {
+    customFoods.mockReturnValue(new Promise(() => undefined));
+    const { container } = renderPage();
+    expect(container.querySelector('[aria-busy="true"]')).toBeInTheDocument();
+  });
+
   it('lista vazia explica e oferece cadastrar', async () => {
     customFoods.mockResolvedValue([]);
     renderPage();

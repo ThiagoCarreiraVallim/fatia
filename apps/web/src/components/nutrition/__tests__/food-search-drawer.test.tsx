@@ -811,6 +811,10 @@ describe('FoodSearchDrawer', () => {
       expect(await screen.findByText(/está sem proteína e gordura/)).toBeInTheDocument();
       expect(screen.getByLabelText('Proteína (g)')).toHaveValue('');
       expect(screen.getByRole('button', { name: /^adicionar$/i })).toBeDisabled();
+      // O botão desabilitado diz por quê.
+      expect(
+        screen.getByText('Complete os quatro valores do rótulo para registrar.'),
+      ).toBeInTheDocument();
       await user.type(screen.getByLabelText('Proteína (g)'), '0');
       await user.type(screen.getByLabelText('Gordura (g)'), '0');
       await user.click(screen.getByRole('button', { name: /^adicionar$/i }));
@@ -822,6 +826,20 @@ describe('FoodSearchDrawer', () => {
         kcal: 20,
         carbsG: 5,
       });
+    });
+
+    it('voltar do produto deixa reler o mesmo código com "Ler de novo"', async () => {
+      lookupBarcode.mockResolvedValue(leiteCondensado);
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await lerCodigo(user);
+      await screen.findByText('Leite Condensado (Moça)');
+      await user.click(screen.getByRole('button', { name: 'Voltar' }));
+
+      expect(screen.getByText(/Leitura descartada/)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Ler de novo' }));
+      expect(screen.queryByText(/Leitura descartada/)).not.toBeInTheDocument();
     });
 
     it('código desconhecido oferece cadastrar à mão', async () => {

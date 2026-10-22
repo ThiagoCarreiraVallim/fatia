@@ -7,6 +7,7 @@ import { ChevronRight, Plus, UtensilsCrossed } from 'lucide-react';
 import { customFoodSummary, nutritionApi, type Food } from '@fatia/api-client';
 import { CustomFoodDrawer } from '@/components/nutrition/custom-food-drawer';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
 import { TopBarActions, topBarActionClass } from '@/components/layout/app-top-bar';
 
 /** `null` = drawer fechado; `'novo'` = cadastro; alimento = edição. */
@@ -29,7 +30,7 @@ function CustomFoodsContent() {
   };
 
   return (
-    <div className="space-y-5 p-4">
+    <div className="space-y-5 p-4" aria-busy={foods.isLoading}>
       <TopBarActions>
         <button
           type="button"
@@ -46,6 +47,8 @@ function CustomFoodsContent() {
         vez e registre como qualquer alimento.
       </p>
 
+      {/* Carregando, como no app: antes a tela ficava só com o texto de cima. */}
+      {foods.isLoading && <Skeleton className="h-28" />}
       {foods.isError && (
         <p role="alert" className="text-sm text-danger">
           Não deu para carregar seus alimentos.{' '}
