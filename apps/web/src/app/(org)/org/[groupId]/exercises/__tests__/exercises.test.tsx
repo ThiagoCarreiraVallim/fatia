@@ -23,6 +23,18 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ctx.router,
 }));
 vi.mock('sonner', () => ({ toast: ctx.toast }));
+// O vaul precisa de APIs de layout que o jsdom não tem; aqui basta abrir e fechar.
+vi.mock('@/components/ui/drawer', () => {
+  const Passthrough = ({ children }: { children: React.ReactNode }) => <>{children}</>;
+  return {
+    Drawer: ({ open, children }: { open: boolean; children: React.ReactNode }) =>
+      open ? <section aria-label="drawer">{children}</section> : null,
+    DrawerContent: Passthrough,
+    DrawerHeader: Passthrough,
+    DrawerTitle: Passthrough,
+    DrawerDescription: Passthrough,
+  };
+});
 vi.mock('@/components/org/org-shell', () => ({ useOrgGroup: () => ctx.group }));
 vi.mock('@/components/layout/app-top-bar', () => ({ useTopBarTitle: vi.fn() }));
 vi.mock('@fatia/api-client', async () => {
@@ -98,13 +110,14 @@ describe('painel › exercícios', () => {
     expect(within(lista).getAllByRole('link')[0]).toHaveTextContent('Da casa');
     expect(within(lista).getAllByRole('link')[1]).toHaveTextContent('CatálogoVídeo');
     expect(within(lista).getAllByRole('link')[1]).toHaveAttribute('href', '/org/g1/exercises/7');
+    expect(screen.getByRole('heading', { name: 'Exercícios (2)' })).toBeInTheDocument();
 
     // Na tela, só o resumo; a lista inteira abre no modal.
     expect(screen.getByRole('list', { name: 'Equipamento marcado' })).toHaveTextContent(
       'HalteresHack da casa',
     );
     expect(screen.queryByRole('checkbox', { name: 'Halteres' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Editar equipamento' }));
     const modal = await screen.findByRole('dialog', { name: 'Equipamento da academia' });
 
     expect(within(modal).getByRole('checkbox', { name: 'Halteres' })).toBeChecked();
@@ -132,6 +145,64 @@ describe('painel › exercícios', () => {
     );
   });
 
+  it('"Novo exercício" pergunta o que criar: da casa ou tutorial do catálogo', async () => {
+    ctx.group = grupo();
+    vi.mocked(groupExerciseApi.list).mockResolvedValue({
+      equipment: [],
+      customEquipment: [],
+      items: [],
+    });
+    vi.mocked(workoutApi.searchExercises).mockResolvedValue([]);
+    renderWithClient(<OrgExercisesPage />);
+
+    // Lista vazia: o estado vazio também oferece criar.
+    await screen.findByText('Nenhum exercício ainda');
+    expect(screen.getAllByRole('button', { name: 'Novo exercício' })).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Novo exercício' })[0]!);
+    const escolha = screen.getByRole('region', { name: 'drawer' });
+    fireEvent.click(within(escolha).getByRole('button', { name: /Exercício da casa/ }));
+    expect(ctx.router.push).toHaveBeenCalledWith('/org/g1/exercises/new');
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Novo exercício' })[0]!);
+    fireEvent.click(
+      within(screen.getByRole('region', { name: 'drawer' })).getByRole('button', {
+        name: /Tutorial de um exercício do catálogo/,
+      }),
+    );
+    expect(await screen.findByRole('dialog', { name: 'Escolha o exercício' })).toBeVisible();
+  });
+
+  it('lista que não carregou diz que falhou, e não que está vazia', async () => {
+    ctx.group = grupo();
+    vi.mocked(groupExerciseApi.list).mockRejectedValue(new Error('rede'));
+    renderWithClient(<OrgExercisesPage />);
+    expect(await screen.findByText('Não deu para carregar os exercícios')).toBeInTheDocument();
+    expect(screen.queryByText('Nenhum exercício ainda')).toBeNull();
+  });
+
+  it('apagar fica à parte, com cara de perigo, e confirma antes', async () => {
+    ctx.group = grupo();
+    ctx.params = { exerciseId: '42' };
+    vi.mocked(groupExerciseApi.get).mockResolvedValue(item());
+    vi.mocked(groupExerciseApi.list).mockResolvedValue({
+      equipment: [],
+      customEquipment: [],
+      items: [],
+    });
+    vi.mocked(groupExerciseApi.remove).mockResolvedValue(undefined as never);
+    renderWithClient(<OrgExercisePage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Apagar exercício' }));
+    expect(groupExerciseApi.remove).not.toHaveBeenCalled();
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Apagar este exercício?' })).getByRole('button', {
+        name: 'Apagar',
+      }),
+    );
+    await waitFor(() => expect(groupExerciseApi.remove).toHaveBeenCalledWith('g1', 42));
+    await waitFor(() => expect(ctx.router.replace).toHaveBeenCalledWith('/org/g1/exercises'));
+  });
+
   it('a busca do modal filtra sem acento e some com as categorias vazias', async () => {
     ctx.group = grupo({ role: 'OWNER' });
     vi.mocked(groupExerciseApi.list).mockResolvedValue({
@@ -140,7 +211,7 @@ describe('painel › exercícios', () => {
       items: [],
     });
     renderWithClient(<OrgExercisesPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Editar' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Editar equipamento' }));
     const modal = await screen.findByRole('dialog', { name: 'Equipamento da academia' });
     expect(within(modal).getByRole('region', { name: 'Máquinas' })).toBeInTheDocument();
 
@@ -168,7 +239,7 @@ describe('painel › exercícios', () => {
     });
     renderWithClient(<OrgExercisesPage />);
     expect(await screen.findByText(/Só o dono muda/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Ver lista' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ver equipamento' }));
     const modal = await screen.findByRole('dialog', { name: 'Equipamento da academia' });
     expect(within(modal).getByRole('checkbox', { name: 'Halteres' })).toBeDisabled();
     expect(within(modal).getByRole('checkbox', { name: 'Hack da casa' })).toBeChecked();
@@ -216,7 +287,7 @@ describe('painel › exercícios', () => {
     renderWithClient(<OrgExercisePage />);
 
     fireEvent.change(screen.getByLabelText('Nome'), { target: { value: 'Cadeira flexora' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Pôr no catálogo' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Criar exercício' }));
     await waitFor(() => expect(ctx.toast).toHaveBeenCalledWith('Escolha o grupo muscular.'));
     expect(groupExerciseApi.create).not.toHaveBeenCalled();
   });
@@ -240,7 +311,7 @@ describe('painel › exercícios', () => {
     fireEvent.change(screen.getByLabelText('Dicas'), {
       target: { value: 'Escápulas **juntas**.' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Pôr no catálogo' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar tutorial' }));
     await waitFor(() =>
       expect(groupExerciseApi.setGuide).toHaveBeenCalledWith('g1', 7, {
         videoFileId: null,
