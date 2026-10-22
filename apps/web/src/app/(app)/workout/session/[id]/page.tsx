@@ -1,20 +1,18 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Clock, Dumbbell } from 'lucide-react';
 import { buildExerciseGroups, orderExerciseGroups, workoutApi } from '@fatia/api-client';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Button } from '@/components/ui/button';
+import { ErrorState } from '@/components/elements/error-state';
 import { useTopBarTitle } from '@/components/layout/app-top-bar';
-function formatDuration(start: string, end: string): string {
-  const ms = new Date(end).getTime() - new Date(start).getTime();
-  const totalMinutes = Math.round(ms / 60000);
-  const h = Math.floor(totalMinutes / 60);
-  const m = totalMinutes % 60;
-  if (h > 0) return `${h}h ${m}min`;
-  return `${m}min`;
-}
+import { groupCardItem } from '@/components/workout/group-card-item';
+import { elapsedLabel, formatInteger, pluralize, totalVolumeKg } from '@/components/workout/format';
 
 export default function SessionDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -46,8 +44,35 @@ export default function SessionDetailPage() {
     );
   }
 
+  // Falha de rede não é "sessão não encontrada": dizer isso faria a pessoa
+  // achar que o treino sumiu. O app separa os dois casos, e aqui também.
+  if (query.isError) {
+    return (
+      <div className="px-5 pt-4">
+        <ErrorState
+          className="max-w-none"
+          title="Não foi possível carregar o treino"
+          detail={query.error instanceof Error ? query.error.message : 'Tente de novo.'}
+          retryLabel="Tentar de novo"
+          onRetry={() => void query.refetch()}
+        />
+      </div>
+    );
+  }
+
   if (!session) {
-    return <p className="px-5 pt-4 text-sm text-muted-foreground">Sessão não encontrada.</p>;
+    return (
+      <div className="px-5 pt-4">
+        <EmptyState
+          title="Sessão não encontrada"
+          action={
+            <Button asChild variant="outline" size="sm">
+              <Link href="/workout">Voltar para treinos</Link>
+            </Button>
+          }
+        />
+      </div>
+    );
   }
 
   const groups = orderExerciseGroups(
@@ -55,11 +80,7 @@ export default function SessionDetailPage() {
     session.exerciseOrder,
   );
   const totalSets = session.sets?.length ?? 0;
-  const totalVolume =
-    session.sets?.reduce((acc, s) => {
-      if (s.weightKg != null && s.reps != null) return acc + s.weightKg * s.reps;
-      return acc;
-    }, 0) ?? 0;
+  const totalVolume = totalVolumeKg(session.sets);
 
   const dateLabel = new Date(session.startedAt).toLocaleDateString('pt-BR', {
     weekday: 'long',
@@ -68,7 +89,7 @@ export default function SessionDetailPage() {
   });
 
   const durationLabel = session.completedAt
-    ? formatDuration(session.startedAt, session.completedAt)
+    ? elapsedLabel(session.startedAt, session.completedAt)
     : 'Em andamento';
 
   return (
@@ -86,8 +107,8 @@ export default function SessionDetailPage() {
             <div className="absolute inset-x-0 bottom-0 p-4">
               <h2 className="text-2xl font-extrabold capitalize text-white">{dateLabel}</h2>
               <p className="mt-1 text-xs text-white/70">
-                {groups.length} exercício{groups.length !== 1 ? 's' : ''} • {totalSets} série
-                {totalSets !== 1 ? 's' : ''}
+                {groups.length} {pluralize(groups.length, 'exercício', 'exercícios')} • {totalSets}{' '}
+                {pluralize(totalSets, 'série', 'séries')}
               </p>
             </div>
           </div>
@@ -106,7 +127,7 @@ export default function SessionDetailPage() {
               <div>
                 <p className="text-[10px] font-bold tracking-wide text-muted-foreground">Volume</p>
                 <p className="text-sm font-extrabold text-foreground tabular-nums">
-                  {totalVolume > 0 ? `${Math.round(totalVolume)} kg` : '—'}
+                  {totalVolume > 0 ? `${formatInteger(totalVolume)} kg` : '—'}
                 </p>
               </div>
             </div>
@@ -126,39 +147,17 @@ export default function SessionDetailPage() {
         </h3>
 
         <div className="space-y-3">
-          {groups.map((g) => {
-            const muscle = g.sets[0]?.exercise?.muscleGroup ?? 'outros';
-            return (
-              <ExerciseDetailCard
-                key={g.exerciseId}
-                mode="readonly"
-                isCardio={g.isCardio}
-                sessionId={session.id}
-                canDeleteSet={false}
-                item={{
-                  id: String(g.exerciseId),
-                  exercise: {
-                    id: g.exerciseId,
-                    name: g.exerciseName,
-                    muscleGroup: muscle,
-                    source: 'SEED',
-                    createdByUserId: null,
-                    primaryMuscles: [],
-                    secondaryMuscles: [],
-                    equipment: null,
-                    level: null,
-                    mechanic: null,
-                    instructions: [],
-                    youtubeVideoId: null,
-                    youtubeVideoIdPt: null,
-                  },
-                  targetSets: g.targetSets ?? g.sets.length,
-                  targetReps: g.targetReps ?? '—',
-                }}
-                loggedSets={g.sets}
-              />
-            );
-          })}
+          {groups.map((g) => (
+            <ExerciseDetailCard
+              key={g.exerciseId}
+              mode="readonly"
+              isCardio={g.isCardio}
+              sessionId={session.id}
+              canDeleteSet={false}
+              item={groupCardItem(g)}
+              loggedSets={g.sets}
+            />
+          ))}
         </div>
       </div>
     </div>
