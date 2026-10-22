@@ -7,22 +7,7 @@
  * usuários, que é o tipo de defeito que ninguém reproduz.
  */
 
-import { formatDecimal, formatInteger } from '@fatia/api-client';
-
-const MONTHS_SHORT = [
-  'jan',
-  'fev',
-  'mar',
-  'abr',
-  'mai',
-  'jun',
-  'jul',
-  'ago',
-  'set',
-  'out',
-  'nov',
-  'dez',
-];
+import { dayMonth, describeSeries, formatDecimal, formatInteger } from '@fatia/api-client';
 
 /**
  * Fatia a string ISO em vez de construir `Date`. `new Date('2026-07-29')` é lido
@@ -32,13 +17,6 @@ const MONTHS_SHORT = [
 export function shortDate(iso: string): string {
   if (iso.length < 10) return iso;
   return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
-}
-
-export function dayMonth(iso: string | null): string {
-  if (!iso || iso.length < 10) return '—';
-  const month = Number(iso.slice(5, 7));
-  if (!Number.isFinite(month) || month < 1 || month > 12) return '—';
-  return `${iso.slice(8, 10)} ${MONTHS_SHORT[month - 1]}`;
 }
 
 /**
@@ -57,7 +35,7 @@ export function instantDayMonth(iso: string | null): string {
 }
 
 // Os mesmos do PWA, num lugar só (`@fatia/api-client`, `format.ts`).
-export { formatDecimal, formatInteger };
+export { dayMonth, describeSeries, formatDecimal, formatInteger };
 
 /** Eixo de celular não comporta "12.500"; vira "12,5k". */
 export function formatCompact(value: number): string {
@@ -75,34 +53,4 @@ export function formatDuration(seconds: number | null): string {
   const total = Math.max(0, Math.round(seconds));
   const minutes = Math.floor(total / 60);
   return `${minutes}:${String(total % 60).padStart(2, '0')}`;
-}
-
-/**
- * Resumo da série em texto. Leitor de tela não atravessa SVG — sem isto o
- * gráfico é um retângulo mudo, e o dado só existe para quem enxerga.
- */
-export function describeSeries(params: {
-  name: string;
-  labels: readonly string[];
-  values: readonly number[];
-  format: (value: number) => string;
-}): string {
-  const { name, labels, values, format } = params;
-  if (values.length === 0) return `${name}: sem dados no período.`;
-  const first = values[0];
-  const last = values[values.length - 1];
-  let min = first;
-  let max = first;
-  for (const value of values) {
-    if (value < min) min = value;
-    if (value > max) max = value;
-  }
-  const period =
-    labels.length > 0 ? ` de ${dayMonth(labels[0])} a ${dayMonth(labels[labels.length - 1])}` : '';
-  const trend =
-    values.length > 1 ? ` Começou em ${format(first)} e terminou em ${format(last)}.` : '';
-  return (
-    `${name}: ${values.length} ${values.length === 1 ? 'registro' : 'registros'}${period}.` +
-    `${trend} Menor valor ${format(min)}, maior valor ${format(max)}.`
-  );
 }

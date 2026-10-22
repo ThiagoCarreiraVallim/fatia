@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { formatDecimal, formatInteger, formatVolume, parseClock } from '../format';
+import {
+  dayMonth,
+  describeSeries,
+  formatDecimal,
+  formatInteger,
+  formatVolume,
+  parseClock,
+} from '../format';
 
 describe('formatInteger', () => {
   it('agrupa milhares com ponto', () => {
@@ -56,5 +63,34 @@ describe('parseClock', () => {
     expect(parseClock('1:75:00')).toBeNull();
     expect(parseClock('1a')).toBeNull();
     expect(parseClock('12min')).toBeNull();
+  });
+});
+
+describe('dayMonth', () => {
+  it('lê o dia da string, sem passar por Date', () => {
+    expect(dayMonth('2026-07-29')).toBe('29 jul');
+    expect(dayMonth(null)).toBe('—');
+    expect(dayMonth('2026-13-01')).toBe('—');
+  });
+});
+
+describe('describeSeries', () => {
+  it('resume a série para o leitor de tela', () => {
+    const text = describeSeries({
+      name: 'Peso',
+      labels: ['2026-07-01', '2026-07-15', '2026-07-29'],
+      values: [80, 79, 78.2],
+      format: (value) => `${formatDecimal(value)} kg`,
+    });
+    expect(text).toBe(
+      'Peso: 3 registros de 01 jul a 29 jul. Começou em 80,0 kg e terminou em 78,2 kg. ' +
+        'Menor valor 78,2 kg, maior valor 80,0 kg.',
+    );
+  });
+
+  it('avisa quando não há dado', () => {
+    expect(describeSeries({ name: 'Passos', labels: [], values: [], format: String })).toBe(
+      'Passos: sem dados no período.',
+    );
   });
 });
