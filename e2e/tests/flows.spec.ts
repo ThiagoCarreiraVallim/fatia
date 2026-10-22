@@ -11,6 +11,9 @@ import { expect, type Page, test } from '@playwright/test';
  */
 test.skip(({ isMobile }) => !isMobile, 'fluxo roda uma vez, no celular');
 
+/** O lixo da refeição, que diz de qual é ("Remover Jantar"); o de item diz o alimento. */
+const REMOVER_REFEICAO = /^Remover (Café da manhã|Almoço|Jantar|Lanche)$/;
+
 /** `yyyy-MM-dd` de N dias atrás no fuso do navegador do teste. */
 function diasAtras(n: number): string {
   const d = new Date();
@@ -65,12 +68,12 @@ async function registrarEApagarNoDia(page: Page, dia: string, nome: string) {
   await expect(page.getByText(nome)).toBeVisible();
 
   // Remover pede confirmação; cancelar mantém.
-  await page.getByRole('button', { name: 'Remover refeição' }).click();
+  await page.getByRole('button', { name: REMOVER_REFEICAO }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('button', { name: 'Cancelar' }).click();
   await expect(page.getByText(nome)).toBeVisible();
 
-  await page.getByRole('button', { name: 'Remover refeição' }).click();
+  await page.getByRole('button', { name: REMOVER_REFEICAO }).click();
   await dialog.getByRole('button', { name: 'Remover' }).click();
   await expect(page.getByText(nome)).toHaveCount(0);
 }
@@ -265,18 +268,18 @@ test('atalhos: favoritar e adicionar dois recentes sem fechar o drawer', async (
   await drawer.getByRole('button', { name: /^concluir · 2 itens/i }).click();
   await expect(drawer).toBeHidden();
 
-  // Os dois na MESMA refeição: um "Remover refeição" só, que leva os dois.
+  // Os dois na MESMA refeição: um "Remover Almoço" só, que leva os dois.
   await expect(page.getByRole('button', { name: `Remover ${primeiro}` })).toBeVisible();
   await expect(page.getByRole('button', { name: `Remover ${segundo}` })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: REMOVER_REFEICAO })).toHaveCount(1);
 
-  await page.getByRole('button', { name: 'Remover refeição' }).click();
+  await page.getByRole('button', { name: REMOVER_REFEICAO }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Remover' }).click();
-  await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: REMOVER_REFEICAO })).toHaveCount(0);
   // Do servidor, não do cache: o teste não pode deixar refeição para trás no demo.
   await page.reload();
   await expect(page.getByRole('button', { name: 'Registrar Jantar' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: REMOVER_REFEICAO })).toHaveCount(0);
 });
 
 test('medida caseira: 2 colheres de sopa de arroz viram 50 g na refeição', async ({ page }) => {
@@ -303,13 +306,13 @@ test('medida caseira: 2 colheres de sopa de arroz viram 50 g na refeição', asy
 
   await expect(page.getByText(/2 × colher de sopa \(50 g\)/)).toBeVisible();
 
-  await page.getByRole('button', { name: 'Remover refeição' }).click();
+  await page.getByRole('button', { name: REMOVER_REFEICAO }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Remover' }).click();
-  await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: REMOVER_REFEICAO })).toHaveCount(0);
   // Do servidor, não do cache: o teste não pode deixar refeição para trás no demo.
   await page.reload();
   await expect(page.getByRole('button', { name: 'Registrar Jantar' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: REMOVER_REFEICAO })).toHaveCount(0);
 });
 
 test('copiar refeição para outro dia e registrar pela refeição salva', async ({ page }) => {
@@ -351,7 +354,7 @@ test('copiar refeição para outro dia e registrar pela refeição salva', async
   drawer = page.getByRole('dialog');
   await drawer.getByRole('button', { name: new RegExp(`^${escapeRegex(nome)}`) }).click();
   await expect(drawer).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(2);
+  await expect(page.getByRole('button', { name: REMOVER_REFEICAO })).toHaveCount(2);
 
   // Limpeza: refeição salva, as duas do destino e a da origem.
   await page.getByRole('button', { name: 'Registrar Café da manhã' }).click();
@@ -365,7 +368,7 @@ test('copiar refeição para outro dia e registrar pela refeição salva', async
     await page.goto(`/nutrition?date=${dia}`);
     // Contar antes de o dia carregar daria zero e pularia a limpeza.
     await expect(page.getByRole('button', { name: 'Registrar Café da manhã' })).toBeVisible();
-    const remover = page.getByRole('button', { name: 'Remover refeição' });
+    const remover = page.getByRole('button', { name: REMOVER_REFEICAO });
     while ((await remover.count()) > 0) {
       const antes = await remover.count();
       await remover.first().click();
@@ -374,7 +377,7 @@ test('copiar refeição para outro dia e registrar pela refeição salva', async
     }
     await page.reload();
     await expect(page.getByRole('button', { name: 'Registrar Jantar' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: REMOVER_REFEICAO })).toHaveCount(0);
   }
 });
 
@@ -422,12 +425,12 @@ test('alimento próprio: cria pela busca, registra por porção e apaga sem perd
   await expect(page.getByRole('button', { name: `Remover ${nome}` })).toBeVisible();
   await expect(page.getByText(/180 kcal/).first()).toBeVisible();
 
-  await page.getByRole('button', { name: 'Remover refeição' }).click();
+  await page.getByRole('button', { name: REMOVER_REFEICAO }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Remover' }).click();
-  await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: REMOVER_REFEICAO })).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole('button', { name: 'Registrar Jantar' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: REMOVER_REFEICAO })).toHaveCount(0);
 });
 
 test('código de barras: lê pelo código digitado, guarda em Meus alimentos e registra a porção', async ({
@@ -493,12 +496,12 @@ test('código de barras: lê pelo código digitado, guarda em Meus alimentos e r
 
   await page.goto(`/nutrition?date=${dia}`);
   await expect(page.getByRole('button', { name: `Remover ${nome}` })).toBeVisible();
-  await page.getByRole('button', { name: 'Remover refeição' }).click();
+  await page.getByRole('button', { name: REMOVER_REFEICAO }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Remover' }).click();
-  await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: REMOVER_REFEICAO })).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole('button', { name: 'Registrar Jantar' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Remover refeição' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: REMOVER_REFEICAO })).toHaveCount(0);
 });
 
 test('código de barras desconhecido leva ao cadastro à mão', async ({ page }) => {

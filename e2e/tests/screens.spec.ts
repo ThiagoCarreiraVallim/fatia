@@ -172,7 +172,7 @@ test.describe('drawers de registro', () => {
   test('nutrição: busca de alimento', async ({ page }) => {
     await page.goto('/nutrition');
     await settle(page);
-    const add = page.getByRole('button', { name: 'Adicionar item' }).first();
+    const add = page.getByRole('button', { name: /^Adicionar item em / }).first();
     if (!(await appears(add))) return;
     await add.click();
     // Atalhos (favoritos e recentes) carregam depois do drawer abrir.
