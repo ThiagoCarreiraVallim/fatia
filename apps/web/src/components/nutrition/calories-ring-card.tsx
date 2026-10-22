@@ -10,6 +10,7 @@ export function CaloriesRingCard({ totals, goals }: Props) {
   const kcalTarget = goals ? Math.round((goals.kcalMin + goals.kcalMax) / 2) : 0;
   const kcalRemaining = goals ? Math.max(0, kcalTarget - Math.round(totals.kcal)) : null;
   const pct = kcalTarget > 0 ? Math.min(1, totals.kcal / kcalTarget) : 0;
+  const consumed = Math.round(totals.kcal);
 
   const r = 82;
   const cx = 110;
@@ -27,8 +28,23 @@ export function CaloriesRingCard({ totals, goals }: Props) {
       />
 
       <div className="relative flex flex-col items-center gap-4">
-        <div className="relative" style={{ width: 220, height: 220 }}>
+        {/* O anel é desenho: quem usa leitor de tela ouve o número com a meta,
+            como no app. */}
+        <div
+          className="relative"
+          style={{ width: 220, height: 220 }}
+          role="progressbar"
+          aria-label={
+            kcalTarget > 0
+              ? `${consumed} de ${kcalTarget} kcal consumidas`
+              : `${consumed} kcal consumidas`
+          }
+          aria-valuemin={0}
+          aria-valuemax={kcalTarget > 0 ? kcalTarget : undefined}
+          aria-valuenow={kcalTarget > 0 ? Math.min(consumed, kcalTarget) : undefined}
+        >
           <svg
+            aria-hidden
             width="220"
             height="220"
             viewBox="0 0 220 220"
@@ -58,7 +74,7 @@ export function CaloriesRingCard({ totals, goals }: Props) {
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <span className="text-[44px] font-bold text-foreground tabular-nums leading-none">
-              {Math.round(totals.kcal)}
+              {consumed}
             </span>
             <span className="mt-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               kcal consumidas

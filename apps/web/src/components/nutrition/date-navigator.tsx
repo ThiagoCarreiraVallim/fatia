@@ -28,12 +28,14 @@ export function DateNavigator({ date }: { date: string }) {
     router.push(`?${next.toString()}`);
   };
 
+  // Setas com alvo de 44 px, como no app: é o controle mais tocado da tela, e
+  // o de 28 px ficava abaixo do mínimo de toque.
   return (
     <div className="flex items-center justify-between rounded-md border bg-card p-2">
       <button
         type="button"
         onClick={() => go(shift(date, -1))}
-        className="rounded p-1 hover:bg-accent"
+        className="flex h-11 w-11 items-center justify-center rounded-md hover:bg-accent"
         aria-label="Dia anterior"
       >
         <ChevronLeft size={20} />
@@ -42,7 +44,7 @@ export function DateNavigator({ date }: { date: string }) {
       <button
         type="button"
         onClick={() => go(shift(date, 1))}
-        className="rounded p-1 hover:bg-accent"
+        className="flex h-11 w-11 items-center justify-center rounded-md hover:bg-accent"
         aria-label="Próximo dia"
       >
         <ChevronRight size={20} />

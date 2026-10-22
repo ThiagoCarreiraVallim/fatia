@@ -24,7 +24,20 @@ function MacroCard({
           {Math.round(current)}g
         </span>
       </div>
-      <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-muted">
+      <div
+        className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={pct}
+        // A barra sozinha diria só a porcentagem; o app lê gramas e meta juntos.
+        aria-valuetext={
+          target > 0
+            ? `${Math.round(current)} gramas de ${target}, ${pct}%`
+            : `${Math.round(current)} gramas`
+        }
+      >
         <div
           className={`h-full rounded-full transition-all ${color}`}
           style={{ width: `${pct}%` }}
