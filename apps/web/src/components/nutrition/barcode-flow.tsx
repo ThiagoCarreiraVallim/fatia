@@ -35,6 +35,12 @@ interface Props {
   adding: boolean;
   addError?: string;
   onCreateManually: () => void;
+  /**
+   * Quantos itens a refeição aberta já recebeu. Quando sobe, o produto entrou e
+   * o leitor volta para a próxima embalagem (o drawer aberto pelo atalho de
+   * escanear continua no leitor).
+   */
+  addedCount?: number;
   /** Só aparece na câmera: no painel do produto, "Voltar" já volta para ela. */
   onBack: () => void;
 }
@@ -46,12 +52,29 @@ interface Props {
  * Mora no drawer, e não numa tela própria como no app, para herdar o contexto da
  * refeição (dia, tipo, vários itens por abertura) sem passar nada pela URL.
  */
-export function BarcodeFlow({ onAdd, adding, addError, onCreateManually, onBack }: Props) {
+export function BarcodeFlow({
+  onAdd,
+  adding,
+  addError,
+  onCreateManually,
+  addedCount = 0,
+  onBack,
+}: Props) {
   const qc = useQueryClient();
   // Último código consultado: a câmera repete o mesmo várias vezes por segundo.
   const lastCode = useRef<string | null>(null);
   const [result, setResult] = useState<BarcodeLookup | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+
+  // Ajuste durante o render, e não num efeito (#187). A trava do último código
+  // fica: a embalagem que acabou de entrar costuma seguir enquadrada, e relê-la
+  // reabriria o painel do produto já registrado.
+  const [seenAdded, setSeenAdded] = useState(addedCount);
+  if (seenAdded !== addedCount) {
+    setSeenAdded(addedCount);
+    setResult(null);
+    setFailure(null);
+  }
 
   const customFoods = useQuery({
     queryKey: ['nutrition', 'custom-foods'],

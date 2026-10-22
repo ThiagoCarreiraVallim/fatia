@@ -45,6 +45,11 @@ interface Props {
   mealId?: string;
   mealType?: MealType;
   date: string;
+  /**
+   * `'scan'` abre direto no leitor: é o atalho do topo da Nutrição, para quem
+   * está com a embalagem na mão (o "Escanear" do cabeçalho do app).
+   */
+  initialMode?: 'scan';
 }
 
 type Mode = 'search' | 'manual' | 'create' | 'scan';
@@ -77,8 +82,16 @@ function parseNonNegative(value: string): number | undefined {
   return Number.isFinite(n) && n >= 0 ? n : undefined;
 }
 
-export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }: Props) {
-  const [mode, setMode] = useState<Mode>('search');
+export function FoodSearchDrawer({
+  open,
+  onOpenChange,
+  mealId,
+  mealType,
+  date,
+  initialMode,
+}: Props) {
+  const startMode: Mode = initialMode ?? 'search';
+  const [mode, setMode] = useState<Mode>(startMode);
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
   const [selected, setSelected] = useState<Food | null>(null);
@@ -111,7 +124,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
   if (wasOpen !== open) {
     setWasOpen(open);
     if (!open) {
-      setMode('search');
+      setMode(startMode);
       setQ('');
       setDebounced('');
       setSelected(null);
@@ -200,8 +213,9 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
       invalidateNutritionDay(qc, date);
       qc.invalidateQueries({ queryKey: ['nutrition', 'my-foods'] });
       setAdded((prev) => [...prev, label]);
-      // De volta aos atalhos, pronto para o próximo item.
-      setMode('search');
+      // De volta ao começo, pronto para o próximo item: os atalhos, ou o leitor
+      // para quem abriu pelo atalho de escanear (a próxima embalagem).
+      setMode(startMode);
       setSelected(null);
       setQ('');
       setDebounced('');
@@ -333,6 +347,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
             onAdd={(payload) => addItem.mutate(payload)}
             adding={addItem.isPending}
             addError={addError}
+            addedCount={added.length}
             onCreateManually={() => startCreate('')}
             onBack={() => setMode('search')}
           />

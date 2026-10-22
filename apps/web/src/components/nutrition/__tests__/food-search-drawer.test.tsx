@@ -716,6 +716,22 @@ describe('FoodSearchDrawer', () => {
       expect(screen.getByPlaceholderText(/Ex\.: arroz/)).toBeInTheDocument();
     });
 
+    it('aberto pelo atalho de escanear, começa no leitor e volta a ele depois de adicionar', async () => {
+      lookupBarcode.mockResolvedValue(leiteCondensado);
+      createMeal.mockResolvedValue({ id: 'm1' } as never);
+      const user = userEvent.setup();
+      renderDrawer({ mealType: 'SNACK', initialMode: 'scan' });
+
+      await user.type(await screen.findByLabelText('Digitar o código'), '7891000100103');
+      await user.click(screen.getByRole('button', { name: 'Buscar' }));
+      await user.click(await screen.findByRole('button', { name: /^adicionar$/i }));
+
+      expect(await screen.findByText('Leite Condensado (Moça) adicionado')).toBeInTheDocument();
+      // A próxima embalagem: o leitor de novo, não a busca por nome.
+      expect(await screen.findByLabelText('Digitar o código')).toBeInTheDocument();
+      expect(screen.queryByPlaceholderText(/Ex\.: arroz/)).not.toBeInTheDocument();
+    });
+
     it('guardar em Meus alimentos cria o alimento e registra ligado a ele', async () => {
       lookupBarcode.mockResolvedValue(leiteCondensado);
       createCustomFood.mockResolvedValue(
