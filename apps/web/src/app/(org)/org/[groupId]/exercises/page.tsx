@@ -3,18 +3,18 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Dumbbell, Image as ImageIcon, Plus, Search, Video } from 'lucide-react';
-import { toast } from 'sonner';
 import {
-  EQUIPMENT_LABEL,
-  GYM_EQUIPMENT,
   groupExerciseApi,
   workoutApi,
   type GroupExercise,
+  type GymEquipmentState,
 } from '@fatia/api-client';
 import { orgKeys } from '@/components/community/query-keys';
+import { GymEquipmentDialog } from '@/components/org/gym-equipment-dialog';
 import { useOrgGroup } from '@/components/org/org-shell';
+import { EquipmentSummary } from '@/components/workout/equipment-chooser';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -50,11 +50,7 @@ export default function OrgExercisesPage() {
       </p>
 
       {lista.data && (
-        <EquipmentCard
-          groupId={g.id}
-          canEdit={g.role === 'OWNER'}
-          equipment={lista.data.equipment}
-        />
+        <EquipmentCard groupId={g.id} canEdit={g.role === 'OWNER'} saved={lista.data} />
       )}
 
       <div className="flex flex-wrap gap-2">
@@ -129,76 +125,47 @@ function ExerciseRow({ exercise: e, href }: { exercise: GroupExercise; href: str
   );
 }
 
+/**
+ * O resumo do equipamento na tela; a lista inteira, com busca e os próprios
+ * da academia, abre no modal (`GymEquipmentDialog`).
+ */
 function EquipmentCard({
   groupId,
   canEdit,
-  equipment,
+  saved,
 }: {
   groupId: string;
   canEdit: boolean;
-  equipment: string[];
+  saved: GymEquipmentState;
 }) {
-  const qc = useQueryClient();
-  const [marcados, setMarcados] = useState(new Set(equipment));
-  // Ajuste durante o render, e não num efeito (#187): salvar devolve a lista
-  // nova, e o que está marcado acompanha.
-  const [salvo, setSalvo] = useState(equipment);
-  if (salvo !== equipment) {
-    setSalvo(equipment);
-    setMarcados(new Set(equipment));
-  }
-  const mudou = marcados.size !== equipment.length || equipment.some((e) => !marcados.has(e));
-
-  const salvar = useMutation({
-    mutationFn: () => groupExerciseApi.setEquipment(groupId, [...marcados]),
-    onSuccess: () => {
-      toast('Equipamento salvo.');
-      void qc.invalidateQueries({ queryKey: orgKeys.exercises(groupId) });
-    },
-    onError: () => toast('Não deu para salvar agora.'),
-  });
-
+  const [open, setOpen] = useState(false);
   return (
-    <fieldset
-      disabled={!canEdit}
+    <section
       aria-label="Equipamento da academia"
       className="space-y-3 rounded-2xl border border-subtle bg-card p-4"
     >
-      <div>
-        <p className="text-sm font-semibold">Equipamento da academia</p>
-        <p className="text-xs text-muted-foreground">
-          {canEdit
-            ? 'O filtro "Na minha academia" mostra o que dá para fazer com isto. Peso corporal vale sempre.'
-            : 'Só o dono muda. O filtro "Na minha academia" usa esta lista.'}
-        </p>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {GYM_EQUIPMENT.map((e) => (
-          <label
-            key={e}
-            className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-subtle px-3 py-1.5 text-xs font-semibold has-[:checked]:border-primary has-[:checked]:bg-primary/10 has-[:checked]:text-primary has-[:disabled]:cursor-default has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
-          >
-            <input
-              type="checkbox"
-              className="sr-only"
-              checked={marcados.has(e)}
-              onChange={(ev) => {
-                const proximo = new Set(marcados);
-                if (ev.target.checked) proximo.add(e);
-                else proximo.delete(e);
-                setMarcados(proximo);
-              }}
-            />
-            {EQUIPMENT_LABEL[e]}
-          </label>
-        ))}
-      </div>
-      {canEdit && (
-        <Button size="sm" disabled={!mudou || salvar.isPending} onClick={() => salvar.mutate()}>
-          Salvar equipamento
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold">Equipamento da academia</h2>
+          <p className="text-xs text-muted-foreground">
+            {canEdit
+              ? 'O filtro "Na minha academia" mostra o que dá para fazer com isto. Peso corporal vale sempre.'
+              : 'Só o dono muda. O filtro "Na minha academia" usa esta lista.'}
+          </p>
+        </div>
+        <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+          {canEdit ? 'Editar' : 'Ver lista'}
         </Button>
-      )}
-    </fieldset>
+      </div>
+      <EquipmentSummary equipment={saved.equipment} custom={saved.customEquipment} />
+      <GymEquipmentDialog
+        groupId={groupId}
+        canEdit={canEdit}
+        saved={saved}
+        open={open}
+        onOpenChange={setOpen}
+      />
+    </section>
   );
 }
 

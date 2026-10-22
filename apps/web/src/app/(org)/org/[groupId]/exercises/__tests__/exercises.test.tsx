@@ -77,7 +77,7 @@ describe('painel › exercícios', () => {
     ctx.group = grupo({ role: 'OWNER' });
     vi.mocked(groupExerciseApi.list).mockResolvedValue({
       equipment: ['halteres'],
-      customEquipment: [],
+      customEquipment: ['Hack da casa'],
       items: [
         item(),
         item({
@@ -90,7 +90,7 @@ describe('painel › exercícios', () => {
     });
     vi.mocked(groupExerciseApi.setEquipment).mockResolvedValue({
       equipment: ['halteres', 'polia'],
-      customEquipment: [],
+      customEquipment: ['Remada articulada'],
     });
     renderWithClient(<OrgExercisesPage />);
 
@@ -99,25 +99,115 @@ describe('painel › exercícios', () => {
     expect(within(lista).getAllByRole('link')[1]).toHaveTextContent('CatálogoVídeo');
     expect(within(lista).getAllByRole('link')[1]).toHaveAttribute('href', '/org/g1/exercises/7');
 
-    expect(screen.getByRole('checkbox', { name: 'Halteres' })).toBeChecked();
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Polia' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Salvar equipamento' }));
+    // Na tela, só o resumo; a lista inteira abre no modal.
+    expect(screen.getByRole('list', { name: 'Equipamento marcado' })).toHaveTextContent(
+      'HalteresHack da casa',
+    );
+    expect(screen.queryByRole('checkbox', { name: 'Halteres' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+    const modal = await screen.findByRole('dialog', { name: 'Equipamento da academia' });
+
+    expect(within(modal).getByRole('checkbox', { name: 'Halteres' })).toBeChecked();
+    fireEvent.click(within(modal).getByRole('checkbox', { name: 'Polia' }));
+
+    // Equipamento próprio: o que já está na lista é recusado com recado; o novo entra.
+    const nome = within(modal).getByLabelText('Nome do equipamento próprio');
+    fireEvent.change(nome, { target: { value: 'Leg Press' } });
+    fireEvent.click(within(modal).getByRole('button', { name: 'Adicionar' }));
+    expect(within(modal).getByRole('alert')).toHaveTextContent('Esse já está na lista');
+    fireEvent.change(nome, { target: { value: '  Remada   articulada ' } });
+    expect(within(modal).queryByRole('alert')).toBeNull();
+    fireEvent.click(within(modal).getByRole('button', { name: 'Adicionar' }));
+    expect(nome).toHaveValue('');
+    fireEvent.click(within(modal).getByRole('button', { name: 'Remover Hack da casa' }));
+    expect(within(modal).queryByRole('button', { name: 'Remover Hack da casa' })).toBeNull();
+
+    fireEvent.click(within(modal).getByRole('button', { name: 'Salvar equipamento' }));
     await waitFor(() =>
-      expect(groupExerciseApi.setEquipment).toHaveBeenCalledWith('g1', ['halteres', 'polia']),
+      expect(groupExerciseApi.setEquipment).toHaveBeenCalledWith(
+        'g1',
+        ['halteres', 'polia'],
+        ['Remada articulada'],
+      ),
     );
   });
 
-  it('o profissional vê o equipamento, mas não muda', async () => {
-    ctx.group = grupo({ role: 'PROFESSIONAL' });
+  it('a busca do modal filtra sem acento e some com as categorias vazias', async () => {
+    ctx.group = grupo({ role: 'OWNER' });
     vi.mocked(groupExerciseApi.list).mockResolvedValue({
       equipment: [],
       customEquipment: [],
       items: [],
     });
     renderWithClient(<OrgExercisesPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Editar' }));
+    const modal = await screen.findByRole('dialog', { name: 'Equipamento da academia' });
+    expect(within(modal).getByRole('region', { name: 'Máquinas' })).toBeInTheDocument();
+
+    fireEvent.change(within(modal).getByLabelText('Buscar equipamento'), {
+      target: { value: 'ELIPTICO' },
+    });
+    expect(within(modal).getByRole('checkbox', { name: 'Elíptico' })).toBeInTheDocument();
+    expect(within(modal).queryByRole('checkbox', { name: 'Polia' })).toBeNull();
+    expect(within(modal).queryByRole('region', { name: 'Máquinas' })).toBeNull();
+
+    fireEvent.change(within(modal).getByLabelText('Buscar equipamento'), {
+      target: { value: 'nada disso' },
+    });
+    expect(within(modal).getByText('Nenhum equipamento com esse nome na lista.')).toBeVisible();
+    // Nada mudou: salvar não tem o que mandar.
+    expect(within(modal).getByRole('button', { name: 'Salvar equipamento' })).toBeDisabled();
+  });
+
+  it('o profissional vê o equipamento, mas não muda', async () => {
+    ctx.group = grupo({ role: 'PROFESSIONAL' });
+    vi.mocked(groupExerciseApi.list).mockResolvedValue({
+      equipment: ['halteres'],
+      customEquipment: ['Hack da casa'],
+      items: [],
+    });
+    renderWithClient(<OrgExercisesPage />);
     expect(await screen.findByText(/Só o dono muda/)).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'Halteres' })).toBeDisabled();
-    expect(screen.queryByRole('button', { name: 'Salvar equipamento' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Ver lista' }));
+    const modal = await screen.findByRole('dialog', { name: 'Equipamento da academia' });
+    expect(within(modal).getByRole('checkbox', { name: 'Halteres' })).toBeDisabled();
+    expect(within(modal).getByRole('checkbox', { name: 'Hack da casa' })).toBeChecked();
+    expect(within(modal).queryByLabelText('Nome do equipamento próprio')).toBeNull();
+    expect(within(modal).queryByRole('button', { name: 'Salvar equipamento' })).toBeNull();
+  });
+
+  it('o exercício da casa escolhe o equipamento próprio da academia', async () => {
+    ctx.group = grupo();
+    ctx.params = { exerciseId: '42' };
+    vi.mocked(groupExerciseApi.get).mockResolvedValue(item());
+    vi.mocked(groupExerciseApi.list).mockResolvedValue({
+      equipment: [],
+      customEquipment: ['Hack da casa'],
+      items: [],
+    });
+    vi.mocked(groupExerciseApi.update).mockResolvedValue(item());
+    vi.mocked(groupExerciseApi.setGuide).mockResolvedValue(item());
+    renderWithClient(<OrgExercisePage />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Equipamento: Máquinas em geral. Trocar' }),
+    );
+    const daAcademia = await screen.findByRole('region', { name: 'Da academia' });
+    expect(within(daAcademia).getByRole('radio', { name: 'Hack da casa' })).not.toBeChecked();
+    fireEvent.change(screen.getByLabelText('Buscar equipamento'), { target: { value: 'hack' } });
+    // A busca alcança a lista geral também.
+    expect(screen.getByRole('radio', { name: 'Agachamento hack' })).toBeInTheDocument();
+    fireEvent.click(within(daAcademia).getByRole('radio', { name: 'Hack da casa' }));
+    expect(screen.getByRole('button', { name: 'Equipamento: Hack da casa. Trocar' })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+    await waitFor(() =>
+      expect(groupExerciseApi.update).toHaveBeenCalledWith(
+        'g1',
+        42,
+        expect.objectContaining({ equipment: 'Hack da casa' }),
+      ),
+    );
   });
 
   it('exercício da casa sem grupo muscular não sai do formulário', async () => {

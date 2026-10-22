@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   ApiError,
-  EXERCISE_EQUIPMENT,
+  BODYWEIGHT_EQUIPMENT,
   equipmentLabel,
   groupExerciseApi,
   groupExerciseProblem,
@@ -15,6 +15,7 @@ import {
   MAX_GUIDE_TIPS,
   MUSCLE_GROUP_LABEL,
   MUSCLE_GROUPS,
+  OTHER_EQUIPMENT,
   workoutApi,
   type Exercise,
   type GroupExercise,
@@ -41,12 +42,13 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
+import { EquipmentChooser } from '@/components/workout/equipment-chooser';
 
 function erroDaApi(err: unknown, padrao: string): string {
   return err instanceof ApiError && err.status < 500 && err.message ? err.message : padrao;
 }
 
-const SEM_EQUIPAMENTO = 'nenhum';
+const NO_EQUIPMENT = 'nenhum';
 
 /**
  * Exercício da casa novo (`/exercises/new`), o tutorial novo de um exercício
@@ -92,6 +94,74 @@ function NaoEncontrado() {
   );
 }
 
+/**
+ * O equipamento do exercício da casa: o escolhido à mostra e, ao abrir, a
+ * lista inteira com busca — os próprios da academia primeiro, depois a geral
+ * por categoria. Na página, e não num modal, porque o editor já rola. A API
+ * recusa o equipamento próprio de outra academia, então só os desta aparecem.
+ */
+function EquipmentField({
+  groupId,
+  value,
+  onChange,
+}: {
+  groupId: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  // A mesma consulta da lista do painel: em geral já está no cache.
+  const bench = useQuery({
+    queryKey: orgKeys.exercises(groupId),
+    queryFn: () => groupExerciseApi.list(groupId),
+  });
+  const chosen = value === NO_EQUIPMENT ? 'Não informar' : equipmentLabel(value);
+
+  return (
+    <div className="space-y-1 sm:col-span-2">
+      <Label htmlFor="equipamento">Equipamento</Label>
+      <button
+        id="equipamento"
+        type="button"
+        aria-expanded={open}
+        aria-label={`Equipamento: ${chosen}. Trocar`}
+        onClick={() => setOpen(!open)}
+        className="flex h-9 w-full items-center justify-between rounded-md border border-input px-3 text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-default disabled:opacity-70"
+      >
+        <span>{chosen}</span>
+        <span className="text-xs font-semibold text-primary">{open ? 'Fechar' : 'Trocar'}</span>
+      </button>
+      {open && (
+        <div className="space-y-3 pt-2">
+          <Input
+            aria-label="Buscar equipamento"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar: smith, polia, esteira…"
+          />
+          <EquipmentChooser
+            single
+            query={query}
+            custom={bench.data?.customEquipment ?? []}
+            extra={[
+              { key: NO_EQUIPMENT, label: 'Não informar' },
+              { key: BODYWEIGHT_EQUIPMENT, label: 'Peso corporal' },
+              { key: OTHER_EQUIPMENT, label: 'Outro' },
+            ]}
+            isSelected={(k) => k === value}
+            onPick={(k) => {
+              onChange(k);
+              setOpen(false);
+              setQuery('');
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ExerciseEditor({
   groupId,
   item,
@@ -112,7 +182,7 @@ function ExerciseEditor({
 
   const [nome, setNome] = useState(nomeBase);
   const [grupo, setGrupo] = useState(item?.muscleGroup ?? catalog?.muscleGroup ?? '');
-  const [equipamento, setEquipamento] = useState(item?.equipment ?? SEM_EQUIPAMENTO);
+  const [equipment, setEquipment] = useState(item?.equipment ?? NO_EQUIPMENT);
   const [instrucoes, setInstrucoes] = useState((item?.instructions ?? []).join('\n'));
   const [video, setVideo] = useState<VideoValue | null>(
     item?.video ? { fileId: item.video.id, url: item.video.url } : null,
@@ -133,7 +203,7 @@ function ExerciseEditor({
   const dados = {
     name: nome.trim(),
     muscleGroup: grupo,
-    equipment: equipamento === SEM_EQUIPAMENTO ? null : equipamento,
+    equipment: equipment === NO_EQUIPMENT ? null : equipment,
     instructions: instructionsFromText(instrucoes),
   };
 
@@ -223,29 +293,7 @@ function ExerciseEditor({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="equipamento">Equipamento</Label>
-                <Select value={equipamento} onValueChange={setEquipamento}>
-                  <SelectTrigger id="equipamento">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={SEM_EQUIPAMENTO}>Não informar</SelectItem>
-                    {/* O equipamento próprio da academia que o exercício já tem fica na
-                        lista, para não sumir ao salvar. O app oferece os próprios todos. */}
-                    {[
-                      ...EXERCISE_EQUIPMENT,
-                      ...(item?.equipment && !EXERCISE_EQUIPMENT.includes(item.equipment)
-                        ? [item.equipment]
-                        : []),
-                    ].map((e) => (
-                      <SelectItem key={e} value={e}>
-                        {equipmentLabel(e)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <EquipmentField groupId={groupId} value={equipment} onChange={setEquipment} />
             </div>
             <div className="space-y-1">
               <Label htmlFor="instrucoes">Como executar</Label>
