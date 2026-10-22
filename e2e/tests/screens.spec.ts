@@ -548,7 +548,7 @@ test.describe('painel da comunidade', () => {
     await page.goto(`/org/${id}/content`);
     await page.getByRole('tab', { name: 'Dicas' }).click();
     await page.getByRole('link', { name: /Aquecimento de 5 minutos/ }).click();
-    await page.getByRole('button', { name: 'Ver prévia' }).click();
+    await page.getByRole('tab', { name: 'Prévia' }).click();
     await appears(page.getByLabel('Prévia da dica'));
     await snap(page, '92-painel-dica');
 

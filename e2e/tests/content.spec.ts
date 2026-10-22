@@ -100,13 +100,13 @@ test.describe('planos prontos e dicas', () => {
       await equipe.getByRole('button', { name: 'Criar rascunho' }).click();
       await equipe.waitForURL(/\/content\/tips\/[0-9a-f-]{36}$/);
       dicaId = equipe.url().split('/').pop()!;
-      await equipe.getByRole('button', { name: 'Publicar' }).click();
+      await equipe.getByRole('button', { name: 'Publicar para os membros' }).click();
       await expect(equipe.getByText('Publicada para os membros.')).toBeVisible();
 
       // Equipe: o treino em rascunho do seed vai ao ar.
       await equipe.goto(`/org/${id}/content`);
       await equipe.getByRole('link', { name: DRAFT }).click();
-      await equipe.getByRole('button', { name: 'Publicar' }).click();
+      await equipe.getByRole('button', { name: 'Publicar para os membros' }).click();
       await expect(equipe.getByText('Publicado para os membros.')).toBeVisible();
 
       // Membro: entra pela comunidade, vê a dica com a imagem e adota o treino.
@@ -140,9 +140,9 @@ test.describe('planos prontos e dicas', () => {
       if (planoAdotado) await page.request.delete(`/api/proxy/workout/plans/${planoAdotado}`);
       if (dicaId) {
         await equipe.goto(`/org/${id}/content/tips/${dicaId}`);
-        await equipe.getByRole('button', { name: 'Apagar' }).click();
+        await equipe.getByRole('button', { name: 'Apagar dica' }).click();
         await equipe.getByRole('dialog').getByRole('button', { name: 'Apagar' }).click();
-        await equipe.waitForURL(/\/content$/);
+        await equipe.waitForURL(/\/content\?tab=tips$/);
       }
       await equipeCtx.close();
     }

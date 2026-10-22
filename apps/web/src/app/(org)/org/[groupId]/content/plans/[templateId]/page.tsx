@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { Download } from 'lucide-react';
 import {
   ApiError,
   contentApi,
@@ -21,10 +22,10 @@ import {
   type TemplateKind,
 } from '@fatia/api-client';
 import { orgKeys } from '@/components/community/query-keys';
+import { CheckableRow, DeleteButton, PublishCard } from '@/components/content/content-ui';
 import { ImageField, type ImageValue } from '@/components/content/image-field';
 import { useTopBarTitle } from '@/components/layout/app-top-bar';
 import { useOrgGroup } from '@/components/org/org-shell';
-import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -62,8 +63,8 @@ const formToGoals = (f: GoalsForm): Partial<Record<keyof NutritionGoalsInput, nu
     Object.entries(f).map(([k, v]) => [k, v.trim() === '' ? null : Number(v)]),
   ) as Partial<Record<keyof NutritionGoalsInput, number | null>>;
 
-function erroDaApi(err: unknown, padrao: string): string {
-  return err instanceof ApiError && err.status < 500 && err.message ? err.message : padrao;
+function apiErrorMessage(err: unknown, fallback: string): string {
+  return err instanceof ApiError && err.status < 500 && err.message ? err.message : fallback;
 }
 
 /** Abre o editor de um plano existente, ou o formulário de um novo (`/new?kind=`). */
@@ -71,18 +72,18 @@ export default function OrgPlanTemplatePage() {
   const g = useOrgGroup();
   const { templateId } = useParams<{ templateId: string }>();
   const search = useSearchParams();
-  const novo = templateId === 'new';
+  const isNew = templateId === 'new';
   const kind: TemplateKind = search.get('kind') === 'NUTRITION' ? 'NUTRITION' : 'WORKOUT';
 
-  const atual = useQuery({
+  const current = useQuery({
     queryKey: orgKeys.contentPlan(g.id, templateId),
     queryFn: () => contentApi.plan(g.id, templateId),
-    enabled: !novo,
+    enabled: !isNew,
   });
 
-  if (novo) return <PlanEditor key="new" groupId={g.id} kind={kind} template={null} />;
-  if (atual.isPending) return <Skeleton className="h-64 max-w-3xl rounded-2xl" />;
-  if (!atual.data) {
+  if (isNew) return <PlanEditor key="new" groupId={g.id} kind={kind} template={null} />;
+  if (current.isPending) return <Skeleton className="h-64 max-w-3xl rounded-2xl" />;
+  if (!current.data) {
     return (
       <EmptyState
         title="Plano não encontrado"
@@ -91,7 +92,12 @@ export default function OrgPlanTemplatePage() {
     );
   }
   return (
-    <PlanEditor key={atual.data.id} groupId={g.id} kind={atual.data.kind} template={atual.data} />
+    <PlanEditor
+      key={current.data.id}
+      groupId={g.id}
+      kind={current.data.kind}
+      template={current.data}
+    />
   );
 }
 
@@ -106,143 +112,168 @@ function PlanEditor({
 }) {
   const router = useRouter();
   const qc = useQueryClient();
-  const editavel = template === null || template.canEdit !== false;
+  const canEdit = template === null || template.canEdit !== false;
   useTopBarTitle(template?.title ?? `Novo plano de ${TEMPLATE_KIND_LABEL[kind].toLowerCase()}`);
 
-  const [titulo, setTitulo] = useState(template?.title ?? '');
-  const [descricao, setDescricao] = useState(template?.description ?? '');
-  const [nivel, setNivel] = useState<PlanLevel | 'none'>(template?.level ?? 'none');
-  const [capa, setCapa] = useState<ImageValue | null>(
+  const [title, setTitle] = useState(template?.title ?? '');
+  const [description, setDescription] = useState(template?.description ?? '');
+  const [level, setLevel] = useState<PlanLevel | 'none'>(template?.level ?? 'none');
+  const [cover, setCover] = useState<ImageValue | null>(
     template?.cover ? { fileId: template.cover.id, url: template.cover.url } : null,
   );
-  const [planoFonte, setPlanoFonte] = useState(template?.sourcePlanId ?? '');
+  const [sourcePlanId, setSourcePlanId] = useState(template?.sourcePlanId ?? '');
   // Plano novo começa com metas; o existente, como foi publicado.
-  const [comMetas, setComMetas] = useState(template === null || template.goals !== null);
-  const [metas, setMetas] = useState<GoalsForm>(goalsToForm(template?.goals));
-  const [refeicoes, setRefeicoes] = useState<string[]>([]);
-  const [apagando, setApagando] = useState(false);
+  const [withGoals, setWithGoals] = useState(template === null || template.goals !== null);
+  const [goals, setGoals] = useState<GoalsForm>(goalsToForm(template?.goals));
+  const [mealIds, setMealIds] = useState<string[]>([]);
+  const [deleting, setDeleting] = useState(false);
+  const [unpublishing, setUnpublishing] = useState(false);
 
-  const meusPlanos = useQuery({
+  // O que está na tela, comparado com o que foi salvo por último: liga o
+  // "Salvar" só quando há o que salvar, e segura "Publicar" até salvar —
+  // publicar manda a versão salva, não a da tela.
+  const form = {
+    title,
+    description,
+    level,
+    cover: cover?.fileId,
+    sourcePlanId,
+    withGoals,
+    goals,
+    mealIds,
+  };
+  const [saved, setSaved] = useState(form);
+  const dirty = JSON.stringify(form) !== JSON.stringify(saved);
+
+  const myPlans = useQuery({
     queryKey: ['workout', 'plans'],
     queryFn: () => workoutApi.listPlans(),
-    enabled: kind === 'WORKOUT' && editavel,
+    enabled: kind === 'WORKOUT' && canEdit,
   });
-  const minhasRefeicoes = useQuery({
+  const myMeals = useQuery({
     queryKey: ['nutrition', 'meal-templates'],
     queryFn: () => nutritionApi.mealTemplates(),
-    enabled: kind === 'NUTRITION' && editavel,
+    enabled: kind === 'NUTRITION' && canEdit,
   });
 
-  const invalidar = () => qc.invalidateQueries({ queryKey: orgKeys.all(groupId) });
+  const invalidate = () => qc.invalidateQueries({ queryKey: orgKeys.all(groupId) });
 
-  function montar() {
+  function buildBody() {
     const meta = {
-      title: titulo.trim(),
-      description: descricao.trim() || null,
-      level: nivel === 'none' ? null : nivel,
-      coverFileId: capa?.fileId ?? null,
+      title: title.trim(),
+      description: description.trim() || null,
+      level: level === 'none' ? null : level,
+      coverFileId: cover?.fileId ?? null,
     };
-    if (kind === 'WORKOUT') return { ...meta, planId: planoFonte || undefined };
-    const goals = comMetas ? (formToGoals(metas) as NutritionGoalsInput) : null;
+    if (kind === 'WORKOUT') return { ...meta, planId: sourcePlanId || undefined };
     return {
       ...meta,
-      goals,
-      ...(refeicoes.length ? { mealTemplateIds: refeicoes } : {}),
+      goals: withGoals ? (formToGoals(goals) as NutritionGoalsInput) : null,
+      ...(mealIds.length ? { mealTemplateIds: mealIds } : {}),
     };
   }
 
-  function problema(): string | null {
-    if (!titulo.trim() && !(kind === 'WORKOUT' && template === null))
+  function problem(): string | null {
+    if (!title.trim() && !(kind === 'WORKOUT' && template === null))
       return 'Dê um título ao plano.';
-    if (kind === 'WORKOUT' && template === null && !planoFonte) {
+    if (kind === 'WORKOUT' && template === null && !sourcePlanId) {
       return 'Escolha um dos seus planos de treino.';
     }
     if (kind === 'NUTRITION') {
-      if (comMetas) {
-        const p = goalsProblem(formToGoals(metas));
+      if (withGoals) {
+        const p = goalsProblem(formToGoals(goals));
         if (p) return p;
       }
-      if (!comMetas && !refeicoes.length && !(template?.meals.length ?? 0)) {
+      if (!withGoals && !mealIds.length && !(template?.meals.length ?? 0)) {
         return 'Inclua metas ou ao menos uma refeição salva.';
       }
     }
     return null;
   }
 
-  const salvar = useMutation({
-    mutationFn: async () => {
-      const corpo = montar();
+  const save = useMutation({
+    // O retrato vai como variável para marcar como salvo o que foi enviado, e
+    // não o que a pessoa digitou enquanto a resposta não chegava.
+    mutationFn: async (_sent: typeof form) => {
+      const body = buildBody();
       if (template === null) {
         return kind === 'WORKOUT'
           ? contentApi.createWorkout(groupId, {
-              ...corpo,
-              title: corpo.title || undefined,
-              planId: planoFonte,
+              ...body,
+              title: body.title || undefined,
+              planId: sourcePlanId,
             })
-          : contentApi.createNutrition(groupId, { ...corpo, title: corpo.title });
+          : contentApi.createNutrition(groupId, { ...body, title: body.title });
       }
       // O retrato do treino só é refeito quando o plano de origem muda.
-      const { planId, ...resto } = corpo as typeof corpo & { planId?: string };
+      const { planId, ...rest } = body as typeof body & { planId?: string };
       return contentApi.updatePlan(groupId, template.id, {
-        ...resto,
+        ...rest,
         ...(planId && planId !== template.sourcePlanId ? { planId } : {}),
       });
     },
-    onSuccess: (t) => {
+    onSuccess: (t, sent) => {
+      setSaved(sent);
       toast(
         template === null ? 'Rascunho criado. Publique quando estiver pronto.' : 'Plano salvo.',
       );
-      void invalidar();
+      void invalidate();
       if (template === null) router.replace(`/org/${groupId}/content/plans/${t.id}`);
     },
-    onError: (err) => toast(erroDaApi(err, 'Não deu para salvar agora.')),
+    onError: (err) => toast(apiErrorMessage(err, 'Não deu para salvar agora.')),
   });
 
-  const refazer = useMutation({
-    mutationFn: () => contentApi.updatePlan(groupId, template!.id, { planId: planoFonte }),
+  const refresh = useMutation({
+    mutationFn: () => contentApi.updatePlan(groupId, template!.id, { planId: sourcePlanId }),
     onSuccess: () => {
+      // O plano de origem foi junto: ele deixa de ser mudança pendente.
+      setSaved((s) => ({ ...s, sourcePlanId }));
       toast('Exercícios atualizados a partir do seu plano.');
-      void invalidar();
+      void invalidate();
     },
-    onError: (err) => toast(erroDaApi(err, 'Não deu para atualizar agora.')),
+    onError: (err) => toast(apiErrorMessage(err, 'Não deu para atualizar agora.')),
   });
 
-  const publicar = useMutation({
+  const publish = useMutation({
     mutationFn: (published: boolean) => contentApi.publishPlan(groupId, template!.id, published),
     onSuccess: (t) => {
+      setUnpublishing(false);
       toast(
         t.publishedAt
           ? 'Publicado para os membros.'
           : 'Saiu do ar. Quem já adotou continua com a cópia.',
       );
-      void invalidar();
+      void invalidate();
     },
-    onError: (err) => toast(erroDaApi(err, 'Não deu para mudar agora.')),
+    onError: (err) => toast(apiErrorMessage(err, 'Não deu para mudar agora.')),
   });
 
-  const apagar = useMutation({
+  const remove = useMutation({
     mutationFn: () => contentApi.deletePlan(groupId, template!.id),
     onSuccess: () => {
       toast('Plano apagado. As cópias de quem adotou continuam.');
-      void invalidar();
+      void invalidate();
       router.replace(`/org/${groupId}/content`);
     },
-    onError: (err) => toast(erroDaApi(err, 'Não deu para apagar agora.')),
+    onError: (err) => toast(apiErrorMessage(err, 'Não deu para apagar agora.')),
   });
-
-  const erro = problema();
 
   return (
     <div className="max-w-3xl space-y-4">
       {template && (
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={template.publishedAt ? 'default' : 'secondary'}>
-            {template.publishedAt ? 'Publicado' : 'Rascunho'}
-          </Badge>
-          <span className="text-xs text-muted-foreground">Por {template.authorName}</span>
-        </div>
+        <PublishCard
+          published={Boolean(template.publishedAt)}
+          authorName={template.authorName}
+          canEdit={canEdit}
+          dirty={dirty}
+          pending={publish.isPending}
+          publishedHint="Os membros veem e podem adotar. Mudanças salvas valem para quem adotar daqui em diante."
+          draftHint="Só a equipe vê. Publique quando estiver pronto."
+          onPublish={() => publish.mutate(true)}
+          onUnpublish={() => setUnpublishing(true)}
+        />
       )}
-      {!editavel && (
+      {!canEdit && (
         <p className="rounded-xl bg-muted p-3 text-sm">
           Só quem publicou, ou o dono, muda este plano.
         </p>
@@ -253,15 +284,16 @@ function PlanEditor({
         aria-label="Plano pronto"
         onSubmit={(e) => {
           e.preventDefault();
-          if (erro) {
-            toast(erro);
+          const p = problem();
+          if (p) {
+            toast(p);
             return;
           }
-          salvar.mutate();
+          save.mutate(form);
         }}
       >
         <fieldset
-          disabled={!editavel}
+          disabled={!canEdit}
           aria-label="Dados do plano"
           className="space-y-4 rounded-2xl border border-subtle bg-card p-4"
         >
@@ -275,8 +307,8 @@ function PlanEditor({
                   ? 'Usa o nome do plano se ficar vazio'
                   : 'Ex.: Cutting 1.800 kcal'
               }
-              value={titulo}
-              onChange={(e) => setTitulo(e.target.value)}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
             />
           </div>
           <div className="space-y-1">
@@ -286,13 +318,13 @@ function PlanEditor({
               maxLength={1000}
               rows={3}
               placeholder="Para quem é, quantas vezes por semana, o que esperar."
-              value={descricao}
-              onChange={(e) => setDescricao(e.target.value)}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
             />
           </div>
           <div className="space-y-1">
             <Label htmlFor="nivel">Nível</Label>
-            <Select value={nivel} onValueChange={(v) => setNivel(v as PlanLevel | 'none')}>
+            <Select value={level} onValueChange={(v) => setLevel(v as PlanLevel | 'none')}>
               <SelectTrigger id="nivel" className="w-full sm:w-60">
                 <SelectValue />
               </SelectTrigger>
@@ -306,8 +338,8 @@ function PlanEditor({
               </SelectContent>
             </Select>
           </div>
-          {editavel && (
-            <ImageField groupId={groupId} label="Capa" value={capa} onChange={setCapa} />
+          {canEdit && (
+            <ImageField groupId={groupId} label="Capa" value={cover} onChange={setCover} />
           )}
         </fieldset>
 
@@ -319,39 +351,46 @@ function PlanEditor({
             <h2 id="exercicios" className="text-sm font-semibold">
               Exercícios
             </h2>
-            {editavel && (
-              <div className="space-y-1">
-                <Label htmlFor="fonte">A partir do seu plano</Label>
-                {meusPlanos.data?.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Você ainda não tem planos de treino.{' '}
-                    <Link href="/workout/plans" className="font-medium text-primary underline">
-                      Monte um em Treino
-                    </Link>{' '}
-                    e volte para publicar.
-                  </p>
-                ) : (
-                  <Select value={planoFonte} onValueChange={setPlanoFonte}>
-                    <SelectTrigger id="fonte" className="w-full sm:w-80">
-                      <SelectValue placeholder="Escolha um plano" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(meusPlanos.data ?? []).map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {`${p.name} · ${p.exercises.length} exercícios`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Os exercícios são copiados como estão agora. Mudar o seu plano depois não muda o
-                  publicado, até você atualizar.
+            {canEdit &&
+              (myPlans.data?.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Você ainda não tem planos de treino.{' '}
+                  <Link href="/workout/plans" className="font-medium text-primary underline">
+                    Monte um em Treino
+                  </Link>{' '}
+                  e volte para publicar.
                 </p>
-              </div>
-            )}
+              ) : (
+                // Os planos à mostra, com a contagem de exercícios, em vez de
+                // escondidos num seletor: escolher é o trabalho desta seção.
+                <fieldset className="space-y-2">
+                  <legend className="pb-1 text-xs text-muted-foreground">
+                    {template
+                      ? 'A partir do seu plano. Trocar substitui os exercícios ao salvar.'
+                      : 'A partir do seu plano'}
+                  </legend>
+                  {(myPlans.data ?? []).map((p) => (
+                    <CheckableRow
+                      key={p.id}
+                      role="radio"
+                      name="plano-de-origem"
+                      label={p.name}
+                      detail={`${p.exercises.length} exercícios`}
+                      checked={sourcePlanId === p.id}
+                      onChange={() => setSourcePlanId(p.id)}
+                    />
+                  ))}
+                  <p className="text-xs text-muted-foreground">
+                    Os exercícios são copiados como estão agora. Mudar o seu plano depois não muda o
+                    publicado, até você atualizar.
+                  </p>
+                </fieldset>
+              ))}
             {template && (
               <>
+                <h3 className="pt-1 text-xs text-muted-foreground">
+                  {canEdit ? 'Exercícios publicados agora' : 'Exercícios'}
+                </h3>
                 <ol className="space-y-1.5" aria-label="Exercícios publicados">
                   {template.exercises.map((e, i) => (
                     <li key={i} className="flex justify-between gap-3 text-sm">
@@ -364,13 +403,13 @@ function PlanEditor({
                     </li>
                   ))}
                 </ol>
-                {editavel && planoFonte && (
+                {canEdit && sourcePlanId && (
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={refazer.isPending}
-                    onClick={() => refazer.mutate()}
+                    disabled={refresh.isPending}
+                    onClick={() => refresh.mutate()}
                   >
                     Atualizar a partir do plano
                   </Button>
@@ -384,57 +423,56 @@ function PlanEditor({
               aria-labelledby="metas"
               className="space-y-3 rounded-2xl border border-subtle bg-card p-4"
             >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 id="metas" className="text-sm font-semibold">
-                  Metas diárias
-                </h2>
-                {editavel && (
+              <h2 id="metas" className="text-sm font-semibold">
+                Metas diárias
+              </h2>
+              {canEdit && (
+                <>
+                  <CheckableRow
+                    role="checkbox"
+                    label="Incluir metas de calorias e macros"
+                    checked={withGoals}
+                    onChange={() => setWithGoals(!withGoals)}
+                  />
+                  {/* Contorno com ícone: o `ghost` de antes era texto solto, e o
+                      clique sobrescreve os oito campos abaixo — tem que parecer ação. */}
                   <Button
                     type="button"
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
                     onClick={async () => {
-                      const minhas = await nutritionApi.goals().catch(() => null);
-                      if (!minhas) {
+                      const mine = await nutritionApi.goals().catch(() => null);
+                      if (!mine) {
                         toast('Você ainda não tem metas definidas.');
                         return;
                       }
-                      setComMetas(true);
-                      setMetas(goalsToForm(minhas));
+                      setWithGoals(true);
+                      setGoals(goalsToForm(mine));
                     }}
                   >
-                    Usar as minhas metas
+                    <Download aria-hidden />
+                    Preencher com as minhas metas
                   </Button>
-                )}
-              </div>
-              <label className="flex min-h-11 items-center gap-3 text-sm">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-primary"
-                  checked={comMetas}
-                  disabled={!editavel}
-                  onChange={(e) => setComMetas(e.target.checked)}
-                />
-                Incluir metas de calorias e macros
-              </label>
-              {comMetas && (
+                </>
+              )}
+              {withGoals && (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {GOAL_ROWS.map(([rotulo, min, max, unidade]) => (
-                    <fieldset key={min} disabled={!editavel} className="space-y-1">
-                      <legend className="text-sm font-medium">{`${rotulo} (${unidade})`}</legend>
+                  {GOAL_ROWS.map(([label, min, max, unit]) => (
+                    <fieldset key={min} disabled={!canEdit} className="space-y-1">
+                      <legend className="text-sm font-medium">{`${label} (${unit})`}</legend>
                       <div className="flex items-center gap-2">
                         <Input
-                          aria-label={`${rotulo} mínimo`}
+                          aria-label={`${label} mínimo`}
                           inputMode="numeric"
-                          value={metas[min]}
-                          onChange={(e) => setMetas({ ...metas, [min]: e.target.value })}
+                          value={goals[min]}
+                          onChange={(e) => setGoals({ ...goals, [min]: e.target.value })}
                         />
                         <span aria-hidden>–</span>
                         <Input
-                          aria-label={`${rotulo} máximo`}
+                          aria-label={`${label} máximo`}
                           inputMode="numeric"
-                          value={metas[max]}
-                          onChange={(e) => setMetas({ ...metas, [max]: e.target.value })}
+                          value={goals[max]}
+                          onChange={(e) => setGoals({ ...goals, [max]: e.target.value })}
                         />
                       </div>
                     </fieldset>
@@ -460,73 +498,48 @@ function PlanEditor({
                   ))}
                 </ul>
               )}
-              {editavel && (
+              {canEdit && (
                 <fieldset className="space-y-2">
-                  <legend className="text-xs text-muted-foreground">
+                  <legend className="pb-1 text-xs text-muted-foreground">
                     {template
                       ? 'Para trocar as refeições, marque as refeições salvas que entram no lugar.'
                       : `Escolha até ${MAX_SUGGESTED_MEALS} das suas refeições salvas.`}
                   </legend>
-                  {minhasRefeicoes.data?.length === 0 && (
+                  {myMeals.data?.length === 0 && (
                     <p className="text-sm text-muted-foreground">
                       Você ainda não tem refeições salvas. Salve uma pelo menu de uma refeição em
                       Nutrição.
                     </p>
                   )}
-                  <ul className="space-y-1">
-                    {(minhasRefeicoes.data ?? []).map((m) => {
-                      const marcada = refeicoes.includes(m.id);
-                      return (
-                        <li key={m.id}>
-                          <label className="flex min-h-11 items-center gap-3 rounded-xl border border-subtle p-2 text-sm">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 accent-primary"
-                              checked={marcada}
-                              disabled={!marcada && refeicoes.length >= MAX_SUGGESTED_MEALS}
-                              onChange={() =>
-                                setRefeicoes(
-                                  marcada
-                                    ? refeicoes.filter((id) => id !== m.id)
-                                    : [...refeicoes, m.id],
-                                )
-                              }
-                            />
-                            <span className="min-w-0 flex-1 truncate">{m.name}</span>
-                            <span className="shrink-0 text-xs text-muted-foreground">
-                              {Math.round(m.items.reduce((s, i) => s + i.kcal, 0))} kcal
-                            </span>
-                          </label>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                  {(myMeals.data ?? []).map((m) => {
+                    const checked = mealIds.includes(m.id);
+                    return (
+                      <CheckableRow
+                        key={m.id}
+                        role="checkbox"
+                        label={m.name}
+                        detail={`${Math.round(m.items.reduce((s, i) => s + i.kcal, 0))} kcal`}
+                        checked={checked}
+                        disabled={!checked && mealIds.length >= MAX_SUGGESTED_MEALS}
+                        onChange={() =>
+                          setMealIds(
+                            checked ? mealIds.filter((id) => id !== m.id) : [...mealIds, m.id],
+                          )
+                        }
+                      />
+                    );
+                  })}
                 </fieldset>
               )}
             </section>
           </>
         )}
 
-        {editavel && (
+        {canEdit && (
           <div className="flex flex-wrap gap-2">
-            <Button type="submit" disabled={salvar.isPending}>
-              {template === null ? 'Criar rascunho' : 'Salvar'}
+            <Button type="submit" disabled={save.isPending || (template !== null && !dirty)}>
+              {template === null ? 'Criar rascunho' : dirty ? 'Salvar mudanças' : 'Tudo salvo'}
             </Button>
-            {template && (
-              <Button
-                type="button"
-                variant="outline"
-                disabled={publicar.isPending}
-                onClick={() => publicar.mutate(!template.publishedAt)}
-              >
-                {template.publishedAt ? 'Tirar do ar' : 'Publicar'}
-              </Button>
-            )}
-            {template && (
-              <Button type="button" variant="ghost" onClick={() => setApagando(true)}>
-                Apagar
-              </Button>
-            )}
             <Link href={`/org/${groupId}/content`} className={buttonVariants({ variant: 'ghost' })}>
               Voltar
             </Link>
@@ -534,17 +547,41 @@ function PlanEditor({
         )}
       </form>
 
+      {/* Longe do "Salvar", com cor e ícone de perigo: antes era um "Apagar"
+          fantasma entre "Publicar" e "Voltar". */}
+      {canEdit && template && (
+        <div className="border-t border-subtle pt-4">
+          <DeleteButton
+            label="Apagar plano"
+            pending={remove.isPending}
+            onClick={() => setDeleting(true)}
+          />
+        </div>
+      )}
+
       {template && (
-        <ConfirmDialog
-          open={apagando}
-          onOpenChange={setApagando}
-          title="Apagar este plano?"
-          description="Ele some para os membros. Quem já adotou continua com a cópia dele."
-          confirmLabel="Apagar"
-          pendingLabel="Apagando..."
-          pending={apagar.isPending}
-          onConfirm={() => apagar.mutate()}
-        />
+        <>
+          <ConfirmDialog
+            open={unpublishing}
+            onOpenChange={setUnpublishing}
+            title="Tirar este plano do ar?"
+            description="Ele some para os membros. Quem já adotou continua com a cópia."
+            confirmLabel="Tirar do ar"
+            pendingLabel="Tirando do ar..."
+            pending={publish.isPending}
+            onConfirm={() => publish.mutate(false)}
+          />
+          <ConfirmDialog
+            open={deleting}
+            onOpenChange={setDeleting}
+            title="Apagar este plano?"
+            description="Ele some para os membros. Quem já adotou continua com a cópia dele."
+            confirmLabel="Apagar"
+            pendingLabel="Apagando..."
+            pending={remove.isPending}
+            onConfirm={() => remove.mutate()}
+          />
+        </>
       )}
     </div>
   );
