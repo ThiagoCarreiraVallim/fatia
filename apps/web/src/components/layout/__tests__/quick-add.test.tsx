@@ -44,10 +44,13 @@ vi.mock('@fatia/api-client', async () => {
   return {
     ...actual,
     workoutApi: { getActiveSession: vi.fn(), startSession: vi.fn() },
+    getChatAvailability: vi.fn(),
   };
 });
 
-import { workoutApi } from '@fatia/api-client';
+import { getChatAvailability, workoutApi } from '@fatia/api-client';
+
+const availability = vi.mocked(getChatAvailability);
 
 const getActiveSession = vi.mocked(workoutApi.getActiveSession);
 const startSession = vi.mocked(workoutApi.startSession);
@@ -84,6 +87,7 @@ describe('QuickAddProvider', () => {
   beforeEach(() => {
     nav.pathname = '/';
     getActiveSession.mockResolvedValue(null);
+    availability.mockResolvedValue({ available: false } as never);
   });
 
   afterEach(() => {
@@ -136,5 +140,36 @@ describe('QuickAddProvider', () => {
     await user.click(treino);
     await waitFor(() => expect(nav.push).toHaveBeenCalledWith('/workout'));
     expect(startSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('sem IA na instância, o menu não mostra o cartão do chat', async () => {
+    const { menu } = await abrirMenu();
+    await waitFor(() => expect(availability).toHaveBeenCalled());
+    expect(within(menu).queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('com IA, o cartão do chat vem antes dos registros e fecha o menu ao ser escolhido', async () => {
+    availability.mockResolvedValue({ available: true, allowed: true } as never);
+    const { user, menu } = await abrirMenu();
+    const chat = await within(menu).findByRole('link', { name: /Chat com a IA/ });
+    expect(chat).toHaveAttribute('href', '/chat');
+    expect(
+      chat.compareDocumentPosition(within(menu).getByRole('button', { name: 'Refeição' })) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    await user.click(chat);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('no Free, o cartão leva ao plano e avisa que é do PRO', async () => {
+    availability.mockResolvedValue({
+      available: true,
+      allowed: false,
+      reason: 'plan_required',
+    } as never);
+    const { menu } = await abrirMenu();
+    const chat = await within(menu).findByRole('link', { name: /Chat com a IA/ });
+    expect(chat).toHaveAttribute('href', '/plan?recurso=chat');
+    expect(chat).toHaveTextContent(/exige o plano PRO/);
   });
 });

@@ -24,6 +24,7 @@ import { LogStepsDrawer } from '@/components/progress/log-steps-drawer';
 import { LogWaterDrawer } from '@/components/progress/log-water-drawer';
 import { LogWeightDrawer } from '@/components/progress/log-weight-drawer';
 import { hojeIso } from '@/lib/dias';
+import { ChatHero, useChatMenuItem } from './chat-hero';
 
 const ICON: Record<QuickAddKey, LucideIcon> = {
   meal: Apple,
@@ -54,6 +55,7 @@ export function QuickAddProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
   const [menuOpen, setMenuOpen] = useState(false);
   const [target, setTarget] = useState<Target | null>(null);
+  const chatItem = useChatMenuItem();
 
   // Mesma chave e mesmas opções da tela de Treino: o menu e a tela concordam
   // sobre haver sessão aberta.
@@ -106,6 +108,11 @@ export function QuickAddProvider({ children }: { children: ReactNode }) {
             <DrawerTitle>Registrar</DrawerTitle>
             <DrawerDescription>O que você quer registrar agora?</DrawerDescription>
           </DrawerHeader>
+          {/* O chat registra qualquer coisa conversando: é o atalho mais largo do
+              "+", e por isso vem em cima dos botões de um registro só. */}
+          {chatItem && (
+            <ChatHero item={chatItem} onNavigate={() => setMenuOpen(false)} className="mt-2 mb-1" />
+          )}
           <ul className="mt-2 grid grid-cols-3 gap-3">
             {QUICK_ADD_ITEMS.map(({ key, label }) => {
               const Icon = ICON[key];

@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Apple, Dumbbell, Plus, Users } from 'lucide-react';
 import { PRIMARY_TABS, activeNavKey } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
-import { MenuLinks } from './menu-mais';
+import { MenuLinks } from './more-menu';
 import { useQuickAdd } from './quick-add';
 import { useNavMenu } from './use-nav-menu';
 

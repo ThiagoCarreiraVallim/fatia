@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { Apple, Dumbbell, Menu, Plus, Users } from 'lucide-react';
 import { PRIMARY_TABS, activeNavKey, type NavTab } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
-import { MenuMais } from './menu-mais';
+import { MoreMenu } from './more-menu';
 import { useQuickAdd } from './quick-add';
 
 const ICON = { nutrition: Apple, workout: Dumbbell, community: Users } as const;
@@ -86,7 +86,7 @@ export function BottomNav() {
           </button>
         </div>
       </nav>
-      <MenuMais open={menuOpen} onOpenChange={setMenuOpen} />
+      <MoreMenu open={menuOpen} onOpenChange={setMenuOpen} />
     </>
   );
 }
