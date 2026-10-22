@@ -49,14 +49,15 @@ test.describe('mural da comunidade', () => {
     const id = await groupId(dona);
 
     try {
-      // Membro: entra e abre o Mural pelas abas.
+      // Membro: entra, e a comunidade já abre no Mural.
       await page.goto(newInvitePath());
       await page.getByRole('button', { name: 'Aceitar e entrar' }).click();
       await page.waitForURL(/\/community\/[0-9a-f-]{36}$/);
-      await page
-        .getByRole('navigation', { name: 'Seções da comunidade' })
-        .getByRole('link', { name: 'Mural' })
-        .click();
+      await expect(
+        page
+          .getByRole('navigation', { name: 'Seções da comunidade' })
+          .getByRole('link', { name: 'Mural' }),
+      ).toHaveAttribute('aria-current', 'page');
       await expect(page.getByText('Fixado pela equipe').first()).toBeVisible();
 
       // Publica com imagem; o apelido é pedido na primeira vez.
@@ -97,8 +98,10 @@ test.describe('mural da comunidade', () => {
       await denuncia.getByRole('button', { name: 'Denunciar' }).click();
       await expect(page.getByText(/ninguém fica sabendo que foi você/)).toBeVisible();
 
-      // Dona: remove o post do demo pelo mural.
+      // Dona: remove o post do demo pelo mural (o caminho antigo, que os avisos
+      // usam, redireciona para a raiz da comunidade).
       await dona.goto(`/community/${id}/feed`);
+      await dona.waitForURL(new RegExp(`/community/${id}$`));
       const doDemo = dona.getByRole('article', { name: 'Post de Demo E2E' });
       await doDemo.getByRole('button', { name: 'Mais ações do post de Demo E2E' }).click();
       await dona.getByRole('dialog').getByRole('button', { name: 'Remover do mural' }).click();

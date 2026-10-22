@@ -86,11 +86,13 @@ test.describe('axe: comunidade', () => {
 
     await page.getByRole('button', { name: 'Aceitar e entrar' }).click();
     await page.waitForURL(/\/community\/[0-9a-f-]{36}$/);
+    const comunidade = page.url();
+    // A comunidade abre no mural; o que compartilho fica atrás da engrenagem.
+    await page.getByRole('link', { name: 'Sobre a comunidade e o que você compartilha' }).click();
     await page.getByRole('heading', { name: 'O que eu compartilho' }).waitFor();
     expect(await auditar(page)).toEqual([]);
 
     // Planos e dicas (Fase 7a): a lista, as dicas e o "o que entra na sua conta".
-    const comunidade = page.url();
     await page.goto(`${comunidade}/content`);
     await page.getByRole('link', { name: /Cutting 1.800 kcal/ }).waitFor();
     expect(await auditar(page)).toEqual([]);
@@ -185,7 +187,7 @@ test.describe('axe: painel da comunidade', () => {
     }>;
     const id = grupos.find((g) => g.slug === COMMUNITY_SLUG)!.id;
     for (const [rota, marco] of [
-      [`/community/${id}/feed`, 'Fixado pela equipe'],
+      [`/community/${id}`, 'Fixado pela equipe'],
       [`/org/${id}/moderation`, 'Quem publica no mural'],
     ] as const) {
       await page.goto(rota);

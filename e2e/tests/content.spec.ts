@@ -113,7 +113,11 @@ test.describe('planos prontos e dicas', () => {
       await page.goto(newInvitePath());
       await page.getByRole('button', { name: 'Aceitar e entrar' }).click();
       await page.waitForURL(/\/community\/[0-9a-f-]{36}$/);
-      await expect(page.getByRole('heading', { name: 'Planos e dicas' })).toBeVisible();
+      await page
+        .getByRole('navigation', { name: 'Seções da comunidade' })
+        .getByRole('link', { name: 'Planos e dicas' })
+        .click();
+      await page.waitForURL(/\/community\/[0-9a-f-]{36}\/content$/);
 
       await page.goto(`/community/${id}/content?tab=tips`);
       const artigo = page.getByRole('article').filter({ hasText: titulo });

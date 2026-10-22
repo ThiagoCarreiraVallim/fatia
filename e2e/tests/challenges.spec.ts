@@ -61,7 +61,10 @@ test.describe('desafios da comunidade', () => {
       await page.goto(newInvitePath());
       await page.getByRole('button', { name: 'Aceitar e entrar' }).click();
       await page.waitForURL(/\/community\/[0-9a-f-]{36}$/);
-      await page.getByRole('link', { name: 'Ver todos' }).click();
+      await page
+        .getByRole('navigation', { name: 'Seções da comunidade' })
+        .getByRole('link', { name: 'Desafios' })
+        .click();
       await page.getByRole('link', { name: new RegExp(titulo) }).click();
       await expect(
         page.getByText('O ranking aparece para quem participa.', { exact: false }),

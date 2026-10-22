@@ -56,8 +56,11 @@ test('convite por link: deslogado vê a comunidade; logado escolhe o que compart
   await marcar(page, /Água e passos/, true);
   await page.getByRole('button', { name: 'Aceitar e entrar' }).click();
 
+  // A comunidade abre no mural; o que compartilho mora atrás da engrenagem.
   await expect(page).toHaveURL(/\/community\/[0-9a-f-]{36}$/);
   await expect(page.getByRole('heading', { level: 1, name: COMMUNITY_NAME })).toBeVisible();
+  await page.getByRole('link', { name: 'Sobre a comunidade e o que você compartilha' }).click();
+  await expect(page).toHaveURL(/\/community\/[0-9a-f-]{36}\/settings$/);
   await expect(page.getByRole('checkbox', { name: /Alimentação/ })).toBeChecked();
   await expect(page.getByRole('checkbox', { name: /Água e passos/ })).toBeChecked();
 
@@ -134,6 +137,7 @@ test('convite por e-mail: a equipe convida, o e-mail chega com o link e o demo e
   ).toBeVisible();
   await page.getByRole('button', { name: 'Aceitar e entrar' }).click();
   await expect(page).toHaveURL(/\/community\/[0-9a-f-]{36}$/);
+  await page.getByRole('link', { name: 'Sobre a comunidade e o que você compartilha' }).click();
   await expect(page.getByText('Ninguém da equipe olhou seus dados ainda.')).toBeVisible();
 });
 
@@ -147,7 +151,9 @@ test('entrar com código pede aprovação, e o pedido pode ser cancelado', async
   await page.getByRole('button', { name: 'Pedir para entrar' }).click();
 
   await expect(page).toHaveURL(/\/community\/[0-9a-f-]{36}$/);
+  // Pendente: o aviso fica no lugar do mural, com o caminho para cancelar.
   await expect(page.getByText(/aguardando o dono aprovar/)).toBeVisible();
+  await page.getByRole('link', { name: 'Ver ou cancelar o pedido' }).click();
   await page.getByRole('button', { name: 'Cancelar pedido' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Cancelar pedido' }).click();
   await expect(page).toHaveURL(/\/community$/);

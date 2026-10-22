@@ -445,6 +445,7 @@ test.describe('comunidade', () => {
 
     await page.getByRole('button', { name: 'Aceitar e entrar' }).click();
     await page.waitForURL(/\/community\/[0-9a-f-]{36}$/);
+    await page.getByRole('link', { name: 'Sobre a comunidade e o que você compartilha' }).click();
     await appears(page.getByRole('heading', { name: 'O que eu compartilho' }));
     grantSeatToDemo();
     await page.reload();
@@ -599,7 +600,7 @@ test.describe('painel da comunidade', () => {
       slug: string;
     }>;
     const id = grupos.find((g) => g.slug === COMMUNITY_SLUG)!.id;
-    await page.goto(`/community/${id}/feed`);
+    await page.goto(`/community/${id}`);
     await appears(page.getByText('Fixado pela equipe').first());
     await snap(page, '107-mural');
     const semana = page.getByRole('article').filter({ hasText: 'Primeira semana completa' });
