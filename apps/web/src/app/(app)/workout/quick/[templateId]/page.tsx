@@ -17,6 +17,8 @@ import { Input } from '@/components/ui/input';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
+import { pluralize } from '@/components/workout/format';
 import { TopBarActions, topBarActionClass, useTopBarTitle } from '@/components/layout/app-top-bar';
 interface LocalExercise {
   localId: string;
@@ -61,6 +63,7 @@ export default function QuickTemplatePage() {
   const [editingName, setEditingName] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [resolved, setResolved] = useState(false);
+  const [announcement, setAnnouncement] = useState('');
 
   const lookups = useQueries({
     queries: (template?.exercises ?? []).map((ex) => ({
@@ -110,11 +113,15 @@ export default function QuickTemplatePage() {
 
   if (!template) {
     return (
-      <div className="p-4">
-        <p className="text-sm text-muted-foreground">Template não encontrado.</p>
-        <Link href="/workout" className="mt-2 inline-block text-sm text-primary">
-          Voltar
-        </Link>
+      <div className="px-5 pt-4">
+        <EmptyState
+          title="Template não encontrado"
+          action={
+            <Button asChild variant="outline" size="sm">
+              <Link href="/workout">Voltar para treinos</Link>
+            </Button>
+          }
+        />
       </div>
     );
   }
@@ -134,10 +141,15 @@ export default function QuickTemplatePage() {
   }
 
   function moveItem(idx: number, delta: -1 | 1) {
+    const target = idx + delta;
+    if (target < 0 || target >= items.length) return;
+    // A lista é local, então a troca é imediata e o anúncio pode sair junto —
+    // não há rede para recusar. Mesmo texto do app e do plano salvo.
+    setAnnouncement(
+      `${items[idx].exercise.name} movido para a posição ${target + 1} de ${items.length}`,
+    );
     setItems((prev) => {
       const next = [...prev];
-      const target = idx + delta;
-      if (target < 0 || target >= next.length) return prev;
       [next[idx], next[target]] = [next[target], next[idx]];
       return next;
     });
@@ -149,8 +161,10 @@ export default function QuickTemplatePage() {
       {
         localId: `${exercise.id}-${Date.now()}`,
         exercise,
-        targetSets: 3,
-        targetReps: '8-12',
+        // Cardio grava uma série só, com duração e distância: "3 × 8-12" numa
+        // esteira virava três séries que a sessão nunca pediria. Como no app.
+        targetSets: isCardioExercise(exercise) ? 1 : 3,
+        targetReps: isCardioExercise(exercise) ? '—' : '8-12',
       },
     ]);
   }
@@ -242,10 +256,16 @@ export default function QuickTemplatePage() {
         )}
 
         {!loading && items.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-white/10 bg-card p-6 text-center text-sm text-muted-foreground">
-            Nenhum exercício encontrado para esse template. Adicione manualmente.
-          </div>
+          <EmptyState
+            title="Nenhum exercício encontrado para esse template"
+            description="Adicione manualmente."
+          />
         )}
+
+        {/* Montada sempre: um `aria-live` que nasce preenchido costuma não ser lido. */}
+        <p role="status" aria-live="polite" className="sr-only">
+          {announcement}
+        </p>
 
         <div className="space-y-3">
           {items.map((it, idx) => (
@@ -287,6 +307,17 @@ export default function QuickTemplatePage() {
           <Play size={16} fill="currentColor" className="mr-1.5" />
           {start.isPending ? 'Iniciando...' : 'Iniciar Treino'}
         </Button>
+
+        {start.isError && (
+          <p role="alert" className="text-center text-xs text-danger">
+            Não foi possível iniciar o treino
+            {start.error instanceof Error ? `: ${start.error.message}` : '.'}
+          </p>
+        )}
+
+        <p className="text-center text-[11px] text-muted-foreground tabular-nums">
+          {totalSets} {pluralize(totalSets, 'série planejada', 'séries planejadas')}
+        </p>
       </div>
 
       <AddExerciseDrawer
