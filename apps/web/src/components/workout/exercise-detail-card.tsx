@@ -252,7 +252,10 @@ function PlanModeCard({
         </div>
       )}
 
-      <div className="mt-4 flex items-center justify-between gap-3">
+      {/* Quebra de linha permitida: com os alvos de 44px, séries + reps + três
+          botões não cabem numa linha de celular, e sem quebra a lixeira saía
+          para fora do card e a página ganhava rolagem lateral. */}
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         {isCardio ? (
           <p className="text-[11px] text-muted-foreground">
             Duração e distância são logadas durante a sessão.
@@ -292,7 +295,7 @@ function PlanModeCard({
           N exercícios, N botões "Mover para cima" idênticos não dizem a quem
           usa leitor de tela qual deles está sob o foco.
         */}
-        <div className="flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-1">
           {onMoveUp && (
             <button
               type="button"
