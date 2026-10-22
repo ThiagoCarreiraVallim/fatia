@@ -10,6 +10,7 @@ import { NextWorkoutCard } from '@/components/dashboard/next-workout-card';
 import { StepsCard } from '@/components/dashboard/steps-card';
 import { StreakCard } from '@/components/dashboard/streak-card';
 import { WaterCard } from '@/components/dashboard/water-card';
+import { ErrorState } from '@/components/ui/error-state';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const noSubscription = () => () => undefined;
@@ -23,16 +24,17 @@ export default function HomePage() {
     () => greetingLine(me.data?.name),
     () => null,
   );
-  const { data, isLoading } = useQuery({
+  const today = useQuery({
     queryKey: ['dashboard', 'today'],
     queryFn: () => progressApi.today(),
   });
+  const data = today.data;
 
   // O `today()` só LÊ as conquistas — desbloquear dentro de um `GET` fazia a leitura gravar.
   // Quem desbloqueia é esta chamada. É `useQuery` mesmo sendo `POST` porque a operação é
   // idempotente e o que interessa é o estado que ela devolve; enquanto ela não chega, o card
   // usa o que veio do dashboard para não piscar vazio.
-  const { data: conquistas } = useQuery({
+  const { data: achievements } = useQuery({
     queryKey: ['achievements', 'refresh'],
     queryFn: () => progressApi.refreshAchievements(),
   });
@@ -55,12 +57,20 @@ export default function HomePage() {
         </Link>
       </section>
 
-      {isLoading && (
+      {today.isLoading && (
         <div className="space-y-4">
           <Skeleton className="h-[200px]" />
           <Skeleton className="h-[160px]" />
           <Skeleton className="h-20" />
         </div>
+      )}
+
+      {/* Como no app: sem isto, a falha deixava o Início só com a saudação. */}
+      {today.isError && (
+        <ErrorState
+          message="Não deu para carregar o resumo de hoje."
+          onRetry={() => void today.refetch()}
+        />
       )}
 
       {data && (
@@ -69,7 +79,7 @@ export default function HomePage() {
           <NextWorkoutCard workout={data.workout} />
           <WaterCard data={data.water} />
           <StepsCard data={data.steps} />
-          <StreakCard streak={data.streak} achievements={conquistas ?? data.achievements} />
+          <StreakCard streak={data.streak} achievements={achievements ?? data.achievements} />
         </>
       )}
     </div>
