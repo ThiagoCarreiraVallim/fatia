@@ -1250,4 +1250,14 @@ describe('ChatScreen — o agente da comunidade (Fase 7c)', () => {
     expect(screen.getAllByText('Treinador Norte').length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByRole('radiogroup', { name: 'Com quem conversar' })).toBeNull();
   });
+
+  it('a barra de topo começa outra conversa a um toque, sem abrir a gaveta', async () => {
+    montar();
+    const barra = screen.getByRole('banner');
+    await userEvent.setup().click(within(barra).getByRole('button', { name: 'Nova conversa' }));
+    expect(pushMock).toHaveBeenCalledTimes(1);
+    const destino = pushMock.mock.calls[0][0] as string;
+    expect(destino).toMatch(/^\/chat\/[0-9a-f-]{36}$/);
+    expect(destino).not.toBe(`/chat/${CONVERSA}`);
+  });
 });

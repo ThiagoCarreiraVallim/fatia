@@ -1,7 +1,10 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useAuiState } from '@assistant-ui/react';
+import { SquarePen } from 'lucide-react';
 import { EmptyState, EmptyStateGreeting } from '@/components/elements/empty-state';
+import { ghostButton } from '@/components/elements/surfaces';
 import { TopBarActions, useTopBarTitle } from '@/components/layout/app-top-bar';
 import {
   useCabecalhoDaConversa,
@@ -9,10 +12,11 @@ import {
   useDisponibilidadeDoChat,
 } from './chat-runtime-provider';
 import { LinhaDoAgente } from './agente';
-import { GavetaDeConversas } from './conversas';
+import { GavetaDeConversas, novaConversa } from './conversas';
 import { GavetaDeMemorias } from './memorias';
 import { UpsellIA } from './upsell-ia';
 import { ChatThread } from './thread';
+import { cn } from '@/lib/utils';
 
 /**
  * A tela do chat: o nome da conversa e as gavetas (memórias, conversas) vão
@@ -23,14 +27,15 @@ import { ChatThread } from './thread';
  * aparece, e o auto-hospedado sem IA continua um produto inteiro.
  */
 export function ChatScreen() {
-  const aberta = useConversaAberta();
+  const router = useRouter();
+  const openId = useConversaAberta();
   // Do servidor, e não só da lista do runtime: o nome é gerado depois do primeiro
   // turno, e a lista do runtime não é relida.
-  const doServidor = useCabecalhoDaConversa(aberta).data?.title;
-  const doRuntime = useAuiState((s) => s.threadListItem?.title);
-  const titulo = doServidor ?? doRuntime ?? 'Chat';
-  const disponivel = useDisponibilidadeDoChat();
-  useTopBarTitle(titulo);
+  const fromServer = useCabecalhoDaConversa(openId).data?.title;
+  const fromRuntime = useAuiState((s) => s.threadListItem?.title);
+  const title = fromServer ?? fromRuntime ?? 'Chat';
+  const availability = useDisponibilidadeDoChat();
+  useTopBarTitle(title);
 
   return (
     <div
@@ -46,15 +51,24 @@ export function ChatScreen() {
     >
       <TopBarActions>
         <GavetaDeMemorias />
-        <GavetaDeConversas aberta={aberta} />
+        <GavetaDeConversas aberta={openId} />
+        {/* Como no app: começar outra conversa a um toque, sem abrir a gaveta. */}
+        <button
+          type="button"
+          aria-label="Nova conversa"
+          onClick={() => router.push(novaConversa())}
+          className={cn(ghostButton, 'rounded-full p-2 text-foreground/70')}
+        >
+          <SquarePen size={20} aria-hidden />
+        </button>
       </TopBarActions>
       <LinhaDoAgente />
 
-      {disponivel?.available === false ? (
+      {availability?.available === false ? (
         <EmptyState className="my-auto max-w-none self-center">
           <EmptyStateGreeting>O chat com IA não está ligado nesta instância.</EmptyStateGreeting>
         </EmptyState>
-      ) : disponivel?.reason === 'plan_required' ? (
+      ) : availability?.reason === 'plan_required' ? (
         <UpsellIA />
       ) : (
         <ChatThread />
