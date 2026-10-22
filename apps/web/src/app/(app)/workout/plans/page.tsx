@@ -10,12 +10,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { ErrorState } from '@/components/elements/error-state';
+import { pluralize } from '@/components/workout/format';
 
 export default function PlansPage() {
   const qc = useQueryClient();
   const router = useRouter();
   const [newName, setNewName] = useState('');
   const [showForm, setShowForm] = useState(false);
+  // Excluir apagava o plano no primeiro clique, a um ícone de distância do
+  // próprio plano. O app pergunta antes; aqui também.
+  const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null);
 
   const plans = useQuery({
     queryKey: ['workout', 'plans'],
@@ -38,6 +44,7 @@ export default function PlansPage() {
   const remove = useMutation({
     mutationFn: (id: string) => workoutApi.deletePlan(id),
     onSuccess: () => {
+      setRemoveTarget(null);
       qc.invalidateQueries({ queryKey: ['workout', 'plans'] });
     },
   });
@@ -87,6 +94,16 @@ export default function PlansPage() {
         </div>
       )}
 
+      {plans.isError && (
+        <ErrorState
+          className="max-w-none"
+          title="Não foi possível carregar seus planos"
+          detail={plans.error instanceof Error ? plans.error.message : 'Tente de novo.'}
+          retryLabel="Tentar de novo"
+          onRetry={() => void plans.refetch()}
+        />
+      )}
+
       {plans.data && plans.data.length === 0 && (
         <EmptyState
           icon={ClipboardList}
@@ -111,23 +128,36 @@ export default function PlansPage() {
               <div className="flex-1 min-w-0">
                 <p className="truncate text-base font-bold text-foreground">{plan.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {plan.exercises?.length ?? 0} exercício
-                  {(plan.exercises?.length ?? 0) !== 1 ? 's' : ''}
+                  {plan.exercises?.length ?? 0}{' '}
+                  {pluralize(plan.exercises?.length ?? 0, 'exercício', 'exercícios')}
                 </p>
               </div>
               <ChevronRight size={16} className="shrink-0 text-muted-foreground" />
             </Link>
             <button
               type="button"
-              onClick={() => remove.mutate(plan.id)}
-              className="rounded p-1 text-muted-foreground hover:text-danger"
-              aria-label="Excluir plano"
+              onClick={() => setRemoveTarget({ id: plan.id, name: plan.name })}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-danger"
+              aria-label={`Excluir plano ${plan.name}`}
             >
               <Trash2 size={16} />
             </button>
           </div>
         ))}
       </div>
+
+      <ConfirmDialog
+        open={removeTarget != null}
+        onOpenChange={(open) => {
+          if (!open) setRemoveTarget(null);
+        }}
+        title="Excluir plano?"
+        description={`"${removeTarget?.name ?? ''}" sai da lista. Os treinos já feitos com ele continuam no histórico.`}
+        confirmLabel="Excluir"
+        pendingLabel="Excluindo..."
+        pending={remove.isPending}
+        onConfirm={() => removeTarget && remove.mutate(removeTarget.id)}
+      />
     </div>
   );
 }
