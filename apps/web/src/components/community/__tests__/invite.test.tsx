@@ -26,11 +26,11 @@ const PREVIEW: InvitePreview = {
 };
 const TOKEN = 'a'.repeat(43);
 
-function renderAccept() {
+function renderAccept(preview: InvitePreview = PREVIEW) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <InviteAccept token={TOKEN} preview={PREVIEW} />
+      <InviteAccept token={TOKEN} preview={preview} />
     </QueryClientProvider>,
   );
 }
@@ -82,5 +82,25 @@ describe('convite', () => {
     renderAccept();
     await userEvent.click(screen.getByRole('button', { name: 'Aceitar e entrar' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/não pode ser usado/);
+  });
+
+  it('o obrigatório vem marcado e travado, e o 409 mostra o que falta', async () => {
+    vi.mocked(groupsApi.acceptInvite).mockRejectedValue(
+      new ApiError('Para entrar nesta comunidade é preciso compartilhar: Metas.', 409),
+    );
+    renderAccept({ ...PREVIEW, requiredSharingScopes: ['WORKOUT'] });
+    const treino = screen.getByRole('checkbox', { name: /Treino/ });
+    expect(treino).toBeChecked();
+    expect(treino).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Aceitar e entrar' }));
+    expect(groupsApi.acceptInvite).toHaveBeenCalledWith(TOKEN, {
+      scopes: ['WORKOUT'],
+      statsOptIn: false,
+    });
+    // O dono passou a exigir Metas depois que o convite abriu: a frase do
+    // servidor, e não um "tente de novo" que daria o mesmo erro.
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Para entrar nesta comunidade é preciso compartilhar: Metas.',
+    );
   });
 });

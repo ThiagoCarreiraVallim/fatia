@@ -67,4 +67,19 @@ describe('painel › configurações', () => {
     expect(screen.getByText('academia-demo')).toBeInTheDocument();
     expect(await screen.findByText('Helena')).toBeInTheDocument();
   });
+
+  it('muda a exigência num salvar à parte, avisando que vale para quem entrar depois', async () => {
+    vi.mocked(orgApi.update).mockResolvedValue({} as never);
+    abrir();
+    const secao = screen.getByRole('form', { name: 'Compartilhamento obrigatório' });
+    expect(within(secao).getByText(/Vale para quem entrar daqui em diante/)).toBeInTheDocument();
+    const salvar = within(secao).getByRole('button', { name: 'Salvar exigência' });
+    expect(salvar).toBeDisabled();
+    await userEvent.click(within(secao).getByRole('checkbox', { name: /Treino/ }));
+    await userEvent.click(salvar);
+    await waitFor(() =>
+      expect(orgApi.update).toHaveBeenCalledWith('g1', { requiredSharingScopes: ['WORKOUT'] }),
+    );
+    expect(toast).toHaveBeenCalledWith('Exigência atualizada.');
+  });
 });

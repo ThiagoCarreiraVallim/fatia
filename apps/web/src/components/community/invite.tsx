@@ -91,11 +91,15 @@ export function InviteAccept({ token, preview }: { token: string; preview: Invit
     },
   });
 
-  const erro =
+  const error =
     accept.isError && !alreadyMemberGroupId(accept.error)
       ? accept.error instanceof ApiError && accept.error.isNotFound
         ? INVITE_UNAVAILABLE
-        : 'Não deu para aceitar agora. Tente de novo.'
+        : // O 409 diz o que falta compartilhar, se o dono mudou a exigência
+          // depois que o convite abriu.
+          accept.error instanceof ApiError && accept.error.isConflict
+          ? accept.error.message
+          : 'Não deu para aceitar agora. Tente de novo.'
       : null;
 
   return (
@@ -103,9 +107,10 @@ export function InviteAccept({ token, preview }: { token: string; preview: Invit
       <InviteCard preview={preview} />
       <ConsentForm
         team={preview.team}
+        required={preview.requiredSharingScopes}
         submitLabel="Aceitar e entrar"
         pending={accept.isPending}
-        error={erro}
+        error={error}
         onSubmit={(consent) => accept.mutate(consent)}
         secondary={
           <Button asChild variant="ghost">

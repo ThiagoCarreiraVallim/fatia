@@ -14,7 +14,9 @@ import {
   panelHref,
   teamRoleLabel,
   type JoinPolicy,
+  type ShareScope,
 } from '@fatia/api-client';
+import { RequiredScopesField } from '@/components/community/required-scopes-field';
 import { ImageField } from '@/components/content/image-field';
 import { useOrgGroup } from '@/components/org/org-shell';
 import { orgKeys } from '@/components/community/query-keys';
@@ -41,8 +43,8 @@ import {
 
 const POLITICAS: JoinPolicy[] = ['OPEN', 'APPROVAL', 'INVITE_ONLY'];
 
-function erroDaApi(err: unknown, padrao: string): string {
-  return err instanceof ApiError && err.status < 500 && err.message ? err.message : padrao;
+function apiErrorMessage(err: unknown, fallback: string): string {
+  return err instanceof ApiError && err.status < 500 && err.message ? err.message : fallback;
 }
 
 /**
@@ -81,7 +83,7 @@ export default function OrgSettingsPage() {
       toast('Comunidade atualizada.');
       void qc.invalidateQueries({ queryKey: ['community'] });
     },
-    onError: (err) => toast(erroDaApi(err, 'Não deu para salvar agora.')),
+    onError: (err) => toast(apiErrorMessage(err, 'Não deu para salvar agora.')),
   });
   const transferir = useMutation({
     mutationFn: () => orgApi.transferOwner(g.id, novoDono),
@@ -91,7 +93,7 @@ export default function OrgSettingsPage() {
       void qc.invalidateQueries({ queryKey: ['community'] });
       router.replace(panelHref(g.id));
     },
-    onError: (err) => toast(erroDaApi(err, 'Não deu para transferir agora.')),
+    onError: (err) => toast(apiErrorMessage(err, 'Não deu para transferir agora.')),
   });
   const apagar = useMutation({
     mutationFn: () => orgApi.remove(g.id),
@@ -104,7 +106,7 @@ export default function OrgSettingsPage() {
       toast(
         err instanceof ApiError && err.status === 503
           ? 'Não conseguimos cancelar a cobrança dos assentos agora. Nada foi apagado; tente de novo em alguns minutos.'
-          : erroDaApi(err, 'Não deu para apagar agora.'),
+          : apiErrorMessage(err, 'Não deu para apagar agora.'),
       ),
   });
 
@@ -124,50 +126,59 @@ export default function OrgSettingsPage() {
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <form
-        aria-labelledby="perfil"
-        className="space-y-3 rounded-2xl border border-subtle bg-card p-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          salvar.mutate();
-        }}
-      >
-        <h2 id="perfil" className="text-sm font-semibold">
-          Perfil
-        </h2>
-        <div className="space-y-1">
-          <Label htmlFor="nome">Nome</Label>
-          <Input id="nome" maxLength={80} value={nome} onChange={(e) => setNome(e.target.value)} />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="descricao">Descrição</Label>
-          <Textarea
-            id="descricao"
-            rows={3}
-            maxLength={500}
-            value={descricao}
-            onChange={(e) => setDescricao(e.target.value)}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="politica">Como se entra</Label>
-          <Select value={politica} onValueChange={(v) => setPolitica(v as JoinPolicy)}>
-            <SelectTrigger id="politica" className="h-11">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {POLITICAS.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {joinPolicyLabel(p)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <Button type="submit" disabled={!mudou || nome.trim().length < 2 || salvar.isPending}>
-          {salvar.isPending ? 'Salvando...' : 'Salvar'}
-        </Button>
-      </form>
+      <div className="space-y-4">
+        <form
+          aria-labelledby="perfil"
+          className="space-y-3 rounded-2xl border border-subtle bg-card p-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            salvar.mutate();
+          }}
+        >
+          <h2 id="perfil" className="text-sm font-semibold">
+            Perfil
+          </h2>
+          <div className="space-y-1">
+            <Label htmlFor="nome">Nome</Label>
+            <Input
+              id="nome"
+              maxLength={80}
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="descricao">Descrição</Label>
+            <Textarea
+              id="descricao"
+              rows={3}
+              maxLength={500}
+              value={descricao}
+              onChange={(e) => setDescricao(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="politica">Como se entra</Label>
+            <Select value={politica} onValueChange={(v) => setPolitica(v as JoinPolicy)}>
+              <SelectTrigger id="politica" className="h-11">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {POLITICAS.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {joinPolicyLabel(p)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button type="submit" disabled={!mudou || nome.trim().length < 2 || salvar.isPending}>
+            {salvar.isPending ? 'Salvando...' : 'Salvar'}
+          </Button>
+        </form>
+
+        <RequiredScopesSection />
+      </div>
 
       <div className="space-y-4">
         <AvatarSection />
@@ -300,6 +311,50 @@ export default function OrgSettingsPage() {
   );
 }
 
+/**
+ * O que a comunidade exige. Seção à parte, com o próprio Salvar: mudar a
+ * exigência tem consequência diferente de mudar o nome, e o aviso diz qual.
+ */
+function RequiredScopesSection() {
+  const g = useOrgGroup();
+  const qc = useQueryClient();
+  const [scopes, setScopes] = useState<ShareScope[]>(g.requiredSharingScopes);
+  const save = useMutation({
+    mutationFn: () => orgApi.update(g.id, { requiredSharingScopes: scopes }),
+    onSuccess: () => {
+      toast('Exigência atualizada.');
+      void qc.invalidateQueries({ queryKey: ['community'] });
+    },
+    onError: (err) => toast(apiErrorMessage(err, 'Não deu para salvar agora.')),
+  });
+  // `toggleScope` mantém a ordem canônica, e a API devolve na mesma: comparar
+  // as listas juntas basta.
+  const changed = scopes.join() !== g.requiredSharingScopes.join();
+
+  return (
+    <form
+      aria-labelledby="obrigatorio"
+      className="space-y-3 rounded-2xl border border-subtle bg-card p-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate();
+      }}
+    >
+      <h2 id="obrigatorio" className="text-sm font-semibold">
+        Compartilhamento obrigatório
+      </h2>
+      <RequiredScopesField
+        value={scopes}
+        onChange={setScopes}
+        hint="Vale para quem entrar daqui em diante. Quem já está dentro não passa a ser cobrado pelo que não compartilha; só não consegue tirar o que já compartilha e passou a ser obrigatório. A equipe não precisa."
+      />
+      <Button type="submit" disabled={!changed || save.isPending}>
+        {save.isPending ? 'Salvando...' : 'Salvar exigência'}
+      </Button>
+    </form>
+  );
+}
+
 /** O avatar da comunidade: aparece em Minhas comunidades e no detalhe dela. */
 function AvatarSection() {
   const g = useOrgGroup();
@@ -310,7 +365,7 @@ function AvatarSection() {
       toast(fileId ? 'Avatar atualizado.' : 'Avatar removido.');
       void qc.invalidateQueries({ queryKey: ['community'] });
     },
-    onError: (err) => toast(erroDaApi(err, 'Não deu para trocar o avatar agora.')),
+    onError: (err) => toast(apiErrorMessage(err, 'Não deu para trocar o avatar agora.')),
   });
   return (
     <section

@@ -29,7 +29,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 
-const quando = (iso: string) =>
+const formatWhen = (iso: string) =>
   new Intl.DateTimeFormat('pt-BR', {
     day: 'numeric',
     month: 'short',
@@ -53,16 +53,16 @@ export default function CommunityDetailPage() {
     queryKey: communityKeys.group(groupId),
     queryFn: () => groupsApi.get(groupId),
   });
-  const ativo = group.data?.status === 'ACTIVE';
+  const active = group.data?.status === 'ACTIVE';
   const members = useQuery({
     queryKey: communityKeys.members(groupId),
     queryFn: () => groupsApi.members(groupId),
-    enabled: ativo,
+    enabled: active,
   });
   const log = useQuery({
     queryKey: communityKeys.accessLog(groupId),
     queryFn: () => groupsApi.accessLog({ groupId, limit: 20 }),
-    enabled: ativo,
+    enabled: active,
   });
   useTopBarTitle(group.data?.name);
 
@@ -91,14 +91,14 @@ export default function CommunityDetailPage() {
     );
   }
   if (group.isError) {
-    const sumiu = group.error instanceof ApiError && group.error.isNotFound;
+    const notFound = group.error instanceof ApiError && group.error.isNotFound;
     return (
       <div className="p-4">
         <EmptyState
-          title={sumiu ? 'Comunidade não encontrada' : 'Não deu para carregar a comunidade'}
-          description={sumiu ? 'Você não faz mais parte dela, ou ela não existe.' : undefined}
+          title={notFound ? 'Comunidade não encontrada' : 'Não deu para carregar a comunidade'}
+          description={notFound ? 'Você não faz mais parte dela, ou ela não existe.' : undefined}
           action={
-            sumiu ? (
+            notFound ? (
               <Button asChild variant="outline">
                 <Link href="/community">Minhas comunidades</Link>
               </Button>
@@ -114,12 +114,12 @@ export default function CommunityDetailPage() {
   }
 
   const g = group.data;
-  const equipe = (members.data ?? []).filter((m) => m.role !== 'MEMBER');
-  const dono = g.role === 'OWNER';
+  const team = (members.data ?? []).filter((m) => m.role !== 'MEMBER');
+  const isOwner = g.role === 'OWNER';
 
   return (
     <div className="space-y-6 p-4">
-      {ativo && <CommunityTabs groupId={g.id} />}
+      {active && <CommunityTabs groupId={g.id} />}
       <section className="flex items-start gap-3">
         <GroupAvatar name={g.name} url={g.avatarUrl} size={48} />
         <div className="min-w-0 space-y-1">
@@ -127,6 +127,11 @@ export default function CommunityDetailPage() {
           <p className="text-xs text-muted-foreground">
             {`${joinPolicyLabel(g.joinPolicy)} · seu papel: ${teamRoleLabel(g.role).toLowerCase()}`}
           </p>
+          {g.requiredSharingScopes.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {`Para participar como membro: compartilhar ${consentSummary(g.requiredSharingScopes).toLowerCase()}.`}
+            </p>
+          )}
         </div>
       </section>
 
@@ -139,7 +144,7 @@ export default function CommunityDetailPage() {
           <span className="flex-1 text-sm">
             <span className="block font-medium">Abrir painel</span>
             <span className="block text-xs text-muted-foreground">
-              {dono
+              {isOwner
                 ? 'Membros, convites, planos e dicas, assentos e números da comunidade.'
                 : 'Membros, o que compartilham com você, convites, planos e dicas.'}
             </span>
@@ -148,7 +153,7 @@ export default function CommunityDetailPage() {
         </Link>
       )}
 
-      {!ativo && (
+      {!active && (
         <p className="rounded-2xl border border-subtle bg-card p-4 text-sm">
           Seu pedido está aguardando o dono aprovar. O que você escolheu compartilhar (
           {consentSummary(g.consentScopes).toLowerCase()}) passa a valer quando você entrar.
@@ -170,20 +175,20 @@ export default function CommunityDetailPage() {
         </Link>
       )}
 
-      {ativo && <CommunityChallengesPreview groupId={g.id} />}
+      {active && <CommunityChallengesPreview groupId={g.id} />}
 
-      {ativo && <CommunityContentPreview groupId={g.id} />}
+      {active && <CommunityContentPreview groupId={g.id} />}
 
-      {ativo && (
+      {active && (
         <section className="space-y-2" aria-labelledby="equipe">
           <h2 id="equipe" className="text-sm font-semibold">
             Equipe
           </h2>
-          {equipe.length === 0 ? (
+          {team.length === 0 ? (
             <p className="text-xs text-muted-foreground">Ninguém da equipe, por enquanto.</p>
           ) : (
             <ul className="divide-y rounded-2xl border border-subtle bg-card">
-              {equipe.map((m) => (
+              {team.map((m) => (
                 <li key={m.membershipId} className="flex justify-between px-4 py-3 text-sm">
                   <span>{m.name}</span>
                   <span className="text-xs text-muted-foreground">{teamRoleLabel(m.role)}</span>
@@ -194,25 +199,34 @@ export default function CommunityDetailPage() {
         </section>
       )}
 
-      {ativo && (
+      {active && (
         <section className="space-y-2" aria-labelledby="compartilho">
           <h2 id="compartilho" className="text-sm font-semibold">
             O que eu compartilho
           </h2>
           <ConsentForm
-            key={`${g.consentScopes.join()}|${g.statsOptIn}`}
+            key={`${g.consentScopes.join()}|${g.statsOptIn}|${g.requiredSharingScopes.join()}`}
             initial={{ scopes: g.consentScopes, statsOptIn: g.statsOptIn }}
-            team={equipe}
+            // A exigência é de quem participa como membro; a equipe recebe.
+            required={g.role === 'MEMBER' ? g.requiredSharingScopes : []}
+            team={team}
             submitLabel="Salvar"
             editing
             pending={save.isPending}
-            error={save.isError ? 'Não deu para salvar agora. Tente de novo.' : null}
+            error={
+              save.isError
+                ? // 409: tirar um obrigatório que já compartilha; a API diz qual.
+                  save.error instanceof ApiError && save.error.isConflict
+                  ? save.error.message
+                  : 'Não deu para salvar agora. Tente de novo.'
+                : null
+            }
             onSubmit={(consent) => save.mutate(consent)}
           />
         </section>
       )}
 
-      {ativo && (
+      {active && (
         <section className="space-y-2" aria-labelledby="acessos">
           <h2 id="acessos" className="flex items-center gap-2 text-sm font-semibold">
             <ShieldCheck size={16} aria-hidden /> Quem acessou seus dados
@@ -224,19 +238,21 @@ export default function CommunityDetailPage() {
           )}
           {log.data && log.data.length > 0 && (
             <ul className="divide-y rounded-2xl border border-subtle bg-card text-sm">
-              {log.data.map((linha, i) => (
-                <li key={`${linha.at}-${i}`} className="flex justify-between gap-3 px-4 py-3">
+              {log.data.map((entry, i) => (
+                <li key={`${entry.at}-${i}`} className="flex justify-between gap-3 px-4 py-3">
                   <span className="min-w-0">
                     <span className="block truncate">
-                      {linha.professionalName ?? 'Conta apagada'}
+                      {entry.professionalName ?? 'Conta apagada'}
                     </span>
                     <span className="block text-xs text-muted-foreground">
-                      {linha.denied
-                        ? `${SHARE_SCOPE_LABEL[linha.scope]} · barrado`
-                        : SHARE_SCOPE_LABEL[linha.scope]}
+                      {entry.denied
+                        ? `${SHARE_SCOPE_LABEL[entry.scope]} · barrado`
+                        : SHARE_SCOPE_LABEL[entry.scope]}
                     </span>
                   </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">{quando(linha.at)}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {formatWhen(entry.at)}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -244,26 +260,26 @@ export default function CommunityDetailPage() {
         </section>
       )}
 
-      {dono ? (
+      {isOwner ? (
         <p className="text-xs text-muted-foreground">
           Quem é dono não sai da comunidade: transfira-a pelo painel, em Configurações.
         </p>
       ) : (
         <Button variant="outline" className="w-full text-danger" onClick={() => setLeaving(true)}>
-          {ativo ? 'Sair da comunidade' : 'Cancelar pedido'}
+          {active ? 'Sair da comunidade' : 'Cancelar pedido'}
         </Button>
       )}
 
       <ConfirmDialog
         open={leaving}
         onOpenChange={setLeaving}
-        title={ativo ? `Sair de ${g.name}?` : 'Cancelar o pedido?'}
+        title={active ? `Sair de ${g.name}?` : 'Cancelar o pedido?'}
         description={
-          ativo
+          active
             ? `A equipe perde o acesso ao que você compartilhava${g.hasAiSeat ? ', e o PRO pago pela comunidade acaba' : ''}. Seus registros continuam com você.`
             : 'Você pode pedir de novo depois, pelo código ou por um convite.'
         }
-        confirmLabel={ativo ? 'Sair' : 'Cancelar pedido'}
+        confirmLabel={active ? 'Sair' : 'Cancelar pedido'}
         pendingLabel="Saindo..."
         pending={leave.isPending}
         onConfirm={() => leave.mutate()}

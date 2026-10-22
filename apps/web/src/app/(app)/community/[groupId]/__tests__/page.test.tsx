@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { MyGroup } from '@fatia/api-client';
+import { ApiError, type MyGroup } from '@fatia/api-client';
 
 const nav = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock('next/navigation', () => ({
@@ -147,5 +147,28 @@ describe('/community/[groupId]', () => {
     renderPage(grupo({ role: 'MEMBER' }));
     expect(await screen.findByRole('button', { name: 'Sair da comunidade' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Abrir painel/ })).not.toBeInTheDocument();
+  });
+
+  it('membro: o obrigatório que já compartilha fica travado, e o 409 mostra a frase da API', async () => {
+    vi.mocked(groupsApi.setConsent).mockRejectedValue(
+      new ApiError(
+        'Alimentação é obrigatório nesta comunidade. Para parar de compartilhar, saia da comunidade.',
+        409,
+      ),
+    );
+    renderPage(grupo({ requiredSharingScopes: ['NUTRITION', 'GOALS'] }));
+    const alimentacao = await screen.findByRole('checkbox', { name: /Alimentação/ });
+    expect(alimentacao).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: /Metas/ })).toBeEnabled();
+    expect(
+      screen.getByText(/Para participar como membro: compartilhar alimentação e metas/),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Para parar de compartilhar, saia/);
+  });
+
+  it('a equipe não tem o obrigatório travado', async () => {
+    renderPage(grupo({ role: 'PROFESSIONAL', requiredSharingScopes: ['NUTRITION'] }));
+    expect(await screen.findByRole('checkbox', { name: /Alimentação/ })).toBeEnabled();
   });
 });

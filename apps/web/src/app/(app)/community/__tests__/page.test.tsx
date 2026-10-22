@@ -126,4 +126,39 @@ describe('/community', () => {
       'Nenhuma comunidade com esse código.',
     );
   });
+
+  it('pelo código, o obrigatório vem travado e o 409 diz o que falta', async () => {
+    vi.mocked(groupsApi.mine).mockResolvedValue([]);
+    vi.mocked(groupsApi.previewBySlug).mockResolvedValue({
+      id: 'g1',
+      type: 'SOCIAL',
+      name: 'Academia Demo',
+      slug: 'academia-demo',
+      memberCount: 3,
+      description: null,
+      joinPolicy: 'OPEN',
+      team: [{ name: 'Ana', role: 'OWNER' }],
+      requiredSharingScopes: ['NUTRITION'],
+    });
+    vi.mocked(groupsApi.join).mockRejectedValue(
+      new ApiError(
+        'Para entrar nesta comunidade é preciso compartilhar: Alimentação e Metas.',
+        409,
+      ),
+    );
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: /^Entrar com código$/ }));
+    await userEvent.type(screen.getByLabelText('Código da comunidade'), 'academia-demo');
+    await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+
+    const alimentacao = await screen.findByRole('checkbox', { name: /Alimentação/ });
+    expect(alimentacao).toBeChecked();
+    expect(alimentacao).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Entrar' }));
+    expect(groupsApi.join).toHaveBeenCalledWith('academia-demo', {
+      scopes: ['NUTRITION'],
+      statsOptIn: false,
+    });
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Alimentação e Metas/);
+  });
 });

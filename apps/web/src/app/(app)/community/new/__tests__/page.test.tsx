@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@fatia/api-client';
@@ -24,7 +24,12 @@ describe('/community/new', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Criar comunidade' }));
     await waitFor(() =>
       expect(orgApi.create).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'Box Centro', type: 'SPONSORED', joinPolicy: 'APPROVAL' }),
+        expect.objectContaining({
+          name: 'Box Centro',
+          type: 'SPONSORED',
+          joinPolicy: 'APPROVAL',
+          requiredSharingScopes: [],
+        }),
       ),
     );
     expect(nav.replace).toHaveBeenCalledWith('/org/g9/invites');
@@ -40,5 +45,21 @@ describe('/community/new', () => {
     await userEvent.type(screen.getByLabelText('Nome'), 'ox');
     await userEvent.click(screen.getByRole('button', { name: 'Criar comunidade' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Slug já está em uso');
+  });
+
+  it('o dono escolhe o que os membros precisam compartilhar', async () => {
+    vi.mocked(orgApi.create).mockResolvedValue({ id: 'g9' } as never);
+    renderWithClient(<NewCommunityPage />);
+    const grupo = screen.getByRole('group', { name: 'O que os membros precisam compartilhar' });
+    expect(within(grupo).getByText(/não consegue desmarcar/)).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Nome'), 'Box Centro');
+    await userEvent.click(within(grupo).getByRole('checkbox', { name: /Metas/ }));
+    await userEvent.click(within(grupo).getByRole('checkbox', { name: /Treino/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Criar comunidade' }));
+    await waitFor(() =>
+      expect(orgApi.create).toHaveBeenCalledWith(
+        expect.objectContaining({ requiredSharingScopes: ['WORKOUT', 'GOALS'] }),
+      ),
+    );
   });
 });

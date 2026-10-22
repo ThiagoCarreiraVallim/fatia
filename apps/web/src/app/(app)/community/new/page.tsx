@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -14,7 +15,9 @@ import {
   panelHref,
   type GroupType,
   type JoinPolicy,
+  type ShareScope,
 } from '@fatia/api-client';
+import { RequiredScopesField } from '@/components/community/required-scopes-field';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -35,7 +38,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-const POLITICAS: JoinPolicy[] = ['APPROVAL', 'OPEN', 'INVITE_ONLY'];
+const JOIN_POLICIES: JoinPolicy[] = ['APPROVAL', 'OPEN', 'INVITE_ONLY'];
 
 const schema = z.object({
   name: z.string().trim().min(2, 'Dê um nome com ao menos 2 letras').max(120),
@@ -43,7 +46,7 @@ const schema = z.object({
   joinPolicy: z.enum(['OPEN', 'APPROVAL', 'INVITE_ONLY']),
   description: z.string().trim().max(500),
 });
-type Valores = z.infer<typeof schema>;
+type FormValues = z.infer<typeof schema>;
 
 /**
  * Criar uma comunidade. Quem cria é a dona, e cai direto no painel para
@@ -52,18 +55,21 @@ type Valores = z.infer<typeof schema>;
 export default function NewCommunityPage() {
   const router = useRouter();
   const qc = useQueryClient();
-  const form = useForm<Valores>({
+  const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { name: '', type: 'SPONSORED', joinPolicy: 'APPROVAL', description: '' },
   });
+  // Fora do zod: são toggles, sem o que validar além do tipo.
+  const [requiredScopes, setRequiredScopes] = useState<ShareScope[]>([]);
 
-  const criar = useMutation({
-    mutationFn: (v: Valores) =>
+  const create = useMutation({
+    mutationFn: (v: FormValues) =>
       orgApi.create({
         name: v.name,
         type: v.type,
         joinPolicy: v.joinPolicy,
         ...(v.description ? { description: v.description } : {}),
+        requiredSharingScopes: requiredScopes,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       }),
     onSuccess: (g) => {
@@ -75,7 +81,7 @@ export default function NewCommunityPage() {
   return (
     <div className="p-4">
       <Form {...form}>
-        <form className="space-y-5" onSubmit={form.handleSubmit((v) => criar.mutate(v))}>
+        <form className="space-y-5" onSubmit={form.handleSubmit((v) => create.mutate(v))}>
           <FormField
             control={form.control}
             name="name"
@@ -125,7 +131,7 @@ export default function NewCommunityPage() {
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {POLITICAS.map((p) => (
+                    {JOIN_POLICIES.map((p) => (
                       <SelectItem key={p} value={p}>
                         {joinPolicyLabel(p)}
                       </SelectItem>
@@ -151,15 +157,20 @@ export default function NewCommunityPage() {
               </FormItem>
             )}
           />
-          {criar.isError && (
+          <RequiredScopesField
+            value={requiredScopes}
+            onChange={setRequiredScopes}
+            hint="Quem entrar como membro já vem com isso marcado e não consegue desmarcar; o resto continua escolha de cada um. A equipe (profissionais e criadores) não precisa. Nada marcado: ninguém é obrigado a compartilhar."
+          />
+          {create.isError && (
             <p role="alert" className="text-sm text-danger">
-              {criar.error instanceof ApiError && criar.error.status < 500
-                ? criar.error.message
+              {create.error instanceof ApiError && create.error.status < 500
+                ? create.error.message
                 : 'Não deu para criar agora. Tente de novo.'}
             </p>
           )}
-          <Button type="submit" size="lg" className="w-full" disabled={criar.isPending}>
-            {criar.isPending ? 'Criando...' : 'Criar comunidade'}
+          <Button type="submit" size="lg" className="w-full" disabled={create.isPending}>
+            {create.isPending ? 'Criando...' : 'Criar comunidade'}
           </Button>
         </form>
       </Form>

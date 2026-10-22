@@ -68,6 +68,8 @@ export function JoinByCodeDrawer({ open, onOpenChange, onJoined }: Props) {
       ? 'Nenhuma comunidade com esse código.'
       : 'Não deu para procurar agora. Tente de novo.'
     : null;
+  // 409 traz a frase do servidor: já é membro, ou falta compartilhar o que a
+  // comunidade exige (o dono pode ter mudado a exigência depois do cartão abrir).
   const joinError = join.isError
     ? join.error instanceof ApiError && join.error.isConflict
       ? join.error.message
@@ -93,6 +95,7 @@ export function JoinByCodeDrawer({ open, onOpenChange, onJoined }: Props) {
             )}
             <ConsentForm
               team={preview.team}
+              required={preview.requiredSharingScopes}
               submitLabel={preview.joinPolicy === 'OPEN' ? 'Entrar' : 'Pedir para entrar'}
               pending={join.isPending}
               error={joinError}
