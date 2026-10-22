@@ -123,7 +123,7 @@ describe('StrengthChart', () => {
 
     await waitFor(() => expect(screen.getByText('Supino reto')).toBeInTheDocument());
     // Com um exercício ativo, o botão do seletor mostra o nome dele.
-    await user.click(screen.getByRole('button', { name: 'Supino reto' }));
+    await user.click(screen.getByRole('button', { name: 'Trocar exercício, atual Supino reto' }));
     await user.click(screen.getByRole('button', { name: 'escolher agachamento' }));
     await waitFor(() => expect(screen.getByText('Agachamento livre')).toBeInTheDocument());
 

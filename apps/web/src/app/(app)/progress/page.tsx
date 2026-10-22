@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Scale, Plus, TrendingDown, TrendingUp } from 'lucide-react';
-import { progressApi } from '@fatia/api-client';
+import { formatDecimal, progressApi } from '@fatia/api-client';
 import { WeightChart } from '@/components/progress/weight-chart';
 import { StepsChart } from '@/components/progress/steps-chart';
 import { StrengthChart } from '@/components/progress/strength-chart';
@@ -13,6 +13,8 @@ import { TrainingIntensity } from '@/components/progress/training-intensity';
 import { ConsistencyCard } from '@/components/progress/consistency-card';
 import { LogWeightDrawer } from '@/components/progress/log-weight-drawer';
 import { LogStepsDrawer } from '@/components/progress/log-steps-drawer';
+import { ErrorState } from '@/components/ui/error-state';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const RANGES = [14, 30, 90, 180] as const;
@@ -29,7 +31,15 @@ function WeightBarMini({ values }: { values: number[] }) {
   const max = Math.max(...values);
   const range = max - min || 1;
   return (
-    <div className="flex h-16 items-end gap-1">
+    <div
+      role="img"
+      // As barras sozinhas só dizem "subiu" ou "desceu"; o leitor de tela ouve os
+      // valores, como no app (`weight-mini-bars.tsx`).
+      aria-label={`Últimas ${values.length} pesagens: ${values
+        .map((v) => `${formatDecimal(v, 1)} kg`)
+        .join(', ')}.`}
+      className="flex h-16 items-end gap-1"
+    >
       {values.map((v, i) => {
         const isLast = i === values.length - 1;
         // Variações de peso são pequenas; mapeamos para uma faixa visível (40%–100%)
@@ -109,19 +119,25 @@ export default function ProgressPage() {
                 <div className="mt-1 flex items-baseline gap-2">
                   <p className="text-3xl font-extrabold text-foreground tabular-nums">
                     {currentWeight !== null && currentWeight !== undefined
-                      ? currentWeight.toFixed(1)
+                      ? formatDecimal(currentWeight, 1)
                       : '—'}{' '}
                     <span className="text-base font-bold">kg</span>
                   </p>
                   {weight.data && realWeightPoints.length >= 2 && (
+                    // Ganhar peso não é alerta (pode ser a meta de quem treina força):
+                    // neutro, como no app, em vez do amarelo de aviso.
                     <span
                       className={`flex items-center gap-0.5 text-xs font-bold ${
-                        weightDelta < 0 ? 'text-primary' : 'text-warning'
+                        weightDelta < 0 ? 'text-primary' : 'text-muted-foreground'
                       }`}
                     >
-                      {weightDelta < 0 ? <TrendingDown size={12} /> : <TrendingUp size={12} />}
+                      {weightDelta < 0 ? (
+                        <TrendingDown size={12} aria-hidden />
+                      ) : (
+                        <TrendingUp size={12} aria-hidden />
+                      )}
                       {weightDelta > 0 ? '+' : ''}
-                      {weightDelta.toFixed(1)} kg
+                      {formatDecimal(weightDelta, 1)} kg
                     </span>
                   )}
                 </div>
@@ -130,9 +146,9 @@ export default function ProgressPage() {
                 type="button"
                 onClick={() => setLogWeightOpen(true)}
                 aria-label="Logar peso"
-                className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-primary"
+                className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/15 text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <Scale size={16} />
+                <Scale size={16} aria-hidden />
               </button>
             </div>
 
@@ -149,13 +165,15 @@ export default function ProgressPage() {
         </TabsContent>
 
         <TabsContent value="charts" className="mt-4 space-y-4">
-          <div className="flex items-center justify-end gap-1">
+          <div role="group" aria-label="Período" className="flex items-center justify-end gap-1">
             {RANGES.map((r) => (
               <button
                 key={r}
                 type="button"
                 onClick={() => setDays(r)}
-                className={`rounded-full px-3 py-1 text-[12px] font-bold transition-colors ${
+                aria-pressed={days === r}
+                aria-label={`${r} dias`}
+                className={`min-h-9 min-w-[52px] rounded-full px-3 py-1 text-[12px] font-bold transition-colors ${
                   days === r
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-muted text-muted-foreground hover:text-foreground'
@@ -166,7 +184,26 @@ export default function ProgressPage() {
             ))}
           </div>
 
+          {(weight.isLoading || steps.isLoading) && (
+            <div className="space-y-4" aria-busy="true">
+              <Skeleton className="h-[220px] rounded-2xl bg-card" />
+            </div>
+          )}
+
+          {/* Cada gráfico com o próprio erro, como no app: um falhar não some com o outro. */}
+          {weight.isError && (
+            <ErrorState
+              message="Não deu para carregar o peso."
+              onRetry={() => void weight.refetch()}
+            />
+          )}
           {weight.data && <WeightChart data={weight.data} />}
+          {steps.isError && (
+            <ErrorState
+              message="Não deu para carregar os passos."
+              onRetry={() => void steps.refetch()}
+            />
+          )}
           {steps.data && <StepsChart data={steps.data} />}
 
           <StrengthChart days={days} />

@@ -15,6 +15,7 @@ import { Search } from 'lucide-react';
 import {
   formatDecimal,
   formatInteger,
+  describeSeries,
   progressApi,
   type CardioProgress,
   type Exercise,
@@ -68,20 +69,22 @@ export function CardioChart({ days }: { days: number }) {
         <button
           type="button"
           onClick={() => setPickerOpen(true)}
-          className="flex items-center gap-1.5 rounded-lg bg-muted px-3 py-1.5 text-xs font-bold text-foreground hover:bg-muted/70"
+          aria-label={exercise ? `Trocar exercício, atual ${exercise.name}` : 'Escolher cardio'}
+          className="flex min-h-9 min-w-0 items-center gap-1.5 rounded-lg bg-muted px-3 py-1.5 text-xs font-bold text-foreground hover:bg-muted/70"
         >
-          <Search size={12} />
-          {exercise ? exercise.name : 'Escolher cardio'}
+          <Search size={12} aria-hidden className="shrink-0" />
+          <span className="truncate">{exercise ? exercise.name : 'Escolher cardio'}</span>
         </button>
       </div>
 
-      <div className="flex gap-1">
+      <div role="group" aria-label="Métrica" className="flex gap-1">
         {METRICS.map((m) => (
           <button
             key={m.value}
             type="button"
             onClick={() => setMetric(m.value)}
-            className={`flex-1 rounded-full px-2 py-1 text-[11px] font-bold transition-colors ${
+            aria-pressed={metric === m.value}
+            className={`min-h-8 flex-1 rounded-full px-2 py-1 text-[11px] font-bold transition-colors ${
               metric === m.value
                 ? 'bg-primary text-primary-foreground'
                 : 'bg-muted text-muted-foreground'
@@ -100,7 +103,9 @@ export function CardioChart({ days }: { days: number }) {
 
       {exercise && progress.isLoading && <Skeleton className="h-[180px] rounded-lg bg-muted/40" />}
 
-      {exercise && progress.data && <ChartBody data={progress.data} metric={metric} />}
+      {exercise && progress.data && (
+        <ChartBody data={progress.data} metric={metric} name={exercise.name} />
+      )}
 
       <ExercisePickerDrawer
         open={pickerOpen}
@@ -115,7 +120,15 @@ export function CardioChart({ days }: { days: number }) {
   );
 }
 
-function ChartBody({ data, metric }: { data: CardioProgress; metric: CardioMetric }) {
+function ChartBody({
+  data,
+  metric,
+  name,
+}: {
+  data: CardioProgress;
+  metric: CardioMetric;
+  name: string;
+}) {
   if (!data.points.length) {
     return (
       <p className="py-8 text-center text-xs text-muted-foreground">
@@ -136,47 +149,57 @@ function ChartBody({ data, metric }: { data: CardioProgress; metric: CardioMetri
           </span>
         )}
       </div>
-      <ResponsiveContainer width="100%" height={180}>
-        <LineChart data={data.points} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-          <XAxis
-            dataKey="sessionDate"
-            stroke="hsl(var(--muted-foreground))"
-            fontSize={11}
-            tickFormatter={(v) => v.slice(5)}
-          />
-          <YAxis
-            stroke="hsl(var(--muted-foreground))"
-            fontSize={11}
-            domain={['dataMin', 'dataMax']}
-            tickFormatter={(v: number) => {
-              if (metric === 'duration' || metric === 'pace') {
-                const m = Math.floor(v / 60);
-                return `${m}m`;
-              }
-              if (metric === 'distance') return `${(v / 1000).toFixed(1)}k`;
-              return Math.round(v).toString();
-            }}
-          />
-          <Tooltip
-            contentStyle={{
-              background: 'hsl(var(--popover))',
-              border: '1px solid hsl(var(--border))',
-              borderRadius: 6,
-              fontSize: 12,
-            }}
-            formatter={(v: number) => [formatCardioValue(metric, v), '']}
-          />
-          <Line
-            type="monotone"
-            dataKey="value"
-            stroke="hsl(var(--primary))"
-            strokeWidth={2}
-            dot={{ r: 3 }}
-            activeDot={{ r: 5 }}
-          />
-        </LineChart>
-      </ResponsiveContainer>
+      <div
+        role="img"
+        aria-label={describeSeries({
+          name,
+          labels: data.points.map((p) => p.sessionDate),
+          values: data.points.map((p) => p.value),
+          format: (v) => formatCardioValue(metric, v),
+        })}
+      >
+        <ResponsiveContainer width="100%" height={180}>
+          <LineChart data={data.points} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+            <XAxis
+              dataKey="sessionDate"
+              stroke="hsl(var(--muted-foreground))"
+              fontSize={11}
+              tickFormatter={(v) => v.slice(5)}
+            />
+            <YAxis
+              stroke="hsl(var(--muted-foreground))"
+              fontSize={11}
+              domain={['dataMin', 'dataMax']}
+              tickFormatter={(v: number) => {
+                if (metric === 'duration' || metric === 'pace') {
+                  const m = Math.floor(v / 60);
+                  return `${m}m`;
+                }
+                if (metric === 'distance') return `${formatDecimal(v / 1000, 1)}k`;
+                return Math.round(v).toString();
+              }}
+            />
+            <Tooltip
+              contentStyle={{
+                background: 'hsl(var(--popover))',
+                border: '1px solid hsl(var(--border))',
+                borderRadius: 6,
+                fontSize: 12,
+              }}
+              formatter={(v: number) => [formatCardioValue(metric, v), '']}
+            />
+            <Line
+              type="monotone"
+              dataKey="value"
+              stroke="hsl(var(--primary))"
+              strokeWidth={2}
+              dot={{ r: 3 }}
+              activeDot={{ r: 5 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
     </>
   );
 }

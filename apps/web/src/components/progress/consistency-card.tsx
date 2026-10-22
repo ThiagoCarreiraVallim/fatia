@@ -48,15 +48,23 @@ export function ConsistencyCard() {
     return { daysActive, buckets };
   }, [sessions.data, nowMs]);
 
+  const buckets = stats?.buckets ?? [0, 0, 0, 0];
+  const daysActive = stats?.daysActive ?? 0;
+
   return (
     <div className="rounded-2xl border border-subtle bg-card p-4">
       <p className="text-[10px] font-bold tracking-wide text-muted-foreground">CONSTÂNCIA</p>
       <p className="mt-1 text-xl font-extrabold text-foreground tabular-nums">
-        {stats?.daysActive ?? 0}{' '}
+        {daysActive}{' '}
         <span className="text-xs font-bold text-muted-foreground">/{WINDOW_DAYS} dias</span>
       </p>
-      <div className="mt-3 grid grid-cols-4 gap-1">
-        {(stats?.buckets ?? [0, 0, 0, 0]).map((count, i) => {
+      {/* Quatro barras sem texto: o leitor de tela ouve o que elas mostram (como no app). */}
+      <div
+        role="img"
+        aria-label={`Constância: ${daysActive} de ${WINDOW_DAYS} dias com treino. Por semana, da mais antiga para a mais recente: ${buckets.join(', ')} dias.`}
+        className="mt-3 grid grid-cols-4 gap-1"
+      >
+        {buckets.map((count, i) => {
           const pct = count / 7;
           const color = pct >= 0.5 ? 'bg-primary' : pct >= 0.25 ? 'bg-primary/40' : 'bg-muted';
           return <div key={i} className={`h-2.5 rounded-sm ${color}`} />;

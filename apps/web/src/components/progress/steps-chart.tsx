@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { StepsProgress } from '@fatia/api-client';
+import { describeSeries, formatInteger, type StepsProgress } from '@fatia/api-client';
 
 export function StepsChart({ data }: { data: StepsProgress }) {
   if (!data.points.length) {
@@ -22,7 +22,22 @@ export function StepsChart({ data }: { data: StepsProgress }) {
   }
 
   return (
-    <div className="rounded-xl border border-subtle bg-card p-4">
+    // O leitor de tela não atravessa o SVG: ouve o resumo da série, como no app.
+    <div
+      role="img"
+      aria-label={
+        describeSeries({
+          name: 'Passos por dia',
+          labels: data.points.map((p) => p.date),
+          values: data.points.map((p) => p.steps),
+          format: (v) => `${formatInteger(v)} passos`,
+        }) +
+        (data.goalTarget !== null
+          ? ` Meta diária de ${formatInteger(data.goalTarget)} passos.`
+          : '')
+      }
+      className="rounded-xl border border-subtle bg-card p-4"
+    >
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={data.points} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -32,7 +47,11 @@ export function StepsChart({ data }: { data: StepsProgress }) {
             fontSize={11}
             tickFormatter={(v) => v.slice(5)}
           />
-          <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
+          <YAxis
+            stroke="hsl(var(--muted-foreground))"
+            fontSize={11}
+            tickFormatter={(v: number) => formatInteger(v)}
+          />
           <Tooltip
             contentStyle={{
               background: 'hsl(var(--popover))',
@@ -40,7 +59,7 @@ export function StepsChart({ data }: { data: StepsProgress }) {
               borderRadius: 6,
               fontSize: 12,
             }}
-            formatter={(v: number) => [v.toLocaleString('pt-BR'), 'Passos']}
+            formatter={(v: number) => [formatInteger(v), 'Passos']}
           />
           {data.goalTarget !== null && (
             <ReferenceLine
@@ -48,7 +67,7 @@ export function StepsChart({ data }: { data: StepsProgress }) {
               stroke="hsl(var(--primary))"
               strokeDasharray="3 3"
               label={{
-                value: `Meta ${data.goalTarget}`,
+                value: `Meta ${formatInteger(data.goalTarget)}`,
                 fontSize: 10,
                 fill: 'hsl(var(--muted-foreground))',
               }}
