@@ -13,20 +13,12 @@ import {
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { workoutApi, type WorkoutSession } from '@fatia/api-client';
+import { elapsedLabel, formatInteger, totalVolumeKg } from './format';
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   session: WorkoutSession;
-}
-
-function formatDuration(start: string, end?: string): string {
-  const ms = new Date(end ?? Date.now()).getTime() - new Date(start).getTime();
-  const totalMinutes = Math.round(ms / 60000);
-  const h = Math.floor(totalMinutes / 60);
-  const m = totalMinutes % 60;
-  if (h > 0) return `${h}h ${m}min`;
-  return `${m}min`;
 }
 
 export function FinishSessionModal({ open, onOpenChange, session }: Props) {
@@ -35,16 +27,12 @@ export function FinishSessionModal({ open, onOpenChange, session }: Props) {
   const [notes, setNotes] = useState(session.notes ?? '');
 
   const totalSets = session.sets?.length ?? 0;
-  const totalVolume =
-    session.sets?.reduce((acc, s) => {
-      if (s.weightKg != null && s.reps != null) return acc + s.weightKg * s.reps;
-      return acc;
-    }, 0) ?? 0;
+  const totalVolume = totalVolumeKg(session.sets);
 
   const finish = useMutation({
     mutationFn: async () => {
       try {
-        await workoutApi.finishSession(session.id, { notes: notes || undefined });
+        await workoutApi.finishSession(session.id, { notes: notes.trim() || undefined });
       } catch (err) {
         const msg = err instanceof Error ? err.message : '';
         if (!/not found/i.test(msg)) throw err;
@@ -54,6 +42,10 @@ export function FinishSessionModal({ open, onOpenChange, session }: Props) {
       qc.setQueryData(['workout', 'active'], null);
       qc.invalidateQueries({ queryKey: ['workout', 'active'] });
       qc.invalidateQueries({ queryKey: ['workout', 'sessions'] });
+      // Como no app: a sessão concluída e o painel (treino do dia, sequência)
+      // mudam com o fim do treino, e ficavam velhos até o próximo refetch.
+      qc.invalidateQueries({ queryKey: ['workout', 'session', session.id] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
       onOpenChange(false);
       router.push('/workout');
     },
@@ -75,12 +67,12 @@ export function FinishSessionModal({ open, onOpenChange, session }: Props) {
             </div>
             <div className="rounded-lg border p-3">
               <p className="text-2xl font-bold tabular-nums">
-                {totalVolume > 0 ? `${Math.round(totalVolume)}` : '—'}
+                {totalVolume > 0 ? formatInteger(totalVolume) : '—'}
               </p>
               <p className="text-xs text-muted-foreground">vol. kg</p>
             </div>
             <div className="rounded-lg border p-3">
-              <p className="text-2xl font-bold">{formatDuration(session.startedAt)}</p>
+              <p className="text-2xl font-bold">{elapsedLabel(session.startedAt)}</p>
               <p className="text-xs text-muted-foreground">duração</p>
             </div>
           </div>

@@ -65,3 +65,61 @@ export function parseClock(input: string): number | null {
   }
   return null;
 }
+
+const MONTHS_SHORT = [
+  'jan',
+  'fev',
+  'mar',
+  'abr',
+  'mai',
+  'jun',
+  'jul',
+  'ago',
+  'set',
+  'out',
+  'nov',
+  'dez',
+] as const;
+
+/**
+ * "19 mai" a partir de um dia `YYYY-MM-DD`. Corta a string em vez de construir
+ * `Date`: `new Date('2026-07-29')` é meia-noite UTC e, no Brasil, volta um dia.
+ */
+export function dayMonth(iso: string | null | undefined): string {
+  if (!iso || iso.length < 10) return '—';
+  const month = Number(iso.slice(5, 7));
+  if (!Number.isFinite(month) || month < 1 || month > 12) return '—';
+  return `${iso.slice(8, 10)} ${MONTHS_SHORT[month - 1]}`;
+}
+
+/**
+ * Resumo de uma série em texto, para o leitor de tela. Ele não atravessa o SVG
+ * de um gráfico — sem isto o gráfico é um retângulo mudo, e o dado só existe
+ * para quem enxerga. Veio do app (`components/charts/format.ts`); o PWA usa o
+ * mesmo texto.
+ */
+export function describeSeries(params: {
+  name: string;
+  labels: readonly string[];
+  values: readonly number[];
+  format: (value: number) => string;
+}): string {
+  const { name, labels, values, format } = params;
+  if (values.length === 0) return `${name}: sem dados no período.`;
+  const first = values[0];
+  const last = values[values.length - 1];
+  let min = first;
+  let max = first;
+  for (const value of values) {
+    if (value < min) min = value;
+    if (value > max) max = value;
+  }
+  const period =
+    labels.length > 0 ? ` de ${dayMonth(labels[0])} a ${dayMonth(labels[labels.length - 1])}` : '';
+  const trend =
+    values.length > 1 ? ` Começou em ${format(first)} e terminou em ${format(last)}.` : '';
+  return (
+    `${name}: ${values.length} ${values.length === 1 ? 'registro' : 'registros'}${period}.` +
+    `${trend} Menor valor ${format(min)}, maior valor ${format(max)}.`
+  );
+}

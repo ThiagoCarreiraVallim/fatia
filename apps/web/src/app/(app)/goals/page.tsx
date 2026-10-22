@@ -20,6 +20,9 @@ import {
 } from 'lucide-react';
 import { goalsApi, type Goal, type GoalKind } from '@fatia/api-client';
 import { NewGoalDrawer } from '@/components/goals/new-goal-drawer';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { EmptyState } from '@/components/ui/empty-state';
+import { ErrorState } from '@/components/ui/error-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TopBarActions, topBarActionClass } from '@/components/layout/app-top-bar';
 
@@ -81,7 +84,15 @@ function MainGoalCard({ goal }: { goal: Goal }) {
       </div>
 
       <div className="relative mt-5 flex justify-center">
-        <div className="relative" style={{ width: size, height: size }}>
+        <div
+          role="progressbar"
+          aria-label={`${goal.title}: ${pct}% concluído`}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={pct}
+          className="relative"
+          style={{ width: size, height: size }}
+        >
           <svg width={size} height={size} className="-rotate-90">
             <circle
               cx={size / 2}
@@ -119,10 +130,13 @@ function MainGoalCard({ goal }: { goal: Goal }) {
 
 function SecondaryGoalCard({
   goal,
+  busy = false,
   onComplete,
   onDelete,
 }: {
   goal: Goal;
+  /** Concluir ou remover em andamento: o segundo clique mandaria a mesma ação de novo. */
+  busy?: boolean;
   onComplete: () => void;
   onDelete: () => void;
 }) {
@@ -164,7 +178,14 @@ function SecondaryGoalCard({
         </p>
       </div>
 
-      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+      <div
+        role="progressbar"
+        aria-label={`${goal.title}: ${pct}% concluído`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={pct}
+        className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted"
+      >
         <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
       </div>
 
@@ -172,18 +193,21 @@ function SecondaryGoalCard({
         <button
           type="button"
           onClick={onComplete}
-          className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-primary/10 px-2 py-1.5 text-[11px] font-bold text-primary hover:bg-primary/20"
+          disabled={busy}
+          aria-label={`Concluir meta ${goal.title}`}
+          className="flex min-h-9 flex-1 items-center justify-center gap-1 rounded-lg bg-primary/10 px-2 py-1.5 text-[11px] font-bold text-primary hover:bg-primary/20 disabled:opacity-60"
         >
-          <Check size={12} />
+          <Check size={12} aria-hidden />
           Concluir
         </button>
         <button
           type="button"
           onClick={onDelete}
-          aria-label="Remover meta"
-          className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted text-muted-foreground hover:bg-danger/15 hover:text-danger alvo-toque"
+          disabled={busy}
+          aria-label={`Remover meta ${goal.title}`}
+          className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground hover:bg-danger/15 hover:text-danger disabled:opacity-60 alvo-toque"
         >
-          <Trash2 size={12} />
+          <Trash2 size={14} aria-hidden />
         </button>
       </div>
     </div>
@@ -218,6 +242,7 @@ function RecentGoalRow({ goal }: { goal: Goal }) {
 
 export default function GoalsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [toDelete, setToDelete] = useState<Goal | null>(null);
   const qc = useQueryClient();
 
   // Uma única query traz todas as metas (sem filtro de status). Bucketizamos
@@ -235,8 +260,17 @@ export default function GoalsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => goalsApi.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['goals'] }),
+    onSuccess: () => {
+      setToDelete(null);
+      return qc.invalidateQueries({ queryKey: ['goals'] });
+    },
   });
+
+  const busyId = completeMutation.isPending
+    ? completeMutation.variables
+    : deleteMutation.isPending
+      ? deleteMutation.variables
+      : undefined;
 
   const goals = allGoals.data ?? [];
   const activeGoals = goals.filter((g) => g.status === 'active');
@@ -269,14 +303,20 @@ export default function GoalsPage() {
         </>
       )}
 
-      {!allGoals.isLoading && activeGoals.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-white/10 bg-card/30 p-6 text-center">
-          <Hourglass size={20} className="mx-auto text-muted-foreground" />
-          <p className="mt-3 text-sm font-bold text-foreground">Nenhuma meta ativa</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Crie uma meta pelo botão acima ou peça ao Claude.
-          </p>
-        </div>
+      {/* Sem isto, a falha aparecia como "Nenhuma meta ativa" — e a pessoa criava de novo. */}
+      {allGoals.isError && (
+        <ErrorState
+          message="Não deu para carregar suas metas."
+          onRetry={() => void allGoals.refetch()}
+        />
+      )}
+
+      {!allGoals.isLoading && !allGoals.isError && activeGoals.length === 0 && (
+        <EmptyState
+          icon={Hourglass}
+          title="Nenhuma meta ativa"
+          description="Crie uma meta pelo botão acima ou peça ao Claude."
+        />
       )}
 
       {mainGoal && <MainGoalCard goal={mainGoal} />}
@@ -287,8 +327,9 @@ export default function GoalsPage() {
             <SecondaryGoalCard
               key={g.id}
               goal={g}
+              busy={busyId === g.id}
               onComplete={() => completeMutation.mutate(g.id)}
-              onDelete={() => deleteMutation.mutate(g.id)}
+              onDelete={() => setToDelete(g)}
             />
           ))}
         </div>
@@ -316,6 +357,17 @@ export default function GoalsPage() {
       </Link>
 
       <NewGoalDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+
+      {/* Remover não tem desfazer na API: um clique errado no ícone custava a meta
+          (o app já confirmava; o PWA apagava direto). */}
+      <ConfirmDialog
+        open={toDelete !== null}
+        onOpenChange={(open) => !open && setToDelete(null)}
+        title="Remover meta"
+        description={`Apagar "${toDelete?.title ?? ''}"? Essa ação não pode ser desfeita.`}
+        pending={deleteMutation.isPending}
+        onConfirm={() => toDelete && deleteMutation.mutate(toDelete.id)}
+      />
     </div>
   );
 }

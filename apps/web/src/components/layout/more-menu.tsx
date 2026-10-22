@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/drawer';
 import { cn } from '@/lib/utils';
 import { PlanBadge } from '@/components/billing/plan-badge';
+import { ChatHero } from './chat-hero';
 import { MENU_ICON } from './nav-icons';
 import { useNavMenu } from './use-nav-menu';
 
@@ -88,8 +89,14 @@ export function MenuLinks({
   );
 }
 
-/** O "Mais" da barra de baixo: todas as telas que não estão na barra, em seções. */
-export function MenuMais({
+/**
+ * O "Mais" da barra de baixo: todas as telas que não estão na barra, em seções.
+ *
+ * Como no app, o chat sai da lista e vira o primeiro cartão, grande: no meio da
+ * seção "IA" ele tinha o mesmo peso de "Meu plano", e é a porta mais larga para
+ * registrar qualquer coisa. A barra lateral do desktop continua com ele na lista.
+ */
+export function MoreMenu({
   open,
   onOpenChange,
 }: {
@@ -97,6 +104,10 @@ export function MenuMais({
   onOpenChange: (o: boolean) => void;
 }) {
   const sections = useNavMenu();
+  const chatItem = sections.flatMap((s) => s.items).find((i) => i.key === 'chat');
+  const listed = sections
+    .map((s) => ({ ...s, items: s.items.filter((i) => i.key !== 'chat') }))
+    .filter((s) => s.items.length > 0);
   const me = useQuery({ queryKey: ['users', 'me'], queryFn: () => usersApi.me() });
   const name = me.data?.name ?? '';
   const close = () => onOpenChange(false);
@@ -108,7 +119,10 @@ export function MenuMais({
           <DrawerTitle>Menu</DrawerTitle>
           <DrawerDescription className="sr-only">Todas as telas do Fatia</DrawerDescription>
         </DrawerHeader>
-        <div className="space-y-5 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
+        {/* `-mx-4 px-4 pt-2`: a rolagem corta o que passa da borda, e o brilho
+            em volta do cartão do chat sumiria nas laterais. */}
+        <div className="-mx-4 space-y-5 overflow-y-auto px-4 pt-2 pb-[env(safe-area-inset-bottom)]">
+          {chatItem && <ChatHero item={chatItem} onNavigate={close} />}
           <Link
             href="/profile"
             onClick={close}
@@ -126,7 +140,7 @@ export function MenuMais({
             </span>
             <ChevronRight size={18} className="text-muted-foreground" aria-hidden />
           </Link>
-          <MenuLinks sections={sections} onNavigate={close} />
+          <MenuLinks sections={listed} onNavigate={close} />
         </div>
       </DrawerContent>
     </Drawer>

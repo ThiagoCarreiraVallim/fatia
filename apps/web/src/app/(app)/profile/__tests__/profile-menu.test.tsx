@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ProfilePage from '../page';
 
@@ -99,5 +100,13 @@ describe('menu do perfil', () => {
     // como as instruções divergiram até uma delas mandar colar um endereço inexistente.
     expect(container.querySelectorAll('details')).toHaveLength(0);
     expect(screen.getAllByRole('link', { name: /Conectar/ })).toHaveLength(1);
+  });
+
+  it('sair da conta é um botão que pergunta antes, e não um link direto para a saída', async () => {
+    await renderProfile();
+    // Um link para o handler saía no primeiro clique (e o Next poderia prefetchá-lo).
+    expect(screen.queryByRole('link', { name: /Sair da conta/ })).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Sair da conta' }));
+    expect(screen.getByRole('dialog', { name: 'Sair da conta' })).toBeInTheDocument();
   });
 });

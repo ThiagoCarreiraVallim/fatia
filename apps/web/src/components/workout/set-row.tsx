@@ -4,7 +4,9 @@ import { useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
-import { getRpeInfo, workoutApi, type SessionSet } from '@fatia/api-client';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { getRpeInfo, parseClock, workoutApi, type SessionSet } from '@fatia/api-client';
+import { formatClock, formatNumber, parseDecimalInput } from './format';
 import { RpeBadge } from './rpe-badge';
 
 export function SetRow({
@@ -22,6 +24,7 @@ export function SetRow({
 }) {
   const editable = !!sessionId;
   const qc = useQueryClient();
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const update = useMutation({
     mutationFn: (body: Parameters<typeof workoutApi.updateSet>[2]) => {
@@ -40,6 +43,7 @@ export function SetRow({
       return workoutApi.deleteSet(sessionId, set.id);
     },
     onSuccess: () => {
+      setConfirmOpen(false);
       qc.invalidateQueries({ queryKey: ['workout', 'active'] });
       qc.invalidateQueries({ queryKey: ['workout', 'session', sessionId] });
     },
@@ -105,13 +109,27 @@ export function SetRow({
       {showDelete && (
         <button
           type="button"
-          onClick={() => remove.mutate()}
+          // Pergunta antes, como no app: a lixeira fica ao lado do campo que o
+          // polegar acabou de digitar, e a API não tem desfazer.
+          onClick={() => setConfirmOpen(true)}
           disabled={remove.isPending}
           className="alvo-toque flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:text-danger disabled:opacity-50"
           aria-label={`Excluir série ${index + 1}`}
         >
           <Trash2 size={14} />
         </button>
+      )}
+      {showDelete && (
+        <ConfirmDialog
+          open={confirmOpen}
+          onOpenChange={setConfirmOpen}
+          title={`Excluir série ${index + 1}?`}
+          description="A série sai do treino e do volume da sessão."
+          confirmLabel="Excluir"
+          pendingLabel="Excluindo..."
+          pending={remove.isPending}
+          onConfirm={() => remove.mutate()}
+        />
       )}
     </div>
   );
@@ -140,15 +158,12 @@ function useMirroredDraft<T>(value: T, format: (value: T) => string) {
   return [draft, setDraft] as const;
 }
 
-const asText = (n: number | null): string => (n != null ? String(n) : '');
+// Vírgula decimal, como no app: "82,5" é como a pessoa escreve a carga.
+const asText = (n: number | null): string => (n != null ? formatNumber(n) : '');
 
 /** Segundos em `m:ss`. No escopo do módulo para poder ser passada ao hook acima. */
-function fmt(s: number | null): string {
-  if (s == null) return '';
-  const m = Math.floor(s / 60);
-  const sec = s % 60;
-  return `${m}:${String(sec).padStart(2, '0')}`;
-}
+const asClockText = (seconds: number | null): string =>
+  seconds != null ? formatClock(seconds) : '';
 
 function NumberCell({
   label,
@@ -172,7 +187,7 @@ function NumberCell({
   if (!editable) {
     return (
       <div className="text-foreground tabular-nums">
-        {value != null ? `${value}${suffix ?? ''}` : '—'}
+        {value != null ? `${formatNumber(value)}${suffix ?? ''}` : '—'}
       </div>
     );
   }
@@ -182,13 +197,9 @@ function NumberCell({
       if (value != null) onChange(undefined);
       return;
     }
-    const n = Number(local.replace(',', '.'));
-    if (isNaN(n)) {
-      setLocal(value != null ? String(value) : '');
-      return;
-    }
-    if (max != null && n > max) {
-      setLocal(value != null ? String(value) : '');
+    const n = parseDecimalInput(local);
+    if (n == null || (max != null && n > max)) {
+      setLocal(asText(value));
       return;
     }
     if (n !== value) onChange(n);
@@ -237,9 +248,9 @@ function RpeCell({
       if (value != null) onChange(undefined);
       return;
     }
-    const n = Number(local.replace(',', '.'));
-    if (isNaN(n) || n < 0 || n > 10) {
-      setLocal(value != null ? String(value) : '');
+    const n = parseDecimalInput(local);
+    if (n == null || n < 0 || n > 10) {
+      setLocal(asText(value));
       return;
     }
     if (n !== value) onChange(n);
@@ -285,10 +296,10 @@ function DurationCell({
   editable: boolean;
   onChange: (n: number | undefined) => void;
 }) {
-  const [local, setLocal] = useMirroredDraft(seconds, fmt);
+  const [local, setLocal] = useMirroredDraft(seconds, asClockText);
 
   if (!editable) {
-    return <div className="text-foreground tabular-nums">{fmt(seconds) || '—'}</div>;
+    return <div className="text-foreground tabular-nums">{asClockText(seconds) || '—'}</div>;
   }
 
   function commit() {
@@ -296,18 +307,11 @@ function DurationCell({
       if (seconds != null) onChange(undefined);
       return;
     }
-    const parts = local.split(':');
-    let total: number | undefined;
-    if (parts.length === 2) {
-      const m = parseInt(parts[0], 10);
-      const s = parseInt(parts[1], 10);
-      if (!isNaN(m) && !isNaN(s)) total = m * 60 + s;
-    } else {
-      const n = parseInt(local, 10);
-      if (!isNaN(n)) total = n;
-    }
+    // A mesma leitura do card de cardio e do app: aceita `h:mm:ss`, e não só
+    // `m:ss` — uma corrida de 1h10 não cabia na linha da série.
+    const total = parseClock(local);
     if (total == null) {
-      setLocal(fmt(seconds));
+      setLocal(asClockText(seconds));
       return;
     }
     if (total !== seconds) onChange(total);

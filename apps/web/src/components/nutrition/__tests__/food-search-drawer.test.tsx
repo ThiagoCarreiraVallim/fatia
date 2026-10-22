@@ -180,6 +180,37 @@ describe('FoodSearchDrawer', () => {
     expect(onOpenChange).not.toHaveBeenCalled();
   });
 
+  // O texto do 409 é escrito para o agente (id, eatenAt); na tela ele faria a
+  // pessoa achar que não salvou e registrar de novo.
+  it('refeição repetida diz que já está registrada, sem o texto técnico da API', async () => {
+    createMeal.mockRejectedValue(
+      new ApiError('Refeição idêntica já registrada (id m9): ajuste eatenAt.', 409),
+    );
+    const user = userEvent.setup();
+    renderDrawer({ mealType: 'LUNCH' });
+
+    await user.click(screen.getByRole('button', { name: /só desta vez/i }));
+    await user.type(screen.getByLabelText(/Nome/), 'salada');
+    await user.click(screen.getByRole('button', { name: /^adicionar$/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Essa refeição já foi registrada.');
+    expect(screen.queryByText(/eatenAt/)).not.toBeInTheDocument();
+  });
+
+  it('item repetido numa refeição aberta diz isso', async () => {
+    addItem.mockRejectedValue(new ApiError('conflict', 409));
+    const user = userEvent.setup();
+    renderDrawer({ mealId: 'meal-123' });
+
+    await user.click(screen.getByRole('button', { name: /só desta vez/i }));
+    await user.type(screen.getByLabelText(/Nome/), 'pão');
+    await user.click(screen.getByRole('button', { name: /^adicionar$/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Esse item já foi registrado nessa refeição.',
+    );
+  });
+
   describe('dashboard', () => {
     // O "+" registra refeição fora da Nutrição: o card de macros do dashboard
     // (`['dashboard','today']`) tem de acompanhar sem recarregar a página.
@@ -685,6 +716,22 @@ describe('FoodSearchDrawer', () => {
       expect(screen.getByPlaceholderText(/Ex\.: arroz/)).toBeInTheDocument();
     });
 
+    it('aberto pelo atalho de escanear, começa no leitor e volta a ele depois de adicionar', async () => {
+      lookupBarcode.mockResolvedValue(leiteCondensado);
+      createMeal.mockResolvedValue({ id: 'm1' } as never);
+      const user = userEvent.setup();
+      renderDrawer({ mealType: 'SNACK', initialMode: 'scan' });
+
+      await user.type(await screen.findByLabelText('Digitar o código'), '7891000100103');
+      await user.click(screen.getByRole('button', { name: 'Buscar' }));
+      await user.click(await screen.findByRole('button', { name: /^adicionar$/i }));
+
+      expect(await screen.findByText('Leite Condensado (Moça) adicionado')).toBeInTheDocument();
+      // A próxima embalagem: o leitor de novo, não a busca por nome.
+      expect(await screen.findByLabelText('Digitar o código')).toBeInTheDocument();
+      expect(screen.queryByPlaceholderText(/Ex\.: arroz/)).not.toBeInTheDocument();
+    });
+
     it('guardar em Meus alimentos cria o alimento e registra ligado a ele', async () => {
       lookupBarcode.mockResolvedValue(leiteCondensado);
       createCustomFood.mockResolvedValue(
@@ -764,6 +811,10 @@ describe('FoodSearchDrawer', () => {
       expect(await screen.findByText(/está sem proteína e gordura/)).toBeInTheDocument();
       expect(screen.getByLabelText('Proteína (g)')).toHaveValue('');
       expect(screen.getByRole('button', { name: /^adicionar$/i })).toBeDisabled();
+      // O botão desabilitado diz por quê.
+      expect(
+        screen.getByText('Complete os quatro valores do rótulo para registrar.'),
+      ).toBeInTheDocument();
       await user.type(screen.getByLabelText('Proteína (g)'), '0');
       await user.type(screen.getByLabelText('Gordura (g)'), '0');
       await user.click(screen.getByRole('button', { name: /^adicionar$/i }));
@@ -775,6 +826,20 @@ describe('FoodSearchDrawer', () => {
         kcal: 20,
         carbsG: 5,
       });
+    });
+
+    it('voltar do produto deixa reler o mesmo código com "Ler de novo"', async () => {
+      lookupBarcode.mockResolvedValue(leiteCondensado);
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await lerCodigo(user);
+      await screen.findByText('Leite Condensado (Moça)');
+      await user.click(screen.getByRole('button', { name: 'Voltar' }));
+
+      expect(screen.getByText(/Leitura descartada/)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Ler de novo' }));
+      expect(screen.queryByText(/Leitura descartada/)).not.toBeInTheDocument();
     });
 
     it('código desconhecido oferece cadastrar à mão', async () => {

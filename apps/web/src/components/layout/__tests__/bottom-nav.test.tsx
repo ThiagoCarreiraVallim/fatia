@@ -166,4 +166,23 @@ describe('BottomNav', () => {
       '/chat',
     );
   });
+
+  it('o chat vira o cartão do topo do menu, antes do perfil, e não se repete na lista', async () => {
+    availability.mockResolvedValue({ available: true } as never);
+    renderNav();
+    const menu = await abrirMais();
+    await within(menu).findByRole('link', { name: /Chat/ });
+    const links = hrefs(menu);
+    expect(links.slice(0, 2)).toEqual(['/chat', '/profile']);
+    expect(links.filter((h) => h === '/chat')).toHaveLength(1);
+    expect(within(menu).getByTestId('chat-hero-shine')).toHaveClass('chat-hero-shine');
+  });
+
+  it('escolher o chat no cartão fecha o menu', async () => {
+    availability.mockResolvedValue({ available: true } as never);
+    renderNav();
+    const menu = await abrirMais();
+    await userEvent.setup().click(await within(menu).findByRole('link', { name: /Chat/ }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 });

@@ -21,6 +21,7 @@ import {
   type MealItem,
 } from '@fatia/api-client';
 import { AmountPicker } from './amount-picker';
+import { errorMessage } from './error-message';
 import { invalidateNutritionDay } from '@/lib/nutrition-cache';
 
 interface Props {
@@ -118,7 +119,12 @@ export function EditMealItemDrawer({ item, date, onClose }: Props) {
             </div>
           )}
           {mutation.error && (
-            <p className="text-sm text-danger">{(mutation.error as Error).message}</p>
+            <p role="alert" className="text-sm text-danger">
+              {errorMessage(mutation.error, {
+                conflict: 'Esse item já foi registrado nessa refeição.',
+                fallback: 'Não foi possível salvar. Tente de novo.',
+              })}
+            </p>
           )}
           <div className="flex gap-2">
             <DrawerClose asChild>

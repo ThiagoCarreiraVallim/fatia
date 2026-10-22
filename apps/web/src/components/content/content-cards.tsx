@@ -1,16 +1,18 @@
 import Link from 'next/link';
 import { Dumbbell, Pin, Salad } from 'lucide-react';
 import {
-  contentStatusLabel,
   planTemplateSummary,
   TIP_CATEGORY_LABEL,
   type GroupTip,
   type PlanTemplate,
 } from '@fatia/api-client';
-import { Badge } from '@/components/ui/badge';
+import { RowChevron, StatusBadge } from './content-ui';
 import { MarkdownLite } from './markdown-lite';
 
-/** Cartão de plano pronto: capa (ou ícone do tipo), título e o resumo. */
+/**
+ * Cartão de plano pronto: capa (ou ícone do tipo), título, o resumo e a seta
+ * de quem abre outra tela.
+ */
 export function TemplateCard({
   template,
   href,
@@ -24,7 +26,7 @@ export function TemplateCard({
   return (
     <Link
       href={href}
-      className="flex min-h-11 gap-3 rounded-2xl border border-subtle bg-card p-3 transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex min-h-11 items-center gap-3 rounded-2xl border border-subtle bg-card p-3 transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {template.cover?.url ? (
         // eslint-disable-next-line @next/next/no-img-element -- URL assinada e curta
@@ -38,20 +40,17 @@ export function TemplateCard({
           <Icone className="h-6 w-6 text-muted-foreground" aria-hidden />
         </span>
       )}
-      <span className="min-w-0 flex-1 space-y-1">
-        <span className="flex items-start justify-between gap-2">
-          <span className="truncate text-sm font-semibold">{template.title}</span>
-          {showStatus && (
-            <Badge variant={template.publishedAt ? 'default' : 'secondary'} className="shrink-0">
-              {contentStatusLabel(template)}
-            </Badge>
-          )}
-        </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="block truncate text-sm font-semibold">{template.title}</span>
         <span className="block text-xs text-muted-foreground">{planTemplateSummary(template)}</span>
         <span className="block truncate text-xs text-muted-foreground">
           Por {template.authorName}
         </span>
+        {/* Selo de contorno, embaixo: a pílula verde cheia ao lado do título
+            tinha a cara do botão primário e atraía o clique. */}
+        {showStatus && <StatusBadge published={Boolean(template.publishedAt)} />}
       </span>
+      <RowChevron />
     </Link>
   );
 }

@@ -252,7 +252,10 @@ function PlanModeCard({
         </div>
       )}
 
-      <div className="mt-4 flex items-center justify-between gap-3">
+      {/* Quebra de linha permitida: com os alvos de 44px, séries + reps + três
+          botões não cabem numa linha de celular, e sem quebra a lixeira saía
+          para fora do card e a página ganhava rolagem lateral. */}
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         {isCardio ? (
           <p className="text-[11px] text-muted-foreground">
             Duração e distância são logadas durante a sessão.
@@ -268,7 +271,7 @@ function PlanModeCard({
               onBlur={commitSets}
               inputMode="numeric"
               className="h-8 w-14 px-1 text-center text-sm"
-              aria-label="Séries"
+              aria-label={`Séries de ${item.exercise.name}`}
             />
             <span className="text-xs text-muted-foreground">×</span>
             <label className="text-[10px] font-bold tracking-wide text-muted-foreground">
@@ -279,17 +282,20 @@ function PlanModeCard({
               onChange={(e) => setReps(e.target.value)}
               onBlur={commitReps}
               className="h-8 w-20 px-1 text-center text-sm"
-              aria-label="Repetições"
+              aria-label={`Repetições de ${item.exercise.name}`}
             />
           </div>
         )}
 
         {/*
+          Alvos de 44px, como no app: no plano as setas ficavam com 24px,
+          coladas umas nas outras.
+
           O rótulo nomeia o exercício, como já era no app nativo. Numa lista de
           N exercícios, N botões "Mover para cima" idênticos não dizem a quem
           usa leitor de tela qual deles está sob o foco.
         */}
-        <div className="flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-1">
           {onMoveUp && (
             <button
               type="button"
@@ -299,7 +305,7 @@ function PlanModeCard({
                 onMoveUp();
               }}
               disabled={isFirst || isMoving}
-              className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-20"
+              className="flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-20 disabled:hover:bg-transparent"
               aria-label={`Mover ${item.exercise.name} para cima`}
             >
               <ChevronUp size={16} />
@@ -314,7 +320,7 @@ function PlanModeCard({
                 onMoveDown();
               }}
               disabled={isLast || isMoving}
-              className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-20"
+              className="flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-20 disabled:hover:bg-transparent"
               aria-label={`Mover ${item.exercise.name} para baixo`}
             >
               <ChevronDown size={16} />
@@ -324,7 +330,7 @@ function PlanModeCard({
             <button
               type="button"
               onClick={onRemove}
-              className="rounded p-1 text-muted-foreground hover:text-danger"
+              className="flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-danger"
               aria-label={`Remover ${item.exercise.name} do plano`}
             >
               <Trash2 size={16} />

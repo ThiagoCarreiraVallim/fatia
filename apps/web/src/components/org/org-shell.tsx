@@ -3,9 +3,10 @@
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ShieldOff } from 'lucide-react';
+import { CloudOff, ShieldOff } from 'lucide-react';
 import {
   activePanelSection,
+  ApiError,
   canOpenPanel,
   groupsApi,
   panelHref,
@@ -15,7 +16,7 @@ import {
 } from '@fatia/api-client';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
-import { buttonVariants } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { createContext, useContext, type ReactNode } from 'react';
 import { orgKeys } from '@/components/community/query-keys';
@@ -37,13 +38,13 @@ export function useOrgGroup(): MyGroup {
 export function OrgShell({ children }: { children: ReactNode }) {
   const { groupId } = useParams<{ groupId: string }>();
   const pathname = usePathname();
-  const grupo = useQuery({
+  const group = useQuery({
     queryKey: orgKeys.group(groupId),
     queryFn: () => groupsApi.get(groupId),
     retry: false,
   });
 
-  if (grupo.isLoading) {
+  if (group.isLoading) {
     return (
       <div className="space-y-3 px-4 pt-4">
         <Skeleton className="h-10 w-48 rounded-xl" />
@@ -52,7 +53,27 @@ export function OrgShell({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!grupo.data || !canOpenPanel(grupo.data)) {
+  // Falha de rede ou da API não é "você não tem acesso": como no app, o erro
+  // diz que falhou e oferece de novo; só o 404 (não é da comunidade) nega.
+  const denied = group.isError && group.error instanceof ApiError && group.error.isNotFound;
+  if (group.isError && !denied) {
+    return (
+      <div className="px-4 pt-8">
+        <EmptyState
+          icon={CloudOff}
+          title="Não deu para abrir o painel"
+          description="Tente de novo em alguns instantes."
+          action={
+            <Button variant="outline" onClick={() => void group.refetch()}>
+              Tentar de novo
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
+  if (!group.data || !canOpenPanel(group.data)) {
     return (
       <div className="px-4 pt-8">
         <EmptyState
@@ -69,9 +90,9 @@ export function OrgShell({ children }: { children: ReactNode }) {
     );
   }
 
-  const g = grupo.data;
-  const secoes = panelSections(g.role);
-  const ativa = activePanelSection(pathname);
+  const g = group.data;
+  const sections = panelSections(g.role);
+  const active = activePanelSection(pathname);
 
   return (
     <OrgGroupContext.Provider value={g}>
@@ -81,14 +102,14 @@ export function OrgShell({ children }: { children: ReactNode }) {
           <p className="px-2 text-xs text-muted-foreground">{teamRoleLabel(g.role)}</p>
           <nav aria-label="Seções do painel" className="mt-4">
             <ul className="space-y-0.5">
-              {secoes.map((s) => (
+              {sections.map((s) => (
                 <li key={s.section}>
                   <Link
                     href={panelHref(g.id, s.section)}
-                    aria-current={s.section === ativa ? 'page' : undefined}
+                    aria-current={s.section === active ? 'page' : undefined}
                     className={cn(
                       'flex min-h-11 items-center rounded-xl px-2 text-sm font-semibold transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                      s.section === ativa ? 'bg-card text-primary' : 'text-foreground',
+                      s.section === active ? 'bg-card text-primary' : 'text-foreground',
                     )}
                   >
                     {s.label}
@@ -103,14 +124,14 @@ export function OrgShell({ children }: { children: ReactNode }) {
           aria-label="Seções do painel"
           className="sticky top-14 z-30 -mt-px flex gap-1 overflow-x-auto border-b border-subtle bg-background/95 px-3 py-2 backdrop-blur md:hidden"
         >
-          {secoes.map((s) => (
+          {sections.map((s) => (
             <Link
               key={s.section}
               href={panelHref(g.id, s.section)}
-              aria-current={s.section === ativa ? 'page' : undefined}
+              aria-current={s.section === active ? 'page' : undefined}
               className={cn(
                 'flex min-h-11 shrink-0 items-center rounded-full px-4 text-sm font-semibold',
-                s.section === ativa
+                s.section === active
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-muted text-foreground',
               )}

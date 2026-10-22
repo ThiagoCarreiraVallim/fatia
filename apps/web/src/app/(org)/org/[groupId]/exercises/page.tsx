@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Dumbbell, Image as ImageIcon, Plus, Search, Video } from 'lucide-react';
+import { BookOpen, Dumbbell, Image as ImageIcon, Plus, Search, Video } from 'lucide-react';
 import {
   groupExerciseApi,
   workoutApi,
@@ -12,11 +12,18 @@ import {
   type GymEquipmentState,
 } from '@fatia/api-client';
 import { orgKeys } from '@/components/community/query-keys';
+import {
+  DrawerOption,
+  ListError,
+  NewButton,
+  RowChevron,
+  SectionHeader,
+} from '@/components/content/content-ui';
 import { GymEquipmentDialog } from '@/components/org/gym-equipment-dialog';
 import { useOrgGroup } from '@/components/org/org-shell';
 import { EquipmentSummary } from '@/components/workout/equipment-chooser';
 import { Badge } from '@/components/ui/badge';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -24,6 +31,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from '@/components/ui/drawer';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -35,12 +49,15 @@ import { Skeleton } from '@/components/ui/skeleton';
  */
 export default function OrgExercisesPage() {
   const g = useOrgGroup();
-  const [escolhendo, setEscolhendo] = useState(false);
-  const lista = useQuery({
+  const router = useRouter();
+  const [choosingKind, setChoosingKind] = useState(false);
+  const [pickingCatalog, setPickingCatalog] = useState(false);
+  const list = useQuery({
     queryKey: orgKeys.exercises(g.id),
     queryFn: () => groupExerciseApi.list(g.id),
   });
   const base = `/org/${g.id}/exercises`;
+  const openNew = () => setChoosingKind(true);
 
   return (
     <div className="max-w-3xl space-y-4">
@@ -49,26 +66,25 @@ export default function OrgExercisesPage() {
         equipe no lugar do vídeo padrão.
       </p>
 
-      {lista.data && (
-        <EquipmentCard groupId={g.id} canEdit={g.role === 'OWNER'} saved={lista.data} />
-      )}
+      {/* Criar no cabeçalho da lista, com a escolha num drawer: os dois botões
+          de antes ("Exercício da casa" e "Tutorial para um exercício do
+          catálogo") eram longos, de pesos diferentes e não diziam que criavam. */}
+      <SectionHeader
+        title="Exercícios"
+        count={list.data?.items.length}
+        action={<NewButton label="Novo exercício" onClick={openNew} />}
+      />
 
-      <div className="flex flex-wrap gap-2">
-        <Link href={`${base}/new`} className={buttonVariants({ size: 'sm' })}>
-          <Plus className="h-4 w-4" aria-hidden />
-          Exercício da casa
-        </Link>
-        <Button size="sm" variant="outline" onClick={() => setEscolhendo(true)}>
-          <Video className="h-4 w-4" aria-hidden />
-          Tutorial para um exercício do catálogo
-        </Button>
-      </div>
-
-      {lista.isPending ? (
+      {list.isPending ? (
         <Skeleton className="h-24 rounded-2xl" />
-      ) : lista.data?.items.length ? (
+      ) : list.isError ? (
+        <ListError
+          title="Não deu para carregar os exercícios"
+          onRetry={() => void list.refetch()}
+        />
+      ) : list.data.items.length ? (
         <ul className="space-y-2" aria-label="Exercícios da comunidade">
-          {lista.data.items.map((e) => (
+          {list.data.items.map((e) => (
             <li key={e.exerciseId}>
               <ExerciseRow exercise={e} href={`${base}/${e.exerciseId}`} />
             </li>
@@ -79,13 +95,46 @@ export default function OrgExercisesPage() {
           icon={Dumbbell}
           title="Nenhum exercício ainda"
           description="Crie os exercícios da casa ou grave o tutorial de um exercício do catálogo."
+          action={<NewButton label="Novo exercício" onClick={openNew} />}
         />
       )}
 
+      {/* Depois da lista, como no app: é o que se mexe uma vez e se consulta pouco. */}
+      {list.data && <EquipmentCard groupId={g.id} canEdit={g.role === 'OWNER'} saved={list.data} />}
+
+      <Drawer open={choosingKind} onOpenChange={setChoosingKind}>
+        <DrawerContent className="px-4 pb-6">
+          <DrawerHeader className="px-0">
+            <DrawerTitle>Novo exercício</DrawerTitle>
+            <DrawerDescription>Quem treina na comunidade vê estes primeiro.</DrawerDescription>
+          </DrawerHeader>
+          <div className="space-y-2 pt-4">
+            <DrawerOption
+              icon={Plus}
+              title="Exercício da casa"
+              description="Do zero: nome, grupo muscular, passos, vídeo e fotos."
+              onClick={() => {
+                setChoosingKind(false);
+                router.push(`${base}/new`);
+              }}
+            />
+            <DrawerOption
+              icon={BookOpen}
+              title="Tutorial de um exercício do catálogo"
+              description="O exercício já existe; a equipe grava o vídeo, as fotos e as dicas."
+              onClick={() => {
+                setChoosingKind(false);
+                setPickingCatalog(true);
+              }}
+            />
+          </div>
+        </DrawerContent>
+      </Drawer>
+
       <CatalogPicker
-        open={escolhendo}
-        onOpenChange={setEscolhendo}
-        existing={new Set(lista.data?.items.map((e) => e.exerciseId) ?? [])}
+        open={pickingCatalog}
+        onOpenChange={setPickingCatalog}
+        existing={new Set(list.data?.items.map((e) => e.exerciseId) ?? [])}
         base={base}
       />
     </div>
@@ -96,18 +145,17 @@ function ExerciseRow({ exercise: e, href }: { exercise: GroupExercise; href: str
   return (
     <Link
       href={href}
-      className="flex items-center justify-between gap-3 rounded-2xl border border-subtle bg-card p-3 hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex items-center gap-3 rounded-2xl border border-subtle bg-card p-3 hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <span className="min-w-0 space-y-0.5">
+      <span className="min-w-0 flex-1 space-y-0.5">
         <span className="block truncate text-sm font-semibold">{e.name}</span>
         <span className="block text-xs capitalize text-muted-foreground">
           {[e.muscleGroup, e.equipment].filter(Boolean).join(' · ')} · por {e.authorName}
         </span>
       </span>
+      {/* Selos de contorno: o "Da casa" verde e cheio tinha cara de botão. */}
       <span className="flex shrink-0 flex-wrap justify-end gap-1">
-        <Badge variant={e.ownedByCommunity ? 'default' : 'secondary'}>
-          {e.ownedByCommunity ? 'Da casa' : 'Catálogo'}
-        </Badge>
+        <Badge variant="outline">{e.ownedByCommunity ? 'Da casa' : 'Catálogo'}</Badge>
         {e.video && (
           <Badge variant="outline" className="gap-1">
             <Video className="h-3 w-3" aria-hidden />
@@ -121,6 +169,7 @@ function ExerciseRow({ exercise: e, href }: { exercise: GroupExercise; href: str
           </Badge>
         )}
       </span>
+      <RowChevron />
     </Link>
   );
 }
@@ -154,7 +203,7 @@ function EquipmentCard({
           </p>
         </div>
         <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
-          {canEdit ? 'Editar' : 'Ver lista'}
+          {canEdit ? 'Editar equipamento' : 'Ver equipamento'}
         </Button>
       </div>
       <EquipmentSummary equipment={saved.equipment} custom={saved.customEquipment} />
@@ -183,18 +232,18 @@ function CatalogPicker({
 }) {
   const router = useRouter();
   const [q, setQ] = useState('');
-  const [termo, setTermo] = useState('');
+  const [term, setTerm] = useState('');
   useEffect(() => {
-    const t = setTimeout(() => setTermo(q.trim()), 300);
+    const t = setTimeout(() => setTerm(q.trim()), 300);
     return () => clearTimeout(t);
   }, [q]);
-  const busca = useQuery({
-    queryKey: ['workout', 'exercises', termo, 'catalog-picker'],
-    queryFn: () => workoutApi.searchExercises(termo || undefined),
+  const search = useQuery({
+    queryKey: ['workout', 'exercises', term, 'catalog-picker'],
+    queryFn: () => workoutApi.searchExercises(term || undefined),
     enabled: open,
   });
   // Só o catálogo geral: o exercício pessoal de quem está no painel não é da comunidade.
-  const itens = busca.data?.filter((e) => e.createdByUserId === null && !e.groupOwned);
+  const items = search.data?.filter((e) => e.createdByUserId === null && !e.groupOwned);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -220,7 +269,7 @@ function CatalogPicker({
           />
         </div>
         <ul className="max-h-80 divide-y overflow-y-auto" aria-label="Exercícios do catálogo">
-          {itens?.map((e) => (
+          {items?.map((e) => (
             <li key={e.id}>
               <button
                 type="button"
@@ -240,8 +289,10 @@ function CatalogPicker({
               </button>
             </li>
           ))}
-          {itens?.length === 0 && (
-            <li className="py-3 text-sm text-muted-foreground">Nenhum exercício encontrado.</li>
+          {(search.isFetching || items?.length === 0) && (
+            <li className="py-3 text-sm text-muted-foreground">
+              {search.isFetching ? 'Buscando…' : 'Nenhum exercício do catálogo com esse nome.'}
+            </li>
           )}
         </ul>
       </DialogContent>

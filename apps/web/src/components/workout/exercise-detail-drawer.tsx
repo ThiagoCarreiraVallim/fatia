@@ -80,20 +80,6 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
               )}
             </DrawerHeader>
 
-            <Button
-              variant="outline"
-              className="mb-3 w-full gap-2"
-              disabled={clone.isPending}
-              onClick={handleEdit}
-            >
-              <Pencil size={16} />
-              {clone.isPending
-                ? 'Criando cópia...'
-                : exercise.source === 'CUSTOM'
-                  ? 'Editar'
-                  : 'Editar (cria uma cópia sua)'}
-            </Button>
-
             {/* Rolável e focável: sem vídeo, nada aqui dentro recebe foco, e quem
                 usa só o teclado não conseguiria rolar até as instruções. */}
             <div
@@ -188,6 +174,26 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
                   </div>
                 </div>
               )}
+
+              {/* Por último, discreto, como no app. Fixo no topo, o "editar" era
+                  a primeira coisa do detalhe e empurrava para baixo o que a
+                  pessoa veio ver — como se faz o exercício. Editar é raro. */}
+              <div className="flex justify-center">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5 text-xs text-muted-foreground"
+                  disabled={clone.isPending}
+                  onClick={handleEdit}
+                >
+                  <Pencil size={14} />
+                  {clone.isPending
+                    ? 'Criando cópia...'
+                    : exercise.source === 'CUSTOM'
+                      ? 'Editar exercício'
+                      : 'Editar (cria uma cópia sua)'}
+                </Button>
+              </div>
             </div>
 
             <DrawerClose asChild>

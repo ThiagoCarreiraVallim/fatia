@@ -14,48 +14,64 @@ import {
 import { CommunityTabs } from '@/components/community/community-tabs';
 import { communityKeys } from '@/components/community/query-keys';
 import { TemplateCard, TipCard } from '@/components/content/content-cards';
+import { ListError, RowChevron } from '@/components/content/content-ui';
 import { ExerciseDetailDrawer } from '@/components/workout/exercise-detail-drawer';
 import { useTopBarTitle } from '@/components/layout/app-top-bar';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-const ABAS = ['plans', 'tips', 'exercises'] as const;
+const TABS = ['plans', 'tips', 'exercises'] as const;
+type Tab = (typeof TABS)[number];
 
 /** Os planos prontos, as dicas e os exercícios que a equipe da comunidade publicou. */
 export default function CommunityContentPage() {
   const { groupId } = useParams<{ groupId: string }>();
-  const pedida = useSearchParams().get('tab');
-  const aba = ABAS.find((a) => a === pedida) ?? 'plans';
-  const grupo = useQuery({
+  const requested = useSearchParams().get('tab');
+  const [tab, setTab] = useState<Tab>(TABS.find((a) => a === requested) ?? 'plans');
+  // O "?tab=tips" do atalho da dica fixada também vale com a página já aberta
+  // (o Next não remonta ao trocar só a busca): ajuste durante o render, como no app.
+  const [lastRequested, setLastRequested] = useState(requested);
+  if (lastRequested !== requested) {
+    setLastRequested(requested);
+    const next = TABS.find((a) => a === requested);
+    if (next) setTab(next);
+  }
+  const group = useQuery({
     queryKey: communityKeys.group(groupId),
     queryFn: () => groupsApi.get(groupId),
   });
-  const planos = useQuery({
+  const plans = useQuery({
     queryKey: communityKeys.plans(groupId),
     queryFn: () => groupContentApi.plans(groupId),
   });
-  const dicas = useQuery({
+  const tips = useQuery({
     queryKey: communityKeys.tips(groupId),
     queryFn: () => groupContentApi.tips(groupId),
   });
-  useTopBarTitle(grupo.data ? `Planos e dicas · ${grupo.data.name}` : 'Planos e dicas');
+  useTopBarTitle(group.data ? `Planos e dicas · ${group.data.name}` : 'Planos e dicas');
 
   return (
     <div className="space-y-4 p-4">
       <CommunityTabs groupId={groupId} />
-      <Tabs defaultValue={aba}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
         <TabsList>
           <TabsTrigger value="plans">Planos</TabsTrigger>
           <TabsTrigger value="tips">Dicas</TabsTrigger>
           <TabsTrigger value="exercises">Exercícios</TabsTrigger>
         </TabsList>
         <TabsContent value="plans" className="space-y-2 pt-2">
-          {planos.isPending ? (
+          {plans.isPending ? (
             <Skeleton className="h-24 rounded-2xl bg-card" />
-          ) : planos.data?.length ? (
+          ) : plans.isError ? (
+            // Antes o erro caía no "Nenhum plano publicado".
+            <ListError
+              title="Não deu para carregar os planos"
+              onRetry={() => void plans.refetch()}
+            />
+          ) : plans.data.length ? (
             <ul className="space-y-2" aria-label="Planos prontos">
-              {planos.data.map((t) => (
+              {plans.data.map((t) => (
                 <li key={t.id}>
                   <TemplateCard template={t} href={`/community/${groupId}/content/${t.id}`} />
                 </li>
@@ -70,10 +86,12 @@ export default function CommunityContentPage() {
           )}
         </TabsContent>
         <TabsContent value="tips" className="space-y-3 pt-2">
-          {dicas.isPending ? (
+          {tips.isPending ? (
             <Skeleton className="h-24 rounded-2xl bg-card" />
-          ) : dicas.data?.length ? (
-            sortTips(dicas.data).map((d) => <TipCard key={d.id} tip={d} />)
+          ) : tips.isError ? (
+            <ListError title="Não deu para carregar as dicas" onRetry={() => void tips.refetch()} />
+          ) : tips.data.length ? (
+            sortTips(tips.data).map((d) => <TipCard key={d.id} tip={d} />)
           ) : (
             <EmptyState
               icon={Lightbulb}
@@ -95,19 +113,24 @@ export default function CommunityContentPage() {
  * gravados pela equipe. Abrir mostra o detalhe de sempre, com o vídeo dela.
  */
 function CommunityExercises({ groupId }: { groupId: string }) {
-  const [aberto, setAberto] = useState<number | null>(null);
-  const lista = useQuery({
+  const [openId, setOpenId] = useState<number | null>(null);
+  const list = useQuery({
     queryKey: communityKeys.exercises(groupId),
     queryFn: () => groupExerciseApi.forMember(groupId),
   });
-  const detalhe = useQuery({
-    queryKey: ['workout', 'exercise', aberto],
-    queryFn: () => workoutApi.getExercise(aberto!),
-    enabled: aberto !== null,
+  const detail = useQuery({
+    queryKey: ['workout', 'exercise', openId],
+    queryFn: () => workoutApi.getExercise(openId!),
+    enabled: openId !== null,
   });
 
-  if (lista.isPending) return <Skeleton className="h-24 rounded-2xl bg-card" />;
-  if (!lista.data?.length) {
+  if (list.isPending) return <Skeleton className="h-24 rounded-2xl bg-card" />;
+  if (list.isError) {
+    return (
+      <ListError title="Não deu para carregar os exercícios" onRetry={() => void list.refetch()} />
+    );
+  }
+  if (!list.data.length) {
     return (
       <EmptyState
         icon={Video}
@@ -119,11 +142,11 @@ function CommunityExercises({ groupId }: { groupId: string }) {
   return (
     <>
       <ul className="space-y-2" aria-label="Exercícios da comunidade">
-        {lista.data.map((e) => (
+        {list.data.map((e) => (
           <li key={e.exerciseId}>
             <button
               type="button"
-              onClick={() => setAberto(e.exerciseId)}
+              onClick={() => setOpenId(e.exerciseId)}
               className="flex w-full items-center gap-3 rounded-2xl border border-subtle bg-card p-3 text-left hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {e.photos[0]?.url ? (
@@ -147,15 +170,17 @@ function CommunityExercises({ groupId }: { groupId: string }) {
               {e.video && (
                 <PlayCircle className="h-5 w-5 shrink-0 text-primary" aria-label="Com vídeo" />
               )}
+              {/* Sem a seta, a linha parecia só informação. */}
+              <RowChevron />
             </button>
           </li>
         ))}
       </ul>
       <ExerciseDetailDrawer
-        exercise={detalhe.data ?? null}
-        open={aberto !== null && Boolean(detalhe.data)}
+        exercise={detail.data ?? null}
+        open={openId !== null && Boolean(detail.data)}
         onOpenChange={(o) => {
-          if (!o) setAberto(null);
+          if (!o) setOpenId(null);
         }}
       />
     </>

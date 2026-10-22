@@ -1,38 +1,62 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Dumbbell, Lightbulb, Pin, Plus, Salad } from 'lucide-react';
-import {
-  contentApi,
-  contentStatusLabel,
-  markdownLitePlainText,
-  TIP_CATEGORY_LABEL,
-} from '@fatia/api-client';
+import { Dumbbell, Lightbulb, Pin, Salad } from 'lucide-react';
+import { contentApi, markdownLitePlainText, TIP_CATEGORY_LABEL } from '@fatia/api-client';
 import { orgKeys } from '@/components/community/query-keys';
 import { TemplateCard } from '@/components/content/content-cards';
+import {
+  DrawerOption,
+  ListError,
+  NewButton,
+  RowChevron,
+  SectionHeader,
+  StatusBadge,
+} from '@/components/content/content-ui';
 import { useOrgGroup } from '@/components/org/org-shell';
-import { Badge } from '@/components/ui/badge';
-import { buttonVariants } from '@/components/ui/button';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from '@/components/ui/drawer';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
+type Tab = 'plans' | 'tips';
+
 /**
  * Planos prontos e dicas da comunidade, pela equipe (Fase 7a). Rascunho fica
  * aqui até alguém publicar; o membro só vê o que está publicado.
+ *
+ * Criar mora no cabeçalho de cada lista ("Novo plano", "Nova dica"), e não
+ * mais em botões soltos acima dela: "Plano de treino" cheio ao lado de "Plano
+ * de nutrição" de contorno não dizia que criava nada e parecia um seletor com o
+ * treino já escolhido. O tipo do plano agora se escolhe no drawer.
  */
 export default function OrgContentPage() {
   const g = useOrgGroup();
-  const planos = useQuery({
+  const router = useRouter();
+  // `?tab=tips` volta para a aba certa depois de apagar uma dica.
+  const requested = useSearchParams().get('tab');
+  const [tab, setTab] = useState<Tab>(requested === 'tips' ? 'tips' : 'plans');
+  const [newPlanOpen, setNewPlanOpen] = useState(false);
+  const plans = useQuery({
     queryKey: orgKeys.contentPlans(g.id),
     queryFn: () => contentApi.plans(g.id),
   });
-  const dicas = useQuery({
+  const tips = useQuery({
     queryKey: orgKeys.contentTips(g.id),
     queryFn: () => contentApi.tips(g.id),
   });
   const base = `/org/${g.id}/content`;
+  const newPlan = () => setNewPlanOpen(true);
+  const newTipHref = `${base}/tips/new`;
 
   return (
     <div className="max-w-3xl space-y-4">
@@ -40,34 +64,28 @@ export default function OrgContentPage() {
         O que a equipe publica aqui aparece para os membros em {g.name}. Quem adota um plano recebe
         uma cópia: mudar o original depois não mexe na cópia de ninguém.
       </p>
-      <Tabs defaultValue="plans">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
         <TabsList>
           <TabsTrigger value="plans">Planos</TabsTrigger>
           <TabsTrigger value="tips">Dicas</TabsTrigger>
         </TabsList>
 
         <TabsContent value="plans" className="space-y-3 pt-2">
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href={`${base}/plans/new?kind=WORKOUT`}
-              className={buttonVariants({ size: 'sm' })}
-            >
-              <Dumbbell className="h-4 w-4" aria-hidden />
-              Plano de treino
-            </Link>
-            <Link
-              href={`${base}/plans/new?kind=NUTRITION`}
-              className={buttonVariants({ size: 'sm', variant: 'outline' })}
-            >
-              <Salad className="h-4 w-4" aria-hidden />
-              Plano de nutrição
-            </Link>
-          </div>
-          {planos.isPending ? (
+          <SectionHeader
+            title="Planos"
+            count={plans.data?.length}
+            action={<NewButton label="Novo plano" onClick={newPlan} />}
+          />
+          {plans.isPending ? (
             <Skeleton className="h-24 rounded-2xl" />
-          ) : planos.data?.length ? (
+          ) : plans.isError ? (
+            <ListError
+              title="Não deu para carregar os planos"
+              onRetry={() => void plans.refetch()}
+            />
+          ) : plans.data.length ? (
             <ul className="space-y-2" aria-label="Planos da comunidade">
-              {planos.data.map((t) => (
+              {plans.data.map((t) => (
                 <li key={t.id}>
                   <TemplateCard template={t} href={`${base}/plans/${t.id}`} showStatus />
                 </li>
@@ -78,39 +96,46 @@ export default function OrgContentPage() {
               icon={Dumbbell}
               title="Nenhum plano ainda"
               description="Publique um treino seu ou metas e refeições para os membros adotarem."
+              action={<NewButton label="Novo plano" onClick={newPlan} />}
             />
           )}
         </TabsContent>
 
         <TabsContent value="tips" className="space-y-3 pt-2">
-          <Link href={`${base}/tips/new`} className={buttonVariants({ size: 'sm' })}>
-            <Plus className="h-4 w-4" aria-hidden />
-            Nova dica
-          </Link>
-          {dicas.isPending ? (
+          <SectionHeader
+            title="Dicas"
+            count={tips.data?.length}
+            action={<NewButton label="Nova dica" href={newTipHref} />}
+          />
+          {tips.isPending ? (
             <Skeleton className="h-24 rounded-2xl" />
-          ) : dicas.data?.length ? (
+          ) : tips.isError ? (
+            <ListError title="Não deu para carregar as dicas" onRetry={() => void tips.refetch()} />
+          ) : tips.data.length ? (
             <ul className="space-y-2" aria-label="Dicas da comunidade">
-              {dicas.data.map((d) => (
+              {tips.data.map((d) => (
                 <li key={d.id}>
                   <Link
                     href={`${base}/tips/${d.id}`}
-                    className="block space-y-1 rounded-2xl border border-subtle bg-card p-3 hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex items-center gap-3 rounded-2xl border border-subtle bg-card p-3 hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <span className="flex items-start justify-between gap-2">
-                      <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold">
-                        {d.pinned && (
-                          <Pin className="h-3.5 w-3.5 shrink-0 text-primary" aria-label="Fixada" />
-                        )}
-                        <span className="truncate">{d.title}</span>
+                    <span className="flex min-w-0 flex-1 flex-col gap-1">
+                      <span className="truncate text-sm font-semibold">{d.title}</span>
+                      <span className="line-clamp-2 text-xs text-muted-foreground">
+                        {TIP_CATEGORY_LABEL[d.category]} · {markdownLitePlainText(d.body)}
                       </span>
-                      <Badge variant={d.publishedAt ? 'default' : 'secondary'} className="shrink-0">
-                        {contentStatusLabel(d)}
-                      </Badge>
+                      <span className="flex items-center gap-2">
+                        <StatusBadge published={Boolean(d.publishedAt)} feminine />
+                        {/* O alfinete sozinho não dizia nada; com a palavra, diz. */}
+                        {d.pinned && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
+                            <Pin className="h-3 w-3" aria-hidden />
+                            Fixada
+                          </span>
+                        )}
+                      </span>
                     </span>
-                    <span className="line-clamp-2 block text-xs text-muted-foreground">
-                      {TIP_CATEGORY_LABEL[d.category]} · {markdownLitePlainText(d.body)}
-                    </span>
+                    <RowChevron />
                   </Link>
                 </li>
               ))}
@@ -120,10 +145,42 @@ export default function OrgContentPage() {
               icon={Lightbulb}
               title="Nenhuma dica ainda"
               description="Dicas curtas de treino, alimentação ou hábitos, com imagem se quiser."
+              action={<NewButton label="Nova dica" href={newTipHref} />}
             />
           )}
         </TabsContent>
       </Tabs>
+
+      <Drawer open={newPlanOpen} onOpenChange={setNewPlanOpen}>
+        <DrawerContent className="px-4 pb-6">
+          <DrawerHeader className="px-0">
+            <DrawerTitle>Novo plano</DrawerTitle>
+            <DrawerDescription>
+              Começa como rascunho; só os membros veem depois de publicar.
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="space-y-2 pt-4">
+            <DrawerOption
+              icon={Dumbbell}
+              title="Plano de treino"
+              description="A partir de um dos seus planos de treino."
+              onClick={() => {
+                setNewPlanOpen(false);
+                router.push(`${base}/plans/new?kind=WORKOUT`);
+              }}
+            />
+            <DrawerOption
+              icon={Salad}
+              title="Plano de nutrição"
+              description="Metas de calorias e macros e refeições salvas."
+              onClick={() => {
+                setNewPlanOpen(false);
+                router.push(`${base}/plans/new?kind=NUTRITION`);
+              }}
+            />
+          </div>
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 }

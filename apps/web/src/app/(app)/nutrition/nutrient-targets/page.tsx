@@ -8,6 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
+import { LoadError } from '@/components/nutrition/load-error';
+import { errorMessage } from '@/components/nutrition/error-message';
 
 interface Preset {
   nutrientKey: string;
@@ -63,12 +67,16 @@ export default function NutrientTargetsPage() {
     },
   });
 
+  // Remover pede confirmação, como no app: a API não desfaz, e o lixo fica ao
+  // lado da linha que a pessoa toca para ler a meta.
+  const [pendingDelete, setPendingDelete] = useState<NutrientTarget | null>(null);
   const remove = useMutation({
     mutationFn: (key: string) => nutritionApi.deleteNutrientTarget(key),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['nutrition', 'nutrient-targets'] });
       qc.invalidateQueries({ queryKey: ['nutrition', 'nutrient-summary'] });
     },
+    onSettled: () => setPendingDelete(null),
   });
 
   const existingKeys = useMemo(
@@ -87,10 +95,20 @@ export default function NutrientTargetsPage() {
         uma meta (mín). O valor do dia soma o que você registra nas refeições.
       </p>
 
+      {targets.isLoading && <Skeleton className="h-16" />}
+      {targets.error && <LoadError error={targets.error} onRetry={() => void targets.refetch()} />}
+      {remove.error && (
+        <p role="alert" className="text-sm text-danger">
+          {errorMessage(remove.error, {
+            fallback: 'Não foi possível remover a meta. Tente de novo.',
+          })}
+        </p>
+      )}
+
       {/* Lista atual */}
       <div className="space-y-2">
         {targets.data?.map((t) => (
-          <TargetRow key={t.id} target={t} onDelete={() => remove.mutate(t.nutrientKey)} />
+          <TargetRow key={t.id} target={t} onDelete={() => setPendingDelete(t)} />
         ))}
         {targets.data && targets.data.length === 0 && (
           <EmptyState
@@ -111,12 +129,13 @@ export default function NutrientTargetsPage() {
               key={p.nutrientKey}
               type="button"
               disabled={existingKeys.has(p.nutrientKey)}
+              aria-pressed={preset.nutrientKey === p.nutrientKey}
               onClick={() => {
                 setPreset(p);
                 setMin(p.suggestMin ? String(p.suggestMin) : '');
                 setMax(p.suggestMax ? String(p.suggestMax) : '');
               }}
-              className={`rounded-full px-3 py-1 text-xs font-bold transition-colors disabled:opacity-30 ${
+              className={`min-h-11 rounded-full px-3 py-1 text-xs font-bold transition-colors disabled:opacity-30 ${
                 preset.nutrientKey === p.nutrientKey
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-muted text-muted-foreground'
@@ -128,7 +147,8 @@ export default function NutrientTargetsPage() {
           <button
             type="button"
             onClick={() => setPreset({ nutrientKey: '__custom__', label: '', unit: 'mg' })}
-            className={`rounded-full px-3 py-1 text-xs font-bold transition-colors ${
+            aria-pressed={isCustom}
+            className={`min-h-11 rounded-full px-3 py-1 text-xs font-bold transition-colors ${
               isCustom ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
             }`}
           >
@@ -201,8 +221,24 @@ export default function NutrientTargetsPage() {
           <Plus size={16} />
           {save.isPending ? 'Salvando…' : 'Salvar meta'}
         </Button>
-        {save.error && <p className="text-sm text-danger">{(save.error as Error).message}</p>}
+        {save.error && (
+          <p role="alert" className="text-sm text-danger">
+            {errorMessage(save.error, {
+              conflict: 'Essa meta já existe.',
+              fallback: 'Não foi possível salvar a meta. Tente de novo.',
+            })}
+          </p>
+        )}
       </div>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Remover meta"
+        description={pendingDelete ? `A meta de ${pendingDelete.label} será apagada.` : ''}
+        pending={remove.isPending}
+        onConfirm={() => pendingDelete && remove.mutate(pendingDelete.nutrientKey)}
+      />
     </div>
   );
 }
@@ -226,7 +262,7 @@ function TargetRow({ target, onDelete }: { target: NutrientTarget; onDelete: () 
         type="button"
         onClick={onDelete}
         aria-label={`Remover ${target.label}`}
-        className="rounded p-1 text-muted-foreground hover:text-danger"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-danger"
       >
         <Trash2 size={16} />
       </button>

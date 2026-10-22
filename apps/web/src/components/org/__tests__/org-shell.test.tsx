@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@fatia/api-client';
@@ -80,5 +80,16 @@ describe('OrgShell', () => {
     abrir();
     expect(await screen.findByText('Painel indisponível')).toBeInTheDocument();
     expect(screen.queryByText(/dentro de/)).toBeNull();
+  });
+
+  it('falha da API não vira "sem acesso": diz que falhou e tenta de novo', async () => {
+    vi.mocked(groupsApi.get)
+      .mockRejectedValueOnce(new ApiError('Erro', 503))
+      .mockResolvedValueOnce(grupo());
+    abrir();
+    expect(await screen.findByText('Não deu para abrir o painel')).toBeInTheDocument();
+    expect(screen.queryByText('Painel indisponível')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Tentar de novo' }));
+    expect(await screen.findByText('dentro de Academia Demo')).toBeInTheDocument();
   });
 });

@@ -16,8 +16,13 @@ import WorkoutPage from '../page';
  * isso: quem monta (ou não) o `key` é a página.
  */
 
-// Fora do caminho: modais e cards vizinhos não participam da troca de foco.
-vi.mock('@/components/workout/rpe-modal', () => ({ RpeModal: () => null }));
+// Fora do caminho: modais e cards vizinhos não participam da troca de foco. O
+// de RPE vira um marcador, porque o que importa é ele seguir aberto quando o
+// card que o pediu desmonta.
+vi.mock('@/components/workout/rpe-modal', () => ({
+  RpeModal: ({ open, set }: { open: boolean; set: { id: string } | null }) =>
+    open ? <p>RPE pedido para {set?.id}</p> : null,
+}));
 vi.mock('@/components/workout/exercise-search-drawer', () => ({
   ExerciseSearchDrawer: () => null,
 }));
@@ -59,6 +64,7 @@ vi.mock('@fatia/api-client', async () => {
       getLastSet: vi.fn(),
       getPersonalRecord: vi.fn(),
       logSet: vi.fn(),
+      getPrescription: vi.fn(),
       updateSession: vi.fn(),
       deleteSet: vi.fn(),
       listPlans: vi.fn(),
@@ -71,6 +77,8 @@ import { workoutApi } from '@fatia/api-client';
 const getActiveSession = vi.mocked(workoutApi.getActiveSession);
 const getLastSet = vi.mocked(workoutApi.getLastSet);
 const getPersonalRecord = vi.mocked(workoutApi.getPersonalRecord);
+const getPrescription = vi.mocked(workoutApi.getPrescription);
+const logSet = vi.mocked(workoutApi.logSet);
 const updateSession = vi.mocked(workoutApi.updateSession);
 const deleteSet = vi.mocked(workoutApi.deleteSet);
 const listPlans = vi.mocked(workoutApi.listPlans);
@@ -147,13 +155,14 @@ function renderPage() {
 }
 
 function weightValue(): string | null {
-  return screen.getByRole('button', { name: 'Editar CARGA (KG)' }).textContent;
+  return screen.getByRole('button', { name: /^Editar carga em quilos/ }).textContent;
 }
 
 describe('WorkoutPage — troca de exercício na sessão', () => {
   beforeEach(() => {
     getActiveSession.mockResolvedValue(session);
     getPersonalRecord.mockResolvedValue(null);
+    getPrescription.mockResolvedValue({ status: 'insufficient_history' });
     // Supino a 60 kg da última vez; rosca direta a 20 kg.
     getLastSet.mockImplementation(async (exerciseId: number) =>
       exerciseId === 1 ? makeReferenceSet(1, 60) : makeReferenceSet(2, 20),
@@ -168,14 +177,49 @@ describe('WorkoutPage — troca de exercício na sessão', () => {
     await waitFor(() => expect(weightValue()).toBe('60'));
 
     // Ajuste manual: é o que marca `touched` e, sem `key`, vaza para o próximo.
-    await user.click(screen.getAllByRole('button', { name: 'Aumentar' })[0]);
+    await user.click(
+      screen.getByRole('button', { name: 'Aumentar carga em quilos para Supino reto' }),
+    );
     expect(weightValue()).toBe('61');
 
     await user.click(screen.getByRole('button', { name: /finalizar exercício/i }));
 
     expect(await screen.findByRole('heading', { name: 'Rosca direta' })).toBeInTheDocument();
     await waitFor(() => expect(weightValue()).toBe('20'));
-    expect(screen.getByText('Anterior: 20kg')).toBeInTheDocument();
+    expect(screen.getByText('Anterior: 20 kg')).toBeInTheDocument();
+  });
+
+  it('o descanso e o RPE da última série sobrevivem à troca de exercício', async () => {
+    // Supino com uma série só: registrá-la conclui o exercício e o foco passa
+    // para a rosca. O card do supino desmonta — e com ele, até aqui, iam o
+    // descanso recém-começado e o drawer de RPE da série que acabou de sair.
+    const oneSet: WorkoutSession = {
+      ...session,
+      plannedExercises: session.plannedExercises!.map((p) =>
+        p.exerciseId === 1 ? { ...p, targetSets: 1 } : p,
+      ),
+    };
+    const logged: SessionSet = {
+      ...makeReferenceSet(1, 60),
+      id: 'serie-hoje',
+      sessionId: session.id,
+    };
+    getActiveSession.mockResolvedValue(oneSet);
+    logSet.mockImplementation(async () => {
+      getActiveSession.mockResolvedValue({ ...oneSet, sets: [logged] });
+      return logged;
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    expect(await screen.findByRole('heading', { name: 'Supino reto' })).toBeInTheDocument();
+    expect(screen.getByText('0/2 exercícios')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /concluir série/i }));
+
+    expect(await screen.findByRole('heading', { name: 'Rosca direta' })).toBeInTheDocument();
+    expect(screen.getByText('1/2 exercícios')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pular descanso' })).toBeInTheDocument();
+    expect(screen.getByText('RPE pedido para serie-hoje')).toBeInTheDocument();
   });
 });
 

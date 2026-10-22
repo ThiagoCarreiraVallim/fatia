@@ -192,7 +192,7 @@ def mcp_unavailable_reason(settings: AgentSettings) -> str | None:
             f"'{parsed.hostname or '(sem host)'}', que é alcançável de fora da rede. O agente "
             "encaminha o Bearer DO USUÁRIO para esse endereço: sem TLS, o token de acesso de "
             "quem está conversando trafega em texto puro. Use https, ou aponte para um host "
-            "da rede local (localhost, ou o nome do serviço no compose — 'api')."
+            "da rede local (localhost, ou o nome do serviço no compose — 'fatia-api')."
         )
 
     return None

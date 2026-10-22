@@ -100,6 +100,8 @@ describe('EditMealItemDrawer', () => {
     expect(screen.getByText('= 50 g')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Mais' }));
+    // O número muda no nome, para o leitor de tela anunciar o passo.
+    expect(screen.getByRole('status', { name: 'Quantas medidas: 2½' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Salvar' }));
 
     await waitFor(() =>

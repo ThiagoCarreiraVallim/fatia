@@ -35,6 +35,12 @@ interface Props {
   adding: boolean;
   addError?: string;
   onCreateManually: () => void;
+  /**
+   * Quantos itens a refeição aberta já recebeu. Quando sobe, o produto entrou e
+   * o leitor volta para a próxima embalagem (o drawer aberto pelo atalho de
+   * escanear continua no leitor).
+   */
+  addedCount?: number;
   /** Só aparece na câmera: no painel do produto, "Voltar" já volta para ela. */
   onBack: () => void;
 }
@@ -46,12 +52,31 @@ interface Props {
  * Mora no drawer, e não numa tela própria como no app, para herdar o contexto da
  * refeição (dia, tipo, vários itens por abertura) sem passar nada pela URL.
  */
-export function BarcodeFlow({ onAdd, adding, addError, onCreateManually, onBack }: Props) {
+export function BarcodeFlow({
+  onAdd,
+  adding,
+  addError,
+  onCreateManually,
+  addedCount = 0,
+  onBack,
+}: Props) {
   const qc = useQueryClient();
   // Último código consultado: a câmera repete o mesmo várias vezes por segundo.
   const lastCode = useRef<string | null>(null);
   const [result, setResult] = useState<BarcodeLookup | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  /** Painel fechado sem registrar. A trava do código continua valendo. */
+  const [dismissed, setDismissed] = useState(false);
+
+  // Ajuste durante o render, e não num efeito (#187). A trava do último código
+  // fica: a embalagem que acabou de entrar costuma seguir enquadrada, e relê-la
+  // reabriria o painel do produto já registrado.
+  const [seenAdded, setSeenAdded] = useState(addedCount);
+  if (seenAdded !== addedCount) {
+    setSeenAdded(addedCount);
+    setResult(null);
+    setFailure(null);
+  }
 
   const customFoods = useQuery({
     queryKey: ['nutrition', 'custom-foods'],
@@ -81,12 +106,14 @@ export function BarcodeFlow({ onAdd, adding, addError, onCreateManually, onBack 
     // O digitado é gesto explícito: vale mesmo repetindo o último código.
     if (source === 'camera' && !canProcessScan(code, lastCode.current)) return;
     lastCode.current = code;
+    setDismissed(false);
     setFailure(null);
     lookup.mutate(code);
   };
 
   const close = (reason: ScanCloseReason) => {
     lastCode.current = lockAfterClose(lastCode.current, reason);
+    setDismissed(reason === 'dismissed');
     setResult(null);
     setFailure(null);
     lookup.reset();
@@ -140,6 +167,19 @@ export function BarcodeFlow({ onAdd, adding, addError, onCreateManually, onBack 
   return (
     <>
       <BarcodeScanner onCode={handleCode} />
+      {dismissed && (
+        // O código descartado segue travado, senão a câmera o releria na hora.
+        // Como a embalagem costuma seguir enquadrada, sem este botão quem voltou
+        // por engano ficaria sem como reler o mesmo produto. Como no app.
+        <div className="my-2 space-y-2 text-center">
+          <p className="text-xs text-muted-foreground">
+            Leitura descartada. Aponte para outro produto ou toque abaixo.
+          </p>
+          <Button variant="outline" className="w-full" onClick={() => close('rescan')}>
+            Ler de novo
+          </Button>
+        </div>
+      )}
       <Button variant="ghost" className="w-full" onClick={onBack}>
         Voltar para a busca
       </Button>

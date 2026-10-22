@@ -84,7 +84,7 @@ describe('MealTimeline', () => {
     const user = userEvent.setup();
     renderTimeline();
 
-    await user.click(screen.getByRole('button', { name: 'Remover refeição' }));
+    await user.click(screen.getByRole('button', { name: 'Remover Jantar' }));
     expect(nutritionApi.deleteMeal).not.toHaveBeenCalled();
 
     const dialog = await screen.findByRole('dialog');
@@ -140,17 +140,35 @@ describe('MealTimeline', () => {
     );
   });
 
+  // Com várias refeições no dia, "Adicionar item" repetido não dizia qual.
+  it('as ações da refeição dizem de qual refeição são', () => {
+    renderTimeline();
+
+    expect(screen.getByRole('button', { name: 'Adicionar item em Jantar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remover Jantar' })).toBeInTheDocument();
+  });
+
+  it('falha ao remover um item diz o motivo, em vez de passar calada', async () => {
+    vi.mocked(nutritionApi.deleteItem).mockRejectedValue(new Error('Sem conexão.'));
+    const user = userEvent.setup();
+    renderTimeline();
+
+    await user.click(screen.getByRole('button', { name: 'Remover Arroz' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Sem conexão.');
+  });
+
   it('keeps empty meal slots before a logged dinner', () => {
     renderTimeline();
 
     const labels = screen
-      .getAllByRole('button', { name: /^Registrar|Remover refeição/ })
+      .getAllByRole('button', { name: /^Registrar|Remover Jantar/ })
       .map((b) => b.getAttribute('aria-label'));
     expect(labels).toEqual([
       'Registrar Café da manhã',
       'Registrar Almoço',
       'Registrar Lanche',
-      'Remover refeição',
+      'Remover Jantar',
     ]);
   });
 

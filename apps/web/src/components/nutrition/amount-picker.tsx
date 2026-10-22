@@ -24,7 +24,8 @@ interface Props {
 }
 
 /**
- * Quanto comeu: gramas digitadas ou medida caseira × quantidade.
+ * Quanto comeu: gramas digitadas ou medida caseira × quantidade. Chips e
+ * passos com alvo de 44 px, como no seletor do app (`seletor-de-quantidade`).
  *
  * As medidas são chips de escolha única ("g" é uma delas) porque a pessoa pensa
  * em "2 colheres" antes de pensar em gramas, e a conta em gramas aparece ao lado
@@ -71,7 +72,7 @@ export function AmountPicker({
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="inline-flex min-h-9 items-center gap-1 rounded-full border border-dashed px-3 text-sm text-muted-foreground hover:text-foreground"
+            className="inline-flex min-h-11 items-center gap-1 rounded-full border border-dashed px-3 text-sm text-muted-foreground hover:text-foreground"
           >
             <Plus size={14} aria-hidden />
             Nova medida
@@ -111,13 +112,16 @@ export function AmountPicker({
             type="button"
             variant="outline"
             size="icon"
+            className="h-11 w-11"
             aria-label="Menos"
             onClick={() => onChange({ ...amount, quantity: stepQuantity(amount.quantity, -1) })}
           >
             <Minus size={16} aria-hidden />
           </Button>
           <output
-            aria-label="Quantas medidas"
+            // Com o número no nome, o leitor diz "Quantas medidas: 2" a cada passo.
+            aria-label={`Quantas medidas: ${formatQuantity(amount.quantity)}`}
+            aria-live="polite"
             className="min-w-10 text-center text-lg font-semibold tabular-nums"
           >
             {formatQuantity(amount.quantity)}
@@ -126,6 +130,7 @@ export function AmountPicker({
             type="button"
             variant="outline"
             size="icon"
+            className="h-11 w-11"
             aria-label="Mais"
             onClick={() => onChange({ ...amount, quantity: stepQuantity(amount.quantity, 1) })}
           >
@@ -161,7 +166,7 @@ function Chip({
       aria-label={label}
       onClick={onSelect}
       className={cn(
-        'inline-flex min-h-9 items-center rounded-full border px-3 text-sm transition-colors',
+        'inline-flex min-h-11 items-center rounded-full border px-3 text-sm transition-colors',
         checked
           ? 'border-primary bg-primary/15 font-medium text-primary'
           : 'text-muted-foreground hover:text-foreground',
@@ -215,7 +220,11 @@ function NewPortionForm({
           />
         </div>
       </div>
-      {error && <p className="text-sm text-danger">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-danger">
+          {error}
+        </p>
+      )}
       <div className="flex gap-2">
         <Button type="button" variant="ghost" size="sm" className="flex-1" onClick={onCancel}>
           Cancelar

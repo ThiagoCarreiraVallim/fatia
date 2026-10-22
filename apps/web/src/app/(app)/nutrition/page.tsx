@@ -4,8 +4,8 @@ import { Suspense, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Copy, Settings } from 'lucide-react';
-import { nutritionApi, type MealType } from '@fatia/api-client';
+import { Copy, ScanBarcode, Settings } from 'lucide-react';
+import { mealTypeForTime, nutritionApi, type MealType } from '@fatia/api-client';
 import { DateNavigator } from '@/components/nutrition/date-navigator';
 import { CaloriesRingCard } from '@/components/nutrition/calories-ring-card';
 import { MacroBentoGrid } from '@/components/nutrition/macro-bento-grid';
@@ -15,6 +15,7 @@ import { NutrientTargetsCard } from '@/components/nutrition/nutrient-targets-car
 import { CustomFoodsCard } from '@/components/nutrition/custom-foods-card';
 import { FoodSearchDrawer } from '@/components/nutrition/food-search-drawer';
 import { CopyDayDrawer } from '@/components/nutrition/copy-day-drawer';
+import { LoadError } from '@/components/nutrition/load-error';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TopBarActions, topBarActionClass } from '@/components/layout/app-top-bar';
 
@@ -32,6 +33,8 @@ function NutritionPageContent() {
   const date = params.get('date') ?? todayIso();
   const [newMealType, setNewMealType] = useState<MealType | null>(null);
   const [copyingDay, setCopyingDay] = useState(false);
+  // Tipo da refeição do atalho de escanear, pela hora — a mesma regra do "+".
+  const [scanMealType, setScanMealType] = useState<MealType | null>(null);
 
   const summary = useQuery({
     queryKey: ['nutrition', 'summary', date],
@@ -46,6 +49,17 @@ function NutritionPageContent() {
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
       <TopBarActions>
+        {/* Escanear fica no topo, e não só dentro do drawer de busca: o caso é
+          "estou com a embalagem na mão", e dois cliques até o leitor fazem a
+          pessoa digitar o nome do produto assim mesmo. Como no app. */}
+        <button
+          type="button"
+          onClick={() => setScanMealType(mealTypeForTime(new Date()))}
+          className={topBarActionClass}
+          aria-label="Escanear código de barras"
+        >
+          <ScanBarcode size={20} />
+        </button>
         {mealCount > 0 && (
           <button
             type="button"
@@ -71,6 +85,8 @@ function NutritionPageContent() {
         </div>
       )}
 
+      {summary.error && <LoadError error={summary.error} onRetry={() => void summary.refetch()} />}
+
       {summary.data && (
         <>
           <CaloriesRingCard totals={summary.data.totals} goals={goals.data ?? null} />
@@ -94,6 +110,14 @@ function NutritionPageContent() {
         date={date}
       />
 
+      <FoodSearchDrawer
+        open={scanMealType !== null}
+        onOpenChange={(open) => !open && setScanMealType(null)}
+        mealType={scanMealType ?? undefined}
+        date={date}
+        initialMode="scan"
+      />
+
       <CopyDayDrawer
         open={copyingDay}
         onOpenChange={setCopyingDay}
@@ -102,8 +126,10 @@ function NutritionPageContent() {
         mealCount={mealCount}
       />
 
-      {summary.error && (
-        <p className="text-sm text-danger">Erro ao carregar: {(summary.error as Error).message}</p>
+      {goals.error && (
+        <p role="alert" className="text-sm text-danger">
+          Não foi possível carregar suas metas.
+        </p>
       )}
     </div>
   );

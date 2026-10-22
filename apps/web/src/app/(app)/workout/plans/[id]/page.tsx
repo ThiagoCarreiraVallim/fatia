@@ -16,6 +16,10 @@ import { Input } from '@/components/ui/input';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { ErrorState } from '@/components/elements/error-state';
+import { pluralize } from '@/components/workout/format';
 import { TopBarActions, topBarActionClass, useTopBarTitle } from '@/components/layout/app-top-bar';
 
 interface MoveVars {
@@ -46,6 +50,7 @@ export default function PlanDetailPage() {
   const [editingName, setEditingName] = useState(false);
   const [nameEdit, setNameEdit] = useState('');
   const [announcement, setAnnouncement] = useState('');
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const plan = useQuery({
     queryKey: ['workout', 'plan', id],
@@ -175,8 +180,27 @@ export default function PlanDetailPage() {
     );
   }
 
+  // Falha de rede não é "plano não encontrado" — o app separa os dois casos.
+  if (plan.isError) {
+    return (
+      <div className="px-5 pt-4">
+        <ErrorState
+          className="max-w-none"
+          title="Não foi possível carregar o plano"
+          detail={plan.error instanceof Error ? plan.error.message : 'Tente de novo.'}
+          retryLabel="Tentar de novo"
+          onRetry={() => void plan.refetch()}
+        />
+      </div>
+    );
+  }
+
   if (!plan.data) {
-    return <p className="px-5 pt-4 text-sm text-muted-foreground">Plano não encontrado.</p>;
+    return (
+      <div className="px-5 pt-4">
+        <EmptyState title="Plano não encontrado" />
+      </div>
+    );
   }
 
   const exercises = [...plan.data.exercises].sort((a, b) => a.order - b.order);
@@ -214,12 +238,6 @@ export default function PlanDetailPage() {
     moveExercise.mutate({ a: exercises[idx], b: exercises[target] });
   }
 
-  function handleDelete() {
-    if (confirm('Excluir este plano de treino?')) {
-      deletePlan.mutate();
-    }
-  }
-
   return (
     <div className="pb-4">
       <TopBarActions>
@@ -233,7 +251,9 @@ export default function PlanDetailPage() {
         </button>
         <button
           type="button"
-          onClick={handleDelete}
+          // O `confirm()` do navegador não diz o que acontece com o histórico, e
+          // destoa do resto do PWA; a confirmação do app diz.
+          onClick={() => setDeleteOpen(true)}
           aria-label="Excluir plano"
           className={topBarActionClass}
         >
@@ -279,7 +299,8 @@ export default function PlanDetailPage() {
             <div className="absolute inset-x-0 bottom-0 p-4">
               <h2 className="text-2xl font-extrabold text-white">{plan.data.name}</h2>
               <p className="mt-1 text-xs text-white/70">
-                {exercises.length} exercício{exercises.length !== 1 ? 's' : ''} • {totalSets} séries
+                {exercises.length} {pluralize(exercises.length, 'exercício', 'exercícios')} •{' '}
+                {totalSets} {pluralize(totalSets, 'série', 'séries')}
               </p>
             </div>
           </div>
@@ -411,6 +432,17 @@ export default function PlanDetailPage() {
           {start.isPending ? 'Iniciando...' : 'Iniciar Treino'}
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Excluir plano?"
+        description="Os treinos já feitos com ele continuam no histórico."
+        confirmLabel="Excluir"
+        pendingLabel="Excluindo..."
+        pending={deletePlan.isPending}
+        onConfirm={() => deletePlan.mutate()}
+      />
 
       <AddExerciseDrawer
         open={addOpen}

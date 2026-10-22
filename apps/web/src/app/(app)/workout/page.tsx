@@ -13,6 +13,7 @@ import {
   workoutApi,
   type ExerciseGroup,
   type PendingExercise,
+  type SessionSet,
   type WorkoutSession,
 } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,12 @@ import { ActiveCardioCard } from '@/components/workout/active-cardio-card';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { ExerciseActions } from '@/components/workout/exercise-actions';
 import { RemoveExerciseModal } from '@/components/workout/remove-exercise-modal';
+import { RpeModal } from '@/components/workout/rpe-modal';
+import { SessionHeader } from '@/components/workout/session-header';
+import { groupCardItem } from '@/components/workout/group-card-item';
+import { pluralize, sessionProgress } from '@/components/workout/format';
+import { useRestTimer } from '@/components/workout/use-rest-timer';
+import { ErrorState } from '@/components/elements/error-state';
 import { useSessionLayout } from '@/components/workout/use-session-layout';
 import { useWakeLock } from '@/components/workout/use-wake-lock';
 import { BlockTimeline } from '@/components/workout/block-timeline';
@@ -46,12 +53,17 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
   // que está segurando a barra.
   useWakeLock();
   const layout = useSessionLayout(session);
+  // Descanso e RPE moram aqui, e não no card: o card desmonta quando o foco
+  // passa para o próximo exercício (ver `active-exercise-card.tsx`).
+  const rest = useRestTimer();
   const topRef = useRef<HTMLDivElement>(null);
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [finishOpen, setFinishOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<ExerciseGroup | null>(null);
+  const [rpeTarget, setRpeTarget] = useState<SessionSet | null>(null);
+  const [announcement, setAnnouncement] = useState('');
   const [skippedExerciseIds, setSkippedExerciseIds] = useState<Set<number>>(new Set());
   // Escolhidos na busca e ainda sem série: vivem só na tela (ver `buildExerciseGroups`).
   const [pending, setPending] = useState<PendingExercise[]>([]);
@@ -112,28 +124,23 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
 
   return (
     <div ref={topRef} className="scroll-mt-20 space-y-4 px-5 pt-4 pb-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">
-            Iniciado às{' '}
-            {new Date(session.startedAt).toLocaleTimeString('pt-BR', {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setCancelOpen(true)}>
-            Cancelar
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setFinishOpen(true)}>
-            Finalizar
-          </Button>
-        </div>
-      </div>
+      <SessionHeader
+        startedAt={session.startedAt}
+        progress={sessionProgress(groups)}
+        onCancel={() => setCancelOpen(true)}
+        onFinish={() => setFinishOpen(true)}
+      />
+
+      {/* Montada sempre, e não junto com o texto: um `aria-live` que nasce já
+          preenchido costuma não ser anunciado. */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
 
       {groups.length === 0 && (
-        <p className="text-sm text-muted-foreground">Nenhum exercício registrado ainda.</p>
+        <p className="text-sm text-muted-foreground">
+          Nenhum exercício registrado ainda. Adicione o primeiro abaixo.
+        </p>
       )}
 
       {focused && !focused.isCardio && (
@@ -146,7 +153,10 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
           sessionId={session.id}
           sessionStartedAt={session.startedAt}
           group={focused}
+          rest={rest}
           onFinishExercise={() => skipExercise(focused.exerciseId)}
+          onAskRpe={setRpeTarget}
+          onAnnounce={setAnnouncement}
         />
       )}
 
@@ -186,49 +196,27 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
           <p className="mt-2 text-[11px] font-extrabold tracking-wide text-muted-foreground">
             {focused ? 'PRÓXIMOS' : 'EXERCÍCIOS DO TREINO'}
           </p>
-          {others.map((g, index) => {
-            const muscle = g.sets[0]?.exercise?.muscleGroup ?? 'outros';
-            return (
-              <ExerciseDetailCard
-                key={g.exerciseId}
-                mode="readonly"
-                isCardio={g.isCardio}
-                sessionId={session.id}
-                item={{
-                  id: String(g.exerciseId),
-                  exercise: {
-                    id: g.exerciseId,
-                    name: g.exerciseName,
-                    muscleGroup: muscle,
-                    source: 'SEED',
-                    createdByUserId: null,
-                    primaryMuscles: [],
-                    secondaryMuscles: [],
-                    equipment: null,
-                    level: null,
-                    mechanic: null,
-                    instructions: [],
-                    youtubeVideoId: null,
-                    youtubeVideoIdPt: null,
-                  },
-                  targetSets: g.targetSets ?? g.sets.length,
-                  targetReps: g.targetReps ?? '—',
-                }}
-                loggedSets={g.sets}
-                footer={
-                  <ExerciseActions
-                    group={g}
-                    isFirst={index === 0}
-                    isLast={index === others.length - 1}
-                    disabled={layout.reorder.isPending}
-                    onDoNow={() => doNow(g.exerciseId)}
-                    onMove={(direction) => move(g.exerciseId, direction)}
-                    onRemove={() => requestRemove(g)}
-                  />
-                }
-              />
-            );
-          })}
+          {others.map((g, index) => (
+            <ExerciseDetailCard
+              key={g.exerciseId}
+              mode="readonly"
+              isCardio={g.isCardio}
+              sessionId={session.id}
+              item={groupCardItem(g)}
+              loggedSets={g.sets}
+              footer={
+                <ExerciseActions
+                  group={g}
+                  isFirst={index === 0}
+                  isLast={index === others.length - 1}
+                  disabled={layout.reorder.isPending}
+                  onDoNow={() => doNow(g.exerciseId)}
+                  onMove={(direction) => move(g.exerciseId, direction)}
+                  onRemove={() => requestRemove(g)}
+                />
+              }
+            />
+          ))}
         </div>
       )}
 
@@ -248,6 +236,14 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
           setPending((prev) => [...prev, exercise]);
           setPickedId(exercise.id);
         }}
+      />
+      <RpeModal
+        open={rpeTarget != null}
+        onOpenChange={(open) => {
+          if (!open) setRpeTarget(null);
+        }}
+        sessionId={session.id}
+        set={rpeTarget}
       />
       <FinishSessionModal open={finishOpen} onOpenChange={setFinishOpen} session={session} />
       <CancelSessionModal open={cancelOpen} onOpenChange={setCancelOpen} session={session} />
@@ -309,6 +305,16 @@ function NoSession() {
           </div>
         )}
 
+        {plans.isError && (
+          <ErrorState
+            className="mt-3 max-w-none"
+            title="Não foi possível carregar seus planos"
+            detail={plans.error instanceof Error ? plans.error.message : 'Tente de novo.'}
+            retryLabel="Tentar de novo"
+            onRetry={() => void plans.refetch()}
+          />
+        )}
+
         {plans.data && plans.data.length === 0 && (
           <p className="mt-3 text-sm text-muted-foreground">
             Nenhum plano criado ainda.{' '}
@@ -331,8 +337,8 @@ function NoSession() {
               <div className="flex-1 min-w-0">
                 <p className="truncate text-base font-bold text-foreground">{plan.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {plan.exercises?.length ?? 0} exercício
-                  {(plan.exercises?.length ?? 0) !== 1 ? 's' : ''}
+                  {plan.exercises?.length ?? 0}{' '}
+                  {pluralize(plan.exercises?.length ?? 0, 'exercício', 'exercícios')}
                 </p>
               </div>
               <ChevronRight size={16} className="shrink-0 text-muted-foreground" />

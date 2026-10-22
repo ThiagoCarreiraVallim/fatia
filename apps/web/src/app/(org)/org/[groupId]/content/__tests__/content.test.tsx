@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GroupTip, MyGroup, PlanTemplate } from '@fatia/api-client';
 import { grupo, renderWithClient } from '../../__tests__/helpers';
@@ -22,6 +22,18 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ctx.router,
 }));
 vi.mock('sonner', () => ({ toast: vi.fn() }));
+// O vaul precisa de APIs de layout que o jsdom não tem; aqui basta abrir e fechar.
+vi.mock('@/components/ui/drawer', () => {
+  const Passthrough = ({ children }: { children: React.ReactNode }) => <>{children}</>;
+  return {
+    Drawer: ({ open, children }: { open: boolean; children: React.ReactNode }) =>
+      open ? <section aria-label="drawer">{children}</section> : null,
+    DrawerContent: Passthrough,
+    DrawerHeader: Passthrough,
+    DrawerTitle: Passthrough,
+    DrawerDescription: Passthrough,
+  };
+});
 vi.mock('@/components/org/org-shell', () => ({ useOrgGroup: () => ctx.group }));
 vi.mock('@/components/layout/app-top-bar', () => ({ useTopBarTitle: vi.fn() }));
 vi.mock('@fatia/api-client', async () => {
@@ -34,8 +46,10 @@ vi.mock('@fatia/api-client', async () => {
       tips: vi.fn(),
       createNutrition: vi.fn(),
       createTip: vi.fn(),
+      updatePlan: vi.fn(),
       publishPlan: vi.fn(),
       setTipState: vi.fn(),
+      deleteTip: vi.fn(),
     },
     nutritionApi: { goals: vi.fn(), mealTemplates: vi.fn() },
     workoutApi: { listPlans: vi.fn() },
@@ -92,7 +106,10 @@ const dica = (p: Partial<GroupTip> = {}): GroupTip => ({
 });
 
 describe('painel › planos e dicas', () => {
-  afterEach(() => vi.clearAllMocks());
+  afterEach(() => {
+    vi.clearAllMocks();
+    ctx.search = new URLSearchParams();
+  });
 
   it('lista planos e dicas com o estado de cada um', async () => {
     ctx.group = grupo({ role: 'PROFESSIONAL' });
@@ -113,10 +130,38 @@ describe('painel › planos e dicas', () => {
     expect(lista).toHaveTextContent('Treino A');
     expect(lista).toHaveTextContent('Rascunho');
     expect(lista).toHaveTextContent('Nutrição · 1800–2100 kcal');
-    expect(screen.getByRole('link', { name: /Plano de treino/ })).toHaveAttribute(
+    expect(screen.getByRole('heading', { name: 'Planos (2)' })).toBeInTheDocument();
+
+    // "Novo plano" pergunta o tipo antes de abrir o formulário.
+    fireEvent.click(screen.getByRole('button', { name: 'Novo plano' }));
+    const escolha = screen.getByRole('region', { name: 'drawer' });
+    fireEvent.click(within(escolha).getByRole('button', { name: /Plano de nutrição/ }));
+    expect(ctx.router.push).toHaveBeenCalledWith('/org/g1/content/plans/new?kind=NUTRITION');
+  });
+
+  it('abre na aba de dicas pelo endereço, com o estado escrito e a seta de quem abre', async () => {
+    ctx.group = grupo();
+    ctx.search = new URLSearchParams('tab=tips');
+    vi.mocked(contentApi.plans).mockResolvedValue([]);
+    vi.mocked(contentApi.tips).mockResolvedValue([dica({ pinned: true, publishedAt: null })]);
+    renderWithClient(<OrgContentPage />);
+
+    const lista = await screen.findByRole('list', { name: 'Dicas da comunidade' });
+    expect(within(lista).getByRole('link')).toHaveTextContent('RascunhoFixada');
+    expect(screen.getByRole('link', { name: 'Nova dica' })).toHaveAttribute(
       'href',
-      '/org/g1/content/plans/new?kind=WORKOUT',
+      '/org/g1/content/tips/new',
     );
+  });
+
+  it('lista que não carregou diz que falhou, e não que está vazia', async () => {
+    ctx.group = grupo();
+    vi.mocked(contentApi.plans).mockRejectedValue(new Error('rede'));
+    vi.mocked(contentApi.tips).mockResolvedValue([]);
+    renderWithClient(<OrgContentPage />);
+
+    expect(await screen.findByText('Não deu para carregar os planos')).toBeInTheDocument();
+    expect(screen.queryByText('Nenhum plano ainda')).toBeNull();
   });
 
   it('cria um plano de nutrição com as minhas metas e uma refeição salva', async () => {
@@ -139,7 +184,7 @@ describe('painel › planos e dicas', () => {
     renderWithClient(<OrgPlanTemplatePage />);
 
     fireEvent.change(screen.getByLabelText('Título'), { target: { value: 'Cutting' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Usar as minhas metas' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Preencher com as minhas metas' }));
     await waitFor(() => expect(screen.getByLabelText('Calorias mínimo')).toHaveValue('1800'));
     fireEvent.click(await screen.findByRole('checkbox', { name: /Café da academia/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Criar rascunho' }));
@@ -185,14 +230,85 @@ describe('painel › planos e dicas', () => {
     vi.mocked(contentApi.plan).mockResolvedValue(plano());
     vi.mocked(contentApi.publishPlan).mockResolvedValue(plano({ publishedAt: '2026-10-17' }));
     const { unmount } = renderWithClient(<OrgPlanTemplatePage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Publicar' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Publicar para os membros' }));
     await waitFor(() => expect(contentApi.publishPlan).toHaveBeenCalledWith('g1', 't1', true));
     unmount();
 
     vi.mocked(contentApi.plan).mockResolvedValue(plano({ canEdit: false }));
     renderWithClient(<OrgPlanTemplatePage />);
     expect(await screen.findByText(/Só quem publicou, ou o dono/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Publicar' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Publicar para os membros' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Apagar plano' })).toBeNull();
+  });
+
+  it('com mudança não salva, publicar espera o salvar', async () => {
+    ctx.group = grupo();
+    ctx.params = { templateId: 't1' };
+    vi.mocked(contentApi.plan).mockResolvedValue(plano());
+    vi.mocked(contentApi.updatePlan).mockResolvedValue(plano({ title: 'Treino B' }));
+    renderWithClient(<OrgPlanTemplatePage />);
+
+    const publicar = await screen.findByRole('button', { name: 'Publicar para os membros' });
+    expect(screen.getByRole('button', { name: 'Tudo salvo' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Título'), { target: { value: 'Treino B' } });
+    expect(publicar).toBeDisabled();
+    expect(publicar).toHaveAccessibleDescription('Salve as mudanças antes de publicar.');
+    fireEvent.click(publicar);
+    expect(contentApi.publishPlan).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar mudanças' }));
+    await waitFor(() => expect(publicar).toBeEnabled());
+    expect(vi.mocked(contentApi.updatePlan).mock.calls[0]![2]).toMatchObject({ title: 'Treino B' });
+    expect(screen.queryByText('Salve as mudanças antes de publicar.')).toBeNull();
+  });
+
+  it('tirar o plano do ar pede confirmação', async () => {
+    ctx.group = grupo();
+    ctx.params = { templateId: 't1' };
+    vi.mocked(contentApi.plan).mockResolvedValue(plano({ publishedAt: '2026-10-17' }));
+    vi.mocked(contentApi.publishPlan).mockResolvedValue(plano());
+    renderWithClient(<OrgPlanTemplatePage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Tirar do ar' }));
+    expect(contentApi.publishPlan).not.toHaveBeenCalled();
+    const dialogo = screen.getByRole('dialog', { name: 'Tirar este plano do ar?' });
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Tirar do ar' }));
+    await waitFor(() => expect(contentApi.publishPlan).toHaveBeenCalledWith('g1', 't1', false));
+  });
+
+  it('dica: tirar do ar confirma, fixar vale na hora e apagar volta para as dicas', async () => {
+    ctx.group = grupo();
+    ctx.params = { tipId: 'd1' };
+    vi.mocked(contentApi.tips).mockResolvedValue([dica()]);
+    vi.mocked(contentApi.setTipState).mockResolvedValue(dica());
+    vi.mocked(contentApi.deleteTip).mockResolvedValue(undefined as never);
+    renderWithClient(<OrgTipPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Tirar do ar' }));
+    expect(contentApi.setTipState).not.toHaveBeenCalled();
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Tirar esta dica do ar?' })).getByRole('button', {
+        name: 'Tirar do ar',
+      }),
+    );
+    await waitFor(() =>
+      expect(contentApi.setTipState).toHaveBeenCalledWith('g1', 'd1', { published: false }),
+    );
+
+    fireEvent.click(screen.getByRole('switch', { name: /Fixar no topo/ }));
+    await waitFor(() =>
+      expect(contentApi.setTipState).toHaveBeenCalledWith('g1', 'd1', { pinned: true }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apagar dica' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Apagar esta dica?' })).getByRole('button', {
+        name: 'Apagar',
+      }),
+    );
+    await waitFor(() =>
+      expect(ctx.router.replace).toHaveBeenCalledWith('/org/g1/content?tab=tips'),
+    );
   });
 
   it('a prévia da dica desenha o markdown e mostra HTML como texto', async () => {
@@ -204,11 +320,13 @@ describe('painel › planos e dicas', () => {
     fireEvent.change(screen.getByLabelText('Texto'), {
       target: { value: 'Durma **8 h**. <script>alert(1)</script>' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Ver prévia' }));
+    // Aba do Radix: ativa no mousedown, como no navegador.
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prévia' }));
     const previa = screen.getByLabelText('Prévia da dica');
     expect(previa.querySelector('strong')).toHaveTextContent('8 h');
     expect(previa.querySelector('script')).toBeNull();
     expect(previa).toHaveTextContent('<script>alert(1)</script>');
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Escrever' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Criar rascunho' }));
     await waitFor(() =>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { describeMuscles } from './muscle-labels';
 
 interface MuscleDiagramProps {
   primaryMuscles: string[];
@@ -59,14 +60,20 @@ export function MuscleDiagram({
   }, [primaryMuscles, secondaryMuscles]);
 
   return (
-    <div className="flex gap-2 justify-center">
+    // Os dois `<object>` são desenho: o grupo fala por eles, como no app.
+    <div
+      role="img"
+      aria-label={describeMuscles(primaryMuscles, secondaryMuscles)}
+      className="flex gap-2 justify-center"
+    >
       {(view === 'front' || view === 'both') && (
         <object
           ref={frontRef}
           data="/muscle-front.svg"
           type="image/svg+xml"
-          className="w-32 h-auto"
-          aria-label="Vista frontal"
+          className="pointer-events-none w-32 h-auto"
+          aria-hidden
+          tabIndex={-1}
         />
       )}
       {(view === 'back' || view === 'both') && (
@@ -74,8 +81,9 @@ export function MuscleDiagram({
           ref={backRef}
           data="/muscle-back.svg"
           type="image/svg+xml"
-          className="w-32 h-auto"
-          aria-label="Vista posterior"
+          className="pointer-events-none w-32 h-auto"
+          aria-hidden
+          tabIndex={-1}
         />
       )}
     </div>

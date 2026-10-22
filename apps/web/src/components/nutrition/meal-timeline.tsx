@@ -21,6 +21,8 @@ import { EditMealItemDrawer } from './edit-meal-item-drawer';
 import { MealActionsDrawer } from './meal-actions-drawer';
 import { MEAL_TYPE_LABEL as mealTypeLabel } from './meal-labels';
 import { invalidateNutritionDay } from '@/lib/nutrition-cache';
+import { errorMessage } from './error-message';
+import { cn } from '@/lib/utils';
 
 const mealTypeEmoji: Record<MealType, string> = {
   BREAKFAST: '☀️',
@@ -67,13 +69,24 @@ export function MealTimeline({ meals, date, today, onAddMeal }: Props) {
       refresh();
       setPendingDelete(null);
     },
+    // O diálogo fecha para o aviso de erro, logo abaixo do título, ficar à vista.
+    onError: () => setPendingDelete(null),
   });
+  // Antes a falha ao remover passava calada: o item continuava na lista e nada
+  // dizia por quê. O app mostra o motivo no topo da timeline.
+  const deleteError = deleteItem.error ?? deleteMeal.error;
 
   return (
     <div>
       <h2 className="mb-4 text-[13px] font-bold uppercase tracking-wide text-muted-foreground">
         {mealTimelineTitle(date, today)}
       </h2>
+
+      {deleteError && (
+        <p role="alert" className="mb-3 text-sm text-danger">
+          {errorMessage(deleteError, { fallback: 'Não foi possível remover. Tente de novo.' })}
+        </p>
+      )}
 
       <div className="relative">
         <div className="absolute left-[19px] top-0 bottom-0 w-px bg-white/10" />
@@ -138,6 +151,13 @@ export function MealTimeline({ meals, date, today, onAddMeal }: Props) {
   );
 }
 
+/**
+ * Ícone de ação com alvo de 44 px, como no app — o de 22 px ficava abaixo do
+ * mínimo de toque.
+ */
+const iconButtonClass =
+  'flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground';
+
 function MealCard({
   meal,
   onAddItem,
@@ -166,41 +186,41 @@ function MealCard({
         {mealTypeEmoji[meal.mealType]}
       </div>
 
-      <div className="flex-1 overflow-hidden rounded-xl border border-subtle bg-card">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div>
+      <div className="min-w-0 flex-1 overflow-hidden rounded-xl border border-subtle bg-card">
+        <div className="flex items-center justify-between gap-1 py-1.5 pr-1 pl-4">
+          <div className="min-w-0 flex-1">
             <span className="text-[14px] font-semibold text-foreground">
               {mealTypeLabel[meal.mealType]}
             </span>
             <span className="ml-2 text-[12px] text-muted-foreground">{time}</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-[12px] font-bold tabular-nums text-muted-foreground">
+            <span className="text-[12px] font-bold whitespace-nowrap tabular-nums text-muted-foreground">
               {Math.round(totalKcal)} kcal
             </span>
             <button
               type="button"
               onClick={onAddItem}
-              className="ml-1 rounded p-1 text-muted-foreground hover:text-foreground"
-              aria-label="Adicionar item"
+              className={iconButtonClass}
+              aria-label={`Adicionar item em ${mealTypeLabel[meal.mealType]}`}
             >
-              <Plus size={14} />
+              <Plus size={16} />
             </button>
             <button
               type="button"
               onClick={onMore}
-              className="rounded p-1 text-muted-foreground hover:text-foreground"
+              className={iconButtonClass}
               aria-label={`Mais ações de ${mealTypeLabel[meal.mealType]}`}
             >
-              <MoreHorizontal size={14} />
+              <MoreHorizontal size={16} />
             </button>
             <button
               type="button"
               onClick={onDeleteMeal}
-              className="rounded p-1 text-muted-foreground hover:text-danger"
-              aria-label="Remover refeição"
+              className={cn(iconButtonClass, 'hover:text-danger')}
+              aria-label={`Remover ${mealTypeLabel[meal.mealType]}`}
             >
-              <Trash2 size={14} />
+              <Trash2 size={16} />
             </button>
           </div>
         </div>
@@ -208,30 +228,30 @@ function MealCard({
         {meal.items.length > 0 && (
           <div className="divide-y divide-white/5 border-t border-subtle">
             {meal.items.map((item) => (
-              <div key={item.id} className="flex items-center justify-between px-4 py-2.5">
-                <div>
+              <div key={item.id} className="flex items-center justify-between py-1 pr-1 pl-4">
+                <div className="min-w-0 flex-1 pr-2">
                   <p className="text-[13px] text-foreground">{item.foodName}</p>
                   <p className="text-[11px] tabular-nums text-muted-foreground">
                     {itemAmountText(item)} · {Math.round(item.kcal)} kcal · P
                     {Math.round(item.proteinG)} C{Math.round(item.carbsG)} G{Math.round(item.fatG)}
                   </p>
                 </div>
-                <div className="flex items-center gap-0.5">
+                <div className="flex shrink-0 items-center">
                   <button
                     type="button"
                     onClick={() => onEditItem(item)}
-                    className="rounded p-1 text-muted-foreground hover:text-foreground"
+                    className={iconButtonClass}
                     aria-label={`Editar ${item.foodName}`}
                   >
-                    <Pencil size={12} />
+                    <Pencil size={14} />
                   </button>
                   <button
                     type="button"
                     onClick={() => onDeleteItem(item)}
-                    className="rounded p-1 text-muted-foreground hover:text-danger"
+                    className={cn(iconButtonClass, 'hover:text-danger')}
                     aria-label={`Remover ${item.foodName}`}
                   >
-                    <Trash2 size={12} />
+                    <Trash2 size={14} />
                   </button>
                 </div>
               </div>

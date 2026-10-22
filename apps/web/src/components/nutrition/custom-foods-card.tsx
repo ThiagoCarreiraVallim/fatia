@@ -25,7 +25,8 @@ export function CustomFoodsCard() {
         </h3>
         <Link
           href="/nutrition/foods"
-          className="flex min-h-9 items-center gap-1 text-[11px] font-bold text-primary"
+          aria-label="Gerenciar meus alimentos"
+          className="flex min-h-11 items-center gap-1 text-[11px] font-bold text-primary"
         >
           Gerenciar
           <ChevronRight size={12} aria-hidden />

@@ -219,7 +219,14 @@ function IncompleteProduct({
           </div>
         ))}
       </div>
-      <Preview preview={item} />
+      {item ? (
+        <Preview preview={item} />
+      ) : (
+        // Sem isto o botão ficava desabilitado sem dizer por quê. Como no app.
+        <p className="text-sm text-muted-foreground">
+          Complete os quatro valores do rótulo para registrar.
+        </p>
+      )}
       <SaveOption id={id} saved={saved} save={save} onSaveChange={setSave} parsed={parsed} />
       <Attribution attribution={lookup.attribution} />
       {error && (

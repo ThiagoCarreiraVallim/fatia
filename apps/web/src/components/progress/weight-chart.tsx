@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { WeightProgress } from '@fatia/api-client';
+import { describeSeries, formatDecimal, type WeightProgress } from '@fatia/api-client';
 
 export function WeightChart({ data }: { data: WeightProgress }) {
   if (!data.points.length) {
@@ -21,7 +21,17 @@ export function WeightChart({ data }: { data: WeightProgress }) {
   }
 
   return (
-    <div className="rounded-xl border border-subtle bg-card p-4">
+    // O leitor de tela não atravessa o SVG: ouve o resumo da série, como no app.
+    <div
+      role="img"
+      aria-label={describeSeries({
+        name: 'Peso corporal',
+        labels: data.points.map((p) => p.date),
+        values: data.points.map((p) => p.weightKg),
+        format: (v) => `${formatDecimal(v, 1)} kg`,
+      })}
+      className="rounded-xl border border-subtle bg-card p-4"
+    >
       <ResponsiveContainer width="100%" height={220}>
         <AreaChart data={data.points} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -35,7 +45,7 @@ export function WeightChart({ data }: { data: WeightProgress }) {
             stroke="hsl(var(--muted-foreground))"
             fontSize={11}
             domain={['dataMin - 1', 'dataMax + 1']}
-            tickFormatter={(v) => v.toFixed(1)}
+            tickFormatter={(v: number) => formatDecimal(v, 1)}
           />
           <Tooltip
             contentStyle={{
@@ -44,7 +54,7 @@ export function WeightChart({ data }: { data: WeightProgress }) {
               borderRadius: 6,
               fontSize: 12,
             }}
-            formatter={(v: number) => [`${v.toFixed(1)} kg`, 'Peso']}
+            formatter={(v: number) => [`${formatDecimal(v, 1)} kg`, 'Peso']}
           />
           <Area
             type="monotone"

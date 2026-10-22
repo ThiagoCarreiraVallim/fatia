@@ -6,6 +6,7 @@ import { ChevronRight, Dumbbell, History } from 'lucide-react';
 import { workoutApi, type WorkoutSession } from '@fatia/api-client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
+import { ErrorState } from '@/components/elements/error-state';
 
 function formatDuration(start: string, end?: string): string {
   if (!end) return '—';
@@ -69,6 +70,16 @@ export default function WorkoutHistoryPage() {
             <Skeleton key={i} className="h-20 rounded-2xl bg-muted" />
           ))}
         </div>
+      )}
+
+      {sessions.isError && (
+        <ErrorState
+          className="max-w-none"
+          title="Não foi possível carregar o histórico"
+          detail={sessions.error instanceof Error ? sessions.error.message : 'Tente de novo.'}
+          retryLabel="Tentar de novo"
+          onRetry={() => void sessions.refetch()}
+        />
       )}
 
       {sessions.data && sessions.data.length === 0 && (

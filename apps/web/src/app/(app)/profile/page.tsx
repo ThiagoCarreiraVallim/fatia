@@ -1,10 +1,11 @@
 import Link from 'next/link';
-import { Bell, Flag, Sparkles, Settings, Shield, LogOut, ChevronRight, Users } from 'lucide-react';
+import { Bell, Flag, Sparkles, Settings, Shield, ChevronRight, Users } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth-server';
 import { ProfileMetrics } from '@/components/profile/profile-metrics';
 import { ProfessionalPanelLink } from '@/components/sharing/professional-panel-link';
 import { AccountSection } from '@/components/profile/account-section';
 import { PlanSection } from '@/components/billing/plan-section';
+import { SignOutButton } from '@/components/profile/sign-out-button';
 
 interface MenuItemProps {
   href: string;
@@ -100,17 +101,7 @@ export default async function ProfilePage() {
 
       <AccountSection />
 
-      {/* prefetch={false} obrigatório: sem isso o Next prefetcha o handler
-          /api/logto/sign-out (mesma origem), que retorna Set-Cookie limpando
-          a sessão antes do clique. */}
-      <Link
-        href="/api/logto/sign-out"
-        prefetch={false}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-danger/50 bg-transparent px-4 py-4 text-base font-bold text-danger transition-colors hover:bg-destructive/10"
-      >
-        <LogOut size={18} />
-        Sair da conta
-      </Link>
+      <SignOutButton />
     </div>
   );
 }

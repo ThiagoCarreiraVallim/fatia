@@ -4,10 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ExerciseGroup, LoadPrescription, SessionSet } from '@fatia/api-client';
 import { ActiveExerciseCard } from '../active-exercise-card';
-
-// O modal de RPE só aparece depois de registrar uma série e arrasta o vaul
-// junto; nada disso interessa ao valor de partida dos campos.
-vi.mock('../rpe-modal', () => ({ RpeModal: () => null }));
+import { useRestTimer } from '../use-rest-timer';
 
 vi.mock('@fatia/api-client', async () => {
   const actual = await vi.importActual<typeof import('@fatia/api-client')>('@fatia/api-client');
@@ -85,15 +82,35 @@ function makeClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } });
 }
 
-function renderCard(group: ExerciseGroup = makeGroup(), client: QueryClient = makeClient()) {
+/** O descanso é da página; aqui um dono mínimo faz o papel dela. */
+function Harness({
+  group,
+  onAskRpe,
+}: {
+  group: ExerciseGroup;
+  onAskRpe: (set: SessionSet) => void;
+}) {
+  const rest = useRestTimer();
+  return (
+    <ActiveExerciseCard
+      sessionId={SESSION_ID}
+      sessionStartedAt={STARTED_AT}
+      group={group}
+      rest={rest}
+      onFinishExercise={() => undefined}
+      onAskRpe={onAskRpe}
+    />
+  );
+}
+
+function renderCard(
+  group: ExerciseGroup = makeGroup(),
+  client: QueryClient = makeClient(),
+  onAskRpe: (set: SessionSet) => void = () => undefined,
+) {
   return render(
     <QueryClientProvider client={client}>
-      <ActiveExerciseCard
-        sessionId={SESSION_ID}
-        sessionStartedAt={STARTED_AT}
-        group={group}
-        onFinishExercise={() => undefined}
-      />
+      <Harness group={group} onAskRpe={onAskRpe} />
     </QueryClientProvider>,
   );
 }
@@ -106,12 +123,14 @@ function renderCard(group: ExerciseGroup = makeGroup(), client: QueryClient = ma
  * da #190, com o campo exibindo o recorde de 100 kg. Comparar o `textContent`
  * com `toBe` é o que faz o teste ter opinião sobre o número.
  */
-function fieldValue(label: string): string | null {
-  return screen.getByRole('button', { name: `Editar ${label}` }).textContent;
+function fieldValue(label: RegExp): string | null {
+  return screen.getByRole('button', { name: label }).textContent;
 }
 
-const weightValue = () => fieldValue('CARGA (KG)');
-const repsValue = () => fieldValue('REPETIÇÕES');
+const weightValue = () => fieldValue(/^Editar carga em quilos para Supino reto/);
+const repsValue = () => fieldValue(/^Editar repetições para Supino reto/);
+const increaseWeight = () =>
+  screen.getByRole('button', { name: 'Aumentar carga em quilos para Supino reto' });
 
 describe('ActiveExerciseCard', () => {
   beforeEach(() => {
@@ -132,7 +151,7 @@ describe('ActiveExerciseCard', () => {
 
     // O recorde continua visível como referência — é por ele que se sabe que a
     // query já respondeu e que, mesmo assim, o campo não o adotou.
-    expect(await screen.findByText('🏆 Recorde: 100kg')).toBeInTheDocument();
+    expect(await screen.findByText('🏆 Recorde: 100 kg')).toBeInTheDocument();
     expect(weightValue()).toBe('0');
     expect(repsValue()).toBe('8');
   });
@@ -155,7 +174,7 @@ describe('ActiveExerciseCard', () => {
 
     renderCard(makeGroup(), client);
 
-    expect(weightValue()).toBe('62.5');
+    expect(weightValue()).toBe('62,5');
     expect(repsValue()).toBe('10');
   });
 
@@ -173,9 +192,9 @@ describe('ActiveExerciseCard', () => {
     });
     renderCard();
 
-    await waitFor(() => expect(weightValue()).toBe('62.5'));
+    await waitFor(() => expect(weightValue()).toBe('62,5'));
     expect(repsValue()).toBe('10');
-    expect(screen.getByText('Anterior: 62.5kg')).toBeInTheDocument();
+    expect(screen.getByText('Anterior: 62,5 kg')).toBeInTheDocument();
     expect(screen.queryByText(/Recorde/)).not.toBeInTheDocument();
   });
 
@@ -185,7 +204,7 @@ describe('ActiveExerciseCard', () => {
 
     await waitFor(() => expect(repsValue()).toBe('12'));
     expect(weightValue()).toBe('0');
-    expect(screen.getByText('Anterior: 0kg')).toBeInTheDocument();
+    expect(screen.getByText('Anterior: 0 kg')).toBeInTheDocument();
   });
 
   it('registra carga 0 em vez de engoli-la como campo vazio', async () => {
@@ -208,7 +227,7 @@ describe('ActiveExerciseCard', () => {
 
     // A referência da sessão anterior chega e é ignorada pelo campo: quem manda
     // é a série já feita hoje.
-    await waitFor(() => expect(screen.getByText('Anterior: 62.5kg')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Anterior: 62,5 kg')).toBeInTheDocument());
     expect(weightValue()).toBe('70');
     expect(repsValue()).toBe('8');
   });
@@ -226,11 +245,11 @@ describe('ActiveExerciseCard', () => {
     });
     renderCard();
 
-    await waitFor(() => expect(weightValue()).toBe('62.5'));
+    await waitFor(() => expect(weightValue()).toBe('62,5'));
     expect(repsValue()).toBe('8');
     // A referência da sessão anterior continua à vista: é dela que a prescrição
     // parte, e é por ela que se confere que o campo não copiou os 60 kg.
-    expect(screen.getByText('Anterior: 60kg')).toBeInTheDocument();
+    expect(screen.getByText('Anterior: 60 kg')).toBeInTheDocument();
   });
 
   it('pede a prescrição para a faixa de repetições do plano', async () => {
@@ -298,7 +317,7 @@ describe('ActiveExerciseCard', () => {
     const user = userEvent.setup();
     renderCard();
 
-    await user.click(screen.getAllByRole('button', { name: 'Aumentar' })[0]);
+    await user.click(increaseWeight());
     expect(weightValue()).toBe('1');
 
     resolvePrescription({
@@ -325,12 +344,80 @@ describe('ActiveExerciseCard', () => {
     const user = userEvent.setup();
     renderCard();
 
-    await user.click(screen.getAllByRole('button', { name: 'Aumentar' })[0]);
+    await user.click(increaseWeight());
     expect(weightValue()).toBe('1');
 
     resolveLastSet(makeSet({ id: 'antigo', weightKg: 62.5, reps: 10 }));
 
-    await waitFor(() => expect(screen.getByText('Anterior: 62.5kg')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Anterior: 62,5 kg')).toBeInTheDocument());
     expect(weightValue()).toBe('1');
+  });
+  it('registrar a série começa o descanso prescrito e pede o RPE dela', async () => {
+    getPrescription.mockResolvedValue({
+      status: 'ok',
+      weightKg: 62.5,
+      reps: 8,
+      restSeconds: 180,
+      basis: 'rpe',
+      action: 'increase_load',
+      capped: false,
+    });
+    const created = makeSet({ id: 'nova', weightKg: 62.5, reps: 8 });
+    logSet.mockResolvedValue(created);
+    const onAskRpe = vi.fn();
+    const user = userEvent.setup();
+    renderCard(makeGroup(), makeClient(), onAskRpe);
+
+    await waitFor(() => expect(weightValue()).toBe('62,5'));
+    // Parado, o descanso só se oferece para começar.
+    expect(screen.queryByRole('button', { name: 'Pular descanso' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: /concluir série/i }));
+
+    await waitFor(() => expect(onAskRpe).toHaveBeenCalledWith(created));
+    expect(screen.getByRole('button', { name: 'Pular descanso' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Somar 30 segundos ao descanso' }),
+    ).toBeInTheDocument();
+  });
+
+  it('os steppers nomeiam o exercício e não deixam a carga ficar negativa', async () => {
+    const user = userEvent.setup();
+    renderCard();
+    await waitFor(() => expect(repsValue()).toBe('8'));
+
+    await user.click(
+      screen.getByRole('button', { name: 'Diminuir carga em quilos para Supino reto' }),
+    );
+    expect(weightValue()).toBe('0');
+
+    await user.click(screen.getByRole('button', { name: 'Aumentar repetições para Supino reto' }));
+    expect(repsValue()).toBe('9');
+  });
+
+  it('aceita carga digitada com vírgula e mostra do mesmo jeito', async () => {
+    const user = userEvent.setup();
+    renderCard();
+    await waitFor(() => expect(weightValue()).toBe('0'));
+
+    await user.click(screen.getByRole('button', { name: /^Editar carga em quilos/ }));
+    const field = screen.getByRole('textbox', {
+      name: 'Valor de carga em quilos para Supino reto',
+    });
+    await user.clear(field);
+    await user.type(field, '82,5{Enter}');
+
+    expect(weightValue()).toBe('82,5');
+  });
+
+  it('põe a última vez na grade das séries, e diz quando ainda não há série hoje', async () => {
+    getLastSet.mockResolvedValue(makeSet({ id: 'antigo', weightKg: 62.5, reps: 10, rpe: 8 }));
+    renderCard();
+
+    const previousRow = await screen.findByRole('group', {
+      name: 'Última vez: 62,5 kg × 10 · RPE 8',
+    });
+    expect(previousRow).toHaveTextContent('ant.');
+    expect(screen.getByText('Nenhuma série registrada neste exercício ainda.')).toBeInTheDocument();
   });
 });
