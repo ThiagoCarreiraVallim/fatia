@@ -25,6 +25,20 @@ export function RpeModal({ open, onOpenChange, sessionId, set, onConfirmed }: Pr
   const qc = useQueryClient();
   const [selected, setSelected] = useState<number | null>(null);
 
+  // Abre já marcando o RPE que a série tem, como no app: reabrir para corrigir
+  // e encontrar tudo desmarcado faz parecer que o valor salvo se perdeu. Ajuste
+  // durante o render, e não num efeito (#187); o estado anterior parte de
+  // "fechado, sem RPE" para cobrir também o drawer que monta já aberto.
+  const rpe = set?.rpe ?? null;
+  const [previous, setPrevious] = useState<{ open: boolean; rpe: number | null }>({
+    open: false,
+    rpe: null,
+  });
+  if (previous.open !== open || previous.rpe !== rpe) {
+    setPrevious({ open, rpe });
+    if (open) setSelected(rpe);
+  }
+
   const save = useMutation({
     mutationFn: (rpe: number) => {
       if (!set) throw new Error('Sem série selecionada');
@@ -61,7 +75,11 @@ export function RpeModal({ open, onOpenChange, sessionId, set, onConfirmed }: Pr
           </DrawerDescription>
         </DrawerHeader>
 
-        <div className="mt-2 grid grid-cols-5 gap-2">
+        <div
+          role="radiogroup"
+          aria-label="Esforço percebido"
+          className="mt-2 grid grid-cols-5 gap-2"
+        >
           {RPE_VALUES.map((value) => {
             const info = getRpeInfo(value);
             if (!info) return null;
@@ -70,6 +88,9 @@ export function RpeModal({ open, onOpenChange, sessionId, set, onConfirmed }: Pr
               <button
                 key={value}
                 type="button"
+                role="radio"
+                aria-checked={active}
+                aria-label={`RPE ${value}, ${info.label}. ${info.hint}`}
                 onClick={() => setSelected(value)}
                 className={`flex flex-col items-center gap-1 rounded-2xl border p-3 transition-colors ${
                   active
