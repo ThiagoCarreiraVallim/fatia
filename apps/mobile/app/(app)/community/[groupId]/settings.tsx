@@ -44,7 +44,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 /**
  * O que era a tela principal da comunidade (equivalente de
- * `apps/web/src/app/(app)/community/[groupId]/page.tsx`), agora atrás da
+ * `apps/web/src/app/(app)/community/[groupId]/settings/page.tsx`), atrás da
  * engrenagem do mural: sobre, painel, o que eu compartilho, quem acessou e
  * sair. Desafios e Planos e dicas são abas do mural.
  */

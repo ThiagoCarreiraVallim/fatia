@@ -55,26 +55,16 @@ describe('mural da comunidade (helpers)', () => {
     expect(reportSummary({ count: 1, reasons: { OTHER: 1 } })).toBe('1 denúncia: outro motivo (1)');
   });
 
-  it('abas da comunidade e a ativa pelo caminho', () => {
-    expect(communityTabs('g1').map((t) => [t.label, t.href])).toEqual([
-      ['Início', '/community/g1'],
-      ['Mural', '/community/g1/feed'],
-      ['Desafios', '/community/g1/challenges'],
-      ['Planos e dicas', '/community/g1/content'],
-    ]);
-    expect(activeCommunityTab('/community/g1')).toBe('home');
-    expect(activeCommunityTab('/community/g1/feed')).toBe('feed');
-    expect(activeCommunityTab('/community/g1/challenges/c1?x=1')).toBe('challenges');
-    expect(activeCommunityTab('/community/g1/content/plans/t1')).toBe('content');
-  });
-
-  it('no app o mural é a comunidade, sem aba Início', () => {
-    expect(communityTabs('g1', 'mobile').map((t) => [t.tab, t.label, t.href])).toEqual([
+  it('abas da comunidade: o mural é a raiz, sem aba Início, na web e no app', () => {
+    expect(communityTabs('g1').map((t) => [t.tab, t.label, t.href])).toEqual([
       ['feed', 'Mural', '/community/g1'],
       ['challenges', 'Desafios', '/community/g1/challenges'],
       ['content', 'Planos e dicas', '/community/g1/content'],
     ]);
-    expect(activeCommunityTab('/community/g1', 'mobile')).toBe('feed');
-    expect(activeCommunityTab('/community/g1/challenges/c1', 'mobile')).toBe('challenges');
+    expect(activeCommunityTab('/community/g1')).toBe('feed');
+    // O caminho antigo do mural (avisos, links salvos) ainda conta como mural.
+    expect(activeCommunityTab('/community/g1/feed')).toBe('feed');
+    expect(activeCommunityTab('/community/g1/challenges/c1?x=1')).toBe('challenges');
+    expect(activeCommunityTab('/community/g1/content/plans/t1')).toBe('content');
   });
 });

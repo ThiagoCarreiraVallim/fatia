@@ -4,12 +4,12 @@ import { activeCommunityTab, communityTabs } from '@fatia/api-client';
 import { cn } from '@/components/ui';
 
 /**
- * As abas da comunidade — equivalente de `apps/web/src/components/community/community-tabs.tsx`,
- * menos o Início: no app o mural é a raiz da comunidade, e o resto mora na engrenagem.
+ * As abas da comunidade — equivalente de `apps/web/src/components/community/community-tabs.tsx`:
+ * o mural é a raiz da comunidade, e o resto mora na engrenagem.
  */
 export function CommunityTabs({ groupId }: { groupId: string }) {
   const router = useRouter();
-  const ativa = activeCommunityTab(usePathname() ?? '', 'mobile');
+  const active = activeCommunityTab(usePathname() ?? '');
   return (
     <ScrollView
       horizontal
@@ -17,8 +17,8 @@ export function CommunityTabs({ groupId }: { groupId: string }) {
       accessibilityRole="tablist"
       contentContainerClassName="gap-1 border-b border-border"
     >
-      {communityTabs(groupId, 'mobile').map((t) => {
-        const on = ativa === t.tab;
+      {communityTabs(groupId).map((t) => {
+        const on = active === t.tab;
         return (
           <Pressable
             key={t.tab}

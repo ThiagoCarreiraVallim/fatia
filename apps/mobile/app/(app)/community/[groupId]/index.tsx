@@ -91,7 +91,7 @@ function Composer({ groupId, me }: { groupId: string; me: MyName }) {
 
 /**
  * A comunidade abre no mural (equivalente de
- * `apps/web/src/app/(app)/community/[groupId]/feed/page.tsx`). O resto do que
+ * `apps/web/src/app/(app)/community/[groupId]/page.tsx`). O resto do que
  * era a tela principal — sobre, o que eu compartilho, quem acessou, sair — fica
  * atrás da engrenagem, em `settings.tsx`; o painel da equipe, no ícone ao lado.
  */

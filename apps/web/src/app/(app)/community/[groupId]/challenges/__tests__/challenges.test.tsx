@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Challenge, ChallengeDetail } from '@fatia/api-client';
+import type { ChallengeDetail } from '@fatia/api-client';
 
 const ctx = vi.hoisted(() => ({
   params: { groupId: 'g1', challengeId: 'c1' } as Record<string, string>,
@@ -28,7 +28,6 @@ vi.mock('@fatia/api-client', async () => {
 });
 
 import { challengesApi } from '@fatia/api-client';
-import { CommunityChallengesPreview } from '@/components/challenges/community-challenges-preview';
 import CommunityChallengePage from '../[challengeId]/page';
 
 function renderWithClient(ui: ReactElement) {
@@ -131,37 +130,5 @@ describe('desafio › membro', () => {
     renderWithClient(<CommunityChallengePage />);
 
     expect(await screen.findByText(/O ranking ficou para quem participou/)).toBeInTheDocument();
-  });
-});
-
-describe('desafios › prévia na comunidade', () => {
-  afterEach(() => vi.clearAllMocks());
-  const c = (p: Partial<Challenge>): Challenge => ({ ...desafio(), ...p });
-
-  it('mostra só os abertos e some quando não há nenhum', async () => {
-    vi.mocked(challengesApi.list).mockResolvedValue({
-      today: '2026-10-18',
-      // O encerrado vem primeiro de propósito: quem filtra é a prévia, não a
-      // ordem nem o corte em dois.
-      challenges: [
-        c({ id: 'z', title: 'Velho', status: 'ended' }),
-        c({ id: 'a', title: 'Rodando' }),
-        c({ id: 'b', title: 'Marcado', status: 'upcoming', startDate: '2026-10-20' }),
-      ],
-    });
-    const { unmount } = renderWithClient(<CommunityChallengesPreview groupId="g1" />);
-    const lista = await screen.findByRole('list', { name: 'Desafios abertos' });
-    expect(lista).toHaveTextContent('Rodando');
-    expect(lista).toHaveTextContent('Começa 20 out');
-    expect(lista).not.toHaveTextContent('Velho');
-    unmount();
-
-    vi.mocked(challengesApi.list).mockResolvedValue({
-      today: '2026-10-18',
-      challenges: [c({ id: 'z', title: 'Velho', status: 'ended' })],
-    });
-    const { container } = renderWithClient(<CommunityChallengesPreview groupId="g1" />);
-    await waitFor(() => expect(challengesApi.list).toHaveBeenCalledTimes(2));
-    expect(container).toBeEmptyDOMElement();
   });
 });

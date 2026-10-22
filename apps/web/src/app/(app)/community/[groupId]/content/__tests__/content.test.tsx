@@ -35,7 +35,6 @@ vi.mock('@fatia/api-client', async () => {
 
 import { ApiError, groupContentApi, nutritionApi, uploadMedia } from '@fatia/api-client';
 import { ImageField } from '@/components/content/image-field';
-import { CommunityContentPreview } from '@/components/content/community-content-preview';
 import CommunityTemplatePage from '../[templateId]/page';
 
 function renderWithClient(ui: ReactElement) {
@@ -167,37 +166,6 @@ describe('comunidade › plano pronto', () => {
     );
     expect(ctx.toast).toHaveBeenCalledWith('1 refeição salva.');
     expect(ctx.router.push).not.toHaveBeenCalled();
-  });
-
-  it('a prévia da comunidade mostra a dica fixada e some sem conteúdo', async () => {
-    vi.mocked(groupContentApi.plans).mockResolvedValue([modelo()]);
-    vi.mocked(groupContentApi.tips).mockResolvedValue([
-      {
-        id: 'd1',
-        title: 'Água antes do treino',
-        body: 'Beba **500 ml**.',
-        category: 'HABITS',
-        image: null,
-        pinned: true,
-        authorName: 'Bruno',
-        publishedAt: '2026-10-10',
-        updatedAt: '2026-10-10',
-      },
-    ]);
-    const { unmount } = renderWithClient(<CommunityContentPreview groupId="g1" />);
-    expect(await screen.findByText('Água antes do treino')).toBeInTheDocument();
-    expect(screen.getByText('Beba 500 ml.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Ver tudo' })).toHaveAttribute(
-      'href',
-      '/community/g1/content',
-    );
-    unmount();
-
-    vi.mocked(groupContentApi.plans).mockResolvedValue([]);
-    vi.mocked(groupContentApi.tips).mockResolvedValue([]);
-    const { container } = renderWithClient(<CommunityContentPreview groupId="g1" />);
-    await waitFor(() => expect(groupContentApi.tips).toHaveBeenCalled());
-    expect(container).toBeEmptyDOMElement();
   });
 });
 

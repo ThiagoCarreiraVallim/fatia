@@ -1,6 +1,5 @@
 import { apiFetch } from './http';
 import type { MediaView } from './community-content';
-import type { NavPlatform } from './navigation';
 
 /**
  * O mural da comunidade (Fase 8b, ADR 032): posts com texto e até 4 imagens,
@@ -252,36 +251,29 @@ export function reportSummary(item: Pick<ReportQueueItem, 'count' | 'reasons'>):
   return `${item.count === 1 ? '1 denúncia' : `${item.count} denúncias`}: ${motivos}`;
 }
 
-export type CommunityTab = 'home' | 'feed' | 'challenges' | 'content';
+export type CommunityTab = 'feed' | 'challenges' | 'content';
 
 /**
- * As abas da comunidade para o membro.
+ * As abas da comunidade para o membro, iguais na web e no app.
  *
- * No app o mural **é** a comunidade: tocar nela abre o mural em
- * `/community/<id>`, e o que era a aba Início virou a tela discreta de
- * `/community/<id>/settings` (engrenagem no topo do mural), sem aba. A web
- * ainda abre no Início.
+ * O mural **é** a comunidade: tocar nela abre o mural em `/community/<id>`, e
+ * o que era a aba Início virou a tela discreta de `/community/<id>/settings`
+ * (engrenagem no topo do mural), sem aba. `/community/<id>/feed` só redireciona
+ * para a raiz.
  */
 export function communityTabs(
   groupId: string,
-  platform: NavPlatform = 'web',
 ): { tab: CommunityTab; label: string; href: string }[] {
   const base = `/community/${groupId}`;
-  const resto: { tab: CommunityTab; label: string; href: string }[] = [
+  return [
+    { tab: 'feed', label: 'Mural', href: base },
     { tab: 'challenges', label: 'Desafios', href: `${base}/challenges` },
     { tab: 'content', label: 'Planos e dicas', href: `${base}/content` },
-  ];
-  if (platform === 'mobile') return [{ tab: 'feed', label: 'Mural', href: base }, ...resto];
-  return [
-    { tab: 'home', label: 'Início', href: base },
-    { tab: 'feed', label: 'Mural', href: `${base}/feed` },
-    ...resto,
   ];
 }
 
 /** A aba ativa a partir do caminho (`/community/<id>/challenges/<c>` → `challenges`). */
-export function activeCommunityTab(pathname: string, platform: NavPlatform = 'web'): CommunityTab {
-  const parte = pathname.split(/[?#]/)[0]!.split('/')[3];
-  if (parte === 'feed' || parte === 'challenges' || parte === 'content') return parte;
-  return platform === 'mobile' ? 'feed' : 'home';
+export function activeCommunityTab(pathname: string): CommunityTab {
+  const segment = pathname.split(/[?#]/)[0]!.split('/')[3];
+  return segment === 'challenges' || segment === 'content' ? segment : 'feed';
 }

@@ -32,8 +32,8 @@ Nenhum placeholder restante no código.
 | `(app)/chat`                         | `app/(app)/chat/index.tsx`                               | ✅  | conversas; segurar renomeia ou apaga; "Nova conversa"; upsell no Free       |
 | `(app)/chat/[id]`                    | `app/(app)/chat/[id].tsx`                                | ✅  | a conversa (Fase 9e) — ver "Chat no app" abaixo                             |
 | gaveta "Memórias" do chat            | `app/(app)/chat/memories.tsx`                            | ✅  | tela própria no app; na web é uma gaveta da conversa                        |
-| `(app)/community/[groupId]/feed`     | `app/(app)/community/[groupId]/index.tsx`                | ✅  | no app a comunidade abre no mural; `/feed` só redireciona para lá           |
-| `(app)/community/[groupId]`          | `app/(app)/community/[groupId]/settings.tsx`             | ✅  | atrás da engrenagem do mural: equipe, o que compartilho, quem acessou, sair |
+| `(app)/community/[groupId]`          | `app/(app)/community/[groupId]/index.tsx`                | ✅  | nos dois a comunidade abre no mural; `/feed` só redireciona para lá         |
+| `(app)/community/[groupId]/settings` | `app/(app)/community/[groupId]/settings.tsx`             | ✅  | atrás da engrenagem do mural: equipe, o que compartilho, quem acessou, sair |
 | `(app)/community/[groupId]/content`  | `app/(app)/community/[groupId]/content/index.tsx`        | ✅  | planos prontos e dicas publicados (pílulas Planos/Dicas)                    |
 | `(app)/…/content/[templateId]`       | `app/(app)/community/[groupId]/content/[templateId].tsx` | ✅  | prévia e "Adotar"; nutrição escolhe o que copiar, metas com a comparação    |
 | `(invite)/c/[token]`                 | `app/c/[token].tsx`                                      | ✅  | fora do `(app)`; deslogado guarda o token no cofre e retoma depois do login |
@@ -340,8 +340,8 @@ viram pílulas (`Choice`). Diferenças de propósito:
   prontas — começa hoje, amanhã ou na próxima segunda; dura 7, 14 ou 30 dias
   (`components/challenges/window-choice.ts`) — em vez do calendário; datas livres e editar um
   desafio marcado ficam na web. Encerrar e apagar existem nos dois.
-- **Mural da comunidade (Fase 8b):** no app, tocar numa comunidade abre o mural, com as abas
-  Mural, Desafios e Planos e dicas; o que na web é a aba Início (sobre, o que compartilho, quem
+- **Mural da comunidade (Fase 8b):** nos dois, tocar numa comunidade abre o mural, com as abas
+  Mural, Desafios e Planos e dicas; o que era a aba Início (sobre, o que compartilho, quem
   acessou, sair) fica numa tela discreta atrás da engrenagem do topo, e o painel da equipe no ícone
   ao lado. Publicar com até 4 imagens da galeria, reagir, comentar e denunciar são
   iguais; o menu do post é um `Alert` (a web abre um diálogo). A Moderação do painel (regra do
