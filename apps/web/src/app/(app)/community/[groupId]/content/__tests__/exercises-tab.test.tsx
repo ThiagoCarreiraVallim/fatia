@@ -78,4 +78,16 @@ describe('comunidade › exercícios', () => {
       await screen.findByRole('region', { name: 'Tutorial de Academia Demo' }),
     ).toBeInTheDocument();
   });
+
+  it('lista que não carregou diz que falhou, e não que está vazia', async () => {
+    vi.mocked(groupExerciseApi.forMember).mockRejectedValue(new Error('rede'));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <CommunityContentPage />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText('Não deu para carregar os exercícios')).toBeInTheDocument();
+    expect(screen.queryByText('Nenhum exercício ainda')).toBeNull();
+  });
 });

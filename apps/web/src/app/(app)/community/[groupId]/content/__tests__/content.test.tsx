@@ -97,6 +97,25 @@ describe('comunidade › plano pronto', () => {
     expect(groupContentApi.adopt).toHaveBeenCalledWith('g1', 't1', {});
   });
 
+  it('"Adotar" vem antes da lista de exercícios, e quem já adotou lê isso', async () => {
+    vi.mocked(groupContentApi.plan).mockResolvedValue(modelo());
+    const { unmount } = renderWithClient(<CommunityTemplatePage />);
+    const adotar = await screen.findByRole('button', { name: 'Adotar plano' });
+    const lista = screen.getByText('1. Supino');
+    // A ação principal não fica depois de uma lista que pode passar de uma tela.
+    expect(adotar.compareDocumentPosition(lista) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    unmount();
+
+    vi.mocked(groupContentApi.plan).mockResolvedValue(modelo({ adoptedPlanId: 'meu' }));
+    renderWithClient(<CommunityTemplatePage />);
+    expect(await screen.findByText('Você já adotou este plano.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Abrir meu plano' })).toHaveAttribute(
+      'href',
+      '/workout/plans/meu',
+    );
+    expect(screen.queryByRole('button', { name: 'Adotar plano' })).toBeNull();
+  });
+
   it('se já adotou, a API responde 409 com o plano e a tela abre o que a pessoa tem', async () => {
     vi.mocked(groupContentApi.plan).mockResolvedValue(modelo());
     vi.mocked(groupContentApi.adopt).mockRejectedValue(

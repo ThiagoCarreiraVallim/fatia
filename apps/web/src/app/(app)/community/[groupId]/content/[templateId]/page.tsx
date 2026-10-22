@@ -17,6 +17,7 @@ import {
   type PlanTemplate,
 } from '@fatia/api-client';
 import { communityKeys } from '@/components/community/query-keys';
+import { CheckableRow } from '@/components/content/content-ui';
 import { useTopBarTitle } from '@/components/layout/app-top-bar';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -31,27 +32,27 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 
 /**
- * Um plano pronto da comunidade, antes de adotar. Treino vira plano seu num
+ * Um plano pronto da comunidade, antes de adopt. Treino vira plano seu num
  * toque; nutrição pergunta o que entra — as metas só mudam se você marcar.
  */
 export default function CommunityTemplatePage() {
   const { groupId, templateId } = useParams<{ groupId: string; templateId: string }>();
   const router = useRouter();
   const qc = useQueryClient();
-  const [nutricao, setNutricao] = useState(false);
+  const [choosing, setChoosing] = useState(false);
 
-  const modelo = useQuery({
+  const template = useQuery({
     queryKey: communityKeys.plan(groupId, templateId),
     queryFn: () => groupContentApi.plan(groupId, templateId),
     retry: false,
   });
-  useTopBarTitle(modelo.data?.title);
+  useTopBarTitle(template.data?.title);
 
-  const adotar = useMutation({
+  const adopt = useMutation({
     mutationFn: (input: AdoptInput) => groupContentApi.adopt(groupId, templateId, input),
     onSuccess: (r) => {
       toast(adoptResultMessage(r));
-      setNutricao(false);
+      setChoosing(false);
       void qc.invalidateQueries({ queryKey: communityKeys.plans(groupId) });
       void qc.invalidateQueries({ queryKey: ['workout'] });
       void qc.invalidateQueries({ queryKey: ['nutrition'] });
@@ -70,13 +71,13 @@ export default function CommunityTemplatePage() {
       toast(
         err instanceof ApiError && err.status < 500 && err.message
           ? err.message
-          : 'Não deu para adotar agora.',
+          : 'Não deu para adopt agora.',
       );
     },
   });
 
-  if (modelo.isPending) return <Skeleton className="m-4 h-64 rounded-2xl bg-card" />;
-  if (!modelo.data) {
+  if (template.isPending) return <Skeleton className="m-4 h-64 rounded-2xl bg-card" />;
+  if (!template.data) {
     return (
       <div className="p-4">
         <EmptyState
@@ -86,8 +87,8 @@ export default function CommunityTemplatePage() {
       </div>
     );
   }
-  const t = modelo.data;
-  const Icone = t.kind === 'WORKOUT' ? Dumbbell : Salad;
+  const t = template.data;
+  const KindIcon = t.kind === 'WORKOUT' ? Dumbbell : Salad;
 
   return (
     <div className="space-y-4 p-4">
@@ -97,7 +98,7 @@ export default function CommunityTemplatePage() {
       ) : null}
       <header className="space-y-1">
         <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Icone size={14} aria-hidden />
+          <KindIcon size={14} aria-hidden />
           {planTemplateSummary(t)}
         </p>
         <h2 className="text-lg font-semibold">{t.title}</h2>
@@ -105,37 +106,42 @@ export default function CommunityTemplatePage() {
       </header>
       {t.description && <p className="whitespace-pre-line text-sm">{t.description}</p>}
 
-      {t.kind === 'WORKOUT' ? <WorkoutPreview t={t} /> : <NutritionPreview t={t} />}
-
-      <div className="sticky bottom-20 md:bottom-4">
-        {t.adoptedPlanId ? (
+      {/* A ação principal logo depois da descrição, como no app, e não presa
+          ao pé da tela por cima de uma lista que podia passar de uma página. */}
+      {t.adoptedPlanId ? (
+        <section aria-label="Plano adotado" className="space-y-2">
+          <p className="text-sm">Você já adotou este plano.</p>
           <Link
             href={`/workout/plans/${t.adoptedPlanId}`}
-            className={buttonVariants({ className: 'w-full' })}
+            className={buttonVariants({ className: 'w-full sm:w-auto' })}
           >
             Abrir meu plano
           </Link>
-        ) : (
+        </section>
+      ) : (
+        <div className="space-y-2">
           <Button
-            className="w-full"
-            disabled={adotar.isPending}
-            onClick={() => (t.kind === 'WORKOUT' ? adotar.mutate({}) : setNutricao(true))}
+            className="w-full sm:w-auto"
+            disabled={adopt.isPending}
+            onClick={() => (t.kind === 'WORKOUT' ? adopt.mutate({}) : setChoosing(true))}
           >
-            {adotar.isPending ? 'Adotando…' : 'Adotar plano'}
+            {adopt.isPending ? 'Adotando…' : 'Adotar plano'}
           </Button>
-        )}
-        <p className="mt-2 text-center text-xs text-muted-foreground">
-          Uma cópia vai para a sua conta e é sua: muda só quando você mudar.
-        </p>
-      </div>
+          <p className="text-xs text-muted-foreground">
+            Uma cópia vai para a sua conta e é sua: muda só quando você mudar.
+          </p>
+        </div>
+      )}
+
+      {t.kind === 'WORKOUT' ? <WorkoutPreview t={t} /> : <NutritionPreview t={t} />}
 
       {t.kind === 'NUTRITION' && (
         <AdoptNutritionDialog
           t={t}
-          open={nutricao}
-          onOpenChange={setNutricao}
-          pending={adotar.isPending}
-          onConfirm={(input) => adotar.mutate(input)}
+          open={choosing}
+          onOpenChange={setChoosing}
+          pending={adopt.isPending}
+          onConfirm={(input) => adopt.mutate(input)}
         />
       )}
     </div>
@@ -233,31 +239,25 @@ function AdoptNutritionDialog({
         </DialogHeader>
         <div className="space-y-3">
           {t.meals.length > 0 && (
-            <label className="flex min-h-11 items-start gap-3 rounded-xl border border-subtle p-3 text-sm">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 accent-primary"
-                checked={refeicoes}
-                onChange={(e) => setRefeicoes(e.target.checked)}
-              />
-              <span>
-                <span className="block font-medium">Salvar as refeições sugeridas</span>
-                <span className="block text-xs text-muted-foreground">
-                  {`${t.meals.length} ${t.meals.length === 1 ? 'refeição' : 'refeições'} em Refeições salvas, para registrar num toque.`}
-                </span>
+            <CheckableRow
+              role="checkbox"
+              label="Salvar as refeições sugeridas"
+              checked={refeicoes}
+              onChange={() => setRefeicoes(!refeicoes)}
+            >
+              <span className="block pl-7 text-xs text-muted-foreground">
+                {`${t.meals.length} ${t.meals.length === 1 ? 'refeição' : 'refeições'} em Refeições salvas, para registrar num toque.`}
               </span>
-            </label>
+            </CheckableRow>
           )}
           {t.goals && (
-            <label className="flex min-h-11 items-start gap-3 rounded-xl border border-subtle p-3 text-sm">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 accent-primary"
-                checked={metas}
-                onChange={(e) => setMetas(e.target.checked)}
-              />
-              <span className="min-w-0 flex-1 space-y-2">
-                <span className="block font-medium">Trocar minhas metas pelas do plano</span>
+            <CheckableRow
+              role="checkbox"
+              label="Trocar minhas metas pelas do plano"
+              checked={metas}
+              onChange={() => setMetas(!metas)}
+            >
+              <span className="block pl-7">
                 <table className="w-full text-xs">
                   <caption className="sr-only">Suas metas e as do plano</caption>
                   <thead>
@@ -284,7 +284,7 @@ function AdoptNutritionDialog({
                   </tbody>
                 </table>
               </span>
-            </label>
+            </CheckableRow>
           )}
         </div>
         <DialogFooter>
