@@ -1,35 +1,18 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, Pause, Play, RotateCcw } from 'lucide-react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Check, Pause, Play, RotateCcw } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { parseClock, workoutApi, type ExerciseGroup } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { ExerciseTitle } from './exercise-title';
+import { formatClock, formatPace, formatPreviousSet } from './format';
+
 interface Props {
   sessionId: string;
   group: ExerciseGroup;
   onFinishExercise: () => void;
-}
-
-function fmtClock(s: number): string {
-  const sign = s < 0 ? '-' : '';
-  const abs = Math.abs(s);
-  const h = Math.floor(abs / 3600);
-  const m = Math.floor((abs % 3600) / 60);
-  const sec = abs % 60;
-  if (h > 0) {
-    return `${sign}${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-  }
-  return `${sign}${m}:${String(sec).padStart(2, '0')}`;
-}
-
-function calcPace(seconds: number, meters: number): string | null {
-  if (!seconds || !meters || meters <= 0) return null;
-  const secondsPerKm = (seconds / meters) * 1000;
-  const m = Math.floor(secondsPerKm / 60);
-  const s = Math.round(secondsPerKm % 60);
-  return `${m}:${String(s).padStart(2, '0')}/km`;
 }
 
 export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) {
@@ -39,7 +22,7 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
   const [running, setRunning] = useState(false);
   const [seconds, setSeconds] = useState<number>(existing?.durationSeconds ?? 0);
   const [durationInput, setDurationInput] = useState<string>(
-    fmtClock(existing?.durationSeconds ?? 0),
+    formatClock(existing?.durationSeconds ?? 0),
   );
   const [editingDuration, setEditingDuration] = useState(false);
 
@@ -79,7 +62,7 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
   const [previous, setPrevious] = useState({ seconds, editingDuration });
   if (previous.seconds !== seconds || previous.editingDuration !== editingDuration) {
     setPrevious({ seconds, editingDuration });
-    if (!editingDuration) setDurationInput(fmtClock(seconds));
+    if (!editingDuration) setDurationInput(formatClock(seconds));
   }
 
   function commitDurationInput() {
@@ -87,7 +70,7 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
     if (parsed != null) {
       setSeconds(parsed);
     } else {
-      setDurationInput(fmtClock(seconds));
+      setDurationInput(formatClock(seconds));
     }
     setEditingDuration(false);
   }
@@ -103,8 +86,22 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
     : null;
   const pace =
     distanceMeters != null && Number.isFinite(distanceMeters)
-      ? calcPace(seconds, distanceMeters)
+      ? formatPace(seconds, distanceMeters)
       : null;
+
+  // Sem `before` de propósito, como no app: o card de cardio não recebe o
+  // início da sessão, e aqui a referência é só rótulo — não vira valor de campo.
+  // Basta buscar uma vez e descartar o que for desta sessão. O card de força usa
+  // o `before` porque lá o dado é o palpite de carga (#190).
+  const lastSet = useQuery({
+    queryKey: ['workout', 'last-set', group.exerciseId],
+    queryFn: () => workoutApi.getLastSet(group.exerciseId),
+    staleTime: Infinity,
+  });
+  const previousLabel = formatPreviousSet(
+    lastSet.data && lastSet.data.sessionId !== sessionId ? lastSet.data : null,
+    true,
+  );
 
   const persist = useMutation({
     mutationFn: () => {
@@ -132,15 +129,20 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
 
   return (
     <div className="rounded-2xl border border-subtle bg-card">
-      <div className="flex items-center justify-between px-4 pt-3">
-        <button type="button" aria-label="Recolher" className="text-muted-foreground">
-          <ChevronDown size={18} />
-        </button>
-        <div className="text-center">
-          <p className="text-[10px] font-extrabold tracking-wide text-water">CARDIO</p>
-          <h2 className="text-base font-extrabold text-foreground">{group.exerciseName}</h2>
-        </div>
-        <div className="w-5" />
+      {/* O "Recolher" que ficava à esquerda do nome não recolhia nada: saiu, e
+          no lugar dele entrou o "Como fazer" e a última vez, como no app. */}
+      <div className="flex flex-col items-center px-4 pt-4">
+        <ExerciseTitle
+          kicker="CARDIO"
+          kickerClassName="text-water"
+          exerciseId={group.exerciseId}
+          exerciseName={group.exerciseName}
+        />
+        {previousLabel && (
+          <p className="mt-1 text-[11px] text-muted-foreground tabular-nums">
+            Anterior: {previousLabel}
+          </p>
+        )}
       </div>
 
       {/* Cronômetro */}
@@ -158,7 +160,7 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
             onKeyDown={(e) => {
               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
               if (e.key === 'Escape') {
-                setDurationInput(fmtClock(seconds));
+                setDurationInput(formatClock(seconds));
                 setEditingDuration(false);
               }
             }}
@@ -175,7 +177,7 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
             }}
             className="block w-full text-center text-5xl font-extrabold text-foreground tabular-nums hover:text-primary"
           >
-            {fmtClock(seconds)}
+            {formatClock(seconds)}
           </button>
         )}
         <div className="mt-3 flex items-center justify-center gap-2">
@@ -184,7 +186,7 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
             onClick={() => setRunning((r) => !r)}
             disabled={editingDuration}
             className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_0_16px_hsl(var(--primary)/0.5)] disabled:opacity-50"
-            aria-label={running ? 'Pausar' : 'Iniciar'}
+            aria-label={running ? 'Pausar cronômetro' : 'Iniciar cronômetro'}
           >
             {running ? (
               <Pause size={18} fill="currentColor" />
@@ -195,8 +197,8 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
           <button
             type="button"
             onClick={reset}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground alvo-toque"
-            aria-label="Zerar"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-muted text-muted-foreground"
+            aria-label="Zerar cronômetro"
           >
             <RotateCcw size={14} />
           </button>
@@ -207,6 +209,7 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
       <div className="grid grid-cols-3 gap-2 px-4 pt-4">
         <Field
           label="DISTÂNCIA (KM)"
+          accessibleLabel={`Distância em quilômetros de ${group.exerciseName}`}
           value={distanceKm}
           onChange={setDistanceKm}
           placeholder="0,00"
@@ -214,6 +217,7 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
         />
         <Field
           label="FC (BPM)"
+          accessibleLabel={`Frequência cardíaca média de ${group.exerciseName}`}
           value={bpm}
           onChange={(v) => setBpm(v.replace(/\D/g, ''))}
           placeholder="—"
@@ -221,6 +225,7 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
         />
         <Field
           label="KCAL"
+          accessibleLabel={`Calorias gastas em ${group.exerciseName}`}
           value={kcal}
           onChange={(v) => setKcal(v.replace(/\D/g, ''))}
           placeholder="—"
@@ -257,12 +262,15 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
 
 function Field({
   label,
+  accessibleLabel,
   value,
   onChange,
   placeholder,
   step,
 }: {
   label: string;
+  /** O rótulo visível é sigla em caixa alta ("FC (BPM)"); o leitor de tela ouve a frase. */
+  accessibleLabel: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
@@ -274,7 +282,7 @@ function Field({
         {label}
       </p>
       <Input
-        aria-label={label}
+        aria-label={accessibleLabel}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
