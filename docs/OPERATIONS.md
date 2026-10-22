@@ -586,7 +586,7 @@ Não há fallback, e é uma dependência aceita conscientemente na ADR 008. Rest
 ## Chat e agente
 
 O chat passa por três saltos: **PWA/app → `api` → `agent` → OpenRouter**, e o agente volta à
-`api` pelo `/mcp` (`http://api:3000/mcp`, rede interna) com o Bearer de quem conversa (ADR 021).
+`api` pelo `/mcp` (`http://fatia-api:3000/mcp`, rede interna — o nome próprio, porque a `dokploy-network` é compartilhada e `api` pode ser o serviço de outro projeto) com o Bearer de quem conversa (ADR 021).
 O estado das conversas pausadas fica no schema `agent_checkpoint` do Postgres da Fatia (ADR 023).
 
 | Variável (serviço `agent`)      | Para quê                                                                    |

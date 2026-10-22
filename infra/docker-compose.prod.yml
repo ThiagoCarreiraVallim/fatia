@@ -51,9 +51,9 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-fatia-api}
       # Como a API alcança o agente (chat e foto do prato). Vazio = as duas
-      # funcionalidades somem da interface e o resto segue inteiro. Dentro deste
-      # compose: AGENT_BASE_URL=http://agent:8100.
-      AGENT_BASE_URL: ${AGENT_BASE_URL:-}
+      # funcionalidades somem da interface e o resto segue inteiro. O padrão é
+      # o agente deste compose, pelo nome próprio (ver `fatia-agent` abaixo).
+      AGENT_BASE_URL: ${AGENT_BASE_URL-http://fatia-agent:8100}
       AGENT_API_KEY: ${AGENT_API_KEY:-}
       AGENT_TIMEOUT_MS: ${AGENT_TIMEOUT_MS:-180000}
       # Custo e cota da IA hospedada (#135) — quem aplica é a API, que tem o banco.
@@ -95,7 +95,14 @@ services:
     expose:
       - "3000"
     networks:
-      - dokploy-network
+      # Nome próprio na rede compartilhada. A `dokploy-network` junta os
+      # serviços de **todos** os projetos do servidor, e `api` é o nome que
+      # qualquer um usa: o DNS do Docker devolvia o `api` de outro projeto, e o
+      # agente mandava o Bearer de quem conversa para ele (404, MCP_REFUSED).
+      # Quem fala com esta API por dentro usa `fatia-api`, nunca `api`.
+      dokploy-network:
+        aliases:
+          - fatia-api
     deploy:
       resources:
         limits:
@@ -126,7 +133,8 @@ services:
   # ============================================================
   # Agente de IA (apps/agent, ADR 015) — só rede interna
   # Sem labels do Traefik e sem porta publicada: quem fala com ele é a `api`,
-  # com o X-Fatia-Agent-Key. Ele fala com o /mcp da `api` pelo nome do serviço.
+  # com o X-Fatia-Agent-Key. Ele fala com o /mcp da `api` pelo nome próprio
+  # dela na rede, `fatia-api`.
   # ============================================================
   agent:
     logging: *logging
@@ -148,7 +156,7 @@ services:
       # Novas tentativas do provedor antes do primeiro token (429, 5xx, conexão).
       AI_MAX_RETRIES: ${AI_MAX_RETRIES:-2}
       AGENT_API_KEY: ${AGENT_API_KEY:-}
-      MCP_BASE_URL: ${MCP_BASE_URL:-http://api:3000/mcp}
+      MCP_BASE_URL: ${MCP_BASE_URL:-http://fatia-api:3000/mcp}
       MCP_TIMEOUT_S: ${MCP_TIMEOUT_S:-30}
       # Mesmo Postgres da API; o agente cria o schema `agent_checkpoint` (ADR 023).
       AGENT_CHECKPOINT_DATABASE_URL: ${AGENT_CHECKPOINT_DATABASE_URL:-}
@@ -163,7 +171,11 @@ services:
     depends_on:
       - api
     networks:
-      - dokploy-network
+      # Pelo mesmo motivo do `fatia-api`: `agent` é genérico demais numa rede
+      # que outros projetos dividem, e a API mandaria o chat para outro serviço.
+      dokploy-network:
+        aliases:
+          - fatia-agent
     # O `/health` responde 200 mesmo sem IA ou sem Postgres (ver api.py): o que
     # isto pega é o processo travado ou morto, não a dependência fora do ar.
     healthcheck:
