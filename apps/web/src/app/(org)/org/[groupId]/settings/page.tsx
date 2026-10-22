@@ -19,6 +19,7 @@ import {
 import { RequiredScopesField } from '@/components/community/required-scopes-field';
 import { ImageField } from '@/components/content/image-field';
 import { useOrgGroup } from '@/components/org/org-shell';
+import { ShareButton } from '@/components/org/share-button';
 import { orgKeys } from '@/components/community/query-keys';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -110,7 +111,7 @@ export default function OrgSettingsPage() {
       ),
   });
 
-  async function copiarCodigo() {
+  async function copyCode() {
     try {
       await navigator.clipboard.writeText(g.slug);
       toast('Código copiado.');
@@ -192,10 +193,14 @@ export default function OrgSettingsPage() {
           </h2>
           <div className="flex items-center gap-2">
             <code className="flex-1 truncate rounded-lg bg-muted px-3 py-2 text-sm">{g.slug}</code>
-            <Button size="sm" variant="outline" className="gap-1" onClick={copiarCodigo}>
+            <Button size="sm" variant="outline" className="gap-1" onClick={copyCode}>
               <Copy size={14} aria-hidden /> Copiar
             </Button>
           </div>
+          <ShareButton
+            label="Compartilhar código"
+            text={`Código da ${g.name} no Fatia: ${g.slug} (Comunidade › Entrar com código)`}
+          />
           <p className="text-xs text-muted-foreground">
             {g.joinPolicy === 'INVITE_ONLY'
               ? 'Com "Só por convite", o código não abre a porta: só os convites.'

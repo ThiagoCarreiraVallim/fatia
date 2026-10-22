@@ -69,6 +69,29 @@ describe('painel › convites', () => {
       'http://localhost:3030/c/abc',
     );
     expect(screen.getByText(/O link aparece só agora/)).toBeInTheDocument();
+    // Sem a folha de compartilhar do sistema (desktop), só "Copiar link".
+    expect(screen.queryByRole('button', { name: 'Compartilhar' })).toBeNull();
+  });
+
+  it('onde o navegador tem a folha do sistema, o link vai por ela', async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'share', { value: share, configurable: true });
+    try {
+      vi.mocked(orgApi.createInvite).mockResolvedValue({
+        invite: convite({ id: 'i3' }),
+        url: 'http://localhost:3030/c/abc',
+        emailSent: false,
+      });
+      abrir();
+      await userEvent.click(screen.getByRole('button', { name: 'Criar link' }));
+      await userEvent.click(await screen.findByRole('button', { name: 'Compartilhar' }));
+      expect(share).toHaveBeenCalledWith({
+        text: 'Entre na Academia Demo no Fatia:',
+        url: 'http://localhost:3030/c/abc',
+      });
+    } finally {
+      delete (navigator as { share?: unknown }).share;
+    }
   });
 
   it('lote: prévia de válidos, inválidos e repetidos; resultado com os pulados', async () => {

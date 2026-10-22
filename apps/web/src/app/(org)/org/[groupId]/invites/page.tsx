@@ -17,6 +17,7 @@ import {
   type GrantableRole,
 } from '@fatia/api-client';
 import { useOrgGroup } from '@/components/org/org-shell';
+import { ShareButton } from '@/components/org/share-button';
 import { orgKeys } from '@/components/community/query-keys';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -178,7 +179,7 @@ export default function OrgInvitesPage() {
     onError: (err) => toast(erroDaApi(err, 'Não deu para revogar agora.')),
   });
 
-  async function copiar(url: string) {
+  async function copyLink(url: string) {
     try {
       await navigator.clipboard.writeText(url);
       toast('Link copiado.');
@@ -231,9 +232,12 @@ export default function OrgInvitesPage() {
             <p className="break-all font-mono text-xs" data-testid="invite-url">
               {link}
             </p>
-            <Button size="sm" variant="outline" className="gap-1" onClick={() => copiar(link)}>
-              <Copy size={14} aria-hidden /> Copiar link
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <ShareButton text={`Entre na ${g.name} no Fatia:`} url={link} />
+              <Button size="sm" variant="outline" className="gap-1" onClick={() => copyLink(link)}>
+                <Copy size={14} aria-hidden /> Copiar link
+              </Button>
+            </div>
             <p className="text-xs text-muted-foreground">
               O link aparece só agora. Se perder, crie outro e revogue este na lista.
             </p>
