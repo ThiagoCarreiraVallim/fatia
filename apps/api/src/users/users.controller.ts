@@ -5,15 +5,8 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { AccountService } from './account.service';
-
-const USER_SELECT = {
-  id: true,
-  email: true,
-  name: true,
-  role: true,
-  timezone: true,
-  heightCm: true,
-} as const;
+import { USER_SELECT } from './user-select';
+import { profileUpdateData } from './profile-update';
 
 @Controller('users')
 export class UsersController {
@@ -31,11 +24,7 @@ export class UsersController {
   updateMe(@CurrentUser() user: CurrentUserPayload, @Body() dto: UpdateMeDto) {
     return this.prisma.user.update({
       where: { id: user.id },
-      data: {
-        ...(dto.name !== undefined && { name: dto.name }),
-        ...(dto.heightCm !== undefined && { heightCm: dto.heightCm }),
-        ...(dto.timezone !== undefined && { timezone: dto.timezone }),
-      },
+      data: profileUpdateData(dto, user.timezone),
       select: USER_SELECT,
     });
   }

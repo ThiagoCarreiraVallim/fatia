@@ -21,6 +21,7 @@ from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
 
 from ..providers.base import ToolChatCapability
+from ..tracing import NOOP_TRACE, TurnTrace
 from .mcp_client import McpClient, McpToolInfo
 
 
@@ -63,10 +64,17 @@ class ContextoDoTurno:
     # verdade é o banco da API, e uma cópia no checkpoint envelheceria no
     # primeiro "esquece isso" feito pela tela.
     memorias: Sequence[dict[str, str]] = field(default=())
+    # O agente da comunidade desta conversa (Fase 7c, ADR 031): `groupId`, `name`,
+    # `community` e `instructions`. Por contexto, como a memória: o `apps/api`
+    # confere a cada turno se a pessoa ainda é da comunidade e se o dono não
+    # desligou o agente, e uma cópia no checkpoint ficaria velha.
+    persona: dict[str, str] | None = None
     # Liga o planejador (`AGENT_CHAT_PLANNER`) — ver `planejador.py`.
     planejar: bool = False
     # Com foto, o turno inteiro vai para `AI_MODEL_VISION` — ver `FotoDoTurno`.
     fotos: Sequence[FotoDoTurno] = field(default=())
+    # O trace do turno no Langfuse (ADR 034); o no-op quando ele está desligado.
+    trace: TurnTrace = NOOP_TRACE
 
 
 class EstadoDaConversa(TypedDict, total=False):

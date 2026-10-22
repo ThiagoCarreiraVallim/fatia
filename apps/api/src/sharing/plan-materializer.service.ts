@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { ExerciseService } from '../workout/exercise.service';
+import { CATALOG_EXERCISE } from '../workout/helpers/exercise-access';
 import {
-  descreverProblemas,
+  describeIssues,
   PLAN_SNAPSHOT_VERSION,
   planSnapshotSchema,
   type DefinicaoCustom,
@@ -36,12 +37,11 @@ const PLAN_INCLUDE = {
  * isso e não cumpria: casava também `training-block.service.ts`, que só lê, e os
  * specs. Invariante que o comando escrito não confere apodrece calada.
  *
- * **Proveniência ainda não é gravada.** `fromOfferId`/`fromTemplateId` em
- * `WorkoutPlan` dependem de model novo, que esta fatia não abre (ver a proposta
- * de schema na PR). Enquanto a coluna não existe, a adoção **não é idempotente**:
- * é o chamador que precisa evitar materializar duas vezes. A consulta que resolve
- * isso — `workoutPlan.findFirst({ where: { userId, fromTemplateId } })` — entra
- * aqui junto com a coluna, e não antes.
+ * **Proveniência:** o plano pronto da comunidade (Fase 7) grava
+ * `fromTemplateId`, e é o `ContentService` que confere a cópia já existente
+ * (`workoutPlan.findFirst({ where: { userId, fromTemplateId } })`) antes de
+ * chamar esta máquina, que continua sem saber de onde o retrato veio. A oferta
+ * do profissional ainda não grava proveniência.
  */
 @Injectable()
 export class PlanMaterializerService {
@@ -67,10 +67,14 @@ export class PlanMaterializerService {
    * O snapshot chega como `unknown` de propósito: ele vem de coluna `Json`,
    * escrita possivelmente por uma versão anterior do produto, e o `as` que o
    * TypeScript aceitaria de graça não olharia o conteúdo.
+   *
+   * `groupId` é a comunidade do plano pronto. Sem ela (oferta do profissional),
+   * item `source: 'group'` é recusado.
    */
-  async materialize(userId: string, snapshot: unknown) {
-    const snap = this.validar(snapshot);
-    await this.conferirCatalogo(snap);
+  async materialize(userId: string, snapshot: unknown, fromTemplateId?: string, groupId?: string) {
+    const snap = this.validate(snapshot);
+    await this.assertCatalogExercises(snap);
+    await this.assertGroupExercises(snap, groupId);
 
     const exercises: Array<{
       exerciseId: number;
@@ -83,7 +87,9 @@ export class PlanMaterializerService {
         exerciseId:
           item.source === 'catalog'
             ? item.catalogExerciseId
-            : await this.copiarCustom(userId, item.exercise),
+            : item.source === 'group'
+              ? item.groupExerciseId
+              : await this.copyCustomExercise(userId, item.exercise),
         order: item.order,
         targetSets: item.targetSets,
         targetReps: item.targetReps,
@@ -94,12 +100,12 @@ export class PlanMaterializerService {
     // saem numa transação só do lado do Prisma, sem segurar conexão entre
     // roundtrips — pgbouncer em transaction pooling (ADR 010).
     return this.prisma.workoutPlan.create({
-      data: { userId, name: snap.name, exercises: { create: exercises } },
+      data: { userId, name: snap.name, fromTemplateId, exercises: { create: exercises } },
       include: PLAN_INCLUDE,
     });
   }
 
-  private validar(snapshot: unknown): PlanSnapshot {
+  private validate(snapshot: unknown): PlanSnapshot {
     // A versão é conferida antes do schema para a mensagem dizer o que houve.
     // O `z.literal` sozinho reprovaria com "invalid literal value", e o
     // snapshot de um plano guardado meses atrás merece erro melhor do que isso.
@@ -114,7 +120,7 @@ export class PlanMaterializerService {
     const parsed = planSnapshotSchema.safeParse(snapshot);
     if (!parsed.success) {
       throw new BadRequestException(
-        `Snapshot de plano inválido (${descreverProblemas(parsed.error)}). Nada foi criado.`,
+        `Snapshot de plano inválido (${describeIssues(parsed.error)}). Nada foi criado.`,
       );
     }
     return parsed.data;
@@ -136,7 +142,7 @@ export class PlanMaterializerService {
    * na biblioteca de quem adota. Uma query só para todos os ids, antes de
    * qualquer escrita.
    */
-  private async conferirCatalogo(snap: PlanSnapshot): Promise<void> {
+  private async assertCatalogExercises(snap: PlanSnapshot): Promise<void> {
     const ids = [
       ...new Set(
         snap.exercises.flatMap((item) =>
@@ -147,7 +153,7 @@ export class PlanMaterializerService {
     if (ids.length === 0) return;
 
     const publicos = await this.prisma.exercise.findMany({
-      where: { id: { in: ids }, createdByUserId: null },
+      where: { id: { in: ids }, ...CATALOG_EXERCISE },
       select: { id: true },
     });
 
@@ -157,6 +163,34 @@ export class PlanMaterializerService {
       throw new BadRequestException(
         `O exercício ${forasteiro} não está no catálogo público e por isso não pode vir de um plano ` +
           'de outra pessoa. Nada foi criado.',
+      );
+    }
+  }
+
+  /**
+   * Exercício da comunidade entra por referência, e só o da comunidade do
+   * plano pronto: um snapshot forjado com o id do exercício de outra academia
+   * poria no plano de quem adota uma linha que ele não enxerga. Pré-passada
+   * pelo mesmo motivo de `assertCatalogExercises`.
+   */
+  private async assertGroupExercises(snap: PlanSnapshot, groupId?: string): Promise<void> {
+    const ids = [
+      ...new Set(
+        snap.exercises.flatMap((item) => (item.source === 'group' ? [item.groupExerciseId] : [])),
+      ),
+    ];
+    if (ids.length === 0) return;
+    const daComunidade = groupId
+      ? await this.prisma.exercise.findMany({
+          where: { id: { in: ids }, groupOwned: true, groupId },
+          select: { id: true },
+        })
+      : [];
+    const encontrados = new Set(daComunidade.map((ex) => ex.id));
+    const forasteiro = ids.find((id) => !encontrados.has(id));
+    if (forasteiro !== undefined) {
+      throw new BadRequestException(
+        `O exercício ${forasteiro} não é do catálogo desta comunidade. Nada foi criado.`,
       );
     }
   }
@@ -172,7 +206,7 @@ export class PlanMaterializerService {
    * apontar para o que ela já tem. É a mesma escolha que `cloneForEdit` faz ao
    * devolver a cópia existente em vez de criar outra.
    */
-  private async copiarCustom(userId: string, definicao: DefinicaoCustom): Promise<number> {
+  private async copyCustomExercise(userId: string, definicao: DefinicaoCustom): Promise<number> {
     const { name, muscleGroup, ...enriquecimento } = definicao;
 
     const existente = await this.prisma.exercise.findFirst({

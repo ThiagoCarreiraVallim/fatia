@@ -1,12 +1,12 @@
 import { useCallback, useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Flag, LogOut, Settings, Shield, Watch } from 'lucide-react-native';
-import { usersApi } from '@fatia/api-client';
+import { Bell, Crown, Flag, LogOut, Settings, Shield, Sparkles, Users } from 'lucide-react-native';
+import { billingApi, planSummary, usersApi } from '@fatia/api-client';
 import { useAuth } from '@/auth/auth-context';
 import { Screen } from '@/components/layout/screen';
-import { Button } from '@/components/ui';
+import { Button, useConfirm } from '@/components/ui';
 import { DeleteAccountDrawer } from '@/components/profile/delete-account-drawer';
 import { EditHeightDrawer } from '@/components/profile/edit-height-drawer';
 import { McpSection } from '@/components/profile/mcp-section';
@@ -14,8 +14,11 @@ import { MenuItem } from '@/components/profile/menu-item';
 import { openLegal } from '@/components/profile/legal';
 import { PrivacyCard } from '@/components/profile/privacy-card';
 import { ProfileMetrics } from '@/components/profile/profile-metrics';
+import { disablePush } from '@/notifications/push';
+import { cores } from '@/theme/cores';
 
 export default function ProfileScreen() {
+  const confirm = useConfirm();
   const [heightOpen, setHeightOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -26,27 +29,30 @@ export default function ProfileScreen() {
   // No PWA os dados do usuário vêm do servidor (`getCurrentUser()`); aqui vêm da
   // API, na mesma chave que o `ProfileMetrics` usa — uma requisição só.
   const me = useQuery({ queryKey: ['users', 'me'], queryFn: () => usersApi.me() });
+  const plano = useQuery({ queryKey: ['billing', 'plan'], queryFn: () => billingApi.plan() });
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     void Promise.all([
       qc.refetchQueries({ queryKey: ['users', 'me'] }),
       qc.refetchQueries({ queryKey: ['dashboard', 'today'] }),
+      qc.refetchQueries({ queryKey: ['billing', 'plan'] }),
     ]).finally(() => setRefreshing(false));
   }, [qc]);
 
   const confirmSignOut = () => {
-    Alert.alert('Sair da conta', 'Você vai precisar entrar de novo para usar o app.', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Sair',
-        style: 'destructive',
-        onPress: () => {
-          qc.clear();
-          void signOut();
-        },
+    confirm({
+      title: 'Sair da conta',
+      description: 'Você vai precisar entrar de novo para usar o app.',
+      confirmLabel: 'Sair',
+      destructive: true,
+      onConfirm: () => {
+        qc.clear();
+        // Antes de sair: com a sessão ainda viva, o aparelho sai da conta e
+        // os avisos dela param de chegar aqui.
+        void disablePush().finally(() => void signOut());
       },
-    ]);
+    });
   };
 
   const name = me.data?.name;
@@ -75,25 +81,45 @@ export default function ProfileScreen() {
 
           <View className="overflow-hidden rounded-2xl border border-border bg-card">
             <MenuItem
-              icon={<Flag size={18} color="#2ce500" />}
+              icon={<Crown size={18} color={cores.primary} />}
+              title="Meu plano"
+              subtitle={plano.data ? planSummary(plano.data) : 'Free ou PRO'}
+              onPress={() => router.push('/plan')}
+            />
+            <MenuItem
+              icon={<Users size={18} color={cores.primary} />}
+              title="Comunidades"
+              subtitle="Suas comunidades e o que você compartilha"
+              onPress={() => router.push('/community')}
+            />
+            <MenuItem
+              icon={<Flag size={18} color={cores.primary} />}
               title="Metas"
               subtitle="Acompanhe seus objetivos pessoais"
               onPress={() => router.push('/goals')}
             />
             <MenuItem
-              icon={<Settings size={18} color="#2ce500" />}
+              icon={<Settings size={18} color={cores.primary} />}
               title="Metas de nutrição"
               subtitle="Calorias e macros diários"
               onPress={() => router.push('/nutrition/goals')}
             />
+            {/* O rótulo dizia "Dispositivos — Apple Health e Garmin", integrações que não
+                existem; o destino sempre foi conectar a IA (mesma correção do PWA, #151). */}
             <MenuItem
-              icon={<Watch size={18} color="#2ce500" />}
-              title="Dispositivos"
-              subtitle="Integração com Apple Health e Garmin"
+              icon={<Sparkles size={18} color={cores.primary} />}
+              title="Conectar sua IA"
+              subtitle="Registre e consulte seu diário conversando com o Claude"
               onPress={() => router.push('/profile/tokens')}
             />
             <MenuItem
-              icon={<Shield size={18} color="#2ce500" />}
+              icon={<Bell size={18} color={cores.primary} />}
+              title="Notificações"
+              subtitle="Avisos das comunidades neste celular"
+              onPress={() => router.push('/profile/notifications')}
+            />
+            <MenuItem
+              icon={<Shield size={18} color={cores.primary} />}
               title="Privacidade e dados"
               subtitle="O que guardamos, e como exportar ou apagar"
               onPress={() => openLegal('/privacy')}
@@ -110,7 +136,7 @@ export default function ProfileScreen() {
             onPress={confirmSignOut}
             accessibilityLabel="Sair da conta"
           >
-            <LogOut size={18} color="#93000a" />
+            <LogOut size={18} color={cores.destructive} />
             <Text className="text-base font-bold text-destructive">Sair da conta</Text>
           </Button>
 

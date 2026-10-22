@@ -10,7 +10,7 @@ import type {
   ChatQuestionAction,
   ChatResumeValue,
 } from '@fatia/api-client';
-import { previewChatAction } from '@fatia/api-client';
+import { askFieldsOf, previewChatAction, questionAnswer } from '@fatia/api-client';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { field, floating, ghostButton, inkButton } from '../elements/surfaces';
@@ -97,7 +97,7 @@ function Escrita({
             </dl>
           ) : null}
           {previa.valida === false ? (
-            <p role="alert" className="mt-2 text-xs text-rose-500">
+            <p role="alert" className="mt-2 text-xs text-danger">
               {previa.problema}
             </p>
           ) : null}
@@ -138,40 +138,6 @@ function Escrita({
       </div>
     </div>
   );
-}
-
-const TIPOS: ChatAskField['type'][] = ['text', 'number', 'date', 'select', 'boolean'];
-
-/**
- * Os campos como o formulário precisa deles.
- *
- * ⚠️ Quem escreve `fields` é o **modelo**, e ele não respeita o contrato à risca:
- * manda campo sem `label`, sem `type`, ou só o nome em texto. O agente já
- * normaliza (`human.pergunta_dos_argumentos`), e esta é a segunda barreira: um
- * campo malformado não pode derrubar a tela da conversa.
- */
-export function normalizarCampos(bruto: unknown): ChatAskField[] {
-  if (!Array.isArray(bruto)) return [];
-  return bruto.flatMap((item, indice): ChatAskField[] => {
-    if (typeof item === 'string') {
-      return item.trim() ? [{ name: `campo_${indice}`, label: item.trim(), type: 'text' }] : [];
-    }
-    if (!item || typeof item !== 'object') return [];
-    const campo = item as Partial<ChatAskField>;
-    const label = String(campo.label || campo.name || '').trim();
-    if (!label) return [];
-    return [
-      {
-        name: String(campo.name || `campo_${indice}`),
-        label,
-        type: TIPOS.includes(campo.type as ChatAskField['type'])
-          ? (campo.type as ChatAskField['type'])
-          : 'text',
-        required: campo.required === true,
-        ...(Array.isArray(campo.options) ? { options: campo.options.map(String) } : {}),
-      },
-    ];
-  });
 }
 
 function CampoDaPergunta({
@@ -236,13 +202,6 @@ function CampoDaPergunta({
 }
 
 /** A resposta de um formulário, no texto que o modelo lê: "campo: valor". */
-function respostaDaPergunta(campos: ChatAskField[], valores: Record<string, string>): unknown {
-  if (campos.length === 1 && campos[0].name === '__livre') return valores.__livre ?? '';
-  return Object.fromEntries(
-    campos.filter((c) => (valores[c.name] ?? '') !== '').map((c) => [c.label, valores[c.name]]),
-  );
-}
-
 function Pergunta({
   acao,
   valores,
@@ -252,7 +211,7 @@ function Pergunta({
   valores: Record<string, string>;
   onMudar: (nome: string, valor: string) => void;
 }) {
-  const campos = camposDe(acao);
+  const campos = askFieldsOf(acao);
   return (
     <div className={cn(field, 'space-y-3 rounded-lg p-3')}>
       <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
@@ -272,11 +231,6 @@ function Pergunta({
 }
 
 /** Pergunta sem campos vira resposta livre, com a própria pergunta de rótulo. */
-function camposDe(acao: ChatQuestionAction): ChatAskField[] {
-  const campos = normalizarCampos(acao.fields);
-  return campos.length > 0 ? campos : [{ name: '__livre', label: 'Sua resposta', type: 'text' }];
-}
-
 function Acoes({ pausa, ocupado, onResponder }: Props) {
   const escritas = useMemo(
     () => pausa.actions.filter((a): a is ChatConfirmAction => a.kind === 'confirm'),
@@ -291,7 +245,7 @@ function Acoes({ pausa, ocupado, onResponder }: Props) {
 
   const faltaDecidir = escritas.some((acao) => decisoes[acao.toolCallId] === undefined);
   const faltaResponder = perguntas.some((acao) =>
-    camposDe(acao).some(
+    askFieldsOf(acao).some(
       (campo) =>
         (campo.required || campo.name === '__livre') &&
         !(respostas[acao.toolCallId]?.[campo.name] ?? '').trim(),
@@ -309,7 +263,7 @@ function Acoes({ pausa, ocupado, onResponder }: Props) {
       answers: Object.fromEntries(
         perguntas.map((acao) => [
           acao.toolCallId,
-          respostaDaPergunta(camposDe(acao), respostas[acao.toolCallId] ?? {}),
+          questionAnswer(askFieldsOf(acao), respostas[acao.toolCallId] ?? {}),
         ]),
       ),
     });
@@ -336,7 +290,7 @@ function Acoes({ pausa, ocupado, onResponder }: Props) {
     >
       {escritas.length > 0 ? (
         <div className="flex items-start gap-2">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" aria-hidden />
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-warning" aria-hidden />
           <div>
             <p className="text-sm font-bold text-foreground">
               {escritas.length > 1 ? 'Confirmar estas ações?' : 'Confirmar esta ação?'}

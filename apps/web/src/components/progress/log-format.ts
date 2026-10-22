@@ -14,20 +14,32 @@ const MONTHS_SHORT = [
 ] as const;
 
 /**
- * "19 mai" a partir de um ISO (`YYYY-MM-DD` ou datetime completo).
+ * "19 mai" a partir de um dia `YYYY-MM-DD` (o `date` de água e passos, que o
+ * servidor já calcula no fuso do perfil).
  *
- * Corta a string em vez de passar por `new Date(iso).toLocaleDateString()` de
- * propósito. A API deriva a data do gráfico de peso em UTC
- * (`progress.service.ts`: `loggedAt.toISOString().slice(0, 10)`); formatar aqui
- * no fuso do navegador faria uma pesagem de fim de noite aparecer num dia na
- * lista e noutro no gráfico — e alguém apagaria a "duplicata" que é o mesmo
- * registro.
+ * Corta a string em vez de passar por `new Date(iso)`: um dia sem hora vira
+ * meia-noite UTC, que no Brasil ainda é o dia anterior.
  */
 export function dayMonth(iso: string | null | undefined): string {
   if (!iso || iso.length < 10) return '—';
   const month = Number(iso.slice(5, 7));
   if (!Number.isFinite(month) || month < 1 || month > 12) return '—';
   return `${iso.slice(8, 10)} ${MONTHS_SHORT[month - 1]}`;
+}
+
+/**
+ * "19 mai" a partir de um instante (`loggedAt` do peso), no dia do relógio de
+ * quem registrou — o mesmo dia local em que o gráfico de peso agrupa a pesagem
+ * (`progress.service.ts`). Cortar a string daria o dia UTC: a pesagem das 21h30
+ * em São Paulo apareceria no dia seguinte.
+ */
+export function instantDayMonth(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return '—';
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const day = String(parsed.getDate()).padStart(2, '0');
+  return dayMonth(`${parsed.getFullYear()}-${month}-${day}`);
 }
 
 /**

@@ -1,7 +1,15 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { LogtoManagementService } from '../auth/logto-management.service';
 import { CheckpointPurgeService } from '../chat/checkpoint-purge.service';
+import { ACCOUNT_DELETION_HOOKS, type AccountDeletionHook } from './account-deletion.hook';
 import { ITENS_EM_ORDEM } from '../nutrition/itens-em-ordem';
 
 /** Frase exata que o usuário precisa confirmar para apagar a conta. */
@@ -20,6 +28,9 @@ export class AccountService {
     private readonly prisma: PrismaService,
     private readonly logtoManagement: LogtoManagementService,
     private readonly checkpoints: CheckpointPurgeService,
+    @Optional()
+    @Inject(ACCOUNT_DELETION_HOOKS)
+    private readonly ganchos: AccountDeletionHook[] = [],
   ) {}
 
   /**
@@ -37,6 +48,11 @@ export class AccountService {
         role: true,
         timezone: true,
         heightCm: true,
+        sex: true,
+        birthDate: true,
+        activityLevel: true,
+        objective: true,
+        onboardedAt: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -49,6 +65,9 @@ export class AccountService {
       personalGoals,
       meals,
       customFoods,
+      favoriteFoods,
+      foodPortions,
+      mealTemplates,
       customExercises,
       workoutPlans,
       workoutSessions,
@@ -61,6 +80,14 @@ export class AccountService {
       accessLogs,
       conversations,
       memories,
+      subscriptions,
+      communityMemberships,
+      invitesCreated,
+      contentPublished,
+      mediaUploaded,
+      devices,
+      notificationPreferences,
+      webPushSubscriptions,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
       this.prisma.nutrientTarget.findMany({ where: { userId }, orderBy: { label: 'asc' } }),
@@ -73,6 +100,30 @@ export class AccountService {
       this.prisma.food.findMany({
         where: { createdByUserId: userId },
         orderBy: { name: 'asc' },
+      }),
+      // O nome junto do id: o id de um alimento público só faz sentido dentro desta instância.
+      this.prisma.favoriteFood.findMany({
+        where: { userId },
+        select: { foodId: true, food: { select: { name: true } }, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      // Medidas que a pessoa criou ("minha concha = 140 g"); as do catálogo não têm dono.
+      this.prisma.foodPortion.findMany({
+        where: { createdByUserId: userId },
+        select: {
+          foodId: true,
+          food: { select: { name: true } },
+          label: true,
+          grams: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      // Refeições salvas, com o retrato dos itens.
+      this.prisma.mealTemplate.findMany({
+        where: { userId },
+        include: { items: { orderBy: { position: 'asc' } } },
+        orderBy: { createdAt: 'asc' },
       }),
       this.prisma.exercise.findMany({
         where: { createdByUserId: userId },
@@ -150,6 +201,8 @@ export class AccountService {
         select: {
           id: true,
           title: true,
+          // De qual comunidade era o agente da conversa (Fase 7c); nulo é o da Fatia.
+          agentGroupId: true,
           createdAt: true,
           messages: {
             select: {
@@ -171,6 +224,184 @@ export class AccountService {
       this.prisma.userMemory.findMany({
         where: { userId },
         select: { content: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      // Histórico do plano (ADR 024). Sem `paymentUrl`, que é link de cobrança
+      // temporário, e sem nada do provedor além do id.
+      this.prisma.userSubscription.findMany({
+        where: { userId },
+        select: {
+          tier: true,
+          source: true,
+          status: true,
+          interval: true,
+          productId: true,
+          currentPeriodEnd: true,
+          cancelAtPeriodEnd: true,
+          canceledAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      // As próprias associações a comunidades, com o consentimento registrado
+      // (ADR 026) e o assento de IA (ADR 025). Só a linha da pessoa: quem mais
+      // está no grupo é dado de terceiro e não sai daqui.
+      this.prisma.groupMembership.findMany({
+        where: { userId },
+        select: {
+          group: { select: { name: true, slug: true } },
+          role: true,
+          status: true,
+          invitedAt: true,
+          joinedAt: true,
+          leftAt: true,
+          consentScopes: true,
+          consentAt: true,
+          statsOptIn: true,
+          displayName: true,
+          seatAssignments: { select: { assignedAt: true, revokedAt: true } },
+          // Os desafios em que a pessoa entrou (Fase 8a): o apelido, a pontuação
+          // e a posição dela. O ranking dos outros é dado de terceiro.
+          challengeEntries: {
+            select: {
+              displayName: true,
+              score: true,
+              finalRank: true,
+              joinedAt: true,
+              challenge: { select: { title: true, metric: true, startsAt: true, endsAt: true } },
+            },
+            orderBy: { joinedAt: 'asc' },
+          },
+          // O mural (Fase 8b): o que a pessoa escreveu, como reagiu e o que
+          // denunciou. Os posts e comentários dos outros são dado de terceiro.
+          posts: {
+            select: {
+              body: true,
+              createdAt: true,
+              pinnedAt: true,
+              removedAt: true,
+              removedReason: true,
+              _count: { select: { images: true } },
+            },
+            orderBy: { createdAt: 'asc' },
+          },
+          postComments: {
+            select: { body: true, createdAt: true, removedAt: true },
+            orderBy: { createdAt: 'asc' },
+          },
+          postReactions: { select: { kind: true, createdAt: true }, orderBy: { createdAt: 'asc' } },
+          reportsMade: {
+            select: {
+              reason: true,
+              note: true,
+              createdAt: true,
+              resolvedAt: true,
+              resolution: true,
+            },
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      // Convites que a pessoa criou. Sem o e-mail do convidado (dado de
+      // terceiro) e sem o hash do token.
+      this.prisma.groupInvite.findMany({
+        where: { createdById: userId },
+        select: {
+          group: { select: { name: true } },
+          role: true,
+          maxUses: true,
+          uses: true,
+          expiresAt: true,
+          revokedAt: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      // O que a pessoa publicou numa comunidade (Fase 7): só os metadados. O
+      // conteúdo é da comunidade e fica lá depois que a conta some.
+      Promise.all([
+        this.prisma.groupPlanTemplate.findMany({
+          where: { authorId: userId },
+          select: {
+            group: { select: { name: true } },
+            kind: true,
+            title: true,
+            publishedAt: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        }),
+        this.prisma.groupTip.findMany({
+          where: { authorId: userId },
+          select: {
+            group: { select: { name: true } },
+            title: true,
+            publishedAt: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        }),
+        // Tutoriais de exercício do catálogo da comunidade (Fase 7b).
+        this.prisma.groupExerciseGuide.findMany({
+          where: { authorId: userId },
+          select: {
+            group: { select: { name: true } },
+            exercise: { select: { name: true } },
+            createdAt: true,
+            updatedAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        }),
+        // Desafios que a pessoa marcou (Fase 8a). O ranking é dos participantes.
+        this.prisma.groupChallenge.findMany({
+          where: { authorId: userId },
+          select: {
+            group: { select: { name: true } },
+            title: true,
+            metric: true,
+            startsAt: true,
+            endsAt: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        }),
+      ]).then(([plans, tips, exerciseGuides, challenges]) => ({
+        plans,
+        tips,
+        exerciseGuides,
+        challenges,
+      })),
+      // Os arquivos enviados (ADR 028): metadados, sem o arquivo.
+      this.prisma.mediaFile.findMany({
+        where: { uploaderId: userId },
+        select: {
+          group: { select: { name: true } },
+          purpose: true,
+          kind: true,
+          mime: true,
+          bytes: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      // Avisos no celular (ADR 033): a plataforma e as datas. O token fica de
+      // fora: é o endereço do aparelho na Expo, sem uso para a pessoa.
+      this.prisma.userDevice.findMany({
+        where: { userId },
+        select: { platform: true, createdAt: true, lastSeenAt: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.notificationPreference.findMany({
+        where: { userId },
+        select: { kind: true, enabled: true, updatedAt: true },
+        orderBy: { kind: 'asc' },
+      }),
+      // Só as datas: o endpoint identifica o navegador e não serve a ninguém fora daqui.
+      this.prisma.webPushSubscription.findMany({
+        where: { userId },
+        select: { createdAt: true, lastSeenAt: true },
         orderBy: { createdAt: 'asc' },
       }),
     ]);
@@ -201,6 +432,9 @@ export class AccountService {
       personalGoals,
       meals,
       customFoods,
+      favoriteFoods,
+      foodPortions,
+      mealTemplates,
       customExercises,
       workoutPlans,
       workoutSessions,
@@ -212,6 +446,14 @@ export class AccountService {
       professionalLinks,
       conversations,
       memories,
+      subscriptions,
+      communityMemberships,
+      invitesCreated,
+      contentPublished,
+      mediaUploaded,
+      devices,
+      notificationPreferences,
+      webPushSubscriptions,
       accessLogs: accessLogs.map(({ professionalId, ...linha }) => ({
         ...linha,
         professionalName: nomesDeProfissional.get(professionalId) ?? null,
@@ -220,10 +462,27 @@ export class AccountService {
         achievements: achievements.length,
         conversations: conversations.length,
         memories: memories.length,
+        subscriptions: subscriptions.length,
+        communityMemberships: communityMemberships.length,
+        challengeEntries: communityMemberships.reduce((n, m) => n + m.challengeEntries.length, 0),
+        posts: communityMemberships.reduce((n, m) => n + m.posts.length, 0),
+        postComments: communityMemberships.reduce((n, m) => n + m.postComments.length, 0),
+        invitesCreated: invitesCreated.length,
+        contentPublished:
+          contentPublished.plans.length +
+          contentPublished.tips.length +
+          contentPublished.exerciseGuides.length +
+          contentPublished.challenges.length,
+        mediaUploaded: mediaUploaded.length,
+        devices: devices.length,
+        webPushSubscriptions: webPushSubscriptions.length,
         professionalLinks: professionalLinks.length,
         accessLogs: accessLogs.length,
         meals: meals.length,
         customFoods: customFoods.length,
+        favoriteFoods: favoriteFoods.length,
+        foodPortions: foodPortions.length,
+        mealTemplates: mealTemplates.length,
         customExercises: customExercises.length,
         workoutPlans: workoutPlans.length,
         workoutSessions: workoutSessions.length,
@@ -258,6 +517,11 @@ export class AccountService {
       select: { id: true, email: true, logtoSub: true },
     });
     if (!user) throw new NotFoundException('User not found');
+
+    // Antes de tudo, e podendo abortar: encerrar a assinatura paga (ADR 024).
+    // Se o provedor não responder, a conta fica inteira e o erro sobe — apagar
+    // a conta e seguir cobrando seria o pior resultado possível.
+    for (const gancho of this.ganchos ?? []) await gancho.beforeDelete(userId);
 
     // Ordem deliberada: Logto primeiro. Se apagássemos o User local antes e o
     // Logto falhasse, a identidade órfã voltaria a provisionar um User novo no

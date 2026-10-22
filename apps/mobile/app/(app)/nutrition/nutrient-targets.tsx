@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react-native';
 import { nutritionApi, type NutrientTarget } from '@fatia/api-client';
@@ -16,8 +16,10 @@ import {
   Label,
   LoadingState,
   cn,
+  useConfirm,
 } from '@/components/ui';
 import { NUMEROS_TABULARES, mensagemDeErro } from '@/components/nutrition/helpers';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/app/(app)/nutrition/nutrient-targets/page.tsx`.
@@ -48,6 +50,7 @@ const PRESETS: Preset[] = [
 const CHAVE_LIVRE = '__custom__';
 
 export default function NutrientTargetsScreen() {
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const metas = useQuery({
     queryKey: ['nutrition', 'nutrient-targets'],
@@ -107,18 +110,16 @@ export default function NutrientTargetsScreen() {
     : Boolean(minimo.trim() || maximo.trim());
 
   const confirmarRemocao = (meta: NutrientTarget) =>
-    Alert.alert('Remover meta', `A meta de ${meta.label} será apagada.`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Remover', style: 'destructive', onPress: () => remover.mutate(meta.nutrientKey) },
-    ]);
+    confirm({
+      title: 'Remover meta',
+      description: `A meta de ${meta.label} será apagada.`,
+      confirmLabel: 'Remover',
+      destructive: true,
+      onConfirm: () => remover.mutate(meta.nutrientKey),
+    });
 
   return (
-    <Screen
-      back
-      title="Metas personalizadas"
-      onRefresh={() => void metas.refetch()}
-      refreshing={metas.isRefetching}
-    >
+    <Screen onRefresh={() => void metas.refetch()} refreshing={metas.isRefetching}>
       <View className="gap-5 p-4">
         <Text className="text-sm text-muted-foreground">
           Controle nutrientes além dos macros — sódio, açúcar, fibra... Defina um limite (máx) e/ou
@@ -258,7 +259,7 @@ export default function NutrientTargetsScreen() {
               disabled={!podeSalvar || salvar.isPending}
               loading={salvar.isPending}
             >
-              <Plus size={16} color="#131313" />
+              <Plus size={16} color={cores.background} />
               <Text className="text-sm font-medium text-primary-foreground">Salvar meta</Text>
             </Button>
 
@@ -333,7 +334,7 @@ function LinhaDaMeta({ meta, onRemover }: { meta: NutrientTarget; onRemover: () 
         hitSlop={8}
         className="h-11 w-11 items-center justify-center rounded-md active:bg-accent"
       >
-        <Trash2 size={16} color="#baccaf" />
+        <Trash2 size={16} color={cores.mutedForeground} />
       </Pressable>
     </View>
   );

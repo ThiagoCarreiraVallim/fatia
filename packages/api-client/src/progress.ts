@@ -136,6 +136,8 @@ export interface TodaySummary {
   };
   workout: {
     plannedToday: { planId: string; name: string } | null;
+    /** Plano a oferecer no card: o do bloco ativo ou o seguinte da rotação. */
+    nextPlan: { planId: string; name: string; source: 'BLOCK' | 'ROTATION' } | null;
     sessionInProgress: { id: string; startedAt: string } | null;
     completedToday: boolean;
   };

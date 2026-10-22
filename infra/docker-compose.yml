@@ -48,6 +48,38 @@ services:
     # pros admin roles serem assinados corretamente). Primeira execução ~30s.
     entrypoint: ["sh", "-c", "npm run cli db seed -- --swe && npm start"]
 
+  mailpit:
+    # SMTP de mentira para desenvolvimento: captura todo e-mail que o Logto manda
+    # (verificação de cadastro, código de "esqueci minha senha") e mostra numa
+    # caixa de entrada web em http://localhost:8025. Nada sai para a internet.
+    # Em produção o conector aponta para um SMTP real (EMAIL_SMTP_*).
+    image: axllent/mailpit:v1.27
+    container_name: fatia-mailpit
+    restart: unless-stopped
+    environment:
+      # O conector SMTP do Logto exige usuário/senha; o Mailpit aceita qualquer um.
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+
+  media:
+    # Armazenamento de mídia da comunidade no dev (ADR 028): SeaweedFS falando o
+    # mesmo protocolo S3 do Cloudflare R2 de produção. Bucket privado; quem lê
+    # recebe URL assinada. A API cria o bucket e o CORS no dev ao subir
+    # (`StorageService`); em produção isso é configuração do R2 (OPERATIONS.md).
+    # SeaweedFS e não MinIO: as imagens do MinIO saíram do Docker Hub.
+    image: chrislusf/seaweedfs:3.97
+    container_name: fatia-media
+    restart: unless-stopped
+    command: server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data
+    ports:
+      - "${MEDIA_S3_PORT:-8333}:8333"
+    volumes:
+      - fatia_media_data:/data
+      - ./media/s3.json:/etc/seaweedfs/s3.json:ro
+
   api:
     build:
       context: ..
@@ -73,6 +105,28 @@ services:
       AGENT_BASE_URL: ${AGENT_BASE_URL:-}
       AGENT_API_KEY: ${AGENT_API_KEY:-}
       AGENT_TIMEOUT_MS: ${AGENT_TIMEOUT_MS:-180000}
+      # Custo e cota da IA hospedada (#135). Vazio/0 = sem cota.
+      AI_PRICE_TABLE: ${AI_PRICE_TABLE:-}
+      AI_QUOTA_DAILY_MICROS: ${AI_QUOTA_DAILY_MICROS:-0}
+      AI_QUOTA_GLOBAL_DAILY_MICROS: ${AI_QUOTA_GLOBAL_DAILY_MICROS:-0}
+      AI_QUOTA_UNPRICED_DAILY_CALLS: ${AI_QUOTA_UNPRICED_DAILY_CALLS:-20}
+      # Plano Free/PRO (ADR 024). false = IA hospedada liberada para todos.
+      AI_REQUIRES_PLAN: ${AI_REQUIRES_PLAN:-false}
+      BILLING_PRO_MONTHLY_CENTS: ${BILLING_PRO_MONTHLY_CENTS:-1990}
+      BILLING_PRO_YEARLY_CENTS: ${BILLING_PRO_YEARLY_CENTS:-17900}
+      BILLING_SEAT_MONTHLY_CENTS: ${BILLING_SEAT_MONTHLY_CENTS:-1490}
+      # Asaas (cobrança web). Vazio = cobrança desligada.
+      ASAAS_BASE_URL: ${ASAAS_BASE_URL:-}
+      ASAAS_API_KEY: ${ASAAS_API_KEY:-}
+      ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:-}
+      # RevenueCat (compra no app). Vazio = webhook e sync respondem 503.
+      REVENUECAT_WEBHOOK_AUTH: ${REVENUECAT_WEBHOOK_AUTH:-}
+      REVENUECAT_SECRET_KEY: ${REVENUECAT_SECRET_KEY:-}
+      REVENUECAT_ENTITLEMENT_ID: ${REVENUECAT_ENTITLEMENT_ID:-pro}
+      # E-mail do convite de comunidade. Fixo: dentro deste compose o Mailpit é
+      # `mailpit`, e o MAIL_SMTP_URL do .env aponta para localhost (a API no host).
+      MAIL_SMTP_URL: smtp://fatia:fatia@mailpit:1025
+      EMAIL_FROM: ${EMAIL_FROM:-Fatia <nao-responda@fatia.local>}
     ports:
       - "${API_PORT:-3000}:3000"
     profiles: ["full"]
@@ -95,6 +149,9 @@ services:
       LOGTO_APP_SECRET: ${LOGTO_APP_SECRET}
       LOGTO_COOKIE_SECRET: ${LOGTO_COOKIE_SECRET}
       LOGTO_BASE_URL: ${LOGTO_BASE_URL:-http://localhost:3030}
+      # Link universal do convite (/.well-known/*). Vazio = 404, o link abre o PWA.
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
+      ANDROID_CERT_SHA256: ${ANDROID_CERT_SHA256:-}
       PORT: 3030
     ports:
       - "${WEB_PORT:-3030}:3030"
@@ -142,3 +199,5 @@ services:
 volumes:
   fatia_pg_data:
     name: fatia_pg_data
+  fatia_media_data:
+    name: fatia_media_data

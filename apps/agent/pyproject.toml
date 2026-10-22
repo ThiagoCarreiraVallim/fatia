@@ -22,6 +22,7 @@ dependencies = [
   "pydantic>=2.12",
   "pydantic-settings>=2.12",
   "uvicorn>=0.41",
+  "langfuse>=4.15.6,<5",
 ]
 
 [dependency-groups]

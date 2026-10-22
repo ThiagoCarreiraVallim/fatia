@@ -30,7 +30,12 @@ export const viewport: Viewport = {
   themeColor: '#131313',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
+  // Sem `maximumScale`: travar o zoom tira de quem enxerga mal o único jeito de
+  // ler um número pequeno (WCAG 1.4.4). O zoom automático do iOS ao focar um
+  // campo não acontece porque os campos têm 16 px no celular (`ui/input.tsx`).
+  // Conteúdo até as bordas no PWA instalado; os paddings de área segura do
+  // layout `(app)` e da `bottom-nav` devolvem o espaço do notch e do indicador.
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

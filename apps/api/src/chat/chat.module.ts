@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
-import { AiUsageService } from '../ai/ai-usage.service';
-import { AgentChatClient } from './agent-chat.client';
+import { AiModule } from '../ai/ai.module';
 import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { ChatRunRegistry } from './chat-run.registry';
 import { ChatThrottlerGuard } from './chat-throttler.guard';
 import { CheckpointPurgeService } from './checkpoint-purge.service';
 import { ConversationService } from './conversation.service';
@@ -12,6 +13,7 @@ import { SaveMemoryTool } from './memory/mcp/save-memory.tool';
 import { MemoryService } from './memory/memory.service';
 import { PreviaDaAcaoService } from './previa/previa-da-acao.service';
 import { McpModule } from '../mcp/mcp.module';
+import { SharingModule } from '../sharing/sharing.module';
 
 /**
  * Chat com a IA hospedada (#249).
@@ -26,14 +28,13 @@ import { McpModule } from '../mcp/mcp.module';
  * valida os argumentos com o schema da própria tool (`previa/`).
  */
 @Module({
-  imports: [McpModule],
+  imports: [McpModule, AiModule, SharingModule, NotificationsModule],
   controllers: [ChatController],
   providers: [
+    ChatRunRegistry,
     ChatService,
     ConversationService,
-    AgentChatClient,
     ChatThrottlerGuard,
-    AiUsageService,
     CheckpointPurgeService,
     MemoryService,
     SaveMemoryTool,

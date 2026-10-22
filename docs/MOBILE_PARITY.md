@@ -10,7 +10,7 @@
 componentes em `apps/web`. Paridade significa: qualquer coisa que a pessoa faz
 hoje em `app.fat.ia.br`, ela faz no app nativo.
 
-**Estado:** 15 de 15 rotas de aplicação replicadas, 3 fora de propósito.
+**Estado:** 17 de 17 rotas de aplicação replicadas, 3 fora de propósito.
 Nenhum placeholder restante no código.
 
 ## Legenda
@@ -25,28 +25,51 @@ Nenhum placeholder restante no código.
 
 ## Rotas
 
-| PWA                                | App nativo                                 |     | Observação                                                                  |
-| ---------------------------------- | ------------------------------------------ | :-: | --------------------------------------------------------------------------- |
-| `(app)/page.tsx`                   | `app/(app)/index.tsx`                      | ✅  | dashboard                                                                   |
-| `(app)/goals`                      | `app/(app)/goals.tsx`                      | ✅  |                                                                             |
-| `(app)/nutrition`                  | `app/(app)/nutrition/index.tsx`            | ✅  |                                                                             |
-| `(app)/nutrition/goals`            | `app/(app)/nutrition/goals.tsx`            | ✅  |                                                                             |
-| `(app)/nutrition/nutrient-targets` | `app/(app)/nutrition/nutrient-targets.tsx` | ✅  |                                                                             |
-| —                                  | `app/(app)/nutrition/scan.tsx`             | ➕  | scanner de código de barras (#140); o PWA não tem, ver abaixo               |
-| —                                  | `app/(app)/nutrition/photo.tsx`            | ➕  | registro por foto (#139); o PWA não tem, ver abaixo                         |
-| `(app)/profile`                    | `app/(app)/profile/index.tsx`              | ✅  |                                                                             |
-| `(app)/profile/connect`            | `app/(app)/profile/tokens.tsx`             | ⚠️  | o PWA virou fluxo guiado (#164); o nativo ainda é a tela antiga, ver abaixo |
-| `(app)/progress`                   | `app/(app)/progress/index.tsx`             | ✅  |                                                                             |
-| `(app)/progress/records`           | `app/(app)/progress/records.tsx`           | ✅  |                                                                             |
-| `(app)/workout`                    | `app/(app)/workout/index.tsx`              | ✅  | a sessão ativa vira aviso com "Continuar treino" em vez de tomar a tela     |
-| `(app)/workout/history`            | `app/(app)/workout/history.tsx`            | ✅  |                                                                             |
-| `(app)/workout/plans`              | `app/(app)/workout/plans/index.tsx`        | ✅  |                                                                             |
-| `(app)/workout/plans/[id]`         | `app/(app)/workout/plans/[id].tsx`         | ✅  |                                                                             |
-| `(app)/workout/quick/[templateId]` | `app/(app)/workout/quick/[templateId].tsx` | ✅  |                                                                             |
-| `(app)/workout/session/[id]`       | `app/(app)/workout/session/[id].tsx`       | ✅  | uma rota para sessão ativa e concluída — o treino termina durante a visita  |
-| `(auth)/login`                     | `app/login.tsx`                            | ✅  | navegador do sistema em vez de redirect no servidor                         |
-| `(public)/privacy`                 | —                                          | ⛔  | abre no navegador; ver "Fora de propósito"                                  |
-| `(public)/terms`                   | —                                          | ⛔  | idem                                                                        |
+| PWA                                  | App nativo                                               |     | Observação                                                                  |
+| ------------------------------------ | -------------------------------------------------------- | :-: | --------------------------------------------------------------------------- |
+| `(app)/page.tsx`                     | `app/(app)/index.tsx`                                    | ✅  | dashboard                                                                   |
+| `(app)/community`                    | `app/(app)/community/index.tsx`                          | ✅  | minhas comunidades + "Entrar com código" (drawer)                           |
+| `(app)/chat`                         | `app/(app)/chat/index.tsx`                               | ✅  | conversas; segurar renomeia ou apaga; "Nova conversa"; upsell no Free       |
+| `(app)/chat/[id]`                    | `app/(app)/chat/[id].tsx`                                | ✅  | a conversa (Fase 9e) — ver "Chat no app" abaixo                             |
+| gaveta "Memórias" do chat            | `app/(app)/chat/memories.tsx`                            | ✅  | tela própria no app; na web é uma gaveta da conversa                        |
+| `(app)/community/[groupId]`          | `app/(app)/community/[groupId]/index.tsx`                | ✅  | nos dois a comunidade abre no mural; `/feed` só redireciona para lá         |
+| `(app)/community/[groupId]/settings` | `app/(app)/community/[groupId]/settings.tsx`             | ✅  | atrás da engrenagem do mural: equipe, o que compartilho, quem acessou, sair |
+| `(app)/community/[groupId]/content`  | `app/(app)/community/[groupId]/content/index.tsx`        | ✅  | planos prontos e dicas publicados (pílulas Planos/Dicas)                    |
+| `(app)/…/content/[templateId]`       | `app/(app)/community/[groupId]/content/[templateId].tsx` | ✅  | prévia e "Adotar"; nutrição escolhe o que copiar, metas com a comparação    |
+| `(invite)/c/[token]`                 | `app/c/[token].tsx`                                      | ✅  | fora do `(app)`; deslogado guarda o token no cofre e retoma depois do login |
+| `(app)/community/new`                | `app/(app)/community/new.tsx`                            | ✅  | criar comunidade; leva aos convites do painel                               |
+| `(org)/org/[groupId]`                | `app/(app)/org/[groupId]/index.tsx`                      | ✅  | painel: visão geral e retenção agregada (dono)                              |
+| `(org)/org/[groupId]/members`        | `app/(app)/org/[groupId]/members/index.tsx`              | ✅  | aprovar, recusar; "Gerenciar" (`Alert`) muda papel, assento e remove        |
+| `(org)/…/members/[membershipId]`     | `app/(app)/org/[groupId]/members/[membershipId].tsx`     | ✅  | leitura por categoria do que o membro compartilha                           |
+| `(org)/org/[groupId]/invites`        | `app/(app)/org/[groupId]/invites.tsx`                    | ✅  | link com `Share` nativo; e-mail; lote colado (sem `.csv`)                   |
+| `(org)/org/[groupId]/seats`          | `app/(app)/org/[groupId]/seats.tsx`                      | ⚠️  | ver, tirar e faturas; compra, quantidade e cancelar só na web, ver abaixo   |
+| `(org)/org/[groupId]/settings`       | `app/(app)/org/[groupId]/settings.tsx`                   | ✅  | perfil, avatar (galeria), código (`Share`), transferir e apagar             |
+| `(org)/org/[groupId]/content`        | `app/(app)/org/[groupId]/content/index.tsx`              | ✅  | planos e dicas da equipe, rascunho e publicado                              |
+| `(org)/…/content/plans/[templateId]` | `app/(app)/org/[groupId]/content/plans/[templateId].tsx` | ✅  | treino a partir de um plano seu; nutrição com metas e refeições salvas      |
+| `(org)/…/content/tips/[tipId]`       | `app/(app)/org/[groupId]/content/tips/[tipId].tsx`       | ✅  | dica com prévia do markdown, imagem da galeria, fixar e publicar            |
+| `(app)/goals`                        | `app/(app)/goals.tsx`                                    | ✅  |                                                                             |
+| `(app)/nutrition`                    | `app/(app)/nutrition/index.tsx`                          | ✅  |                                                                             |
+| `(app)/nutrition/foods`              | `app/(app)/nutrition/foods.tsx`                          | ✅  | Meus alimentos; `?novo=1` abre o cadastro (card vazio e scanner)            |
+| `(app)/nutrition/goals`              | `app/(app)/nutrition/goals.tsx`                          | ✅  |                                                                             |
+| `(app)/nutrition/nutrient-targets`   | `app/(app)/nutrition/nutrient-targets.tsx`               | ✅  |                                                                             |
+| —                                    | `app/(app)/nutrition/scan.tsx`                           | ➕  | scanner de código de barras (#140); no PWA o leitor mora no drawer de busca |
+| —                                    | `app/(app)/nutrition/photo.tsx`                          | ➕  | registro por foto (#139); o PWA não tem, ver abaixo                         |
+| `(app)/plan`                         | `app/(app)/plan.tsx`                                     | ⚠️  | Meu plano (ADR 024); o app vende só pela loja (RevenueCat), ver abaixo      |
+| `(app)/profile`                      | `app/(app)/profile/index.tsx`                            | ✅  |                                                                             |
+| `(app)/profile/notifications`        | `app/(app)/profile/notifications.tsx`                    | ✅  | no app liga os avisos neste celular; a web lista os celulares e tira um     |
+| `(app)/profile/connect`              | `app/(app)/profile/tokens.tsx`                           | ⚠️  | o PWA virou fluxo guiado (#164); o nativo ainda é a tela antiga, ver abaixo |
+| `(app)/progress`                     | `app/(app)/progress/index.tsx`                           | ✅  |                                                                             |
+| `(app)/progress/records`             | `app/(app)/progress/records.tsx`                         | ✅  |                                                                             |
+| `(app)/workout`                      | `app/(app)/workout/index.tsx`                            | ✅  | a sessão ativa vira aviso com "Continuar treino" em vez de tomar a tela     |
+| `(app)/workout/history`              | `app/(app)/workout/history.tsx`                          | ✅  |                                                                             |
+| `(app)/workout/plans`                | `app/(app)/workout/plans/index.tsx`                      | ✅  |                                                                             |
+| `(app)/workout/plans/[id]`           | `app/(app)/workout/plans/[id].tsx`                       | ✅  |                                                                             |
+| `(app)/workout/quick/[templateId]`   | `app/(app)/workout/quick/[templateId].tsx`               | ✅  |                                                                             |
+| `(app)/workout/session/[id]`         | `app/(app)/workout/session/[id].tsx`                     | ✅  | uma rota para sessão ativa e concluída — o treino termina durante a visita  |
+| `(auth)/login`                       | `app/login.tsx`                                          | ✅  | navegador do sistema em vez de redirect no servidor                         |
+| `(onboarding)/onboarding`            | `app/onboarding.tsx`                                     | ✅  | assistente de primeira vez; nascimento digitado com máscara DD/MM/AAAA      |
+| `(public)/privacy`                   | —                                                        | ⛔  | abre no navegador; ver "Fora de propósito"                                  |
+| `(public)/terms`                     | —                                                        | ⛔  | idem                                                                        |
 
 ---
 
@@ -67,35 +90,41 @@ esconde a diferença é exatamente o que este documento existe para impedir.
 
 ## Componentes
 
-### Dashboard — 6 de 6
+### Dashboard — 5 de 5
 
-| PWA                    | App nativo                       |     | Observação                                                        |
-| ---------------------- | -------------------------------- | :-: | ----------------------------------------------------------------- |
-| `next-workout-card`    | `dashboard/next-workout-card`    | ✅  |                                                                   |
-| `nutrition-macro-card` | `dashboard/nutrition-macro-card` | ✅  | gradiente vira véu chapado (sem `expo-linear-gradient`)           |
-| `quick-log-actions`    | `dashboard/quick-log-actions`    | ✅  | **corrigido**: o botão "Log Água" do PWA abria o drawer de passos |
-| `steps-card`           | `dashboard/steps-card`           | ✅  |                                                                   |
-| `streak-card`          | `dashboard/streak-card`          | ✅  | textos vêm do `@fatia/api-client` para os dois dizerem igual      |
-| `water-card`           | `dashboard/water-card`           | ✅  | erro do atalho é exibido; no PWA some                             |
-| —                      | `dashboard/macro-bar`            | ➕  | o alvo aqui é único, não faixa mín–máx como em nutrição           |
+| PWA                    | App nativo                       |     | Observação                                                   |
+| ---------------------- | -------------------------------- | :-: | ------------------------------------------------------------ |
+| `next-workout-card`    | `dashboard/next-workout-card`    | ✅  |                                                              |
+| `nutrition-macro-card` | `dashboard/nutrition-macro-card` | ✅  | gradiente vira véu chapado (sem `expo-linear-gradient`)      |
+| `steps-card`           | `dashboard/steps-card`           | ✅  |                                                              |
+| `streak-card`          | `dashboard/streak-card`          | ✅  | textos vêm do `@fatia/api-client` para os dois dizerem igual |
+| `water-card`           | `dashboard/water-card`           | ✅  | erro do atalho é exibido; no PWA some                        |
+| —                      | `dashboard/macro-bar`            | ➕  | o alvo aqui é único, não faixa mín–máx como em nutrição      |
 
-### Nutrição — 10 de 10, mais 3 do scanner
+### Nutrição — 19 de 19, mais 1 do scanner
 
-| PWA                     | App nativo                         |     | Observação                                                                          |
-| ----------------------- | ---------------------------------- | :-: | ----------------------------------------------------------------------------------- |
-| `calories-ring-card`    | `nutrition/calories-ring-card`     | ✅  | anel em `react-native-svg`                                                          |
-| `date-navigator`        | `nutrition/date-navigator`         | ✅  | data em estado, não na URL — senão o voltar do Android percorreria o calendário     |
-| `edit-meal-item-drawer` | `nutrition/edit-meal-item-drawer`  | ✅  |                                                                                     |
-| `food-search-drawer`    | `nutrition/food-search-drawer`     | ✅  | replica o que o teste do web documenta (debounce, formulário manual, 2+ caracteres) |
-| `macro-bar`             | `nutrition/macro-bar`              | ✅  |                                                                                     |
-| `macro-bento-grid`      | `nutrition/macro-bento-grid`       | ✅  |                                                                                     |
-| `meal-list`             | `nutrition/meal-list`              | ✅  | portado; nenhuma rota usa, igual ao web                                             |
-| `meal-timeline`         | `nutrition/meal-timeline`          | ✅  |                                                                                     |
-| `nutrient-targets-card` | `nutrition/nutrient-targets-card`  | ✅  |                                                                                     |
-| `weekly-trend-chart`    | `nutrition/weekly-trend-chart`     | ✅  | barras em `react-native-svg`                                                        |
-| —                       | `nutrition/barcode-camera`         | ➕  | `expo-camera` (o `expo-barcode-scanner` foi descontinuado)                          |
-| —                       | `nutrition/scanned-product-drawer` | ➕  | produto do Open Food Facts + atribuição ODbL na própria tela (ADR 017)              |
-| —                       | `nutrition/barcode`                | ➕  | lógica pura do scanner: trava de leitura repetida, porção, ficha incompleta         |
+| PWA                     | App nativo                           |     | Observação                                                                                                                                                                                                                                                                      |
+| ----------------------- | ------------------------------------ | :-: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `calories-ring-card`    | `nutrition/calories-ring-card`       | ✅  | anel em `react-native-svg`                                                                                                                                                                                                                                                      |
+| `copy-day-drawer`       | `nutrition/copiar-dia-drawer`        | ✅  | copiar o dia inteiro; mesmo texto de resultado (`copyDayText`)                                                                                                                                                                                                                  |
+| `copy-to-day`           | `nutrition/copiar-para-dia`          | ✅  | dia de destino nas setas ◀ ▶ em vez de `<input type="date">`: o app não carrega date picker                                                                                                                                                                                     |
+| `custom-food-drawer`    | `nutrition/alimento-drawer`          | ✅  | novo e edição; apagar confirma por `Alert` em vez do `ConfirmDialog`                                                                                                                                                                                                            |
+| `custom-food-form`      | `nutrition/formulario-de-alimento`   | ✅  | por porção ou por 100 g; a conta e os limites são os de `@fatia/api-client/custom-food`                                                                                                                                                                                         |
+| `custom-foods-card`     | `nutrition/meus-alimentos-card`      | ✅  |                                                                                                                                                                                                                                                                                 |
+| `date-navigator`        | `nutrition/date-navigator`           | ✅  | data em estado, não na URL — senão o voltar do Android percorreria o calendário                                                                                                                                                                                                 |
+| `edit-meal-item-drawer` | `nutrition/edit-meal-item-drawer`    | ✅  | gramas ou medida caseira (`seletor-de-quantidade`, réplica de `amount-picker`); item livre só em gramas                                                                                                                                                                         |
+| `food-search-drawer`    | `nutrition/food-search-drawer`       | ✅  | replica o que o teste do web documenta (debounce, formulário manual, 2+ caracteres, favoritos/recentes, vários itens por abertura, medidas caseiras, refeições salvas, criar alimento pela busca vazia); a lógica comum está em `@fatia/api-client/food-shortcuts` e `portions` |
+| `macro-bar`             | `nutrition/macro-bar`                | ✅  |                                                                                                                                                                                                                                                                                 |
+| `macro-bento-grid`      | `nutrition/macro-bento-grid`         | ✅  |                                                                                                                                                                                                                                                                                 |
+| `meal-actions-drawer`   | `nutrition/acoes-da-refeicao-drawer` | ✅  | copiar refeição e salvar como refeição salva; drawer e não `Alert` (no Android, só 3 botões)                                                                                                                                                                                    |
+| `meal-list`             | `nutrition/meal-list`                | ✅  | portado; nenhuma rota usa, igual ao web                                                                                                                                                                                                                                         |
+| `meal-timeline`         | `nutrition/meal-timeline`            | ✅  |                                                                                                                                                                                                                                                                                 |
+| `nutrient-targets-card` | `nutrition/nutrient-targets-card`    | ✅  |                                                                                                                                                                                                                                                                                 |
+| `weekly-trend-chart`    | `nutrition/weekly-trend-chart`       | ✅  | barras em `react-native-svg`                                                                                                                                                                                                                                                    |
+| `barcode-scanner`       | `nutrition/barcode-camera`           | ✅  | `expo-camera` no app; no PWA, `BarcodeDetector` nativo ou `@zxing/browser` (Safari, Firefox, Chrome desktop), com o campo "Digitar o código" sempre à mão                                                                                                                       |
+| `scanned-product-panel` | `nutrition/scanned-product-drawer`   | ✅  | produto do Open Food Facts + atribuição ODbL na própria tela (ADR 017) e "Guardar em Meus alimentos"; checkbox no PWA, `Pressable` com papel de checkbox no app                                                                                                                 |
+| `barcode-flow`          | `app/(app)/nutrition/scan.tsx`       | ✅  | no PWA é um modo do drawer de busca; no app é tela (câmera inteira), aberta pelo cabeçalho da Nutrição ou pelo botão do drawer                                                                                                                                                  |
+| —                       | `nutrition/barcode`                  | ➕  | só os formatos do `expo-camera`; a lógica pura (trava, porção, ficha incompleta, guardar) é comum em `@fatia/api-client` (`barcode.ts`)                                                                                                                                         |
 
 ### Treino — 14 de 14
 
@@ -119,14 +148,14 @@ esconde a diferença é exatamente o que este documento existe para impedir.
 | —                        | `workout/session/rest-timer`            | ➕  | cronômetro de descanso                                                       |
 | —                        | `workout/session/session-header`        | ➕  | header fixo com "X/Y exercícios"                                             |
 
-### Progresso — 12 de 12
+### Progresso — 13 de 13
 
 | PWA                              | App nativo                        |     | Observação                                         |
 | -------------------------------- | --------------------------------- | :-: | -------------------------------------------------- |
 | `cardio-chart`                   | `progress/cardio-chart`           | ✅  |                                                    |
 | `consistency-card`               | `progress/consistency-card`       | ✅  |                                                    |
 | `exercise-picker-drawer`         | `progress/exercise-picker-drawer` | ✅  |                                                    |
-| `log-steps-drawer`               | `progress/log-steps-drawer`       | ✅  | editar e apagar nos dois (#116)                    |
+| `log-steps-drawer`               | `progress/log-steps-drawer`       | ✅  | editar e apagar nos dois (#116); dia do registro   |
 | `log-water-drawer`               | `progress/log-water-drawer`       | ✅  | idem                                               |
 | `log-weight-drawer`              | `progress/log-weight-drawer`      | ✅  | idem                                               |
 | `personal-records`               | `progress/personal-records`       | ✅  |                                                    |
@@ -136,6 +165,7 @@ esconde a diferença é exatamente o que este documento existe para impedir.
 | `weight-chart`                   | `progress/weight-chart`           | ✅  |                                                    |
 | `WeightBarMini` (dentro da page) | `progress/weight-mini-bars`       | ✅  | extraído para arquivo próprio                      |
 | `log-history`                    | `progress/log-history`            | ✅  | lista de registros recentes, base do editar/apagar |
+| `log-day-field`                  | `progress/seletor-de-dia`         | ✅  | só setas ◀ ▶ no app; o PWA tem também o calendário |
 
 ### Metas e perfil — 4 de 4
 
@@ -149,23 +179,40 @@ esconde a diferença é exatamente o que este documento existe para impedir.
 | —                                    | `profile/export-data-button`                                     | ➕  | LGPD art. 18, V — ver abaixo                                             |
 | —                                    | `profile/delete-account-drawer`                                  | ➕  | LGPD art. 18, VI + exigência das lojas                                   |
 
-### Layout e UI base — 10 de 10
+### Comunidade — 6 de 6
 
-| PWA                   | App nativo          |     | Observação                                                                                                             |
-| --------------------- | ------------------- | :-: | ---------------------------------------------------------------------------------------------------------------------- |
-| `layout/bottom-nav`   | `layout/bottom-nav` | ⚠️  | 5 destinos nos dois, mas o PWA trocou Perfil por Chat (#250); o nativo ainda leva ao Perfil — a épica #247 é só do PWA |
-| `layout/top-bar`      | `layout/top-bar`    | ✅  | ganha seta de voltar — no navegador ela é do navegador                                                                 |
-| `ui/button`           | `ui/button`         | ✅  | todos os tamanhos com 44pt mínimos                                                                                     |
-| `ui/card`             | `ui/card`           | ✅  |                                                                                                                        |
-| `ui/carousel` (embla) | `ui/carousel`       | ✅  | `FlatList` paginada                                                                                                    |
-| `ui/drawer` (vaul)    | `ui/drawer`         | ✅  | `@gorhom/bottom-sheet`                                                                                                 |
-| `ui/form`             | `ui/form`           | ✅  | rótulo vira `accessibilityLabel`, não `<label for>`                                                                    |
-| `ui/input`            | `ui/input`          | ✅  |                                                                                                                        |
-| `ui/label`            | `ui/label`          | ✅  |                                                                                                                        |
-| `ui/tabs`             | `ui/tabs`           | ✅  | implementação própria, sem `pager-view`                                                                                |
-| —                     | `ui/state`          | ➕  | carregamento, erro e vazio centralizados                                                                               |
-| —                     | `layout/screen`     | ➕  | moldura com safe area e pull-to-refresh                                                                                |
-| `legal-doc`           | —                   | ⛔  | só serve às rotas legais, que abrem no navegador                                                                       |
+| PWA                                  | App nativo                      |     | Observação                                                |
+| ------------------------------------ | ------------------------------- | :-: | --------------------------------------------------------- |
+| `community/consent-form`             | `community/consent-form`        | ✅  | checkbox nativo no PWA; `Pressable` com papel de checkbox |
+| `community/join-by-code-drawer`      | `community/join-by-code-drawer` | ✅  | código → prévia → consentimento no mesmo sheet            |
+| `community/invite` (cartão e aceite) | dentro de `app/c/[token].tsx`   | ✅  | a prévia deslogada vem da API pública nas duas pontas     |
+| `org/org-shell`                      | `org/org-panel`                 | ✅  | barra lateral/abas na web; abas no topo no app            |
+| `org/insights-card`                  | `org/insights-card`             | ✅  | recorte e período em pílulas; célula < 5 tracejada        |
+| `sharing/member-reading`             | `sharing/member-reading`        | ✅  | a mesma leitura auditada, uma categoria por vez           |
+
+### Layout e UI base — 15 de 15
+
+| PWA                   | App nativo                  |     | Observação                                                                                                                                                                                                                              |
+| --------------------- | --------------------------- | :-: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `layout/bottom-nav`   | `layout/bottom-nav`         | ✅  | Nutrição · Treino · [ + ] · Comunidade · Mais, de `navigation.ts` do api-client; o "+" central é o Registrar; sem aba Início (a barra de topo volta a ele)                                                                              |
+| `layout/menu-mais`    | `layout/menu-mais`          | ✅  | mesmas seções de `menuSections`; o Chat aparece pela disponibilidade da instância (com cadeado no Free), e "Conectar sua IA" leva a `/profile/tokens`                                                                                   |
+| `layout/side-nav`     | —                           | ⛔  | só o desktop do PWA                                                                                                                                                                                                                     |
+| `layout/quick-add`    | `layout/registro-rapido`    | ✅  | o menu Registrar; refeição pela hora e treino que retoma vêm do `@fatia/api-client`. O gatilho é o "+" da barra (`useQuickAdd` no PWA, `useRegistroRapido` aqui). O treino retoma em `/workout/session/:id` aqui e em `/workout` no PWA |
+| `layout/app-top-bar`  | `layout/top-bar`            | ✅  | barra de topo estilo iOS em toda tela menos o Início: voltar hierárquico por `routeInfo` (api-client), título pequeno, ações à direita; `onBack` na sessão de treino                                                                    |
+| `ui/button`           | `ui/button`                 | ✅  | todos os tamanhos com 44pt mínimos                                                                                                                                                                                                      |
+| `ui/card`             | `ui/card`                   | ✅  |                                                                                                                                                                                                                                         |
+| `ui/carousel` (embla) | `ui/carousel`               | ✅  | `FlatList` paginada                                                                                                                                                                                                                     |
+| `ui/drawer` (vaul)    | `ui/drawer`                 | ✅  | `@gorhom/bottom-sheet`                                                                                                                                                                                                                  |
+| `ui/form`             | `ui/form`                   | ✅  | rótulo vira `accessibilityLabel`, não `<label for>`                                                                                                                                                                                     |
+| `ui/input`            | `ui/input`                  | ✅  |                                                                                                                                                                                                                                         |
+| `ui/label`            | `ui/label`                  | ✅  |                                                                                                                                                                                                                                         |
+| `ui/tabs`             | `ui/tabs`                   | ✅  | implementação própria, sem `pager-view`                                                                                                                                                                                                 |
+| `ui/skeleton`         | `ui/state` (`LoadingState`) | ✅  | o PWA mostra o formato do conteúdo; o nativo, o indicador central                                                                                                                                                                       |
+| `ui/empty-state`      | `ui/state` (`EmptyState`)   | ✅  | título, texto com o próximo passo e ação                                                                                                                                                                                                |
+| `ui/toaster` (sonner) | `ui/toast`                  | ✅  | aviso com "Desfazer" (`UNDO_MS`). No PWA, dentro de drawer o "Desfazer" fica na lista (`useUndoSlot`): o vaul deixa a página inerte; o nativo usa sempre o `useToast`, acima dos sheets                                                 |
+| —                     | `ui/state`                  | ➕  | carregamento, erro e vazio centralizados                                                                                                                                                                                                |
+| —                     | `layout/screen`             | ➕  | moldura com safe area e pull-to-refresh                                                                                                                                                                                                 |
+| `legal-doc`           | —                           | ⛔  | só serve às rotas legais, que abrem no navegador                                                                                                                                                                                        |
 
 ---
 
@@ -194,8 +241,8 @@ exigência de loja.
 | Feedback tátil e cronômetro de descanso           | #126                                                                                   |
 | Confirmação antes de apagar                       | em tela de toque o alvo erra, e a API não desfaz                                       |
 | Estados de erro onde o web deixa a tela em branco | a auditoria pede estados equivalentes; "equivalente a nada" não serve                  |
-| Scanner de código de barras                       | #140 — e não é escolha: o PWA depende de `BarcodeDetector`, que o Safari não tem       |
 | Notificação local do fim do descanso              | #182 — o descanso é o momento em que o celular vai para o bolso                        |
+| Avisos da comunidade (push)                       | Fase 8c, ADR 033 — o PWA no iOS não entrega push com confiança                         |
 | Registro de refeição por foto                     | #139 — depende de câmera e galeria; ver abaixo                                         |
 
 **Registro por foto (#139) não é dívida de paridade — é dependência de aparelho.**
@@ -215,10 +262,10 @@ gota e rótulo de água, abria o drawer de **passos**. Corrigido nos dois.
 
 **Ganho que voltou para o PWA:** editar e apagar registro de peso, passos e água
 (#116) nasceu aqui e foi portado de volta na direção inversa da habitual. O
-`log-history` do web é o mesmo componente traduzido para DOM, com uma diferença:
-a confirmação de exclusão é inline na própria linha, não um diálogo do sistema —
-`ui/` não tem `alert-dialog`, e um `window.confirm` sobre um sheet do vaul rouba
-o foco e, no iOS instalado como PWA, aparece com o nome do domínio.
+`log-history` do web é o mesmo componente traduzido para DOM. Desde a Fase 3 os
+dois apagam sem pergunta e oferecem "Desfazer" por 5 s (registros pequenos; ver
+`docs/DESIGN.md`): no PWA o aviso fica no topo da lista, porque o drawer modal
+deixa o resto da página inerte; no app é o `useToast`.
 
 **Reordenar exercício do plano saiu desta tabela (#183).** Estava listada como
 ganho do mobile — "existe na API e no MCP, não no PWA". Era falso: o PWA
@@ -252,6 +299,92 @@ leitor de tela — o TalkBack e o VoiceOver anunciam a mudança pelo
 
 ---
 
+## Comunidade — o convite abre o app
+
+O convite é o mesmo link nas duas pontas: `https://<app>/c/<token>` no PWA e, no app, `fatia://c/<token>`
+ou o link universal quando o build tem `APP_LINKS_HOST` (e a web serve
+`/.well-known/apple-app-site-association` e `/.well-known/assetlinks.json` com `APPLE_TEAM_ID` e
+`ANDROID_CERT_SHA256`). Os textos e as regras (`groupsApi`, `community-consent`) vêm do api-client.
+
+A diferença é o login: no PWA o `?next=` passa por um cookie e volta ao link; no app o login abre o
+navegador do sistema e o app pode ser fechado no meio, então o token fica no cofre
+(`src/community/pending-invite.ts`) e o `(app)/_layout` volta ao convite quando a pessoa está dentro
+e já passou pelo assistente. O consentimento é um `Pressable` com papel de checkbox — não há
+Switch nem Checkbox no app.
+
+## Painel da comunidade — a equipe no celular
+
+O painel (Fase 6) existe no app pensando em quem atende de pé, entre um aluno e outro: as seções do
+papel viram abas no topo (`OrgPanel`), as regras e os textos vêm do api-client
+(`community-panel.ts`, `orgApi`, `seatsApi`, `insightsApi`), e as escolhas que na web são `Select`
+viram pílulas (`Choice`). Diferenças de propósito:
+
+- **Assentos:** o app mostra os assentos, quem usa, tira assento e lista as faturas, mas **não
+  compra, não muda a quantidade e não cancela** — é pagamento fora da loja, e o app não mostra
+  link de pagamento externo (mesma regra do Plano PRO). Dar assento fica em Membros › Gerenciar.
+- **Convite em lote:** só colando a lista; subir `.csv` é da web.
+- **Comportamento (add-on):** o painel pago e o export CSV ficam na web; o app mostra a retenção.
+- **Planos e dicas (Fase 7a):** iguais à web. A imagem vem da galeria (`expo-image-picker`, que
+  reencoda em JPEG e resolve o HEIC) e vai direto ao bucket pela URL assinada, como no navegador;
+  o markdown das dicas é desenhado pelos mesmos tokens (`parseMarkdownLite`), nunca HTML.
+- **Exercícios da comunidade (Fase 7b):** iguais à web, com duas diferenças. O vídeo do tutorial
+  abre no navegador do sistema (`expo-web-browser`), não num player dentro do app: um player
+  nativo (`expo-video`) é dependência nativa nova e pediria build novo. E o vídeo vem da galeria:
+  gravar pela câmera do Fatia pediria a permissão de microfone. O envio lê o arquivo do disco
+  (`createUploadTask`), com progresso, para um vídeo grande não ficar na memória.
+- **Agente da comunidade (Fase 7c):** o dono configura no app como na web (nome, avatar,
+  orientações, ligar e desligar), com "Ligado / Desligado" em pílulas. Desde a Fase 9e o membro
+  escolhe o agente também no chat do app.
+- **Desafios da comunidade (Fase 8a):** o membro vê a prévia na comunidade, a lista e o detalhe
+  com o ranking, entra com apelido e sai, como na web. No painel, marcar um desafio usa escolhas
+  prontas — começa hoje, amanhã ou na próxima segunda; dura 7, 14 ou 30 dias
+  (`components/challenges/window-choice.ts`) — em vez do calendário; datas livres e editar um
+  desafio marcado ficam na web. Encerrar e apagar existem nos dois.
+- **Mural da comunidade (Fase 8b):** nos dois, tocar numa comunidade abre o mural, com as abas
+  Mural, Desafios e Planos e dicas; o que era a aba Início (sobre, o que compartilho, quem
+  acessou, sair) fica numa tela discreta atrás da engrenagem do topo, e o painel da equipe no ícone
+  ao lado. Publicar com até 4 imagens da galeria, reagir, comentar e denunciar são
+  iguais; o menu do post é um `Alert` (a web abre um diálogo). A Moderação do painel (regra do
+  mural, denúncias, removidos e banidos) existe nos dois.
+
+## Chat no app (Fase 9e)
+
+O app não tem o runtime do assistant-ui que a web usa. A conversa vira estado puro no api-client
+(`applyChatFrame`, `threadFromHistory`, testados sem tela) e a `ChatSession`
+(`src/chat/chat-session.ts`) cuida do fio: abrir, enviar, responder pausa, parar, reconectar.
+
+| Recurso da web                                               | No app | Como                                                                                        |
+| ------------------------------------------------------------ | :----: | ------------------------------------------------------------------------------------------- |
+| Resposta token a token                                       |   ✅   | `expo/fetch` só para o stream (`streamFetch` do transporte); o resto segue no `fetch` do RN |
+| Raciocínio recolhido, tools com estado e título              |   ✅   | `catalog` dá o título; ✓, girando ou ✗ com o motivo                                         |
+| Cartões das tools (métrica, evolução, relatório, comparação) |   ✅   | `ArtifactCard`, gráfico com o kit do ADR 012                                                |
+| Plano do turno                                               |   ✅   | `PlanCard`                                                                                  |
+| Pausas: confirmar escrita com resumo, pergunta, continuar    |   ✅   | `PauseCard`, mesmos ajudantes da web (`askFieldsOf`, `questionAnswer`)                      |
+| Parar, tentar de novo, erro com o caminho certo              |   ✅   | parar vai ao servidor (`stopChatRun`); 402 leva ao plano; cota diz quando volta             |
+| Voto 👍/👎, copiar, tempo da resposta                        |   ✅   | o motivo do 👎 fica só na web                                                               |
+| Agente da comunidade: escolha na conversa nova, nome no topo |   ✅   | pílulas "Quem responde"                                                                     |
+| Foto (câmera ou galeria, até 3)                              |   ✅   | JPEG `quality: 0.6`; a API tira o EXIF de novo                                              |
+| Ditado                                                       |   ✅   | `expo-audio` (módulo novo, permissão de microfone); o texto volta ao campo, não envia       |
+| Memórias                                                     |   ✅   | tela própria                                                                                |
+| Resposta segue ao trocar de aba / F5                         |   ✅   | sessão no layout; "Respondendo…" acima da barra; ao voltar do segundo plano, `live?after=`  |
+| Resposta pronta com o app fechado                            |   ➕   | push `CHAT` "Sua resposta está pronta." — a web não tem push                                |
+| Busca nas conversas                                          |   ❌   | a lista do app não filtra; fica para quando houver muitas                                   |
+| Motivo do 👎 e nota                                          |   ❌   | só na web                                                                                   |
+
+## Plano PRO — a mesma tela, outro caixa
+
+A tela "Meu plano" mostra o mesmo plano que o PWA (`billingApi.plan`, `PRO_BENEFITS`,
+`FREE_INCLUDES`, `planSummary` do api-client), mas a compra é diferente de propósito: as lojas
+exigem compra in-app, então o app vende pela App Store / Google Play via RevenueCat
+(`src/billing/purchases.ts`) e **nunca mostra link de pagamento externo**. Quem assinou pela web vê
+"gerencie pela web", sem link. A compra só aparece com `EXPO_PUBLIC_IAP_ENABLED=true` e as chaves
+`EXPO_PUBLIC_REVENUECAT_*` no build; sem isso (o piloto, o Expo Go) a tela não vende nada e diz que o
+PRO chega pela comunidade, sem preço e sem apontar para a web (`src/billing/plan-offer.ts`).
+
+O cadeado: a câmera da Nutrição continua visível no Free, com cadeado, e leva a
+`/plan?recurso=foto`; a tela de foto trata o 402 com "Ver o plano PRO". O Chat do menu leva a
+`/plan?recurso=chat` no Free, e o 402 dentro da conversa mostra "Ver o plano PRO".
+
 ## O que o React Native impôs
 
 Diferenças que não são escolha de produto — são consequência da plataforma. Estão
@@ -278,7 +411,7 @@ por `style`.
 formatados à mão ou com `date-fns` + locale `ptBR`, nunca com `toLocaleString`.
 
 **Cores fora da paleta, de propósito.** Os macros mantêm o código de cor do
-produto (proteína `#4b8eff`, gordura `#f43f5e`) e os estados de aviso usam
+produto (proteína `#4b8eff`, gordura `#ffb4ab`) e os estados de aviso usam
 âmbar/vermelho claros: `--destructive` é `#93000a`, que some como preenchimento
 de barra sobre `#131313`. Texto de erro continua em `text-destructive`.
 
@@ -292,6 +425,32 @@ rodando, e deve ser feito antes de publicar:
 - [ ] Os números batem com o PWA para a mesma conta, no mesmo dia
 - [ ] Login, refresh e logout nos dois sistemas, com o token saindo do cofre
 - [ ] Sheet de busca de alimento com o teclado aberto em tela pequena (iPhone SE)
+- [ ] Estrela de favorito e "Concluir · N itens" no sheet de busca (toque de 44 pt, leitor de tela)
+- [ ] Chips de medida caseira, botões − e + (44 pt) e "Nova medida" com o teclado aberto no sheet
+- [ ] Formulário de alimento no sheet com o teclado numérico aberto (vírgula decimal), e "Cadastrar à mão" do scanner abrindo Meus alimentos
+- [ ] Botão "Ler código de barras" do sheet de busca abrindo o scanner no mesmo dia e tipo, e "Guardar em Meus alimentos" fazendo o produto aparecer na busca
+- [ ] "Mais ações" da refeição (copiar, salvar) e "Copiar dia": setas do dia de destino e "Ver dia" trocando a data da tela
+- [ ] Dia de água, peso e passos: seta "Próximo dia" apagada em hoje, e o registro de ontem aparecendo na lista com a data certa
+- [ ] Barra nova: "+" central abrindo o Registrar (treino retomando a sessão aberta), "Mais" abrindo o menu com rolagem no sheet de 85%, e a aba acesa certa em Metas/Perfil/Progresso
+- [ ] Barra de topo: área segura no iPhone com notch, título longo com reticências, ações à direita com 44 pt, "voltar" subindo pelo mapa até o Início (inclusive aberto por link direto) e a sessão de treino perguntando antes de sair
+- [ ] Assistente de primeira vez: conta nova cai nele, "Pular por agora" não volta a perguntar, e "Recalcular com meus dados" volta às metas
+- [ ] "Desfazer" do aviso no rodapé: apagar água/peso/passos no sheet e item na timeline, tocar em Desfazer dentro de 5 s e o registro voltar (o aviso tem de ficar acima do sheet e da barra)
+- [ ] Meu plano (dev build com `EXPO_PUBLIC_REVENUECAT_*` e conta de teste da loja): pacotes com o preço da loja, compra virando PRO na hora (`revenuecat/sync`), "Restaurar compras", "Gerenciar na loja", e a câmera da Nutrição saindo do cadeado
+- [ ] Logout trocando a conta da RevenueCat (`Purchases.logOut`) e o login seguinte com outra pessoa não herdando a compra
+- [ ] Convite: `fatia://c/<token>` abrindo a tela do convite; deslogado, entrar e voltar ao convite (inclusive fechando o app no meio do login e passando pelo assistente)
+- [ ] Link universal (`APP_LINKS_HOST` no build, `APPLE_TEAM_ID`/`ANDROID_CERT_SHA256` na web): `https://<app>/c/<token>` abrindo o app em vez do navegador
+- [ ] Comunidade: checkboxes do consentimento com leitor de tela (estado marcado anunciado), "Entrar com código" com o teclado aberto no sheet, e "Sair" voltando à lista
+- [ ] Painel da comunidade (conta da equipe): abas no topo rolando sem cortar, "Aprovar" e "Gerenciar" com 44 pt, `Alert` de papel e assento, `Share` do link de convite e do código, lote colado com o teclado aberto, e o "voltar" do painel levando à comunidade
+- [ ] Planos e dicas: escolher imagem da galeria (iPhone com HEIC e Android sem tipo), ver a capa depois de enviar, publicar um treino e adotá-lo com outra conta, e o link de uma dica abrindo no navegador
+- [ ] Exercícios da comunidade: enviar um vídeo MOV de iPhone e um MP4 de Android (com a barra de progresso andando e o app em primeiro plano), até 4 fotos de uma vez, "Assistir" abrindo o vídeo assinado, e "Na minha academia" nos seletores de exercício
+- [ ] Agente da comunidade: trocar o avatar pela galeria, salvar ligado e conferir no chat da web que o agente aparece para um membro
+- [ ] Desafios: marcar pelo painel (hoje, 7 dias), entrar com outra conta com apelido, ver a própria linha no ranking, puxar para atualizar, sair pelo `Alert` e encerrar pelo painel
+- [ ] Mural: publicar com 2 imagens da galeria (iPhone com HEIC), reagir, comentar com o teclado aberto, denunciar pelo `Alert`, e a dona removendo e restaurando pela Moderação
+- [ ] Avisos (build com `EAS_PROJECT_ID` e API com `PUSH_ENABLED=true`): ligar em Perfil → Notificações (diálogo do sistema no iOS e no Android 13+), receber o comentário de outra conta com o app fechado e em primeiro plano, o toque abrindo o mural, negar a permissão e ver "Abrir configurações", e sair da conta parando os avisos
+- [ ] Chat: pergunta com resposta chegando aos pedaços, trocar de aba no meio e ver "Respondendo…", voltar e ver a resposta; mandar o app para o segundo plano no meio e voltar (a resposta continua de onde estava); "Parar resposta"
+- [ ] Chat: confirmar uma escrita (registrar refeição) com o resumo, responder uma pergunta do assistente, foto pela câmera e pela galeria, ditado (diálogo do microfone na primeira vez, recusar e ver o aviso), memórias e apagar uma
+- [ ] Chat com o app fechado (dev build com push): mandar pergunta, fechar o app e receber "Sua resposta está pronta."; o toque abre a conversa
+- [ ] Cores dos macros e de erro (`cores.ts`) iguais às do PWA lado a lado
 - [ ] Diagrama muscular destacando os grupos certos
 - [ ] Aparelho de entrada, não só simulador — os gráficos são o ponto a observar
 - [ ] Leitor de tela e fonte ampliada nos dois sistemas

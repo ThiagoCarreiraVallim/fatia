@@ -3,15 +3,10 @@
 import { useState } from 'react';
 import { Droplet, MoreHorizontal } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { progressApi, type TodaySummary } from '@fatia/api-client';
+import { formatVolume, progressApi, type TodaySummary } from '@fatia/api-client';
 import { LogWaterDrawer } from '@/components/progress/log-water-drawer';
 
 const QUICK_ML = [250, 500, 750] as const;
-
-function formatVolume(ml: number): string {
-  if (ml >= 1000) return `${(ml / 1000).toFixed(1)} L`;
-  return `${ml} mL`;
-}
 
 export function WaterCard({ data }: { data: TodaySummary['water'] }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -31,7 +26,7 @@ export function WaterCard({ data }: { data: TodaySummary['water'] }) {
   });
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-white/5 bg-card p-5 space-y-4">
+    <div className="relative overflow-hidden rounded-xl border border-subtle bg-card p-5 space-y-4">
       <div
         className="pointer-events-none absolute inset-0"
         style={{
@@ -41,7 +36,7 @@ export function WaterCard({ data }: { data: TodaySummary['water'] }) {
 
       <div className="relative flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-[18px] font-semibold text-foreground">
-          <Droplet size={18} className="text-blue-400" />
+          <Droplet size={18} className="text-water" />
           Hidratação
         </h2>
         <button
@@ -65,7 +60,7 @@ export function WaterCard({ data }: { data: TodaySummary['water'] }) {
             </span>
           )}
           {data.goalReached && (
-            <span className="ml-auto rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-300">
+            <span className="ml-auto rounded-full bg-water/15 px-2 py-0.5 text-[10px] font-bold text-water">
               META BATIDA
             </span>
           )}
@@ -74,8 +69,12 @@ export function WaterCard({ data }: { data: TodaySummary['water'] }) {
         {pct !== null && (
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
             <div
-              className="h-full bg-blue-400 transition-all"
+              className="h-full bg-water transition-all"
               style={{ width: `${pct}%` }}
+              role="progressbar"
+              aria-label="Meta de água"
+              aria-valuemin={0}
+              aria-valuemax={100}
               aria-valuenow={pct}
             />
           </div>
@@ -89,7 +88,7 @@ export function WaterCard({ data }: { data: TodaySummary['water'] }) {
             type="button"
             disabled={quickAdd.isPending}
             onClick={() => quickAdd.mutate(ml)}
-            className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-sm font-bold text-blue-300 transition-colors hover:bg-blue-500/20 disabled:opacity-50"
+            className="rounded-xl border border-water/30 bg-water/10 px-3 py-2 text-sm font-bold text-water transition-colors hover:bg-water/20 disabled:opacity-50"
           >
             +{ml} mL
           </button>

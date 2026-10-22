@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarRange } from 'lucide-react';
 import { workoutApi, type TrainingBlock, type TrainingBlockWeek } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const FOCO_CURTO: Record<TrainingBlockWeek['focus'], string> = {
   accumulation: 'Acúmulo',
@@ -47,12 +48,12 @@ export function BlockTimeline() {
   });
 
   if (block.isLoading) {
-    return <div className="h-28 animate-pulse rounded-2xl bg-muted" data-testid="block-loading" />;
+    return <Skeleton data-testid="block-loading" className="h-28 rounded-2xl bg-muted" />;
   }
 
   if (!block.data) {
     return (
-      <div className="rounded-2xl border border-white/5 bg-card p-4">
+      <div className="rounded-2xl border border-subtle bg-card p-4">
         <p className="text-sm font-bold text-foreground">Periodização em blocos</p>
         <p className="mt-1 text-xs text-muted-foreground">
           Quatro semanas com carga e volume planejados, terminando em deload. Se você perder uma
@@ -96,7 +97,7 @@ function BlockCard({ block, onEncerrar }: { block: TrainingBlock; onEncerrar: ()
   const [confirmando, setConfirmando] = useState(false);
 
   return (
-    <section className="rounded-2xl border border-white/5 bg-card p-4">
+    <section className="rounded-2xl border border-subtle bg-card p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
@@ -114,7 +115,7 @@ function BlockCard({ block, onEncerrar }: { block: TrainingBlock; onEncerrar: ()
             <button
               type="button"
               onClick={onEncerrar}
-              className="text-[11px] font-extrabold text-destructive underline"
+              className="text-[11px] font-extrabold text-danger underline"
             >
               Confirmar
             </button>

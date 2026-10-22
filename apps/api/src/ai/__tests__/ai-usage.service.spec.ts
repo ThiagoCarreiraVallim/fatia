@@ -190,14 +190,16 @@ describe('AiUsageService.cotaDoUsuario', () => {
   });
 });
 
-describe('AiUsageService.registrar', () => {
+describe('AiUsageService.record', () => {
   it('precifica pelo modelo quando ele está na tabela', async () => {
     const { service, create } = montar({});
 
-    await service.registrar('user-a', {
+    await service.record('user-a', {
       feature: 'chat',
       model: 'gateway/modelo',
       units: { inputUnits: 1_000_000, outputUnits: 0 },
+      paidBy: 'INSTANCE',
+      groupId: null,
     });
 
     expect(create).toHaveBeenCalledWith({
@@ -207,14 +209,38 @@ describe('AiUsageService.registrar', () => {
         model: 'gateway/modelo',
         costMicros: 3_000_000,
         pricingKnown: true,
+        paidBy: 'INSTANCE',
+        groupId: null,
       },
+    });
+  });
+
+  it('grava quem pagou quando o portão informa (ADR 024)', async () => {
+    const { service, create } = montar({});
+
+    await service.record('user-a', {
+      feature: 'meal_photo',
+      model: null,
+      units: {},
+      paidBy: 'USER',
+      groupId: null,
+    });
+
+    expect(create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ feature: 'meal_photo', paidBy: 'USER', groupId: null }),
     });
   });
 
   it('sem modelo reportado grava custo NÃO MEDIDO, não custo zero', async () => {
     const { service, create } = montar({});
 
-    await service.registrar('user-a', { feature: 'chat', model: null, units: {} });
+    await service.record('user-a', {
+      feature: 'chat',
+      model: null,
+      units: {},
+      paidBy: 'INSTANCE',
+      groupId: null,
+    });
 
     const dados = create.mock.calls[0][0].data;
     // Os dois juntos são o ponto: `costMicros: 0` sozinho é indistinguível de uma
@@ -228,10 +254,12 @@ describe('AiUsageService.registrar', () => {
   it('modelo fora da tabela de preço também é custo não medido', async () => {
     const { service, create } = montar({});
 
-    await service.registrar('user-a', {
+    await service.record('user-a', {
       feature: 'chat',
       model: 'modelo/trocado-no-painel',
       units: { inputUnits: 5_000, outputUnits: 5_000 },
+      paidBy: 'INSTANCE',
+      groupId: null,
     });
 
     expect(create.mock.calls[0][0].data).toMatchObject({ costMicros: 0, pricingKnown: false });
@@ -242,10 +270,12 @@ describe('AiUsageService.registrar', () => {
     // como zero faria a chamada mais cara do dia entrar como grátis.
     const { service, create } = montar({});
 
-    await service.registrar('user-a', {
+    await service.record('user-a', {
       feature: 'chat',
       model: 'gateway/modelo',
       units: { outputUnits: 300 },
+      paidBy: 'INSTANCE',
+      groupId: null,
     });
 
     expect(create.mock.calls[0][0].data).toMatchObject({ costMicros: 0, pricingKnown: false });

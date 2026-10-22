@@ -20,11 +20,17 @@ import { ConversationService } from '../../chat/conversation.service';
 import { MemoryService } from '../../chat/memory/memory.service';
 import { GoalsService } from '../../goals/goals.service';
 import { FoodService } from '../../nutrition/food.service';
+import { FoodShortcutsService } from '../../nutrition/food-shortcuts.service';
+import { FoodPortionService } from '../../nutrition/food-portion.service';
 import { MealItemService } from '../../nutrition/meal-item.service';
 import { MealService } from '../../nutrition/meal.service';
+import { MealCopyService } from '../../nutrition/meal-copy.service';
+import { MealTemplateService } from '../../nutrition/meal-template.service';
+import { dateInTz } from '../../progress/helpers/date-tz';
 import { NutrientTargetService } from '../../nutrition/nutrient-target.service';
 import { NutritionSummaryService } from '../../nutrition/nutrition-summary.service';
 import { UserGoalsService } from '../../nutrition/user-goals.service';
+import { OnboardingService } from '../../nutrition/onboarding.service';
 import { ProgressService } from '../../progress/progress.service';
 import { StepLogService } from '../../progress/step-log.service';
 import { WaterLogService } from '../../progress/water-log.service';
@@ -33,6 +39,7 @@ import { ExerciseService } from '../../workout/exercise.service';
 import { SessionSetService } from '../../workout/session-set.service';
 import { WorkoutPlanService } from '../../workout/workout-plan.service';
 import { WorkoutSessionService } from '../../workout/workout-session.service';
+import { silentNotifications } from '../../notifications/__tests__/silent-notifications';
 
 /**
  * Isolamento multi-tenant, ponta a ponta contra Postgres real (issue #92).
@@ -57,9 +64,14 @@ describe('isolamento entre usuários', () => {
 
   const meals = new MealService(prisma);
   const foods = new FoodService(prisma);
+  const shortcuts = new FoodShortcutsService(prisma, foods);
+  const portions = new FoodPortionService(prisma, foods);
   const mealItems = new MealItemService(prisma, meals);
+  const mealCopies = new MealCopyService(prisma, meals);
+  const mealTemplates = new MealTemplateService(prisma, meals);
   const nutrientTargets = new NutrientTargetService(prisma);
   const userGoals = new UserGoalsService(prisma);
+  const onboarding = new OnboardingService(prisma);
   const weights = new WeightLogService(prisma);
   const steps = new StepLogService(prisma);
   const waters = new WaterLogService(prisma);
@@ -72,8 +84,8 @@ describe('isolamento entre usuários', () => {
   const sets = new SessionSetService(prisma);
   const links = new ProfessionalLinkService(prisma);
   const access = new ProfessionalAccessService(prisma, new AccessAuditService(prisma));
-  const groups = new GroupService(prisma);
-  const memberships = new MembershipService(prisma, links);
+  const groups = new GroupService(prisma, links);
+  const memberships = new MembershipService(prisma, links, silentNotifications);
   const consent = new ConsentService(prisma, links);
   const conversas = new ConversationService(prisma);
   const memorias = new MemoryService(prisma);
@@ -112,6 +124,9 @@ describe('isolamento entre usuários', () => {
     mealId: '',
     mealItemId: '',
     customFoodId: 0,
+    /** Alimento público (como um da TACO): os dois enxergam, cada um com a sua medida. */
+    publicFoodId: 0,
+    portionA: '',
     customExerciseId: 0,
     goalId: '',
     weightLogId: '',
@@ -210,7 +225,8 @@ describe('isolamento entre usuários', () => {
     // O grupo é do **user-B**, e o user-A é aluno dele. Isso é de propósito:
     // todos os casos deste arquivo passam a rodar com o user-B na posição de
     // dono da academia do user-A, e continuam exigindo recusa. Dono de grupo
-    // não lê dado de aluno — a garantia sai de graça em ~50 casos.
+    // só lê com o vínculo que o aluno consentiu (ADR 026), e os services de
+    // domínio nunca — a garantia sai de graça em ~50 casos.
     const group = await prisma.group.create({
       data: {
         type: GroupType.SPONSORED,
@@ -265,6 +281,24 @@ describe('isolamento entre usuários', () => {
       fatPer100g: 1,
     });
     owned.customFoodId = customFood.id;
+    await shortcuts.setFavorite(owned.userA, customFood.id, true);
+
+    owned.publicFoodId = (
+      await prisma.food.create({
+        data: {
+          name: `${stamp}-publico`,
+          searchName: `${stamp}-publico`,
+          source: 'TACO',
+          kcalPer100g: 100,
+          proteinPer100g: 1,
+          carbsPer100g: 20,
+          fatPer100g: 1,
+        },
+      })
+    ).id;
+    owned.portionA = (
+      await portions.create(owned.userA, owned.publicFoodId, { label: 'concha de A', grams: 140 })
+    ).id;
 
     const meal = await meals.create(owned.userA, {
       mealType: MealType.LUNCH,
@@ -292,7 +326,7 @@ describe('isolamento entre usuários', () => {
       fatMaxG: 80,
     });
 
-    const weightLog = await weights.create({ weightKg: 80 }, owned.userA);
+    const weightLog = await weights.create({ weightKg: 80 }, owned.userA, TZ);
     owned.weightLogId = weightLog.id;
 
     const stepLog = await steps.create({ date: TODAY, steps: 9000 }, owned.userA, TZ);
@@ -369,6 +403,7 @@ describe('isolamento entre usuários', () => {
         },
       })
       .catch(() => undefined);
+    await prisma.food.deleteMany({ where: { id: owned.publicFoodId } }).catch(() => undefined);
     await prisma.exercise
       .deleteMany({ where: { id: owned.sharedExerciseId } })
       .catch(() => undefined);
@@ -461,6 +496,29 @@ describe('isolamento entre usuários', () => {
       expect(found.map((food) => food.id)).not.toContain(owned.customFoodId);
     });
 
+    it('list_my_foods não traz favorito nem recente do user-A', async () => {
+      // Sanidade: para o dono, o alimento aparece — senão o caso abaixo passaria vazio.
+      const deA = await shortcuts.list(owned.userA, {});
+      expect(deA.favorites.map((food) => food.id)).toContain(owned.customFoodId);
+
+      const deB = await shortcuts.list(owned.userB, {});
+      const ids = [...deB.favorites, ...deB.recent].map((food) => food.id);
+      expect(ids).not.toContain(owned.customFoodId);
+    });
+
+    it('get_food e search_food não mostram a medida caseira do user-A', async () => {
+      // Sanidade: o dono vê a própria medida.
+      const deA = await foods.get(owned.userA, owned.publicFoodId);
+      expect(deA.portions.map((p) => p.id)).toContain(owned.portionA);
+
+      const deB = await foods.get(owned.userB, owned.publicFoodId);
+      expect(deB.portions.map((p) => p.id)).not.toContain(owned.portionA);
+      const busca = await foods.search(owned.userB, { q: 'publico' });
+      const doPublico = busca.find((food) => food.id === owned.publicFoodId);
+      expect(doPublico?.portions.map((p) => p.id)).not.toContain(owned.portionA);
+      await expect(portions.list(owned.userB, owned.publicFoodId)).resolves.toEqual([]);
+    });
+
     it('search_exercise não retorna o exercício custom do user-A', async () => {
       const found = await exercises.search(owned.userB, {});
       expect(found.map((exercise) => exercise.id)).not.toContain(owned.customExerciseId);
@@ -501,10 +559,46 @@ describe('isolamento entre usuários', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
+    it('list_custom_foods não mostra o alimento de outro', async () => {
+      const deB = await foods.listCustom(owned.userB);
+      expect(deB.map((f) => f.id)).not.toContain(owned.customFoodId);
+
+      const deA = await foods.listCustom(owned.userA);
+      expect(deA.map((f) => f.id)).toContain(owned.customFoodId);
+      expect(deA.every((f) => f.createdByUserId === owned.userA)).toBe(true);
+    });
+
     it('delete_custom_food recusa', async () => {
       await expect(foods.deleteCustom(owned.userB, owned.customFoodId)).rejects.toThrow(
         NotFoundException,
       );
+    });
+
+    it('set_food_favorite recusa o alimento custom de outro', async () => {
+      await expect(shortcuts.setFavorite(owned.userB, owned.customFoodId, true)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('delete_food_portion recusa a medida de outro', async () => {
+      await expect(portions.remove(owned.userB, owned.portionA)).rejects.toThrow(NotFoundException);
+      await expect(prisma.foodPortion.count({ where: { id: owned.portionA } })).resolves.toBe(1);
+    });
+
+    it('log_meal recusa registrar com a medida de outro', async () => {
+      await expect(
+        meals.create(owned.userB, {
+          mealType: MealType.SNACK,
+          eatenAt: `${TODAY}T16:00:00Z`,
+          items: [{ foodId: owned.publicFoodId, portionId: owned.portionA, quantity: 1 }],
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('create_food_portion recusa o alimento custom de outro', async () => {
+      await expect(
+        portions.create(owned.userB, owned.customFoodId, { label: 'x', grams: 10 }),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('update_custom_exercise recusa', async () => {
@@ -530,9 +624,9 @@ describe('isolamento entre usuários', () => {
     });
 
     it('update_weight_log recusa', async () => {
-      await expect(weights.update(owned.weightLogId, { weightKg: 1 }, owned.userB)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        weights.update(owned.weightLogId, { weightKg: 1 }, owned.userB, TZ),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('delete_weight_log recusa', async () => {
@@ -542,7 +636,7 @@ describe('isolamento entre usuários', () => {
     });
 
     it('update_step_log recusa', async () => {
-      await expect(steps.update(owned.stepLogId, { steps: 1 }, owned.userB)).rejects.toThrow(
+      await expect(steps.update(owned.stepLogId, { steps: 1 }, owned.userB, TZ)).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -552,7 +646,7 @@ describe('isolamento entre usuários', () => {
     });
 
     it('update_water_log recusa', async () => {
-      await expect(waters.update(owned.waterLogId, { ml: 1 }, owned.userB)).rejects.toThrow(
+      await expect(waters.update(owned.waterLogId, { ml: 1 }, owned.userB, TZ)).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -819,12 +913,14 @@ describe('isolamento entre usuários', () => {
       }
     });
 
-    it('DONO do grupo não lê nem com vínculo concedido em nome dele', async () => {
-      // O user-B é OWNER da academia. Se alguém (ou um bug de #154) criar um
-      // vínculo com ele na ponta do profissional, o papel ainda barra: dono
-      // gere grupo, membros e cobrança e não lê dado de saúde (ADR 014). É
-      // também o que mantém os ~50 casos deste arquivo válidos, já que todos
-      // rodam com o user-B nessa posição.
+    it('DONO do grupo lê só o escopo que o aluno consentiu a ele (ADR 026)', async () => {
+      // Sem vínculo, o dono é um estranho: gere grupo, membros e cobrança, e
+      // isso não abre dado de saúde. Com o consentimento do aluno, ele passa a
+      // ler — só aquele escopo, e a leitura entra na trilha do aluno.
+      await expect(
+        access.assertReadable(owned.userB, owned.membershipA, ShareScope.WORKOUT, 'probe'),
+      ).rejects.toThrow(NotFoundException);
+
       await links.grant({
         subjectUserId: owned.userA,
         professionalId: owned.userB,
@@ -834,6 +930,9 @@ describe('isolamento entre usuários', () => {
 
       await expect(
         access.assertReadable(owned.userB, owned.membershipA, ShareScope.WORKOUT, 'probe'),
+      ).resolves.toBe(owned.userA);
+      await expect(
+        access.assertReadable(owned.userB, owned.membershipA, ShareScope.NUTRITION, 'probe'),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -1161,11 +1260,18 @@ describe('isolamento entre usuários', () => {
         ShareScope.WORKOUT,
         ShareScope.BODY,
       ]);
-      expect(alunos.map((a) => a.name).sort()).toEqual(['Colega', 'User A']);
+      const daAcademia = alunos.filter((a) => a.groupId === owned.groupId);
+      expect(daAcademia.map((a) => a.name).sort()).toEqual(['Colega', 'User A']);
 
-      // A lista não é dado de saúde, mas também não pode virar diretório: o
-      // `pro` é dono de um segundo grupo, e ninguém de lá entra aqui.
-      expect(alunos.every((a) => a.groupId === owned.groupId)).toBe(true);
+      // A lista não é dado de saúde, mas também não pode virar diretório: só
+      // entram as comunidades em que o `pro` é equipe — a academia e o grupo
+      // de que ele é dono (ADR 026) —, e nunca a equipe como "aluno".
+      expect(
+        alunos.every((a) => a.groupId === owned.groupId || a.groupId === owned.grupoDoProId),
+      ).toBe(true);
+      expect(alunos.filter((a) => a.groupId === owned.grupoDoProId).map((a) => a.name)).toEqual([
+        'User B',
+      ]);
     });
 
     it('vínculo revogado some do consentimento da lista, e não só da leitura', async () => {
@@ -1208,7 +1314,9 @@ describe('isolamento entre usuários', () => {
           data: { status: MembershipStatus.LEFT, leftAt: new Date() },
         });
 
-        const depois = await studentView.listStudents(owned.pro);
+        const depois = (await studentView.listStudents(owned.pro)).filter(
+          (a) => a.groupId === owned.groupId,
+        );
         expect(depois.map((a) => a.membershipId)).not.toContain(owned.membershipA);
         // O colega continua — o filtro é por associação, não um apagão da lista.
         expect(depois.map((a) => a.name)).toEqual(['Colega']);
@@ -1220,13 +1328,17 @@ describe('isolamento entre usuários', () => {
       }
     });
 
-    it('quem não é PROFESSIONAL não tem lista de alunos, nem sendo dono da academia', async () => {
-      // O user-B é OWNER do grupo do user-A. Dono administra e cobra; não
-      // atende. Devolver a lista a ele daria ao painel de dono um caminho de
-      // aquisição de acesso que a ADR 014 nega.
-      await expect(studentView.listStudents(owned.userB)).resolves.toEqual([]);
-      await expect(studentView.listStudents(owned.creator)).resolves.toEqual([]);
+    it('MEMBER não tem lista de alunos; dono e criador têm, sem consentimento a mais', async () => {
+      // ADR 026: a equipe toda (dono, profissional, criador) recebe o que cada
+      // membro escolhe compartilhar, então todos têm a lista. A lista é nome e
+      // escopos consentidos — sem vínculo, vazia de escopos, e a leitura
+      // continua fechada. O aluno nunca vê outros alunos.
       await expect(studentView.listStudents(owned.colega)).resolves.toEqual([]);
+      for (const equipe of [owned.userB, owned.creator]) {
+        const lista = await studentView.listStudents(equipe);
+        expect(lista.map((a) => a.name).sort()).toEqual(['Colega', 'User A']);
+        expect(lista.every((a) => a.scopesGrantedToMe.length === 0)).toBe(true);
+      }
     });
 
     it('profissional DEMITIDO perde a lista e a leitura no mesmo instante', async () => {
@@ -1245,7 +1357,10 @@ describe('isolamento entre usuários', () => {
         });
         expect(vinculo?.revokedAt).toBeNull();
 
-        await expect(studentView.listStudents(owned.pro)).resolves.toEqual([]);
+        // Fica só o grupo de que ele é dono; da academia, nada.
+        expect(
+          (await studentView.listStudents(owned.pro)).filter((a) => a.groupId === owned.groupId),
+        ).toEqual([]);
         expect(await mensagemDaRecusa(owned.pro, owned.membershipA, ShareScope.WORKOUT)).toBe(
           await recusaDeEstranho(ShareScope.WORKOUT),
         );
@@ -1882,8 +1997,19 @@ describe('isolamento entre usuários', () => {
       ).toEqual([segundoAluno.id]);
 
       // Metadado de associação, nunca dado de saúde — e nunca o `userId` de
-      // outra pessoa: tudo que sai daqui é referenciado por `membershipId`.
+      // outra pessoa: tudo que sai daqui é referenciado por `membershipId`. A
+      // equipe vê também o que cada um compartilha COM ELA e o assento (Fase 6);
+      // `statsOptIn` individual nunca sai.
       expect(Object.keys(peloDono[0]).sort()).toEqual([
+        'hasAiSeat',
+        'joinedAt',
+        'membershipId',
+        'name',
+        'role',
+        'scopesGrantedToMe',
+        'status',
+      ]);
+      expect(Object.keys(peloAluno[0]).sort()).toEqual([
         'joinedAt',
         'membershipId',
         'name',
@@ -2155,6 +2281,7 @@ describe('isolamento entre usuários', () => {
         'action',
         'at',
         'denied',
+        'groupId',
         'professionalName',
         'scope',
       ]);
@@ -2170,12 +2297,37 @@ describe('isolamento entre usuários', () => {
     });
 
     // --- #156: papel não lê, em nenhum escopo ---
+    //
+    // ADR 026: dono e criador passaram a ser equipe e podem receber vínculo
+    // (casos logo abaixo). MEMBER continua nunca lendo ninguém.
 
-    const papeisQueNaoLeem = [
+    const papeisQueNaoLeem = [{ papel: GroupRole.MEMBER, quem: () => owned.colega }];
+
+    it.each([
       { papel: GroupRole.OWNER, quem: () => owned.userB },
       { papel: GroupRole.CREATOR, quem: () => owned.creator },
-      { papel: GroupRole.MEMBER, quem: () => owned.colega },
-    ];
+    ])('$papel lê só com o consentimento do titular, e fica na trilha', async ({ quem }) => {
+      for (const scope of escopos) {
+        expect(await mensagemDaRecusa(quem(), owned.membershipA, scope)).toBe(
+          await recusaDeEstranho(scope),
+        );
+      }
+      const alvo = await prisma.groupMembership.findUnique({
+        where: { groupId_userId: { groupId: owned.groupId, userId: quem() } },
+      });
+      await consent.grant(owned.userA, alvo!.id, [ShareScope.HABITS]);
+
+      await expect(
+        access.assertReadable(quem(), owned.membershipA, ShareScope.HABITS, 'leu_habitos'),
+      ).resolves.toBe(owned.userA);
+      for (const scope of escopos.filter((s) => s !== ShareScope.HABITS)) {
+        expect(await mensagemDaRecusa(quem(), owned.membershipA, scope)).toBe(
+          await recusaDeEstranho(scope),
+        );
+      }
+      const trilha = await consent.listAccessLog(owned.userA);
+      expect(trilha.some((l) => l.action === 'leu_habitos' && !l.denied)).toBe(true);
+    });
 
     it.each(
       papeisQueNaoLeem.flatMap(({ papel, quem }) =>
@@ -2410,7 +2562,7 @@ describe('isolamento entre usuários', () => {
         where: { conversationId: owned.conversationId, role: 'assistant' },
       });
       await expect(
-        conversas.votar(owned.userB, owned.conversationId, resposta.id, { review: 'like' }),
+        conversas.vote(owned.userB, owned.conversationId, resposta.id, { review: 'like' }),
       ).rejects.toThrow(NotFoundException);
       await expect(conversas.clearPauses(owned.userB, owned.conversationId)).rejects.toThrow(
         NotFoundException,
@@ -2466,6 +2618,127 @@ describe('isolamento entre usuários', () => {
 
       expect(await prisma.conversation.findUnique({ where: { id: conversationId } })).toBeNull();
       expect(await prisma.message.count({ where: { conversationId } })).toBe(0);
+    });
+  });
+
+  describe('cópia de refeição e refeições salvas', () => {
+    let templateA = '';
+    let diaDaRefeicaoA = '';
+    const refeicoesDoB = () => prisma.meal.count({ where: { userId: owned.userB } });
+
+    beforeAll(async () => {
+      templateA = (
+        await mealTemplates.create(owned.userA, { name: 'Café de A', mealId: owned.mealId })
+      ).id;
+      const meal = await meals.findById(owned.userA, owned.mealId);
+      diaDaRefeicaoA = dateInTz(meal.eatenAt, TZ);
+    });
+
+    it('copy_meal recusa a refeição de outro, e o vizinho não ganha nada', async () => {
+      const antes = await refeicoesDoB();
+      await expect(
+        mealCopies.copyMeal(owned.userB, owned.mealId, { toDate: '2030-01-01' }, TZ),
+      ).rejects.toThrow(NotFoundException);
+      await expect(refeicoesDoB()).resolves.toBe(antes);
+    });
+
+    it('copy_day só enxerga as refeições de quem pede', async () => {
+      const antes = await refeicoesDoB();
+      await expect(
+        mealCopies.copyDay(owned.userB, diaDaRefeicaoA, '2030-01-02', TZ),
+      ).rejects.toThrow(NotFoundException);
+      await expect(refeicoesDoB()).resolves.toBe(antes);
+    });
+
+    it('list_meal_templates do user-B não traz a refeição salva do user-A', async () => {
+      const deA = await mealTemplates.list(owned.userA);
+      expect(deA.map((t) => t.id)).toContain(templateA);
+      const deB = await mealTemplates.list(owned.userB);
+      expect(deB.map((t) => t.id)).not.toContain(templateA);
+    });
+
+    it('log_meal_template recusa a refeição salva de outro, e nada é registrado', async () => {
+      const antes = await refeicoesDoB();
+      await expect(
+        mealTemplates.log(owned.userB, templateA, { eatenAt: '2030-01-03T12:00:00Z' }),
+      ).rejects.toThrow(NotFoundException);
+      await expect(refeicoesDoB()).resolves.toBe(antes);
+    });
+
+    it('delete_meal_template recusa a de outro, e ela continua lá', async () => {
+      await expect(mealTemplates.remove(owned.userB, templateA)).rejects.toThrow(NotFoundException);
+      await expect(prisma.mealTemplate.count({ where: { id: templateA } })).resolves.toBe(1);
+    });
+
+    it('save_meal_template recusa salvar a refeição de outro', async () => {
+      await expect(
+        mealTemplates.create(owned.userB, { name: 'Roubado', mealId: owned.mealId }),
+      ).rejects.toThrow(NotFoundException);
+      await expect(
+        prisma.mealTemplate.count({ where: { userId: owned.userB, name: 'Roubado' } }),
+      ).resolves.toBe(0);
+    });
+
+    it('save_meal_template recusa itens com o alimento custom de outro', async () => {
+      await expect(
+        mealTemplates.create(owned.userB, {
+          name: 'Com alimento alheio',
+          items: [{ foodId: owned.customFoodId, grams: 100 }],
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('sugestão de metas e onboarding', () => {
+    it('suggest_nutrition_goals do user-B não usa a pesagem do user-A', async () => {
+      // O user-A tem pesagem de 80 kg; o user-B não tem nenhuma.
+      await expect(
+        onboarding.suggest(
+          owned.userB,
+          {
+            sex: 'FEMALE',
+            birthDate: '1990-01-01',
+            heightCm: 165,
+            activityLevel: 'LIGHT',
+            objective: 'MAINTAIN',
+          },
+          TZ,
+        ),
+      ).rejects.toThrow('Faltam dados para calcular: peso.');
+    });
+
+    it('o onboarding do user-B não toca nas metas nem nas pesagens do user-A', async () => {
+      const metasA = await prisma.userGoals.findUnique({ where: { userId: owned.userA } });
+      const pesagensA = await prisma.weightLog.count({ where: { userId: owned.userA } });
+
+      await onboarding.complete(
+        owned.userB,
+        {
+          sex: 'MALE',
+          birthDate: '1990-01-01',
+          heightCm: 180,
+          weightKg: 77,
+          activityLevel: 'LIGHT',
+          objective: 'MAINTAIN',
+          goals: {
+            kcalMin: 2400,
+            kcalMax: 2600,
+            proteinMinG: 110,
+            proteinMaxG: 140,
+            carbsMinG: 250,
+            carbsMaxG: 350,
+            fatMinG: 60,
+            fatMaxG: 90,
+          },
+        },
+        TZ,
+      );
+
+      expect(await prisma.userGoals.findUnique({ where: { userId: owned.userA } })).toEqual(metasA);
+      expect(await prisma.weightLog.count({ where: { userId: owned.userA } })).toBe(pesagensA);
+      expect(await prisma.weightLog.count({ where: { userId: owned.userB, weightKg: 77 } })).toBe(
+        1,
+      );
     });
   });
 

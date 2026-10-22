@@ -2,6 +2,7 @@ import { View } from 'react-native';
 import type { KeyboardTypeOptions } from 'react-native';
 import { DrawerTextInput, FormMessage, Label } from '@/components/ui';
 import { chartColors } from '@/components/charts';
+import { cores } from '@/theme/cores';
 
 /**
  * Campo numérico dentro de um bottom sheet.
@@ -41,7 +42,7 @@ export function SheetField({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#8a8a8a"
+        placeholderTextColor={cores.placeholder}
         selectionColor={chartColors.primary}
         keyboardType={keyboardType}
         autoFocus={autoFocus}

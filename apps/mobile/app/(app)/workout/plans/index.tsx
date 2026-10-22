@@ -1,16 +1,18 @@
 import { useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { ChevronRight, Dumbbell, Plus, Trash2 } from 'lucide-react-native';
 import { workoutApi } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
-import { Button, EmptyState, ErrorState, Input, LoadingState } from '@/components/ui';
+import { Button, EmptyState, ErrorState, Input, LoadingState, useConfirm } from '@/components/ui';
 import { pluralize } from '@/components/workout/workout-stats';
+import { cores } from '@/theme/cores';
 
 /** Réplica de `apps/web/src/app/(app)/workout/plans/page.tsx`. */
 
 export default function PlansScreen() {
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const router = useRouter();
   const [newName, setNewName] = useState('');
@@ -44,19 +46,17 @@ export default function PlansScreen() {
   // O `confirm()` do PWA não existe no React Native, e apagar um plano sem
   // confirmação a um toque de distância é destrutivo demais.
   function confirmRemove(id: string, name: string) {
-    Alert.alert('Excluir plano', `Excluir "${name}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Excluir', style: 'destructive', onPress: () => remove.mutate(id) },
-    ]);
+    confirm({
+      title: 'Excluir plano',
+      description: `Excluir "${name}"?`,
+      confirmLabel: 'Excluir',
+      destructive: true,
+      onConfirm: () => remove.mutate(id),
+    });
   }
 
   return (
-    <Screen
-      back
-      title="Planos de treino"
-      refreshing={plans.isRefetching}
-      onRefresh={() => void plans.refetch()}
-    >
+    <Screen refreshing={plans.isRefetching} onRefresh={() => void plans.refetch()}>
       <View className="gap-5 px-5 pb-4 pt-4">
         {showForm ? (
           <View className="gap-2">
@@ -88,7 +88,7 @@ export default function PlansScreen() {
           </View>
         ) : (
           <Button variant="outline" className="rounded-2xl" onPress={() => setShowForm(true)}>
-            <Plus size={16} color="#e5e2e1" />
+            <Plus size={16} color={cores.foreground} />
             <Text className="text-sm font-medium text-foreground">Novo plano</Text>
           </Button>
         )}
@@ -120,7 +120,7 @@ export default function PlansScreen() {
                   className="min-h-[44px] min-w-0 flex-1 flex-row items-center gap-3 active:opacity-80"
                 >
                   <View className="h-12 w-12 items-center justify-center rounded-lg bg-muted">
-                    <Dumbbell size={20} color="#2ce500" />
+                    <Dumbbell size={20} color={cores.primary} />
                   </View>
                   <View className="min-w-0 flex-1">
                     <Text numberOfLines={1} className="text-base font-bold text-foreground">
@@ -128,7 +128,7 @@ export default function PlansScreen() {
                     </Text>
                     <Text className="text-xs text-muted-foreground">{countLabel}</Text>
                   </View>
-                  <ChevronRight size={16} color="#baccaf" />
+                  <ChevronRight size={16} color={cores.mutedForeground} />
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
@@ -136,7 +136,7 @@ export default function PlansScreen() {
                   onPress={() => confirmRemove(plan.id, plan.name)}
                   className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
                 >
-                  <Trash2 size={16} color="#baccaf" />
+                  <Trash2 size={16} color={cores.mutedForeground} />
                 </Pressable>
               </View>
             );

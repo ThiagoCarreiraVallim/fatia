@@ -1,22 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alvoMedio, formatarVolume, horaDoDia, percentualDaMeta, saudacao } from '../helpers';
-
-describe('saudacao', () => {
-  it('cobre as quatro faixas do dia', () => {
-    expect(saudacao(new Date(2026, 6, 29, 3))).toBe('Boa madrugada');
-    expect(saudacao(new Date(2026, 6, 29, 9))).toBe('Bom dia');
-    expect(saudacao(new Date(2026, 6, 29, 15))).toBe('Boa tarde');
-    expect(saudacao(new Date(2026, 6, 29, 21))).toBe('Boa noite');
-  });
-
-  it('troca de faixa exatamente na virada da hora', () => {
-    expect(saudacao(new Date(2026, 6, 29, 5, 59))).toBe('Boa madrugada');
-    expect(saudacao(new Date(2026, 6, 29, 6, 0))).toBe('Bom dia');
-    expect(saudacao(new Date(2026, 6, 29, 11, 59))).toBe('Bom dia');
-    expect(saudacao(new Date(2026, 6, 29, 12, 0))).toBe('Boa tarde');
-    expect(saudacao(new Date(2026, 6, 29, 18, 0))).toBe('Boa noite');
-  });
-});
+import { alvoMedio, horaDoDia, percentualDaMeta } from '../helpers';
 
 describe('percentualDaMeta', () => {
   it('devolve a fração arredondada', () => {
@@ -36,19 +19,6 @@ describe('percentualDaMeta', () => {
 
   it('não deixa valor negativo virar barra invertida', () => {
     expect(percentualDaMeta(-100, 2000)).toBe(0);
-  });
-});
-
-describe('formatarVolume', () => {
-  it('usa mL abaixo de um litro', () => {
-    expect(formatarVolume(0)).toBe('0 mL');
-    expect(formatarVolume(350)).toBe('350 mL');
-    expect(formatarVolume(999)).toBe('999 mL');
-  });
-
-  it('vira litro com vírgula decimal a partir de mil', () => {
-    expect(formatarVolume(1000)).toBe('1,0 L');
-    expect(formatarVolume(2450)).toBe('2,5 L');
   });
 });
 

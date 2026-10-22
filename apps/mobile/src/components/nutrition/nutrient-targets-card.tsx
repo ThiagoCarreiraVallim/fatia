@@ -5,25 +5,25 @@ import { ChevronRight, SlidersHorizontal } from 'lucide-react-native';
 import { nutritionApi, type NutrientProgress, type NutrientStatus } from '@fatia/api-client';
 import { ErrorState, LoadingState, cn } from '@/components/ui';
 import { NUMEROS_TABULARES, percentualDaMeta } from './helpers';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/components/nutrition/nutrient-targets-card.tsx`.
  *
- * Âmbar e vermelho não são tokens do tema; são os mesmos tons do PWA, pelo
- * mesmo motivo do `macro-bar` — o vermelho do tema desaparece como preenchimento
- * de barra sobre fundo escuro.
+ * `warning` e `danger`, pelo mesmo motivo do `macro-bar`: o `destructive` do
+ * tema desaparece como preenchimento de barra sobre fundo escuro.
  */
 
 const COR_DA_BARRA: Record<NutrientStatus, string> = {
-  over: 'bg-[#f43f5e]',
-  under: 'bg-[#facc15]',
+  over: 'bg-danger',
+  under: 'bg-warning',
   ok: 'bg-primary',
   none: 'bg-muted-foreground',
 };
 
 const COR_DA_ETIQUETA: Record<NutrientStatus, string> = {
-  over: 'text-[#fb7185]',
-  under: 'text-[#facc15]',
+  over: 'text-danger',
+  under: 'text-warning',
   ok: 'text-primary',
   none: 'text-muted-foreground',
 };
@@ -49,7 +49,7 @@ export function NutrientTargetsCard({ date }: { date: string }) {
     <View className="gap-3 rounded-xl border border-border bg-card p-4">
       <View className="flex-row items-center justify-between">
         <View className="flex-row items-center gap-2">
-          <SlidersHorizontal size={15} color="#2ce500" />
+          <SlidersHorizontal size={15} color={cores.primary} />
           <Text accessibilityRole="header" className="text-sm font-bold text-foreground">
             Metas personalizadas
           </Text>
@@ -62,7 +62,7 @@ export function NutrientTargetsCard({ date }: { date: string }) {
           className="min-h-[44px] flex-row items-center gap-1"
         >
           <Text className="text-[11px] font-bold text-primary">Gerenciar</Text>
-          <ChevronRight size={12} color="#2ce500" />
+          <ChevronRight size={12} color={cores.primary} />
         </Pressable>
       </View>
 

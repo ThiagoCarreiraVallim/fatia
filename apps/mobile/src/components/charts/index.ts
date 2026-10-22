@@ -8,6 +8,7 @@ export {
   formatDecimal,
   formatDuration,
   formatInteger,
+  instantDayMonth,
   shortDate,
 } from './format';
 export { LineChart } from './line-chart';

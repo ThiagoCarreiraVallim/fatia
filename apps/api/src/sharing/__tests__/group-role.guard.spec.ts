@@ -2,6 +2,7 @@ import { ForbiddenException, NotFoundException, type ExecutionContext } from '@n
 import type { Reflector } from '@nestjs/core';
 import { GroupRole, GroupType, MembershipStatus } from '@fatia/db';
 import { GroupRoleGuard } from '../guards/group-role.guard';
+import { ProfessionalLinkService } from '../professional-link.service';
 import { GroupService } from '../group.service';
 import type { PrismaService } from '../../common/prisma.service';
 
@@ -15,7 +16,10 @@ const makeContext = (request: Record<string, unknown>): ExecutionContext =>
   }) as unknown as ExecutionContext;
 
 describe('GroupRoleGuard', () => {
-  const prisma = { groupMembership: { findUnique: jest.fn() } };
+  const prisma = {
+    groupMembership: { findUnique: jest.fn() },
+    groupSeatAssignment: { findMany: jest.fn().mockResolvedValue([]) },
+  };
   const reflector = { get: jest.fn() };
   const guard = new GroupRoleGuard(
     reflector as unknown as Reflector,
@@ -122,8 +126,13 @@ describe('GroupRoleGuard', () => {
           slug: 'x',
           createdAt: new Date(),
         },
+        consentScopes: [],
+        statsOptIn: false,
       });
-      const service = new GroupService(prisma as unknown as PrismaService);
+      const service = new GroupService(
+        prisma as unknown as PrismaService,
+        new ProfessionalLinkService(prisma as unknown as PrismaService),
+      );
 
       const noGuarda = await passou(guard.canActivate(makeContext(requisicao)));
       const noService = await passou(service.findByIdForMember(USER, GROUP));

@@ -4,7 +4,7 @@ import { Suspense, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Settings } from 'lucide-react';
+import { Copy, Settings } from 'lucide-react';
 import { nutritionApi, type MealType } from '@fatia/api-client';
 import { DateNavigator } from '@/components/nutrition/date-navigator';
 import { CaloriesRingCard } from '@/components/nutrition/calories-ring-card';
@@ -12,7 +12,11 @@ import { MacroBentoGrid } from '@/components/nutrition/macro-bento-grid';
 import { MealTimeline } from '@/components/nutrition/meal-timeline';
 import { WeeklyTrendChart } from '@/components/nutrition/weekly-trend-chart';
 import { NutrientTargetsCard } from '@/components/nutrition/nutrient-targets-card';
+import { CustomFoodsCard } from '@/components/nutrition/custom-foods-card';
 import { FoodSearchDrawer } from '@/components/nutrition/food-search-drawer';
+import { CopyDayDrawer } from '@/components/nutrition/copy-day-drawer';
+import { Skeleton } from '@/components/ui/skeleton';
+import { TopBarActions, topBarActionClass } from '@/components/layout/app-top-bar';
 
 function todayIso(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -27,6 +31,7 @@ function NutritionPageContent() {
   const params = useSearchParams();
   const date = params.get('date') ?? todayIso();
   const [newMealType, setNewMealType] = useState<MealType | null>(null);
+  const [copyingDay, setCopyingDay] = useState(false);
 
   const summary = useQuery({
     queryKey: ['nutrition', 'summary', date],
@@ -36,27 +41,33 @@ function NutritionPageContent() {
     queryKey: ['nutrition', 'goals'],
     queryFn: () => nutritionApi.goals(),
   });
+  const mealCount = summary.data?.meals.filter((m) => m.items.length > 0).length ?? 0;
 
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
-      <header className="flex items-center justify-between">
-        <h1 className="text-[18px] font-semibold text-foreground">Nutrição</h1>
-        <Link
-          href="/nutrition/goals"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
-          aria-label="Metas"
-        >
-          <Settings size={18} />
+      <TopBarActions>
+        {mealCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setCopyingDay(true)}
+            className={topBarActionClass}
+            aria-label="Copiar dia"
+          >
+            <Copy size={20} />
+          </button>
+        )}
+        <Link href="/nutrition/goals" className={topBarActionClass} aria-label="Metas">
+          <Settings size={20} />
         </Link>
-      </header>
+      </TopBarActions>
 
       <DateNavigator date={date} />
 
       {(summary.isLoading || goals.isLoading) && (
         <div className="space-y-4">
-          <div className="h-80 animate-pulse rounded-xl bg-card" />
-          <div className="h-28 animate-pulse rounded-xl bg-card" />
-          <div className="h-48 animate-pulse rounded-xl bg-card" />
+          <Skeleton className="h-80" />
+          <Skeleton className="h-28" />
+          <Skeleton className="h-48" />
         </div>
       )}
 
@@ -68,9 +79,11 @@ function NutritionPageContent() {
           <MealTimeline
             meals={summary.data.meals}
             date={date}
+            today={todayIso()}
             onAddMeal={(mt) => setNewMealType(mt)}
           />
           <WeeklyTrendChart today={todayIso()} />
+          <CustomFoodsCard />
         </>
       )}
 
@@ -81,10 +94,16 @@ function NutritionPageContent() {
         date={date}
       />
 
+      <CopyDayDrawer
+        open={copyingDay}
+        onOpenChange={setCopyingDay}
+        date={date}
+        today={todayIso()}
+        mealCount={mealCount}
+      />
+
       {summary.error && (
-        <p className="text-sm text-rose-500">
-          Erro ao carregar: {(summary.error as Error).message}
-        </p>
+        <p className="text-sm text-danger">Erro ao carregar: {(summary.error as Error).message}</p>
       )}
     </div>
   );

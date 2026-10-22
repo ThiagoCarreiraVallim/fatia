@@ -25,6 +25,20 @@ const makePrisma = () => ({
   professionalAccessLog: { findMany: jest.fn().mockResolvedValue([]) },
   conversation: { findMany: jest.fn().mockResolvedValue([]) },
   userMemory: { findMany: jest.fn().mockResolvedValue([]) },
+  favoriteFood: { findMany: jest.fn().mockResolvedValue([]) },
+  foodPortion: { findMany: jest.fn().mockResolvedValue([]) },
+  mealTemplate: { findMany: jest.fn().mockResolvedValue([]) },
+  userSubscription: { findMany: jest.fn().mockResolvedValue([]) },
+  groupMembership: { findMany: jest.fn().mockResolvedValue([]) },
+  groupInvite: { findMany: jest.fn().mockResolvedValue([]) },
+  groupPlanTemplate: { findMany: jest.fn().mockResolvedValue([]) },
+  groupTip: { findMany: jest.fn().mockResolvedValue([]) },
+  groupExerciseGuide: { findMany: jest.fn().mockResolvedValue([]) },
+  groupChallenge: { findMany: jest.fn().mockResolvedValue([]) },
+  mediaFile: { findMany: jest.fn().mockResolvedValue([]) },
+  userDevice: { findMany: jest.fn().mockResolvedValue([]) },
+  notificationPreference: { findMany: jest.fn().mockResolvedValue([]) },
+  webPushSubscription: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const SCHEMA = resolve(__dirname, '../../../../../packages/db/prisma/schema.prisma');
@@ -48,6 +62,9 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   stepLogs: 'stepLogs',
   waterLogs: 'waterLogs',
   customFoods: 'customFoods',
+  favoriteFoods: 'favoriteFoods',
+  foodPortions: 'foodPortions',
+  mealTemplates: 'mealTemplates',
   customExercises: 'customExercises',
   nutrientTargets: 'nutrientTargets',
   achievements: 'achievements',
@@ -56,11 +73,25 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   // dado". Os dois entram no export por LGPD art. 18 V — ficaram de fora na #153 com o argumento
   // de que seriam consultados na tela de compartilhamento, e "está na tela" não é portabilidade.
   linksAsSubject: 'professionalLinks',
+  // Só a linha da própria pessoa, com o consentimento e o assento (ADR 025/026).
+  memberships: 'communityMemberships',
+  invitesCreated: 'invitesCreated',
+  planTemplates: 'contentPublished',
+  tipsAuthored: 'contentPublished',
+  guidesAuthored: 'contentPublished',
+  authoredChallenges: 'contentPublished',
+  mediaFiles: 'mediaUploaded',
+  devices: 'devices',
+  notificationPreferences: 'notificationPreferences',
+  // Só as datas de cada navegador; o endpoint fica de fora (Fase 9g).
+  webPushSubscriptions: 'webPushSubscriptions',
   accessLogs: 'accessLogs',
   // Chat com a IA hospedada (#249): o que a pessoa escreveu sobre a própria saúde, em prosa.
   conversations: 'conversations',
   // O que o assistente guardou sobre a pessoa, com o texto que ela aprovou.
   memories: 'memories',
+  // Plano Free/PRO (ADR 024): o histórico de assinatura é um contrato da pessoa.
+  subscriptions: 'subscriptions',
 };
 
 /**
@@ -69,11 +100,13 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
  */
 const FORA_DO_EXPORT: Record<string, string> = {
   ownedGroups: 'B2B (ADR 014): o grupo é do profissional, não dado pessoal de saúde do titular.',
-  memberships: 'B2B: vínculo administrativo, e exportá-lo revelaria a composição do grupo.',
   linksAsProfessional: 'B2B: lista os PACIENTES do profissional — dado de terceiro.',
   aiUsage:
     'Livro-caixa da inferência que a Fatia pagou (#249): modelo e custo, nada do titular. ' +
     'A linha sobrevive à exclusão da conta de propósito — é fatura, não dado pessoal.',
+  pendingNotices:
+    'Contagem de avisos esperando o fim de uma janela de 10 minutos (Fase 9g): estado de ' +
+    'entrega que some sozinho, sem nada do conteúdo — e apaga com a conta.',
 };
 
 /** Nomes de model do schema, para separar campo de relação de campo escalar. */
@@ -148,13 +181,14 @@ describe('AccountService', () => {
         'weightLog',
         'stepLog',
         'waterLog',
+        'favoriteFood',
       ] as const) {
         expect(prisma[model].findMany).toHaveBeenCalledWith(
           expect.objectContaining({ where: expect.objectContaining({ userId: 'user-A' }) }),
         );
       }
       // Catálogo custom é escopado por createdByUserId, não userId.
-      for (const model of ['food', 'exercise'] as const) {
+      for (const model of ['food', 'exercise', 'foodPortion'] as const) {
         expect(prisma[model].findMany).toHaveBeenCalledWith(
           expect.objectContaining({ where: { createdByUserId: 'user-A' } }),
         );
@@ -227,6 +261,21 @@ describe('AccountService', () => {
       const { select } = prisma.user.findUnique.mock.calls[0][0];
       expect(select).not.toHaveProperty('logtoSub');
       expect(select).toMatchObject({ id: true, email: true, name: true });
+    });
+
+    it('exporta o perfil do onboarding (sexo, nascimento, atividade, objetivo)', async () => {
+      prisma.user.findUnique.mockResolvedValue(USER);
+
+      await service.exportData('user-A');
+
+      const { select } = prisma.user.findUnique.mock.calls[0][0];
+      expect(select).toMatchObject({
+        sex: true,
+        birthDate: true,
+        activityLevel: true,
+        objective: true,
+        onboardedAt: true,
+      });
     });
 
     it('exporta consentimento e trilha do titular, com nome em vez de id do profissional', async () => {
@@ -346,6 +395,32 @@ describe('AccountService', () => {
 
       expect(purga.apagarDoUsuario).toHaveBeenCalledWith('user-A');
       expect(order).toEqual(['checkpoint', 'prisma']);
+    });
+
+    it('roda os ganchos antes de apagar, e um gancho que falha aborta tudo (ADR 024)', async () => {
+      prisma.user.findUnique.mockResolvedValue(USER);
+      const gancho = { beforeDelete: jest.fn(async (_id: string) => undefined) };
+      const comGancho = new AccountService(
+        prisma as unknown as PrismaService,
+        logto as unknown as LogtoManagementService,
+        purga as unknown as CheckpointPurgeService,
+        [gancho],
+      );
+
+      await comGancho.deleteAccount('user-A', DELETE_CONFIRMATION);
+      expect(gancho.beforeDelete).toHaveBeenCalledWith('user-A');
+      expect(prisma.user.delete).toHaveBeenCalled();
+
+      prisma.user.delete.mockClear();
+      logto.deleteUser.mockClear();
+      gancho.beforeDelete.mockRejectedValueOnce(new Error('Asaas fora do ar'));
+      await expect(comGancho.deleteAccount('user-A', DELETE_CONFIRMATION)).rejects.toThrow(
+        'Asaas fora do ar',
+      );
+      // Nada foi apagado: nem identidade, nem dados. A assinatura continua
+      // cancelável e a pessoa tenta de novo.
+      expect(logto.deleteUser).not.toHaveBeenCalled();
+      expect(prisma.user.delete).not.toHaveBeenCalled();
     });
 
     it('se a purga do agente falhar, a conta fica inteira e o erro sobe', async () => {

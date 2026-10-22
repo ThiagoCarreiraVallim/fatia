@@ -2,13 +2,14 @@ import { Prisma, Role } from '@prisma/client';
 import { UserProvisioningService } from '../user-provisioning.service';
 import type { PrismaService } from '../../common/prisma.service';
 import type { LogtoJwtPayload } from '../jwt-validation.service';
+import type { LogtoManagementService } from '../logto-management.service';
 
 type MockPrisma = {
-  user: { findUnique: jest.Mock; create: jest.Mock };
+  user: { findUnique: jest.Mock; create: jest.Mock; update: jest.Mock };
 };
 
 const makePrisma = (): MockPrisma => ({
-  user: { findUnique: jest.fn(), create: jest.fn() },
+  user: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
 });
 
 const makePayload = (overrides: Partial<LogtoJwtPayload> = {}): LogtoJwtPayload => ({
@@ -168,6 +169,137 @@ describe('UserProvisioningService', () => {
       await service.provision(makePayload({ roles: ['Editor', 'Viewer'] }));
 
       expect(prisma.user.create.mock.calls[0][0].data.role).toBe(Role.USER);
+    });
+  });
+
+  /**
+   * O access token do Logto não traz `email` nem `name`. Sem a Management API, todo
+   * usuário real nascia `<sub>@logto.local` com o `sub` no lugar do nome — e a tela
+   * do perfil e a saudação do dashboard mostravam isso.
+   */
+  describe('perfil a partir da Management API do Logto', () => {
+    let logto: { getUserProfile: jest.Mock };
+
+    beforeEach(() => {
+      logto = { getUserProfile: jest.fn() };
+      service = new UserProvisioningService(
+        prisma as unknown as PrismaService,
+        logto as unknown as LogtoManagementService,
+      );
+    });
+
+    it('cria o usuário com o e-mail e o nome do Logto quando o token não os traz', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.user.create.mockImplementation(({ data }) =>
+        Promise.resolve({ id: 'u', email: data.email, role: data.role, timezone: 'UTC' }),
+      );
+      logto.getUserProfile.mockResolvedValue({ email: 'ana@example.com', name: 'Ana' });
+
+      await service.provision(makePayload({ email: undefined, name: undefined }));
+
+      expect(logto.getUserProfile).toHaveBeenCalledWith('logto|abc123');
+      expect(prisma.user.create.mock.calls[0][0].data).toMatchObject({
+        email: 'ana@example.com',
+        name: 'Ana',
+      });
+    });
+
+    it('primeiro acesso em paralelo: quem chega durante a consulta espera o perfil, e não nasce provisório', async () => {
+      // O primeiro acesso dispara várias requisições juntas. Antes, a segunda via o
+      // `sub` já marcado como consultado, criava `<sub>@logto.local` sem esperar a
+      // primeira, e a conta ficava provisória até a API reiniciar.
+      let linha: { id: string; email: string; role: Role; timezone: string } | null = null;
+      prisma.user.findUnique.mockImplementation(() => Promise.resolve(linha));
+      prisma.user.create.mockImplementation(({ data }) => {
+        if (linha) {
+          return Promise.reject(
+            new Prisma.PrismaClientKnownRequestError('unique', {
+              code: 'P2002',
+              clientVersion: 'x',
+            }),
+          );
+        }
+        linha = { id: 'u', email: data.email, role: data.role, timezone: 'UTC' };
+        return Promise.resolve(linha);
+      });
+      let responder: (perfil: { email: string; name: string }) => void = () => undefined;
+      logto.getUserProfile.mockReturnValue(new Promise((resolve) => (responder = resolve)));
+
+      const payload = makePayload({ email: undefined, name: undefined });
+      const primeira = service.provision(payload);
+      const segunda = service.provision(payload);
+      await new Promise((resolve) => setImmediate(resolve));
+      responder({ email: 'ana@example.com', name: 'Ana' });
+
+      const [a, b] = await Promise.all([primeira, segunda]);
+      expect(a.email).toBe('ana@example.com');
+      expect(b.email).toBe('ana@example.com');
+      expect(logto.getUserProfile).toHaveBeenCalledTimes(1);
+    });
+
+    it('não consulta o Logto quando o token já traz o e-mail', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.user.create.mockResolvedValue({
+        id: 'u',
+        email: 'x',
+        role: Role.USER,
+        timezone: 'UTC',
+      });
+
+      await service.provision(makePayload());
+
+      expect(logto.getUserProfile).not.toHaveBeenCalled();
+    });
+
+    it('corrige o e-mail provisório de quem já existe, uma vez por processo', async () => {
+      const placeholder = {
+        id: 'u',
+        email: 'logto|abc123@logto.local',
+        role: Role.USER,
+        timezone: 'UTC',
+      };
+      prisma.user.findUnique.mockResolvedValue(placeholder);
+      logto.getUserProfile.mockResolvedValue({ email: 'ana@example.com', name: 'Ana' });
+      prisma.user.update.mockResolvedValue({ ...placeholder, email: 'ana@example.com' });
+
+      const first = await service.provision(makePayload({ email: undefined }));
+      await service.provision(makePayload({ email: undefined }));
+
+      expect(first.email).toBe('ana@example.com');
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { email: 'ana@example.com', name: 'Ana' } }),
+      );
+      expect(logto.getUserProfile).toHaveBeenCalledTimes(1);
+    });
+
+    it('mantém o provisório quando o e-mail do Logto já pertence a outra conta', async () => {
+      const placeholder = {
+        id: 'u',
+        email: 'logto|abc123@logto.local',
+        role: Role.USER,
+        timezone: 'UTC',
+      };
+      prisma.user.findUnique.mockResolvedValue(placeholder);
+      logto.getUserProfile.mockResolvedValue({ email: 'dup@example.com', name: null });
+      prisma.user.update.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('unique', { code: 'P2002', clientVersion: 'x' }),
+      );
+
+      await expect(service.provision(makePayload({ email: undefined }))).resolves.toEqual(
+        placeholder,
+      );
+    });
+
+    it('segue com o provisório quando a Management API não está configurada', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.user.create.mockImplementation(({ data }) =>
+        Promise.resolve({ id: 'u', email: data.email, role: data.role, timezone: 'UTC' }),
+      );
+      logto.getUserProfile.mockResolvedValue(null);
+
+      await service.provision(makePayload({ sub: 'logto|s', email: undefined }));
+
+      expect(prisma.user.create.mock.calls[0][0].data.email).toBe('logto|s@logto.local');
     });
   });
 });

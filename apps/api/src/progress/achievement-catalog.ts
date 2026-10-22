@@ -8,8 +8,9 @@ import type { Prisma } from '@prisma/client';
  * banco de quem desbloqueou ontem e a do deploy de hoje. O banco guarda só o fato: quem, qual
  * chave, quando, e o contexto para a tela contar a história.
  *
- * São sete, exatamente o que a issue lista. Sem pontos, sem níveis, sem medalha por horário: o
- * tom da épica #146 é "útil, não insistente".
+ * As sete da issue, mais duas dos desafios da comunidade (Fase 8a): concluir um desafio pontuando
+ * e subir ao pódio. Sem pontos, sem níveis, sem medalha por horário: o tom da épica #146 é "útil,
+ * não insistente".
  */
 
 export interface AchievementUnlock {
@@ -43,6 +44,10 @@ export interface AchievementSnapshot {
   primeiraSemanaCompleta(): Promise<{ weekStart: string; sessions: number; target: number } | null>;
   /** Tamanho da sequência de dias ativos, já com a tolerância aplicada. */
   diasAtivosSeguidos(): Promise<number>;
+  /** O primeiro desafio de comunidade encerrado em que a pessoa pontuou. */
+  primeiroDesafioConcluido(): Promise<{ at: Date; challengeTitle: string } | null>;
+  /** O primeiro desafio encerrado com a pessoa entre as três primeiras posições. */
+  primeiroPodio(): Promise<{ at: Date; challengeTitle: string; rank: number } | null>;
 }
 
 export interface AchievementDefinition {
@@ -132,6 +137,26 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   },
   porStreak('streak_7', 'Uma semana ativa', 7),
   porStreak('streak_30', 'Um mês ativo', 30),
+  {
+    key: 'challenge_finished',
+    title: 'Primeiro desafio',
+    description: 'Você concluiu um desafio da sua comunidade.',
+    async evaluate(snapshot) {
+      const d = await snapshot.primeiroDesafioConcluido();
+      return d ? { unlockedAt: d.at, context: { challengeTitle: d.challengeTitle } } : null;
+    },
+  },
+  {
+    key: 'challenge_podium',
+    title: 'No pódio',
+    description: 'Você terminou um desafio da sua comunidade entre os três primeiros.',
+    async evaluate(snapshot) {
+      const d = await snapshot.primeiroPodio();
+      return d
+        ? { unlockedAt: d.at, context: { challengeTitle: d.challengeTitle, rank: d.rank } }
+        : null;
+    },
+  },
 ];
 
 export const ACHIEVEMENT_KEYS: readonly string[] = ACHIEVEMENT_CATALOG.map((a) => a.key);

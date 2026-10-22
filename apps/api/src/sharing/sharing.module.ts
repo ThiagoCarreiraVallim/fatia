@@ -4,9 +4,33 @@ import { GoalsModule } from '../goals/goals.module';
 import { NutritionModule } from '../nutrition/nutrition.module';
 import { ProgressModule } from '../progress/progress.module';
 import { WorkoutModule } from '../workout/workout.module';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { SocialModule } from '../social/social.module';
+import { StorageModule } from '../storage/storage.module';
+import { ChallengeController } from './challenge.controller';
+import { ChallengeService } from './challenge.service';
+import { ModerationController } from './moderation.controller';
+import { PostController } from './post.controller';
+import { PostService } from './post.service';
+import { CommentOnGroupPostTool } from './mcp/comment-on-group-post.tool';
+import { CreateGroupPostTool } from './mcp/create-group-post.tool';
+import { ListGroupPostsTool } from './mcp/list-group-posts.tool';
+import { ContentController } from './content.controller';
+import { ContentService } from './content.service';
+import { GroupExerciseController } from './group-exercise.controller';
+import { GroupExerciseService } from './group-exercise.service';
+import { GroupAgentController } from './group-agent.controller';
+import { GroupAgentService } from './group-agent.service';
+import { AdoptGroupPlanTool } from './mcp/adopt-group-plan.tool';
+import { ListGroupPlansTool } from './mcp/list-group-plans.tool';
+import { ListGroupTipsTool } from './mcp/list-group-tips.tool';
+import { GetChallengeLeaderboardTool } from './mcp/get-challenge-leaderboard.tool';
+import { JoinGroupChallengeTool } from './mcp/join-group-challenge.tool';
+import { ListGroupChallengesTool } from './mcp/list-group-challenges.tool';
 import { AccessAuditService } from './access-audit.service';
 import { ConsentService } from './consent.service';
 import { GroupService } from './group.service';
+import { InviteService } from './invite.service';
 import { MembershipService } from './membership.service';
 import { PlanMaterializerService } from './plan-materializer.service';
 import { ProfessionalAccessService } from './professional-access.service';
@@ -25,6 +49,9 @@ import { ListDataSharingTool } from './mcp/list-data-sharing.tool';
 import { ListMyGroupsTool } from './mcp/list-my-groups.tool';
 import { ListMyStudentsTool } from './mcp/list-my-students.tool';
 import { RevokeDataSharingTool } from './mcp/revoke-data-sharing.tool';
+import { GetGroupInviteTool } from './mcp/get-group-invite.tool';
+import { AcceptGroupInviteTool } from './mcp/accept-group-invite.tool';
+import { SetGroupSharingTool } from './mcp/set-group-sharing.tool';
 
 /**
  * Toda a lógica de grupo e vínculo profissional do produto (ADR 014).
@@ -40,7 +67,11 @@ import { RevokeDataSharingTool } from './mcp/revoke-data-sharing.tool';
  *
  * A direção contrária — profissional/criador → aluno — é **cópia**, e quem a faz
  * é o `PlanMaterializerService` (#162), a única máquina de materialização do
- * repositório. Oferta aceita (#157) e plano pronto adotado (#162) são a mesma
+ * repositório. O `ContentService` (Fase 7) é a porta dos planos prontos e das
+ * dicas que a equipe publica; o membro adota pelo REST e pelas tools daqui. O
+ * `ChallengeService` (Fase 8a) é a porta dos desafios; o placar é calculado em
+ * `social/`, que só recebe os participantes do desafio da URL. O `PostService`
+ * (Fase 8b) é o mural, e a moderação dele. Oferta aceita (#157) e plano pronto adotado (#162) são a mesma
  * cópia com portas de entrada diferentes; duas implementações divergiriam no
  * primeiro campo novo de `WorkoutPlan`.
  *
@@ -60,8 +91,27 @@ import { RevokeDataSharingTool } from './mcp/revoke-data-sharing.tool';
  * mudou uma linha para isso acontecer.
  */
 @Module({
-  imports: [CommonModule, WorkoutModule, ProgressModule, NutritionModule, GoalsModule],
-  controllers: [SharingController, ConsentController, ProfessionalController],
+  imports: [
+    CommonModule,
+    WorkoutModule,
+    ProgressModule,
+    NutritionModule,
+    GoalsModule,
+    NotificationsModule,
+    StorageModule,
+    SocialModule,
+  ],
+  controllers: [
+    SharingController,
+    ConsentController,
+    ProfessionalController,
+    ContentController,
+    GroupExerciseController,
+    GroupAgentController,
+    ChallengeController,
+    PostController,
+    ModerationController,
+  ],
   providers: [
     ProfessionalAccessService,
     ProfessionalLinkService,
@@ -70,17 +120,35 @@ import { RevokeDataSharingTool } from './mcp/revoke-data-sharing.tool';
     ConsentService,
     GroupService,
     MembershipService,
+    InviteService,
     PlanMaterializerService,
+    ContentService,
+    GroupExerciseService,
+    GroupAgentService,
+    ChallengeService,
+    PostService,
     GroupRoleGuard,
     ListMyGroupsTool,
     JoinGroupTool,
     LeaveGroupTool,
+    GetGroupInviteTool,
+    AcceptGroupInviteTool,
+    SetGroupSharingTool,
     ListDataSharingTool,
     GrantDataSharingTool,
     RevokeDataSharingTool,
     ListDataAccessLogTool,
     ListMyStudentsTool,
     GetStudentProgressTool,
+    ListGroupPlansTool,
+    AdoptGroupPlanTool,
+    ListGroupTipsTool,
+    ListGroupChallengesTool,
+    GetChallengeLeaderboardTool,
+    JoinGroupChallengeTool,
+    ListGroupPostsTool,
+    CreateGroupPostTool,
+    CommentOnGroupPostTool,
   ],
   exports: [
     ProfessionalAccessService,
@@ -88,8 +156,13 @@ import { RevokeDataSharingTool } from './mcp/revoke-data-sharing.tool';
     ConsentService,
     GroupService,
     MembershipService,
+    InviteService,
     StudentViewService,
     PlanMaterializerService,
+    ContentService,
+    GroupExerciseService,
+    GroupAgentService,
+    ChallengeService,
   ],
 })
 export class SharingModule {}

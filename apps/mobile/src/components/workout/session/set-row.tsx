@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { Trash2 } from 'lucide-react-native';
 import { getRpeInfo, workoutApi, type SessionSet } from '@fatia/api-client';
-import { Input } from '@/components/ui';
+import { Input, useConfirm } from '@/components/ui';
 import { formatClock, formatNumber, parseClock, parseDecimalInput } from './format';
 import { RpeBadge } from './rpe-badge';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/components/workout/set-row.tsx`.
@@ -39,6 +40,7 @@ export interface SetRowProps {
 }
 
 export function SetRow({ set, index, isCardio, sessionId, showDelete, onEditRpe }: SetRowProps) {
+  const confirm = useConfirm();
   const editable = Boolean(sessionId);
   const qc = useQueryClient();
 
@@ -67,10 +69,14 @@ export function SetRow({ set, index, isCardio, sessionId, showDelete, onEditRpe 
   });
 
   function confirmRemove() {
-    Alert.alert(`Excluir série ${index + 1}?`, 'A série sai do treino e do volume da sessão.', [
-      { text: 'Manter', style: 'cancel' },
-      { text: 'Excluir', style: 'destructive', onPress: () => remove.mutate() },
-    ]);
+    confirm({
+      title: `Excluir série ${index + 1}?`,
+      description: 'A série sai do treino e do volume da sessão.',
+      confirmLabel: 'Excluir',
+      cancelLabel: 'Manter',
+      destructive: true,
+      onConfirm: () => remove.mutate(),
+    });
   }
 
   const label = `Série ${index + 1}`;
@@ -138,7 +144,7 @@ export function SetRow({ set, index, isCardio, sessionId, showDelete, onEditRpe 
           style={remove.isPending ? { opacity: 0.5 } : undefined}
           className="h-11 w-10 items-center justify-center rounded-full active:bg-accent"
         >
-          <Trash2 size={16} color="#baccaf" />
+          <Trash2 size={16} color={cores.mutedForeground} />
         </Pressable>
       ) : null}
     </View>

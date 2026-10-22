@@ -23,6 +23,7 @@ import { describe, expect, it } from 'vitest';
 const RAIZ = resolve(__dirname, '..', '..', '..', '..');
 const LAYOUT = resolve(RAIZ, 'src/app/(app)/layout.tsx');
 const CHAT = resolve(RAIZ, 'src/components/chat/chat-screen.tsx');
+const TOPO = resolve(RAIZ, 'src/components/layout/app-top-bar.tsx');
 
 /** `pt-16` → 4, `pb-24` → 6. A escala do Tailwind é 0.25rem por unidade. */
 function remDaClasse(fonte: string, prefixo: 'pt' | 'pb'): number {
@@ -42,13 +43,32 @@ describe('a caixa do chat cabe entre as duas barras', () => {
   });
 
   it('o chat desconta a barra do topo E a de baixo', () => {
-    const reservado = remDaClasse(layout, 'pt') + remDaClasse(layout, 'pb');
+    // A barra de topo (`AppTopBar`) é `sticky`, no fluxo: a altura dela também
+    // sai da tela. A faixa da área segura ela cobre com `-mt`/`pt`, sem somar.
+    expect(layout).toMatch(/<AppTopBar \/>/);
+    const barra = readFileSync(TOPO, 'utf8').match(/mx-auto flex h-(\d+)\b/);
+    expect(barra, 'AppTopBar precisa declarar a altura como h-N').not.toBeNull();
+    const reservado =
+      remDaClasse(layout, 'pt') + remDaClasse(layout, 'pb') + Number(barra![1]) * 0.25;
 
-    const altura = chat.match(/h-\[calc\(100dvh-([\d.]+)rem\)\]/);
+    const altura = chat.match(/h-\[calc\(100dvh-([\d.]+)rem[^\]]*\)\]/);
     expect(altura, 'ChatScreen precisa declarar a altura como calc(100dvh-Nrem)').not.toBeNull();
 
-    // O defeito original: 5 (só a barra de baixo) contra os 10 que o layout reserva.
+    // O defeito original: 5 (só a barra de baixo) contra os 10 que o layout reservava.
+    // Hoje: 1 + 6 + 3.5 da barra de topo.
     expect(Number(altura![1])).toBe(reservado);
+  });
+
+  it('o chat desconta também as áreas seguras que o layout soma', () => {
+    // O wrapper do layout soma o notch e o indicador de home ao padding. Se o chat não os
+    // descontar, no iPhone a caixa volta a terminar embaixo da `bottom-nav`.
+    for (const lado of ['top', 'bottom'] as const) {
+      if (layout.includes(`env(safe-area-inset-${lado})`)) {
+        expect(chat).toMatch(
+          new RegExp(`h-\\[calc\\(100dvh-[^\\]]*env\\(safe-area-inset-${lado}\\)`),
+        );
+      }
+    }
   });
 
   it('a barra de baixo continua fixa e por cima — é o que torna o erro invisível', () => {

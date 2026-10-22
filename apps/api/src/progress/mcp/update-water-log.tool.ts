@@ -26,9 +26,9 @@ export class UpdateWaterLogTool implements McpToolDef {
   } as const;
   async execute(
     input: { id: string; ml?: number; date?: string; notes?: string },
-    { userId }: McpToolContext,
+    { userId, timezone }: McpToolContext,
   ) {
     const { id, ...patch } = input;
-    return this.waters.update(id, patch, userId);
+    return this.waters.update(id, patch, userId, timezone);
   }
 }

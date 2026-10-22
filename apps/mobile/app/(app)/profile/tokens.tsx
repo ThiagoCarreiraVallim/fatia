@@ -8,7 +8,7 @@ import { CopyMcpUrl } from '@/components/profile/copy-mcp-url';
 /** Réplica de `apps/web/src/app/(app)/profile/tokens/page.tsx`. */
 export default function TokensScreen() {
   return (
-    <Screen back title="Conectar com Claude">
+    <Screen>
       <View className="gap-4 p-4">
         <Text className="text-sm text-muted-foreground">
           O fatia usa OAuth para autenticar o Claude via Logto. Siga os passos abaixo para

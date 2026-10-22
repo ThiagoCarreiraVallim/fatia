@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { nutritionApi } from '@fatia/api-client';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const PT_DAY_INITIALS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 const BAR_MAX_HEIGHT = 80;
@@ -16,13 +17,13 @@ export function WeeklyTrendChart({ today }: Props) {
     queryFn: () => nutritionApi.history(7),
   });
 
-  if (isLoading) return <div className="h-40 animate-pulse rounded-xl bg-card" />;
+  if (isLoading) return <Skeleton className="h-40" />;
   if (!data) return null;
 
   const maxKcal = Math.max(...data.series.map((d) => d.kcal), 1);
 
   return (
-    <div className="rounded-xl border border-white/5 bg-card p-5">
+    <div className="rounded-xl border border-subtle bg-card p-5">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-[15px] font-semibold text-foreground">Tendência Semanal</h2>
         <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">

@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import Link from 'next/link';
-import { ChevronLeft, Trophy, Dumbbell, Footprints } from 'lucide-react';
+import { Trophy, Dumbbell, Footprints } from 'lucide-react';
 import { workoutApi, type PersonalRecordEntry } from '@fatia/api-client';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 
 type SortKey = 'recent' | 'weight';
 
@@ -63,17 +64,6 @@ export default function RecordsPage() {
 
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
-      <header className="flex items-center gap-3">
-        <Link
-          href="/progress"
-          aria-label="Voltar"
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground"
-        >
-          <ChevronLeft size={18} />
-        </Link>
-        <h1 className="text-2xl font-extrabold text-foreground">Recordes</h1>
-      </header>
-
       {/* Análise */}
       <div className="grid grid-cols-3 gap-2">
         <StatCard label="Exercícios" value={String(data.length)} />
@@ -108,15 +98,17 @@ export default function RecordsPage() {
       {records.isLoading && (
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-20 animate-pulse rounded-2xl bg-muted" />
+            <Skeleton key={i} className="h-20 rounded-2xl bg-muted" />
           ))}
         </div>
       )}
 
       {records.data && filtered.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-white/10 bg-card p-8 text-center text-sm text-muted-foreground">
-          Nenhum recorde ainda. Registre séries durante o treino para começar.
-        </div>
+        <EmptyState
+          icon={Trophy}
+          title="Nenhum recorde ainda"
+          description="Registre séries durante o treino; as melhores marcas aparecem aqui."
+        />
       )}
 
       <div className="space-y-2">
@@ -138,7 +130,7 @@ function StatCard({
   highlight?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-white/5 bg-card p-3 text-center">
+    <div className="rounded-2xl border border-subtle bg-card p-3 text-center">
       <p
         className={`text-2xl font-extrabold tabular-nums ${highlight ? 'text-primary' : 'text-foreground'}`}
       >
@@ -196,7 +188,7 @@ function SortBtn({
 function RecordRow({ record: r }: { record: PersonalRecordEntry }) {
   const isCardio = r.type === 'cardio';
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-white/5 bg-card p-4">
+    <div className="flex items-center gap-3 rounded-2xl border border-subtle bg-card p-4">
       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-muted">
         {isCardio ? (
           <Footprints size={18} className="text-primary" />
@@ -234,7 +226,7 @@ function RecordRow({ record: r }: { record: PersonalRecordEntry }) {
           </>
         )}
       </div>
-      <Trophy size={16} className="shrink-0 text-amber-400" />
+      <Trophy size={16} className="shrink-0 text-warning" />
     </div>
   );
 }

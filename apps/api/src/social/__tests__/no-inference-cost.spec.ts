@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { RAIZ_SOCIAL, fontesDeSocial } from './fontes';
 
 /**
@@ -27,6 +28,8 @@ const IMPORTS_PERMITIDOS = [
   '@nestjs/common',
   '../common/prisma.service',
   '../progress/helpers/date-tz',
+  // A aderência à meta de nutrição (ADR 027): só datas, sem inferência.
+  '../nutrition/daily-adherence.service',
 ];
 
 /**
@@ -98,6 +101,22 @@ describe('social não gera custo de inferência', () => {
         fora: [],
       });
     }
+  });
+
+  it('a aderência de nutrição que o placar usa também não depende de IA', () => {
+    // Ela mora fora da pasta (lê refeição), mas roda dentro de todo recálculo de
+    // placar: um import de IA lá custaria igual a um aqui.
+    const aderencia = join(RAIZ_SOCIAL, '../nutrition/daily-adherence.service.ts');
+    const permitidos = [
+      '@nestjs/common',
+      '../common/prisma.service',
+      '../progress/helpers/date-tz',
+    ];
+    expect(
+      importsDe(readFileSync(aderencia, 'utf8')).filter(
+        (e) => !e.startsWith('./') && !permitidos.includes(e),
+      ),
+    ).toEqual([]);
   });
 
   it('nenhuma tool de social declara inferência hospedada', () => {

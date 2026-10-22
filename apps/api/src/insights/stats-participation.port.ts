@@ -1,14 +1,15 @@
 import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../common/prisma.service';
 
 /**
  * Quem entra na contagem — o consentimento próprio da agregação (#159).
  *
- * **Isto não é `ProfessionalLink`.** O destinatário do agregado é o **dono** da
- * academia, e pela matriz da #156 o dono nunca recebe vínculo: ele não lê dado
- * individual de ninguém, em escopo nenhum. Então não há vínculo a consultar
- * aqui. Participar do agregado é uma permissão diferente e menor — entrar numa
- * contagem — e mantê-la separada do vínculo é o que preserva a matriz: o dono
- * continua sem nenhum caminho até um indivíduo.
+ * **Isto não é `ProfessionalLink`.** O vínculo (ADR 026) abre o dado
+ * individual de uma pessoa para a equipe, nas categorias que ela escolheu.
+ * Participar do agregado é uma permissão diferente e menor — entrar numa
+ * contagem anônima com amostra mínima — e é dada à parte, no mesmo momento
+ * (`GroupMembership.statsOptIn`). Mantê-las separadas é o que deixa alguém
+ * entrar na estatística sem abrir nada de si, e vice-versa.
  *
  * O denominador também sai daqui. Numerador consentido sobre denominador cheio
  * vazaria informação exatamente sobre quem **não** consentiu.
@@ -25,9 +26,7 @@ export interface Participant {
   joinedAt: Date | null;
 }
 
-/**
- * A porta. Uma implementação hoje, outra quando a coluna existir.
- */
+/** A porta: os agregados não sabem de onde vem o consentimento. */
 @Injectable()
 export abstract class StatsParticipation {
   /** Participantes ativos e consentidos do grupo. Nunca lança. */
@@ -35,22 +34,28 @@ export abstract class StatsParticipation {
 }
 
 /**
- * Implementação de hoje: **ninguém participa**.
+ * Quem está **ativo** no grupo e disse sim às estatísticas.
  *
- * O opt-in mora em `GroupMembership.statsOptIn`, e essa coluna **não existe** no
- * `schema.prisma` desta rodada — a migration está proposta no corpo da PR e não
- * foi aplicada aqui de propósito. Sem a coluna não há como saber quem consentiu,
- * e a única resposta defensável para "não sei quem consentiu" é **ninguém**.
- *
- * O efeito é o painel responder "amostra insuficiente" para todo grupo, sempre.
- * É inútil, e é o comportamento certo: o contrário seria contar quem nunca disse
- * sim. A troca, quando a coluna entrar, é uma implementação nova desta porta
- * (`ACTIVE` + `statsOptIn: true`) e um `provide` no módulo — nenhum arquivo de
- * agregação, recorte ou export é tocado.
+ * Pedido pendente, quem saiu e quem foi removido ficam fora mesmo com o
+ * opt-in gravado: a linha continua no banco para o histórico, mas a pessoa não
+ * está mais lá para ser contada. O padrão da coluna é `false`, então quem nunca
+ * respondeu também não entra.
  */
 @Injectable()
-export class NoStatsParticipation extends StatsParticipation {
-  async participants(): Promise<Participant[]> {
-    return [];
+export class OptInStatsParticipation extends StatsParticipation {
+  constructor(private readonly prisma: PrismaService) {
+    super();
+  }
+
+  async participants(groupId: string): Promise<Participant[]> {
+    const linhas = await this.prisma.groupMembership.findMany({
+      where: { groupId, status: 'ACTIVE', statsOptIn: true },
+      select: { userId: true, joinedAt: true, user: { select: { timezone: true } } },
+    });
+    return linhas.map((m) => ({
+      userId: m.userId,
+      timezone: m.user.timezone,
+      joinedAt: m.joinedAt,
+    }));
   }
 }

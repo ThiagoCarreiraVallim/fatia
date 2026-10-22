@@ -1,3 +1,4 @@
+import { fetch as expoFetch } from 'expo/fetch';
 import { configureApiClient, type ApiTransport } from '@fatia/api-client';
 import { env } from '@/env';
 
@@ -30,6 +31,10 @@ export function installMobileApiTransport(deps: {
     // Rede móvel é pior que Wi-Fi de escritório. 15 s é o padrão do pacote e o
     // que o PWA usa; aqui vale mais folga antes de dizer que deu erro.
     timeoutMs: 25_000,
+
+    // O chat chega aos pedaços (SSE). O `fetch` do React Native só entrega o
+    // corpo inteiro no fim; o da Expo lê em stream. Só o chat usa este.
+    streamFetch: expoFetch as unknown as typeof fetch,
 
     // Chegar aqui significa que o token que o SessionManager considerou válido
     // foi recusado pela API — revogação no servidor, ou relógio do aparelho

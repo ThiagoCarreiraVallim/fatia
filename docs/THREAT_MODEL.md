@@ -19,8 +19,10 @@ chamadas de tool e os resultados que o `/mcp` devolveu ([ADR 023](./ADR/023-chec
 — e as **memórias** (`UserMemory`), que a pessoa pediu para o assistente guardar. Os três têm a
 mesma sensibilidade, e o vetor 10 descreve o que os protege.
 
-Não armazenamos: fotos (ADR 004), senhas (ADR 008 — a identidade vive no Logto), meios de
-pagamento.
+Não armazenamos: fotos de refeição (ADR 004), senhas (ADR 008 — a identidade vive no Logto),
+meios de pagamento. Desde a Fase 7a há um bucket de **mídia publicada** pela comunidade (imagens de
+dica, capa de plano, avatar; vídeo de exercício na 7b), privado e lido só por URL assinada
+([ADR 028](./ADR/028-imagens-de-posts-da-comunidade.md)); o vetor 13 descreve o que o protege.
 
 ## Camadas de defesa
 
@@ -282,7 +284,7 @@ já que a metodologia é publicada.
 Até a #249 o `apps/agent` **deliberadamente não recebia** token de usuário; o docstring de
 `apps/agent/src/fatia_agent/api.py` registrava o porquê: "mandar um Bearer de usuário para um serviço que
 não precisa dele só aumentaria o estrago de um comprometimento". O chat com IA hospedada inverte
-isso, e a inversão é uma decisão, não um descuido: `agent-chat.client.ts` manda
+isso, e a inversão é uma decisão, não um descuido: `ai/http-agent.adapter.ts` manda
 `Authorization: Bearer <token do usuário>` para o agente, que o reusa no `/mcp`.
 
 **Por que a inversão vale a pena.** É o desenho da [ADR 015](./ADR/015-agente-python-langgraph-cliente-mcp.md):
@@ -303,15 +305,15 @@ processo Node; o `apps/agent` é Python, com outro toolchain de log e outra pilh
 A mesma superfície da #215 existe lá e **aquele conserto não vale ali** — por isso a varredura de
 vazamento do agente é um teste próprio, que olha stdout e stderr e tem controle negativo.
 
-| Onde o token poderia escapar        | O que impede                                                                                                                                                                                                                                                                 |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Log da requisição                   | `log-serializers.ts` é **lista de permissão** e `authorization` não está nela (§6)                                                                                                                                                                                           |
-| Log do proxy de chat                | `agent-chat.client.ts` e `chat.service.ts` só logam status e **nome** de classe de erro — nunca header, corpo ou resposta. Os dois specs têm um bloco "o que NÃO pode vazar" que percorre todos os caminhos que logam e falha se o token ou o que a pessoa escreveu aparecer |
-| Span                                | `headersToSpanAttributes` fica não configurado (§6b), e a chamada ao agente sai por `fetch`/undici, que **não** está na lista de instrumentações: ela não gera span nenhum                                                                                                   |
-| Banco                               | `Message` guarda texto, nomes de tool, `metadata`, `runId` e o voto. Não há coluna de token, aqui nem em `Conversation`                                                                                                                                                      |
-| Estado do grafo e checkpoint        | O `McpClient` com o Bearer viaja no **runtime context** do LangGraph, que o checkpointer não serializa. `tests/chat/test_sem_vazamento.py` lê o checkpoint gravado e procura o token, com controle negativo                                                                  |
-| Corpo de erro                       | `traduzirErro` traduz pelo `code` do agente, sem eco do que foi mandado: token recusado pelo `/mcp` vira 401 (a sessão da pessoa expirou); outro 401/403 do agente vira "instância mal configurada"                                                                          |
-| Confusão com o segredo da instância | O que autentica **a API no agente** é o `X-Fatia-Agent-Key`, um header separado. Por isso 401/403 do agente é problema de configuração, e nunca o token da pessoa                                                                                                            |
+| Onde o token poderia escapar        | O que impede                                                                                                                                                                                                                                                                     |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Log da requisição                   | `log-serializers.ts` é **lista de permissão** e `authorization` não está nela (§6)                                                                                                                                                                                               |
+| Log do proxy de chat                | `ai/http-agent.adapter.ts` e `chat.service.ts` só logam status e **nome** de classe de erro — nunca header, corpo ou resposta. Os dois specs têm um bloco "o que NÃO pode vazar" que percorre todos os caminhos que logam e falha se o token ou o que a pessoa escreveu aparecer |
+| Span                                | `headersToSpanAttributes` fica não configurado (§6b), e a chamada ao agente sai por `fetch`/undici, que **não** está na lista de instrumentações: ela não gera span nenhum                                                                                                       |
+| Banco                               | `Message` guarda texto, nomes de tool, `metadata`, `runId` e o voto. Não há coluna de token, aqui nem em `Conversation`                                                                                                                                                          |
+| Estado do grafo e checkpoint        | O `McpClient` com o Bearer viaja no **runtime context** do LangGraph, que o checkpointer não serializa. `tests/chat/test_sem_vazamento.py` lê o checkpoint gravado e procura o token, com controle negativo                                                                      |
+| Corpo de erro                       | `translateError` traduz pelo `code` do agente, sem eco do que foi mandado: token recusado pelo `/mcp` vira 401 (a sessão da pessoa expirou); outro 401/403 do agente vira "instância mal configurada"                                                                            |
+| Confusão com o segredo da instância | O que autentica **a API no agente** é o `X-Fatia-Agent-Key`, um header separado. Por isso 401/403 do agente é problema de configuração, e nunca o token da pessoa                                                                                                                |
 
 **O estado da conversa, desde a ADR 023.** O agente passou a guardar a conversa num checkpointer
 para poder pausar e retomar. Isso abre cinco perguntas, e cada uma tem resposta verificável:
@@ -355,6 +357,291 @@ exemplos do `.env.example` são `http://` porque os dois ficam na mesma rede int
 sem porta publicada — apontar o `AGENT_BASE_URL` para outra máquina sem TLS põe o Bearer na rede
 em texto claro.
 
+### 11. Plano PRO — webhook forjado, PRO de graça e cobrança de quem saiu (ADR 024)
+
+O que um atacante ganharia: IA hospedada sem pagar (custo de inferência por conta do Fatia), ou
+fazer outra pessoa perder o PRO que pagou.
+
+- **Webhook forjado.** As duas rotas de webhook são públicas por natureza. O do Asaas só aceita o
+  `asaas-access-token` igual a `ASAAS_WEBHOOK_TOKEN`; o da RevenueCat, o header `Authorization`
+  igual a `REVENUECAT_WEBHOOK_AUTH`, comparado em **tempo constante**. Sem segredo configurado a
+  rota responde 503, nunca "aceita qualquer coisa". E o webhook da RevenueCat nem confia no corpo:
+  ele só diz **quem** mudou; o estado vem de `GET /v1/subscribers/:id` com a chave secreta. Forjar o
+  corpo, no máximo, faz o servidor reler a verdade.
+- **Reentrega e ordem.** `BillingWebhookEvent` tem `@@unique([provider, eventId])` e é gravado na
+  mesma transação do efeito: o mesmo evento duas vezes é no-op. O fim do período do Asaas só
+  avança, e um `PAYMENT_OVERDUE` de uma cobrança já superada é ignorado (`sem_efeito`).
+- **Conceder PRO a si mesmo.** Nenhuma rota recebe tier, status ou `userId`: o checkout cria
+  `PENDING` (Free) e só o webhook autenticado ativa; o sync da RevenueCat atua apenas no
+  `@CurrentUser()`, e o `app_user_id` da loja é o id do Fatia, que o app define depois do login. A
+  origem `MANUAL` só nasce pelo script `billing:grant-pro`, que exige acesso ao banco.
+- **Portão esquecido.** O cliente do agente (`AgentAdapter`) só é injetável no `HostedAiService`, que
+  passa pelo portão e pela cota antes de chamar e grava o uso depois; o `AiModule` não o exporta, e
+  o Nest recusa a injeção em outro módulo. `ai/__tests__/hosted-ai.service.spec.ts` prova que, sem
+  direito, nenhuma chamada sai (turno, ditado, foto).
+- **Cobrança depois de apagar a conta.** `deleteAccount` cancela a recorrência no Asaas antes de
+  apagar o usuário e **aborta** se o Asaas falhar. Assinatura de loja não é cancelável por nós: o
+  aviso de exclusão manda a pessoa à loja.
+- **Dado de pagamento.** O CPF vai ao Asaas no checkout e não é gravado; cartão nunca passa pelo
+  Fatia. O payload guardado do webhook tem só ids, status e datas.
+
+**Não mitigado:** o portão é por usuário, e um PRO pode compartilhar a conta. A cota diária (#135)
+limita o custo; detectar compartilhamento não está no escopo.
+
+### 12. Comunidades — convite vazado, entrada indevida e assento para quem não é membro (ADR 025/026)
+
+O que um atacante ganharia: entrar numa comunidade alheia (e ganhar o PRO de um assento), ver os
+dados de quem consentiu à equipe, ou fazer a comunidade pagar a IA de alguém de fora.
+
+- **Adivinhar ou vazar o token.** O token é `randomBytes(32)` em base64url; o banco guarda só o
+  sha256, então um dump não dá convite válido. A prévia pública tem throttle (20/min) e responde o
+  **mesmo 404** para inexistente, vencido, revogado, esgotado ou de outra conta — o link não ensina
+  qual era o motivo. O aceite exige login e tem throttle próprio.
+- **Link encaminhado.** Convite por e-mail é de **uso único** e só vale para a conta com aquele
+  e-mail; o de link compartilhável tem validade (até 30 dias) e limite opcional de usos, e a equipe
+  revoga quando quiser. O incremento de usos é condicional na mesma transação do aceite: dois aceites
+  simultâneos não passam do limite.
+- **Entrar quem não devia.** Comunidade "só por convite" responde ao código como se não existisse; a
+  "com aprovação" guarda o pedido sem vínculo nenhum até o dono aprovar. Profissional só convida
+  membro, e ninguém é convidado como dono.
+- **Ler sem consentimento.** O consentimento é por categoria e vale para a equipe (dono, profissionais
+  e criadores) só pelo `assertReadable`, com registro de toda leitura; membro comum nunca lê. Sair,
+  ser removido ou mudar o consentimento revoga os vínculos na mesma transação.
+- **Assento para quem não é membro.** Atribuir exige associação **ativa da mesma comunidade**, e
+  `unassign` filtra pelo grupo da URL (id do corpo amarrado ao pai da rota); só o dono tem
+  `billing.manage`. Quem sai perde o assento na mesma transação.
+- **Redirecionamento aberto.** O retorno depois do login (`?next=`) só aceita caminho relativo deste
+  app, revalidado no callback.
+
+- **Painel da equipe (Fase 6).** O painel é tela; quem decide é a matriz em cada rota. Mudar papel é
+  só do dono (`member.role`), com o id da associação amarrado ao grupo da URL, e rebaixar revoga na
+  mesma transação o que a pessoa recebia. A lista de membros mostra à equipe o que cada um
+  compartilha **com quem pergunta** e o assento; a participação individual nas estatísticas nunca
+  sai. O profissional lista, revoga e reenvia só convites de membro.
+- **Convite em lote como spam.** Até 50 e-mails por lote, o teto de 50 convites por dia conta o lote
+  inteiro **antes** de criar qualquer um (estourou, nada sai), a rota tem throttle próprio e quem já
+  é membro ou tem convite aberto é pulado.
+- **Link de fatura injetado.** O link da fatura vem do webhook autenticado do Asaas e só é guardado se
+  for `https`.
+
+**Não mitigado:** um link compartilhável sem limite de usos deixa entrar quem o recebeu de segunda
+mão, até a equipe revogá-lo — é o preço de ter link de convite. O e-mail do convidado fica até 30 dias
+depois do uso ou do vencimento. O teto diário limita quanto e-mail uma comunidade dispara, mas não
+impede que um dono mande convites a endereços que não pediram — o e-mail diz quem convidou e some
+sem resposta.
+
+### 13. Conteúdo e mídia da comunidade — upload, URL assinada e o texto de terceiros (Fase 7a, ADR 028)
+
+O que um atacante ganharia: hospedar arquivo arbitrário no nosso bucket, ler a imagem de uma
+comunidade de que não faz parte, pôr o conteúdo dele na comunidade de outra pessoa, injetar script
+pelo texto de uma dica, ou colocar dado de outra conta na cópia de quem adota um plano.
+
+- **Upload direto ao bucket.** A URL de envio é assinada com **tipo e tamanho exatos** (o storage
+  recusa outro corpo) e vale 10 minutos; só JPEG, PNG e WebP até 10 MB entram, e pedir a URL exige a
+  ação da tela que vai usar o arquivo (`content.publish`, ou `group.update` para o avatar) numa
+  associação ativa. Confirmar é só de quem enviou (arquivo alheio responde 404).
+- **Metadado e arquivo malformado.** Toda imagem é decodificada e regravada pelo `sharp`: sai em
+  WebP, sem EXIF nem GPS, no máximo 1600 px; o original é apagado. Mais de 40 megapixels é recusado
+  (bomba de descompressão), e o que não decodifica é apagado e recusado.
+- **Ler mídia de outra comunidade.** O bucket é privado. A URL de leitura (10 minutos) só sai dentro
+  da resposta de uma rota que já conferiu a associação; não existe rota de "arquivo por id". Um
+  `fileId` usado como capa, imagem ou avatar precisa ser da **mesma comunidade da URL**, do mesmo
+  propósito e já confirmado — o de outra comunidade responde como inexistente.
+- **Conteúdo de outra comunidade.** `templateId` e `tipId` são sempre buscados com o `groupId` da URL,
+  e para o membro só existe o publicado (rascunho responde 404, inclusive na adoção). O autor edita o
+  que é dele; quem modera (`content.moderate`) edita o de todos.
+- **Script na dica.** O corpo é markdown restrito, transformado em tokens (`parseMarkdownLite`) e
+  desenhado com componentes: nunca vira HTML, e link que não é `https:` vira texto. Nas tools MCP a
+  descrição avisa que o texto é da equipe, conteúdo a mostrar e não instrução.
+- **Dado de outra conta na cópia.** A adoção valida o retrato inteiro antes de escrever: exercício de
+  catálogo só se for público (o próprio do autor viaja por valor), alimento só mantém `foodId` se for
+  público, e um retrato forjado com id alheio é recusado ou limpo. Treino é adotado uma vez; as metas
+  só mudam com `applyGoals`.
+- **Lixo no bucket.** Arquivo pendente, ou confirmado e não usado, sai em 24 h; trocar ou apagar o
+  item apaga o arquivo; apagar a comunidade ou a conta da dona apaga os objetos antes do banco.
+
+**Não mitigado:** quem recebe a URL assinada pode repassá-la, e ela vale até expirar (10 minutos).
+Conteúdo impróprio publicado pela equipe só sai quando o dono tira; denúncia e moderação de membros
+são da Fase 8.
+
+### 14. Catálogo de exercícios da comunidade (Fase 7b, ADR 030)
+
+O que um atacante ganharia: ver ou usar o exercício de uma comunidade de que não faz parte, pôr o
+tutorial dele por cima do exercício pessoal de alguém, hospedar um arquivo qualquer com cara de
+vídeo, ou fazer um exercício de comunidade cair no catálogo de todo mundo.
+
+- **Quem vê qual exercício** está num helper só (`exercise-access.ts`), usado na busca, no detalhe,
+  ao registrar série, na prescrição, no recorde, na prévia do chat, no snapshot e na adoção. O
+  exercício da comunidade aparece para membro ativo; quem saiu continua lendo o que já está no
+  plano ou no histórico dele. `addExercise` passou a conferir o acesso: antes aceitava o exercício
+  pessoal de outra pessoa pelo id sequencial.
+- **Catálogo público** é `createdByUserId` nulo **e** `groupOwned` falso. `groupOwned` não muda
+  nunca, e dois `CHECK` no banco seguram a forma; apagar a comunidade ou o exercício em uso solta o
+  exercício (`groupId` nulo) sem publicá-lo.
+- **Tutorial alheio.** O tutorial novo só vale para exercício do catálogo geral ou da própria
+  comunidade (o pessoal de alguém e o de outra comunidade respondem 404); vídeo e fotos têm de ser
+  da mesma comunidade e do propósito certo (`exercise_video`, `exercise_photo`). Autor ou moderador
+  edita.
+- **Arquivo com cara de vídeo.** A confirmação lê os primeiros bytes e exige a caixa `ftyp`; o que
+  não passa é apagado do bucket. O vídeo é servido sem conversão, só por URL assinada.
+- **Plano pronto forjado.** Item `source: 'group'` só é aceito na adoção de plano pronto da mesma
+  comunidade, e o exercício precisa ser dela; disfarçado de catálogo (`source: 'catalog'` com o id
+  de um exercício de comunidade) é recusado.
+- **Agente.** O MCP recebe o tutorial resumido (dicas, se tem vídeo, quantas fotos), sem URL.
+
+**Não mitigado:** quem está em duas comunidades vê o tutorial de uma só; o vídeo não é verificado
+além do cabeçalho (um MP4 com conteúdo impróprio só sai quando a equipe tira).
+
+### 15. Agente da comunidade — orientações da equipe no prompt (Fase 7c, ADR 031)
+
+O que um atacante ganharia: com a conta de dono de uma comunidade, escrever orientações que façam o
+assistente gravar sem a pessoa aprovar, contar o peso ou as refeições de outro membro, receitar
+remédio em nome da academia, ou trocar as regras do prompt; ou, como membro, conversar com o
+agente de uma comunidade de que não faz parte.
+
+- **As tools não mudam.** A persona não toca no catálogo, no recorte da ADR 022 nem no Bearer: o
+  agente só alcança os dados de quem conversa. Uma orientação "você tem acesso a todos os membros"
+  não tem tool que a atenda.
+- **A aprovação não é texto.** A escrita confirmável pausa o grafo (ADR 023) com ou sem persona; o
+  caso `persona-nao-pula-a-confirmacao` do benchmark manda o modelo gravar direto e confere a pausa.
+- **Ordem e cerca.** As orientações entram depois das regras fixas, com a frase de que elas vêm
+  antes, e cercadas como dado; a cerca não fecha de dentro. O nome, fora da cerca, sai numa linha
+  curta, sem `<`/`>` — conferido na API e de novo no agente.
+- **Quem configura e quem escolhe.** Só o dono (`group.update`). O membro só escolhe entre os
+  agentes ligados das comunidades em que está ativo; outro id é 404 antes de abrir o agente. A
+  persona é conferida a cada turno, e quem sai da comunidade volta ao assistente da Fatia.
+
+**Não mitigado:** o tom é do dono. Uma orientação como "prometa resultado em 30 dias" não fere
+nenhuma regra mecânica e pode ser seguida; o texto fixo pede para não prescrever e não diagnosticar,
+e o benchmark cobre dose e identidade de profissional de saúde, não promessa comercial.
+
+### 16. Desafios da comunidade — o ranking como canal (Fase 8a, ADR 027)
+
+O que um atacante ganharia: como membro, ler pelo ranking quanto outra pessoa come, pesa ou bebe;
+ver o placar de um desafio em que não entrou ou de outra comunidade; ou, como equipe, usar uma
+métrica de valor bruto ("mais proteína") para expor o que cada um comeu.
+
+- **O placar não recebe refeição.** `social/` é proibido de tocar em refeição, peso e meta
+  (`no-body-comparison.spec.ts`); a aderência vem de `nutrition/daily-adherence.service.ts` como
+  conjunto de datas, e toda métrica de nutrição é contagem de dias na própria meta (sufixo `_DAYS`,
+  conferido no spec). Não há métrica de corpo.
+- **Ranking só para quem participa.** O detalhe devolve `leaderboard: null` a quem não entrou; a
+  linha do ranking tem `displayName`, `score`, `rank`, `isMe` e `medal`, e nada que identifique a
+  conta. Quem sai da comunidade some do placar.
+- **Isolamento pelo par da URL.** O desafio é buscado com `{ id, groupId }` da rota, e os
+  participantes que o `ScoreboardService` pontua saem desse desafio, com o `userId` lido da
+  associação — nunca de id vindo do corpo. Desafio de outra comunidade é 404, inclusive no cartão
+  de confirmação do chat.
+- **Apelido.** Até 30 caracteres, sem quebra de linha nem `<`/`>`; é o único texto da pessoa que
+  os outros participantes leem.
+
+**Não mitigado:** `STEPS` e `WATER_ML` pontuam pelo valor somado (decisão da #161, anterior à ADR
+027): num desafio de um dia, a pontuação de água **é** a água daquele dia, visível a quem participa.
+A pessoa entra sabendo o que conta (o texto da métrica está na tela de entrada).
+
+### 17. Mural da comunidade — conteúdo de qualquer membro (Fase 8b, ADR 032)
+
+O que um atacante ganharia: publicar ofensa, assédio, propaganda ou conselho de saúde perigoso
+para a comunidade inteira; ler ou mexer no mural de outra comunidade; descobrir quem o denunciou;
+voltar depois de banido; ou, pelo texto do post, mandar no assistente de quem lê o mural no chat.
+
+- **Isolamento pelo par da URL.** Post, comentário, denúncia e imagem são buscados com o
+  `groupId` da rota; post, cursor, denúncia e imagem de outra comunidade são 404. A imagem do post
+  tem de ser `post_image`, da mesma comunidade, pronta, **enviada pela própria pessoa** e sem outro
+  post (`post.integration.spec.ts`).
+- **Moderação humana com fila.** Quem tem `content.moderate` remove (o post some para todos menos
+  o autor), restaura em 30 dias e fixa. A fila agrupa as denúncias por alvo e não leva quem
+  denunciou. Limites por pessoa: 10 posts, 60 comentários e 30 denúncias por hora.
+- **Banimento.** `member.ban` (só o dono) encerra a associação com a revogação dos vínculos e do
+  assento na mesma transação, e `BANNED` barra o código e o convite.
+- **Prompt injection.** `list_group_posts` diz na descrição que o texto é de terceiros, devolve
+  as imagens como contagem e não traz URL. Publicar e comentar pelo chat são confirmáveis.
+- **Imagem.** O mesmo fluxo da ADR 028: reprocessada, sem EXIF e GPS, URL assinada de 10 min,
+  emitida só para quem vê o post. Apagar o post ou a conta apaga o arquivo.
+
+**Não mitigado:** não há filtro automático de conteúdo; até a equipe agir, o post está no ar.
+
+### 18. Avisos no celular — a tela bloqueada e o toque (Fase 8c, ADR 033)
+
+O que um atacante ganharia: ler, na tela bloqueada de alguém, dado de saúde ou o que foi escrito
+no mural; receber os avisos de outra conta num aparelho; apagar o celular de outra pessoa; ou, por
+um aviso, levar quem toca para fora do app.
+
+- **Texto sem dado sensível.** Os textos moram em `sharing/community-notices.ts` e levam só o
+  nome da comunidade, o apelido ou o nome de quem agiu e o título do desafio — nunca dado de
+  saúde, posição no ranking nem o texto do post ou do comentário (`notifications.integration.spec`
+  confere o comentário).
+- **Aparelho de uma conta só.** O token é único: registrar em outra conta tira da anterior, e sair
+  da conta no app apaga o aparelho. Apagar o aparelho de outra pessoa responde 404. Até 10 por
+  pessoa.
+- **Quem recebe.** Ninguém é avisado da própria ação; comentário e remoção só chegam a quem ainda
+  está ativo na comunidade; desafio novo só para membros ativos; fim do desafio só para quem
+  participou e continua lá; convite só para a conta do e-mail convidado.
+- **Destino do toque.** O app só navega para caminho interno de tela conhecida ou `/c/<token>`
+  (`notificationTarget`, testado contra esquema, `//`, `?` e rota inventada).
+- **Token no log.** O `PushService` não registra o token de ninguém, só o motivo da recusa.
+
+**Não mitigado:** o aviso passa pela Expo e pela Apple ou pelo Google; quem controla esses
+serviços vê o texto (que por isso é neutro) e o caminho, que no convite inclui o token do
+convite — o mesmo que já vai no e-mail, e que só vale para a conta do endereço convidado.
+
+### 19. Observabilidade do chat no Langfuse (Fase 9c, ADR 034)
+
+O que um atacante — ou o próprio fornecedor — ganharia: o registro de saúde de alguém, ligado ao
+cadastro dela, numa base fora da Fatia.
+
+- **O que não sai.** Resultado e argumentos das tools, fotos, áudio e o id da conta
+  (`messages_for_trace`, `hashed_user_id`; `tests/test_tracing.py` confere o texto de uma tool e o
+  id da pessoa ausentes de todos os spans exportados, com vermelho provado).
+- **O que sai mascarado.** Pergunta e resposta, sem e-mail, CPF, CNPJ e telefone (`mask`).
+- **O id é um HMAC** com a `AGENT_API_KEY`: o Langfuse agrupa os traces de uma pessoa sem ter como
+  chegar ao cadastro dela, e quem tem o banco da Fatia não precisa do Langfuse para nada.
+- **Voto sem comentário.** O comentário livre do 👎 fica no Postgres; ao Langfuse vão o sinal e os
+  motivos fechados.
+- **Desligável.** Sem as duas chaves, nada é enviado.
+
+**Não mitigado:** a pergunta e a resposta continuam sendo saúde em prosa, mascaradas só nos
+padrões de identificação; a retenção é a do projeto na Langfuse Cloud (EUA) — transferência internacional, declarada na política de privacidade.
+
+### 20. Resposta do chat desacoplada da requisição (Fase 9d, ADR 035)
+
+O que um atacante ganharia: assistir à resposta de outra pessoa pelo `live`, ou parar o turno
+dela.
+
+- **Dona da conversa primeiro.** `live` e `stop` passam por `assertDaPessoa` (404 para conversa
+  alheia), e o registro só devolve o turno a quem o abriu (`ChatRunRegistry.find`, testado com
+  outra pessoa).
+- **Nada novo em disco.** Os eventos ficam na memória do processo por no máximo 60 s depois do
+  fim, com teto de 8 MB por turno.
+- **Um turno por conversa** (409): duas abas não abrem duas execuções na mesma thread.
+
+**Não mitigado:** fechar a aba não para mais a inferência; o teto de turnos por minuto continua
+sendo o que limita o gasto.
+
+**Aviso de resposta pronta (Fase 9e).** Quando o turno termina sem ninguém ouvindo, a pessoa
+recebe um push de texto fixo ("Sua resposta está pronta.", ou o pedido de confirmação) com o
+caminho `/chat/<id>` — nada da conversa vai à tela bloqueada (`chatReadyNotice`, testado contra o
+conteúdo da resposta).
+
+### 21. Push no navegador, recibos e agrupamento (Fase 9g, ADR 036)
+
+O que um atacante ganharia: usar a API para fazer requisições a endereços internos (o endpoint de
+push é escolhido pelo cliente), receber os avisos de outra conta num navegador, ou ler conteúdo
+num aviso agrupado.
+
+- **SSRF fechado por lista.** `isPushEndpoint` só aceita `https`, sem porta, nos hosts dos
+  serviços de push dos navegadores. `localhost`, IP, porta e domínio parecido são recusados
+  (`web-push.service.spec`, `notifications.integration.spec`, com vermelho provado).
+- **Inscrição de uma conta só.** O endpoint é único e passa para quem inscreveu por último; tirar
+  a inscrição de outra pessoa não faz nada.
+- **Toque só para dentro.** O service worker abre apenas caminho interno (`/` sem `//` nem
+  esquema), a mesma regra do app.
+- **Agrupado sem conteúdo.** "Mais N comentários no seu post" leva só a contagem e o nome da
+  comunidade.
+- **Recibos sem token no log.** O alerta de recibo com erro registra o motivo, nunca o token.
+
+**Não mitigado:** o serviço de push do navegador vê o texto (neutro) e o caminho do aviso.
+
 ## Matriz de cobertura
 
 Onde o escopo é aplicado, por domínio. Verificado por
@@ -371,28 +658,40 @@ atacante manda um recurso **próprio** na URL — legítimo, passa no `assertOwn
 **corpo**. Endpoint que aceita id de recurso filho no payload precisa amarrá-lo ao pai da URL; ser
 dono do pai não autoriza escrever em qualquer filho.
 
-| Domínio              | Service                                       | Ponto de escopo                                                            |
-| -------------------- | --------------------------------------------- | -------------------------------------------------------------------------- |
-| Refeições            | `meal.service.ts`                             | `where: { userId }` nas leituras; `assertOwner` nas escritas               |
-| Itens de refeição    | `meal-item.service.ts`                        | posse via `item.meal.userId` / `meal.userId`                               |
-| Alimentos custom     | `food.service.ts`                             | `OR: [createdByUserId: null, createdByUserId: userId]`; custom exige posse |
-| Metas de nutriente   | `nutrient-target.service.ts`                  | `where: { userId }`; unique `[userId, nutrientKey]`                        |
-| Metas de macros      | `user-goals.service.ts`                       | `UserGoals.userId` é a própria PK                                          |
-| Metas pessoais       | `goals.service.ts`                            | `where: { userId }`; `assertOwned` nas escritas                            |
-| Peso                 | `weight-log.service.ts`                       | `where: { userId }`; posse no update/delete                                |
-| Passos               | `step-log.service.ts`                         | idem                                                                       |
-| Hidratação           | `water-log.service.ts`                        | idem                                                                       |
-| Exercícios           | `exercise.service.ts`                         | `accessFilter(userId)`; custom exige posse; base é só-leitura              |
-| Planos               | `workout-plan.service.ts`                     | `where: { userId }`; `assertOwner`                                         |
-| Sessões              | `workout-session.service.ts`                  | `where: { userId }`; `assertOwner`; delete idempotente                     |
-| Séries               | `session-set.service.ts`                      | posse via `set.session.userId`                                             |
-| Progresso/dashboard  | `progress.service.ts`, `dashboard.service.ts` | agregam sobre queries já escopadas                                         |
-| Grupos de alimento   | `food.service.ts#listGroups`                  | **sem escopo, de propósito** — `FoodGroup` não tem dono                    |
-| Leitura profissional | `sharing/professional-access.service.ts`      | `assertReadable` resolve o titular; a **única** leitura entre contas       |
-| Painel agregado      | `insights/insights.service.ts`                | opt-in + limiar + `suppress()`; nenhum id de pessoa sai do módulo          |
-| Chat com IA          | `chat/conversation.service.ts`                | `where: { id, userId }`; `Message` não tem dono — quem tem é a conversa    |
-| Memórias do chat     | `chat/memory/memory.service.ts`               | `where: { userId }`; esquecer exige posse                                  |
-| Checkpoint do agente | `chat/checkpoint-purge.service.ts`            | thread `{userId}:{conversationId}`; dono vem do `get_me`, nunca do corpo   |
+| Domínio                  | Service                                                                   | Ponto de escopo                                                                                     |
+| ------------------------ | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Refeições                | `meal.service.ts`                                                         | `where: { userId }` nas leituras; `assertOwner` nas escritas                                        |
+| Itens de refeição        | `meal-item.service.ts`                                                    | posse via `item.meal.userId` / `meal.userId`                                                        |
+| Alimentos custom         | `food.service.ts`                                                         | `OR: [createdByUserId: null, createdByUserId: userId]`; custom exige posse                          |
+| Metas de nutriente       | `nutrient-target.service.ts`                                              | `where: { userId }`; unique `[userId, nutrientKey]`                                                 |
+| Metas de macros          | `user-goals.service.ts`                                                   | `UserGoals.userId` é a própria PK                                                                   |
+| Metas pessoais           | `goals.service.ts`                                                        | `where: { userId }`; `assertOwned` nas escritas                                                     |
+| Peso                     | `weight-log.service.ts`                                                   | `where: { userId }`; posse no update/delete                                                         |
+| Passos                   | `step-log.service.ts`                                                     | idem                                                                                                |
+| Hidratação               | `water-log.service.ts`                                                    | idem                                                                                                |
+| Exercícios               | `exercise.service.ts`                                                     | `readableExercises`/`searchableExercises`; custom exige posse; base só-leitura                      |
+| Planos                   | `workout-plan.service.ts`                                                 | `where: { userId }`; `assertOwner`                                                                  |
+| Sessões                  | `workout-session.service.ts`                                              | `where: { userId }`; `assertOwner`; delete idempotente                                              |
+| Séries                   | `session-set.service.ts`                                                  | posse via `set.session.userId`                                                                      |
+| Progresso/dashboard      | `progress.service.ts`, `dashboard.service.ts`                             | agregam sobre queries já escopadas                                                                  |
+| Grupos de alimento       | `food.service.ts#listGroups`                                              | **sem escopo, de propósito** — `FoodGroup` não tem dono                                             |
+| Leitura profissional     | `sharing/professional-access.service.ts`                                  | `assertReadable` resolve o titular; a **única** leitura entre contas                                |
+| Painel agregado          | `insights/insights.service.ts`                                            | opt-in + limiar + `suppress()`; nenhum id de pessoa sai do módulo                                   |
+| Chat com IA              | `chat/conversation.service.ts`                                            | `where: { id, userId }`; `Message` não tem dono — quem tem é a conversa                             |
+| Memórias do chat         | `chat/memory/memory.service.ts`                                           | `where: { userId }`; esquecer exige posse                                                           |
+| Checkpoint do agente     | `chat/checkpoint-purge.service.ts`                                        | thread `{userId}:{conversationId}`; dono vem do `get_me`, nunca do corpo                            |
+| Plano / assinatura       | `billing/user-subscription.service.ts`                                    | `where: { userId }`; nenhuma rota recebe tier, status ou id de assinatura                           |
+| Convite                  | `sharing/invite.service.ts`                                               | token só por hash; aceite é sempre de quem chama; e-mail vinculado à conta                          |
+| Assentos                 | `billing/seat-pool.service.ts`                                            | `groupId` da URL + associação ativa do mesmo grupo; só `billing.manage`                             |
+| Papel no grupo           | `sharing/membership.service.ts#changeRole`                                | só o dono; associação ativa do grupo da URL; vínculos no mesmo commit                               |
+| Faturas dos assentos     | `billing/seat-pool.service.ts#invoices`                                   | `where: { pool: { groupId } }` do grupo da URL; só `billing.read`                                   |
+| Planos e dicas           | `sharing/content.service.ts`                                              | `{ id, groupId }` da URL; membro só vê o publicado; autor ou moderador edita                        |
+| Mídia                    | `storage/media.service.ts`                                                | envio pela ação da tela; confirmar só quem enviou; arquivo da mesma comunidade                      |
+| Exercícios da comunidade | `workout/helpers/exercise-access.ts`, `sharing/group-exercise.service.ts` | membro ativo, ou já no plano/histórico; `{ groupId, exerciseId }` da URL; `groupOwned` imutável     |
+| Agente da comunidade     | `sharing/group-agent.service.ts`, `chat/chat.service.ts`                  | só o dono configura; escolha entre agentes ligados de comunidade ativa, conferida a cada turno      |
+| Desafios da comunidade   | `sharing/challenge.service.ts`, `social/scoreboard.service.ts`            | `{ groupId, id }` da URL; ranking só para participante ativo; placar só recebe datas de aderência   |
+| Mural da comunidade      | `sharing/post.service.ts`, `storage/media.service.ts`                     | `{ groupId, id }` da URL; removido só para o autor; imagem só do próprio autor e da comunidade      |
+| Avisos no celular        | `notifications/notification.service.ts`                                   | `where: { id, userId }` para apagar; token único passa à conta que registra; preferência por pessoa |
 
 ## O que não está protegido
 

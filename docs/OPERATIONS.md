@@ -15,6 +15,7 @@
 | API (NestJS)   | container, `infra/docker-compose.prod.yml` | Aplica migrations no boot                     |
 | PWA (Next.js)  | container, mesmo compose                   | —                                             |
 | Logto          | container, mesmo compose                   | IdP (ADR 008)                                 |
+| Agente de IA   | container, mesmo compose, só rede interna  | Python (ADR 015); ver "Chat e agente"         |
 | Postgres       | "Database" do Dokploy, **fora** do compose | **Dois** clusters: `fatia` e `logto`          |
 | Traefik        | gerenciado pelo Dokploy                    | TLS via Let's Encrypt, `dokploy-network`      |
 | Backups        | `infra/backup.sh` via cron no host         | Local + offsite opcional                      |
@@ -197,6 +198,44 @@ o **Tempo** (o trace só passa a valer de verdade quando o `apps/agent` da ADR 0
 dois processos no caminho de uma requisição), depois o **Loki** — que economiza ~250 MiB e ainda
 deixa métrica, painel e o `docker logs` com rotação.
 
+## Mídia da comunidade — bucket R2 (ADR 028)
+
+Imagens publicadas pela comunidade (dica, capa de plano, avatar) e, a partir da Fase 7b, vídeos de
+exercício. Sem as variáveis abaixo a API sobe igual e o envio responde 503.
+
+1. No Cloudflare R2, crie um bucket **privado** (sem domínio público), por exemplo `fatia-media`.
+2. Gere um token de API S3 com permissão **Object Read & Write só nesse bucket** — a API não cria
+   bucket nem mexe em CORS em produção.
+3. Em _Settings › CORS policy_ do bucket, libere o app para enviar e ler direto:
+
+   ```json
+   [
+     {
+       "AllowedOrigins": ["https://app.<DOMAIN>"],
+       "AllowedMethods": ["PUT", "GET"],
+       "AllowedHeaders": ["*"],
+       "MaxAgeSeconds": 3600
+     }
+   ]
+   ```
+
+4. Preencha no Dokploy (estão no `docker-compose.prod.yml`): `MEDIA_S3_ENDPOINT`
+   (`https://<account>.r2.cloudflarestorage.com`), `MEDIA_S3_REGION=auto`, `MEDIA_S3_BUCKET`,
+   `MEDIA_S3_ACCESS_KEY_ID` e `MEDIA_S3_SECRET_ACCESS_KEY`.
+5. Confirme publicando uma dica com imagem pelo painel: a imagem aparece, e abrir o endereço dela sem
+   a parte depois do `?` responde 403.
+
+No dev, o `pnpm dev` sobe o SeaweedFS do compose (`media`, porta 8333) e a API cria o bucket e o CORS
+para `WEB_ORIGIN` ao subir. A faxina de arquivos pendentes ou sem uso roda de hora em hora dentro da
+API (24 h de tolerância).
+
+**Backup do bucket:** o `infra/backup.sh` copia a mídia para o offsite, cifrada (`MEDIA_S3_*` no
+`.env.backup`; ver [Backup — setup do zero](#backup--setup-do-zero) e o
+[drill](#drill-de-restore)). Ligue também o **versionamento de objetos** no bucket de produção, com
+uma regra de ciclo de vida que **expira as versões antigas em 7 dias**: o versionamento desfaz uma
+exclusão por engano no próprio R2, e a expiração mantém a exclusão LGPD dentro do prazo do
+`DATA_RETENTION.md` (uma versão antiga é uma cópia do arquivo apagado).
+
 ## Backup — setup do zero
 
 Tudo abaixo roda **no host**, via SSH. Leva ~15 minutos, quase todo em criar o bucket.
@@ -252,6 +291,14 @@ PG_INSTANCES="fatia:<container-da-app>:postgres logto:<container-do-logto>:postg
 Dumpar só um traria os dados sem as contas (ou o contrário), e isso só apareceria na hora do
 restore. Se qualquer instância falhar, o backup inteiro falha.
 
+**A mídia da comunidade** (imagens de posts, capas, avatares, vídeos) não está no dump: preencha
+`MEDIA_S3_*` com um token **só de leitura** no bucket R2 de mídia. O backup mantém um espelho em
+`$BACKUP_DIR/media-mirror` (em claro, no host) e a cópia cifrada em `$BACKUP_DIR/media-sealed`, que
+vai para `$S3_BUCKET/media/`. É incremental: só arquivo novo ou alterado é cifrado e enviado de
+novo. O `--delete` nas duas pontas faz o que foi apagado em produção sair da cópia na execução
+seguinte, e por isso o token do offsite precisa poder apagar. Conte com o espaço do espelho mais o
+da cópia cifrada no disco do host.
+
 O `backup.sh` carrega o `.env.backup` sozinho — não é preciso repetir variável nenhuma
 na crontab (e credencial em crontab ficaria legível por qualquer `crontab -l`).
 
@@ -261,7 +308,8 @@ na crontab (e credencial em crontab ficaria legível por qualquer `crontab -l`).
 /opt/fatia/infra/backup.sh
 ```
 
-Esperado: `Dump OK`, `Cifrando com AES-256`, `Offsite OK`, `Concluído`. Se algum passo
+Esperado: `Dump OK`, `Cifrando com AES-256`, `Offsite OK` e, com a mídia configurada,
+`[media] Offsite OK (N objeto(s))`, e por fim `Concluído`. Se algum passo
 falhar, o script sai com código 1 e dispara o `ALERT_WEBHOOK`.
 
 ### 6. Agendar
@@ -386,6 +434,8 @@ dados conferidos — ver [Histórico de drills](#histórico-de-drills).
   endpoint é S3-compatível de terceiro.
 - Sai com código 1 em qualquer falha e chama `ALERT_WEBHOOK`.
 - Sem `S3_BUCKET`, avisa em log que o backup só existe naquele host.
+- Mídia (`MEDIA_S3_BUCKET`): só com o offsite ligado; nada vai em claro; confere que o espelho, a
+  cópia cifrada e o offsite têm o mesmo número de objetos, e falha se não fecharem.
 - Pinga `BACKUP_PING_URL` **só no fim**, depois de tudo verificado — e um ping que falhe nunca
   derruba um backup que deu certo. Com a variável vazia, o comportamento é no-op silencioso.
 
@@ -428,6 +478,30 @@ rm -f /tmp/restore-test.sql.gz.gpg
 Se as contagens vierem zeradas ou muito abaixo do esperado, **o backup não serve** — investigue
 antes de precisar dele.
 
+### A mídia, junto com o banco
+
+Com o banco do passo 3 de pé, restaure a mídia num bucket **descartável** (nunca no de produção) e
+confira que toda `MediaFile` pronta do banco restaurado tem o objeto:
+
+```bash
+# 6. Um bucket vazio para o teste, no R2 ou no B2, com um token de escrita nele
+RESTORE_S3_BUCKET=fatia-media-drill \
+RESTORE_S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com \
+RESTORE_S3_ACCESS_KEY_ID=... RESTORE_S3_SECRET_ACCESS_KEY=... \
+DATABASE_CONTAINER=fatia-restore-test DATABASE_USER=fatia \
+  /opt/fatia/infra/restore-media.sh
+```
+
+O `restore-media.sh` lê o offsite e a passphrase do `.env.backup`, baixa `media/`, decifra cada
+objeto e o sobe na mesma chave. Esperado: `Conferido: as N MediaFile READY do banco existem no
+bucket`. Se faltar alguma, ele lista as chaves e sai com erro: é imagem que voltaria quebrada.
+
+Diferença de idade esperada: a mídia espelha o **último** backup, e o dump pode ser mais antigo. Um
+dump de dias atrás pode citar imagem que a pessoa apagou depois — essa chave aparece como faltando, e
+está certo que falte. Para o drill, use o dump da mesma execução.
+
+Depois do drill, apague o bucket descartável.
+
 Para backup local não cifrado, pule o passo 2 e o `gpg`:
 
 ```bash
@@ -448,17 +522,20 @@ Tempo estimado: **1 a 2 horas**, dominado por propagação de DNS e emissão de 
    `fatia-logto-<TS>` para as contas — porque são **dois clusters distintos**.
    ⚠️ Restaurar só o da aplicação devolve os dados sem nenhuma conta: todo mundo perde o acesso
    ao próprio histórico. Restaurar só o do Logto devolve as contas vazias. Os dois, sempre.
-5. **Recriar o Compose service** apontando para `infra/docker-compose.prod.yml`.
-6. **Repor as variáveis de ambiente** no painel do Dokploy (ver `.env.production.example`).
+5. **Restaurar a mídia** no bucket R2 de produção (recrie-o se ele se perdeu, com o CORS da seção
+   [Mídia da comunidade](#mídia-da-comunidade--bucket-r2-adr-028)): `infra/restore-media.sh` com
+   `RESTORE_S3_*` apontando para ele e `DATABASE_CONTAINER` no Postgres restaurado, para conferir.
+6. **Recriar o Compose service** apontando para `infra/docker-compose.prod.yml`.
+7. **Repor as variáveis de ambiente** no painel do Dokploy (ver `.env.production.example`).
    Precisam ser as **mesmas** de antes, em especial `LOGTO_COOKIE_SECRET` — trocá-la invalida as
    sessões do PWA.
-7. **Deploy.** A API aplica migrations no boot; o dump restaurado já está na versão correta, então
+8. **Deploy.** A API aplica migrations no boot; o dump restaurado já está na versão correta, então
    é no-op.
-8. **Confirmar o TLS.** O Traefik pede certificado ao Let's Encrypt no primeiro acesso a cada
+9. **Confirmar o TLS.** O Traefik pede certificado ao Let's Encrypt no primeiro acesso a cada
    subdomínio. Se falhar, quase sempre é DNS ainda não propagado — espere e tente de novo, com
    atenção ao rate limit do Let's Encrypt.
-9. **Reinstalar o cron de backup** e rodar `backup.sh` na mão uma vez.
-10. **Smoke test:**
+10. **Reinstalar o cron de backup** e rodar `backup.sh` na mão uma vez.
+11. **Smoke test:**
     - `curl https://api.fat.ia.br/health`
     - `curl https://api.fat.ia.br/.well-known/oauth-authorization-server`
     - `curl -I https://fat.ia.br/claude-connect/`
@@ -505,6 +582,134 @@ A API valida JWT via JWKS com cache. Com o Logto fora:
 
 Não há fallback, e é uma dependência aceita conscientemente na ADR 008. Restaurar o Logto é a
 única saída: `docker compose logs logto` e confirmar que ele alcança a database `logto`.
+
+## Chat e agente
+
+O chat passa por três saltos: **PWA/app → `api` → `agent` → OpenRouter**, e o agente volta à
+`api` pelo `/mcp` (`http://api:3000/mcp`, rede interna) com o Bearer de quem conversa (ADR 021).
+O estado das conversas pausadas fica no schema `agent_checkpoint` do Postgres da Fatia (ADR 023).
+
+| Variável (serviço `agent`)      | Para quê                                                                    |
+| ------------------------------- | --------------------------------------------------------------------------- |
+| `AI_BASE_URL`, `AI_API_KEY`     | gateway (OpenRouter); host e modelo precisam estar em `allowed_models.py`   |
+| `AI_MODEL_TEXT`/`_VISION`/…     | modelo por capacidade                                                       |
+| `AI_TIMEOUT_S` (120)            | silêncio tolerado do provedor                                               |
+| `AI_MAX_RETRIES` (2)            | novas tentativas antes do primeiro token (429, 5xx, conexão caída)          |
+| `AGENT_API_KEY`                 | segredo compartilhado com a `api` (ADR 018)                                 |
+| `AGENT_CHECKPOINT_DATABASE_URL` | Postgres do estado das conversas; vazio = memória (não sobrevive a restart) |
+
+**Healthcheck:** `GET /health` responde 200 sempre que o processo está vivo. O campo
+`checkpointer.reachable` diz se o Postgres respondeu a um `SELECT 1` agora — `false` com o chat
+falhando é banco, não modelo:
+
+```bash
+docker exec $(docker ps -qf name=agent) python -c \
+  "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8100/health').read().decode())"
+```
+
+### Erro na hora, e o "tentar de novo" funciona
+
+Era o sintoma de produção até a Fase 9b. Três causas, todas tratadas, e como reconhecer cada uma
+se voltar:
+
+| No log do `agent`                                                        | Causa                                                                     | O que já faz                                                                            |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `Turno de chat terminou em erro inesperado` + `psycopg…OperationalError` | conexão do checkpointer morta (rede do Swarm, restart ou backup do banco) | o pool confere a conexão antes de usar, keepalive TCP, `max_idle` 5 min                 |
+| `Stream do provedor falhou antes do primeiro token (…)`                  | 429/5xx ou conexão caída no OpenRouter                                    | repete até `AI_MAX_RETRIES` com backoff e `Retry-After`                                 |
+| (no log da `api`) `Conexão com o agente caiu antes da resposta`          | socket reusado que o uvicorn fechou                                       | uma nova tentativa (chat, foto, ditado e título); uvicorn com `--timeout-keep-alive 30` |
+
+Para olhar o passado (antes do deploy da 9b), procure no log do `agent`:
+
+```bash
+docker logs $(docker ps -qf name=agent) --since 72h 2>&1 \
+  | grep -E "Exception in ASGI application|OperationalError|server closed the connection" | tail -20
+```
+
+Se aparecer `Turno de chat terminou em erro inesperado` sem `psycopg`, é defeito nosso: o
+traceback está logo abaixo da linha.
+
+### Custo e cota da IA
+
+A `api` grava cada chamada ao agente em `AiUsage` (turno, título, ditado e foto) com o modelo, o
+custo estimado pela `AI_PRICE_TABLE` e quem pagou (`paidBy`: `USER`, `GROUP`, `INSTANCE`). Todas as
+rotas de inferência do agente devolvem `usage`; a foto passou a devolver em outubro de 2026, e antes
+disso entrava sempre como custo não medido.
+
+**Tabela de preço.** Micro-dólares por milhão de tokens, inteiros, com a chave igual ao `model` que
+o provedor devolve. Para o GLM 5.3 Flash no OpenRouter (preço de 19/10/2026, o mesmo para texto e
+foto): `AI_PRICE_TABLE={"z-ai/glm-5.3-flash":{"in":47076,"out":160000}}`. Confira o preço em
+<https://openrouter.ai/z-ai/glm-5.3-flash> quando trocar de modelo ou de provedor.
+
+**Quanto custa, medido no formato da tabela:**
+
+| Chamada                                                 | Tokens (entrada / saída) | Custo                         |
+| ------------------------------------------------------- | ------------------------ | ----------------------------- |
+| Foto de refeição                                        | ~1 200 / ~90             | ~71 micro-dólares             |
+| Turno de chat com três voltas de tool (~20 k por volta) | ~60 000 / ~1 500         | ~3 065 micro-dólares          |
+| Título da conversa                                      | ~300 / ~15               | ~16 micro-dólares (arredonda) |
+
+**Cotas sugeridas para o piloto:** `AI_QUOTA_DAILY_MICROS=60000` (US$ 0,06 por pessoa por dia, ~20
+turnos longos; no pior caso ~US$ 1,80/mês por PRO, abaixo do preço do plano) e
+`AI_QUOTA_GLOBAL_DAILY_MICROS=3000000` (US$ 3/dia, ~US$ 90/mês de teto para a instância).
+`AI_QUOTA_UNPRICED_DAILY_CALLS=20` fica: ela só fecha se a medição se perder.
+
+**Depois de ligar, confira que nada sai sem preço.** Chamada com `pricingKnown = false` conta na
+tolerância **da instância inteira**; a 20ª do dia fecha a IA de todo mundo até a meia-noite UTC.
+O motivo mais provável é o `model` da resposta não bater com a chave da tabela:
+
+```bash
+docker exec -i $(docker ps -qf name=postgres) psql -U fatia -d fatia -c "
+  SELECT feature, model, \"pricingKnown\", count(*), sum(\"costMicros\")
+  FROM \"AiUsage\" WHERE \"createdAt\" >= date_trunc('day', now() at time zone 'utc')
+  GROUP BY 1, 2, 3 ORDER BY 1;"
+```
+
+Linha com `pricingKnown = f` e `model` preenchido: acrescente esse nome à `AI_PRICE_TABLE`. Com
+`model` vazio: o agente não devolveu `usage` (versão antiga do agente, ou o provedor não mandou o
+bloco).
+
+### Langfuse — o que cada turno fez (ADR 034)
+
+1. Conta em <https://us.cloud.langfuse.com> (região **US**; uma chave de outra região não funciona aqui). Organização e projeto `fatia`.
+2. **Settings → Data retention:** 30 dias (é o teto do plano Hobby; nos pagos, escolha).
+3. **Settings → API keys → Create:** copie a _public key_ (`pk-lf-…`) e a _secret key_
+   (`sk-lf-…`).
+4. No Dokploy, serviço `agent` (já no `docker-compose.prod.yml`): `LANGFUSE_PUBLIC_KEY`,
+   `LANGFUSE_SECRET_KEY`; `LANGFUSE_ENVIRONMENT=production`. `LANGFUSE_SAMPLE_RATE` abaixo de 1
+   reduz o volume.
+5. Confirme mandando uma pergunta no chat: em **Tracing**, aparece `chat-chat` com a sessão igual
+   ao id da conversa, as gerações (`modelo`) com tokens e custo, e as tools com nome e duração.
+
+Para achar um turno: filtre por **Session** (id da conversa, que está na URL do chat) ou por
+horário. O `user_id` é um HMAC — para achar todos os turnos de uma pessoa, calcule-o com
+`hashed_user_id` do `apps/agent/src/fatia_agent/tracing.py`. Um 👎 aparece como score
+`user_feedback = 0` no trace, com os motivos em metadata.
+
+## Avisos no celular — Expo push (ADR 033)
+
+Os avisos da comunidade saem pela API HTTP da Expo. Sem `PUSH_ENABLED=true` a API só registra no
+log o que mandaria (é o padrão no dev).
+
+1. O app precisa do projeto EAS (`eas init`, `EAS_PROJECT_ID` no build): sem ele, Perfil →
+   Notificações diz que a versão não recebe avisos.
+2. Credenciais de push: no Android, a chave FCM v1 do projeto Firebase em `eas credentials`; no
+   iOS, a chave APNs, que o EAS gera no primeiro build.
+3. No Dokploy (estão no `docker-compose.prod.yml`): `PUSH_ENABLED=true`, e `EXPO_ACCESS_TOKEN` só
+   se o projeto tiver _Enhanced Security for Push Notifications_ ligado.
+4. Confirme ligando os avisos num celular e comentando, com outra conta, um post da primeira: o
+   aviso chega com o app fechado, e o log da API não mostra `Push recusado`.
+
+### Avisos no navegador — Web Push (ADR 036)
+
+1. Gere o par de chaves uma vez: `npx web-push generate-vapid-keys`. Trocar o par desfaz todas
+   as inscrições (cada navegador precisa ligar de novo).
+2. No Dokploy, serviço `api` (já no `docker-compose.prod.yml`): `WEB_PUSH_VAPID_PUBLIC_KEY`,
+   `WEB_PUSH_VAPID_PRIVATE_KEY` (segredo) e `WEB_PUSH_SUBJECT` (`mailto:` de quem opera).
+3. Confirme em Perfil → Notificações, num Chrome de desktop: ligue "Avisos neste navegador" e
+   comente, com outra conta, um post da primeira. O aviso chega com a aba fechada, e o toque abre
+   o mural.
+4. Recibos da Expo e janelas de agrupamento rodam sozinhos na API (15 min e 1 min). No log,
+   `Recibo de push com erro: InvalidCredentials` pede revisar a chave FCM/APNs em `eas credentials`.
 
 ## Release do app nativo
 
@@ -560,6 +765,9 @@ vê é a `version` do `app.config.ts`, e sobe junto do resto do monorepo.
       barra final: o Logto faz match exato e recusa com `invalid_target`
 - [ ] Apagar conta funciona de dentro do app — Apple e Google **rejeitam** app que
       permite criar conta e não permite apagá-la
+- [ ] Conta de revisão das lojas criada ou atualizada com `pnpm store:review-account`
+      (ver [TESTAR_O_APP.md §7](./TESTAR_O_APP.md#7-conta-de-revisão-das-lojas)) e a senha
+      colada no formulário de cada loja
 - [ ] [Auditoria de paridade](./MOBILE_PARITY.md) sem linha pendente
 
 ### Quando um build quebra e o backend não

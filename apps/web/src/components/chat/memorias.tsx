@@ -44,7 +44,7 @@ function Item({ memoria }: { memoria: ChatMemory }) {
         className={cn(
           ghostButton,
           'shrink-0 rounded p-1.5',
-          confirmando ? 'text-rose-500' : 'text-foreground/50',
+          confirmando ? 'text-danger' : 'text-foreground/50',
         )}
       >
         {confirmando ? (

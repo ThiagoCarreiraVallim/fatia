@@ -100,7 +100,7 @@ export function FinishSessionModal({ open, onOpenChange, session }: Props) {
           </div>
 
           {finish.error && (
-            <p className="text-sm text-rose-500">
+            <p className="text-sm text-danger">
               Erro ao finalizar treino:{' '}
               {finish.error instanceof Error ? finish.error.message : 'Tente novamente.'}
             </p>

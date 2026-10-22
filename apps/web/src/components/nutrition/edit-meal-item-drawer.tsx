@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Drawer,
   DrawerClose,
@@ -12,7 +12,16 @@ import {
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { nutritionApi, type MealItem } from '@fatia/api-client';
+import {
+  amountGrams,
+  amountPayload,
+  nutritionApi,
+  type Amount,
+  type FoodPortion,
+  type MealItem,
+} from '@fatia/api-client';
+import { AmountPicker } from './amount-picker';
+import { invalidateNutritionDay } from '@/lib/nutrition-cache';
 
 interface Props {
   item: MealItem | null;
@@ -20,34 +29,59 @@ interface Props {
   onClose: () => void;
 }
 
+/** Como o item foi gravado: na medida, se ela ainda existe; senão em gramas. */
+function amountOf(item: MealItem, portions: FoodPortion[]): Amount {
+  const portion = item.portionLabel
+    ? portions.find((p) => p.label === item.portionLabel)
+    : undefined;
+  return portion && item.portionQuantity
+    ? { kind: 'portion', portionId: portion.id, quantity: item.portionQuantity }
+    : { kind: 'grams', grams: String(item.grams) };
+}
+
 export function EditMealItemDrawer({ item, date, onClose }: Props) {
   const open = item !== null;
-  const [grams, setGrams] = useState('');
+  // `null` até a pessoa mexer: antes disso o valor sai do item e das medidas carregadas.
+  const [edited, setEdited] = useState<Amount | null>(null);
+  const [created, setCreated] = useState<FoodPortion[]>([]);
   const qc = useQueryClient();
 
-  // Ajuste durante o render, e não num efeito (#187). A comparação é a mesma que
-  // estava no array de dependências — identidade do objeto `item` — então o campo
-  // é reespelhado nos mesmos momentos, só que antes de pintar. `previousItem`
-  // parte de `null` para reproduzir a passagem de montagem: o drawer é montado
-  // já com `item`, e sem isso o campo nasceria vazio.
+  // Ajuste durante o render, e não num efeito (#187): trocar de item descarta a edição.
   const [previousItem, setPreviousItem] = useState<MealItem | null>(null);
   if (previousItem !== item) {
     setPreviousItem(item);
-    if (item) setGrams(String(item.grams));
+    setEdited(null);
+    setCreated([]);
   }
+
+  const foodId = item?.foodId ?? null;
+  const portionsQuery = useQuery({
+    queryKey: ['nutrition', 'portions', foodId],
+    queryFn: () => nutritionApi.portions(foodId as number),
+    enabled: open && foodId !== null,
+  });
+  const portions = [...(portionsQuery.data ?? []), ...created];
+  const amount: Amount | null = item ? (edited ?? amountOf(item, portions)) : null;
+  const grams = amount ? amountGrams(amount, portions) : null;
 
   const mutation = useMutation({
     mutationFn: () => {
-      if (!item) throw new Error('Sem item');
-      const g = Number(grams);
-      if (!Number.isFinite(g) || g <= 0) throw new Error('Gramas inválidas');
-      return nutritionApi.updateItem(item.id, { grams: g });
+      if (!item || !amount || grams === null) throw new Error('Quantidade inválida');
+      return nutritionApi.updateItem(item.id, amountPayload(amount));
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['nutrition', 'summary', date] });
+      invalidateNutritionDay(qc, date);
       onClose();
     },
   });
+
+  const createPortion = async (label: string, g: number) => {
+    if (foodId === null) throw new Error('Item sem alimento');
+    const portion = await nutritionApi.createPortion(foodId, { label, grams: g });
+    setCreated((prev) => [...prev, portion]);
+    qc.invalidateQueries({ queryKey: ['nutrition', 'portions', foodId] });
+    return portion;
+  };
 
   return (
     <Drawer open={open} onOpenChange={(o) => !o && onClose()}>
@@ -57,23 +91,34 @@ export function EditMealItemDrawer({ item, date, onClose }: Props) {
           <DrawerDescription>{item?.foodName}</DrawerDescription>
         </DrawerHeader>
         <div className="my-3 space-y-4">
-          <div className="space-y-1">
-            <label htmlFor="edit-grams" className="text-sm font-medium">
-              Quantidade (g)
-            </label>
-            <Input
-              id="edit-grams"
-              type="number"
-              inputMode="decimal"
-              value={grams}
-              onChange={(e) => setGrams(e.target.value)}
-              min={0}
-              step={1}
-              autoFocus
+          {amount && foodId !== null ? (
+            <AmountPicker
+              portions={portions}
+              amount={amount}
+              onChange={setEdited}
+              onCreatePortion={createPortion}
+              gramsId="edit-grams"
             />
-          </div>
+          ) : (
+            // Item livre não tem alimento do catálogo, logo não tem medida para escolher.
+            <div className="space-y-1">
+              <label htmlFor="edit-grams" className="text-sm font-medium">
+                Quantidade (g)
+              </label>
+              <Input
+                id="edit-grams"
+                type="number"
+                inputMode="decimal"
+                value={amount?.kind === 'grams' ? amount.grams : ''}
+                onChange={(e) => setEdited({ kind: 'grams', grams: e.target.value })}
+                min={0}
+                step={1}
+                autoFocus
+              />
+            </div>
+          )}
           {mutation.error && (
-            <p className="text-sm text-rose-500">{(mutation.error as Error).message}</p>
+            <p className="text-sm text-danger">{(mutation.error as Error).message}</p>
           )}
           <div className="flex gap-2">
             <DrawerClose asChild>
@@ -84,7 +129,7 @@ export function EditMealItemDrawer({ item, date, onClose }: Props) {
             <Button
               className="flex-1"
               onClick={() => mutation.mutate()}
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || grams === null}
             >
               {mutation.isPending ? 'Salvando...' : 'Salvar'}
             </Button>

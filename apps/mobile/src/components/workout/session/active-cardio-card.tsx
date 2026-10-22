@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
-import { Check, Info, Pause, Play, RotateCcw } from 'lucide-react-native';
+import { Check, Pause, Play, RotateCcw } from 'lucide-react-native';
 import { workoutApi, type ExerciseGroup } from '@fatia/api-client';
 import { Button, Input } from '@/components/ui';
-import { useOpenExerciseDetail } from '@/components/workout/exercise-detail-host';
+import { ExerciseTitle } from './exercise-title';
 import {
   formatClock,
   formatPace,
@@ -14,6 +14,7 @@ import {
   parseDecimalInput,
   parseIntegerInput,
 } from './format';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/components/workout/active-cardio-card.tsx`.
@@ -37,7 +38,6 @@ export function ActiveCardioCard({
   onFinishExercise: () => void;
 }) {
   const qc = useQueryClient();
-  const openDetail = useOpenExerciseDetail();
   const existing = group.sets[0];
 
   const [running, setRunning] = useState(false);
@@ -137,16 +137,11 @@ export function ActiveCardioCard({
   return (
     <View className="rounded-2xl border border-border bg-card p-4">
       <View className="items-center">
-        <Text className="text-[10px] font-extrabold tracking-wide text-primary">CARDIO</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Ver detalhes de ${group.exerciseName}`}
-          onPress={() => openDetail(group.exerciseId)}
-          className="min-h-[44px] flex-row items-center justify-center gap-1.5 px-2 active:opacity-80"
-        >
-          <Text className="text-base font-extrabold text-foreground">{group.exerciseName}</Text>
-          <Info size={14} color="#baccaf" />
-        </Pressable>
+        <ExerciseTitle
+          kicker="CARDIO"
+          exerciseId={group.exerciseId}
+          exerciseName={group.exerciseName}
+        />
         {previousLabel ? (
           <Text className="text-[11px] text-muted-foreground">Anterior: {previousLabel}</Text>
         ) : null}
@@ -203,9 +198,9 @@ export function ActiveCardioCard({
             className="h-12 w-12 items-center justify-center rounded-full bg-primary active:opacity-80"
           >
             {running ? (
-              <Pause size={20} color="#131313" fill="#131313" />
+              <Pause size={20} color={cores.background} fill={cores.background} />
             ) : (
-              <Play size={20} color="#131313" fill="#131313" />
+              <Play size={20} color={cores.background} fill={cores.background} />
             )}
           </Pressable>
 
@@ -215,7 +210,7 @@ export function ActiveCardioCard({
             onPress={reset}
             className="h-11 w-11 items-center justify-center rounded-full bg-background active:opacity-80"
           >
-            <RotateCcw size={16} color="#baccaf" />
+            <RotateCcw size={16} color={cores.mutedForeground} />
           </Pressable>
         </View>
       </View>
@@ -260,7 +255,7 @@ export function ActiveCardioCard({
           loading={save.isPending}
           onPress={() => save.mutate()}
         >
-          <Check size={16} color="#131313" />
+          <Check size={16} color={cores.background} />
           <Text className="text-sm font-extrabold text-primary-foreground">
             {existing ? 'Atualizar sessão' : 'Salvar sessão'}
           </Text>

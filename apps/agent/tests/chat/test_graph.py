@@ -11,7 +11,6 @@ from collections.abc import AsyncIterator, Sequence
 from typing import Never
 
 import httpx
-import pytest
 from langgraph.checkpoint.memory import InMemorySaver
 
 from fatia_agent.chat.graph import (
@@ -401,17 +400,60 @@ async def test_provedor_que_cai_no_meio_do_stream_vira_evento_de_erro(settings_f
     assert without_timing(eventos[-1]) == ("done", {"status": "error"})
 
 
-async def test_defeito_nosso_nao_vira_evento_de_erro_generico(settings_factory):
-    """Exceção sem `code` continua subindo: o traceback é a única pista dela."""
+async def test_defeito_nosso_vira_evento_de_erro_e_traceback_no_log(settings_factory, caplog):
+    """Exceção sem `code` não corta mais o stream: vira evento, e o traceback vai ao log.
+
+    Subir crua deixava a tela com "a resposta foi interrompida" e nenhuma linha
+    de log dizendo qual turno — o pior dos dois lados.
+    """
 
     class ProvedorComDefeito:
         def stream_chat(self, messages, *, tools=(), capacidade="text") -> Never:
             raise ZeroDivisionError("defeito de programação")
 
     fluxo = await _fluxo(ProvedorComDefeito(), mensagem="oi")
-    with pytest.raises(ZeroDivisionError):
-        async for _ in fluxo:
-            pass
+    eventos = quadros([q async for q in fluxo])
+
+    (erro,) = [dado for nome, dado in eventos if nome == "error"]
+    assert erro["code"] == "AGENT_INTERNAL_ERROR"
+    assert "defeito de programação" not in erro["message"]
+    assert without_timing(eventos[-1]) == ("done", {"status": "error"})
+    assert any(
+        registro.exc_info and registro.exc_info[0] is ZeroDivisionError
+        for registro in caplog.records
+    )
+
+
+async def test_checkpointer_caindo_vira_evento_de_erro(settings_factory):
+    """O caso de produção: a conexão do checkpointer morre e o turno não pode cortar o stream."""
+    import psycopg
+
+    class SaverQueCai(InMemorySaver):
+        async def aget_tuple(self, config) -> Never:
+            raise psycopg.OperationalError("server closed the connection unexpectedly")
+
+    client = McpClient(
+        base_url="http://localhost:3000/mcp",
+        bearer=TOKEN,
+        transport=duplo_do_mcp(catalogo=CATALOGO),
+    )
+    contexto = ContextoDoTurno(
+        provider=None,  # type: ignore[arg-type]
+        client=client,
+        permitidas=tuple(todas_permitidas(await client.list_tools())),
+        run_id="run-1",
+    )
+    fluxo = stream_chat_events(
+        montar_grafo(SaverQueCai()),
+        contexto,
+        thread_id=THREAD,
+        conversation_id=CONVERSA,
+        mensagem="oi",
+    )
+    eventos = quadros([q async for q in fluxo])
+
+    assert [nome for nome, _ in eventos][-2:] == ["error", "done"]
+    assert dict(eventos)["error"]["code"] == "AGENT_INTERNAL_ERROR"
 
 
 async def _fluxo(provedor: object, *, mensagem: str) -> AsyncIterator[str]:

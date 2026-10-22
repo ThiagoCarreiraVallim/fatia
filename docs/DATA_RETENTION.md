@@ -17,6 +17,7 @@
 | Exercícios custom (`Exercise` com `createdByUserId`) | Postgres | Enquanto a conta existir |
 | Planos, sessões e séries de treino                   | Postgres | Enquanto a conta existir |
 | Peso, passos, hidratação                             | Postgres | Enquanto a conta existir |
+| Assinatura do plano (`UserSubscription`)             | Postgres | Enquanto a conta existir |
 
 **Não há expiração automática.** O histórico é o produto: um registro de peso de dois anos atrás
 é exatamente o que dá valor ao gráfico de progresso. Apagar por idade seria destruir a
@@ -26,6 +27,23 @@ Ao apagar a conta, tudo acima vai embora imediatamente, pelos `onDelete: Cascade
 `User` em `packages/db/prisma/schema.prisma`. Não há soft delete, não há lixeira, não há período
 de carência.
 
+### Plano PRO e pagamento (ADR 024)
+
+- **`UserSubscription`** guarda origem, status, intervalo, datas e o id da assinatura no provedor.
+  Vai embora com a conta (`Cascade`) e sai no `export_my_data` (sem o link de pagamento, que é do
+  provedor). Antes de apagar, a recorrência do Asaas é cancelada; a de loja a pessoa cancela na
+  loja.
+- **`User.asaasCustomerId`** é o único elo com o cliente no Asaas. O **CPF** vai ao Asaas no
+  checkout (exigência para emitir cobrança) e **não é gravado** no Fatia; cartão nunca passa por
+  nós. Nome, e-mail e CPF ficam no Asaas sob a retenção fiscal dele.
+- **`BillingWebhookEvent`** guarda o id do evento, o tipo e um payload **mínimo** (id da
+  assinatura, status, data de vencimento) — nada de nome, e-mail ou CPF. Não tem `userId`, então
+  não vai embora com a conta e não entra no export: é a trilha de idempotência e de auditoria do
+  que o provedor disse. Sem expiração automática hoje; uma rotina de expurgo por idade é dívida
+  aberta, sem urgência porque a linha não identifica ninguém sem a assinatura apagada.
+- **`AiUsage.paidBy`** registra quem bancou a chamada (`USER`, `GROUP`, `INSTANCE`), sem nada do
+  conteúdo.
+
 ## Compartilhamento com profissional (B2B)
 
 Quem entra numa academia dentro do Fatia gera três coisas novas, e nenhuma delas é dado de saúde:
@@ -33,16 +51,38 @@ a associação ao grupo, o **consentimento** que o titular concede a um profissi
 de quem leu o dado dele. Desenho em [ADR 014](./ADR/014-compartilhamento-b2b-copia-e-vinculo.md);
 quem pode o quê, em [PERMISSIONS.md](./PERMISSIONS.md).
 
-| Dado                                       | Onde               | Retenção                                                 |
-| ------------------------------------------ | ------------------ | -------------------------------------------------------- |
-| Associação ao grupo (`GroupMembership`)    | Postgres           | Enquanto a conta existir. Sair marca `status` e `leftAt` |
-| Consentimento (`ProfessionalLink`)         | Postgres           | Enquanto a conta existir — **revogar não apaga a linha** |
-| Trilha de acesso (`ProfessionalAccessLog`) | Postgres           | Enquanto a conta existir                                 |
-| O que o profissional leu                   | **Não armazenado** | —                                                        |
+| Dado                                                                      | Onde               | Retenção                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Associação ao grupo (`GroupMembership`)                                   | Postgres           | Enquanto a conta existir. Sair marca `status` e `leftAt`                                                                                                                                                                                                                      |
+| Consentimento (`ProfessionalLink`)                                        | Postgres           | Enquanto a conta existir — **revogar não apaga a linha**                                                                                                                                                                                                                      |
+| Trilha de acesso (`ProfessionalAccessLog`)                                | Postgres           | Enquanto a conta existir                                                                                                                                                                                                                                                      |
+| Consentimento à equipe (`consentScopes`)                                  | Postgres           | Na associação; reescrito quando a pessoa muda                                                                                                                                                                                                                                 |
+| Convite (`GroupInvite`)                                                   | Postgres           | Enquanto a comunidade existir; só o hash do token                                                                                                                                                                                                                             |
+| E-mail de quem foi convidado                                              | Postgres           | **30 dias** depois do uso, do vencimento ou da revogação                                                                                                                                                                                                                      |
+| Assentos (`GroupSeatPool`, `…Assignment`)                                 | Postgres           | Enquanto a comunidade existir; atribuição tem `revokedAt`                                                                                                                                                                                                                     |
+| Faturas dos assentos (`GroupSeatInvoice`)                                 | Postgres           | Enquanto a comunidade existir; valor, vencimento, status e o link do Asaas, sem dado de pessoa                                                                                                                                                                                |
+| Planos prontos e dicas (`GroupPlanTemplate`, `GroupTip`)                  | Postgres           | Enquanto a comunidade existir. São da comunidade: quem publicou e apaga a conta vira "Equipe" (`authorId` nulo)                                                                                                                                                               |
+| Cópia adotada (`WorkoutPlan`, `MealTemplate` com `fromTemplateId`)        | Postgres           | É da pessoa, como qualquer plano dela; apagar o modelo só tira a proveniência                                                                                                                                                                                                 |
+| Mídia publicada (`MediaFile` + objeto no bucket)                          | Postgres + R2      | Enquanto o item que a usa existir. Sem EXIF/GPS. Pendente ou sem uso: 24 h. Apagar a comunidade ou a conta da dona apaga os objetos                                                                                                                                           |
+| Catálogo da comunidade (`GroupExerciseGuide`, exercício da casa)          | Postgres + R2      | Enquanto a comunidade existir. Exercício da casa que alguém usa fica, sem comunidade, no plano e no histórico dessa pessoa                                                                                                                                                    |
+| Agente da comunidade (`GroupAgent`)                                       | Postgres + R2      | Enquanto a comunidade existir. A conversa guarda só qual comunidade (`agentGroupId`), que fica nula quando ela é apagada                                                                                                                                                      |
+| Desafios (`GroupChallenge`, participações, apelido)                       | Postgres           | Enquanto a comunidade existir. Sair da comunidade tira a pessoa do ranking; apagar a conta apaga as participações e o apelido                                                                                                                                                 |
+| Mural (`GroupPost`, imagens, reações, comentários, denúncias)             | Postgres + bucket  | Enquanto a comunidade existir. O autor apaga o post (e as imagens); removido pela equipe fica visível só ao autor. Apagar a conta apaga tudo o que a pessoa publicou, reagiu e denunciou, com as imagens                                                                      |
+| Avisos no celular (`UserDevice`, `NotificationPreference`)                | Postgres           | O aparelho fica até a pessoa sair da conta no app, tirá-lo pela web, a Expo dizer que o token morreu, ou passar de 10 (sai o mais antigo). Apagar a conta apaga aparelhos e preferências. O export leva a plataforma e as datas, sem o token. O texto do aviso não é guardado |
+| Navegadores com avisos (`WebPushSubscription`, ADR 036)                   | Postgres           | Até a pessoa desligar, o serviço dizer que acabou (404/410), passar de 10 por conta ou a conta ser apagada. O export leva só as datas                                                                                                                                         |
+| Tickets da Expo (`PushTicket`) e janelas de agrupamento (`PendingNotice`) | Postgres           | No máximo 24 h e 10 min; sem conteúdo, apagados com a conta                                                                                                                                                                                                                   |
+| O que o profissional leu                                                  | **Não armazenado** | —                                                                                                                                                                                                                                                                             |
 
 **Revogar preenche `revokedAt`, nunca apaga.** É a linha revogada que responde "quem teve acesso a
 quê, e quando" — apagá-la destruiria exatamente a prova que o titular pode querer depois. O mesmo
 vale para conceder de novo: nasce uma linha nova, e a antiga fica com a sua janela de vigência.
+
+**O e-mail do convidado é dado de terceiro**, e por isso tem prazo: o expurgo apaga o endereço 30
+dias depois de o convite ser usado, vencer ou ser revogado — ao subir a API, a cada 6 horas e a cada
+convite novo (`InviteService.purgeOldEmails`). O convite fica, sem o e-mail, porque responde quem
+convidou e quando. O consentimento dado ao entrar fica na associação (`consentScopes`, `consentAt`) e
+sai no `export_my_data` junto com os assentos da própria pessoa; os convites que ela criou saem sem o
+e-mail de quem foi convidado.
 
 **A trilha registra que houve leitura, nunca o conteúdo lido.** Guardar o que foi lido criaria uma
 segunda cópia do dado de saúde dentro da tabela cujo propósito é protegê-lo. Ficam a data, a
@@ -60,8 +100,10 @@ essa é a clientela dele, e é dado de terceiro.
 ## Dados que NÃO são armazenados
 
 - **Fotos de refeição.** Decisão registrada na [ADR 004](./ADR/004-sem-armazenamento-fotos.md) e
-  estendida pela [ADR 020](./ADR/020-foto-e-audio-trafegam-sem-persistencia.md). **Não há bucket,
-  não há disco, não há coluna** — em nenhum dos dois caminhos de IA. O que muda entre eles é se a
+  estendida pela [ADR 020](./ADR/020-foto-e-audio-trafegam-sem-persistencia.md). **Não há bucket
+  para elas, não há disco, não há coluna** — em nenhum dos dois caminhos de IA. O bucket que existe
+  desde a Fase 7a é só de mídia **publicada** pela comunidade
+  ([ADR 028](./ADR/028-imagens-de-posts-da-comunidade.md)), e foto de refeição nunca passa por ele. O que muda entre eles é se a
   imagem chega a atravessar o Fatia; ver a seção seguinte.
 - **Fotos de refeição.** Decisão registrada na [ADR 004](./ADR/004-sem-armazenamento-fotos.md).
   Continua valendo com o registro por foto do app nativo (#139): a imagem **transita**, é analisada
@@ -214,7 +256,7 @@ nada pessoal: sem o `userId`, sobra um custo e um nome de modelo. Pelo mesmo mot
 
 ## Consulta ao Open Food Facts (scanner de código de barras)
 
-O scanner do app nativo consulta o [Open Food Facts](https://world.openfoodfacts.org) para descobrir
+O scanner (do app nativo e do PWA) consulta o [Open Food Facts](https://world.openfoodfacts.org) para descobrir
 o produto embalado a partir do código lido. É a **única transferência de dado para terceiro** no
 fluxo de nutrição, e por isso está descrita aqui item a item. Decisão em
 [ADR 017](./ADR/017-open-food-facts-para-industrializado.md).
@@ -233,11 +275,12 @@ O único cabeçalho que identifica algo é o `User-Agent`, que identifica **o ap
 pelo OFF) e não a pessoa. A lista de cabeçalhos é fechada por teste
 (`apps/api/src/nutrition/__tests__/off-food.service.spec.ts`).
 
-| Dado                                | Onde                       | Retenção                         |
-| ----------------------------------- | -------------------------- | -------------------------------- |
-| Ficha do produto consultada         | Memória do processo da API | 6 h, ou até o processo reiniciar |
-| Código de barras escaneado          | **Não armazenado**         | —                                |
-| Vínculo entre usuário e código lido | **Não existe**             | —                                |
+| Dado                                | Onde                       | Retenção                             |
+| ----------------------------------- | -------------------------- | ------------------------------------ |
+| Ficha do produto consultada         | Memória do processo da API | 6 h, ou até o processo reiniciar     |
+| Código de barras escaneado          | **Não armazenado**         | —                                    |
+| Vínculo entre usuário e código lido | **Não existe**             | —                                    |
+| Produto guardado em Meus alimentos  | `Food` `CUSTOM` da pessoa  | até ela apagar o alimento ou a conta |
 
 O cache é do produto, não da pessoa: é chaveado só pelo código de barras, não guarda quem consultou
 e some no primeiro deploy.
@@ -259,8 +302,13 @@ código escaneado é um **segmento do caminho**, não um parâmetro de query.
 
 A mensagem de aviso de falha do OFF (`off-food.service.ts`) também não inclui o código.
 
-**No scanner, a imagem da câmera não sai do aparelho e não é gravada.** O `expo-camera` faz a
-decodificação localmente; o que o app envia à API é o número já lido. Não há foto, não há upload.
+**No scanner, a imagem da câmera não sai do aparelho e não é gravada.** No app, o `expo-camera` faz a
+decodificação localmente; no PWA, o `BarcodeDetector` do navegador ou o `@zxing/browser`, que roda
+na própria página. O que chega à API é o número já lido (ou digitado). Não há foto, não há upload.
+
+**"Guardar em Meus alimentos" é opcional e é da pessoa.** Desmarcado por padrão, cria um alimento
+próprio com o nome e os valores por 100 g do rótulo. Fica sob o isolamento por usuário como qualquer
+alimento cadastrado à mão, sai no export e é apagado com a conta. Não guarda o código de barras.
 (O registro **por foto** é outro fluxo, descrito na seção seguinte — lá a imagem transita, e é por
 isso que ela tem uma seção só dela.)
 
@@ -343,19 +391,20 @@ a pessoa **escreveu** sobre a própria saúde, em prosa — e não um número. P
 aqui item a item. O fluxo está em [`ARCHITECTURE.md`](./ARCHITECTURE.md) §"Chat hospedado"; o estado
 do agente, na [ADR 023](./ADR/023-checkpointer-no-postgres-da-fatia.md).
 
-| Dado                                              | Onde                                                 | Retenção                                                                  |
-| ------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------- |
-| Conversas e mensagens (`Conversation`, `Message`) | Postgres                                             | Enquanto a pessoa não apagar a conversa, e enquanto a conta existir       |
-| Voto na resposta e motivos (`Message.review*`)    | Postgres, na própria mensagem                        | Igual à mensagem                                                          |
-| Pausa aberta — a escrita ou a pergunta à espera   | Postgres, `Message.metadata.interrupt`               | **Até o turno seguinte**, qualquer que seja a resposta                    |
-| Tools do turno e o desfecho de cada uma           | Postgres, `Message.metadata.toolCalls`/`toolResults` | Igual à mensagem. Nome, id e deu certo ou não — **nunca** o resultado     |
-| Cartão da tool (número, série, tabela)            | Postgres, `Message.metadata.artifacts`               | Igual à mensagem. Descartado acima de 32 mil caracteres                   |
-| Tempo e consumo do turno                          | Postgres, `Message.metadata`                         | Igual à mensagem                                                          |
-| Estado do grafo da conversa                       | Postgres, schema `agent_checkpoint`                  | Igual à conversa; apagado com ela e com a conta                           |
-| Memórias (`UserMemory`)                           | Postgres                                             | Até a pessoa esquecer, ou apagar a conta                                  |
-| Foto anexada a uma mensagem                       | Memória dos processos, durante o turno               | Nenhuma. Fica só **quantas** foram (`Message.metadata.photos`)            |
-| Áudio do ditado                                   | Memória da aba e dos processos, durante a chamada    | Nenhuma. Fica só a **duração**, como unidade de custo em `AiUsage`        |
-| Uso da inferência (`AiUsage`)                     | Postgres                                             | Sobrevive à conta **sem** o `userId` — ver "Registro de uso da IA", acima |
+| Dado                                              | Onde                                                 | Retenção                                                                                                         |
+| ------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Conversas e mensagens (`Conversation`, `Message`) | Postgres                                             | Enquanto a pessoa não apagar a conversa, e enquanto a conta existir                                              |
+| Voto na resposta e motivos (`Message.review*`)    | Postgres, na própria mensagem                        | Igual à mensagem                                                                                                 |
+| Pausa aberta — a escrita ou a pergunta à espera   | Postgres, `Message.metadata.interrupt`               | **Até o turno seguinte**, qualquer que seja a resposta                                                           |
+| Tools do turno e o desfecho de cada uma           | Postgres, `Message.metadata.toolCalls`/`toolResults` | Igual à mensagem. Nome, id e deu certo ou não — **nunca** o resultado                                            |
+| Cartão da tool (número, série, tabela)            | Postgres, `Message.metadata.artifacts`               | Igual à mensagem. Descartado acima de 32 mil caracteres                                                          |
+| Tempo e consumo do turno                          | Postgres, `Message.metadata`                         | Igual à mensagem                                                                                                 |
+| Estado do grafo da conversa                       | Postgres, schema `agent_checkpoint`                  | Igual à conversa; apagado com ela e com a conta                                                                  |
+| Trace do turno no Langfuse (ADR 034)              | Langfuse Cloud (EUA), só com as chaves configuradas  | A do projeto no Langfuse (30 dias no Hobby). Texto mascarado; sem resultado de tool, foto, áudio nem id da conta |
+| Memórias (`UserMemory`)                           | Postgres                                             | Até a pessoa esquecer, ou apagar a conta                                                                         |
+| Foto anexada a uma mensagem                       | Memória dos processos, durante o turno               | Nenhuma. Fica só **quantas** foram (`Message.metadata.photos`)                                                   |
+| Áudio do ditado                                   | Memória da aba e dos processos, durante a chamada    | Nenhuma. Fica só a **duração**, como unidade de custo em `AiUsage`                                               |
+| Uso da inferência (`AiUsage`)                     | Postgres                                             | Sobrevive à conta **sem** o `userId` — ver "Registro de uso da IA", acima                                        |
 
 ### O checkpoint do agente
 
@@ -533,7 +582,14 @@ backups.** Isso é aceitável e usual — a LGPD admite retenção em backup por
 significa que "eliminação imediata" vale para o banco em produção, não para as cópias de
 segurança, que rotacionam.
 
-O envio dos backups para storage offsite cifrado é acompanhado na issue #93.
+Os dumps vão também para storage offsite cifrado, com retenção de **30 dias** lá.
+
+**A mídia da comunidade** (imagens e vídeos publicados, `MediaFile`) é copiada para o mesmo
+offsite, cifrada, mas não por data: a cópia **espelha o bucket de produção** a cada execução, e o
+que foi apagado em produção — pela pessoa, pela comunidade, pela exclusão da conta ou pela faxina de
+24 h — **some da cópia no backup seguinte, em até 24 horas**. O bucket de produção tem
+versionamento, com as versões antigas expiradas em 7 dias: um arquivo apagado pode sobreviver até 7
+dias como versão antiga, o mesmo prazo dos dumps locais.
 
 ## Como o usuário exerce os direitos
 

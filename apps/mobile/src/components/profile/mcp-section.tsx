@@ -3,6 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import { ChevronDown, ChevronRight } from 'lucide-react-native';
 import { env } from '@/env';
 import { CopyMcpUrl } from './copy-mcp-url';
+import { cores } from '@/theme/cores';
 
 /**
  * Equivalente do `<details>` "Conectar ao Claude" do PWA. `<details>` não existe
@@ -22,9 +23,9 @@ export function McpSection() {
       >
         <Text className="text-sm font-bold text-foreground">Conectar ao Claude</Text>
         {open ? (
-          <ChevronDown size={16} color="#baccaf" />
+          <ChevronDown size={16} color={cores.mutedForeground} />
         ) : (
-          <ChevronRight size={16} color="#baccaf" />
+          <ChevronRight size={16} color={cores.mutedForeground} />
         )}
       </Pressable>
 

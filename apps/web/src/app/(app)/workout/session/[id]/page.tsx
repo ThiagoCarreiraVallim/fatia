@@ -2,10 +2,11 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
-import { ChevronLeft, Clock, Dumbbell } from 'lucide-react';
-import { buildExerciseGroups, workoutApi } from '@fatia/api-client';
+import { Clock, Dumbbell } from 'lucide-react';
+import { buildExerciseGroups, orderExerciseGroups, workoutApi } from '@fatia/api-client';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useTopBarTitle } from '@/components/layout/app-top-bar';
 function formatDuration(start: string, end: string): string {
   const ms = new Date(end).getTime() - new Date(start).getTime();
   const totalMinutes = Math.round(ms / 60000);
@@ -24,13 +25,23 @@ export default function SessionDetailPage() {
   });
 
   const session = query.data;
+  // O dia do treino é o título: "quarta-feira, 14 de out.".
+  useTopBarTitle(
+    session
+      ? new Date(session.startedAt).toLocaleDateString('pt-BR', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'short',
+        })
+      : null,
+  );
 
   if (query.isLoading) {
     return (
       <div className="space-y-3 px-5 pt-4">
-        <div className="h-6 w-32 animate-pulse rounded bg-muted" />
-        <div className="h-44 animate-pulse rounded-2xl bg-muted" />
-        <div className="h-32 animate-pulse rounded-2xl bg-muted" />
+        <Skeleton className="h-6 w-32 rounded bg-muted" />
+        <Skeleton className="h-44 rounded-2xl bg-muted" />
+        <Skeleton className="h-32 rounded-2xl bg-muted" />
       </div>
     );
   }
@@ -39,7 +50,10 @@ export default function SessionDetailPage() {
     return <p className="px-5 pt-4 text-sm text-muted-foreground">Sessão não encontrada.</p>;
   }
 
-  const groups = buildExerciseGroups(session.plannedExercises, session.sets);
+  const groups = orderExerciseGroups(
+    buildExerciseGroups(session.plannedExercises, session.sets),
+    session.exerciseOrder,
+  );
   const totalSets = session.sets?.length ?? 0;
   const totalVolume =
     session.sets?.reduce((acc, s) => {
@@ -59,20 +73,8 @@ export default function SessionDetailPage() {
 
   return (
     <div className="pb-4">
-      <header className="sticky top-0 z-10 flex h-14 items-center justify-between bg-background/90 px-4 backdrop-blur">
-        <Link
-          href="/workout/history"
-          aria-label="Voltar"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-foreground"
-        >
-          <ChevronLeft size={20} />
-        </Link>
-        <h1 className="text-base font-bold capitalize text-foreground">{dateLabel}</h1>
-        <div className="w-9" />
-      </header>
-
       <div className="space-y-4 px-5 pt-2">
-        <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-card">
+        <div className="relative overflow-hidden rounded-2xl border border-subtle bg-card">
           <div className="relative h-44 w-full overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-slate-700 via-stone-800 to-stone-900" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
@@ -89,7 +91,7 @@ export default function SessionDetailPage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-6 border-t border-white/5 px-5 py-3">
+          <div className="flex items-center gap-6 border-t border-subtle px-5 py-3">
             <div className="flex items-center gap-2">
               <Clock size={14} className="text-primary" />
               <div>
@@ -112,7 +114,7 @@ export default function SessionDetailPage() {
         </div>
 
         {session.notes && (
-          <div className="rounded-2xl border border-white/5 bg-card px-4 py-3">
+          <div className="rounded-2xl border border-subtle bg-card px-4 py-3">
             <p className="text-[10px] font-bold tracking-wide text-muted-foreground">OBSERVAÇÕES</p>
             <p className="mt-1 text-sm">{session.notes}</p>
           </div>

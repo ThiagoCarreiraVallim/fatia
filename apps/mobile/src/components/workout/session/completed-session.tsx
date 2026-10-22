@@ -1,7 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Clock, Dumbbell } from 'lucide-react-native';
-import { buildExerciseGroups, type SessionSet, type WorkoutSession } from '@fatia/api-client';
+import {
+  buildExerciseGroups,
+  orderExerciseGroups,
+  type SessionSet,
+  type WorkoutSession,
+} from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { DrawerLayer } from '@/components/ui';
 import { formatInteger } from '@/components/charts';
@@ -11,6 +16,7 @@ import { groupCardItem } from './exercise-card-item';
 import { RpeDrawer } from './rpe-drawer';
 import { SetRow } from './set-row';
 import { elapsedLabel, formatSessionDate, pluralize, totalVolumeKg } from './format';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/app/(app)/workout/session/[id]/page.tsx` — a mesma
@@ -31,8 +37,12 @@ export function CompletedSession({
   const [rpeTarget, setRpeTarget] = useState<SessionSet | null>(null);
 
   const groups = useMemo(
-    () => buildExerciseGroups(session.plannedExercises, session.sets),
-    [session.plannedExercises, session.sets],
+    () =>
+      orderExerciseGroups(
+        buildExerciseGroups(session.plannedExercises, session.sets),
+        session.exerciseOrder,
+      ),
+    [session.plannedExercises, session.sets, session.exerciseOrder],
   );
 
   const totalSets = session.sets?.length ?? 0;
@@ -45,7 +55,7 @@ export function CompletedSession({
   return (
     <>
       <ExerciseDetailHost>
-        <Screen back title="Treino" refreshing={refreshing} onRefresh={onRefresh}>
+        <Screen title={dateLabel} refreshing={refreshing} onRefresh={onRefresh}>
           <View className="gap-4 px-5 pb-4 pt-2">
             <View className="overflow-hidden rounded-2xl border border-border bg-card">
               <View className="gap-1 bg-accent p-4 pt-10">
@@ -125,7 +135,7 @@ export function CompletedSession({
 function Stat({ icon: Icon, label, value }: { icon: typeof Clock; label: string; value: string }) {
   return (
     <View className="flex-row items-center gap-2">
-      <Icon size={14} color="#2ce500" />
+      <Icon size={14} color={cores.primary} />
       <View>
         <Text className="text-[10px] font-bold tracking-wide text-muted-foreground">{label}</Text>
         <Text className="text-sm font-extrabold text-foreground">{value}</Text>

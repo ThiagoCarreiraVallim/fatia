@@ -32,7 +32,7 @@ import { fixarRelogio } from './support/modulo-de-tools';
  * porque nenhum dos dois nomes casava com o catálogo — e o modelo copia o exemplo.
  *
  * Exemplo que aponta um registro por id ou slug (um uuid, um `id`/`…Id` numérico, um `slug`)
- * não tem como conhecer o seed: ele pode receber a resposta do domínio sobre aquele registro —
+ * — ou o `token` de um convite — não tem como conhecer o seed: ele pode receber a resposta do domínio sobre aquele registro —
  * não existe, é do catálogo e não se edita —, mas não erro de validação nem `INTERNAL`. Os
  * outros têm que dar certo.
  */
@@ -86,7 +86,7 @@ const MALFORMED = /^\[INTERNAL\]|-32602|Input validation error/;
 function pointsAtRecord(value: unknown, key = ''): boolean {
   if (typeof value === 'string' && UUID.test(value)) return true;
   if (typeof value === 'number' && /(^id$|Id$)/.test(key)) return true;
-  if (typeof value === 'string' && key === 'slug') return true;
+  if (typeof value === 'string' && (key === 'slug' || key === 'token')) return true;
   if (Array.isArray(value)) return value.some((v) => pointsAtRecord(v));
   if (value && typeof value === 'object') {
     return Object.entries(value).some(([k, v]) => pointsAtRecord(v, k));

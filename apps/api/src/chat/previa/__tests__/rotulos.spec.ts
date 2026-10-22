@@ -76,4 +76,20 @@ describe('rótulos do cartão de confirmação', () => {
 
     expect(semRotulo).toEqual([]);
   });
+
+  it('medidas do alimento aparecem com o peso de cada uma', () => {
+    const ctx = { timezone: 'America/Sao_Paulo', agora: new Date() };
+    const { rotulo, formato } = CAMPOS.portions;
+    expect(rotulo).toBe('Medidas');
+    expect(
+      formato!(
+        [
+          { label: ' porção ', grams: 30 },
+          { label: 'unidade', grams: 12.5 },
+        ],
+        ctx,
+      ),
+    ).toBe('porção (30 g), unidade (12,5 g)');
+    expect(formato!([], ctx)).toBeNull();
+  });
 });

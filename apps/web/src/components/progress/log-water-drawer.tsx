@@ -11,13 +11,24 @@ import {
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { progressApi, type WaterLog } from '@fatia/api-client';
+import {
+  dayLabel,
+  progressApi,
+  undoMessage,
+  waterRestoreInput,
+  type WaterLog,
+} from '@fatia/api-client';
+import { useUndoSlot } from './use-undo-slot';
+import { hojeIso } from '@/lib/dias';
+import { LogDayField } from './log-day-field';
 import { LogHistory, type LogHistoryEntry } from './log-history';
 import { dayMonth, formatInteger, hourMinute } from './log-format';
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  /** Dia em que o drawer abre; sem ele, hoje. */
+  date?: string;
 }
 
 const PRESETS_ML = [250, 500, 750, 1000] as const;
@@ -29,7 +40,9 @@ const PRESETS_ML = [250, 500, 750, 1000] as const;
  */
 const HISTORY_DAYS = 7;
 
-export function LogWaterDrawer({ open, onClose }: Props) {
+export function LogWaterDrawer({ open, onClose, date }: Props) {
+  const today = hojeIso();
+  const [day, setDay] = useState(date ?? today);
   const [ml, setMl] = useState('');
   const [editing, setEditing] = useState<WaterLog | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -58,7 +71,10 @@ export function LogWaterDrawer({ open, onClose }: Props) {
   }
 
   function resetAll() {
+    setUndone(null);
+    restore.reset();
     clearForm();
+    setDay(date ?? hojeIso());
     save.reset();
     remove.reset();
   }
@@ -69,19 +85,33 @@ export function LogWaterDrawer({ open, onClose }: Props) {
       // spread condicional (`...(dto.date && { date: dto.date })`): campo
       // ausente não é escrito, então o registro fica no dia em que nasceu. O
       // default de "hoje" está no `create`, não no `update`.
-      id ? progressApi.updateWater(id, { ml: value }) : progressApi.createWater({ ml: value }),
+      // Hoje não manda `date`: o padrão do servidor é hoje no fuso do perfil.
+      id
+        ? progressApi.updateWater(id, { ml: value })
+        : progressApi.createWater({ ml: value, ...(day !== today ? { date: day } : {}) }),
     onSuccess: (_data, variables) => {
       invalidate();
       clearForm();
-      if (!variables.id) onClose();
+      if (!variables.id) {
+        setDay(date ?? hojeIso());
+        onClose();
+      }
     },
   });
 
+  // Apaga sem perguntar; o aviso oferece "Desfazer" (`undo.ts` do api-client).
+  const restore = useMutation({
+    mutationFn: (log: WaterLog) => progressApi.createWater(waterRestoreInput(log)),
+    onSuccess: () => invalidate(),
+  });
+  const [undone, setUndone] = useUndoSlot<WaterLog>();
+
   const remove = useMutation({
-    mutationFn: (id: string) => progressApi.deleteWater(id),
-    onSuccess: (_data, id) => {
+    mutationFn: (log: WaterLog) => progressApi.deleteWater(log.id),
+    onSuccess: (_data, log) => {
       invalidate();
-      if (editing?.id === id) clearForm();
+      setUndone(log);
+      if (editing?.id === log.id) clearForm();
       inputRef.current?.focus();
     },
   });
@@ -122,10 +152,12 @@ export function LogWaterDrawer({ open, onClose }: Props) {
           <DrawerDescription>
             {editing
               ? `Corrigindo o registro de ${dayMonth(editing.date)}.`
-              : 'Cada log soma ao total do dia.'}
+              : `Cada registro soma ao total de ${dayLabel(day, today)}.`}
           </DrawerDescription>
         </DrawerHeader>
         <div className="my-3 space-y-4">
+          {/* Editar nunca muda o dia (ver `save`): o campo é só de registro novo. */}
+          {!editing && <LogDayField id="water-day" day={day} today={today} onChange={setDay} />}
           {/* Durante uma edição os atalhos sairiam do lugar: eles criam um
               registro novo, não alteram o que está sendo corrigido. */}
           {!editing && (
@@ -140,7 +172,7 @@ export function LogWaterDrawer({ open, onClose }: Props) {
                     type="button"
                     disabled={save.isPending}
                     onClick={() => save.mutate({ value: v, id: null })}
-                    className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-base font-bold text-blue-300 transition-colors hover:bg-blue-500/20 disabled:opacity-50"
+                    className="rounded-xl border border-water/30 bg-water/10 px-4 py-3 text-base font-bold text-water transition-colors hover:bg-water/20 disabled:opacity-50"
                   >
                     +{v} mL
                   </button>
@@ -164,9 +196,10 @@ export function LogWaterDrawer({ open, onClose }: Props) {
             />
           </div>
 
-          {error && <p className="text-sm text-rose-500">{error}</p>}
-          {remove.error && (
-            <p className="text-sm text-rose-500">{(remove.error as Error).message}</p>
+          {error && <p className="text-sm text-danger">{error}</p>}
+          {remove.error && <p className="text-sm text-danger">{(remove.error as Error).message}</p>}
+          {restore.error && (
+            <p className="text-sm text-danger">Não deu para desfazer. Registre de novo.</p>
           )}
 
           <LogHistory
@@ -186,11 +219,24 @@ export function LogWaterDrawer({ open, onClose }: Props) {
               remove.reset();
               inputRef.current?.focus();
             }}
-            onDelete={(entry) => remove.mutate(entry.id)}
-            pendingId={remove.isPending ? (remove.variables ?? null) : null}
+            onDelete={(entry) => {
+              const log = logs.data?.logs.find((item) => item.id === entry.id);
+              if (log) remove.mutate(log);
+            }}
+            pendingId={remove.isPending ? (remove.variables?.id ?? null) : null}
             isDeleting={remove.isPending}
+            undo={
+              undone
+                ? {
+                    message: undoMessage('water'),
+                    onUndo: () => {
+                      restore.mutate(undone);
+                      setUndone(null);
+                    },
+                  }
+                : null
+            }
             emptyLabel="Nenhum registro de água nos últimos 7 dias."
-            confirmLabel="Apagar este registro de água?"
           />
 
           <div className="space-y-2">
@@ -199,7 +245,9 @@ export function LogWaterDrawer({ open, onClose }: Props) {
                 ? 'Salvando…'
                 : editing
                   ? 'Salvar alteração'
-                  : 'Adicionar valor personalizado'}
+                  : day === today
+                    ? 'Adicionar valor personalizado'
+                    : `Adicionar em ${dayLabel(day, today)}`}
             </Button>
             {editing && (
               <Button variant="outline" className="w-full" onClick={resetAll}>

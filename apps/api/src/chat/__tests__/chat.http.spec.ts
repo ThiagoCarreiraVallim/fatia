@@ -1,17 +1,20 @@
 import type { AddressInfo } from 'node:net';
-import { ValidationPipe, type INestApplication } from '@nestjs/common';
+import { NotFoundException, ValidationPipe, type INestApplication } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { ThrottlerModule } from '@nestjs/throttler';
 import type { NextFunction, Request, Response } from 'express';
 import { AiUsageService } from '../../ai/ai-usage.service';
+import { INSTANCIA_LIBERADA, type AiEntitlement } from '../../billing/ai-entitlement';
+import { AiEntitlements } from '../../billing/subscription-entitlements.service';
 import { AiQuotaExceededException } from '../../ai/ai-quota';
 import { CommonModule } from '../../common/common.module';
 import { PrismaService } from '../../common/prisma.service';
-import { AgentChatClient, type EntradaDoTurno, type StreamDoAgente } from '../agent-chat.client';
+import { AgentAdapter, type AgentStream, type TurnInput } from '../../ai/agent.adapter';
 import { ChatModule } from '../chat.module';
 import { CheckpointPurgeService } from '../checkpoint-purge.service';
 import { ConversationService } from '../conversation.service';
+import { GroupAgentService } from '../../sharing/group-agent.service';
 import { MemoryService } from '../memory/memory.service';
 import { registrarCorposDoChat, TETO_DO_AUDIO } from '../corpos-do-chat';
 import { JPEG_COM_EXIF_GPS } from '../../nutrition/helpers/jpeg-com-exif.fixture';
@@ -93,9 +96,9 @@ function canalDoAgente() {
       else aguardando.push(resolve);
     });
 
-  const stream: StreamDoAgente = {
-    cancelar: () => entregar(null),
-    async *pedacos() {
+  const stream: AgentStream = {
+    cancel: () => entregar(null),
+    async *chunks() {
       for (;;) {
         const valor = await proximo();
         if (valor === null) return;
@@ -115,26 +118,38 @@ interface Cenario {
   app: INestApplication;
   url: string;
   canal: ReturnType<typeof canalDoAgente>;
-  abrir: jest.Mock<Promise<StreamDoAgente>, [EntradaDoTurno]>;
-  configurado: jest.Mock<boolean, []>;
-  capacidades: jest.Mock;
-  transcrever: jest.Mock;
-  registrar: jest.Mock;
+  openTurn: jest.Mock<Promise<AgentStream>, [TurnInput]>;
+  configured: jest.Mock<boolean, []>;
+  capabilities: jest.Mock;
+  transcribe: jest.Mock;
+  record: jest.Mock;
   assertDentroDaCota: jest.Mock<Promise<void>, [string]>;
+  aiTierForUser: jest.Mock<Promise<AiEntitlement>, [string]>;
   comoUsuario: (id: string) => void;
 }
 
+const FREE: AiEntitlement = {
+  tier: 'FREE',
+  source: null,
+  motivo: 'sem_assinatura',
+  degraded: false,
+  subscription: null,
+};
+
 async function subirApp(): Promise<Cenario> {
   const canal = canalDoAgente();
-  const abrir = jest.fn(async (_entrada: EntradaDoTurno) => canal.stream);
-  const configurado = jest.fn(() => true);
+  const openTurn = jest.fn(async (_entrada: TurnInput) => canal.stream);
+  const configured = jest.fn(() => true);
   const assertDentroDaCota = jest.fn(async (_userId: string) => undefined);
-  const capacidades = jest.fn(async () => ({ fotos: true, ditado: false }));
-  const transcrever = jest.fn(async (_audio: Buffer, _tipo: string) => ({
-    texto: 'registra 200 g de frango',
-    uso: { model: 'whisper-1', inputUnits: 3.4 },
+  const capabilities = jest.fn(async () => ({ vision: true, transcription: false }));
+  const transcribe = jest.fn(async (_audio: Buffer, _tipo: string) => ({
+    text: 'registra 200 g de frango',
+    usage: { model: 'whisper-1', inputUnits: 3.4 },
   }));
-  const registrar = jest.fn(async () => undefined);
+  const record = jest.fn(async () => undefined);
+  const aiTierForUser = jest.fn(
+    async (_userId: string): Promise<AiEntitlement> => INSTANCIA_LIBERADA,
+  );
 
   const modulo = await Test.createTestingModule({
     imports: [
@@ -152,12 +167,26 @@ async function subirApp(): Promise<Cenario> {
     // Nenhum teste daqui toca o banco; o Postgres de teste é compartilhado.
     .overrideProvider(PrismaService)
     .useValue({})
-    .overrideProvider(AgentChatClient)
-    .useValue({ abrir, configurado, capacidades, transcrever })
+    .overrideProvider(AgentAdapter)
+    .useValue({
+      openTurn,
+      configured,
+      capabilities,
+      transcribe,
+      title: jest.fn(async () => null),
+      sendFeedback: jest.fn(async () => undefined),
+    })
     .overrideProvider(AiUsageService)
-    .useValue({ assertDentroDaCota, registrar })
+    .useValue({ assertDentroDaCota, record })
+    .overrideProvider(AiEntitlements)
+    .useValue({ aiTierForUser, exigePlano: () => true })
     .overrideProvider(ConversationService)
     .useValue({
+      // Dona da conversa é só a USER: a OUTRO_USER recebe o 404 de sempre.
+      assertDaPessoa: jest.fn(async (userId: string, id: string) => {
+        if (userId !== USER) throw new NotFoundException('Conversa não encontrada.');
+        return { id };
+      }),
       encontrar: jest.fn(async () => null),
       historicoParaOAgente: jest.fn(async () => []),
       clearPauses: jest.fn(async () => undefined),
@@ -169,6 +198,13 @@ async function subirApp(): Promise<Cenario> {
     .useValue({ apagarConversa: jest.fn(async () => undefined) })
     .overrideProvider(MemoryService)
     .useValue({ listar: jest.fn(async () => []) })
+    .overrideProvider(GroupAgentService)
+    .useValue({
+      listForChat: jest.fn(async () => ({ defaultGroupId: null, agents: [] })),
+      assertSelectable: jest.fn(async () => undefined),
+      personaFor: jest.fn(async () => null),
+      headerFor: jest.fn(async () => null),
+    })
     .compile();
 
   const app = modulo.createNestApplication({ logger: false });
@@ -199,12 +235,13 @@ async function subirApp(): Promise<Cenario> {
     app,
     url: `http://127.0.0.1:${port}/api/chat`,
     canal,
-    abrir,
-    configurado,
-    capacidades,
-    transcrever,
-    registrar,
+    openTurn,
+    configured,
+    capabilities,
+    transcribe,
+    record,
     assertDentroDaCota,
+    aiTierForUser,
     comoUsuario: (id: string) => {
       usuarioAtual = id;
     },
@@ -284,8 +321,8 @@ describe('POST /api/chat', () => {
     cenario.canal.encerrar();
     await resposta.text();
 
-    expect(cenario.abrir).toHaveBeenCalledTimes(1);
-    expect(cenario.abrir.mock.calls[0][0].bearer).toBe('token-de-verdade');
+    expect(cenario.openTurn).toHaveBeenCalledTimes(1);
+    expect(cenario.openTurn.mock.calls[0][0].bearer).toBe('token-de-verdade');
   });
 
   it('sem `Authorization` recusa com 401 e não chama o agente', async () => {
@@ -295,7 +332,7 @@ describe('POST /api/chat', () => {
     const resposta = await conversar(cenario.url, { message: 'oi' }, { bearer: null });
 
     expect(resposta.status).toBe(401);
-    expect(cenario.abrir).not.toHaveBeenCalled();
+    expect(cenario.openTurn).not.toHaveBeenCalled();
   });
 
   it('cota estourada é 429 com corpo JSON, e não um stream vazio', async () => {
@@ -317,12 +354,43 @@ describe('POST /api/chat', () => {
     expect(resposta.status).toBe(429);
     expect(resposta.headers.get('content-type')).toContain('application/json');
     expect(await resposta.json()).toMatchObject({ code: 'AI_QUOTA_EXCEEDED', scope: 'user' });
-    expect(cenario.abrir).not.toHaveBeenCalled();
+    expect(cenario.openTurn).not.toHaveBeenCalled();
+  });
+
+  it('Free recebe 402 AI_PLAN_REQUIRED antes da cota e sem chamar o agente (ADR 024)', async () => {
+    cenario.aiTierForUser.mockResolvedValueOnce(FREE);
+
+    const resposta = await conversar(cenario.url, { message: 'oi' });
+
+    expect(resposta.status).toBe(402);
+    expect(resposta.headers.get('content-type')).toContain('application/json');
+    expect(await resposta.json()).toMatchObject({ code: 'AI_PLAN_REQUIRED' });
+    expect(cenario.assertDentroDaCota).not.toHaveBeenCalled();
+    expect(cenario.openTurn).not.toHaveBeenCalled();
+  });
+
+  it('o custo do turno sai como pago pelo usuário no PRO', async () => {
+    cenario.aiTierForUser.mockResolvedValueOnce({
+      ...FREE,
+      tier: 'PRO',
+      source: 'ASAAS',
+      motivo: 'ativa',
+    });
+
+    const resposta = conversar(cenario.url, { message: 'oi' });
+    cenario.canal.encerrar();
+    await (await resposta).text();
+
+    await new Promise((r) => setTimeout(r, 20));
+    expect(cenario.record).toHaveBeenCalledWith(
+      USER,
+      expect.objectContaining({ feature: 'chat', paidBy: 'USER' }),
+    );
   });
 
   it('agente fora do ar é 503 com corpo JSON', async () => {
     const { ServiceUnavailableException } = await import('@nestjs/common');
-    cenario.abrir.mockRejectedValueOnce(new ServiceUnavailableException('fora do ar'));
+    cenario.openTurn.mockRejectedValueOnce(new ServiceUnavailableException('fora do ar'));
 
     const resposta = await conversar(cenario.url, { message: 'oi' });
 
@@ -334,14 +402,14 @@ describe('POST /api/chat', () => {
     const resposta = await conversar(cenario.url, { message: '' });
 
     expect(resposta.status).toBe(400);
-    expect(cenario.abrir).not.toHaveBeenCalled();
+    expect(cenario.openTurn).not.toHaveBeenCalled();
   });
 
   it('sem mensagem nem retomada é 400', async () => {
     const resposta = await conversar(cenario.url, {});
 
     expect(resposta.status).toBe(400);
-    expect(cenario.abrir).not.toHaveBeenCalled();
+    expect(cenario.openTurn).not.toHaveBeenCalled();
   });
 
   it('a retomada chega ao agente com o id da pausa e o valor intacto', async () => {
@@ -357,8 +425,8 @@ describe('POST /api/chat', () => {
     await resposta.text();
 
     expect(resposta.status).toBe(200);
-    expect(cenario.abrir.mock.calls[0][0]).toMatchObject({
-      retomada: { interruptId: 'pausa-1', value: { approvals: { c1: true } } },
+    expect(cenario.openTurn.mock.calls[0][0]).toMatchObject({
+      resume: { interruptId: 'pausa-1', value: { approvals: { c1: true } } },
     });
   });
 
@@ -366,7 +434,7 @@ describe('POST /api/chat', () => {
     const resposta = await conversar(cenario.url, { conversationId: 'nao-e-uuid', message: 'oi' });
 
     expect(resposta.status).toBe(400);
-    expect(cenario.abrir).not.toHaveBeenCalled();
+    expect(cenario.openTurn).not.toHaveBeenCalled();
   });
 
   it('passa do teto de turnos por minuto e o excedente vira 429 sem inferir', async () => {
@@ -382,7 +450,7 @@ describe('POST /api/chat', () => {
     expect(status.slice(0, 12)).toEqual(Array<number>(12).fill(200));
     expect(status[12]).toBe(429);
     // O 429 é barrado ANTES do serviço: o custo é a inferência, não o 200.
-    expect(cenario.abrir).toHaveBeenCalledTimes(12);
+    expect(cenario.openTurn).toHaveBeenCalledTimes(12);
   });
 
   it('o teto é por usuário, e não por IP', async () => {
@@ -405,6 +473,87 @@ describe('POST /api/chat', () => {
   });
 });
 
+describe('resposta desacoplada da requisição: live e stop (ADR 035)', () => {
+  let cenario: Cenario;
+
+  beforeEach(async () => {
+    cenario = await subirApp();
+  });
+
+  afterEach(async () => {
+    cenario.canal.encerrar();
+    await cenario.app.close();
+  });
+
+  const live = (after?: number, user = USER) => {
+    cenario.comoUsuario(user);
+    return fetch(
+      `${cenario.url}/conversations/${CONVERSA}/live${after !== undefined ? `?after=${after}` : ''}`,
+      { headers: { Authorization: 'Bearer token-do-usuario' } },
+    );
+  };
+
+  it('quem fecha a conexão volta pelo live e recebe só o que perdeu, até o fim', async () => {
+    const primeira = new AbortController();
+    const resposta = await fetch(cenario.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token-do-usuario' },
+      body: JSON.stringify({ conversationId: CONVERSA, message: 'oi' }),
+      signal: primeira.signal,
+    });
+    const leitor = resposta.body!.getReader();
+    expect(await lerPedaco(leitor)).toBe(': aberto\n\n');
+    cenario.canal.emitir('event: messages\ndata: [{"content":"Boa ","id":"ai-1"},{}]\n\n');
+    const recebido = await lerPedaco(leitor);
+    expect(recebido).toMatch(/^id: 1\n/);
+    primeira.abort();
+
+    // O agente segue falando com ninguém na escuta: não foi cortado.
+    cenario.canal.emitir('event: messages\ndata: [{"content":"tarde","id":"ai-1"},{}]\n\n');
+    await new Promise((r) => setTimeout(r, 20));
+
+    const retomada = await live(1);
+    expect(retomada.status).toBe(200);
+    expect(retomada.headers.get('content-type')).toContain('text/event-stream');
+    cenario.canal.emitir('event: done\ndata: {"status":"completed"}\n\n');
+    cenario.canal.encerrar();
+    const resto = await retomada.text();
+
+    expect(resto).toContain('id: 2\n');
+    expect(resto).toContain('"tarde"');
+    expect(resto).not.toContain('"Boa "');
+    expect(resto).toContain('"completed"');
+  });
+
+  it('sem resposta rodando, o live é 204', async () => {
+    expect((await live()).status).toBe(204);
+  });
+
+  it('live e stop de conversa alheia são 404', async () => {
+    expect((await live(0, OUTRO_USER)).status).toBe(404);
+    cenario.comoUsuario(OUTRO_USER);
+    const parar = await fetch(`${cenario.url}/conversations/${CONVERSA}/stop`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer token-do-usuario' },
+    });
+    expect(parar.status).toBe(404);
+  });
+
+  it('stop fecha o turno com done stopped para quem está ouvindo', async () => {
+    const resposta = await conversar(cenario.url, { message: 'oi' });
+    const corpo = resposta.text();
+    await new Promise((r) => setTimeout(r, 20));
+
+    const parar = await fetch(`${cenario.url}/conversations/${CONVERSA}/stop`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer token-do-usuario' },
+    });
+
+    expect(parar.status).toBe(204);
+    expect(await corpo).toContain('event: done\ndata: {"status":"stopped"}');
+  });
+});
+
 describe('GET /api/chat/availability', () => {
   let cenario: Cenario;
 
@@ -421,20 +570,34 @@ describe('GET /api/chat/availability', () => {
       available: true,
       photos: true,
       dictation: false,
+      allowed: true,
+      reason: 'ok',
+    });
+  });
+
+  it('no Free a aba existe, mas `allowed: false` com o motivo do plano', async () => {
+    cenario.aiTierForUser.mockResolvedValueOnce(FREE);
+
+    expect(await (await fetch(`${cenario.url}/availability`)).json()).toMatchObject({
+      available: true,
+      allowed: false,
+      reason: 'plan_required',
     });
   });
 
   it('instância sem agente responde `available: false` em vez de deixar a aba quebrar', async () => {
     // Uma funcionalidade que sempre falha é pior que uma que não aparece: é o
     // que permite o auto-hospedado sem agente continuar um produto inteiro.
-    cenario.configurado.mockReturnValueOnce(false);
+    cenario.configured.mockReturnValueOnce(false);
 
     expect(await (await fetch(`${cenario.url}/availability`)).json()).toEqual({
       available: false,
       photos: false,
       dictation: false,
+      allowed: false,
+      reason: 'not_configured',
     });
-    expect(cenario.capacidades).not.toHaveBeenCalled();
+    expect(cenario.capabilities).not.toHaveBeenCalled();
   });
 });
 
@@ -506,8 +669,8 @@ describe('POST /api/chat com foto', () => {
     });
 
     expect(resposta.status).toBe(200);
-    const entrada = cenario.abrir.mock.calls[0][0] as { fotos?: { data: string }[] };
-    const enviada = Buffer.from(entrada.fotos?.[0]?.data ?? '', 'base64');
+    const entrada = cenario.openTurn.mock.calls[0][0] as { photos?: { data: string }[] };
+    const enviada = Buffer.from(entrada.photos?.[0]?.data ?? '', 'base64');
     expect(enviada.length).toBeGreaterThan(150_000);
     expect(enviada.includes(Buffer.from('iPhone 15 Pro'))).toBe(false);
     expect(enviada.includes(Buffer.from('F2LZQ8XKJC'))).toBe(false);
@@ -522,7 +685,7 @@ describe('POST /api/chat com foto', () => {
     });
 
     expect(resposta.status).toBe(400);
-    expect(cenario.abrir).not.toHaveBeenCalled();
+    expect(cenario.openTurn).not.toHaveBeenCalled();
   });
 
   it('recusa foto na resposta a uma pausa', async () => {
@@ -532,7 +695,7 @@ describe('POST /api/chat com foto', () => {
     });
 
     expect([400, 404]).toContain(resposta.status);
-    expect(cenario.abrir).not.toHaveBeenCalled();
+    expect(cenario.openTurn).not.toHaveBeenCalled();
   });
 });
 
@@ -561,12 +724,14 @@ describe('POST /api/chat/transcribe', () => {
 
     expect(resposta.status).toBe(200);
     expect(await resposta.json()).toEqual({ text: 'registra 200 g de frango' });
-    const [bytes, tipo] = cenario.transcrever.mock.calls[0];
+    const [bytes, tipo] = cenario.transcribe.mock.calls[0];
     expect(Buffer.compare(bytes, Buffer.from(audio))).toBe(0);
     expect(tipo).toBe('audio/webm;codecs=opus');
-    expect(cenario.assertDentroDaCota).toHaveBeenCalledWith(USER);
-    expect(cenario.registrar).toHaveBeenCalledWith(USER, {
+    expect(cenario.assertDentroDaCota).toHaveBeenCalledWith(USER, expect.any(Date));
+    expect(cenario.record).toHaveBeenCalledWith(USER, {
       feature: 'transcription',
+      paidBy: 'INSTANCE',
+      groupId: null,
       model: 'whisper-1',
       units: { inputUnits: 3.4, outputUnits: 0 },
     });
@@ -576,14 +741,25 @@ describe('POST /api/chat/transcribe', () => {
     const resposta = await ditar(enc('{"oi":1}'), 'application/json');
 
     expect(resposta.status).toBe(415);
-    expect(cenario.transcrever).not.toHaveBeenCalled();
+    expect(cenario.transcribe).not.toHaveBeenCalled();
   });
 
   it('recusa áudio acima do teto sem chamar o agente', async () => {
     const resposta = await ditar(new Uint8Array(TETO_DO_AUDIO + 1), 'audio/webm');
 
     expect(resposta.status).toBe(413);
-    expect(cenario.transcrever).not.toHaveBeenCalled();
+    expect(cenario.transcribe).not.toHaveBeenCalled();
+  });
+
+  it('Free recebe 402 sem transcrever nem gastar cota', async () => {
+    cenario.aiTierForUser.mockResolvedValueOnce(FREE);
+
+    const resposta = await ditar(new Uint8Array([1, 2, 3]), 'audio/webm');
+
+    expect(resposta.status).toBe(402);
+    expect(await resposta.json()).toMatchObject({ code: 'AI_PLAN_REQUIRED' });
+    expect(cenario.assertDentroDaCota).not.toHaveBeenCalled();
+    expect(cenario.transcribe).not.toHaveBeenCalled();
   });
 
   it('cota estourada barra antes do agente', async () => {
@@ -600,6 +776,6 @@ describe('POST /api/chat/transcribe', () => {
     const resposta = await ditar(new Uint8Array([1, 2, 3]), 'audio/webm');
 
     expect(resposta.status).toBe(429);
-    expect(cenario.transcrever).not.toHaveBeenCalled();
+    expect(cenario.transcribe).not.toHaveBeenCalled();
   });
 });

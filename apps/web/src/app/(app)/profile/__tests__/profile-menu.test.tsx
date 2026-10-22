@@ -85,7 +85,7 @@ describe('menu do perfil', () => {
 
     // `findBy` porque o item só existe depois da lista responder: quem não
     // atende ninguém recebe `[]` e não ganha entrada nenhuma.
-    expect(await screen.findByRole('link', { name: /Meus alunos/ })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: /Membros/ })).toHaveAttribute(
       'href',
       '/students',
     );

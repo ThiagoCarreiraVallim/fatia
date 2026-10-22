@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { StorageModule } from '../storage/storage.module';
 import { ExerciseService } from './exercise.service';
 import { WorkoutPlanService } from './workout-plan.service';
 import { WorkoutSessionService } from './workout-session.service';
@@ -42,6 +43,8 @@ import { UpdateWorkoutPlanTool } from './mcp/update-workout-plan.tool';
 import { UpdateWorkoutSessionTool } from './mcp/update-workout-session.tool';
 
 @Module({
+  // O tutorial da comunidade (Fase 7b) traz vídeo e fotos com URL assinada.
+  imports: [StorageModule],
   controllers: [WorkoutController],
   providers: [
     ExerciseService,

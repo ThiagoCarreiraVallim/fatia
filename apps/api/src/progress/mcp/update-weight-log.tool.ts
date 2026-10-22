@@ -26,9 +26,9 @@ export class UpdateWeightLogTool implements McpToolDef {
   } as const;
   execute(
     input: { weightLogId: string; weightKg?: number; loggedAt?: string; notes?: string },
-    { userId }: McpToolContext,
+    { userId, timezone }: McpToolContext,
   ) {
     const { weightLogId, ...patch } = input;
-    return this.weights.update(weightLogId, patch, userId);
+    return this.weights.update(weightLogId, patch, userId, timezone);
   }
 }

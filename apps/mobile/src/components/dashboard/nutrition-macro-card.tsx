@@ -3,21 +3,19 @@ import { useRouter } from 'expo-router';
 import type { TodaySummary } from '@fatia/api-client';
 import { MacroBar } from './macro-bar';
 import { NUMEROS_TABULARES, alvoMedio } from './helpers';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/components/dashboard/nutrition-macro-card.tsx`.
  *
- * As cores das barras são literais porque nenhuma delas é token do tema — no PWA
- * também são. A gordura foge do `destructive` do tema (`#93000a`): como
- * preenchimento de barra sobre fundo escuro ele praticamente some, o mesmo
- * motivo pelo qual `src/components/nutrition/macro-bar.tsx` escolheu este
- * vermelho.
+ * As cores dos macros são tokens (`protein`, `carbs`, `fat`), as mesmas da
+ * Nutrição e do PWA; as kcal ficam neutras para não se confundirem com nenhum.
  */
 const CORES = {
-  kcal: '#ffb4ab',
-  proteina: '#4b8eff',
-  carboidrato: '#2ce500',
-  gordura: '#f43f5e',
+  kcal: cores.foreground,
+  proteina: cores.protein,
+  carboidrato: cores.carbs,
+  gordura: cores.fat,
 } as const;
 
 export function NutritionMacroCard({ nutrition }: { nutrition: TodaySummary['nutrition'] }) {

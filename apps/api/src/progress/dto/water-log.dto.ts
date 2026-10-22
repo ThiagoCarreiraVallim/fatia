@@ -1,8 +1,9 @@
-import { IsInt, IsOptional, IsPositive, IsString, MaxLength, Min } from 'class-validator';
+import { Matches, IsInt, IsOptional, IsPositive, IsString, MaxLength, Min } from 'class-validator';
+import { ISO_DAY, ISO_DAY_MESSAGE } from '../helpers/log-day';
 
 export class CreateWaterLogDto {
   @IsOptional()
-  @IsString()
+  @Matches(ISO_DAY, { message: ISO_DAY_MESSAGE })
   date?: string;
 
   @IsInt()
@@ -22,7 +23,7 @@ export class UpdateWaterLogDto {
   ml?: number;
 
   @IsOptional()
-  @IsString()
+  @Matches(ISO_DAY, { message: ISO_DAY_MESSAGE })
   date?: string;
 
   @IsOptional()
@@ -33,11 +34,11 @@ export class UpdateWaterLogDto {
 
 export class ListWaterLogsDto {
   @IsOptional()
-  @IsString()
+  @Matches(ISO_DAY, { message: ISO_DAY_MESSAGE })
   from?: string;
 
   @IsOptional()
-  @IsString()
+  @Matches(ISO_DAY, { message: ISO_DAY_MESSAGE })
   to?: string;
 
   @IsOptional()

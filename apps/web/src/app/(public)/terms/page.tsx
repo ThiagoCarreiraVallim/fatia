@@ -1,14 +1,19 @@
 import type { Metadata } from 'next';
 import { LegalDoc, LegalSection } from '@/components/legal-doc';
+import { legalEntity } from '@/lib/legal-entity';
+
+// Quem opera a instância vem do ambiente (`LEGAL_ENTITY_*`), lido por requisição.
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Termos de Serviço — Fatia',
   description: 'As regras de uso da instância pública do Fatia.',
 };
 
-const LAST_UPDATED = '3 de agosto de 2026';
+const LAST_UPDATED = '19 de outubro de 2026';
 
 export default function TermsPage() {
+  const operador = legalEntity();
   return (
     <LegalDoc title="Termos de Serviço" lastUpdated={LAST_UPDATED}>
       <LegalSection title="O que é o Fatia">
@@ -20,6 +25,12 @@ export default function TermsPage() {
           Estes termos regem o uso da <strong>instância pública oficial</strong>. Se você
           auto-hospeda, sua relação é com a licença do software, não com estes termos.
         </p>
+        {operador ? (
+          <p>
+            Esta instância é operada por <strong>{operador.name}</strong>
+            {operador.document ? <>, CNPJ {operador.document}</> : null}.
+          </p>
+        ) : null}
       </LegalSection>
 
       <LegalSection title="Isto não é orientação médica">
@@ -85,16 +96,37 @@ export default function TermsPage() {
 
       <LegalSection title="Custo e disponibilidade">
         <p>
-          A instância pública é <strong>gratuita</strong>. Não há plano pago, e nenhum custo de IA é
-          cobrado de você: o processamento do Claude corre na sua própria assinatura.
+          A instância pública tem dois planos. O <strong>Free</strong> é gratuito e inclui o app
+          inteiro — registro de refeições, treino, água, peso, passos, metas e progresso — e a
+          conexão com a sua própria IA pelo MCP, cujo processamento corre na sua assinatura dela.
         </p>
         <p>
-          Se a IA hospedada pelo Fatia for ativada na sua conta, quem paga a inferência é o projeto,
-          e não você. Por isso ela tem <strong>limite diário de uso</strong>. Ao atingir o limite, a
-          função de IA fica indisponível até o dia seguinte e o registro manual continua funcionando
-          normalmente —{' '}
-          <strong>em nenhuma hipótese isso vira cobrança ou oferta de plano pago</strong>. O limite
-          é uma contenção de custo do projeto, não um funil de vendas.
+          O <strong>PRO</strong> acrescenta a IA hospedada pelo Fatia: chat, ditado e registro de
+          refeição por foto. Custa <strong>R$ 19,90 por mês</strong> ou{' '}
+          <strong>R$ 179 por ano</strong>, com <strong>renovação automática</strong> ao fim de cada
+          período, até você cancelar. Nenhuma função de registro, leitura, exportação ou exclusão
+          dos seus dados depende do plano.
+        </p>
+        <p>
+          <strong>Assinatura pela web</strong> (Pix, boleto ou cartão, processados pelo Asaas): você
+          cancela em &ldquo;Meu plano&rdquo; quando quiser, e o PRO continua até o fim do período já
+          pago. Você tem <strong>7 dias de arrependimento</strong> a partir da contratação (Código
+          de Defesa do Consumidor, art. 49): pedindo nesse prazo, devolvemos o valor pago.{' '}
+          <strong>Assinatura pelo app</strong>: é feita e cancelada na App Store ou no Google Play,
+          e reembolso e arrependimento seguem a política da loja.
+        </p>
+        <p>
+          Se um pagamento atrasar, o PRO continua por <strong>7 dias de carência</strong>; depois a
+          conta volta ao Free, sem perder nenhum dado. A IA hospedada tem também um{' '}
+          <strong>limite diário de uso</strong>, inclusive no PRO: ao atingi-lo, ela fica
+          indisponível até o dia seguinte e o registro manual continua funcionando normalmente.
+        </p>
+        <p>
+          <strong>PRO pago por uma comunidade:</strong> uma academia ou um treinador pode comprar
+          assentos e dar o PRO a quem escolher. Enquanto o assento for seu, a cobrança é da
+          comunidade, não sua. Ela pode retirar o assento a qualquer momento, e se deixar de pagar
+          ele vale até o fim da carência; nos dois casos você volta ao Free sem perder nenhum dado.
+          Se você já assina o PRO, a sua assinatura continua valendo e não é cancelada.
         </p>
         <p>
           Em contrapartida, e sendo direto: <strong>não há SLA.</strong> É um projeto mantido por
@@ -170,6 +202,13 @@ export default function TermsPage() {
         <p>
           Pelas <a href="https://github.com/ThiagoCarreiraVallim/fatia/issues">issues do GitHub</a>{' '}
           ou pelo e-mail de suporte publicado no repositório.
+          {operador?.dpoEmail ? (
+            <>
+              {' '}
+              Sobre os seus dados pessoais, o encarregado (DPO) atende em{' '}
+              <a href={`mailto:${operador.dpoEmail}`}>{operador.dpoEmail}</a>.
+            </>
+          ) : null}
         </p>
       </LegalSection>
     </LegalDoc>

@@ -9,6 +9,8 @@ capacidade. Nenhuma linha deste arquivo sabe em que ambiente está rodando.
 import asyncio
 import base64
 import json as jsonlib
+import logging
+import random
 import uuid
 from collections.abc import AsyncIterator, Mapping, Sequence
 from typing import Any
@@ -26,6 +28,7 @@ from ..allowed_models import (
 from ..settings import endpoint_host
 from .base import (
     ChatCapability,
+    Description,
     EmbeddingCapability,
     ReasoningDelta,
     TextCapability,
@@ -52,7 +55,11 @@ from .errors import (
 
 # 429 e 5xx são transientes: o gateway está com fila ou instável. 401/403/400
 # não são — repetir só gasta tempo e, no gateway, cota.
+logger = logging.getLogger(__name__)
+
 RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
+# Teto do `Retry-After` honrado: mais que isso e a pessoa acha que o chat travou.
+MAX_RETRY_AFTER_S = 8.0
 
 
 class OpenAICompatProvider:
@@ -159,9 +166,11 @@ class OpenAICompatProvider:
         if system is not None:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
-        return await self._chat(model, messages)
+        return (await self._chat(model, messages)).text
 
-    async def describe(self, image: bytes, *, prompt: str, media_type: str = "image/jpeg") -> str:
+    async def describe(
+        self, image: bytes, *, prompt: str, media_type: str = "image/jpeg"
+    ) -> Description:
         model = self._require_model("vision", self._vision_model)
         data_uri = f"data:{media_type};base64,{base64.b64encode(image).decode('ascii')}"
         messages: list[dict[str, Any]] = [
@@ -230,10 +239,13 @@ class OpenAICompatProvider:
         ponto por onde a revisão de destino e de modelo da #136 acontece, e o
         chat manda texto do usuário para o mesmo lugar que a foto ia.
 
-        **Sem retentativa, ao contrário de `_request`.** Repetir um POST que já
-        entregou tokens duplicaria a resposta na tela; e o backoff, aqui, seria
-        indistinguível de "o modelo está pensando" para quem está olhando. Falha
-        antes do primeiro byte vira erro nomeado como em qualquer outra chamada.
+        **Repete só antes do primeiro pedaço visível.** Repetir um POST que já
+        entregou tokens duplicaria a resposta na tela, então depois do primeiro
+        texto, raciocínio ou tool call o erro sobe como está. Antes disso, um
+        429, um 5xx, uma conexão que caiu ou um erro dentro do stream ainda sem
+        conteúdo são repetidos até `AI_MAX_RETRIES` vezes: era o que, em
+        produção, fazia quase toda pergunta falhar na hora e passar no "tentar de
+        novo" manual. Timeout não repete — ele já consumiu `AI_TIMEOUT_S`.
         """
         model = self._require_model(
             capacidade, self._vision_model if capacidade == "vision" else self._text_model
@@ -257,6 +269,32 @@ class OpenAICompatProvider:
         # inteiro, e o que foi para o corpo é exatamente o que o ledger grava.
         payload.update(self._chat_extra)
 
+        for attempt in range(self._max_retries + 1):
+            delivered = False
+            try:
+                async for piece in self._stream_once(model, payload):
+                    if not isinstance(piece, TurnEnd):
+                        delivered = True
+                    yield piece
+                return
+            except (AIProviderRefused, AIProviderUnreachable) as exc:
+                if delivered or attempt >= self._max_retries or not _retryable(exc):
+                    raise
+                logger.warning(
+                    "Stream do provedor falhou antes do primeiro token (%s); tentativa %d de %d.",
+                    exc.code,
+                    attempt + 2,
+                    self._max_retries + 1,
+                )
+                await self._backoff(
+                    attempt,
+                    retry_after_s=exc.retry_after_s if isinstance(exc, AIProviderRefused) else None,
+                )
+
+    async def _stream_once(
+        self, model: str, payload: dict[str, Any]
+    ) -> AsyncIterator[TextDelta | ReasoningDelta | TurnEnd]:
+        """Uma tentativa de `stream_chat`: a requisição e a leitura do stream."""
         acumulador = _ToolCallAccumulator()
         finish_reason = "stop"
         uso: Usage | None = None
@@ -270,6 +308,7 @@ class OpenAICompatProvider:
                     raise AIProviderRefused(
                         f"O provedor respondeu {response.status_code} em POST chat/completions.",
                         status_code=response.status_code,
+                        retry_after_s=_retry_after(response),
                     )
 
                 async for linha in response.aiter_lines():
@@ -422,7 +461,7 @@ class OpenAICompatProvider:
             return payload
         return {**payload, "provider": dict(self._routing)}
 
-    async def _chat(self, model: str, messages: list[dict[str, Any]]) -> str:
+    async def _chat(self, model: str, messages: list[dict[str, Any]]) -> Description:
         response = await self._request(
             "POST",
             "chat/completions",
@@ -450,7 +489,9 @@ class OpenAICompatProvider:
             raise AIResponseTruncated(
                 f"O modelo '{model}' parou por limite de tokens; a resposta veio pela metade."
             )
-        return content
+        # A resposta não-streaming traz `usage` e `model` na raiz, como o último
+        # fragmento do stream: o mesmo leitor serve aos dois.
+        return Description(text=content, usage=_uso_do_fragmento(body, padrao=model))
 
     async def _request(
         self,
@@ -503,9 +544,36 @@ class OpenAICompatProvider:
         # inalcançável; fica para o type checker.
         raise AIProviderUnreachable(f"Nenhuma tentativa de {method} {path} foi executada.")
 
-    async def _backoff(self, attempt: int) -> None:
-        if self._retry_backoff_s > 0:
-            await asyncio.sleep(self._retry_backoff_s * (2**attempt))
+    async def _backoff(self, attempt: int, *, retry_after_s: float | None = None) -> None:
+        if self._retry_backoff_s <= 0:
+            return
+        # Jitter para que dois turnos que falharam juntos não voltem juntos; o
+        # `Retry-After` do provedor manda quando existe, com teto para não
+        # parecer travado.
+        espera = self._retry_backoff_s * (2**attempt) * (1 + random.random() / 2)
+        if retry_after_s is not None:
+            espera = max(espera, min(retry_after_s, MAX_RETRY_AFTER_S))
+        await asyncio.sleep(espera)
+
+
+def _retryable(exc: AIProviderError) -> bool:
+    """Transporte caído, 429, 5xx ou erro dentro do stream (200) valem nova tentativa."""
+    if isinstance(exc, AIProviderUnreachable):
+        return True
+    return isinstance(exc, AIProviderRefused) and (
+        exc.status_code in RETRYABLE_STATUS or exc.status_code == 200
+    )
+
+
+def _retry_after(response: httpx.Response) -> float | None:
+    """`Retry-After` em segundos; a forma de data HTTP é rara em API e fica de fora."""
+    bruto = response.headers.get("retry-after")
+    if bruto is None:
+        return None
+    try:
+        return max(0.0, float(bruto))
+    except ValueError:
+        return None
 
 
 def _capacidades_atendidas(

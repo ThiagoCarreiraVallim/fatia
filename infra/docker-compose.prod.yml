@@ -41,6 +41,10 @@ services:
       WEB_ORIGIN: https://app.${DOMAIN}
       LOGTO_MCP_APP_ID: ${LOGTO_MCP_APP_ID}
       LOGTO_MCP_APP_SECRET: ${LOGTO_MCP_APP_SECRET}
+      # Management API do Logto: apagar a identidade junto da conta e ler o e-mail no
+      # primeiro acesso. Vazio = a conta nasce com e-mail provisório.
+      LOGTO_M2M_APP_ID: ${LOGTO_M2M_APP_ID:-}
+      LOGTO_M2M_APP_SECRET: ${LOGTO_M2M_APP_SECRET:-}
       # Observabilidade (#39). Vazio = instrumentação inerte, sem exportador e sem overhead:
       # a API sobe igual mesmo sem o stack de observabilidade implantado. Para ligar, aponte
       # para o collector na `dokploy-network` — ver `docs/OPERATIONS.md` §Observabilidade.
@@ -57,6 +61,37 @@ services:
       AI_QUOTA_DAILY_MICROS: ${AI_QUOTA_DAILY_MICROS:-0}
       AI_QUOTA_GLOBAL_DAILY_MICROS: ${AI_QUOTA_GLOBAL_DAILY_MICROS:-0}
       AI_QUOTA_UNPRICED_DAILY_CALLS: ${AI_QUOTA_UNPRICED_DAILY_CALLS:-20}
+      # Plano Free/PRO e assentos (ADR 024/025). A instância pública usa true.
+      AI_REQUIRES_PLAN: ${AI_REQUIRES_PLAN:-false}
+      BILLING_PRO_MONTHLY_CENTS: ${BILLING_PRO_MONTHLY_CENTS:-1990}
+      BILLING_PRO_YEARLY_CENTS: ${BILLING_PRO_YEARLY_CENTS:-17900}
+      BILLING_SEAT_MONTHLY_CENTS: ${BILLING_SEAT_MONTHLY_CENTS:-1490}
+      # Asaas (PRO pela web e assentos). Vazio = checkout responde 503.
+      ASAAS_BASE_URL: ${ASAAS_BASE_URL:-}
+      ASAAS_API_KEY: ${ASAAS_API_KEY:-}
+      ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:-}
+      # RevenueCat (compra no app). Vazio = webhook e sync respondem 503.
+      REVENUECAT_WEBHOOK_AUTH: ${REVENUECAT_WEBHOOK_AUTH:-}
+      REVENUECAT_SECRET_KEY: ${REVENUECAT_SECRET_KEY:-}
+      REVENUECAT_ENTITLEMENT_ID: ${REVENUECAT_ENTITLEMENT_ID:-pro}
+      # E-mail do convite de comunidade. Vazio = só o link, sem e-mail.
+      MAIL_SMTP_URL: ${MAIL_SMTP_URL:-}
+      EMAIL_FROM: ${EMAIL_FROM:-Fatia <nao-responda@fat.ia.br>}
+      # Avisos no celular pela Expo (ADR 033). A instância pública usa true.
+      PUSH_ENABLED: ${PUSH_ENABLED:-false}
+      EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}
+      # Push no navegador (Fase 9g). As três juntas, ou nenhuma.
+      WEB_PUSH_VAPID_PUBLIC_KEY: ${WEB_PUSH_VAPID_PUBLIC_KEY:-}
+      WEB_PUSH_VAPID_PRIVATE_KEY: ${WEB_PUSH_VAPID_PRIVATE_KEY:-}
+      WEB_PUSH_SUBJECT: ${WEB_PUSH_SUBJECT:-}
+      # Mídia da comunidade no Cloudflare R2 (ADR 028). Vazio = envio de imagem
+      # responde 503. Bucket privado e CORS para https://app.${DOMAIN}: ver
+      # docs/OPERATIONS.md §Mídia.
+      MEDIA_S3_ENDPOINT: ${MEDIA_S3_ENDPOINT:-}
+      MEDIA_S3_REGION: ${MEDIA_S3_REGION:-auto}
+      MEDIA_S3_BUCKET: ${MEDIA_S3_BUCKET:-}
+      MEDIA_S3_ACCESS_KEY_ID: ${MEDIA_S3_ACCESS_KEY_ID:-}
+      MEDIA_S3_SECRET_ACCESS_KEY: ${MEDIA_S3_SECRET_ACCESS_KEY:-}
     expose:
       - "3000"
     networks:
@@ -110,21 +145,43 @@ services:
       AI_MODEL_EMBEDDING: ${AI_MODEL_EMBEDDING:-}
       AI_MODEL_TRANSCRIPTION: ${AI_MODEL_TRANSCRIPTION:-}
       AI_TIMEOUT_S: ${AI_TIMEOUT_S:-120}
+      # Novas tentativas do provedor antes do primeiro token (429, 5xx, conexão).
+      AI_MAX_RETRIES: ${AI_MAX_RETRIES:-2}
       AGENT_API_KEY: ${AGENT_API_KEY:-}
       MCP_BASE_URL: ${MCP_BASE_URL:-http://api:3000/mcp}
       MCP_TIMEOUT_S: ${MCP_TIMEOUT_S:-30}
       # Mesmo Postgres da API; o agente cria o schema `agent_checkpoint` (ADR 023).
       AGENT_CHECKPOINT_DATABASE_URL: ${AGENT_CHECKPOINT_DATABASE_URL:-}
+      # Langfuse (ADR 034). Sem as chaves, nada sai.
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-https://us.cloud.langfuse.com}
+      LANGFUSE_SAMPLE_RATE: ${LANGFUSE_SAMPLE_RATE:-1.0}
+      LANGFUSE_ENVIRONMENT: ${LANGFUSE_ENVIRONMENT:-production}
     expose:
       - "8100"
     depends_on:
       - api
     networks:
       - dokploy-network
+    # O `/health` responde 200 mesmo sem IA ou sem Postgres (ver api.py): o que
+    # isto pega é o processo travado ou morto, não a dependência fora do ar.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/health', timeout=5)"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     deploy:
       resources:
         limits:
-          memory: 384M
+          # 384M ficava no limite com o pool do checkpointer e um turno com
+          # foto em base64 na memória; um OOM derruba todos os turnos abertos.
+          memory: 512M
 
   # ============================================================
   # Frontend (Next.js PWA)
@@ -151,6 +208,13 @@ services:
       LOGTO_BASE_URL: https://app.${DOMAIN}
       LOGTO_AUDIENCE: ${LOGTO_AUDIENCE:-https://api.${DOMAIN}}
       NEXT_PUBLIC_API_URL: https://api.${DOMAIN}
+      # Link universal do convite no app (/.well-known/*). Vazio = 404, abre o PWA.
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
+      ANDROID_CERT_SHA256: ${ANDROID_CERT_SHA256:-}
+      # Controlador dos dados (LGPD), nas páginas /privacy e /terms.
+      LEGAL_ENTITY_NAME: ${LEGAL_ENTITY_NAME:-}
+      LEGAL_ENTITY_DOCUMENT: ${LEGAL_ENTITY_DOCUMENT:-}
+      DPO_EMAIL: ${DPO_EMAIL:-}
     expose:
       - "3001"
     depends_on:

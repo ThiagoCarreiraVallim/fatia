@@ -11,19 +11,31 @@ import {
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { progressApi, type StepLog } from '@fatia/api-client';
+import {
+  dayLabel,
+  progressApi,
+  undoMessage,
+  stepsRestoreInput,
+  type StepLog,
+} from '@fatia/api-client';
+import { useUndoSlot } from './use-undo-slot';
+import { hojeIso } from '@/lib/dias';
+import { LogDayField } from './log-day-field';
 import { LogHistory, type LogHistoryEntry } from './log-history';
 import { dayMonth, formatInteger } from './log-format';
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  /** Dia em que o drawer abre; sem ele, hoje. */
   date?: string;
 }
 
 const HISTORY_DAYS = 30;
 
 export function LogStepsDrawer({ open, onClose, date }: Props) {
+  const today = hojeIso();
+  const [day, setDay] = useState(date ?? today);
   const [steps, setSteps] = useState('');
   const [editing, setEditing] = useState<StepLog | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -57,7 +69,10 @@ export function LogStepsDrawer({ open, onClose, date }: Props) {
   }
 
   function resetAll() {
+    setUndone(null);
+    restore.reset();
     clearForm();
+    setDay(date ?? hojeIso());
     save.reset();
     remove.reset();
   }
@@ -69,19 +84,30 @@ export function LogStepsDrawer({ open, onClose, date }: Props) {
       // não move o registro para hoje.
       id
         ? progressApi.updateStep(id, { steps: value })
-        : progressApi.createStep({ steps: value, ...(date ? { date } : {}) }),
+        : progressApi.createStep({ steps: value, ...(day !== today ? { date: day } : {}) }),
     onSuccess: (_data, variables) => {
       invalidate();
       clearForm();
-      if (!variables.id) onClose();
+      if (!variables.id) {
+        setDay(date ?? hojeIso());
+        onClose();
+      }
     },
   });
 
+  // Apaga sem perguntar; o aviso oferece "Desfazer" (`undo.ts` do api-client).
+  const restore = useMutation({
+    mutationFn: (log: StepLog) => progressApi.createStep(stepsRestoreInput(log)),
+    onSuccess: () => invalidate(),
+  });
+  const [undone, setUndone] = useUndoSlot<StepLog>();
+
   const remove = useMutation({
-    mutationFn: (id: string) => progressApi.deleteStep(id),
-    onSuccess: (_data, id) => {
+    mutationFn: (log: StepLog) => progressApi.deleteStep(log.id),
+    onSuccess: (_data, log) => {
       invalidate();
-      if (editing?.id === id) clearForm();
+      setUndone(log);
+      if (editing?.id === log.id) clearForm();
       inputRef.current?.focus();
     },
   });
@@ -129,6 +155,8 @@ export function LogStepsDrawer({ open, onClose, date }: Props) {
           </DrawerDescription>
         </DrawerHeader>
         <div className="my-3 space-y-4">
+          {/* Editar nunca muda o dia (ver `save`): o campo é só de registro novo. */}
+          {!editing && <LogDayField id="steps-day" day={day} today={today} onChange={setDay} />}
           <div className="space-y-1">
             <label htmlFor="steps" className="text-sm font-medium">
               Passos
@@ -145,9 +173,10 @@ export function LogStepsDrawer({ open, onClose, date }: Props) {
             />
           </div>
 
-          {error && <p className="text-sm text-rose-500">{error}</p>}
-          {remove.error && (
-            <p className="text-sm text-rose-500">{(remove.error as Error).message}</p>
+          {error && <p className="text-sm text-danger">{error}</p>}
+          {remove.error && <p className="text-sm text-danger">{(remove.error as Error).message}</p>}
+          {restore.error && (
+            <p className="text-sm text-danger">Não deu para desfazer. Registre de novo.</p>
           )}
 
           <LogHistory
@@ -167,16 +196,35 @@ export function LogStepsDrawer({ open, onClose, date }: Props) {
               remove.reset();
               inputRef.current?.focus();
             }}
-            onDelete={(entry) => remove.mutate(entry.id)}
-            pendingId={remove.isPending ? (remove.variables ?? null) : null}
+            onDelete={(entry) => {
+              const log = logs.data?.logs.find((item) => item.id === entry.id);
+              if (log) remove.mutate(log);
+            }}
+            pendingId={remove.isPending ? (remove.variables?.id ?? null) : null}
             isDeleting={remove.isPending}
+            undo={
+              undone
+                ? {
+                    message: undoMessage('steps'),
+                    onUndo: () => {
+                      restore.mutate(undone);
+                      setUndone(null);
+                    },
+                  }
+                : null
+            }
             emptyLabel="Nenhum registro de passos nos últimos 30 dias."
-            confirmLabel="Apagar este registro de passos?"
           />
 
           <div className="space-y-2">
             <Button className="w-full" onClick={submit} disabled={save.isPending || !steps.trim()}>
-              {save.isPending ? 'Salvando…' : editing ? 'Salvar alteração' : 'Salvar'}
+              {save.isPending
+                ? 'Salvando…'
+                : editing
+                  ? 'Salvar alteração'
+                  : day === today
+                    ? 'Salvar'
+                    : `Salvar em ${dayLabel(day, today)}`}
             </Button>
             {editing && (
               <Button variant="outline" className="w-full" onClick={resetAll}>

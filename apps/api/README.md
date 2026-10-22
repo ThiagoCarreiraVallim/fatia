@@ -62,4 +62,4 @@ src/
 └── main.ts
 ```
 
-A ordem de implementação vive nas [Issues](https://github.com/ThiagoCarreiraVallim/fatia/issues), organizadas por épica — veja `docs/TASKS.md` para o mapa.
+A ordem de implementação vive nas [Issues](https://github.com/ThiagoCarreiraVallim/fatia/issues), organizadas por épica — o Roadmap do [README](../../README.md#roadmap) lista as abertas.

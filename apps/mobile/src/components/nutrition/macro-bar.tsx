@@ -6,15 +6,14 @@ import { NUMEROS_TABULARES } from './helpers';
  * Réplica de `apps/web/src/components/nutrition/macro-bar.tsx`.
  *
  * Barra com faixa: dentro do intervalo, na borda (até 10% fora) ou fora.
- * O tema não tem cor de aviso, então os dois estados fora do verde usam os
- * mesmos tons do PWA (âmbar e vermelho do Tailwind) — o vermelho do tema
- * (`#93000a`) some sobre o fundo escuro quando é preenchimento de barra.
+ * Fora do verde, os tokens `warning` e `danger` — não o `destructive`
+ * (`#93000a`), que some sobre o fundo escuro quando é preenchimento de barra.
  */
 
 const COR_POR_ESTADO = {
   dentro: 'bg-primary',
-  borda: 'bg-[#facc15]',
-  fora: 'bg-[#f43f5e]',
+  borda: 'bg-warning',
+  fora: 'bg-danger',
 } as const;
 
 export function MacroBar({

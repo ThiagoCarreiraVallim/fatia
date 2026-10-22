@@ -65,3 +65,42 @@ self.addEventListener('fetch', (event) => {
     ),
   );
 });
+
+// Push no navegador (Fase 9g). O texto vem pronto do servidor e nunca traz dado
+// de saúde; o caminho do toque passa pela mesma conferência do app
+// (`notificationTarget`): só caminho interno, sem esquema, sem `//` e sem `?`.
+const CAMINHO_INTERNO = /^\/(?!\/)[A-Za-z0-9/_-]*$/;
+
+self.addEventListener('push', (event) => {
+  let aviso = { title: 'Fatia', body: '', url: '/' };
+  try {
+    aviso = { ...aviso, ...(event.data ? event.data.json() : {}) };
+  } catch {
+    // Corpo que não é JSON: mostra o padrão, sem conteúdo nenhum.
+  }
+  event.waitUntil(
+    self.registration.showNotification(aviso.title, {
+      body: aviso.body,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      data: { url: aviso.url },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const bruto = event.notification.data && event.notification.data.url;
+  const destino = typeof bruto === 'string' && CAMINHO_INTERNO.test(bruto) ? bruto : '/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((abertas) => {
+      for (const c of abertas) {
+        if (new URL(c.url).origin === self.location.origin && 'focus' in c) {
+          c.navigate(destino);
+          return c.focus();
+        }
+      }
+      return self.clients.openWindow(destino);
+    }),
+  );
+});

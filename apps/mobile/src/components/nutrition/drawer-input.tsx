@@ -7,6 +7,7 @@ import {
   type TextStyle,
 } from 'react-native';
 import { DrawerTextInput, cn } from '@/components/ui';
+import { cores } from '@/theme/cores';
 
 /**
  * Campo de texto com a aparência do `Input` de `@/components/ui`, mas sobre
@@ -30,12 +31,12 @@ const estilos = StyleSheet.create({
     width: '100%',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#333333',
+    borderColor: cores.border,
     backgroundColor: 'transparent',
     paddingHorizontal: 12,
     paddingVertical: 8,
     fontSize: 14,
-    color: '#e5e2e1',
+    color: cores.foreground,
   },
 });
 
@@ -55,8 +56,8 @@ export function DrawerInput({
       <Text className={cn('text-sm font-medium text-foreground', labelClassName)}>{label}</Text>
       <DrawerTextInput
         accessibilityLabel={label}
-        placeholderTextColor="#8a8a8a"
-        selectionColor="#2ce500"
+        placeholderTextColor={cores.placeholder}
+        selectionColor={cores.primary}
         style={[estilos.campo, style]}
         {...props}
       />

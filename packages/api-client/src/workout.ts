@@ -1,4 +1,6 @@
 import { apiFetch } from './http';
+import type { MediaView } from './community-content';
+import type { GymEquipmentState } from './community-exercises';
 
 export type MuscleGroup =
   | 'peito'
@@ -31,6 +33,21 @@ export interface Exercise {
   instructions: string[];
   youtubeVideoId: string | null;
   youtubeVideoIdPt: string | null;
+  /** Criado por uma comunidade (Fase 7b). */
+  groupOwned?: boolean;
+  /** Na busca: a comunidade da pessoa que destaca este exercício. */
+  communityName?: string | null;
+  /** No detalhe: o tutorial da comunidade da pessoa, se houver. */
+  community?: CommunityGuide | null;
+}
+
+/** Vídeo, fotos e dicas que a comunidade da pessoa pôs no exercício (ADR 030). */
+export interface CommunityGuide {
+  groupId: string;
+  groupName: string;
+  video: MediaView | null;
+  photos: MediaView[];
+  tips: string | null;
 }
 
 // Campos editáveis de um exercício (custom ou cópia). Músculos devem usar as chaves
@@ -82,6 +99,10 @@ export interface WorkoutSession {
   notes: string | null;
   sets?: SessionSet[];
   plannedExercises?: PlannedExercise[];
+  /** Ordem dos exercícios escolhida nesta sessão (ids). Vazia = a do plano. */
+  exerciseOrder?: number[];
+  /** Exercícios do plano tirados desta sessão — já fora de `plannedExercises`. */
+  removedExerciseIds?: number[];
 }
 
 export interface WorkoutPlanExercise {
@@ -121,6 +142,14 @@ export const workoutApi = {
     apiFetch<WorkoutSession>(`/api/workout/sessions/${id}/finish`, {
       method: 'POST',
       body: JSON.stringify(body ?? {}),
+    }),
+  updateSession: (
+    id: string,
+    body: { notes?: string; exerciseOrder?: number[]; removedExerciseIds?: number[] },
+  ) =>
+    apiFetch<WorkoutSession>(`/api/workout/sessions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
     }),
   deleteSession: (id: string) =>
     apiFetch<void>(`/api/workout/sessions/${id}`, { method: 'DELETE' }),
@@ -219,13 +248,16 @@ export const workoutApi = {
       body: JSON.stringify({ exercises }),
     }),
 
-  searchExercises: (q?: string, muscleGroup?: MuscleGroup) => {
+  searchExercises: (q?: string, muscleGroup?: MuscleGroup, opts: { onlyMyGym?: boolean } = {}) => {
     const qs = new URLSearchParams();
     if (q) qs.set('q', q);
     if (muscleGroup) qs.set('muscleGroup', muscleGroup);
+    if (opts.onlyMyGym) qs.set('onlyMyGym', 'true');
     const query = qs.toString();
     return apiFetch<Exercise[]>(`/api/workout/exercises${query ? `?${query}` : ''}`);
   },
+  /** O equipamento das academias da pessoa (marcado e próprio), para o editor de exercício. */
+  gymEquipment: () => apiFetch<GymEquipmentState>('/api/workout/equipment'),
   getExercise: (id: number) => apiFetch<Exercise>(`/api/workout/exercises/${id}`),
   updateExercise: (id: number, body: ExerciseEditInput) =>
     apiFetch<Exercise>(`/api/workout/exercises/${id}`, {

@@ -1,22 +1,26 @@
-import {
-  BadGatewayException,
-  BadRequestException,
-  GatewayTimeoutException,
-  PayloadTooLargeException,
-  ServiceUnavailableException,
-} from '@nestjs/common';
-import type { ConfigService } from '@nestjs/config';
+import { BadRequestException, PayloadTooLargeException } from '@nestjs/common';
 import type { Food } from '@prisma/client';
 import { MAX_FOTO_BYTES, MealRecognitionService } from '../meal-recognition.service';
 import type { FoodService } from '../food.service';
+import {
+  AiAccessService,
+  AiPlanRequiredException,
+  INSTANCIA_LIBERADA,
+  type AiEntitlement,
+} from '../../ai/ai-access.service';
+import type { AiUsageService } from '../../ai/ai-usage.service';
+import type { AgentMealRecognition, AgentRecognizedItem } from '../../ai/agent.adapter';
+import { HostedAiService } from '../../ai/hosted-ai.service';
+import { FakeAgentAdapter } from '../../ai/__tests__/fake-agent.adapter';
 
 /**
- * O agente Python nunca é chamado de verdade aqui — `fetch` é sempre dublê.
+ * O agente é um adapter falso (`FakeAgentAdapter`): o HTTP — corpo sem
+ * identidade, tradução de erro, nova tentativa — está no
+ * `ai/__tests__/http-agent.adapter.spec.ts`, e o portão e o livro-caixa no
+ * `ai/__tests__/hosted-ai.service.spec.ts`.
  *
- * O que mais importa afirmar não é o caminho feliz: é (1) que **nada do usuário
- * sai daqui** junto da foto, (2) que a foto sai **sem EXIF**, e (3) que toda
- * falha do agente vira um erro que manda a pessoa para o registro manual, nunca
- * um 500 nem um beco sem saída.
+ * O que fica aqui é o que é desta classe: (1) a foto sai **sem EXIF**, (2) foto
+ * recusada não gasta inferência, e (3) o casamento com a TACO.
  */
 
 /**
@@ -124,20 +128,12 @@ const TACO: Food[] = [
 ];
 
 interface CenarioOpcoes {
-  env?: Record<string, string>;
+  configured?: boolean;
   catalogo?: Food[];
+  direito?: AiEntitlement;
 }
 
 function montar(opcoes: CenarioOpcoes = {}) {
-  const env: Record<string, string> = {
-    AGENT_BASE_URL: 'http://agent.local:8100',
-    ...opcoes.env,
-  };
-
-  const config = {
-    get: (chave: string, padrao?: string) => env[chave] ?? padrao,
-  } as unknown as ConfigService;
-
   const search = jest.fn(
     async (userId: string, params: { q?: string; limit?: number }): Promise<Food[]> => {
       // Reusa o ranqueamento de verdade — e, com ele, o filtro que o `contains`
@@ -153,49 +149,76 @@ function montar(opcoes: CenarioOpcoes = {}) {
   );
 
   const foods = { search } as unknown as FoodService;
-  const service = new MealRecognitionService(config, foods);
-  jest.spyOn(service['logger'], 'warn').mockImplementation(() => undefined);
+  const uso = {
+    assertDentroDaCota: jest.fn(async (_userId: string, _agora?: Date) => undefined),
+    record: jest.fn(async (_userId: string, _entrada: unknown) => undefined),
+  };
+  const acesso = new AiAccessService(
+    { aiTierForUser: async () => opcoes.direito ?? INSTANCIA_LIBERADA, exigePlano: () => true },
+    uso as unknown as AiUsageService,
+  );
+  const agent = new FakeAgentAdapter();
+  agent.configured.mockReturnValue(opcoes.configured ?? true);
+  const hostedAi = new HostedAiService(acesso, uso as unknown as AiUsageService, agent);
+  const service = new MealRecognitionService(foods, hostedAi);
 
-  return { service, search };
+  return { service, search, uso, agent };
 }
 
-function respostaDoAgente(corpo: unknown, status = 200): Response {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => corpo,
-  } as unknown as Response;
+/** O que o agente responde, na forma que o adapter devolve. */
+function respostaDoAgente(corpo: {
+  items: AgentRecognizedItem[];
+  note?: string | null;
+}): AgentMealRecognition {
+  return { items: corpo.items, note: corpo.note ?? null, usage: null };
 }
 
 describe('MealRecognitionService', () => {
-  let fetchMock: jest.Mock;
+  describe('plano e cota (ADR 024)', () => {
+    it('Free recebe 402 AI_PLAN_REQUIRED sem chamar o agente nem gastar cota', async () => {
+      const { service, uso, agent } = montar({
+        direito: {
+          tier: 'FREE',
+          source: null,
+          motivo: 'sem_assinatura',
+          degraded: false,
+          subscription: null,
+        },
+      });
 
-  beforeEach(() => {
-    fetchMock = jest.fn();
-    global.fetch = fetchMock as unknown as typeof fetch;
-  });
+      const erro = await service.recognize(USER, JPEG_COM_EXIF_GPS).catch((e: unknown) => e);
 
-  afterEach(() => {
-    jest.restoreAllMocks();
+      expect(erro).toBeInstanceOf(AiPlanRequiredException);
+      expect((erro as AiPlanRequiredException).getStatus()).toBe(402);
+      expect(agent.recognizeMeal).not.toHaveBeenCalled();
+      expect(uso.assertDentroDaCota).not.toHaveBeenCalled();
+    });
+
+    it('passa pela cota antes do agente e lança a foto precificada no livro-caixa', async () => {
+      const { service, uso } = montar();
+
+      await service.recognize(USER, JPEG_COM_EXIF_GPS);
+
+      expect(uso.assertDentroDaCota).toHaveBeenCalledWith(USER, expect.any(Date));
+      // Com o `usage` do agente a foto sai precificada, e não conta na tolerância
+      // de chamadas sem preço — que é da instância inteira.
+      expect(uso.record).toHaveBeenCalledWith(USER, {
+        feature: 'meal_photo',
+        paidBy: 'INSTANCE',
+        groupId: null,
+        model: 'z-ai/glm-5.3-flash',
+        units: { inputUnits: 1200, outputUnits: 90 },
+      });
+    });
   });
 
   describe('privacidade — o que sai daqui', () => {
-    it('manda a foto sem EXIF, sem GPS e sem nada que identifique a pessoa', async () => {
-      const { service } = montar();
-      fetchMock.mockResolvedValue(respostaDoAgente({ items: [], note: null }));
+    it('manda a foto ao agente sem EXIF e sem GPS', async () => {
+      const { service, agent } = montar();
 
-      await service.reconhecer(USER, JPEG_COM_EXIF_GPS);
+      await service.recognize(USER, JPEG_COM_EXIF_GPS);
 
-      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-      expect(url).toBe('http://agent.local:8100/recognize-meal');
-
-      const enviado = JSON.parse(init.body as string) as Record<string, unknown>;
-      // Lista fechada de propósito: um `userId` acrescentado "só para o log"
-      // criaria um segundo lugar onde o dado do usuário existe, e um teste que
-      // só checasse "tem image_base64" não veria isso.
-      expect(Object.keys(enviado).sort()).toEqual(['image_base64', 'media_type']);
-
-      const foto = Buffer.from(enviado.image_base64 as string, 'base64');
+      const [foto] = agent.recognizeMeal.mock.calls[0];
       expect(foto.subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8])); // ainda é JPEG
       expect(foto.includes(Buffer.from('Exif\0\0', 'binary'))).toBe(false);
       expect(foto.includes(Buffer.from('iPhone 15 Pro'))).toBe(false);
@@ -205,36 +228,23 @@ describe('MealRecognitionService', () => {
       expect(JPEG_COM_EXIF_GPS.includes(Buffer.from('iPhone 15 Pro'))).toBe(true);
     });
 
-    it('não manda cabeçalho de autorização do usuário para o agente', async () => {
-      const { service } = montar({ env: { AGENT_API_KEY: 'segredo-do-compose' } });
-      fetchMock.mockResolvedValue(respostaDoAgente({ items: [] }));
-
-      await service.reconhecer(USER, JPEG_COM_EXIF_GPS);
-
-      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-      const headers = init.headers as Record<string, string>;
-      // O segredo é do serviço, não da pessoa: ele identifica o `apps/api`, e o
-      // agente não fica sabendo de quem é a foto.
-      expect(Object.keys(headers).sort()).toEqual(['Accept', 'Content-Type', 'X-Fatia-Agent-Key']);
-      expect(headers['X-Fatia-Agent-Key']).toBe('segredo-do-compose');
-    });
-
     it('recusa quem não é JPEG antes de qualquer chamada ao provedor', async () => {
-      const { service } = montar();
+      const { service, agent, uso } = montar();
       const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
-      await expect(service.reconhecer(USER, png)).rejects.toBeInstanceOf(BadRequestException);
-      expect(fetchMock).not.toHaveBeenCalled();
+      await expect(service.recognize(USER, png)).rejects.toBeInstanceOf(BadRequestException);
+      expect(agent.recognizeMeal).not.toHaveBeenCalled();
+      expect(uso.record).not.toHaveBeenCalled();
     });
 
     it('recusa foto acima do teto sem gastar inferência', async () => {
-      const { service } = montar();
+      const { service, agent } = montar();
       const grande = Buffer.concat([JPEG_COM_EXIF_GPS, Buffer.alloc(MAX_FOTO_BYTES)]);
 
-      await expect(service.reconhecer(USER, grande)).rejects.toBeInstanceOf(
+      await expect(service.recognize(USER, grande)).rejects.toBeInstanceOf(
         PayloadTooLargeException,
       );
-      expect(fetchMock).not.toHaveBeenCalled();
+      expect(agent.recognizeMeal).not.toHaveBeenCalled();
     });
   });
 
@@ -259,10 +269,10 @@ describe('MealRecognitionService', () => {
       // uma entrada só não existe desempate, e é no desempate que o casamento
       // erra. Quem escolhe aqui é o preparo dito pelo modelo ("frita"), não a
       // sorte da ordenação.
-      const { service } = montar({ catalogo: TACO });
-      fetchMock.mockResolvedValue(respostaDoAgente(respostaComMandiocaEBolinho));
+      const { service, agent } = montar({ catalogo: TACO });
+      agent.recognizeMeal.mockResolvedValue(respostaDoAgente(respostaComMandiocaEBolinho));
 
-      const { itens } = await service.reconhecer(USER, JPEG_COM_EXIF_GPS);
+      const { itens } = await service.recognize(USER, JPEG_COM_EXIF_GPS);
 
       expect(itens[0]).toMatchObject({
         nomeReconhecido: 'mandioca frita',
@@ -285,12 +295,12 @@ describe('MealRecognitionService', () => {
       // Macaúba na frente das duas maçãs. Resultado contra o catálogo real:
       // 525,56 kcal em 130 g no lugar de ~73, com `estimado: false`, ou seja,
       // apresentado como confirmado pela tabela.
-      const { service } = montar({ catalogo: TACO });
-      fetchMock.mockResolvedValue(
+      const { service, agent } = montar({ catalogo: TACO });
+      agent.recognizeMeal.mockResolvedValue(
         respostaDoAgente({ items: [{ name: 'maçã', grams: 130, confidence: 0.9 }] }),
       );
 
-      const { itens } = await service.reconhecer(USER, JPEG_COM_EXIF_GPS);
+      const { itens } = await service.recognize(USER, JPEG_COM_EXIF_GPS);
 
       expect(itens[0]).toMatchObject({ foodId: null, nomeDoCatalogo: null, estimado: true });
       // E, principalmente, sem a caloria da macaúba entrando como maçã.
@@ -302,21 +312,21 @@ describe('MealRecognitionService', () => {
       // cozido (128). O nome não escolheu entre elas; escolher por conta seria
       // errar o macro em quase 3× sem nenhum sintoma na tela. Item livre é a
       // resposta honesta — a pessoa corrige em um toque e vê que é estimado.
-      const { service } = montar({ catalogo: TACO });
-      fetchMock.mockResolvedValue(
+      const { service, agent } = montar({ catalogo: TACO });
+      agent.recognizeMeal.mockResolvedValue(
         respostaDoAgente({ items: [{ name: 'arroz', grams: 150, confidence: 0.9 }] }),
       );
 
-      const { itens } = await service.reconhecer(USER, JPEG_COM_EXIF_GPS);
+      const { itens } = await service.recognize(USER, JPEG_COM_EXIF_GPS);
 
       expect(itens[0]).toMatchObject({ foodId: null, estimado: true });
     });
 
     it('não casou: vira item livre marcado como estimado', async () => {
-      const { service } = montar({ catalogo: [] });
-      fetchMock.mockResolvedValue(respostaDoAgente(respostaComMandiocaEBolinho));
+      const { service, agent } = montar({ catalogo: [] });
+      agent.recognizeMeal.mockResolvedValue(respostaDoAgente(respostaComMandiocaEBolinho));
 
-      const { itens } = await service.reconhecer(USER, JPEG_COM_EXIF_GPS);
+      const { itens } = await service.recognize(USER, JPEG_COM_EXIF_GPS);
 
       expect(itens[1]).toMatchObject({
         nomeReconhecido: 'bolinho da vó',
@@ -339,12 +349,12 @@ describe('MealRecognitionService', () => {
       // piso de rank barrava) e "Caramelo, doce" contém "mel" no meio da
       // palavra (`Contains`). Nenhum dos dois tem "mel" como identidade, então
       // sobra uma entrada só — e é a certa, com o macro dela.
-      const { service } = montar({ catalogo: TACO });
-      fetchMock.mockResolvedValue(
+      const { service, agent } = montar({ catalogo: TACO });
+      agent.recognizeMeal.mockResolvedValue(
         respostaDoAgente({ items: [{ name: 'mel', grams: 20, confidence: 0.7 }] }),
       );
 
-      const { itens } = await service.reconhecer(USER, JPEG_COM_EXIF_GPS);
+      const { itens } = await service.recognize(USER, JPEG_COM_EXIF_GPS);
 
       expect(itens[0]).toMatchObject({
         foodId: 507,
@@ -359,8 +369,8 @@ describe('MealRecognitionService', () => {
       // sentidos. "coco" não é a identidade de "Leite, de coco" — a identidade
       // é "leite" —, e além disso serve a duas entradas de coco: item livre. Já
       // "leite de coco" cobre a identidade "leite" e sobra uma só.
-      const { service } = montar({ catalogo: TACO });
-      fetchMock.mockResolvedValue(
+      const { service, agent } = montar({ catalogo: TACO });
+      agent.recognizeMeal.mockResolvedValue(
         respostaDoAgente({
           items: [
             { name: 'coco', grams: 50, confidence: 0.6 },
@@ -369,7 +379,7 @@ describe('MealRecognitionService', () => {
         }),
       );
 
-      const { itens } = await service.reconhecer(USER, JPEG_COM_EXIF_GPS);
+      const { itens } = await service.recognize(USER, JPEG_COM_EXIF_GPS);
 
       expect(itens[0]).toMatchObject({ foodId: null, estimado: true });
       expect(itens[1]).toMatchObject({
@@ -386,7 +396,7 @@ describe('MealRecognitionService', () => {
       // **casaria** se estivesse visível (identidade igual ao termo, e único),
       // senão o `foodId: null` abaixo seria consequência da regra de casamento
       // e não do isolamento, e o teste passaria verde com o isolamento furado.
-      const { service, search } = montar({
+      const { service, search, agent } = montar({
         catalogo: [
           alimento({
             id: 9,
@@ -396,11 +406,11 @@ describe('MealRecognitionService', () => {
           }),
         ],
       });
-      fetchMock.mockResolvedValue(
+      agent.recognizeMeal.mockResolvedValue(
         respostaDoAgente({ items: [{ name: 'tapioca', grams: 80, confidence: 0.8 }] }),
       );
 
-      const { itens } = await service.reconhecer(USER, JPEG_COM_EXIF_GPS);
+      const { itens } = await service.recognize(USER, JPEG_COM_EXIF_GPS);
 
       expect(search).toHaveBeenCalledWith(USER, expect.objectContaining({ q: 'tapioca' }));
       // O custom do outro usuário não pode virar `foodId` da refeição desta pessoa.
@@ -408,138 +418,40 @@ describe('MealRecognitionService', () => {
     });
 
     it('foto sem comida devolve lista vazia, não erro', async () => {
-      const { service } = montar();
-      fetchMock.mockResolvedValue(
+      const { service, agent } = montar();
+      agent.recognizeMeal.mockResolvedValue(
         respostaDoAgente({ items: [], note: 'não identifiquei alimentos na foto' }),
       );
 
-      const resultado = await service.reconhecer(USER, JPEG_COM_EXIF_GPS);
+      const resultado = await service.recognize(USER, JPEG_COM_EXIF_GPS);
 
       expect(resultado.itens).toEqual([]);
       expect(resultado.observacao).toBe('não identifiquei alimentos na foto');
     });
   });
 
-  describe('degradação — o caminho manual nunca fecha', () => {
-    it('sem AGENT_BASE_URL responde 503 sem chamar ninguém', async () => {
-      const { service } = montar({ env: { AGENT_BASE_URL: '' } });
-
-      await expect(service.reconhecer(USER, JPEG_COM_EXIF_GPS)).rejects.toBeInstanceOf(
-        ServiceUnavailableException,
-      );
-      expect(fetchMock).not.toHaveBeenCalled();
-    });
-
-    it('agente fora do ar vira 503 com instrução de registrar à mão', async () => {
-      const { service } = montar();
-      fetchMock.mockRejectedValue(Object.assign(new Error('connect ECONNREFUSED'), {}));
-
-      await expect(service.reconhecer(USER, JPEG_COM_EXIF_GPS)).rejects.toThrow(
-        /Registre manualmente/i,
-      );
-    });
-
-    it('timeout vira 504, e não erro genérico', async () => {
-      const { service } = montar();
-      fetchMock.mockRejectedValue(
-        Object.assign(new Error('The operation was aborted'), { name: 'TimeoutError' }),
-      );
-
-      await expect(service.reconhecer(USER, JPEG_COM_EXIF_GPS)).rejects.toBeInstanceOf(
-        GatewayTimeoutException,
-      );
-    });
-
-    it('traduz pelo `code` do agente, não pela mensagem em prosa', async () => {
-      // A mensagem muda sem aviso; o código é contrato. Casar por texto faria uma
-      // edição de português no `apps/agent` mudar o status HTTP daqui.
-      const casos: Array<[string, unknown]> = [
-        ['AI_PROVIDER_NOT_CONFIGURED', ServiceUnavailableException],
-        ['AI_PROVIDER_TIMEOUT', GatewayTimeoutException],
-        ['AI_RESPONSE_UNPARSEABLE', BadGatewayException],
-        ['AI_PROVIDER_REFUSED', BadGatewayException],
-      ];
-
-      for (const [code, tipo] of casos) {
-        const { service } = montar();
-        fetchMock.mockResolvedValue(
-          respostaDoAgente({ error: { code, message: 'qualquer coisa' } }, 502),
-        );
-
-        await expect(service.reconhecer(USER, JPEG_COM_EXIF_GPS)).rejects.toBeInstanceOf(
-          tipo as never,
-        );
-      }
-    });
-
-    it('401 do agente é erro de configuração, e não "o modelo falhou"', async () => {
-      // API com `AGENT_API_KEY` e agente sem (ou com outra) devolve 401 com
-      // `AGENT_KEY_REJECTED` — um código que este `switch` não conhece, e que
-      // portanto cairia no `default`: a pessoa lia "o reconhecimento por foto
-      // falhou" e quem opera ia procurar defeito no modelo. É configuração, e o
-      // erro tem de dizer. Por isso a decisão é pelo status, antes do código.
-      //
-      // O corpo é o que o agente responde de verdade desde a revisão da #248
-      // (`apps/agent/src/fatia_agent/api.py`, `AgentKeyRejected`); antes era um
-      // `{ detail: 'Unauthorized' }`, e um duplo com forma que a realidade não
-      // tem passa verde sobre a tradução que deveria testar.
-      const { service } = montar();
-      fetchMock.mockResolvedValue(
-        respostaDoAgente(
-          { error: { code: 'AGENT_KEY_REJECTED', message: 'chave ausente ou inválida' } },
-          401,
-        ),
-      );
-
-      await expect(service.reconhecer(USER, JPEG_COM_EXIF_GPS)).rejects.toThrow(
-        /mal configurado.*autenticar no agente/i,
-      );
-    });
-
-    it('resposta do agente sem `items` vira 502 em vez de itens undefined', async () => {
-      const { service } = montar();
-      fetchMock.mockResolvedValue(respostaDoAgente({ resultado: 'ok' }));
-
-      await expect(service.reconhecer(USER, JPEG_COM_EXIF_GPS)).rejects.toBeInstanceOf(
-        BadGatewayException,
-      );
-    });
-  });
-
   describe('disponibilidade — a entrada por foto some quando não há IA', () => {
-    it('sem AGENT_BASE_URL responde indisponível sem tocar a rede', async () => {
-      const { service } = montar({ env: { AGENT_BASE_URL: '' } });
+    it('sem agente configurado responde indisponível sem perguntar capacidades', async () => {
+      const { service, agent } = montar({ configured: false });
 
-      expect(await service.disponivel()).toBe(false);
-      expect(fetchMock).not.toHaveBeenCalled();
+      expect(await service.isAvailable()).toBe(false);
+      expect(agent.capabilities).not.toHaveBeenCalled();
     });
 
     it('agente no ar mas sem modelo de visão também é indisponível', async () => {
       // Sem `AI_MODEL_VISION` o agente sobe saudável e recusa toda inferência.
       // Mostrar o botão nesse estado leva a pessoa a tirar uma foto para receber
       // um erro — que é pior que a funcionalidade não existir.
-      const { service } = montar();
-      fetchMock.mockResolvedValue(
-        respostaDoAgente({ capabilities: { text: 'ornith-1.0-9b', vision: null } }),
-      );
+      const { service, agent } = montar();
+      agent.capabilities.mockResolvedValue({ vision: false, transcription: true });
 
-      expect(await service.disponivel()).toBe(false);
+      expect(await service.isAvailable()).toBe(false);
     });
 
     it('agente com modelo de visão responde disponível', async () => {
       const { service } = montar();
-      fetchMock.mockResolvedValue(
-        respostaDoAgente({ capabilities: { vision: 'google/gemma-4-12b-qat' } }),
-      );
 
-      expect(await service.disponivel()).toBe(true);
-    });
-
-    it('agente inacessível não estoura — só desliga a entrada por foto', async () => {
-      const { service } = montar();
-      fetchMock.mockRejectedValue(new Error('connect ECONNREFUSED'));
-
-      expect(await service.disponivel()).toBe(false);
+      expect(await service.isAvailable()).toBe(true);
     });
   });
 });

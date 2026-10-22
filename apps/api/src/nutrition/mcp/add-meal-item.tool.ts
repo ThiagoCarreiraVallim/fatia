@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { MealItemService } from '../meal-item.service';
+import { MAX_PORTION_QUANTITY, MIN_PORTION_QUANTITY } from '../dto/meal.dto';
 import {
   McpTool,
   type McpToolContext,
@@ -31,7 +32,18 @@ export class AddMealItemTool implements McpToolDef {
       .describe(
         'Nome do alimento. Obrigatório quando não há foodId; senão vira snapshot do catálogo',
       ),
-    grams: z.number().min(0.1).describe('Quantidade consumida em gramas'),
+    grams: z.number().min(0.1).optional().describe('Quantidade em gramas, ou use portionId'),
+    portionId: z
+      .string()
+      .uuid()
+      .optional()
+      .describe('Medida caseira do alimento (portions de get_food), no lugar de grams'),
+    quantity: z
+      .number()
+      .min(MIN_PORTION_QUANTITY)
+      .max(MAX_PORTION_QUANTITY)
+      .optional()
+      .describe('Quantas medidas, com portionId (ex.: 2 ou 0.5)'),
     kcal: z
       .number()
       .min(0)
@@ -51,7 +63,7 @@ export class AddMealItemTool implements McpToolDef {
       .describe('ID do grupo alimentar. Copiado do alimento quando há foodId'),
   } as const;
   execute(
-    { mealId, ...item }: { mealId: string; grams: number } & Record<string, unknown>,
+    { mealId, ...item }: { mealId: string } & Record<string, unknown>,
     { userId }: McpToolContext,
   ) {
     return this.mealItems.add(userId, mealId, item as never);

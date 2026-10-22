@@ -33,6 +33,12 @@ describe('NutrientTargetService', () => {
     service = new NutrientTargetService(prisma as unknown as PrismaService);
   });
 
+  it('resumo de nutrientes com dia inválido é 400', async () => {
+    await expect(service.getNutrientSummary(userId, 'hoje', 'UTC')).rejects.toThrow(
+      /date não é um dia válido/,
+    );
+  });
+
   describe('upsert', () => {
     it('upserts by (userId, nutrientKey) with min/max defaulted to null', async () => {
       prisma.nutrientTarget.upsert.mockResolvedValue({});

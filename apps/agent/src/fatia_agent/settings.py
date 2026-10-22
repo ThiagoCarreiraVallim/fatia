@@ -79,6 +79,16 @@ class AgentSettings(BaseSettings):
     # parada antes da primeira palavra. Ver `chat/planejador.py`.
     agent_chat_planner: bool = False
 
+    # Langfuse (ADR 034). Sem as duas chaves, nada é enviado. O padrão é a
+    # Langfuse Cloud na região EUA; o texto passa por `tracing.mask` antes.
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_host: str = "https://us.cloud.langfuse.com"
+    # Fração dos turnos traçados, de 0 a 1. O voto segue a mesma decisão.
+    langfuse_sample_rate: float = 1.0
+    # `production`, `staging`, `dev`… — separa os traces no mesmo projeto.
+    langfuse_environment: str = "default"
+
 
 AGENT_API_KEY_HEADER = "x-fatia-agent-key"
 

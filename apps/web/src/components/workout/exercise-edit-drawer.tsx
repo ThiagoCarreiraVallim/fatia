@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Drawer,
   DrawerClose,
@@ -13,7 +13,15 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { workoutApi, type Exercise } from '@fatia/api-client';
+import {
+  BODYWEIGHT_EQUIPMENT,
+  chooserQuery,
+  OTHER_EQUIPMENT,
+  sameEquipment,
+  workoutApi,
+  type Exercise,
+} from '@fatia/api-client';
+import { EquipmentChooser } from './equipment-chooser';
 
 interface Props {
   /** Exercício custom (ou cópia) a editar. */
@@ -28,6 +36,16 @@ export function ExerciseEditDrawer({ exercise, open, onOpenChange, onSaved }: Pr
   const [name, setName] = useState('');
   const [equipment, setEquipment] = useState('');
   const [instructions, setInstructions] = useState('');
+  const [showList, setShowList] = useState(false);
+  // O equipamento próprio das academias da pessoa entra na lista, primeiro:
+  // é com ele que o filtro "Na minha academia" casa o exercício pessoal.
+  const gym = useQuery({
+    queryKey: ['workout', 'equipment'],
+    queryFn: () => workoutApi.gymEquipment(),
+    enabled: open,
+    staleTime: 60_000,
+  });
+  const custom = gym.data?.customEquipment ?? [];
 
   // Sincroniza os campos quando abre / muda de exercício. Ajuste durante o
   // render, e não num efeito (#187): a comparação é a mesma que estava no array
@@ -42,6 +60,7 @@ export function ExerciseEditDrawer({ exercise, open, onOpenChange, onSaved }: Pr
       setName(exercise.name ?? '');
       setEquipment(exercise.equipment ?? '');
       setInstructions((exercise.instructions ?? []).join('\n'));
+      setShowList(false);
     }
   }
 
@@ -89,8 +108,36 @@ export function ExerciseEditDrawer({ exercise, open, onOpenChange, onSaved }: Pr
               id="ex-equip"
               value={equipment}
               onChange={(e) => setEquipment(e.target.value)}
-              placeholder="Ex.: barra, halteres, máquina"
+              placeholder="Ex.: barra, halteres, leg press"
             />
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="h-auto px-0"
+              aria-expanded={showList}
+              onClick={() => setShowList(!showList)}
+            >
+              {showList ? 'Esconder a lista' : 'Escolher da lista'}
+            </Button>
+            {showList && (
+              // O campo acima é a busca: digitar filtra; clicar num item preenche.
+              <EquipmentChooser
+                single
+                query={chooserQuery(equipment, custom)}
+                custom={custom}
+                customTitle="Da sua academia"
+                extra={[
+                  { key: BODYWEIGHT_EQUIPMENT, label: 'Peso corporal' },
+                  { key: OTHER_EQUIPMENT, label: 'Outro' },
+                ]}
+                isSelected={(k) => sameEquipment(k, equipment)}
+                onPick={(k) => {
+                  setEquipment(k);
+                  setShowList(false);
+                }}
+              />
+            )}
           </div>
 
           <div className="space-y-1.5">

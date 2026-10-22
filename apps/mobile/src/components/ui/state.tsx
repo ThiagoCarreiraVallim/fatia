@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { Button } from './button';
 import { cn } from './utils';
+import { cores } from '@/theme/cores';
 
 /**
  * Estados de carregamento, erro e vazio.
@@ -15,7 +16,7 @@ import { cn } from './utils';
 export function LoadingState({ label = 'Carregando…' }: { label?: string }) {
   return (
     <View className="items-center justify-center gap-3 py-12" accessibilityRole="progressbar">
-      <ActivityIndicator color="#2ce500" />
+      <ActivityIndicator color={cores.primary} />
       <Text className="text-sm text-muted-foreground">{label}</Text>
     </View>
   );

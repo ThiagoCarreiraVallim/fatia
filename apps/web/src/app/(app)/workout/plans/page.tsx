@@ -4,10 +4,12 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Trash2, Plus, Dumbbell } from 'lucide-react';
+import { ChevronRight, Trash2, Plus, Dumbbell, ClipboardList } from 'lucide-react';
 import { workoutApi } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 
 export default function PlansPage() {
   const qc = useQueryClient();
@@ -42,20 +44,10 @@ export default function PlansPage() {
 
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
-      <header className="flex items-center gap-3">
-        <Link
-          href="/workout"
-          aria-label="Voltar"
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground"
-        >
-          <ChevronLeft size={18} />
-        </Link>
-        <h1 className="text-3xl font-extrabold text-foreground">Planos de treino</h1>
-      </header>
-
       {showForm ? (
         <div className="flex gap-2">
           <Input
+            aria-label="Nome do plano"
             autoFocus
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
@@ -90,20 +82,24 @@ export default function PlansPage() {
       {plans.isLoading && (
         <div className="space-y-2">
           {[1, 2].map((i) => (
-            <div key={i} className="h-20 animate-pulse rounded-2xl bg-muted" />
+            <Skeleton key={i} className="h-20 rounded-2xl bg-muted" />
           ))}
         </div>
       )}
 
       {plans.data && plans.data.length === 0 && (
-        <p className="text-sm text-muted-foreground">Nenhum plano criado ainda.</p>
+        <EmptyState
+          icon={ClipboardList}
+          title="Nenhum plano criado ainda"
+          description="Monte um treino (ex.: Push, Pull, Pernas) para começar mais rápido na academia."
+        />
       )}
 
       <div className="space-y-2">
         {plans.data?.map((plan) => (
           <div
             key={plan.id}
-            className="flex items-center gap-3 rounded-2xl border border-white/5 bg-card p-4"
+            className="flex items-center gap-3 rounded-2xl border border-subtle bg-card p-4"
           >
             <Link
               href={`/workout/plans/${plan.id}`}
@@ -124,7 +120,7 @@ export default function PlansPage() {
             <button
               type="button"
               onClick={() => remove.mutate(plan.id)}
-              className="rounded p-1 text-muted-foreground hover:text-rose-500"
+              className="rounded p-1 text-muted-foreground hover:text-danger"
               aria-label="Excluir plano"
             >
               <Trash2 size={16} />

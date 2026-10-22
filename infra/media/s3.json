@@ -1,0 +1,9 @@
+{
+  "identities": [
+    {
+      "name": "fatia-dev",
+      "credentials": [{ "accessKey": "fatia", "secretKey": "fatia_dev_media" }],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}

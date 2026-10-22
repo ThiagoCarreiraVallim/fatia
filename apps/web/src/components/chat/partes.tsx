@@ -140,13 +140,13 @@ export const ToolCallPart: ToolCallMessagePartComponent = ({
         {estado === 'feito' ? (
           <CheckIcon
             aria-label="Feito"
-            className="fade-in zoom-in-90 animate-in size-3.5 shrink-0 text-emerald-500 duration-200"
+            className="fade-in zoom-in-90 animate-in size-3.5 shrink-0 text-success duration-200"
           />
         ) : null}
         {estado === 'falhou' ? (
           <AlertCircleIcon
             aria-hidden
-            className="fade-in zoom-in-90 animate-in size-3.5 shrink-0 text-red-500 duration-200"
+            className="fade-in zoom-in-90 animate-in size-3.5 shrink-0 text-danger duration-200"
           />
         ) : null}
         {motivo ? (

@@ -76,6 +76,67 @@ LOGTO_COOKIE_SECRET=$(openssl rand -base64 32)
 
 Salve. Os subdomínios e demais derivações ficam por conta do compose.
 
+### Opcional — IA hospedada e plano PRO (ADR 024)
+
+Sem nada disto a instância sobe com o app inteiro e o MCP; a IA hospedada some da interface.
+
+```env
+# IA hospedada (agente) e custo
+AGENT_BASE_URL=http://fatia-agent:8100
+AGENT_API_KEY=$(openssl rand -hex 32)
+# micro-dólares por milhão de tokens; preço do OpenRouter em 19/10/2026
+AI_PRICE_TABLE={"z-ai/glm-5.3-flash":{"in":47076,"out":160000}}
+# micro-dólares por dia (UTC): US$ 0,06 por pessoa, US$ 3 na instância
+AI_QUOTA_DAILY_MICROS=60000
+AI_QUOTA_GLOBAL_DAILY_MICROS=3000000
+
+# Plano PRO: false libera a IA hospedada para todos (self-host)
+AI_REQUIRES_PLAN=true
+BILLING_PRO_MONTHLY_CENTS=1990
+BILLING_PRO_YEARLY_CENTS=17900
+
+# Asaas (assinatura pela web) — webhook em https://api.<DOMAIN>/api/billing/webhooks/asaas
+ASAAS_BASE_URL=https://api.asaas.com
+ASAAS_API_KEY=...
+ASAAS_WEBHOOK_TOKEN=$(openssl rand -hex 32)
+
+# RevenueCat (compra no app) — webhook em https://api.<DOMAIN>/api/billing/webhooks/revenuecat
+REVENUECAT_WEBHOOK_AUTH=$(openssl rand -hex 32)
+REVENUECAT_SECRET_KEY=sk_...
+REVENUECAT_ENTITLEMENT_ID=pro
+```
+
+Com `AI_REQUIRES_PLAN=true`, ligue a cota **antes** (o PRO tem preço fixo) e configure pelo menos
+o Asaas, senão ninguém consegue assinar pela web. Depois do primeiro uso, confira que o chat e a foto
+saem precificados (`pricingKnown = true`) — a conta e a consulta estão em
+[`docs/OPERATIONS.md`](../../docs/OPERATIONS.md#custo-e-cota-da-ia). Roteiro completo em
+[`docs/BILLING.md`](../../docs/BILLING.md#plano-pro-do-usuário-adr-024).
+
+### Opcional — comunidades: assentos, convite por e-mail e link universal (ADR 025/026)
+
+```env
+# Assento de IA pago pela comunidade, por mês (cobrado pelo mesmo Asaas)
+BILLING_SEAT_MONTHLY_CENTS=1490
+
+# E-mail do convite, mandado pela própria API. O mesmo SMTP do Logto, em URL.
+# Vazio = a equipe copia o link do convite.
+MAIL_SMTP_URL=smtps://resend:CHAVE@smtp.resend.com:465
+EMAIL_FROM=Fatia <nao-responda@fat.ia.br>
+
+# Apagar a conta remove a identidade no Logto, e o primeiro acesso lê o e-mail
+# real da pessoa (sem isso o convite por e-mail não a reconhece). App M2M com a
+# role "Logto Management API access".
+LOGTO_M2M_APP_ID=...
+LOGTO_M2M_APP_SECRET=...
+
+# Link universal do convite no app nativo (/.well-known/*). Vazio = abre o PWA.
+APPLE_TEAM_ID=...
+ANDROID_CERT_SHA256=AA:BB:...
+```
+
+Todas já estão listadas no `infra/docker-compose.prod.yml`: o container só recebe o que está lá,
+então preencher no painel basta.
+
 ## Passo 4 — Primeiro deploy (Logto sobe sozinho)
 
 1. **Compose → Deploy**.

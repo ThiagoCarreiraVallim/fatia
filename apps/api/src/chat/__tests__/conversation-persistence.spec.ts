@@ -258,11 +258,14 @@ describe('ConversationService — o que sobra do turno', () => {
       resposta({ texto: 'Oi!', runId: 'run-1' }),
     );
 
-    await conversas.votar(userId, conversationId, linha!, {
-      review: 'dislike',
-      reasons: ['incorrect'],
-      note: 'errou a data',
-    });
+    // O `runId` volta: é como o voto acha o trace do turno no Langfuse.
+    await expect(
+      conversas.vote(userId, conversationId, linha!, {
+        review: 'dislike',
+        reasons: ['incorrect'],
+        note: 'errou a data',
+      }),
+    ).resolves.toBe('run-1');
     expect(
       await prisma.message.findUniqueOrThrow({
         where: { id: linha! },
@@ -275,7 +278,7 @@ describe('ConversationService — o que sobra do turno', () => {
       runId: 'run-1',
     });
 
-    await conversas.votar(userId, conversationId, linha!, { review: 'like', reasons: ['x'] });
+    await conversas.vote(userId, conversationId, linha!, { review: 'like', reasons: ['x'] });
     expect(
       await prisma.message.findUniqueOrThrow({
         where: { id: linha! },
@@ -289,7 +292,7 @@ describe('ConversationService — o que sobra do turno', () => {
     const [fala] = await prisma.message.findMany({ where: { conversationId } });
 
     await expect(
-      conversas.votar(userId, conversationId, fala.id, { review: 'like' }),
+      conversas.vote(userId, conversationId, fala.id, { review: 'like' }),
     ).rejects.toThrow(NotFoundException);
   });
 

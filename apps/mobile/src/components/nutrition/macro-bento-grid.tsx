@@ -6,9 +6,8 @@ import { NUMEROS_TABULARES, percentualDaMeta } from './helpers';
 /**
  * Réplica de `apps/web/src/components/nutrition/macro-bento-grid.tsx`.
  *
- * As cores de proteína e gordura são as mesmas do PWA (`#4b8eff` e `#ffb4ab`):
- * são o código de cor dos macros no produto inteiro, e trocá-las por tokens do
- * tema faria os três cards ficarem verdes e indistinguíveis.
+ * Proteína, carboidrato e gordura usam os tokens `protein`, `carbs` e `fat`: são
+ * o código de cor dos macros no produto inteiro, no app e no PWA.
  */
 
 interface Props {
@@ -28,18 +27,18 @@ export function MacroBentoGrid({ totals, goals }: Props) {
           label="Proteína"
           atual={totals.proteinG}
           meta={metaProteina}
-          cor="bg-[#4b8eff]"
+          cor="bg-protein"
           className="flex-1"
         />
         <MacroCard
           label="Carboidratos"
           atual={totals.carbsG}
           meta={metaCarbo}
-          cor="bg-primary"
+          cor="bg-carbs"
           className="flex-1"
         />
       </View>
-      <MacroCard label="Gordura" atual={totals.fatG} meta={metaGordura} cor="bg-[#ffb4ab]" />
+      <MacroCard label="Gordura" atual={totals.fatG} meta={metaGordura} cor="bg-fat" />
     </View>
   );
 }

@@ -17,7 +17,7 @@ dois turnos: a tool CONFIRMABLE vira `proposal`, a tela guarda a proposta, e a a
 segundo `POST /chat` com os argumentos ecoados pelo cliente.
 
 Isso funcionou para uma coisa só — confirmar escrita — e bloqueou todo o resto que um agente
-conversacional precisa (ver [`docs/CHAT_PARIDADE_LUNIA.md`](../CHAT_PARIDADE_LUNIA.md)):
+conversacional precisa (a análise de paridade do chat, já concluída, está no histórico do git em `docs/CHAT_PARIDADE_LUNIA.md`):
 
 - **perguntar** no meio do trabalho ("qual refeição: almoço ou jantar?") e continuar de onde parou;
 - **pedir licença** quando o orçamento de tools acaba, em vez de cortar calado com `step_limit`;

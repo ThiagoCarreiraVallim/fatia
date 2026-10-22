@@ -14,6 +14,8 @@ import { ProgressModule } from './progress/progress.module';
 import { GoalsModule } from './goals/goals.module';
 import { SharingModule } from './sharing/sharing.module';
 import { BillingModule } from './billing/billing.module';
+import { DeletionHooksModule } from './deletion-hooks.module';
+import { StorageModule } from './storage/storage.module';
 import { InsightsModule } from './insights/insights.module';
 import { ChatModule } from './chat/chat.module';
 import { McpModule } from './mcp/mcp.module';
@@ -52,6 +54,8 @@ import { McpModule } from './mcp/mcp.module';
     GoalsModule,
     SharingModule,
     BillingModule,
+    DeletionHooksModule,
+    StorageModule,
     InsightsModule,
     ChatModule,
     McpModule,

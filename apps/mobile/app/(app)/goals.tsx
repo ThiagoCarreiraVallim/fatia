@@ -1,17 +1,20 @@
 import { useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { ChevronRight, Plus } from 'lucide-react-native';
 import { goalsApi } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui';
+import { EmptyState, ErrorState, LoadingState, useConfirm } from '@/components/ui';
 import { MainGoalCard } from '@/components/goals/main-goal-card';
 import { NewGoalDrawer } from '@/components/goals/new-goal-drawer';
 import { RecentGoalRow } from '@/components/goals/recent-goal-row';
 import { SecondaryGoalCard } from '@/components/goals/secondary-goal-card';
+import { cores } from '@/theme/cores';
+import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
 
 export default function GoalsScreen() {
+  const confirm = useConfirm();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const router = useRouter();
   const qc = useQueryClient();
@@ -45,10 +48,13 @@ export default function GoalsScreen() {
   // Remover é irreversível e, no toque, um erro de alvo custa uma meta. O PWA
   // apaga direto porque o clique de mouse é preciso; aqui vale a confirmação.
   const confirmDelete = (id: string, title: string) => {
-    Alert.alert('Remover meta', `Apagar "${title}"? Essa ação não pode ser desfeita.`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Remover', style: 'destructive', onPress: () => deleteMutation.mutate(id) },
-    ]);
+    confirm({
+      title: 'Remover meta',
+      description: `Apagar "${title}"? Essa ação não pode ser desfeita.`,
+      confirmLabel: 'Remover',
+      destructive: true,
+      onConfirm: () => deleteMutation.mutate(id),
+    });
   };
 
   const busyId = completeMutation.isPending
@@ -60,28 +66,21 @@ export default function GoalsScreen() {
   return (
     <>
       <Screen
-        back
-        title="Metas"
+        actions={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Nova meta"
+            onPress={() => setDrawerOpen(true)}
+            className={TOP_BAR_ACTION}
+          >
+            <Plus size={22} color={cores.primary} />
+          </Pressable>
+        }
         onRefresh={() => void allGoals.refetch()}
         refreshing={allGoals.isRefetching}
       >
         <View className="gap-5 px-5 pb-4 pt-4">
-          <View className="flex-row items-end justify-between gap-3">
-            <View className="flex-1">
-              <Text className="text-sm text-muted-foreground">
-                Acompanhe seus objetivos ativos.
-              </Text>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Nova meta"
-              onPress={() => setDrawerOpen(true)}
-              className="min-h-[44px] flex-row items-center gap-1.5 rounded-xl bg-primary px-4 py-3 active:opacity-80"
-            >
-              <Plus size={14} strokeWidth={3} color="#131313" />
-              <Text className="text-[11px] font-extrabold text-primary-foreground">NOVA META</Text>
-            </Pressable>
-          </View>
+          <Text className="text-sm text-muted-foreground">Acompanhe seus objetivos ativos.</Text>
 
           {allGoals.isLoading ? <LoadingState label="Carregando metas…" /> : null}
 
@@ -132,7 +131,7 @@ export default function GoalsScreen() {
             className="min-h-[44px] flex-row items-center justify-between rounded-xl border border-border bg-card px-4 py-3"
           >
             <Text className="text-sm text-muted-foreground">Voltar ao perfil</Text>
-            <ChevronRight size={16} color="#baccaf" />
+            <ChevronRight size={16} color={cores.mutedForeground} />
           </Pressable>
         </View>
       </Screen>

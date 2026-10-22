@@ -1,7 +1,14 @@
 import { useState } from 'react';
-import { View } from 'react-native';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { workoutApi, type Exercise } from '@fatia/api-client';
+import { Pressable, Text, View } from 'react-native';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  BODYWEIGHT_EQUIPMENT,
+  chooserQuery,
+  OTHER_EQUIPMENT,
+  sameEquipment,
+  workoutApi,
+  type Exercise,
+} from '@fatia/api-client';
 import {
   Button,
   Drawer,
@@ -14,6 +21,8 @@ import {
   FormMessage,
   Label,
 } from '@/components/ui';
+import { cores } from '@/theme/cores';
+import { EquipmentChooser } from './equipment-chooser';
 
 /**
  * Réplica de `apps/web/src/components/workout/exercise-edit-drawer.tsx`.
@@ -35,6 +44,16 @@ export function ExerciseEditDrawer({ exercise, open, onOpenChange, onSaved }: Pr
   const [name, setName] = useState('');
   const [equipment, setEquipment] = useState('');
   const [instructions, setInstructions] = useState('');
+  const [showList, setShowList] = useState(false);
+  // O equipamento próprio das academias da pessoa entra na lista, primeiro:
+  // é com ele que o filtro "Na minha academia" casa o exercício pessoal.
+  const gym = useQuery({
+    queryKey: ['workout', 'equipment'],
+    queryFn: () => workoutApi.gymEquipment(),
+    enabled: open,
+    staleTime: 60_000,
+  });
+  const custom = gym.data?.customEquipment ?? [];
 
   // Sincroniza os campos quando abre / muda de exercício. Ajuste durante o
   // render, e não num efeito (#187): a comparação é a mesma que estava no array
@@ -49,6 +68,7 @@ export function ExerciseEditDrawer({ exercise, open, onOpenChange, onSaved }: Pr
       setName(exercise.name ?? '');
       setEquipment(exercise.equipment ?? '');
       setInstructions((exercise.instructions ?? []).join('\n'));
+      setShowList(false);
     }
   }
 
@@ -91,7 +111,7 @@ export function ExerciseEditDrawer({ exercise, open, onOpenChange, onSaved }: Pr
               value={name}
               onChangeText={setName}
               accessibilityLabel="Nome"
-              placeholderTextColor="#8a8a8a"
+              placeholderTextColor={cores.placeholder}
               className={FIELD_CLASS}
             />
           </View>
@@ -102,10 +122,38 @@ export function ExerciseEditDrawer({ exercise, open, onOpenChange, onSaved }: Pr
               value={equipment}
               onChangeText={setEquipment}
               accessibilityLabel="Equipamento"
-              placeholder="Ex.: barra, halteres, máquina"
-              placeholderTextColor="#8a8a8a"
+              placeholder="Ex.: barra, halteres, leg press"
+              placeholderTextColor={cores.placeholder}
               className={FIELD_CLASS}
             />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showList }}
+              onPress={() => setShowList(!showList)}
+              className="min-h-[44px] justify-center self-start active:opacity-70"
+            >
+              <Text className="text-sm font-semibold text-primary">
+                {showList ? 'Esconder a lista' : 'Escolher da lista'}
+              </Text>
+            </Pressable>
+            {showList ? (
+              // O campo acima é a busca: digitar filtra; tocar num item preenche.
+              <EquipmentChooser
+                single
+                query={chooserQuery(equipment, custom)}
+                custom={custom}
+                customTitle="Da sua academia"
+                extra={[
+                  { key: BODYWEIGHT_EQUIPMENT, label: 'Peso corporal' },
+                  { key: OTHER_EQUIPMENT, label: 'Outro' },
+                ]}
+                isSelected={(k) => sameEquipment(k, equipment)}
+                onPick={(k) => {
+                  setEquipment(k);
+                  setShowList(false);
+                }}
+              />
+            ) : null}
           </View>
 
           <View className="gap-1.5">
@@ -117,7 +165,7 @@ export function ExerciseEditDrawer({ exercise, open, onOpenChange, onSaved }: Pr
               multiline
               numberOfLines={6}
               textAlignVertical="top"
-              placeholderTextColor="#8a8a8a"
+              placeholderTextColor={cores.placeholder}
               className={`${FIELD_CLASS} min-h-[140px]`}
             />
           </View>

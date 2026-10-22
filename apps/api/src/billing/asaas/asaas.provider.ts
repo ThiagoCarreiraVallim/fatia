@@ -2,10 +2,17 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { dateInTz, dayBoundsInTz } from '../../progress/helpers/date-tz';
 import type {
   BillingProvider,
+  EntradaDeAssinatura,
   EntradaDeCliente,
+  EntradaDeClienteGrupo,
+  EntradaDeClientePessoa,
+  EntradaDeCobrancaDaAssinatura,
   EntradaDeCobranca,
   ResultadoDeWebhook,
+  ResultadoDeWebhookDeAssinatura,
+  SeatProvider,
   StatusDaCobranca,
+  SubscriptionProvider,
 } from '../billing-provider.port';
 import {
   traduzStatus,
@@ -13,7 +20,9 @@ import {
   type AsaasCliente,
   type AsaasCobranca,
   type AsaasErro,
+  type AsaasAssinatura,
   type AsaasEventoDeWebhook,
+  type AsaasLista,
 } from './asaas.types';
 
 /**
@@ -23,10 +32,9 @@ import {
  * monorepo), e `undici`/`axios` entrariam para fazer o que a plataforma já faz —
  * com o custo de mais uma biblioteca no caminho de um segredo de pagamento.
  *
- * Sem `@Injectable`: enquanto não existe controller de cobrança (depende da
- * persistência, que esta fatia não entrega), registrar o provider no módulo
- * faria o Nest construí-lo em todo boot, inclusive no de teste — e a construção
- * a partir do ambiente é justamente o que recusa rodar em teste.
+ * Sem `@Injectable`: o `BillingModule` o constrói por fábrica
+ * (`SUBSCRIPTION_PROVIDER`) só quando as três variáveis existem e fora de teste
+ * — a construção a partir do ambiente é justamente o que recusa rodar em teste.
  */
 
 /** Fuso da conta no provedor. O Asaas é brasileiro e datas dele são locais. */
@@ -61,7 +69,7 @@ export class AsaasError extends Error {
   }
 }
 
-export class AsaasProvider implements BillingProvider {
+export class AsaasProvider implements BillingProvider, SubscriptionProvider, SeatProvider {
   private readonly timeoutMs: number;
 
   constructor(private readonly config: ConfiguracaoAsaas) {
@@ -181,7 +189,156 @@ export class AsaasProvider implements BillingProvider {
     };
   }
 
-  private async request<T>(metodo: 'GET' | 'POST', caminho: string, corpo?: unknown): Promise<T> {
+  async ensurePersonCustomer(
+    entrada: EntradaDeClientePessoa,
+  ): Promise<{ providerCustomerId: string }> {
+    const cliente = await this.request<AsaasCliente>('POST', '/v3/customers', {
+      name: entrada.name,
+      cpfCnpj: entrada.cpf,
+      email: entrada.email,
+      externalReference: `user:${entrada.userId}`,
+    });
+    return { providerCustomerId: cliente.id };
+  }
+
+  async createSubscription(
+    entrada: EntradaDeAssinatura,
+  ): Promise<{ providerSubscriptionId: string }> {
+    const assinatura = await this.request<AsaasAssinatura>('POST', '/v3/subscriptions', {
+      customer: entrada.providerCustomerId,
+      // A pessoa escolhe Pix, boleto ou cartão na página de pagamento.
+      billingType: 'UNDEFINED' satisfies AsaasBillingType,
+      value: Number((entrada.valueCents / 100).toFixed(2)),
+      nextDueDate: dateInTz(entrada.nextDueAt, FUSO_DO_PROVEDOR),
+      cycle: entrada.cycle,
+      description: entrada.description,
+      externalReference: entrada.externalReference,
+    });
+    return { providerSubscriptionId: assinatura.id };
+  }
+
+  async firstPaymentUrl(providerSubscriptionId: string): Promise<string | null> {
+    const lista = await this.request<AsaasLista<AsaasCobranca>>(
+      'GET',
+      `/v3/subscriptions/${encodeURIComponent(providerSubscriptionId)}/payments`,
+    );
+    const primeira = [...(lista.data ?? [])].sort((a, b) =>
+      (a.dueDate ?? '').localeCompare(b.dueDate ?? ''),
+    )[0];
+    return primeira?.invoiceUrl ?? null;
+  }
+
+  /** Cliente da comunidade (ADR 025), com referência `group:<id>`. */
+  async ensureGroupCustomer(
+    entrada: EntradaDeClienteGrupo,
+  ): Promise<{ providerCustomerId: string }> {
+    const cliente = await this.request<AsaasCliente>('POST', '/v3/customers', {
+      name: entrada.name,
+      cpfCnpj: entrada.taxId,
+      email: entrada.email,
+      externalReference: `group:${entrada.groupId}`,
+    });
+    return { providerCustomerId: cliente.id };
+  }
+
+  /**
+   * Muda o valor da recorrente. `updatePendingPayments` leva o valor novo
+   * também à cobrança já gerada e não paga — senão a próxima fatura sairia com
+   * o número antigo de assentos.
+   */
+  async updateSubscriptionValue(providerSubscriptionId: string, valueCents: number): Promise<void> {
+    await this.request<AsaasAssinatura>(
+      'POST',
+      `/v3/subscriptions/${encodeURIComponent(providerSubscriptionId)}`,
+      { value: Number((valueCents / 100).toFixed(2)), updatePendingPayments: true },
+    );
+  }
+
+  /** Cobrança avulsa ao cliente da assinatura: o pró-rata do aumento de assentos. */
+  async createSubscriptionCharge(
+    entrada: EntradaDeCobrancaDaAssinatura,
+  ): Promise<{ providerChargeId: string; url: string | null }> {
+    const assinatura = await this.request<AsaasAssinatura>(
+      'GET',
+      `/v3/subscriptions/${encodeURIComponent(entrada.providerSubscriptionId)}`,
+    );
+    if (!assinatura.customer) {
+      throw new AsaasError(200, 'sem_cliente', 'assinatura sem cliente');
+    }
+    const cobranca = await this.request<AsaasCobranca>('POST', '/v3/payments', {
+      customer: assinatura.customer,
+      billingType: 'UNDEFINED' satisfies AsaasBillingType,
+      value: Number((entrada.amountCents / 100).toFixed(2)),
+      dueDate: entrada.dueDate,
+      description: entrada.description,
+      externalReference: entrada.externalReference,
+    });
+    return { providerChargeId: cobranca.id, url: cobranca.invoiceUrl ?? null };
+  }
+
+  async cancelSubscription(providerSubscriptionId: string): Promise<void> {
+    await this.request<unknown>(
+      'DELETE',
+      `/v3/subscriptions/${encodeURIComponent(providerSubscriptionId)}`,
+    );
+  }
+
+  /**
+   * Webhook do lado de assinatura. Aceita evento de cobrança (`PAYMENT_*`, que
+   * traz `payment.subscription`) e de assinatura (`SUBSCRIPTION_*`, que traz
+   * `subscription.id`). Cobrança avulsa (B2B) volta com `subscriptionId: null`.
+   */
+  verifySubscriptionWebhook(
+    headers: Record<string, string | undefined>,
+    rawBody: string,
+  ): ResultadoDeWebhookDeAssinatura {
+    const recebido = Object.entries(headers).find(
+      ([nome]) => nome.toLowerCase() === 'asaas-access-token',
+    )?.[1];
+    if (!segredoConfere(recebido, this.config.webhookToken)) {
+      return { ok: false, motivo: 'token_invalido' };
+    }
+
+    let evento: AsaasEventoDeWebhook;
+    try {
+      evento = JSON.parse(rawBody) as AsaasEventoDeWebhook;
+    } catch {
+      return { ok: false, motivo: 'payload_invalido' };
+    }
+    if (!evento?.id || (!evento.payment?.id && !evento.subscription?.id)) {
+      return { ok: false, motivo: 'payload_invalido' };
+    }
+
+    return {
+      ok: true,
+      eventId: evento.id,
+      event: evento.event ?? 'UNKNOWN',
+      subscriptionId: evento.payment?.subscription ?? evento.subscription?.id ?? null,
+      status: traduzStatus(evento.payment?.status),
+      dueDate:
+        evento.payment?.dueDate && /^\d{4}-\d{2}-\d{2}$/.test(evento.payment.dueDate)
+          ? evento.payment.dueDate
+          : null,
+      paymentId: evento.payment?.id ?? null,
+      externalReference:
+        evento.payment?.externalReference ?? evento.subscription?.externalReference ?? null,
+      valueCents:
+        typeof evento.payment?.value === 'number' && Number.isFinite(evento.payment.value)
+          ? Math.round(evento.payment.value * 100)
+          : null,
+      invoiceUrl:
+        typeof evento.payment?.invoiceUrl === 'string' &&
+        /^https:\/\//.test(evento.payment.invoiceUrl)
+          ? evento.payment.invoiceUrl
+          : null,
+    };
+  }
+
+  private async request<T>(
+    metodo: 'GET' | 'POST' | 'DELETE',
+    caminho: string,
+    corpo?: unknown,
+  ): Promise<T> {
     const resposta = await fetch(`${this.config.baseUrl}${caminho}`, {
       method: metodo,
       headers: {

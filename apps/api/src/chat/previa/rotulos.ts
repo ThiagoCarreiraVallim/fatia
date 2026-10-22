@@ -30,6 +30,8 @@ const comUnidade =
   (valor) =>
     typeof valor === 'number' ? `${numero(valor, casas)} ${unidade}` : null;
 
+const simOuNao: Formato = (valor) => (typeof valor === 'boolean' ? (valor ? 'Sim' : 'Não') : null);
+
 const semUnidade: Formato = (valor) => (typeof valor === 'number' ? numero(valor) : null);
 
 const texto: Formato = (valor) => (typeof valor === 'string' && valor.trim() ? valor.trim() : null);
@@ -47,6 +49,18 @@ const listaDeMapa =
           .map((item) => (typeof item === 'string' ? (mapa[item] ?? item) : String(item)))
           .join(', ')
       : null;
+
+/** `[{label: 'porção', grams: 30}]` → "porção (30 g)". */
+const medidas: Formato = (valor) => {
+  if (!Array.isArray(valor) || !valor.length) return null;
+  const partes = valor.flatMap((m: unknown) => {
+    const { label, grams } = (m ?? {}) as { label?: unknown; grams?: unknown };
+    return typeof label === 'string' && typeof grams === 'number'
+      ? [`${label.trim()} (${numero(grams)} g)`]
+      : [];
+  });
+  return partes.length ? partes.join(', ') : null;
+};
 
 function diaNoFuso(data: Date, timezone: string): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -166,6 +180,27 @@ const MUSCULOS: Record<string, string> = {
   triceps: 'Tríceps',
 };
 
+const SEXO: Record<string, string> = { FEMALE: 'Feminino', MALE: 'Masculino' };
+const ATIVIDADE: Record<string, string> = {
+  SEDENTARY: 'Sedentário',
+  LIGHT: 'Leve',
+  MODERATE: 'Moderado',
+  ACTIVE: 'Ativo',
+  VERY_ACTIVE: 'Muito ativo',
+};
+const OBJETIVO: Record<string, string> = {
+  LOSE: 'Perder peso',
+  MAINTAIN: 'Manter o peso',
+  GAIN: 'Ganhar peso',
+};
+
+/** "1996-03-12" → "12/03/1996": nascimento não é "ontem" nem "terça". */
+const nascimento: Formato = (valor) => {
+  if (typeof valor !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(valor)) return null;
+  const [a, m, d] = valor.split('-');
+  return `${d}/${m}/${a}`;
+};
+
 /** "America/Sao_Paulo" → "São Paulo": o nome do fuso é o da cidade, sem o continente. */
 const fuso: Formato = (valor) => {
   if (typeof valor !== 'string' || !valor) return null;
@@ -173,23 +208,62 @@ const fuso: Formato = (valor) => {
   return cidade === 'Sao Paulo' ? 'São Paulo' : cidade;
 };
 
+/** As categorias do consentimento (ADR 026), como a tela de entrar na comunidade diz. */
+const ESCOPOS: Record<string, string> = {
+  WORKOUT: 'Treino',
+  NUTRITION: 'Alimentação',
+  BODY: 'Peso e medidas',
+  HABITS: 'Água e passos',
+  GOALS: 'Metas',
+};
+
+/** Lista vazia é uma escolha, e o cartão diz qual: não compartilhar nada. */
+const escopos: Formato = (valor, ctx) =>
+  Array.isArray(valor) ? (valor.length ? listaDeMapa(ESCOPOS)(valor, ctx) : 'Nada') : null;
+
 export const CAMPOS: Record<string, Campo> = {
+  scopes: { rotulo: 'Compartilha com a equipe', formato: escopos },
+  applyGoals: {
+    rotulo: 'Trocar minhas metas pelas do plano',
+    formato: (valor) => (typeof valor === 'boolean' ? (valor ? 'Sim' : 'Não') : null),
+  },
+  saveMeals: {
+    rotulo: 'Guardar as refeições sugeridas',
+    formato: (valor) => (typeof valor === 'boolean' ? (valor ? 'Sim' : 'Não') : null),
+  },
+  statsOptIn: {
+    rotulo: 'Estatísticas agregadas',
+    formato: (valor) =>
+      typeof valor === 'boolean' ? (valor ? 'Participa' : 'Não participa') : null,
+  },
   mealType: { rotulo: 'Refeição', formato: deMapa(TIPO_DA_REFEICAO) },
   eatenAt: { rotulo: 'Quando', formato: dataEHora },
   loggedAt: { rotulo: 'Quando', formato: dataEHora },
   startedAt: { rotulo: 'Início', formato: dataEHora },
   completedAt: { rotulo: 'Fim', formato: dataEHora },
   date: { rotulo: 'Dia', formato: dia },
+  fromDate: { rotulo: 'Copiar de', formato: dia },
+  toDate: { rotulo: 'Copiar para', formato: dia },
   deadline: { rotulo: 'Prazo', formato: dia },
   notes: { rotulo: 'Observação', formato: texto },
   foodName: { rotulo: 'Alimento', formato: texto },
+  favorite: { rotulo: 'Favorito', formato: simOuNao },
   grams: { rotulo: 'Quantidade', formato: comUnidade('g') },
+  portions: { rotulo: 'Medidas', formato: medidas },
+  // Duas casas: um quarto de colher (0,25) não pode virar "0,3".
+  quantity: {
+    rotulo: 'Quantas medidas',
+    formato: (valor) => (typeof valor === 'number' ? numero(valor, 2) : null),
+  },
   kcal: { rotulo: 'Calorias', formato: comUnidade('kcal', 0) },
   proteinG: { rotulo: 'Proteína', formato: comUnidade('g') },
   carbsG: { rotulo: 'Carboidrato', formato: comUnidade('g') },
   fatG: { rotulo: 'Gordura', formato: comUnidade('g') },
   name: { rotulo: 'Nome', formato: texto },
   title: { rotulo: 'Título', formato: texto },
+  // O apelido da comunidade vale para o ranking e para o mural.
+  displayName: { rotulo: 'Apelido na comunidade', formato: texto },
+  body: { rotulo: 'Texto', formato: texto },
   description: { rotulo: 'Descrição', formato: texto },
   content: { rotulo: 'O que lembrar', formato: texto },
   kcalPer100g: { rotulo: 'Calorias em 100 g', formato: comUnidade('kcal', 0) },
@@ -213,6 +287,10 @@ export const CAMPOS: Record<string, Campo> = {
   max: { rotulo: 'Máximo', formato: semUnidade },
   period: { rotulo: 'Período', formato: deMapa({ daily: 'Por dia' }) },
   weightKg: { rotulo: 'Peso', formato: comUnidade('kg') },
+  sex: { rotulo: 'Sexo', formato: deMapa(SEXO) },
+  birthDate: { rotulo: 'Nascimento', formato: nascimento },
+  activityLevel: { rotulo: 'Atividade', formato: deMapa(ATIVIDADE) },
+  objective: { rotulo: 'Objetivo', formato: deMapa(OBJETIVO) },
   ml: { rotulo: 'Água', formato: comUnidade('ml', 0) },
   steps: { rotulo: 'Passos', formato: comUnidade('passos', 0) },
   source: { rotulo: 'Origem', formato: deMapa(ORIGEM_DOS_PASSOS) },
@@ -299,15 +377,41 @@ export const IDS = {
   stepLogId: 'passos',
   setId: 'serie',
   planExerciseId: 'exercicioDoPlano',
+  portionId: 'medida',
+  templateId: 'modelo',
 } as const;
 
-export type TipoDeRegistro = (typeof IDS)[keyof typeof IDS] | 'itemDaRefeicao' | 'agua';
+export type TipoDeRegistro =
+  | (typeof IDS)[keyof typeof IDS]
+  | 'itemDaRefeicao'
+  | 'agua'
+  | 'comunidade'
+  | 'convite'
+  | 'planoDaComunidade'
+  | 'desafioDaComunidade'
+  | 'postDaComunidade';
+
+/**
+ * Campo cujo sentido muda com a tool. `groupId` é grupo de alimento em
+ * `create_custom_food` e comunidade em `set_group_sharing`: resolver o segundo
+ * pelo primeiro recusava todo cartão de consentimento.
+ */
+export const CAMPO_POR_TOOL: Record<string, Record<string, TipoDeRegistro>> = {
+  set_group_sharing: { groupId: 'comunidade' },
+  accept_group_invite: { token: 'convite' },
+  // `templateId` aqui é plano pronto da comunidade, não refeição salva.
+  adopt_group_plan: { groupId: 'comunidade', templateId: 'planoDaComunidade' },
+  join_group_challenge: { groupId: 'comunidade', challengeId: 'desafioDaComunidade' },
+  create_group_post: { groupId: 'comunidade' },
+  comment_on_group_post: { groupId: 'comunidade', postId: 'postDaComunidade' },
+};
 
 /** O `id` cru muda de sentido conforme a tool — ver `tipoDoCampoId`. */
 export const ID_POR_TOOL: Record<string, TipoDeRegistro> = {
   update_meal: 'refeicao',
   update_meal_item: 'itemDaRefeicao',
   update_custom_food: 'alimento',
+  set_food_favorite: 'alimento',
   update_water_log: 'agua',
   clone_exercise: 'exercicio',
   update_custom_exercise: 'exercicio',
@@ -327,14 +431,23 @@ export const ROTULO_DO_REGISTRO: Record<TipoDeRegistro, string> = {
   passos: 'Registro de passos',
   serie: 'Série',
   exercicioDoPlano: 'Exercício do plano',
+  medida: 'Medida',
+  modelo: 'Refeição salva',
   itemDaRefeicao: 'Item',
   agua: 'Registro de água',
+  comunidade: 'Comunidade',
+  convite: 'Comunidade',
+  planoDaComunidade: 'Plano da comunidade',
+  desafioDaComunidade: 'Desafio',
+  postDaComunidade: 'Post',
 };
 
 /** Campos com forma própria no cartão, montados pelo serviço. */
 export const COMPOSTOS = new Set(['items', 'exercises']);
 
 export function tipoDoCampo(tool: string, campo: string): TipoDeRegistro | null {
+  const proprio = CAMPO_POR_TOOL[tool]?.[campo];
+  if (proprio) return proprio;
   if (campo === 'id') return ID_POR_TOOL[tool] ?? null;
   return (IDS as Record<string, TipoDeRegistro>)[campo] ?? null;
 }

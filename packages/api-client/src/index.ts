@@ -18,11 +18,31 @@ export {
   resetApiClient,
 } from './http';
 
+export * from './billing';
 export * from './chat';
+export * from './chat-thread';
+export * from './chat-markdown';
+export * from './plan';
+export * from './food-shortcuts';
+export * from './portions';
+export * from './meal-templates';
+export * from './custom-food';
+export * from './barcode';
 export * from './goals';
 export * from './nutrition';
 export * from './progress';
 export * from './sharing';
+export * from './community';
+export * from './community-consent';
+export * from './community-admin';
+export * from './community-panel';
+export * from './community-content';
+export * from './community-exercises';
+export * from './community-agent';
+export * from './community-challenges';
+export * from './community-feed';
+export * from './content-panel';
+export * from './markdown-lite';
 export * from './users';
 export * from './workout';
 
@@ -33,3 +53,11 @@ export * from './workout/prescription';
 export * from './workout/quick-templates';
 export * from './session-view';
 export * from './streak-copy';
+export * from './meal-timeline';
+export * from './dashboard-copy';
+export * from './quick-add';
+export * from './onboarding';
+export * from './navigation';
+export * from './format';
+export * from './notifications';
+export * from './undo';

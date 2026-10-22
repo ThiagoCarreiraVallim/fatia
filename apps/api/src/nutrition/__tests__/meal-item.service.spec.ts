@@ -1,7 +1,7 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { MealItemService } from '../meal-item.service';
 import type { PrismaService } from '../../common/prisma.service';
-import type { MealService } from '../meal.service';
+import { MealService } from '../meal.service';
 
 type MockPrisma = {
   meal: { findUnique: jest.Mock };
@@ -10,6 +10,8 @@ type MockPrisma = {
 
 type MockMealService = {
   resolveItems: jest.Mock;
+  resolvePortion: jest.Mock;
+  resolveAmount: jest.Mock;
 };
 
 const makePrisma = (): MockPrisma => ({
@@ -22,7 +24,14 @@ const makePrisma = (): MockPrisma => ({
   },
 });
 
-const makeMealService = (): MockMealService => ({ resolveItems: jest.fn() });
+// `resolveAmount` é a regra de verdade (gramas × medida); só a leitura da medida é mock.
+const makeMealService = (): MockMealService => {
+  const mock = { resolveItems: jest.fn(), resolvePortion: jest.fn() } as MockMealService;
+  mock.resolveAmount = jest.fn((...args: Parameters<MealService['resolveAmount']>) =>
+    MealService.prototype.resolveAmount.apply(mock as unknown as MealService, args),
+  );
+  return mock;
+};
 
 const makeFood = () => ({
   id: 1,
@@ -112,10 +121,58 @@ describe('MealItemService', () => {
 
       await service.update(userId, 'item-1', { grams: 200 });
 
+      // Gramas digitadas à mão apagam o retrato da medida: "2 × colher" deixou de ser verdade.
       expect(prisma.mealItem.update).toHaveBeenCalledWith({
         where: { id: 'item-1' },
-        data: { grams: 200, kcal: 260, proteinG: 5, carbsG: 56, fatG: 0.4 },
+        data: {
+          grams: 200,
+          kcal: 260,
+          proteinG: 5,
+          carbsG: 56,
+          fatG: 0.4,
+          portionLabel: null,
+          portionQuantity: null,
+        },
       });
+    });
+
+    it('com medida, recalcula pelas gramas da medida e guarda o retrato', async () => {
+      prisma.mealItem.findUnique.mockResolvedValue({ ...baseItem, foodId: 1 });
+      mealService.resolvePortion.mockResolvedValue({
+        id: 'p1',
+        label: 'colher de sopa',
+        grams: 25,
+      });
+      prisma.mealItem.update.mockImplementation(({ data }) =>
+        Promise.resolve({ id: 'item-1', ...data }),
+      );
+
+      await service.update(userId, 'item-1', { portionId: 'p1', quantity: 3 });
+
+      expect(mealService.resolvePortion).toHaveBeenCalledWith(userId, 1, 'p1');
+      const data = prisma.mealItem.update.mock.calls[0][0].data;
+      expect(data).toMatchObject({
+        grams: 75,
+        kcal: 97.5,
+        portionLabel: 'colher de sopa',
+        portionQuantity: 3,
+      });
+    });
+
+    it('medida em item livre (sem alimento) é 400', async () => {
+      prisma.mealItem.findUnique.mockResolvedValue({ ...baseItem, foodId: null, food: null });
+
+      await expect(
+        service.update(userId, 'item-1', { portionId: 'p1', quantity: 1 }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('gramas e medida juntas é 400', async () => {
+      prisma.mealItem.findUnique.mockResolvedValue({ ...baseItem, foodId: 1 });
+
+      await expect(
+        service.update(userId, 'item-1', { grams: 10, portionId: 'p1', quantity: 1 }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('keeps existing macros when grams is unchanged but other fields are updated', async () => {
@@ -155,7 +212,15 @@ describe('MealItemService', () => {
       await service.update(userId, 'item-1', { grams: 200 });
 
       const data = prisma.mealItem.update.mock.calls[0][0].data;
-      expect(data).toEqual({ grams: 200, kcal: 130, proteinG: 2.5, carbsG: 28, fatG: 0.2 });
+      expect(data).toEqual({
+        grams: 200,
+        kcal: 130,
+        proteinG: 2.5,
+        carbsG: 28,
+        fatG: 0.2,
+        portionLabel: null,
+        portionQuantity: null,
+      });
     });
 
     it('throws NotFoundException when the item does not exist', async () => {

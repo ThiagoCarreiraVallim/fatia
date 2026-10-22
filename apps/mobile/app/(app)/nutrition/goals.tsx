@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Calculator } from 'lucide-react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { nutritionApi, type UserGoals } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { Button, ErrorState, Input, Label, LoadingState } from '@/components/ui';
 import { mensagemDeErro } from '@/components/nutrition/helpers';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/app/(app)/nutrition/goals/page.tsx`.
@@ -33,6 +36,7 @@ const VAZIO: Formulario = {
 
 export default function NutritionGoalsScreen() {
   const qc = useQueryClient();
+  const router = useRouter();
   const metas = useQuery({ queryKey: ['nutrition', 'goals'], queryFn: () => nutritionApi.goals() });
   const [formulario, setFormulario] = useState<Formulario>(VAZIO);
   const [salvo, setSalvo] = useState(false);
@@ -86,13 +90,23 @@ export default function NutritionGoalsScreen() {
   );
 
   return (
-    <Screen
-      back
-      title="Metas"
-      onRefresh={() => void metas.refetch()}
-      refreshing={metas.isRefetching}
-    >
+    <Screen onRefresh={() => void metas.refetch()} refreshing={metas.isRefetching}>
       <View className="gap-4 p-4">
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="Recalcular com meus dados"
+          onPress={() => router.push('/onboarding?refazer=1')}
+          className="min-h-12 flex-row items-center gap-3 rounded-xl border border-border bg-card px-4 py-3"
+        >
+          <Calculator size={18} color={cores.primary} />
+          <View className="flex-1">
+            <Text className="text-sm font-semibold text-foreground">Recalcular com meus dados</Text>
+            <Text className="text-xs text-muted-foreground">
+              Objetivo, peso e rotina viram uma sugestão de metas.
+            </Text>
+          </View>
+        </Pressable>
+
         {metas.isLoading ? <LoadingState label="Carregando metas…" /> : null}
         {metas.error ? (
           <ErrorState error={metas.error} onRetry={() => void metas.refetch()} />

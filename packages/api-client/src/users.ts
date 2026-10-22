@@ -1,4 +1,9 @@
 import { apiFetch } from './http';
+import type { UserGoals } from './nutrition';
+
+export type BiologicalSex = 'FEMALE' | 'MALE';
+export type ActivityLevel = 'SEDENTARY' | 'LIGHT' | 'MODERATE' | 'ACTIVE' | 'VERY_ACTIVE';
+export type BodyObjective = 'LOSE' | 'MAINTAIN' | 'GAIN';
 
 export interface MeUser {
   id: string;
@@ -7,12 +12,39 @@ export interface MeUser {
   role: 'USER' | 'ADMIN';
   timezone: string;
   heightCm: number | null;
+  sex: BiologicalSex | null;
+  /** ISO; a parte da data (AAAA-MM-DD) é o dia de nascimento. */
+  birthDate: string | null;
+  activityLevel: ActivityLevel | null;
+  objective: BodyObjective | null;
+  /** Nulo = ainda não passou pelo assistente de primeira vez. */
+  onboardedAt: string | null;
 }
 
 export interface UpdateMeInput {
   name?: string;
   heightCm?: number;
   timezone?: string;
+  sex?: BiologicalSex;
+  birthDate?: string;
+  activityLevel?: ActivityLevel;
+  objective?: BodyObjective;
+}
+
+export interface OnboardingProfile {
+  sex: BiologicalSex;
+  /** AAAA-MM-DD. */
+  birthDate: string;
+  heightCm: number;
+  weightKg: number;
+  activityLevel: ActivityLevel;
+  objective: BodyObjective;
+}
+
+export type GoalsInput = Omit<UserGoals, 'userId'>;
+
+export interface CompleteOnboardingInput extends OnboardingProfile {
+  goals: GoalsInput;
 }
 
 /**
@@ -35,6 +67,16 @@ export const usersApi = {
   me: () => apiFetch<MeUser>('/api/users/me'),
   updateMe: (body: UpdateMeInput) =>
     apiFetch<MeUser>('/api/users/me', { method: 'PATCH', body: JSON.stringify(body) }),
+
+  /** Perfil, pesagem e metas numa transação; marca o assistente como feito. */
+  completeOnboarding: (body: CompleteOnboardingInput) =>
+    apiFetch<{ onboardedAt: string; goals: UserGoals }>('/api/users/me/onboarding', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  /** "Pular por agora": não pergunta de novo e não mexe nas metas. */
+  skipOnboarding: () =>
+    apiFetch<{ onboardedAt: string }>('/api/users/me/onboarding/skip', { method: 'POST' }),
 
   /**
    * Portabilidade (LGPD art. 18, V). Devolve o JSON com tudo: refeições,

@@ -6,6 +6,29 @@ This page walks through the one-time setup. Re-running `pnpm bootstrap` or `pnpm
 
 > Time budget: ~10 minutes the first time. Zero on subsequent runs.
 
+## Atalho: configuração por script (ADR 029)
+
+Os passos 2–6 abaixo podem ser pulados. Com Postgres e Logto de pé:
+
+```bash
+pnpm logto:seed-m2m     # só local/CI: cria o app M2M de bootstrap direto na database do Logto
+pnpm logto:bootstrap    # API resource, apps Web/MCP/Mobile, experiência de login e usuário demo
+```
+
+O bootstrap é idempotente e grava no `.env` os IDs/secrets que ainda estiverem vazios ou com
+placeholder (nunca sobrescreve um valor real). O usuário demo é `demo@fatia.local` /
+`Fatia-demo-2026!` (sobrescreva com `DEMO_EMAIL`/`DEMO_PASSWORD`) e não é criado com
+`NODE_ENV=production`. Em produção, crie o app M2M no console e rode só `pnpm logto:bootstrap`.
+
+**E-mail e "esqueci minha senha".** Com `EMAIL_SMTP_HOST` preenchido o bootstrap cria o conector
+SMTP do Logto (templates em pt-BR), troca o cadastro para e-mail verificado e liga a recuperação
+de senha por código. Em dev o SMTP é o Mailpit do compose: todo e-mail aparece em
+<http://localhost:8025>. Em produção, aponte `EMAIL_SMTP_*` para um SMTP real e rode
+`pnpm logto:bootstrap` de novo. A página de login do PWA abre direto em cada tela do Logto:
+`/api/logto/sign-in` (entrar), `?tela=cadastro` e `?tela=senha`.
+
+Screenshots e fluxos de interface: [`e2e/README.md`](../e2e/README.md).
+
 ---
 
 ## Why Logto in dev?

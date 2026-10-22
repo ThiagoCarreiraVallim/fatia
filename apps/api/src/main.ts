@@ -10,6 +10,7 @@ import { Logger } from 'nestjs-pino';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
+import { registrarCorposDoWebhook } from './billing/corpos-do-webhook';
 import { registrarCorposDoChat } from './chat/corpos-do-chat';
 
 async function bootstrap() {
@@ -24,6 +25,7 @@ async function bootstrap() {
   app.use(helmet());
   app.use(cookieParser());
   registrarCorposDoChat(app);
+  registrarCorposDoWebhook(app);
 
   app.enableCors({
     origin: webOrigin,

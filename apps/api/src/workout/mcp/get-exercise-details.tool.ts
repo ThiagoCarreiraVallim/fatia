@@ -20,7 +20,7 @@ export class GetExerciseDetailsTool implements McpToolDef {
 
   readonly hostedInference = false;
   readonly description =
-    'Retorna os detalhes completos de um exercício: nome, músculos primários e secundários, equipamento, nível, mecânica e passos de execução. Use quando já tiver o ID; para buscar por nome, use search_exercise ou explain_form.';
+    'Retorna os detalhes completos de um exercício: nome, músculos primários e secundários, equipamento, nível, mecânica, passos de execução e, se houver, o tutorial da comunidade da pessoa (dicas, vídeo). Use quando já tiver o ID; para buscar por nome, use search_exercise ou explain_form.';
   readonly inputSchema = {
     exerciseId: z
       .number()

@@ -1,7 +1,16 @@
+import type { AiAccessReason } from './chat';
 import { apiFetch } from './http';
 
 export type MealType = 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK';
 export type FoodSource = 'TACO' | 'USDA' | 'CUSTOM';
+
+/** Medida caseira: "colher de sopa" = 25 g. `mine` = criada pela própria pessoa. */
+export interface FoodPortion {
+  id: string;
+  label: string;
+  grams: number;
+  mine: boolean;
+}
 
 export interface Food {
   id: number;
@@ -13,6 +22,36 @@ export interface Food {
   carbsPer100g: number;
   fatPer100g: number;
   createdByUserId: string | null;
+  /** Catálogo + as da pessoa. A API sempre manda; opcional para alimento montado à mão. */
+  portions?: FoodPortion[];
+}
+
+/** O que cria um alimento próprio: valores sempre por 100 g. */
+export interface CustomFoodInput {
+  name: string;
+  kcalPer100g: number;
+  proteinPer100g: number;
+  carbsPer100g: number;
+  fatPer100g: number;
+  /** A porção do rótulo, só na criação: no PATCH as medidas têm rota própria. */
+  portions?: Array<{ label: string; grams: number }>;
+}
+
+/** Alimento da busca com o histórico da pessoa: o atalho que poupa digitar. */
+export interface FoodShortcut extends Food {
+  /** Gramagem da última vez, para já vir preenchida. */
+  lastGrams: number | null;
+  /** Como foi da última vez ("colher de sopa" × 2); nulos quando foi em gramas. */
+  lastPortionLabel?: string | null;
+  lastPortionQuantity?: number | null;
+  timesEaten: number;
+  favorite: boolean;
+}
+
+export interface FoodShortcuts {
+  favorites: FoodShortcut[];
+  /** Comidos nos últimos 60 dias, sem repetir os favoritos. */
+  recent: FoodShortcut[];
 }
 
 /**
@@ -98,6 +137,9 @@ export interface MealItem {
   foodName: string;
   groupId: number | null;
   grams: number;
+  /** Retrato de como foi digitado ("colher de sopa" × 2); a conta usa `grams`. */
+  portionLabel?: string | null;
+  portionQuantity?: number | null;
   kcal: number;
   proteinG: number;
   carbsG: number;
@@ -111,6 +153,34 @@ export interface Meal {
   eatenAt: string;
   notes: string | null;
   items: MealItem[];
+}
+
+export interface MealTemplateItem {
+  id: string;
+  position: number;
+  foodId: number | null;
+  foodName: string;
+  grams: number;
+  portionLabel?: string | null;
+  portionQuantity?: number | null;
+  kcal: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+}
+
+/** Refeição salva ("Café de sempre"): o retrato dos itens, registrado de novo em um toque. */
+export interface MealTemplate {
+  id: string;
+  name: string;
+  mealType: MealType | null;
+  items: MealTemplateItem[];
+}
+
+export interface CopyDayResult {
+  created: Meal[];
+  /** Refeições que já estavam no destino e ficaram de fora. */
+  skipped: number;
 }
 
 export interface DayTotals {
@@ -140,6 +210,18 @@ export interface UserGoals {
   weeklyWorkouts: number;
   dailyStepsTarget: number;
   dailyWaterTargetMl: number;
+}
+
+/** Resposta de `POST /nutrition/goals/suggestion` (e de `suggest_nutrition_goals`). */
+export interface GoalSuggestion {
+  age: number;
+  /** Metabolismo basal, kcal/dia. */
+  bmr: number;
+  /** Gasto total estimado, kcal/dia. */
+  tdee: number;
+  /** Centro da faixa de kcal, já ajustado ao objetivo. */
+  targetKcal: number;
+  goals: Omit<UserGoals, 'userId'>;
 }
 
 export interface FoodGroup {
@@ -176,6 +258,31 @@ export const nutritionApi = {
   searchFoods: (q: string, limit = 20) =>
     apiFetch<Food[]>(`/api/nutrition/foods?q=${encodeURIComponent(q)}&limit=${limit}`),
   groups: () => apiFetch<FoodGroup[]>('/api/nutrition/foods/groups'),
+  /** Favoritos e recentes; com `mealType`, o que costuma ir naquela refeição vem primeiro. */
+  myFoods: (mealType?: MealType) =>
+    apiFetch<FoodShortcuts>(`/api/nutrition/foods/mine${mealType ? `?mealType=${mealType}` : ''}`),
+  setFavorite: (foodId: number, favorite: boolean) =>
+    apiFetch<void>(`/api/nutrition/foods/${foodId}/favorite`, {
+      method: favorite ? 'PUT' : 'DELETE',
+    }),
+  /** Os alimentos que a pessoa cadastrou, por nome. */
+  customFoods: () => apiFetch<Food[]>('/api/nutrition/foods/custom'),
+  /** Nome repetido responde 409; valores fora do possível em 100 g, 400. */
+  createCustomFood: (body: CustomFoodInput) =>
+    apiFetch<Food>('/api/nutrition/foods', { method: 'POST', body: JSON.stringify(body) }),
+  updateCustomFood: (id: number, body: Partial<Omit<CustomFoodInput, 'portions'>>) =>
+    apiFetch<Food>(`/api/nutrition/foods/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  /** As refeições já registradas guardam nome e valores; só o alimento some. */
+  deleteCustomFood: (id: number) =>
+    apiFetch<void>(`/api/nutrition/foods/${id}`, { method: 'DELETE' }),
+  portions: (foodId: number) => apiFetch<FoodPortion[]>(`/api/nutrition/foods/${foodId}/portions`),
+  createPortion: (foodId: number, body: { label: string; grams: number }) =>
+    apiFetch<FoodPortion>(`/api/nutrition/foods/${foodId}/portions`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  deletePortion: (id: string) =>
+    apiFetch<void>(`/api/nutrition/portions/${id}`, { method: 'DELETE' }),
   /**
    * Consulta um produto embalado pelo código de barras.
    *
@@ -192,7 +299,9 @@ export const nutritionApi = {
    * funcionalidade **some** em vez de aparecer e falhar.
    */
   photoRecognitionStatus: () =>
-    apiFetch<{ available: boolean }>('/api/nutrition/photo-recognition'),
+    apiFetch<{ available: boolean; allowed: boolean; reason: AiAccessReason }>(
+      '/api/nutrition/photo-recognition',
+    ),
 
   /**
    * Foto de refeição (JPEG em base64) → alimentos candidatos. **Não grava nada.**
@@ -217,7 +326,10 @@ export const nutritionApi = {
     items: Array<{
       foodId?: number;
       foodName?: string;
-      grams: number;
+      /** Ou gramas, ou `portionId` + `quantity` (só com `foodId`). */
+      grams?: number;
+      portionId?: string;
+      quantity?: number;
       kcal?: number;
       proteinG?: number;
       carbsG?: number;
@@ -229,12 +341,38 @@ export const nutritionApi = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  /** Copia para `toDate`, no mesmo horário local. Repetir responde 409. */
+  copyMeal: (id: string, body: { toDate: string; mealType?: MealType }) =>
+    apiFetch<Meal>(`/api/nutrition/meals/${id}/copy`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  copyDay: (body: { fromDate: string; toDate: string }) =>
+    apiFetch<CopyDayResult>('/api/nutrition/days/copy', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  mealTemplates: () => apiFetch<MealTemplate[]>('/api/nutrition/meal-templates'),
+  createMealTemplate: (body: { name: string; mealId: string; mealType?: MealType }) =>
+    apiFetch<MealTemplate>('/api/nutrition/meal-templates', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  deleteMealTemplate: (id: string) =>
+    apiFetch<void>(`/api/nutrition/meal-templates/${id}`, { method: 'DELETE' }),
+  logMealTemplate: (id: string, body: { eatenAt: string; mealType?: MealType }) =>
+    apiFetch<Meal>(`/api/nutrition/meal-templates/${id}/log`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   addItem: (
     mealId: string,
     item: {
       foodId?: number;
       foodName?: string;
-      grams: number;
+      grams?: number;
+      portionId?: string;
+      quantity?: number;
       kcal?: number;
       proteinG?: number;
       carbsG?: number;
@@ -246,7 +384,7 @@ export const nutritionApi = {
       method: 'POST',
       body: JSON.stringify(item),
     }),
-  updateItem: (id: string, patch: { grams?: number }) =>
+  updateItem: (id: string, patch: { grams?: number; portionId?: string; quantity?: number }) =>
     apiFetch<MealItem>(`/api/nutrition/meal-items/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(patch),
@@ -259,6 +397,21 @@ export const nutritionApi = {
     apiFetch<UserGoals>('/api/nutrition/goals', {
       method: 'PUT',
       body: JSON.stringify(body),
+    }),
+  /** Só calcula. O que faltar vem do perfil salvo e da última pesagem. */
+  suggestGoals: (
+    input: Partial<{
+      sex: 'FEMALE' | 'MALE';
+      birthDate: string;
+      heightCm: number;
+      weightKg: number;
+      activityLevel: 'SEDENTARY' | 'LIGHT' | 'MODERATE' | 'ACTIVE' | 'VERY_ACTIVE';
+      objective: 'LOSE' | 'MAINTAIN' | 'GAIN';
+    }> = {},
+  ) =>
+    apiFetch<GoalSuggestion>('/api/nutrition/goals/suggestion', {
+      method: 'POST',
+      body: JSON.stringify(input),
     }),
   history: (days: number) =>
     apiFetch<{

@@ -1,11 +1,9 @@
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
-import {
-  isRestNotification,
-  REST_CHANNEL_ID,
-  REST_NOTIFICATION_KIND,
-  type RestNotifier,
-} from './rest-notification';
+import { REST_CHANNEL_ID, REST_NOTIFICATION_KIND, type RestNotifier } from './rest-notification';
+import { cores } from '@/theme/cores';
+// O handler de primeiro plano é global e silencia só o descanso; mora lá.
+import '@/notifications/foreground-handler';
+import { Notifications } from '@/notifications/native';
 
 /**
  * A ponta que fala com o sistema operacional (#182).
@@ -17,30 +15,10 @@ import {
  * roteiro está na PR da issue.
  */
 
-/**
- * Com o app aberto o aviso do descanso já é o timer na tela, o háptico e o
- * leitor de tela — uma tarja por cima da sessão cobriria justamente o campo de
- * carga que a pessoa está preenchendo.
- *
- * O handler é global do app e responde por toda notificação em primeiro plano,
- * então ele decide por `content.data` e **não** em bloco: silenciar tudo daqui
- * deixaria mudo, sem aviso nenhum, o push remoto da #148. O padrão é mostrar; o
- * silêncio é a exceção do descanso.
- */
-Notifications.setNotificationHandler({
-  handleNotification: async (notification) => {
-    const doDescanso = isRestNotification(notification.request.content.data);
-    return {
-      shouldShowBanner: !doDescanso,
-      shouldShowList: !doDescanso,
-      shouldPlaySound: !doDescanso,
-      shouldSetBadge: !doDescanso,
-    };
-  },
-});
-
 export const expoRestNotifier: RestNotifier = {
   async ensurePermission() {
+    // Expo Go do Android: sem o módulo, o descanso fica só na tela (`native.ts`).
+    if (!Notifications) return false;
     if (Platform.OS === 'android') {
       // Antes de pedir a permissão, e não depois: no Android o diálogo é do
       // canal. Sem canal, o sistema entrega o aviso mudo e sem vibrar, que é o
@@ -50,7 +28,7 @@ export const expoRestNotifier: RestNotifier = {
         importance: Notifications.AndroidImportance.HIGH,
         sound: 'default',
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#2ce500',
+        lightColor: cores.primary,
       });
     }
 
@@ -65,6 +43,7 @@ export const expoRestNotifier: RestNotifier = {
   },
 
   async schedule(seconds: number) {
+    if (!Notifications) throw new Error('Avisos indisponíveis neste app.');
     return Notifications.scheduleNotificationAsync({
       content: {
         title: 'Descanso terminado',
@@ -83,6 +62,6 @@ export const expoRestNotifier: RestNotifier = {
   },
 
   async cancel(id: string) {
-    await Notifications.cancelScheduledNotificationAsync(id);
+    await Notifications?.cancelScheduledNotificationAsync(id);
   },
 };

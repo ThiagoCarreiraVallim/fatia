@@ -76,9 +76,11 @@ async def executar(
     for foto in fotos:
         inicio = time.perf_counter()
         try:
-            reconhecida = await recognize_meal(
-                provider, foto.caminho.read_bytes(), media_type=foto.media_type
-            )
+            reconhecida = (
+                await recognize_meal(
+                    provider, foto.caminho.read_bytes(), media_type=foto.media_type
+                )
+            ).meal
         except AIProviderError as erro:
             resultados.append(
                 mt.ResultadoDaFoto(

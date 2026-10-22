@@ -48,6 +48,6 @@ export class ConsentController {
   @Get('access-log')
   @SelfOnly()
   accessLog(@CurrentUser() user: CurrentUserPayload, @Query() q: AccessLogQueryDto) {
-    return this.consent.listAccessLog(user.id, q.limit);
+    return this.consent.listAccessLog(user.id, q.limit, q.groupId);
   }
 }

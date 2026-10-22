@@ -6,6 +6,8 @@ import {
   erroDoChat,
   parseQuadro,
   recortarQuadros,
+  joinChatRun,
+  stopChatRun,
   streamChat,
   textoDeErroDoChat,
   type ChatStreamFrame,
@@ -134,7 +136,7 @@ describe('streamChat', () => {
 
   it('manda a conversa e a mensagem, pelo proxy do Next, com Accept de event-stream', async () => {
     configure();
-    fetchMock.mockResolvedValue(sse([]));
+    fetchMock.mockResolvedValue(sse(['event: done\ndata: {"status":"completed"}\n\n']));
 
     await coletar(streamChat({ conversationId: CONVERSA, message: 'oi' }));
 
@@ -146,7 +148,7 @@ describe('streamChat', () => {
 
   it('a retomada vai com o id da pausa e sem mensagem', async () => {
     configure();
-    fetchMock.mockResolvedValue(sse([]));
+    fetchMock.mockResolvedValue(sse(['event: done\ndata: {"status":"completed"}\n\n']));
 
     await coletar(
       streamChat({
@@ -185,13 +187,48 @@ describe('streamChat', () => {
         else controller.error(new Error('caiu'));
       },
     });
-    fetchMock.mockResolvedValue(new Response(body, { status: 200 }));
+    fetchMock
+      .mockResolvedValueOnce(new Response(body, { status: 200 }))
+      // A reconexão acha o servidor sem a resposta (reiniciou): 204.
+      .mockResolvedValue(new Response(null, { status: 204 }));
 
     expect(await coletar(streamChat({ conversationId: CONVERSA, message: 'oi' }))).toEqual([
       { event: 'start', data: { runId: 'r' } },
       { event: 'error', data: { code: 'AI_NETWORK_ERROR' } },
       { event: 'done', data: { status: 'error' } },
     ]);
+  });
+
+  it('queda no meio reconecta pelo live a partir do último id, sem repetir nada (ADR 035)', async () => {
+    configure();
+    const encoder = new TextEncoder();
+    let puxadas = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        puxadas += 1;
+        if (puxadas === 1)
+          controller.enqueue(
+            encoder.encode('id: 1\nevent: messages\ndata: [{"content":"Boa ","id":"ai-1"},{}]\n\n'),
+          );
+        else controller.error(new Error('caiu'));
+      },
+    });
+    fetchMock
+      .mockResolvedValueOnce(new Response(body, { status: 200 }))
+      .mockResolvedValueOnce(
+        sse([
+          'id: 2\nevent: messages\ndata: [{"content":"tarde","id":"ai-1"},{}]\n\n',
+          'id: 3\nevent: done\ndata: {"status":"completed"}\n\n',
+        ]),
+      );
+
+    const eventos = await coletar(streamChat({ conversationId: CONVERSA, message: 'oi' }));
+
+    expect(eventos.map((e) => e.id)).toEqual([1, 2, 3]);
+    expect(eventos.at(-1)).toEqual({ event: 'done', data: { status: 'completed' }, id: 3 });
+    const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(url).toBe(`/api/proxy/chat/conversations/${CONVERSA}/live?after=1`);
+    expect(init.method).toBe('GET');
   });
 
   it('cota estourada chega como erro nomeado, com o horário em que volta', async () => {
@@ -282,5 +319,38 @@ describe('textoDeErroDoChat', () => {
     expect(textoDeErroDoChat({ code: 'AI_QUOTA_EXCEEDED', resetsAt: 'ontem' })).toContain(
       'volta amanhã',
     );
+  });
+});
+
+describe('joinChatRun e stopChatRun (ADR 035)', () => {
+  it('sem resposta rodando (204), termina sem emitir nada', async () => {
+    configure();
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    expect(await coletar(joinChatRun(CONVERSA))).toEqual([]);
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      `/api/proxy/chat/conversations/${CONVERSA}/live?after=0`,
+    );
+  });
+
+  it('reenvia a partir do cursor pedido e segue até o done', async () => {
+    configure();
+    fetchMock.mockResolvedValue(sse(['id: 5\nevent: done\ndata: {"status":"completed"}\n\n']));
+
+    expect(await coletar(joinChatRun(CONVERSA, { after: 4 }))).toEqual([
+      { event: 'done', data: { status: 'completed' }, id: 5 },
+    ]);
+    expect(fetchMock.mock.calls[0][0]).toContain('/live?after=4');
+  });
+
+  it('parar é um POST no servidor', async () => {
+    configure();
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await stopChatRun(CONVERSA);
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`/api/proxy/chat/conversations/${CONVERSA}/stop`);
+    expect(init.method).toBe('POST');
   });
 });

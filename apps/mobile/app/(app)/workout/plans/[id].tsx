@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { AccessibilityInfo, Alert, Pressable, Text, View } from 'react-native';
+import { AccessibilityInfo, Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { Check, Clock, Dumbbell, Lightbulb, Play, Plus, Trash2 } from 'lucide-react-native';
+import { Check, Clock, Dumbbell, Lightbulb, Pencil, Play, Plus, Trash2 } from 'lucide-react-native';
 import {
   ApiError,
   isCardioExercise,
@@ -12,7 +12,16 @@ import {
   type WorkoutPlanExercise,
 } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
-import { Button, EmptyState, ErrorState, Input, LoadingState } from '@/components/ui';
+import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
+import {
+  Button,
+  EmptyState,
+  ErrorState,
+  Input,
+  LoadingState,
+  useConfirm,
+  useToast,
+} from '@/components/ui';
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { ExerciseDetailHost } from '@/components/workout/exercise-detail-host';
@@ -25,6 +34,7 @@ import {
   pluralize,
   type PlanMove,
 } from '@/components/workout/workout-stats';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/app/(app)/workout/plans/[id]/page.tsx`.
@@ -37,7 +47,7 @@ import {
 function Stat({ icon: Icon, label, value }: { icon: typeof Clock; label: string; value: string }) {
   return (
     <View className="flex-row items-center gap-2">
-      <Icon size={14} color="#2ce500" />
+      <Icon size={14} color={cores.primary} />
       <View>
         <Text className="text-[10px] font-bold tracking-wide text-muted-foreground">{label}</Text>
         <Text className="text-sm font-extrabold text-foreground">{value}</Text>
@@ -50,6 +60,8 @@ export default function PlanDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const qc = useQueryClient();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [addOpen, setAddOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameEdit, setNameEdit] = useState('');
@@ -144,16 +156,15 @@ export default function PlanDetailScreen() {
       // velho. A mensagem crua seria "Plan exercise not found", em inglês e sem
       // dizer o que fazer.
       if (error instanceof ApiError && error.isNotFound) {
-        Alert.alert(
-          'Este plano mudou',
-          'Um exercício saiu do plano em outro lugar. Atualizamos a lista — tente mover de novo.',
-        );
+        toast.show({
+          message:
+            'Um exercício saiu do plano em outro lugar. Atualizamos a lista — tente mover de novo.',
+        });
         return;
       }
-      Alert.alert(
-        'Não foi possível mover',
-        error instanceof Error ? error.message : 'Tente novamente.',
-      );
+      toast.show({
+        message: `Não foi possível mover. ${error instanceof Error ? error.message : 'Tente novamente.'}`,
+      });
     },
   });
 
@@ -167,7 +178,7 @@ export default function PlanDetailScreen() {
 
   if (plan.isLoading) {
     return (
-      <Screen back title="Plano">
+      <Screen>
         <LoadingState />
       </Screen>
     );
@@ -175,7 +186,7 @@ export default function PlanDetailScreen() {
 
   if (plan.isError) {
     return (
-      <Screen back title="Plano">
+      <Screen>
         <ErrorState error={plan.error} onRetry={() => void plan.refetch()} />
       </Screen>
     );
@@ -183,7 +194,7 @@ export default function PlanDetailScreen() {
 
   if (!plan.data) {
     return (
-      <Screen back title="Plano">
+      <Screen>
         <EmptyState title="Plano não encontrado." />
       </Screen>
     );
@@ -218,65 +229,66 @@ export default function PlanDetailScreen() {
   }
 
   function confirmDelete() {
-    Alert.alert('Excluir plano', 'Excluir este plano de treino?', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Excluir', style: 'destructive', onPress: () => deletePlan.mutate() },
-    ]);
+    confirm({
+      title: 'Excluir plano?',
+      description: 'Os treinos já feitos com ele continuam no histórico.',
+      confirmLabel: 'Excluir',
+      destructive: true,
+      onConfirm: () => deletePlan.mutate(),
+    });
   }
 
   return (
     <ExerciseDetailHost>
       <Screen
-        back
-        title="Plano"
-        refreshing={plan.isRefetching}
-        onRefresh={() => void plan.refetch()}
-      >
-        <View className="gap-4 px-5 pb-4 pt-2">
-          <View className="flex-row items-center gap-2">
-            {editingName ? (
-              <>
-                <Input
-                  autoFocus
-                  value={nameEdit}
-                  onChangeText={setNameEdit}
-                  accessibilityLabel="Nome do plano"
-                  returnKeyType="done"
-                  onSubmitEditing={submitName}
-                  className="flex-1 text-base font-bold"
-                />
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Salvar nome"
-                  accessibilityState={{ disabled: !nameEdit.trim() || renamePlan.isPending }}
-                  disabled={!nameEdit.trim() || renamePlan.isPending}
-                  onPress={submitName}
-                  className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
-                >
-                  <Check size={20} color="#2ce500" />
-                </Pressable>
-              </>
-            ) : (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Renomear plano ${planData.name}`}
-                onPress={startEditName}
-                className="min-h-[44px] flex-1 justify-center"
-              >
-                <Text numberOfLines={1} className="text-2xl font-extrabold text-foreground">
-                  {planData.name}
-                </Text>
-              </Pressable>
-            )}
+        title={planData.name}
+        actions={
+          <>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Renomear plano"
+              onPress={startEditName}
+              className={TOP_BAR_ACTION}
+            >
+              <Pencil size={19} color={cores.primary} />
+            </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Excluir plano"
               onPress={confirmDelete}
-              className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
+              className={TOP_BAR_ACTION}
             >
-              <Trash2 size={18} color="#baccaf" />
+              <Trash2 size={19} color={cores.primary} />
             </Pressable>
-          </View>
+          </>
+        }
+        refreshing={plan.isRefetching}
+        onRefresh={() => void plan.refetch()}
+      >
+        <View className="gap-4 px-5 pb-4 pt-2">
+          {editingName ? (
+            <View className="flex-row items-center gap-2">
+              <Input
+                autoFocus
+                value={nameEdit}
+                onChangeText={setNameEdit}
+                accessibilityLabel="Nome do plano"
+                returnKeyType="done"
+                onSubmitEditing={submitName}
+                className="flex-1 text-base font-bold"
+              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Salvar nome"
+                accessibilityState={{ disabled: !nameEdit.trim() || renamePlan.isPending }}
+                disabled={!nameEdit.trim() || renamePlan.isPending}
+                onPress={submitName}
+                className={TOP_BAR_ACTION}
+              >
+                <Check size={20} color={cores.primary} />
+              </Pressable>
+            </View>
+          ) : null}
 
           <View className="overflow-hidden rounded-2xl border border-border bg-card">
             <View className="gap-1 bg-muted p-4 pt-10">
@@ -309,7 +321,7 @@ export default function PlanDetailScreen() {
               onPress={() => setAddOpen(true)}
               className="items-center gap-2 rounded-2xl border border-dashed border-border bg-accent p-6 active:opacity-80"
             >
-              <Plus size={20} color="#2ce500" />
+              <Plus size={20} color={cores.primary} />
               <Text className="text-center text-sm text-muted-foreground">
                 Plano criado! Agora{' '}
                 <Text className="font-bold text-primary">adicione seu primeiro exercício</Text>.
@@ -341,13 +353,13 @@ export default function PlanDetailScreen() {
           </View>
 
           <Button variant="outline" className="rounded-2xl" onPress={() => setAddOpen(true)}>
-            <Plus size={16} color="#e5e2e1" />
+            <Plus size={16} color={cores.foreground} />
             <Text className="text-sm font-medium text-foreground">Adicionar exercício</Text>
           </Button>
 
           <View className="rounded-2xl border border-border bg-accent p-4">
             <View className="flex-row items-center gap-2">
-              <Lightbulb size={16} color="#2ce500" />
+              <Lightbulb size={16} color={cores.primary} />
               <Text className="text-sm font-extrabold text-foreground">Foco na Excêntrica</Text>
             </View>
             <Text className="mt-1 text-xs leading-relaxed text-muted-foreground">
@@ -362,7 +374,7 @@ export default function PlanDetailScreen() {
             loading={start.isPending}
             onPress={() => start.mutate()}
           >
-            <Play size={16} color="#131313" fill="#131313" />
+            <Play size={16} color={cores.background} fill={cores.background} />
             <Text className="text-base font-extrabold text-primary-foreground">Iniciar Treino</Text>
           </Button>
         </View>

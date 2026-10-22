@@ -41,7 +41,7 @@ export function NutritionMacroCard({ nutrition }: Props) {
 
   return (
     <Link href="/nutrition" className="block">
-      <div className="relative overflow-hidden rounded-xl border border-white/5 bg-card p-5 space-y-4">
+      <div className="relative overflow-hidden rounded-xl border border-subtle bg-card p-5 space-y-4">
         {/* green gradient tint */}
         <div
           className="pointer-events-none absolute inset-0"
@@ -59,7 +59,7 @@ export function NutritionMacroCard({ nutrition }: Props) {
         {/* body */}
         <div className="relative flex gap-4">
           {/* left: remaining kcal */}
-          <div className="flex w-28 shrink-0 flex-col items-center justify-center gap-1 border-r border-white/5 pr-4">
+          <div className="flex w-28 shrink-0 flex-col items-center justify-center gap-1 border-r border-subtle pr-4">
             {kcalRemaining !== null ? (
               <>
                 <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
@@ -84,25 +84,25 @@ export function NutritionMacroCard({ nutrition }: Props) {
               current={consumed.kcal}
               target={kcalTarget}
               unit=""
-              color="bg-[#ffb4ab]"
+              color="bg-foreground"
             />
             <MacroBar
               label="PROT"
               current={consumed.proteinG}
               target={goals ? Math.round((goals.proteinMinG + goals.proteinMaxG) / 2) : 0}
-              color="bg-[#4b8eff]"
+              color="bg-protein"
             />
             <MacroBar
               label="CARB"
               current={consumed.carbsG}
               target={goals ? Math.round((goals.carbsMinG + goals.carbsMaxG) / 2) : 0}
-              color="bg-primary"
+              color="bg-carbs"
             />
             <MacroBar
               label="GORD"
               current={consumed.fatG}
               target={goals ? Math.round((goals.fatMinG + goals.fatMaxG) / 2) : 0}
-              color="bg-destructive"
+              color="bg-fat"
             />
           </div>
         </div>

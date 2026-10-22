@@ -6,6 +6,11 @@ import { GroupRoleGuard } from '../../sharing/guards/group-role.guard';
 import { InsightsAddonGuard } from '../guards/insights-addon.guard';
 import { StaticEntitlementsService } from '../../billing/static-entitlements.service';
 import type { PrismaService } from '../../common/prisma.service';
+import type { BillingEntitlements } from '../../billing/entitlements.port';
+import { GROUP_ACTION_KEY } from '../../sharing/decorators/require-group-action.decorator';
+import { InsightsController } from '../insights.controller';
+import type { InsightsExportService } from '../insights-export.service';
+import type { InsightsService } from '../insights.service';
 
 const GROUP = 'grupo-1';
 const OUTRO = 'grupo-2';
@@ -128,6 +133,23 @@ describe('InsightsAddonGuard — o add-on é conferido na rota, não na tela', (
 
     await expect(guard.canActivate(makeContext({ params: { groupId: GROUP } }))).resolves.toBe(
       true,
+    );
+  });
+});
+
+describe('GET insights/panels — a tela pergunta antes, em vez de ler um 404', () => {
+  const controller = (temAddon: boolean) =>
+    new InsightsController(
+      {} as InsightsService,
+      {} as InsightsExportService,
+      { hasInsights: async () => temAddon } as unknown as BillingEntitlements,
+    );
+
+  it('diz se o painel de comportamento existe, e só para o dono', async () => {
+    expect(await controller(true).panels('g1')).toEqual({ retention: true, behavior: true });
+    expect(await controller(false).panels('g1')).toEqual({ retention: true, behavior: false });
+    expect(Reflect.getMetadata(GROUP_ACTION_KEY, InsightsController.prototype.panels)).toBe(
+      'insights.read',
     );
   });
 });

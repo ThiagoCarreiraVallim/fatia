@@ -2,8 +2,10 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, Dumbbell } from 'lucide-react';
+import { ChevronRight, Dumbbell, History } from 'lucide-react';
 import { workoutApi, type WorkoutSession } from '@fatia/api-client';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 
 function formatDuration(start: string, end?: string): string {
   if (!end) return '—';
@@ -32,7 +34,7 @@ function SessionRow({ session }: { session: WorkoutSession }) {
   return (
     <Link
       href={`/workout/session/${session.id}`}
-      className="flex items-center gap-3 rounded-2xl border border-white/5 bg-card p-4"
+      className="flex items-center gap-3 rounded-2xl border border-subtle bg-card p-4"
     >
       <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
         <Dumbbell size={20} className="text-primary" />
@@ -61,27 +63,20 @@ export default function WorkoutHistoryPage() {
 
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
-      <header className="flex items-center gap-3">
-        <Link
-          href="/workout"
-          aria-label="Voltar"
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground"
-        >
-          <ChevronLeft size={18} />
-        </Link>
-        <h1 className="text-3xl font-extrabold text-foreground">Histórico</h1>
-      </header>
-
       {sessions.isLoading && (
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-20 animate-pulse rounded-2xl bg-muted" />
+            <Skeleton key={i} className="h-20 rounded-2xl bg-muted" />
           ))}
         </div>
       )}
 
       {sessions.data && sessions.data.length === 0 && (
-        <p className="text-sm text-muted-foreground">Nenhum treino registrado ainda.</p>
+        <EmptyState
+          icon={History}
+          title="Nenhum treino registrado ainda"
+          description="Toque em + e escolha Treino para começar o primeiro."
+        />
       )}
 
       <div className="space-y-2">

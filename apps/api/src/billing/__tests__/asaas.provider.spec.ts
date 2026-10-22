@@ -262,3 +262,229 @@ describe('AsaasProvider', () => {
     });
   });
 });
+
+describe('AsaasProvider — assinatura PRO (ADR 024)', () => {
+  const fetchOriginal = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = fetchOriginal;
+  });
+
+  it('cria o cliente da pessoa com CPF e referência `user:<id>`', async () => {
+    const fetchMock = responde(200, { id: 'cus_9' });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const r = await provider().ensurePersonCustomer({
+      userId: 'u1',
+      name: 'Ana',
+      email: 'ana@x.dev',
+      cpf: '52998224725',
+    });
+
+    expect(r).toEqual({ providerCustomerId: 'cus_9' });
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api-sandbox.asaas.example/x/v3/customers');
+    expect(corpoEnviado(fetchMock)).toEqual({
+      name: 'Ana',
+      cpfCnpj: '52998224725',
+      email: 'ana@x.dev',
+      externalReference: 'user:u1',
+    });
+  });
+
+  it('assinatura: valor em reais, ciclo e primeiro vencimento no dia local', async () => {
+    const fetchMock = responde(200, { id: 'sub_1' });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const r = await provider().createSubscription({
+      providerCustomerId: 'cus_9',
+      valueCents: 17900,
+      cycle: 'YEARLY',
+      nextDueAt: new Date('2026-10-16T01:00:00Z'), // ainda 15/10 em São Paulo
+      description: 'Fatia PRO — plano anual',
+      externalReference: 'user:u1',
+    });
+
+    expect(r).toEqual({ providerSubscriptionId: 'sub_1' });
+    expect(corpoEnviado(fetchMock)).toMatchObject({
+      customer: 'cus_9',
+      billingType: 'UNDEFINED',
+      value: 179,
+      cycle: 'YEARLY',
+      nextDueDate: '2026-10-15',
+    });
+  });
+
+  it('o link de pagamento é o da primeira cobrança da assinatura', async () => {
+    const fetchMock = responde(200, {
+      data: [
+        { id: 'pay_2', dueDate: '2026-11-15', invoiceUrl: 'https://pay/2' },
+        { id: 'pay_1', dueDate: '2026-10-15', invoiceUrl: 'https://pay/1' },
+      ],
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    expect(await provider().firstPaymentUrl('sub_1')).toBe('https://pay/1');
+    expect(fetchMock.mock.calls[0][0]).toMatch(/\/v3\/subscriptions\/sub_1\/payments$/);
+  });
+
+  it('cancelar é DELETE na assinatura', async () => {
+    const fetchMock = responde(200, { deleted: true, id: 'sub_1' });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await provider().cancelSubscription('sub_1');
+
+    expect(fetchMock.mock.calls[0][1].method).toBe('DELETE');
+    expect(fetchMock.mock.calls[0][0]).toMatch(/\/v3\/subscriptions\/sub_1$/);
+  });
+
+  describe('verifySubscriptionWebhook', () => {
+    const headers = { 'asaas-access-token': TOKEN_DE_WEBHOOK };
+
+    it('evento de cobrança traz a assinatura e o vencimento', () => {
+      expect(
+        provider().verifySubscriptionWebhook(
+          headers,
+          JSON.stringify({
+            id: 'evt_1',
+            event: 'PAYMENT_RECEIVED',
+            payment: {
+              id: 'pay_1',
+              status: 'RECEIVED',
+              dueDate: '2026-10-15',
+              subscription: 'sub_1',
+              value: 74.5,
+              invoiceUrl: 'https://www.asaas.com/i/pay_1',
+            },
+          }),
+        ),
+      ).toEqual({
+        ok: true,
+        eventId: 'evt_1',
+        event: 'PAYMENT_RECEIVED',
+        subscriptionId: 'sub_1',
+        status: 'PAID',
+        dueDate: '2026-10-15',
+        paymentId: 'pay_1',
+        externalReference: null,
+        valueCents: 7450,
+        invoiceUrl: 'https://www.asaas.com/i/pay_1',
+      });
+    });
+
+    it('evento de assinatura (sem cobrança) também é aceito', () => {
+      expect(
+        provider().verifySubscriptionWebhook(
+          headers,
+          JSON.stringify({
+            id: 'evt_2',
+            event: 'SUBSCRIPTION_DELETED',
+            subscription: { id: 'sub_1' },
+          }),
+        ),
+      ).toMatchObject({ ok: true, subscriptionId: 'sub_1', dueDate: null });
+    });
+
+    it('cobrança avulsa (B2B) volta sem assinatura, com o id e a referência dela', () => {
+      expect(
+        provider().verifySubscriptionWebhook(
+          headers,
+          JSON.stringify({
+            id: 'evt_3',
+            event: 'PAYMENT_RECEIVED',
+            payment: { id: 'pay_9', externalReference: 'seat-adjustment:a1' },
+          }),
+        ),
+      ).toMatchObject({
+        ok: true,
+        subscriptionId: null,
+        paymentId: 'pay_9',
+        externalReference: 'seat-adjustment:a1',
+      });
+    });
+
+    it('token errado e corpo sem ids são recusados', () => {
+      expect(provider().verifySubscriptionWebhook({ 'asaas-access-token': 'x' }, '{}')).toEqual({
+        ok: false,
+        motivo: 'token_invalido',
+      });
+      expect(provider().verifySubscriptionWebhook(headers, '{"id":"evt"}')).toEqual({
+        ok: false,
+        motivo: 'payload_invalido',
+      });
+    });
+  });
+});
+
+describe('AsaasProvider — assentos de comunidade (ADR 025)', () => {
+  const fetchOriginal = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = fetchOriginal;
+  });
+
+  it('cria o cliente da comunidade com referência `group:<id>`', async () => {
+    const fetchMock = responde(200, { id: 'cus_g' });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const r = await provider().ensureGroupCustomer({
+      groupId: 'g1',
+      name: 'Academia X',
+      email: 'dono@x.dev',
+      taxId: '11222333000181',
+    });
+
+    expect(r).toEqual({ providerCustomerId: 'cus_g' });
+    expect(corpoEnviado(fetchMock)).toEqual({
+      name: 'Academia X',
+      cpfCnpj: '11222333000181',
+      email: 'dono@x.dev',
+      externalReference: 'group:g1',
+    });
+  });
+
+  it('novo valor da recorrente vai em reais e atualiza a cobrança pendente', async () => {
+    const fetchMock = responde(200, { id: 'sub_g' });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await provider().updateSubscriptionValue('sub_g', 10430);
+
+    expect(fetchMock.mock.calls[0][0]).toMatch(/\/v3\/subscriptions\/sub_g$/);
+    expect(fetchMock.mock.calls[0][1].method).toBe('POST');
+    expect(corpoEnviado(fetchMock)).toEqual({ value: 104.3, updatePendingPayments: true });
+  });
+
+  it('cobrança avulsa vai ao cliente da assinatura', async () => {
+    const fetchMock = jest.fn(async (url: string, _init: RequestInit) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify(
+            url.endsWith('/v3/subscriptions/sub_g')
+              ? { id: 'sub_g', customer: 'cus_g' }
+              : { id: 'pay_x', invoiceUrl: 'https://pay/x' },
+          ),
+          { status: 200 },
+        ),
+      ),
+    ) as FetchMock;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const r = await provider().createSubscriptionCharge({
+      providerSubscriptionId: 'sub_g',
+      amountCents: 1442,
+      dueDate: '2026-11-01',
+      description: 'Fatia — 2 assentos novos até 15/11',
+      externalReference: 'seat-adjustment:a1',
+    });
+
+    expect(r).toEqual({ providerChargeId: 'pay_x', url: 'https://pay/x' });
+    expect(fetchMock.mock.calls[1][0]).toMatch(/\/v3\/payments$/);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body as string)).toEqual({
+      customer: 'cus_g',
+      billingType: 'UNDEFINED',
+      value: 14.42,
+      dueDate: '2026-11-01',
+      description: 'Fatia — 2 assentos novos até 15/11',
+      externalReference: 'seat-adjustment:a1',
+    });
+  });
+});

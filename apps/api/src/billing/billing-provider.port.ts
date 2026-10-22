@@ -74,3 +74,101 @@ export interface BillingProvider {
    */
   verifyWebhook(headers: Record<string, string | undefined>, rawBody: string): ResultadoDeWebhook;
 }
+
+// ─── Assinatura PRO da pessoa (ADR 024) ──────────────────────────────────────
+
+export interface EntradaDeClientePessoa {
+  /** Vira `externalReference` (`user:<id>`) no provedor. */
+  userId: string;
+  name: string;
+  email: string;
+  /**
+   * CPF, só dígitos. O Asaas exige para emitir cobrança; o Fatia não guarda —
+   * passa adiante uma vez e fica só com o id do cliente.
+   */
+  cpf: string;
+}
+
+export interface EntradaDeAssinatura {
+  providerCustomerId: string;
+  valueCents: number;
+  cycle: 'MONTHLY' | 'YEARLY';
+  /** Vencimento da primeira cobrança. */
+  nextDueAt: Date;
+  description: string;
+  externalReference: string;
+}
+
+export type ResultadoDeWebhookDeAssinatura =
+  | { ok: false; motivo: 'token_invalido' | 'payload_invalido' }
+  | {
+      ok: true;
+      eventId: string;
+      event: string;
+      /** Assinatura a que o evento se refere; `null` = cobrança avulsa (B2B). */
+      subscriptionId: string | null;
+      status: StatusDaCobranca;
+      /** Vencimento da cobrança do evento, `YYYY-MM-DD`, no fuso do provedor. */
+      dueDate: string | null;
+      /** Cobrança do evento; liga a cobrança avulsa de assentos (`GroupSeatAdjustment`). */
+      paymentId: string | null;
+      /** A referência que mandamos ao criar (`user:<id>`, `group:<id>`, `seat-adjustment:<id>`). */
+      externalReference: string | null;
+      /** Valor da cobrança do evento, em centavos. Vai ao histórico de faturas dos assentos. */
+      valueCents: number | null;
+      /** Página da fatura no provedor. */
+      invoiceUrl: string | null;
+    };
+
+/**
+ * O lado de assinatura recorrente do provedor. Separado de `BillingProvider`
+ * (cobrança avulsa do grupo) porque os consumidores são outros e o B2B não
+ * precisa saber de assinatura de pessoa.
+ */
+export interface SubscriptionProvider {
+  ensurePersonCustomer(entrada: EntradaDeClientePessoa): Promise<{ providerCustomerId: string }>;
+  createSubscription(entrada: EntradaDeAssinatura): Promise<{ providerSubscriptionId: string }>;
+  /** Página de pagamento da primeira cobrança (Pix, boleto ou cartão). */
+  firstPaymentUrl(providerSubscriptionId: string): Promise<string | null>;
+  /** Encerra a recorrência. Cobranças já pagas não são estornadas. */
+  cancelSubscription(providerSubscriptionId: string): Promise<void>;
+  verifySubscriptionWebhook(
+    headers: Record<string, string | undefined>,
+    rawBody: string,
+  ): ResultadoDeWebhookDeAssinatura;
+}
+
+export interface EntradaDeClienteGrupo {
+  groupId: string;
+  name: string;
+  email: string;
+  /** CPF ou CNPJ de quem paga a comunidade. Não é guardado. */
+  taxId: string;
+}
+
+export interface EntradaDeCobrancaDaAssinatura {
+  providerSubscriptionId: string;
+  amountCents: number;
+  /** Vencimento, `YYYY-MM-DD` no fuso do provedor. */
+  dueDate: string;
+  description: string;
+  externalReference: string;
+}
+
+/**
+ * O lado de assentos de comunidade (ADR 025): uma assinatura mensal por
+ * comunidade, com valor que muda quando o número de assentos muda, e a
+ * cobrança avulsa do pró-rata quando aumenta no meio do ciclo.
+ */
+export interface SeatProvider {
+  ensureGroupCustomer(entrada: EntradaDeClienteGrupo): Promise<{ providerCustomerId: string }>;
+  createSubscription(entrada: EntradaDeAssinatura): Promise<{ providerSubscriptionId: string }>;
+  firstPaymentUrl(providerSubscriptionId: string): Promise<string | null>;
+  cancelSubscription(providerSubscriptionId: string): Promise<void>;
+  /** Novo valor da recorrente, inclusive da cobrança ainda não paga. */
+  updateSubscriptionValue(providerSubscriptionId: string, valueCents: number): Promise<void>;
+  /** Cobrança avulsa ao mesmo cliente da assinatura (o pró-rata do aumento). */
+  createSubscriptionCharge(
+    entrada: EntradaDeCobrancaDaAssinatura,
+  ): Promise<{ providerChargeId: string; url: string | null }>;
+}

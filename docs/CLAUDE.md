@@ -15,16 +15,15 @@ Instruções para o Claude (e outros assistentes IA) trabalhando neste repositó
 
 ## Contexto rápido
 
-Fatia é um rastreador self-hosted de nutrição e treino, multiusuário. Backend NestJS + Postgres. Frontend Next.js PWA + app Expo. Integração com IA via MCP. Detalhes em `docs/PRD.md` e `docs/ARCHITECTURE.md`.
+Fatia é um app de nutrição e treino com comunidades de academias, personais e influencers: plano FREE (registro sem IA) e PRO (IA hospedada), assentos de IA pagos pela comunidade, MCP-first e self-hostable. Backend NestJS + Postgres, web Next.js, app Expo, agente Python. Detalhes em `docs/PRD.md` e `docs/ARCHITECTURE.md`.
 
 ## Antes de começar qualquer task
 
-1. Leia `docs/PRD.md` para entender escopo e **não-escopo**. Atenção à regra de precedência da
-   [ADR 013](./ADR/013-roadmap-supera-escopo-negativo-v1.md): a lista negativa do §4 vale para
-   trabalho de **v1**; para trabalho de **roadmap pós-MVP**, a épica manda e o PRD registra a
-   exceção. Item com issue aberta e priorizada não é fora de escopo, mesmo que a lista o cite.
+1. Leia `docs/PRD.md` para entender escopo, os princípios do §3 e os **não-objetivos** do §5. Pela
+   [ADR 037](./ADR/037-prd-descreve-o-produto-atual.md), a lista vale para todo trabalho e só uma
+   ADR a muda; item "em discussão" (issue com label `discussion`) não entra sem a ADR.
 2. Leia `docs/ARCHITECTURE.md` para decisões técnicas já tomadas
-3. Confira as [Issues](https://github.com/ThiagoCarreiraVallim/fatia/issues) para ver onde a tarefa se encaixa (`docs/TASKS.md` tem o mapa das épicas)
+3. Confira as [Issues](https://github.com/ThiagoCarreiraVallim/fatia/issues) para ver onde a tarefa se encaixa (a épica #275 reúne o que falta antes do piloto)
 4. Se vai mudar schema, leia `packages/db/prisma/schema.prisma` inteiro primeiro
 
 ## Princípios de código
@@ -104,14 +103,15 @@ português na frase seguinte.
 - ❌ Hardcodar `userId` ou pular guards "temporariamente"
 - ❌ Commitar `.env`, secrets, ou tokens
 - ❌ Criar dependências para coisas triviais (ex: lodash para 1 função)
-- ❌ Sobrepor decisões do PRD/ARCHITECTURE sem ADR (exceção prevista: ADR 013, para roadmap)
-- ❌ Adicionar testes E2E na v1 (testes unitários em services críticos é suficiente)
+- ❌ Sobrepor decisões do PRD/ARCHITECTURE sem ADR (ADR 037)
+- ❌ Testes E2E de lógica de negócio — isso é unitário. Playwright (`e2e/`, ADR 029) é para screenshots antes/depois (`pnpm ui:snap`) e poucos fluxos críticos de tela
 - ❌ Refatorar código que não está sendo tocado pela task atual
 
 ## Quando em dúvida
 
-1. Em dúvida sobre escopo: **procure a issue primeiro**. Se existe issue aberta e priorizada, está
-   dentro — ver ADR 013. Se não existe, assume que está fora.
+1. Em dúvida sobre escopo: **procure a issue primeiro**. Issue aberta e priorizada que não bate num
+   não-objetivo do PRD está dentro; se bate, precisa de ADR antes (ADR 037). Sem issue, assume que
+   está fora.
 2. Em dúvida sobre arquitetura: lê ARCHITECTURE.md, se não tem resposta, pergunta antes de codar.
 3. Em dúvida sobre estilo: copia do código existente mais próximo.
 4. Em dúvida sobre dependência nova: prefere a opção que já está no projeto.
@@ -180,7 +180,7 @@ apps/web/src/
 
 - Unit tests para services com lógica não-trivial (cálculo de macros, agregações)
 - Integration tests para guards (auth, isolamento por user)
-- Sem E2E, sem snapshot, sem coverage report
+- E2E só em `e2e/` (Playwright, ADR 029); sem snapshot de componente, sem coverage report
 
 **Teste obrigatório quando:**
 

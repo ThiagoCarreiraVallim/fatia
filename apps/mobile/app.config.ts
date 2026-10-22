@@ -12,9 +12,30 @@ import type { ExpoConfig } from 'expo/config';
 /** Scheme do deep link. Precisa bater com o redirect URI cadastrado no Logto. */
 const SCHEME = 'fatia';
 
+/**
+ * Domínio do link universal do convite (`https://<host>/c/<token>`), o mesmo do
+ * PWA. Vazio, o app só abre o `fatia://c/<token>`: o link universal exige que a
+ * web sirva `apple-app-site-association` e `assetlinks.json` (`APPLE_TEAM_ID`,
+ * `ANDROID_CERT_SHA256`), e um domínio declarado sem eles só confunde o sistema.
+ */
+const APP_LINKS_HOST = process.env.APP_LINKS_HOST;
+
+/**
+ * `google-services.json` do Firebase: sem ele o Android não emite token de push
+ * (ADR 033) e Perfil → Notificações falha ao ligar. Não vai para o git; no build
+ * da EAS chega como variável do tipo arquivo, que entrega o caminho do arquivo
+ * — ver docs/TESTAR_O_APP.md.
+ */
+const GOOGLE_SERVICES_JSON = process.env.GOOGLE_SERVICES_JSON;
+
+/** O projeto `@fat.ia.br/fatia` na EAS. */
+const EAS_PROJECT_ID = 'f2f556bd-db04-4057-a788-246f00c145df';
+
 const config: ExpoConfig = {
   name: 'Fatia',
   slug: 'fatia',
+  // A conta da EAS dona do projeto (organização), e não a de quem roda o build.
+  owner: process.env.EAS_OWNER ?? 'fat.ia.br',
   version: '0.1.0',
   orientation: 'portrait',
   scheme: SCHEME,
@@ -29,9 +50,21 @@ const config: ExpoConfig = {
   ios: {
     supportsTablet: false,
     bundleIdentifier: 'br.ia.fat.app',
+    ...(APP_LINKS_HOST && { associatedDomains: [`applinks:${APP_LINKS_HOST}`] }),
   },
   android: {
     package: 'br.ia.fat.app',
+    ...(GOOGLE_SERVICES_JSON && { googleServicesFile: GOOGLE_SERVICES_JSON }),
+    ...(APP_LINKS_HOST && {
+      intentFilters: [
+        {
+          action: 'VIEW',
+          autoVerify: true,
+          data: [{ scheme: 'https', host: APP_LINKS_HOST, pathPrefix: '/c/' }],
+          category: ['BROWSABLE', 'DEFAULT'],
+        },
+      ],
+    }),
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#131313',
@@ -57,19 +90,37 @@ const config: ExpoConfig = {
       {
         cameraPermission:
           'O Fatia usa a câmera para ler códigos de barras e para reconhecer a refeição em uma foto do prato. A foto é analisada e descartada — ela não é salva no Fatia.',
-        // Nem o scanner nem o registro por foto gravam vídeo ou áudio; desligar
-        // aqui evita que o aplicativo peça microfone que nunca vai usar.
-        recordAudioAndroid: false,
+        // A câmera não grava áudio, mas `false` aqui **bloqueia** a permissão de
+        // microfone no manifesto do Android inteiro — e o ditado do chat (Fase
+        // 9e, `expo-audio`) precisa dela. A câmera continua sem pedir microfone.
+        recordAudioAndroid: true,
+      },
+    ],
+    [
+      // Ditado do chat (Fase 9e): o áudio vai à transcrição e é apagado do
+      // aparelho; o texto volta para o campo, e quem envia é a pessoa.
+      'expo-audio',
+      {
+        microphonePermission:
+          'O Fatia usa o microfone para você ditar mensagens ao assistente. O áudio é transcrito e descartado — ele não fica guardado.',
+        enableBackgroundPlayback: false,
+        enableBackgroundRecording: false,
       },
     ],
     [
       // Galeria (#139): a issue pede câmera **e** galeria, para quem fotografou
       // o prato antes de abrir o app. Só leitura — o Fatia nunca escreve na
       // galeria, e por isso não pede a permissão de gravação.
+      //
+      // Desde a Fase 7 a galeria também serve à equipe de uma comunidade, que
+      // publica imagens e vídeos — e esses ficam guardados. O texto antigo
+      // ("a imagem é descartada") deixou de ser verdade para esse caso, e é o
+      // mesmo tipo de descrição errada do comentário da câmera acima. Entra no
+      // próximo build nativo.
       'expo-image-picker',
       {
         photosPermission:
-          'O Fatia acessa suas fotos para você escolher a imagem de uma refeição já fotografada. A imagem é analisada e descartada — ela não é salva no Fatia.',
+          'O Fatia acessa suas fotos e vídeos para você escolher a foto de uma refeição, que é analisada e descartada, ou, se você faz parte da equipe de uma comunidade, a imagem ou o vídeo que vai publicar nela.',
       },
     ],
     [
@@ -97,9 +148,11 @@ const config: ExpoConfig = {
   extra: {
     router: {},
     eas: {
-      // Preenchido por `eas init`. Sem isto o EAS Build não sabe a qual projeto
-      // o app pertence — ver apps/mobile/README.md.
-      projectId: process.env.EAS_PROJECT_ID,
+      // O projeto da EAS. Fixo, e não só do ambiente: o `eas build` avalia esta
+      // configuração sem carregar o `.env`, e sem o id ele tenta "ligar" o
+      // projeto escrevendo aqui — o que falha num `app.config.ts`. O id não é
+      // segredo. `EAS_PROJECT_ID` ainda vence, para um fork usar o próprio.
+      projectId: process.env.EAS_PROJECT_ID ?? EAS_PROJECT_ID,
     },
   },
 };

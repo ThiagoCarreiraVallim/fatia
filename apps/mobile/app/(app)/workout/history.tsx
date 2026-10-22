@@ -10,6 +10,7 @@ import {
   pluralize,
   summarizeSession,
 } from '@/components/workout/workout-stats';
+import { cores } from '@/theme/cores';
 
 /** Réplica de `apps/web/src/app/(app)/workout/history/page.tsx`. */
 
@@ -35,7 +36,7 @@ function SessionRow({ session }: { session: WorkoutSession }) {
       className="min-h-[44px] flex-row items-center gap-3 rounded-2xl border border-border bg-card p-4 active:opacity-80"
     >
       <View className="h-12 w-12 items-center justify-center rounded-lg bg-muted">
-        <Dumbbell size={20} color="#2ce500" />
+        <Dumbbell size={20} color={cores.primary} />
       </View>
       <View className="min-w-0 flex-1">
         <Text numberOfLines={1} className="text-base font-bold capitalize text-foreground">
@@ -44,7 +45,7 @@ function SessionRow({ session }: { session: WorkoutSession }) {
         <Text className="text-xs text-muted-foreground">{stats}</Text>
         <Text className="text-[11px] text-muted-foreground">{duration}</Text>
       </View>
-      <ChevronRight size={16} color="#baccaf" />
+      <ChevronRight size={16} color={cores.mutedForeground} />
     </Pressable>
   );
 }
@@ -56,12 +57,7 @@ export default function WorkoutHistoryScreen() {
   });
 
   return (
-    <Screen
-      back
-      title="Histórico"
-      refreshing={sessions.isRefetching}
-      onRefresh={() => void sessions.refetch()}
-    >
+    <Screen refreshing={sessions.isRefetching} onRefresh={() => void sessions.refetch()}>
       <View className="gap-2 px-5 pb-4 pt-4">
         {sessions.isLoading ? <LoadingState /> : null}
         {sessions.isError ? (

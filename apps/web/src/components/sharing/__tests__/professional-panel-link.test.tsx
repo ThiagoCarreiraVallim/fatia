@@ -55,16 +55,16 @@ describe('entrada do painel do profissional', () => {
 
     renderLink();
 
-    const link = await screen.findByRole('link', { name: /Meus alunos/ });
+    const link = await screen.findByRole('link', { name: /Membros/ });
     expect(link).toHaveAttribute('href', '/students');
     // O contador é o que distingue "tem painel" de "tem painel com gente
     // dentro"; sem ele o item viraria decoração.
-    expect(link.textContent).toMatch(/2 alunos atendidos/);
+    expect(link.textContent).toMatch(/2 pessoas compartilham com você/);
   });
 
   it('não aparece para quem não atende ninguém', async () => {
     // A API devolve `[]` — e não 403 — para quem não é PROFESSIONAL em grupo
-    // nenhum. Renderizar mesmo assim poria "Meus alunos" no perfil de todo
+    // nenhum. Renderizar mesmo assim poria "Membros" no perfil de todo
     // usuário do app, que é o oposto do que a lista vazia quer dizer.
     listStudents.mockResolvedValue([]);
 

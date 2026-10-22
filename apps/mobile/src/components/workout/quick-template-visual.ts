@@ -9,6 +9,7 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react-native';
+import { cores } from '@/theme/cores';
 
 /**
  * Visual dos treinos rápidos no app nativo.
@@ -26,7 +27,7 @@ export interface QuickVisual {
   icon: LucideIcon;
 }
 
-const DEFAULT_VISUAL: QuickVisual = { tint: '#2a2a2a', icon: Dumbbell };
+const DEFAULT_VISUAL: QuickVisual = { tint: cores.card, icon: Dumbbell };
 
 const QUICK_VISUALS: Record<string, QuickVisual> = {
   'full-body': { tint: '#14532d', icon: PersonStanding },

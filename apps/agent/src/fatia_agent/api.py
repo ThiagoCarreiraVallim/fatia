@@ -80,7 +80,9 @@ from .chat.errors import (
 from .chat.graph import MAX_CARACTERES_POR_MENSAGEM
 from .chat.state import FotoDoTurno
 from .chat.titulo import gerar_titulo
+from .http_pool import SharedTransport
 from .providers import build_provider
+from .providers.base import Usage
 from .providers.errors import (
     AgentKeyRejected,
     AIEndpointNotAllowed,
@@ -91,12 +93,19 @@ from .providers.errors import (
     AIProviderTimeout,
 )
 from .recognition import MEDIA_TYPES_ACEITOS, recognize_meal
-from .schemas.recognized_meal import RecognizedMeal
 from .settings import (
     AgentSettings,
     agent_auth_unavailable_reason,
     ai_unavailable_reason,
     endpoint_host,
+)
+from .tracing import (
+    NOOP_TRACE,
+    TracedProvider,
+    record_feedback,
+    record_generation,
+    shutdown_langfuse,
+    start_turn_trace,
 )
 
 # Teto do lado do agente. O `apps/api` já corta antes (é ele quem fala com o
@@ -122,6 +131,20 @@ class TitleRequest(BaseModel):
     text: Annotated[str, Field(min_length=1, max_length=MAX_CARACTERES_POR_MENSAGEM)]
 
 
+class FeedbackRequest(BaseModel):
+    """O voto da pessoa numa resposta, para o score do trace (ADR 034).
+
+    Sem o comentário livre: ele pode trazer dado de saúde, e o Langfuse só
+    precisa do sinal e dos motivos fechados.
+    """
+
+    model_config = {"extra": "forbid", "populate_by_name": True}
+
+    run_id: Annotated[str, Field(alias="runId", min_length=1, max_length=64)]
+    review: Annotated[str | None, Field(pattern="^(like|dislike)$")] = None
+    reasons: Annotated[list[Annotated[str, Field(max_length=40)]], Field(max_length=10)] = []
+
+
 class ChatMessage(BaseModel):
     """Uma fala já gravada pelo `apps/api`, para semear uma thread fria.
 
@@ -143,6 +166,30 @@ class ChatMemory(BaseModel):
 
     id: Annotated[str, Field(min_length=1, max_length=64)]
     content: Annotated[str, Field(min_length=1, max_length=500)]
+
+
+class ChatPersona(BaseModel):
+    """O agente da comunidade nesta conversa (Fase 7c, ADR 031).
+
+    Os limites são os do `apps/api` (`group-agent.service.ts`), repetidos aqui
+    porque a garantia não pode depender de quem chama: o nome vai numa frase do
+    prompt, fora de cerca, e não pode trazer quebra de linha nem `<`/`>`.
+    """
+
+    model_config = {"extra": "forbid", "populate_by_name": True}
+
+    group_id: Annotated[UUID4, Field(alias="groupId")]
+    name: Annotated[str, Field(min_length=2, max_length=40, pattern=r"^[^\x00-\x1f\x7f<>]+$")]
+    community: Annotated[str, Field(min_length=1, max_length=120)]
+    instructions: Annotated[str, Field(max_length=2000)] = ""
+
+    def para_o_prompt(self) -> dict[str, str]:
+        return {
+            "groupId": str(self.group_id),
+            "name": self.name,
+            "community": self.community,
+            "instructions": self.instructions,
+        }
 
 
 MAX_FOTOS_POR_MENSAGEM = 3
@@ -209,6 +256,9 @@ class ChatRequest(BaseModel):
     # prompt. Não é identidade: o nome de um fuso é grosso demais para apontar
     # para alguém.
     timezone: str | None = None
+    # Sem persona é o assistente da Fatia. Quem decide qual comunidade, e se a
+    # pessoa ainda é dela, é o `apps/api`, a cada turno.
+    persona: ChatPersona | None = None
     # Vivem só neste turno: o checkpoint recebe uma marca no lugar (ver
     # `FotoDoTurno` em `chat/state.py`).
     photos: Annotated[
@@ -256,18 +306,27 @@ _STATUS_BY_MCP_ERROR: dict[type[McpError], int] = {
 def create_app(settings: AgentSettings | None = None) -> FastAPI:
     resolved = settings if settings is not None else AgentSettings()
     checkpointer = Checkpointer(resolved.agent_checkpoint_database_url)
+    # O gateway mantém conexão ociosa por minutos; o Node do `apps/api` fecha a
+    # dele em 5 s (`keepAliveTimeout` padrão). Abaixo disso, o socket reusado
+    # nunca é um que o outro lado acabou de fechar.
+    provider_transport = SharedTransport(keepalive_expiry_s=30.0)
+    mcp_transport = SharedTransport(keepalive_expiry_s=4.0)
     grafos: list[GrafoDaConversa] = []
 
-    async def grafo() -> GrafoDaConversa:
+    async def compiled_graph() -> GrafoDaConversa:
         """O grafo do processo, compilado com o checkpointer na primeira conversa."""
         if not grafos:
-            grafos.append(montar_grafo(await checkpointer.obter()))
+            grafos.append(montar_grafo(await checkpointer.get()))
         return grafos[0]
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
+        await checkpointer.warm_up()
         yield
-        await checkpointer.fechar()
+        await checkpointer.close()
+        await provider_transport.shutdown()
+        await mcp_transport.shutdown()
+        shutdown_langfuse()
 
     app = FastAPI(title="Fatia Agent", version=__version__, lifespan=lifespan)
 
@@ -358,7 +417,12 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
                 "unreviewed_models": unreviewed_models(resolved),
             },
             # Em memória, uma pausa do chat não sobrevive a um restart (ADR 023).
-            "checkpointer": {"persistent": checkpointer.persistente},
+            # `reachable` é o `SELECT 1` de verdade: o healthcheck do compose lê
+            # o status, e o operador lê aqui se é o banco que está fora.
+            "checkpointer": {
+                "persistent": checkpointer.persistente,
+                "reachable": await checkpointer.ping(),
+            },
         }
 
     @app.get("/capabilities")
@@ -383,12 +447,16 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
     async def recognize_meal_route(
         payload: RecognizeMealRequest,
         x_fatia_agent_key: Annotated[str | None, Header()] = None,
-    ) -> RecognizedMeal:
-        """Foto de refeição → alimentos candidatos (#139).
+    ) -> dict[str, object]:
+        """Foto de refeição → alimentos candidatos (#139), e o que a chamada custou.
 
         **Não grava nada e não devolve refeição.** O que sai daqui é sugestão: a
         gravação continua sendo o caminho manual do `apps/api`, que é o que faz da
         tela de confirmação a única forma de registrar, e não uma disciplina.
+
+        Devolve `usage` como o `/title` e o `/transcribe`: é com ele que o
+        `apps/api` precifica a foto. Sem ele, cada foto entrava como custo não
+        medido, e a tolerância desses custos é da instância inteira.
 
         A imagem vive em memória e morre com a requisição — ADR 004.
         """
@@ -396,11 +464,12 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
 
         imagem = _decodificar_imagem(payload.image_base64, payload.media_type, "image_base64")
 
-        provider = build_provider(resolved)
+        provider = build_provider(resolved, transport=provider_transport)
         try:
-            return await recognize_meal(provider, imagem, media_type=payload.media_type)
+            medido = await recognize_meal(provider, imagem, media_type=payload.media_type)
         finally:
             await provider.aclose()
+        return {**medido.meal.model_dump(), "usage": _usage_body(medido.usage)}
 
     @app.post("/title")
     async def title_route(
@@ -414,22 +483,24 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
         comprometimento. A chave do agente continua exigida — é inferência paga.
         """
         _exigir_credencial(resolved, x_fatia_agent_key)
-        provider = build_provider(resolved)
+        provider = build_provider(resolved, transport=provider_transport)
         try:
             gerado = await gerar_titulo(provider, payload.text)
         finally:
             await provider.aclose()
         usage = gerado.usage
-        return {
-            "title": gerado.titulo,
-            "usage": None
-            if usage is None
-            else {
-                "model": usage.model,
-                **({"inputUnits": usage.input_units} if usage.input_units is not None else {}),
-                **({"outputUnits": usage.output_units} if usage.output_units is not None else {}),
+        record_generation(
+            resolved,
+            name="titulo",
+            model=usage.model if usage else resolved.ai_model_text,
+            input=payload.text,
+            output=gerado.titulo,
+            usage={
+                "input": usage.input_units if usage else None,
+                "output": usage.output_units if usage else None,
             },
-        }
+        )
+        return {"title": gerado.titulo, "usage": _usage_body(usage)}
 
     @app.post("/transcribe")
     async def transcribe_route(
@@ -458,11 +529,19 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
         if not audio:
             raise HTTPException(status_code=400, detail="O corpo veio sem áudio.")
 
-        provider = build_provider(resolved)
+        provider = build_provider(resolved, transport=provider_transport)
         try:
             transcricao = await provider.transcribe(audio, media_type=media_type)
         finally:
             await provider.aclose()
+        # O áudio não vai; o texto ditado, mascarado, sim — é o que a pessoa ia digitar.
+        record_generation(
+            resolved,
+            name="transcricao",
+            model=transcricao.model,
+            input={"media_type": media_type, "bytes": len(audio)},
+            output=transcricao.text,
+        )
         return {
             "text": transcricao.text,
             "usage": {
@@ -474,6 +553,18 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
                 ),
             },
         }
+
+    @app.post("/feedback")
+    async def feedback_route(
+        payload: FeedbackRequest,
+        x_fatia_agent_key: Annotated[str | None, Header()] = None,
+    ) -> dict[str, object]:
+        """O 👍/👎 de uma resposta vira score no trace do turno. Nunca falha por isso."""
+        _exigir_credencial(resolved, x_fatia_agent_key)
+        gravado = await record_feedback(
+            resolved, run_id=payload.run_id, review=payload.review, reasons=payload.reasons
+        )
+        return {"recorded": gravado}
 
     @app.post("/chat", response_model=None)
     async def chat_route(
@@ -512,15 +603,16 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
                 "(AI_MODEL_VISION), que também aceite tools."
             )
 
-        provider = build_provider(resolved)
-        client = build_mcp_client(resolved, bearer=bearer)
+        provider = build_provider(resolved, transport=provider_transport)
+        client = build_mcp_client(resolved, bearer=bearer, transport=mcp_transport)
 
         try:
             # O catálogo antes do stream: é a primeira chamada que exercita o
             # Bearer, e a única chance de um token inválido virar 401 de verdade.
             permitidas = todas_permitidas(await client.list_tools())
-            thread_id = thread_da_conversa(await _dono(client), str(payload.conversation_id))
-            compilado = await grafo()
+            owner_id = await _owner_id(client)
+            thread_id = thread_da_conversa(owner_id, str(payload.conversation_id))
+            compilado = await compiled_graph()
             if payload.resume is not None:
                 recusa = await _recusa_de_retomada(
                     compilado, thread_id, payload.resume.interrupt_id
@@ -534,14 +626,34 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             await provider.aclose()
             raise
 
+        run_id = uuid.uuid4().hex
+        trace = start_turn_trace(
+            resolved,
+            run_id=run_id,
+            user_id=owner_id,
+            conversation_id=str(payload.conversation_id),
+            kind="chat" if payload.message is not None else "resume",
+            message=payload.message,
+            persona_group_id=str(payload.persona.group_id) if payload.persona else None,
+            model=resolved.ai_model_vision if fotos else resolved.ai_model_text,
+        )
+        client.tool_tracer = trace.tool
         contexto = ContextoDoTurno(
-            provider=provider,
+            provider=provider
+            if trace is NOOP_TRACE
+            else TracedProvider(
+                provider,
+                trace,
+                model=resolved.ai_model_vision if fotos else resolved.ai_model_text,
+            ),
             client=client,
             permitidas=tuple(permitidas),
-            run_id=uuid.uuid4().hex,
+            run_id=run_id,
+            trace=trace,
             timezone=payload.timezone,
             historico=tuple(mensagem.model_dump() for mensagem in payload.history),
             memorias=tuple(memoria.model_dump() for memoria in payload.memories),
+            persona=payload.persona.para_o_prompt() if payload.persona is not None else None,
             planejar=resolved.agent_chat_planner,
             fotos=fotos,
         )
@@ -625,6 +737,21 @@ async def _ler_audio(request: Request) -> bytes:
     return bytes(lido)
 
 
+def _usage_body(usage: Usage | None) -> dict[str, object] | None:
+    """O `usage` das rotas auxiliares, no formato que o `apps/api` lê.
+
+    Unidade ausente fica fora do objeto, e não vira `0`: o `apps/api` trata
+    ausência como custo não medido, e zero como medida.
+    """
+    if usage is None:
+        return None
+    return {
+        "model": usage.model,
+        **({"inputUnits": usage.input_units} if usage.input_units is not None else {}),
+        **({"outputUnits": usage.output_units} if usage.output_units is not None else {}),
+    }
+
+
 def _exigir_credencial(settings: AgentSettings, oferecida: str | None) -> None:
     """401 quando a rota de inferência exige segredo e ele não veio (ou veio errado)."""
     motivo = agent_auth_unavailable_reason(settings)
@@ -650,14 +777,14 @@ def _exigir_credencial(settings: AgentSettings, oferecida: str | None) -> None:
         )
 
 
-async def _dono(client: McpClient) -> str:
+async def _owner_id(client: McpClient) -> str:
     """O id de quem está conversando, segundo o próprio `/mcp`.
 
     Pelo token, e não pelo corpo: é o `/mcp` que valida o Bearer, e ele devolve
     o usuário que o token representa. Um `userId` no corpo seria a thread de
     outra pessoa a um campo adulterado de distância (ADR 023).
     """
-    resultado = await client.call_tool("get_me", {})
+    resultado = await client.call_tool("get_me", {}, read_only=True)
     try:
         perfil: object = json.loads(resultado.text)
     except ValueError:

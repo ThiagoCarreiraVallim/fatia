@@ -6,7 +6,7 @@ import { WaterLogService } from './water-log.service';
 import { StreakService } from './streak.service';
 import { AchievementService, type AchievementEntry } from './achievement.service';
 import { TrainingBlockService } from '../workout/training-block.service';
-import { addDaysIso, dayBoundsInTz, todayInTz, weekStartInTz } from './helpers/date-tz';
+import { addDaysIso, dateInTz, dayBoundsInTz, todayInTz, weekStartInTz } from './helpers/date-tz';
 import { ITENS_EM_ORDEM } from '../nutrition/itens-em-ordem';
 
 interface UserCtx {
@@ -42,6 +42,7 @@ export class DashboardService {
       waterToday,
       streak,
       activeBlock,
+      plans,
     ] = await Promise.all([
       this.prisma.meal.findMany({
         // `lt`, não `lte`: o `end` do `dayBoundsInTz` é a meia-noite do dia SEGUINTE, então
@@ -71,7 +72,28 @@ export class DashboardService {
       // ativo — ou com um bloco já vencido, que o `getActive` devolve como `null` —
       // o campo continua nulo e o card volta a dizer "treino livre".
       this.trainingBlocks.getActive(ctx),
+      // Rotação para quem tem planos mas não tem bloco: só a última sessão
+      // concluída de cada plano, para saber qual foi treinado por último.
+      this.prisma.workoutPlan.findMany({
+        where: { userId: ctx.userId },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          sessions: {
+            where: { completedAt: { not: null } },
+            orderBy: { completedAt: 'desc' },
+            take: 1,
+            select: { completedAt: true },
+          },
+        },
+      }),
     ]);
+
+    const plannedToday =
+      activeBlock?.planId && activeBlock.planName
+        ? { planId: activeBlock.planId, name: activeBlock.planName }
+        : null;
 
     const consumed = meals
       .flatMap((m) => m.items)
@@ -124,10 +146,13 @@ export class DashboardService {
         // Bloco sem plano (`planId` nulo) periodiza treino livre: não há nome de
         // plano para prometer, e prometer o do bloco levaria a pessoa a procurar
         // uma tela que não existe.
-        plannedToday:
-          activeBlock?.planId && activeBlock.planName
-            ? { planId: activeBlock.planId, name: activeBlock.planName }
-            : null,
+        plannedToday,
+        // O que o card de "próximo treino" oferece: o plano do bloco, ou, sem
+        // bloco, o seguinte ao último plano treinado. `plannedToday` continua
+        // sendo só o do bloco, porque é o que ele promete.
+        nextPlan: plannedToday
+          ? { ...plannedToday, source: 'BLOCK' as const }
+          : nextInRotation(plans),
         sessionInProgress,
         completedToday: !!completedSession,
       },
@@ -158,19 +183,20 @@ export class DashboardService {
     const today = todayInTz(ctx.timezone);
     const weekStart = weekStartInTz(new Date(`${today}T12:00:00Z`), ctx.timezone);
     const weekEnd = addDaysIso(weekStart, 6);
-    const startDate = new Date(`${weekStart}T00:00:00Z`);
-    const endDate = new Date(`${weekEnd}T23:59:59Z`);
+    // Semana e dias no fuso da pessoa, com `lt` na meia-noite seguinte como em `today`.
+    const startDate = dayBoundsInTz(weekStart, ctx.timezone).start;
+    const endDate = dayBoundsInTz(weekEnd, ctx.timezone).end;
 
     const [meals, goals, sessions, weightLogs] = await Promise.all([
       this.prisma.meal.findMany({
-        where: { userId: ctx.userId, eatenAt: { gte: startDate, lte: endDate } },
+        where: { userId: ctx.userId, eatenAt: { gte: startDate, lt: endDate } },
         include: ITENS_EM_ORDEM,
       }),
       this.prisma.userGoals.findUnique({ where: { userId: ctx.userId } }),
       this.prisma.workoutSession.findMany({
         where: {
           userId: ctx.userId,
-          completedAt: { gte: startDate, lte: endDate },
+          completedAt: { gte: startDate, lt: endDate },
         },
         include: {
           plan: { select: { name: true } },
@@ -178,14 +204,14 @@ export class DashboardService {
         },
       }),
       this.prisma.weightLog.findMany({
-        where: { userId: ctx.userId, loggedAt: { gte: startDate, lte: endDate } },
+        where: { userId: ctx.userId, loggedAt: { gte: startDate, lt: endDate } },
         orderBy: { loggedAt: 'asc' },
       }),
     ]);
 
     const byDate = new Map<string, { kcal: number; proteinG: number }>();
     for (const m of meals) {
-      const date = m.eatenAt.toISOString().slice(0, 10);
+      const date = dateInTz(m.eatenAt, ctx.timezone);
       const cur = byDate.get(date) ?? { kcal: 0, proteinG: 0 };
       for (const i of m.items) {
         cur.kcal += i.kcal;
@@ -205,7 +231,7 @@ export class DashboardService {
         .filter((set) => set.weightKg && set.reps && set.exercise.muscleGroup !== 'cardio')
         .reduce((a, set) => a + (set.weightKg ?? 0) * (set.reps ?? 0), 0);
       return {
-        date: s.startedAt.toISOString().slice(0, 10),
+        date: dateInTz(s.startedAt, ctx.timezone),
         planName: s.plan?.name ?? null,
         volumeKg,
       };
@@ -255,4 +281,31 @@ export class DashboardService {
       weight: { startKg, currentKg, deltaKg },
     };
   }
+}
+
+type PlanWithLastSession = {
+  id: string;
+  name: string;
+  sessions: Array<{ completedAt: Date | null }>;
+};
+
+/**
+ * O plano seguinte ao último treinado, em ordem de criação, voltando ao
+ * primeiro depois do último. Quem ainda não treinou nenhum começa pelo primeiro.
+ */
+export function nextInRotation(
+  plans: PlanWithLastSession[],
+): { planId: string; name: string; source: 'ROTATION' } | null {
+  if (plans.length === 0) return null;
+  let lastIdx = -1;
+  let lastAt = 0;
+  plans.forEach((plan, idx) => {
+    const at = plan.sessions[0]?.completedAt?.getTime() ?? 0;
+    if (at > lastAt) {
+      lastAt = at;
+      lastIdx = idx;
+    }
+  });
+  const next = plans[(lastIdx + 1) % plans.length];
+  return { planId: next.id, name: next.name, source: 'ROTATION' };
 }

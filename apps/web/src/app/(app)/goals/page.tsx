@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { goalsApi, type Goal, type GoalKind } from '@fatia/api-client';
 import { NewGoalDrawer } from '@/components/goals/new-goal-drawer';
+import { Skeleton } from '@/components/ui/skeleton';
+import { TopBarActions, topBarActionClass } from '@/components/layout/app-top-bar';
 
 const KIND_ICON: Record<GoalKind, LucideIcon> = {
   weight: Scale,
@@ -44,7 +46,7 @@ function MainGoalCard({ goal }: { goal: Goal }) {
   const offset = circ - (pct / 100) * circ;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-card p-5">
+    <div className="relative overflow-hidden rounded-2xl border border-subtle bg-card p-5">
       <div className="absolute inset-y-0 right-0 w-32 bg-gradient-to-l from-primary/10 to-transparent" />
 
       <span className="relative inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-[11px] font-bold text-foreground">
@@ -137,7 +139,7 @@ function SecondaryGoalCard({
   const badge = daysLeft !== null ? `${daysLeft}D` : goal.kind.toUpperCase();
 
   return (
-    <div className="rounded-2xl border border-white/5 bg-card p-4">
+    <div className="rounded-2xl border border-subtle bg-card p-4">
       <div className="flex items-start justify-between">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
           <Icon size={18} className="text-primary" />
@@ -179,7 +181,7 @@ function SecondaryGoalCard({
           type="button"
           onClick={onDelete}
           aria-label="Remover meta"
-          className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+          className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted text-muted-foreground hover:bg-danger/15 hover:text-danger alvo-toque"
         >
           <Trash2 size={12} />
         </button>
@@ -245,29 +247,24 @@ export default function GoalsPage() {
 
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
-      <header>
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-extrabold text-foreground">Metas</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Acompanhe seus objetivos ativos.</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setDrawerOpen(true)}
-            className="flex items-center gap-1.5 rounded-xl bg-primary px-4 py-3 text-[11px] font-extrabold text-primary-foreground"
-          >
-            <Plus size={14} strokeWidth={3} />
-            NOVA META
-          </button>
-        </div>
-      </header>
+      <TopBarActions>
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(true)}
+          aria-label="Nova meta"
+          className={topBarActionClass}
+        >
+          <Plus size={22} />
+        </button>
+      </TopBarActions>
+      <p className="text-sm text-muted-foreground">Acompanhe seus objetivos ativos.</p>
 
       {allGoals.isLoading && (
         <>
-          <div className="h-[280px] animate-pulse rounded-2xl bg-card" />
+          <Skeleton className="h-[280px] rounded-2xl bg-card" />
           <div className="grid grid-cols-1 gap-3">
-            <div className="h-[160px] animate-pulse rounded-2xl bg-card" />
-            <div className="h-[160px] animate-pulse rounded-2xl bg-card" />
+            <Skeleton className="h-[160px] rounded-2xl bg-card" />
+            <Skeleton className="h-[160px] rounded-2xl bg-card" />
           </div>
         </>
       )}
@@ -298,7 +295,7 @@ export default function GoalsPage() {
       )}
 
       {recents.length > 0 && (
-        <section className="rounded-2xl border border-white/5 bg-card p-4">
+        <section className="rounded-2xl border border-subtle bg-card p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-bold text-foreground">Metas Recentes</h3>
           </div>
@@ -312,7 +309,7 @@ export default function GoalsPage() {
 
       <Link
         href="/profile"
-        className="flex items-center justify-between rounded-xl border border-white/5 bg-card/50 px-4 py-3 text-sm text-muted-foreground hover:text-foreground"
+        className="flex items-center justify-between rounded-xl border border-subtle bg-card/50 px-4 py-3 text-sm text-muted-foreground hover:text-foreground"
       >
         Voltar ao perfil
         <ChevronRight size={16} />

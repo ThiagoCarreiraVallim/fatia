@@ -1,6 +1,10 @@
 /**
  * Inadimplência **degrada**, nunca bloqueia (#158).
  *
+ * Escrita para o grupo patrocinador e reusada pelo plano PRO da pessoa
+ * (`ai-entitlement.ts`, ADR 024): lá também o atraso só tira a IA hospedada,
+ * depois da carência — o app e o MCP continuam inteiros no Free.
+ *
  * Função pura, e é o ponto: a degradação é uma **leitura**, não um efeito
  * colateral. Nada é desligado, nada é apagado, nenhuma tela do aluno muda de
  * texto. A única diferença entre uma academia em dia e uma devendo é o nível de

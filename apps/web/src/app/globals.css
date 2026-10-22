@@ -33,6 +33,18 @@
     --input: 0 0% 20%;
     --ring: 108 100% 45%;
 
+    /* Cores de estado e de dado (Fase 3). Texto de erro usa --danger, legível no
+       escuro; --destructive continua só como fundo de botão perigoso. */
+    --danger: 351 95% 71%; /* #fb7185 */
+    --success: 160 84% 39%; /* #10b981 */
+    --warning: 43 96% 56%; /* #fbbf24 */
+    --protein: 218 100% 65%; /* #4b8eff */
+    --carbs: 108 100% 45%; /* #2ce500 */
+    --fat: 6 100% 84%; /* #ffb4ab */
+    --water: 213 94% 68%; /* #60a5fa */
+    /* Borda de cartão: branco translúcido, para clarear o card e o fundo por igual. */
+    --border-subtle: 0 0% 100% / 0.05;
+
     --radius: 0.75rem; /* 12px (Figma cards) */
   }
 
@@ -49,6 +61,29 @@
 
   html {
     color-scheme: dark;
+  }
+
+  /* Foco visível em todo controle, inclusive os que não são `Button`: o anel
+     do Tailwind (`ring`) só existe onde alguém o pôs na classe. */
+  a:focus-visible,
+  button:focus-visible,
+  [role='button']:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  /* Botão cru menor que 44 px: área de toque invisível em volta, sem mudar o
+     desenho. O elemento precisa ser `relative` (a utilidade já põe). */
+  .alvo-toque {
+    position: relative;
+  }
+  .alvo-toque::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
   }
 }
 

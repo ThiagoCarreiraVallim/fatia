@@ -62,11 +62,11 @@ export function StreakCard({ streak, achievements }: Props) {
                 key={a.key}
                 title={a.description}
                 className={`flex items-center gap-1 rounded-full border px-2 py-1 text-xs ${
-                  aberta ? 'border-amber-500/40 text-foreground' : 'text-muted-foreground'
+                  aberta ? 'border-warning/40 text-foreground' : 'text-muted-foreground'
                 }`}
               >
                 {aberta ? (
-                  <Trophy size={12} className="text-amber-500" aria-hidden />
+                  <Trophy size={12} className="text-warning" aria-hidden />
                 ) : (
                   <Lock size={12} aria-hidden />
                 )}

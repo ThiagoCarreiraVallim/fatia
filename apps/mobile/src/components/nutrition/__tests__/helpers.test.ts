@@ -140,8 +140,22 @@ describe('totalKcal e resumoDoItem', () => {
 
   it('monta o resumo do item com macros arredondados', () => {
     expect(resumoDoItem({ grams: 120, kcal: 209.7, proteinG: 8.4, carbsG: 20.2, fatG: 2.6 })).toBe(
-      '120g · 210 kcal · P8 C20 G3',
+      '120 g · 210 kcal · P8 C20 G3',
     );
+  });
+
+  it('item em medida caseira aparece como foi dito, com as gramas (igual ao PWA)', () => {
+    expect(
+      resumoDoItem({
+        grams: 50,
+        portionLabel: 'colher de sopa',
+        portionQuantity: 2,
+        kcal: 64,
+        proteinG: 1.3,
+        carbsG: 14,
+        fatG: 0.1,
+      }),
+    ).toBe('2 × colher de sopa (50 g) · 64 kcal · P1 C14 G0');
   });
 });
 

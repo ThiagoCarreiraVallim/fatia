@@ -15,5 +15,8 @@ export default defineConfig({
     css: false,
     clearMocks: true,
     restoreMocks: true,
+    // Os testes que formatam hora (artefatos e cota do chat) esperam o fuso do CI. Sem isto,
+    // numa máquina em -04 eles mostram 11:00 onde o teste espera 15:00.
+    env: { TZ: 'UTC' },
   },
 });

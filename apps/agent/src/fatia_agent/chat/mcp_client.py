@@ -32,14 +32,16 @@ método e status, nunca o header — é a mesma lição da #214, do lado Python.
 """
 
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
 
 from ..settings import AgentSettings, mcp_unavailable_reason
+from ..tracing import ToolTrace
 from .errors import (
+    McpError,
     McpNotConfigured,
     McpRefused,
     McpResponseUnparseable,
@@ -102,6 +104,8 @@ class McpClient:
         )
         self._url = base_url
         self._proximo_id = 0
+        # Abre o span de cada tool no Langfuse (ADR 034). `None` fora do chat.
+        self.tool_tracer: Callable[[str], ToolTrace] | None = None
 
     async def aclose(self) -> None:
         await self._client.aclose()
@@ -126,7 +130,7 @@ class McpClient:
         # mesmo cursor. 20 páginas é muito mais do que o catálogo inteiro cabe.
         for _ in range(20):
             params: dict[str, Any] = {"cursor": cursor} if cursor else {}
-            resultado = await self._rpc("tools/list", params)
+            resultado = await self._rpc("tools/list", params, read_only=True)
             tools.extend(_tools_do_resultado(resultado))
             proximo = resultado.get("nextCursor")
             if not isinstance(proximo, str) or not proximo:
@@ -134,7 +138,9 @@ class McpClient:
             cursor = proximo
         raise McpResponseUnparseable("'tools/list' não parou de paginar depois de 20 páginas.")
 
-    async def call_tool(self, name: str, arguments: dict[str, Any]) -> "McpToolResult":
+    async def call_tool(
+        self, name: str, arguments: dict[str, Any], *, read_only: bool = False
+    ) -> "McpToolResult":
         """Executa a tool e devolve o texto que ela produziu.
 
         Erro **de execução** da tool volta como `isError: true` com texto, e não
@@ -142,15 +148,35 @@ class McpClient:
         `mcp-tool.registry.ts`), e o modelo precisa poder ler a categoria e se
         corrigir. Exceção aqui é falha de transporte ou de protocolo.
         """
-        resultado = await self._rpc("tools/call", {"name": name, "arguments": arguments})
+        trace = self.tool_tracer(name) if self.tool_tracer is not None else None
+        try:
+            resultado = await self._rpc(
+                "tools/call", {"name": name, "arguments": arguments}, read_only=read_only
+            )
+        except McpError as exc:
+            if trace is not None:
+                trace.fail(exc.code)
+            raise
         estruturado = resultado.get("structuredContent")
-        return McpToolResult(
+        saida = McpToolResult(
             text=_texto_do_conteudo(resultado),
             is_error=_e_erro(resultado),
             structured=estruturado if isinstance(estruturado, dict) else None,
         )
+        if trace is not None:
+            trace.end(is_error=saida.is_error, result_chars=len(saida.text))
+        return saida
 
-    async def _rpc(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+    async def _rpc(
+        self, method: str, params: dict[str, Any], *, read_only: bool = False
+    ) -> dict[str, Any]:
+        """Uma chamada JSON-RPC.
+
+        `read_only` repete **uma vez** a falha de transporte (conexão que caiu
+        no meio). Só leitura: repetir um `tools/call` de escrita poderia gravar
+        duas vezes uma refeição cuja primeira gravação chegou e só a resposta se
+        perdeu.
+        """
         self._proximo_id += 1
         corpo = {
             "jsonrpc": "2.0",
@@ -160,7 +186,12 @@ class McpClient:
         }
 
         try:
-            response = await self._client.post(self._url, json=corpo)
+            try:
+                response = await self._client.post(self._url, json=corpo)
+            except httpx.TransportError:
+                if not read_only:
+                    raise
+                response = await self._client.post(self._url, json=corpo)
         except httpx.TimeoutException as exc:
             raise McpTimeout(
                 f"O /mcp não respondeu '{method}' dentro de MCP_TIMEOUT_S ({exc})."

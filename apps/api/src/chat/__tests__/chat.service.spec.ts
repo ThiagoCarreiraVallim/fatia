@@ -1,17 +1,18 @@
-import { BadRequestException, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Logger, NotFoundException } from '@nestjs/common';
 import { MessageRole } from '@prisma/client';
 import { AiQuotaExceededException } from '../../ai/ai-quota';
+import { AiAccessService } from '../../ai/ai-access.service';
 import type { AiUsageService } from '../../ai/ai-usage.service';
+import { AgentStreamError, type AgentStream, type TurnInput } from '../../ai/agent.adapter';
+import { HostedAiService } from '../../ai/hosted-ai.service';
+import { FakeAgentAdapter } from '../../ai/__tests__/fake-agent.adapter';
+import { INSTANCIA_LIBERADA } from '../../billing/ai-entitlement';
 import type { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
-import {
-  ErroDeStreamDoAgente,
-  type AgentChatClient,
-  type EntradaDoTurno,
-  type StreamDoAgente,
-  type TituloDoAgente,
-} from '../agent-chat.client';
+import { ChatRunRegistry } from '../chat-run.registry';
+import type { NotificationService, Notice } from '../../notifications/notification.service';
 import { ChatService, type DestinoDoStream } from '../chat.service';
 import type { MemoryService } from '../memory/memory.service';
+import type { GroupAgentService } from '../../sharing/group-agent.service';
 import type {
   ConversationService,
   MensagemDoHistorico,
@@ -100,12 +101,12 @@ function canalDoAgente() {
       else aguardando.push(resolve);
     });
 
-  const stream: StreamDoAgente = {
-    cancelar: () => {
+  const stream: AgentStream = {
+    cancel: () => {
       cancelado = true;
       entregar(null);
     },
-    async *pedacos() {
+    async *chunks() {
       for (;;) {
         const valor = await proximo();
         if (valor === null) return;
@@ -144,33 +145,46 @@ function destinoDeTeste() {
 
 function montar(
   opcoes: {
-    stream?: StreamDoAgente;
+    stream?: AgentStream;
     historico?: MensagemDoHistorico[];
     /** `false` = a conversa ainda não existe (primeira mensagem). */
     existente?: boolean;
     memorias?: { id: string; content: string }[];
     /** Segura o `abrir` até resolver — a janela em que o agente ainda pensa. */
     atrasarAbertura?: Promise<void>;
+    /** O agente gravado na conversa que já existe. */
+    agentGroupId?: string | null;
+    /** As comunidades com agente que esta pessoa pode escolher, e o padrão. */
+    agentes?: { padrao: string | null; disponiveis: string[] };
   } = {},
 ) {
   const canal = canalDoAgente();
   const stream = opcoes.stream ?? canal.stream;
-  const chamadas: EntradaDoTurno[] = [];
+  const chamadas: TurnInput[] = [];
 
   const conversas = {
     encontrar: jest.fn(async (_userId: string, id: string) =>
       opcoes.existente === false
         ? null
-        : { id, userId: 'user-a', title: 't', createdAt: new Date(0), updatedAt: new Date(0) },
+        : {
+            id,
+            userId: 'user-a',
+            title: 't',
+            agentGroupId: opcoes.agentGroupId ?? null,
+            createdAt: new Date(0),
+            updatedAt: new Date(0),
+          },
     ),
     historicoParaOAgente: jest.fn(
       async (_userId: string, _id: string): Promise<MensagemDoHistorico[]> =>
         opcoes.historico ?? [],
     ),
     clearPauses: jest.fn(async (_userId: string, _id: string): Promise<void> => undefined),
-    iniciarTurno: jest.fn(async (_userId: string, id: string, _texto: string) => ({
-      conversationId: id,
-    })),
+    iniciarTurno: jest.fn(
+      async (_u: string, id: string, _t: string, _f?: number, _a?: string | null) => ({
+        conversationId: id,
+      }),
+    ),
     titularSeProvisorio: jest.fn(
       async (_u: string, _c: string, _p: string, _t: string): Promise<void> => undefined,
     ),
@@ -183,21 +197,25 @@ function montar(
     ),
   } satisfies Partial<ConversationService>;
 
-  const agent = {
-    abrir: jest.fn(async (entrada: EntradaDoTurno): Promise<StreamDoAgente> => {
-      chamadas.push(entrada);
-      if (opcoes.atrasarAbertura) await opcoes.atrasarAbertura;
-      return stream;
-    }),
-    titular: jest.fn(async (_texto: string): Promise<TituloDoAgente | null> => null),
-  } satisfies Partial<AgentChatClient>;
+  const agent = new FakeAgentAdapter();
+  agent.openTurn.mockImplementation(async (entrada: TurnInput): Promise<AgentStream> => {
+    chamadas.push(entrada);
+    if (opcoes.atrasarAbertura) await opcoes.atrasarAbertura;
+    return stream;
+  });
 
   const uso = {
     assertDentroDaCota: jest.fn(async (_userId: string): Promise<void> => undefined),
-    registrar: jest.fn(
+    record: jest.fn(
       async (
         _userId: string,
-        _entrada: { feature: string; model: string | null; units: Record<string, unknown> },
+        _entrada: {
+          feature: string;
+          model: string | null;
+          units: Record<string, unknown>;
+          paidBy: string;
+          groupId: string | null;
+        },
       ): Promise<void> => undefined,
     ),
   } satisfies Partial<AiUsageService>;
@@ -208,14 +226,57 @@ function montar(
     ),
   } satisfies Partial<MemoryService>;
 
-  const service = new ChatService(
-    conversas as unknown as ConversationService,
-    agent as unknown as AgentChatClient,
+  // O portão real (plano antes de cota) com a instância liberada: os testes
+  // daqui são do repasse; o 402 do Free está no `chat.http.spec.ts`.
+  const acesso = new AiAccessService(
+    { aiTierForUser: async () => INSTANCIA_LIBERADA, exigePlano: () => false },
     uso as unknown as AiUsageService,
-    memorias as unknown as MemoryService,
   );
 
-  return { service, conversas, agent, uso, canal, chamadasAoAgente: chamadas };
+  const disponiveis = opcoes.agentes?.disponiveis ?? [];
+  const persona = (groupId: string) => ({
+    groupId,
+    name: `Agente ${groupId}`,
+    community: `Comunidade ${groupId}`,
+    instructions: 'Fale de treino.',
+  });
+  const agentes = {
+    listForChat: jest.fn(async (_userId: string, _seat: string | null) => ({
+      defaultGroupId: opcoes.agentes?.padrao ?? null,
+      agents: [],
+    })),
+    assertSelectable: jest.fn(async (_userId: string, groupId: string) => {
+      if (!disponiveis.includes(groupId)) throw new NotFoundException('Agente não encontrado');
+    }),
+    personaFor: jest.fn(async (_userId: string, groupId: string | null) =>
+      groupId && disponiveis.includes(groupId) ? persona(groupId) : null,
+    ),
+  } satisfies Partial<GroupAgentService>;
+
+  const runs = new ChatRunRegistry();
+  const avisos = { notify: jest.fn((_ids: readonly string[], _notice: Notice) => undefined) };
+  const hostedAi = new HostedAiService(acesso, uso as unknown as AiUsageService, agent);
+  const service = new ChatService(
+    conversas as unknown as ConversationService,
+    hostedAi,
+    memorias as unknown as MemoryService,
+    acesso,
+    agentes as unknown as GroupAgentService,
+    runs,
+    avisos as unknown as NotificationService,
+  );
+
+  return {
+    service,
+    conversas,
+    agent,
+    uso,
+    canal,
+    agentes,
+    runs,
+    avisos,
+    chamadasAoAgente: chamadas,
+  };
 }
 
 beforeEach(() => {
@@ -276,24 +337,136 @@ describe('ChatService — repasse do SSE', () => {
     await turno;
 
     // Depois do `done` do agente: é o último quadro, e o voto da tela depende dele.
-    expect(saida.escritos.at(-1)).toBe(
-      quadro('persisted', { messageId: 'ai-1', assistantMessageId: 'linha-1' }),
-    );
+    expect(saida.escritos.at(-1)).toMatch(/^id: \d+\n/);
+    expect(
+      saida.escritos
+        .at(-1)
+        ?.endsWith(quadro('persisted', { messageId: 'ai-1', assistantMessageId: 'linha-1' })),
+    ).toBe(true);
   });
 
-  it('corta o upstream quando o cliente vai embora', async () => {
-    const { service, canal } = montar();
+  it('o cliente ir embora NÃO corta o turno: a resposta termina e é gravada (ADR 035)', async () => {
+    const { service, canal, conversas } = montar();
     const saida = destinoDeTeste();
 
     const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
     await respirar();
+    canal.emitir(fragmento('ai-1', 'Você comeu '));
+    await respirar();
     saida.simularClienteSaindo();
+    canal.emitir(fragmento('ai-1', 'arroz.'));
+    canal.emitir(fim('completed'));
+    canal.encerrar();
+    await turno;
+
+    expect(canal.foiCancelado()).toBe(false);
+    const [, , resposta] = conversas.completeTurn.mock.calls[0];
+    expect(resposta.status).toBe('completed');
+    expect(resposta.texto).toBe('Você comeu arroz.');
+    // Quem saiu não recebe mais nada depois de sair.
+    expect(saida.tudo()).not.toContain('arroz.');
+  });
+
+  it('quem volta pelo `live` recebe o que perdeu, a partir do último número que tinha', async () => {
+    const { service, canal, runs } = montar();
+    const primeira = destinoDeTeste();
+
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', primeira.destino);
+    await respirar();
+    canal.emitir(fragmento('ai-1', 'Você comeu '));
+    await respirar();
+    const ultimo = Number(/id: (\d+)/.exec(primeira.tudo())?.[1]);
+    primeira.simularClienteSaindo();
+    canal.emitir(fragmento('ai-1', 'arroz.'));
+    await respirar();
+
+    const recebidos: string[] = [];
+    runs.find(USUARIO.id, CONVERSA)!.subscribe(ultimo, {
+      write: (t) => recebidos.push(t),
+      end: () => recebidos.push('<fim>'),
+    });
+    expect(recebidos.join('')).toContain('"arroz."');
+    expect(recebidos.join('')).not.toContain('"Você comeu "');
+
+    canal.emitir(fim('completed'));
+    canal.encerrar();
+    await turno;
+    expect(recebidos.at(-1)).toBe('<fim>');
+    expect(recebidos.join('')).toContain('event: persisted');
+  });
+
+  it('quem saiu antes do fim recebe o aviso de resposta pronta, sem nada da conversa', async () => {
+    const { service, canal, avisos } = montar();
+    const saida = destinoDeTeste();
+
+    const turno = service.converse(USUARIO, turnoNovo('quanto pesei?'), 'tok', saida.destino);
+    await respirar();
+    saida.simularClienteSaindo();
+    canal.emitir(fragmento('ai-1', 'Você pesou 82 kg.'));
+    canal.emitir(fim('completed'));
+    canal.encerrar();
+    await turno;
+
+    expect(avisos.notify).toHaveBeenCalledTimes(1);
+    const [ids, aviso] = avisos.notify.mock.calls[0];
+    expect(ids).toEqual([USUARIO.id]);
+    expect(aviso).toEqual({
+      kind: 'CHAT',
+      title: 'Fatia',
+      body: 'Sua resposta está pronta.',
+      url: `/chat/${CONVERSA}`,
+    });
+    expect(JSON.stringify(aviso)).not.toMatch(/82|pesei/);
+  });
+
+  it('quem ficou até o fim, ou parou, ou viu dar erro, não recebe aviso', async () => {
+    const ficou = montar();
+    const turno = ficou.service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    await respirar();
+    ficou.canal.emitir(fim('completed'));
+    ficou.canal.encerrar();
+    await turno;
+    expect(ficou.avisos.notify).not.toHaveBeenCalled();
+
+    const parou = montar();
+    const saida = destinoDeTeste();
+    const t2 = parou.service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
+    await respirar();
+    saida.simularClienteSaindo();
+    parou.service.stop(USUARIO.id, CONVERSA);
+    await t2;
+    expect(parou.avisos.notify).not.toHaveBeenCalled();
+
+    const erro = montar();
+    const saida3 = destinoDeTeste();
+    const t3 = erro.service.converse(USUARIO, turnoNovo('oi'), 'tok', saida3.destino);
+    await respirar();
+    saida3.simularClienteSaindo();
+    erro.canal.emitir(fim('error'));
+    erro.canal.encerrar();
+    await t3;
+    expect(erro.avisos.notify).not.toHaveBeenCalled();
+  });
+
+  it('parar corta o upstream, grava `stopped` e fecha o fio com done stopped', async () => {
+    const { service, canal, conversas } = montar();
+    const saida = destinoDeTeste();
+
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
+    await respirar();
+    canal.emitir(fragmento('ai-1', 'Você comeu '));
+    await respirar();
+    expect(service.stop(USUARIO.id, CONVERSA)).toBe(true);
     await turno;
 
     expect(canal.foiCancelado()).toBe(true);
+    const [, , resposta] = conversas.completeTurn.mock.calls[0];
+    expect(resposta.status).toBe('stopped');
+    expect(resposta.texto).toBe('Você comeu ');
+    expect(saida.tudo()).toContain(fim('stopped'));
   });
 
-  it('corta o upstream quando o cliente vai embora ANTES de o agente responder', async () => {
+  it('parar ANTES de o agente responder corta assim que ele abre', async () => {
     const canal = canalDoAgente();
     let aceitarOTurno!: () => void;
     const abriu = new Promise<void>((resolve) => {
@@ -305,19 +478,35 @@ describe('ChatService — repasse do SSE', () => {
     const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
     await respirar();
 
-    // Aba fechada com o `abrir` ainda pendurado. `res.on('close')` NÃO reentrega
-    // um evento já emitido: registrar o callback só depois do `await abrir`
-    // deixava esta janela inteira sem cancelamento nenhum.
-    saida.simularClienteSaindo();
+    service.stop(USUARIO.id, CONVERSA);
     aceitarOTurno();
-    await respirar();
-    await respirar();
-
-    const cancelou = canal.foiCancelado();
-    canal.encerrar();
     await turno;
 
-    expect(cancelou).toBe(true);
+    expect(canal.foiCancelado()).toBe(true);
+  });
+
+  it('segundo turno na mesma conversa enquanto a primeira responde é 409, sem chamar o agente', async () => {
+    const { service, canal, agent } = montar();
+
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    await respirar();
+    await expect(
+      service.converse(USUARIO, turnoNovo('de novo'), 'tok', destinoDeTeste().destino),
+    ).rejects.toThrow(ConflictException);
+    expect(agent.openTurn).toHaveBeenCalledTimes(1);
+
+    canal.encerrar();
+    await turno;
+  });
+
+  it('falha antes do primeiro byte libera a conversa para a próxima tentativa', async () => {
+    const { service, agent, runs } = montar();
+    agent.openTurn.mockRejectedValueOnce(new Error('fora do ar'));
+
+    await expect(
+      service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino),
+    ).rejects.toThrow('fora do ar');
+    expect(runs.find(USUARIO.id, CONVERSA)).toBeNull();
   });
 });
 
@@ -332,7 +521,7 @@ describe('ChatService — ordem das guardas', () => {
     );
 
     // Recusar depois de gastar seria recusar tarde: o dinheiro já teria saído.
-    expect(agent.abrir).not.toHaveBeenCalled();
+    expect(agent.openTurn).not.toHaveBeenCalled();
     expect(uso.assertDentroDaCota).not.toHaveBeenCalled();
     // A recusa chega como 404 de verdade, não como um 200 com erro dentro.
     expect(saida.escritos).toEqual([]);
@@ -350,7 +539,7 @@ describe('ChatService — ordem das guardas', () => {
         saida.destino,
       ),
     ).rejects.toThrow(NotFoundException);
-    expect(agent.abrir).not.toHaveBeenCalled();
+    expect(agent.openTurn).not.toHaveBeenCalled();
   });
 
   it('mensagem e retomada juntas é 400', async () => {
@@ -363,7 +552,7 @@ describe('ChatService — ordem das guardas', () => {
         destinoDeTeste().destino,
       ),
     ).rejects.toThrow(BadRequestException);
-    expect(agent.abrir).not.toHaveBeenCalled();
+    expect(agent.openTurn).not.toHaveBeenCalled();
   });
 
   it('cota estourada recusa antes de chamar o agente', async () => {
@@ -383,14 +572,14 @@ describe('ChatService — ordem das guardas', () => {
       AiQuotaExceededException,
     );
 
-    expect(agent.abrir).not.toHaveBeenCalled();
+    expect(agent.openTurn).not.toHaveBeenCalled();
     expect(conversas.iniciarTurno).not.toHaveBeenCalled();
     expect(saida.escritos).toEqual([]);
   });
 
   it('agente fora do ar não deixa a pergunta órfã no histórico', async () => {
     const { service, agent, conversas } = montar();
-    agent.abrir.mockRejectedValueOnce(new Error('conexão recusada'));
+    agent.openTurn.mockRejectedValueOnce(new Error('conexão recusada'));
 
     await expect(
       service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino),
@@ -420,9 +609,9 @@ describe('ChatService — ordem das guardas', () => {
       bearer: 'token-do-usuario',
       timezone: 'America/Sao_Paulo',
       conversationId: CONVERSA,
-      mensagem: 'e agora?',
-      historico: [{ role: MessageRole.user, content: 'anterior' }],
-      memorias: [{ id: 'm1', content: 'É vegetariana.' }],
+      message: 'e agora?',
+      history: [{ role: MessageRole.user, content: 'anterior' }],
+      memories: [{ id: 'm1', content: 'É vegetariana.' }],
     });
   });
 
@@ -434,9 +623,9 @@ describe('ChatService — ordem das guardas', () => {
     canal.encerrar();
     await turno;
 
-    expect(chamadasAoAgente[0].historico).toEqual([]);
+    expect(chamadasAoAgente[0].history).toEqual([]);
     expect(conversas.historicoParaOAgente).not.toHaveBeenCalled();
-    expect(conversas.iniciarTurno).toHaveBeenCalledWith('user-a', CONVERSA, 'oi', 0);
+    expect(conversas.iniciarTurno).toHaveBeenCalledWith('user-a', CONVERSA, 'oi', 0, null);
   });
 
   it('a retomada vai ao agente sem mensagem e não grava fala da pessoa', async () => {
@@ -456,12 +645,79 @@ describe('ChatService — ordem das guardas', () => {
     await turno;
 
     expect(chamadasAoAgente[0]).toMatchObject({
-      retomada: { interruptId: 'p1', value: { approvals: { c0: true } } },
+      resume: { interruptId: 'p1', value: { approvals: { c0: true } } },
     });
-    expect(chamadasAoAgente[0].mensagem).toBeUndefined();
+    expect(chamadasAoAgente[0].message).toBeUndefined();
     expect(conversas.iniciarTurno).not.toHaveBeenCalled();
     // A pausa anterior está resolvida: o card não pode voltar depois de um F5.
     expect(conversas.clearPauses).toHaveBeenCalledWith('user-a', CONVERSA);
+  });
+});
+
+describe('ChatService — o agente da comunidade (Fase 7c)', () => {
+  const ACADEMIA = '7b0e1c2d-3a4b-4c5d-8e6f-112233445566';
+  const OUTRA = '0a9b8c7d-6e5f-4a3b-9c2d-665544332211';
+
+  async function turno(
+    m: ReturnType<typeof montar>,
+    dto: { conversationId: string; message: string; agentGroupId?: string | null },
+  ) {
+    const t = m.service.converse(USUARIO, dto, 'tok', destinoDeTeste().destino);
+    await respirar();
+    m.canal.encerrar();
+    await t;
+  }
+
+  it('conversa nova sem escolha vai com o agente da comunidade do assento, e grava a escolha', async () => {
+    const m = montar({ existente: false, agentes: { padrao: ACADEMIA, disponiveis: [ACADEMIA] } });
+    await turno(m, turnoNovo('oi'));
+
+    expect(m.chamadasAoAgente[0].persona).toEqual(
+      expect.objectContaining({ groupId: ACADEMIA, instructions: 'Fale de treino.' }),
+    );
+    expect(m.conversas.iniciarTurno).toHaveBeenCalledWith('user-a', CONVERSA, 'oi', 0, ACADEMIA);
+  });
+
+  it('null escolhe o assistente da Fatia mesmo com um padrão, e o turno vai sem persona', async () => {
+    const m = montar({ existente: false, agentes: { padrao: ACADEMIA, disponiveis: [ACADEMIA] } });
+    await turno(m, { ...turnoNovo('oi'), agentGroupId: null });
+
+    expect(m.chamadasAoAgente[0]).not.toHaveProperty('persona');
+    expect(m.conversas.iniciarTurno).toHaveBeenCalledWith('user-a', CONVERSA, 'oi', 0, null);
+  });
+
+  it('agente de comunidade em que a pessoa não está é 404, antes de abrir o agente e de gravar', async () => {
+    const m = montar({ existente: false, agentes: { padrao: null, disponiveis: [ACADEMIA] } });
+
+    await expect(
+      m.service.converse(
+        USUARIO,
+        { ...turnoNovo('oi'), agentGroupId: OUTRA },
+        'tok',
+        destinoDeTeste().destino,
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(m.agent.openTurn).not.toHaveBeenCalled();
+    expect(m.conversas.iniciarTurno).not.toHaveBeenCalled();
+  });
+
+  it('conversa que já existe segue com o agente gravado, e ignora outra escolha no corpo', async () => {
+    const m = montar({
+      agentGroupId: ACADEMIA,
+      agentes: { padrao: null, disponiveis: [ACADEMIA, OUTRA] },
+    });
+    await turno(m, { ...turnoNovo('e agora?'), agentGroupId: OUTRA });
+
+    expect(m.chamadasAoAgente[0].persona?.groupId).toBe(ACADEMIA);
+    expect(m.agentes.assertSelectable).not.toHaveBeenCalled();
+  });
+
+  it('quem saiu da comunidade (ou cujo dono desligou o agente) volta ao assistente da Fatia na mesma conversa', async () => {
+    const m = montar({ agentGroupId: ACADEMIA, agentes: { padrao: null, disponiveis: [] } });
+    await turno(m, turnoNovo('ainda está aí?'));
+
+    expect(m.agentes.personaFor).toHaveBeenCalledWith('user-a', ACADEMIA);
+    expect(m.chamadasAoAgente[0]).not.toHaveProperty('persona');
   });
 });
 
@@ -571,10 +827,10 @@ describe('ChatService — o que fica no banco', () => {
   it('grava o parcial e fecha com error + done quando o stream quebra no meio', async () => {
     const { service, conversas } = montar({
       stream: {
-        cancelar: () => undefined,
-        async *pedacos() {
+        cancel: () => undefined,
+        async *chunks() {
           yield enc(fragmento('ai-1', 'Você comeu'));
-          throw new ErroDeStreamDoAgente('AGENT_STREAM_INTERRUPTED', 'Interrompida.');
+          throw new AgentStreamError('AGENT_STREAM_INTERRUPTED', 'Interrompida.');
         },
       },
     });
@@ -597,8 +853,8 @@ describe('ChatService — o que fica no banco', () => {
   it('erro inesperado no meio do stream vira evento, e não exceção relançada', async () => {
     const { service } = montar({
       stream: {
-        cancelar: () => undefined,
-        async *pedacos() {
+        cancel: () => undefined,
+        async *chunks() {
           yield enc(fragmento('ai-1', 'a'));
           throw new TypeError('defeito');
         },
@@ -629,9 +885,9 @@ describe('ChatService — o que fica no banco', () => {
 describe('ChatService — o título da conversa', () => {
   it('conversa nova ganha o nome do agente, com o custo no livro-caixa', async () => {
     const { service, canal, agent, conversas, uso } = montar({ existente: false });
-    agent.titular.mockResolvedValueOnce({
-      titulo: 'Almoço com frango',
-      uso: { model: 'm', inputUnits: 40, outputUnits: 5 },
+    agent.title.mockResolvedValueOnce({
+      title: 'Almoço com frango',
+      usage: { model: 'm', inputUnits: 40, outputUnits: 5 },
     });
 
     const turno = service.converse(
@@ -645,15 +901,17 @@ describe('ChatService — o título da conversa', () => {
     await turno;
     await respirar();
 
-    expect(agent.titular).toHaveBeenCalledWith('registra 200 g de frango');
+    expect(agent.title).toHaveBeenCalledWith('registra 200 g de frango');
     expect(conversas.titularSeProvisorio).toHaveBeenCalledWith(
       'user-a',
       CONVERSA,
       'registra 200 g de frango',
       'Almoço com frango',
     );
-    expect(uso.registrar).toHaveBeenCalledWith('user-a', {
+    expect(uso.record).toHaveBeenCalledWith('user-a', {
       feature: 'chat_title',
+      paidBy: 'INSTANCE',
+      groupId: null,
       model: 'm',
       units: { inputUnits: 40, outputUnits: 5 },
     });
@@ -672,12 +930,12 @@ describe('ChatService — o título da conversa', () => {
     canal.encerrar();
     await turno;
 
-    expect(agent.titular).not.toHaveBeenCalled();
+    expect(agent.title).not.toHaveBeenCalled();
   });
 
   it('falha no título não derruba o turno', async () => {
     const { service, canal, agent } = montar({ existente: false });
-    agent.titular.mockRejectedValueOnce(new Error('agente caiu'));
+    agent.title.mockRejectedValueOnce(new Error('agente caiu'));
     const saida = destinoDeTeste();
 
     const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino);
@@ -702,8 +960,10 @@ describe('ChatService — o que vai para o livro-caixa', () => {
     canal.encerrar();
     await turno;
 
-    expect(livro.registrar).toHaveBeenCalledWith('user-a', {
+    expect(livro.record).toHaveBeenCalledWith('user-a', {
       feature: 'chat',
+      paidBy: 'INSTANCE',
+      groupId: null,
       model: 'gateway/modelo',
       units: { inputUnits: 1200, outputUnits: 300 },
     });
@@ -718,10 +978,12 @@ describe('ChatService — o que vai para o livro-caixa', () => {
     canal.encerrar();
     await turno;
 
-    // `model: null` é o que faz `AiUsageService.registrar` gravar
+    // `model: null` é o que faz `AiUsageService.record` gravar
     // `pricingKnown: false` — um turno caro não pode entrar como grátis.
-    expect(livro.registrar).toHaveBeenCalledWith('user-a', {
+    expect(livro.record).toHaveBeenCalledWith('user-a', {
       feature: 'chat',
+      paidBy: 'INSTANCE',
+      groupId: null,
       model: null,
       units: {},
     });
@@ -738,27 +1000,41 @@ describe('ChatService — o que vai para o livro-caixa', () => {
     canal.encerrar();
     await turno;
 
-    expect(livro.registrar.mock.calls.map(([, entrada]) => entrada)).toEqual([
-      { feature: 'chat', model: 'm', units: { inputUnits: 6000, outputUnits: 450 } },
-      { feature: 'chat', model: 'caro', units: { inputUnits: 900, outputUnits: undefined } },
+    expect(livro.record.mock.calls.map(([, entrada]) => entrada)).toEqual([
+      {
+        feature: 'chat',
+        paidBy: 'INSTANCE',
+        groupId: null,
+        model: 'm',
+        units: { inputUnits: 6000, outputUnits: 450 },
+      },
+      {
+        feature: 'chat',
+        paidBy: 'INSTANCE',
+        groupId: null,
+        model: 'caro',
+        units: { inputUnits: 900, outputUnits: undefined },
+      },
     ]);
   });
 
   it('registra o custo mesmo quando o stream quebrou — o dinheiro já saiu', async () => {
     const { service, uso: livro } = montar({
       stream: {
-        cancelar: () => undefined,
-        async *pedacos() {
+        cancel: () => undefined,
+        async *chunks() {
           yield enc(uso({ model: 'gateway/modelo', inputUnits: 900 }));
-          throw new ErroDeStreamDoAgente('AGENT_STREAM_INTERRUPTED', 'Interrompida.');
+          throw new AgentStreamError('AGENT_STREAM_INTERRUPTED', 'Interrompida.');
         },
       },
     });
 
     await service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
 
-    expect(livro.registrar).toHaveBeenCalledWith('user-a', {
+    expect(livro.record).toHaveBeenCalledWith('user-a', {
       feature: 'chat',
+      paidBy: 'INSTANCE',
+      groupId: null,
       model: 'gateway/modelo',
       units: { inputUnits: 900, outputUnits: undefined },
     });
@@ -776,10 +1052,10 @@ describe('ChatService — o que NÃO pode vazar', () => {
 
     const { service, conversas } = montar({
       stream: {
-        cancelar: () => undefined,
-        async *pedacos() {
+        cancel: () => undefined,
+        async *chunks() {
           yield enc(fragmento('ai-1', 'sua glicemia está alta'));
-          throw new ErroDeStreamDoAgente('AGENT_STREAM_INTERRUPTED', 'Interrompida.');
+          throw new AgentStreamError('AGENT_STREAM_INTERRUPTED', 'Interrompida.');
         },
       },
     });
@@ -919,7 +1195,7 @@ describe('ChatService — tempo do turno e resposta parada', () => {
     await respirar();
     canal.emitir(fragmento('ai-1', 'Você comeu '));
     await respirar();
-    saida.simularClienteSaindo();
+    service.stop(USUARIO.id, CONVERSA);
     await turno;
 
     const [, , resposta] = conversas.completeTurn.mock.calls[0];
@@ -927,7 +1203,7 @@ describe('ChatService — tempo do turno e resposta parada', () => {
     expect(resposta.texto).toBe('Você comeu ');
   });
 
-  it('o cliente sair depois do fim não transforma a resposta completa em parada', async () => {
+  it('parar depois do fim não transforma a resposta completa em parada', async () => {
     const { service, canal, conversas } = montar();
     const saida = destinoDeTeste();
 
@@ -936,13 +1212,13 @@ describe('ChatService — tempo do turno e resposta parada', () => {
     canal.emitir(fragmento('ai-1', 'Oi!'));
     canal.emitir(fim('completed'));
     await respirar();
-    saida.simularClienteSaindo();
+    service.stop(USUARIO.id, CONVERSA);
     await turno;
 
     expect(conversas.completeTurn.mock.calls[0][2].status).toBe('completed');
   });
 
-  it('erro do provedor que chegou antes de o cliente sair continua `error`, e não vira parada', async () => {
+  it('erro do provedor que chegou antes do pedido de parar continua `error`, e não vira parada', async () => {
     const { service, canal, conversas } = montar();
     const saida = destinoDeTeste();
 
@@ -952,13 +1228,13 @@ describe('ChatService — tempo do turno e resposta parada', () => {
     canal.emitir(quadro('error', { code: 'AI_PROVIDER_TIMEOUT', message: 'demorou' }));
     canal.emitir(fim('error'));
     await respirar();
-    saida.simularClienteSaindo();
+    service.stop(USUARIO.id, CONVERSA);
     await turno;
 
     expect(conversas.completeTurn.mock.calls[0][2].status).toBe('error');
   });
 
-  it('o stream quebrar sem o cliente ter saído continua sendo `error`', async () => {
+  it('o stream quebrar sem pedido de parar continua sendo `error`', async () => {
     const { service, canal, conversas } = montar();
 
     const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);

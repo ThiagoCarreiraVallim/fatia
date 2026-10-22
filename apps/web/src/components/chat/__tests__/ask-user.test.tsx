@@ -15,7 +15,8 @@ vi.mock('@fatia/api-client', async () => {
   };
 });
 
-const { AskUser, normalizarCampos } = await import('../ask-user');
+const { AskUser } = await import('../ask-user');
+const { normalizeAskFields } = await import('@fatia/api-client');
 
 function render(elemento: ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -182,10 +183,10 @@ describe('AskUser — pergunta', () => {
   });
 });
 
-describe('normalizarCampos', () => {
+describe('normalizeAskFields', () => {
   it('campo torto do modelo não derruba o formulário', () => {
     expect(
-      normalizarCampos(['Gramas', { name: 'x', type: 'cor' }, { label: '' }, 42, null]),
+      normalizeAskFields(['Gramas', { name: 'x', type: 'cor' }, { label: '' }, 42, null]),
     ).toEqual([
       { name: 'campo_0', label: 'Gramas', type: 'text' },
       { name: 'x', label: 'x', type: 'text', required: false },

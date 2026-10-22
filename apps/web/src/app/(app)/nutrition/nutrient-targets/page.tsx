@@ -2,12 +2,12 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import Link from 'next/link';
-import { ChevronLeft, Trash2, Plus } from 'lucide-react';
+import { Trash2, Plus, FlaskConical } from 'lucide-react';
 import { nutritionApi, type NutrientTarget } from '@fatia/api-client';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 
 interface Preset {
   nutrientKey: string;
@@ -82,13 +82,6 @@ export default function NutrientTargetsPage() {
 
   return (
     <div className="space-y-5 p-4">
-      <header className="flex items-center gap-2">
-        <Link href="/nutrition" className="rounded p-1 hover:bg-accent" aria-label="Voltar">
-          <ChevronLeft size={20} />
-        </Link>
-        <h1 className="text-xl font-semibold">Metas personalizadas</h1>
-      </header>
-
       <p className="text-sm text-muted-foreground">
         Controle nutrientes além dos macros — sódio, açúcar, fibra... Defina um limite (máx) e/ou
         uma meta (mín). O valor do dia soma o que você registra nas refeições.
@@ -100,12 +93,16 @@ export default function NutrientTargetsPage() {
           <TargetRow key={t.id} target={t} onDelete={() => remove.mutate(t.nutrientKey)} />
         ))}
         {targets.data && targets.data.length === 0 && (
-          <p className="text-sm text-muted-foreground">Nenhuma meta personalizada ainda.</p>
+          <EmptyState
+            icon={FlaskConical}
+            title="Nenhuma meta personalizada ainda"
+            description="Defina abaixo um alvo de fibra, sódio, açúcar ou outro nutriente."
+          />
         )}
       </div>
 
       {/* Adicionar */}
-      <div className="space-y-3 rounded-2xl border border-white/5 bg-card p-4">
+      <div className="space-y-3 rounded-2xl border border-subtle bg-card p-4">
         <h2 className="text-sm font-bold">Adicionar meta</h2>
 
         <div className="flex flex-wrap gap-1.5">
@@ -204,7 +201,7 @@ export default function NutrientTargetsPage() {
           <Plus size={16} />
           {save.isPending ? 'Salvando…' : 'Salvar meta'}
         </Button>
-        {save.error && <p className="text-sm text-rose-500">{(save.error as Error).message}</p>}
+        {save.error && <p className="text-sm text-danger">{(save.error as Error).message}</p>}
       </div>
     </div>
   );
@@ -220,7 +217,7 @@ function TargetRow({ target, onDelete }: { target: NutrientTarget; onDelete: () 
           ? `mín ${target.min} ${target.unit}`
           : '—';
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-white/5 bg-card p-4">
+    <div className="flex items-center gap-3 rounded-2xl border border-subtle bg-card p-4">
       <div className="min-w-0 flex-1">
         <p className="text-sm font-bold text-foreground">{target.label}</p>
         <p className="text-xs text-muted-foreground tabular-nums">{range}</p>
@@ -229,7 +226,7 @@ function TargetRow({ target, onDelete }: { target: NutrientTarget; onDelete: () 
         type="button"
         onClick={onDelete}
         aria-label={`Remover ${target.label}`}
-        className="rounded p-1 text-muted-foreground hover:text-rose-500"
+        className="rounded p-1 text-muted-foreground hover:text-danger"
       >
         <Trash2 size={16} />
       </button>

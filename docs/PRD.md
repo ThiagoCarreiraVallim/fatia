@@ -1,137 +1,151 @@
 # Product Requirements Document — Fatia
 
+> **Descreve o produto de hoje.** A versão anterior registrava a v1 (2026-05), um rastreador
+> self-hosted para cinco a dez amigos; ela está no histórico do git. A troca e a nova regra de
+> escopo estão na [ADR 037](./ADR/037-prd-descreve-o-produto-atual.md).
+
 ## 1. Problema
 
-Usuários (eu, namorada, amigos) querem acompanhar nutrição e treino de forma simples, com mínimo atrito no logging diário. Apps existentes ou são caros (MyFitnessPal premium), ou têm interface ruim, ou não têm integração com IA conversacional.
+**Para quem treina e quer comer melhor.** Registrar comida e treino dá trabalho, e quem desiste
+desiste nas primeiras semanas. Os apps conhecidos são caros, em inglês ou com base de alimentos
+estrangeira, e não conhecem o prato brasileiro: arroz, feijão, farofa, pão de queijo, medida caseira.
 
-A oportunidade: usar o Claude como interface principal de logging — tirar foto da comida, falar "comi 200g de frango com arroz", "fiz supino com 60kg 4x10" — enquanto o PWA serve só pra visualização e correção pontual.
+**Para a academia.** O problema número 1 do dono é a evasão: a academia perde de 10% a 13% dos
+alunos por mês, e boa parte de quem entra sai nos primeiros 90 dias. O que segura o aluno é
+**constância** (ir pelo menos 2 vezes por semana) e **vínculo** (conhecer gente, ser lembrado pela
+equipe). O sistema de gestão da academia cobra a mensalidade e abre a catraca; nenhum cuida disso, e
+nenhum tem nutrição.
 
-## 2. Usuários
+**Para o personal, a nutricionista e o influencer.** O acompanhamento fica espalhado entre planilha,
+PDF, WhatsApp e plataforma de venda de curso. Não há um lugar onde o aluno registra, o profissional
+acompanha e a comunidade se motiva junto.
 
-- **Owner (eu):** desenvolve, mantém, usa diariamente
-- **Familiares/amigos próximos:** ~5-10 pessoas, contas individuais, dados isolados
+## 2. Para quem é
 
-> **Desatualizado desde a #97.** A v1 previa "sem onboarding público, sem signup aberto, convites
-> manuais". O conector foi submetido ao diretório público da Anthropic, o registro de cliente é
-> dinâmico (DCR) e o cadastro é aberto pelo Logto. Quem chega pelo diretório não passa por convite
-> nenhum — o que torna cada garantia de isolamento por `userId` uma promessa a um estranho, e não
-> a um amigo. O roadmap B2B (#152) acrescenta ainda academia e profissional como usuários.
+| Quem                                                                                   | O que usa                                                                                                             | Como paga                                                                                                                                       |
+| -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Aluno** (qualquer pessoa)                                                            | App (iOS, Android) e web: registro de refeição, treino, água, peso e passos; metas; progresso; comunidades            | **FREE**: tudo, menos a IA hospedada. **PRO**: com IA (chat, foto do prato, ditado)                                                             |
+| **Equipe da comunidade** — academia, box, estúdio, personal, nutricionista, influencer | Painel (web e app): membros, convites, conteúdo, catálogo de exercícios, agente, desafios, mural, moderação, insights | Compra **assentos** de PRO para membros escolhidos; outras camadas em estudo ([#276](https://github.com/ThiagoCarreiraVallim/fatia/issues/276)) |
+| **Quem traz a própria IA**                                                             | O conector MCP no Claude ou em outro cliente: o mesmo produto, conversando                                            | FREE — a inferência é dele ([ADR 018](./ADR/018-inferencia-hospedada-fora-do-mcp.md))                                                           |
+| **Quem self-hosta**                                                                    | A stack inteira no próprio servidor, licença MIT                                                                      | Nada; `AI_REQUIRES_PLAN=false` libera a IA para a instância ([ADR 024](./ADR/024-plano-free-e-pago-do-usuario.md))                              |
 
-## 3. Objetivos do produto
+Papéis da comunidade: `OWNER`, `PROFESSIONAL`, `CREATOR` e `MEMBER` — o que cada um faz está em
+[`PERMISSIONS.md`](./PERMISSIONS.md).
 
-1. Reduzir atrito no logging de comida (3 cliques ou menos via Claude)
-2. Manter histórico estruturado e queriável de nutrição e treino
-3. Mostrar progresso de peso corporal e carga (strength) ao longo do tempo
-4. Servir múltiplos usuários com isolamento total de dados
+## 3. Princípios que o produto não negocia
 
-## 4. Não-objetivos (escopo NEGATIVO explícito)
+1. **Registrar é rápido sem IA.** O FREE não tem IA hospedada, então recentes, favoritos, medidas
+   caseiras, copiar dia, refeições salvas e código de barras são o centro do produto, não acessório.
+2. **O dado é do aluno.** Exportar e apagar a conta são livres e expostos como tool
+   (`export_my_data`, `delete_my_account`). A equipe da comunidade só lê o que o aluno consentiu, por
+   categoria, e ele revoga quando quiser ([ADR 026](./ADR/026-consentimento-ao-entrar-na-comunidade.md)).
+   O resto ela vê agregado, com supressão de células pequenas ([`AGGREGATION_POLICY.md`](./AGGREGATION_POLICY.md)).
+3. **Pagamento degrada, nunca bloqueia.** Inadimplência — do aluno ou da comunidade — tira só a IA
+   hospedada, depois da carência. Registro, histórico e MCP continuam.
+4. **Ninguém compara corpo.** Desafios e rankings medem aderência à **própria** meta e constância,
+   nunca peso, medida ou foto ([ADR 027](./ADR/027-desafios-por-aderencia-a-propria-meta.md)).
+5. **MCP-first.** Toda função do app existe como tool MCP ([ADR 006](./ADR/006-mcp-first.md)),
+   com duas exceções declaradas: inferência paga pela Fatia (ADR 018) e a administração da
+   comunidade.
+6. **Foto de refeição não vira arquivo.** Foto e áudio vão à IA e somem
+   ([ADR 004](./ADR/004-sem-armazenamento-fotos.md), [ADR 020](./ADR/020-foto-e-audio-trafegam-sem-persistencia.md)).
+   Imagem que a pessoa **publica** na comunidade é outra coisa e é guardada sem EXIF
+   ([ADR 028](./ADR/028-imagens-de-posts-da-comunidade.md)).
+7. **Isolamento é da aplicação e é testado.** Recurso de outra pessoa responde `NOT_FOUND`, igual a
+   inexistente ([ADR 010](./ADR/010-row-level-security.md), [`THREAT_MODEL.md`](./THREAT_MODEL.md)).
 
-> **Este documento descreve a v1.** O roadmap pós-MVP adotou deliberadamente parte do que está
-> listado abaixo como fora de escopo. Onde isso acontece, a linha está marcada e aponta a issue.
-> A regra de precedência está na [ADR 013](./ADR/013-roadmap-supera-escopo-negativo-v1.md): **para
-> trabalho de v1, esta lista manda; para trabalho de roadmap, a épica manda.** Sem essa regra,
-> PR legítima trava em review por bater numa lista escrita antes de o produto existir.
+## 4. O que o produto faz
 
-Ainda válidos, sem exceção prevista:
+### Aluno
 
-- ❌ Sugestões inteligentes de receitas
-- ❌ Fotos de progresso (Entries)
-- ❌ Sistema de aulas/lessons
-- ❌ Sincronização offline de escrita (read-only cache OK)
-- ❌ Modo claro (apenas dark)
-- ❌ Internacionalização — só pt-BR
-- ❌ Frequência cardíaca em tempo real durante treino (apenas valor médio digitado)
-- ❌ GPS / mapa de corrida
+- **Nutrição:** base TACO (597 alimentos) e Open Food Facts por código de barras; medidas caseiras;
+  recentes e favoritos; alimentos próprios; refeições salvas; copiar refeição e dia; metas de kcal e
+  macros em faixa, sugeridas no onboarding (gasto calórico por Mifflin-St Jeor); água.
+- **Treino:** catálogo de 873 exercícios com músculos e instruções, mais o catálogo da academia
+  (aparelhos, vídeos e dicas dela); planos; sessão com séries, carga, RPE e "previous"; cardio;
+  prescrição de carga; periodização em blocos.
+- **Progresso:** peso, passos, gráficos de carga, cardio e peso, sequências e conquistas.
+- **IA hospedada (PRO):** chat que registra e consulta pelo mesmo catálogo de tools, com
+  confirmação antes de escrever, memória e conversa que continua no servidor; foto do prato; ditado;
+  o agente da comunidade (nome, avatar e orientações da equipe).
+- **Comunidades:** entrar por convite, link ou código, com consentimento por categoria; mural com
+  imagens, reações e comentários; desafios com ranking só de quem participa; planos prontos, dicas e
+  exercícios da comunidade; avisos no celular e no navegador.
 
-### Já entregues — a proibição caiu
+### Equipe da comunidade
 
-O produto passou por cima destas três porque a realidade mudou, não porque alguém esqueceu:
+- Painel na web e no app: membros (aprovar, papel, assento, remover, banir), convites (link, e-mail,
+  lote por CSV), assentos e faturas, planos e dicas, exercícios e equipamentos, agente, desafios,
+  moderação do mural e insights agregados de retenção e comportamento.
+- Leitura do aluno que consentiu, com registro de cada acesso.
 
-| Era não-objetivo                     | O que aconteceu                                                                                                                                  |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| App nativo iOS/Android (PWA cobre)   | **Entregue** na épica #132. O PWA não entrega câmera com boa latência nem push confiável no iOS, que é o que as próximas funcionalidades exigem. |
-| Exportação de dados                  | **Entregue** na #95. Deixou de ser conveniência e virou obrigação: LGPD art. 18, V.                                                              |
-| Instruções de execução de exercícios | **Entregue** na #43. O catálogo enriquecido veio junto do diagrama muscular, sem custo autoral.                                                  |
+### Cobrança
 
-### Adiados para o roadmap — fora da v1, dentro do pós-MVP
+- PRO pessoal pela web (Asaas: Pix, boleto, cartão) e pelas lojas (RevenueCat); assentos de
+  comunidade pela web. Valores, estados e webhooks em [`BILLING.md`](./BILLING.md).
 
-Continuam **fora da v1**. As épicas que os adotam estão vinculadas:
+## 5. Não-objetivos
 
-| Era não-objetivo                                                                       | Onde voltou                                                                                                                    |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Barcode scanner de produtos                                                            | #140 — a [ADR 005](./ADR/005-taco-sem-usda-v1.md) já apontava Open Food Facts como o caminho para industrializado              |
-| Conteúdo autoral e catálogo curado de planos                                           | #161, #162 — no B2B o conteúdo é **do personal**, publicado por ele; o Fatia não cura nada                                     |
-| Integração automática de passos (Apple Health / Google Fit / Strava / Garmin / Fitbit) | #151 — o schema já está preparado via `StepLog.source`, conforme a [ADR 007](./ADR/007-passos-manuais-com-schema-preparado.md) |
+Valem para todo trabalho. Mudar qualquer linha desta seção exige ADR (ADR 037).
 
-## 5. Funcionalidades por fase
+**Fora, sem exceção prevista:**
 
-### Fase 1 — Nutrição core
+- ❌ **Comparar corpo** entre pessoas — ranking, desafio ou post com peso, medida ou foto de corpo (ADR 027)
+- ❌ **Guardar a foto da refeição** (ADR 004, ADR 020)
+- ❌ **Bloquear o app ou o histórico por falta de pagamento** — só a IA hospedada degrada
+- ❌ **Inferência paga pela Fatia exposta pelo MCP** (ADR 018)
+- ❌ **Ser o sistema de gestão da academia** — matrícula, cobrança de mensalidade, catraca, agenda de
+  aulas. O Fatia complementa esse sistema; não o substitui
+- ❌ **Vender dado de aluno** ou entregar à equipe o que ele não consentiu, por qualquer preço
+  ("pagar mais não compra recorte mais estreito", `BILLING.md`)
+- ❌ **Sugestão automática de receitas** geradas por IA
+- ❌ **Conteúdo próprio do Fatia** — planos, dietas e aulas são da equipe de cada comunidade; o
+  Fatia não cura nem vende conteúdo
+- ❌ **Sincronização offline de escrita** (cache de leitura é aceito)
+- ❌ **Frequência cardíaca em tempo real e GPS de corrida** — vêm de wearable/app de corrida, não do Fatia
+- ❌ **App nas lojas com a marca de cada comunidade** (white-label) — a marca aparece dentro do Fatia
 
-- Login/signup (admin cria contas)
-- Definir metas de calorias e macros (em range: min-max)
-- Logar refeição com itens (nome, gramas, kcal, P/C/G)
-- Buscar alimentos na base TACO
-- Categorizar refeição: café, almoço, jantar, lanche
-- Ver totais do dia vs. meta com barras de progresso
-- Navegar entre dias
-- Editar/deletar item de refeição
+**Em discussão** — têm issue com a label `discussion` e só entram com ADR:
 
-### Fase 2 — Treino core
-
-- Catálogo de exercícios (seed inicial ~60, força + cardio)
-- Criar planos de treino (Push, Pull, Leg, etc.)
-- Iniciar sessão de treino
-- **Força:** logar séries com peso, reps, RPE opcional
-- **Cardio:** logar entradas com duração, distância, frequência cardíaca, kcal queimadas (opcionais)
-- Ver "previous" — última carga ou último tempo do mesmo exercício
-- Notas por exercício
-- Finalizar sessão
-- Histórico de treinos
-- Treinos híbridos (força + cardio na mesma sessão) suportados
-
-### Fase 3 — Progresso e atividade
-
-- Logar peso corporal
-- **Logar passos diários** (manual via Claude no fim do dia ou via PWA)
-- Múltiplos logs de passos por dia permitidos (preparado para futura integração)
-- Gráfico de evolução de peso (14/30/90 dias)
-- Gráfico de evolução de carga por exercício (força)
-- Gráfico de evolução de cardio por exercício (duração/distância/pace)
-- Gráfico de passos diários
-- Médias semanais
-- Meta de passos diários (parte de UserGoals)
-
-### Fase 4 — Polimento
-
-- PWA installable
-- Gerenciamento de tokens MCP (criar/revogar)
-- Dashboard com checklist diário
-- Dark mode polido
+| Tema                                               | Issue                                                            |
+| -------------------------------------------------- | ---------------------------------------------------------------- |
+| Cobrança por aluno ativo (revê parte da ADR 025)   | [#289](https://github.com/ThiagoCarreiraVallim/fatia/issues/289) |
+| Plano pago de ferramenta para o profissional       | [#296](https://github.com/ThiagoCarreiraVallim/fatia/issues/296) |
+| Fotos de progresso, privadas                       | [#300](https://github.com/ThiagoCarreiraVallim/fatia/issues/300) |
+| Receitas autorais (do profissional ou do aluno)    | [#334](https://github.com/ThiagoCarreiraVallim/fatia/issues/334) |
+| MCP para a equipe da comunidade                    | [#343](https://github.com/ThiagoCarreiraVallim/fatia/issues/343) |
+| Tema claro                                         | [#352](https://github.com/ThiagoCarreiraVallim/fatia/issues/352) |
+| Unidades e outros idiomas (hoje só pt-BR; ADR 016) | [#353](https://github.com/ThiagoCarreiraVallim/fatia/issues/353) |
 
 ## 6. Métricas de sucesso
 
-- Logging de >80% das refeições do dia (auto-reportado)
-- Zero perda de dado (backups automáticos do Postgres)
-- Tempo médio de log via Claude < 30s por refeição
-- 100% das chamadas MCP autenticadas e isoladas por usuário
+| Métrica                                                      | Por quê                                |
+| ------------------------------------------------------------ | -------------------------------------- |
+| Ativação: convidado → primeiro registro em 48 h              | Diz se o convite da academia vira uso  |
+| Dias ativos por semana, por aluno                            | Constância é o que retém na academia   |
+| Retenção semanal (semana 1, 4 e 8)                           | Diz se o app se sustenta sem novidade  |
+| Conversão teste → PRO e cancelamento do PRO                  | Saúde da receita do consumidor         |
+| Comunidades com membros ativos e com desafio rodando         | Saúde do B2B                           |
+| Custo de IA por usuário ativo, por origem (`AiUsage.paidBy`) | Margem do preço fixo                   |
+| Registro de refeição em menos de 30 s                        | Atrito é o que faz desistir            |
+| Zero acesso cruzado sem consentimento                        | Promessa central; verificada por teste |
 
-## 7. Riscos e mitigações
+## 7. Riscos
 
-| Risco                                                 | Mitigação                                                        |
-| ----------------------------------------------------- | ---------------------------------------------------------------- |
-| Estimativa de macros via foto pode ter 20-30% de erro | Permitir correção em linguagem natural ("na verdade era 200g")   |
-| Multi-usuário com dados sensíveis                     | RLS-style guards em todo endpoint, testes específicos            |
-| MCP remoto sem auth = vazamento                       | Token por dispositivo, hasheado, revogável                       |
-| Servidor próprio cai                                  | Docker Compose simples + backup diário do volume Postgres        |
-| Escopo crescer                                        | Lista de não-objetivos explícita; novas ideias vão pra "Fase 5+" |
+| Risco                                                     | Mitigação                                                                                                     |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Dado de saúde de estranhos, lido por terceiros (a equipe) | Consentimento por categoria, leitura registrada, agregado com supressão, `THREAT_MODEL.md`, export e exclusão |
+| Custo de IA acima do preço fixo                           | Cota por usuário e global; tabela de preço obrigatória por modelo; modelos revisados em `allowed_models.py`   |
+| O app não reter por si só                                 | O produto aposta em constância e comunidade (desafios, mural, avisos, equipe), não só em registro             |
+| Estimativa de macro por foto com erro de 20–30%           | Correção em linguagem natural e conferência antes de salvar                                                   |
+| Um servidor só                                            | Backup cifrado fora da máquina, restore testado, monitor externo (`OPERATIONS.md`)                            |
+| Escopo crescer sem critério                               | Esta lista de não-objetivos, mudada só por ADR                                                                |
 
-## 8. Decisões abertas
+## 8. Onde está o resto
 
-- [ ] Importar TACO completa (~600 itens) ou só top 200 mais comuns?
-      → **Decisão:** completa, é só uma vez.
-- [ ] USDA via API agora ou depois?
-      → **Decisão:** depois (Fase 5+).
-- [ ] Mobile push notifications?
-      → **Decisão da v1:** não, PWA já cobre instalação na home screen.
-      → **Revisto:** o app nativo existe (#132) e a #148 trata de push. A premissa "PWA cobre" caiu
-      no iOS, onde notificação de PWA é limitada. Fora da v1, dentro do roadmap.
+- **Como o sistema é feito:** [`ARCHITECTURE.md`](./ARCHITECTURE.md)
+- **Por que é assim:** [`ADR/`](./ADR/)
+- **O que está sendo feito:** [Issues](https://github.com/ThiagoCarreiraVallim/fatia/issues) — a
+  épica [#275](https://github.com/ThiagoCarreiraVallim/fatia/issues/275) reúne o que falta antes do
+  piloto com academias
+- **Tools MCP:** [`MCP.md`](./MCP.md)

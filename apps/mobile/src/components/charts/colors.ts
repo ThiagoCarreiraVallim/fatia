@@ -1,16 +1,15 @@
+import { cores } from '@/theme/cores';
+
 /**
- * Cores literais para as props do React Native que não aceitam `className` —
- * `stroke`/`fill` do SVG, `color` de ícone, `ActivityIndicator`.
- *
- * São os mesmos valores dos tokens de `global.css`. Ficam aqui, e não espalhadas
- * pelos componentes, para que uma troca de paleta tenha um lugar só para mexer.
+ * As cores dos gráficos. Vêm de `src/theme/cores.ts`, o lugar único dos hex do
+ * tema; este nome fica porque os gráficos já o importam.
  */
 export const chartColors = {
-  primary: '#2ce500',
-  foreground: '#e5e2e1',
-  mutedForeground: '#baccaf',
-  background: '#131313',
-  card: '#2a2a2a',
-  border: '#333333',
-  destructive: '#93000a',
+  primary: cores.primary,
+  foreground: cores.foreground,
+  mutedForeground: cores.mutedForeground,
+  background: cores.background,
+  card: cores.card,
+  border: cores.border,
+  destructive: cores.destructive,
 } as const;

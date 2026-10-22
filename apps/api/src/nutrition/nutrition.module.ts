@@ -3,8 +3,11 @@ import { text } from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import { NutritionController } from './nutrition.controller';
 import { FoodService } from './food.service';
+import { FoodShortcutsService } from './food-shortcuts.service';
+import { FoodPortionService } from './food-portion.service';
 import { InferenceThrottlerGuard } from './inference-throttler.guard';
 import { MealRecognitionService } from './meal-recognition.service';
+import { AiModule } from '../ai/ai.module';
 import { OffFoodService } from './off-food.service';
 import { MealService } from './meal.service';
 import { MealItemService } from './meal-item.service';
@@ -33,6 +36,22 @@ import { ListNutrientTargetsTool } from './mcp/list-nutrient-targets.tool';
 import { SetNutrientTargetTool } from './mcp/set-nutrient-target.tool';
 import { DeleteNutrientTargetTool } from './mcp/delete-nutrient-target.tool';
 import { GetNutrientSummaryTool } from './mcp/get-nutrient-summary.tool';
+import { ListMyFoodsTool } from './mcp/list-my-foods.tool';
+import { ListCustomFoodsTool } from './mcp/list-custom-foods.tool';
+import { SetFoodFavoriteTool } from './mcp/set-food-favorite.tool';
+import { CreateFoodPortionTool } from './mcp/create-food-portion.tool';
+import { DeleteFoodPortionTool } from './mcp/delete-food-portion.tool';
+import { MealCopyService } from './meal-copy.service';
+import { MealTemplateService } from './meal-template.service';
+import { CopyMealTool } from './mcp/copy-meal.tool';
+import { CopyDayTool } from './mcp/copy-day.tool';
+import { ListMealTemplatesTool } from './mcp/list-meal-templates.tool';
+import { SaveMealTemplateTool } from './mcp/save-meal-template.tool';
+import { LogMealTemplateTool } from './mcp/log-meal-template.tool';
+import { DeleteMealTemplateTool } from './mcp/delete-meal-template.tool';
+import { SuggestNutritionGoalsTool } from './mcp/suggest-nutrition-goals.tool';
+import { OnboardingService } from './onboarding.service';
+import { OnboardingController } from './onboarding.controller';
 
 /**
  * Teto do corpo da rota de reconhecimento (#139).
@@ -47,16 +66,22 @@ const TETO_DA_FOTO_BASE64 = '6mb';
 const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 });
 
 @Module({
-  controllers: [NutritionController],
+  imports: [AiModule],
+  controllers: [NutritionController, OnboardingController],
   providers: [
     FoodService,
+    FoodShortcutsService,
+    FoodPortionService,
     InferenceThrottlerGuard,
     MealRecognitionService,
     OffFoodService,
     MealService,
     MealItemService,
+    MealCopyService,
+    MealTemplateService,
     NutritionSummaryService,
     UserGoalsService,
+    OnboardingService,
     NutrientTargetService,
     // MCP tools (auto-discovered by McpToolRegistry)
     SearchFoodTool,
@@ -65,6 +90,11 @@ const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 })
     CreateCustomFoodTool,
     UpdateCustomFoodTool,
     DeleteCustomFoodTool,
+    ListMyFoodsTool,
+    ListCustomFoodsTool,
+    SetFoodFavoriteTool,
+    CreateFoodPortionTool,
+    DeleteFoodPortionTool,
     LogMealTool,
     GetMealTool,
     ListMealsTool,
@@ -73,10 +103,17 @@ const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 })
     AddMealItemTool,
     UpdateMealItemTool,
     DeleteMealItemTool,
+    CopyMealTool,
+    CopyDayTool,
+    ListMealTemplatesTool,
+    SaveMealTemplateTool,
+    LogMealTemplateTool,
+    DeleteMealTemplateTool,
     GetNutritionSummaryTool,
     GetNutritionHistoryTool,
     GetNutritionGoalsTool,
     SetNutritionGoalsTool,
+    SuggestNutritionGoalsTool,
     ListNutrientTargetsTool,
     SetNutrientTargetTool,
     DeleteNutrientTargetTool,
@@ -89,6 +126,7 @@ const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 })
     NutritionSummaryService,
     UserGoalsService,
     NutrientTargetService,
+    MealTemplateService,
   ],
 })
 export class NutritionModule implements NestModule {

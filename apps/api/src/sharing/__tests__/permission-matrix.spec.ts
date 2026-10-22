@@ -13,6 +13,7 @@ import {
 import {
   CONSENT_GOVERNED_KEY,
   GROUP_ACTION_KEY,
+  INVITE_PREVIEW_KEY,
   SELF_ONLY_KEY,
 } from '../decorators/require-group-action.decorator';
 
@@ -137,7 +138,7 @@ describe('matriz de papéis (docs/PERMISSIONS.md × permissions.ts)', () => {
     expect(leitura.rows.map((row) => row[0]).sort()).toEqual(Object.values(ShareScope).sort());
   });
 
-  it('só PROFESSIONAL pode receber vínculo, em todo escopo', () => {
+  it('só a equipe (OWNER, PROFESSIONAL, CREATOR) pode receber vínculo, em todo escopo', () => {
     for (const [escopo, podem, nunca] of leitura.rows) {
       const listados = podem.split(',').map((p) => p.trim());
       expect([escopo, listados]).toEqual([escopo, [...ROLES_ELIGIBLE_FOR_LINK]]);
@@ -168,10 +169,26 @@ describe('todo método de controller de sharing declara a camada em que vive', (
    * consentimento. Ela não afrouxa o "sem estado nenhum" — continua não
    * existindo rota sem declaração; o que existe agora é uma declaração a mais,
    * e ela tem cobrança própria no caso logo abaixo.
+   *
+   * A quarta, `@InvitePreview`, é a prévia pública do convite (Fase 5), com
+   * cobrança própria também: só com `:token` na URL.
+   *
+   * Além de `sharing/`, entra todo controller que registra o `GroupRoleGuard`
+   * (assentos em `billing/`, painel em `insights/`): é rota de grupo, e o
+   * esquecimento ali seria o mesmo.
    */
-  const controllers = readdirSync(SHARING_SRC, { recursive: true, encoding: 'utf8' })
-    .filter((entry) => entry.endsWith('.controller.ts'))
-    .map((entry) => join(SHARING_SRC, entry));
+  const API_ROOT = resolve(SHARING_SRC, '..');
+  const controllers = [
+    ...new Set([
+      ...readdirSync(SHARING_SRC, { recursive: true, encoding: 'utf8' })
+        .filter((entry) => entry.endsWith('.controller.ts'))
+        .map((entry) => join(SHARING_SRC, entry)),
+      ...readdirSync(API_ROOT, { recursive: true, encoding: 'utf8' })
+        .filter((entry) => entry.endsWith('.controller.ts') && !entry.includes('__tests__'))
+        .map((entry) => join(API_ROOT, entry))
+        .filter((file) => /@UseGuards\([^)]*\bGroupRoleGuard\b/.test(readFileSync(file, 'utf8'))),
+    ]),
+  ];
 
   it('encontra os controllers de sharing', () => {
     expect(controllers.length).toBeGreaterThan(1);
@@ -185,7 +202,7 @@ describe('todo método de controller de sharing declara a camada em que vive', (
     // anotada, dependendo de onde a preguiça do quantificador parar.
     const linhas = readFileSync(file, 'utf8').split('\n');
     const VERBO = /^\s*@(?:Get|Post|Put|Patch|Delete)\(/;
-    const DECLARACAO = /^\s*@(?:RequireGroupAction\(|SelfOnly\(|ConsentGoverned\()/;
+    const DECLARACAO = /^\s*@(?:RequireGroupAction\(|SelfOnly\(|ConsentGoverned\(|InvitePreview\()/;
     /** Fim do bloco de decorators: a linha da assinatura do método. */
     const ASSINATURA = /^\s{2}(?:async\s+)?[\w]+\s*\(/;
 
@@ -239,6 +256,26 @@ describe('todo método de controller de sharing declara a camada em que vive', (
     // do profissional (#157) tem exatamente uma.
     expect(anotadas).toBeGreaterThan(0);
     expect(semAssociacao).toEqual([]);
+  });
+
+  it('a prévia pública do convite só existe com o token na URL', () => {
+    // `@InvitePreview` é `@Public()`: sem o `:token`, seria uma rota de grupo
+    // aberta a qualquer um. E é a única porta pública de grupo — outra rota
+    // `@Public()` aqui seria catálogo de academia.
+    const semToken: string[] = [];
+    let anotadas = 0;
+    for (const file of controllers) {
+      const linhas = readFileSync(file, 'utf8').split('\n');
+      linhas.forEach((linha, i) => {
+        if (/^\s*@Public\(\)/.test(linha)) semToken.push(`${file}:${i + 1} @Public solto`);
+        if (!/^\s*@InvitePreview\(\)/.test(linha)) return;
+        anotadas++;
+        const bloco = linhas.slice(Math.max(0, i - 3), i + 4).join('\n');
+        if (!/@Get\('[^']*:token[^']*'\)/.test(bloco)) semToken.push(`${file}:${i + 1}`);
+      });
+    }
+    expect(anotadas).toBe(1);
+    expect(semToken).toEqual([]);
   });
 
   it('só usa ações que existem no mapa', () => {
@@ -301,7 +338,7 @@ describe('todo método de controller de sharing declara a camada em que vive', (
   });
 
   it('as chaves de metadata não colidem', () => {
-    const chaves = [GROUP_ACTION_KEY, SELF_ONLY_KEY, CONSENT_GOVERNED_KEY];
+    const chaves = [GROUP_ACTION_KEY, SELF_ONLY_KEY, CONSENT_GOVERNED_KEY, INVITE_PREVIEW_KEY];
     expect(new Set(chaves).size).toBe(chaves.length);
   });
 });

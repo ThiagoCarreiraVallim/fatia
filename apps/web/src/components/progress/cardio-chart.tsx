@@ -12,8 +12,15 @@ import {
   YAxis,
 } from 'recharts';
 import { Search } from 'lucide-react';
-import { progressApi, type CardioProgress, type Exercise } from '@fatia/api-client';
+import {
+  formatDecimal,
+  formatInteger,
+  progressApi,
+  type CardioProgress,
+  type Exercise,
+} from '@fatia/api-client';
 import { ExercisePickerDrawer } from './exercise-picker-drawer';
+import { Skeleton } from '@/components/ui/skeleton';
 type CardioMetric = 'duration' | 'distance' | 'pace' | 'kcal';
 
 const METRICS: Array<{ value: CardioMetric; label: string; unit: string }> = [
@@ -23,7 +30,8 @@ const METRICS: Array<{ value: CardioMetric; label: string; unit: string }> = [
   { value: 'kcal', label: 'Calorias', unit: 'kcal' },
 ];
 
-function formatValue(metric: CardioMetric, value: number): string {
+/** Os números do gráfico como o app mostra: vírgula decimal, ponto de milhar. */
+export function formatCardioValue(metric: CardioMetric, value: number): string {
   if (metric === 'duration') {
     const totalSec = Math.round(value);
     const min = Math.floor(totalSec / 60);
@@ -31,7 +39,7 @@ function formatValue(metric: CardioMetric, value: number): string {
     return `${min}:${s.toString().padStart(2, '0')}`;
   }
   if (metric === 'distance') {
-    return `${(value / 1000).toFixed(2)} km`;
+    return `${formatDecimal(value / 1000, 2)} km`;
   }
   if (metric === 'pace') {
     const total = Math.round(value);
@@ -39,7 +47,7 @@ function formatValue(metric: CardioMetric, value: number): string {
     const s = total % 60;
     return `${min}:${s.toString().padStart(2, '0')} /km`;
   }
-  return `${Math.round(value)} kcal`;
+  return `${formatInteger(value)} kcal`;
 }
 
 export function CardioChart({ days }: { days: number }) {
@@ -54,7 +62,7 @@ export function CardioChart({ days }: { days: number }) {
   });
 
   return (
-    <div className="space-y-3 rounded-2xl border border-white/5 bg-card p-4">
+    <div className="space-y-3 rounded-2xl border border-subtle bg-card p-4">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-bold text-foreground">Evolução de cardio</h3>
         <button
@@ -90,9 +98,7 @@ export function CardioChart({ days }: { days: number }) {
         </p>
       )}
 
-      {exercise && progress.isLoading && (
-        <div className="h-[180px] animate-pulse rounded-lg bg-muted/40" />
-      )}
+      {exercise && progress.isLoading && <Skeleton className="h-[180px] rounded-lg bg-muted/40" />}
 
       {exercise && progress.data && <ChartBody data={progress.data} metric={metric} />}
 
@@ -122,11 +128,11 @@ function ChartBody({ data, metric }: { data: CardioProgress; metric: CardioMetri
     <>
       <div className="flex items-baseline gap-3">
         <p className="text-2xl font-extrabold tabular-nums text-foreground">
-          {formatValue(metric, last.value)}
+          {formatCardioValue(metric, last.value)}
         </p>
         {data.bestSession && (
           <span className="text-[11px] text-muted-foreground">
-            Melhor: {formatValue(metric, data.bestSession.value)}
+            Melhor: {formatCardioValue(metric, data.bestSession.value)}
           </span>
         )}
       </div>
@@ -159,7 +165,7 @@ function ChartBody({ data, metric }: { data: CardioProgress; metric: CardioMetri
               borderRadius: 6,
               fontSize: 12,
             }}
-            formatter={(v: number) => [formatValue(metric, v), '']}
+            formatter={(v: number) => [formatCardioValue(metric, v), '']}
           />
           <Line
             type="monotone"

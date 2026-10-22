@@ -4,6 +4,7 @@ import type { Goal } from '@fatia/api-client';
 import { Button } from '@/components/ui';
 import { daysLeft, formatValue } from './format';
 import { KIND_ICON } from './kind-icon';
+import { cores } from '@/theme/cores';
 
 /** Réplica do `SecondaryGoalCard` do PWA. */
 export function SecondaryGoalCard({
@@ -26,7 +27,7 @@ export function SecondaryGoalCard({
     <View className="rounded-2xl border border-border bg-card p-4">
       <View className="flex-row items-start justify-between">
         <View className="h-10 w-10 items-center justify-center rounded-xl bg-accent">
-          <Icon size={18} color="#2ce500" />
+          <Icon size={18} color={cores.primary} />
         </View>
         <View className="rounded-full bg-muted px-3 py-1">
           <Text className="text-[10px] font-bold text-foreground">{badge}</Text>
@@ -77,7 +78,7 @@ export function SecondaryGoalCard({
           onPress={onComplete}
           accessibilityLabel={`Concluir meta ${goal.title}`}
         >
-          <Check size={14} color="#2ce500" />
+          <Check size={14} color={cores.primary} />
           <Text className="text-xs font-bold text-primary">Concluir</Text>
         </Button>
         <Button
@@ -88,7 +89,7 @@ export function SecondaryGoalCard({
           onPress={onDelete}
           accessibilityLabel={`Remover meta ${goal.title}`}
         >
-          <Trash2 size={16} color="#baccaf" />
+          <Trash2 size={16} color={cores.mutedForeground} />
         </Button>
       </View>
     </View>

@@ -17,15 +17,18 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
+import { AiAccessService } from '../ai/ai-access.service';
 import { AiUsageService } from '../ai/ai-usage.service';
+import { HostedAiService } from '../ai/hosted-ai.service';
 import { CurrentUser, type CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { ChatThrottlerGuard } from './chat-throttler.guard';
-import { AgentChatClient } from './agent-chat.client';
 import { ChatService, type DestinoDoStream } from './chat.service';
+import { ChatRunRegistry } from './chat-run.registry';
 import { CheckpointPurgeService } from './checkpoint-purge.service';
 import { ConversationService } from './conversation.service';
 import { MemoryService } from './memory/memory.service';
 import { PreviaDaAcaoService } from './previa/previa-da-acao.service';
+import { GroupAgentService } from '../sharing/group-agent.service';
 import { McpToolRegistry } from '../mcp/mcp-tool.registry';
 import {
   ChatActionPreviewDto,
@@ -60,11 +63,14 @@ export class ChatController {
   constructor(
     private readonly chat: ChatService,
     private readonly conversas: ConversationService,
-    private readonly agent: AgentChatClient,
+    private readonly hostedAi: HostedAiService,
     private readonly checkpoints: CheckpointPurgeService,
     private readonly memorias: MemoryService,
     private readonly uso: AiUsageService,
+    private readonly acesso: AiAccessService,
     private readonly previas: PreviaDaAcaoService,
+    private readonly runs: ChatRunRegistry,
+    private readonly agentes: GroupAgentService,
     private readonly registry: McpToolRegistry,
   ) {}
 
@@ -93,14 +99,18 @@ export class ChatController {
    * Mesma razão do `photo-recognition` da #139: uma funcionalidade que sempre
    * falha é pior que uma que não aparece. Instância auto-hospedada sem agente
    * continua um produto inteiro.
+   *
+   * `available` é da instância; `allowed`/`reason` são desta pessoa (ADR 024):
+   * no Free a aba aparece com cadeado e leva ao "Meu plano".
    */
   @Get('availability')
-  async availability() {
-    const available = this.agent.configurado();
-    const { fotos, ditado } = available
-      ? await this.agent.capacidades()
-      : { fotos: false, ditado: false };
-    return { available, photos: fotos, dictation: ditado };
+  async availability(@CurrentUser() user: CurrentUserPayload) {
+    const available = this.hostedAi.configured();
+    const { vision, transcription } = available
+      ? await this.hostedAi.capabilities()
+      : { vision: false, transcription: false };
+    const { allowed, reason } = await this.acesso.motivo(user.id, available);
+    return { available, photos: vision, dictation: transcription, allowed, reason };
   }
 
   /**
@@ -116,7 +126,7 @@ export class ChatController {
     if (!Buffer.isBuffer(req.body)) {
       throw new UnsupportedMediaTypeException('Envie o áudio cru, com Content-Type audio/*.');
     }
-    return this.chat.transcrever(user.id, req.body, req.headers['content-type'] ?? '');
+    return this.chat.transcribe(user.id, req.body, req.headers['content-type'] ?? '');
   }
 
   @Get('conversations')
@@ -127,9 +137,65 @@ export class ChatController {
     return this.conversas.listar(user.id, query.q);
   }
 
+  /** Os agentes que a pessoa pode escolher numa conversa nova (Fase 7c), e o padrão. */
+  @Get('agents')
+  agents(@CurrentUser() user: CurrentUserPayload) {
+    return this.chat.agents(user.id);
+  }
+
   @Get('conversations/:id')
-  getConversation(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseUUIDPipe) id: string) {
-    return this.conversas.obterComMensagens(user.id, id);
+  async getConversation(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const conversa = await this.conversas.obterComMensagens(user.id, id);
+    return {
+      ...conversa,
+      agent: await this.agentes.headerFor(user.id, conversa.agentGroupId),
+      // Uma resposta ainda correndo no servidor: a tela assina o `live` em vez de
+      // mostrar o histórico parado (ADR 035).
+      running: this.runs.isRunning(user.id, id),
+    };
+  }
+
+  /**
+   * A resposta em andamento desta conversa, como SSE: reenvia o que veio
+   * depois de `after` (ou do `Last-Event-ID`) e segue ao vivo até o fim.
+   *
+   * 204 quando nada está rodando — inclusive no minuto seguinte ao fim, se o
+   * cursor já passou do último evento. Conversa alheia é 404, como em todo o
+   * resto do chat.
+   */
+  @Get('conversations/:id/live')
+  async live(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('after') after: string | undefined,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.conversas.assertDaPessoa(user.id, id);
+    const run = this.runs.find(user.id, id);
+    const desde = parseCursor(after ?? req.headers['last-event-id']);
+    if (!run || (run.done && run.lastSeq <= desde)) {
+      res.status(204).end();
+      return;
+    }
+    const destino = destinoSse(res);
+    destino.escrever(': aberto\n\n');
+    const sair = run.subscribe(desde, {
+      write: (texto) => destino.escrever(texto),
+      end: () => destino.fim(),
+    });
+    destino.aoFechar(sair);
+  }
+
+  /** Para a resposta em andamento. 204 mesmo sem resposta rodando: o efeito pedido já vale. */
+  @Post('conversations/:id/stop')
+  @HttpCode(204)
+  async stop(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseUUIDPipe) id: string) {
+    await this.conversas.assertDaPessoa(user.id, id);
+    this.chat.stop(user.id, id);
   }
 
   @Patch('conversations/:id')
@@ -188,7 +254,9 @@ export class ChatController {
     @Param('messageId', ParseUUIDPipe) messageId: string,
     @Body() dto: MessageFeedbackDto,
   ) {
-    await this.conversas.votar(user.id, id, messageId, dto);
+    const runId = await this.conversas.vote(user.id, id, messageId, dto);
+    // Espelho no Langfuse, sem esperar: o voto já está gravado aqui.
+    if (runId) void this.hostedAi.sendFeedback(runId, dto.review, dto.reasons ?? []);
   }
 
   /**
@@ -217,6 +285,12 @@ export class ChatController {
 
     await this.chat.converse(user, dto, bearer, destinoSse(res));
   }
+}
+
+/** O cursor do `live`: o último evento que o cliente já tem. Inválido é "nenhum". */
+function parseCursor(bruto: string | string[] | undefined): number {
+  const valor = Number(Array.isArray(bruto) ? bruto[0] : bruto);
+  return Number.isInteger(valor) && valor > 0 ? valor : 0;
 }
 
 function extrairBearer(req: Request): string | null {

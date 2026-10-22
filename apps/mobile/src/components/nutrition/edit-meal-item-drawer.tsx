@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { nutritionApi, type MealItem } from '@fatia/api-client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  amountGrams,
+  amountPayload,
+  nutritionApi,
+  type Amount,
+  type FoodPortion,
+  type MealItem,
+} from '@fatia/api-client';
 import {
   Button,
   Drawer,
@@ -12,7 +19,8 @@ import {
   DrawerTitle,
 } from '@/components/ui';
 import { DrawerInput } from './drawer-input';
-import { mensagemDeErro, parsePositivo } from './helpers';
+import { mensagemDeErro } from './helpers';
+import { SeletorDeQuantidade } from './seletor-de-quantidade';
 
 /**
  * Réplica de `apps/web/src/components/nutrition/edit-meal-item-drawer.tsx`.
@@ -21,6 +29,15 @@ import { mensagemDeErro, parsePositivo } from './helpers';
  * sem `snapPoints`) — o teclado ocupa metade da tela e um sheet de altura fixa
  * empurraria o único campo para fora.
  */
+
+/** Como o item foi gravado: na medida, se ela ainda existe; senão em gramas. */
+function quantidadeDoItem(item: MealItem, medidas: FoodPortion[]): Amount {
+  const medida = item.portionLabel ? medidas.find((m) => m.label === item.portionLabel) : undefined;
+  return medida && item.portionQuantity
+    ? { kind: 'portion', portionId: medida.id, quantity: item.portionQuantity }
+    : { kind: 'grams', grams: String(item.grams) };
+}
+
 export function EditMealItemDrawer({
   item,
   date,
@@ -31,26 +48,33 @@ export function EditMealItemDrawer({
   onClose: () => void;
 }) {
   const aberto = item !== null;
-  const [gramas, setGramas] = useState('');
+  // `null` até a pessoa mexer: antes disso o valor sai do item e das medidas carregadas.
+  const [editada, setEditada] = useState<Amount | null>(null);
+  const [criadas, setCriadas] = useState<FoodPortion[]>([]);
   const qc = useQueryClient();
 
-  // Ajuste durante o render, e não num efeito (#187). A comparação é a mesma que
-  // estava no array de dependências — identidade do objeto `item` — então o campo
-  // é reespelhado nos mesmos momentos, só que antes de pintar. `itemAnterior`
-  // parte de `null` para reproduzir a passagem de montagem: o drawer é montado
-  // já com `item`, e sem isso o campo nasceria vazio.
+  // Ajuste durante o render, e não num efeito (#187): trocar de item descarta a edição.
   const [itemAnterior, setItemAnterior] = useState<MealItem | null>(null);
   if (itemAnterior !== item) {
     setItemAnterior(item);
-    if (item) setGramas(String(item.grams));
+    setEditada(null);
+    setCriadas([]);
   }
+
+  const foodId = item?.foodId ?? null;
+  const consultaDeMedidas = useQuery({
+    queryKey: ['nutrition', 'portions', foodId],
+    queryFn: () => nutritionApi.portions(foodId as number),
+    enabled: aberto && foodId !== null,
+  });
+  const medidas = [...(consultaDeMedidas.data ?? []), ...criadas];
+  const quantidade: Amount | null = item ? (editada ?? quantidadeDoItem(item, medidas)) : null;
+  const gramas = quantidade ? amountGrams(quantidade, medidas) : null;
 
   const salvar = useMutation({
     mutationFn: () => {
-      if (!item) throw new Error('Sem item');
-      const g = parsePositivo(gramas);
-      if (g === null) throw new Error('Gramas inválidas');
-      return nutritionApi.updateItem(item.id, { grams: g });
+      if (!item || !quantidade || gramas === null) throw new Error('Quantidade inválida');
+      return nutritionApi.updateItem(item.id, amountPayload(quantidade));
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['nutrition', 'summary', date] });
@@ -59,6 +83,14 @@ export function EditMealItemDrawer({
       onClose();
     },
   });
+
+  const criarMedida = async (rotulo: string, g: number) => {
+    if (foodId === null) throw new Error('Item sem alimento');
+    const criada = await nutritionApi.createPortion(foodId, { label: rotulo, grams: g });
+    setCriadas((anteriores) => [...anteriores, criada]);
+    void qc.invalidateQueries({ queryKey: ['nutrition', 'portions', foodId] });
+    return criada;
+  };
 
   const erro = salvar.error
     ? mensagemDeErro(salvar.error, {
@@ -76,14 +108,25 @@ export function EditMealItemDrawer({
         </DrawerHeader>
 
         <View className="gap-4 px-4 py-3">
-          <DrawerInput
-            label="Quantidade (g)"
-            autoFocus
-            keyboardType="numeric"
-            inputMode="decimal"
-            value={gramas}
-            onChangeText={setGramas}
-          />
+          {quantidade && foodId !== null ? (
+            <SeletorDeQuantidade
+              medidas={medidas}
+              quantidade={quantidade}
+              onChange={setEditada}
+              onCriarMedida={criarMedida}
+              autoFocus
+            />
+          ) : (
+            // Item livre não tem alimento do catálogo, logo não tem medida para escolher.
+            <DrawerInput
+              label="Quantidade (g)"
+              autoFocus
+              keyboardType="numeric"
+              inputMode="decimal"
+              value={quantidade?.kind === 'grams' ? quantidade.grams : ''}
+              onChangeText={(valor) => setEditada({ kind: 'grams', grams: valor })}
+            />
+          )}
           {erro ? (
             <Text accessibilityRole="alert" className="text-sm text-destructive">
               {erro}
@@ -98,7 +141,7 @@ export function EditMealItemDrawer({
           <Button
             className="flex-1"
             onPress={() => salvar.mutate()}
-            disabled={salvar.isPending}
+            disabled={salvar.isPending || gramas === null}
             loading={salvar.isPending}
           >
             Salvar

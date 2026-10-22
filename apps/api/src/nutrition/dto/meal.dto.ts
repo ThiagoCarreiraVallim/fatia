@@ -9,11 +9,17 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  IsUUID,
+  Max,
   MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
 import { MealType } from '@prisma/client';
+
+/** Um quarto de colher até vinte unidades: fora disso é engano de digitação. */
+export const MIN_PORTION_QUANTITY = 0.25;
+export const MAX_PORTION_QUANTITY = 20;
 
 export class MealItemInputDto {
   @IsOptional()
@@ -25,9 +31,21 @@ export class MealItemInputDto {
   @MaxLength(160)
   foodName?: string;
 
+  /** Ou gramas, ou medida caseira (`portionId` + `quantity`) — nunca as duas. */
+  @IsOptional()
   @IsNumber()
   @Min(0.1)
-  grams!: number;
+  grams?: number;
+
+  @IsOptional()
+  @IsUUID()
+  portionId?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(MIN_PORTION_QUANTITY)
+  @Max(MAX_PORTION_QUANTITY)
+  quantity?: number;
 
   // Para items livres (sem foodId), Claude pode estimar macros diretamente.
   @IsOptional() @IsNumber() @Min(0) kcal?: number;
@@ -98,6 +116,17 @@ export class UpdateMealItemDto {
   @IsNumber()
   @Min(0.1)
   grams?: number;
+
+  /** Troca a quantidade por medida caseira; ver `MealItemInputDto.portionId`. */
+  @IsOptional()
+  @IsUUID()
+  portionId?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(MIN_PORTION_QUANTITY)
+  @Max(MAX_PORTION_QUANTITY)
+  quantity?: number;
 
   @IsOptional() @IsNumber() @Min(0) kcal?: number;
   @IsOptional() @IsNumber() @Min(0) proteinG?: number;

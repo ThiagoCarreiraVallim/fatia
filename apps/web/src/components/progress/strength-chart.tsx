@@ -14,6 +14,7 @@ import {
 import { Search } from 'lucide-react';
 import { progressApi, workoutApi, type Exercise, type StrengthProgress } from '@fatia/api-client';
 import { ExercisePickerDrawer } from './exercise-picker-drawer';
+import { Skeleton } from '@/components/ui/skeleton';
 type StrengthMetric = 'max_weight' | 'estimated_1rm' | 'total_volume';
 
 const METRICS: Array<{ value: StrengthMetric; label: string; unit: string }> = [
@@ -73,7 +74,7 @@ export function StrengthChart({ days }: { days: number }) {
   const metricInfo = METRICS.find((m) => m.value === metric)!;
 
   return (
-    <div className="space-y-3 rounded-2xl border border-white/5 bg-card p-4">
+    <div className="space-y-3 rounded-2xl border border-subtle bg-card p-4">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-bold text-foreground">Evolução de força</h3>
         <button
@@ -109,9 +110,7 @@ export function StrengthChart({ days }: { days: number }) {
         </p>
       )}
 
-      {exercise && progress.isLoading && (
-        <div className="h-[180px] animate-pulse rounded-lg bg-muted/40" />
-      )}
+      {exercise && progress.isLoading && <Skeleton className="h-[180px] rounded-lg bg-muted/40" />}
 
       {exercise && progress.data && <ChartBody data={progress.data} unit={metricInfo.unit} />}
 
@@ -145,9 +144,7 @@ function ChartBody({ data, unit }: { data: StrengthProgress; unit: string }) {
           <span className="text-sm font-bold text-muted-foreground">{unit}</span>
         </p>
         {data.deltaPercent !== null && (
-          <span
-            className={`text-xs font-bold ${deltaPct >= 0 ? 'text-primary' : 'text-amber-400'}`}
-          >
+          <span className={`text-xs font-bold ${deltaPct >= 0 ? 'text-primary' : 'text-warning'}`}>
             {deltaPct > 0 ? '+' : ''}
             {deltaPct.toFixed(1)}%
           </span>

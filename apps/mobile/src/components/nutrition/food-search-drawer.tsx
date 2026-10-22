@@ -1,8 +1,28 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search } from 'lucide-react-native';
-import { nutritionApi, type Food, type MealType } from '@fatia/api-client';
+import { useRouter } from 'expo-router';
+import { Check, Plus, ScanBarcode, Search, Star, Trash2 } from 'lucide-react-native';
+import {
+  amountGrams,
+  amountPayload,
+  emptyCustomFoodForm,
+  initialAmount,
+  nutritionApi,
+  shortcutDetail,
+  shortcutRows,
+  templateSummary,
+  withFavorite,
+  type Amount,
+  type CustomFoodInput,
+  type Food,
+  type FoodPortion,
+  type FoodShortcut,
+  type FoodShortcuts,
+  type MealTemplate,
+  type MealType,
+  type ShortcutRow,
+} from '@fatia/api-client';
 import {
   Button,
   Drawer,
@@ -13,15 +33,20 @@ import {
   DrawerScrollView,
   DrawerTextInput,
   DrawerTitle,
+  useConfirm,
 } from '@/components/ui';
 import { DrawerInput, estiloDoCampoDoDrawer } from './drawer-input';
 import {
   NUMEROS_TABULARES,
+  instanteNoDia,
   mensagemDeErro,
   parseNaoNegativo,
   parsePositivo,
   previaDoAlimento,
 } from './helpers';
+import { FormularioDeAlimento } from './formulario-de-alimento';
+import { SeletorDeQuantidade } from './seletor-de-quantidade';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/components/nutrition/food-search-drawer.tsx`.
@@ -31,6 +56,9 @@ import {
  * sobreviver ao porte: busca com atraso de 300 ms, troca para o formulário
  * manual, criar refeição nova quando não há `mealId`, adicionar item quando há,
  * botão bloqueado com nome vazio e erro de busca com botão de tentar de novo.
+ *
+ * Atalhos (favoritos e recentes), estrela e vários itens por abertura seguem o
+ * PWA; a lógica comum mora em `@fatia/api-client/food-shortcuts`.
  *
  * Duas coisas são específicas do nativo:
  *
@@ -42,7 +70,7 @@ import {
  */
 
 type ItemDaRefeicao = Parameters<typeof nutritionApi.addItem>[1];
-type Modo = 'busca' | 'manual';
+type Modo = 'busca' | 'manual' | 'criar';
 
 interface Props {
   open: boolean;
@@ -53,18 +81,44 @@ interface Props {
   date: string;
 }
 
+const QUANTIDADE_INICIAL: Amount = { kind: 'grams', grams: '100' };
+
 const MANUAL_INICIAL = { name: '', grams: '100', kcal: '', proteinG: '', carbsG: '', fatG: '' };
 type ValoresManuais = typeof MANUAL_INICIAL;
 
 export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }: Props) {
+  const confirm = useConfirm();
   const [modo, setModo] = useState<Modo>('busca');
   const [busca, setBusca] = useState('');
   const [buscaComAtraso, setBuscaComAtraso] = useState('');
   const [selecionado, setSelecionado] = useState<Food | null>(null);
-  const [gramas, setGramas] = useState('100');
+  const [quantidade, setQuantidade] = useState<Amount>(QUANTIDADE_INICIAL);
+  // As medidas do alimento escolhido, mais as que a pessoa criar sem fechar o drawer.
+  const [medidas, setMedidas] = useState<FoodPortion[]>([]);
   const [manual, setManual] = useState<ValoresManuais>(MANUAL_INICIAL);
+  // Nome que a busca já tinha: "Criar "granola X"" chega com ele preenchido.
+  const [nomeACriar, setNomeACriar] = useState('');
   const [nutrientesManuais, setNutrientesManuais] = useState<Record<string, string>>({});
+  // Vários itens por abertura: o primeiro cria a refeição, os seguintes entram nela.
+  const [refeicaoCriada, setRefeicaoCriada] = useState<string | null>(null);
+  const [adicionados, setAdicionados] = useState<string[]>([]);
   const qc = useQueryClient();
+  const router = useRouter();
+  const refeicaoAlvo = mealId ?? refeicaoCriada;
+
+  // O scanner é uma tela (precisa da câmera inteira). Leva o dia, o tipo e a
+  // refeição já criada nesta abertura, para o produto cair no mesmo lugar.
+  const lerCodigo = () => {
+    onOpenChange(false);
+    router.push({
+      pathname: '/nutrition/scan',
+      params: {
+        date,
+        ...(mealType ? { mealType } : {}),
+        ...(refeicaoAlvo ? { mealId: refeicaoAlvo } : {}),
+      },
+    });
+  };
 
   // Metas de nutrientes ativas: o item manual pode informá-las (ADR 009).
   const metas = useQuery({
@@ -86,9 +140,13 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
       setBusca('');
       setBuscaComAtraso('');
       setSelecionado(null);
-      setGramas('100');
+      setQuantidade(QUANTIDADE_INICIAL);
+      setMedidas([]);
       setManual(MANUAL_INICIAL);
+      setNomeACriar('');
       setNutrientesManuais({});
+      setRefeicaoCriada(null);
+      setAdicionados([]);
     }
   }
 
@@ -103,26 +161,141 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
     enabled: open && modo === 'busca' && buscaComAtraso.trim().length >= 2,
   });
 
-  const adicionar = useMutation<unknown, Error, ItemDaRefeicao>({
-    mutationFn: (payload) => {
-      if (mealId) return nutritionApi.addItem(mealId, payload);
-      return nutritionApi.createMeal({
-        mealType: mealType ?? 'SNACK',
-        eatenAt: new Date().toISOString(),
-        items: [payload],
-      });
-    },
+  const chaveDosAtalhos = ['nutrition', 'my-foods', mealType ?? null] as const;
+  const atalhos = useQuery({
+    queryKey: chaveDosAtalhos,
+    queryFn: () => nutritionApi.myFoods(mealType),
+    enabled: open,
+  });
+  const favoritos = useMemo(
+    () => new Set((atalhos.data?.favorites ?? []).map((f) => f.id)),
+    [atalhos.data],
+  );
+
+  // Refeição salva registra a refeição inteira: só faz sentido ao criar uma nova.
+  const modelos = useQuery({
+    queryKey: ['nutrition', 'meal-templates'],
+    queryFn: () => nutritionApi.mealTemplates(),
+    enabled: open && !mealId,
+  });
+
+  const registrarModelo = useMutation<unknown, Error, MealTemplate>({
+    mutationFn: (modelo) =>
+      nutritionApi.logMealTemplate(modelo.id, { eatenAt: instanteNoDia(date), mealType }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['nutrition', 'summary', date] });
       void qc.invalidateQueries({ queryKey: ['nutrition', 'nutrient-summary', date] });
       void qc.invalidateQueries({ queryKey: ['nutrition', 'history', 7] });
+      void qc.invalidateQueries({ queryKey: ['nutrition', 'my-foods'] });
+      // O card de macros do dashboard: a refeição pode vir do "+", fora da Nutrição.
+      void qc.invalidateQueries({ queryKey: ['dashboard'] });
       onOpenChange(false);
     },
   });
 
+  const apagarModelo = useMutation<void, Error, string>({
+    mutationFn: (id) => nutritionApi.deleteMealTemplate(id),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['nutrition', 'meal-templates'] }),
+  });
+
+  const confirmarApagarModelo = (modelo: MealTemplate) => {
+    confirm({
+      title: 'Apagar refeição salva',
+      description: `"${modelo.name}" sai da lista. O que já foi registrado fica.`,
+      confirmLabel: 'Apagar',
+      destructive: true,
+      onConfirm: () => apagarModelo.mutate(modelo.id),
+    });
+  };
+
+  const erroDoModelo = registrarModelo.error ?? apagarModelo.error;
+
+  // Otimista: a estrela responde no toque, e o servidor confirma depois.
+  const favoritar = useMutation<void, Error, { food: Food; favorite: boolean }>({
+    mutationFn: ({ food, favorite }) => nutritionApi.setFavorite(food.id, favorite),
+    onMutate: ({ food, favorite }) => {
+      qc.setQueryData<FoodShortcuts>(chaveDosAtalhos, (anterior) =>
+        withFavorite(anterior, food, favorite),
+      );
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: ['nutrition', 'my-foods'] }),
+  });
+  const alternarFavorito = (food: Food) =>
+    favoritar.mutate({ food, favorite: !favoritos.has(food.id) });
+
+  const adicionar = useMutation<unknown, Error, ItemDaRefeicao & { rotulo: string }>({
+    mutationFn: ({ rotulo: _rotulo, ...payload }) => {
+      if (refeicaoAlvo) return nutritionApi.addItem(refeicaoAlvo, payload);
+      return nutritionApi.createMeal({
+        mealType: mealType ?? 'SNACK',
+        eatenAt: instanteNoDia(date),
+        items: [payload],
+      });
+    },
+    onSuccess: (resultado, { rotulo }) => {
+      if (!refeicaoAlvo) {
+        const id = (resultado as { id?: string } | undefined)?.id;
+        if (id) setRefeicaoCriada(id);
+      }
+      void qc.invalidateQueries({ queryKey: ['nutrition', 'summary', date] });
+      void qc.invalidateQueries({ queryKey: ['nutrition', 'nutrient-summary', date] });
+      void qc.invalidateQueries({ queryKey: ['nutrition', 'history', 7] });
+      void qc.invalidateQueries({ queryKey: ['nutrition', 'my-foods'] });
+      // O card de macros do dashboard: a refeição pode vir do "+", fora da Nutrição.
+      void qc.invalidateQueries({ queryKey: ['dashboard'] });
+      setAdicionados((anteriores) => [...anteriores, rotulo]);
+      // De volta aos atalhos, pronto para o próximo item.
+      setModo('busca');
+      setSelecionado(null);
+      setBusca('');
+      setBuscaComAtraso('');
+      setQuantidade(QUANTIDADE_INICIAL);
+      setMedidas([]);
+      setManual(MANUAL_INICIAL);
+      setNutrientesManuais({});
+    },
+  });
+
+  const escolher = (food: Food | FoodShortcut) => {
+    adicionar.reset();
+    setSelecionado(food);
+    setMedidas(food.portions ?? []);
+    setQuantidade(initialAmount(food));
+  };
+
+  // Criou, já escolhe: o alimento cai no seletor de quantidade da refeição aberta.
+  const criarAlimento = useMutation<Food, Error, CustomFoodInput>({
+    mutationFn: (input) => nutritionApi.createCustomFood(input),
+    onSuccess: (food) => {
+      void qc.invalidateQueries({ queryKey: ['nutrition', 'search'] });
+      void qc.invalidateQueries({ queryKey: ['nutrition', 'custom-foods'] });
+      setModo('busca');
+      escolher(food);
+    },
+  });
+
+  const comecarCadastro = (nome: string) => {
+    adicionar.reset();
+    criarAlimento.reset();
+    setNomeACriar(nome);
+    setModo('criar');
+  };
+
+  const criarMedida = async (rotulo: string, g: number) => {
+    if (!selecionado) throw new Error('Sem alimento');
+    const criada = await nutritionApi.createPortion(selecionado.id, { label: rotulo, grams: g });
+    setMedidas((anteriores) => [...anteriores, criada]);
+    // Busca e atalhos guardaram o alimento sem a medida nova.
+    void qc.invalidateQueries({ queryKey: ['nutrition', 'search'] });
+    void qc.invalidateQueries({ queryKey: ['nutrition', 'my-foods'] });
+    return criada;
+  };
+
+  const gramas = selecionado ? amountGrams(quantidade, medidas) : null;
+
   const erro = adicionar.error
     ? mensagemDeErro(adicionar.error, {
-        conflito: mealId
+        conflito: refeicaoAlvo
           ? 'Esse item já foi registrado nessa refeição.'
           : 'Essa refeição já foi registrada.',
         alternativa: 'Não foi possível salvar. Tente de novo.',
@@ -130,10 +303,12 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
     : undefined;
 
   const enviarDaBusca = () => {
-    if (!selecionado) return;
-    const g = parsePositivo(gramas);
-    if (g === null) return;
-    adicionar.mutate({ foodId: selecionado.id, grams: g });
+    if (!selecionado || gramas === null) return;
+    adicionar.mutate({
+      foodId: selecionado.id,
+      ...amountPayload(quantidade),
+      rotulo: selecionado.name,
+    });
   };
 
   const enviarManual = () => {
@@ -146,6 +321,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
       if (n !== undefined) nutrientes[chave] = n;
     }
     adicionar.mutate({
+      rotulo: nome,
       foodName: nome,
       grams: g,
       kcal: parseNaoNegativo(manual.kcal),
@@ -165,12 +341,40 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
           <DrawerTitle>{titulo}</DrawerTitle>
           <DrawerDescription>
             {modo === 'manual'
-              ? 'Informe nome e macros do alimento.'
-              : 'Busque um alimento da TACO ou seus customs.'}
+              ? 'Só para esta refeição: informe nome e macros.'
+              : modo === 'criar'
+                ? 'Copie o rótulo. O alimento fica salvo em Meus alimentos.'
+                : 'Toque num atalho ou busque. Dá para adicionar vários.'}
           </DrawerDescription>
         </DrawerHeader>
 
-        {modo === 'manual' ? (
+        {adicionados.length > 0 ? (
+          <View
+            accessibilityRole="summary"
+            accessibilityLiveRegion="polite"
+            className="mx-4 flex-row items-center gap-2 rounded-lg bg-primary/10 px-3 py-2"
+          >
+            <Check size={16} color={cores.primary} />
+            <Text className="flex-1 text-sm text-primary">
+              {`${adicionados[adicionados.length - 1]} adicionado`}
+            </Text>
+          </View>
+        ) : null}
+
+        {modo === 'criar' ? (
+          <FormularioDeAlimento
+            inicial={emptyCustomFoodForm(nomeACriar)}
+            rotuloDoEnvio="Salvar e escolher quantidade"
+            enviando={criarAlimento.isPending}
+            erro={
+              criarAlimento.error
+                ? mensagemDeErro(criarAlimento.error, { conflito: criarAlimento.error.message })
+                : undefined
+            }
+            onEnviar={(input) => criarAlimento.mutate(input)}
+            onCancelar={() => setModo('busca')}
+          />
+        ) : modo === 'manual' ? (
           <FormularioManual
             valores={manual}
             onChange={setManual}
@@ -194,8 +398,17 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
         ) : selecionado ? (
           <PainelDoAlimento
             food={selecionado}
+            favorito={favoritos.has(selecionado.id)}
+            onAlternarFavorito={() => alternarFavorito(selecionado)}
             gramas={gramas}
-            onGramasChange={setGramas}
+            seletor={
+              <SeletorDeQuantidade
+                medidas={medidas}
+                quantidade={quantidade}
+                onChange={setQuantidade}
+                onCriarMedida={criarMedida}
+              />
+            }
             onBack={() => {
               setSelecionado(null);
               adicionar.reset();
@@ -213,15 +426,33 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
             comErro={resultados.isError}
             onRetry={() => void resultados.refetch()}
             dados={resultados.data}
-            onEscolher={setSelecionado}
-            onManual={() => setModo('manual')}
+            atalhos={atalhos.data}
+            modelos={mealId ? [] : (modelos.data ?? [])}
+            onRegistrarModelo={(modelo) => registrarModelo.mutate(modelo)}
+            onApagarModelo={confirmarApagarModelo}
+            erroDoModelo={erroDoModelo ? mensagemDeErro(erroDoModelo) : undefined}
+            favoritos={favoritos}
+            onAlternarFavorito={alternarFavorito}
+            onEscolher={escolher}
+            onManual={() => {
+              adicionar.reset();
+              setModo('manual');
+            }}
+            onCriar={comecarCadastro}
+            onLerCodigo={lerCodigo}
           />
         )}
 
         <DrawerFooter className="pb-6">
-          <Button variant="ghost" onPress={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
+          {adicionados.length > 0 ? (
+            <Button onPress={() => onOpenChange(false)}>
+              {`Concluir · ${adicionados.length} ${adicionados.length === 1 ? 'item' : 'itens'}`}
+            </Button>
+          ) : (
+            <Button variant="ghost" onPress={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+          )}
         </DrawerFooter>
       </View>
     </Drawer>
@@ -236,8 +467,17 @@ function PainelDeBusca({
   comErro,
   onRetry,
   dados,
+  atalhos,
+  modelos,
+  onRegistrarModelo,
+  onApagarModelo,
+  erroDoModelo,
+  favoritos,
+  onAlternarFavorito,
   onEscolher,
   onManual,
+  onCriar,
+  onLerCodigo,
 }: {
   busca: string;
   onBuscaChange: (valor: string) => void;
@@ -246,17 +486,35 @@ function PainelDeBusca({
   comErro: boolean;
   onRetry: () => void;
   dados: Food[] | undefined;
-  onEscolher: (food: Food) => void;
+  atalhos: FoodShortcuts | undefined;
+  modelos: MealTemplate[];
+  onRegistrarModelo: (modelo: MealTemplate) => void;
+  onApagarModelo: (modelo: MealTemplate) => void;
+  erroDoModelo?: string;
+  favoritos: ReadonlySet<number>;
+  onAlternarFavorito: (food: Food) => void;
+  onEscolher: (food: Food | FoodShortcut) => void;
   onManual: () => void;
+  onCriar: (nome: string) => void;
+  onLerCodigo: () => void;
 }) {
+  const digitando = buscaComAtraso.trim().length >= 2;
+  // Sem termo, a lista mostra os atalhos; com termo, os resultados da busca.
+  const linhas: ShortcutRow[] = digitando
+    ? (dados ?? []).map((food) => ({
+        kind: 'food',
+        food: { ...food, lastGrams: null, timesEaten: 0, favorite: favoritos.has(food.id) },
+      }))
+    : shortcutRows(atalhos, modelos);
+
   return (
     <View className="flex-1">
-      <View className="px-4 py-3">
-        <View className="relative justify-center">
+      <View className="flex-row items-center gap-2 px-4 py-3">
+        <View className="relative flex-1 justify-center">
           {/* `pointerEvents` desligado: o ícone cobre a borda esquerda do campo
               e sem isso o toque ali não abre o teclado. */}
           <View pointerEvents="none" className="absolute left-3 z-10">
-            <Search size={16} color="#baccaf" />
+            <Search size={16} color={cores.mutedForeground} />
           </View>
           <DrawerTextInput
             autoFocus
@@ -264,23 +522,41 @@ function PainelDeBusca({
             value={busca}
             onChangeText={onBuscaChange}
             placeholder="Ex.: arroz, frango, banana..."
-            placeholderTextColor="#8a8a8a"
-            selectionColor="#2ce500"
+            placeholderTextColor={cores.placeholder}
+            selectionColor={cores.primary}
             // Estilo em `style` e não em `className`: ver `drawer-input.tsx`.
             style={[estiloDoCampoDoDrawer, { paddingLeft: 36 }]}
           />
         </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Ler código de barras"
+          onPress={onLerCodigo}
+          className="h-11 w-11 items-center justify-center rounded-md border border-border active:bg-accent"
+        >
+          <ScanBarcode size={18} color={cores.mutedForeground} />
+        </Pressable>
       </View>
 
       <DrawerFlatList
         style={{ flex: 1 }}
-        data={dados ?? []}
-        keyExtractor={(food: Food) => String(food.id)}
+        data={linhas}
+        keyExtractor={(linha: ShortcutRow) =>
+          linha.kind === 'header'
+            ? `titulo-${linha.title}`
+            : linha.kind === 'template'
+              ? `modelo-${linha.template.id}`
+              : String(linha.food.id)
+        }
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         ListHeaderComponent={
           buscando ? (
             <Text className="px-4 py-3 text-sm text-muted-foreground">Buscando...</Text>
+          ) : erroDoModelo && !digitando ? (
+            <Text accessibilityRole="alert" className="px-4 py-3 text-sm text-destructive">
+              {erroDoModelo}
+            </Text>
           ) : null
         }
         ListEmptyComponent={
@@ -299,83 +575,222 @@ function PainelDeBusca({
                 <Text className="text-sm text-primary underline">Tentar novamente</Text>
               </Pressable>
             </View>
-          ) : buscaComAtraso.trim().length < 2 ? (
+          ) : !digitando ? (
             <Text className="px-4 py-3 text-sm text-muted-foreground">
-              Digite pelo menos 2 caracteres.
+              Digite pelo menos 2 caracteres. O que você registrar aparece aqui, a um toque.
             </Text>
           ) : (
-            <Text className="px-4 py-3 text-sm text-muted-foreground">Nenhum resultado.</Text>
+            <View className="items-start gap-2 px-4 py-3">
+              <Text className="text-sm text-muted-foreground">
+                {`Nenhum resultado para "${buscaComAtraso.trim()}".`}
+              </Text>
+              <Button
+                variant="outline"
+                size="sm"
+                onPress={() => onCriar(buscaComAtraso.trim())}
+                accessibilityLabel={`Criar "${buscaComAtraso.trim()}"`}
+              >
+                <View className="flex-row items-center gap-1">
+                  <Plus size={14} color={cores.primary} />
+                  <Text className="text-sm text-foreground">{`Criar "${buscaComAtraso.trim()}"`}</Text>
+                </View>
+              </Button>
+            </View>
           )
         }
-        renderItem={({ item }: { item: Food }) => (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`${item.name}, ${Math.round(item.kcalPer100g)} quilocalorias por 100 gramas`}
-            onPress={() => onEscolher(item)}
-            className="min-h-[44px] flex-row items-center justify-between border-b border-border px-4 py-3 active:bg-accent"
-          >
-            <View className="flex-1 pr-2">
-              <Text className="text-sm font-medium text-foreground">{item.name}</Text>
-              <Text style={NUMEROS_TABULARES} className="text-xs text-muted-foreground">
-                {Math.round(item.kcalPer100g)} kcal/100g · P{Math.round(item.proteinPer100g)} · C
-                {Math.round(item.carbsPer100g)} · G{Math.round(item.fatPer100g)}
-              </Text>
-            </View>
-            <Text className="rounded bg-muted px-2 py-0.5 text-xs uppercase text-muted-foreground">
-              {item.source}
+        renderItem={({ item: linha }: { item: ShortcutRow }) =>
+          linha.kind === 'header' ? (
+            <Text
+              accessibilityRole="header"
+              className="px-4 pb-1 pt-3 text-[11px] font-bold uppercase tracking-wide text-muted-foreground"
+            >
+              {linha.title}
             </Text>
-          </Pressable>
-        )}
+          ) : linha.kind === 'template' ? (
+            <LinhaDeModelo
+              modelo={linha.template}
+              onRegistrar={() => onRegistrarModelo(linha.template)}
+              onApagar={() => onApagarModelo(linha.template)}
+            />
+          ) : (
+            <LinhaDeAlimento
+              food={linha.food}
+              detalhe={
+                digitando
+                  ? `${Math.round(linha.food.kcalPer100g)} kcal/100g · P${Math.round(linha.food.proteinPer100g)} · C${Math.round(linha.food.carbsPer100g)} · G${Math.round(linha.food.fatPer100g)}`
+                  : shortcutDetail(linha.food)
+              }
+              favorito={favoritos.has(linha.food.id)}
+              onEscolher={() => onEscolher(linha.food)}
+              onAlternarFavorito={() => onAlternarFavorito(linha.food)}
+            />
+          )
+        }
       />
 
+      <View className="flex-row flex-wrap items-center justify-center gap-x-4 px-4">
+        <Text className="text-sm text-muted-foreground">Não achou?</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Criar meu alimento"
+          onPress={() => onCriar(busca.trim())}
+          className="min-h-[44px] justify-center"
+        >
+          <Text className="text-sm font-medium text-primary underline">Criar meu alimento</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Registrar só desta vez"
+          onPress={onManual}
+          className="min-h-[44px] justify-center"
+        >
+          <Text className="text-sm text-primary underline">Registrar só desta vez</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+/** Escolher e favoritar são alvos separados, cada um com 44 pt de toque. */
+/** Refeição salva: o toque registra tudo; apagar confirma antes. */
+function LinhaDeModelo({
+  modelo,
+  onRegistrar,
+  onApagar,
+}: {
+  modelo: MealTemplate;
+  onRegistrar: () => void;
+  onApagar: () => void;
+}) {
+  const resumo = templateSummary(modelo);
+  return (
+    <View className="min-h-[56px] flex-row items-center border-b border-border">
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Não achei, inserir manualmente"
-        onPress={onManual}
-        className="min-h-[44px] items-center justify-center px-4"
+        accessibilityLabel={`${modelo.name}, ${resumo}`}
+        onPress={onRegistrar}
+        className="flex-1 py-3 pl-4 active:bg-accent"
       >
-        <Text className="text-sm text-primary underline">Não achei, inserir manualmente</Text>
+        <Text className="text-sm font-medium text-foreground">{modelo.name}</Text>
+        <Text style={NUMEROS_TABULARES} className="text-xs text-muted-foreground">
+          {resumo}
+        </Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Apagar ${modelo.name}`}
+        onPress={onApagar}
+        className="h-11 w-11 items-center justify-center"
+      >
+        <Trash2 size={16} color={cores.mutedForeground} />
       </Pressable>
     </View>
   );
 }
 
+function LinhaDeAlimento({
+  food,
+  detalhe,
+  favorito,
+  onEscolher,
+  onAlternarFavorito,
+}: {
+  food: Food;
+  detalhe: string;
+  favorito: boolean;
+  onEscolher: () => void;
+  onAlternarFavorito: () => void;
+}) {
+  return (
+    <View className="min-h-[56px] flex-row items-center border-b border-border">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${food.name}, ${detalhe}`}
+        onPress={onEscolher}
+        className="flex-1 flex-row items-center py-3 pl-4 active:bg-accent"
+      >
+        <View className="flex-1 pr-2">
+          <Text className="text-sm font-medium text-foreground">{food.name}</Text>
+          <Text style={NUMEROS_TABULARES} className="text-xs text-muted-foreground">
+            {detalhe}
+          </Text>
+        </View>
+        {food.source === 'CUSTOM' ? (
+          <Text className="rounded bg-muted px-2 py-0.5 text-[10px] uppercase text-muted-foreground">
+            Meu
+          </Text>
+        ) : null}
+      </Pressable>
+      <BotaoFavorito nome={food.name} favorito={favorito} onPress={onAlternarFavorito} />
+    </View>
+  );
+}
+
+function BotaoFavorito({
+  nome,
+  favorito,
+  onPress,
+}: {
+  nome: string;
+  favorito: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${favorito ? 'Desfavoritar' : 'Favoritar'} ${nome}`}
+      accessibilityState={{ selected: favorito }}
+      onPress={onPress}
+      hitSlop={4}
+      className="h-12 w-12 items-center justify-center"
+    >
+      <Star
+        size={18}
+        color={favorito ? cores.warning : cores.placeholder}
+        fill={favorito ? cores.warning : 'transparent'}
+      />
+    </Pressable>
+  );
+}
+
 function PainelDoAlimento({
   food,
+  favorito,
+  onAlternarFavorito,
   gramas,
-  onGramasChange,
+  seletor,
   onBack,
   onSubmit,
   enviando,
   erro,
 }: {
   food: Food;
-  gramas: string;
-  onGramasChange: (valor: string) => void;
+  favorito: boolean;
+  onAlternarFavorito: () => void;
+  /** Gramas que vão ser gravadas (digitadas ou da medida); `null` se ainda não dá. */
+  gramas: number | null;
+  seletor: React.ReactNode;
   onBack: () => void;
   onSubmit: () => void;
   enviando: boolean;
   erro: string | undefined;
 }) {
-  const previa = previaDoAlimento(food, gramas);
-  const podeEnviar = parsePositivo(gramas) !== null;
+  const previa = gramas !== null ? previaDoAlimento(food, String(gramas)) : null;
+  const podeEnviar = gramas !== null;
 
   return (
     <View className="flex-1 gap-4 px-4 py-3">
-      <View className="rounded-lg border border-border p-3">
-        <Text className="text-sm font-medium text-foreground">{food.name}</Text>
-        <Text className="text-xs text-muted-foreground">
-          {Math.round(food.kcalPer100g)} kcal/100g
-        </Text>
+      <View className="flex-row items-center rounded-lg border border-border pl-3">
+        <View className="flex-1 py-3">
+          <Text className="text-sm font-medium text-foreground">{food.name}</Text>
+          <Text className="text-xs text-muted-foreground">
+            {Math.round(food.kcalPer100g)} kcal/100g
+          </Text>
+        </View>
+        <BotaoFavorito nome={food.name} favorito={favorito} onPress={onAlternarFavorito} />
       </View>
 
-      <DrawerInput
-        label="Quantidade (g)"
-        keyboardType="numeric"
-        inputMode="decimal"
-        value={gramas}
-        onChangeText={onGramasChange}
-      />
+      {seletor}
 
       {previa ? (
         <Text style={NUMEROS_TABULARES} className="text-sm text-muted-foreground">
@@ -500,7 +915,7 @@ function FormularioManual({
       </View>
 
       {semKcal ? (
-        <Text className="text-xs text-[#facc15]">
+        <Text className="text-xs text-warning">
           Sem calorias informadas — o item será salvo, mas não afetará seu resumo de kcal.
         </Text>
       ) : null}

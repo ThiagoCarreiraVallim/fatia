@@ -15,9 +15,11 @@ export class ListMyGroupsTool implements McpToolDef {
   readonly annotations = { readOnlyHint: true, destructiveHint: false, confirmableHint: false };
   readonly hostedInference = false;
   readonly description =
-    'Lista as academias e grupos de que o usuário participa, com o papel dele em cada um e a ' +
-    'situação (aguardando aprovação ou ativo). Estar num grupo não dá a ninguém acesso aos ' +
-    'dados do usuário: quem lê é apenas o profissional que ele autorizou explicitamente.';
+    'Lista as comunidades de que o usuário participa: papel dele, situação (aguardando ' +
+    'aprovação ou ativo), como se entra (`joinPolicy`), o que ele compartilha com a equipe ' +
+    '(`consentScopes`), se entra nas estatísticas agregadas (`statsOptIn`) e se a comunidade ' +
+    'paga a IA dele (`hasAiSeat`). Só a equipe (dono, profissionais e criadores) vê dados, e ' +
+    'só as categorias que o usuário escolheu; membros comuns nunca veem.';
   readonly inputSchema = {} as const;
   async execute(_input: Record<string, never>, { userId }: McpToolContext) {
     return this.groups.listMine(userId);

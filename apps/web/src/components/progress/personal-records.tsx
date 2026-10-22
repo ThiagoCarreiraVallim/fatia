@@ -5,6 +5,7 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Trophy, Dumbbell, Footprints, ChevronRight } from 'lucide-react';
 import { workoutApi, type SessionSet } from '@fatia/api-client';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const TOP_N = 3;
 
@@ -77,14 +78,14 @@ export function PersonalRecords() {
   return (
     <div className="space-y-2">
       <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
-        <Trophy size={16} className="text-blue-400" />
+        <Trophy size={16} className="text-water" />
         Recordes Pessoais
       </h3>
 
       {loading && (
         <>
-          <div className="h-16 animate-pulse rounded-2xl bg-muted/40" />
-          <div className="h-16 animate-pulse rounded-2xl bg-muted/40" />
+          <Skeleton className="h-16 rounded-2xl bg-muted/40" />
+          <Skeleton className="h-16 rounded-2xl bg-muted/40" />
         </>
       )}
 
@@ -106,14 +107,14 @@ export function PersonalRecords() {
         <div className="grid grid-cols-2 gap-2">
           <Link
             href="/progress/records"
-            className="flex items-center justify-center gap-1.5 rounded-2xl border border-white/5 bg-card py-3 text-sm font-bold text-foreground"
+            className="flex items-center justify-center gap-1.5 rounded-2xl border border-subtle bg-card py-3 text-sm font-bold text-foreground"
           >
             Todos os recordes
             <ChevronRight size={14} />
           </Link>
           <Link
             href="/workout/history"
-            className="flex items-center justify-center gap-1.5 rounded-2xl border border-white/5 bg-card py-3 text-sm font-bold text-foreground"
+            className="flex items-center justify-center gap-1.5 rounded-2xl border border-subtle bg-card py-3 text-sm font-bold text-foreground"
           >
             Histórico
             <ChevronRight size={14} />
@@ -127,10 +128,10 @@ export function PersonalRecords() {
 function PrRow({ exercise, pr }: { exercise: UsedExercise; pr: AnyPR }) {
   const isCardio = exercise.isCardio;
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-white/5 bg-card p-3">
+    <div className="flex items-center gap-3 rounded-2xl border border-subtle bg-card p-3">
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
         {isCardio ? (
-          <Footprints size={18} className="text-blue-400" />
+          <Footprints size={18} className="text-water" />
         ) : (
           <Dumbbell size={18} className="text-primary" />
         )}
@@ -155,7 +156,7 @@ function PrValue({ isCardio, pr }: { isCardio: boolean; pr: NonNullable<AnyPR> }
       pr.distanceMeters !== null ? `${(pr.distanceMeters / 1000).toFixed(2)} km` : null;
     return (
       <>
-        <p className="text-lg font-extrabold text-blue-400 tabular-nums">
+        <p className="text-lg font-extrabold text-water tabular-nums">
           {min}:{sec.toString().padStart(2, '0')}
         </p>
         <p className="text-[10px] font-bold tracking-wide text-muted-foreground">

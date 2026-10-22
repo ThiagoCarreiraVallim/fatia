@@ -79,7 +79,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.runtime import Runtime
 from langgraph.types import Command, interrupt
 
-from ..prompts.chat_pt_br import cercar, sistema_do_turno
+from ..prompts.chat_pt_br import bloco_da_persona, cercar, sistema_do_turno
 from ..providers.base import ReasoningDelta, TextDelta, TurnEnd
 from ..providers.errors import AIProviderError
 from . import events, human
@@ -386,9 +386,11 @@ def _composicao_do_contexto(
     catalogo: Sequence[dict[str, Any]],
 ) -> events.ChatEvent:
     memoria = "\n".join(m["content"] for m in contexto.memorias)
+    persona = bloco_da_persona(contexto.persona) if contexto.persona else ""
     historico = "".join(str(m.get("content") or "") for m in conversa)
     segmentos: list[dict[str, Any]] = [
-        {"key": "system", "tokens": _tokens(sistema) - _tokens(memoria)},
+        {"key": "system", "tokens": _tokens(sistema) - _tokens(memoria) - _tokens(persona)},
+        {"key": "persona", "tokens": _tokens(persona)},
         {"key": "memory", "tokens": _tokens(memoria)},
         {"key": "history", "tokens": _tokens(historico)},
         {"key": "tools", "tokens": _tokens(json.dumps(list(catalogo), ensure_ascii=False))},
@@ -435,6 +437,7 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
         plano = state.get("plano") or []
         sistema = sistema_do_turno(
             contexto.timezone,
+            persona=contexto.persona,
             memorias=contexto.memorias,
             plano=plano,
             reflexoes=state.get("reflexoes") or [],
@@ -904,6 +907,12 @@ def _paradas(state: EstadoDaConversa, contexto: ContextoDoTurno) -> list[dict[st
     return itens
 
 
+AGENT_INTERNAL_ERROR = "AGENT_INTERNAL_ERROR"
+MENSAGEM_DE_ERRO_INTERNO = (
+    "O assistente teve um problema interno neste turno. O registro do erro ficou no log do agente."
+)
+
+
 async def interrupcao_pendente(grafo: GrafoDaConversa, thread_id: str) -> str | None:
     """O id da pausa que a thread está esperando, ou `None` se não há nenhuma."""
     estado = await grafo.aget_state({"configurable": {"thread_id": thread_id}})
@@ -996,23 +1005,38 @@ async def stream_chat_events(
                 quadro = events.atualizacoes(pacote, reasoning)
                 if quadro is not None:
                     yield quadro
-    # Só as duas famílias nomeadas. Exceção sem `code` sobe com traceback: ela é
-    # defeito nosso, e um evento genérico esconderia a única pista.
+        final_text: str | None = None
+        if not interrompido:
+            estado = await grafo.aget_state(config)
+            encontrada = _ultima_do_assistente(estado.values.get("messages") or [])
+            if encontrada is not None:
+                final_text = _texto(encontrada[1])
+                yield events.completas([encontrada[1]], reasoning)
     except (AIProviderError, McpError) as exc:
         logger.warning("Turno de chat terminou em %s: %s", exc.code, exc.message)
+        contexto.trace.finish(status="error", error_code=exc.code)
         yield events.error(exc.code, exc.message).frame()
         yield events.done("error", **timing()).frame()
         return
-
-    if interrompido:
-        yield events.done("interrupted", **timing()).frame()
+    # Qualquer outra — o Postgres do checkpointer caindo, um defeito nosso — vira
+    # evento também. Subir crua cortava o stream no meio, e a tela mostrava "a
+    # resposta foi interrompida" sem que nada no log dissesse qual turno. O
+    # traceback continua indo para o log, que é onde a pista é útil.
+    except Exception:
+        logger.exception("Turno de chat terminou em erro inesperado.")
+        contexto.trace.finish(status="error", error_code=AGENT_INTERNAL_ERROR)
+        yield events.error(AGENT_INTERNAL_ERROR, MENSAGEM_DE_ERRO_INTERNO).frame()
+        yield events.done("error", **timing()).frame()
         return
+    # Cliente que foi embora (`GeneratorExit`) ou cancelamento: o trace fecha
+    # como parado, e o turno segue o caminho de sempre.
+    except BaseException:
+        contexto.trace.finish(status="stopped")
+        raise
 
-    estado = await grafo.aget_state(config)
-    encontrada = _ultima_do_assistente(estado.values.get("messages") or [])
-    if encontrada is not None:
-        yield events.completas([encontrada[1]], reasoning)
-    yield events.done("completed", **timing()).frame()
+    status = "interrupted" if interrompido else "completed"
+    contexto.trace.finish(status=status, output=final_text)
+    yield events.done(status, **timing()).frame()
 
 
 def _ms_between(inicio: float, fim: float) -> int:
@@ -1024,6 +1048,7 @@ def _ms_since(inicio: float) -> int:
 
 
 __all__ = [
+    "AGENT_INTERNAL_ERROR",
     "AVISO_DE_CORTE",
     "LIMITE_DE_PASSOS",
     "MAX_ARGUMENTOS_APROVADOS",

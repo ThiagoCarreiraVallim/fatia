@@ -1,5 +1,10 @@
 import type { Metadata } from 'next';
 import { LegalDoc, LegalSection } from '@/components/legal-doc';
+import { legalEntity } from '@/lib/legal-entity';
+
+// O controlador vem do ambiente da instância (`LEGAL_ENTITY_*`), lido a cada
+// requisição: trocar no painel vale sem novo build.
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Política de Privacidade — Fatia',
@@ -7,9 +12,10 @@ export const metadata: Metadata = {
 };
 
 /** Atualizar sempre que o conteúdo mudar de forma material. */
-const LAST_UPDATED = '26 de setembro de 2026';
+const LAST_UPDATED = '19 de outubro de 2026';
 
 export default function PrivacyPage() {
+  const controlador = legalEntity();
   return (
     <LegalDoc title="Política de Privacidade" lastUpdated={LAST_UPDATED}>
       <LegalSection title="Resumo">
@@ -25,11 +31,26 @@ export default function PrivacyPage() {
       </LegalSection>
 
       <LegalSection title="Quem é o controlador">
-        <p>
-          O mantenedor do projeto Fatia, responsável pela instância pública. Contato pelas{' '}
-          <a href="https://github.com/ThiagoCarreiraVallim/fatia/issues">issues do GitHub</a> ou
-          pelo e-mail de suporte publicado no repositório.
-        </p>
+        {controlador ? (
+          <p>
+            <strong>{controlador.name}</strong>
+            {controlador.document ? <>, CNPJ {controlador.document}</> : null}, responsável por esta
+            instância e pelas decisões sobre os seus dados.
+            {controlador.dpoEmail ? (
+              <>
+                {' '}
+                Encarregado de dados (DPO):{' '}
+                <a href={`mailto:${controlador.dpoEmail}`}>{controlador.dpoEmail}</a>.
+              </>
+            ) : null}
+          </p>
+        ) : (
+          <p>
+            Quem opera esta instância do Fatia. Contato pelas{' '}
+            <a href="https://github.com/ThiagoCarreiraVallim/fatia/issues">issues do GitHub</a> ou
+            pelo e-mail de suporte publicado no repositório.
+          </p>
+        )}
       </LegalSection>
 
       <LegalSection title="Quais dados coletamos">
@@ -52,6 +73,10 @@ export default function PrivacyPage() {
           <li>
             <strong>Progresso:</strong> peso corporal, passos, hidratação e metas pessoais.
           </li>
+          <li>
+            <strong>Plano:</strong> se você assina o PRO, a origem (web ou loja), o status, o
+            intervalo e as datas da assinatura. A base legal é a execução do contrato.
+          </li>
         </ul>
         <p>
           Dados de saúde são <strong>dados pessoais sensíveis</strong> pela LGPD (art. 5º, II). A
@@ -59,14 +84,21 @@ export default function PrivacyPage() {
           registrar informações — e revogável a qualquer momento apagando a conta.
         </p>
         <p>
-          Se você entra numa academia dentro do Fatia, o consentimento passa a ter um segundo nível,
-          e ele é <strong>por categoria e por profissional</strong>: você autoriza este personal a
-          ver seu treino sem que ele veja sua alimentação, e sem que o nutricionista da mesma
-          academia veja qualquer uma das duas. Nada é compartilhado por padrão — entrar num grupo
-          não autoriza ninguém a ver nada, e o dono da academia não vê dado de saúde de aluno em
-          nenhuma hipótese. Você pode ver quem tem acesso, mudar as categorias e cortar o acesso a
-          qualquer momento, pedindo ao Claude. Cortar vale a partir da próxima requisição do
-          profissional — não é &ldquo;instantâneo&rdquo;, é uma requisição.
+          Se você entra numa comunidade dentro do Fatia — uma academia, um treinador, um grupo de
+          corrida —, o consentimento passa a ter um segundo nível, e ele é{' '}
+          <strong>por categoria</strong>: ao entrar, você escolhe o que a <strong>equipe</strong> da
+          comunidade (o dono, os profissionais e os criadores de conteúdo) pode ver — treino,
+          alimentação, peso e medidas, água e passos, metas. Nada vem marcado, e recusar tudo ainda
+          deixa você entrar. Os outros membros nunca veem nada seu. Quem entra na equipe depois
+          recebe o mesmo que você escolheu; quem sai dela perde o acesso. Dá também para ajustar por
+          pessoa da equipe.
+        </p>
+        <p>
+          Você pode ver quem tem acesso, mudar as categorias e cortar o acesso a qualquer momento,
+          na tela da comunidade ou pedindo à sua IA; sair da comunidade corta o acesso de toda a
+          equipe. Cortar vale a partir da próxima requisição de quem lia — não é
+          &ldquo;instantâneo&rdquo;, é uma requisição. Se a comunidade convidar você por e-mail,
+          guardamos esse endereço no convite só até 30 dias depois de ele ser usado ou vencer.
         </p>
         <p>
           A academia pode ver <strong>estatísticas agregadas</strong> — quantas pessoas treinam de
@@ -109,7 +141,9 @@ export default function PrivacyPage() {
             <strong>Senhas.</strong> Ficam no provedor de identidade, não conosco.
           </li>
           <li>
-            <strong>Meios de pagamento.</strong> A instância pública é gratuita.
+            <strong>Cartão e CPF.</strong> Se você assina o PRO pela web, o CPF vai ao processador
+            de pagamento para emitir a cobrança e não é guardado pelo Fatia; dados de cartão nunca
+            passam por nós. Guardamos só o identificador da assinatura, o status e as datas.
           </li>
           <li>
             <strong>Localização, contatos, agenda</strong> ou qualquer dado do seu dispositivo além
@@ -255,6 +289,16 @@ export default function PrivacyPage() {
             <strong>Provedor de infraestrutura</strong> — hospeda o servidor e o banco.
           </li>
           <li>
+            <strong>Asaas</strong> — processa a assinatura do PRO feita pela web. Recebe nome,
+            e-mail e CPF para emitir a cobrança, e os dados de pagamento você informa direto a ele.
+            Não recebe seus dados de saúde.
+          </li>
+          <li>
+            <strong>Apple, Google e RevenueCat</strong> — na assinatura feita no aplicativo, a loja
+            processa o pagamento e a RevenueCat nos informa o estado da compra. Recebem só o
+            identificador da sua conta no Fatia, sem e-mail e sem dados de saúde.
+          </li>
+          <li>
             <strong>Open Food Facts</strong> — consultado quando você escaneia o código de barras de
             um produto no aplicativo. Recebe <strong>apenas o número do código de barras</strong>:
             sem token, sem cookie, sem identificador seu e sem nada do que você registrou. Do lado
@@ -271,6 +315,25 @@ export default function PrivacyPage() {
             as coordenadas de onde você estava, é removido no seu aparelho antes do envio. Cada
             chamada exige <strong>retenção zero</strong> e proíbe o uso para treino; o fornecedor
             que não cumprir não recebe a chamada. Veja <strong>Inteligência artificial</strong>.
+          </li>
+          <li>
+            <strong>Serviços de aviso</strong> — somente se você ligar os avisos no app ou no
+            navegador. No celular, os avisos passam pela <strong>Expo</strong> e pela{' '}
+            <strong>Apple</strong> ou pelo <strong>Google</strong>; no navegador, pelo serviço de
+            push dele (Google, Mozilla, Apple ou Microsoft). Recebem o texto do aviso — que{' '}
+            <strong>nunca traz dado de saúde</strong> nem o que alguém escreveu, só coisas como
+            &quot;Sua resposta está pronta&quot; — e o endereço do aparelho ou do navegador.
+            Desligar os avisos ou sair da conta no app apaga esse endereço.
+          </li>
+          <li>
+            <strong>Langfuse</strong> (servidores nos Estados Unidos) — somente quando ativado nesta
+            instância, para investigarmos erros e respostas ruins do chat. Recebe o registro técnico
+            de cada resposta: a pergunta e a resposta com{' '}
+            <strong>e-mail, CPF, CNPJ e telefone mascarados</strong>, o modelo usado, o tempo, o
+            custo e o nome das consultas que o assistente fez. <strong>Não recebe</strong> o
+            resultado dessas consultas, suas fotos, seus áudios, nem seu e-mail ou id de conta — no
+            lugar do id vai um código que não leva ao seu cadastro. Os registros são apagados pelo
+            próprio Langfuse em até 30 dias.
           </li>
         </ul>
         <p>
@@ -326,13 +389,13 @@ export default function PrivacyPage() {
             pedindo ao Claude. É irreversível e exige confirmação explícita.
           </li>
           <li>
-            <strong>Revogar o consentimento</strong> — para um profissional de academia, cortando o
-            acesso dele sem apagar nada seu. Para o tratamento como um todo, apagar a conta é a
-            forma direta.
+            <strong>Revogar o consentimento</strong> — para a equipe de uma comunidade, ou para uma
+            pessoa dela, cortando o acesso sem apagar nada seu. Para o tratamento como um todo,
+            apagar a conta é a forma direta.
           </li>
           <li>
             <strong>Saber quem acessou</strong> — a lista de quem pode ver o quê, e o registro de
-            cada leitura feita por um profissional, tentativas barradas incluídas.
+            cada leitura feita pela equipe de uma comunidade, tentativas barradas incluídas.
           </li>
         </ul>
         <p>

@@ -1,9 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Scale, Plus, TrendingDown, TrendingUp, User } from 'lucide-react';
+import { Scale, Plus, TrendingDown, TrendingUp } from 'lucide-react';
 import { progressApi } from '@fatia/api-client';
 import { WeightChart } from '@/components/progress/weight-chart';
 import { StepsChart } from '@/components/progress/steps-chart';
@@ -79,27 +78,9 @@ export default function ProgressPage() {
 
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
-      <header className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-extrabold text-foreground">Evolução</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Seus dados de performance dos últimos {days} dias.
-          </p>
-        </div>
-        {/*
-          Única porta visível para o perfil desde que o Chat tomou a vaga dele na
-          bottom-nav (#250). É `Link` e não `router.push` porque precisa continuar
-          copiável, abrível em nova aba e favoritável — a rota `/profile` não
-          mudou, só o caminho até ela.
-        */}
-        <Link
-          href="/profile"
-          className="flex shrink-0 flex-col items-center gap-1 rounded-xl bg-muted/60 px-3 py-2 text-[10px] font-bold text-muted-foreground"
-        >
-          <User size={18} />
-          Perfil
-        </Link>
-      </header>
+      <p className="text-sm text-muted-foreground">
+        Seus dados de performance dos últimos {days} dias.
+      </p>
 
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="grid w-full grid-cols-2 rounded-xl bg-muted p-1">
@@ -119,7 +100,7 @@ export default function ProgressPage() {
 
         <TabsContent value="overview" className="mt-4 space-y-4">
           {/* PESO CORPORAL CARD */}
-          <div className="rounded-2xl border border-white/5 bg-card p-4">
+          <div className="rounded-2xl border border-subtle bg-card p-4">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[10px] font-bold tracking-wide text-muted-foreground">
@@ -135,7 +116,7 @@ export default function ProgressPage() {
                   {weight.data && realWeightPoints.length >= 2 && (
                     <span
                       className={`flex items-center gap-0.5 text-xs font-bold ${
-                        weightDelta < 0 ? 'text-primary' : 'text-amber-400'
+                        weightDelta < 0 ? 'text-primary' : 'text-warning'
                       }`}
                     >
                       {weightDelta < 0 ? <TrendingDown size={12} /> : <TrendingUp size={12} />}

@@ -93,3 +93,34 @@ export function dayBoundsInTz(dateYmd: string, timezone: string): { start: Date;
 
   return { start: new Date(tzMidnightMs), end: new Date(tzMidnightMs + 86_400_000) };
 }
+
+/**
+ * O mesmo horário local de `instant`, mas no dia `targetYmd`: o almoço das 12:30
+ * de ontem copiado para hoje cai às 12:30 de hoje, no fuso da pessoa.
+ */
+export function sameLocalTimeOn(instant: Date, targetYmd: string, timezone: string): Date {
+  const wanted = secondsSinceLocalMidnight(instant, timezone);
+  const guess = new Date(dayBoundsInTz(targetYmd, timezone).start.getTime() + wanted * 1000);
+  // Dia com troca de horário de verão: a meia-noite e o horário pedido têm offsets
+  // diferentes. Uma correção basta para voltar ao relógio de parede.
+  const drift = secondsSinceLocalMidnight(guess, timezone) - wanted;
+  return drift === 0 ? guess : new Date(guess.getTime() - drift * 1000);
+}
+
+function secondsSinceLocalMidnight(instant: Date, timezone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(instant);
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  // `hour12: false` escreve meia-noite como "24" em alguns runtimes.
+  return (
+    (get('hour') % 24) * 3600 +
+    get('minute') * 60 +
+    get('second') +
+    instant.getUTCMilliseconds() / 1000
+  );
+}

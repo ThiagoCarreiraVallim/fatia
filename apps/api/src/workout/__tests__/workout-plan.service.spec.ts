@@ -1,5 +1,6 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { WorkoutPlanService } from '../workout-plan.service';
+import { readableExercises } from '../helpers/exercise-access';
 import type { PrismaService } from '../../common/prisma.service';
 
 type MockPrisma = {
@@ -19,6 +20,7 @@ type MockPrisma = {
     delete: jest.Mock;
     count: jest.Mock;
   };
+  exercise: { count: jest.Mock };
   $transaction: jest.Mock;
 };
 
@@ -39,6 +41,8 @@ const makePrisma = (): MockPrisma => ({
     delete: jest.fn(),
     count: jest.fn(),
   },
+  // Visível por padrão; o caso do exercício alheio sobrescreve.
+  exercise: { count: jest.fn().mockResolvedValue(1) },
   $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
 });
 
@@ -202,6 +206,24 @@ describe('WorkoutPlanService', () => {
           targetReps: '8-12',
         }),
       ).rejects.toBe(boom);
+    });
+
+    it('recusa exercício que a pessoa não enxerga, sem criar a linha (#92)', async () => {
+      prisma.workoutPlan.findUnique.mockResolvedValue({ id: 'plan-1', userId });
+      prisma.exercise.count.mockResolvedValue(0);
+
+      await expect(
+        service.addExercise(userId, 'plan-1', {
+          exerciseId: 77,
+          order: 1,
+          targetSets: 3,
+          targetReps: '8-12',
+        }),
+      ).rejects.toThrow(NotFoundException);
+      expect(prisma.exercise.count).toHaveBeenCalledWith({
+        where: { id: 77, ...readableExercises(userId) },
+      });
+      expect(prisma.workoutPlanExercise.create).not.toHaveBeenCalled();
     });
 
     it('refuses to add to a plan owned by another user', async () => {

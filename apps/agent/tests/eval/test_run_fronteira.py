@@ -108,6 +108,9 @@ def test_o_provedor_sem_revisao_de_destino_nao_e_importado_pelo_produto() -> Non
             continue
         arvore = ast.parse(arquivo.read_text(encoding="utf-8"))
         for no in ast.walk(arvore):
+            # Só import: `global _client` também tem `names`, mas de strings.
+            if not isinstance(no, ast.Import | ast.ImportFrom):
+                continue
             modulo = getattr(no, "module", None) or ""
             nomes = [a.name for a in getattr(no, "names", [])]
             assert "run_fronteira" not in modulo and "run_fronteira" not in " ".join(nomes), (

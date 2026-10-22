@@ -3,6 +3,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
+import { shiftDay } from '@fatia/api-client';
+import { hojeIso } from '@/lib/dias';
 import { LogStepsDrawer } from '../log-steps-drawer';
 
 vi.mock('@/components/ui/drawer', () => {
@@ -167,21 +169,18 @@ describe('LogStepsDrawer', () => {
     renderDrawer({ date: '2026-05-20' });
 
     await user.type(screen.getByLabelText(/^Passos$/), '7000');
-    await user.click(screen.getByRole('button', { name: /^salvar$/i }));
+    await user.click(screen.getByRole('button', { name: 'Salvar em qua, 20/05' }));
 
     await waitFor(() =>
       expect(createStep).toHaveBeenCalledWith({ steps: 7000, date: '2026-05-20' }),
     );
   });
 
-  it('deletes only after the confirmation, and refreshes every consumer', async () => {
+  it('deletes right away and refreshes every consumer', async () => {
     const user = userEvent.setup();
     const { invalidateQueries } = renderDrawer();
 
     await user.click(await screen.findByRole('button', { name: DELETE_S1 }));
-    expect(deleteStep).not.toHaveBeenCalled();
-
-    await user.click(screen.getByRole('button', { name: /^apagar$/i }));
 
     await waitFor(() => expect(deleteStep).toHaveBeenCalledWith('s1'));
     const keys = invalidateQueries.mock.calls.map((call) => call[0]?.queryKey);
@@ -190,5 +189,34 @@ describe('LogStepsDrawer', () => {
     expect(keys).toContainEqual(['dashboard']);
     // A meta de passos é derivada da média dos últimos 7 dias no servidor.
     expect(keys).toContainEqual(['goals']);
+  });
+
+  it('esqueceu ontem: volta um dia e salva lá; de volta em hoje, não manda `date`', async () => {
+    const user = userEvent.setup();
+    renderDrawer();
+    const ontem = shiftDay(hojeIso(), -1);
+
+    await user.click(screen.getByRole('button', { name: 'Dia anterior' }));
+    expect(screen.getByRole('button', { name: 'Próximo dia' })).toBeEnabled();
+    await user.type(screen.getByLabelText(/^Passos$/), '4321');
+    await user.click(screen.getByRole('button', { name: 'Salvar em ontem' }));
+    await waitFor(() => expect(createStep).toHaveBeenCalledWith({ steps: 4321, date: ontem }));
+
+    expect(screen.getByRole('button', { name: 'Próximo dia' })).toBeDisabled();
+    await user.type(screen.getByLabelText(/^Passos$/), '1000');
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(createStep).toHaveBeenLastCalledWith({ steps: 1000 }));
+  });
+  it('offers "Desfazer", which recreates the deleted log on the same day', async () => {
+    const user = userEvent.setup();
+    renderDrawer();
+
+    await user.click(await screen.findByRole('button', { name: DELETE_S1 }));
+    // Dentro do drawer modal o aviso fica na própria lista: o resto da página é inerte.
+    expect(await screen.findByRole('status')).toHaveTextContent('Registro de passos apagado');
+    await user.click(screen.getByRole('button', { name: 'Desfazer' }));
+    await waitFor(() =>
+      expect(createStep).toHaveBeenCalledWith({ steps: 9500, date: '2026-05-19' }),
+    );
   });
 });

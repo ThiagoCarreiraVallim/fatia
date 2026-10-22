@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { SessionSet, WorkoutSession } from '@fatia/api-client';
+import type { ReactNode } from 'react';
 import WorkoutPage from '../page';
 
 /**
@@ -22,7 +23,30 @@ vi.mock('@/components/workout/exercise-search-drawer', () => ({
 }));
 vi.mock('@/components/workout/finish-session-modal', () => ({ FinishSessionModal: () => null }));
 vi.mock('@/components/workout/cancel-session-modal', () => ({ CancelSessionModal: () => null }));
-vi.mock('@/components/workout/exercise-detail-card', () => ({ ExerciseDetailCard: () => null }));
+// O card de leitura em si fica de fora; só o pé dele (as ações da lista) interessa.
+vi.mock('@/components/workout/exercise-detail-card', () => ({
+  ExerciseDetailCard: ({ footer }: { footer?: ReactNode }) => <div>{footer}</div>,
+}));
+vi.mock('@/components/workout/block-timeline', () => ({ BlockTimeline: () => null }));
+// O embla consulta `matchMedia`, que o jsdom não tem; o carrossel não é o alvo.
+vi.mock('@/components/ui/carousel', () => {
+  const Passthrough = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
+  return { Carousel: Passthrough, CarouselContent: Passthrough, CarouselItem: Passthrough };
+});
+// Mesmo dublê do `edit-height-drawer.test.tsx`: o vaul chama `setPointerCapture`,
+// que o jsdom não implementa, e aqui só importa o que a confirmação diz e faz.
+vi.mock('@/components/ui/drawer', () => {
+  const Passthrough = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
+  return {
+    Drawer: ({ open, children }: { open: boolean; children: ReactNode }) =>
+      open ? <div role="dialog">{children}</div> : null,
+    DrawerContent: Passthrough,
+    DrawerHeader: Passthrough,
+    DrawerTitle: ({ children }: { children: ReactNode }) => <h2>{children}</h2>,
+    DrawerDescription: ({ children }: { children: ReactNode }) => <p>{children}</p>,
+    DrawerClose: Passthrough,
+  };
+});
 vi.mock('@/components/workout/active-cardio-card', () => ({ ActiveCardioCard: () => null }));
 
 vi.mock('@fatia/api-client', async () => {
@@ -35,6 +59,9 @@ vi.mock('@fatia/api-client', async () => {
       getLastSet: vi.fn(),
       getPersonalRecord: vi.fn(),
       logSet: vi.fn(),
+      updateSession: vi.fn(),
+      deleteSet: vi.fn(),
+      listPlans: vi.fn(),
     },
   };
 });
@@ -44,6 +71,9 @@ import { workoutApi } from '@fatia/api-client';
 const getActiveSession = vi.mocked(workoutApi.getActiveSession);
 const getLastSet = vi.mocked(workoutApi.getLastSet);
 const getPersonalRecord = vi.mocked(workoutApi.getPersonalRecord);
+const updateSession = vi.mocked(workoutApi.updateSession);
+const deleteSet = vi.mocked(workoutApi.deleteSet);
+const listPlans = vi.mocked(workoutApi.listPlans);
 
 const STARTED_AT = '2026-08-01T18:00:00.000Z';
 
@@ -146,5 +176,198 @@ describe('WorkoutPage — troca de exercício na sessão', () => {
     expect(await screen.findByRole('heading', { name: 'Rosca direta' })).toBeInTheDocument();
     await waitFor(() => expect(weightValue()).toBe('20'));
     expect(screen.getByText('Anterior: 20kg')).toBeInTheDocument();
+  });
+});
+
+/**
+ * Fazer outro exercício agora, reordenar e tirar — só desta sessão. A lógica é
+ * a do `active-session.tsx` do app; aqui o que se prova é o que a página manda
+ * para a API e quem fica em foco.
+ */
+describe('WorkoutPage — arrumar a sessão em andamento', () => {
+  const threeExercises: WorkoutSession = {
+    ...session,
+    plannedExercises: [
+      ...(session.plannedExercises ?? []),
+      {
+        exerciseId: 3,
+        exerciseName: 'Agachamento',
+        muscleGroup: 'pernas',
+        order: 3,
+        targetSets: 3,
+        targetReps: '8',
+      },
+    ],
+  };
+
+  function loggedSet(exerciseId: number, setNumber: number): SessionSet {
+    return {
+      ...makeReferenceSet(exerciseId, 20),
+      id: `serie-${exerciseId}-${setNumber}`,
+      sessionId: threeExercises.id,
+      setNumber,
+    };
+  }
+
+  function listOrder() {
+    return screen
+      .getAllByRole('button', { name: /^Tirar .* deste treino$/ })
+      .map((b) => b.getAttribute('aria-label'));
+  }
+
+  beforeEach(() => {
+    getActiveSession.mockResolvedValue(threeExercises);
+    getPersonalRecord.mockResolvedValue(null);
+    getLastSet.mockResolvedValue(null);
+    updateSession.mockResolvedValue(threeExercises);
+    deleteSet.mockResolvedValue(undefined);
+  });
+
+  it('"Fazer agora" traz o exercício para o foco, inclusive um pulado', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    expect(await screen.findByRole('heading', { name: 'Supino reto' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Fazer Agachamento agora' }));
+    expect(await screen.findByRole('heading', { name: 'Agachamento' })).toBeInTheDocument();
+
+    // Pula o agachamento: o foco volta ao primeiro aberto, o supino. Pula o
+    // supino também, e o agachamento — pulado — ainda dá para trazer de volta.
+    await user.click(screen.getByRole('button', { name: /finalizar exercício/i }));
+    expect(await screen.findByRole('heading', { name: 'Supino reto' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /finalizar exercício/i }));
+    expect(await screen.findByRole('heading', { name: 'Rosca direta' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Fazer Agachamento agora' }));
+    expect(await screen.findByRole('heading', { name: 'Agachamento' })).toBeInTheDocument();
+  });
+
+  it('exercício já concluído na lista mostra "✓ Concluído"', async () => {
+    getActiveSession.mockResolvedValue({
+      ...threeExercises,
+      sets: [loggedSet(3, 1), loggedSet(3, 2), loggedSet(3, 3)],
+    });
+    renderPage();
+    expect(await screen.findByText('✓ Concluído')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Fazer Agachamento agora' })).toBeNull();
+  });
+
+  it('mover grava a ordem inteira, com o exercício em foco onde estava', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('heading', { name: 'Supino reto' });
+
+    await user.click(screen.getByRole('button', { name: 'Mover Rosca direta para baixo' }));
+    await waitFor(() =>
+      expect(updateSession).toHaveBeenCalledWith(threeExercises.id, { exerciseOrder: [1, 3, 2] }),
+    );
+  });
+
+  it('com o foco no meio, mover os de baixo não tira o foco da posição dele', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('heading', { name: 'Supino reto' });
+    await user.click(screen.getByRole('button', { name: 'Fazer Rosca direta agora' }));
+    await screen.findByRole('heading', { name: 'Rosca direta' });
+
+    // Lista de baixo: supino, agachamento. Subir o agachamento troca os dois,
+    // e a rosca continua na segunda posição.
+    await user.click(screen.getByRole('button', { name: 'Mover Agachamento para cima' }));
+    await waitFor(() =>
+      expect(updateSession).toHaveBeenCalledWith(threeExercises.id, { exerciseOrder: [3, 2, 1] }),
+    );
+  });
+
+  it('a ordem nova aparece na hora e volta se a API recusar', async () => {
+    let reject!: (error: Error) => void;
+    updateSession.mockReturnValueOnce(new Promise((_, r) => (reject = r)));
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('heading', { name: 'Supino reto' });
+    expect(listOrder()).toEqual([
+      'Tirar Rosca direta deste treino',
+      'Tirar Agachamento deste treino',
+    ]);
+
+    await user.click(screen.getByRole('button', { name: 'Mover Rosca direta para baixo' }));
+    await waitFor(() =>
+      expect(listOrder()).toEqual([
+        'Tirar Agachamento deste treino',
+        'Tirar Rosca direta deste treino',
+      ]),
+    );
+
+    // A releitura depois do erro fica pendurada: quem desfaz a troca tem de ser
+    // o rollback, não a resposta do servidor.
+    getActiveSession.mockReturnValue(new Promise(() => {}));
+    reject(new Error('falhou'));
+    await waitFor(() =>
+      expect(listOrder()).toEqual([
+        'Tirar Rosca direta deste treino',
+        'Tirar Agachamento deste treino',
+      ]),
+    );
+  });
+
+  it('sem série registrada, a lixeira tira direto e marca o planejado como removido', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('heading', { name: 'Supino reto' });
+
+    await user.click(screen.getByRole('button', { name: 'Tirar Rosca direta deste treino' }));
+    await waitFor(() =>
+      expect(updateSession).toHaveBeenCalledWith(threeExercises.id, { removedExerciseIds: [2] }),
+    );
+    expect(deleteSet).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('com série registrada, confirma dizendo quantas vão embora antes de apagar', async () => {
+    getActiveSession.mockResolvedValue({
+      ...threeExercises,
+      sets: [loggedSet(2, 1), loggedSet(2, 2)],
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('heading', { name: 'Supino reto' });
+
+    await user.click(screen.getByRole('button', { name: 'Tirar Rosca direta deste treino' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Tirar Rosca direta do treino?');
+    expect(dialog).toHaveTextContent(
+      'As 2 séries registradas serão apagadas. O plano não muda: ele volta no próximo treino.',
+    );
+    expect(updateSession).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Tirar do treino' }));
+    await waitFor(() =>
+      expect(updateSession).toHaveBeenCalledWith(threeExercises.id, { removedExerciseIds: [2] }),
+    );
+    expect(deleteSet.mock.calls).toEqual([
+      [threeExercises.id, 'serie-2-1'],
+      [threeExercises.id, 'serie-2-2'],
+    ]);
+  });
+});
+
+describe('WorkoutPage — sem sessão aberta', () => {
+  it('mostra os planos primeiro e a periodização por último, como no app', async () => {
+    getActiveSession.mockResolvedValue(null);
+    listPlans.mockResolvedValue([]);
+    renderPage();
+
+    await screen.findByText('MEUS PLANOS');
+    const nodes = [
+      'MEUS PLANOS',
+      'PERSONALIZAÇÃO',
+      'INICIAR TREINO LIVRE',
+      'TREINOS RÁPIDOS',
+      'PERIODIZAÇÃO',
+    ].map((label) => screen.getByText(label));
+    for (let i = 1; i < nodes.length; i++) {
+      expect(
+        nodes[i - 1]!.compareDocumentPosition(nodes[i]!) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    }
   });
 });

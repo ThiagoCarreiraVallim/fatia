@@ -7,9 +7,10 @@ import { HttpException, HttpStatus } from '@nestjs/common';
  * credencial de Postgres (ADR 015) e é disparado com o token do próprio usuário; se ele reportasse
  * o próprio consumo, o limite dependeria de o reportador ser honesto. Quem mede é quem cobra.
  *
- * A cota **degrada, não vende**. O app é grátis para o aluno (#158, cobrança por cabeça): estourar
- * o limite devolve o usuário ao registro manual, que continua funcionando inteiro. Em nenhuma
- * hipótese isso vira oferta de pagamento.
+ * A cota **degrada, não vende**. Ela vale para quem já tem a IA hospedada, inclusive no PRO, que
+ * tem preço fixo (ADR 024): estourar o limite devolve a pessoa ao registro manual, que continua
+ * funcionando inteiro. Em nenhuma hipótese isso vira oferta de pagamento — quem oferece o PRO é o
+ * portão de plano (`ai-access.service.ts`, 402), que roda antes e só fala com quem está no Free.
  */
 
 /** Onde o teto bateu. Muda a mensagem e muda quem precisa agir. */

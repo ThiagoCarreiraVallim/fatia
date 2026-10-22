@@ -12,8 +12,10 @@ import {
   DrawerScrollView,
   DrawerTitle,
 } from '@/components/ui';
+import { CommunityGuideSection } from './community-guide';
 import { ExerciseEditDrawer } from './exercise-edit-drawer';
 import { MuscleDiagram } from './muscle-diagram';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/components/workout/exercise-detail-drawer.tsx`.
@@ -68,7 +70,12 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
     },
   });
 
-  const videoId = exercise ? (exercise.youtubeVideoIdPt ?? exercise.youtubeVideoId ?? null) : null;
+  const guia = exercise?.community ?? null;
+  // O vídeo da comunidade substitui o do YouTube (Fase 7b).
+  const videoId =
+    exercise && !guia?.video?.url
+      ? (exercise.youtubeVideoIdPt ?? exercise.youtubeVideoId ?? null)
+      : null;
 
   function handleEdit() {
     if (!exercise) return;
@@ -91,17 +98,10 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
             ) : null}
           </DrawerHeader>
 
-          <View className="px-4 pb-3">
-            <Button variant="outline" loading={clone.isPending} onPress={handleEdit}>
-              <Pencil size={16} color="#e5e2e1" />
-              <Text className="text-sm font-medium text-foreground">
-                {exercise.source === 'CUSTOM' ? 'Editar' : 'Editar (cria uma cópia sua)'}
-              </Text>
-            </Button>
-          </View>
-
           <DrawerScrollView className="flex-1 px-4">
             <View className="gap-5 pb-6">
+              {guia ? <CommunityGuideSection guide={guia} exerciseName={exercise.name} /> : null}
+
               {exercise.primaryMuscles && exercise.primaryMuscles.length > 0 ? (
                 <MuscleDiagram
                   primaryMuscles={exercise.primaryMuscles}
@@ -166,11 +166,28 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
                       void Linking.openURL(`https://www.youtube.com/watch?v=${videoId}`);
                     }}
                   >
-                    <ExternalLink size={16} color="#e5e2e1" />
+                    <ExternalLink size={16} color={cores.foreground} />
                     <Text className="text-sm font-medium text-foreground">Assistir no YouTube</Text>
                   </Button>
                 </View>
               ) : null}
+
+              {/* Por último, rolando com o conteúdo. Fixo no topo, o "editar"
+                  era a primeira coisa do detalhe e empurrava para baixo o que a
+                  pessoa veio ver — como se faz o exercício. Editar é raro. */}
+              <Button
+                variant="ghost"
+                loading={clone.isPending}
+                onPress={handleEdit}
+                className="mt-2 self-center"
+              >
+                <Pencil size={14} color={cores.mutedForeground} />
+                <Text className="text-xs font-medium text-muted-foreground">
+                  {exercise.source === 'CUSTOM'
+                    ? 'Editar exercício'
+                    : 'Editar (cria uma cópia sua)'}
+                </Text>
+              </Button>
             </View>
           </DrawerScrollView>
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search } from 'lucide-react';
+import { Check, Plus, ScanBarcode, Search, Star, Trash2 } from 'lucide-react';
 import {
   Drawer,
   DrawerClose,
@@ -13,7 +13,29 @@ import {
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { nutritionApi, type Food, type MealType } from '@fatia/api-client';
+import {
+  amountGrams,
+  amountPayload,
+  emptyCustomFoodForm,
+  initialAmount,
+  nutritionApi,
+  shortcutDetail,
+  templateSummary,
+  withFavorite,
+  type Amount,
+  type CustomFoodInput,
+  type Food,
+  type FoodPortion,
+  type FoodShortcut,
+  type FoodShortcuts,
+  type MealTemplate,
+  type MealType,
+} from '@fatia/api-client';
+import { instanteNoDia } from '@/lib/dias';
+import { AmountPicker } from './amount-picker';
+import { BarcodeFlow } from './barcode-flow';
+import { CustomFoodForm } from './custom-food-form';
+import { invalidateNutritionDay } from '@/lib/nutrition-cache';
 
 interface Props {
   open: boolean;
@@ -24,18 +46,22 @@ interface Props {
   date: string;
 }
 
-type Mode = 'search' | 'manual';
+type Mode = 'search' | 'manual' | 'create' | 'scan';
 
 interface ItemPayload {
   foodId?: number;
   foodName?: string;
-  grams: number;
+  grams?: number;
+  portionId?: string;
+  quantity?: number;
   kcal?: number;
   proteinG?: number;
   carbsG?: number;
   fatG?: number;
   nutrients?: Record<string, number>;
 }
+
+const INITIAL_AMOUNT: Amount = { kind: 'grams', grams: '100' };
 
 const INITIAL_MANUAL = { name: '', grams: '100', kcal: '', proteinG: '', carbsG: '', fatG: '' };
 
@@ -55,10 +81,18 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
   const [selected, setSelected] = useState<Food | null>(null);
-  const [grams, setGrams] = useState<string>('100');
+  const [amount, setAmount] = useState<Amount>(INITIAL_AMOUNT);
+  // As medidas do alimento escolhido, mais as que a pessoa criar sem fechar o drawer.
+  const [portions, setPortions] = useState<FoodPortion[]>([]);
   const [manual, setManual] = useState(INITIAL_MANUAL);
+  // Nome que a busca já tinha: "Criar "granola X"" chega com ele preenchido.
+  const [createName, setCreateName] = useState('');
   const [manualNutrients, setManualNutrients] = useState<Record<string, string>>({});
+  // Vários itens por abertura: o primeiro cria a refeição, os seguintes entram nela.
+  const [createdMealId, setCreatedMealId] = useState<string | null>(null);
+  const [added, setAdded] = useState<string[]>([]);
   const qc = useQueryClient();
+  const targetMealId = mealId ?? createdMealId;
 
   // Metas de nutrientes ativas: o item manual pode informar esses nutrientes (ADR 009).
   const targets = useQuery({
@@ -80,9 +114,13 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
       setQ('');
       setDebounced('');
       setSelected(null);
-      setGrams('100');
+      setAmount(INITIAL_AMOUNT);
+      setPortions([]);
       setManual(INITIAL_MANUAL);
+      setCreateName('');
       setManualNutrients({});
+      setCreatedMealId(null);
+      setAdded([]);
     }
   }
 
@@ -97,26 +135,122 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
     enabled: open && mode === 'search' && debounced.trim().length >= 2,
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['nutrition', 'summary', date] });
+  const myFoodsKey = ['nutrition', 'my-foods', mealType ?? null] as const;
+  const shortcuts = useQuery({
+    queryKey: myFoodsKey,
+    queryFn: () => nutritionApi.myFoods(mealType),
+    enabled: open,
+  });
+  const favoriteIds = useMemo(
+    () => new Set((shortcuts.data?.favorites ?? []).map((f) => f.id)),
+    [shortcuts.data],
+  );
 
-  const addItem = useMutation<unknown, Error, ItemPayload>({
-    mutationFn: (payload) => {
-      if (mealId) return nutritionApi.addItem(mealId, payload);
-      return nutritionApi.createMeal({
-        mealType: mealType ?? 'SNACK',
-        eatenAt: new Date().toISOString(),
-        items: [payload],
-      });
-    },
+  // Refeição salva registra a refeição inteira: só faz sentido ao criar uma nova.
+  const templates = useQuery({
+    queryKey: ['nutrition', 'meal-templates'],
+    queryFn: () => nutritionApi.mealTemplates(),
+    enabled: open && !mealId,
+  });
+
+  const logTemplate = useMutation<unknown, Error, MealTemplate>({
+    mutationFn: (template) =>
+      nutritionApi.logMealTemplate(template.id, {
+        eatenAt: instanteNoDia(date),
+        mealType,
+      }),
     onSuccess: () => {
-      invalidate();
+      // O dashboard entra junto: a refeição pode vir do "+", fora da Nutrição.
+      invalidateNutritionDay(qc, date);
+      qc.invalidateQueries({ queryKey: ['nutrition', 'my-foods'] });
       onOpenChange(false);
     },
   });
 
+  const deleteTemplate = useMutation<void, Error, string>({
+    mutationFn: (id) => nutritionApi.deleteMealTemplate(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['nutrition', 'meal-templates'] }),
+  });
+
+  // Otimista: a estrela responde no toque, e o servidor confirma depois.
+  const favorite = useMutation<void, Error, { food: Food; favorite: boolean }>({
+    mutationFn: ({ food, favorite }) => nutritionApi.setFavorite(food.id, favorite),
+    onMutate: ({ food, favorite }) => {
+      qc.setQueryData<FoodShortcuts>(myFoodsKey, (prev) => withFavorite(prev, food, favorite));
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['nutrition', 'my-foods'] }),
+  });
+
+  const addItem = useMutation<{ id?: string } | unknown, Error, ItemPayload & { label: string }>({
+    mutationFn: ({ label: _label, ...payload }) => {
+      if (targetMealId) return nutritionApi.addItem(targetMealId, payload);
+      return nutritionApi.createMeal({
+        mealType: mealType ?? 'SNACK',
+        eatenAt: instanteNoDia(date),
+        items: [payload],
+      });
+    },
+    onSuccess: (result, { label }) => {
+      if (!targetMealId) {
+        const id = (result as { id?: string } | undefined)?.id;
+        if (id) setCreatedMealId(id);
+      }
+      // O dashboard entra junto: a refeição pode vir do "+", fora da Nutrição.
+      invalidateNutritionDay(qc, date);
+      qc.invalidateQueries({ queryKey: ['nutrition', 'my-foods'] });
+      setAdded((prev) => [...prev, label]);
+      // De volta aos atalhos, pronto para o próximo item.
+      setMode('search');
+      setSelected(null);
+      setQ('');
+      setDebounced('');
+      setAmount(INITIAL_AMOUNT);
+      setPortions([]);
+      setManual(INITIAL_MANUAL);
+      setManualNutrients({});
+    },
+  });
+
+  // Criou, já escolhe: o alimento cai no seletor de quantidade da refeição aberta.
+  const createFood = useMutation<Food, Error, CustomFoodInput>({
+    mutationFn: (input) => nutritionApi.createCustomFood(input),
+    onSuccess: (food) => {
+      qc.invalidateQueries({ queryKey: ['nutrition', 'search'] });
+      qc.invalidateQueries({ queryKey: ['nutrition', 'custom-foods'] });
+      setMode('search');
+      pick(food);
+    },
+  });
+
+  const startCreate = (name: string) => {
+    addItem.reset();
+    createFood.reset();
+    setCreateName(name);
+    setMode('create');
+  };
+
+  const createPortion = async (label: string, grams: number) => {
+    if (!selected) throw new Error('Sem alimento');
+    const created = await nutritionApi.createPortion(selected.id, { label, grams });
+    setPortions((prev) => [...prev, created]);
+    // Busca e atalhos guardaram o alimento sem a medida nova.
+    qc.invalidateQueries({ queryKey: ['nutrition', 'search'] });
+    qc.invalidateQueries({ queryKey: ['nutrition', 'my-foods'] });
+    return created;
+  };
+
+  const pick = (food: Food | FoodShortcut) => {
+    addItem.reset();
+    setSelected(food);
+    setPortions(food.portions ?? []);
+    setAmount(initialAmount(food));
+  };
+
+  const grams = selected ? amountGrams(amount, portions) : null;
+
   const preview = useMemo(() => {
     if (!selected) return null;
-    const g = parsePositive(grams);
+    const g = grams;
     if (g === null) return null;
     const ratio = g / 100;
     return {
@@ -128,10 +262,8 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
   }, [selected, grams]);
 
   const submitFromSearch = () => {
-    if (!selected) return;
-    const g = parsePositive(grams);
-    if (g === null) return;
-    addItem.mutate({ foodId: selected.id, grams: g });
+    if (!selected || grams === null) return;
+    addItem.mutate({ foodId: selected.id, ...amountPayload(amount), label: selected.name });
   };
 
   const submitManual = () => {
@@ -144,6 +276,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
       if (n !== undefined) nutrients[key] = n;
     }
     addItem.mutate({
+      label: name,
       foodName: name,
       grams: g,
       kcal: parseNonNegative(manual.kcal),
@@ -163,12 +296,43 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
           <DrawerTitle>{title}</DrawerTitle>
           <DrawerDescription>
             {mode === 'manual'
-              ? 'Informe nome e macros do alimento.'
-              : 'Busque um alimento da TACO ou seus customs.'}
+              ? 'Só para esta refeição: informe nome e macros.'
+              : mode === 'create'
+                ? 'Copie o rótulo. O alimento fica salvo em Meus alimentos.'
+                : mode === 'scan'
+                  ? 'Aponte a câmera para as barras ou digite o código.'
+                  : 'Toque num atalho ou busque. Dá para adicionar vários.'}
           </DrawerDescription>
         </DrawerHeader>
 
-        {mode === 'manual' ? (
+        {added.length > 0 && (
+          <p
+            role="status"
+            className="flex items-center gap-2 rounded-lg bg-primary/10 px-3 py-2 text-sm text-primary"
+          >
+            <Check size={16} aria-hidden />
+            <span>{`${added[added.length - 1]} adicionado`}</span>
+          </p>
+        )}
+
+        {mode === 'scan' ? (
+          <BarcodeFlow
+            onAdd={(payload) => addItem.mutate(payload)}
+            adding={addItem.isPending}
+            addError={addItem.error?.message}
+            onCreateManually={() => startCreate('')}
+            onBack={() => setMode('search')}
+          />
+        ) : mode === 'create' ? (
+          <CustomFoodForm
+            initial={emptyCustomFoodForm(createName)}
+            submitLabel="Salvar e escolher quantidade"
+            pending={createFood.isPending}
+            error={createFood.error?.message}
+            onSubmit={(input) => createFood.mutate(input)}
+            onCancel={() => setMode('search')}
+          />
+        ) : mode === 'manual' ? (
           <ManualForm
             values={manual}
             onChange={setManual}
@@ -190,8 +354,19 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
         ) : selected ? (
           <SelectedFoodPanel
             food={selected}
-            grams={grams}
-            onGramsChange={setGrams}
+            favorite={favoriteIds.has(selected.id)}
+            onToggleFavorite={() =>
+              favorite.mutate({ food: selected, favorite: !favoriteIds.has(selected.id) })
+            }
+            picker={
+              <AmountPicker
+                portions={portions}
+                amount={amount}
+                onChange={setAmount}
+                onCreatePortion={createPortion}
+              />
+            }
+            canSubmit={grams !== null}
             preview={preview}
             onBack={() => {
               setSelected(null);
@@ -210,16 +385,39 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
             isError={search.isError}
             onRetry={() => search.refetch()}
             data={search.data}
-            onPick={setSelected}
-            onSwitchToManual={() => setMode('manual')}
+            shortcuts={shortcuts.data}
+            templates={mealId ? [] : (templates.data ?? [])}
+            onLogTemplate={(template) => logTemplate.mutate(template)}
+            onDeleteTemplate={(template) => deleteTemplate.mutate(template.id)}
+            templateError={logTemplate.error?.message ?? deleteTemplate.error?.message}
+            favoriteIds={favoriteIds}
+            onToggleFavorite={(food) =>
+              favorite.mutate({ food, favorite: !favoriteIds.has(food.id) })
+            }
+            onPick={pick}
+            onSwitchToManual={() => {
+              addItem.reset();
+              setMode('manual');
+            }}
+            onCreate={startCreate}
+            onScan={() => {
+              addItem.reset();
+              setMode('scan');
+            }}
           />
         )}
 
-        <DrawerClose asChild>
-          <Button variant="ghost" className="mt-2 w-full">
-            Cancelar
+        {added.length > 0 ? (
+          <Button className="mt-2 w-full" onClick={() => onOpenChange(false)}>
+            Concluir · {added.length} {added.length === 1 ? 'item' : 'itens'}
           </Button>
-        </DrawerClose>
+        ) : (
+          <DrawerClose asChild>
+            <Button variant="ghost" className="mt-2 w-full">
+              Cancelar
+            </Button>
+          </DrawerClose>
+        )}
       </DrawerContent>
     </Drawer>
   );
@@ -233,8 +431,17 @@ interface SearchPanelProps {
   isError: boolean;
   onRetry: () => void;
   data: Food[] | undefined;
-  onPick: (food: Food) => void;
+  shortcuts: FoodShortcuts | undefined;
+  templates: MealTemplate[];
+  onLogTemplate: (template: MealTemplate) => void;
+  onDeleteTemplate: (template: MealTemplate) => void;
+  templateError?: string;
+  favoriteIds: ReadonlySet<number>;
+  onToggleFavorite: (food: Food) => void;
+  onPick: (food: Food | FoodShortcut) => void;
   onSwitchToManual: () => void;
+  onCreate: (name: string) => void;
+  onScan: () => void;
 }
 
 function SearchPanel({
@@ -245,76 +452,292 @@ function SearchPanel({
   isError,
   onRetry,
   data,
+  shortcuts,
+  templates,
+  onLogTemplate,
+  onDeleteTemplate,
+  templateError,
+  favoriteIds,
+  onToggleFavorite,
   onPick,
   onSwitchToManual,
+  onCreate,
+  onScan,
 }: SearchPanelProps) {
+  const typing = debounced.trim().length >= 2;
+  const hasShortcuts =
+    templates.length > 0 ||
+    (!!shortcuts && shortcuts.favorites.length + shortcuts.recent.length > 0);
+
   return (
     <>
-      <div className="relative my-3">
-        <Search
-          size={16}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-        />
-        <Input
-          autoFocus
-          value={q}
-          onChange={(e) => onQChange(e.target.value)}
-          placeholder="Ex.: arroz, frango, banana..."
-          className="pl-9"
-        />
+      <div className="my-3 flex gap-2">
+        <div className="relative flex-1">
+          <Search
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            aria-label="Buscar alimento"
+            autoFocus
+            value={q}
+            onChange={(e) => onQChange(e.target.value)}
+            placeholder="Ex.: arroz, frango, banana..."
+            className="pl-9"
+          />
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={onScan}
+          aria-label="Ler código de barras"
+          title="Ler código de barras"
+          className="shrink-0"
+        >
+          <ScanBarcode size={18} aria-hidden />
+        </Button>
       </div>
       <ul className="-mx-4 max-h-[55vh] divide-y overflow-y-auto">
         {isFetching && <li className="px-4 py-3 text-sm text-muted-foreground">Buscando...</li>}
         {!isFetching && isError && (
           <li className="flex items-center justify-between px-4 py-3 text-sm">
-            <span className="text-rose-500">Erro ao buscar alimentos.</span>
+            <span className="text-danger">Erro ao buscar alimentos.</span>
             <button type="button" onClick={onRetry} className="text-primary underline">
               Tentar novamente
             </button>
           </li>
         )}
-        {!isFetching && !isError && debounced.length < 2 && (
+        {!typing && !hasShortcuts && (
           <li className="px-4 py-3 text-sm text-muted-foreground">
-            Digite pelo menos 2 caracteres.
+            Digite pelo menos 2 caracteres. O que você registrar aparece aqui, a um toque.
           </li>
         )}
-        {!isFetching && !isError && data?.length === 0 && (
-          <li className="px-4 py-3 text-sm text-muted-foreground">Nenhum resultado.</li>
-        )}
-        {data?.map((food) => (
-          <li key={food.id}>
-            <button
-              type="button"
-              onClick={() => onPick(food)}
-              className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-accent"
-            >
-              <div>
-                <p className="text-sm font-medium">{food.name}</p>
-                <p className="text-xs text-muted-foreground tabular-nums">
-                  {Math.round(food.kcalPer100g)} kcal/100g · P{Math.round(food.proteinPer100g)} · C
-                  {Math.round(food.carbsPer100g)} · G{Math.round(food.fatPer100g)}
-                </p>
-              </div>
-              <span className="rounded bg-muted px-2 py-0.5 text-xs uppercase">{food.source}</span>
-            </button>
+        {!typing && templateError && (
+          <li role="alert" className="px-4 py-3 text-sm text-danger">
+            {templateError}
           </li>
+        )}
+        {!typing && templates.length > 0 && (
+          <li>
+            <h3 className="px-4 pt-3 pb-1 text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
+              Refeições salvas
+            </h3>
+            <ul aria-label="Refeições salvas" className="divide-y">
+              {templates.map((template) => (
+                <TemplateRow
+                  key={template.id}
+                  template={template}
+                  onLog={() => onLogTemplate(template)}
+                  onDelete={() => onDeleteTemplate(template)}
+                />
+              ))}
+            </ul>
+          </li>
+        )}
+        {!typing && shortcuts && (
+          <>
+            <ShortcutSection
+              title="Favoritos"
+              foods={shortcuts.favorites}
+              favoriteIds={favoriteIds}
+              onPick={onPick}
+              onToggleFavorite={onToggleFavorite}
+            />
+            <ShortcutSection
+              title="Recentes"
+              foods={shortcuts.recent}
+              favoriteIds={favoriteIds}
+              onPick={onPick}
+              onToggleFavorite={onToggleFavorite}
+            />
+          </>
+        )}
+        {typing && !isFetching && !isError && data?.length === 0 && (
+          <li className="space-y-2 px-4 py-3 text-sm">
+            <p className="text-muted-foreground">{`Nenhum resultado para "${debounced.trim()}".`}</p>
+            <Button variant="outline" size="sm" onClick={() => onCreate(debounced.trim())}>
+              <Plus size={14} aria-hidden />
+              {`Criar "${debounced.trim()}"`}
+            </Button>
+          </li>
+        )}
+        {typing &&
+          data?.map((food) => (
+            <FoodRow
+              key={food.id}
+              food={food}
+              favorite={favoriteIds.has(food.id)}
+              onPick={() => onPick(food)}
+              onToggleFavorite={() => onToggleFavorite(food)}
+              detail={`${Math.round(food.kcalPer100g)} kcal/100g · P${Math.round(food.proteinPer100g)} · C${Math.round(food.carbsPer100g)} · G${Math.round(food.fatPer100g)}`}
+            />
+          ))}
+      </ul>
+      <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm">
+        <span className="text-muted-foreground">Não achou?</span>
+        <button
+          type="button"
+          onClick={() => onCreate(q.trim())}
+          className="min-h-9 font-medium text-primary underline"
+        >
+          Criar meu alimento
+        </button>
+        <button type="button" onClick={onSwitchToManual} className="min-h-9 text-primary underline">
+          Registrar só desta vez
+        </button>
+      </div>
+    </>
+  );
+}
+
+function ShortcutSection({
+  title,
+  foods,
+  favoriteIds,
+  onPick,
+  onToggleFavorite,
+}: {
+  title: string;
+  foods: FoodShortcut[];
+  favoriteIds: ReadonlySet<number>;
+  onPick: (food: Food, lastGrams?: number | null) => void;
+  onToggleFavorite: (food: Food) => void;
+}) {
+  if (foods.length === 0) return null;
+  return (
+    <li>
+      <h3 className="px-4 pt-3 pb-1 text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
+        {title}
+      </h3>
+      <ul aria-label={title} className="divide-y">
+        {foods.map((food) => (
+          <FoodRow
+            key={food.id}
+            food={food}
+            favorite={favoriteIds.has(food.id)}
+            onPick={() => onPick(food)}
+            onToggleFavorite={() => onToggleFavorite(food)}
+            detail={shortcutDetail(food)}
+          />
         ))}
       </ul>
+    </li>
+  );
+}
+
+/** Refeição salva: o toque registra tudo; apagar confirma na própria linha. */
+function TemplateRow({
+  template,
+  onLog,
+  onDelete,
+}: {
+  template: MealTemplate;
+  onLog: () => void;
+  onDelete: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <li className="flex items-center">
       <button
         type="button"
-        onClick={onSwitchToManual}
-        className="mt-3 w-full text-sm text-primary underline"
+        onClick={onLog}
+        className="min-h-11 flex-1 px-4 py-2 text-left hover:bg-accent"
       >
-        Não achei, inserir manualmente
+        <span className="block text-sm">{template.name}</span>
+        <span className="block text-xs text-muted-foreground">{templateSummary(template)}</span>
       </button>
-    </>
+      {confirming ? (
+        <div className="flex items-center gap-1 pr-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="destructive"
+            aria-label={`Confirmar apagar ${template.name}`}
+            onClick={onDelete}
+          >
+            Apagar
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setConfirming(false)}>
+            Não
+          </Button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          aria-label={`Apagar ${template.name}`}
+          className="flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-danger"
+        >
+          <Trash2 size={16} aria-hidden />
+        </button>
+      )}
+    </li>
+  );
+}
+
+/** Linha da lista: escolher e favoritar são alvos separados (botão dentro de botão não vale). */
+function FoodRow({
+  food,
+  favorite,
+  detail,
+  onPick,
+  onToggleFavorite,
+}: {
+  food: Food;
+  favorite: boolean;
+  detail: string;
+  onPick: () => void;
+  onToggleFavorite: () => void;
+}) {
+  return (
+    <li className="flex items-center">
+      <button
+        type="button"
+        onClick={onPick}
+        className="flex min-h-14 flex-1 items-center justify-between gap-2 py-3 pl-4 text-left hover:bg-accent"
+      >
+        <div className="min-w-0">
+          <p className="text-sm font-medium">{food.name}</p>
+          <p className="text-xs text-muted-foreground tabular-nums">{detail}</p>
+        </div>
+        {food.source === 'CUSTOM' && (
+          <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-[10px] uppercase">Meu</span>
+        )}
+      </button>
+      <FavoriteButton name={food.name} favorite={favorite} onToggle={onToggleFavorite} />
+    </li>
+  );
+}
+
+function FavoriteButton({
+  name,
+  favorite,
+  onToggle,
+}: {
+  name: string;
+  favorite: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={`${favorite ? 'Desfavoritar' : 'Favoritar'} ${name}`}
+      aria-pressed={favorite}
+      className="flex h-12 w-12 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
+    >
+      <Star size={18} className={favorite ? 'fill-warning text-warning' : undefined} aria-hidden />
+    </button>
   );
 }
 
 interface SelectedFoodPanelProps {
   food: Food;
-  grams: string;
-  onGramsChange: (v: string) => void;
+  favorite: boolean;
+  onToggleFavorite: () => void;
+  picker: React.ReactNode;
+  canSubmit: boolean;
   preview: { kcal: number; proteinG: number; carbsG: number; fatG: number } | null;
   onBack: () => void;
   onSubmit: () => void;
@@ -324,41 +747,32 @@ interface SelectedFoodPanelProps {
 
 function SelectedFoodPanel({
   food,
-  grams,
-  onGramsChange,
+  favorite,
+  onToggleFavorite,
+  picker,
+  canSubmit,
   preview,
   onBack,
   onSubmit,
   isSubmitting,
   error,
 }: SelectedFoodPanelProps) {
-  const canSubmit = parsePositive(grams) !== null;
   return (
     <div className="my-3 space-y-4">
-      <div className="rounded-lg border p-3">
-        <p className="text-sm font-medium">{food.name}</p>
-        <p className="text-xs text-muted-foreground">{Math.round(food.kcalPer100g)} kcal/100g</p>
+      <div className="flex items-center rounded-lg border pl-3">
+        <div className="flex-1 py-3">
+          <p className="text-sm font-medium">{food.name}</p>
+          <p className="text-xs text-muted-foreground">{Math.round(food.kcalPer100g)} kcal/100g</p>
+        </div>
+        <FavoriteButton name={food.name} favorite={favorite} onToggle={onToggleFavorite} />
       </div>
-      <div className="space-y-1">
-        <label htmlFor="grams" className="text-sm font-medium">
-          Quantidade (g)
-        </label>
-        <Input
-          id="grams"
-          type="number"
-          inputMode="decimal"
-          value={grams}
-          onChange={(e) => onGramsChange(e.target.value)}
-          min={0}
-          step={1}
-        />
-      </div>
+      {picker}
       {preview && (
         <p className="text-sm tabular-nums text-muted-foreground">
           Total: {preview.kcal} kcal · P{preview.proteinG} · C{preview.carbsG} · G{preview.fatG}
         </p>
       )}
-      {error && <p className="text-sm text-rose-500">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
       <div className="flex gap-2">
         <Button variant="outline" className="flex-1" onClick={onBack}>
           Voltar
@@ -450,13 +864,13 @@ function ManualForm({
         <ManualMacro id="manual-g" label="G (g)" value={values.fatG} onChange={set('fatG')} />
       </div>
       {noKcal && (
-        <p className="text-xs text-amber-500">
+        <p className="text-xs text-warning">
           Sem calorias informadas — o item será salvo, mas não afetará seu resumo de kcal.
         </p>
       )}
 
       {nutrientTargets.length > 0 && (
-        <div className="space-y-2 rounded-lg border border-white/5 bg-muted/30 p-3">
+        <div className="space-y-2 rounded-lg border border-subtle bg-muted/30 p-3">
           <p className="text-xs font-bold text-muted-foreground">Metas personalizadas (opcional)</p>
           <div className="grid grid-cols-3 gap-2">
             {nutrientTargets.map((n) => (
@@ -482,7 +896,7 @@ function ManualForm({
         </div>
       )}
 
-      {error && <p className="text-sm text-rose-500">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
       <div className="flex gap-2">
         <Button variant="outline" className="flex-1" onClick={onBack}>
           Voltar

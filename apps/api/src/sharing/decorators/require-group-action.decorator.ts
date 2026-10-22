@@ -1,9 +1,11 @@
-import { SetMetadata } from '@nestjs/common';
+import { SetMetadata, applyDecorators } from '@nestjs/common';
+import { Public } from '../../common/decorators/public.decorator';
 import type { GroupAction } from '../permissions';
 
 export const GROUP_ACTION_KEY = 'sharing:group-action';
 export const SELF_ONLY_KEY = 'sharing:self-only';
 export const CONSENT_GOVERNED_KEY = 'sharing:consent-governed';
+export const INVITE_PREVIEW_KEY = 'sharing:invite-preview';
 
 /**
  * Declara qual ação administrativa a rota exerce. O `GroupRoleGuard` lê o
@@ -50,3 +52,15 @@ export const SelfOnly = () => SetMetadata(SELF_ONLY_KEY, true);
  * proíbe: resolver o aluno por um id de usuário vindo de fora.
  */
 export const ConsentGoverned = () => SetMetadata(CONSENT_GOVERNED_KEY, true);
+
+/**
+ * A quarta camada, e a única sem login: a prévia do convite (`/c/<token>`),
+ * para quem ainda não tem conta ver **que comunidade** o convidou antes de se
+ * cadastrar.
+ *
+ * Não lê dado de ninguém e não age sobre ninguém — só devolve o cartão da
+ * comunidade a quem tem o token, que é o segredo. Por isso não cabe em
+ * nenhuma das outras três. O teste estrutural cobra que a rota tenha `:token`
+ * na URL: sem o token, uma rota pública de grupo seria um catálogo aberto.
+ */
+export const InvitePreview = () => applyDecorators(Public(), SetMetadata(INVITE_PREVIEW_KEY, true));

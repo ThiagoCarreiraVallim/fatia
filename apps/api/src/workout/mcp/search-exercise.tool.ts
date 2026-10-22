@@ -21,7 +21,7 @@ export class SearchExerciseTool implements McpToolDef {
 
   readonly hostedInference = false;
   readonly description =
-    'Search for exercises by name or muscle group (chest, back, legs, shoulders, arms, core, cardio).';
+    "Search for exercises by name or muscle group (chest, back, legs, shoulders, arms, core, cardio). Exercises from the user's community (gym or creator) come first, marked with communityName.";
   readonly inputSchema = {
     q: z.string().optional().describe('Search term (exercise name)'),
     muscleGroup: muscleGroupSchema
@@ -36,9 +36,16 @@ export class SearchExerciseTool implements McpToolDef {
       .max(50)
       .optional()
       .describe('Maximum number of results (default 20)'),
+    onlyMyGym: z
+      .boolean()
+      .optional()
+      .describe("Only the community's own exercises and those its equipment allows"),
   } as const;
 
-  execute(input: { q?: string; muscleGroup?: string; limit?: number }, { userId }: McpToolContext) {
+  execute(
+    input: { q?: string; muscleGroup?: string; limit?: number; onlyMyGym?: boolean },
+    { userId }: McpToolContext,
+  ) {
     return this.exercises.search(userId, input);
   }
 }

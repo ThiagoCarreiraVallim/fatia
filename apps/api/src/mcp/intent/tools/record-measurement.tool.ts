@@ -50,6 +50,7 @@ export class RecordMeasurementTool extends IntentTool<'record_measurement'> {
             notes: input.notes,
           },
           userId,
+          timezone,
         ); // log_weight
     }
   }

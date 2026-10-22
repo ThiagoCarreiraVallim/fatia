@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Play, Trash2, ChevronUp, ChevronDown, Trophy } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
@@ -39,6 +39,8 @@ interface SessionCardProps {
   sessionId?: string;
   /** When false, hides per-set delete button. Defaults to true. */
   canDeleteSet?: boolean;
+  /** Pé do card — na sessão em andamento, "Fazer agora" e as ações de arrumação. */
+  footer?: ReactNode;
 }
 
 type Props = PlanCardProps | SessionCardProps;
@@ -78,7 +80,7 @@ function Header({ item, isCardio }: { item: PlanItemLike; isCardio?: boolean }) 
         <p className="mt-0.5 text-xs text-muted-foreground">{item.exercise.muscleGroup}</p>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {isCardio ? (
-            <span className="rounded-md bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-400">
+            <span className="rounded-md bg-water/15 px-2 py-0.5 text-[10px] font-bold text-water">
               CARDIO
             </span>
           ) : (
@@ -110,6 +112,7 @@ function SessionModeCard({
   isCardio,
   sessionId,
   canDeleteSet = true,
+  footer,
 }: SessionCardProps) {
   const editable = !!sessionId;
   const showDelete = editable && canDeleteSet;
@@ -118,7 +121,7 @@ function SessionModeCard({
     : 'grid-cols-[40px_1fr_1fr_1fr]';
 
   return (
-    <div className="rounded-2xl border border-white/5 bg-card p-4">
+    <div className="rounded-2xl border border-subtle bg-card p-4">
       <Header item={item} isCardio={isCardio} />
       {loggedSets.length > 0 && (
         <div className="mt-4 space-y-1.5">
@@ -153,6 +156,7 @@ function SessionModeCard({
           ))}
         </div>
       )}
+      {footer}
     </div>
   );
 }
@@ -238,7 +242,7 @@ function PlanModeCard({
         : null;
 
   return (
-    <div className="rounded-2xl border border-white/5 bg-card p-4">
+    <div className="rounded-2xl border border-subtle bg-card p-4">
       <Header item={item} isCardio={isCardio} />
 
       {prLabel && (
@@ -320,7 +324,7 @@ function PlanModeCard({
             <button
               type="button"
               onClick={onRemove}
-              className="rounded p-1 text-muted-foreground hover:text-rose-500"
+              className="rounded p-1 text-muted-foreground hover:text-danger"
               aria-label={`Remover ${item.exercise.name} do plano`}
             >
               <Trash2 size={16} />

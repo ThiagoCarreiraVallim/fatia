@@ -165,11 +165,13 @@ class McpSemDestrutivas(McpClient):
             t.name for t in catalogo if t.annotations.get("destructiveHint") is True
         )
 
-    async def call_tool(self, name: str, arguments: dict[str, Any]) -> McpToolResult:
+    async def call_tool(
+        self, name: str, arguments: dict[str, Any], *, read_only: bool = False
+    ) -> McpToolResult:
         if name in self.destrutivas:
             self.interceptadas.append(name)
             return McpToolResult(text=INTERCEPTADA, is_error=False)
-        return await super().call_tool(name, arguments)
+        return await super().call_tool(name, arguments, read_only=read_only)
 
 
 class ProvedorDoEval(OpenAICompatProvider):

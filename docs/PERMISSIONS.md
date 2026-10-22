@@ -32,11 +32,19 @@ Um controller de `sharing/` declara a camada por decorator, e não existe rota s
 | `@RequireGroupAction` | administra o grupo; papel decide              | `GroupRoleGuard`, pelo `:groupId`      |
 | `@SelfOnly`           | age sobre quem chamou; papel não decide nada  | o próprio `userId` do contexto         |
 | `@ConsentGoverned`    | lê dado de outra pessoa; **o vínculo** decide | `assertReadable`, pelo `:membershipId` |
+| `@InvitePreview`      | cartão do convite, sem login                  | o próprio token, que é o segredo       |
 
 O terceiro entrou com o painel do profissional (#157). Ele não é um afrouxamento: continua não
 existindo rota sem declaração, e `permission-matrix.spec.ts` cobra de cada rota `@ConsentGoverned`
 que ela enderece o titular por `:membershipId` — porque a variante que a ADR 014 proíbe é
 justamente resolver o aluno por um identificador de usuário vindo de fora.
+
+O quarto, `@InvitePreview`, entrou com os convites (Fase 5) e é a única rota pública de
+`sharing/`: `GET /groups/invites/:token` mostra a quem recebeu o link **que comunidade** o
+convidou, antes de criar conta. Não lê dado de ninguém nem age sobre ninguém. O spec cobra que a
+rota tenha `:token` na URL — sem o token, uma rota pública de grupo seria um catálogo aberto — e
+o throttle da rota é baixo. Convite inválido, expirado, revogado, esgotado ou de outro e-mail
+responde o mesmo `NOT_FOUND`.
 
 ## Acúmulo de papéis é impossível por construção
 
@@ -60,16 +68,24 @@ aparece em `permissions.ts` e nenhum service consulta `role` para ampliar escopo
 | `group.read`       | sim   | sim          | sim     | sim    |
 | `group.update`     | sim   | não          | não     | não    |
 | `group.delete`     | sim   | não          | não     | não    |
+| `group.transfer`   | sim   | não          | não     | não    |
 | `invite.create`    | sim   | sim          | não     | não    |
 | `invite.revoke`    | sim   | sim          | não     | não    |
 | `member.list`      | sim   | sim          | sim     | sim    |
 | `member.approve`   | sim   | não          | não     | não    |
 | `member.remove`    | sim   | não          | não     | não    |
+| `member.role`      | sim   | não          | não     | não    |
 | `billing.read`     | sim   | não          | não     | não    |
 | `billing.manage`   | sim   | não          | não     | não    |
-| `content.publish`  | não   | sim          | sim     | não    |
+| `content.publish`  | sim   | sim          | sim     | não    |
+| `content.read`     | sim   | sim          | sim     | sim    |
 | `content.moderate` | sim   | não          | sim     | não    |
 | `offer.create`     | não   | sim          | não     | não    |
+| `challenge.manage` | sim   | sim          | sim     | não    |
+| `challenge.join`   | sim   | sim          | sim     | sim    |
+| `post.read`        | sim   | sim          | sim     | sim    |
+| `post.create`      | sim   | sim          | sim     | sim    |
+| `member.ban`       | sim   | não          | não     | não    |
 | `insights.read`    | sim   | não          | não     | não    |
 
 Quatro linhas merecem justificativa, porque são as que alguém tentaria "corrigir" numa revisão
@@ -86,12 +102,51 @@ futura:
 - **`insights.read` é `OWNER` e só.** O painel agregado (#159/#160) é do dono. O profissional já
   tem o caminho individual, com consentimento; dar-lhe também o agregado seria dois caminhos para
   a mesma informação com regras diferentes.
+- **`invite.create` abre para `PROFESSIONAL`, mas só como `MEMBER`.** Quem define a equipe é
+  o dono: o `InviteService` recusa convite de profissional para papel de equipe, e ninguém é
+  convidado como `OWNER` — dono se transfere (`group.transfer`, o antigo dono fica na equipe
+  como `PROFESSIONAL`).
+- **`member.role` é `OWNER` e só.** Virar equipe é passar a receber o que cada membro consentiu
+  à comunidade, então só quem define a equipe muda papel. Os vínculos acompanham no mesmo commit:
+  quem entra na equipe recebe o leque inverso, quem sai perde tudo que recebia ali
+  (`revokedReason = role_changed`), e o dono não muda de papel por aqui — transfere.
+- **`content.publish` inclui o `OWNER`.** Numa academia é a dona quem publica o treino e as dicas
+  da casa. Publicar é escrever para a comunidade, não ler dado de ninguém. O autor edita o que é
+  dele; quem tem `content.moderate` edita e tira do ar o de qualquer pessoa da equipe.
+- **`content.read` abre para todo mundo.** É a vitrine de planos prontos e dicas; o rascunho fica
+  de fora pelo `ContentService`, não por esta tabela.
+- **O catálogo de exercícios da comunidade (Fase 7b, ADR 030) usa as mesmas ações.** Criar
+  exercício e gravar tutorial é `content.publish`; o autor muda o dele e quem tem
+  `content.moderate` muda o de todos. O membro enxerga o catálogo por `content.read` e pela busca
+  de exercícios de sempre. O equipamento da academia é configuração dela: `group.update`.
+- **O agente da comunidade no chat (Fase 7c, ADR 031) é do dono:** `group.update` configura nome,
+  avatar e orientações. Não há ação nova para conversar com ele: qualquer membro ativo escolhe o
+  agente ligado da comunidade no chat, e a API confere a associação a cada turno.
+- **Desafios (Fase 8a, ADR 027): `challenge.manage` é da equipe, `challenge.join` de todos.** A
+  equipe marca, muda antes de começar, encerra e apaga antes de começar; o autor mexe no dele e
+  quem tem `content.moderate` no de qualquer um. Participar é opt-in e o **ranking só vai para quem
+  participa** — a equipe vê quantos entraram, não o placar, a menos que entre também.
+- **Mural (Fase 8b, ADR 032): `post.read` e `post.create` são de todos; moderar é
+  `content.moderate`; banir é `member.ban`, só do dono.** `post.create` abre para `MEMBER` na
+  tabela, mas a comunidade pode fechar o mural para a equipe (`Group.postPolicy = TEAM_ONLY`,
+  conferido no `PostService` e no pedido de envio da imagem). Reagir, comentar e denunciar são
+  `post.read`. Quem modera remove, restaura e fixa e trata a fila de denúncias, sem saber quem
+  denunciou; banir é mais forte que remover membro e fica com quem remove.
 - **`content.moderate` é `OWNER` e `CREATOR`.** `PROFESSIONAL` não modera: não é papel de
   moderação, e acumular seria a mesma armadilha que o resto do documento evita.
 
+**Recusa: 403 para quem é de dentro, 404 para quem é de fora.** Quem não tem associação viva no
+grupo recebe `NOT_FOUND`, igual a um grupo inexistente — não pode descobrir que a comunidade existe.
+Membro ativo cujo papel não alcança a ação recebe `FORBIDDEN`: ele já está lá dentro, e não há o que
+esconder. A regra é uma só no `GroupRoleGuard`, no `assertOwner` do `GroupService` e do
+`MembershipService` e no `assertManager` do `SeatPoolService` (`billing.manage`: comprar, ajustar,
+cancelar, atribuir e retirar assento), que repetem a checagem para quando o service é chamado sem
+passar pela rota.
+
 ### Status da associação (papel só vale com associação viva)
 
-Papel é uma das duas condições; a outra é o **status** da associação. `LEFT` e `REMOVED` não
+Papel é uma das duas condições; a outra é o **status** da associação. `LEFT`, `REMOVED` e
+`BANNED` não
 exercem nada — o papel guardado numa associação encerrada faria o ex-dono continuar
 administrando. `ACTIVE` exerce o que a tabela acima permite. E a associação **pendente**
 (`INVITED`, criada por `POST /groups/join`) exerce só isto:
@@ -101,16 +156,24 @@ administrando. `ACTIVE` exerce o que a tabela acima permite. E a associação **
 | `group.read`       | sim                  |
 | `group.update`     | não                  |
 | `group.delete`     | não                  |
+| `group.transfer`   | não                  |
 | `invite.create`    | não                  |
 | `invite.revoke`    | não                  |
 | `member.list`      | não                  |
 | `member.approve`   | não                  |
 | `member.remove`    | não                  |
+| `member.role`      | não                  |
 | `billing.read`     | não                  |
 | `billing.manage`   | não                  |
 | `content.publish`  | não                  |
+| `content.read`     | não                  |
 | `content.moderate` | não                  |
 | `offer.create`     | não                  |
+| `challenge.manage` | não                  |
+| `challenge.join`   | não                  |
+| `post.read`        | não                  |
+| `post.create`      | não                  |
+| `member.ban`       | não                  |
 | `insights.read`    | não                  |
 
 `group.read` é "sim" porque o grupo pendente **já aparece** em `GET /groups` (o `STATUS_VIVOS` de
@@ -127,18 +190,25 @@ cobrança viva (#158).
 
 ## Leitura de dado de titular (papel NÃO decide — vínculo decide)
 
-| Escopo      | Quem pode receber vínculo | Quem NUNCA recebe             |
-| ----------- | ------------------------- | ----------------------------- |
-| `WORKOUT`   | PROFESSIONAL              | OWNER, CREATOR, MEMBER, ADMIN |
-| `NUTRITION` | PROFESSIONAL              | OWNER, CREATOR, MEMBER, ADMIN |
-| `BODY`      | PROFESSIONAL              | OWNER, CREATOR, MEMBER, ADMIN |
-| `HABITS`    | PROFESSIONAL              | OWNER, CREATOR, MEMBER, ADMIN |
-| `GOALS`     | PROFESSIONAL              | OWNER, CREATOR, MEMBER, ADMIN |
+| Escopo      | Quem pode receber vínculo    | Quem NUNCA recebe |
+| ----------- | ---------------------------- | ----------------- |
+| `WORKOUT`   | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
+| `NUTRITION` | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
+| `BODY`      | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
+| `HABITS`    | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
+| `GOALS`     | OWNER, PROFESSIONAL, CREATOR | MEMBER, ADMIN     |
 
 Esta tabela é **igual em todas as linhas de propósito**, e é isso que ela tem a dizer: nenhum
-papel lê nada. `PROFESSIONAL` aparece só como "pode receber", que não é o mesmo que "tem" — sem
-uma linha de `ProfessionalLink` criada pelo titular, com aquele escopo, ativa, no mesmo grupo, a
-leitura responde o mesmo `NOT_FOUND` que um estranho receberia.
+papel lê nada. A equipe (`OWNER`, `PROFESSIONAL`, `CREATOR`) aparece só como "pode receber", que
+não é o mesmo que "tem" — sem uma linha de `ProfessionalLink` criada pelo titular, com aquele
+escopo, ativa, no mesmo grupo, a leitura responde o mesmo `NOT_FOUND` que um estranho receberia.
+
+A ADR 026 abriu a coluna para o dono e o criador: o consentimento passa a ser dado **ao entrar**
+(no convite ou no código), para a equipe toda de uma vez, e não mais um profissional por vez.
+Os escopos escolhidos ficam em `GroupMembership.consentScopes` e viram um vínculo para cada
+pessoa ativa da equipe; quem entra na equipe depois recebe os vínculos de quem já consentiu, e
+quem sai perde os seus. Reescrever o consentimento do grupo (`PUT /groups/:groupId/consent`)
+substitui os vínculos da pessoa naquele grupo. `MEMBER` continua nunca lendo ninguém.
 
 Consentir um escopo não abre outro: a porta confere `scopes: { has: scope }`, um escopo por
 chamada. `hasSome` com lista casaria com tudo, e consentir treino abriria a dieta.

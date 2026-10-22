@@ -3,28 +3,42 @@ import { GroupRole, MembershipStatus, ShareScope } from '@fatia/db';
 import { MembershipService } from '../membership.service';
 import type { ProfessionalLinkService } from '../professional-link.service';
 import type { PrismaService } from '../../common/prisma.service';
+import { silentNotifications } from '../../notifications/__tests__/silent-notifications';
 
 type MockPrisma = {
-  group: { findUnique: jest.Mock };
+  group: { findUnique: jest.Mock; findUniqueOrThrow: jest.Mock };
+  user: { findUnique: jest.Mock };
   groupMembership: {
     findUnique: jest.Mock;
     findMany: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
+    upsert: jest.Mock;
   };
   professionalLink: { findMany: jest.Mock };
+  groupSeatAssignment: { updateMany: jest.Mock; findMany: jest.Mock };
   $transaction: jest.Mock;
 };
 
 const makePrisma = (): MockPrisma => ({
-  group: { findUnique: jest.fn() },
+  group: {
+    findUnique: jest.fn(),
+    // O nome da comunidade no aviso de aprovação (Fase 8c).
+    findUniqueOrThrow: jest.fn().mockResolvedValue({ name: 'Academia' }),
+  },
+  user: { findUnique: jest.fn().mockResolvedValue({ name: 'Ana' }) },
   groupMembership: {
     findUnique: jest.fn(),
     findMany: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+    upsert: jest.fn(),
   },
   professionalLink: { findMany: jest.fn() },
+  groupSeatAssignment: {
+    updateMany: jest.fn().mockReturnValue({ count: 0 }),
+    findMany: jest.fn().mockResolvedValue([]),
+  },
   // O service passa um ARRAY de operações; `Promise.all` reproduz o batch sem banco.
   $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
 });
@@ -36,21 +50,30 @@ const PRO = 'pro-1';
 
 describe('MembershipService', () => {
   let prisma: MockPrisma;
-  let links: { revokeAllForMemberOp: jest.Mock };
+  let links: {
+    revokeAllForMemberOp: jest.Mock;
+    groupConsentOps: jest.Mock;
+    teamMemberLinksOps: jest.Mock;
+  };
   let service: MembershipService;
 
   beforeEach(() => {
     prisma = makePrisma();
-    links = { revokeAllForMemberOp: jest.fn(() => ({ count: 0 })) };
+    links = {
+      revokeAllForMemberOp: jest.fn(() => ({ count: 0 })),
+      groupConsentOps: jest.fn(() => []),
+      teamMemberLinksOps: jest.fn(() => []),
+    };
     service = new MembershipService(
       prisma as unknown as PrismaService,
       links as unknown as ProfessionalLinkService,
+      silentNotifications,
     );
   });
 
   describe('requestJoin', () => {
     it('entra sempre como MEMBER e aguardando aprovação', async () => {
-      prisma.group.findUnique.mockResolvedValue({ id: GROUP });
+      prisma.group.findUnique.mockResolvedValue({ id: GROUP, requiredSharingScopes: [] });
       prisma.groupMembership.findUnique.mockResolvedValue(null);
       prisma.groupMembership.create.mockResolvedValue({
         id: 'm1',
@@ -71,7 +94,7 @@ describe('MembershipService', () => {
     });
 
     it('não cria nenhum ProfessionalLink ao entrar', async () => {
-      prisma.group.findUnique.mockResolvedValue({ id: GROUP });
+      prisma.group.findUnique.mockResolvedValue({ id: GROUP, requiredSharingScopes: [] });
       prisma.groupMembership.findUnique.mockResolvedValue(null);
       prisma.groupMembership.create.mockResolvedValue({
         id: 'm1',
@@ -93,13 +116,65 @@ describe('MembershipService', () => {
     });
 
     it('pedido repetido responde CONFLICT', async () => {
-      prisma.group.findUnique.mockResolvedValue({ id: GROUP });
+      prisma.group.findUnique.mockResolvedValue({ id: GROUP, requiredSharingScopes: [] });
       prisma.groupMembership.findUnique.mockResolvedValue({
         id: 'm1',
         status: MembershipStatus.ACTIVE,
       });
 
       await expect(service.requestJoin(ALUNO, 'academia-x')).rejects.toThrow(ConflictException);
+    });
+
+    describe('escopos obrigatórios da comunidade', () => {
+      const exige = (joinPolicy: 'OPEN' | 'APPROVAL') =>
+        prisma.group.findUnique.mockResolvedValue({
+          id: GROUP,
+          ownerId: DONO,
+          name: 'Academia',
+          joinPolicy,
+          requiredSharingScopes: [ShareScope.WORKOUT, ShareScope.GOALS],
+        });
+
+      it.each(['OPEN', 'APPROVAL'] as const)(
+        '%s: sem um obrigatório, recusa com o nome do que falta e não grava nada',
+        async (joinPolicy) => {
+          exige(joinPolicy);
+          prisma.groupMembership.findUnique.mockResolvedValue(null);
+
+          const erro = await service
+            .requestJoin(ALUNO, 'academia-x', { scopes: [ShareScope.WORKOUT], statsOptIn: false })
+            .catch((e: Error) => e);
+
+          expect(erro).toBeInstanceOf(ConflictException);
+          expect((erro as Error).message).toBe(
+            'Para entrar nesta comunidade é preciso compartilhar: Metas.',
+          );
+          expect(prisma.groupMembership.create).not.toHaveBeenCalled();
+          expect(prisma.groupMembership.upsert).not.toHaveBeenCalled();
+          expect(prisma.$transaction).not.toHaveBeenCalled();
+        },
+      );
+
+      it('com os obrigatórios (e mais), o pedido segue com tudo o que a pessoa marcou', async () => {
+        exige('APPROVAL');
+        prisma.groupMembership.findUnique.mockResolvedValue(null);
+        prisma.groupMembership.create.mockResolvedValue({
+          id: 'm1',
+          status: MembershipStatus.INVITED,
+          role: GroupRole.MEMBER,
+        });
+
+        await service.requestJoin(ALUNO, 'academia-x', {
+          scopes: [ShareScope.GOALS, ShareScope.BODY, ShareScope.WORKOUT],
+          statsOptIn: false,
+        });
+
+        expect(prisma.groupMembership.create.mock.calls[0][0].data.consentScopes).toEqual([
+          ShareScope.WORKOUT,
+          ShareScope.BODY,
+          ShareScope.GOALS,
+        ]);
+      });
     });
   });
 
@@ -127,24 +202,69 @@ describe('MembershipService', () => {
       await expect(service.approve('estranho', GROUP, 'm2')).rejects.toThrow(NotFoundException);
     });
 
-    it('aprova com o papel escolhido pelo dono', async () => {
+    it('aprova com o papel escolhido pelo dono e o consentimento guardado no pedido', async () => {
       prisma.groupMembership.findUnique.mockResolvedValueOnce(donoAtivo).mockResolvedValueOnce({
         id: 'm2',
         groupId: GROUP,
+        userId: ALUNO,
         status: MembershipStatus.INVITED,
+        consentScopes: ['WORKOUT'],
+        statsOptIn: true,
       });
-      prisma.groupMembership.update.mockResolvedValue({
+      prisma.groupMembership.findMany.mockResolvedValue([
+        { userId: DONO, role: GroupRole.OWNER, consentScopes: [] },
+        { userId: 'aluno-2', role: GroupRole.MEMBER, consentScopes: ['NUTRITION'] },
+      ]);
+      prisma.groupMembership.upsert.mockResolvedValue({
         id: 'm2',
         status: MembershipStatus.ACTIVE,
         role: GroupRole.PROFESSIONAL,
       });
 
-      await service.approve(DONO, GROUP, 'm2', GroupRole.PROFESSIONAL);
+      const r = await service.approve(DONO, GROUP, 'm2', GroupRole.PROFESSIONAL);
 
-      expect(prisma.groupMembership.update.mock.calls[0][0].data).toMatchObject({
+      expect(r).toMatchObject({ status: MembershipStatus.ACTIVE, role: GroupRole.PROFESSIONAL });
+      expect(prisma.groupMembership.upsert.mock.calls[0][0].update).toMatchObject({
         status: MembershipStatus.ACTIVE,
         role: GroupRole.PROFESSIONAL,
+        consentScopes: ['WORKOUT'],
+        statsOptIn: true,
       });
+      // O que a pessoa consentiu vai só para a equipe (o dono), nunca para outro aluno.
+      expect(links.groupConsentOps.mock.calls[0][0]).toMatchObject({
+        subjectUserId: ALUNO,
+        scopes: ['WORKOUT'],
+        receivers: [DONO],
+      });
+      // Entrou como profissional: recebe o que cada membro já consentiu ao grupo.
+      expect(links.teamMemberLinksOps.mock.calls[0][0]).toMatchObject({
+        teamUserId: ALUNO,
+        subjects: [
+          { userId: DONO, scopes: [] },
+          { userId: 'aluno-2', scopes: ['NUTRITION'] },
+        ],
+      });
+    });
+
+    it('aprovado como membro não recebe o leque inverso', async () => {
+      prisma.groupMembership.findUnique.mockResolvedValueOnce(donoAtivo).mockResolvedValueOnce({
+        id: 'm2',
+        groupId: GROUP,
+        userId: ALUNO,
+        status: MembershipStatus.INVITED,
+        consentScopes: [],
+        statsOptIn: false,
+      });
+      prisma.groupMembership.findMany.mockResolvedValue([]);
+      prisma.groupMembership.upsert.mockResolvedValue({
+        id: 'm2',
+        status: 'ACTIVE',
+        role: 'MEMBER',
+      });
+
+      await service.approve(DONO, GROUP, 'm2');
+
+      expect(links.teamMemberLinksOps).not.toHaveBeenCalled();
     });
 
     // O alvo é um pedido VÁLIDO e o papel é OWNER: o único motivo de recusa
@@ -186,8 +306,13 @@ describe('MembershipService', () => {
       // Duas escritas separadas abririam uma janela em que a associação já
       // acabou e o vínculo ainda autoriza leitura de dado de saúde.
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-      expect(prisma.$transaction.mock.calls[0][0]).toHaveLength(2);
+      expect(prisma.$transaction.mock.calls[0][0]).toHaveLength(3);
       expect(resultado.revokedLinks).toBe(2);
+      // O assento pago pela comunidade (ADR 025) acaba na mesma transação.
+      expect(prisma.groupSeatAssignment.updateMany).toHaveBeenCalledWith({
+        where: { membershipId: 'm1', revokedAt: null },
+        data: { revokedAt: expect.any(Date) },
+      });
 
       const [groupId, userId, reason, at] = links.revokeAllForMemberOp.mock.calls[0];
       expect([groupId, userId, reason]).toEqual([GROUP, ALUNO, 'left_group']);
@@ -333,6 +458,21 @@ describe('MembershipService', () => {
           user: { name: 'Aluno 2' },
         },
       ]);
+      // A atribuição do m2, num pool que vale agora (a regra é a do portão).
+      prisma.groupSeatAssignment.findMany.mockResolvedValue([
+        {
+          membershipId: 'm2',
+          assignedAt: new Date(0),
+          pool: {
+            id: 'pool',
+            status: 'ACTIVE',
+            currentPeriodEnd: null,
+            graceEndsAt: null,
+            cancelAtPeriodEnd: false,
+            group: { id: GROUP, name: 'Academia' },
+          },
+        },
+      ]);
       prisma.professionalLink.findMany.mockResolvedValue([
         { subjectUserId: ALUNO, scopes: [ShareScope.WORKOUT] },
       ]);
@@ -347,6 +487,7 @@ describe('MembershipService', () => {
       // Quem não consentiu a ELE aparece com lista vazia — e nunca com o que
       // consentiu a outro profissional.
       expect(membros.map((m) => m.scopesGrantedToMe)).toEqual([[ShareScope.WORKOUT], []]);
+      expect(membros.map((m) => m.hasAiSeat)).toEqual([false, true]);
     });
 
     it('quem não é membro ativo recebe NOT_FOUND', async () => {
@@ -369,6 +510,7 @@ describe('MembershipService', () => {
         status: MembershipStatus.ACTIVE,
       });
       prisma.groupMembership.findMany.mockResolvedValue([]);
+      prisma.professionalLink.findMany.mockResolvedValue([]);
 
       await service.listMembers(quem, GROUP);
 

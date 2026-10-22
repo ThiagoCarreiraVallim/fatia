@@ -30,7 +30,6 @@ function renderHistory(props: Partial<Parameters<typeof LogHistory>[0]> = {}) {
       pendingId={null}
       isDeleting={false}
       emptyLabel="Nenhum registro de água nos últimos 7 dias."
-      confirmLabel="Apagar este registro de água?"
       {...props}
     />,
   );
@@ -71,51 +70,16 @@ describe('LogHistory', () => {
     expect(onEdit).toHaveBeenCalledWith(ENTRIES[1]);
   });
 
-  // O caso que impede a confirmação de virar enfeite: um toque na lixeira não
-  // pode apagar nada por conta própria.
-  it('does not call onDelete on the first click — it only asks', async () => {
+  // Registro pequeno apaga sem pergunta; o aviso com "Desfazer" do drawer é a
+  // rede de segurança (registros pequenos, Fase 3).
+  it('calls onDelete right away with the entry of the row', async () => {
     const user = userEvent.setup();
     const { onDelete } = renderHistory();
 
     await user.click(screen.getByRole('button', { name: DELETE_A }));
-
-    expect(onDelete).not.toHaveBeenCalled();
-    expect(screen.getByText('Apagar este registro de água?')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^apagar$/i })).toBeInTheDocument();
-  });
-
-  it('calls onDelete only after the confirmation is accepted', async () => {
-    const user = userEvent.setup();
-    const { onDelete } = renderHistory();
-
-    await user.click(screen.getByRole('button', { name: DELETE_A }));
-    await user.click(screen.getByRole('button', { name: /^apagar$/i }));
 
     expect(onDelete).toHaveBeenCalledWith(ENTRIES[0]);
-  });
-
-  it('drops the confirmation and deletes nothing when the user cancels', async () => {
-    const user = userEvent.setup();
-    const { onDelete } = renderHistory();
-
-    await user.click(screen.getByRole('button', { name: DELETE_A }));
-    await user.click(screen.getByRole('button', { name: /^cancelar$/i }));
-
-    expect(onDelete).not.toHaveBeenCalled();
-    expect(screen.queryByText('Apagar este registro de água?')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: DELETE_A })).toBeInTheDocument();
-  });
-
-  it('announces the question and moves focus to the confirm button', async () => {
-    const user = userEvent.setup();
-    renderHistory();
-
-    await user.click(screen.getByRole('button', { name: DELETE_A }));
-
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Apagar este registro de água? 500 mL, 17 mai · 11:00.',
-    );
-    expect(screen.getByRole('button', { name: /^apagar$/i })).toHaveFocus();
+    expect(screen.queryByRole('button', { name: /^apagar$/i })).not.toBeInTheDocument();
   });
 
   // Uma segunda exclusão em voo faz o observer da mutação migrar, e o erro da

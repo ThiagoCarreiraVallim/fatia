@@ -16,34 +16,65 @@ datasource db {
 // ============================================================
 
 model User {
-  id        String   @id @default(uuid())
+  id       String @id @default(uuid())
   // Sub claim do JWT do Logto. Identidade externa estável (ver ADR 008).
-  logtoSub  String   @unique
-  email     String   @unique
-  name      String
-  role      Role     @default(USER)
-  timezone  String   @default("America/Sao_Paulo")
-  heightCm  Float?
+  logtoSub String @unique
+  email    String @unique
+  name     String
+  role     Role   @default(USER)
+  timezone String @default("America/Sao_Paulo")
+  heightCm Float?
+
+  // Perfil do onboarding: só alimentam a sugestão de metas (gasto pela
+  // Mifflin-St Jeor). Nenhum aparece para terceiros nem entra em comparação.
+  sex           BiologicalSex?
+  birthDate     DateTime?      @db.Date
+  activityLevel ActivityLevel?
+  objective     BodyObjective?
+  // Nulo = ainda não passou pelo assistente de primeira vez (nem o pulou, nem
+  // definiu metas por outro caminho). O app redireciona enquanto for nulo.
+  onboardedAt   DateTime?
+
+  // Cliente no Asaas (assinatura PRO pela web, ADR 024). Só o id do provedor:
+  // CPF e cartão ficam no Asaas, nunca aqui.
+  asaasCustomerId String? @unique
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  goals           UserGoals?
-  personalGoals   Goal[]
-  meals           Meal[]
-  workoutPlans    WorkoutPlan[]
-  workoutSessions WorkoutSession[]
-  weightLogs      WeightLog[]
-  stepLogs        StepLog[]
-  waterLogs       WaterLog[]
-  customFoods     Food[]            @relation("UserCustomFoods")
-  customExercises Exercise[]        @relation("UserCustomExercises")
-  nutrientTargets NutrientTarget[]
-  achievements    UserAchievement[]
-  trainingBlocks  TrainingBlock[]
+  goals              UserGoals?
+  authoredChallenges GroupChallenge[]  @relation("ChallengeAuthor")
+  personalGoals      Goal[]
+  meals              Meal[]
+  workoutPlans       WorkoutPlan[]
+  workoutSessions    WorkoutSession[]
+  weightLogs         WeightLog[]
+  stepLogs           StepLog[]
+  waterLogs          WaterLog[]
+  customFoods        Food[]            @relation("UserCustomFoods")
+  favoriteFoods      FavoriteFood[]
+  foodPortions       FoodPortion[]
+  mealTemplates      MealTemplate[]
+  customExercises    Exercise[]        @relation("UserCustomExercises")
+  nutrientTargets    NutrientTarget[]
+  achievements       UserAchievement[]
+  trainingBlocks     TrainingBlock[]
 
-  conversations Conversation[]
-  memories      UserMemory[]
-  aiUsage       AiUsage[]
+  conversations  Conversation[]
+  memories       UserMemory[]
+  aiUsage        AiUsage[]
+  subscriptions  UserSubscription[]
+  invitesCreated GroupInvite[]        @relation("GroupInviteCreator")
+  mediaFiles     MediaFile[]          @relation("MediaUploader")
+  planTemplates  GroupPlanTemplate[]  @relation("PlanTemplateAuthor")
+  tipsAuthored   GroupTip[]           @relation("TipAuthor")
+  guidesAuthored GroupExerciseGuide[] @relation("GuideAuthor")
+
+  // Avisos no celular (ADR 033).
+  devices                 UserDevice[]
+  notificationPreferences NotificationPreference[]
+  pendingNotices          PendingNotice[]
+  webPushSubscriptions    WebPushSubscription[]
 
   // B2B (ADR 014). Nenhuma destas relações dá acesso a dado de saúde por si só —
   // quem autoriza leitura é exclusivamente uma linha de `ProfessionalLink`.
@@ -54,6 +85,25 @@ model User {
   accessLogs          ProfessionalAccessLog[] @relation("AccessLogSubject")
 
   @@index([logtoSub])
+}
+
+enum BiologicalSex {
+  FEMALE
+  MALE
+}
+
+enum ActivityLevel {
+  SEDENTARY
+  LIGHT
+  MODERATE
+  ACTIVE
+  VERY_ACTIVE
+}
+
+enum BodyObjective {
+  LOSE
+  MAINTAIN
+  GAIN
 }
 
 enum Role {
@@ -129,8 +179,9 @@ model FoodGroup {
   id   Int    @id @default(autoincrement())
   name String @unique // "cereais", "leguminosas", "carnes", "frutas", etc
 
-  foods     Food[]
-  mealItems MealItem[]
+  foods             Food[]
+  mealItems         MealItem[]
+  mealTemplateItems MealTemplateItem[]
 }
 
 model Food {
@@ -154,9 +205,12 @@ model Food {
   searchName      String     @default("")
   createdAt       DateTime   @default(now())
 
-  group     FoodGroup? @relation(fields: [groupId], references: [id])
-  createdBy User?      @relation("UserCustomFoods", fields: [createdByUserId], references: [id], onDelete: Cascade)
-  mealItems MealItem[]
+  group         FoodGroup?         @relation(fields: [groupId], references: [id])
+  createdBy     User?              @relation("UserCustomFoods", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  mealItems     MealItem[]
+  favoritedBy   FavoriteFood[]
+  portions      FoodPortion[]
+  templateItems MealTemplateItem[]
 
   // Unicidade por (nome, source) só para públicos. Customs podem repetir nomes
   // entre usuários — unicidade real é (nome, source, createdByUserId).
@@ -164,6 +218,40 @@ model Food {
   @@index([searchName])
   @@index([name])
   @@index([source])
+  @@index([createdByUserId])
+}
+
+// Atalho da busca de alimento: o que a pessoa marca para achar em um toque.
+// Os "recentes" não têm tabela — saem do histórico de `MealItem`.
+model FavoriteFood {
+  id        String   @id @default(uuid())
+  userId    String
+  foodId    Int
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  food Food @relation(fields: [foodId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, foodId])
+  @@index([userId, createdAt])
+}
+
+// Medida caseira: "colher de sopa = 25 g". Atalho que vira gramas no registro —
+// `MealItem.grams` continua sendo a verdade. Sem dono = catálogo curado
+// (`prisma/data/medidas-caseiras.json`); com dono = medida da própria pessoa.
+model FoodPortion {
+  id              String   @id @default(uuid())
+  foodId          Int
+  label           String
+  grams           Float
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+
+  food      Food  @relation(fields: [foodId], references: [id], onDelete: Cascade)
+  createdBy User? @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+
+  @@unique([foodId, label, createdByUserId])
+  @@index([foodId])
   @@index([createdByUserId])
 }
 
@@ -195,30 +283,80 @@ model Meal {
 }
 
 model MealItem {
-  id        String @id @default(uuid())
-  mealId    String
+  id              String  @id @default(uuid())
+  mealId          String
   /// A ordem de inserção, e só isso: os itens de uma refeição saem por ela (`ITENS_EM_ORDEM`).
   /// Sem ela, a ordem era a física da tabela, e um UPDATE que não cabe na página muda de lugar.
   /// O `PrismaService` a omite de toda resposta.
-  seq       Int    @default(autoincrement())
-  foodId    Int? // null = item livre estimado pelo Claude
-  groupId   Int? // copiado do food, ou inferido pelo Claude
-  foodName  String // snapshot — sempre preenchido
-  grams     Float
-  kcal      Float
-  proteinG  Float
-  carbsG    Float
-  fatG      Float
+  seq             Int     @default(autoincrement())
+  foodId          Int? // null = item livre estimado pelo Claude
+  groupId         Int? // copiado do food, ou inferido pelo Claude
+  foodName        String // snapshot — sempre preenchido
+  grams           Float
+  kcal            Float
+  proteinG        Float
+  carbsG          Float
+  fatG            Float
   // Micronutrientes opcionais (snapshot), mapa flexível: { "sodium_mg": 412, "sugar_g": 9 }.
   // Json em vez de colunas fixas: nutrientes são open-ended e a TACO não cobre todos
   // (ADR 009). Ausente = não rastreado para aquele item.
-  nutrients Json?
+  nutrients       Json?
+  // Retrato de como a quantidade foi digitada ("2 × colher de sopa"). Só exibição
+  // e sugestão da próxima vez; a conta usa `grams`. Nulos quando veio em gramas.
+  portionLabel    String?
+  portionQuantity Float?
 
   meal  Meal       @relation(fields: [mealId], references: [id], onDelete: Cascade)
   food  Food?      @relation(fields: [foodId], references: [id])
   group FoodGroup? @relation(fields: [groupId], references: [id])
 
   @@index([mealId])
+}
+
+// Refeição salva ("meu café de sempre"): registrada de novo em um toque. Guarda o
+// retrato dos itens como foram registrados, sem recalcular: o que a pessoa comeu
+// continua igual mesmo se o alimento personalizado for apagado depois.
+model MealTemplate {
+  id             String    @id @default(uuid())
+  userId         String
+  name           String
+  // Tipo sugerido ao registrar; null = quem registra escolhe.
+  mealType       MealType?
+  /// Plano pronto da comunidade de onde esta refeição veio (Fase 7). Só
+  /// proveniência: a cópia é da pessoa e não acompanha o modelo.
+  fromTemplateId String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items        MealTemplateItem[]
+  fromTemplate GroupPlanTemplate? @relation("MealFromTemplate", fields: [fromTemplateId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model MealTemplateItem {
+  id              String  @id @default(uuid())
+  templateId      String
+  position        Int
+  foodId          Int?
+  groupId         Int?
+  foodName        String
+  grams           Float
+  kcal            Float
+  proteinG        Float
+  carbsG          Float
+  fatG            Float
+  nutrients       Json?
+  portionLabel    String?
+  portionQuantity Float?
+
+  template MealTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  food     Food?        @relation(fields: [foodId], references: [id], onDelete: SetNull)
+  group    FoodGroup?   @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  @@index([templateId])
 }
 
 // ============================================================
@@ -247,34 +385,54 @@ model Exercise {
   // Se esta é uma cópia editável de um exercício base, aponta para o base de origem.
   // A base correspondente é escondida das listagens do usuário (a cópia a substitui).
   clonedFromId     Int?
+  /// Exercício criado por uma comunidade (Fase 7b, ADR 030), como a máquina da
+  /// casa. **Imutável**: é ele, e não `groupId`, que tira o exercício do
+  /// catálogo público. `groupId` cai em SetNull quando a comunidade some ou
+  /// quando a equipe apaga um exercício que alguém já usa, e sem esta marca a
+  /// linha (sem dono e sem comunidade) viraria catálogo de todo mundo.
+  groupOwned       Boolean  @default(false)
+  /// Comunidade dona, enquanto o exercício estiver no catálogo dela.
+  groupId          String?
   createdAt        DateTime @default(now())
 
   createdBy     User?                 @relation("UserCustomExercises", fields: [createdByUserId], references: [id], onDelete: Cascade)
   clonedFrom    Exercise?             @relation("ExerciseClones", fields: [clonedFromId], references: [id], onDelete: SetNull)
   clones        Exercise[]            @relation("ExerciseClones")
+  group         Group?                @relation("GroupExercises", fields: [groupId], references: [id], onDelete: SetNull)
   planExercises WorkoutPlanExercise[]
   sessionSets   SessionSet[]
+  groupGuides   GroupExerciseGuide[]
 
   @@unique([name, createdByUserId])
+  // Nome único dentro do catálogo da comunidade. `groupId` nulo (catálogo
+  // geral, exercício pessoal, exercício solto da comunidade) não colide: no
+  // Postgres, NULL é distinto de NULL.
+  @@unique([name, groupId])
   @@index([name])
   @@index([searchName])
   @@index([muscleGroup])
   @@index([createdByUserId])
   @@index([clonedFromId])
+  @@index([groupId])
 }
 
 model WorkoutPlan {
-  id        String   @id @default(uuid())
-  userId    String
-  name      String // "Push", "Pull", "Leg"
-  createdAt DateTime @default(now())
+  id             String   @id @default(uuid())
+  userId         String
+  name           String // "Push", "Pull", "Leg"
+  /// Plano pronto da comunidade de onde este plano veio (Fase 7). Torna a
+  /// adoção idempotente; arquivar o modelo não mexe na cópia.
+  fromTemplateId String?
+  createdAt      DateTime @default(now())
 
   user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   exercises      WorkoutPlanExercise[]
   sessions       WorkoutSession[]
   trainingBlocks TrainingBlock[]
+  fromTemplate   GroupPlanTemplate?    @relation("PlanFromTemplate", fields: [fromTemplateId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@index([userId, fromTemplateId])
 }
 
 model WorkoutPlanExercise {
@@ -300,9 +458,19 @@ model WorkoutSession {
   completedAt DateTime?
   notes       String?
 
+  // Ajustes desta sessão sobre o plano, sem mexer no plano: a ordem em que a
+  // pessoa decidiu fazer os exercícios (ids, na ordem; vazio = a do plano) e os
+  // exercícios do plano que ela tirou deste treino. Vale só aqui — o plano
+  // segue igual para a próxima vez.
+  exerciseOrder      Int[] @default([])
+  removedExerciseIds Int[] @default([])
+
   user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan WorkoutPlan? @relation(fields: [planId], references: [id])
   sets SessionSet[]
+  // E um índice único PARCIAL em (userId) onde completedAt é nulo — uma sessão
+  // aberta por pessoa (#350). O Prisma não o descreve: está na migration
+  // 20261026120000_one_open_workout_session.
 
   @@index([userId, startedAt])
 }
@@ -600,11 +768,11 @@ enum GroupType {
 }
 
 enum GroupRole {
-  /// Gere grupo, membros e cobrança. NÃO lê dado de saúde de ninguém.
+  /// Gere grupo, membros e cobrança. Lê dado de saúde só com vínculo (ADR 026).
   OWNER
-  /// Pode receber vínculo de leitura e oferecer plano. Só isso.
+  /// Pode receber vínculo de leitura e oferecer plano.
   PROFESSIONAL
-  /// Publica conteúdo no grupo social. Nunca lê dado individual.
+  /// Publica conteúdo. Lê dado individual só com vínculo (ADR 026).
   CREATOR
   /// Aluno/fã. O próprio dado, sempre.
   MEMBER
@@ -615,6 +783,24 @@ enum MembershipStatus {
   ACTIVE
   LEFT
   REMOVED
+  /// Removido e barrado: o código e o convite não reabrem a porta (Fase 8b).
+  BANNED
+}
+
+/// Quem acha a comunidade (ADR 025/026). PRIVATE só por convite ou código.
+enum GroupVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+/// Como se entra pelo código (`slug`). Convite já é a aprovação: entra ACTIVE.
+enum JoinPolicy {
+  /// Entra na hora.
+  OPEN
+  /// Fica pendente até o dono aprovar (o comportamento de antes).
+  APPROVAL
+  /// O código não abre a porta; só convite.
+  INVITE_ONLY
 }
 
 /// Categorias de dado que podem ser consentidas, independentes entre si.
@@ -631,42 +817,96 @@ enum ShareScope {
 }
 
 model Group {
-  id        String    @id @default(uuid())
-  type      GroupType
-  name      String
+  id          String          @id @default(uuid())
+  type        GroupType
+  name        String
   /// Usado no link de convite e na URL do painel. Público por natureza.
-  slug      String    @unique
-  ownerId   String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  slug        String          @unique
+  ownerId     String
+  description String?
+  /// Fuso da comunidade (desafios e ranking, Fase 8).
+  timezone    String          @default("America/Sao_Paulo")
+  visibility  GroupVisibility @default(PRIVATE)
+  joinPolicy  JoinPolicy      @default(APPROVAL)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   // Cascade e não Restrict de propósito: com Restrict, `delete_my_account` de um
   // dono de academia falharia — um direito da LGPD travado por dívida comercial.
   // Apagar a conta do dono apaga grupo, memberships e vínculos, e **nenhum dado
   // de aluno é tocado**, porque nunca esteve sob o grupo. Fatura em aberto é
   // problema da #158, não deste FK.
-  owner       User               @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  memberships GroupMembership[]
-  links       ProfessionalLink[]
+  owner                 User                 @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  memberships           GroupMembership[]
+  links                 ProfessionalLink[]
+  aiUsage               AiUsage[]
+  invites               GroupInvite[]
+  seatPool              GroupSeatPool?
+  /// Avatar da comunidade (ADR 028).
+  avatarFileId          String?              @unique
+  avatarFile            MediaFile?           @relation("GroupAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
+  mediaFiles            MediaFile[]          @relation("GroupMedia")
+  planTemplates         GroupPlanTemplate[]
+  tips                  GroupTip[]
+  /// Equipamentos que a academia tem (Fase 7b), da lista do catálogo. Serve
+  /// ao filtro "Na minha academia".
+  equipment             String[]             @default([])
+  /// Equipamentos que a academia nomeou por conta própria ("Hack 45° da casa"),
+  /// fora da lista. Valem no filtro "Na minha academia" contra o equipamento
+  /// gravado no exercício, e aparecem no editor de exercício.
+  customEquipment       String[]             @default([])
+  exercises             Exercise[]           @relation("GroupExercises")
+  exerciseGuides        GroupExerciseGuide[]
+  /// O agente da comunidade no chat (Fase 7c, ADR 031).
+  agent                 GroupAgent?
+  agentChats            Conversation[]       @relation("ConversationAgent")
+  /// Desafios da comunidade (Fase 8a, ADR 027).
+  challenges            GroupChallenge[]
+  /// Quem publica no mural (Fase 8b, ADR 032).
+  postPolicy            PostPolicy           @default(ALL_MEMBERS)
+  posts                 GroupPost[]
+  /// O que quem entra como membro precisa compartilhar com a equipe. Cobrado
+  /// na entrada (código ou convite) e ao tirar um escopo já compartilhado;
+  /// quem entrou antes de o dono mudar a lista não deve o que nunca compartilhou.
+  requiredSharingScopes ShareScope[]         @default([])
 
   @@index([ownerId])
   @@index([type])
 }
 
 model GroupMembership {
-  id        String           @id @default(uuid())
-  groupId   String
-  userId    String
-  role      GroupRole
-  status    MembershipStatus @default(INVITED)
-  invitedAt DateTime         @default(now())
-  joinedAt  DateTime?
-  leftAt    DateTime?
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  id            String           @id @default(uuid())
+  groupId       String
+  userId        String
+  role          GroupRole
+  status        MembershipStatus @default(INVITED)
+  invitedAt     DateTime         @default(now())
+  joinedAt      DateTime?
+  leftAt        DateTime?
+  /// O que a pessoa aceitou compartilhar com a equipe ao entrar (ADR 026).
+  /// Registro do aceite; a autorização de fato são os `ProfessionalLink`.
+  consentScopes ShareScope[]     @default([])
+  consentAt     DateTime?
+  /// Entra nas estatísticas agregadas da comunidade (opt-in, ADR 026 §6).
+  statsOptIn    Boolean          @default(false)
+  /// Apelido na comunidade: como a pessoa aparece no ranking dos desafios
+  /// (Fase 8a). Nulo até a primeira vez que ela entra num desafio.
+  displayName   String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 
-  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group            Group                       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user             User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  seatAssignments  GroupSeatAssignment[]
+  challengeEntries GroupChallengeParticipant[]
+  /// O mural (Fase 8b): o que a pessoa publicou, reagiu, comentou e denunciou.
+  posts            GroupPost[]                 @relation("PostAuthor")
+  postsRemoved     GroupPost[]                 @relation("PostRemovedBy")
+  postReactions    GroupPostReaction[]
+  postComments     GroupPostComment[]          @relation("CommentAuthor")
+  commentsRemoved  GroupPostComment[]          @relation("CommentRemovedBy")
+  reportsMade      GroupPostReport[]           @relation("ReportReporter")
+  reportsResolved  GroupPostReport[]           @relation("ReportResolvedBy")
 
   // Um papel por pessoa por grupo. É o que torna estruturalmente impossível
   // o acúmulo de papéis que a #156 pede para evitar: não existe linha em que
@@ -747,20 +987,26 @@ model ProfessionalAccessLog {
 /// no agente: o `apps/agent` não tem credencial de Postgres e não vai ter
 /// (ADR 015), então quem guarda é quem já é dono do isolamento.
 model Conversation {
-  id     String  @id @default(uuid())
-  userId String
+  id           String  @id @default(uuid())
+  userId       String
   /// Derivado da primeira mensagem, para a lista de conversas ter o que mostrar.
   /// Nulo até o primeiro turno completar.
-  title  String?
+  title        String?
+  /// A comunidade cujo agente conduz a conversa (Fase 7c), escolhida quando a
+  /// conversa nasce. Nulo é o assistente da Fatia. `SetNull`: apagar a
+  /// comunidade devolve a conversa ao assistente da Fatia sem apagar nada.
+  agentGroupId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages Message[]
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agentGroup Group?    @relation("ConversationAgent", fields: [agentGroupId], references: [id], onDelete: SetNull)
+  messages   Message[]
 
   /// A listagem é sempre "minhas conversas, mais recente primeiro".
   @@index([userId, updatedAt])
+  @@index([agentGroupId])
 }
 
 /// Papel de quem falou. Minúsculo e com estes dois nomes de propósito: é o
@@ -778,7 +1024,7 @@ enum MessageReview {
 }
 
 model Message {
-  id             String      @id @default(uuid())
+  id             String         @id @default(uuid())
   conversationId String
   role           MessageRole
   content        String
@@ -805,7 +1051,7 @@ model Message {
   review         MessageReview?
   reviewReasons  String[]       @default([])
   reviewNote     String?
-  createdAt      DateTime    @default(now())
+  createdAt      DateTime       @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
@@ -858,6 +1104,10 @@ model AiUsage {
 
   /// Micro-unidades da moeda, inteiro. Ver `ai-pricing.ts` para a escala.
   costMicros   Int
+  /// Quem paga esta chamada (ADR 024/025). Nulo nas linhas anteriores ao plano.
+  paidBy       AiPaidBy?
+  /// Comunidade que pagou, quando `paidBy = GROUP` (assentos, Fase 5).
+  groupId      String?
   /// `false` = este custo **não foi medido**, e o `0` ao lado não significa
   /// "grátis". É o que impede a cota de se desligar sozinha e em silêncio quando
   /// a medição se perde (`AiQuotaSpend.unpricedCalls`).
@@ -870,9 +1120,702 @@ model AiUsage {
   /// gastasse o orçamento da instância e apagasse a conta em seguida devolveria a
   /// cota global ao zero. A linha órfã não guarda nada pessoal — id, papel e
   /// conteúdo vão embora com o usuário; aqui fica um custo e um modelo.
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user  User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  group Group? @relation(fields: [groupId], references: [id], onDelete: SetNull)
 
   /// Os dois `where` da janela: o do usuário e o da instância inteira.
   @@index([userId, createdAt])
   @@index([createdAt])
+  @@index([groupId])
+}
+
+// ─── Plano Free/PRO (ADR 024) ────────────────────────────────────────────────
+// O plano só governa a IA hospedada (chat, ditado, foto de refeição). Nenhum
+// registro, leitura ou exportação fica atrás de pagamento.
+
+enum PlanTier {
+  FREE
+  PRO
+}
+
+enum BillingInterval {
+  MONTHLY
+  YEARLY
+}
+
+/// De onde veio a assinatura. `MANUAL` é cortesia concedida pela equipe
+/// (`pnpm billing:grant-pro`), também usada pelo E2E. Assento de comunidade
+/// não entra aqui: tem tabelas próprias (ADR 025, Fase 5).
+enum SubscriptionSource {
+  ASAAS
+  APPLE
+  GOOGLE
+  MANUAL
+}
+
+/// `PENDING` = checkout aberto e ainda não pago, não dá direito à IA.
+/// `CANCELED` = encerrada pelo provedor. Cancelar pelo app só marca
+/// `cancelAtPeriodEnd`, e o PRO vale até `currentPeriodEnd`.
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum AiPaidBy {
+  USER
+  GROUP
+  FREE
+  /// Instância sem exigência de plano (`AI_REQUIRES_PLAN=false`, self-host).
+  INSTANCE
+}
+
+model UserSubscription {
+  id       String             @id @default(uuid())
+  userId   String
+  tier     PlanTier           @default(PRO)
+  source   SubscriptionSource
+  status   SubscriptionStatus
+  interval BillingInterval?
+
+  /// Id da assinatura no provedor (Asaas `sub_…`, RevenueCat original
+  /// transaction id). Nulo em `MANUAL`.
+  providerRef String?
+  /// Produto da loja (`fatia_pro_mensal`…). Nulo fora das lojas.
+  productId   String?
+
+  currentPeriodEnd  DateTime?
+  /// Fim da carência de inadimplência (`decideAiTier`).
+  graceEndsAt       DateTime?
+  cancelAtPeriodEnd Boolean   @default(false)
+  canceledAt        DateTime?
+  /// Link de pagamento do Asaas enquanto `PENDING`. Não vai no export.
+  paymentUrl        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([source, providerRef])
+  @@index([userId, status])
+}
+
+/// Idempotência dos webhooks: o mesmo evento entregue duas vezes é no-op.
+/// `payload` guarda só o necessário para auditar (ids, tipo, status, datas),
+/// nunca CPF, e-mail ou cartão.
+model BillingWebhookEvent {
+  id          String    @id @default(uuid())
+  provider    String
+  eventId     String
+  type        String
+  payload     Json
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+  error       String?
+
+  @@unique([provider, eventId])
+  @@index([receivedAt])
+}
+
+/// Convite para a comunidade (Fase 5). Só o hash do token fica no banco: o link
+/// `/c/<token>` aparece uma vez, para quem criou. Com e-mail, vale só para a
+/// conta com aquele e-mail e uma vez; sem e-mail, é link compartilhável.
+model GroupInvite {
+  id          String    @id @default(uuid())
+  groupId     String
+  /// sha256 do token, em hex.
+  tokenHash   String    @unique
+  /// Apagado 30 dias depois do uso ou da expiração (DATA_RETENTION.md).
+  email       String?
+  role        GroupRole
+  createdById String?
+  /// null = sem limite até expirar.
+  maxUses     Int?
+  uses        Int       @default(0)
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  lastSentAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  group     Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdBy User? @relation("GroupInviteCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([groupId, revokedAt])
+  @@index([createdById])
+}
+
+/// Assentos de IA que a comunidade paga (ADR 025). Um pool por comunidade;
+/// mesma máquina de estados da assinatura pessoal.
+model GroupSeatPool {
+  id                String             @id @default(uuid())
+  groupId           String             @unique
+  seats             Int
+  /// Redução pedida: vale na próxima renovação.
+  nextPeriodSeats   Int?
+  unitPriceCents    Int
+  status            SubscriptionStatus
+  /// Id da assinatura no Asaas. null = pool de cortesia (script de dev).
+  providerRef       String?            @unique
+  currentPeriodEnd  DateTime?
+  graceEndsAt       DateTime?
+  cancelAtPeriodEnd Boolean            @default(false)
+  canceledAt        DateTime?
+  paymentUrl        String?
+  createdById       String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  group       Group                 @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  assignments GroupSeatAssignment[]
+  adjustments GroupSeatAdjustment[]
+  invoices    GroupSeatInvoice[]
+}
+
+/// Quem recebeu um assento. No máximo um ativo por membership (índice único
+/// parcial `revokedAt IS NULL`, criado no SQL da migration).
+model GroupSeatAssignment {
+  id           String    @id @default(uuid())
+  poolId       String
+  membershipId String
+  assignedById String?
+  assignedAt   DateTime  @default(now())
+  revokedAt    DateTime?
+
+  pool       GroupSeatPool   @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  membership GroupMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([poolId, revokedAt])
+  @@index([membershipId, revokedAt])
+}
+
+enum SeatInvoiceKind {
+  /// Mensalidade da assinatura dos assentos.
+  SUBSCRIPTION
+  /// Cobrança avulsa proporcional de um aumento.
+  ADJUSTMENT
+}
+
+enum SeatInvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  /// Apagada, estornada ou contestada.
+  VOID
+}
+
+/// Histórico de cobranças dos assentos, para o painel do dono (Fase 6). Uma
+/// linha por cobrança do Asaas, atualizada a cada evento dela no webhook — é
+/// cópia do que o provedor diz, e não fonte de verdade de direito nenhum.
+model GroupSeatInvoice {
+  id                String            @id @default(uuid())
+  poolId            String
+  /// Id da cobrança no Asaas (`pay_…`).
+  providerPaymentId String            @unique
+  kind              SeatInvoiceKind
+  amountCents       Int
+  /// Vencimento, `YYYY-MM-DD` no fuso do provedor.
+  dueDate           String?
+  status            SeatInvoiceStatus
+  /// Página da fatura no Asaas.
+  invoiceUrl        String?
+  paidAt            DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  pool GroupSeatPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
+
+  @@index([poolId, createdAt])
+}
+
+/// Aumento de assentos no meio do ciclo: a cobrança avulsa proporcional.
+model GroupSeatAdjustment {
+  id               String             @id @default(uuid())
+  poolId           String
+  fromSeats        Int
+  toSeats          Int
+  amountCents      Int
+  /// Id da cobrança avulsa no Asaas. null = abaixo do mínimo, não cobrada.
+  providerChargeId String?            @unique
+  status           SubscriptionStatus
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  pool GroupSeatPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
+
+  @@index([poolId])
+}
+
+// ============================================================
+// MÍDIA (ADR 028)
+// ============================================================
+
+enum MediaKind {
+  IMAGE
+  VIDEO
+}
+
+enum MediaStatus {
+  /// URL de envio emitida, objeto ainda não conferido.
+  PENDING
+  READY
+}
+
+/// Um arquivo publicado no storage S3 (R2 em produção). O objeto mora no
+/// bucket; aqui fica quem enviou, a que comunidade pertence e o estado.
+/// Leitura só por URL assinada, emitida para quem pode ver o conteúdo.
+model MediaFile {
+  id          String      @id @default(uuid())
+  /// Quem enviou. Nulo depois que a pessoa apaga a conta: o arquivo de uma
+  /// comunidade é dela e fica.
+  uploaderId  String?
+  /// Comunidade dona do arquivo. Nulo = arquivo pessoal (Fase 8).
+  groupId     String?
+  /// Para que o arquivo foi enviado (`group_avatar`, `group_content`…). O
+  /// item que o referencia confere que o propósito bate.
+  purpose     String
+  kind        MediaKind
+  status      MediaStatus @default(PENDING)
+  /// Chave do objeto no bucket.
+  key         String      @unique
+  mime        String
+  bytes       Int
+  width       Int?
+  height      Int?
+  createdAt   DateTime    @default(now())
+  confirmedAt DateTime?
+
+  uploader       User?                    @relation("MediaUploader", fields: [uploaderId], references: [id], onDelete: SetNull)
+  group          Group?                   @relation("GroupMedia", fields: [groupId], references: [id], onDelete: Cascade)
+  groupAvatarOf  Group?                   @relation("GroupAvatar")
+  agentAvatarOf  GroupAgent?              @relation("AgentAvatar")
+  templateCovers GroupPlanTemplate[]      @relation("TemplateCover")
+  tipImages      GroupTip[]               @relation("TipImage")
+  guideVideoOf   GroupExerciseGuide?      @relation("GuideVideo")
+  guidePhotoOf   GroupExerciseGuidePhoto?
+  postImageOf    GroupPostImage?          @relation("PostImage")
+
+  @@index([groupId])
+  @@index([uploaderId])
+  @@index([status, createdAt])
+}
+
+// ============================================================
+// CONTEÚDO DA COMUNIDADE (Fase 7)
+// ============================================================
+
+enum PlanTemplateKind {
+  WORKOUT
+  NUTRITION
+}
+
+/// Plano pronto publicado pela equipe da comunidade. O conteúdo é um retrato
+/// congelado (`snapshot`): treino no formato de `plan-snapshot.ts`, nutrição em
+/// `nutrition-snapshot.ts`. Adotar copia para a conta do membro, e a cópia é
+/// dele (ADR 014).
+model GroupPlanTemplate {
+  id              String           @id @default(uuid())
+  groupId         String
+  /// Nulo quando o autor apaga a conta: o plano é da comunidade.
+  authorId        String?
+  kind            PlanTemplateKind
+  title           String
+  description     String?
+  /// "beginner" | "intermediate" | "advanced", como `Exercise.level`.
+  level           String?
+  coverFileId     String?
+  snapshot        Json
+  snapshotVersion Int
+  /// Plano do autor de onde o treino foi congelado, para "atualizar a partir
+  /// do plano". Sem chave estrangeira: é só conveniência do autor, e o plano
+  /// dele pode sumir sem mexer no modelo publicado.
+  sourcePlanId    String?
+  /// Nulo = rascunho, visível só para a equipe.
+  publishedAt     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  group         Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  author        User?          @relation("PlanTemplateAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  cover         MediaFile?     @relation("TemplateCover", fields: [coverFileId], references: [id], onDelete: SetNull)
+  workoutCopies WorkoutPlan[]  @relation("PlanFromTemplate")
+  mealCopies    MealTemplate[] @relation("MealFromTemplate")
+
+  @@index([groupId, publishedAt])
+}
+
+/// Dica publicada pela equipe da comunidade. Corpo em markdown restrito
+/// (parágrafo, negrito, itálico, lista e link https), renderizado sem HTML.
+model GroupTip {
+  id          String    @id @default(uuid())
+  groupId     String
+  authorId    String?
+  title       String
+  body        String
+  category    String
+  imageFileId String?
+  pinned      Boolean   @default(false)
+  /// Nulo = rascunho, visível só para a equipe.
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  group  Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  author User?      @relation("TipAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  image  MediaFile? @relation("TipImage", fields: [imageFileId], references: [id], onDelete: SetNull)
+
+  @@index([groupId, publishedAt])
+}
+
+/// O tutorial da comunidade para um exercício (Fase 7b, ADR 030): vídeo,
+/// fotos e dicas dela por cima do exercício, seja do catálogo geral ou da
+/// própria comunidade. É sobreposição, não cópia: o plano e o histórico de
+/// quem treina continuam apontando para o mesmo `exerciseId`.
+model GroupExerciseGuide {
+  id          String   @id @default(uuid())
+  groupId     String
+  exerciseId  Int
+  authorId    String?
+  videoFileId String?  @unique
+  /// Markdown restrito (`markdown-lite`), como as dicas.
+  tips        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  group    Group                     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  exercise Exercise                  @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  author   User?                     @relation("GuideAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  video    MediaFile?                @relation("GuideVideo", fields: [videoFileId], references: [id], onDelete: SetNull)
+  photos   GroupExerciseGuidePhoto[]
+
+  @@unique([groupId, exerciseId])
+  @@index([exerciseId])
+}
+
+model GroupExerciseGuidePhoto {
+  id      String @id @default(uuid())
+  guideId String
+  fileId  String @unique
+  order   Int
+
+  guide GroupExerciseGuide @relation(fields: [guideId], references: [id], onDelete: Cascade)
+  file  MediaFile          @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([guideId])
+}
+
+/// O agente da comunidade no chat (Fase 7c, ADR 031): nome, avatar e
+/// orientações de tom e foco, por cima do mesmo assistente. As orientações
+/// entram cercadas no prompt, abaixo das regras fixas, e nunca mudam o que as
+/// tools enxergam — elas continuam com o login de quem conversa.
+model GroupAgent {
+  groupId      String   @id
+  name         String
+  /// Até 2.000 caracteres, conferidos na API e no agente.
+  instructions String   @default("")
+  avatarFileId String?  @unique
+  enabled      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  group      Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  avatarFile MediaFile? @relation("AgentAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
+}
+
+// ============================================================
+// DESAFIOS DA COMUNIDADE (Fase 8a, ADR 027)
+// ============================================================
+
+/// O que um desafio mede. Atividade (as quatro primeiras) ou aderência à
+/// PRÓPRIA meta, em dias (ADR 027) — nunca valor de corpo ou de alimentação.
+/// A lista é a de `apps/api/src/social/challenge-metric.ts`, conferida em teste.
+enum ChallengeMetric {
+  WORKOUT_SESSIONS
+  STEPS
+  WATER_ML
+  ACTIVE_DAYS
+  KCAL_IN_RANGE_DAYS
+  PROTEIN_TARGET_DAYS
+  STREAK_DAYS
+}
+
+/// Um desafio que a equipe marca. A janela é única para todo participante, no
+/// fuso da comunidade (`ScoreboardService`).
+model GroupChallenge {
+  id           String          @id @default(uuid())
+  groupId      String
+  /// Quem marcou. Sai da equipe ou apaga a conta: o desafio fica.
+  authorId     String?
+  title        String
+  description  String?
+  metric       ChallengeMetric
+  /// Meia-noite do primeiro dia, no fuso da comunidade (inclusivo).
+  startsAt     DateTime
+  /// Virada do último dia (exclusivo). Encerrar antes grava o instante.
+  endsAt       DateTime
+  /// Fuso da comunidade quando o desafio foi marcado.
+  timezone     String
+  endedEarlyAt DateTime?
+  /// Último recálculo do placar (recalcula na leitura quando fica velho).
+  scoredAt     DateTime?
+  /// Placar fechado e posições finais gravadas.
+  finalizedAt  DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  group        Group                       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  author       User?                       @relation("ChallengeAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  participants GroupChallengeParticipant[]
+
+  @@index([groupId, endsAt])
+  @@index([finalizedAt, endsAt])
+}
+
+/// Quem entrou no desafio (opt-in). A linha é a inscrição: sair apaga.
+model GroupChallengeParticipant {
+  id           String   @id @default(uuid())
+  challengeId  String
+  /// Pela associação, e não pelo usuário: sair da comunidade tira do placar.
+  membershipId String
+  /// Como a pessoa aparece no ranking.
+  displayName  String
+  /// Contagem da métrica. Nunca um valor de refeição ou de corpo (ADR 027).
+  score        Int      @default(0)
+  /// Posição gravada ao encerrar (empate divide a posição).
+  finalRank    Int?
+  joinedAt     DateTime @default(now())
+
+  challenge  GroupChallenge  @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  membership GroupMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, membershipId])
+  @@index([membershipId])
+}
+
+// ============================================================
+// MURAL DA COMUNIDADE (Fase 8b)
+// ============================================================
+
+/// Quem publica no mural. Reagir, comentar e denunciar é de todo membro ativo.
+enum PostPolicy {
+  ALL_MEMBERS
+  /// Só a equipe (dono, profissional, criador) publica.
+  TEAM_ONLY
+}
+
+enum PostReactionKind {
+  STRONG
+  FIRE
+  CLAP
+  HEART
+}
+
+enum ReportReason {
+  SPAM
+  OFFENSIVE
+  HARASSMENT
+  /// Informação de saúde enganosa ou perigosa.
+  MISINFORMATION
+  OTHER
+}
+
+/// Um post no mural. O autor é a associação, e não a conta: o apelido e o selo
+/// de equipe saem dela, e apagar a conta apaga o post junto (cascata).
+/// Removido pela moderação continua aqui, visível só ao autor (ADR 032).
+model GroupPost {
+  id            String        @id @default(uuid())
+  groupId       String
+  membershipId  String
+  /// Markdown-lite, até 2000 caracteres. Pode ser vazio quando há imagem.
+  body          String
+  pinnedAt      DateTime?
+  removedAt     DateTime?
+  removedById   String?
+  removedReason ReportReason?
+  createdAt     DateTime      @default(now())
+
+  group     Group               @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  author    GroupMembership     @relation("PostAuthor", fields: [membershipId], references: [id], onDelete: Cascade)
+  removedBy GroupMembership?    @relation("PostRemovedBy", fields: [removedById], references: [id], onDelete: SetNull)
+  images    GroupPostImage[]
+  reactions GroupPostReaction[]
+  comments  GroupPostComment[]
+  reports   GroupPostReport[]
+
+  @@index([groupId, createdAt])
+  @@index([groupId, pinnedAt])
+  @@index([membershipId])
+}
+
+/// Até quatro imagens por post (mídia `post_image`, ADR 028).
+model GroupPostImage {
+  id     String @id @default(uuid())
+  postId String
+  fileId String @unique
+  order  Int
+
+  post GroupPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  file MediaFile @relation("PostImage", fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+}
+
+/// Uma reação por pessoa por post; trocar de reação troca o `kind`.
+model GroupPostReaction {
+  id           String           @id @default(uuid())
+  postId       String
+  membershipId String
+  kind         PostReactionKind
+  createdAt    DateTime         @default(now())
+
+  post       GroupPost       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  membership GroupMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, membershipId])
+  @@index([membershipId])
+}
+
+/// Comentário: texto puro, até 500 caracteres.
+model GroupPostComment {
+  id           String    @id @default(uuid())
+  postId       String
+  membershipId String
+  body         String
+  removedAt    DateTime?
+  removedById  String?
+  createdAt    DateTime  @default(now())
+
+  post      GroupPost         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    GroupMembership   @relation("CommentAuthor", fields: [membershipId], references: [id], onDelete: Cascade)
+  removedBy GroupMembership?  @relation("CommentRemovedBy", fields: [removedById], references: [id], onDelete: SetNull)
+  reports   GroupPostReport[]
+
+  @@index([postId, createdAt])
+  @@index([membershipId])
+}
+
+/// Denúncia de um post (ou de um comentário dele). Quem denunciou não aparece
+/// para a equipe; a linha serve à fila e à trilha da decisão.
+model GroupPostReport {
+  id           String       @id @default(uuid())
+  postId       String
+  commentId    String?
+  reporterId   String
+  reason       ReportReason
+  note         String?
+  createdAt    DateTime     @default(now())
+  resolvedAt   DateTime?
+  resolvedById String?
+  /// "removed" | "dismissed"
+  resolution   String?
+
+  post       GroupPost         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment    GroupPostComment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  reporter   GroupMembership   @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  resolvedBy GroupMembership?  @relation("ReportResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([postId, resolvedAt])
+  @@index([commentId])
+  @@index([reporterId])
+}
+
+// ============================================================
+// Avisos no celular (Fase 8c, ADR 033)
+// ============================================================
+
+enum DevicePlatform {
+  IOS
+  ANDROID
+}
+
+/// O que cada aviso cobre; a pessoa desliga por tipo.
+enum NotificationKind {
+  COMMUNITY
+  CHALLENGES
+  FEED
+  MODERATION
+  /// A resposta do chat ficou pronta com o app fora de vista (Fase 9e).
+  CHAT
+}
+
+/// Um celular em que a pessoa ligou os avisos. O token é da Expo e é único: o
+/// mesmo aparelho em outra conta passa para quem registrou por último.
+model UserDevice {
+  id         String         @id @default(uuid())
+  userId     String
+  token      String         @unique
+  platform   DevicePlatform
+  createdAt  DateTime       @default(now())
+  /// Última vez que o app abriu e refez o cadastro.
+  lastSeenAt DateTime       @default(now())
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tickets PushTicket[]
+
+  @@index([userId, lastSeenAt])
+}
+
+/// Um envio que a Expo aceitou e cujo recibo ainda não foi lido (Fase 9g). O
+/// recibo diz se a Apple ou o Google entregaram; `DeviceNotRegistered` nele
+/// apaga o aparelho. Vive no máximo 24 h.
+model PushTicket {
+  /// O id do ticket da Expo.
+  id        String   @id
+  deviceId  String
+  createdAt DateTime @default(now())
+
+  device UserDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+}
+
+/// Avisos em sequência viram um só (Fase 9g): o primeiro comentário num post
+/// avisa na hora; os seguintes, dentro da janela, saem juntos no fim dela.
+model PendingNotice {
+  /// O que agrupa, ex. `comment:<postId>`.
+  key          String
+  userId       String
+  kind         NotificationKind
+  /// Quantos chegaram depois do aviso que já saiu.
+  count        Int              @default(0)
+  /// Nome da comunidade e caminho do toque — nada do conteúdo.
+  community    String
+  url          String
+  windowEndsAt DateTime
+  createdAt    DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([key, userId])
+  @@index([windowEndsAt])
+}
+
+/// Um navegador em que a pessoa ligou os avisos (Web Push, Fase 9g). O endpoint
+/// é do serviço de push do navegador e é único.
+model WebPushSubscription {
+  id         String   @id @default(uuid())
+  userId     String
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, lastSeenAt])
+}
+
+/// Só existe linha para o tipo que a pessoa mexeu; sem linha, está ligado.
+model NotificationPreference {
+  userId    String
+  kind      NotificationKind
+  enabled   Boolean
+  updatedAt DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, kind])
 }

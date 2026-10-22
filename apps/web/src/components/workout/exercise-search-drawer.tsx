@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import {
   Drawer,
@@ -11,19 +11,26 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from '@/components/ui/drawer';
+import { CommunityBadge, MyGymToggle, useInCommunity } from './my-gym-filter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { isCardioExercise, workoutApi, type Exercise } from '@fatia/api-client';
+import { workoutApi, type Exercise } from '@fatia/api-client';
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  sessionId: string;
+  /**
+   * Recebe o exercício escolhido. A sessão o mostra como pendente até a
+   * primeira série real — escolher não registra nada.
+   */
+  onPick: (exercise: Exercise) => void;
 }
 
-export function ExerciseSearchDrawer({ open, onOpenChange, sessionId }: Props) {
-  const qc = useQueryClient();
+export function ExerciseSearchDrawer({ open, onOpenChange, onPick }: Props) {
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
+  const [naAcademia, setNaAcademia] = useState(false);
+  const emComunidade = useInCommunity(open);
 
   // Ajuste durante o render, e não num efeito (#187). A comparação é a mesma que
   // estava no array de dependências, então a limpeza acontece no mesmo fechamento
@@ -35,6 +42,7 @@ export function ExerciseSearchDrawer({ open, onOpenChange, sessionId }: Props) {
     if (!open) {
       setQ('');
       setDebounced('');
+      setNaAcademia(false);
     }
   }
 
@@ -44,22 +52,10 @@ export function ExerciseSearchDrawer({ open, onOpenChange, sessionId }: Props) {
   }, [q]);
 
   const search = useQuery({
-    queryKey: ['workout', 'exercises', debounced],
-    queryFn: () => workoutApi.searchExercises(debounced || undefined),
+    queryKey: ['workout', 'exercises', debounced, naAcademia],
+    queryFn: () =>
+      workoutApi.searchExercises(debounced || undefined, undefined, { onlyMyGym: naAcademia }),
     enabled: open,
-  });
-
-  const logSet = useMutation({
-    mutationFn: (exercise: Exercise) =>
-      workoutApi.logSet(sessionId, {
-        exerciseId: exercise.id,
-        ...(isCardioExercise(exercise) ? { durationSeconds: 60 } : { reps: 1 }),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['workout', 'active'] });
-      qc.invalidateQueries({ queryKey: ['workout', 'session', sessionId] });
-      onOpenChange(false);
-    },
   });
 
   const filtered =
@@ -81,6 +77,7 @@ export function ExerciseSearchDrawer({ open, onOpenChange, sessionId }: Props) {
             className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
           />
           <Input
+            aria-label="Buscar exercício"
             autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -88,6 +85,11 @@ export function ExerciseSearchDrawer({ open, onOpenChange, sessionId }: Props) {
             className="pl-9"
           />
         </div>
+        {emComunidade && (
+          <div className="mb-2">
+            <MyGymToggle checked={naAcademia} onChange={setNaAcademia} />
+          </div>
+        )}
 
         <ul className="-mx-4 max-h-[55vh] divide-y overflow-y-auto">
           {search.isFetching && (
@@ -104,15 +106,22 @@ export function ExerciseSearchDrawer({ open, onOpenChange, sessionId }: Props) {
             <li key={exercise.id}>
               <button
                 type="button"
-                onClick={() => logSet.mutate(exercise)}
+                onClick={() => {
+                  onPick(exercise);
+                  onOpenChange(false);
+                }}
                 className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-accent"
               >
                 <div>
                   <p className="text-sm font-medium">{exercise.name}</p>
                   <p className="text-xs text-muted-foreground">{exercise.muscleGroup}</p>
                 </div>
-                {exercise.source === 'CUSTOM' && (
-                  <span className="rounded bg-muted px-2 py-0.5 text-xs">custom</span>
+                {exercise.communityName ? (
+                  <CommunityBadge name={exercise.communityName} />
+                ) : (
+                  exercise.source === 'CUSTOM' && (
+                    <span className="rounded bg-muted px-2 py-0.5 text-xs">custom</span>
+                  )
                 )}
               </button>
             </li>

@@ -1,0 +1,18 @@
+{
+  "name": "@fatia/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Playwright: screenshots antes/depois (ui:snap) e fluxos críticos (ADR 029)",
+  "scripts": {
+    "test": "playwright test",
+    "snap": "bash scripts/snap.sh",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.10.2",
+    "@playwright/test": "1.56.1",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.22.4",
+    "typescript": "^5.5.0"
+  }
+}

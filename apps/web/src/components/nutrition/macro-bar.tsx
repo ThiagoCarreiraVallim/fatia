@@ -14,8 +14,7 @@ export function MacroBar({ label, value, min, max, unit = 'g' }: MacroBarProps) 
   const pct = Math.min(100, (value / max) * 100);
   const status: 'in' | 'edge' | 'out' =
     value >= min && value <= max ? 'in' : value < min * 0.9 || value > max * 1.1 ? 'out' : 'edge';
-  const color =
-    status === 'in' ? 'bg-emerald-500' : status === 'edge' ? 'bg-amber-500' : 'bg-rose-500';
+  const color = status === 'in' ? 'bg-primary' : status === 'edge' ? 'bg-warning' : 'bg-danger';
   const minMarker = (min / max) * 100;
 
   return (

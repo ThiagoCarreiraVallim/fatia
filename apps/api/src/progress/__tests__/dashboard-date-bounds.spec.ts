@@ -33,6 +33,7 @@ describe('DashboardService — fronteiras de dia e semana', () => {
         count: jest.fn().mockResolvedValue(0),
       },
       weightLog: { findMany: jest.fn().mockResolvedValue([]) },
+      workoutPlan: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const stepLogs = { getStepsForDate: jest.fn().mockResolvedValue({ steps: 0 }) };
     const weightLogs = { getLatest: jest.fn().mockResolvedValue(null) };
@@ -105,6 +106,43 @@ describe('DashboardService — fronteiras de dia e semana', () => {
   // A janela semanal de treino saiu daqui: quem a monta agora é o `StreakService`, e os casos
   // (segunda 07:00 em Tóquio dentro da janela, `lt` no fim, sete dias exatos) vivem em
   // `streak.service.spec.ts` — que também usa os helpers reais, pelo mesmo motivo deste arquivo.
+
+  describe('o resumo da semana', () => {
+    afterEach(() => jest.useRealTimers());
+
+    it('janela de segunda a domingo no fuso, com `lt` na meia-noite seguinte', async () => {
+      // Quarta, 14/01/2026 em Tóquio: a semana vai de 12/01 a 18/01 locais.
+      jest.useFakeTimers({ now: new Date('2026-01-14T03:00:00Z') });
+      const { service, prisma } = build();
+
+      await service.week({ userId: 'user-A', timezone: TOKYO });
+
+      for (const call of [prisma.meal.findMany, prisma.weightLog.findMany]) {
+        const range = Object.values(call.mock.calls[0][0].where).find(
+          (v) => v && typeof v === 'object' && 'gte' in v,
+        ) as { gte: Date; lt: Date };
+        expect(range.gte.toISOString()).toBe('2026-01-11T15:00:00.000Z');
+        expect(range.lt.toISOString()).toBe('2026-01-18T15:00:00.000Z');
+        expect(range).not.toHaveProperty('lte');
+      }
+    });
+
+    it('conta a refeição da noite no dia local dela', async () => {
+      jest.useFakeTimers({ now: new Date('2026-01-14T03:00:00Z') });
+      const { service, prisma } = build();
+      // Duas refeições no mesmo dia local (13/01 em Tóquio), uma antes e uma depois da
+      // meia-noite UTC. Agrupadas por dia UTC, viram dois dias de meia refeição cada.
+      const item = { kcal: 500, proteinG: 30 };
+      prisma.meal.findMany.mockResolvedValue([
+        { eatenAt: new Date('2026-01-12T23:00:00Z'), items: [item] },
+        { eatenAt: new Date('2026-01-13T01:00:00Z'), items: [item] },
+      ]);
+
+      const week = await service.week({ userId: 'user-A', timezone: TOKYO });
+
+      expect(week.nutrition.avgKcal).toBe(1000);
+    });
+  });
 
   describe('o helper de limites', () => {
     it('devolve `end` como a meia-noite seguinte, e não o último instante do dia', () => {

@@ -35,6 +35,12 @@ export interface ApiTransport {
 
   /** `fetch` a usar. Existe para teste e para ambientes com fetch customizado. */
   fetch?: typeof fetch;
+  /**
+   * `fetch` das respostas em stream do chat. O `fetch` do React Native não lê
+   * o corpo aos pedaços (`body.getReader()`); o app passa o `expo/fetch`, que
+   * lê, sem trocar o `fetch` de todas as outras chamadas.
+   */
+  streamFetch?: typeof fetch;
 
   /**
    * Chamado quando a API responde 401, antes do erro ser lançado. O web apenas

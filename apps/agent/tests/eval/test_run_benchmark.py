@@ -30,6 +30,7 @@ from fatia_agent.eval.run_benchmark import (
     montar_saida,
     registrar_execucao,
 )
+from fatia_agent.providers.base import Description
 from fatia_agent.providers.errors import AIProviderTimeout
 from fatia_agent.recognition.recognize_meal import PROMPT
 
@@ -42,14 +43,16 @@ class ProvedorGravado:
         self.prompts: list[str] = []
         self.media_types: list[str] = []
 
-    async def describe(self, image: bytes, *, prompt: str, media_type: str = "image/jpeg") -> str:
+    async def describe(
+        self, image: bytes, *, prompt: str, media_type: str = "image/jpeg"
+    ) -> Description:
         assert image, "o runner precisa ler os bytes da foto"
         self.prompts.append(prompt)
         self.media_types.append(media_type)
         resposta = self._respostas.pop(0)
         if isinstance(resposta, Exception):
             raise resposta
-        return resposta
+        return Description(text=resposta)
 
     async def aclose(self) -> None:
         return None

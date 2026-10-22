@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -92,4 +93,10 @@ export class SearchExercisesDto {
   muscleGroup?: string;
 
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) limit?: number;
+
+  /** Só o que a comunidade da pessoa destaca e o que o equipamento dela permite (Fase 7b). */
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => value === true || value === 'true')
+  @IsBoolean()
+  onlyMyGym?: boolean;
 }

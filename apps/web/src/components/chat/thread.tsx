@@ -21,8 +21,10 @@ import {
   useAuiState,
 } from '@assistant-ui/react';
 import { useLangGraphInterruptState } from '@assistant-ui/react-langgraph';
-import { erroDoChat, textoDeErroDoChat } from '@fatia/api-client';
+import Link from 'next/link';
+import { erroDoChat, planHref, stopChatRun, textoDeErroDoChat } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
+import { LiveJoin } from './live-join';
 import { field, ghostButton } from '@/components/elements/surfaces';
 import {
   EmptyState,
@@ -52,6 +54,7 @@ import {
 } from './chat-runtime-provider';
 import { timingStats } from './turn-timing';
 import { useDitado } from './use-ditado';
+import { AutorDaResposta, SeletorDeAgente } from './agente';
 
 /**
  * A conversa, sobre os primitivos do assistant-ui.
@@ -97,11 +100,23 @@ function useLastQuestion(): string {
 function FailedAnswer({ error }: { error: unknown }) {
   const lastQuestion = useLastQuestion();
   const aui = useAui();
+  const erro = erroDoChat(error);
+  // O plano acabou no meio da conversa (ADR 024): tentar de novo daria o mesmo 402.
+  if (erro.code === 'AI_PLAN_REQUIRED') {
+    return (
+      <div role="alert" className={cn(field, 'w-full space-y-2 rounded-2xl px-4 py-3 text-sm')}>
+        <p>{textoDeErroDoChat(erro)}</p>
+        <Link href={planHref('chat')} className="font-semibold text-primary underline">
+          Ver o plano PRO
+        </Link>
+      </div>
+    );
+  }
   return (
     <ErrorState
       className="max-w-none"
       title="A resposta falhou"
-      detail={textoDeErroDoChat(erroDoChat(error))}
+      detail={textoDeErroDoChat(erro)}
       retryLabel="Tentar de novo"
       // Reenvia a pergunta como mensagem nova: o estado da conversa está no
       // agente, e refazer "o turno do meio" exigiria bifurcar o checkpoint.
@@ -183,13 +198,13 @@ function BarraDeAcoes() {
       </ActionBarPrimitive.Copy>
       <ActionBarPrimitive.FeedbackPositive
         aria-label="Resposta boa"
-        className={cn(ghostButton, 'rounded-md p-1.5 data-[submitted]:text-emerald-500')}
+        className={cn(ghostButton, 'rounded-md p-1.5 data-[submitted]:text-success')}
       >
         <ThumbsUpIcon size={14} aria-hidden />
       </ActionBarPrimitive.FeedbackPositive>
       <ActionBarPrimitive.FeedbackNegative
         aria-label="Resposta ruim"
-        className={cn(ghostButton, 'rounded-md p-1.5 data-[submitted]:text-rose-500')}
+        className={cn(ghostButton, 'rounded-md p-1.5 data-[submitted]:text-danger')}
       >
         <ThumbsDownIcon size={14} aria-hidden />
       </ActionBarPrimitive.FeedbackNegative>
@@ -200,6 +215,7 @@ function BarraDeAcoes() {
 function MensagemDoAssistente() {
   return (
     <MessagePrimitive.Root className="flex w-full flex-col items-start gap-3">
+      <AutorDaResposta />
       <MessagePrimitive.Parts
         components={{
           Text: TextoDoAssistente,
@@ -221,6 +237,7 @@ function Boas() {
   return (
     <EmptyState className="my-auto max-w-none self-center">
       <EmptyStateGreeting>Por onde começamos?</EmptyStateGreeting>
+      <SeletorDeAgente />
       <EmptyStateSuggestions>
         {SUGESTOES.map((sugestao, indice) => (
           <EmptyStateSuggestion
@@ -329,7 +346,7 @@ function BotaoDeDitado({
       className={cn(
         ghostButton,
         'size-9 shrink-0 rounded-full disabled:opacity-60',
-        gravando && 'text-rose-500 hover:text-rose-500',
+        gravando && 'text-danger hover:text-danger',
       )}
     >
       {gravando ? (
@@ -386,7 +403,7 @@ function Composer() {
   return (
     <>
       {aviso ? (
-        <p role="alert" className="shrink-0 px-5 pb-1 text-xs text-rose-500">
+        <p role="alert" className="shrink-0 px-5 pb-1 text-xs text-danger">
           {aviso}
         </p>
       ) : null}
@@ -418,6 +435,8 @@ function Composer() {
           // "terminou" (react-langgraph nunca marca `incomplete/cancelled`).
           const ultima = aui.thread().getState().messages.at(-1);
           if (ultima?.role === 'assistant') markStopped(ultima.id);
+          // Parar é no servidor (ADR 035): fechar a conexão não para mais o turno.
+          if (aberta) void stopChatRun(aberta).catch(() => undefined);
           aui.thread().cancelRun();
         }}
         className="shrink-0 bg-transparent shadow-none"
@@ -430,6 +449,7 @@ export function ChatThread() {
   const rodando = useAuiState((s) => s.thread.isRunning);
   return (
     <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
+      <LiveJoin />
       <Conversation aria-busy={rodando} className="min-h-0">
         <ConversationContent>
           <AuiIf condition={(s) => s.thread.isEmpty && !s.thread.isLoading}>

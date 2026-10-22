@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type {
+  ChatAgents,
   ChatConversation,
   ChatMemory,
   ChatQuota,
@@ -70,10 +71,20 @@ let listaLiberada: Promise<void> = Promise.resolve();
 let cota: ChatQuota;
 let memorias: ChatMemory[] = [];
 let recursos = { photos: false, dictation: false };
+let acesso: { allowed?: boolean; reason?: string } = {};
+let agentes: ChatAgents = { defaultGroupId: null, agents: [] };
 const transcribeAudioMock = vi.fn(async (_audio: Blob) => ({ text: 'registra 200 g de frango' }));
 const deleteChatMemoryMock = vi.fn(async (id: string) => {
   memorias = memorias.filter((m) => m.id !== id);
 });
+
+let fontesDoLive: Fonte[] = [];
+const joinChatRunMock = vi.fn((_conversa: string, init?: StreamChatInit) => {
+  const fonte = new Fonte();
+  fontesDoLive.push(fonte);
+  return fonte.gerar(init?.signal);
+});
+const stopChatRunMock = vi.fn(async (_conversa: string) => undefined);
 
 const streamChatMock = vi.fn((corpo: ChatTurnRequest, init?: StreamChatInit) => {
   corpos.push(corpo);
@@ -87,11 +98,14 @@ vi.mock('@fatia/api-client', async () => {
   return {
     ...actual,
     streamChat: streamChatMock,
+    joinChatRun: joinChatRunMock,
+    stopChatRun: stopChatRunMock,
     listConversations: vi.fn(async () => {
       await listaLiberada;
       return [];
     }),
-    getChatAvailability: vi.fn(async () => ({ available: true, ...recursos })),
+    getChatAvailability: vi.fn(async () => ({ available: true, ...recursos, ...acesso })),
+    listChatAgents: vi.fn(async () => agentes),
     transcribeAudio: transcribeAudioMock,
     listChatToolTitles: vi.fn(async () => ({
       log_meal: 'Registrar refeição',
@@ -136,6 +150,7 @@ vi.mock('next/navigation', () => ({
 
 const { ChatRuntimeProvider } = await import('../chat-runtime-provider');
 const { ChatScreen } = await import('../chat-screen');
+const { AppTopBar, TopBarProvider } = await import('@/components/layout/app-top-bar');
 
 beforeAll(() => {
   // `use-stick-to-bottom` e o `SwapLabel` dos elements medem com `ResizeObserver`,
@@ -164,6 +179,9 @@ beforeAll(() => {
 
 beforeEach(() => {
   fontes = [];
+  fontesDoLive = [];
+  joinChatRunMock.mockClear();
+  stopChatRunMock.mockClear();
   corpos.length = 0;
   conversaGravada = null;
   cota = {
@@ -175,6 +193,8 @@ beforeEach(() => {
   };
   memorias = [];
   recursos = { photos: false, dictation: false };
+  acesso = {};
+  agentes = { defaultGroupId: null, agents: [] };
   deleteChatMemoryMock.mockClear();
   pushMock.mockClear();
   listaLiberada = Promise.resolve();
@@ -185,9 +205,13 @@ function montar() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <ChatRuntimeProvider>
-        <ChatScreen />
-      </ChatRuntimeProvider>
+      <TopBarProvider>
+        {/* O título e as gavetas moram na barra de topo do layout. */}
+        <AppTopBar />
+        <ChatRuntimeProvider>
+          <ChatScreen />
+        </ChatRuntimeProvider>
+      </TopBarProvider>
     </QueryClientProvider>,
   );
 }
@@ -475,6 +499,43 @@ describe('ChatScreen', () => {
     expect(screen.queryByText(/Bearer recusado/)).not.toBeInTheDocument();
   });
 
+  it('no Free, o chat mostra o que o PRO acrescenta e os dois caminhos, sem caixa de mensagem', async () => {
+    acesso = { allowed: false, reason: 'plan_required' };
+    montar();
+
+    expect(
+      await screen.findByRole('heading', { name: /o chat com a ia faz parte do pro/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /assinar pro/i })).toHaveAttribute(
+      'href',
+      '/plan?recurso=chat',
+    );
+    expect(screen.getByRole('link', { name: /sua própria ia pelo mcp/i })).toHaveAttribute(
+      'href',
+      '/profile/connect',
+    );
+    expect(
+      screen.queryByRole('textbox', { name: 'Mensagem para o Fatia' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('o plano que acaba no meio da conversa leva ao plano, sem "tentar de novo"', async () => {
+    montar();
+    await enviar('oi');
+    fontes[0].emitir(
+      { event: 'error', data: { code: 'AI_PLAN_REQUIRED', message: 'plano' } },
+      { event: 'done', data: { status: 'error' } },
+    );
+    fontes[0].fechar();
+
+    expect(await screen.findByText(/faz parte do plano PRO/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ver o plano PRO' })).toHaveAttribute(
+      'href',
+      '/plan?recurso=chat',
+    );
+    expect(screen.queryByRole('button', { name: 'Tentar de novo' })).not.toBeInTheDocument();
+  });
+
   it('erro antes da primeira palavra aparece no turno de agora, e não na resposta anterior', async () => {
     montar();
     await enviar('oi');
@@ -614,6 +675,55 @@ describe('ChatScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Parar resposta' }));
 
     expect(await screen.findByText('Resposta interrompida')).toBeInTheDocument();
+  });
+
+  it('parar vai ao servidor, e não só fecha a conexão (ADR 035)', async () => {
+    montar();
+    const user = await enviar('me conta do meu almoço');
+    fontes[0].emitir(fragmento('ai-1', 'Seu almoço teve'));
+    expect(await screen.findByText('Seu almoço teve')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Parar resposta' }));
+
+    await waitFor(() => expect(stopChatRunMock).toHaveBeenCalledWith(CONVERSA));
+  });
+
+  it('conversa que ainda responde no servidor: ao abrir, acompanha a resposta ao vivo (ADR 035)', async () => {
+    conversaGravada = {
+      id: CONVERSA,
+      title: 'Almoço',
+      createdAt: '2026-09-25T12:00:00Z',
+      updatedAt: '2026-09-25T12:00:00Z',
+      running: true,
+      messages: [
+        {
+          id: 'm1',
+          role: 'user',
+          content: 'quanto de proteína hoje?',
+          tools: null,
+          metadata: null,
+          runId: null,
+          review: null,
+          createdAt: '2026-09-25T12:00:00Z',
+        },
+      ],
+    };
+    montar();
+
+    expect(await screen.findByText('quanto de proteína hoje?')).toBeInTheDocument();
+    await waitFor(() => expect(joinChatRunMock).toHaveBeenCalledWith(CONVERSA, expect.anything()));
+    // Nenhum turno novo: é a mesma resposta, vista de novo.
+    expect(streamChatMock).not.toHaveBeenCalled();
+
+    fontesDoLive[0].emitir(fragmento('ai-1', 'Você comeu 92 g.'));
+    expect(await screen.findByText('Você comeu 92 g.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Parar resposta' })).toBeInTheDocument();
+
+    fontesDoLive[0].emitir({ event: 'done', data: { status: 'completed' } });
+    fontesDoLive[0].fechar();
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Parar resposta' })).not.toBeInTheDocument(),
+    );
   });
 
   it('depois do F5, a resposta parada e o tempo gravado voltam', async () => {
@@ -1046,5 +1156,98 @@ describe('ChatScreen', () => {
     expect(pararTrilha).toHaveBeenCalled();
     expect(corpos).toHaveLength(0);
     vi.unstubAllGlobals();
+  });
+});
+
+describe('ChatScreen — o agente da comunidade (Fase 7c)', () => {
+  const ACADEMIA = '7b0e1c2d-3a4b-4c5d-8e6f-112233445566';
+  const comAgente = (): ChatAgents => ({
+    defaultGroupId: ACADEMIA,
+    agents: [
+      {
+        groupId: ACADEMIA,
+        name: 'Treinador Norte',
+        communityName: 'Studio Norte',
+        avatarUrl: null,
+      },
+    ],
+  });
+
+  it('sem agente de comunidade, não há escolha e o turno vai como sempre', async () => {
+    montar();
+    await enviar('oi');
+
+    expect(screen.queryByRole('radiogroup', { name: 'Com quem conversar' })).toBeNull();
+    expect(corpos[0]).toEqual({ conversationId: CONVERSA, message: 'oi' });
+  });
+
+  it('na conversa nova, o agente da comunidade do assento já vem marcado e o turno deixa a API usar o padrão', async () => {
+    agentes = comAgente();
+    montar();
+
+    const escolha = await screen.findByRole('radiogroup', { name: 'Com quem conversar' });
+    expect(within(escolha).getByRole('radio', { name: /Treinador Norte/ })).toBeChecked();
+    expect(await screen.findByText('Treinador Norte', { selector: 'strong' })).toBeInTheDocument();
+
+    await enviar('tem plano pra iniciante?');
+    expect(corpos[0]).toEqual({ conversationId: CONVERSA, message: 'tem plano pra iniciante?' });
+  });
+
+  it('escolher a Fatia manda null, e a conversa nasce com o assistente da Fatia', async () => {
+    agentes = comAgente();
+    montar();
+    const user = userEvent.setup();
+
+    const escolha = await screen.findByRole('radiogroup', { name: 'Com quem conversar' });
+    await user.click(within(escolha).getByRole('radio', { name: /Fatia/ }));
+    expect(
+      await screen.findByText(
+        'Peça para registrar refeição, consultar treino ou ver sua evolução.',
+      ),
+    ).toBeInTheDocument();
+
+    await enviar('oi');
+    expect(corpos[0]).toEqual({ conversationId: CONVERSA, message: 'oi', agentGroupId: null });
+  });
+
+  it('conversa gravada com o agente mostra o nome no topo e acima de cada resposta, sem escolha', async () => {
+    // Escolhido sem ser o padrão: quem diz o agente é a conversa gravada, não a escolha de hoje.
+    agentes = { ...comAgente(), defaultGroupId: null };
+    conversaGravada = {
+      id: CONVERSA,
+      title: 'Plano da academia',
+      createdAt: '2026-10-17T12:00:00Z',
+      updatedAt: '2026-10-17T12:00:00Z',
+      agentGroupId: ACADEMIA,
+      agent: { groupId: ACADEMIA, name: 'Treinador Norte', avatarUrl: null },
+      messages: [
+        {
+          id: 'm1',
+          role: 'user',
+          content: 'tem plano?',
+          tools: null,
+          metadata: null,
+          runId: null,
+          review: null,
+          createdAt: '2026-10-17T12:00:00Z',
+        },
+        {
+          id: 'm2',
+          role: 'assistant',
+          content: 'Tem o Iniciante 3x.',
+          tools: null,
+          metadata: { status: 'completed' },
+          runId: 'r1',
+          review: null,
+          createdAt: '2026-10-17T12:00:01Z',
+        },
+      ],
+    };
+    montar();
+
+    expect(await screen.findByText('Tem o Iniciante 3x.')).toBeInTheDocument();
+    expect(screen.getByText('Treinador Norte', { selector: 'strong' })).toBeInTheDocument();
+    expect(screen.getAllByText('Treinador Norte').length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByRole('radiogroup', { name: 'Com quem conversar' })).toBeNull();
   });
 });

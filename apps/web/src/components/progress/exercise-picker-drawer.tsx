@@ -52,7 +52,13 @@ export function ExercisePickerDrawer({ open, onClose, onPick, filter }: Props) {
           </DrawerDescription>
         </DrawerHeader>
         <div className="my-3 space-y-3">
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar…" autoFocus />
+          <Input
+            aria-label="Buscar exercício"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar…"
+            autoFocus
+          />
           <div className="max-h-[60vh] -mx-2 overflow-y-auto">
             {filtered.length === 0 && (
               <p className="px-4 py-6 text-center text-xs text-muted-foreground">

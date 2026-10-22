@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react-native';
-import { isCardioExercise, workoutApi, type Exercise } from '@fatia/api-client';
+import { workoutApi, type Exercise } from '@fatia/api-client';
 import {
   Button,
   Drawer,
@@ -13,24 +13,27 @@ import {
   DrawerTextInput,
   DrawerTitle,
 } from '@/components/ui';
+import { cores } from '@/theme/cores';
+import { CommunityBadge, MyGymToggle, useInCommunity } from './my-gym-filter';
 
 /**
  * Réplica de `apps/web/src/components/workout/exercise-search-drawer.tsx`.
  *
- * Registra uma série mínima do exercício escolhido na sessão em andamento — é
- * como o PWA faz o exercício "aparecer" no treino livre.
+ * Só escolhe: o exercício vai para a sessão como pendente e aparece em foco
+ * sem nenhuma série registrada (`buildExerciseGroups`, `pending`).
  */
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  sessionId: string;
+  onPick: (exercise: Exercise) => void;
 }
 
-export function ExerciseSearchDrawer({ open, onOpenChange, sessionId }: Props) {
-  const qc = useQueryClient();
+export function ExerciseSearchDrawer({ open, onOpenChange, onPick }: Props) {
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
+  const [naAcademia, setNaAcademia] = useState(false);
+  const emComunidade = useInCommunity(open);
 
   // Ajuste durante o render, e não num efeito (#187). A comparação é a mesma que
   // estava no array de dependências, então a limpeza acontece no mesmo fechamento
@@ -42,6 +45,7 @@ export function ExerciseSearchDrawer({ open, onOpenChange, sessionId }: Props) {
     if (!open) {
       setQ('');
       setDebounced('');
+      setNaAcademia(false);
     }
   }
 
@@ -51,22 +55,10 @@ export function ExerciseSearchDrawer({ open, onOpenChange, sessionId }: Props) {
   }, [q]);
 
   const search = useQuery({
-    queryKey: ['workout', 'exercises', debounced],
-    queryFn: () => workoutApi.searchExercises(debounced || undefined),
+    queryKey: ['workout', 'exercises', debounced, naAcademia],
+    queryFn: () =>
+      workoutApi.searchExercises(debounced || undefined, undefined, { onlyMyGym: naAcademia }),
     enabled: open,
-  });
-
-  const logSet = useMutation({
-    mutationFn: (exercise: Exercise) =>
-      workoutApi.logSet(sessionId, {
-        exerciseId: exercise.id,
-        ...(isCardioExercise(exercise) ? { durationSeconds: 60 } : { reps: 1 }),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['workout', 'active'] });
-      qc.invalidateQueries({ queryKey: ['workout', 'session', sessionId] });
-      onOpenChange(false);
-    },
   });
 
   const filtered =
@@ -84,18 +76,23 @@ export function ExerciseSearchDrawer({ open, onOpenChange, sessionId }: Props) {
       <View className="px-4 py-3">
         <View className="relative justify-center">
           <View className="absolute left-3 z-10">
-            <Search size={16} color="#baccaf" />
+            <Search size={16} color={cores.mutedForeground} />
           </View>
           <DrawerTextInput
             value={q}
             onChangeText={setQ}
             accessibilityLabel="Buscar exercício"
             placeholder="Ex.: supino, corrida, agachamento..."
-            placeholderTextColor="#8a8a8a"
-            selectionColor="#2ce500"
+            placeholderTextColor={cores.placeholder}
+            selectionColor={cores.primary}
             className="min-h-[44px] rounded-md border border-input bg-transparent py-2 pl-9 pr-3 text-sm text-foreground"
           />
         </View>
+        {emComunidade ? (
+          <View className="pt-2">
+            <MyGymToggle checked={naAcademia} onChange={setNaAcademia} />
+          </View>
+        ) : null}
       </View>
 
       <DrawerFlatList
@@ -117,15 +114,19 @@ export function ExerciseSearchDrawer({ open, onOpenChange, sessionId }: Props) {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`${item.name}, ${item.muscleGroup}`}
-            disabled={logSet.isPending}
-            onPress={() => logSet.mutate(item)}
+            onPress={() => {
+              onPick(item);
+              onOpenChange(false);
+            }}
             className="min-h-[44px] flex-row items-center justify-between px-4 py-3 active:bg-accent"
           >
             <View className="flex-1 pr-2">
               <Text className="text-sm font-medium text-foreground">{item.name}</Text>
               <Text className="text-xs text-muted-foreground">{item.muscleGroup}</Text>
             </View>
-            {item.source === 'CUSTOM' ? (
+            {item.communityName ? (
+              <CommunityBadge name={item.communityName} />
+            ) : item.source === 'CUSTOM' ? (
               <View className="rounded bg-muted px-2 py-0.5">
                 <Text className="text-xs text-foreground">custom</Text>
               </View>

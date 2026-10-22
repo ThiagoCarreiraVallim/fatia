@@ -247,6 +247,40 @@ export class AchievementService {
         const resumo = await this.streaks.compute(ctx);
         return resumo.activeDays.periodos;
       }),
+
+      // Desafios (Fase 8a): só o que já fechou conta, e só com pontuação — quem entrou e não
+      // registrou nada não "concluiu". A data é a do fechamento, não a da avaliação.
+      primeiroDesafioConcluido: umaVez(async () => {
+        const p = await this.prisma.groupChallengeParticipant.findFirst({
+          where: {
+            membership: { userId },
+            score: { gt: 0 },
+            finalRank: { not: null },
+            challenge: { finalizedAt: { not: null } },
+          },
+          orderBy: { challenge: { finalizedAt: 'asc' } },
+          select: { challenge: { select: { title: true, finalizedAt: true } } },
+        });
+        return p?.challenge.finalizedAt
+          ? { at: p.challenge.finalizedAt, challengeTitle: p.challenge.title }
+          : null;
+      }),
+
+      primeiroPodio: umaVez(async () => {
+        const p = await this.prisma.groupChallengeParticipant.findFirst({
+          where: {
+            membership: { userId },
+            score: { gt: 0 },
+            finalRank: { lte: 3 },
+            challenge: { finalizedAt: { not: null } },
+          },
+          orderBy: { challenge: { finalizedAt: 'asc' } },
+          select: { finalRank: true, challenge: { select: { title: true, finalizedAt: true } } },
+        });
+        return p?.challenge.finalizedAt && p.finalRank
+          ? { at: p.challenge.finalizedAt, challengeTitle: p.challenge.title, rank: p.finalRank }
+          : null;
+      }),
     };
   }
 }

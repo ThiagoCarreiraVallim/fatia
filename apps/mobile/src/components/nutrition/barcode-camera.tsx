@@ -11,7 +11,7 @@ import { TIPOS_DE_CODIGO } from './barcode';
  *
  * O componente não sabe consultar nada — só entrega o código lido. Quem decide
  * o que fazer com ele é a tela, e a trava contra leitura repetida está em
- * `podeProcessarLeitura`, que é testável sem montar React Native.
+ * `canProcessScan` (`@fatia/api-client`), que é testável sem montar React Native.
  */
 export function BarcodeCamera({
   onLido,

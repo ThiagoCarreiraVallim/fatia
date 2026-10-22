@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { progressApi, type WeightLog } from '@fatia/api-client';
+import {
+  dayLabel,
+  progressApi,
+  undoMessage,
+  weightRestoreInput,
+  type WeightLog,
+} from '@fatia/api-client';
+import { hojeIso, instanteNoDia } from '@/components/nutrition/helpers';
 import {
   Button,
   Drawer,
@@ -12,8 +19,10 @@ import {
   DrawerTitle,
   FormMessage,
 } from '@/components/ui';
-import { dayMonth, formatDecimal } from '@/components/charts';
+import { formatDecimal, instantDayMonth } from '@/components/charts';
+import { useToast } from '@/components/ui/toast';
 import { LogHistory, type LogHistoryEntry } from './log-history';
+import { SeletorDeDia } from './seletor-de-dia';
 import { SheetField } from './sheet-field';
 import { parseAmount } from './parse';
 
@@ -23,11 +32,23 @@ const HISTORY_DAYS = 30;
  * Réplica de `apps/web/src/components/progress/log-weight-drawer.tsx`, com
  * edição e remoção — ver `log-history.tsx` para o porquê.
  */
-export function LogWeightDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function LogWeightDrawer({
+  open,
+  onClose,
+  date,
+}: {
+  open: boolean;
+  onClose: () => void;
+  /** Dia em que o drawer abre; sem ele, hoje. */
+  date?: string;
+}) {
+  const hoje = hojeIso();
+  const [dia, setDia] = useState(date ?? hoje);
   const [weight, setWeight] = useState('');
   const [editing, setEditing] = useState<WeightLog | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   // `useState` com inicializador preguiçoso, e não `useMemo(..., [])`: `useMemo`
   // é dica de performance, não garantia — o React pode descartar o valor e
@@ -50,6 +71,7 @@ export function LogWeightDrawer({ open, onClose }: { open: boolean; onClose: () 
   }
 
   function reset() {
+    setDia(date ?? hojeIso());
     setWeight('');
     setEditing(null);
     setFormError(null);
@@ -59,22 +81,42 @@ export function LogWeightDrawer({ open, onClose }: { open: boolean; onClose: () 
 
   const save = useMutation({
     mutationFn: ({ weightKg, id }: { weightKg: number; id: string | null }) =>
-      id ? progressApi.updateWeight(id, { weightKg }) : progressApi.createWeight({ weightKg }),
+      // Dia passado vai ao meio-dia local (`instanteNoDia`); hoje, o servidor usa agora.
+      id
+        ? progressApi.updateWeight(id, { weightKg })
+        : progressApi.createWeight({
+            weightKg,
+            ...(dia !== hoje ? { loggedAt: instanteNoDia(dia) } : {}),
+          }),
     onSuccess: (_result, variables) => {
       invalidate();
       setWeight('');
       setEditing(null);
       // Criar fecha o drawer, como no PWA. Editar mantém aberto: a lista logo
       // abaixo é a confirmação de que a correção pegou.
-      if (!variables.id) onClose();
+      if (!variables.id) {
+        setDia(date ?? hojeIso());
+        onClose();
+      }
     },
   });
 
+  // Apaga sem perguntar; o aviso oferece "Desfazer" (`undo.ts` do api-client).
+  const restore = useMutation({
+    mutationFn: (log: WeightLog) => progressApi.createWeight(weightRestoreInput(log)),
+    onSuccess: invalidate,
+    onError: () => toast.show({ message: 'Não deu para desfazer. Registre de novo.' }),
+  });
+
   const remove = useMutation({
-    mutationFn: (id: string) => progressApi.deleteWeight(id),
-    onSuccess: (_result, id) => {
+    mutationFn: (log: WeightLog) => progressApi.deleteWeight(log.id),
+    onSuccess: (_result, log) => {
       invalidate();
-      if (editing?.id === id) {
+      toast.show({
+        message: undoMessage('weight'),
+        action: { label: 'Desfazer', onPress: () => restore.mutate(log) },
+      });
+      if (editing?.id === log.id) {
         setEditing(null);
         setWeight('');
       }
@@ -94,7 +136,7 @@ export function LogWeightDrawer({ open, onClose }: { open: boolean; onClose: () 
   const entries: LogHistoryEntry[] = (logs.data?.logs ?? []).map((log) => ({
     id: log.id,
     title: `${formatDecimal(log.weightKg)} kg`,
-    subtitle: dayMonth(log.loggedAt),
+    subtitle: instantDayMonth(log.loggedAt),
   }));
 
   const error = formError ?? (save.error as Error | null)?.message ?? null;
@@ -114,12 +156,15 @@ export function LogWeightDrawer({ open, onClose }: { open: boolean; onClose: () 
           <DrawerTitle>{editing ? 'Editar peso' : 'Logar peso'}</DrawerTitle>
           <DrawerDescription>
             {editing
-              ? `Corrigindo a pesagem de ${dayMonth(editing.loggedAt)}.`
-              : 'Pesagem da manhã, em jejum, é o mais consistente.'}
+              ? `Corrigindo a pesagem de ${instantDayMonth(editing.loggedAt)}.`
+              : dia === hoje
+                ? 'Pesagem da manhã, em jejum, é o mais consistente.'
+                : `A pesagem vai para ${dayLabel(dia, hoje)}.`}
           </DrawerDescription>
         </DrawerHeader>
 
         <View className="gap-4 py-3">
+          {editing ? null : <SeletorDeDia dia={dia} hoje={hoje} onChange={setDia} />}
           <SheetField
             label="Peso (kg)"
             value={weight}
@@ -145,16 +190,22 @@ export function LogWeightDrawer({ open, onClose }: { open: boolean; onClose: () 
               setWeight(formatDecimal(log.weightKg));
               setFormError(null);
             }}
-            onDelete={(entry) => remove.mutate(entry.id)}
-            pendingId={remove.isPending ? (remove.variables ?? null) : null}
+            onDelete={(entry) => {
+              const log = logs.data?.logs.find((item) => item.id === entry.id);
+              if (log) remove.mutate(log);
+            }}
+            pendingId={remove.isPending ? (remove.variables?.id ?? null) : null}
             emptyLabel="Nenhuma pesagem nos últimos 30 dias."
-            confirmTitle="Apagar esta pesagem?"
           />
         </View>
 
         <DrawerFooter className="px-0">
           <Button onPress={submit} loading={save.isPending}>
-            {editing ? 'Salvar alteração' : 'Salvar'}
+            {editing
+              ? 'Salvar alteração'
+              : dia === hoje
+                ? 'Salvar'
+                : `Salvar em ${dayLabel(dia, hoje)}`}
           </Button>
           {editing ? (
             <Button

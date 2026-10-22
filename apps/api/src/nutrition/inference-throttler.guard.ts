@@ -11,10 +11,9 @@ import type { CurrentUserPayload } from '../common/decorators/current-user.decor
  * guard aqui, a rota de inferência não tinha teto **nenhum**: um token válido em
  * laço dispara inferência paga sem limite. Um teto por rota é a mitigação barata.
  *
- * A tabela `AiUsage` que faltava para a cota da #135 existe desde a #249, e o
- * chat já registra nela — **esta rota ainda não**. Enquanto ela não chamar
- * `AiUsageService.registrar`, o reconhecimento por foto continua invisível para o
- * teto do dia, e este guard segue sendo a única contenção que ele tem.
+ * Desde a Fase 4 (ADR 024) a rota também passa pelo portão de plano e pela
+ * cota do dia (`AiAccessService`) e lança o uso em `AiUsage`; este guard
+ * continua como o teto por minuto, que a cota diária não substitui.
  *
  * Por usuário e não por IP porque o custo é por usuário: atrás de um CGNAT ou de
  * um proxy corporativo, chavear por IP faria uma pessoa consumir o teto de todas

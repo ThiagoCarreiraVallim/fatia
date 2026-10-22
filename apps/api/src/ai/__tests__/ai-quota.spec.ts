@@ -255,8 +255,9 @@ describe('assertAiQuota', () => {
   });
 
   it('não oferece pagamento em lugar nenhum da resposta', () => {
-    // O app é grátis para o aluno (#158). A cota degrada; ela não vende. Um guarda textual porque o
-    // modo de falha aqui é alguém "melhorar" a mensagem depois, e nada mais acusaria.
+    // A cota degrada; ela não vende — quem estoura a cota pode já ser PRO (ADR 024), e a oferta do
+    // plano é do portão de plano, não daqui. Um guarda textual porque o modo de falha aqui é alguém
+    // "melhorar" a mensagem depois, e nada mais acusaria.
     let corpo = '';
     try {
       assertAiQuota(gasto({ userMicros: 999_999, globalMicros: 0 }), LIMITES, AGORA);

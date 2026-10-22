@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -35,11 +34,14 @@ interface Props {
    */
   isDeleting: boolean;
   emptyLabel: string;
-  confirmLabel: string;
+  /** O último registro apagado, enquanto ainda dá para desfazer. */
+  undo?: { message: string; onUndo: () => void } | null;
 }
 
 /**
- * Lista de registros já salvos, com editar e apagar.
+ * Lista de registros já salvos, com editar e apagar. Apagar não pergunta: quem
+ * usa a lista mostra o aviso com "Desfazer" (`undo.ts` do api-client), que é a
+ * rede de segurança dos registros pequenos.
  *
  * Porte de `apps/mobile/src/components/progress/log-history.tsx` — direção
  * inversa da habitual, porque o app nativo resolveu a #116 primeiro. Até aqui o
@@ -61,40 +63,38 @@ export function LogHistory({
   pendingId,
   isDeleting,
   emptyLabel,
-  confirmLabel,
+  undo = null,
 }: Props) {
-  const [confirmingId, setConfirmingId] = useState<string | null>(null);
-  const confirmButtonRef = useRef<HTMLButtonElement>(null);
-  // Derivado, e não um segundo estado: um refetch pode tirar da janela o
-  // registro que estava em confirmação, e assim a pergunta desaparece sozinha
-  // em vez de ficar pendurada num id que não existe mais.
-  const confirming = entries.find((entry) => entry.id === confirmingId) ?? null;
-
-  // O botão que abriu a pergunta some do DOM no mesmo commit, e o foco iria
-  // para o `<body>` — quem navega por teclado recomeçaria do zero no meio de
-  // uma ação destrutiva. `autoFocus` não serve aqui: a ordem em que ele roda em
-  // relação à remoção do botão de lixeira não é confiável.
-  useEffect(() => {
-    if (confirmingId) confirmButtonRef.current?.focus();
-  }, [confirmingId]);
-
   return (
     <div className="space-y-2">
       <p className="text-[11px] font-bold tracking-wide text-muted-foreground">
         REGISTROS RECENTES
       </p>
 
-      {/* Região viva montada sempre, e não junto com a pergunta: um
-          `aria-live` que nasce já preenchido costuma não ser anunciado. */}
-      <p role="status" aria-live="polite" className="sr-only">
-        {confirming ? `${confirmLabel} ${confirming.title}, ${confirming.subtitle}.` : ''}
-      </p>
+      {/* Região viva montada sempre: um `aria-live` que nasce preenchido costuma
+          não ser anunciado. */}
+      <div role="status" aria-live="polite">
+        {undo && (
+          <div className="flex items-center gap-2 rounded-xl border border-subtle bg-popover px-3 py-1">
+            <p className="min-w-0 flex-1 text-sm">{undo.message}</p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="font-bold text-primary"
+              onClick={undo.onUndo}
+            >
+              Desfazer
+            </Button>
+          </div>
+        )}
+      </div>
 
       {isLoading && <p className="py-4 text-center text-xs text-muted-foreground">Carregando…</p>}
 
       {!isLoading && isError && (
         <div className="flex items-center justify-between py-3 text-sm">
-          <span className="text-rose-500">Erro ao carregar os registros.</span>
+          <span className="text-danger">Erro ao carregar os registros.</span>
           <button type="button" onClick={onRetry} className="text-primary underline">
             Tentar novamente
           </button>
@@ -114,7 +114,6 @@ export function LogHistory({
           {entries.map((entry) => {
             const isEditing = entry.id === editingId;
             const isPending = entry.id === pendingId;
-            const isConfirming = entry.id === confirmingId;
 
             return (
               <li
@@ -125,71 +124,37 @@ export function LogHistory({
                   isPending && 'opacity-50',
                 )}
               >
-                {isConfirming ? (
-                  <>
-                    <p className="min-w-0 flex-1 text-sm font-medium">{confirmLabel}</p>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      // O foco vai para a confirmação, e não para "Cancelar":
-                      // quem chegou aqui já disse o que quer. Não há disparo
-                      // acidental herdado da mesma tecla — o clique do botão
-                      // anterior já foi entregue antes deste existir.
-                      ref={confirmButtonRef}
-                      disabled={isDeleting}
-                      onClick={() => {
-                        setConfirmingId(null);
-                        onDelete(entry);
-                      }}
-                    >
-                      Apagar
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setConfirmingId(null)}
-                    >
-                      Cancelar
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-bold">{entry.title}</p>
-                      <p className="truncate text-xs text-muted-foreground">{entry.subtitle}</p>
-                    </div>
-                    {/* O rótulo carrega o valor, e não só a data. Água tem
-                        vários registros por dia por definição: com a data
-                        sozinha saíam N botões "Apagar registro de 17 mai"
-                        indistinguíveis no leitor de tela, bem na ação
-                        irreversível. */}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-11 w-11 shrink-0"
-                      aria-label={`Editar registro de ${entry.title}, ${entry.subtitle}`}
-                      aria-pressed={isEditing}
-                      disabled={isDeleting}
-                      onClick={() => onEdit(entry)}
-                    >
-                      <Pencil className={cn(isEditing && 'text-primary')} />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-11 w-11 shrink-0 text-muted-foreground"
-                      aria-label={`Apagar registro de ${entry.title}, ${entry.subtitle}`}
-                      disabled={isDeleting}
-                      onClick={() => setConfirmingId(entry.id)}
-                    >
-                      <Trash2 />
-                    </Button>
-                  </>
-                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold">{entry.title}</p>
+                  <p className="truncate text-xs text-muted-foreground">{entry.subtitle}</p>
+                </div>
+                {/* O rótulo carrega o valor, e não só a data. Água tem
+                    vários registros por dia por definição: com a data
+                    sozinha saíam N botões "Apagar registro de 17 mai"
+                    indistinguíveis no leitor de tela, bem na ação que apaga. */}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-11 w-11 shrink-0"
+                  aria-label={`Editar registro de ${entry.title}, ${entry.subtitle}`}
+                  aria-pressed={isEditing}
+                  disabled={isDeleting}
+                  onClick={() => onEdit(entry)}
+                >
+                  <Pencil className={cn(isEditing && 'text-primary')} />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-11 w-11 shrink-0 text-muted-foreground"
+                  aria-label={`Apagar registro de ${entry.title}, ${entry.subtitle}`}
+                  disabled={isDeleting}
+                  onClick={() => onDelete(entry)}
+                >
+                  <Trash2 />
+                </Button>
               </li>
             );
           })}

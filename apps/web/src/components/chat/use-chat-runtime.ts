@@ -8,6 +8,7 @@ import {
   ApiError,
   deleteConversation,
   getConversation,
+  joinChatRun,
   listConversations,
   renameConversation,
   sendChatFeedback,
@@ -157,8 +158,14 @@ export function useChatRuntime({
   onThreadIdChange,
   onTurnEnd,
   fotos = false,
+  agenteEscolhido,
 }: {
   conversationId: string | undefined;
+  /**
+   * O agente escolhido para a conversa nova (Fase 7c): `undefined` é o padrão,
+   * `null` o assistente da Fatia. Lido no envio; a API só usa na criação.
+   */
+  agenteEscolhido?: { readonly current: string | null | undefined };
   /** A instância tem modelo de visão: o composer aceita foto. */
   fotos?: boolean;
   threadListAdapter: RemoteThreadListAdapter;
@@ -192,37 +199,69 @@ export function useChatRuntime({
     aoFimDoTurno.current = onTurnEnd;
   }, [conversationId, onTurnEnd]);
 
-  const stream = useCallback(async function* (
-    messages: LangChainMessage[],
-    config: { command?: { resume: string }; abortSignal: AbortSignal },
-  ) {
-    const conversa = conversaAtual.current;
-    if (!conversa) return;
-    const ultima = messages.at(-1);
-    const anexadas = fotosDaMensagem(ultima);
-    const corpo = config.command?.resume
-      ? { conversationId: conversa, resume: decodificarRetomada(config.command.resume) }
-      : {
-          conversationId: conversa,
-          message: textoDaMensagem(ultima).trim() || PERGUNTA_DA_FOTO,
-          ...(anexadas.length ? { photos: anexadas } : {}),
-        };
-    // Aqui, e não no `start`: um turno parado ou recusado antes do `start` deixava
-    // o erro do turno anterior voltar para a tela, abaixo da pergunta nova.
-    setTurnError(null);
-    pendingTiming.current = null;
-    answerId.current = openAnswerId(messages);
-    try {
-      for await (const quadro of separateTurnError(
-        streamChat(corpo, { signal: config.abortSignal }),
-      )) {
-        answerId.current ??= aiMessageIdIn(quadro);
-        yield quadro;
+  // A conversa aberta cuja resposta ainda corre no servidor (ADR 035): o `load`
+  // marca, o `LiveJoin` da tela assina quando o runtime fica livre.
+  const [paraAcompanhar, setParaAcompanhar] = useState<string | null>(null);
+  const acompanhouNada = useRef(false);
+
+  const stream = useCallback(
+    async function* (
+      messages: LangChainMessage[],
+      config: { command?: { resume: string }; abortSignal: AbortSignal; runConfig?: unknown },
+    ) {
+      const conversa = conversaAtual.current;
+      if (!conversa) return;
+      if ((config.runConfig as { join?: boolean } | undefined)?.join) {
+        // Sem mensagem nova: é a mesma resposta, vista de novo. A tela é a de
+        // quem nunca saiu — indicador, tools, botão de parar.
+        setTurnError(null);
+        pendingTiming.current = null;
+        answerId.current = undefined;
+        let recebeu = false;
+        try {
+          for await (const quadro of separateTurnError(
+            joinChatRun(conversa, { signal: config.abortSignal }),
+          )) {
+            recebeu = true;
+            answerId.current ??= aiMessageIdIn(quadro);
+            yield quadro;
+          }
+        } finally {
+          acompanhouNada.current = !recebeu;
+          aoFimDoTurno.current?.();
+        }
+        return;
       }
-    } finally {
-      aoFimDoTurno.current?.();
-    }
-  }, []);
+      const ultima = messages.at(-1);
+      const anexadas = fotosDaMensagem(ultima);
+      const corpo = config.command?.resume
+        ? { conversationId: conversa, resume: decodificarRetomada(config.command.resume) }
+        : {
+            conversationId: conversa,
+            message: textoDaMensagem(ultima).trim() || PERGUNTA_DA_FOTO,
+            ...(anexadas.length ? { photos: anexadas } : {}),
+            ...(agenteEscolhido?.current !== undefined
+              ? { agentGroupId: agenteEscolhido.current }
+              : {}),
+          };
+      // Aqui, e não no `start`: um turno parado ou recusado antes do `start` deixava
+      // o erro do turno anterior voltar para a tela, abaixo da pergunta nova.
+      setTurnError(null);
+      pendingTiming.current = null;
+      answerId.current = openAnswerId(messages);
+      try {
+        for await (const quadro of separateTurnError(
+          streamChat(corpo, { signal: config.abortSignal }),
+        )) {
+          answerId.current ??= aiMessageIdIn(quadro);
+          yield quadro;
+        }
+      } finally {
+        aoFimDoTurno.current?.();
+      }
+    },
+    [agenteEscolhido],
+  );
 
   /**
    * O histórico da conversa e a pausa pendente. Conversa que ainda não existe no
@@ -231,6 +270,7 @@ export function useChatRuntime({
   const load = useCallback(async (threadId: string) => {
     try {
       const conversa = await getConversation(threadId);
+      if (conversa.running) setParaAcompanhar(threadId);
       const pausa = pausaPendente(conversa.messages);
       setTimings((antes) => ({ ...antes, ...timingsFromHistory(conversa.messages) }));
       setArtefatos((antes) => ({ ...antes, ...artifactsFromHistory(conversa.messages) }));
@@ -323,6 +363,12 @@ export function useChatRuntime({
 
   return {
     runtime,
+    liveJoin: {
+      pending: Boolean(conversationId) && paraAcompanhar === conversationId,
+      consume: () => setParaAcompanhar(null),
+      /** O turno acabou entre o `load` e o join: o histórico é que tem a resposta. */
+      missed: () => acompanhouNada.current,
+    },
     titulos,
     artefatos,
     plano: plano && plano.conversa === conversationId ? plano.passos : null,

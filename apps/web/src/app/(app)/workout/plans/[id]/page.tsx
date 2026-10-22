@@ -3,8 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { ChevronLeft, Play, Clock, Dumbbell, Lightbulb, Plus, Trash2, Check } from 'lucide-react';
+import { Play, Clock, Dumbbell, Lightbulb, Pencil, Plus, Trash2, Check } from 'lucide-react';
 import {
   ApiError,
   isCardioExercise,
@@ -16,6 +15,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
+import { Skeleton } from '@/components/ui/skeleton';
+import { TopBarActions, topBarActionClass, useTopBarTitle } from '@/components/layout/app-top-bar';
 
 interface MoveVars {
   a: WorkoutPlanExercise;
@@ -162,12 +163,14 @@ export default function PlanDetailPage() {
     },
   });
 
+  useTopBarTitle(plan.data?.name);
+
   if (plan.isLoading) {
     return (
       <div className="space-y-3 px-5 pt-4">
-        <div className="h-6 w-32 animate-pulse rounded bg-muted" />
-        <div className="h-44 animate-pulse rounded-2xl bg-muted" />
-        <div className="h-32 animate-pulse rounded-2xl bg-muted" />
+        <Skeleton className="h-6 w-32 rounded bg-muted" />
+        <Skeleton className="h-44 rounded-2xl bg-muted" />
+        <Skeleton className="h-32 rounded-2xl bg-muted" />
       </div>
     );
   }
@@ -219,57 +222,52 @@ export default function PlanDetailPage() {
 
   return (
     <div className="pb-4">
-      <header className="sticky top-0 z-10 flex h-14 items-center justify-between bg-background/90 px-4 backdrop-blur">
-        <Link
-          href="/workout"
-          aria-label="Voltar"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-foreground"
+      <TopBarActions>
+        <button
+          type="button"
+          onClick={startEditName}
+          aria-label="Renomear plano"
+          className={topBarActionClass}
         >
-          <ChevronLeft size={20} />
-        </Link>
-        {editingName ? (
-          <div className="flex flex-1 items-center gap-2 px-2">
-            <Input
-              autoFocus
-              value={nameEdit}
-              onChange={(e) => setNameEdit(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') submitName();
-                if (e.key === 'Escape') setEditingName(false);
-              }}
-              className="h-8 text-base font-bold"
-            />
-            <button
-              type="button"
-              onClick={submitName}
-              disabled={!nameEdit.trim() || renamePlan.isPending}
-              className="rounded p-1 text-primary disabled:opacity-50"
-              aria-label="Salvar nome"
-            >
-              <Check size={18} />
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={startEditName}
-            className="flex-1 truncate px-2 text-center text-base font-bold text-foreground hover:underline"
-          >
-            {plan.data.name}
-          </button>
-        )}
+          <Pencil size={19} />
+        </button>
         <button
           type="button"
           onClick={handleDelete}
           aria-label="Excluir plano"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-rose-500"
+          className={topBarActionClass}
         >
-          <Trash2 size={18} />
+          <Trash2 size={19} />
         </button>
-      </header>
+      </TopBarActions>
+
+      {editingName && (
+        <div className="flex items-center gap-2 px-5 pt-1 pb-2">
+          <Input
+            aria-label="Nome do plano"
+            autoFocus
+            value={nameEdit}
+            onChange={(e) => setNameEdit(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') submitName();
+              if (e.key === 'Escape') setEditingName(false);
+            }}
+            className="h-10 text-base font-bold"
+          />
+          <button
+            type="button"
+            onClick={submitName}
+            disabled={!nameEdit.trim() || renamePlan.isPending}
+            className={topBarActionClass}
+            aria-label="Salvar nome"
+          >
+            <Check size={20} />
+          </button>
+        </div>
+      )}
 
       <div className="space-y-4 px-5 pt-2">
-        <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-card">
+        <div className="relative overflow-hidden rounded-2xl border border-subtle bg-card">
           <div className="relative h-44 w-full overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-slate-700 via-stone-800 to-stone-900" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
@@ -285,7 +283,7 @@ export default function PlanDetailPage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-6 border-t border-white/5 px-5 py-3">
+          <div className="flex items-center gap-6 border-t border-subtle px-5 py-3">
             <div className="flex items-center gap-2">
               <Clock size={14} className="text-primary" />
               <div>
@@ -330,7 +328,7 @@ export default function PlanDetailPage() {
         {moveExercise.isError && (
           <p
             role="alert"
-            className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-400"
+            className="rounded-2xl border border-rose-500/30 bg-danger/10 px-4 py-3 text-xs text-danger"
           >
             {moveExercise.error instanceof ApiError && moveExercise.error.isNotFound ? (
               // A mensagem crua da API é "Plan exercise not found", em inglês e

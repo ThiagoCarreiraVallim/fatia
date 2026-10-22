@@ -1,4 +1,4 @@
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Pencil, Trash2 } from 'lucide-react-native';
 import { DrawerScrollView, ErrorState, LoadingState, cn } from '@/components/ui';
 import { chartColors } from '@/components/charts';
@@ -12,7 +12,8 @@ export interface LogHistoryEntry {
 }
 
 /**
- * Lista de registros já salvos, com editar e apagar.
+ * Lista de registros já salvos, com editar e apagar. Apagar não pergunta: quem
+ * usa a lista mostra o aviso com "Desfazer" (registros pequenos, Fase 3).
  *
  * É o ganho da issue #116: no PWA peso, passos e água só podem ser criados —
  * corrigir um número errado depende de pedir ao Claude. A API sempre suportou
@@ -29,7 +30,6 @@ export function LogHistory({
   onDelete,
   pendingId,
   emptyLabel,
-  confirmTitle,
 }: {
   entries: LogHistoryEntry[];
   isLoading: boolean;
@@ -40,15 +40,7 @@ export function LogHistory({
   onDelete: (entry: LogHistoryEntry) => void;
   pendingId: string | null;
   emptyLabel: string;
-  confirmTitle: string;
 }) {
-  function confirmDelete(entry: LogHistoryEntry) {
-    Alert.alert(confirmTitle, `${entry.title} — ${entry.subtitle}`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Apagar', style: 'destructive', onPress: () => onDelete(entry) },
-    ]);
-  }
-
   return (
     <View className="gap-2">
       <Text className="text-[11px] font-bold tracking-wide text-muted-foreground">
@@ -86,7 +78,7 @@ export function LogHistory({
                 </View>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Editar registro de ${entry.subtitle}`}
+                  accessibilityLabel={`Editar registro de ${entry.title}, ${entry.subtitle}`}
                   accessibilityState={{ selected: editing, disabled: pending }}
                   disabled={pending}
                   onPress={() => onEdit(entry)}
@@ -99,15 +91,15 @@ export function LogHistory({
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Apagar registro de ${entry.subtitle}`}
+                  accessibilityLabel={`Apagar registro de ${entry.title}, ${entry.subtitle}`}
                   accessibilityState={{ disabled: pending }}
                   disabled={pending}
-                  onPress={() => confirmDelete(entry)}
+                  onPress={() => onDelete(entry)}
                   className="h-11 w-11 items-center justify-center rounded-xl"
                 >
-                  {/* O vermelho do tema (#93000a) é escuro demais sobre o card
-                      escuro — o ícone sumiria. O aviso de perigo fica no diálogo
-                      de confirmação, que o sistema já pinta de vermelho. */}
+                  {/* Apaga na hora, sem pergunta: o aviso com "Desfazer" (`useToast`)
+                      é a rede de segurança. O vermelho do tema (#93000a) sumiria
+                      sobre o card escuro. */}
                   <Trash2 size={16} color={chartColors.mutedForeground} />
                 </Pressable>
               </View>

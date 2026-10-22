@@ -8,6 +8,7 @@ import {
   NotFoundException,
   Param,
   ParseIntPipe,
+  ParseUUIDPipe,
   Patch,
   Post,
   Put,
@@ -20,13 +21,30 @@ import { CurrentUser, type CurrentUserPayload } from '../common/decorators/curre
 import { InferenceThrottlerGuard } from './inference-throttler.guard';
 import { FoodService } from './food.service';
 import { MealRecognitionService } from './meal-recognition.service';
+import { AiAccessService } from '../ai/ai-access.service';
 import { OffFoodService, atribuicaoDoOff } from './off-food.service';
 import { MealService } from './meal.service';
 import { MealItemService } from './meal-item.service';
 import { NutritionSummaryService } from './nutrition-summary.service';
 import { UserGoalsService } from './user-goals.service';
 import { NutrientTargetService } from './nutrient-target.service';
-import { CreateCustomFoodDto, SearchFoodDto, UpdateCustomFoodDto } from './dto/food.dto';
+import {
+  CreateCustomFoodDto,
+  CreateFoodPortionDto,
+  ListFoodShortcutsDto,
+  SearchFoodDto,
+  UpdateCustomFoodDto,
+} from './dto/food.dto';
+import { FoodShortcutsService } from './food-shortcuts.service';
+import { FoodPortionService } from './food-portion.service';
+import { MealCopyService } from './meal-copy.service';
+import { MealTemplateService } from './meal-template.service';
+import {
+  CopyDayDto,
+  CopyMealDto,
+  CreateMealTemplateDto,
+  LogMealTemplateDto,
+} from './dto/meal-template.dto';
 import {
   CreateMealDto,
   ListMealsDto,
@@ -35,6 +53,8 @@ import {
   UpdateMealItemDto,
 } from './dto/meal.dto';
 import { UpsertGoalsDto } from './dto/goals.dto';
+import { SuggestGoalsDto } from './dto/onboarding.dto';
+import { OnboardingService } from './onboarding.service';
 import { UpsertNutrientTargetDto } from './dto/nutrient-target.dto';
 
 /**
@@ -60,6 +80,12 @@ export class NutritionController {
     private readonly goals: UserGoalsService,
     private readonly nutrientTargets: NutrientTargetService,
     private readonly recognition: MealRecognitionService,
+    private readonly acesso: AiAccessService,
+    private readonly shortcuts: FoodShortcutsService,
+    private readonly portions: FoodPortionService,
+    private readonly copies: MealCopyService,
+    private readonly templates: MealTemplateService,
+    private readonly onboarding: OnboardingService,
   ) {}
 
   // -------- Reconhecimento por foto (#139) --------
@@ -69,12 +95,13 @@ export class NutritionController {
    *
    * Existe para que a funcionalidade **suma** onde não há agente configurado, em
    * vez de aparecer e falhar: um botão que sempre erra é pior que um botão que
-   * não existe. Sem `@CurrentUser()` porque não lê nada do usuário — a rota
-   * continua atrás do guard global de autenticação.
+   * não existe. `allowed`/`reason` são desta pessoa (ADR 024): no Free o botão
+   * aparece com cadeado e leva ao "Meu plano".
    */
   @Get('photo-recognition')
-  async photoRecognitionStatus() {
-    return { available: await this.recognition.disponivel() };
+  async photoRecognitionStatus(@CurrentUser() user: CurrentUserPayload) {
+    const available = await this.recognition.isAvailable();
+    return { available, ...(await this.acesso.motivo(user.id, available)) };
   }
 
   /**
@@ -106,7 +133,7 @@ export class NutritionController {
       throw new BadRequestException('O corpo não é base64 válido.');
     }
 
-    return this.recognition.reconhecer(user.id, Buffer.from(corpo, 'base64'));
+    return this.recognition.recognize(user.id, Buffer.from(corpo, 'base64'));
   }
 
   // -------- Foods --------
@@ -118,6 +145,52 @@ export class NutritionController {
   @Get('foods/groups')
   listGroups() {
     return this.foods.listGroups();
+  }
+
+  /** Favoritos e recentes da busca — antes de `foods/:id`, que engoliria o "mine". */
+  @Get('foods/mine')
+  listFoodShortcuts(@CurrentUser() user: CurrentUserPayload, @Query() q: ListFoodShortcutsDto) {
+    return this.shortcuts.list(user.id, q);
+  }
+
+  /** Os alimentos que a pessoa cadastrou — também antes de `foods/:id`. */
+  @Get('foods/custom')
+  listCustomFoods(@CurrentUser() user: CurrentUserPayload) {
+    return this.foods.listCustom(user.id);
+  }
+
+  @Put('foods/:id/favorite')
+  @HttpCode(204)
+  favoriteFood(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseIntPipe) id: number) {
+    return this.shortcuts.setFavorite(user.id, id, true);
+  }
+
+  @Delete('foods/:id/favorite')
+  @HttpCode(204)
+  unfavoriteFood(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseIntPipe) id: number) {
+    return this.shortcuts.setFavorite(user.id, id, false);
+  }
+
+  // -------- Medidas caseiras --------
+
+  @Get('foods/:id/portions')
+  listPortions(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseIntPipe) id: number) {
+    return this.portions.list(user.id, id);
+  }
+
+  @Post('foods/:id/portions')
+  createPortion(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateFoodPortionDto,
+  ) {
+    return this.portions.create(user.id, id, dto);
+  }
+
+  @Delete('portions/:id')
+  @HttpCode(204)
+  deletePortion(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseUUIDPipe) id: string) {
+    return this.portions.remove(user.id, id);
   }
 
   /**
@@ -205,6 +278,50 @@ export class NutritionController {
     return this.meals.delete(user.id, id);
   }
 
+  // -------- Copiar refeição e dia --------
+  @Post('meals/:id/copy')
+  copyMeal(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') id: string,
+    @Body() dto: CopyMealDto,
+  ) {
+    return this.copies.copyMeal(user.id, id, dto, user.timezone);
+  }
+
+  @Post('days/copy')
+  copyDay(@CurrentUser() user: CurrentUserPayload, @Body() dto: CopyDayDto) {
+    return this.copies.copyDay(user.id, dto.fromDate, dto.toDate, user.timezone);
+  }
+
+  // -------- Refeições salvas --------
+  @Get('meal-templates')
+  listMealTemplates(@CurrentUser() user: CurrentUserPayload) {
+    return this.templates.list(user.id);
+  }
+
+  @Post('meal-templates')
+  createMealTemplate(@CurrentUser() user: CurrentUserPayload, @Body() dto: CreateMealTemplateDto) {
+    return this.templates.create(user.id, dto);
+  }
+
+  @Delete('meal-templates/:id')
+  @HttpCode(204)
+  deleteMealTemplate(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.templates.remove(user.id, id);
+  }
+
+  @Post('meal-templates/:id/log')
+  logMealTemplate(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: LogMealTemplateDto,
+  ) {
+    return this.templates.log(user.id, id, dto);
+  }
+
   // -------- MealItems --------
   @Post('meals/:id/items')
   addItem(
@@ -250,6 +367,13 @@ export class NutritionController {
   @Put('goals')
   upsertGoals(@CurrentUser() user: CurrentUserPayload, @Body() dto: UpsertGoalsDto) {
     return this.goals.upsert(user.id, dto);
+  }
+
+  /** Só calcula; não grava. O que faltar no corpo vem do perfil e da última pesagem. */
+  @Post('goals/suggestion')
+  @HttpCode(200)
+  suggestGoals(@CurrentUser() user: CurrentUserPayload, @Body() dto: SuggestGoalsDto) {
+    return this.onboarding.suggest(user.id, dto, user.timezone);
   }
 
   // -------- Nutrient targets (metas personalizadas, ADR 009) --------

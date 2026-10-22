@@ -21,10 +21,18 @@ import {
  * mudar uma descrição de tool de entidade **é** mudar o braço A — este caso quebra para que
  * isso não aconteça sem alguém ver. O de intenção é o do braço B de hoje: o congelado e medido
  * é `92bc0392…`, e o exemplo do `record_meal` mudou depois da medição, sem medição nova.
+ *
+ * Os dois são os de hoje, não os medidos: o braço A medido é `3ef29a0d…` (106 tools), e as
+ * Fases 3 a 5 (comunidades e planos) acrescentaram 15 tools depois, duas delas destrutivas
+ * (`delete_food_portion`, `delete_meal_template`) — que o braço B serve também, por ser
+ * destrutivas. A Fase 7a acrescentou mais três (`list_group_plans`, `adopt_group_plan`,
+ * `list_group_tips`), e a Fase 8a mais três (`list_group_challenges`,
+ * `get_challenge_leaderboard`, `join_group_challenge`), nenhuma destrutiva. Sem medição nova.
+ * O `update_meal_item` ganhou `nutrients` (paridade com o REST, ADR 006): muda o braço A.
  */
 
-const SHA_ENTIDADE = '3ef29a0d62b40d259f6d7051a67ce91f80b546b35be181af889c682d39e71879';
-const SHA_INTENCAO = 'd1b7cbaecef9a37b8b66399ab81f4c812079583995e85aec6f6b8a209163c9a6';
+const SHA_ENTIDADE = '6791f0872ca2bf0ff1793ef59678d9bac1bd701ee6fb3a4e68c4702d3cebeba4';
+const SHA_INTENCAO = '7c36e15630e05e7188964f8bc3fc7fadb66db106b3280448aeb98fbd2abf9c7f';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */
 function comoPython(valor: unknown): string {
@@ -149,13 +157,13 @@ describe('superfície do /mcp', () => {
           .map((t) => t.name),
       ].sort();
       expect(intencao.map((t) => t.name).sort()).toEqual(esperadas);
-      expect(intencao).toHaveLength(40);
+      expect(intencao).toHaveLength(42);
       expect(shaDoCatalogo(intencao)).toBe(SHA_INTENCAO);
     });
 
     it('serve as de entidade compartilhadas byte a byte iguais nas duas superfícies', () => {
       const compartilhadas = intencao.filter((t) => !INTENT_TOOLS.some((i) => i.name === t.name));
-      expect(compartilhadas).toHaveLength(22);
+      expect(compartilhadas).toHaveLength(24);
       for (const tool of compartilhadas) {
         const naEntidade = entidade.find((t) => t.name === tool.name);
         expect(naEntidade).toEqual(tool);

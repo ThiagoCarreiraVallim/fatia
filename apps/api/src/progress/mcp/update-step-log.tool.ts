@@ -26,9 +26,9 @@ export class UpdateStepLogTool implements McpToolDef {
   } as const;
   execute(
     input: { stepLogId: string; steps?: number; date?: string; notes?: string },
-    { userId }: McpToolContext,
+    { userId, timezone }: McpToolContext,
   ) {
     const { stepLogId, ...patch } = input;
-    return this.steps.update(stepLogId, patch, userId);
+    return this.steps.update(stepLogId, patch, userId, timezone);
   }
 }

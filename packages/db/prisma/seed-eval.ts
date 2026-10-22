@@ -302,7 +302,9 @@ export async function runSeedEval(
       kcalMin: 2000,
       kcalMax: 2300,
       proteinMinG: 140,
-      proteinMaxG: 170,
+      // Teto acima dos 180 da tarefa `nutri-mudar-meta`: desde a Fase 3 o piso não passa do
+      // teto, e só subir o piso para 180 seria recusado com o teto em 170.
+      proteinMaxG: 200,
       carbsMinG: 200,
       carbsMaxG: 260,
       fatMinG: 55,

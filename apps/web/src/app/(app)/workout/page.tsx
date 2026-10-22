@@ -1,13 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Plus, History, ListChecks, ChevronRight, Dumbbell } from 'lucide-react';
 import {
   buildExerciseGroups,
+  moveExerciseInOrder,
+  orderExerciseGroups,
+  pickFocusedGroup,
   QUICK_TEMPLATES,
   workoutApi,
+  type ExerciseGroup,
+  type PendingExercise,
   type WorkoutSession,
 } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
@@ -17,31 +22,99 @@ import { CancelSessionModal } from '@/components/workout/cancel-session-modal';
 import { ActiveExerciseCard } from '@/components/workout/active-exercise-card';
 import { ActiveCardioCard } from '@/components/workout/active-cardio-card';
 import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
+import { ExerciseActions } from '@/components/workout/exercise-actions';
+import { RemoveExerciseModal } from '@/components/workout/remove-exercise-modal';
+import { useSessionLayout } from '@/components/workout/use-session-layout';
+import { useWakeLock } from '@/components/workout/use-wake-lock';
 import { BlockTimeline } from '@/components/workout/block-timeline';
 import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel';
+import { Skeleton } from '@/components/ui/skeleton';
+import { TopBarActions, topBarActionClass, useTopBarTitle } from '@/components/layout/app-top-bar';
 
+/**
+ * Sessão em andamento — no PWA ela vive aqui, porque não existe rota de sessão.
+ *
+ * Um exercício por vez fica em foco (o primeiro incompleto que não foi pulado) e
+ * os demais aparecem abaixo em modo leitura. O foco segue a ordem, mas a
+ * academia não: o aparelho do próximo está ocupado e a pessoa pula para outro.
+ * Cada card abaixo tem "Fazer agora", que o traz para o foco, e setas e lixeira
+ * para arrumar a ordem ou tirar o exercício — só desta sessão
+ * (`use-session-layout.ts`). Mesmo recorte do `active-session.tsx` do app.
+ */
 function ActiveSession({ session }: { session: WorkoutSession }) {
+  // A tela apagando no meio da série obriga a desbloquear o celular com a mão
+  // que está segurando a barra.
+  useWakeLock();
+  const layout = useSessionLayout(session);
+  const topRef = useRef<HTMLDivElement>(null);
+
   const [searchOpen, setSearchOpen] = useState(false);
   const [finishOpen, setFinishOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<ExerciseGroup | null>(null);
   const [skippedExerciseIds, setSkippedExerciseIds] = useState<Set<number>>(new Set());
-  const groups = buildExerciseGroups(session.plannedExercises, session.sets);
-
-  const focused = groups.find((g) => {
-    if (skippedExerciseIds.has(g.exerciseId)) return false;
-    if (g.isCardio) return g.sets.length === 0;
-    const target = g.targetSets ?? 0;
-    return target === 0 || g.sets.length < target;
-  });
+  // Escolhidos na busca e ainda sem série: vivem só na tela (ver `buildExerciseGroups`).
+  const [pending, setPending] = useState<PendingExercise[]>([]);
+  const [pickedId, setPickedId] = useState<number | null>(null);
+  const groups = orderExerciseGroups(
+    buildExerciseGroups(session.plannedExercises, session.sets, pending),
+    session.exerciseOrder,
+  );
+  const focused = pickFocusedGroup(groups, skippedExerciseIds, pickedId);
 
   const others = groups.filter((g) => g.exerciseId !== focused?.exerciseId);
+  useTopBarTitle('Treino em andamento');
+
+  function skipExercise(exerciseId: number) {
+    setSkippedExerciseIds((prev) => new Set(prev).add(exerciseId));
+  }
+
+  /** Traz o exercício para o foco — inclusive um que a pessoa tinha pulado. */
+  function doNow(exerciseId: number) {
+    setSkippedExerciseIds((prev) => {
+      const next = new Set(prev);
+      next.delete(exerciseId);
+      return next;
+    });
+    setPickedId(exerciseId);
+    // O card em foco fica no topo; quem clicou estava lá embaixo na lista.
+    topRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  }
+
+  /**
+   * Move entre os cards de baixo, e o que está em foco fica onde estava na
+   * ordem: senão, mexer em dois exercícios lá embaixo mudaria qual vem depois
+   * do atual.
+   */
+  function move(exerciseId: number, direction: 'up' | 'down') {
+    const ids = moveExerciseInOrder(others, exerciseId, direction);
+    if (focused) {
+      const index = groups.findIndex((g) => g.exerciseId === focused.exerciseId);
+      ids.splice(index, 0, focused.exerciseId);
+    }
+    layout.reorder.mutate(ids);
+  }
+
+  function removeExercise(group: ExerciseGroup) {
+    setRemoveTarget(null);
+    setPending((prev) => prev.filter((p) => p.id !== group.exerciseId));
+    if (pickedId === group.exerciseId) setPickedId(null);
+    // Escolhido na busca e ainda sem série: só existia na tela.
+    if (!group.isPlanned && group.sets.length === 0) return;
+    layout.remove.mutate(group);
+  }
+
+  /** Sem série registrada não há o que perder: tira direto, sem perguntar. */
+  function requestRemove(group: ExerciseGroup) {
+    if (group.sets.length === 0) removeExercise(group);
+    else setRemoveTarget(group);
+  }
 
   return (
-    <div className="space-y-4 px-5 pt-4 pb-4">
+    <div ref={topRef} className="scroll-mt-20 space-y-4 px-5 pt-4 pb-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold">Treino em andamento</h1>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Iniciado às{' '}
             {new Date(session.startedAt).toLocaleTimeString('pt-BR', {
               hour: '2-digit',
@@ -73,9 +146,7 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
           sessionId={session.id}
           sessionStartedAt={session.startedAt}
           group={focused}
-          onFinishExercise={() =>
-            setSkippedExerciseIds((prev) => new Set(prev).add(focused.exerciseId))
-          }
+          onFinishExercise={() => skipExercise(focused.exerciseId)}
         />
       )}
 
@@ -84,15 +155,38 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
           key={focused.exerciseId}
           sessionId={session.id}
           group={focused}
-          onFinishExercise={() =>
-            setSkippedExerciseIds((prev) => new Set(prev).add(focused.exerciseId))
-          }
+          onFinishExercise={() => skipExercise(focused.exerciseId)}
         />
+      )}
+
+      {focused && (
+        <div className="-mt-2 flex justify-center">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground"
+            onClick={() => requestRemove(focused)}
+          >
+            Tirar este exercício do treino
+          </Button>
+        </div>
+      )}
+
+      {!focused && groups.length > 0 && (
+        <div className="rounded-2xl border border-subtle bg-card p-4">
+          <p className="text-sm font-bold text-foreground">Tudo feito por aqui.</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Finalize o treino no topo, ou adicione outro exercício abaixo.
+          </p>
+        </div>
       )}
 
       {others.length > 0 && (
         <div className="space-y-3">
-          {others.map((g) => {
+          <p className="mt-2 text-[11px] font-extrabold tracking-wide text-muted-foreground">
+            {focused ? 'PRÓXIMOS' : 'EXERCÍCIOS DO TREINO'}
+          </p>
+          {others.map((g, index) => {
             const muscle = g.sets[0]?.exercise?.muscleGroup ?? 'outros';
             return (
               <ExerciseDetailCard
@@ -121,6 +215,17 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
                   targetReps: g.targetReps ?? '—',
                 }}
                 loggedSets={g.sets}
+                footer={
+                  <ExerciseActions
+                    group={g}
+                    isFirst={index === 0}
+                    isLast={index === others.length - 1}
+                    disabled={layout.reorder.isPending}
+                    onDoNow={() => doNow(g.exerciseId)}
+                    onMove={(direction) => move(g.exerciseId, direction)}
+                    onRemove={() => requestRemove(g)}
+                  />
+                }
               />
             );
           })}
@@ -136,9 +241,23 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
         Adicionar exercício
       </button>
 
-      <ExerciseSearchDrawer open={searchOpen} onOpenChange={setSearchOpen} sessionId={session.id} />
+      <ExerciseSearchDrawer
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        onPick={(exercise) => {
+          setPending((prev) => [...prev, exercise]);
+          setPickedId(exercise.id);
+        }}
+      />
       <FinishSessionModal open={finishOpen} onOpenChange={setFinishOpen} session={session} />
       <CancelSessionModal open={cancelOpen} onOpenChange={setCancelOpen} session={session} />
+      <RemoveExerciseModal
+        group={removeTarget}
+        onOpenChange={(open) => {
+          if (!open) setRemoveTarget(null);
+        }}
+        onConfirm={removeExercise}
+      />
     </div>
   );
 }
@@ -163,23 +282,62 @@ function NoSession() {
 
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
-      <header className="flex items-center justify-between">
-        <h1 className="text-3xl font-extrabold text-foreground">Treinos</h1>
-        <Link
-          href="/workout/history"
-          aria-label="Histórico"
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground"
-        >
-          <History size={16} />
+      <TopBarActions>
+        <Link href="/workout/history" aria-label="Histórico" className={topBarActionClass}>
+          <History size={20} />
         </Link>
-      </header>
+      </TopBarActions>
 
+      {/* Os planos da pessoa vêm primeiro, que é o que ela abre a tela para
+          achar; a periodização — consultada uma vez por bloco, não a cada
+          treino — desce para o fim. Mesma ordem do app. */}
       <section>
-        <p className="text-[11px] font-extrabold tracking-wide text-muted-foreground">
-          PERIODIZAÇÃO
-        </p>
-        <div className="mt-2">
-          <BlockTimeline />
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-extrabold tracking-wide text-muted-foreground">
+            MEUS PLANOS
+          </p>
+          <Link href="/workout/plans" className="text-[11px] font-extrabold text-primary">
+            Ver tudo
+          </Link>
+        </div>
+
+        {plans.isLoading && (
+          <div className="mt-3 space-y-2">
+            {[1, 2].map((i) => (
+              <Skeleton key={i} className="h-16 rounded-2xl bg-muted" />
+            ))}
+          </div>
+        )}
+
+        {plans.data && plans.data.length === 0 && (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Nenhum plano criado ainda.{' '}
+            <Link href="/workout/plans" className="font-bold text-primary underline">
+              Criar agora
+            </Link>
+          </p>
+        )}
+
+        <div className="mt-3 space-y-2">
+          {plans.data?.map((plan) => (
+            <Link
+              key={plan.id}
+              href={`/workout/plans/${plan.id}`}
+              className="flex items-center gap-3 rounded-2xl border border-subtle bg-card p-3"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
+                <Dumbbell size={20} className="text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="truncate text-base font-bold text-foreground">{plan.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {plan.exercises?.length ?? 0} exercício
+                  {(plan.exercises?.length ?? 0) !== 1 ? 's' : ''}
+                </p>
+              </div>
+              <ChevronRight size={16} className="shrink-0 text-muted-foreground" />
+            </Link>
+          ))}
         </div>
       </section>
 
@@ -188,7 +346,7 @@ function NoSession() {
           PERSONALIZAÇÃO
         </p>
         <div className="mt-2 grid grid-cols-2 gap-3">
-          <Link href="/workout/plans" className="rounded-2xl border border-white/5 bg-card p-4">
+          <Link href="/workout/plans" className="rounded-2xl border border-subtle bg-card p-4">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
               <Plus size={16} className="text-foreground" />
             </div>
@@ -198,7 +356,7 @@ function NoSession() {
               personalizado
             </p>
           </Link>
-          <Link href="/workout/plans" className="rounded-2xl border border-white/5 bg-card p-4">
+          <Link href="/workout/plans" className="rounded-2xl border border-subtle bg-card p-4">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
               <ListChecks size={16} className="text-foreground" />
             </div>
@@ -210,6 +368,14 @@ function NoSession() {
           </Link>
         </div>
       </section>
+
+      <Button
+        className="h-14 w-full rounded-2xl text-base font-extrabold tracking-wide shadow-[0_0_20px_hsl(var(--primary)/0.4)]"
+        onClick={() => start.mutate()}
+        disabled={start.isPending}
+      >
+        {start.isPending ? 'INICIANDO...' : 'INICIAR TREINO LIVRE'}
+      </Button>
 
       <section>
         <div className="flex items-center justify-between">
@@ -249,61 +415,12 @@ function NoSession() {
         </Carousel>
       </section>
 
-      <Button
-        className="h-14 w-full rounded-2xl text-base font-extrabold tracking-wide shadow-[0_0_20px_hsl(var(--primary)/0.4)]"
-        onClick={() => start.mutate()}
-        disabled={start.isPending}
-      >
-        {start.isPending ? 'INICIANDO...' : 'INICIAR TREINO LIVRE'}
-      </Button>
-
       <section>
-        <div className="flex items-center justify-between">
-          <p className="text-[11px] font-extrabold tracking-wide text-muted-foreground">
-            MEUS PLANOS
-          </p>
-          <Link href="/workout/plans" className="text-[11px] font-extrabold text-primary">
-            Ver tudo
-          </Link>
-        </div>
-
-        {plans.isLoading && (
-          <div className="mt-3 space-y-2">
-            {[1, 2].map((i) => (
-              <div key={i} className="h-16 animate-pulse rounded-2xl bg-muted" />
-            ))}
-          </div>
-        )}
-
-        {plans.data && plans.data.length === 0 && (
-          <p className="mt-3 text-sm text-muted-foreground">
-            Nenhum plano criado ainda.{' '}
-            <Link href="/workout/plans" className="font-bold text-primary underline">
-              Criar agora
-            </Link>
-          </p>
-        )}
-
-        <div className="mt-3 space-y-2">
-          {plans.data?.map((plan) => (
-            <Link
-              key={plan.id}
-              href={`/workout/plans/${plan.id}`}
-              className="flex items-center gap-3 rounded-2xl border border-white/5 bg-card p-3"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
-                <Dumbbell size={20} className="text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="truncate text-base font-bold text-foreground">{plan.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {plan.exercises?.length ?? 0} exercício
-                  {(plan.exercises?.length ?? 0) !== 1 ? 's' : ''}
-                </p>
-              </div>
-              <ChevronRight size={16} className="shrink-0 text-muted-foreground" />
-            </Link>
-          ))}
+        <p className="text-[11px] font-extrabold tracking-wide text-muted-foreground">
+          PERIODIZAÇÃO
+        </p>
+        <div className="mt-2">
+          <BlockTimeline />
         </div>
       </section>
     </div>
@@ -323,8 +440,8 @@ export default function WorkoutPage() {
   if (active.isLoading) {
     return (
       <div className="space-y-3 p-4">
-        <div className="h-6 w-40 animate-pulse rounded bg-muted" />
-        <div className="h-24 animate-pulse rounded-lg bg-muted" />
+        <Skeleton className="h-6 w-40 rounded bg-muted" />
+        <Skeleton className="h-24 rounded-lg bg-muted" />
       </div>
     );
   }

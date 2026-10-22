@@ -80,7 +80,7 @@ export default function RecordsScreen() {
   );
 
   return (
-    <Screen back title="Recordes" onRefresh={onRefresh} refreshing={refreshing}>
+    <Screen onRefresh={onRefresh} refreshing={refreshing}>
       <View className="gap-5 px-5 pb-4 pt-1">
         <View className="flex-row gap-2">
           <StatCard label="Exercícios" value={String(data.length)} />

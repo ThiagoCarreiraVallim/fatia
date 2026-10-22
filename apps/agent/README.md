@@ -28,7 +28,14 @@ curl -s localhost:8100/recognize-meal \
   -H 'Content-Type: application/json' \
   -H "X-Fatia-Agent-Key: $AGENT_API_KEY" \
   -d "{\"image_base64\":\"$(base64 -w0 prato.jpg)\",\"media_type\":\"image/jpeg\"}"
+# {"items":[{"name":"arroz branco cozido","grams":150,"confidence":0.82,…}],"note":null,
+#  "usage":{"model":"z-ai/glm-5.3-flash","inputUnits":1200,"outputUnits":90}}
 ```
+
+O `usage` tem o formato do `/title` (unidade que o provedor não mandou fica de fora, e `usage: null`
+quando não veio bloco nenhum). É com ele que o `apps/api` precifica a foto; antes ela entrava como
+custo não medido, e a tolerância desses custos é da instância inteira — a vigésima foto do dia
+fechava a IA de todo mundo.
 
 Três propriedades que valem mais que o código:
 
@@ -72,15 +79,16 @@ curl -N localhost:8100/chat \
 **O corpo é um turno novo ou uma retomada, nunca os dois.** `extra: "forbid"` recusa qualquer
 campo a mais, e o validador recusa `message` junto de `resume` (ou nenhum dos dois):
 
-| Campo            | Papel                                                                                        |
-| ---------------- | -------------------------------------------------------------------------------------------- |
-| `conversationId` | UUID v4 gerado pelo PWA na primeira mensagem. É o que torna a conversa retomável.            |
-| `message`        | A fala de agora, até 4 000 caracteres.                                                       |
-| `resume`         | `{interruptId, value}` — a resposta a uma pausa (ver "As três pausas").                      |
-| `history`        | O que o `apps/api` tem gravado. Só é lido numa thread fria (nó `hidratar`).                  |
-| `memories`       | Até 50 anotações de `UserMemory`, cercadas como dado no prompt de sistema.                   |
-| `timezone`       | O fuso do perfil. Sem ele o modelo chuta a data em "ontem". Nome de fuso não aponta ninguém. |
-| `photos`         | Até 3 `{mediaType, data}` em base64, **só** com `message` nova (ver "Foto no turno").        |
+| Campo            | Papel                                                                                         |
+| ---------------- | --------------------------------------------------------------------------------------------- |
+| `conversationId` | UUID v4 gerado pelo PWA na primeira mensagem. É o que torna a conversa retomável.             |
+| `message`        | A fala de agora, até 4 000 caracteres.                                                        |
+| `resume`         | `{interruptId, value}` — a resposta a uma pausa (ver "As três pausas").                       |
+| `history`        | O que o `apps/api` tem gravado. Só é lido numa thread fria (nó `hidratar`).                   |
+| `memories`       | Até 50 anotações de `UserMemory`, cercadas como dado no prompt de sistema.                    |
+| `timezone`       | O fuso do perfil. Sem ele o modelo chuta a data em "ontem". Nome de fuso não aponta ninguém.  |
+| `photos`         | Até 3 `{mediaType, data}` em base64, **só** com `message` nova (ver "Foto no turno").         |
+| `persona`        | O agente da comunidade (ADR 031): `{groupId, name, community, instructions}`. Ausente: Fatia. |
 
 **Nenhum campo de identidade, e a thread é de quem o token diz.** O `thread_id` do checkpointer é
 `{userId}:{conversationId}`, e o `userId` sai do `get_me` chamado com o próprio Bearer

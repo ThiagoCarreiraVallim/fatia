@@ -38,15 +38,16 @@ export function ProfessionalPanelLink() {
   return (
     <Link
       href="/students"
-      className="flex items-center gap-4 border-b border-white/5 px-4 py-4 last:border-b-0"
+      className="flex items-center gap-4 border-b border-subtle px-4 py-4 last:border-b-0"
     >
       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted/60">
         <Users size={18} className="text-primary" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-base font-bold leading-tight text-foreground">Meus alunos</p>
+        <p className="text-base font-bold leading-tight text-foreground">Membros</p>
         <p className="text-xs text-muted-foreground">
-          {total === 1 ? '1 aluno atendido' : `${total} alunos atendidos`} — somente leitura
+          {total === 1 ? '1 pessoa compartilha com você' : `${total} pessoas compartilham com você`}{' '}
+          — somente leitura
         </p>
       </div>
       <ChevronRight size={18} className="text-muted-foreground" />

@@ -35,8 +35,9 @@ def test_health_diz_se_o_estado_do_chat_sobrevive_a_um_restart(settings_factory)
         .json()
     )
 
-    assert em_memoria["checkpointer"] == {"persistent": False}
-    assert persistente["checkpointer"] == {"persistent": True}
+    assert em_memoria["checkpointer"] == {"persistent": False, "reachable": None}
+    # O DSN aponta para um banco que não aceita a conexão: persistente, e fora.
+    assert persistente["checkpointer"] == {"persistent": True, "reachable": False}
 
 
 def test_health_com_provedor_configurado_nao_traz_motivo(settings_factory):
@@ -125,7 +126,8 @@ def test_a_superficie_e_so_diagnostico_mais_as_rotas_de_inferencia(settings_fact
 
     A #134 não expunha rota de inferência nenhuma; a #139 expôs uma e a #248
     expõe a segunda (`/chat`); o `/title` nomeia a conversa (ADR 023) e o
-    `/transcribe` é o ditado do chat (#141). Todas são
+    `/transcribe` é o ditado do chat (#141); o `/feedback` leva o voto ao trace
+    do Langfuse (ADR 034) e não infere nada, mas também exige a chave. Todas são
     autenticadas por segredo compartilhado (ver `test_recognize_meal.py`,
     `chat/test_chat_route.py` e `chat/test_titulo.py`). Rota de inferência
     **anônima** seria um proxy aberto para o gateway pago — a fronteira de custo
@@ -146,4 +148,5 @@ def test_a_superficie_e_so_diagnostico_mais_as_rotas_de_inferencia(settings_fact
         "/chat",
         "/title",
         "/transcribe",
+        "/feedback",
     }

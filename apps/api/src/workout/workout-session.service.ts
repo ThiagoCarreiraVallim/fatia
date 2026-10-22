@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import type {
@@ -38,15 +43,36 @@ export interface PlannedExerciseView {
 export class WorkoutSessionService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Abre uma sessão. **Uma aberta por pessoa** (#350): quem garante é o índice
+   * único parcial do banco, e não uma checagem antes do `create` — duas chamadas
+   * concorrentes (duas abas, o MCP, o treino rápido) passariam juntas nela.
+   * A segunda recebe 409 dizendo qual sessão está aberta e como seguir.
+   */
   async start(userId: string, dto: StartSessionDto) {
-    return this.prisma.workoutSession.create({
-      data: {
-        userId,
-        planId: dto.planId ?? null,
-        startedAt: dto.startedAt ? new Date(dto.startedAt) : new Date(),
-        notes: dto.notes,
-      },
-    });
+    try {
+      return await this.prisma.workoutSession.create({
+        data: {
+          userId,
+          planId: dto.planId ?? null,
+          startedAt: dto.startedAt ? new Date(dto.startedAt) : new Date(),
+          notes: dto.notes,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const aberta = await this.prisma.workoutSession.findFirst({
+          where: { userId, completedAt: null },
+          select: { id: true },
+        });
+        throw new ConflictException(
+          `Já existe uma sessão de treino aberta (id ${aberta?.id ?? 'desconhecido'}). ` +
+            'Retome-a registrando séries nela, ou encerre com finish_workout_session antes de ' +
+            'abrir outra.',
+        );
+      }
+      throw error;
+    }
   }
 
   async findById(userId: string, id: string) {
@@ -127,9 +153,19 @@ export class WorkoutSessionService {
     });
   }
 
+  /**
+   * Devolve a sessão no mesmo formato do `findById`: quem reordena ou tira um
+   * exercício no meio do treino precisa dos `plannedExercises` já recortados
+   * para redesenhar a tela sem uma segunda ida ao servidor.
+   */
   async update(userId: string, id: string, dto: UpdateSessionDto) {
     await this.assertOwner(userId, id);
-    return this.prisma.workoutSession.update({ where: { id }, data: dto });
+    const session = await this.prisma.workoutSession.update({
+      where: { id },
+      data: dto,
+      include: SESSION_INCLUDE,
+    });
+    return this.shapeSession(session);
   }
 
   async delete(userId: string, id: string): Promise<void> {
@@ -158,15 +194,21 @@ export class WorkoutSessionService {
 
   private shapeSession(session: SessionWithRelations) {
     const { plan, ...rest } = session;
+    // O que a pessoa tirou deste treino some daqui, e não só da tela do app:
+    // web, MCP e o resumo do fim leem a mesma lista, e o progresso "3/5
+    // exercícios" contaria o removido como pendente para sempre.
+    const removed = new Set(session.removedExerciseIds ?? []);
     const plannedExercises: PlannedExerciseView[] = plan
-      ? plan.exercises.map((pe) => ({
-          exerciseId: pe.exerciseId,
-          exerciseName: pe.exercise.name,
-          muscleGroup: pe.exercise.muscleGroup,
-          order: pe.order,
-          targetSets: pe.targetSets,
-          targetReps: pe.targetReps,
-        }))
+      ? plan.exercises
+          .filter((pe) => !removed.has(pe.exerciseId))
+          .map((pe) => ({
+            exerciseId: pe.exerciseId,
+            exerciseName: pe.exercise.name,
+            muscleGroup: pe.exercise.muscleGroup,
+            order: pe.order,
+            targetSets: pe.targetSets,
+            targetReps: pe.targetReps,
+          }))
       : [];
     return { ...rest, plannedExercises };
   }

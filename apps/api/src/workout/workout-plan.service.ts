@@ -7,6 +7,7 @@ import type {
   UpdatePlanDto,
   UpdatePlanExerciseDto,
 } from './dto/plan.dto';
+import { readableExercises } from './helpers/exercise-access';
 
 const PLAN_INCLUDE = {
   exercises: {
@@ -59,6 +60,13 @@ export class WorkoutPlanService {
 
   async addExercise(userId: string, planId: string, dto: AddPlanExerciseDto) {
     await this.assertOwner(userId, planId);
+    // O id de `Exercise` é inteiro sequencial: sem esta conferência, o
+    // exercício pessoal de outra pessoa (ou o de uma comunidade de que ela não
+    // faz parte) entrava no plano, e o `include` devolvia o nome dele (#92).
+    const visivel = await this.prisma.exercise.count({
+      where: { id: dto.exerciseId, ...readableExercises(userId) },
+    });
+    if (!visivel) throw new NotFoundException('Exercise not found');
     try {
       return await this.prisma.workoutPlanExercise.create({
         data: { planId, ...dto },

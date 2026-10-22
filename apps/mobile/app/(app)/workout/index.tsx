@@ -8,6 +8,8 @@ import { Button, Carousel, ErrorState, LoadingState } from '@/components/ui';
 import { BlockTimeline } from '@/components/workout/block-timeline';
 import { quickVisual } from '@/components/workout/quick-template-visual';
 import { pluralize } from '@/components/workout/workout-stats';
+import { cores } from '@/theme/cores';
+import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
 
 /**
  * Réplica de `apps/web/src/app/(app)/workout/page.tsx`.
@@ -17,6 +19,10 @@ import { pluralize } from '@/components/workout/workout-stats';
  * (`/workout/session/[id]`), então aqui a sessão aberta aparece como um aviso no
  * topo que leva até ela. Assim o botão voltar do Android sai da sessão para o
  * seletor, em vez de sair do app.
+ *
+ * A ordem também é outra: os planos da pessoa vêm primeiro, que é o que ela
+ * abre a tela para achar, e a periodização — consultada uma vez por bloco, não
+ * a cada treino — desce para o fim.
  */
 
 function SectionLabel({ children }: { children: string }) {
@@ -60,7 +66,7 @@ function QuickCard({ template, width }: { template: QuickTemplate; width: number
       className="h-44 justify-end overflow-hidden rounded-2xl border border-border p-4 active:opacity-80"
     >
       <View className="absolute right-3 top-3 opacity-30">
-        <Icon size={64} color="#e5e2e1" />
+        <Icon size={64} color={cores.foreground} />
       </View>
       <Text className="text-[10px] font-bold text-muted-foreground">{template.level}</Text>
       <Text className="mt-1 text-base font-extrabold leading-tight text-foreground">
@@ -90,7 +96,7 @@ function ShortcutCard({
       className="flex-1 rounded-2xl border border-border bg-card p-4 active:opacity-80"
     >
       <View className="h-8 w-8 items-center justify-center rounded-lg bg-muted">
-        <Icon size={16} color="#e5e2e1" />
+        <Icon size={16} color={cores.foreground} />
       </View>
       <Text className="mt-3 text-sm font-bold leading-tight text-foreground">{label}</Text>
     </Pressable>
@@ -127,7 +133,16 @@ export default function WorkoutScreen() {
 
   return (
     <Screen
-      title="Treinos"
+      actions={
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Histórico de treinos"
+          onPress={() => router.push('/workout/history')}
+          className={TOP_BAR_ACTION}
+        >
+          <History size={20} color={cores.primary} />
+        </Pressable>
+      }
       refreshing={active.isRefetching || plans.isRefetching}
       onRefresh={() => {
         void active.refetch();
@@ -135,61 +150,10 @@ export default function WorkoutScreen() {
       }}
     >
       <View className="gap-5 px-5 pb-4 pt-4">
-        <View className="flex-row items-center justify-end">
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Histórico de treinos"
-            onPress={() => router.push('/workout/history')}
-            className="h-11 w-11 items-center justify-center rounded-full bg-muted active:opacity-80"
-          >
-            <History size={18} color="#baccaf" />
-          </Pressable>
-        </View>
-
         {active.isLoading ? <LoadingState /> : null}
         {active.data ? (
           <ActiveSessionBanner sessionId={active.data.id} startedAt={active.data.startedAt} />
         ) : null}
-
-        <View className="gap-2">
-          <SectionLabel>PERIODIZAÇÃO</SectionLabel>
-          <BlockTimeline />
-        </View>
-
-        <View className="gap-2">
-          <SectionLabel>PERSONALIZAÇÃO</SectionLabel>
-          <View className="flex-row gap-3">
-            <ShortcutCard
-              label="Criar um treino personalizado"
-              icon={Plus}
-              onPress={() => router.push('/workout/plans')}
-            />
-            <ShortcutCard
-              label="Meus planos de treino"
-              icon={ListChecks}
-              onPress={() => router.push('/workout/plans')}
-            />
-          </View>
-        </View>
-
-        <View className="gap-2">
-          <SectionLabel>TREINOS RÁPIDOS</SectionLabel>
-          <Carousel
-            data={QUICK_TEMPLATES}
-            itemWidth={quickCardWidth}
-            keyExtractor={(t) => t.id}
-            renderItem={({ item }) => <QuickCard template={item} width={quickCardWidth} />}
-          />
-        </View>
-
-        <Button
-          className="h-14 rounded-2xl"
-          textClassName="text-base font-extrabold tracking-wide"
-          loading={start.isPending}
-          onPress={() => start.mutate()}
-        >
-          INICIAR TREINO LIVRE
-        </Button>
 
         <View className="gap-2">
           <View className="flex-row items-center justify-between">
@@ -234,7 +198,7 @@ export default function WorkoutScreen() {
                 className="min-h-[44px] flex-row items-center gap-3 rounded-2xl border border-border bg-card p-3 active:opacity-80"
               >
                 <View className="h-12 w-12 items-center justify-center rounded-lg bg-muted">
-                  <Dumbbell size={20} color="#2ce500" />
+                  <Dumbbell size={20} color={cores.primary} />
                 </View>
                 <View className="min-w-0 flex-1">
                   <Text numberOfLines={1} className="text-base font-bold text-foreground">
@@ -242,10 +206,50 @@ export default function WorkoutScreen() {
                   </Text>
                   <Text className="text-xs text-muted-foreground">{countLabel}</Text>
                 </View>
-                <ChevronRight size={16} color="#baccaf" />
+                <ChevronRight size={16} color={cores.mutedForeground} />
               </Pressable>
             );
           })}
+        </View>
+
+        <View className="gap-2">
+          <SectionLabel>PERSONALIZAÇÃO</SectionLabel>
+          <View className="flex-row gap-3">
+            <ShortcutCard
+              label="Criar um treino personalizado"
+              icon={Plus}
+              onPress={() => router.push('/workout/plans')}
+            />
+            <ShortcutCard
+              label="Meus planos de treino"
+              icon={ListChecks}
+              onPress={() => router.push('/workout/plans')}
+            />
+          </View>
+        </View>
+
+        <Button
+          className="h-14 rounded-2xl"
+          textClassName="text-base font-extrabold tracking-wide"
+          loading={start.isPending}
+          onPress={() => start.mutate()}
+        >
+          INICIAR TREINO LIVRE
+        </Button>
+
+        <View className="gap-2">
+          <SectionLabel>TREINOS RÁPIDOS</SectionLabel>
+          <Carousel
+            data={QUICK_TEMPLATES}
+            itemWidth={quickCardWidth}
+            keyExtractor={(t) => t.id}
+            renderItem={({ item }) => <QuickCard template={item} width={quickCardWidth} />}
+          />
+        </View>
+
+        <View className="gap-2">
+          <SectionLabel>PERIODIZAÇÃO</SectionLabel>
+          <BlockTimeline />
         </View>
       </View>
     </Screen>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { RestCountdown } from '../../../../modules/rest-countdown';
 import { expoRestNotifier } from './expo-rest-notifier';
 import { createRestNotifications, restWasInterrupted } from './rest-notification';
 
@@ -21,6 +22,11 @@ import { createRestNotifications, restWasInterrupted } from './rest-notification
  * faz durante o descanso — o `setInterval` é estrangulado e o háptico só
  * dispara quando o app volta, ou seja, tarde. A notificação é agendada pelo
  * sistema, então chega na hora mesmo com o JS parado.
+ *
+ * E, no Android, a contagem em si aparece na notificação e na tela de
+ * bloqueio, contada pelo cronômetro do sistema (`modules/rest-countdown`): a
+ * tela não apaga durante o treino (`useKeepAwake`), mas quem bloqueia o
+ * celular entre as séries quer ver quanto falta sem desbloquear.
  */
 
 export const DEFAULT_REST_SECONDS = 90;
@@ -61,6 +67,28 @@ export function useRestTimer(defaultSeconds: number = DEFAULT_REST_SECONDS): Res
       if (restWasInterrupted(deadline, Date.now())) void notifications.cancel();
     };
   }, [deadline, notifications]);
+
+  // A contagem da tela de bloqueio acompanha o mesmo `deadline`: some ao
+  // pausar, pular ou acabar, e no desmonte — sair da sessão não pode deixar um
+  // cronômetro órfão na barra de notificações.
+  useEffect(() => {
+    try {
+      if (deadline == null) RestCountdown?.hide();
+      else RestCountdown?.show(deadline, 'Descanso', 'Próxima série quando zerar.');
+    } catch {
+      // É o extra: sem ela o descanso segue na tela e no aviso agendado.
+    }
+  }, [deadline]);
+  useEffect(
+    () => () => {
+      try {
+        RestCountdown?.hide();
+      } catch {
+        // idem
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (deadline == null) return;

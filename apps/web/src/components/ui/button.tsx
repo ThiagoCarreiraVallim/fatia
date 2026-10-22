@@ -4,7 +4,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+  'relative inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
   {
     variants: {
       variant: {
@@ -16,15 +16,17 @@ const buttonVariants = cva(
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
       },
+      // Alvo de toque de 44 px (WCAG 2.5.5) sem mudar o desenho: o que é menor
+      // ganha uma área invisível (`after:`) em volta, que recebe o toque.
       size: {
-        default: 'h-9 px-4 py-2',
-        sm: 'h-8 rounded-md px-3 text-xs',
-        lg: 'h-10 rounded-md px-8',
-        icon: 'h-9 w-9',
+        default: 'h-10 px-4 py-2 after:absolute after:-inset-0.5',
+        sm: 'h-8 rounded-md px-3 text-xs after:absolute after:-inset-1.5',
+        lg: 'h-11 rounded-md px-8',
+        icon: 'h-10 w-10 after:absolute after:-inset-0.5',
         // Os elementos de IA do registry pedem `icon-sm` (ações de mensagem e
         // navegação de branch). Sem este tamanho o `tsc` recusa os arquivos que
         // o CLI instalou — e reescrevê-los à mão é justamente o que a #250 proíbe.
-        'icon-sm': 'h-8 w-8',
+        'icon-sm': 'h-8 w-8 after:absolute after:-inset-1.5',
       },
     },
     defaultVariants: {

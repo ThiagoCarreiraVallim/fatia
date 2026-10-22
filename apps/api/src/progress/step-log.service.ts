@@ -3,6 +3,7 @@ import { Prisma, StepSource } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import type { CreateStepLogDto, ListStepLogsDto, UpdateStepLogDto } from './dto/step-log.dto';
 import { addDaysIso, todayInTz } from './helpers/date-tz';
+import { assertLoggableDay } from './helpers/log-day';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
@@ -13,6 +14,7 @@ export class StepLogService {
 
   async create(dto: CreateStepLogDto, userId: string, timezone: string) {
     const date = dto.date ?? todayInTz(timezone);
+    assertLoggableDay(date, timezone);
     return this.prisma.stepLog.create({
       data: {
         userId,
@@ -30,8 +32,9 @@ export class StepLogService {
     return log;
   }
 
-  async update(id: string, dto: UpdateStepLogDto, userId: string) {
+  async update(id: string, dto: UpdateStepLogDto, userId: string, timezone: string) {
     await this.findById(id, userId);
+    if (dto.date) assertLoggableDay(dto.date, timezone);
     return this.prisma.stepLog.update({
       where: { id },
       data: {

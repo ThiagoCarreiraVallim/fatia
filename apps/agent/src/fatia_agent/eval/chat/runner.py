@@ -125,6 +125,7 @@ async def rodar_caso(caso: Caso, provider: ToolChatCapability) -> ResultadoDoCas
                 run_id=f"bench-{caso.id}-{indice}",
                 timezone=caso.timezone,
                 memorias=caso.memorias,
+                persona=caso.persona,
             )
             brutos = [
                 quadro

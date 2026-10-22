@@ -3,6 +3,7 @@ import { MembershipStatus, ShareScope } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { ProfessionalLinkService } from './professional-link.service';
 import { canReceiveLink } from './permissions';
+import { assertKeepsRequiredScopes, normalizarEscopos } from './consent-scopes';
 
 /** Mesma resposta para membership inexistente, de outro grupo e de grupo alheio (#92, #204). */
 const NOT_FOUND = 'Membership not found';
@@ -36,6 +37,13 @@ export interface ConsentView {
 }
 
 /** Uma linha de "quem olhou meu dado". Inclui as tentativas negadas. */
+export interface GroupConsentView {
+  groupId: string;
+  scopes: ShareScope[];
+  statsOptIn: boolean;
+  consentAt: Date;
+}
+
 export interface AccessLogView {
   at: Date;
   /** Operação do produto: "list_workout_sessions", "get_student_progress". */
@@ -102,7 +110,7 @@ export class ConsentService {
     // associações de grupos de que não faz parte, uma sondagem por vez.
     const eu = await this.prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId: alvo.groupId, userId: subjectUserId } },
-      select: { status: true },
+      select: { status: true, role: true, group: { select: { requiredSharingScopes: true } } },
     });
     if (!eu || eu.status !== MembershipStatus.ACTIVE) throw new NotFoundException(NOT_FOUND);
 
@@ -123,6 +131,21 @@ export class ConsentService {
       professionalId: alvo.userId,
       groupId: alvo.groupId,
     };
+
+    // O ajuste por pessoa não é atalho para fugir do obrigatório da comunidade:
+    // o que este profissional já recebe e é exigido continua na lista.
+    if (eu.group.requiredSharingScopes.length > 0) {
+      const atual = await this.prisma.professionalLink.findFirst({
+        where: { ...vinculo, revokedAt: null },
+        select: { scopes: true },
+      });
+      assertKeepsRequiredScopes(
+        eu.role,
+        eu.group.requiredSharingScopes,
+        atual?.scopes ?? [],
+        escopos,
+      );
+    }
 
     // Lista vazia **revoga**, e não grava concessão de nada: é o que
     // `grant_data_sharing` promete ("enviar [] equivale a revogar") e o que
@@ -157,6 +180,54 @@ export class ConsentService {
   }
 
   /**
+   * O compartilhamento com a comunidade inteira (ADR 026): os escopos valem
+   * para cada pessoa ativa da equipe, e o opt-in das estatísticas agregadas é
+   * gravado junto. **Substitui** os vínculos vivos do titular naquele grupo —
+   * inclusive ajustes feitos por pessoa — no mesmo commit do registro do aceite.
+   *
+   * Só a própria membership ativa; outra coisa responde como inexistente.
+   */
+  async setGroupConsent(
+    subjectUserId: string,
+    groupId: string,
+    consent: { scopes: ShareScope[]; statsOptIn: boolean },
+  ): Promise<GroupConsentView> {
+    const eu = await this.prisma.groupMembership.findUnique({
+      where: { groupId_userId: { groupId, userId: subjectUserId } },
+      select: {
+        id: true,
+        status: true,
+        role: true,
+        consentScopes: true,
+        group: { select: { requiredSharingScopes: true } },
+      },
+    });
+    if (!eu || eu.status !== MembershipStatus.ACTIVE) throw new NotFoundException(NOT_FOUND);
+
+    const scopes = normalizarEscopos(consent.scopes);
+    assertKeepsRequiredScopes(eu.role, eu.group.requiredSharingScopes, eu.consentScopes, scopes);
+    const equipe = await this.prisma.groupMembership.findMany({
+      where: { groupId, status: MembershipStatus.ACTIVE, userId: { not: subjectUserId } },
+      select: { userId: true, role: true },
+    });
+    const at = new Date();
+    await this.prisma.$transaction([
+      this.prisma.groupMembership.update({
+        where: { id: eu.id },
+        data: { consentScopes: scopes, consentAt: at, statsOptIn: consent.statsOptIn },
+      }),
+      ...this.links.groupConsentOps({
+        subjectUserId,
+        groupId,
+        scopes,
+        receivers: equipe.filter((m) => canReceiveLink(m.role)).map((m) => m.userId),
+        at,
+      }),
+    ]);
+    return { groupId, scopes, statsOptIn: consent.statsOptIn, consentAt: at };
+  }
+
+  /**
    * Revoga um consentimento do próprio titular. Vale a partir da requisição
    * seguinte — a janela é de **uma** requisição, e é o que `/privacy` promete,
    * em vez de "instantâneo".
@@ -168,6 +239,22 @@ export class ConsentService {
     subjectUserId: string,
     linkId: string,
   ): Promise<{ linkId: string; revokedAt: Date }> {
+    // Revogar o vínculo inteiro tira todos os escopos dele: se algum é
+    // obrigatório na comunidade, a resposta é a mesma de desmarcá-lo. Lido pelo
+    // titular — vínculo de outra pessoa cai no 404 do `revokeAsSubject`.
+    const alvo = await this.prisma.professionalLink.findFirst({
+      where: { id: linkId, subjectUserId, revokedAt: null },
+      select: { scopes: true, groupId: true },
+    });
+    if (alvo) {
+      const eu = await this.prisma.groupMembership.findUnique({
+        where: { groupId_userId: { groupId: alvo.groupId, userId: subjectUserId } },
+        select: { role: true, group: { select: { requiredSharingScopes: true } } },
+      });
+      if (eu) {
+        assertKeepsRequiredScopes(eu.role, eu.group.requiredSharingScopes, alvo.scopes, []);
+      }
+    }
     const link = await this.links.revokeAsSubject(subjectUserId, linkId);
     // `revokedAt` acabou de ser preenchido pelo service; o `??` existe só para
     // o tipo, e um `new Date()` aqui seria uma data inventada.
@@ -222,12 +309,25 @@ export class ConsentService {
    * titular, e um id de vínculo vindo de fora daria a qualquer autenticado a
    * leitura da trilha alheia.
    */
-  async listAccessLog(subjectUserId: string, limit = LOG_PAGE_SIZE): Promise<AccessLogView[]> {
+  async listAccessLog(
+    subjectUserId: string,
+    limit = LOG_PAGE_SIZE,
+    groupId?: string,
+  ): Promise<AccessLogView[]> {
     const linhas = await this.prisma.professionalAccessLog.findMany({
-      where: { subjectUserId },
+      // Filtro pela comunidade passa pelo vínculo: a tela da comunidade mostra
+      // só quem dela olhou. O `subjectUserId` continua sendo a trava.
+      where: { subjectUserId, ...(groupId ? { link: { groupId } } : {}) },
       orderBy: { at: 'desc' },
       take: Math.min(Math.max(limit, 1), LOG_MAX_PAGE_SIZE),
-      select: { at: true, action: true, scope: true, denied: true, professionalId: true },
+      select: {
+        at: true,
+        action: true,
+        scope: true,
+        denied: true,
+        professionalId: true,
+        link: { select: { groupId: true } },
+      },
     });
     if (linhas.length === 0) return [];
 
@@ -250,16 +350,7 @@ export class ConsentService {
       scope: linha.scope,
       denied: linha.denied,
       professionalName: nomes.get(linha.professionalId) ?? null,
+      groupId: linha.link?.groupId ?? null,
     }));
   }
-}
-
-/**
- * Remove repetições mantendo a ordem do enum. Ordem estável importa porque o
- * array vai para o banco e volta para a UI — duas concessões idênticas
- * produzirem arrays diferentes faria "mudou alguma coisa?" virar chute.
- */
-function normalizarEscopos(scopes: ShareScope[]): ShareScope[] {
-  const pedidos = new Set(scopes);
-  return Object.values(ShareScope).filter((scope) => pedidos.has(scope));
 }

@@ -11,9 +11,24 @@ export interface ExerciseGroup {
   isPlanned: boolean;
 }
 
+/** Exercício escolhido na busca que ainda não tem série registrada. */
+export interface PendingExercise {
+  id: number;
+  name: string;
+  muscleGroup: string;
+}
+
+/**
+ * Agrupa as séries da sessão por exercício, na ordem: planejados, os que já
+ * têm série e, por fim, os `pending` — escolhidos na busca do treino livre e
+ * ainda sem série. Os pendentes existem só na tela: antes deles, o único jeito
+ * de um exercício "aparecer" era registrar uma série falsa de 1 repetição, que
+ * ia parar no volume, nos recordes e no histórico.
+ */
 export function buildExerciseGroups(
   plannedExercises: PlannedExercise[] | undefined,
   sets: SessionSet[] | undefined,
+  pending: PendingExercise[] = [],
 ): ExerciseGroup[] {
   const setsByExercise = new Map<number, SessionSet[]>();
   for (const s of sets ?? []) {
@@ -51,5 +66,78 @@ export function buildExerciseGroups(
     });
   }
 
+  for (const p of pending) {
+    if (seen.has(p.id)) continue;
+    seen.add(p.id);
+    groups.push({
+      exerciseId: p.id,
+      exerciseName: p.name,
+      isCardio: isCardioExercise({ muscleGroup: p.muscleGroup }),
+      sets: [],
+      isPlanned: false,
+    });
+  }
+
   return groups;
+}
+
+function isIncomplete(group: ExerciseGroup): boolean {
+  if (group.isCardio) return group.sets.length === 0;
+  const target = group.targetSets ?? 0;
+  return target === 0 || group.sets.length < target;
+}
+
+/**
+ * O exercício em foco na sessão: o `preferredId` (o que acabou de ser
+ * escolhido na busca) se ainda estiver por fazer, senão o primeiro incompleto
+ * que não foi pulado.
+ */
+export function pickFocusedGroup(
+  groups: ExerciseGroup[],
+  skipped: ReadonlySet<number>,
+  preferredId?: number | null,
+): ExerciseGroup | undefined {
+  const open = (g: ExerciseGroup) => !skipped.has(g.exerciseId) && isIncomplete(g);
+  const preferred = groups.find((g) => g.exerciseId === preferredId);
+  if (preferred && open(preferred)) return preferred;
+  return groups.find(open);
+}
+
+/**
+ * Aplica a ordem que a pessoa escolheu para esta sessão (`exerciseOrder`).
+ *
+ * Quem está na lista vem primeiro, na ordem dela; quem não está — exercício
+ * acrescentado depois da última reordenação — segue no fim, na ordem natural
+ * do `buildExerciseGroups`. Ordem vazia devolve os grupos como vieram.
+ */
+export function orderExerciseGroups(
+  groups: ExerciseGroup[],
+  order: readonly number[] | undefined,
+): ExerciseGroup[] {
+  if (!order || order.length === 0) return groups;
+  const position = new Map(order.map((id, index) => [id, index]));
+  const listed = groups
+    .filter((g) => position.has(g.exerciseId))
+    .sort((a, b) => position.get(a.exerciseId)! - position.get(b.exerciseId)!);
+  const rest = groups.filter((g) => !position.has(g.exerciseId));
+  return [...listed, ...rest];
+}
+
+/**
+ * A nova `exerciseOrder` depois de mover um exercício uma casa para cima ou
+ * para baixo. Devolve os ids de **todos** os grupos visíveis: gravar só o par
+ * trocado deixaria os outros à mercê do `orderExerciseGroups`, que manda quem
+ * não está na lista para o fim.
+ */
+export function moveExerciseInOrder(
+  groups: ExerciseGroup[],
+  exerciseId: number,
+  direction: 'up' | 'down',
+): number[] {
+  const ids = groups.map((g) => g.exerciseId);
+  const from = ids.indexOf(exerciseId);
+  const to = direction === 'up' ? from - 1 : from + 1;
+  if (from < 0 || to < 0 || to >= ids.length) return ids;
+  [ids[from], ids[to]] = [ids[to]!, ids[from]!];
+  return ids;
 }

@@ -7,6 +7,7 @@ import httpx
 import pytest
 
 from fatia_agent.providers import build_provider
+from fatia_agent.providers.base import Usage
 from fatia_agent.providers.errors import (
     AIProviderNotConfigured,
     AIProviderRefused,
@@ -64,6 +65,30 @@ async def test_visao_manda_a_imagem_como_data_uri_no_modelo_de_visao():
     assert partes[0] == {"type": "text", "text": "O que é isto?"}
     esperado = "data:image/png;base64," + base64.b64encode(PIXEL_PNG).decode("ascii")
     assert partes[1]["image_url"]["url"] == esperado
+
+
+async def test_visao_devolve_o_consumo_que_o_provedor_reportou():
+    """É por este `usage` que o `apps/api` precifica a foto. Sem ele, custo não medido."""
+
+    def resposta(_r: httpx.Request) -> httpx.Response:
+        corpo = chat_response('{"items": []}').json()
+        corpo["model"] = "z-ai/glm-5.3-flash"
+        corpo["usage"] = {"prompt_tokens": 1200, "completion_tokens": 90}
+        return httpx.Response(200, json=corpo)
+
+    async with make_provider(RecordingTransport(resposta)) as provider:
+        descrita = await provider.describe(PIXEL_PNG, prompt="?", media_type="image/png")
+
+    assert descrita.text == '{"items": []}'
+    assert descrita.usage == Usage(model="z-ai/glm-5.3-flash", input_units=1200, output_units=90)
+
+
+async def test_visao_sem_bloco_de_usage_devolve_consumo_nulo():
+    """Ausência é custo não medido, nunca zero."""
+    async with make_provider(RecordingTransport(lambda _r: chat_response("ok"))) as provider:
+        descrita = await provider.describe(PIXEL_PNG, prompt="?")
+
+    assert descrita.usage is None
 
 
 async def test_trocar_de_modelo_e_so_configuracao():

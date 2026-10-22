@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { GroupRole, MembershipStatus, ShareScope } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { ProfessionalAccessService } from './professional-access.service';
+import { TEAM_ROLES } from './permissions';
 import { GoalsService } from '../goals/goals.service';
 import { NutritionSummaryService } from '../nutrition/nutrition-summary.service';
 import { ProgressService } from '../progress/progress.service';
@@ -161,8 +162,9 @@ export class StudentViewService {
   ) {}
 
   /**
-   * Os alunos que este profissional atende, em todos os grupos em que ele é
-   * `PROFESSIONAL` ativo, com o que cada um consentiu **a ele**.
+   * Os membros que esta pessoa da equipe acompanha, em todos os grupos em que
+   * ela é `OWNER`, `PROFESSIONAL` ou `CREATOR` ativo (ADR 026), com o que cada
+   * um consentiu **a ela**.
    *
    * Não passa pela porta de leitura, e não é esquecimento: aqui não há dado de
    * saúde nenhum — é composição de grupo, a mesma informação que
@@ -178,7 +180,7 @@ export class StudentViewService {
     const minhas = await this.prisma.groupMembership.findMany({
       where: {
         userId: professionalId,
-        role: GroupRole.PROFESSIONAL,
+        role: { in: [...TEAM_ROLES] },
         // Sem `ACTIVE` aqui o ex-funcionário continuaria com a lista de alunos
         // da academia que o demitiu — nome por nome, mesmo sem ler dado nenhum.
         status: MembershipStatus.ACTIVE,

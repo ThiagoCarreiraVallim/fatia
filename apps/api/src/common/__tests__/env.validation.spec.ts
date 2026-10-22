@@ -87,8 +87,8 @@ describe('AppEnvSchema — IA hospedada', () => {
 describe('AppEnvSchema — cobrança (#158)', () => {
   it('instância que não cobra ninguém sobe sem preencher nada', () => {
     // É como a instância pública roda hoje. Tornar qualquer variável de cobrança
-    // obrigatória impediria de subir quem nunca vai faturar academia nenhuma —
-    // e o app é grátis para o aluno em qualquer cenário.
+    // obrigatória impediria de subir quem nunca vai cobrar nada — o self-host
+    // roda com AI_REQUIRES_PLAN=false e a IA liberada (ADR 024).
     const env = AppEnvSchema.parse(BASE);
 
     expect(env.ASAAS_BASE_URL).toBeUndefined();
@@ -111,5 +111,24 @@ describe('AppEnvSchema — cobrança (#158)', () => {
     // Uma base torta só apareceria no fechamento do ciclo, uma vez por mês, com
     // a fatura já calculada e nenhuma cobrança criada.
     expect(() => AppEnvSchema.parse({ ...BASE, ASAAS_BASE_URL: 'api.asaas.com' })).toThrow();
+  });
+});
+
+describe('AppEnvSchema — plano Free/PRO (ADR 024)', () => {
+  it('sem nada preenchido, a IA não exige plano e o preço é o padrão', () => {
+    const env = AppEnvSchema.parse(BASE);
+    expect(env.AI_REQUIRES_PLAN).toBe(false);
+    expect(env.BILLING_PRO_MONTHLY_CENTS).toBe(1990);
+    expect(env.BILLING_PRO_YEARLY_CENTS).toBe(17900);
+    expect(env.BILLING_SEAT_MONTHLY_CENTS).toBe(1490);
+    expect(env.REVENUECAT_ENTITLEMENT_ID).toBe('pro');
+  });
+
+  it('`AI_REQUIRES_PLAN` aceita true/1 e recusa o que não é booleano', () => {
+    expect(AppEnvSchema.parse({ ...BASE, AI_REQUIRES_PLAN: 'true' }).AI_REQUIRES_PLAN).toBe(true);
+    expect(AppEnvSchema.parse({ ...BASE, AI_REQUIRES_PLAN: '1' }).AI_REQUIRES_PLAN).toBe(true);
+    expect(AppEnvSchema.parse({ ...BASE, AI_REQUIRES_PLAN: 'false' }).AI_REQUIRES_PLAN).toBe(false);
+    // "yes" ligaria ou desligaria? Melhor o boot recusar do que adivinhar.
+    expect(() => AppEnvSchema.parse({ ...BASE, AI_REQUIRES_PLAN: 'yes' })).toThrow();
   });
 });

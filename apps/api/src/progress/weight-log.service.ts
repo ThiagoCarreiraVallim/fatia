@@ -6,6 +6,7 @@ import type {
   ListWeightLogsDto,
   UpdateWeightLogDto,
 } from './dto/weight-log.dto';
+import { assertLoggableInstant } from './helpers/log-day';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
@@ -14,20 +15,22 @@ const MAX_LIMIT = 100;
 export class WeightLogService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateWeightLogDto, userId: string) {
+  async create(dto: CreateWeightLogDto, userId: string, timezone: string) {
+    const loggedAt = dto.loggedAt ? new Date(dto.loggedAt) : new Date();
+    assertLoggableInstant(loggedAt, timezone);
     return this.prisma.weightLog.create({
       data: {
         userId,
         weightKg: dto.weightKg,
-        loggedAt: dto.loggedAt ? new Date(dto.loggedAt) : new Date(),
+        loggedAt,
         notes: dto.notes ?? null,
       },
     });
   }
 
   /** Registra e devolve só o id — o que a tool de registro responde. */
-  async log(dto: CreateWeightLogDto, userId: string) {
-    const log = await this.create(dto, userId);
+  async log(dto: CreateWeightLogDto, userId: string, timezone: string) {
+    const log = await this.create(dto, userId, timezone);
     return { weightLogId: log.id };
   }
 
@@ -37,8 +40,9 @@ export class WeightLogService {
     return log;
   }
 
-  async update(id: string, dto: UpdateWeightLogDto, userId: string) {
+  async update(id: string, dto: UpdateWeightLogDto, userId: string, timezone: string) {
     await this.findById(id, userId);
+    if (dto.loggedAt) assertLoggableInstant(new Date(dto.loggedAt), timezone);
     return this.prisma.weightLog.update({
       where: { id },
       data: {

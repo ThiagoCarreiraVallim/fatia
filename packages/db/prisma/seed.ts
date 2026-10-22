@@ -2,13 +2,15 @@
  * Seed agregador. Roda na ordem:
  * 1. Admin user (idempotente)
  * 2. TACO (foods + groups)
- * 3. Exercises
+ * 3. Medidas caseiras (depende da TACO)
+ * 4. Exercises
  *
  * Cada um é idempotente. Pode rodar várias vezes sem duplicar.
  */
 
 import { runSeedAdmin } from './seed-admin';
 import { runSeedTaco } from './seed-taco';
+import { runSeedPortions } from './seed-portions';
 import { runSeedExercises } from './seed-exercises';
 
 async function main() {
@@ -20,14 +22,16 @@ async function main() {
   console.log('\n→ TACO (alimentos)');
   await runSeedTaco();
 
+  console.log('\n→ Medidas caseiras');
+  await runSeedPortions();
+
   console.log('\n→ Exercícios');
   await runSeedExercises();
 
   console.log('\n✅ Seeds concluídos.');
 }
 
-main()
-  .catch((err) => {
-    console.error('❌ Seed falhou:', err);
-    process.exit(1);
-  });
+main().catch((err) => {
+  console.error('❌ Seed falhou:', err);
+  process.exit(1);
+});

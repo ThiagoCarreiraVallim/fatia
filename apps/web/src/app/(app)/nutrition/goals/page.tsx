@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { ChevronLeft } from 'lucide-react';
+import { Calculator } from 'lucide-react';
 import { nutritionApi, type UserGoals } from '@fatia/api-client';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -69,12 +69,18 @@ export default function GoalsPage() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4 p-4">
-      <header className="flex items-center gap-2">
-        <Link href="/nutrition" className="rounded p-1 hover:bg-accent" aria-label="Voltar">
-          <ChevronLeft size={20} />
-        </Link>
-        <h1 className="text-xl font-semibold">Metas</h1>
-      </header>
+      <Link
+        href="/onboarding?refazer=1"
+        className="flex min-h-12 items-center gap-3 rounded-xl border border-subtle bg-card px-4 py-3 text-sm hover:bg-card/80"
+      >
+        <Calculator size={18} className="text-primary" aria-hidden />
+        <span className="flex-1">
+          <span className="block font-semibold">Recalcular com meus dados</span>
+          <span className="block text-xs text-muted-foreground">
+            Objetivo, peso e rotina viram uma sugestão de metas.
+          </span>
+        </span>
+      </Link>
 
       <fieldset className="grid grid-cols-2 gap-3">
         <legend className="col-span-2 text-sm font-medium">Calorias (kcal/dia)</legend>
@@ -114,7 +120,7 @@ export default function GoalsPage() {
       <Button type="submit" disabled={save.isPending} className="w-full">
         {save.isPending ? 'Salvando…' : 'Salvar metas'}
       </Button>
-      {save.error && <p className="text-sm text-rose-500">{(save.error as Error).message}</p>}
+      {save.error && <p className="text-sm text-danger">{(save.error as Error).message}</p>}
     </form>
   );
 }

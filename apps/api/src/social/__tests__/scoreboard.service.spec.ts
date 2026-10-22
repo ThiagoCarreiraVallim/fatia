@@ -6,6 +6,11 @@ import {
   type ChallengeWindow,
 } from '../scoreboard.service';
 import type { PrismaService } from '../../common/prisma.service';
+import type {
+  AdherenceDays,
+  AdherenceSubject,
+  DailyAdherenceService,
+} from '../../nutrition/daily-adherence.service';
 
 /**
  * Este spec **não** mocka `date-tz`: usa os fusos de verdade. Sob mock, o dia
@@ -44,6 +49,11 @@ interface FakeDb {
   workoutSession: Array<{ userId: string; completedAt: Date | null }>;
   stepLog: Array<{ userId: string; date: string; steps: number }>;
   waterLog: Array<{ userId: string; date: string; ml: number }>;
+  /**
+   * O que a aderência de nutrição devolveria: só datas, por pessoa. O fake
+   * recorta pela janela pedida, como o serviço de verdade.
+   */
+  aderencia: Record<string, Partial<Record<keyof AdherenceDays, string[]>>>;
 }
 
 /**
@@ -76,6 +86,7 @@ function build(db: Partial<FakeDb>) {
     workoutSession: db.workoutSession ?? [],
     stepLog: db.stepLog ?? [],
     waterLog: db.waterLog ?? [],
+    aderencia: db.aderencia ?? {},
   };
 
   const prisma = {
@@ -111,7 +122,37 @@ function build(db: Partial<FakeDb>) {
     },
   };
 
-  return { dados, prisma, service: new ScoreboardService(prisma as unknown as PrismaService) };
+  const adherence = {
+    forDays: jest.fn((subjects: readonly AdherenceSubject[], first: string, last: string) => {
+      const recorte = (datas: string[] = []) =>
+        new Set(datas.filter((d) => d >= first && d <= last));
+      return Promise.resolve(
+        new Map(
+          subjects.map((s) => {
+            const a = dados.aderencia[s.userId] ?? {};
+            return [
+              s.userId,
+              {
+                kcalInRange: recorte(a.kcalInRange),
+                proteinTarget: recorte(a.proteinTarget),
+                mealLogged: recorte(a.mealLogged),
+              },
+            ];
+          }),
+        ),
+      );
+    }),
+  };
+
+  return {
+    dados,
+    prisma,
+    adherence,
+    service: new ScoreboardService(
+      prisma as unknown as PrismaService,
+      adherence as unknown as DailyAdherenceService,
+    ),
+  };
 }
 
 const desafio = (metric: ChallengeMetric): ChallengeWindow => ({ metric, ...JANELA });
@@ -411,6 +452,13 @@ describe('ScoreboardService.recompute', () => {
       workoutSession: [{ userId: 'u-ana', completedAt: new Date('2026-03-03T12:00:00.000Z') }],
       stepLog: [{ userId: 'u-ana', date: '2026-03-03', steps: 9000 }],
       waterLog: [{ userId: 'u-ana', date: '2026-03-03', ml: 2000 }],
+      aderencia: {
+        'u-ana': {
+          kcalInRange: ['2026-03-03'],
+          proteinTarget: ['2026-03-03'],
+          mealLogged: ['2026-03-03'],
+        },
+      },
     });
 
     // Métrica sem ramo pontuaria zero para todo mundo, e um placar todo
@@ -421,23 +469,79 @@ describe('ScoreboardService.recompute', () => {
   });
 });
 
+describe('métricas de aderência (ADR 027)', () => {
+  it('dias na meta de kcal e de proteína contam cada um o seu, na janela do desafio', async () => {
+    const { service, adherence } = build({
+      aderencia: {
+        'u-ana': {
+          kcalInRange: ['2026-03-01', '2026-03-02', '2026-03-05', '2026-03-09'],
+          proteinTarget: ['2026-03-03'],
+        },
+        'u-bruno': { kcalInRange: ['2026-03-04'], proteinTarget: ['2026-03-04', '2026-03-08'] },
+      },
+    });
+
+    // 01/03 e 09/03 estão fora da janela de 02 a 08.
+    expect(porMembro(await service.recompute(desafio('KCAL_IN_RANGE_DAYS'), [ANA, BRUNO]))).toEqual(
+      { 'm-ana': 2, 'm-bruno': 1 },
+    );
+    expect(
+      porMembro(await service.recompute(desafio('PROTEIN_TARGET_DAYS'), [ANA, BRUNO])),
+    ).toEqual({ 'm-ana': 1, 'm-bruno': 2 });
+    // A aderência é pedida só com os dias do desafio, no calendário dele.
+    expect(adherence.forDays).toHaveBeenCalledWith([ANA, BRUNO], '2026-03-02', '2026-03-08');
+  });
+
+  it('sequência é a MAIOR corrida de dias seguidos, e refeição registrada salva o dia', async () => {
+    const { service } = build({
+      stepLog: [
+        { userId: 'u-ana', date: '2026-03-02', steps: 3000 },
+        { userId: 'u-ana', date: '2026-03-03', steps: 3000 },
+        { userId: 'u-ana', date: '2026-03-06', steps: 3000 },
+      ],
+      waterLog: [{ userId: 'u-ana', date: '2026-03-07', ml: 300 }],
+      // 05/03 só teve refeição: conta. Sem ela, a maior corrida seria 2.
+      aderencia: { 'u-ana': { mealLogged: ['2026-03-05'] } },
+    });
+
+    expect(porMembro(await service.recompute(desafio('STREAK_DAYS'), [ANA]))).toEqual({
+      'm-ana': 3,
+    });
+  });
+
+  it('a sequência não começa antes do desafio nem passa do último dia', async () => {
+    const { service } = build({
+      stepLog: [
+        { userId: 'u-ana', date: '2026-02-28', steps: 3000 },
+        { userId: 'u-ana', date: '2026-03-01', steps: 3000 },
+        { userId: 'u-ana', date: '2026-03-02', steps: 3000 },
+      ],
+      aderencia: { 'u-ana': { mealLogged: ['2026-03-08', '2026-03-09', '2026-03-10'] } },
+    });
+
+    expect(porMembro(await service.recompute(desafio('STREAK_DAYS'), [ANA]))).toEqual({
+      'm-ana': 1,
+    });
+  });
+});
+
 describe('buildScoreboard', () => {
   it('empate divide a mesma posição, e a seguinte pula', () => {
     const placar = buildScoreboard([
-      { displayName: 'Bruno', score: 10 },
-      { displayName: 'Ana', score: 30 },
-      { displayName: 'Carla', score: 10 },
+      { displayName: 'Bruno', score: 10, isMe: false },
+      { displayName: 'Ana', score: 30, isMe: true },
+      { displayName: 'Carla', score: 10, isMe: false },
       // Sem esta quarta linha o fixture acabava no empate: "a seguinte" nunca
       // existia, e o ranking denso (que daria 3 aqui, não 4) passava verde
       // apesar do nome do teste.
-      { displayName: 'Dedé', score: 5 },
+      { displayName: 'Dedé', score: 5, isMe: false },
     ]);
 
     expect(placar).toEqual([
-      { displayName: 'Ana', score: 30, rank: 1 },
-      { displayName: 'Bruno', score: 10, rank: 2 },
-      { displayName: 'Carla', score: 10, rank: 2 },
-      { displayName: 'Dedé', score: 5, rank: 4 },
+      { displayName: 'Ana', score: 30, rank: 1, isMe: true },
+      { displayName: 'Bruno', score: 10, rank: 2, isMe: false },
+      { displayName: 'Carla', score: 10, rank: 2, isMe: false },
+      { displayName: 'Dedé', score: 5, rank: 4, isMe: false },
     ]);
   });
 
@@ -446,18 +550,19 @@ describe('buildScoreboard', () => {
     // ordenação estável do JS, um desempate ausente devolveria 'Zoe' primeiro e
     // a posição dos empatados oscilaria entre duas leituras iguais do placar.
     const placar = buildScoreboard([
-      { displayName: 'Zoe', score: 10 },
-      { displayName: 'Ana', score: 10 },
+      { displayName: 'Zoe', score: 10, isMe: false },
+      { displayName: 'Ana', score: 10, isMe: false },
     ]);
 
     expect(placar.map((l) => l.displayName)).toEqual(['Ana', 'Zoe']);
   });
 
-  it('a linha que vai para a tela tem exatamente três chaves', () => {
-    const placar = buildScoreboard([{ displayName: 'Ana', score: 30 }]);
+  it('a linha que vai para a tela tem exatamente quatro chaves', () => {
+    const placar = buildScoreboard([{ displayName: 'Ana', score: 30, isMe: true }]);
 
     // Não é preciosismo de DTO: é a fronteira em que um `include` distraído
-    // transformaria um placar de atividade num vazamento de registro.
-    expect(Object.keys(placar[0]).sort()).toEqual(['displayName', 'rank', 'score']);
+    // transformaria um placar de atividade num vazamento de registro. `isMe` é a
+    // marca de quem lê, não identidade de ninguém.
+    expect(Object.keys(placar[0]).sort()).toEqual(['displayName', 'isMe', 'rank', 'score']);
   });
 });

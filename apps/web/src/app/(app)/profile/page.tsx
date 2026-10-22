@@ -1,8 +1,10 @@
 import Link from 'next/link';
-import { Flag, Sparkles, Settings, Shield, LogOut, ChevronRight } from 'lucide-react';
+import { Bell, Flag, Sparkles, Settings, Shield, LogOut, ChevronRight, Users } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth-server';
 import { ProfileMetrics } from '@/components/profile/profile-metrics';
 import { ProfessionalPanelLink } from '@/components/sharing/professional-panel-link';
+import { AccountSection } from '@/components/profile/account-section';
+import { PlanSection } from '@/components/billing/plan-section';
 
 interface MenuItemProps {
   href: string;
@@ -15,7 +17,7 @@ function MenuItem({ href, icon, title, subtitle }: MenuItemProps) {
   return (
     <Link
       href={href}
-      className="flex items-center gap-4 border-b border-white/5 px-4 py-4 last:border-b-0"
+      className="flex items-center gap-4 border-b border-subtle px-4 py-4 last:border-b-0"
     >
       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted/60">
         {icon}
@@ -41,17 +43,24 @@ export default async function ProfilePage() {
           </span>
         </div>
 
-        <h1 className="mt-3 text-2xl font-extrabold text-foreground">
+        {/* O `h1` da tela é o "Perfil" da barra de topo. */}
+        <h2 className="mt-3 text-2xl font-extrabold text-foreground">
           {user?.name ? user.name : 'Atleta Fatia'}
-        </h1>
+        </h2>
         {user?.email && <p className="text-xs text-muted-foreground">{user.email}</p>}
       </div>
 
       <ProfileMetrics />
 
-      <nav className="overflow-hidden rounded-2xl border border-white/5 bg-card">
+      <nav className="overflow-hidden rounded-2xl border border-subtle bg-card">
         {/* Só rende algo para quem atende alguém — ver o componente. */}
         <ProfessionalPanelLink />
+        <MenuItem
+          href="/community"
+          icon={<Users size={18} className="text-primary" />}
+          title="Comunidades"
+          subtitle="Suas comunidades e o que você compartilha"
+        />
         <MenuItem
           href="/goals"
           icon={<Flag size={18} className="text-primary" />}
@@ -74,6 +83,12 @@ export default async function ProfilePage() {
           subtitle="Registre e consulte seu diário conversando com o Claude"
         />
         <MenuItem
+          href="/profile/notifications"
+          icon={<Bell size={18} className="text-primary" />}
+          title="Notificações"
+          subtitle="O que chega no celular e onde"
+        />
+        <MenuItem
           href="/privacy"
           icon={<Shield size={18} className="text-primary" />}
           title="Privacidade e dados"
@@ -81,13 +96,17 @@ export default async function ProfilePage() {
         />
       </nav>
 
+      <PlanSection />
+
+      <AccountSection />
+
       {/* prefetch={false} obrigatório: sem isso o Next prefetcha o handler
           /api/logto/sign-out (mesma origem), que retorna Set-Cookie limpando
           a sessão antes do clique. */}
       <Link
         href="/api/logto/sign-out"
         prefetch={false}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-destructive/50 bg-transparent px-4 py-4 text-base font-bold text-destructive transition-colors hover:bg-destructive/10"
+        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-danger/50 bg-transparent px-4 py-4 text-base font-bold text-danger transition-colors hover:bg-destructive/10"
       >
         <LogOut size={18} />
         Sair da conta

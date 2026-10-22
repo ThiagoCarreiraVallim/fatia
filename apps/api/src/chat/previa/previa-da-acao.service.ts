@@ -3,6 +3,8 @@ import { z, type ZodError } from 'zod';
 import { PrismaService } from '../../common/prisma.service';
 import { McpToolRegistry } from '../../mcp/mcp-tool.registry';
 import { TIPO_DA_REFEICAO } from '../../nutrition/mcp/list-meals.tool';
+import { gramsFromPortion, visiblePortions } from '../../nutrition/helpers/portion';
+import { hashInviteToken } from '../../sharing/invite.service';
 import {
   CAMPOS,
   COMPOSTOS,
@@ -14,6 +16,7 @@ import {
   type ContextoDoFormato,
   type TipoDeRegistro,
 } from './rotulos';
+import { readableExercises } from '../../workout/helpers/exercise-access';
 
 export interface LinhaDaPrevia {
   rotulo: string;
@@ -24,7 +27,23 @@ export type PreviaDaAcao =
   | { valida: true; linhas: LinhaDaPrevia[] }
   | { valida: false; linhas: LinhaDaPrevia[]; problema: string };
 
-const numero = (valor: number) => valor.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+const numero = (valor: number, casas = 1) =>
+  valor.toLocaleString('pt-BR', { maximumFractionDigits: casas });
+
+/** Cartão é para ler de relance: depois disso, "e mais N". */
+const MAX_ITENS_DO_MODELO = 5;
+
+/** "2 × colher de sopa (50 g) de Arroz" ou "120 g de Arroz", como foi registrado. */
+function descricaoDoItem(item: {
+  foodName: string;
+  grams: number;
+  portionLabel: string | null;
+  portionQuantity: number | null;
+}): string {
+  return item.portionLabel && item.portionQuantity
+    ? `${numero(item.portionQuantity, 2)} × ${item.portionLabel} (${numero(item.grams)} g) de ${item.foodName}`
+    : `${numero(item.grams)} g de ${item.foodName}`;
+}
 
 /**
  * O que uma escrita pausada vai fazer, em português de gente (ADR 022).
@@ -101,6 +120,20 @@ export class PreviaDaAcaoService {
 
   private async itemDeRefeicao(userId: string, item: Record<string, unknown>) {
     const gramas = typeof item.grams === 'number' ? `${numero(item.grams)} g de ` : '';
+    if (typeof item.foodId === 'number' && typeof item.portionId === 'string') {
+      // "2 × colher de sopa (50 g)": como a pessoa disse, e o peso que vai ser gravado.
+      const [nome, medida] = await Promise.all([
+        this.resolver('alimento', item.foodId, userId),
+        this.prisma.foodPortion.findFirst({
+          where: { id: item.portionId, foodId: item.foodId, ...visiblePortions(userId) },
+          select: { label: true, grams: true },
+        }),
+      ]);
+      if (nome === null || !medida) return null;
+      const vezes = typeof item.quantity === 'number' ? item.quantity : 1;
+      const total = numero(gramsFromPortion(medida.grams, vezes));
+      return `${numero(vezes, 2)} × ${medida.label} (${total} g) de ${nome}`;
+    }
     if (typeof item.foodId === 'number') {
       const nome = await this.resolver('alimento', item.foodId, userId);
       return nome === null ? null : `${gramas}${nome}`;
@@ -149,7 +182,7 @@ export class PreviaDaAcaoService {
       }
       case 'exercicio': {
         const exercicio = await this.prisma.exercise.findFirst({
-          where: { id, OR: [{ createdByUserId: null }, { createdByUserId: userId }] },
+          where: { id, ...readableExercises(userId) },
           select: { name: true },
         });
         return exercicio?.name ?? null;
@@ -181,9 +214,9 @@ export class PreviaDaAcaoService {
       case 'itemDaRefeicao': {
         const item = await this.prisma.mealItem.findFirst({
           where: { id, meal: { userId } },
-          select: { foodName: true, grams: true },
+          select: { foodName: true, grams: true, portionLabel: true, portionQuantity: true },
         });
-        return item ? `${numero(item.grams)} g de ${item.foodName}` : null;
+        return item ? descricaoDoItem(item) : null;
       }
       case 'meta': {
         const meta = await this.prisma.goal.findFirst({
@@ -198,6 +231,68 @@ export class PreviaDaAcaoService {
           select: { content: true },
         });
         return memoria?.content ?? null;
+      }
+      case 'comunidade': {
+        // Só a comunidade de que a pessoa é membro ativo: o nome de outra não vaza.
+        const membro = await this.prisma.groupMembership.findFirst({
+          where: { groupId: id, userId, status: 'ACTIVE' },
+          select: { group: { select: { name: true } } },
+        });
+        return membro?.group.name ?? null;
+      }
+      case 'planoDaComunidade': {
+        // Só plano publicado de comunidade de que a pessoa é membro ativo.
+        const modelo = await this.prisma.groupPlanTemplate.findFirst({
+          where: {
+            id,
+            publishedAt: { not: null },
+            group: { memberships: { some: { userId, status: 'ACTIVE' } } },
+          },
+          select: { title: true },
+        });
+        return modelo?.title ?? null;
+      }
+      case 'desafioDaComunidade': {
+        // Só desafio de comunidade de que a pessoa é membro ativo.
+        const desafio = await this.prisma.groupChallenge.findFirst({
+          where: { id, group: { memberships: { some: { userId, status: 'ACTIVE' } } } },
+          select: { title: true },
+        });
+        return desafio?.title ?? null;
+      }
+      case 'postDaComunidade': {
+        // Só post no ar de comunidade de que a pessoa é membro ativo: o
+        // comentário num post removido ou alheio falharia.
+        const post = await this.prisma.groupPost.findFirst({
+          where: {
+            id,
+            removedAt: null,
+            group: { memberships: { some: { userId, status: 'ACTIVE' } } },
+          },
+          select: { body: true },
+        });
+        if (!post) return null;
+        const linha = post.body.replace(/\s+/g, ' ').trim();
+        return linha.length > 60 ? `${linha.slice(0, 59)}…` : linha || 'Post com imagem';
+      }
+      case 'convite': {
+        // Convite que não vale mais não ganha nome no cartão: o aceite falharia.
+        const convite = await this.prisma.groupInvite.findUnique({
+          where: { tokenHash: hashInviteToken(String(valor)) },
+          select: {
+            revokedAt: true,
+            expiresAt: true,
+            maxUses: true,
+            uses: true,
+            group: { select: { name: true } },
+          },
+        });
+        const vale =
+          convite &&
+          !convite.revokedAt &&
+          convite.expiresAt > ctx.agora &&
+          (convite.maxUses === null || convite.uses < convite.maxUses);
+        return vale ? convite.group.name : null;
       }
       case 'profissional': {
         const vinculo = await this.prisma.professionalLink.findFirst({
@@ -239,6 +334,29 @@ export class PreviaDaAcaoService {
           select: { setNumber: true, exercise: { select: { name: true } } },
         });
         return serie ? `${serie.exercise.name}, série ${serie.setNumber}` : null;
+      }
+      case 'medida': {
+        const medida = await this.prisma.foodPortion.findFirst({
+          where: { id, ...visiblePortions(userId) },
+          select: { label: true, grams: true, food: { select: { name: true } } },
+        });
+        return medida ? `${medida.label} (${numero(medida.grams)} g) de ${medida.food.name}` : null;
+      }
+      case 'modelo': {
+        const modelo = await this.prisma.mealTemplate.findFirst({
+          where: { id, userId },
+          select: {
+            name: true,
+            items: {
+              orderBy: { position: 'asc' },
+              select: { foodName: true, grams: true, portionLabel: true, portionQuantity: true },
+            },
+          },
+        });
+        if (!modelo) return null;
+        const itens = modelo.items.slice(0, MAX_ITENS_DO_MODELO).map(descricaoDoItem);
+        const resto = modelo.items.length - itens.length;
+        return `${modelo.name}: ${itens.join(', ')}${resto > 0 ? ` e mais ${resto}` : ''}`;
       }
       case 'exercicioDoPlano': {
         const doPlano = await this.prisma.workoutPlanExercise.findFirst({

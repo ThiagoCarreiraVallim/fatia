@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { DELETE_ACCOUNT_CONFIRMATION, usersApi } from '@fatia/api-client';
 import { useAuth } from '@/auth/auth-context';
@@ -13,7 +13,9 @@ import {
   DrawerTitle,
   FormMessage,
   Label,
+  useToast,
 } from '@/components/ui';
+import { cores } from '@/theme/cores';
 
 /**
  * Apagar a conta de dentro do app.
@@ -26,6 +28,7 @@ export function DeleteAccountDrawer({ open, onClose }: { open: boolean; onClose:
   const [confirmation, setConfirmation] = useState('');
   const { signOut } = useAuth();
   const qc = useQueryClient();
+  const toast = useToast();
 
   // Ajuste durante o render, e não num efeito (#187). A comparação é a mesma que
   // estava no array de dependências: a confirmação digitada some na mesma
@@ -45,7 +48,8 @@ export function DeleteAccountDrawer({ open, onClose }: { open: boolean; onClose:
       // de existir. Sem limpar, a próxima sessão nesse aparelho abriria com os
       // dados de quem saiu.
       qc.clear();
-      Alert.alert('Conta apagada', result.message);
+      // Toast, e não diálogo: ele mora na raiz e continua na tela de login.
+      toast.show({ message: result.message });
       await signOut();
     },
   });
@@ -79,6 +83,10 @@ export function DeleteAccountDrawer({ open, onClose }: { open: boolean; onClose:
             <Text className="mt-1 text-xs text-muted-foreground">
               Se quiser guardar uma cópia, exporte seus dados antes.
             </Text>
+            <Text className="mt-1 text-xs text-muted-foreground">
+              Assinatura PRO feita pela web é cancelada junto. A feita na App Store ou no Google
+              Play precisa ser cancelada na própria loja.
+            </Text>
           </View>
 
           <View className="gap-1.5">
@@ -88,8 +96,8 @@ export function DeleteAccountDrawer({ open, onClose }: { open: boolean; onClose:
               value={confirmation}
               onChangeText={setConfirmation}
               placeholder={DELETE_ACCOUNT_CONFIRMATION}
-              placeholderTextColor="#8a8a8a"
-              selectionColor="#2ce500"
+              placeholderTextColor={cores.placeholder}
+              selectionColor={cores.primary}
               autoCapitalize="characters"
               autoCorrect={false}
               className="min-h-[44px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground"

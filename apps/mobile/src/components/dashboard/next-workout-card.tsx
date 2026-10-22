@@ -1,8 +1,9 @@
 import { Pressable, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { Dumbbell, Play } from 'lucide-react-native';
-import type { TodaySummary } from '@fatia/api-client';
+import { nextWorkoutCopy, type TodaySummary } from '@fatia/api-client';
 import { horaDoDia } from './helpers';
+import { cores } from '@/theme/cores';
 
 /**
  * Réplica de `apps/web/src/components/dashboard/next-workout-card.tsx`.
@@ -13,40 +14,23 @@ import { horaDoDia } from './helpers';
  */
 export function NextWorkoutCard({ workout }: { workout: TodaySummary['workout'] }) {
   const router = useRouter();
-  const { plannedToday, sessionInProgress, completedToday } = workout;
-
-  const selo = completedToday
-    ? 'Treino concluído'
-    : sessionInProgress
-      ? 'Em andamento'
-      : 'Próximo treino';
-
-  const titulo = sessionInProgress
-    ? 'Retomar sessão'
-    : completedToday
-      ? 'Ver histórico'
-      : (plannedToday?.name ?? 'Treino livre');
-
-  const subtitulo = completedToday
-    ? 'Parabéns!'
-    : sessionInProgress
-      ? `Iniciado às ${horaDoDia(sessionInProgress.startedAt)}`
-      : plannedToday
-        ? 'Plano de treino'
-        : 'Sem plano configurado';
+  const {
+    badge: selo,
+    title: titulo,
+    subtitle: subtitulo,
+    href,
+  } = nextWorkoutCopy(workout, horaDoDia, { sessionHref: (id) => `/workout/session/${id}` });
 
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${selo}: ${titulo}. ${subtitulo}.`}
-      onPress={() =>
-        router.push(sessionInProgress ? `/workout/session/${sessionInProgress.id}` : '/workout')
-      }
+      onPress={() => router.push(href as Href)}
       className="overflow-hidden rounded-xl border border-border bg-card active:opacity-80"
     >
       <View className="h-24 w-full justify-end bg-muted p-4">
         <View className="absolute right-4 top-4" style={{ opacity: 0.25 }}>
-          <Dumbbell size={48} color="#baccaf" />
+          <Dumbbell size={48} color={cores.mutedForeground} />
         </View>
         <View className="self-start rounded bg-background px-2 py-1">
           <Text className="text-[11px] font-bold tracking-wide text-foreground">
@@ -63,7 +47,7 @@ export function NextWorkoutCard({ workout }: { workout: TodaySummary['workout'] 
           <Text className="text-[14px] text-muted-foreground">{subtitulo}</Text>
         </View>
         <View className="h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary">
-          <Play size={16} color="#131313" fill="#131313" />
+          <Play size={16} color={cores.background} fill={cores.background} />
         </View>
       </View>
     </Pressable>
