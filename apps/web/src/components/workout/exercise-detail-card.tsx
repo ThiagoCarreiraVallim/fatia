@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Play, Trash2, ChevronUp, ChevronDown, Trophy } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
@@ -39,6 +39,8 @@ interface SessionCardProps {
   sessionId?: string;
   /** When false, hides per-set delete button. Defaults to true. */
   canDeleteSet?: boolean;
+  /** Pé do card — na sessão em andamento, "Fazer agora" e as ações de arrumação. */
+  footer?: ReactNode;
 }
 
 type Props = PlanCardProps | SessionCardProps;
@@ -110,6 +112,7 @@ function SessionModeCard({
   isCardio,
   sessionId,
   canDeleteSet = true,
+  footer,
 }: SessionCardProps) {
   const editable = !!sessionId;
   const showDelete = editable && canDeleteSet;
@@ -153,6 +156,7 @@ function SessionModeCard({
           ))}
         </div>
       )}
+      {footer}
     </div>
   );
 }
