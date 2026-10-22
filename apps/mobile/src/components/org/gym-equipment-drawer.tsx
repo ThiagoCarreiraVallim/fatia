@@ -3,6 +3,7 @@ import { Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CUSTOM_EQUIPMENT_MAX_LENGTH,
+  customEquipmentName,
   customEquipmentProblem,
   groupExerciseApi,
   groupsApi,
@@ -103,7 +104,7 @@ export function GymEquipmentDrawer({
     const p = customEquipmentProblem(novo, proprios);
     setProblema(p);
     if (p) return;
-    setProprios([...proprios, novo.replace(/\s+/g, ' ').trim()]);
+    setProprios([...proprios, customEquipmentName(novo)]);
     setNovo('');
   }
 

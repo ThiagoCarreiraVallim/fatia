@@ -3,7 +3,9 @@ import { Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BODYWEIGHT_EQUIPMENT,
+  chooserQuery,
   OTHER_EQUIPMENT,
+  sameEquipment,
   workoutApi,
   type Exercise,
 } from '@fatia/api-client';
@@ -20,7 +22,6 @@ import {
   Label,
 } from '@/components/ui';
 import { cores } from '@/theme/cores';
-import { chooserQuery, sameEquipment } from './equipment';
 import { EquipmentChooser } from './equipment-chooser';
 
 /**

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  chooserQuery,
+  customEquipmentName,
   customEquipmentProblem,
   EQUIPMENT_CATEGORIES,
   equipmentLabel,
@@ -10,6 +12,7 @@ import {
   groupExerciseApi,
   groupExerciseProblem,
   instructionsFromText,
+  sameEquipment,
   videoProblem,
 } from '../community-exercises';
 import { activePanelSection, panelHref } from '../community-panel';
@@ -152,5 +155,20 @@ describe('lista de equipamentos', () => {
       ),
     ).toMatch(/30/);
     expect(customEquipmentProblem('Hack 45° da casa', [])).toBeNull();
+  });
+
+  it('o texto do campo filtra a lista, a não ser que já seja um item conhecido', () => {
+    expect(chooserQuery('esteir', [])).toBe('esteir');
+    expect(chooserQuery('  ', [])).toBe('');
+    expect(chooserQuery('leg press', [])).toBe('');
+    expect(chooserQuery('Voador (peck deck)', [])).toBe('');
+    expect(chooserQuery('PESO CORPORAL', [])).toBe('');
+    expect(chooserQuery('hack da casa', ['Hack da Casa'])).toBe('');
+  });
+
+  it('compara sem caixa, acento nem espaço extra, e grava sem espaço sobrando', () => {
+    expect(sameEquipment(' Máquina  de glúteo', 'maquina de gluteo')).toBe(true);
+    expect(sameEquipment('smith', 'leg press')).toBe(false);
+    expect(customEquipmentName('  Hack   45° ')).toBe('Hack 45°');
   });
 });

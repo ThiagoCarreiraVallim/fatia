@@ -178,6 +178,34 @@ export function customEquipmentProblem(name: string, existing: readonly string[]
   return null;
 }
 
+/** O nome como o equipamento próprio é gravado: sem espaço sobrando. */
+export function customEquipmentName(name: string): string {
+  return name.replace(/\s+/g, ' ').trim();
+}
+
+/** Os dois nomes são o mesmo equipamento (sem olhar caixa, acento nem espaço extra)? */
+export function sameEquipment(a: string, b: string): boolean {
+  return comparable(a) === comparable(b);
+}
+
+/**
+ * O termo que filtra a lista abaixo do campo de equipamento do exercício
+ * pessoal, no web e no app.
+ *
+ * O campo é texto livre e serve de busca ao mesmo tempo. Quando o texto já é
+ * um item conhecido (o que a pessoa acabou de tocar), filtrar por ele deixaria
+ * só aquele item na tela, e trocar de ideia exigiria apagar o campo. Nesse caso
+ * a lista volta inteira, com o item marcado.
+ */
+export function chooserQuery(text: string, custom: readonly string[]): string {
+  const t = text.trim();
+  if (!t) return '';
+  const known = [...EXERCISE_EQUIPMENT, ...custom].some(
+    (e) => sameEquipment(e, t) || sameEquipment(equipmentLabel(e), t),
+  );
+  return known ? '' : t;
+}
+
 /** Os grupos musculares do catálogo, na ordem do editor (os mesmos da API). */
 export const MUSCLE_GROUPS = [
   'peito',
