@@ -180,6 +180,37 @@ describe('FoodSearchDrawer', () => {
     expect(onOpenChange).not.toHaveBeenCalled();
   });
 
+  // O texto do 409 é escrito para o agente (id, eatenAt); na tela ele faria a
+  // pessoa achar que não salvou e registrar de novo.
+  it('refeição repetida diz que já está registrada, sem o texto técnico da API', async () => {
+    createMeal.mockRejectedValue(
+      new ApiError('Refeição idêntica já registrada (id m9): ajuste eatenAt.', 409),
+    );
+    const user = userEvent.setup();
+    renderDrawer({ mealType: 'LUNCH' });
+
+    await user.click(screen.getByRole('button', { name: /só desta vez/i }));
+    await user.type(screen.getByLabelText(/Nome/), 'salada');
+    await user.click(screen.getByRole('button', { name: /^adicionar$/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Essa refeição já foi registrada.');
+    expect(screen.queryByText(/eatenAt/)).not.toBeInTheDocument();
+  });
+
+  it('item repetido numa refeição aberta diz isso', async () => {
+    addItem.mockRejectedValue(new ApiError('conflict', 409));
+    const user = userEvent.setup();
+    renderDrawer({ mealId: 'meal-123' });
+
+    await user.click(screen.getByRole('button', { name: /só desta vez/i }));
+    await user.type(screen.getByLabelText(/Nome/), 'pão');
+    await user.click(screen.getByRole('button', { name: /^adicionar$/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Esse item já foi registrado nessa refeição.',
+    );
+  });
+
   describe('dashboard', () => {
     // O "+" registra refeição fora da Nutrição: o card de macros do dashboard
     // (`['dashboard','today']`) tem de acompanhar sem recarregar a página.

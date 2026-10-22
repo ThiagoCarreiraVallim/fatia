@@ -35,6 +35,7 @@ import { instanteNoDia } from '@/lib/dias';
 import { AmountPicker } from './amount-picker';
 import { BarcodeFlow } from './barcode-flow';
 import { CustomFoodForm } from './custom-food-form';
+import { MEAL_CONFLICT_MESSAGE, errorMessage } from './error-message';
 import { invalidateNutritionDay } from '@/lib/nutrition-cache';
 
 interface Props {
@@ -287,6 +288,18 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
     });
   };
 
+  // 409 aqui é registro repetido: a mensagem diz que já está salvo, para a
+  // pessoa não tentar de novo.
+  const addError = addItem.error
+    ? errorMessage(addItem.error, {
+        conflict: targetMealId
+          ? 'Esse item já foi registrado nessa refeição.'
+          : MEAL_CONFLICT_MESSAGE,
+        fallback: 'Não foi possível salvar. Tente de novo.',
+      })
+    : undefined;
+  const templateError = logTemplate.error ?? deleteTemplate.error;
+
   const title = mealId ? 'Adicionar item' : 'Nova refeição';
 
   return (
@@ -319,7 +332,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
           <BarcodeFlow
             onAdd={(payload) => addItem.mutate(payload)}
             adding={addItem.isPending}
-            addError={addItem.error?.message}
+            addError={addError}
             onCreateManually={() => startCreate('')}
             onBack={() => setMode('search')}
           />
@@ -349,7 +362,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
               addItem.reset();
             }}
             isSubmitting={addItem.isPending}
-            error={addItem.error?.message}
+            error={addError}
           />
         ) : selected ? (
           <SelectedFoodPanel
@@ -374,7 +387,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
             }}
             onSubmit={submitFromSearch}
             isSubmitting={addItem.isPending}
-            error={addItem.error?.message}
+            error={addError}
           />
         ) : (
           <SearchPanel
@@ -389,7 +402,7 @@ export function FoodSearchDrawer({ open, onOpenChange, mealId, mealType, date }:
             templates={mealId ? [] : (templates.data ?? [])}
             onLogTemplate={(template) => logTemplate.mutate(template)}
             onDeleteTemplate={(template) => deleteTemplate.mutate(template.id)}
-            templateError={logTemplate.error?.message ?? deleteTemplate.error?.message}
+            templateError={templateError ? errorMessage(templateError) : undefined}
             favoriteIds={favoriteIds}
             onToggleFavorite={(food) =>
               favorite.mutate({ food, favorite: !favoriteIds.has(food.id) })
@@ -772,7 +785,11 @@ function SelectedFoodPanel({
           Total: {preview.kcal} kcal · P{preview.proteinG} · C{preview.carbsG} · G{preview.fatG}
         </p>
       )}
-      {error && <p className="text-sm text-danger">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-danger">
+          {error}
+        </p>
+      )}
       <div className="flex gap-2">
         <Button variant="outline" className="flex-1" onClick={onBack}>
           Voltar
@@ -896,7 +913,11 @@ function ManualForm({
         </div>
       )}
 
-      {error && <p className="text-sm text-danger">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-danger">
+          {error}
+        </p>
+      )}
       <div className="flex gap-2">
         <Button variant="outline" className="flex-1" onClick={onBack}>
           Voltar
