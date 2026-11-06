@@ -747,11 +747,6 @@ export type ChatArtifact =
   | (ChatArtifactBase & {
       kind: 'comparison';
       items: { label: string; value: number | string; unit?: string }[];
-    })
-  | (ChatArtifactBase & {
-      /** As fontes de uma busca na web (`search_web`): cada uma vira um link. */
-      kind: 'sources';
-      sources: { title: string; url: string; domain: string; date?: string }[];
     });
 
 // ---------------------------------------------------------------- memória e cota

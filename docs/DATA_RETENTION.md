@@ -150,13 +150,13 @@ retenção zero (ver adiante). Ligar isso na instância oficial continua depende
 consentimento específico. Aqui o conteúdo sai do dispositivo, atravessa o `apps/api`, vai ao
 `apps/agent` e de lá ao provedor, pelo OpenRouter. É este caminho que a tabela abaixo descreve.
 
-| Capacidade                  | O que vai ao provedor                                                                        | Persistido?                                                   |
-| --------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Visão — registro por foto   | a imagem do prato, reencodada em JPEG **sem EXIF**, e o prompt                               | **não**                                                       |
-| Texto — chat                | a mensagem, as últimas falas da conversa, os resultados das tools lidas, as memórias, o fuso | a conversa, sim — em `Message`; ver adiante                   |
-| Visão — foto no chat        | tudo o que o texto leva, mais até três fotos da mensagem, recodificadas **sem EXIF**         | **sim**, no bucket, com a conversa (ADR 038)                  |
-| Transcrição — ditado (#141) | o áudio gravado e o formato dele                                                             | **não** — só a duração, como custo                            |
-| Busca na web (`search_web`) | só o texto da consulta que o modelo montou, sem id, Bearer nem nada da conversa              | **não** no Brave; a consulta entra em `AiUsage` só como custo |
+| Capacidade                  | O que vai ao provedor                                                                        | Persistido?                                                                                                     |
+| --------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Visão — registro por foto   | a imagem do prato, reencodada em JPEG **sem EXIF**, e o prompt                               | **não**                                                                                                         |
+| Texto — chat                | a mensagem, as últimas falas da conversa, os resultados das tools lidas, as memórias, o fuso | a conversa, sim — em `Message`; ver adiante                                                                     |
+| Visão — foto no chat        | tudo o que o texto leva, mais até três fotos da mensagem, recodificadas **sem EXIF**         | **sim**, no bucket, com a conversa (ADR 038)                                                                    |
+| Transcrição — ditado (#141) | o áudio gravado e o formato dele                                                             | **não** — só a duração, como custo                                                                              |
+| Busca na web (chat)         | só o texto da consulta que o modelo montou, sem id, Bearer nem nada da conversa              | fora da retenção zero: o buscador (Exa, via OpenRouter) segue a política dele; aqui, só a contagem em `AiUsage` |
 
 A linha do chat é diferente das outras, e é por isso que ela está escrita por extenso: para
 responder "o que eu comi ontem", o modelo **precisa ver** o que a pessoa comeu ontem. O resultado

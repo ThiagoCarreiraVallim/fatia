@@ -105,6 +105,27 @@ ZERO_RETENTION_ROUTING: Mapping[str, Mapping[str, object]] = {
     "openrouter.ai": {"zdr": True, "data_collection": "deny"},
 }
 
+# A busca na web do chat: a tool de servidor do gateway, que ele executa por
+# dentro da mesma chamada — o modelo decide se e quando buscar, e o resultado
+# volta no texto do turno e em `url_citation` (medido em 2026-11-05 contra o GLM
+# 5.3 Flash, Chat Completions em stream, com `provider.zdr`).
+#
+# ⚠️ A retenção zero **não** cobre a busca: a consulta vai ao buscador (Exa, no
+# padrão do OpenRouter), que segue a política dele. A /privacy diz isso. Nada da
+# conta da pessoa vai junto — só a consulta que o modelo escreveu.
+#
+# Só no chat interno, por construção: é um campo da chamada que o agente faz ao
+# modelo, e o `/mcp` que o Claude ou o ChatGPT de alguém usa nunca o vê.
+#
+# `max_results`/`max_total_results` seguram o tamanho do contexto: cada página
+# traz milhares de caracteres, e o custo do token vem junto do custo da busca.
+WEB_SEARCH_TOOL: Mapping[str, Mapping[str, object]] = {
+    "openrouter.ai": {
+        "type": "openrouter:web_search",
+        "parameters": {"max_results": 3, "max_total_results": 6},
+    },
+}
+
 # Hosts que a **revisão de privacidade** trata como "não há terceiro": o dado não
 # sai da máquina, então não há subprocessador a declarar nem lista a consultar.
 #

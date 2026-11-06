@@ -417,12 +417,13 @@ class TracedProvider:
         *,
         tools: Sequence[dict[str, object]] = (),
         capacidade: ChatCapability = "text",
+        web_search: bool = False,
     ) -> AsyncIterator[TextDelta | ReasoningDelta | TurnEnd]:
         geracao = self._trace.generation(model=self._model, messages=messages)
         texto: list[str] = []
         try:
             async for pedaco in self._inner.stream_chat(
-                messages, tools=tools, capacidade=capacidade
+                messages, tools=tools, capacidade=capacidade, web_search=web_search
             ):
                 if isinstance(pedaco, TextDelta):
                     geracao.token()

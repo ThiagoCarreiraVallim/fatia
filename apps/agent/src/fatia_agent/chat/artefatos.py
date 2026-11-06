@@ -17,8 +17,6 @@ CAMPO_OBRIGATORIO = {
     "metric": "value",
     "timeline": "events",
     "comparison": "items",
-    # As fontes de uma busca na web (`search_web`): título, URL e domínio.
-    "sources": "sources",
 }
 
 

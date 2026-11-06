@@ -1135,6 +1135,51 @@ describe('ChatService — o que vai para o livro-caixa', () => {
     ]);
   });
 
+  it('cada busca na web do turno vira lançamento próprio, na cota da pessoa', async () => {
+    const { service, canal, uso: livro } = montar();
+
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    await respirar();
+    // Duas chamadas ao modelo no turno, cada uma com as buscas que fez lá dentro.
+    canal.emitir(uso({ model: 'm', inputUnits: 1000, outputUnits: 50, webSearches: 2 }));
+    canal.emitir(uso({ model: 'm', inputUnits: 500, outputUnits: 20, webSearches: 1 }));
+    // Torto não conta: contagem é inteira e positiva.
+    canal.emitir(uso({ model: 'm', inputUnits: 0, outputUnits: 0, webSearches: '9' }));
+    canal.emitir(uso({ model: 'm', inputUnits: 0, outputUnits: 0, webSearches: 1.5 }));
+    canal.emitir(uso({ model: 'm', inputUnits: 0, outputUnits: 0, webSearches: -2 }));
+    canal.encerrar();
+    await turno;
+
+    const lancamentos = livro.record.mock.calls.map(([, entrada]) => entrada);
+    expect(lancamentos).toContainEqual({
+      feature: 'web_search',
+      paidBy: 'INSTANCE',
+      groupId: null,
+      model: 'openrouter-web-search',
+      units: { inputUnits: 3, outputUnits: 0 },
+    });
+    // O token do modelo continua à parte, como sempre foi.
+    expect(lancamentos).toContainEqual(
+      expect.objectContaining({
+        feature: 'chat',
+        model: 'm',
+        units: { inputUnits: 1500, outputUnits: 70 },
+      }),
+    );
+  });
+
+  it('turno sem busca não ganha lançamento de busca', async () => {
+    const { service, canal, uso: livro } = montar();
+
+    const turno = service.converse(USUARIO, turnoNovo('oi'), 'tok', destinoDeTeste().destino);
+    await respirar();
+    canal.emitir(uso({ model: 'm', inputUnits: 10, outputUnits: 1 }));
+    canal.encerrar();
+    await turno;
+
+    expect(livro.record.mock.calls.map(([, e]) => e.feature)).toEqual(['chat']);
+  });
+
   it('registra o custo mesmo quando o stream quebrou — o dinheiro já saiu', async () => {
     const { service, uso: livro } = montar({
       stream: {

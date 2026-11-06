@@ -1,16 +1,12 @@
-import { Pressable, ScrollView, Text, View } from 'react-native';
-import * as Linking from 'expo-linking';
+import { ScrollView, Text, View } from 'react-native';
 import type { ChatArtifact } from '@fatia/api-client';
 import { LineChart, formatDecimal } from '@/components/charts';
 import { cn } from '@/components/ui';
 
 /**
- * O cartão de uma tool (evento `artifact`), nos formatos que o agente emite
- * (`artefatos.py`). Gráfico com o kit do app (ADR 012).
+ * O cartão de uma tool (evento `artifact`), nos quatro formatos que o agente
+ * emite (`artefatos.py`). Gráfico com o kit do app (ADR 012).
  */
-
-/** Só link da web abre: a URL vem de um buscador, e `javascript:` ou `file:` não. */
-export const ehLinkDaWeb = (url: string) => /^https?:\/\//i.test(url);
 
 const numero = (v: number) => formatDecimal(v, Number.isInteger(v) ? 0 : 1);
 
@@ -112,27 +108,6 @@ function Conteudo({ artifact }: { artifact: ChatArtifact }) {
               </Text>
             </View>
           ))}
-        </View>
-      );
-    case 'sources':
-      return (
-        <View className="gap-2">
-          {artifact.sources
-            .filter((fonte) => ehLinkDaWeb(fonte.url))
-            .map((fonte) => (
-              <Pressable
-                key={fonte.url}
-                accessibilityRole="link"
-                accessibilityLabel={`${fonte.title}, ${fonte.domain}`}
-                onPress={() => void Linking.openURL(fonte.url)}
-                className="gap-0.5 py-1"
-              >
-                <Text className="text-sm font-semibold text-primary" numberOfLines={2}>
-                  {fonte.title || fonte.domain}
-                </Text>
-                <Text className="text-xs text-muted-foreground">{fonte.domain}</Text>
-              </Pressable>
-            ))}
         </View>
       );
   }

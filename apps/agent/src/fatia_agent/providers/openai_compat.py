@@ -20,6 +20,7 @@ import httpx
 from ..allowed_models import (
     CAPABILITY_ENV_VARS,
     CAPABILITY_LABELS,
+    WEB_SEARCH_TOOL,
     ZERO_RETENTION_ROUTING,
     is_local_destination,
     unreviewed_host_reason,
@@ -40,6 +41,7 @@ from .base import (
     TurnEnd,
     Usage,
     VisionCapability,
+    WebSource,
 )
 from .errors import (
     AIEndpointNotAllowed,
@@ -141,6 +143,9 @@ class OpenAICompatProvider:
         # mandar sempre, como o header acima, quebraria o Cloudflare AI Gateway.
         # Ver `ZERO_RETENTION_ROUTING` para o que o campo garante.
         self._routing = ZERO_RETENTION_ROUTING.get(endpoint_host(base_url))
+        # A busca na web só existe onde o gateway a executa. Mandar a tool de
+        # servidor a quem não a conhece (LM Studio, OpenAI) seria um 400.
+        self._web_search_tool = WEB_SEARCH_TOOL.get(endpoint_host(base_url))
 
         self._client = httpx.AsyncClient(
             base_url=base_url,
@@ -229,8 +234,13 @@ class OpenAICompatProvider:
         *,
         tools: Sequence[dict[str, Any]] = (),
         capacidade: ChatCapability = "text",
+        web_search: bool = False,
     ) -> AsyncIterator[TextDelta | ReasoningDelta | TurnEnd]:
         """Conversa em streaming, com tools. Atende `ToolChatCapability`.
+
+        `web_search=True` oferece ao modelo a busca na web do gateway, quando ele
+        a tem (`WEB_SEARCH_TOOL`); fora dele o pedido é ignorado — o chat segue
+        sem busca, e não quebra.
 
         `capacidade="vision"` quando a conversa leva foto: o turno inteiro vai para
         `AI_MODEL_VISION`, que por isso precisa aceitar tools também.
@@ -262,8 +272,11 @@ class OpenAICompatProvider:
             # `usage`). Provedor que não o conheça ignora um campo a mais.
             "stream_options": {"include_usage": True},
         }
-        if tools:
-            payload["tools"] = list(tools)
+        catalogo = list(tools)
+        if web_search and self._web_search_tool is not None:
+            catalogo.append(dict(self._web_search_tool))
+        if catalogo:
+            payload["tools"] = catalogo
         payload = self._with_routing(payload)
         # O `chat_extra` vem por último: um `provider` declarado ali troca o roteamento
         # inteiro, e o que foi para o corpo é exatamente o que o ledger grava.
@@ -298,6 +311,7 @@ class OpenAICompatProvider:
         acumulador = _ToolCallAccumulator()
         finish_reason = "stop"
         uso: Usage | None = None
+        fontes: dict[str, WebSource] = {}
 
         try:
             async with self._client.stream("POST", "chat/completions", json=payload) as response:
@@ -349,6 +363,8 @@ class OpenAICompatProvider:
                         if isinstance(conteudo, str) and conteudo:
                             yield TextDelta(text=conteudo)
                         acumulador.absorb(delta.get("tool_calls"))
+                        for fonte in _fontes_do_delta(delta):
+                            fontes.setdefault(fonte.url, fonte)
 
                     razao = bloco.get("finish_reason")
                     if isinstance(razao, str):
@@ -373,7 +389,12 @@ class OpenAICompatProvider:
                 f"O modelo '{model}' parou por limite de tokens; a resposta veio pela metade."
             )
 
-        yield TurnEnd(tool_calls=acumulador.result(), finish_reason=finish_reason, usage=uso)
+        yield TurnEnd(
+            tool_calls=acumulador.result(),
+            finish_reason=finish_reason,
+            usage=uso,
+            sources=tuple(fontes.values()),
+        )
 
     async def transcribe(self, audio: bytes, *, media_type: str) -> Transcription:
         """Áudio → texto, pelo `/audio/transcriptions` do contrato OpenAI. Atende a #141.
@@ -752,7 +773,35 @@ def _uso_do_fragmento(fragmento: dict[str, Any], *, padrao: str) -> Usage | None
         cached_input_units=_detalhe(uso, "prompt_tokens_details", "cached_tokens"),
         reasoning_units=_detalhe(uso, "completion_tokens_details", "reasoning_tokens"),
         cost_usd=_numero(uso.get("cost")),
+        # A documentação do OpenRouter usa os dois nomes; o medido foi o primeiro.
+        web_searches=_detalhe(uso, "server_tool_use_details", "web_search_requests")
+        or _detalhe(uso, "server_tool_use", "web_search_requests"),
     )
+
+
+def _fontes_do_delta(delta: dict[str, Any]) -> list[WebSource]:
+    """As `url_citation` do delta — onde o OpenRouter as manda, medido em stream.
+
+    Só `http(s)`: a URL vira link na tela, e um `javascript:` vindo de uma página
+    qualquer da web não pode chegar lá. Anotação torta é ignorada, como o `usage`
+    torto: fonte é enfeite da resposta, não motivo para derrubá-la.
+    """
+    anotacoes = delta.get("annotations")
+    if not isinstance(anotacoes, list):
+        return []
+    fontes: list[WebSource] = []
+    for anotacao in anotacoes:
+        if not isinstance(anotacao, dict) or anotacao.get("type") != "url_citation":
+            continue
+        citacao = anotacao.get("url_citation")
+        if not isinstance(citacao, dict):
+            continue
+        url = citacao.get("url")
+        if not isinstance(url, str) or not url.startswith(("https://", "http://")):
+            continue
+        titulo = citacao.get("title")
+        fontes.append(WebSource(url=url, title=titulo if isinstance(titulo, str) else ""))
+    return fontes
 
 
 def _detalhe(uso: dict[str, Any], bloco: str, campo: str) -> int | None:

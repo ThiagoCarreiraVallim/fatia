@@ -127,26 +127,6 @@ O campo **não** vai no fio: ele fica fora de `annotations` de propósito — é
 custo, não anotação da spec, e não tem por que gastar contexto do cliente. Há caso de teste
 dedicado a impedir que ele volte para lá.
 
-### Tools só do agente da Fatia
-
-Algumas tools existem só para o chat hospedado e **não** aparecem para quem conecta o `/mcp` com
-o Claude, o ChatGPT ou outro cliente: declaram `agentOnly`, e o `/mcp` só as registra quando o
-pedido traz o header `x-fatia-agent-key` igual ao `AGENT_API_KEY` da instância — o mesmo segredo
-que a API já manda ao agente. O header não autentica ninguém: quem a pessoa é continua vindo do
-Bearer, e toda tool amarra o `userId` por ele.
-
-Hoje é uma só, a busca na web (`search_web`, `apps/api/src/search/`). Ela é a exceção à seção
-acima: cada chamada é uma consulta paga ao Brave Search, e por isso `hostedInference: true`, na
-lista `HOSTED_INFERENCE_TOOLS`. O que a torna aceitável é o recorte — o cliente externo já busca
-na web sozinho e nunca a recebe — e quem paga: antes de cada consulta a tool confere o plano e a
-cota de IA da pessoa, e depois lança a consulta em `AiUsage` (`feature: web_search`,
-`model: brave-search`), que conta na mesma cota diária do chat. Sem `BRAVE_SEARCH_API_KEY`, ela
-responde 503 nomeado e o chat segue.
-
-Por ficarem fora do catálogo que todo cliente recebe, essas tools não entram nas contagens desta
-página nem nos hashes do eval da fronteira; o spec de catálogo as cobre pela lista de todas as
-tools do código.
-
 ### Exemplo de invocação
 
 Toda tool de **escrita** (`readOnlyHint: false`) termina a `description` com uma chamada

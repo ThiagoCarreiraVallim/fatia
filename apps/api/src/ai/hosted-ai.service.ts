@@ -12,7 +12,15 @@ import {
 } from './agent.adapter';
 
 /** O que vai em `AiUsage.feature`. */
-type AiFeature = 'chat' | 'chat_title' | 'transcription' | 'meal_photo';
+type AiFeature = 'chat' | 'chat_title' | 'transcription' | 'meal_photo' | 'web_search';
+
+/**
+ * O nome da busca na web do chat no `AI_PRICE_TABLE`: o preço de **uma** busca vai
+ * em `in`, na escala da tabela (micro-dólares por milhão de unidades). A busca é a
+ * tool de servidor do OpenRouter, que o modelo chama dentro da própria chamada —
+ * ver `WEB_SEARCH_TOOL` no agente.
+ */
+export const WEB_SEARCH_MODEL = 'openrouter-web-search';
 
 /**
  * A IA hospedada, num lugar só: **portão de plano e cota → quem paga → agente →
@@ -148,7 +156,15 @@ export class HostedTurn {
    * Turno sem nenhum `usage` vira um lançamento **não medido**, e não nenhum:
    * um turno caro não pode entrar como grátis.
    */
-  async finish(usageByModel: ReadonlyMap<string, AiCallUnits>): Promise<void> {
+  async finish(usageByModel: ReadonlyMap<string, AiCallUnits>, webSearches = 0): Promise<void> {
+    // A busca é cobrada da pessoa pela mesma cota do turno (decisão de 2026-11-05),
+    // num lançamento próprio: a margem por recurso separa conversa de busca.
+    if (webSearches > 0) {
+      await this.recordUsage('web_search', WEB_SEARCH_MODEL, {
+        inputUnits: webSearches,
+        outputUnits: 0,
+      });
+    }
     if (usageByModel.size === 0) {
       await this.recordUsage('chat', null, {});
       return;

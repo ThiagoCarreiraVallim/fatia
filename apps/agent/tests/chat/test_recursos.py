@@ -86,13 +86,6 @@ def test_artefato_desconhecido_vira_relatorio_e_incompleto_nao_vira_nada():
     assert artefato({"kind": "metric", "value": 0}) == {"kind": "metric", "value": 0}
 
 
-def test_fontes_da_busca_passam_inteiras_e_sem_lista_nao_viram_cartao():
-    fontes = {"kind": "sources", "sources": [{"title": "t", "url": "https://x", "domain": "x"}]}
-    assert artefato(fontes) == fontes
-    # Sem a lista, não é relatório: viraria cartão vazio com cara de tabela.
-    assert artefato({"kind": "sources"}) is None
-
-
 async def test_o_planejador_desligado_nao_gasta_chamada(settings_factory):
     r = await turno(settings_factory, [[fragmento_de_texto("ok")]])
     assert len(r.provider.corpos) == 1

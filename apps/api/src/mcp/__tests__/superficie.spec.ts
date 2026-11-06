@@ -122,7 +122,7 @@ describe('superfície do /mcp', () => {
 
     it('com a flag desligada, o controller responde 400 antes de abrir o servidor MCP', async () => {
       const registry = { intencaoHabilitada: () => false } as unknown as McpToolRegistry;
-      const controller = new McpController(registry, config({}) as never);
+      const controller = new McpController(registry);
       const req = { headers: { [HEADER_SUPERFICIE]: 'intencao' } } as unknown as Request;
       await expect(
         controller.handle(req, {} as Response, { id: 'u', timezone: 'UTC' } as never),
@@ -143,25 +143,8 @@ describe('superfície do /mcp', () => {
       ]);
     });
 
-    it('a tool só do agente fica fora do catálogo de quem conecta o /mcp', () => {
-      const soDoAgente = todas.filter((t) => t.agentOnly).map((t) => t.name);
-      expect(soDoAgente).toEqual(['search_web']);
-      expect(entidade.some((t) => soDoAgente.includes(t.name))).toBe(false);
-      expect(intencao.some((t) => soDoAgente.includes(t.name))).toBe(false);
-    });
-
-    it('com a chave do agente, a de entidade ganha as tools só do agente e nada mais', async () => {
-      const doAgente = await catalogoServido('entidade', registry, { agente: true });
-      const extras = doAgente
-        .map((t) => t.name)
-        .filter((nome) => !entidade.some((t) => t.name === nome));
-      expect(extras).toEqual(['search_web']);
-    });
-
     it('sem header, serve o braço A de sempre — mesmo sha256 da linha de base', () => {
-      expect(entidade).toHaveLength(
-        todas.filter((t) => t.surface === undefined && !t.agentOnly).length,
-      );
+      expect(entidade).toHaveLength(todas.filter((t) => t.surface === undefined).length);
       expect(entidade.some((t) => INTENT_TOOLS.some((i) => i.name === t.name))).toBe(false);
       expect(shaDoCatalogo(entidade)).toBe(SHA_ENTIDADE);
     });

@@ -89,6 +89,18 @@ class Usage:
     # LM Studio não manda, e o `apps/api` continua calculando pela tabela de preço:
     # isto é só para o eval.
     cost_usd: float | None = None
+    # Quantas buscas na web o gateway fez dentro da chamada
+    # (`usage.server_tool_use_details.web_search_requests` do OpenRouter). Cada
+    # uma é cobrada à parte do token, e o `apps/api` lança cada uma na cota.
+    web_searches: int | None = None
+
+
+@dataclass(frozen=True)
+class WebSource:
+    """Uma página que a busca na web do gateway trouxe (`url_citation`)."""
+
+    url: str
+    title: str
 
 
 @dataclass(frozen=True)
@@ -99,6 +111,8 @@ class TurnEnd:
     finish_reason: str = "stop"
     # `None` quando o provedor não mandou bloco de `usage`. Ver `Usage`.
     usage: Usage | None = None
+    # As páginas da busca na web, na ordem em que chegaram e sem repetir URL.
+    sources: tuple[WebSource, ...] = ()
 
 
 @runtime_checkable
@@ -119,6 +133,7 @@ class ToolChatCapability(Protocol):
         *,
         tools: Sequence[dict[str, object]] = (),
         capacidade: ChatCapability = "text",
+        web_search: bool = False,
     ) -> AsyncIterator[TextDelta | ReasoningDelta | TurnEnd]: ...
 
 

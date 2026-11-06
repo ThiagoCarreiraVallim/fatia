@@ -105,13 +105,6 @@ export interface McpToolDef<S extends ZodRawShape = ZodRawShape> {
   surface?: McpSurface;
   /** Tool de intenção: as tools de entidade cujas pernas o `execute` percorre. */
   compoe?: readonly string[];
-  /**
-   * Servida só ao agente da Fatia — o `/mcp` a registra apenas quando o pedido
-   * traz `x-fatia-agent-key` igual ao `AGENT_API_KEY` da instância. Fica fora do
-   * catálogo de todo cliente externo, das contagens das docs e dos hashes do
-   * eval. É o caso de `search_web`: o Claude de quem conecta já busca na web.
-   */
-  agentOnly?: true;
 }
 
 export const MCP_TOOL_METADATA = 'mcp:tool';

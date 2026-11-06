@@ -230,6 +230,7 @@ def usage(
     cached_input_units: int | None = None,
     reasoning_units: int | None = None,
     cost_usd: float | None = None,
+    web_searches: int | None = None,
 ) -> ChatEvent:
     """O que uma chamada ao modelo consumiu, para a cota do `apps/api` (#135).
 
@@ -251,6 +252,10 @@ def usage(
         dados["reasoningUnits"] = reasoning_units
     if cost_usd is not None:
         dados["costUsd"] = cost_usd
+    # Este o `leitor-do-turno.ts` lê: cada busca na web é um lançamento à parte
+    # na cota, com o preço dela, e não token do modelo.
+    if web_searches:
+        dados["webSearches"] = web_searches
     return ChatEvent("usage", dados)
 
 

@@ -12,7 +12,6 @@ import { IntentToolsModule } from './intent/intent-tools.module';
 import { SuperficieDeIntencao } from './intent/superficie';
 import { GetMeTool } from './tools/meta/get-me.tool';
 import { UpdateTimezoneTool } from './tools/meta/update-timezone.tool';
-import { SearchModule } from '../search/search.module';
 import { UpdateMeTool } from './tools/meta/update-me.tool';
 
 @Module({
@@ -24,7 +23,6 @@ import { UpdateMeTool } from './tools/meta/update-me.tool';
     GoalsModule,
     ObservabilityModule,
     IntentToolsModule,
-    SearchModule,
   ],
   controllers: [McpController],
   providers: [

@@ -57,8 +57,10 @@ describe('política de privacidade — foto do chat guardada (ADR 038)', () => {
     render(<PrivacyPage />);
 
     const terceiros = secao('Com quem compartilhamos');
-    expect(terceiros).toMatch(/Brave Search/);
+    expect(terceiros).toMatch(/Exa, pelo OpenRouter/);
     expect(terceiros).toMatch(/só o texto da busca/i);
+    // A retenção zero não cobre o buscador, e a página não pode sugerir o contrário.
+    expect(terceiros).toMatch(/fora da retenção zero/i);
   });
 
   it('nomeia quem guarda o arquivo', () => {

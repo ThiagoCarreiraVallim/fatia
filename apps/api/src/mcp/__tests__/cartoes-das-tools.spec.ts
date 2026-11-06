@@ -4,7 +4,6 @@ import { GetNutritionSummaryTool } from '../../nutrition/mcp/get-nutrition-summa
 import { LogMealTool } from '../../nutrition/mcp/log-meal.tool';
 import { SearchFoodTool } from '../../nutrition/mcp/search-food.tool';
 import { LogWeightTool } from '../../progress/mcp/log-weight.tool';
-import { SearchWebTool } from '../../search/mcp/search-web.tool';
 import { GetActiveWorkoutSessionTool } from '../../workout/mcp/get-active-workout-session.tool';
 import { LogSetTool } from '../../workout/mcp/log-set.tool';
 import { SearchExerciseTool } from '../../workout/mcp/search-exercise.tool';
@@ -42,8 +41,8 @@ function aceitoPeloAgente(carga: Record<string, unknown> | null | undefined) {
 }
 
 describe('cartões das tools do chat', () => {
-  it('lê a lista de formatos do agente, com o de fontes', () => {
-    expect(CAMPOS).toMatchObject({ report: 'columns', metric: 'value', sources: 'sources' });
+  it('lê a lista de formatos do agente', () => {
+    expect(CAMPOS).toMatchObject({ report: 'columns', metric: 'value', comparison: 'items' });
   });
 
   it('as tools mais usadas têm cartão', () => {
@@ -63,7 +62,6 @@ describe('cartões das tools do chat', () => {
         'log_weight',
         'search_exercise',
         'search_food',
-        'search_web',
       ].sort(),
     );
   });
@@ -168,31 +166,5 @@ describe('cartões das tools do chat', () => {
 
     aceitoPeloAgente(carga);
     expect(carga).toMatchObject({ kind: 'metric', value: 78.4, unit: 'kg' });
-  });
-
-  it('search_web: cada resultado vira fonte com o domínio, sem o www', () => {
-    const carga = new SearchWebTool(nada, nada, nada).artifact({
-      query: 'creatina',
-      results: [
-        {
-          title: 'Creatina: o que diz a ciência',
-          url: 'https://www.exemplo.com.br/creatina',
-          description: '…',
-          date: '2026-04-14T00:00:00',
-        },
-        { title: 'Sem data', url: 'https://outro.org/x', description: '…' },
-      ],
-    });
-
-    aceitoPeloAgente(carga);
-    expect(carga.sources).toEqual([
-      {
-        title: 'Creatina: o que diz a ciência',
-        url: 'https://www.exemplo.com.br/creatina',
-        domain: 'exemplo.com.br',
-        date: '2026-04-14T00:00:00',
-      },
-      { title: 'Sem data', url: 'https://outro.org/x', domain: 'outro.org' },
-    ]);
   });
 });

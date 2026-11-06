@@ -93,6 +93,7 @@ from .errors import (
     McpToolRejected,
     McpUnreachable,
 )
+from .fontes import linha_de_fontes
 from .planejador import com_status, planejar
 from .qualidade import (
     MAX_REFLEXOES,
@@ -498,7 +499,12 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
         texto: list[str] = []
         fim: TurnEnd | None = None
         async for pedaco in contexto.provider.stream_chat(
-            prompt, tools=catalogo, capacidade="vision" if contexto.fotos else "text"
+            prompt,
+            tools=catalogo,
+            capacidade="vision" if contexto.fotos else "text",
+            # A busca vai junto do catálogo: na volta que encerra o turno, sem
+            # tool nenhuma, também não há busca.
+            web_search=bool(catalogo),
         ):
             if isinstance(pedaco, ReasoningDelta):
                 # Só para a tela: o raciocínio não entra em `texto`, então não vai
@@ -529,8 +535,18 @@ def montar_grafo(checkpointer: BaseCheckpointSaver[str] | None) -> GrafoDaConver
                             cached_input_units=pedaco.usage.cached_input_units,
                             reasoning_units=pedaco.usage.reasoning_units,
                             cost_usd=pedaco.usage.cost_usd,
+                            web_searches=pedaco.usage.web_searches,
                         )
                     )
+
+        # As páginas da busca na web viram uma linha de links no fim da resposta.
+        # No texto, e não num cartão: é o texto que fica gravado, então as fontes
+        # voltam com a conversa depois de reabrir — e nenhum cartão precisa de
+        # uma chamada de tool para se pendurar, que esta busca não tem.
+        if fim is not None and fim.sources:
+            linha = linha_de_fontes(fim.sources)
+            texto.append(linha)
+            writer(events.Fragmento(AIMessageChunk(content=linha, id=identificador), "agente"))
 
         validas: list[dict[str, Any]] = []
         invalidas: list[dict[str, Any]] = []

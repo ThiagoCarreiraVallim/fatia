@@ -7,17 +7,12 @@ import { CurrentUser, type CurrentUserPayload } from '../common/decorators/curre
 import { McpThrottlerGuard } from './mcp-throttler.guard';
 import { McpToolRegistry } from './mcp-tool.registry';
 import { HEADER_SUPERFICIE, superficieDoHeader } from './intent/superficie';
-import { ConfigService } from '@nestjs/config';
-import { HEADER_DO_AGENTE, ehOAgente } from './agente';
 
 @UseGuards(McpThrottlerGuard)
 @Throttle({ default: { ttl: 60_000, limit: 60 } })
 @Controller('mcp')
 export class McpController {
-  constructor(
-    private readonly registry: McpToolRegistry,
-    private readonly config: ConfigService,
-  ) {}
+  constructor(private readonly registry: McpToolRegistry) {}
 
   @All()
   async handle(@Req() req: Request, @Res() res: Response, @CurrentUser() user: CurrentUserPayload) {
@@ -33,13 +28,7 @@ export class McpController {
       { name: 'fatia-mcp', version: '0.1.0' },
       { capabilities: { tools: {} } },
     );
-    const agente = ehOAgente(
-      req.headers[HEADER_DO_AGENTE],
-      this.config.get<string>('AGENT_API_KEY', ''),
-    );
-    this.registry.bindAll(server, { userId: user.id, timezone: user.timezone }, superficie, {
-      agente,
-    });
+    this.registry.bindAll(server, { userId: user.id, timezone: user.timezone }, superficie);
 
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     res.on('close', () => {

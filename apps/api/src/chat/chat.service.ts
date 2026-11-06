@@ -333,7 +333,7 @@ export class ChatService {
       this.logger.error(`Falha ao gravar a resposta do chat: ${(erro as Error).name}`);
     }
     // Sempre, inclusive quando o stream quebrou: o dinheiro já saiu.
-    await hosted.finish(turno.usoPorModelo);
+    await hosted.finish(turno.usoPorModelo, turno.buscasNaWeb);
     return linha;
   }
 }
