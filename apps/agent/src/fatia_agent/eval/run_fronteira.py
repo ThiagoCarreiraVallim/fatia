@@ -139,7 +139,38 @@ class ConfiguracaoRecusada(Exception):
     """A rodada não começa — ou para: o número sairia medindo outra coisa."""
 
 
-class McpSemDestrutivas(McpClient):
+class McpDoEval(McpClient):
+    """O `McpClient` do eval, que lembra a falha de infraestrutura do `/mcp`.
+
+    O grafo do produto devolve ao modelo a falha passageira do `/mcp` (rede,
+    timeout, 429/5xx), para ele tentar de novo sem derrubar o turno. No eval isso
+    esconderia o problema: a execução seguiria e a nota do modelo carregaria a
+    falha da nossa infraestrutura. Por isso o cliente registra a falha, e o
+    runner a trata como erro da execução — que para a rodada, como antes.
+    """
+
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        bearer: str,
+        transport: httpx.AsyncBaseTransport | None = None,
+        headers: Mapping[str, str] | None = None,
+    ) -> None:
+        super().__init__(base_url=base_url, bearer=bearer, transport=transport, headers=headers)
+        self.falhas_de_infra: list[str] = []
+
+    async def call_tool(
+        self, name: str, arguments: dict[str, Any], *, read_only: bool = False
+    ) -> McpToolResult:
+        try:
+            return await super().call_tool(name, arguments, read_only=read_only)
+        except McpError as exc:
+            self.falhas_de_infra.append(f"{exc.code}: {exc.message}")
+            raise
+
+
+class McpSemDestrutivas(McpDoEval):
     """O `McpClient` do braço C: tool com `destructiveHint` não sai daqui.
 
     O resto passa igual, inclusive o que a política de três camadas deixaria de fora
@@ -386,10 +417,10 @@ async def executar(
     fuso = str(perfil.get("timezone") or "America/Sao_Paulo")
     hoje = datetime.now(ZoneInfo(fuso)).date()
 
-    cliente = McpSemDestrutivas if cru else McpClient
-    async with cliente(
+    cliente = (McpSemDestrutivas if cru else McpDoEval)(
         base_url=mcp_url, bearer=bearer, headers=headers, transport=transport
-    ) as client:
+    )
+    async with cliente as client:
         catalogo = await client.list_tools()
         if isinstance(client, McpSemDestrutivas):
             client.armar(catalogo)
@@ -521,6 +552,8 @@ async def executar(
             aprovacoes += "confirm" in tipos
 
         segundos = time.monotonic() - inicio
+        if erro is None and cliente.falhas_de_infra:
+            erro = cliente.falhas_de_infra[0]
 
     execucao = Execucao(
         tarefa=tarefa.id,
