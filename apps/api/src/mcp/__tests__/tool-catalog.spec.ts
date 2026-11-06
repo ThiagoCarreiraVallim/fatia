@@ -873,13 +873,18 @@ describe.each(SUPERFICIES)('catálogo servido na superfície %s', (superficie) =
    * (cujo default é o oposto — capacidade que custa inferência não se expõe
    * pelo MCP; o cliente traz o resultado pronto, como `log_meal` já faz).
    */
-  const HOSTED_INFERENCE_TOOLS = new Set<string>();
+  const HOSTED_INFERENCE_TOOLS = new Set<string>([
+    // A busca na web: cada chamada é uma consulta paga ao Brave. Só o agente da
+    // Fatia a recebe (`agentOnly`), e a consulta entra na cota de IA da pessoa
+    // (`search-web.tool.ts`). Cliente externo nunca a vê — o Claude dele já busca.
+    'search_web',
+  ]);
 
   it('classifica toda tool quanto a inferência hospedada', () => {
     // Campo ausente é o modo de falha que interessa: tool nova entra sem
     // ninguém pensar no assunto, e `undefined` não é `true` — passaria batido
     // no caso seguinte. Aqui ele é erro, não omissão tolerada.
-    const missing = tools
+    const missing = todas
       .filter(({ tool }) => typeof tool.hostedInference !== 'boolean')
       .map(({ tool }) => tool.name)
       .sort();
@@ -887,8 +892,20 @@ describe.each(SUPERFICIES)('catálogo servido na superfície %s', (superficie) =
     expect(missing).toEqual([]);
   });
 
+  it('a tool que custa e não é só do agente precisa de decisão própria', () => {
+    // A exceção de `search_web` vale porque o cliente externo não a recebe. Uma
+    // tool paga servida a todo cliente é o caso da ADR 018, e não este.
+    const pagasDeTodos = todas
+      .filter(({ tool }) => tool.hostedInference === true && !tool.agentOnly)
+      .map(({ tool }) => tool.name);
+
+    expect(pagasDeTodos).toEqual([]);
+  });
+
   it('não deixa tool disparar inferência paga pela Fatia sem decisão explícita', () => {
-    const undeclared = tools
+    // `todas`, e não só o catálogo de entidade: a tool `agentOnly` fica fora do que
+    // as docs contam, mas custa do mesmo jeito.
+    const undeclared = todas
       .filter(({ tool }) => tool.hostedInference === true)
       .map(({ tool }) => tool.name)
       .filter((name) => !HOSTED_INFERENCE_TOOLS.has(name))
@@ -900,7 +917,7 @@ describe.each(SUPERFICIES)('catálogo servido na superfície %s', (superficie) =
     // ou tool que voltou a ser `false` — deixaria uma permissão pendurada,
     // pronta para cobrir a próxima tool que se chamasse assim.
     const stale = [...HOSTED_INFERENCE_TOOLS]
-      .filter((name) => !tools.some(({ tool }) => tool.name === name && tool.hostedInference))
+      .filter((name) => !todas.some(({ tool }) => tool.name === name && tool.hostedInference))
       .sort();
 
     expect(stale).toEqual([]);

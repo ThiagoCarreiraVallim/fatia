@@ -71,12 +71,15 @@ export function registryDeTeste(tools: McpToolDef[] = carregarTools()): McpToolR
 export async function catalogoServido(
   superficie: McpSurface,
   registry: McpToolRegistry = registryDeTeste(),
+  { agente = false }: { agente?: boolean } = {},
 ): Promise<ToolServida[]> {
   const server = new McpServer(
     { name: 'fatia-mcp', version: '0.1.0' },
     { capabilities: { tools: {} } },
   );
-  registry.bindAll(server, { userId: 'catalogo', timezone: 'America/Sao_Paulo' }, superficie);
+  registry.bindAll(server, { userId: 'catalogo', timezone: 'America/Sao_Paulo' }, superficie, {
+    agente,
+  });
   const [lado, outro] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: 'catalogo-servido', version: '0' });
   await Promise.all([server.connect(lado), client.connect(outro)]);

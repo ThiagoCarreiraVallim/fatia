@@ -32,11 +32,17 @@ export function superficieDoHeader(valor: string | string[] | undefined): McpSur
 /**
  * Na superfície de entidade, toda tool que não é de intenção. Na de intenção, as de
  * intenção e as de entidade que o contrato declara iguais nos dois braços.
+ *
+ * Tool `agentOnly` só entra na de entidade, e só quando quem pede é o agente da
+ * Fatia (`agente`). Sem isso ela não existe — nem para o cliente externo, nem para
+ * as contagens e os hashes que leem o catálogo de entidade.
  */
 export function servidaNa(
-  tool: Pick<McpToolDef, 'name' | 'annotations' | 'surface'>,
+  tool: Pick<McpToolDef, 'name' | 'annotations' | 'surface' | 'agentOnly'>,
   superficie: McpSurface,
+  { agente = false }: { agente?: boolean } = {},
 ): boolean {
+  if (tool.agentOnly) return superficie === 'entidade' && agente;
   const propria = tool.surface ?? 'entidade';
   if (superficie === 'entidade') return propria === 'entidade';
   return propria === 'intencao' || isSharedWithIntentSurface(tool);

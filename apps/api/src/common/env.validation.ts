@@ -101,6 +101,14 @@ export const AppEnvSchema = z.object({
   // pública por natureza.
   ASAAS_WEBHOOK_TOKEN: z.string().optional().or(z.literal('')),
 
+  // Busca na web do chat hospedado (`search_web`, só para o agente). Vazio = a
+  // tool responde 503 nomeado e o resto do chat segue.
+  BRAVE_SEARCH_API_KEY: z.string().optional().or(z.literal('')),
+  // Segredo compartilhado com o agente: a API o manda ao agente e o reconhece
+  // vindo dele no `/mcp` (`x-fatia-agent-key`), para servir as tools só do
+  // agente. Vazio = nenhuma tool `agentOnly` é servida.
+  AGENT_API_KEY: z.string().optional().or(z.literal('')),
+
   // Plano Free/PRO (ADR 024). `false` (padrão) = a IA hospedada vale para todo
   // mundo, que é o certo para instância auto-hospedada: quem roda o próprio
   // modelo não tem o que vender. A instância pública liga com `true`, e aí só

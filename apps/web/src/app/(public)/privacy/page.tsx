@@ -303,6 +303,11 @@ export default function PrivacyPage() {
             publicadas nas comunidades. Guarda o arquivo, sem seu nome nem e-mail junto.
           </li>
           <li>
+            <strong>Brave Search</strong> — quando o assistente do chat busca algo na web, recebe só
+            o texto da busca que ele montou. Não recebe seu nome, e-mail, nem nada da sua conta ou
+            da conversa além dessa frase.
+          </li>
+          <li>
             <strong>Asaas</strong> — processa a assinatura do PRO feita pela web. Recebe nome,
             e-mail e CPF para emitir a cobrança, e os dados de pagamento você informa direto a ele.
             Não recebe seus dados de saúde.

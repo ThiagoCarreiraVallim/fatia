@@ -70,6 +70,8 @@ services:
       ASAAS_BASE_URL: ${ASAAS_BASE_URL:-}
       ASAAS_API_KEY: ${ASAAS_API_KEY:-}
       ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:-}
+      # Busca na web do chat (search_web). Vazio = a tool responde 503.
+      BRAVE_SEARCH_API_KEY: ${BRAVE_SEARCH_API_KEY:-}
       # RevenueCat (compra no app). Vazio = webhook e sync respondem 503.
       REVENUECAT_WEBHOOK_AUTH: ${REVENUECAT_WEBHOOK_AUTH:-}
       REVENUECAT_SECRET_KEY: ${REVENUECAT_SECRET_KEY:-}

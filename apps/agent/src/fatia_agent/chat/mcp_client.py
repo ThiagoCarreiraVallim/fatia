@@ -77,6 +77,10 @@ class McpToolInfo:
     title: str = ""
 
 
+# O header com que o agente se apresenta ao `/mcp` (`apps/api/src/mcp/agente.ts`).
+HEADER_DO_AGENTE = "x-fatia-agent-key"
+
+
 class McpClient:
     """Fala JSON-RPC com o `/mcp`. Uma instância por conversa, um Bearer por instância."""
 
@@ -244,11 +248,16 @@ def build_mcp_client(
     if motivo is not None:
         raise McpNotConfigured(motivo)
 
+    # A chave do agente vai ao `/mcp` para a API servir as tools que só o agente da
+    # Fatia recebe (`agentOnly`, como `search_web`). Ela não autentica a pessoa —
+    # quem ela é continua sendo o Bearer.
+    chave = settings.agent_api_key.strip()
     return McpClient(
         base_url=settings.mcp_base_url,
         bearer=bearer,
         timeout_s=settings.mcp_timeout_s,
         transport=transport,
+        headers={HEADER_DO_AGENTE: chave} if chave else None,
     )
 
 

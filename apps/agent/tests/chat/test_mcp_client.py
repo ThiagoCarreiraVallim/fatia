@@ -352,3 +352,34 @@ def test_o_token_nao_aparece_na_mensagem_de_erro_de_configuracao(settings_factor
         )
 
     assert "segredo-do-token" not in excinfo.value.message
+
+
+async def test_a_chave_do_agente_vai_ao_mcp_e_o_bearer_continua_o_da_pessoa(settings_factory):
+    # É com ela que a API serve as tools só do agente (`search_web`); quem a pessoa
+    # é continua vindo do Bearer.
+    transporte = duplo_do_mcp(catalogo=[])
+    cliente_montado = build_mcp_client(
+        settings_factory(mcp_base_url="http://api:3000/mcp", agent_api_key="chave-do-agente"),
+        bearer=TOKEN,
+        transport=transporte,
+    )
+    async with cliente_montado:
+        await cliente_montado.list_tools()
+
+    (pedido,) = transporte.requests
+    assert pedido.headers["x-fatia-agent-key"] == "chave-do-agente"
+    assert pedido.headers["authorization"] == f"Bearer {TOKEN}"
+
+
+async def test_sem_chave_configurada_o_header_nao_sai(settings_factory):
+    transporte = duplo_do_mcp(catalogo=[])
+    cliente_montado = build_mcp_client(
+        settings_factory(mcp_base_url="http://api:3000/mcp", agent_api_key=""),
+        bearer=TOKEN,
+        transport=transporte,
+    )
+    async with cliente_montado:
+        await cliente_montado.list_tools()
+
+    (pedido,) = transporte.requests
+    assert "x-fatia-agent-key" not in pedido.headers

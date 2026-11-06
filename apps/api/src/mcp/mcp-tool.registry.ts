@@ -79,13 +79,20 @@ export class McpToolRegistry implements OnModuleInit {
    * de intenção nunca é o que o produto executa.
    */
   buscar(nome: string): McpToolDef | undefined {
-    return this.tools.find((tool) => tool.name === nome && servidaNa(tool, 'entidade'));
+    return this.tools.find(
+      (tool) => tool.name === nome && servidaNa(tool, 'entidade', { agente: true }),
+    );
   }
 
-  /** Nome → título em português, o mesmo que o `tools/list` de entidade anuncia. */
+  /**
+   * Nome → título em português, o mesmo que o `tools/list` de entidade anuncia ao
+   * agente — com as `agentOnly`, que o chat hospedado também mostra na tela.
+   */
   titulos(): Record<string, string> {
     return Object.fromEntries(
-      this.tools.filter((tool) => servidaNa(tool, 'entidade')).map((t) => [t.name, t.title]),
+      this.tools
+        .filter((tool) => servidaNa(tool, 'entidade', { agente: true }))
+        .map((t) => [t.name, t.title]),
     );
   }
 
@@ -93,11 +100,16 @@ export class McpToolRegistry implements OnModuleInit {
    * Registra no servidor da requisição as tools da `superficie` pedida. É o mesmo ponto em
    * que só entra o que a pessoa pode chamar: tool fora do recorte não existe para o modelo.
    */
-  bindAll(server: McpServer, ctx: McpToolContext, superficie: McpSurface = 'entidade'): void {
+  bindAll(
+    server: McpServer,
+    ctx: McpToolContext,
+    superficie: McpSurface = 'entidade',
+    { agente = false }: { agente?: boolean } = {},
+  ): void {
     if (superficie === 'intencao' && !this.intencaoHabilitada()) {
       throw new Error('Superfície de intenção pedida com MCP_SUPERFICIE_INTENCAO desligada.');
     }
-    for (const tool of this.tools.filter((t) => servidaNa(t, superficie))) {
+    for (const tool of this.tools.filter((t) => servidaNa(t, superficie, { agente }))) {
       // O type signature de registerTool gera type-instantiation explosivo;
       // contornamos com cast localizado (mesmo padrão do registry antigo).
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
