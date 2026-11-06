@@ -1,3 +1,4 @@
+import type { MediaService } from '../../storage/media.service';
 import { BadRequestException, ConflictException, Logger, NotFoundException } from '@nestjs/common';
 import { MessageRole } from '@prisma/client';
 import { AiQuotaExceededException } from '../../ai/ai-quota';
@@ -156,6 +157,8 @@ function montar(
     agentGroupId?: string | null;
     /** As comunidades com agente que esta pessoa pode escolher, e o padrão. */
     agentes?: { padrao: string | null; disponiveis: string[] };
+    /** Fotos guardadas desta pessoa (ADR 038): id → base64 do JPEG. */
+    fotosGuardadas?: Record<string, string>;
   } = {},
 ) {
   const canal = canalDoAgente();
@@ -181,7 +184,14 @@ function montar(
     ),
     clearPauses: jest.fn(async (_userId: string, _id: string): Promise<void> => undefined),
     iniciarTurno: jest.fn(
-      async (_u: string, id: string, _t: string, _f?: number, _a?: string | null) => ({
+      async (
+        _u: string,
+        id: string,
+        _t: string,
+        _f?: number,
+        _a?: string | null,
+        _ids?: string[],
+      ) => ({
         conversationId: id,
       }),
     ),
@@ -253,6 +263,16 @@ function montar(
     ),
   } satisfies Partial<GroupAgentService>;
 
+  const guardadas = opcoes.fotosGuardadas ?? {};
+  const midia = {
+    chatPhotosForTurn: jest.fn(async (_userId: string, ids: string[]) =>
+      ids.map((id) => {
+        if (!(id in guardadas)) throw new NotFoundException('Foto não encontrada.');
+        return { mediaType: 'image/jpeg' as const, data: guardadas[id] };
+      }),
+    ),
+  } satisfies Partial<MediaService>;
+
   const runs = new ChatRunRegistry();
   const avisos = { notify: jest.fn((_ids: readonly string[], _notice: Notice) => undefined) };
   const hostedAi = new HostedAiService(acesso, uso as unknown as AiUsageService, agent);
@@ -264,6 +284,7 @@ function montar(
     agentes as unknown as GroupAgentService,
     runs,
     avisos as unknown as NotificationService,
+    midia as unknown as MediaService,
   );
 
   return {
@@ -273,6 +294,7 @@ function montar(
     uso,
     canal,
     agentes,
+    midia,
     runs,
     avisos,
     chamadasAoAgente: chamadas,
@@ -625,7 +647,95 @@ describe('ChatService — ordem das guardas', () => {
 
     expect(chamadasAoAgente[0].history).toEqual([]);
     expect(conversas.historicoParaOAgente).not.toHaveBeenCalled();
-    expect(conversas.iniciarTurno).toHaveBeenCalledWith('user-a', CONVERSA, 'oi', 0, null);
+    expect(conversas.iniciarTurno).toHaveBeenCalledWith('user-a', CONVERSA, 'oi', 0, null, []);
+  });
+
+  describe('fotos guardadas no bucket (ADR 038)', () => {
+    const FOTO = '0b3c1f9e-8d7a-4c21-9f4e-2a6b5c7d8e90';
+
+    it('a foto vai ao agente em base64 e fica ligada à mensagem da pessoa', async () => {
+      const m = montar({ fotosGuardadas: { [FOTO]: 'anBlZw==' } });
+
+      const turno = m.service.converse(
+        USUARIO,
+        { ...turnoNovo('o que tem neste prato?'), photoIds: [FOTO] },
+        'tok',
+        destinoDeTeste().destino,
+      );
+      await respirar();
+      m.canal.encerrar();
+      await turno;
+
+      expect(m.midia.chatPhotosForTurn).toHaveBeenCalledWith('user-a', [FOTO]);
+      expect(m.chamadasAoAgente[0]).toHaveProperty('photos', [
+        { mediaType: 'image/jpeg', data: 'anBlZw==' },
+      ]);
+      // A contagem de `metadata.photos` é só da foto que não fica guardada.
+      expect(m.conversas.iniciarTurno).toHaveBeenCalledWith(
+        'user-a',
+        CONVERSA,
+        'o que tem neste prato?',
+        0,
+        null,
+        [FOTO],
+      );
+    });
+
+    it('foto de outra pessoa é 404 antes de abrir o agente e de gravar a mensagem', async () => {
+      const m = montar({ fotosGuardadas: {} });
+
+      await expect(
+        m.service.converse(
+          USUARIO,
+          { ...turnoNovo('e esta?'), photoIds: [FOTO] },
+          'tok',
+          destinoDeTeste().destino,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(m.chamadasAoAgente).toHaveLength(0);
+      expect(m.conversas.iniciarTurno).not.toHaveBeenCalled();
+    });
+
+    it('foto guardada não acompanha a resposta a uma pausa', async () => {
+      const m = montar({ fotosGuardadas: { [FOTO]: 'anBlZw==' } });
+
+      await expect(
+        m.service.converse(
+          USUARIO,
+          {
+            conversationId: CONVERSA,
+            resume: { interruptId: 'p1', value: 'sim' },
+            photoIds: [FOTO],
+          },
+          'tok',
+          destinoDeTeste().destino,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(m.midia.chatPhotosForTurn).not.toHaveBeenCalled();
+    });
+
+    it('somadas as duas formas, passa de três fotos e é 400', async () => {
+      const ids = [
+        FOTO,
+        '1b3c1f9e-8d7a-4c21-9f4e-2a6b5c7d8e90',
+        '2b3c1f9e-8d7a-4c21-9f4e-2a6b5c7d8e90',
+      ];
+      const m = montar({ fotosGuardadas: Object.fromEntries(ids.map((id) => [id, 'eA=='])) });
+
+      await expect(
+        m.service.converse(
+          USUARIO,
+          {
+            ...turnoNovo('e estas?'),
+            photoIds: ids,
+            photos: [{ mediaType: 'image/jpeg', data: '/9j/2Q==' }],
+          },
+          'tok',
+          destinoDeTeste().destino,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(m.midia.chatPhotosForTurn).not.toHaveBeenCalled();
+    });
   });
 
   it('a retomada vai ao agente sem mensagem e não grava fala da pessoa', async () => {
@@ -675,7 +785,14 @@ describe('ChatService — o agente da comunidade (Fase 7c)', () => {
     expect(m.chamadasAoAgente[0].persona).toEqual(
       expect.objectContaining({ groupId: ACADEMIA, instructions: 'Fale de treino.' }),
     );
-    expect(m.conversas.iniciarTurno).toHaveBeenCalledWith('user-a', CONVERSA, 'oi', 0, ACADEMIA);
+    expect(m.conversas.iniciarTurno).toHaveBeenCalledWith(
+      'user-a',
+      CONVERSA,
+      'oi',
+      0,
+      ACADEMIA,
+      [],
+    );
   });
 
   it('null escolhe o assistente da Fatia mesmo com um padrão, e o turno vai sem persona', async () => {
@@ -683,7 +800,7 @@ describe('ChatService — o agente da comunidade (Fase 7c)', () => {
     await turno(m, { ...turnoNovo('oi'), agentGroupId: null });
 
     expect(m.chamadasAoAgente[0]).not.toHaveProperty('persona');
-    expect(m.conversas.iniciarTurno).toHaveBeenCalledWith('user-a', CONVERSA, 'oi', 0, null);
+    expect(m.conversas.iniciarTurno).toHaveBeenCalledWith('user-a', CONVERSA, 'oi', 0, null, []);
   });
 
   it('agente de comunidade em que a pessoa não está é 404, antes de abrir o agente e de gravar', async () => {

@@ -98,7 +98,14 @@ export type ChatTurnRequest = {
    */
   agentGroupId?: string | null;
 } & (
-  | { message: string; resume?: undefined; photos?: ChatPhoto[] }
+  | {
+      message: string;
+      resume?: undefined;
+      /** Fotos já guardadas no bucket (ADR 038): os ids de `uploadChatPhoto`. */
+      photoIds?: string[];
+      /** O caminho antigo, em base64, que não fica guardado (ADR 020). */
+      photos?: ChatPhoto[];
+    }
   | { message?: undefined; resume: { interruptId: string; value: unknown } }
 );
 
@@ -532,7 +539,10 @@ export interface ChatHistoryMessage {
         /** `stopped`: a pessoa parou a resposta no meio. O texto é o que tinha chegado. */
         status?: 'completed' | 'interrupted' | 'error' | 'resolved' | 'stopped';
         interrupt?: { id: string; value: ChatInterruptValue };
-        /** Na fala da pessoa: quantas fotos foram com ela. A foto em si não é guardada. */
+        /**
+         * Na fala da pessoa: quantas fotos foram com ela pelo caminho antigo, que
+         * não guarda a foto (ADR 020). As guardadas vêm em `photos` da mensagem.
+         */
         photos?: number;
         /** As tools pedidas neste turno, com o id que as liga ao desfecho. */
         toolCalls?: { id: string; name: string }[];
@@ -548,6 +558,40 @@ export interface ChatHistoryMessage {
   runId: string | null;
   review: 'like' | 'dislike' | null;
   createdAt: string;
+  /**
+   * As fotos que a pessoa mandou nesta mensagem, guardadas no bucket (ADR 038).
+   * A URL é assinada e vence em minutos: quem precisa de novo relê a conversa.
+   */
+  photos?: ChatHistoryPhoto[];
+}
+
+export interface ChatHistoryPhoto {
+  id: string;
+  url: string | null;
+  width: number | null;
+  height: number | null;
+}
+
+/**
+ * Sobe uma foto do chat (ADR 038): pede a URL, manda o corpo direto ao bucket e
+ * confirma. Devolve o id que vai em `photoIds`. O `put` é do app, como no
+ * `uploadMedia`: o corpo não passa pela API.
+ */
+export async function uploadChatPhoto(
+  input: { mime: string; bytes: number },
+  put: (url: string, headers: Record<string, string>) => Promise<{ ok: boolean; status: number }>,
+): Promise<ChatHistoryPhoto> {
+  const ticket = await apiFetch<{
+    fileId: string;
+    uploadUrl: string;
+    headers: Record<string, string>;
+  }>('/api/media/chat-photos', { method: 'POST', body: JSON.stringify(input) });
+  const res = await put(ticket.uploadUrl, ticket.headers);
+  if (!res.ok) throw new Error(`O envio da foto falhou (${res.status}).`);
+  const view = await apiFetch<ChatHistoryPhoto>(`/api/media/${ticket.fileId}/confirm`, {
+    method: 'POST',
+  });
+  return view;
 }
 
 export interface ChatConversation extends ChatConversationSummary {

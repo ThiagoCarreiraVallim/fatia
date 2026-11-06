@@ -30,6 +30,7 @@ import { MemoryService } from './memory/memory.service';
 import { PreviaDaAcaoService } from './previa/previa-da-acao.service';
 import { GroupAgentService } from '../sharing/group-agent.service';
 import { McpToolRegistry } from '../mcp/mcp-tool.registry';
+import { MediaService } from '../storage/media.service';
 import {
   ChatActionPreviewDto,
   ListConversationsQueryDto,
@@ -72,6 +73,7 @@ export class ChatController {
     private readonly runs: ChatRunRegistry,
     private readonly agentes: GroupAgentService,
     private readonly registry: McpToolRegistry,
+    private readonly midia: MediaService,
   ) {}
 
   /**
@@ -149,8 +151,14 @@ export class ChatController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     const conversa = await this.conversas.obterComMensagens(user.id, id);
+    // As mensagens já são desta pessoa (`obterComMensagens` amarrou a conversa).
+    const fotos = await this.midia.chatPhotoViews(conversa.messages.map((m) => m.id));
     return {
       ...conversa,
+      messages: conversa.messages.map((m) => {
+        const photos = fotos.get(m.id);
+        return photos ? { ...m, photos } : m;
+      }),
       agent: await this.agentes.headerFor(user.id, conversa.agentGroupId),
       // Uma resposta ainda correndo no servidor: a tela assina o `live` em vez de
       // mostrar o histórico parado (ADR 035).
@@ -221,6 +229,11 @@ export class ChatController {
     @CurrentUser() user: CurrentUserPayload,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
+    // As fotos antes: depois do `delete` elas não se acham mais pela conversa.
+    // O `assertDaPessoa` de `apagar` não rodou ainda, mas o `where` de
+    // `discardChatPhotosOf` casa conversa **e** dono, então conversa alheia
+    // não acha foto nenhuma.
+    await this.midia.discardChatPhotosOf(user.id, id);
     await this.conversas.apagar(user.id, id);
     await this.checkpoints.apagarConversa(user.id, id);
   }

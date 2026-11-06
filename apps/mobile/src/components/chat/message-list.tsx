@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import {
@@ -28,7 +28,10 @@ import { cores } from '@/theme/cores';
 import { ArtifactCard } from './artifact-card';
 import { ChatMarkdown } from './chat-markdown';
 
-/** Uma fala da pessoa. A foto não fica guardada (ADR 004): sobra o aviso. */
+/**
+ * Uma fala da pessoa. A foto guardada (ADR 038) aparece; a que foi pelo caminho
+ * antigo não ficou guardada (ADR 020), e sobra o aviso.
+ */
 
 /**
  * O desfecho de cada chamada, em português e como no PWA (`partes.tsx`): recusar
@@ -42,9 +45,30 @@ const TOOL_STATUS_LABEL: Record<ChatToolStatus, string> = {
   not_run: 'não chegou a rodar',
 };
 
-export function UserBubble({ text, photos }: { text: string; photos: number }) {
+export function UserBubble({
+  text,
+  photos,
+  images,
+}: {
+  text: string;
+  photos: number;
+  images?: string[];
+}) {
   return (
     <View className="max-w-[85%] self-end rounded-2xl rounded-br-md bg-secondary px-4 py-2.5">
+      {images?.length ? (
+        <View className="mb-2 flex-row flex-wrap justify-end gap-2">
+          {images.map((uri, i) => (
+            <Image
+              key={uri}
+              source={{ uri }}
+              accessibilityLabel={images.length > 1 ? `Foto enviada ${i + 1}` : 'Foto enviada'}
+              className="size-24 rounded-lg"
+              resizeMode="cover"
+            />
+          ))}
+        </View>
+      ) : null}
       {photos > 0 ? (
         <View className="mb-1 flex-row items-center gap-1">
           <ImageIcon size={12} color={cores.mutedForeground} />

@@ -19,6 +19,8 @@ import { type TurnSummary, createTurnReader } from './leitor-do-turno';
 import { criarLeitorSse, formatarEventoSse } from './sse';
 import { ChatRunRegistry, createSseFramer } from './chat-run.registry';
 import { NotificationService, type Notice } from '../notifications/notification.service';
+import { MediaService } from '../storage/media.service';
+import { MAX_FOTOS_POR_MENSAGEM } from './corpos-do-chat';
 
 /**
  * O turno de conversa: cota, persistência e **repasse do SSE sem bufferizar**.
@@ -62,6 +64,7 @@ export class ChatService {
     private readonly agentes: GroupAgentService,
     private readonly runs: ChatRunRegistry,
     private readonly avisos: NotificationService,
+    private readonly midia: MediaService,
   ) {}
 
   /** Os agentes que a pessoa pode escolher numa conversa nova, e o padrão. */
@@ -126,10 +129,17 @@ export class ChatService {
         'Envie message (turno novo) ou resume (resposta a uma pausa), não os dois.',
       );
     }
-    if (dto.resume && dto.photos?.length) {
+    const fotoIds = dto.photoIds ?? [];
+    if (dto.resume && (dto.photos?.length || fotoIds.length)) {
       throw new BadRequestException('Foto só acompanha uma mensagem nova.');
     }
-    const fotos = fotosDoTurno(dto.photos ?? []);
+    if ((dto.photos?.length ?? 0) + fotoIds.length > MAX_FOTOS_POR_MENSAGEM) {
+      throw new BadRequestException(`No máximo ${MAX_FOTOS_POR_MENSAGEM} fotos por mensagem.`);
+    }
+    // As de base64 vivem só no turno; as guardadas (ADR 038) vêm do bucket, e
+    // um id que não é desta pessoa responde 404 antes de qualquer custo.
+    const fotosAvulsas = fotosDoTurno(dto.photos ?? []);
+    const fotos = [...(await this.midia.chatPhotosForTurn(user.id, fotoIds)), ...fotosAvulsas];
 
     const existente = await this.conversas.encontrar(user.id, dto.conversationId);
     if (dto.resume && !existente) throw new NotFoundException('Conversa não encontrada.');
@@ -186,8 +196,9 @@ export class ChatService {
         user.id,
         dto.conversationId,
         dto.message,
-        fotos.length,
+        fotosAvulsas.length,
         agentGroupId,
+        fotoIds,
       );
       // Sem `await`: o nome é enfeite de lista, e esperar por ele atrasaria o
       // primeiro token da resposta, que é o que a pessoa está olhando.

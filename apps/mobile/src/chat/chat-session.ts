@@ -3,6 +3,7 @@ import {
   PHOTO_ONLY_QUESTION,
   ApiError,
   appendUserMessage,
+  erroDoChat,
   applyChatFrame,
   getConversation,
   joinChatRun,
@@ -11,6 +12,7 @@ import {
   streamChat,
   threadFromHistory,
   type ChatAgentHeader,
+  type ChatHistoryPhoto,
   type ChatPhoto,
   type ChatResumeValue,
   type ChatStreamFrame,
@@ -42,6 +44,16 @@ export interface ChatSessionSnapshot {
 
 type Listener = () => void;
 
+/** A foto escolhida no aparelho: o arquivo para subir, e o base64 para o caminho antigo. */
+export interface LocalChatPhoto {
+  uri: string;
+  /** JPEG em base64, sem o prefixo `data:`. */
+  data: string;
+}
+
+/** Sobe a foto ao bucket (ADR 038). É do app: o corpo sai do arquivo do seletor. */
+export type ChatPhotoUploader = (photo: LocalChatPhoto) => Promise<ChatHistoryPhoto>;
+
 const VAZIO: ChatSessionSnapshot = {
   conversationId: null,
   thread: EMPTY_CHAT_THREAD,
@@ -58,7 +70,10 @@ export class ChatSession {
   /** Ao fim de cada turno: a lista, a cota e as memórias mudam juntas. */
   private onTurnEnd: (() => void) | null = null;
 
-  constructor(private readonly newId: () => string) {}
+  constructor(
+    private readonly newId: () => string,
+    private readonly uploadPhoto: ChatPhotoUploader | null = null,
+  ) {}
 
   setTurnEndListener(listener: (() => void) | null): void {
     this.onTurnEnd = listener;
@@ -125,7 +140,7 @@ export class ChatSession {
 
   async send(input: {
     text: string;
-    photos?: ChatPhoto[];
+    photos?: LocalChatPhoto[];
     /** Só na conversa nova: `undefined` é o padrão, `null` o assistente da Fatia. */
     agentGroupId?: string | null;
   }): Promise<void> {
@@ -135,8 +150,21 @@ export class ChatSession {
     const texto = input.text.trim() || (fotos.length ? PHOTO_ONLY_QUESTION : '');
     if (!texto) return;
     this.setThread((t) =>
-      appendUserMessage(t, { id: `local-${this.newId()}`, text: texto, photos: fotos.length }),
+      appendUserMessage(t, {
+        id: `local-${this.newId()}`,
+        text: texto,
+        ...(fotos.length ? { images: fotos.map((f) => f.uri) } : {}),
+      }),
     );
+    let enviadas: { photoIds: string[]; photos: ChatPhoto[] };
+    try {
+      enviadas = await this.prepararFotos(fotos);
+    } catch (erro) {
+      // O corpo da recusa, se houver; o texto do servidor nunca vai à tela.
+      const recusa = erroDoChat(erro instanceof ApiError ? erro.body : null);
+      this.setThread((t) => ({ ...t, running: false, error: recusa }));
+      return;
+    }
     const novo = this.snapshot.isNew;
     this.set({ isNew: false });
     await this.follow(
@@ -144,12 +172,40 @@ export class ChatSession {
         {
           conversationId,
           message: texto,
-          ...(fotos.length ? { photos: fotos } : {}),
+          ...(enviadas.photoIds.length ? { photoIds: enviadas.photoIds } : {}),
+          ...(enviadas.photos.length ? { photos: enviadas.photos } : {}),
           ...(novo && input.agentGroupId !== undefined ? { agentGroupId: input.agentGroupId } : {}),
         },
         this.signal(),
       ),
     );
+  }
+
+  /**
+   * Sobe as fotos ao bucket (ADR 038). Instância sem bucket responde 503 ao
+   * pedido de envio: aí a foto vai em base64 no turno e não fica guardada (ADR
+   * 020). Qualquer outra falha para o envio, em vez de a foto sair por um
+   * caminho que a pessoa não escolheu.
+   */
+  private async prepararFotos(
+    fotos: LocalChatPhoto[],
+  ): Promise<{ photoIds: string[]; photos: ChatPhoto[] }> {
+    const photoIds: string[] = [];
+    const photos: ChatPhoto[] = [];
+    for (const foto of fotos) {
+      const avulsa = { mediaType: 'image/jpeg' as const, data: foto.data };
+      if (!this.uploadPhoto) {
+        photos.push(avulsa);
+        continue;
+      }
+      try {
+        photoIds.push((await this.uploadPhoto(foto)).id);
+      } catch (erro) {
+        if (erro instanceof ApiError && erro.status === 503) photos.push(avulsa);
+        else throw erro;
+      }
+    }
+    return { photoIds, photos };
   }
 
   /** A resposta a uma pausa: o `id` dela prova a qual pausa a resposta responde. */

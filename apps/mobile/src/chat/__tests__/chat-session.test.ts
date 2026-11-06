@@ -71,6 +71,7 @@ vi.mock('@fatia/api-client', async () => {
 });
 
 const { ChatSession } = await import('../chat-session');
+const { ApiError, PHOTO_ONLY_QUESTION } = await import('@fatia/api-client');
 const respirar = () => new Promise((r) => setTimeout(r, 0));
 const fragmento = (id: string, content: string): ChatStreamFrame => ({
   event: 'messages',
@@ -85,6 +86,64 @@ beforeEach(() => {
   turnos.length = 0;
   lives.length = 0;
   conversa = null;
+});
+
+describe('ChatSession — fotos (ADR 038)', () => {
+  const foto = { uri: 'file:///prato.jpg', data: '/9j/2Q==' };
+
+  it('sobe a foto antes do turno, e o turno leva o id e não o base64', async () => {
+    const subir = vi.fn(async () => ({ id: 'foto-1', url: 'https://b/ler', width: 1, height: 1 }));
+    const s = new ChatSession(() => `id-${++n}`, subir);
+    const id = s.startNew();
+
+    void s.send({ text: 'o que tem aqui?', photos: [foto] });
+    await respirar();
+
+    expect(subir).toHaveBeenCalledWith(foto);
+    expect(turnos[0]).toEqual({
+      conversationId: id,
+      message: 'o que tem aqui?',
+      photoIds: ['foto-1'],
+    });
+    expect(s.getSnapshot().thread.messages[0]).toMatchObject({
+      role: 'user',
+      images: ['file:///prato.jpg'],
+      photos: 0,
+    });
+  });
+
+  it('instância sem bucket (503) manda a foto em base64, sem guardar', async () => {
+    const subir = vi.fn(async () => {
+      throw new ApiError('sem bucket', 503);
+    });
+    const s = new ChatSession(() => `id-${++n}`, subir);
+    const id = s.startNew();
+
+    void s.send({ text: '', photos: [foto] });
+    await respirar();
+
+    expect(turnos[0]).toEqual({
+      conversationId: id,
+      message: PHOTO_ONLY_QUESTION,
+      photos: [{ mediaType: 'image/jpeg', data: '/9j/2Q==' }],
+    });
+  });
+
+  it('outra falha do envio para o turno e mostra o erro', async () => {
+    const subir = vi.fn(async () => {
+      throw new ApiError('cheio', 413, { code: 'AI_UNKNOWN_ERROR' });
+    });
+    const s = new ChatSession(() => `id-${++n}`, subir);
+    s.startNew();
+
+    await s.send({ text: 'e esta?', photos: [foto] });
+
+    expect(turnos).toHaveLength(0);
+    expect(s.getSnapshot().thread).toMatchObject({
+      running: false,
+      error: { code: 'AI_UNKNOWN_ERROR' },
+    });
+  });
 });
 
 describe('ChatSession', () => {

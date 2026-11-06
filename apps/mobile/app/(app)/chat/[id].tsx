@@ -171,7 +171,7 @@ export default function ConversationScreen() {
             }
             renderItem={({ item, index }) =>
               item.role === 'user' ? (
-                <UserBubble text={item.text} photos={item.photos} />
+                <UserBubble text={item.text} photos={item.photos} images={item.images} />
               ) : (
                 <AssistantBlock
                   message={item}

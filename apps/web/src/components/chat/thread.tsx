@@ -43,7 +43,7 @@ import { PausaDoAgente } from './pausa';
 import { MotivoDoVoto } from './motivo-do-voto';
 import { PlanoDoTurno } from './plano';
 import { AvisoDeCota } from './cota';
-import { AnexosDaMensagem, AnexosDoComposer } from './anexos';
+import { AnexosDaMensagem, AnexosDoComposer, FotoDaFala } from './anexos';
 import {
   useConversaAberta,
   useDisponibilidadeDoChat,
@@ -81,7 +81,7 @@ function MensagemDaPessoa() {
       {/* `field`, e não `paper`: nesta paleta `paper` fica a 2,5% de
           luminosidade do fundo, e o balão sumiria. */}
       <div className={cn(field, 'max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm')}>
-        <MessagePrimitive.Parts />
+        <MessagePrimitive.Parts components={{ Image: FotoDaFala }} />
       </div>
     </MessagePrimitive.Root>
   );

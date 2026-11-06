@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { ArrowUp, Camera, Mic, Square, X } from 'lucide-react-native';
-import type { ChatPhoto } from '@fatia/api-client';
+import type { LocalChatPhoto } from '@/chat/chat-session';
 import { cn, useActionSheet, useToast } from '@/components/ui';
 import { useDictation } from '@/chat/dictation';
 import { cores } from '@/theme/cores';
@@ -13,9 +13,10 @@ const MAX_FOTOS = 3;
 const MAX_CARACTERES = 4000;
 
 /**
- * O campo de mensagem. Foto vai em JPEG recomprimido (`quality: 0.6`) e a API
- * tira o EXIF de novo antes de seguir (ADR 020); o ditado devolve o texto para
- * o campo e não envia nada.
+ * O campo de mensagem. Foto vai em JPEG recomprimido (`quality: 0.6`), sem EXIF,
+ * e é guardada no bucket (ADR 038); a API a reprocessa no `confirm` (reduz a
+ * 1280 px e tira metadado de novo). O ditado devolve o texto para o campo e não
+ * envia nada.
  */
 export function Composer({
   running,
@@ -29,13 +30,13 @@ export function Composer({
   disabled: boolean;
   photosEnabled: boolean;
   dictationEnabled: boolean;
-  onSend: (text: string, photos: ChatPhoto[]) => void;
+  onSend: (text: string, photos: LocalChatPhoto[]) => void;
   onStop: () => void;
 }) {
   const toast = useToast();
   const actionSheet = useActionSheet();
   const [texto, setTexto] = useState('');
-  const [fotos, setFotos] = useState<{ uri: string; data: string }[]>([]);
+  const [fotos, setFotos] = useState<LocalChatPhoto[]>([]);
   const aoDitar = useCallback(
     (ditado: string) => setTexto((t) => (t.trim() ? `${t.trimEnd()} ${ditado}` : ditado)),
     [],
@@ -46,10 +47,7 @@ export function Composer({
 
   const enviar = () => {
     if (!podeEnviar) return;
-    onSend(
-      texto,
-      fotos.map((f) => ({ mediaType: 'image/jpeg', data: f.data })),
-    );
+    onSend(texto, fotos);
     setTexto('');
     setFotos([]);
   };

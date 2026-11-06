@@ -43,6 +43,7 @@ Decisões arquiteturais relevantes do projeto. Cada ADR é imutável depois de a
 | [035](./035-chat-desacoplado-da-requisicao.md)                         | A resposta do chat corre no servidor, desacoplada da requisição | Accepted                               |
 | [036](./036-push-na-web.md)                                            | Avisos também no navegador (Web Push), recibos e agrupamento    | Accepted                               |
 | [037](./037-prd-descreve-o-produto-atual.md)                           | O PRD descreve o produto atual; só ADR muda o escopo negativo   | Accepted                               |
+| [038](./038-foto-do-chat-guardada.md)                                  | A foto do chat é guardada, enquanto a conversa existir          | Accepted                               |
 
 ## Template
 

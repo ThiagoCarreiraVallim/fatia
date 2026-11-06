@@ -192,9 +192,13 @@ export class ConversationService {
    * pessoa. O `userId` vem do `@CurrentUser()` e nunca do corpo.
    */
   /**
-   * `fotos` é só a **contagem**: a foto em si não é gravada (ADR 004 e 020). O
-   * número fica em `metadata.photos` para a tela dizer, depois de um F5, que ali
-   * houve uma foto que não foi guardada.
+   * `fotos` é só a **contagem** das fotos em base64, que não são gravadas (ADR
+   * 020). O número fica em `metadata.photos` para a tela dizer, depois de um F5,
+   * que ali houve uma foto que não foi guardada.
+   *
+   * `fotoIds` são as guardadas no bucket (ADR 038): ficam ligadas à mensagem, na
+   * ordem em que vieram. O `MediaService.chatPhotosForTurn` já conferiu o dono;
+   * o `where` repete a conferência para fechar a janela entre as duas leituras.
    */
   async iniciarTurno(
     userId: string,
@@ -202,6 +206,7 @@ export class ConversationService {
     texto: string,
     fotos = 0,
     agentGroupId: string | null = null,
+    fotoIds: string[] = [],
   ): Promise<{ conversationId: string }> {
     const conversa = await this.encontrar(userId, conversationId);
 
@@ -212,14 +217,21 @@ export class ConversationService {
           data: { id: conversationId, userId, title: tituloDe(texto), agentGroupId },
         }));
 
-      await tx.message.create({
+      const mensagem = await tx.message.create({
         data: {
           conversationId: alvo.id,
           role: MessageRole.user,
           content: texto,
           ...(fotos > 0 ? { metadata: { photos: fotos } } : {}),
         },
+        select: { id: true },
       });
+      for (const [posicao, id] of fotoIds.entries()) {
+        await tx.mediaFile.updateMany({
+          where: { id, uploaderId: userId, purpose: 'chat_photo', chatMessageId: null },
+          data: { chatMessageId: mensagem.id, chatPosition: posicao },
+        });
+      }
 
       await tx.conversation.update({
         where: { id: alvo.id },

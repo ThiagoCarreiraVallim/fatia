@@ -2,7 +2,7 @@ import { Body, Controller, HttpCode, Param, Post, UseGuards } from '@nestjs/comm
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser, type CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { UserThrottlerGuard } from '../common/user-throttler.guard';
-import { MediaIdParamDto, RequestUploadDto } from './dto/media.dto';
+import { MediaIdParamDto, RequestChatPhotoUploadDto, RequestUploadDto } from './dto/media.dto';
 import { MediaService } from './media.service';
 
 /**
@@ -20,6 +20,16 @@ export class MediaController {
   @Throttle({ default: { ttl: 60_000, limit: 30 } })
   requestUpload(@CurrentUser() user: CurrentUserPayload, @Body() dto: RequestUploadDto) {
     return this.media.requestUpload(user.id, dto);
+  }
+
+  /** A foto que vai no chat (ADR 038). Confirma pela mesma `:id/confirm`. */
+  @Post('chat-photos')
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
+  requestChatPhotoUpload(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: RequestChatPhotoUploadDto,
+  ) {
+    return this.media.requestChatPhotoUpload(user.id, dto);
   }
 
   @Post(':id/confirm')
