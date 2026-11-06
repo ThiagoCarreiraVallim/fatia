@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { TIPO_DA_REFEICAO } from './list-meals.tool';
 import { z } from 'zod';
 import { MealType } from '@prisma/client';
 import { MealService } from '../meal.service';
@@ -61,5 +62,21 @@ export class LogMealTool implements McpToolDef {
     { userId }: McpToolContext,
   ) {
     return this.meals.create(userId, input);
+  }
+
+  /** O que foi gravado, item por item: é o que a pessoa confere depois de aprovar. */
+  artifact(result: unknown) {
+    const refeicao = result as Awaited<ReturnType<MealService['create']>>;
+    return {
+      kind: 'report',
+      label: `${TIPO_DA_REFEICAO[refeicao.mealType] ?? 'Refeição'} registrado`,
+      columns: ['Alimento', 'g', 'kcal', 'Proteína (g)'],
+      rows: refeicao.items.map((item) => [
+        item.foodName,
+        Math.round(item.grams),
+        Math.round(item.kcal),
+        Math.round(item.proteinG),
+      ]),
+    };
   }
 }

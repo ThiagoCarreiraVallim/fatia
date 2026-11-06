@@ -184,6 +184,31 @@ function Comparacao({ artefato }: { artefato: Extract<ChatArtifact, { kind: 'com
   );
 }
 
+/** Só link da web vira `href`: a URL vem de um buscador, e `javascript:` não pode. */
+export const ehLinkDaWeb = (url: string) => /^https?:\/\//i.test(url);
+
+function Fontes({ artefato }: { artefato: Extract<ChatArtifact, { kind: 'sources' }> }) {
+  return (
+    <ol className="flex flex-col gap-2 text-sm">
+      {artefato.sources
+        .filter((fonte) => ehLinkDaWeb(fonte.url))
+        .map((fonte) => (
+          <li key={fonte.url} className="flex flex-col">
+            <a
+              href={fonte.url}
+              target="_blank"
+              rel="noopener noreferrer nofollow"
+              className="line-clamp-2 font-semibold text-foreground underline-offset-2 hover:underline"
+            >
+              {fonte.title || fonte.domain}
+            </a>
+            <span className="text-xs text-muted-foreground">{fonte.domain}</span>
+          </li>
+        ))}
+    </ol>
+  );
+}
+
 export function Artefato({ artefato }: { artefato: ChatArtifact }) {
   return (
     <figure
@@ -201,6 +226,8 @@ export function Artefato({ artefato }: { artefato: ChatArtifact }) {
         <LinhaDoTempo artefato={artefato} />
       ) : artefato.kind === 'comparison' ? (
         <Comparacao artefato={artefato} />
+      ) : artefato.kind === 'sources' ? (
+        <Fontes artefato={artefato} />
       ) : (
         <Relatorio artefato={artefato} />
       )}

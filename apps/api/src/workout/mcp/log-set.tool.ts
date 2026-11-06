@@ -55,4 +55,22 @@ export class LogSetTool implements McpToolDef {
   ) {
     return this.sets.create(userId, input);
   }
+
+  /** A série gravada. Só os campos preenchidos: força e cardio não se misturam. */
+  artifact(result: unknown) {
+    const serie = result as Awaited<ReturnType<SessionSetService['create']>>;
+    const campos: { label: string; value: number | string; unit?: string }[] = [
+      { label: 'Exercício', value: serie.exercise.name },
+      { label: 'Série', value: serie.setNumber },
+    ];
+    if (serie.weightKg != null) campos.push({ label: 'Carga', value: serie.weightKg, unit: 'kg' });
+    if (serie.reps != null) campos.push({ label: 'Repetições', value: serie.reps });
+    if (serie.durationSeconds != null) {
+      campos.push({ label: 'Duração', value: Math.round(serie.durationSeconds / 60), unit: 'min' });
+    }
+    if (serie.distanceMeters != null) {
+      campos.push({ label: 'Distância', value: serie.distanceMeters / 1000, unit: 'km' });
+    }
+    return { kind: 'comparison', label: 'Série registrada', items: campos };
+  }
 }

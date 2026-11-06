@@ -24,4 +24,21 @@ export class GetActiveWorkoutSessionTool implements McpToolDef {
   execute(_input: Record<string, never>, { userId }: McpToolContext) {
     return this.sessions.findActive(userId);
   }
+
+  /** As séries do treino aberto. Sem treino aberto não há cartão. */
+  artifact(result: unknown) {
+    const sessao = result as Awaited<ReturnType<WorkoutSessionService['findActive']>>;
+    if (!sessao) return null;
+    return {
+      kind: 'report',
+      label: 'Treino em andamento',
+      columns: ['Exercício', 'Série', 'Carga (kg)', 'Repetições'],
+      rows: sessao.sets.map((serie) => [
+        serie.exercise.name,
+        serie.setNumber,
+        serie.weightKg,
+        serie.reps,
+      ]),
+    };
+  }
 }

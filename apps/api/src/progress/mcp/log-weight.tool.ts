@@ -33,4 +33,9 @@ export class LogWeightTool implements McpToolDef {
   ) {
     return this.weights.log(input, userId, timezone);
   }
+
+  /** O peso que foi gravado. O resultado só traz o id; o valor é o do pedido aprovado. */
+  artifact(_result: unknown, input: { weightKg: number }) {
+    return { kind: 'metric', label: 'Peso registrado', value: input.weightKg, unit: 'kg' };
+  }
 }

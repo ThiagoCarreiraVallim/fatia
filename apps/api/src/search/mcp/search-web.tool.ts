@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { AiAccessService } from '../../ai/ai-access.service';
 import { AiUsageService } from '../../ai/ai-usage.service';
-import { BraveSearchService } from '../brave-search.service';
+import { BraveSearchService, type ResultadoDaBusca } from '../brave-search.service';
 import {
   McpTool,
   type McpToolContext,
@@ -12,6 +12,15 @@ import {
 /** O nome do buscador no `AI_PRICE_TABLE`: o preço de uma consulta, em `in`. */
 export const BRAVE_SEARCH_MODEL = 'brave-search';
 export const WEB_SEARCH_FEATURE = 'web_search';
+
+/** O domínio que o cartão mostra, sem `www.`. URL inválida mostra a própria URL. */
+function dominio(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
 
 /**
  * A busca na web do chat hospedado (backup de agosto, 48cb4a4).
@@ -85,5 +94,23 @@ export class SearchWebTool implements McpToolDef {
     // A consulta volta junto do resultado: é o que permite ao modelo citar o que
     // de fato foi perguntado ao buscador, e não o que ele achou que perguntou.
     return { query: params.query, results };
+  }
+
+  /**
+   * As fontes da busca, como links. Na prosa uma URL não se lê, e o corte do
+   * resultado que vai ao modelo decepava as URLs longas.
+   */
+  artifact(result: unknown) {
+    const { results } = result as { results: ResultadoDaBusca[] };
+    return {
+      kind: 'sources',
+      label: 'Fontes',
+      sources: results.map((r) => ({
+        title: r.title,
+        url: r.url,
+        domain: dominio(r.url),
+        ...(r.date ? { date: r.date } : {}),
+      })),
+    };
   }
 }
