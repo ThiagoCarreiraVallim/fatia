@@ -10,12 +10,14 @@ import {
   CircleX,
   Copy,
   Image as ImageIcon,
+  Quote,
   ThumbsDown,
   ThumbsUp,
 } from 'lucide-react-native';
 import {
   FATIA_AGENT_NAME,
   chatMarkdownPlainText,
+  splitQuote,
   textoDeErroDoChat,
   type ChatAssistantMessage,
   type ChatPlanStep,
@@ -54,6 +56,9 @@ export function UserBubble({
   photos: number;
   images?: string[];
 }) {
+  // A citação de uma resposta vem no começo do texto (`withQuote`), e aqui se
+  // desenha à parte — inclusive depois de reabrir a conversa.
+  const { quote, text: fala } = splitQuote(text);
   return (
     <View className="max-w-[85%] self-end rounded-2xl rounded-br-md bg-secondary px-4 py-2.5">
       {images?.length ? (
@@ -77,9 +82,20 @@ export function UserBubble({
           </Text>
         </View>
       ) : null}
-      <Text selectable className="text-[15px] leading-6 text-foreground">
-        {text}
-      </Text>
+      {quote ? (
+        <Text
+          numberOfLines={4}
+          accessibilityLabel={`Citação: ${quote}`}
+          className="mb-1.5 border-l-2 border-primary pl-2.5 text-xs text-muted-foreground"
+        >
+          {quote}
+        </Text>
+      ) : null}
+      {fala ? (
+        <Text selectable className="text-[15px] leading-6 text-foreground">
+          {fala}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -90,12 +106,19 @@ export function AssistantBlock({
   agentName,
   showName,
   onVote,
+  onQuote,
 }: {
   message: ChatAssistantMessage;
   thread: ChatThreadState;
   agentName: string | null;
   showName: boolean;
   onVote: (rowId: string, review: 'like' | 'dislike') => void;
+  /**
+   * Cita a resposta na próxima mensagem. Inteira, e não um trecho: a seleção
+   * parcial de texto no React Native não é confiável; o teto da citação
+   * (`CHAT_QUOTE_MAX`) corta o excesso.
+   */
+  onQuote?: (text: string) => void;
 }) {
   const [pensamentoAberto, setPensamentoAberto] = useState(false);
   const [copiado, setCopiado] = useState(false);
@@ -174,6 +197,16 @@ export function AssistantBlock({
               <Copy size={16} color={cores.mutedForeground} />
             )}
           </Pressable>
+          {onQuote ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Citar resposta"
+              onPress={() => onQuote(chatMarkdownPlainText(message.text))}
+              className="h-11 w-11 items-center justify-center"
+            >
+              <Quote size={16} color={cores.mutedForeground} />
+            </Pressable>
+          ) : null}
           {message.rowId ? (
             <>
               <Pressable

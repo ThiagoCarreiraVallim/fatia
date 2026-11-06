@@ -35,7 +35,8 @@ export default function ConversationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const sessao = useChatSession();
-  const { thread, agent, isNew, loading, loadError, conversationId, queue } = useChatSnapshot();
+  const { thread, agent, isNew, loading, loadError, conversationId, queue, quote } =
+    useChatSnapshot();
   const lista = useRef<FlatList<ChatThreadMessage>>(null);
 
   useEffect(() => {
@@ -179,6 +180,7 @@ export default function ConversationScreen() {
                   agentName={nomeDoAgente}
                   showName={thread.messages[index - 1]?.role !== 'assistant'}
                   onVote={(rowId, review) => void sessao.vote(rowId, review).catch(() => undefined)}
+                  onQuote={(text) => sessao.setQuote(text)}
                 />
               )
             }
@@ -221,6 +223,8 @@ export default function ConversationScreen() {
             void sessao.send({ text, photos, ...(isNew ? { agentGroupId: escolhido } : {}) })
           }
           queue={queue}
+          quote={quote}
+          onDismissQuote={() => sessao.setQuote(null)}
           onQueue={(text) => sessao.enqueue(text)}
           onDequeue={(id) => sessao.dequeue(id)}
           onStop={() => void sessao.stop()}

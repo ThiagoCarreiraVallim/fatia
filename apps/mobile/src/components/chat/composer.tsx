@@ -28,6 +28,8 @@ export function Composer({
   photosEnabled,
   dictationEnabled,
   queue,
+  quote,
+  onDismissQuote,
   onSend,
   onQueue,
   onDequeue,
@@ -38,6 +40,9 @@ export function Composer({
   photosEnabled: boolean;
   dictationEnabled: boolean;
   queue: QueuedChatMessage[];
+  /** O trecho citado, que vai na frente da próxima mensagem (`ChatSession.setQuote`). */
+  quote: string | null;
+  onDismissQuote: () => void;
   onSend: (text: string, photos: LocalChatPhoto[]) => void;
   onQueue: (text: string) => void;
   onDequeue: (id: string) => void;
@@ -129,6 +134,25 @@ export function Composer({
               </Pressable>
             </View>
           ))}
+        </View>
+      ) : null}
+      {quote ? (
+        <View className="flex-row items-start gap-2">
+          <Text
+            numberOfLines={3}
+            accessibilityLabel={`Trecho citado: ${quote}`}
+            className="flex-1 border-l-2 border-primary pl-2.5 text-xs text-muted-foreground"
+          >
+            {quote}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Tirar a citação"
+            hitSlop={8}
+            onPress={onDismissQuote}
+          >
+            <X size={14} color={cores.mutedForeground} />
+          </Pressable>
         </View>
       ) : null}
       {fotos.length ? (

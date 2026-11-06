@@ -1,6 +1,7 @@
 import {
   EMPTY_CHAT_THREAD,
   PHOTO_ONLY_QUESTION,
+  withQuote,
   ApiError,
   appendUserMessage,
   erroDoChat,
@@ -46,6 +47,19 @@ export interface ChatSessionSnapshot {
    * abandonaria (ADR 022). Trocar de conversa descarta; parar a resposta não.
    */
   queue: QueuedChatMessage[];
+  /**
+   * O trecho de uma resposta que a pessoa escolheu citar. Vai na frente da
+   * próxima mensagem como bloco `> ` (`withQuote`) — no texto, para chegar ao
+   * modelo e voltar com a conversa — e sai com ela.
+   */
+  quote: string | null;
+}
+
+export interface ChatSendInput {
+  text: string;
+  photos?: LocalChatPhoto[];
+  /** Só na conversa nova: `undefined` é o padrão, `null` o assistente da Fatia. */
+  agentGroupId?: string | null;
 }
 
 export interface QueuedChatMessage {
@@ -73,6 +87,7 @@ const VAZIO: ChatSessionSnapshot = {
   loading: false,
   loadError: null,
   queue: [],
+  quote: null,
 };
 
 export class ChatSession {
@@ -150,12 +165,26 @@ export class ChatSession {
     await this.open(id);
   }
 
-  async send(input: {
-    text: string;
-    photos?: LocalChatPhoto[];
-    /** Só na conversa nova: `undefined` é o padrão, `null` o assistente da Fatia. */
-    agentGroupId?: string | null;
-  }): Promise<void> {
+  /** Cita um trecho na próxima mensagem; `null` desiste da citação. */
+  setQuote(text: string | null): void {
+    this.set({ quote: text?.trim() || null });
+  }
+
+  /** A citação pendente, se houver, entra na frente do texto e sai do campo. */
+  private takeQuote(text: string): string {
+    const { quote } = this.snapshot;
+    if (!quote) return text;
+    this.set({ quote: null });
+    return withQuote(quote, text);
+  }
+
+  async send(input: ChatSendInput): Promise<void> {
+    if (!this.snapshot.conversationId || this.snapshot.thread.running) return;
+    const texto = input.text.trim() ? this.takeQuote(input.text) : input.text;
+    return this.dispatch({ ...input, text: texto });
+  }
+
+  private async dispatch(input: ChatSendInput): Promise<void> {
     const conversationId = this.snapshot.conversationId;
     if (!conversationId || this.snapshot.thread.running) return;
     const fotos = input.photos ?? [];
@@ -224,7 +253,9 @@ export class ChatSession {
   enqueue(text: string): void {
     const limpo = text.trim();
     if (!limpo || !this.snapshot.conversationId) return;
-    this.set({ queue: [...this.snapshot.queue, { id: this.newId(), text: limpo }] });
+    this.set({
+      queue: [...this.snapshot.queue, { id: this.newId(), text: this.takeQuote(limpo) }],
+    });
   }
 
   dequeue(id: string): void {
@@ -237,7 +268,9 @@ export class ChatSession {
     if (thread.running || thread.interrupt || queue.length === 0) return;
     const [proxima, ...resto] = queue;
     this.set({ queue: resto });
-    void this.send({ text: proxima.text });
+    // `dispatch`, e não `send`: a citação do item já foi junto com ele, e a que
+    // estiver no campo agora é para a próxima mensagem que a pessoa escrever.
+    void this.dispatch({ text: proxima.text });
   }
 
   /** A resposta a uma pausa: o `id` dela prova a qual pausa a resposta responde. */

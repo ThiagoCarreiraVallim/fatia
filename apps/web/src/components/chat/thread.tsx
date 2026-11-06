@@ -23,7 +23,7 @@ import {
 } from '@assistant-ui/react';
 import { useLangGraphInterruptState } from '@assistant-ui/react-langgraph';
 import Link from 'next/link';
-import { erroDoChat, planHref, stopChatRun, textoDeErroDoChat } from '@fatia/api-client';
+import { erroDoChat, planHref, stopChatRun, textoDeErroDoChat, withQuote } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
 import { LiveJoin } from './live-join';
 import { field, ghostButton } from '@/components/elements/surfaces';
@@ -46,6 +46,7 @@ import { PlanoDoTurno } from './plano';
 import { AvisoDeCota } from './cota';
 import { AnexosDaMensagem, AnexosDoComposer, FotoDaFala } from './anexos';
 import { podeEscoar, useFilaDeMensagens, type ItemDaFila } from './fila';
+import { BarraDeCitacao, CitacaoDoComposer, TextoDaPessoa } from './citacao';
 import {
   useConversaAberta,
   useDisponibilidadeDoChat,
@@ -78,12 +79,16 @@ const SUGESTOES = [
 
 function MensagemDaPessoa() {
   return (
-    <MessagePrimitive.Root className="flex w-full flex-col items-end gap-2">
+    // Citar é para a resposta: a própria fala a pessoa reescreve.
+    <MessagePrimitive.Root
+      data-aui-quote-selectable="false"
+      className="flex w-full flex-col items-end gap-2"
+    >
       <AnexosDaMensagem />
       {/* `field`, e não `paper`: nesta paleta `paper` fica a 2,5% de
           luminosidade do fundo, e o balão sumiria. */}
       <div className={cn(field, 'max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm')}>
-        <MessagePrimitive.Parts components={{ Image: FotoDaFala }} />
+        <MessagePrimitive.Parts components={{ Text: TextoDaPessoa, Image: FotoDaFala }} />
       </div>
     </MessagePrimitive.Root>
   );
@@ -412,6 +417,7 @@ function Composer() {
   const campo = useRef<HTMLTextAreaElement>(null);
   const texto = useAuiState((s) => s.composer.text);
   const temFoto = useAuiState((s) => s.composer.attachments.length > 0);
+  const citacao = useAuiState((s) => s.composer.quote?.text);
   const rodando = useAuiState((s) => s.thread.isRunning);
   const recursos = useDisponibilidadeDoChat();
   // O runtime só chega à conversa da URL depois que a lista de conversas responde
@@ -436,6 +442,12 @@ function Composer() {
 
   function enviar() {
     if (!podeEnviar || rodando || abrindo) return;
+    // A citação entra no texto: o metadado em que o assistant-ui a guarda não
+    // passa pela conversão para o LangChain (ver `./citacao`).
+    if (citacao) {
+      aui.composer().setText(withQuote(citacao, texto));
+      aui.composer().setQuote(undefined);
+    }
     aui.composer().send();
     // A #221 nasceu de foco perdido para o `<body>`. Sem esta linha, quem conversa
     // pelo teclado teria de reencontrar o campo antes de cada mensagem.
@@ -452,8 +464,9 @@ function Composer() {
 
   function enfileirar() {
     if (!podeEnfileirar) return;
-    fila.enfileirar(texto);
+    fila.enfileirar(withQuote(citacao, texto));
     aui.composer().setText('');
+    if (citacao) aui.composer().setQuote(undefined);
     campo.current?.focus();
   }
 
@@ -465,6 +478,7 @@ function Composer() {
         </p>
       ) : null}
       <FilaDoComposer itens={fila.itens} onTirar={fila.tirar} pausado={pausado} />
+      <CitacaoDoComposer />
       <MobileComposer
         ref={campo}
         value={texto}
@@ -509,6 +523,7 @@ export function ChatThread() {
   return (
     <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
       <LiveJoin />
+      <BarraDeCitacao />
       <Conversation aria-busy={rodando} className="min-h-0">
         <ConversationContent>
           <AuiIf condition={(s) => s.thread.isEmpty && !s.thread.isLoading}>

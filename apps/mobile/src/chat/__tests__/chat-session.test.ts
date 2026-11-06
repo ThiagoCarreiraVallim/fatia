@@ -342,6 +342,39 @@ describe('ChatSession', () => {
     expect(s.getSnapshot().queue).toEqual([]);
   });
 
+  it('citar: o trecho vai na frente da próxima mensagem e sai do campo', async () => {
+    const s = sessao();
+    s.startNew();
+    s.setQuote('Frango: 31 g de proteína');
+    expect(s.getSnapshot().quote).toBe('Frango: 31 g de proteína');
+
+    void s.send({ text: 'e o peixe?' });
+    await respirar();
+    expect(turnos[0].message).toBe('> Frango: 31 g de proteína\n\ne o peixe?');
+    expect(s.getSnapshot().thread.messages[0]).toMatchObject({ text: turnos[0].message });
+    expect(s.getSnapshot().quote).toBeNull();
+  });
+
+  it('citar: o item da fila leva a citação dele, e não a que estiver no campo ao sair', async () => {
+    const s = sessao();
+    s.startNew();
+    void s.send({ text: 'oi' });
+    await respirar();
+    s.setQuote('trecho A');
+    s.enqueue('sobre A');
+    s.setQuote('trecho B');
+
+    fontes[0].emitir({ event: 'done', data: { status: 'completed' } });
+    fontes[0].fechar();
+    await respirar();
+    await respirar();
+    expect(turnos[1].message).toBe('> trecho A\n\nsobre A');
+    expect(s.getSnapshot().quote).toBe('trecho B');
+
+    s.startNew();
+    expect(s.getSnapshot().quote).toBeNull();
+  });
+
   it('trocar de conversa no meio da resposta não deixa a anterior escrever na nova', async () => {
     const s = sessao();
     s.startNew();
