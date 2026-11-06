@@ -267,6 +267,81 @@ describe('ChatSession', () => {
     expect(s.getSnapshot().thread.interrupt).toBeNull();
   });
 
+  it('fila: o que se escreve durante a resposta sai depois dela, uma por vez', async () => {
+    const s = sessao();
+    const id = s.startNew();
+    void s.send({ text: 'primeira' });
+    await respirar();
+    s.enqueue('segunda');
+    s.enqueue('  terceira  ');
+    s.enqueue('   ');
+    expect(s.getSnapshot().queue.map((q) => q.text)).toEqual(['segunda', 'terceira']);
+
+    fontes[0].emitir({ event: 'done', data: { status: 'completed' } });
+    fontes[0].fechar();
+    await respirar();
+    await respirar();
+    expect(turnos.map((t) => t.message)).toEqual(['primeira', 'segunda']);
+    expect(turnos[1].conversationId).toBe(id);
+    expect(s.getSnapshot().queue.map((q) => q.text)).toEqual(['terceira']);
+
+    fontes[1].emitir({ event: 'done', data: { status: 'completed' } });
+    fontes[1].fechar();
+    await respirar();
+    await respirar();
+    expect(turnos.map((t) => t.message)).toEqual(['primeira', 'segunda', 'terceira']);
+    expect(s.getSnapshot().queue).toEqual([]);
+  });
+
+  it('fila: com uma pausa aberta ela espera, e anda depois da resposta à pausa', async () => {
+    const s = sessao();
+    s.startNew();
+    void s.send({ text: 'registra 200 g de frango' });
+    await respirar();
+    s.enqueue('e o jantar?');
+    fontes[0].emitir(
+      {
+        event: 'updates',
+        data: {
+          __interrupt__: [{ id: 'p1', value: { kind: 'confirm', prompt: 'ok?', actions: [] } }],
+        },
+      },
+      { event: 'done', data: { status: 'interrupted' } },
+    );
+    fontes[0].fechar();
+    await respirar();
+    await respirar();
+    expect(turnos).toHaveLength(1);
+    expect(s.getSnapshot().queue).toHaveLength(1);
+
+    void s.resume({ approvals: { c1: true } });
+    await respirar();
+    fontes[1].emitir({ event: 'done', data: { status: 'completed' } });
+    fontes[1].fechar();
+    await respirar();
+    await respirar();
+    expect(turnos.at(-1)).toMatchObject({ message: 'e o jantar?' });
+  });
+
+  it('fila: tirar um item e trocar de conversa descartam; parar não', async () => {
+    const s = sessao();
+    s.startNew();
+    void s.send({ text: 'oi' });
+    await respirar();
+    s.enqueue('fica');
+    s.enqueue('sai');
+    s.dequeue(s.getSnapshot().queue[1].id);
+    expect(s.getSnapshot().queue.map((q) => q.text)).toEqual(['fica']);
+
+    await s.stop();
+    await respirar();
+    expect(turnos.at(-1)).toMatchObject({ message: 'fica' });
+
+    s.enqueue('da velha');
+    s.startNew();
+    expect(s.getSnapshot().queue).toEqual([]);
+  });
+
   it('trocar de conversa no meio da resposta não deixa a anterior escrever na nova', async () => {
     const s = sessao();
     s.startNew();

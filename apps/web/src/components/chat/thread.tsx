@@ -10,6 +10,7 @@ import {
   SquareIcon,
   ThumbsDownIcon,
   ThumbsUpIcon,
+  XIcon,
 } from 'lucide-react';
 import {
   ActionBarPrimitive,
@@ -44,6 +45,7 @@ import { MotivoDoVoto } from './motivo-do-voto';
 import { PlanoDoTurno } from './plano';
 import { AvisoDeCota } from './cota';
 import { AnexosDaMensagem, AnexosDoComposer, FotoDaFala } from './anexos';
+import { podeEscoar, useFilaDeMensagens, type ItemDaFila } from './fila';
 import {
   useConversaAberta,
   useDisponibilidadeDoChat,
@@ -364,6 +366,47 @@ function BotaoDeDitado({
   );
 }
 
+/**
+ * O que espera a resposta terminar, acima do campo. Cada item tem X: parar a
+ * resposta não descarta a fila, e o que foi escrito não some sem a pessoa ver.
+ */
+function FilaDoComposer({
+  itens,
+  onTirar,
+  pausado,
+}: {
+  itens: ItemDaFila[];
+  onTirar: (id: string) => void;
+  pausado: boolean;
+}) {
+  if (itens.length === 0) return null;
+  return (
+    <section aria-label="Mensagens na fila" className="flex shrink-0 flex-col gap-1.5 px-4 pb-2">
+      <p className="text-xs text-muted-foreground">
+        {pausado ? 'Vai depois que você responder o cartão acima:' : 'Vai depois desta resposta:'}
+      </p>
+      <ul className="flex flex-col gap-1.5">
+        {itens.map((item) => (
+          <li
+            key={item.id}
+            className={cn(field, 'flex items-center gap-2 rounded-xl py-1.5 pl-3 pr-1.5 text-sm')}
+          >
+            <span className="min-w-0 flex-1 truncate">{item.texto}</span>
+            <button
+              type="button"
+              aria-label={`Tirar da fila: ${item.texto}`}
+              onClick={() => onTirar(item.id)}
+              className="flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+            >
+              <XIcon size={14} aria-hidden />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function Composer() {
   const aui = useAui();
   const campo = useRef<HTMLTextAreaElement>(null);
@@ -383,6 +426,13 @@ function Composer() {
   const [digitando, setDigitando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   const podeEnviar = texto.trim() !== '' || temFoto;
+  const fila = useFilaDeMensagens({
+    conversa: aberta,
+    livre: podeEscoar({ rodando, pausado, abrindo }),
+    enviar: (pergunta) => aui.thread().append(pergunta),
+  });
+  // A foto fica no campo: subir ao bucket é do envio, e a fila guarda só texto.
+  const podeEnfileirar = texto.trim() !== '' && !temFoto;
 
   function enviar() {
     if (!podeEnviar || rodando || abrindo) return;
@@ -400,6 +450,13 @@ function Composer() {
       </>
     ) : undefined;
 
+  function enfileirar() {
+    if (!podeEnfileirar) return;
+    fila.enfileirar(texto);
+    aui.composer().setText('');
+    campo.current?.focus();
+  }
+
   return (
     <>
       {aviso ? (
@@ -407,6 +464,7 @@ function Composer() {
           {aviso}
         </p>
       ) : null}
+      <FilaDoComposer itens={fila.itens} onTirar={fila.tirar} pausado={pausado} />
       <MobileComposer
         ref={campo}
         value={texto}
@@ -430,6 +488,7 @@ function Composer() {
         attachments={<AnexosDoComposer />}
         canSend={podeEnviar}
         onSend={enviar}
+        onQueue={podeEnfileirar ? enfileirar : undefined}
         onStop={() => {
           // Marcada antes de cancelar: o runtime não diferencia "parou" de
           // "terminou" (react-langgraph nunca marca `incomplete/cancelled`).

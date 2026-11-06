@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { ArrowUp, Camera, Mic, Square, X } from 'lucide-react-native';
-import type { LocalChatPhoto } from '@/chat/chat-session';
+import { ArrowUp, Camera, ListPlus, Mic, Square, X } from 'lucide-react-native';
+import type { LocalChatPhoto, QueuedChatMessage } from '@/chat/chat-session';
 import { cn, useActionSheet, useToast } from '@/components/ui';
 import { useDictation } from '@/chat/dictation';
 import { cores } from '@/theme/cores';
@@ -17,20 +17,30 @@ const MAX_CARACTERES = 4000;
  * e é guardada no bucket (ADR 038); a API a reprocessa no `confirm` (reduz a
  * 1280 px e tira metadado de novo). O ditado devolve o texto para o campo e não
  * envia nada.
+ *
+ * Com a resposta correndo, o texto vai para a fila (`onQueue`) e sai sozinho
+ * quando a conversa fica livre. Foto não entra na fila: ela sobe para o bucket
+ * na hora do envio, e guardada aqui ficaria presa ao app aberto.
  */
 export function Composer({
   running,
   disabled,
   photosEnabled,
   dictationEnabled,
+  queue,
   onSend,
+  onQueue,
+  onDequeue,
   onStop,
 }: {
   running: boolean;
   disabled: boolean;
   photosEnabled: boolean;
   dictationEnabled: boolean;
+  queue: QueuedChatMessage[];
   onSend: (text: string, photos: LocalChatPhoto[]) => void;
+  onQueue: (text: string) => void;
+  onDequeue: (id: string) => void;
   onStop: () => void;
 }) {
   const toast = useToast();
@@ -44,6 +54,14 @@ export function Composer({
   const ditado = useDictation(aoDitar);
 
   const podeEnviar = !disabled && !running && (texto.trim().length > 0 || fotos.length > 0);
+
+  const podeEnfileirar = !disabled && running && texto.trim().length > 0 && fotos.length === 0;
+
+  const enfileirar = () => {
+    if (!podeEnfileirar) return;
+    onQueue(texto);
+    setTexto('');
+  };
 
   const enviar = () => {
     if (!podeEnviar) return;
@@ -90,6 +108,28 @@ export function Composer({
         <Pressable accessibilityRole="alert" onPress={ditado.dismissError}>
           <Text className="text-xs text-muted-foreground">{ditado.error}</Text>
         </Pressable>
+      ) : null}
+      {queue.length ? (
+        <View className="gap-1" accessibilityLabel="Mensagens na fila">
+          {queue.map((item, i) => (
+            <View
+              key={item.id}
+              className="flex-row items-center gap-2 rounded-xl border border-dashed border-border px-3 py-1.5"
+            >
+              <Text className="flex-1 text-xs text-muted-foreground" numberOfLines={1}>
+                {item.text}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Tirar da fila a mensagem ${i + 1}`}
+                hitSlop={8}
+                onPress={() => onDequeue(item.id)}
+              >
+                <X size={14} color={cores.mutedForeground} />
+              </Pressable>
+            </View>
+          ))}
+        </View>
       ) : null}
       {fotos.length ? (
         <View className="flex-row gap-2">
@@ -166,14 +206,26 @@ export function Composer({
             )}
           </Pressable>
         ) : running ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Parar resposta"
-            onPress={onStop}
-            className="h-11 w-11 items-center justify-center rounded-full bg-secondary"
-          >
-            <Square size={16} color={cores.foreground} fill={cores.foreground} />
-          </Pressable>
+          <View className="flex-row gap-2">
+            {podeEnfileirar ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Pôr na fila"
+                onPress={enfileirar}
+                className="h-11 w-11 items-center justify-center rounded-full bg-primary"
+              >
+                <ListPlus size={20} color={cores.primaryForeground} />
+              </Pressable>
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Parar resposta"
+              onPress={onStop}
+              className="h-11 w-11 items-center justify-center rounded-full bg-secondary"
+            >
+              <Square size={16} color={cores.foreground} fill={cores.foreground} />
+            </Pressable>
+          </View>
         ) : (
           <Pressable
             accessibilityRole="button"

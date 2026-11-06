@@ -40,6 +40,17 @@ export interface ChatSessionSnapshot {
   isNew: boolean;
   loading: boolean;
   loadError: unknown;
+  /**
+   * O que a pessoa escreveu enquanto a resposta corria. Sai uma por vez, quando
+   * a conversa fica livre — e nunca com uma pausa aberta, que a mensagem nova
+   * abandonaria (ADR 022). Trocar de conversa descarta; parar a resposta não.
+   */
+  queue: QueuedChatMessage[];
+}
+
+export interface QueuedChatMessage {
+  id: string;
+  text: string;
 }
 
 type Listener = () => void;
@@ -61,6 +72,7 @@ const VAZIO: ChatSessionSnapshot = {
   isNew: true,
   loading: false,
   loadError: null,
+  queue: [],
 };
 
 export class ChatSession {
@@ -208,6 +220,26 @@ export class ChatSession {
     return { photoIds, photos };
   }
 
+  /** Guarda a mensagem para depois da resposta que está correndo. */
+  enqueue(text: string): void {
+    const limpo = text.trim();
+    if (!limpo || !this.snapshot.conversationId) return;
+    this.set({ queue: [...this.snapshot.queue, { id: this.newId(), text: limpo }] });
+  }
+
+  dequeue(id: string): void {
+    this.set({ queue: this.snapshot.queue.filter((item) => item.id !== id) });
+  }
+
+  /** A próxima da fila, se a conversa está livre: sem resposta e sem pausa. */
+  private drain(): void {
+    const { thread, queue } = this.snapshot;
+    if (thread.running || thread.interrupt || queue.length === 0) return;
+    const [proxima, ...resto] = queue;
+    this.set({ queue: resto });
+    void this.send({ text: proxima.text });
+  }
+
   /** A resposta a uma pausa: o `id` dela prova a qual pausa a resposta responde. */
   async resume(value: ChatResumeValue): Promise<void> {
     const conversationId = this.snapshot.conversationId;
@@ -230,6 +262,9 @@ export class ChatSession {
     } catch {
       // Sem rede: o servidor termina a resposta, e ela aparece ao reabrir.
     }
+    // Parar não descarta a fila: a próxima sai depois do servidor saber da
+    // parada, senão o turno novo esbarraria na resposta que ainda corre lá.
+    if (this.snapshot.conversationId === conversationId) this.drain();
   }
 
   /**
@@ -292,6 +327,7 @@ export class ChatSession {
           else this.setThread((t) => ({ ...t, running: false }));
         }
         this.onTurnEnd?.();
+        if (this.snapshot.conversationId === conversationId) this.drain();
       }
     }
   }
