@@ -93,6 +93,9 @@ Fonte única: `packages/api-client/src/navigation.ts` (`PRIMARY_TABS`, `menuSect
   - As telas não repetem o título grande: o que era subtítulo continua no corpo.
 - **Barra de baixo** (celular): Nutrição, Treino, o **"+" Registrar** no centro, Comunidade e
   **Mais**. Não há aba Início: ele é a raiz, e chega-se a ele voltando de qualquer tela.
+  **Vai mudar** pela [ADR 040](./ADR/040-navegacao-com-aba-hoje-e-botao-da-ia.md): abas Hoje,
+  Nutrição, Treino e Comunidade, o botão redondo da IA à direita, e o "Mais" substituído pelo
+  avatar no topo do Hoje. Esta seção descreve o código até a mudança ser implementada.
   - O "+" abre o menu Registrar: refeição (tipo pela hora), água, peso, passos e treino (retoma
     a sessão aberta). Ver `quick-add.ts` do api-client.
   - "Mais" fica ativo em qualquer tela fora das três abas e do Início e abre o drawer **Menu**: o cartão do

@@ -1,6 +1,6 @@
 # ADR 004 — Sem armazenamento de fotos de refeição
 
-**Status:** Accepted  
+**Status:** Superseded by [ADR 038](./038-foto-da-refeicao-guardada.md)  
 **Data:** 2026-05-06
 
 ## Contexto
