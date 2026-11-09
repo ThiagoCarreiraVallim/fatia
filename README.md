@@ -23,7 +23,7 @@
 | **Constância, não comparação de corpo**   | Desafios e rankings medem a aderência de cada um à **própria** meta — dias treinando, dias na faixa de calorias, sequência —, nunca peso ou medida ([ADR 027](docs/ADR/027-desafios-por-aderencia-a-propria-meta.md)).            |
 | **O dado é do aluno**                     | A equipe da comunidade só lê o que ele consentiu, por categoria, e cada acesso fica registrado. `export_my_data` devolve tudo e `delete_my_account` apaga tudo. Falta de pagamento tira a IA, nunca o app nem o histórico.        |
 | **MCP-first, não "com integração de IA"** | As **130 tools** MCP cobrem o CRUD inteiro. Não existe operação de registro que o app faça e o MCP não faça ([ADR 006](docs/ADR/006-mcp-first.md)).                                                                               |
-| **Foto de refeição não vira arquivo**     | A IA analisa a imagem e devolve **dados estruturados**; a foto do prato nunca é guardada ([ADR 004](docs/ADR/004-sem-armazenamento-fotos.md)).                                                                                    |
+| **A foto é sua escolha**                  | A IA analisa a imagem e devolve **dados estruturados**; a foto do prato só fica guardada se você aceitar ([ADR 038](docs/ADR/038-foto-da-refeicao-guardada.md)).                                                                  |
 | **Open source e self-hostable**           | Licença MIT. `infra/docker-compose.prod.yml` sobe API, web, site e Logto atrás do Traefik com SSL automático; `AI_REQUIRES_PLAN=false` libera a IA para a sua instância sem gateway de pagamento.                                 |
 
 O que o produto faz, para quem e o que ele se recusa a fazer: [`docs/PRD.md`](docs/PRD.md).

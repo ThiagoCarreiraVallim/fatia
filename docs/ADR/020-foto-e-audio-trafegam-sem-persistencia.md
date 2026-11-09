@@ -1,6 +1,6 @@
 # ADR 020 — Foto e áudio trafegam para o provedor de IA, sem persistência em ponto nenhum
 
-**Status:** Accepted
+**Status:** Accepted — item 1 alterado para a foto da refeição pela [ADR 038](./038-foto-da-refeicao-guardada.md)
 **Data:** 2026-08-03
 
 ## Contexto
