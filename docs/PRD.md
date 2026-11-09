@@ -47,8 +47,9 @@ Papéis da comunidade: `OWNER`, `PROFESSIONAL`, `CREATOR` e `MEMBER` — o que c
 5. **MCP-first.** Toda função do app existe como tool MCP ([ADR 006](./ADR/006-mcp-first.md)),
    com duas exceções declaradas: inferência paga pela Fatia (ADR 018) e a administração da
    comunidade.
-6. **Foto de refeição não vira arquivo.** Foto e áudio vão à IA e somem
-   ([ADR 004](./ADR/004-sem-armazenamento-fotos.md), [ADR 020](./ADR/020-foto-e-audio-trafegam-sem-persistencia.md)).
+6. **A foto da refeição só fica guardada se a pessoa aceitar**, e a equipe só a vê com uma
+   categoria de compartilhamento própria ([ADR 038](./ADR/038-foto-da-refeicao-guardada.md)). O
+   áudio do ditado vai à IA e some ([ADR 020](./ADR/020-foto-e-audio-trafegam-sem-persistencia.md)).
    Imagem que a pessoa **publica** na comunidade é outra coisa e é guardada sem EXIF
    ([ADR 028](./ADR/028-imagens-de-posts-da-comunidade.md)).
 7. **Isolamento é da aplicação e é testado.** Recurso de outra pessoa responde `NOT_FOUND`, igual a
@@ -66,7 +67,8 @@ Papéis da comunidade: `OWNER`, `PROFESSIONAL`, `CREATOR` e `MEMBER` — o que c
   prescrição de carga; periodização em blocos.
 - **Progresso:** peso, passos, gráficos de carga, cardio e peso, sequências e conquistas.
 - **IA hospedada (PRO):** chat que registra e consulta pelo mesmo catálogo de tools, com
-  confirmação antes de escrever, memória e conversa que continua no servidor; foto do prato; ditado;
+  confirmação antes de escrever — ou gravação automática com Desfazer, por categoria, para quem
+  escolher ([ADR 039](./ADR/039-ia-grava-no-modo-automatico.md)) —, memória e conversa que continua no servidor; foto do prato; ditado;
   o agente da comunidade (nome, avatar e orientações da equipe).
 - **Comunidades:** entrar por convite, link ou código, com consentimento por categoria; mural com
   imagens, reações e comentários; desafios com ranking só de quem participa; planos prontos, dicas e
@@ -91,7 +93,6 @@ Valem para todo trabalho. Mudar qualquer linha desta seção exige ADR (ADR 037)
 **Fora, sem exceção prevista:**
 
 - ❌ **Comparar corpo** entre pessoas — ranking, desafio ou post com peso, medida ou foto de corpo (ADR 027)
-- ❌ **Guardar a foto da refeição** (ADR 004, ADR 020)
 - ❌ **Bloquear o app ou o histórico por falta de pagamento** — só a IA hospedada degrada
 - ❌ **Inferência paga pela Fatia exposta pelo MCP** (ADR 018)
 - ❌ **Ser o sistema de gestão da academia** — matrícula, cobrança de mensalidade, catraca, agenda de
