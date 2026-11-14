@@ -47,3 +47,11 @@ describe('toastDuration', () => {
     expect(toastDuration(true)).toBe(5000);
   });
 });
+
+describe('pressScale', () => {
+  it('pressionado = escala .97, como o .anim-press da web', async () => {
+    const { pressScale } = await import('../motion-values');
+    expect(pressScale(true)).toBe(0.97);
+    expect(pressScale(false)).toBe(1);
+  });
+});

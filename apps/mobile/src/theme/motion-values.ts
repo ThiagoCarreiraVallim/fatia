@@ -31,3 +31,8 @@ export function countUpValue(target: number, elapsed: number, total: number): nu
 export function toastDuration(hasAction: boolean): number {
   return hasAction ? duration.toastWithAction : duration.toast;
 }
+
+/** Botão pressionado encolhe para .97 (o `.anim-press` da web). */
+export function pressScale(pressed: boolean): number {
+  return pressed ? 0.97 : 1;
+}

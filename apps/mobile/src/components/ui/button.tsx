@@ -1,9 +1,27 @@
 import { forwardRef, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, View, type PressableProps } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  View,
+  type GestureResponderEvent,
+  type PressableProps,
+} from 'react-native';
+import Animated, {
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import { cssInterop } from 'nativewind';
 import { Text } from './text';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from './utils';
 import { colors } from '@/theme/colors';
+import { pressScale } from '@/theme/motion-values';
+import { duration } from '@fatia/design';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+cssInterop(AnimatedPressable, { className: 'style' });
 
 /**
  * Botão do app nativo.
@@ -18,32 +36,29 @@ import { colors } from '@/theme/colors';
  * - altura mínima de 44pt em todos os tamanhos, que é o alvo de toque mínimo das
  *   diretrizes da Apple e do Material. O `sm` do web tem 32px e ficaria abaixo.
  */
-const buttonVariants = cva(
-  'flex-row items-center justify-center gap-2 rounded-md active:opacity-80',
-  {
-    variants: {
-      variant: {
-        default: 'bg-primary',
-        destructive: 'bg-destructive',
-        outline: 'border border-input bg-transparent',
-        secondary: 'bg-secondary',
-        ghost: 'bg-transparent',
-        link: 'bg-transparent',
-      },
-      size: {
-        default: 'min-h-[44px] px-4 py-2',
-        sm: 'min-h-[44px] px-3 py-1',
-        lg: 'min-h-[52px] px-8 py-3',
-        icon: 'h-11 w-11 px-0',
-      },
-      disabled: {
-        true: 'opacity-50',
-        false: '',
-      },
+const buttonVariants = cva('flex-row items-center justify-center gap-2 rounded-md', {
+  variants: {
+    variant: {
+      default: 'bg-primary',
+      destructive: 'bg-destructive',
+      outline: 'border border-input bg-transparent',
+      secondary: 'bg-secondary',
+      ghost: 'bg-transparent',
+      link: 'bg-transparent',
     },
-    defaultVariants: { variant: 'default', size: 'default', disabled: false },
+    size: {
+      default: 'min-h-[44px] px-4 py-2',
+      sm: 'min-h-[44px] px-3 py-1',
+      lg: 'min-h-[52px] px-8 py-3',
+      icon: 'h-11 w-11 px-0',
+    },
+    disabled: {
+      true: 'opacity-50',
+      false: '',
+    },
   },
-);
+  defaultVariants: { variant: 'default', size: 'default', disabled: false },
+});
 
 const labelVariants = cva('text-sm font-medium', {
   variants: {
@@ -79,12 +94,34 @@ export interface ButtonProps
 }
 
 export const Button = forwardRef<View, ButtonProps>(function Button(
-  { children, className, textClassName, variant, size, disabled, loading, ...props },
+  {
+    children,
+    className,
+    textClassName,
+    variant,
+    size,
+    disabled,
+    loading,
+    style,
+    onPressIn,
+    onPressOut,
+    ...props
+  },
   ref,
 ) {
   const isDisabled = Boolean(disabled || loading);
+  // Pressionado = escala .97 (prancha Componentes); com "reduzir movimento" o
+  // tamanho troca sem animar.
+  const scale = useSharedValue(1);
+  const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const press = (pressed: boolean) => {
+    scale.value = withTiming(pressScale(pressed), {
+      duration: duration.fast,
+      reduceMotion: ReduceMotion.System,
+    });
+  };
   return (
-    <Pressable
+    <AnimatedPressable
       ref={ref}
       accessibilityRole="button"
       // `disabled` no `accessibilityState` é o que faz o leitor de tela anunciar
@@ -92,6 +129,15 @@ export const Button = forwardRef<View, ButtonProps>(function Button(
       accessibilityState={{ disabled: isDisabled, busy: loading }}
       disabled={isDisabled}
       className={cn(buttonVariants({ variant, size, disabled: isDisabled }), className)}
+      style={[typeof style === 'function' ? undefined : style, pressStyle]}
+      onPressIn={(e: GestureResponderEvent) => {
+        press(true);
+        onPressIn?.(e);
+      }}
+      onPressOut={(e: GestureResponderEvent) => {
+        press(false);
+        onPressOut?.(e);
+      }}
       {...props}
     >
       {loading ? (
@@ -104,7 +150,7 @@ export const Button = forwardRef<View, ButtonProps>(function Button(
       ) : (
         children
       )}
-    </Pressable>
+    </AnimatedPressable>
   );
 });
 
