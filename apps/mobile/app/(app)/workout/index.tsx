@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { ChevronRight, Dumbbell, History, ListChecks, Plus } from 'lucide-react-native';
 import { QUICK_TEMPLATES, workoutApi, type QuickTemplate } from '@fatia/api-client';
+import { WorkoutCardsCarousel } from '@/components/workout/cards/workout-cards';
 import { Screen } from '@/components/layout/screen';
 import { Button, Carousel, ErrorState, LoadingState } from '@/components/ui';
 import { BlockTimeline } from '@/components/workout/block-timeline';
@@ -154,6 +155,10 @@ export default function WorkoutScreen() {
         {active.data ? (
           <ActiveSessionBanner sessionId={active.data.id} startedAt={active.data.startedAt} />
         ) : null}
+
+        {/* Os cards do canvas (músculos descansados, repetir o último, séries da
+            semana) abrem a aba quando não há sessão aberta, como no PWA (#369). */}
+        {!active.isLoading && !active.data ? <WorkoutCardsCarousel /> : null}
 
         <View className="gap-2">
           <View className="flex-row items-center justify-between">

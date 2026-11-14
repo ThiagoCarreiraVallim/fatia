@@ -29,8 +29,8 @@ export function useToast() {
   return useContext(ToastContext);
 }
 
-/** Acima da barra de baixo (80) com folga, como o "Registrar" ficava. */
-const DISTANCIA_DO_RODAPE = 96;
+/** Acima da barra de baixo, que flutua a 22 px e tem 68 (#369), com folga. */
+const DISTANCIA_DO_RODAPE = 104;
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const insets = useSafeAreaInsets();
