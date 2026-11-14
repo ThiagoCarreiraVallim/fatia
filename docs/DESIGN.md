@@ -38,8 +38,8 @@ Claro** em Perfil → Aparência. A escolha é preferência de interface, guarda
   `:root`, o claro em `:root[data-theme='light']` e de novo sob
   `@media (prefers-color-scheme: light)` em `:root:not([data-theme='dark'])` (para quem está sem
   JS). `dark:` do Tailwind vale com `[data-theme="dark"]`. O `theme-color` do navegador acompanha.
-- **App:** `colorScheme.set` do NativeWind troca as variáveis do `global.css` (o claro está sob
-  `@media (prefers-color-scheme: light)`); `colors` de `src/theme/colors.ts` lê o tema que vale
+- **App:** `colorScheme.set` do NativeWind troca as variáveis do `global.css` (no app o
+  escuro fica sob `@media (prefers-color-scheme: dark)`, o único bloco que o NativeWind reconhece); `colors` de `src/theme/colors.ts` lê o tema que vale
   agora. `userInterfaceStyle: 'automatic'`; a barra de status e a do sistema seguem o tema.
 - **Site:** segue o sistema, sem seletor.
 

@@ -8,8 +8,9 @@ import { colors, setColorsTheme, themeColors, type ColorName } from '../colors';
 
 const CSS = readFileSync(resolve(__dirname, '../../../global.css'), 'utf8');
 const blocks = {
-  dark: readCssTokens(cssBlock(CSS, ':root')),
-  light: readCssTokens(cssBlock(cssBlock(CSS, '@media (prefers-color-scheme: light)'), ':root')),
+  // O NativeWind só reconhece a mídia `dark` como o escuro: no app o claro é o `:root` de fora.
+  dark: readCssTokens(cssBlock(cssBlock(CSS, '@media (prefers-color-scheme: dark)'), ':root')),
+  light: readCssTokens(cssBlock(CSS, ':root')),
 };
 
 const TOKEN: Record<Exclude<ColorName, 'placeholder'>, string> = {

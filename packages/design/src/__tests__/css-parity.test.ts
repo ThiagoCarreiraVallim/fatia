@@ -16,19 +16,21 @@ const FILES = {
   site: resolve(ROOT, 'apps/site/src/styles/global.css'),
 } as const;
 
-/** Onde mora o bloco claro em cada arquivo. */
-const LIGHT_SELECTOR = {
-  web: ":root[data-theme='light']",
-  mobile: '@media (prefers-color-scheme: light)',
-  site: '@media (prefers-color-scheme: light)',
+/**
+ * Onde mora cada tema. Web e site: escuro no `:root`, claro por seletor/mídia.
+ * App: o contrário, porque o NativeWind só lê `prefers-color-scheme: dark`
+ * como o bloco escuro (todo `:root` fora dela vira o claro).
+ */
+const BLOCKS = {
+  web: { dark: [':root'], light: [":root[data-theme='light']"] },
+  mobile: { dark: ['@media (prefers-color-scheme: dark)', ':root'], light: [':root'] },
+  site: { dark: [':root'], light: ['@media (prefers-color-scheme: light)', ':root'] },
 } as const;
 
 function tokensOf(app: keyof typeof FILES, theme: Theme): Record<string, string> {
-  const css = readFileSync(FILES[app], 'utf8');
-  if (theme === 'dark') return readCssTokens(cssBlock(css, ':root'));
-  const light = cssBlock(css, LIGHT_SELECTOR[app]);
-  // No app e no site o claro é um `:root` dentro da mídia.
-  return readCssTokens(app === 'web' ? light : cssBlock(light, ':root'));
+  let block = readFileSync(FILES[app], 'utf8');
+  for (const selector of BLOCKS[app][theme]) block = cssBlock(block, selector);
+  return readCssTokens(block);
 }
 
 /** Diferença por canal entre um "H S% L%" do CSS e o hex do tokens.ts. */

@@ -15,8 +15,9 @@ const MOBILE = readFileSync(resolve(__dirname, '../../../global.css'), 'utf8');
 const WEB = readFileSync(resolve(__dirname, '../../../../web/src/app/globals.css'), 'utf8');
 
 const mobile = {
-  dark: readCssTokens(cssBlock(MOBILE, ':root')),
-  light: readCssTokens(cssBlock(cssBlock(MOBILE, '@media (prefers-color-scheme: light)'), ':root')),
+  // O NativeWind só reconhece a mídia `dark` como o escuro: no app o claro é o `:root` de fora.
+  dark: readCssTokens(cssBlock(cssBlock(MOBILE, '@media (prefers-color-scheme: dark)'), ':root')),
+  light: readCssTokens(cssBlock(MOBILE, ':root')),
 };
 const web = {
   dark: readCssTokens(cssBlock(WEB, ':root')),
