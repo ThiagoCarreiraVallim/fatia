@@ -17,8 +17,6 @@ import { colors } from '@/theme/colors';
  * cópia local: a frase da tolerância explica um número que muda na cara do usuário, e os dois
  * apps dizendo coisas diferentes sobre o mesmo número seria pior que não explicar.
  */
-const LARANJA = '#f97316';
-const AMBAR = '#f59e0b';
 
 export function StreakCard({
   streak,
@@ -42,7 +40,7 @@ export function StreakCard({
       </View>
 
       <View className="flex-row items-center gap-2">
-        <Flame size={28} color={LARANJA} />
+        <Flame size={28} color={colors.warning} />
         <Text style={NUMEROS_TABULARES} className="text-3xl font-semibold text-foreground">
           {rotuloDeSequencia(streak.activeDays, 'dias')}
         </Text>
@@ -72,7 +70,7 @@ export function StreakCard({
               }`}
             >
               {aberta ? (
-                <Trophy size={12} color={AMBAR} />
+                <Trophy size={12} color={colors.warning} />
               ) : (
                 <Lock size={12} color={colors.placeholder} />
               )}

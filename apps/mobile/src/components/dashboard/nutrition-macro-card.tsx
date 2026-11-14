@@ -42,10 +42,7 @@ export function NutritionMacroCard({ nutrition }: { nutrition: TodaySummary['nut
     >
       {/* Tinta verde do PWA. Lá é um gradiente; sem `expo-linear-gradient` no
           projeto, um véu chapado é a aproximação que não custa dependência. */}
-      <View
-        pointerEvents="none"
-        style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(44,229,0,0.06)' }]}
-      />
+      <View pointerEvents="none" className="bg-primary/5" style={StyleSheet.absoluteFill} />
 
       <View className="gap-4 p-5">
         <View className="flex-row items-center justify-between">

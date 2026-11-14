@@ -39,10 +39,7 @@ export function WaterCard({
 
   return (
     <View className="overflow-hidden rounded-xl border border-border bg-card">
-      <View
-        pointerEvents="none"
-        style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(75,142,255,0.06)' }]}
-      />
+      <View pointerEvents="none" className="bg-water/5" style={StyleSheet.absoluteFill} />
 
       <View className="gap-4 p-5">
         <View className="flex-row items-center justify-between">
@@ -106,7 +103,7 @@ export function WaterCard({
               key={ml}
               variant="outline"
               size="sm"
-              className="flex-1 border-water bg-[#16233d]"
+              className="flex-1 border-water bg-water/10"
               disabled={adicionar.isPending}
               accessibilityLabel={`Adicionar ${ml} mililitros de água`}
               onPress={() => adicionar.mutate(ml)}
