@@ -19,6 +19,7 @@ export {
 } from './http';
 
 export * from './billing';
+export * from './pro-block-copy';
 export * from './chat';
 export * from './chat-thread';
 export * from './chat-markdown';

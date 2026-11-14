@@ -225,6 +225,9 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/profile/connect', title: 'Conectar sua IA', parent: '/profile' },
   { pattern: '/profile/tokens', title: 'Conectar sua IA', parent: '/profile' },
   { pattern: '/profile/notifications', title: 'Notificações', parent: '/profile' },
+  { pattern: '/profile/appearance', title: 'Aparência', parent: '/profile' },
+  // Galeria do design system: só fora de produção (notFound em produção), sem link.
+  { pattern: '/design-system', title: 'Design system', parent: '/' },
   { pattern: '/plan', title: 'Meu plano', parent: '/profile' },
   { pattern: '/chat', title: 'Chat', parent: '/' },
   // Só no app: na web as memórias são uma gaveta da conversa. Antes do `:id`.
