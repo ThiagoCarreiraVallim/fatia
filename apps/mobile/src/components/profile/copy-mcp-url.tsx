@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Check, Copy } from 'lucide-react-native';
 import { Button } from '@/components/ui';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/components/profile/copy-mcp-url.tsx`.
@@ -42,9 +42,9 @@ export function CopyMcpUrl({ url }: { url: string }) {
         accessibilityLabel={copied ? 'URL copiada' : 'Copiar URL'}
       >
         {copied ? (
-          <Check size={16} color={cores.primary} />
+          <Check size={16} color={colors.primaryText} />
         ) : (
-          <Copy size={16} color={cores.mutedForeground} />
+          <Copy size={16} color={colors.mutedForeground} />
         )}
       </Button>
     </View>

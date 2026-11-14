@@ -3,7 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import { Check, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { dayLabel, shiftDay } from '@fatia/api-client';
 import { Button } from '@/components/ui';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/components/nutrition/copy-to-day.tsx`.
@@ -43,7 +43,7 @@ export function CopiarParaDia({
           onPress={() => setDia(shiftDay(dia, -1))}
           className="h-11 w-11 items-center justify-center rounded-md active:bg-accent"
         >
-          <ChevronLeft size={20} color={cores.foreground} />
+          <ChevronLeft size={20} color={colors.foreground} />
         </Pressable>
         <Text className="text-sm font-medium capitalize text-foreground">{rotulo}</Text>
         <Pressable
@@ -52,7 +52,7 @@ export function CopiarParaDia({
           onPress={() => setDia(shiftDay(dia, 1))}
           className="h-11 w-11 items-center justify-center rounded-md active:bg-accent"
         >
-          <ChevronRight size={20} color={cores.foreground} />
+          <ChevronRight size={20} color={colors.foreground} />
         </Pressable>
       </View>
       <Button onPress={() => onCopiar(dia)} disabled={pendente} loading={pendente}>
@@ -66,7 +66,7 @@ export function CopiarParaDia({
       {feito ? (
         <View className="flex-row items-center justify-between gap-2 rounded-lg bg-primary/10 px-3 py-2">
           <View accessibilityRole="text" className="flex-1 flex-row items-center gap-2">
-            <Check size={16} color={cores.primary} />
+            <Check size={16} color={colors.primaryText} />
             <Text className="text-sm text-primary">{feito.texto}</Text>
           </View>
           <Pressable

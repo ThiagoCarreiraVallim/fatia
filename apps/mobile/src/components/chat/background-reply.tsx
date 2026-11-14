@@ -2,7 +2,7 @@ import { ActivityIndicator, Pressable, Text } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useChatSnapshot } from '@/chat/chat-provider';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * A resposta do chat que continua chegando enquanto a pessoa está em outra aba
@@ -23,7 +23,7 @@ export function BackgroundReply() {
       style={{ bottom: insets.bottom + 92 }}
       className="absolute right-4 min-h-[44px] flex-row items-center gap-2 rounded-full border border-border bg-card px-4"
     >
-      <ActivityIndicator size="small" color={cores.primary} />
+      <ActivityIndicator size="small" color={colors.primaryText} />
       <Text className="text-sm text-foreground">Respondendo…</Text>
     </Pressable>
   );

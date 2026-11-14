@@ -24,7 +24,7 @@ import {
   type ChatToolStatus,
 } from '@fatia/api-client';
 import { Button, cn } from '@/components/ui';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 import { ArtifactCard } from './artifact-card';
 import { ChatMarkdown } from './chat-markdown';
 
@@ -47,7 +47,7 @@ export function UserBubble({ text, photos }: { text: string; photos: number }) {
     <View className="max-w-[85%] self-end rounded-2xl rounded-br-md bg-secondary px-4 py-2.5">
       {photos > 0 ? (
         <View className="mb-1 flex-row items-center gap-1">
-          <ImageIcon size={12} color={cores.mutedForeground} />
+          <ImageIcon size={12} color={colors.mutedForeground} />
           <Text className="text-xs text-muted-foreground">
             {photos === 1 ? 'Foto enviada' : `${photos} fotos enviadas`} — não fica guardada
           </Text>
@@ -89,9 +89,9 @@ export function AssistantBlock({
         >
           <View className="flex-row items-center gap-1">
             {pensamentoAberto ? (
-              <ChevronDown size={14} color={cores.mutedForeground} />
+              <ChevronDown size={14} color={colors.mutedForeground} />
             ) : (
-              <ChevronRight size={14} color={cores.mutedForeground} />
+              <ChevronRight size={14} color={colors.mutedForeground} />
             )}
             <Text className="text-xs text-muted-foreground">Raciocínio</Text>
           </View>
@@ -107,13 +107,13 @@ export function AssistantBlock({
             className="flex-row items-center gap-2 self-start rounded-full border border-border px-3 py-1"
           >
             {tool.status === 'running' ? (
-              <ActivityIndicator size="small" color={cores.primary} />
+              <ActivityIndicator size="small" color={colors.primaryText} />
             ) : tool.status === 'success' ? (
-              <Check size={14} color={cores.primary} />
+              <Check size={14} color={colors.primaryText} />
             ) : tool.status === 'error' ? (
-              <CircleX size={14} color={cores.mutedForeground} />
+              <CircleX size={14} color={colors.mutedForeground} />
             ) : (
-              <Ban size={14} color={cores.mutedForeground} />
+              <Ban size={14} color={colors.mutedForeground} />
             )}
             <Text className="text-xs text-foreground">
               {thread.toolTitles[tool.name] ?? tool.name}
@@ -145,9 +145,9 @@ export function AssistantBlock({
             className="h-11 w-11 items-center justify-center"
           >
             {copiado ? (
-              <Check size={16} color={cores.primary} />
+              <Check size={16} color={colors.primaryText} />
             ) : (
-              <Copy size={16} color={cores.mutedForeground} />
+              <Copy size={16} color={colors.mutedForeground} />
             )}
           </Pressable>
           {message.rowId ? (
@@ -161,7 +161,7 @@ export function AssistantBlock({
               >
                 <ThumbsUp
                   size={16}
-                  color={message.review === 'like' ? cores.primary : cores.mutedForeground}
+                  color={message.review === 'like' ? colors.primaryText : colors.mutedForeground}
                 />
               </Pressable>
               <Pressable
@@ -173,7 +173,7 @@ export function AssistantBlock({
               >
                 <ThumbsDown
                   size={16}
-                  color={message.review === 'dislike' ? cores.primary : cores.mutedForeground}
+                  color={message.review === 'dislike' ? colors.primaryText : colors.mutedForeground}
                 />
               </Pressable>
             </>
@@ -196,7 +196,7 @@ export function Thinking() {
       accessibilityLabel="Pensando"
       className="flex-row items-center gap-2"
     >
-      <ActivityIndicator size="small" color={cores.primary} />
+      <ActivityIndicator size="small" color={colors.primaryText} />
       <Text className="text-sm text-muted-foreground">Pensando…</Text>
     </View>
   );
@@ -209,9 +209,9 @@ export function PlanCard({ steps }: { steps: ChatPlanStep[] }) {
       {steps.map((p) => (
         <View key={p.id} className="flex-row items-center gap-2">
           {p.status === 'done' ? (
-            <Check size={14} color={cores.primary} />
+            <Check size={14} color={colors.primaryText} />
           ) : p.status === 'running' ? (
-            <ActivityIndicator size="small" color={cores.primary} />
+            <ActivityIndicator size="small" color={colors.primaryText} />
           ) : (
             <View className="h-3.5 w-3.5 rounded-full border border-border" />
           )}

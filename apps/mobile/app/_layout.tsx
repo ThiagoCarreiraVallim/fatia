@@ -8,7 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiError } from '@fatia/api-client';
 import { AuthProvider, useAuth } from '@/auth/auth-context';
 import { installMobileApiTransport } from '@/api/transport';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 import { ToastProvider } from '@/components/ui/toast';
 
 /**
@@ -74,7 +74,7 @@ export default function RootLayout() {
   const [queryClient] = useState(makeQueryClient);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: cores.background }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaProvider>
         <StatusBar style="light" />
         <AuthProvider>
@@ -84,7 +84,7 @@ export default function RootLayout() {
                 <Stack
                   screenOptions={{
                     headerShown: false,
-                    contentStyle: { backgroundColor: cores.background },
+                    contentStyle: { backgroundColor: colors.background },
                     // Gesto de voltar do iOS ligado em todas as telas; no Android
                     // o botão físico é tratado pelo próprio Expo Router.
                     gestureEnabled: true,

@@ -15,7 +15,7 @@ import {
   Label,
   useToast,
 } from '@/components/ui';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Apagar a conta de dentro do app.
@@ -96,8 +96,8 @@ export function DeleteAccountDrawer({ open, onClose }: { open: boolean; onClose:
               value={confirmation}
               onChangeText={setConfirmation}
               placeholder={DELETE_ACCOUNT_CONFIRMATION}
-              placeholderTextColor={cores.placeholder}
-              selectionColor={cores.primary}
+              placeholderTextColor={colors.placeholder}
+              selectionColor={colors.primaryText}
               autoCapitalize="characters"
               autoCorrect={false}
               className="min-h-[44px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground"

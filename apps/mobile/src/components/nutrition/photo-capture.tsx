@@ -4,7 +4,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Images } from 'lucide-react-native';
 import { Button } from '@/components/ui';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Captura da foto da refeição (#139) — câmera e galeria.
@@ -109,7 +109,7 @@ export function PhotoCapture({ onCapturada, ativo }: Props) {
           disabled={!ativo || capturando}
           className="h-12 w-12 items-center justify-center rounded-full bg-background/80 active:bg-accent"
         >
-          <Images size={20} color={cores.mutedForeground} />
+          <Images size={20} color={colors.mutedForeground} />
         </Pressable>
 
         <Pressable

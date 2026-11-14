@@ -3,7 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import { X } from 'lucide-react-native';
 import { equipmentLabel, filterCustomEquipment, groupedEquipmentOptions } from '@fatia/api-client';
 import { cn } from '@/components/ui';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /** Um equipamento em pílula: marcado ou não, e com "×" quando dá para tirar. */
 export function EquipmentChip({
@@ -49,7 +49,7 @@ export function EquipmentChip({
           onPress={onRemove}
           className="h-10 w-9 items-center justify-center active:opacity-60"
         >
-          <X size={14} color={cores.mutedForeground} />
+          <X size={14} color={colors.mutedForeground} />
         </Pressable>
       ) : null}
     </View>

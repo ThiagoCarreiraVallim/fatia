@@ -5,7 +5,7 @@ import { ArrowUp, Camera, Mic, Square, X } from 'lucide-react-native';
 import type { ChatPhoto } from '@fatia/api-client';
 import { cn, useActionSheet, useToast } from '@/components/ui';
 import { useDictation } from '@/chat/dictation';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /** O teto do agente por mensagem (`MAX_FOTOS_POR_MENSAGEM`). */
 const MAX_FOTOS = 3;
@@ -108,7 +108,7 @@ export function Composer({
                 onPress={() => setFotos((fs) => fs.filter((_, j) => j !== i))}
                 className="absolute -top-2 -right-2 h-6 w-6 items-center justify-center rounded-full bg-card"
               >
-                <X size={12} color={cores.foreground} />
+                <X size={12} color={colors.foreground} />
               </Pressable>
             </View>
           ))}
@@ -126,7 +126,7 @@ export function Composer({
               (disabled || running || fotos.length >= MAX_FOTOS) && 'opacity-40',
             )}
           >
-            <Camera size={20} color={cores.mutedForeground} />
+            <Camera size={20} color={colors.mutedForeground} />
           </Pressable>
         ) : null}
         <TextInput
@@ -145,7 +145,7 @@ export function Composer({
                   ? 'Abrindo a conversa…'
                   : 'Escreva sua mensagem'
           }
-          placeholderTextColor={cores.mutedForeground}
+          placeholderTextColor={colors.mutedForeground}
           className="max-h-32 min-h-[44px] flex-1 rounded-2xl border border-border bg-card px-4 py-2.5 text-[15px] text-foreground"
         />
         {dictationEnabled && !running && !texto.trim() ? (
@@ -160,11 +160,11 @@ export function Composer({
             )}
           >
             {ditado.state === 'transcribing' ? (
-              <ActivityIndicator size="small" color={cores.primary} />
+              <ActivityIndicator size="small" color={colors.primaryText} />
             ) : ditado.state === 'recording' ? (
-              <Square size={16} color={cores.foreground} fill={cores.foreground} />
+              <Square size={16} color={colors.foreground} fill={colors.foreground} />
             ) : (
-              <Mic size={20} color={cores.foreground} />
+              <Mic size={20} color={colors.foreground} />
             )}
           </Pressable>
         ) : running ? (
@@ -174,7 +174,7 @@ export function Composer({
             onPress={onStop}
             className="h-11 w-11 items-center justify-center rounded-full bg-secondary"
           >
-            <Square size={16} color={cores.foreground} fill={cores.foreground} />
+            <Square size={16} color={colors.foreground} fill={colors.foreground} />
           </Pressable>
         ) : (
           <Pressable
@@ -187,7 +187,7 @@ export function Composer({
               !podeEnviar && 'opacity-40',
             )}
           >
-            <ArrowUp size={20} color={cores.primaryForeground} />
+            <ArrowUp size={20} color={colors.primaryForeground} />
           </Pressable>
         )}
       </View>

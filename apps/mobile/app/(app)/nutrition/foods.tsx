@@ -7,7 +7,7 @@ import { customFoodSummary, nutritionApi, type Food } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { ErrorState, LoadingState } from '@/components/ui';
 import { AlimentoDrawer } from '@/components/nutrition/alimento-drawer';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
 
 /**
@@ -45,7 +45,7 @@ export default function MeusAlimentosScreen() {
             onPress={() => setEditando('novo')}
             className={TOP_BAR_ACTION}
           >
-            <Plus size={22} color={cores.primary} />
+            <Plus size={22} color={colors.primaryText} />
           </Pressable>
         }
         onRefresh={() => void alimentos.refetch()}
@@ -84,7 +84,7 @@ export default function MeusAlimentosScreen() {
                     </Text>
                     <Text className="text-xs text-muted-foreground">{customFoodSummary(food)}</Text>
                   </View>
-                  <ChevronRight size={16} color={cores.mutedForeground} />
+                  <ChevronRight size={16} color={colors.mutedForeground} />
                 </Pressable>
               ))}
             </View>

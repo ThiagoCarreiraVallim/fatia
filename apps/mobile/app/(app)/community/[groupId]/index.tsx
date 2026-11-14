@@ -24,7 +24,7 @@ import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
 import { apiMessage } from '@/components/org/org-panel';
 import { Button, EmptyState, ErrorState, Input, LoadingState } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 function Composer({ groupId, me }: { groupId: string; me: MyName }) {
   const qc = useQueryClient();
@@ -152,7 +152,7 @@ export default function CommunityFeedScreen() {
                 onPress={() => router.push(panelHref(groupId))}
                 className={TOP_BAR_ACTION}
               >
-                <LayoutDashboard size={20} color={cores.mutedForeground} />
+                <LayoutDashboard size={20} color={colors.mutedForeground} />
               </Pressable>
             ) : null}
             <Pressable
@@ -161,7 +161,7 @@ export default function CommunityFeedScreen() {
               onPress={() => router.push(settingsHref)}
               className={TOP_BAR_ACTION}
             >
-              <Settings size={20} color={cores.mutedForeground} />
+              <Settings size={20} color={colors.mutedForeground} />
             </Pressable>
           </>
         ) : undefined

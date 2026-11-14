@@ -29,7 +29,7 @@ import { useCancelSession } from './use-cancel-session';
 import { useSessionExitGuard } from './use-exit-guard';
 import { useSessionLayout } from './use-session-layout';
 import { useRestTimer } from './use-rest-timer';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Sessão em andamento — o `ActiveSession` de `apps/web/src/app/(app)/workout/page.tsx`,
@@ -147,8 +147,8 @@ export function ActiveSession({
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                tintColor={cores.primary}
-                colors={[cores.primary]}
+                tintColor={colors.primaryText}
+                colors={[colors.primaryText]}
               />
             }
           >
@@ -240,7 +240,7 @@ export function ActiveSession({
             ))}
 
             <Button variant="outline" className="rounded-2xl" onPress={() => setSearchOpen(true)}>
-              <Plus size={16} color={cores.foreground} />
+              <Plus size={16} color={colors.foreground} />
               <Text className="text-sm font-medium text-foreground">Adicionar exercício</Text>
             </Button>
           </ScrollView>
@@ -341,7 +341,7 @@ function ExerciseActions({
           accessibilityLabel={`Fazer ${group.exerciseName} agora`}
           onPress={onDoNow}
         >
-          <Play size={14} color={cores.primaryForeground} fill={cores.primaryForeground} />
+          <Play size={14} color={colors.primaryForeground} fill={colors.primaryForeground} />
           <Text className="text-xs font-extrabold text-primary-foreground">Fazer agora</Text>
         </Button>
       )}
@@ -351,17 +351,17 @@ function ExerciseActions({
         disabled={isFirst || disabled}
         onPress={() => onMove('up')}
       >
-        <ChevronUp size={20} color={isFirst || disabled ? cores.border : cores.foreground} />
+        <ChevronUp size={20} color={isFirst || disabled ? colors.border : colors.foreground} />
       </IconAction>
       <IconAction
         label={`Mover ${group.exerciseName} para baixo`}
         disabled={isLast || disabled}
         onPress={() => onMove('down')}
       >
-        <ChevronDown size={20} color={isLast || disabled ? cores.border : cores.foreground} />
+        <ChevronDown size={20} color={isLast || disabled ? colors.border : colors.foreground} />
       </IconAction>
       <IconAction label={`Tirar ${group.exerciseName} deste treino`} onPress={onRemove}>
-        <Trash2 size={18} color={cores.danger} />
+        <Trash2 size={18} color={colors.danger} />
       </IconAction>
     </View>
   );

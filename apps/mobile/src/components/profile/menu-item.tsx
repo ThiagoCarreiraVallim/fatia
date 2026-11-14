@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import { cn } from '@/components/ui';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /** Réplica do `MenuItem` de `apps/web/src/app/(app)/profile/page.tsx`. */
 export function MenuItem({
@@ -34,7 +34,7 @@ export function MenuItem({
         <Text className="text-base font-bold leading-tight text-foreground">{title}</Text>
         <Text className="text-xs text-muted-foreground">{subtitle}</Text>
       </View>
-      <ChevronRight size={18} color={cores.mutedForeground} />
+      <ChevronRight size={18} color={colors.mutedForeground} />
     </Pressable>
   );
 }

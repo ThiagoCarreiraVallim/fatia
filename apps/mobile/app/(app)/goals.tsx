@@ -10,7 +10,7 @@ import { MainGoalCard } from '@/components/goals/main-goal-card';
 import { NewGoalDrawer } from '@/components/goals/new-goal-drawer';
 import { RecentGoalRow } from '@/components/goals/recent-goal-row';
 import { SecondaryGoalCard } from '@/components/goals/secondary-goal-card';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
 
 export default function GoalsScreen() {
@@ -73,7 +73,7 @@ export default function GoalsScreen() {
             onPress={() => setDrawerOpen(true)}
             className={TOP_BAR_ACTION}
           >
-            <Plus size={22} color={cores.primary} />
+            <Plus size={22} color={colors.primaryText} />
           </Pressable>
         }
         onRefresh={() => void allGoals.refetch()}
@@ -131,7 +131,7 @@ export default function GoalsScreen() {
             className="min-h-[44px] flex-row items-center justify-between rounded-xl border border-border bg-card px-4 py-3"
           >
             <Text className="text-sm text-muted-foreground">Voltar ao perfil</Text>
-            <ChevronRight size={16} color={cores.mutedForeground} />
+            <ChevronRight size={16} color={colors.mutedForeground} />
           </Pressable>
         </View>
       </Screen>

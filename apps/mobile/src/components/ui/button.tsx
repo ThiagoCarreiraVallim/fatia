@@ -2,7 +2,7 @@ import { forwardRef, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, Text, View, type PressableProps } from 'react-native';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from './utils';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Botão do app nativo.
@@ -96,7 +96,7 @@ export const Button = forwardRef<View, ButtonProps>(function Button(
       {loading ? (
         <ActivityIndicator
           size="small"
-          color={variant === 'default' ? cores.background : cores.primary}
+          color={variant === 'default' ? colors.background : colors.primaryText}
         />
       ) : typeof children === 'string' ? (
         <Text className={cn(labelVariants({ variant, size }), textClassName)}>{children}</Text>

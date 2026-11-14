@@ -8,7 +8,7 @@ import { Button, Carousel, ErrorState, LoadingState } from '@/components/ui';
 import { BlockTimeline } from '@/components/workout/block-timeline';
 import { quickVisual } from '@/components/workout/quick-template-visual';
 import { pluralize } from '@/components/workout/workout-stats';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
 
 /**
@@ -66,7 +66,7 @@ function QuickCard({ template, width }: { template: QuickTemplate; width: number
       className="h-44 justify-end overflow-hidden rounded-2xl border border-border p-4 active:opacity-80"
     >
       <View className="absolute right-3 top-3 opacity-30">
-        <Icon size={64} color={cores.foreground} />
+        <Icon size={64} color={colors.foreground} />
       </View>
       <Text className="text-[10px] font-bold text-muted-foreground">{template.level}</Text>
       <Text className="mt-1 text-base font-extrabold leading-tight text-foreground">
@@ -96,7 +96,7 @@ function ShortcutCard({
       className="flex-1 rounded-2xl border border-border bg-card p-4 active:opacity-80"
     >
       <View className="h-8 w-8 items-center justify-center rounded-lg bg-muted">
-        <Icon size={16} color={cores.foreground} />
+        <Icon size={16} color={colors.foreground} />
       </View>
       <Text className="mt-3 text-sm font-bold leading-tight text-foreground">{label}</Text>
     </Pressable>
@@ -140,7 +140,7 @@ export default function WorkoutScreen() {
           onPress={() => router.push('/workout/history')}
           className={TOP_BAR_ACTION}
         >
-          <History size={20} color={cores.primary} />
+          <History size={20} color={colors.primaryText} />
         </Pressable>
       }
       refreshing={active.isRefetching || plans.isRefetching}
@@ -198,7 +198,7 @@ export default function WorkoutScreen() {
                 className="min-h-[44px] flex-row items-center gap-3 rounded-2xl border border-border bg-card p-3 active:opacity-80"
               >
                 <View className="h-12 w-12 items-center justify-center rounded-lg bg-muted">
-                  <Dumbbell size={20} color={cores.primary} />
+                  <Dumbbell size={20} color={colors.primaryText} />
                 </View>
                 <View className="min-w-0 flex-1">
                   <Text numberOfLines={1} className="text-base font-bold text-foreground">
@@ -206,7 +206,7 @@ export default function WorkoutScreen() {
                   </Text>
                   <Text className="text-xs text-muted-foreground">{countLabel}</Text>
                 </View>
-                <ChevronRight size={16} color={cores.mutedForeground} />
+                <ChevronRight size={16} color={colors.mutedForeground} />
               </Pressable>
             );
           })}

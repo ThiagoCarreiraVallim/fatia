@@ -1,169 +1,264 @@
-# Design — PWA e app nativo
+# Design — PWA, painel, app nativo e site
 
-O sistema visual e de interação do Fatia, como está no código. O PWA (`apps/web`) e o app
-nativo (`apps/mobile`) seguem o mesmo desenho; as diferenças estão em
-[`MOBILE_PARITY.md`](./MOBILE_PARITY.md).
+O sistema visual e de interação do Fatia: o **design system v2 "Noite"** (#368). Fundo grafite,
+verde Fatia, números grandes, pouco texto. O PWA (`apps/web`, que também serve o painel da
+comunidade), o app nativo (`apps/mobile`) e o site (`apps/site`) seguem o mesmo desenho; as
+diferenças entre web e app estão em [`MOBILE_PARITY.md`](./MOBILE_PARITY.md).
+
+A fonte única dos valores é o pacote **`@fatia/design`** (`packages/design`): tokens dos dois
+temas, contraste, validação da cor da comunidade, mapa de ícones e movimento. Os três CSS repetem
+os tokens em HSL e o teste `packages/design/src/__tests__/css-parity.test.ts` confere os três
+contra `tokens.ts`. A referência visual são as pranchas do canvas (Main, Componentes,
+Componentes-plano e Movimento); quando o canvas e este documento divergem, vale o canvas e este
+documento é corrigido.
 
 ## Princípios
 
-1. **Registrar sem IA em até 2 toques.** O plano Free não tem IA no app
-   ([ADR 024](./ADR/024-plano-free-e-pago-do-usuario.md)), então o registro manual é o caminho principal, não a
-   correção. Todo registro sai do "+" da barra ("Registrar"), de qualquer tela.
-2. **Celular primeiro, desktop de verdade.** O desenho nasce em 390 px; no desktop (`md`, 768 px)
-   a barra de baixo vira uma barra lateral e o conteúdo fica numa coluna centralizada, em vez do
-   celular esticado.
-3. **Só tema escuro.** Uma paleta, testada para contraste.
-4. **Tudo que o app faz, o MCP faz.** Cada função nova tem tool equivalente
+1. **Um número por bloco.** O dado vem primeiro e grande (Sora); o rótulo vem pequeno embaixo.
+2. **Ícone no lugar de frase.** Explicação só no primeiro uso ou no estado vazio.
+3. **Registrar em 1 toque.** O botão + abre tudo; atalhos com valores prontos. O Free não tem IA
+   no app ([ADR 024](./ADR/024-plano-free-e-pago-do-usuario.md)), então o registro manual é o
+   caminho principal.
+4. **Movimento que informa.** Anéis enchem, barras crescem, folhas sobem. Nada decorativo, e nada
+   anda com "reduzir movimento".
+5. **Desfazer em vez de perguntar, quando refazer é barato.** Registros pequenos apagam na hora
+   e oferecem "Desfazer"; o que é caro de refazer pede confirmação numa folha curta.
+6. **Tudo que o app faz, o MCP faz.** Cada função nova tem tool equivalente
    ([`MCP.md`](./MCP.md)), para quem traz a própria IA.
-5. **Desfazer em vez de perguntar, quando refazer é barato.** Registros pequenos apagam na hora e
-   oferecem "Desfazer"; o que é caro de refazer pede confirmação.
+
+## Tema: escuro, claro e a escolha da pessoa
+
+Pela [ADR 041](./ADR/041-tema-claro-com-escolha-do-usuario.md) o produto tem os dois temas, com
+os **mesmos nomes de token**. O padrão é seguir o sistema; a pessoa escolhe **Sistema, Escuro ou
+Claro** em Perfil → Aparência. A escolha é preferência de interface, guardada no aparelho
+(`localStorage` na web, `SecureStore` no app, chave `fatia.theme`), nunca na conta.
+
+- **Web e painel:** o `<html>` recebe `data-theme` (tema resolvido) de um script inline no
+  `<head>` (`src/lib/theme-script.ts`), antes da pintura, sem piscar. O CSS tem o escuro em
+  `:root`, o claro em `:root[data-theme='light']` e de novo sob
+  `@media (prefers-color-scheme: light)` em `:root:not([data-theme='dark'])` (para quem está sem
+  JS). `dark:` do Tailwind vale com `[data-theme="dark"]`. O `theme-color` do navegador acompanha.
+- **App:** `colorScheme.set` do NativeWind troca as variáveis do `global.css` (o claro está sob
+  `@media (prefers-color-scheme: light)`); `colors` de `src/theme/colors.ts` lê o tema que vale
+  agora. `userInterfaceStyle: 'automatic'`; a barra de status e a do sistema seguem o tema.
+- **Site:** segue o sistema, sem seletor.
 
 ## Paleta e tokens
 
-Os tokens vivem em `apps/web/src/app/globals.css` e `apps/mobile/global.css`, com os mesmos
-valores (HSL sem `hsl()`), e viram classes nos dois `tailwind.config`. Dois testes guardam a
-paridade: `apps/mobile/src/theme/__tests__/palette.test.ts` (o mobile não tem token que o PWA
-não tenha, e os comuns batem) e `cores.test.ts` (os hex de `src/theme/cores.ts`, usados onde o
-React Native não aceita classe, batem com o HSL).
+Os nomes são os do shadcn que o código já usava, mais os novos do canvas. Mapa do canvas:
+`bg → background`, `s1 → muted`, `s2 → card` (escuro), `s3 → surface-3`, `line → border`,
+`line2 → border-strong`, `tx → foreground`, `tx2 → muted-foreground`, `tx3 → faint-foreground`,
+`lime → primary`, `ink → primary-foreground`, `bad → danger`, `warn → warning`.
 
-| Token               | Hex                | Uso                                                                 |
-| ------------------- | ------------------ | ------------------------------------------------------------------- |
-| `background`        | `#131313`          | fundo das telas                                                     |
-| `card`              | `#2a2a2a`          | cartões e linhas de lista                                           |
-| `muted`             | `#1f1f1f`          | trilhos de barra, chips, campos                                     |
-| `foreground`        | `#e5e2e1`          | texto principal; barra de kcal                                      |
-| `muted-foreground`  | `#baccaf`          | texto secundário, ícones inativos                                   |
-| `primary`           | `#2ce500`          | marca, ação principal, aba ativa, "dentro da meta"                  |
-| `destructive`       | `#93000a`          | **só fundo** de botão perigoso                                      |
-| `danger`            | `#fb7185`          | texto e ícone de erro, barra "fora da meta"                         |
-| `warning`           | `#fbbf24`          | aviso, "perto do limite", favorito                                  |
-| `success`           | `#10b981`          | confirmação pontual ("Meta batida", "copiado")                      |
-| `protein`           | `#4b8eff`          | proteína em todo gráfico e barra                                    |
-| `carbs`             | `#2ce500`          | carboidrato                                                         |
-| `fat`               | `#ffb4ab`          | gordura                                                             |
-| `water`             | `#60a5fa`          | hidratação                                                          |
-| `border` / `subtle` | `#333` / branco 5% | borda de campo / borda de cartão (só no PWA; o nativo usa `border`) |
+No claro o cartão é branco (o `s1` do canvas) sobre o fundo `#f4f5f2`: é onde as cores de dado
+passam 4,5:1. No escuro o cartão continua `#2a2a2a`.
+
+| Token                | Escuro    | Claro     | Uso                                                            |
+| -------------------- | --------- | --------- | -------------------------------------------------------------- |
+| `background`         | `#131313` | `#f4f5f2` | fundo das telas                                                |
+| `muted`              | `#1f1f1f` | `#eceee9` | campos, chips, trilhos                                         |
+| `card`               | `#2a2a2a` | `#ffffff` | cartões e linhas de lista                                      |
+| `surface-3`          | `#343434` | `#e1e4dd` | segmento ativo, trilho de anel e barra, esqueleto              |
+| `border`             | `#383838` | `#e1e4dd` | linha entre itens, borda de campo                              |
+| `border-strong`      | `#3d3d3d` | `#cdd1c8` | contorno de botão, check vazio, alça da folha                  |
+| `foreground`         | `#e5e2e1` | `#141613` | texto principal                                                |
+| `muted-foreground`   | `#baccaf` | `#4f544b` | texto secundário                                               |
+| `faint-foreground`   | `#9aa593` | `#646a60` | rótulo pequeno, sobretítulo, ícone inativo                     |
+| `primary`            | `#2ce500` | `#2ce500` | verde da marca: **só superfície** (botão principal, anel, aba) |
+| `primary-foreground` | `#0b1a05` | `#0b1a05` | texto sobre o verde                                            |
+| `primary-text`       | `#2ce500` | `#1a7f00` | verde como texto ou ícone (`text-primary` usa este)            |
+| `kcal`               | `#e5e2e1` | `#141613` | kcal, neutra para não se confundir com macro                   |
+| `protein`            | `#6ea3ff` | `#2563eb` | proteína em todo gráfico e barra                               |
+| `carbs`              | `#2ce500` | `#1a7f00` | carboidrato                                                    |
+| `fat`                | `#ffb4ab` | `#b93a2e` | gordura                                                        |
+| `water`              | `#60a5fa` | `#1a66c2` | hidratação                                                     |
+| `steps`              | `#2dd4bf` | `#0e7468` | passos                                                         |
+| `ok`                 | `#2ce500` | `#1a7f00` | "na meta"                                                      |
+| `info`               | `#60a5fa` | `#1a66c2` | informação neutra                                              |
+| `warning`            | `#fbbf24` | `#8a5a00` | aviso, "perto do limite", "pendente"                           |
+| `danger`             | `#fb7185` | `#b42318` | texto e ícone de erro, "em risco"                              |
+| `success`            | `#10b981` | `#0b7a50` | confirmação pontual                                            |
+| `destructive`        | `#93000a` | `#b42318` | **só fundo** de botão perigoso                                 |
+| `brand`              | `#ff7a1a` | `#ff7a1a` | cor da comunidade (padrão), ver abaixo                         |
+| `brand-foreground`   | `#1f0e00` | `#1f0e00` | texto sobre a cor da comunidade                                |
+
+Os tons de `warning`, `danger`, `success` e `destructive` do claro não vinham no canvas: são os
+mais próximos dos do escuro que passam 4,5:1 e pedem revisão de design.
+
+Translúcidos (só web, `hsl(var(--x))` já com alfa): `border-subtle`, `primary-soft` e
+`brand-soft`.
 
 Regras:
 
-- **Texto de erro é `text-danger`, nunca `text-destructive` nem `text-rose-*`.** O `destructive`
-  sobre o fundo escuro fica abaixo de 2:1; o `danger` passa de 5:1 sobre o `card`.
-- **Macros têm cor fixa** no produto inteiro: proteína azul, carboidrato verde, gordura salmão.
-  As kcal ficam neutras (`foreground`) para não se confundirem com nenhum.
-- Cor literal (`#…`, `text-rose-500`, `bg-[#…]`) em componente é defeito: vira token ou sai.
-  No nativo, onde a prop pede string, use `cores.<token>` de `src/theme/cores.ts`.
+- **Texto sobre superfície passa 4,5:1 nos dois temas.** O teste
+  `packages/design/src/__tests__/tokens-contrast.test.ts` cobre texto e cores de dado sobre
+  `background` e `card` (texto principal e secundário também sobre `muted` e `surface-3`).
+- **Verde da marca nunca é texto no claro** (1,7:1 com branco). `text-primary` aponta para
+  `primary-text`; no app, ícone e texto usam `colors.primaryText`.
+- **Texto de erro é `text-danger`**, nunca `text-destructive`.
+- **Macros têm cor fixa** no produto inteiro; a cor da comunidade nunca as substitui.
+- Cor literal (`#…`, `text-rose-500`, `bg-[#…]`) em componente é defeito: vira token ou sai. No
+  nativo, onde a prop pede string, use `colors.<token>` de `src/theme/colors.ts`, lido dentro do
+  componente (nunca copiado para constante de módulo, que congelaria o tema).
 
-## Tipografia e espaçamento
+### Cor da comunidade
 
-- **Inter** (`font-sans`) no corpo; **Plus Jakarta Sans** (`font-jakarta`) nos títulos grandes.
-- Número que muda (kcal, peso, séries) usa `tabular-nums`, para não pular de largura.
-- Escala usada: título da barra de topo 17 px `font-semibold` (como no iOS), título de cartão
-  `text-[18px] font-semibold`, corpo `text-sm`, legenda `text-xs`. Rótulo da barra: 11 px, o mínimo.
-- Telas com `px-5`; cartões `rounded-xl p-5`; espaço entre cartões `space-y-5`.
+`--brand`/`--brand-foreground`/`--brand-soft` (padrão `#ff7a1a`/`#1f0e00`) são trocados por
+comunidade (`style` na web, `vars()` do NativeWind no app) e aparecem **só** em capa, aba ativa,
+botão principal, convite, e-mail e card. Nunca em macros, estados, anéis ou barras.
+
+O editor de marca (`components/org/brand-color-field.tsx`) e a API (`@IsBrandColor()`) usam a
+mesma regra, `checkBrandColor` de `@fatia/design`:
+
+- o texto é branco ou `#0b1a05`, o que passar 4,5:1;
+- se nenhum passa, a cor é aceita com aviso e a sugestão do tom mais próximo que passa com
+  folga (5,5:1, mesmo matiz em OKLab): o roxo `#7c5cff` (4,3:1) vira ≈ `#6a4ae0`;
+- verde a menos de 0,1 de distância OKLab do `#2ce500` é recusado.
+
+## Tipografia
+
+- **Sora** (`font-display`) em números e títulos; **Manrope** (`font-sans`) no texto. Web:
+  `next/font` em `app/layout.tsx`; site: `@fontsource-variable`; app: `@expo-google-fonts`,
+  carregadas antes de esconder a splash, com uma família por peso (o Android não sintetiza peso
+  em fonte própria; ver `src/theme/fonts.ts`).
+- Escala (classe `text-<passo>` nos três Tailwind):
+
+| Passo | Tamanho/peso | Uso                           |
+| ----- | ------------ | ----------------------------- |
+| `d1`  | 56/700 Sora  | o número do bloco principal   |
+| `d2`  | 40/700 Sora  | número de bloco secundário    |
+| `d3`  | 28/700 Sora  | número em card pequeno        |
+| `h1`  | 28/700 Sora  | título da tela                |
+| `h2`  | 22/700 Sora  | título de seção               |
+| `h3`  | 17/600 Sora  | título de card, barra de topo |
+| `b1`  | 15 Manrope   | texto                         |
+| `b2`  | 13 Manrope   | texto secundário              |
+| `eb`  | 12/700       | sobretítulo em caixa alta     |
+
+- Número que muda (kcal, peso, séries) usa `tabular-nums`.
+
+## Espaço e raios
+
+- Espaço na escala de 4 do Tailwind (4, 8, 12, 16, 20, 24, 32, 48). Margem da tela 20; entre
+  blocos 12–16; alvo de toque mínimo 44.
+- Raios: `rounded-chip` 10 (chip, ícone), `rounded-field` 14 (campo e botão; `--radius` da web),
+  `rounded-card` 20 (card), `rounded-sheet` 28 (folha), `rounded-pill` só em selo e interruptor.
+
+## Movimento
+
+Constantes em `packages/design/src/motion.ts`; web em `globals.css` (`.anim-*`) e no Tailwind
+(`duration-fast|base|tab|sheet|data`, `ease-ds`, `ease-spring`); app em `src/theme/motion.ts`
+(Reanimated com `ReduceMotion.System`).
+
+| Nome  | Duração      | Onde                                                       |
+| ----- | ------------ | ---------------------------------------------------------- |
+| fast  | 150 ms       | toque, toggle, chip ativo; pressionar = escala .97         |
+| base  | 300 ms       | troca de estado, fade, fundo da folha escurecendo          |
+| tab   | 500 ms       | indicador de aba crescendo da esquerda                     |
+| sheet | 550 ms       | folha subindo; lista em cascata (70 ms entre itens, 14 px) |
+| data  | 1000–1300 ms | anel enchendo com contagem, barras (60 ms entre barras)    |
+
+Curvas: `ease` `cubic-bezier(.2,.8,.2,1)`; `spring` `cubic-bezier(.34,1.56,.64,1)` em check,
+medalha e toast. Respiração e pulso só em estado ativo (treino rodando, ranking ao vivo).
+**Reduzir movimento** zera duração e atraso de tudo isso (testado no CSS e nos helpers do app).
+
+## Ícones
+
+Os 76 nomes do canvas (`alert` … `x`) mapeiam para o lucide em `packages/design/src/icons.ts`
+(teste: cada um existe no `lucide-react` e no `lucide-react-native`). O WhatsApp é desenho
+próprio no mesmo traço. Componente `Icon` nas duas pontas (`components/ui/icon.tsx`): traço 1,8,
+24 px, cor herdada do texto, `aria-hidden` por padrão; quando o ícone é o único conteúdo de um
+botão, o botão leva o nome (`aria-label`). O site usa `astro-icon` com `lucide:<nome>`.
+
+## Componentes
+
+Base (web em `apps/web/src/components/ui`, app em `apps/mobile/src/components/ui`):
+
+- **Botões** 52 px (`size="xl"`), raio 14, pressionar = escala .97: primário, secundário,
+  contorno, texto, apagar, adicionar, pequeno (44), mini (34), desativado, "Gerar com IA".
+- **Seleção:** `Chip`, `Segmented`, `Switch`, `Checkbox` (mola ao marcar), `Tabs` com indicador.
+- **Campos:** `Input` com foco em contorno verde e erro com ícone e texto `danger`;
+  `PortionField` ("1½ = 37,5 g"); `Ruler` (peso, altura, porções).
+- **Listas:** linha de 60 px; `SwipeRow` revela Editar/Apagar arrastando para a esquerda (some o
+  lixo fixo). Sempre há alternativa sem gesto: o botão "Mais ações" (web) e as ações de
+  acessibilidade (app).
+- **Blocos de dado:** `StatBlock`, `Ring` (+ contagem), `DayStrip`, `Heatmap`.
+- **Retorno:** toast que cai do topo (2,5 s sem ação, 5 s com "Desfazer"), `Banner` verde e de
+  aviso, estados carregando (shimmer) / vazio / erro, selos (`Badge`, `PlanBadge`).
+- **Folha inferior** substitui modal e gaveta: sobe em 550 ms, arrastar fecha, ações no fim; no
+  desktop (`md+`) a mesma folha abre como **painel lateral de 480 px**. Confirmação vira folha
+  curta com ícone + 1 linha.
+
+Do plano (componentes que várias telas usam): marca da comunidade (`BrandCover`,
+`CommunityTabs`), bloco PRO em 9 estados + compacto (estado vindo de `proBlockState` do
+api-client), selo de plano, card compartilhável (sem peso, medida ou corpo; ADR 027) e folha
+"Compartilhar" com "Aparecer como" (nome de exibição/@), aviso "recebido do seu personal" e o
+painel "Gerar com IA" do painel (resultado sempre rascunho).
+
+A galeria fica em `/design-system` na web e em `(app)/design-system` no app, só fora de produção.
 
 ## Navegação
+
+A navegação nova segue a [ADR 040](./ADR/040-navegacao-com-aba-hoje-e-botao-da-ia.md) (revisada
+em 14/11/2026): cinco abas só de ícone — **Hoje · Nutrição · Treino · Comunidade · Você** — e o
+botão redondo da IA (68 px) à direita. O componente visual (`layout/bottom-nav.tsx`, variante
+`v2`, e `layout/ai-button.tsx`) já existe; a troca da navegação é da #369. Até lá vale a barra
+atual, descrita abaixo.
 
 Fonte única: `packages/api-client/src/navigation.ts` (`PRIMARY_TABS`, `menuSections`,
 `activeNavKey`, `ROUTES`/`routeInfo`), com teste. Web e app montam a partir dela.
 
-```
-┌──────────────────────────────────────────────┐
-│ ‹  Planos de treino                  [ações] │  ← barra de topo (fora do Início)
-├──────────────────────────────────────────────┤
-│                  conteúdo                    │
-├──────────────────────────────────────────────┤
-│ Nutrição · Treino · [ + ] · Comunidade · Mais│
-└──────────────────────────────────────────────┘
-```
+- **Barra de topo** (`app-top-bar.tsx` no PWA, `layout/top-bar.tsx` no app) em toda tela menos o
+  Início: `‹` à esquerda (`aria-label="Voltar para <pai>"`), o título (17 px) e as ações à
+  direita. Voltar é hierárquico, pelo mapa `ROUTES`.
+- **Barra de baixo** (celular, até a #369): Nutrição, Treino, o "+" Registrar no centro,
+  Comunidade e Mais.
+- **Barra lateral** (desktop, `md+`): logo, "Registrar", as abas e as seções do menu à vista.
 
-- **Barra de topo** (`app-top-bar.tsx` no PWA, `layout/top-bar.tsx` no app), como no iOS, em
-  toda tela menos o Início: `‹` à esquerda (`aria-label="Voltar para <pai>"`), o título pequeno
-  da tela (o `h1`, 17 px, uma linha com reticências) e, à direita, as ações da tela (Copiar dia e
-  Metas na Nutrição, Histórico no Treino, Nova meta, Renomear/Excluir plano, Memórias e Conversas
-  no chat). Fixa no topo, com a área segura e fundo com blur.
-  - **Voltar é hierárquico, não histórico:** o pai vem do mapa `ROUTES`, então um link aberto
-    direto (convite, notificação) volta pelo caminho certo até o Início:
-    `/workout/plans/:id` → `/workout/plans` → `/workout` → `/`. Rota fora do mapa sobe ao
-    ancestral conhecido mais próximo. Teste: toda `page.tsx` de `(app)`/`(pro)` tem entrada.
-  - **Títulos** vêm do mapa; tela dinâmica troca pelo nome real (`useTopBarTitle` no PWA, prop
-    `title` do `Screen` no app): plano, treino rápido, conversa, sessão, aluno. Renomear fica
-    como ação da barra, com o campo no corpo.
-  - **Interceptar o voltar** (`useTopBarBack`, `onBack`): a sessão de treino ativa no app
-    confirma antes de sair.
-  - As telas não repetem o título grande: o que era subtítulo continua no corpo.
-- **Barra de baixo** (celular): Nutrição, Treino, o **"+" Registrar** no centro, Comunidade e
-  **Mais**. Não há aba Início: ele é a raiz, e chega-se a ele voltando de qualquer tela.
-  **Vai mudar** pela [ADR 040](./ADR/040-navegacao-com-aba-hoje-e-botao-da-ia.md): abas Hoje,
-  Nutrição, Treino e Comunidade, o botão redondo da IA à direita, e o "Mais" substituído pelo
-  avatar no topo do Hoje. Esta seção descreve o código até a mudança ser implementada.
-  - O "+" abre o menu Registrar: refeição (tipo pela hora), água, peso, passos e treino (retoma
-    a sessão aberta). Ver `quick-add.ts` do api-client.
-  - "Mais" fica ativo em qualquer tela fora das três abas e do Início e abre o drawer **Menu**: o cartão do
-    perfil e as seções **Você** (Progresso, Metas do dia, Metas pessoais, Recordes, Perfil),
-    **Registros** (Meus alimentos, Nutrientes, Planos, Histórico) e **IA** ("Chat com a IA", só
-    no PWA e só quando `/chat/availability` diz que há IA; "Conectar sua IA", sempre).
-- **Barra lateral** (desktop, `md+`): logo (leva ao Início), botão "Registrar", as três abas e
-  as seções do menu à vista. A barra de baixo some; o conteúdo ganha `md:pl-64` e fica em `max-w-3xl`.
-- **Metas a um toque:** o pill "Metas" no Início e "Metas do dia" no primeiro nível do menu.
-- **Primeira vez:** quem ainda não tem `onboardedAt` vai para `/onboarding` (objetivo, dados,
-  atividade, metas sugeridas por Mifflin-St Jeor). "Recalcular com meus dados" em Metas do dia
-  refaz o assistente.
+## Folhas (drawers)
 
-## Drawers
+Todo formulário curto é folha de baixo (vaul no PWA, gorhom bottom-sheet no nativo).
 
-Todo formulário curto é drawer de baixo (vaul no PWA, gorhom bottom-sheet no nativo).
-
-- No desktop o drawer fica centralizado com `md:max-w-lg`, em vez de ocupar a largura toda.
-- No nativo o sheet não é portal: drawer fica dentro de `<DrawerLayer>`, irmão do `<Screen>`
-  (ver o cabeçalho de `apps/mobile/src/components/ui/drawer.tsx`).
-- Listas dentro de drawer usam `data-vaul-no-drag` (PWA) ou `DrawerScrollView` (nativo), para a
-  rolagem não fechar o sheet.
+- No desktop a folha abre à direita, com 480 px (`ui/drawer.tsx`).
+- No nativo o sheet não é portal: a folha fica dentro de `<DrawerLayer>`, irmã do `<Screen>`.
+- Listas dentro da folha usam `data-vaul-no-drag` (PWA) ou `DrawerScrollView` (nativo).
 
 ## Estados
 
-| Estado     | PWA                                               | Nativo                      |
-| ---------- | ------------------------------------------------- | --------------------------- |
-| Carregando | `ui/skeleton.tsx` no formato do conteúdo          | `LoadingState`              |
-| Vazio      | `ui/empty-state.tsx` (ícone, título, texto, ação) | `EmptyState`                |
-| Erro       | mensagem em `text-danger` + "Tentar novamente"    | `ErrorState`                |
-| Aviso      | `toast` do `sonner` (`ui/toaster.tsx`)            | `useToast` (`ui/toast.tsx`) |
+| Estado     | PWA                                        | Nativo                      |
+| ---------- | ------------------------------------------ | --------------------------- |
+| Carregando | `ui/skeleton.tsx` (shimmer)                | `LoadingState`              |
+| Vazio      | `ui/empty-state.tsx` (ícone, título, ação) | `EmptyState`                |
+| Erro       | `ui/error-state.tsx` + "Tentar novamente"  | `ErrorState`                |
+| Aviso      | `toast` do `sonner` (`ui/toaster.tsx`)     | `useToast` (`ui/toast.tsx`) |
 
-Estado vazio sempre diz o que fazer a seguir ("Toque em + para registrar a primeira refeição").
+Estado vazio sempre diz o que fazer a seguir ("Toque em + para registrar").
 
 ### Desfazer e confirmar
 
 - **Desfazer (5 s, `UNDO_MS`):** água, peso, passos e item de refeição apagam na hora e mostram
-  "… apagado · Desfazer". Desfazer recria o registro a partir do retrato tirado antes de apagar
-  (`packages/api-client/src/undo.ts`): mesmo dia ou instante, mesmos valores, o item na mesma
-  refeição. A medida caseira do item não volta (as gramas sim).
-  - No PWA, dentro de drawer o "Desfazer" fica na própria lista (`LogHistory`, `useUndoSlot`):
-    o drawer é modal e deixa a página inerte, então um `toast` fora dele não recebe toque. Fora
-    de drawer (item da refeição) é o `toast` do `sonner`.
-  - No app nativo é sempre o `useToast`, que fica acima dos sheets.
-- **Confirmar:** refeição inteira, plano, sessão de treino, alimento próprio, meta, conta.
+  "… apagado · Desfazer" (`packages/api-client/src/undo.ts`).
+- **Confirmar:** refeição inteira, plano, sessão de treino, alimento próprio, meta, conta — numa
+  folha curta (ícone + 1 linha).
 
 ## Acessibilidade
 
-- **Alvos de toque de 44 px.** `Button` `default`/`icon` têm 40 px visíveis e os tamanhos `sm`
-  e `icon-sm` ganham área invisível até 44 px (`after:-inset-*`), sem mudar o visual. Botões
-  crus pequenos usam a utilidade `.alvo-toque`. No nativo, `min-h-11` ou `hitSlop`.
-- **Foco visível:** `ring-2` com `ring-offset` no `Button`, e regra base de `:focus-visible`
-  para `a`, `button` e `[role=button]` em `globals.css`.
-- **Rótulos:** todo campo tem `<label>` ou `aria-label`; botão só com ícone tem `aria-label`
-  com o objeto ("Apagar registro de 500 mL, 13 out").
-- **Contraste:** AA. É o motivo do `danger` e de nenhum texto abaixo de 11 px.
-- **Verificação automática:** `e2e/tests/a11y.spec.ts` roda o axe nas telas, no menu e no
-  Registrar, em celular e desktop, e falha em violação `serious`/`critical`.
+- **Alvos de toque de 44 px**, sem mudar o desenho (`after:` invisível, `.alvo-toque`, `hitSlop`).
+- **Foco visível:** `ring-2` no `Button` e regra base de `:focus-visible` em `globals.css`.
+- **Rótulos:** todo campo tem rótulo; botão só com ícone tem `aria-label` com o objeto. As abas
+  só de ícone têm nome e `aria-current`.
+- **Contraste AA nos dois temas** (teste de tokens acima).
+- **Gesto nunca é o único caminho:** swipe e arrastar a folha têm alternativa por botão/teclado.
+- **Verificação automática:** `e2e/tests/a11y.spec.ts` roda o axe em celular e desktop, nos
+  dois temas, e falha em violação `serious`/`critical`.
 
 ## Antes e depois (Playwright)
 
-Mudança de UI se fotografa antes e depois ([ADR 029](./ADR/029-playwright-com-logto-real.md)):
+Mudança de UI se fotografa antes e depois ([ADR 029](./ADR/029-playwright-com-logto-real.md)),
+nos dois temas (projetos `mobile`/`desktop` e `mobile-light`/`desktop-light`):
 
 ```bash
-pnpm ui:snap 22-antes-nav      # antes de mexer
-pnpm ui:snap 23-nav            # depois
-pnpm ui:compare 22-antes-nav 23-nav   # HTML lado a lado em e2e/screenshots/
+pnpm ui:snap 00-antes-ds       # antes de mexer
+pnpm ui:snap 01-design-system  # depois
+pnpm ui:compare 00-antes-ds 01-design-system
 ```
-
-O `ui:snap` roda todos os specs (telas, fluxos e axe) com o usuário demo; os fluxos desfazem o
-que criam.

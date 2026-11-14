@@ -13,7 +13,7 @@ import {
   type ChatResumeValue,
 } from '@fatia/api-client';
 import { Button, cn } from '@/components/ui';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * A pausa do agente no fim da conversa (ADR 023), como na web (`ask-user.tsx`):
@@ -37,7 +37,7 @@ export function PauseCard({
         className="gap-3 rounded-xl border border-border bg-card p-4"
       >
         <View className="flex-row items-center gap-2">
-          <PlayCircle size={16} color={cores.primary} />
+          <PlayCircle size={16} color={colors.primaryText} />
           <Text className="flex-1 text-sm font-semibold text-foreground">{pausa.prompt}</Text>
         </View>
         {pausa.summary ? (
@@ -108,9 +108,9 @@ function Acoes({
     <View className="gap-3 rounded-xl border border-border bg-card p-4">
       <View className="flex-row items-center gap-2">
         {escritas.length ? (
-          <AlertTriangle size={16} color={cores.primary} />
+          <AlertTriangle size={16} color={colors.primaryText} />
         ) : (
-          <HelpCircle size={16} color={cores.primary} />
+          <HelpCircle size={16} color={colors.primaryText} />
         )}
         <Text accessibilityRole="header" className="flex-1 text-sm font-semibold text-foreground">
           {titulo}
@@ -295,7 +295,7 @@ function Campo({
           onChangeText={onMudar}
           keyboardType={campo.type === 'number' ? 'decimal-pad' : 'default'}
           placeholder={campo.type === 'date' ? 'AAAA-MM-DD' : undefined}
-          placeholderTextColor={cores.mutedForeground}
+          placeholderTextColor={colors.mutedForeground}
           className="min-h-[44px] rounded-lg border border-border px-3 text-[15px] text-foreground"
         />
       )}

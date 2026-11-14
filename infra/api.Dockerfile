@@ -21,6 +21,9 @@ FROM base AS deps
 COPY .npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/api/package.json apps/api/
 COPY packages/db/package.json packages/db/
+# @fatia/design: o validador da cor de marca (@IsBrandColor) usa o mesmo código
+# do app e da web. A API consome o dist/ (CommonJS), compilado no estágio build.
+COPY packages/design/package.json packages/design/
 RUN pnpm install --frozen-lockfile
 
 # ---------- Build ----------
@@ -32,10 +35,12 @@ COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
 COPY .npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/api ./apps/api
 COPY packages/db ./packages/db
+COPY packages/design ./packages/design
 
-# Gera Prisma Client e compila a API.
+# Gera Prisma Client, compila o @fatia/design (dist/) e compila a API.
 # Com hoisted linker, prisma generate escreve em node_modules/.prisma/client.
 RUN pnpm --filter @fatia/db exec prisma generate \
+ && pnpm --filter @fatia/design build \
  && pnpm --filter @fatia/api build
 
 # ---------- Runner ----------
@@ -49,6 +54,8 @@ COPY --from=build /app/apps/api/package.json apps/api/
 COPY --from=build /app/packages/db/package.json packages/db/
 COPY --from=build /app/packages/db/prisma packages/db/prisma
 COPY --from=build /app/packages/db/src packages/db/src
+COPY --from=build /app/packages/design/package.json packages/design/
+COPY --from=build /app/packages/design/dist packages/design/dist
 
 # Reinstala apenas prod deps (mais leve).
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts

@@ -3,7 +3,7 @@ import { useRouter, type Href } from 'expo-router';
 import { Dumbbell, Play } from 'lucide-react-native';
 import { nextWorkoutCopy, type TodaySummary } from '@fatia/api-client';
 import { horaDoDia } from './helpers';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/components/dashboard/next-workout-card.tsx`.
@@ -30,7 +30,7 @@ export function NextWorkoutCard({ workout }: { workout: TodaySummary['workout'] 
     >
       <View className="h-24 w-full justify-end bg-muted p-4">
         <View className="absolute right-4 top-4" style={{ opacity: 0.25 }}>
-          <Dumbbell size={48} color={cores.mutedForeground} />
+          <Dumbbell size={48} color={colors.mutedForeground} />
         </View>
         <View className="self-start rounded bg-background px-2 py-1">
           <Text className="text-[11px] font-bold tracking-wide text-foreground">
@@ -47,7 +47,7 @@ export function NextWorkoutCard({ workout }: { workout: TodaySummary['workout'] 
           <Text className="text-[14px] text-muted-foreground">{subtitulo}</Text>
         </View>
         <View className="h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary">
-          <Play size={16} color={cores.background} fill={cores.background} />
+          <Play size={16} color={colors.background} fill={colors.background} />
         </View>
       </View>
     </Pressable>

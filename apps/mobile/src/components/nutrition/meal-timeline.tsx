@@ -20,7 +20,7 @@ import {
   resumoDoItem,
   totalKcal,
 } from './helpers';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 import { useRemoverItem } from './use-remover-item';
 
 /**
@@ -127,7 +127,7 @@ export function MealTimeline({
                   <Text className="text-[13px] text-muted-foreground">
                     {ROTULO_REFEICAO[entry.mealType]}
                   </Text>
-                  <Plus size={14} color={cores.mutedForeground} />
+                  <Plus size={14} color={colors.mutedForeground} />
                 </View>
               </Pressable>
             ),
@@ -179,13 +179,13 @@ function MealCard({
               label={`Adicionar item em ${ROTULO_REFEICAO[meal.mealType]}`}
               onPress={onAddItem}
             >
-              <Plus size={16} color={cores.mutedForeground} />
+              <Plus size={16} color={colors.mutedForeground} />
             </AcaoDoIcone>
             <AcaoDoIcone label={`Mais ações de ${ROTULO_REFEICAO[meal.mealType]}`} onPress={onMore}>
-              <MoreHorizontal size={16} color={cores.mutedForeground} />
+              <MoreHorizontal size={16} color={colors.mutedForeground} />
             </AcaoDoIcone>
             <AcaoDoIcone label={`Remover ${ROTULO_REFEICAO[meal.mealType]}`} onPress={onDeleteMeal}>
-              <Trash2 size={16} color={cores.mutedForeground} />
+              <Trash2 size={16} color={colors.mutedForeground} />
             </AcaoDoIcone>
           </View>
         </View>
@@ -208,13 +208,13 @@ function MealCard({
                 </View>
                 <View className="flex-row items-center">
                   <AcaoDoIcone label={`Editar ${item.foodName}`} onPress={() => onEditItem(item)}>
-                    <Pencil size={14} color={cores.mutedForeground} />
+                    <Pencil size={14} color={colors.mutedForeground} />
                   </AcaoDoIcone>
                   <AcaoDoIcone
                     label={`Remover ${item.foodName}`}
                     onPress={() => onDeleteItem(item)}
                   >
-                    <Trash2 size={14} color={cores.mutedForeground} />
+                    <Trash2 size={14} color={colors.mutedForeground} />
                   </AcaoDoIcone>
                 </View>
               </View>

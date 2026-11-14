@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import { notificationsApi } from '@fatia/api-client';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 import './foreground-handler';
 import { Notifications as NotificationsModule } from './native';
 
@@ -39,7 +39,7 @@ export async function enablePush(ask: boolean): Promise<PushSetup> {
     await Notifications.setNotificationChannelAsync(PUSH_CHANNEL_ID, {
       name: 'Avisos da comunidade',
       importance: Notifications.AndroidImportance.DEFAULT,
-      lightColor: cores.primary,
+      lightColor: colors.primary,
     });
   }
   let perm = await Notifications.getPermissionsAsync();

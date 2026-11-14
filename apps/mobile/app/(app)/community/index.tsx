@@ -9,7 +9,7 @@ import { Screen } from '@/components/layout/screen';
 import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
 import { Button, EmptyState, ErrorState, LoadingState, cn } from '@/components/ui';
 import { GroupAvatar } from '@/components/community/group-avatar';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /** Equivalente de `apps/web/src/app/(app)/community/page.tsx`. */
 export default function CommunityScreen() {
@@ -28,7 +28,7 @@ export default function CommunityScreen() {
               onPress={() => setJoining(true)}
               className={TOP_BAR_ACTION}
             >
-              <KeyRound size={20} color={cores.primary} />
+              <KeyRound size={20} color={colors.primaryText} />
             </Pressable>
             <Pressable
               accessibilityRole="link"
@@ -36,7 +36,7 @@ export default function CommunityScreen() {
               onPress={() => router.push('/community/new')}
               className={TOP_BAR_ACTION}
             >
-              <Plus size={20} color={cores.primary} />
+              <Plus size={20} color={colors.primaryText} />
             </Pressable>
           </>
         }
@@ -89,7 +89,7 @@ export default function CommunityScreen() {
                         PRO
                       </Text>
                     ) : null}
-                    <ChevronRight size={16} color={cores.mutedForeground} />
+                    <ChevronRight size={16} color={colors.mutedForeground} />
                   </Pressable>
                 );
               })}

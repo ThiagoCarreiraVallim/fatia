@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { ChevronRight, Crown, Sparkles } from 'lucide-react-native';
 import { getChatAvailability, menuSections, type MenuItem } from '@fatia/api-client';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * O item do chat como o menu o monta (`menuSections`): ausente quando a
@@ -73,7 +73,7 @@ export function ChatHero({ item, onPress }: { item: MenuItem; onPress: () => voi
       onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
       className="mx-4 mb-4 overflow-hidden rounded-3xl border border-primary active:opacity-90"
       style={{
-        shadowColor: cores.primary,
+        shadowColor: colors.primary,
         shadowOpacity: 0.45,
         shadowRadius: 16,
         shadowOffset: { width: 0, height: 0 },
@@ -83,9 +83,9 @@ export function ChatHero({ item, onPress }: { item: MenuItem; onPress: () => voi
       <Svg width="100%" height="100%" style={{ position: 'absolute' }}>
         <Defs>
           <LinearGradient id="chatHero" x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor={cores.primary} stopOpacity="0.38" />
-            <Stop offset="0.6" stopColor={cores.primary} stopOpacity="0.1" />
-            <Stop offset="1" stopColor={cores.card} stopOpacity="1" />
+            <Stop offset="0" stopColor={colors.primary} stopOpacity="0.38" />
+            <Stop offset="0.6" stopColor={colors.primary} stopOpacity="0.1" />
+            <Stop offset="1" stopColor={colors.card} stopOpacity="1" />
           </LinearGradient>
         </Defs>
         <Rect width="100%" height="100%" fill="url(#chatHero)" />
@@ -107,21 +107,21 @@ export function ChatHero({ item, onPress }: { item: MenuItem; onPress: () => voi
 
       <View className="flex-row items-center gap-4 px-5 py-6">
         <View className="h-14 w-14 items-center justify-center rounded-2xl bg-primary">
-          <Sparkles size={28} color={cores.primaryForeground} />
+          <Sparkles size={28} color={colors.primaryForeground} />
         </View>
         <View className="flex-1">
           <View className="flex-row items-center gap-2">
             <Text className="text-lg font-extrabold text-foreground">{item.label}</Text>
             {item.locked ? (
               <View className="flex-row items-center gap-1 rounded-full bg-background/60 px-2 py-0.5">
-                <Crown size={12} color={cores.warning} />
+                <Crown size={12} color={colors.warning} />
                 <Text className="text-[10px] font-extrabold text-warning">PRO</Text>
               </View>
             ) : null}
           </View>
           <Text className="mt-0.5 text-sm text-foreground/80">{item.description}</Text>
         </View>
-        <ChevronRight size={22} color={cores.primary} />
+        <ChevronRight size={22} color={colors.primaryText} />
       </View>
     </Pressable>
   );

@@ -10,7 +10,7 @@ import BottomSheet, {
 } from '@gorhom/bottom-sheet';
 import { cssInterop } from 'nativewind';
 import { cn } from './utils';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Faz `className` funcionar nos componentes do `@gorhom/bottom-sheet`.
@@ -119,8 +119,8 @@ export function Drawer({
         if (index === -1) onOpenChange(false);
       }}
       backdropComponent={renderBackdrop}
-      backgroundStyle={{ backgroundColor: cores.background }}
-      handleIndicatorStyle={{ backgroundColor: cores.muted, width: 48 }}
+      backgroundStyle={{ backgroundColor: colors.background }}
+      handleIndicatorStyle={{ backgroundColor: colors.muted, width: 48 }}
       // `interactive` acompanha o teclado enquanto ele sobe, em vez de saltar
       // para a posição final — é o que torna digitar dentro do sheet suportável.
       keyboardBehavior="interactive"

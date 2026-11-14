@@ -16,6 +16,7 @@
     "@assistant-ui/react": "^0.15.22",
     "@assistant-ui/react-langgraph": "^0.14.30",
     "@fatia/api-client": "workspace:*",
+    "@fatia/design": "workspace:^",
     "@hookform/resolvers": "^3.9.0",
     "@logto/next": "^3.6.0",
     "@radix-ui/react-collapsible": "^1.1.20",

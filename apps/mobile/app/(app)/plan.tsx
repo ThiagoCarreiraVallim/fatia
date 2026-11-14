@@ -23,7 +23,7 @@ import {
 } from '@/billing/purchases';
 import { planOffer } from '@/billing/plan-offer';
 import { mensagemDeErro } from '@/components/nutrition/helpers';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * "Meu plano" no app (ADR 024): Free ou PRO, e a compra do PRO pela loja.
@@ -160,9 +160,9 @@ export default function PlanScreen() {
                 )}
               >
                 {pro ? (
-                  <Check size={18} color={cores.primary} />
+                  <Check size={18} color={colors.primaryText} />
                 ) : (
-                  <Lock size={18} color={cores.mutedForeground} />
+                  <Lock size={18} color={colors.mutedForeground} />
                 )}
                 <View className="flex-1">
                   <Text className="text-base font-bold text-foreground">{b.title}</Text>
@@ -180,7 +180,7 @@ export default function PlanScreen() {
           <View className="gap-2 rounded-2xl border border-border bg-card p-4">
             {FREE_INCLUDES.map((item) => (
               <View key={item} className="flex-row items-start gap-2">
-                <Check size={16} color={cores.primary} />
+                <Check size={16} color={colors.primaryText} />
                 <Text className="flex-1 text-sm text-foreground">{item}</Text>
               </View>
             ))}
@@ -209,7 +209,7 @@ export default function PlanScreen() {
                   onPress={() => assinar.mutate(pacote)}
                   className="min-h-[56px] flex-row items-center gap-3 rounded-2xl bg-primary px-4 py-3 active:opacity-80"
                 >
-                  <Crown size={20} color={cores.background} />
+                  <Crown size={20} color={colors.background} />
                   <View className="flex-1">
                     <Text className="text-base font-bold text-primary-foreground">
                       {pacote.packageType === 'ANNUAL' ? 'PRO anual' : 'PRO mensal'}

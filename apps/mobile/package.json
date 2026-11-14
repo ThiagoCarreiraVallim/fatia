@@ -16,7 +16,10 @@
     "start:dev": "expo start --dev-client"
   },
   "dependencies": {
+    "@expo-google-fonts/manrope": "^0.4.3",
+    "@expo-google-fonts/sora": "^0.4.2",
     "@fatia/api-client": "workspace:*",
+    "@fatia/design": "workspace:^",
     "@gorhom/bottom-sheet": "^5.2.14",
     "@hookform/resolvers": "^3.9.0",
     "@tanstack/react-query": "^5.101.4",

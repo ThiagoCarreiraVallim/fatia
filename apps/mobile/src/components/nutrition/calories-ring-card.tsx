@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import Svg, { Circle, Defs, G, LinearGradient, Rect, Stop } from 'react-native-svg';
 import type { DayTotals, UserGoals } from '@fatia/api-client';
 import { NUMEROS_TABULARES } from './helpers';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/components/nutrition/calories-ring-card.tsx`.
@@ -38,8 +38,8 @@ export function CaloriesRingCard({ totals, goals }: Props) {
         <Svg width="100%" height="100%">
           <Defs>
             <LinearGradient id="brilhoAnel" x1="0" y1="0" x2="0.8" y2="1">
-              <Stop offset="0" stopColor={cores.primary} stopOpacity="0.12" />
-              <Stop offset="0.55" stopColor={cores.primary} stopOpacity="0" />
+              <Stop offset="0" stopColor={colors.primary} stopOpacity="0.12" />
+              <Stop offset="0.55" stopColor={colors.primary} stopOpacity="0" />
             </LinearGradient>
           </Defs>
           <Rect x="0" y="0" width="100%" height="100%" fill="url(#brilhoAnel)" />
@@ -73,7 +73,7 @@ export function CaloriesRingCard({ totals, goals }: Props) {
                   cy={CENTRO}
                   r={RAIO}
                   fill="none"
-                  stroke={cores.primary}
+                  stroke={colors.primaryText}
                   strokeWidth={14}
                   strokeLinecap="round"
                   strokeDasharray={CIRCUNFERENCIA}

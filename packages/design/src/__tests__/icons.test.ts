@@ -1,26 +1,31 @@
-import { describe, expect, it } from 'vitest';
-import * as lucideReact from 'lucide-react';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { describe, expect, it } from 'vitest';
 import { CUSTOM_ICONS, ICON_NAMES, ICONS } from '../icons';
 
 /**
  * Os nomes são os do canvas (`.i-<nome>` em canvas.css). Cada um aponta para um
  * ícone do lucide que existe nos dois pacotes, ou para um desenho próprio
  * (marca de terceiro, que o lucide não traz).
+ *
+ * O lucide é dependência da web e do app, não deste pacote (a API, que também
+ * o consome, não pode arrastar o react-native junto). Por isso os nomes
+ * exportados vêm da declaração de tipos instalada para cada app.
  */
-// O lucide-react-native não carrega no Node (traz o react-native junto); os
-// nomes exportados vêm da declaração de tipos do pacote.
-const requireFromHere = createRequire(__filename);
-const nativeTypes = readFileSync(
-  join(
-    dirname(requireFromHere.resolve('lucide-react-native')),
-    '../types/lucide-react-native.d.ts',
-  ),
-  'utf8',
+const ROOT = resolve(__dirname, '../../../..');
+function exportedNames(app: string, pkg: string, types: string): string {
+  const req = createRequire(join(ROOT, 'apps', app, 'package.json'));
+  return readFileSync(join(dirname(req.resolve(pkg)), types), 'utf8');
+}
+const webTypes = exportedNames('web', 'lucide-react', '../lucide-react.d.ts');
+const nativeTypes = exportedNames(
+  'mobile',
+  'lucide-react-native',
+  '../types/lucide-react-native.d.ts',
 );
-const lucideNativeExports = (name: string) => new RegExp(`\\b${name}\\b`).test(nativeTypes);
+const declares = (types: string, name: string) =>
+  new RegExp(`declare const ${name}:`).test(types) || new RegExp(`\\b${name}\\b`).test(types);
 
 describe('ícones', () => {
   it('mapeia os 76 nomes da prancha, sem repetir', () => {
@@ -37,8 +42,8 @@ describe('ícones', () => {
     '%s existe no lucide-react e no lucide-react-native',
     (name) => {
       const target = ICONS[name];
-      expect(lucideReact).toHaveProperty(target);
-      expect(lucideNativeExports(target)).toBe(true);
+      expect(new RegExp(`declare const ${target}:`).test(webTypes)).toBe(true);
+      expect(declares(nativeTypes, target)).toBe(true);
     },
   );
 

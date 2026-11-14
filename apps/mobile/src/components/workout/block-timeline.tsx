@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarRange } from 'lucide-react-native';
 import { workoutApi, type TrainingBlock, type TrainingBlockWeek } from '@fatia/api-client';
 import { Button, LoadingState, useConfirm } from '@/components/ui';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /** Réplica de `apps/web/src/components/workout/block-timeline.tsx` (#145). */
 
@@ -112,7 +112,7 @@ function BlockCard({ block, onEncerrar }: { block: TrainingBlock; onEncerrar: ()
       <View className="flex-row items-start justify-between gap-3">
         <View className="flex-row items-center gap-2">
           <View className="h-8 w-8 items-center justify-center rounded-lg bg-muted">
-            <CalendarRange size={16} color={cores.primary} />
+            <CalendarRange size={16} color={colors.primaryText} />
           </View>
           <View>
             <Text className="text-sm font-bold text-foreground">

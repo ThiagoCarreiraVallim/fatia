@@ -23,7 +23,7 @@ import {
 import { Composer } from '@/components/chat/composer';
 import { PauseCard } from '@/components/chat/pause-card';
 import { CHAT_KEYS, useChatSession, useChatSnapshot } from '@/chat/chat-provider';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Uma conversa com o assistente (Fase 9e), paridade com `/chat/[id]` da web.
@@ -92,7 +92,7 @@ export default function ConversationScreen() {
             onPress={() => router.push('/chat/memories')}
             className={TOP_BAR_ACTION}
           >
-            <Brain size={20} color={cores.primary} />
+            <Brain size={20} color={colors.primaryText} />
           </Pressable>
           <Pressable
             accessibilityRole="link"
@@ -100,7 +100,7 @@ export default function ConversationScreen() {
             onPress={() => router.push('/chat')}
             className={TOP_BAR_ACTION}
           >
-            <List size={20} color={cores.primary} />
+            <List size={20} color={colors.primaryText} />
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -108,7 +108,7 @@ export default function ConversationScreen() {
             onPress={novaConversa}
             className={TOP_BAR_ACTION}
           >
-            <SquarePen size={20} color={cores.primary} />
+            <SquarePen size={20} color={colors.primaryText} />
           </Pressable>
         </>
       }

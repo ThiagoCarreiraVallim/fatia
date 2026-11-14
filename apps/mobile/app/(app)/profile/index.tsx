@@ -15,7 +15,7 @@ import { openLegal } from '@/components/profile/legal';
 import { PrivacyCard } from '@/components/profile/privacy-card';
 import { ProfileMetrics } from '@/components/profile/profile-metrics';
 import { disablePush } from '@/notifications/push';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 export default function ProfileScreen() {
   const confirm = useConfirm();
@@ -81,25 +81,25 @@ export default function ProfileScreen() {
 
           <View className="overflow-hidden rounded-2xl border border-border bg-card">
             <MenuItem
-              icon={<Crown size={18} color={cores.primary} />}
+              icon={<Crown size={18} color={colors.primaryText} />}
               title="Meu plano"
               subtitle={plano.data ? planSummary(plano.data) : 'Free ou PRO'}
               onPress={() => router.push('/plan')}
             />
             <MenuItem
-              icon={<Users size={18} color={cores.primary} />}
+              icon={<Users size={18} color={colors.primaryText} />}
               title="Comunidades"
               subtitle="Suas comunidades e o que você compartilha"
               onPress={() => router.push('/community')}
             />
             <MenuItem
-              icon={<Flag size={18} color={cores.primary} />}
+              icon={<Flag size={18} color={colors.primaryText} />}
               title="Metas"
               subtitle="Acompanhe seus objetivos pessoais"
               onPress={() => router.push('/goals')}
             />
             <MenuItem
-              icon={<Settings size={18} color={cores.primary} />}
+              icon={<Settings size={18} color={colors.primaryText} />}
               title="Metas de nutrição"
               subtitle="Calorias e macros diários"
               onPress={() => router.push('/nutrition/goals')}
@@ -107,19 +107,19 @@ export default function ProfileScreen() {
             {/* O rótulo dizia "Dispositivos — Apple Health e Garmin", integrações que não
                 existem; o destino sempre foi conectar a IA (mesma correção do PWA, #151). */}
             <MenuItem
-              icon={<Sparkles size={18} color={cores.primary} />}
+              icon={<Sparkles size={18} color={colors.primaryText} />}
               title="Conectar sua IA"
               subtitle="Registre e consulte seu diário conversando com o Claude"
               onPress={() => router.push('/profile/tokens')}
             />
             <MenuItem
-              icon={<Bell size={18} color={cores.primary} />}
+              icon={<Bell size={18} color={colors.primaryText} />}
               title="Notificações"
               subtitle="Avisos das comunidades neste celular"
               onPress={() => router.push('/profile/notifications')}
             />
             <MenuItem
-              icon={<Shield size={18} color={cores.primary} />}
+              icon={<Shield size={18} color={colors.primaryText} />}
               title="Privacidade e dados"
               subtitle="O que guardamos, e como exportar ou apagar"
               onPress={() => openLegal('/privacy')}
@@ -136,7 +136,7 @@ export default function ProfileScreen() {
             onPress={confirmSignOut}
             accessibilityLabel="Sair da conta"
           >
-            <LogOut size={18} color={cores.destructive} />
+            <LogOut size={18} color={colors.destructive} />
             <Text className="text-base font-bold text-destructive">Sair da conta</Text>
           </Button>
 
