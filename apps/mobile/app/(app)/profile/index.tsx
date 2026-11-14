@@ -2,7 +2,17 @@ import { useCallback, useState } from 'react';
 import { Text, View } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Bell, Crown, Flag, LogOut, Settings, Shield, Sparkles, Users } from 'lucide-react-native';
+import {
+  Bell,
+  Crown,
+  Flag,
+  LogOut,
+  Palette,
+  Settings,
+  Shield,
+  Sparkles,
+  Users,
+} from 'lucide-react-native';
 import { billingApi, planSummary, usersApi } from '@fatia/api-client';
 import { useAuth } from '@/auth/auth-context';
 import { Screen } from '@/components/layout/screen';
@@ -111,6 +121,12 @@ export default function ProfileScreen() {
               title="Conectar sua IA"
               subtitle="Registre e consulte seu diário conversando com o Claude"
               onPress={() => router.push('/profile/tokens')}
+            />
+            <MenuItem
+              icon={<Palette size={18} color={colors.primaryText} />}
+              title="Aparência"
+              subtitle="Tema escuro, claro ou o do sistema"
+              onPress={() => router.push('/profile/appearance')}
             />
             <MenuItem
               icon={<Bell size={18} color={colors.primaryText} />}
