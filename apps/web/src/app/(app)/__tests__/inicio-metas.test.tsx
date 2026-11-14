@@ -34,4 +34,18 @@ describe('Início', () => {
       '/nutrition/goals',
     );
   });
+
+  it('o topo do Hoje tem o sino dos avisos e a pessoa, que abre a aba Você (#369)', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <HomePage />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole('link', { name: 'Avisos' })).toHaveAttribute(
+      'href',
+      '/profile/notifications',
+    );
+    expect(screen.getByRole('link', { name: 'Você' })).toHaveAttribute('href', '/you');
+  });
 });

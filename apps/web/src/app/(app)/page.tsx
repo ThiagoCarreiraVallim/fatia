@@ -3,7 +3,6 @@
 import { useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Target } from 'lucide-react';
 import { greetingLine, progressApi, usersApi } from '@fatia/api-client';
 import { NutritionMacroCard } from '@/components/dashboard/nutrition-macro-card';
 import { NextWorkoutCard } from '@/components/dashboard/next-workout-card';
@@ -11,6 +10,7 @@ import { StepsCard } from '@/components/dashboard/steps-card';
 import { StreakCard } from '@/components/dashboard/streak-card';
 import { WaterCard } from '@/components/dashboard/water-card';
 import { ErrorState } from '@/components/ui/error-state';
+import { Icon } from '@/components/ui/icon';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const noSubscription = () => () => undefined;
@@ -22,6 +22,15 @@ export default function HomePage() {
   const greeting = useSyncExternalStore(
     noSubscription,
     () => greetingLine(me.data?.name),
+    () => null,
+  );
+  // "Sáb, 14 nov": do relógio local, pelo mesmo motivo da saudação.
+  const dateLine = useSyncExternalStore(
+    noSubscription,
+    () =>
+      new Date()
+        .toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' })
+        .replace(/\./g, ''),
     () => null,
   );
   const today = useQuery({
@@ -41,19 +50,35 @@ export default function HomePage() {
 
   return (
     <div className="space-y-5 px-5 pt-6 pb-4">
-      <section className="flex items-center gap-3">
+      {/* Topo do Hoje (ADR 040 revisada): data, saudação, o sino dos avisos e a
+          pessoa. O sino leva às notificações até a caixa de avisos da #389; o
+          avatar abre a aba Você. */}
+      <section className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
-          <h1 className="text-[18px] font-semibold text-foreground">{greeting ?? '\u00a0'}</h1>
-          <p className="text-sm text-muted-foreground">Pronto para dominar o dia?</p>
+          <p className="text-b2 capitalize text-muted-foreground">{dateLine ?? '\u00a0'}</p>
+          <h1 className="font-display text-h2 text-foreground">{greeting ?? '\u00a0'}</h1>
         </div>
         {/* As metas do dia a um toque: antes eram Progresso → Perfil → Metas. */}
         <Link
           href="/nutrition/goals"
           aria-label="Metas do dia"
-          className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-white/10 px-4 text-sm font-semibold text-foreground transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Target size={16} className="text-primary" aria-hidden />
-          Metas
+          <Icon name="target" size={20} />
+        </Link>
+        <Link
+          href="/profile/notifications"
+          aria-label="Avisos"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Icon name="bell" size={20} />
+        </Link>
+        <Link
+          href="/you"
+          aria-label="Você"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-secondary font-display text-sm font-bold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span aria-hidden>{(me.data?.name ?? '?').trim().slice(0, 1).toUpperCase() || '?'}</span>
         </Link>
       </section>
 
