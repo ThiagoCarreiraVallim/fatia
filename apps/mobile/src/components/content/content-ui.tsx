@@ -10,7 +10,7 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import { Button, cn, Tabs, TabsList, TabsTrigger } from '@/components/ui';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Peças de interação das telas de conteúdo da comunidade (planos, dicas,
@@ -58,7 +58,7 @@ export function StatusBadge({
 
 /** A seta que diz "isto abre outra tela" — sem ela, cartão de lista parece só informação. */
 export function RowChevron() {
-  return <ChevronRight size={18} color={cores.mutedForeground} />;
+  return <ChevronRight size={18} color={colors.mutedForeground} />;
 }
 
 /** Título de seção com a contagem e a ação de criar à direita, no lugar onde o olho procura. */
@@ -89,7 +89,7 @@ export function NewButton({ label, onPress }: { label: string; onPress: () => vo
         icon={Plus}
         label={label}
         className="text-primary-foreground"
-        color={cores.primaryForeground}
+        color={colors.primaryForeground}
       />
     </Button>
   );
@@ -99,7 +99,7 @@ export function NewButton({ label, onPress }: { label: string; onPress: () => vo
 export function IconLabel({
   icon: Icon,
   label,
-  color = cores.foreground,
+  color = colors.foreground,
   className,
 }: {
   icon: LucideIcon;
@@ -137,7 +137,7 @@ export function DeleteButton({
       onPress={onPress}
       accessibilityLabel={label}
     >
-      <IconLabel icon={Trash2} label={label} color={cores.danger} className="text-danger" />
+      <IconLabel icon={Trash2} label={label} color={colors.danger} className="text-danger" />
     </Button>
   );
 }
@@ -215,7 +215,7 @@ export function CheckableRow({
             role === 'radio' ? (
               <View className="h-2.5 w-2.5 rounded-full bg-primary" />
             ) : (
-              <Check size={14} color={cores.primaryForeground} />
+              <Check size={14} color={colors.primaryForeground} />
             )
           ) : null}
         </View>
@@ -248,7 +248,7 @@ export function DrawerOption({
       className="min-h-[64px] flex-row items-center gap-3 rounded-xl border border-border bg-card p-3 active:opacity-80"
     >
       <View className="h-10 w-10 items-center justify-center rounded-lg bg-muted">
-        <Icon size={20} color={cores.primary} />
+        <Icon size={20} color={colors.primaryText} />
       </View>
       <View className="flex-1 gap-0.5">
         <Text className="text-sm font-semibold text-foreground">{title}</Text>
@@ -325,7 +325,7 @@ export function PublishCard({
               <IconLabel
                 icon={Eye}
                 label="Publicar para os membros"
-                color={cores.primaryForeground}
+                color={colors.primaryForeground}
                 className="text-primary-foreground"
               />
             </Button>

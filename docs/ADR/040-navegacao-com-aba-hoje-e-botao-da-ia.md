@@ -1,7 +1,11 @@
 # ADR 040 — Navegação com aba Hoje e o botão da IA à direita
 
-**Status:** Accepted
+**Status:** Accepted (revisada em 2026-11-14)
 **Data:** 2026-11-09
+
+> **Revisão de 14/11/2026 (#368).** O canvas foi revisto em 10/11 (prancha Componentes, "Barra de
+> navegação", e `.nav.n5` em canvas.css): a barra passou a ter **cinco abas**, com **Você** como
+> aba. A seção "Revisão" no fim substitui os itens 1, 3 e 5 da decisão original; o resto continua.
 
 ## Contexto
 
@@ -53,6 +57,27 @@ dono do produto escolheu a da tela principal.
 ### Neutras
 
 - O conector MCP não muda: navegação é coisa da tela.
+
+## Revisão (2026-11-14)
+
+1. **Cinco abas, só ícone:** **Hoje** (`home`) · **Nutrição** (`apple`) · **Treino** (`dumbbell`)
+   · **Comunidade** (`users`) · **Você** (avatar). Sem rótulo visível, por espaço; toda aba tem
+   nome para leitor de tela (`aria-label`/`accessibilityLabel`) e a ativa tem `aria-current`
+   (ganha o fundo `foreground` com o ícone em `background`).
+2. **Botão redondo da IA** (68 px, `spark`, verde da marca) à direita, separado das abas.
+3. **"Você" vira aba** (no lugar do avatar no topo do Hoje): perfil, metas, progresso, recordes,
+   plano, "Conectar sua IA", Aparência e o item **Avisos**. O **sino de avisos** continua no topo
+   do Hoje. (As telas Al-H1-Hoje e Al-V1-Voce não estão na cópia local do canvas; a posição exata
+   do sino se confere no canvas online antes da #369.)
+4. **Quando a barra some:** nas tarefas de foco (treino em andamento, câmera, chat, criar ou
+   editar algo, compra). Ela fica **por baixo das folhas**. Nas telas de ver com ação principal, o
+   botão de ação sobe para cima da barra. O **voltar do sistema fecha o menu da IA**, como qualquer
+   folha.
+5. **Desktop:** barra lateral com as cinco abas e o botão da IA no topo. O painel da comunidade
+   fica dentro de Comunidade.
+6. **Hábito e check-in** só aparecem no menu da IA quando a #390 existir; até lá, não aparecem.
+7. O componente visual (barra de 5 abas + botão da IA, nos dois temas) entra com a #368; a troca
+   da navegação (`navigation.ts`, layouts, testes) é da #369.
 
 ## Alternativas consideradas
 

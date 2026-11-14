@@ -16,7 +16,7 @@ import { ImageField, type ImageValue } from '@/components/content/image-field';
 import { apiMessage, Choice, OrgPanel, orgKeys, PanelCard } from '@/components/org/org-panel';
 import { Button, EmptyState, ErrorState, Input, LoadingState } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 function Formulario({ g, atual }: { g: MyGroup; atual: GroupAgent }) {
   const qc = useQueryClient();
@@ -128,7 +128,7 @@ function Formulario({ g, atual }: { g: MyGroup; atual: GroupAgent }) {
             />
           ) : (
             <View className="h-12 w-12 items-center justify-center rounded-full bg-muted">
-              <Bot size={22} color={cores.primary} />
+              <Bot size={22} color={colors.primaryText} />
             </View>
           )}
           <View className="min-w-0 flex-1">

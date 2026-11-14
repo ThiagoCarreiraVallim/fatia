@@ -9,7 +9,7 @@ import {
   type StudentReading,
 } from '@fatia/api-client';
 import { LoadingState, cn } from '@/components/ui';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 const ORDEM: ShareScope[] = ['WORKOUT', 'NUTRITION', 'BODY', 'HABITS', 'GOALS'];
 
@@ -135,7 +135,7 @@ export function MemberReading({
   if (granted.length === 0) {
     return (
       <View className="items-center gap-2 rounded-2xl border border-dashed border-border p-6">
-        <Lock size={20} color={cores.mutedForeground} />
+        <Lock size={20} color={colors.mutedForeground} />
         <Text className="text-sm font-bold text-foreground">Nada autorizado</Text>
         <Text className="text-center text-xs text-muted-foreground">
           Esta pessoa ainda não liberou nenhuma categoria para você.

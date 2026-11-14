@@ -13,7 +13,7 @@ import {
   FormMessage,
   Label,
 } from '@/components/ui';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /** Réplica de `apps/web/src/components/profile/edit-height-drawer.tsx`. */
 export function EditHeightDrawer({
@@ -76,8 +76,8 @@ export function EditHeightDrawer({
               onChangeText={setValue}
               keyboardType="number-pad"
               placeholder="ex: 182"
-              placeholderTextColor={cores.placeholder}
-              selectionColor={cores.primary}
+              placeholderTextColor={colors.placeholder}
+              selectionColor={colors.primaryText}
               autoFocus
               className="min-h-[44px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground"
             />

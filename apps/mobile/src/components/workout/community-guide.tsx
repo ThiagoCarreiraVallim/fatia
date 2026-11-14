@@ -4,7 +4,7 @@ import { Play, Users } from 'lucide-react-native';
 import type { CommunityGuide } from '@fatia/api-client';
 import { MarkdownLite } from '@/components/content/markdown-lite';
 import { Button } from '@/components/ui';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * O tutorial que a comunidade da pessoa gravou para o exercício — equivalente
@@ -24,7 +24,7 @@ export function CommunityGuideSection({
   return (
     <View className="gap-3" accessibilityLabel={`Tutorial de ${guide.groupName}`}>
       <View className="flex-row items-center gap-1.5">
-        <Users size={14} color={cores.primary} />
+        <Users size={14} color={colors.primaryText} />
         <Text className="text-xs font-bold uppercase tracking-wide text-primary">
           {vazio ? `Exercício de ${guide.groupName}` : `Tutorial de ${guide.groupName}`}
         </Text>
@@ -34,7 +34,7 @@ export function CommunityGuideSection({
           accessibilityLabel={`Assistir a demonstração de ${exerciseName}`}
           onPress={() => void WebBrowser.openBrowserAsync(guide.video!.url!)}
         >
-          <Play size={16} color={cores.primaryForeground} />
+          <Play size={16} color={colors.primaryForeground} />
           <Text className="text-sm font-semibold text-primary-foreground">Assistir o vídeo</Text>
         </Button>
       ) : null}

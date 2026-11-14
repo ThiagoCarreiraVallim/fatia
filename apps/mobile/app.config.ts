@@ -39,9 +39,10 @@ const config: ExpoConfig = {
   version: '0.1.0',
   orientation: 'portrait',
   scheme: SCHEME,
-  userInterfaceStyle: 'dark',
-  // O PWA é dark-only (`html.dark` fixo em apps/web). O app segue igual: uma
-  // paleta só, sem tema claro pela metade.
+  // Segue o tema do sistema, com escolha manual em Perfil → Aparência (ADR 041).
+  // O `backgroundColor` é o do escuro: é o que aparece antes do JS carregar, e o
+  // escuro é o tema de quem nunca escolheu e está sem resposta do sistema.
+  userInterfaceStyle: 'automatic',
   backgroundColor: '#131313',
   icon: './assets/icon.png',
   // A splash não é mais chave de topo no SDK 57 — é configuração do plugin
@@ -136,9 +137,11 @@ const config: ExpoConfig = {
     [
       'expo-splash-screen',
       {
-        backgroundColor: '#131313',
+        // Splash nos dois temas, com o fundo de cada um (ADR 041).
+        backgroundColor: '#f4f5f2',
         image: './assets/splash.png',
         imageWidth: 160,
+        dark: { backgroundColor: '#131313', image: './assets/splash.png' },
       },
     ],
   ],

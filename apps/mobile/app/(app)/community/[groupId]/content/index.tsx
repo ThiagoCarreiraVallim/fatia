@@ -13,7 +13,7 @@ import {
   ExerciseDetailHost,
   useOpenExerciseDetail,
 } from '@/components/workout/exercise-detail-host';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 type Aba = 'plans' | 'tips' | 'exercises';
 const ABAS: Aba[] = ['plans', 'tips', 'exercises'];
@@ -55,7 +55,7 @@ function CommunityExercises({ groupId }: { groupId: string }) {
             />
           ) : (
             <View className="h-14 w-14 items-center justify-center rounded-xl bg-muted">
-              <Dumbbell size={20} color={cores.mutedForeground} />
+              <Dumbbell size={20} color={colors.mutedForeground} />
             </View>
           )}
           <View className="flex-1">
@@ -66,7 +66,7 @@ function CommunityExercises({ groupId }: { groupId: string }) {
               {[e.muscleGroup, e.equipment].filter(Boolean).join(' · ')}
             </Text>
           </View>
-          {e.video ? <PlayCircle size={20} color={cores.primary} /> : null}
+          {e.video ? <PlayCircle size={20} color={colors.primaryText} /> : null}
           <RowChevron />
         </Pressable>
       ))}

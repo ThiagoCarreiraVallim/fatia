@@ -1,78 +1,106 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { cssBlock, hslToHex, readCssTokens } from '@fatia/design';
 
 /**
- * A paleta do app nativo e a do PWA precisam ser a mesma (issue #118).
+ * A paleta do app nativo e a do PWA precisam ser a mesma (issue #118), nos dois
+ * temas (ADR 041).
  *
- * "Precisa ser a mesma" só vira verdade se alguém verificar. Sem este teste, o
- * jeito de descobrir que o verde da marca mudou num lado e não no outro é
- * abrir os dois apps lado a lado — o que ninguém faz depois de trocar uma cor.
+ * Lê por bloco: o claro repete os nomes do escuro, e juntar o arquivo inteiro
+ * faria o claro sobrescrever o escuro sem ninguém notar.
  */
 
-const MOBILE = resolve(__dirname, '../../../global.css');
-const WEB = resolve(__dirname, '../../../../web/src/app/globals.css');
+const MOBILE = readFileSync(resolve(__dirname, '../../../global.css'), 'utf8');
+const WEB = readFileSync(resolve(__dirname, '../../../../web/src/app/globals.css'), 'utf8');
 
-/** Extrai `--nome: valor;` do bloco `:root`. */
-function readTokens(file: string): Record<string, string> {
-  const css = readFileSync(file, 'utf8');
-  const tokens: Record<string, string> = {};
-  for (const [, name, value] of css.matchAll(/--([a-z-]+):\s*([^;]+);/g)) {
-    tokens[name] = value.trim();
-  }
-  return tokens;
-}
+const mobile = {
+  // O NativeWind só reconhece a mídia `dark` como o escuro: no app o claro é o `:root` de fora.
+  dark: readCssTokens(cssBlock(cssBlock(MOBILE, '@media (prefers-color-scheme: dark)'), ':root')),
+  light: readCssTokens(cssBlock(MOBILE, ':root')),
+};
+const web = {
+  dark: readCssTokens(cssBlock(WEB, ':root')),
+  light: readCssTokens(cssBlock(WEB, ":root[data-theme='light']")),
+};
+
+const SHARED = [
+  'background',
+  'foreground',
+  'card',
+  'card-foreground',
+  'popover',
+  'popover-foreground',
+  'primary',
+  'primary-foreground',
+  'primary-text',
+  'secondary',
+  'secondary-foreground',
+  'muted',
+  'muted-foreground',
+  'faint-foreground',
+  'surface-3',
+  'accent',
+  'accent-foreground',
+  'destructive',
+  'destructive-foreground',
+  'border',
+  'border-strong',
+  'input',
+  'ring',
+  'danger',
+  'success',
+  'warning',
+  'info',
+  'ok',
+  'kcal',
+  'protein',
+  'carbs',
+  'fat',
+  'water',
+  'steps',
+  'brand',
+  'brand-foreground',
+];
 
 describe('paleta', () => {
-  const mobile = readTokens(MOBILE);
-  const web = readTokens(WEB);
-
-  it('lê tokens dos dois arquivos — se um caminho mudar, o teste não pode passar vazio', () => {
-    expect(Object.keys(mobile).length).toBeGreaterThan(10);
-    expect(Object.keys(web).length).toBeGreaterThan(10);
+  it('lê tokens dos dois arquivos e dos dois temas — caminho errado não passa vazio', () => {
+    for (const t of ['dark', 'light'] as const) {
+      expect(Object.keys(mobile[t]).length).toBeGreaterThan(30);
+      expect(Object.keys(web[t]).length).toBeGreaterThan(30);
+    }
   });
 
-  it('o verde da marca é o mesmo', () => {
-    expect(mobile.primary).toBe('108 100% 45%');
-    expect(mobile.primary).toBe(web.primary);
+  it('o escuro e o claro do app não são o mesmo bloco', () => {
+    expect(mobile.light.background).not.toBe(mobile.dark.background);
   });
 
   it.each([
-    'background',
-    'foreground',
-    'card',
-    'card-foreground',
-    'popover',
-    'popover-foreground',
-    'primary',
-    'primary-foreground',
-    'secondary',
-    'secondary-foreground',
-    'muted',
-    'muted-foreground',
-    'accent',
-    'accent-foreground',
-    'destructive',
-    'destructive-foreground',
-    'border',
-    'input',
-    'ring',
-    'danger',
-    'success',
-    'warning',
-    'protein',
-    'carbs',
-    'fat',
-    'water',
-  ])('--%s bate com o do PWA', (token) => {
-    expect(mobile[token]).toBeDefined();
-    expect(mobile[token]).toBe(web[token]);
+    ['dark', 'protein', '#6ea3ff'],
+    ['dark', 'primary-foreground', '#0b1a05'],
+    ['dark', 'border', '#383838'],
+    ['light', 'carbs', '#1a7f00'],
+    ['light', 'fat', '#b93a2e'],
+    ['light', 'water', '#1a66c2'],
+    ['light', 'steps', '#0e7468'],
+  ] as const)('%s: --%s é %s (canvas)', (theme, token, hex) => {
+    expect(hslToHex(mobile[theme][token])).toBe(hex);
   });
 
-  it('não deixa o mobile ganhar token que o web não tem', () => {
-    // `--radius` fica de fora: no web é `0.75rem` (CSS), no mobile o raio vive
-    // no tailwind.config.js em pontos, porque o React Native não tem rem.
-    const extras = Object.keys(mobile).filter((k) => !(k in web));
-    expect(extras).toEqual([]);
+  it('o verde da marca é o mesmo', () => {
+    expect(mobile.dark.primary).toBe(web.dark.primary);
+    expect(mobile.light.primary).toBe(web.light.primary);
+  });
+
+  describe.each(['dark', 'light'] as const)('tema %s', (theme) => {
+    it.each(SHARED)('--%s bate com o do PWA', (token) => {
+      expect(mobile[theme][token]).toBeDefined();
+      expect(mobile[theme][token]).toBe(web[theme][token]);
+    });
+
+    it('o app não ganha token que a web não tem', () => {
+      const extras = Object.keys(mobile[theme]).filter((k) => !(k in web[theme]));
+      expect(extras).toEqual([]);
+    });
   });
 });

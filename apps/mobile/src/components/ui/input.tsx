@@ -1,7 +1,7 @@
 import { forwardRef } from 'react';
 import { TextInput, type TextInputProps } from 'react-native';
 import { cn } from './utils';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 export interface InputProps extends TextInputProps {
   className?: string;
@@ -26,8 +26,8 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
   return (
     <TextInput
       ref={ref}
-      placeholderTextColor={cores.placeholder}
-      selectionColor={cores.primary}
+      placeholderTextColor={colors.placeholder}
+      selectionColor={colors.primaryText}
       className={cn(
         'min-h-[44px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground',
         props.editable === false && 'opacity-50',

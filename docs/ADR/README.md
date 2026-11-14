@@ -45,7 +45,8 @@ Decisões arquiteturais relevantes do projeto. Cada ADR é imutável depois de a
 | [037](./037-prd-descreve-o-produto-atual.md)                           | O PRD descreve o produto atual; só ADR muda o escopo negativo     | Accepted                               |
 | [038](./038-foto-da-refeicao-guardada.md)                              | A foto da refeição passa a ser guardada, com consentimento        | Accepted                               |
 | [039](./039-ia-grava-no-modo-automatico.md)                            | Modo automático: a IA grava sem pedir OK, quando a pessoa escolhe | Accepted                               |
-| [040](./040-navegacao-com-aba-hoje-e-botao-da-ia.md)                   | Navegação com aba Hoje e o botão da IA à direita                  | Accepted                               |
+| [040](./040-navegacao-com-aba-hoje-e-botao-da-ia.md)                   | Navegação com aba Hoje e o botão da IA à direita                  | Accepted (revisada em 2026-11-14)      |
+| [041](./041-tema-claro-com-escolha-do-usuario.md)                      | Tema claro com escolha do usuário (Sistema, Escuro, Claro)        | Accepted                               |
 
 ## Template
 

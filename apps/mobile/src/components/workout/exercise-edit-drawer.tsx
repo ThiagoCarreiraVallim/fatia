@@ -21,7 +21,7 @@ import {
   FormMessage,
   Label,
 } from '@/components/ui';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 import { EquipmentChooser } from './equipment-chooser';
 
 /**
@@ -111,7 +111,7 @@ export function ExerciseEditDrawer({ exercise, open, onOpenChange, onSaved }: Pr
               value={name}
               onChangeText={setName}
               accessibilityLabel="Nome"
-              placeholderTextColor={cores.placeholder}
+              placeholderTextColor={colors.placeholder}
               className={FIELD_CLASS}
             />
           </View>
@@ -123,7 +123,7 @@ export function ExerciseEditDrawer({ exercise, open, onOpenChange, onSaved }: Pr
               onChangeText={setEquipment}
               accessibilityLabel="Equipamento"
               placeholder="Ex.: barra, halteres, leg press"
-              placeholderTextColor={cores.placeholder}
+              placeholderTextColor={colors.placeholder}
               className={FIELD_CLASS}
             />
             <Pressable
@@ -165,7 +165,7 @@ export function ExerciseEditDrawer({ exercise, open, onOpenChange, onSaved }: Pr
               multiline
               numberOfLines={6}
               textAlignVertical="top"
-              placeholderTextColor={cores.placeholder}
+              placeholderTextColor={colors.placeholder}
               className={`${FIELD_CLASS} min-h-[140px]`}
             />
           </View>

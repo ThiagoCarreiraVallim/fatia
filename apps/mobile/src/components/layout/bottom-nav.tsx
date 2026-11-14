@@ -8,7 +8,7 @@ import { DrawerLayer } from '@/components/ui';
 import { cn } from '@/components/ui/utils';
 import { MoreMenu } from './more-menu';
 import { useQuickAdd } from './quick-add';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 const ICONE = { nutrition: Apple, workout: Dumbbell, community: Users } as const;
 
@@ -41,7 +41,7 @@ export function BottomNav() {
         onPress={() => router.navigate(tab.href)}
         className="min-h-[44px] flex-1 items-center justify-center gap-1 py-2"
       >
-        <Icone size={20} color={acesa ? cores.primary : cores.mutedForeground} />
+        <Icone size={20} color={acesa ? colors.primaryText : colors.mutedForeground} />
         <Text
           className={cn('text-[11px]', acesa ? 'font-bold text-primary' : 'text-muted-foreground')}
         >
@@ -72,7 +72,7 @@ export function BottomNav() {
               style={{ elevation: 6 }}
               className="h-14 w-14 items-center justify-center rounded-full bg-primary active:opacity-80"
             >
-              <Plus size={28} strokeWidth={2.5} color={cores.background} />
+              <Plus size={28} strokeWidth={2.5} color={colors.background} />
             </Pressable>
           </View>
           {aba('community')}
@@ -83,7 +83,10 @@ export function BottomNav() {
             onPress={() => setMenuAberto(true)}
             className="min-h-[44px] flex-1 items-center justify-center gap-1 py-2"
           >
-            <Menu size={20} color={ativa === 'more' ? cores.primary : cores.mutedForeground} />
+            <Menu
+              size={20}
+              color={ativa === 'more' ? colors.primaryText : colors.mutedForeground}
+            />
             <Text
               className={cn(
                 'text-[11px]',

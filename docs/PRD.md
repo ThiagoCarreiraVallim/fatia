@@ -115,7 +115,6 @@ Valem para todo trabalho. Mudar qualquer linha desta seção exige ADR (ADR 037)
 | Fotos de progresso, privadas                       | [#300](https://github.com/ThiagoCarreiraVallim/fatia/issues/300) |
 | Receitas autorais (do profissional ou do aluno)    | [#334](https://github.com/ThiagoCarreiraVallim/fatia/issues/334) |
 | MCP para a equipe da comunidade                    | [#343](https://github.com/ThiagoCarreiraVallim/fatia/issues/343) |
-| Tema claro                                         | [#352](https://github.com/ThiagoCarreiraVallim/fatia/issues/352) |
 | Unidades e outros idiomas (hoje só pt-BR; ADR 016) | [#353](https://github.com/ThiagoCarreiraVallim/fatia/issues/353) |
 
 ## 6. Métricas de sucesso

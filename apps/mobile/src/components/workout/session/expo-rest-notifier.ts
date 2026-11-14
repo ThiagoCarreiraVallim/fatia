@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import { REST_CHANNEL_ID, REST_NOTIFICATION_KIND, type RestNotifier } from './rest-notification';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 // O handler de primeiro plano é global e silencia só o descanso; mora lá.
 import '@/notifications/foreground-handler';
 import { Notifications } from '@/notifications/native';
@@ -28,7 +28,7 @@ export const expoRestNotifier: RestNotifier = {
         importance: Notifications.AndroidImportance.HIGH,
         sound: 'default',
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: cores.primary,
+        lightColor: colors.primary,
       });
     }
 

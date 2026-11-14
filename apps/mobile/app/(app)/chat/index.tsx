@@ -27,7 +27,7 @@ import {
 } from '@/components/ui';
 import { DrawerInput } from '@/components/nutrition/drawer-input';
 import { CHAT_KEYS, useChatSession } from '@/chat/chat-provider';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /** Data curta da última mensagem: "hoje", "ontem" ou dia/mês. */
 function quando(iso: string): string {
@@ -108,7 +108,7 @@ export default function ConversationsScreen() {
             onPress={nova}
             className={TOP_BAR_ACTION}
           >
-            <SquarePen size={20} color={cores.primary} />
+            <SquarePen size={20} color={colors.primaryText} />
           </Pressable>
         }
         onRefresh={() => void conversas.refetch()}
@@ -158,7 +158,7 @@ export default function ConversationsScreen() {
               onLongPress={() => showOptions(c)}
               className="min-h-[56px] flex-row items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 active:opacity-80"
             >
-              <MessageCircle size={18} color={cores.mutedForeground} />
+              <MessageCircle size={18} color={colors.mutedForeground} />
               <Text numberOfLines={1} className="flex-1 text-sm text-foreground">
                 {c.title ?? 'Conversa sem título'}
               </Text>

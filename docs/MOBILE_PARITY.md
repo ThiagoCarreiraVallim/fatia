@@ -410,10 +410,25 @@ por `style`.
 **`Intl` do Hermes é irregular entre Androids.** Números e datas em pt-BR são
 formatados à mão ou com `date-fns` + locale `ptBR`, nunca com `toLocaleString`.
 
-**Cores fora da paleta, de propósito.** Os macros mantêm o código de cor do
-produto (proteína `#4b8eff`, gordura `#ffb4ab`) e os estados de aviso usam
-âmbar/vermelho claros: `--destructive` é `#93000a`, que some como preenchimento
-de barra sobre `#131313`. Texto de erro continua em `text-destructive`.
+**Cores por tema, lidas no render.** Os macros mantêm o código de cor do produto
+(no escuro, proteína `#6ea3ff`, carboidrato `#2ce500`, gordura `#ffb4ab`) e trocam
+de tom no claro (ADR 041). As props que pedem string usam `colors.<token>` de
+`src/theme/colors.ts`, que lê o tema que vale agora; copiar para constante de
+módulo congelaria o tema do carregamento. Texto de erro usa `text-danger`.
+
+**Design system v2 "Noite" (#368).** Paridade nova a conferir em aparelho:
+
+- **Fontes:** Sora e Manrope pelo `@expo-google-fonts`, carregadas antes de esconder
+  a splash. Uma família por peso (`font-sans-bold`, `font-display`…): o Android não
+  sintetiza negrito em fonte própria. As telas antigas continuam na fonte do sistema
+  até serem redesenhadas; os componentes novos já usam as famílias.
+- **Tema:** Sistema/Escuro/Claro em Perfil → Aparência, guardado no `SecureStore`;
+  `colorScheme.set` do NativeWind troca as variáveis do `global.css`, e a árvore
+  remonta para as cores em JS (`colors`) acompanharem.
+- **Swipe:** `SwipeRow` com `ReanimatedSwipeable` (RNGH 3.5) e as mesmas ações como
+  ações de acessibilidade do leitor de tela. Na web, ponteiro + botão "Mais ações".
+- **Painel lateral:** a folha abre como painel lateral de 480 px só na web (`md+`);
+  no app é sempre folha de baixo.
 
 ---
 

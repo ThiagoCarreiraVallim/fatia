@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePathname, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { routeInfo } from '@fatia/api-client';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /** Altura da barra de topo, sem a área segura. `Screen` reserva o mesmo. */
 export const TOP_BAR_HEIGHT = 52;
@@ -57,7 +57,7 @@ export function TopBar({
           onPress={() => (onBack ? onBack() : router.navigate(parent))}
           className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
         >
-          <ChevronLeft size={26} color={cores.primary} />
+          <ChevronLeft size={26} color={colors.primaryText} />
         </Pressable>
         <Text
           accessibilityRole="header"

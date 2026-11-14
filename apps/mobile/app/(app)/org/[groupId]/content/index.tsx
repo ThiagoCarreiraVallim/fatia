@@ -32,7 +32,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 type Tab = 'plans' | 'tips';
 
@@ -144,7 +144,7 @@ function ContentLists({
                     {/* O alfinete sozinho não dizia nada; com a palavra, diz. */}
                     {d.pinned ? (
                       <View className="flex-row items-center gap-1">
-                        <Pin size={12} color={cores.primary} />
+                        <Pin size={12} color={colors.primaryText} />
                         <Text className="text-xs font-medium text-primary">Fixada</Text>
                       </View>
                     ) : null}

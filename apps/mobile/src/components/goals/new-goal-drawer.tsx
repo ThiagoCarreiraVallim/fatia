@@ -15,7 +15,7 @@ import {
   Label,
   cn,
 } from '@/components/ui';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 interface KindOption {
   kind: GoalKind;
@@ -190,8 +190,8 @@ export function NewGoalDrawer({ open, onClose }: { open: boolean; onClose: () =>
             value={title}
             onChangeText={setTitle}
             placeholder="ex: Baixar para 12% de BF"
-            placeholderTextColor={cores.placeholder}
-            selectionColor={cores.primary}
+            placeholderTextColor={colors.placeholder}
+            selectionColor={colors.primaryText}
             maxLength={120}
             className={SHEET_INPUT_CLASS}
           />
@@ -206,8 +206,8 @@ export function NewGoalDrawer({ open, onClose }: { open: boolean; onClose: () =>
               onChangeText={setTarget}
               keyboardType="decimal-pad"
               placeholder={selected.placeholder}
-              placeholderTextColor={cores.placeholder}
-              selectionColor={cores.primary}
+              placeholderTextColor={colors.placeholder}
+              selectionColor={colors.primaryText}
               className={SHEET_INPUT_CLASS}
             />
           </View>
@@ -218,8 +218,8 @@ export function NewGoalDrawer({ open, onClose }: { open: boolean; onClose: () =>
               value={unit}
               onChangeText={setUnit}
               maxLength={30}
-              placeholderTextColor={cores.placeholder}
-              selectionColor={cores.primary}
+              placeholderTextColor={colors.placeholder}
+              selectionColor={colors.primaryText}
               className={SHEET_INPUT_CLASS}
             />
           </View>
@@ -234,8 +234,8 @@ export function NewGoalDrawer({ open, onClose }: { open: boolean; onClose: () =>
             onChangeText={setDeadline}
             keyboardType="numbers-and-punctuation"
             placeholder="AAAA-MM-DD"
-            placeholderTextColor={cores.placeholder}
-            selectionColor={cores.primary}
+            placeholderTextColor={colors.placeholder}
+            selectionColor={colors.primaryText}
             maxLength={10}
             className={SHEET_INPUT_CLASS}
           />

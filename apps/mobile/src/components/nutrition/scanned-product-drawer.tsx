@@ -35,7 +35,7 @@ import {
 } from '@/components/ui';
 import { DrawerInput } from './drawer-input';
 import { NUMEROS_TABULARES, instanteNoDia, mensagemDeErro, parsePositivo } from './helpers';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Confirmação do produto escaneado (#140).
@@ -438,9 +438,9 @@ function OpcaoDeGuardar({
         className="min-h-[44px] flex-row items-center gap-2"
       >
         {guardar ? (
-          <Check size={20} color={cores.primary} />
+          <Check size={20} color={colors.primaryText} />
         ) : (
-          <Square size={20} color={cores.placeholder} />
+          <Square size={20} color={colors.placeholder} />
         )}
         <Text className="text-sm text-foreground">Guardar em Meus alimentos</Text>
       </Pressable>

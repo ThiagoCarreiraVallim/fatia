@@ -48,4 +48,41 @@ const TabsContent = React.forwardRef<
 ));
 TabsContent.displayName = TabsPrimitive.Content.displayName;
 
-export { Tabs, TabsList, TabsTrigger, TabsContent };
+/**
+ * Abas sublinhadas do DS v2 (prancha Componentes · Abas): o traço verde corre
+ * para a aba nova em 500 ms (`anim-tab`). Mesma API do Radix; é só a pele.
+ */
+const UnderlineTabsList = React.forwardRef<
+  React.ElementRef<typeof TabsPrimitive.List>,
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
+>(({ className, ...props }, ref) => (
+  <TabsPrimitive.List
+    ref={ref}
+    className={cn('flex gap-6 border-b border-subtle text-muted-foreground', className)}
+    {...props}
+  />
+));
+UnderlineTabsList.displayName = 'UnderlineTabsList';
+
+const UnderlineTabsTrigger = React.forwardRef<
+  React.ElementRef<typeof TabsPrimitive.Trigger>,
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>
+>(({ className, children, ...props }, ref) => (
+  <TabsPrimitive.Trigger
+    ref={ref}
+    className={cn(
+      'group relative min-h-11 pb-3 text-sm font-semibold transition-colors duration-fast data-[state=active]:text-foreground',
+      className,
+    )}
+    {...props}
+  >
+    {children}
+    <i
+      aria-hidden
+      className="anim-tab absolute inset-x-0 -bottom-px hidden h-[3px] rounded-full bg-primary group-data-[state=active]:block"
+    />
+  </TabsPrimitive.Trigger>
+));
+UnderlineTabsTrigger.displayName = 'UnderlineTabsTrigger';
+
+export { Tabs, TabsList, TabsTrigger, TabsContent, UnderlineTabsList, UnderlineTabsTrigger };

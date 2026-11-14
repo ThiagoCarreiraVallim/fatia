@@ -8,7 +8,7 @@ import { Play, Video, X } from 'lucide-react-native';
 import { ApiError, formatBytes, uploadMedia } from '@fatia/api-client';
 import { Button } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 import { IconLabel } from './content-ui';
 import { describePickedVideo } from './picked-image';
 
@@ -127,7 +127,7 @@ export function VideoField({
               accessibilityLabel="Remover o vídeo"
               onPress={() => onChange(null)}
             >
-              <IconLabel icon={X} label="Remover" color={cores.mutedForeground} />
+              <IconLabel icon={X} label="Remover" color={colors.mutedForeground} />
             </Button>
           ) : null}
         </View>

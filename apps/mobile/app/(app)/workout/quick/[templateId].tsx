@@ -19,7 +19,7 @@ import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { ExerciseDetailHost } from '@/components/workout/exercise-detail-host';
 import { quickVisual } from '@/components/workout/quick-template-visual';
 import { estimatePlanStats, swapAt } from '@/components/workout/workout-stats';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/app/(app)/workout/quick/[templateId]/page.tsx`.
@@ -65,7 +65,7 @@ function matchTemplate(
 function Stat({ icon: Icon, label, value }: { icon: typeof Clock; label: string; value: string }) {
   return (
     <View className="flex-row items-center gap-2">
-      <Icon size={14} color={cores.primary} />
+      <Icon size={14} color={colors.primaryText} />
       <View>
         <Text className="text-[10px] font-bold tracking-wide text-muted-foreground">{label}</Text>
         <Text className="text-sm font-extrabold text-foreground">{value}</Text>
@@ -189,7 +189,7 @@ export default function QuickTemplateScreen() {
             onPress={() => setEditingName(true)}
             className={TOP_BAR_ACTION}
           >
-            <Pencil size={19} color={cores.primary} />
+            <Pencil size={19} color={colors.primaryText} />
           </Pressable>
         }
       >
@@ -210,7 +210,7 @@ export default function QuickTemplateScreen() {
           <View className="overflow-hidden rounded-2xl border border-border bg-card">
             <View style={{ backgroundColor: tint }} className="gap-1 p-4 pt-12">
               <View className="absolute right-3 top-3 opacity-30">
-                <TemplateIcon size={56} color={cores.foreground} />
+                <TemplateIcon size={56} color={colors.foreground} />
               </View>
               <View className="absolute left-4 top-4 flex-row gap-2">
                 <View className="rounded-md bg-primary px-2 py-0.5">
@@ -273,7 +273,7 @@ export default function QuickTemplateScreen() {
           </View>
 
           <Button variant="outline" className="rounded-2xl" onPress={() => setAddOpen(true)}>
-            <Plus size={16} color={cores.foreground} />
+            <Plus size={16} color={colors.foreground} />
             <Text className="text-sm font-medium text-foreground">Adicionar exercício</Text>
           </Button>
 
@@ -283,7 +283,7 @@ export default function QuickTemplateScreen() {
             loading={start.isPending}
             onPress={() => start.mutate()}
           >
-            <Play size={16} color={cores.background} fill={cores.background} />
+            <Play size={16} color={colors.background} fill={colors.background} />
             <Text className="text-base font-extrabold text-primary-foreground">Iniciar Treino</Text>
           </Button>
 

@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import type { TodaySummary } from '@fatia/api-client';
 import { MacroBar } from './macro-bar';
 import { NUMEROS_TABULARES, alvoMedio } from './helpers';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/components/dashboard/nutrition-macro-card.tsx`.
@@ -12,10 +12,18 @@ import { cores } from '@/theme/cores';
  * Nutrição e do PWA; as kcal ficam neutras para não se confundirem com nenhum.
  */
 const CORES = {
-  kcal: cores.foreground,
-  proteina: cores.protein,
-  carboidrato: cores.carbs,
-  gordura: cores.fat,
+  get kcal() {
+    return colors.foreground;
+  },
+  get proteina() {
+    return colors.protein;
+  },
+  get carboidrato() {
+    return colors.carbs;
+  },
+  get gordura() {
+    return colors.fat;
+  },
 } as const;
 
 export function NutritionMacroCard({ nutrition }: { nutrition: TodaySummary['nutrition'] }) {

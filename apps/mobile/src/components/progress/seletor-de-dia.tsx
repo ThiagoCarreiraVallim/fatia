@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { dayLabel, shiftDay } from '@fatia/api-client';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/components/progress/log-day-field.tsx`: dia de um
@@ -31,7 +31,7 @@ export function SeletorDeDia({
           onPress={() => onChange(shiftDay(dia, -1))}
           className="h-11 w-11 items-center justify-center rounded-md active:bg-accent"
         >
-          <ChevronLeft size={20} color={cores.foreground} />
+          <ChevronLeft size={20} color={colors.foreground} />
         </Pressable>
         <Text className="text-sm font-medium capitalize text-foreground">
           {dayLabel(dia, hoje)}
@@ -44,7 +44,7 @@ export function SeletorDeDia({
           onPress={() => onChange(shiftDay(dia, 1))}
           className={`h-11 w-11 items-center justify-center rounded-md active:bg-accent ${noLimite ? 'opacity-40' : ''}`}
         >
-          <ChevronRight size={20} color={cores.foreground} />
+          <ChevronRight size={20} color={colors.foreground} />
         </Pressable>
       </View>
     </View>

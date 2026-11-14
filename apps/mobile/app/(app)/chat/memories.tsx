@@ -5,7 +5,7 @@ import { deleteChatMemory, listChatMemories } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { EmptyState, ErrorState, LoadingState, useConfirm } from '@/components/ui';
 import { CHAT_KEYS } from '@/chat/chat-provider';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * O que o assistente guardou sobre a pessoa, a pedido dela (`save_memory`). É a
@@ -58,7 +58,7 @@ export default function MemoriesScreen() {
               }
               className="h-11 w-11 items-center justify-center"
             >
-              <Trash2 size={18} color={cores.mutedForeground} />
+              <Trash2 size={18} color={colors.mutedForeground} />
             </Pressable>
           </View>
         ))}

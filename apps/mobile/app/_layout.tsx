@@ -1,14 +1,24 @@
 import '../global.css';
 import { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
+import { useFonts } from 'expo-font';
+import {
+  Manrope_400Regular,
+  Manrope_500Medium,
+  Manrope_600SemiBold,
+  Manrope_700Bold,
+  Manrope_800ExtraBold,
+} from '@expo-google-fonts/manrope';
+import { Sora_600SemiBold, Sora_700Bold } from '@expo-google-fonts/sora';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiError } from '@fatia/api-client';
 import { AuthProvider, useAuth } from '@/auth/auth-context';
 import { installMobileApiTransport } from '@/api/transport';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
+import { ThemeProvider, useStoredThemePreference } from '@/theme/theme-provider';
 import { ToastProvider } from '@/components/ui/toast';
 
 /**
@@ -18,7 +28,13 @@ import { ToastProvider } from '@/components/ui/toast';
  * (o bottom sheet depende dele), e o transporte da API precisa estar instalado
  * antes de qualquer query rodar — por isso `ApiBridge` fica entre o
  * `AuthProvider` e as telas, e não dentro delas.
+ *
+ * A splash fica na frente até as fontes (Sora e Manrope, #368) e a preferência
+ * de tema (ADR 041) estarem prontas: sem isso a primeira tela piscaria na fonte
+ * do sistema e no tema errado.
  */
+
+void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 function makeQueryClient() {
   return new QueryClient({
@@ -72,33 +88,52 @@ function ApiBridge({ children }: { children: React.ReactNode }) {
 
 export default function RootLayout() {
   const [queryClient] = useState(makeQueryClient);
+  const preference = useStoredThemePreference();
+  // Erro ao carregar fonte não pode travar o app na splash: segue na do sistema.
+  const [fontsLoaded, fontError] = useFonts({
+    Manrope_400Regular,
+    Manrope_500Medium,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
+    Manrope_800ExtraBold,
+    Sora_600SemiBold,
+    Sora_700Bold,
+  });
+  const ready = preference !== null && (fontsLoaded || fontError !== null);
+
+  useEffect(() => {
+    if (ready) void SplashScreen.hideAsync().catch(() => undefined);
+  }, [ready]);
+
+  if (!ready) return null;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: cores.background }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaProvider>
-        <StatusBar style="light" />
-        <AuthProvider>
-          <ApiBridge>
-            <QueryClientProvider client={queryClient}>
-              <ToastProvider>
-                <Stack
-                  screenOptions={{
-                    headerShown: false,
-                    contentStyle: { backgroundColor: cores.background },
-                    // Gesto de voltar do iOS ligado em todas as telas; no Android
-                    // o botão físico é tratado pelo próprio Expo Router.
-                    gestureEnabled: true,
-                  }}
-                >
-                  <Stack.Screen name="(app)" />
-                  <Stack.Screen name="login" options={{ gestureEnabled: false }} />
-                  {/* O link de convite abre sem sessão: fica fora do `(app)`, que exige login. */}
-                  <Stack.Screen name="c/[token]" />
-                </Stack>
-              </ToastProvider>
-            </QueryClientProvider>
-          </ApiBridge>
-        </AuthProvider>
+        <ThemeProvider initialPreference={preference}>
+          <AuthProvider>
+            <ApiBridge>
+              <QueryClientProvider client={queryClient}>
+                <ToastProvider>
+                  <Stack
+                    screenOptions={{
+                      headerShown: false,
+                      contentStyle: { backgroundColor: colors.background },
+                      // Gesto de voltar do iOS ligado em todas as telas; no Android
+                      // o botão físico é tratado pelo próprio Expo Router.
+                      gestureEnabled: true,
+                    }}
+                  >
+                    <Stack.Screen name="(app)" />
+                    <Stack.Screen name="login" options={{ gestureEnabled: false }} />
+                    {/* O link de convite abre sem sessão: fica fora do `(app)`, que exige login. */}
+                    <Stack.Screen name="c/[token]" />
+                  </Stack>
+                </ToastProvider>
+              </QueryClientProvider>
+            </ApiBridge>
+          </AuthProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

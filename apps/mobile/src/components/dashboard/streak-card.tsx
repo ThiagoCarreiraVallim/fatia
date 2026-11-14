@@ -8,7 +8,7 @@ import {
 } from '@fatia/api-client';
 import { Card } from '@/components/ui';
 import { NUMEROS_TABULARES } from './helpers';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/components/dashboard/streak-card.tsx`.
@@ -74,7 +74,7 @@ export function StreakCard({
               {aberta ? (
                 <Trophy size={12} color={AMBAR} />
               ) : (
-                <Lock size={12} color={cores.placeholder} />
+                <Lock size={12} color={colors.placeholder} />
               )}
               <Text className={`text-xs ${aberta ? 'text-foreground' : 'text-muted-foreground'}`}>
                 {a.title}

@@ -18,7 +18,7 @@ import {
 } from '@/components/ui';
 import { formatInteger } from '@/components/charts';
 import { elapsedLabel, totalVolumeKg } from './format';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * `apps/web/src/components/workout/finish-session-modal.tsx`.
@@ -88,19 +88,19 @@ export function FinishSessionDrawer({
               onChangeText={setNotes}
               accessibilityLabel="Observações do treino"
               placeholder="Como foi o treino?"
-              placeholderTextColor={cores.placeholder}
-              selectionColor={cores.primary}
+              placeholderTextColor={colors.placeholder}
+              selectionColor={colors.primaryText}
               multiline
               numberOfLines={3}
               style={{
                 minHeight: 88,
                 borderRadius: 10,
                 borderWidth: 1,
-                borderColor: cores.border,
+                borderColor: colors.border,
                 paddingHorizontal: 12,
                 paddingVertical: 8,
                 fontSize: 16,
-                color: cores.foreground,
+                color: colors.foreground,
                 textAlignVertical: 'top',
               }}
             />

@@ -28,7 +28,7 @@ import {
   type ActionSheetOption,
 } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 const FILTROS: { value: MemberFilter; label: string }[] = [
   { value: 'all', label: 'Todos' },
@@ -173,7 +173,7 @@ function Membros({ g, inicial }: { g: MyGroup; inicial?: string }) {
                   <View className="flex-1 gap-0.5">
                     <View className="flex-row items-center gap-2">
                       <Text className="text-sm font-semibold text-foreground">{m.name}</Text>
-                      {m.hasAiSeat ? <Crown size={14} color={cores.primary} /> : null}
+                      {m.hasAiSeat ? <Crown size={14} color={colors.primaryText} /> : null}
                     </View>
                     <Text className="text-xs text-muted-foreground">
                       {pendente ? 'Aguardando aprovação' : teamRoleLabel(m.role)}
@@ -186,7 +186,7 @@ function Membros({ g, inicial }: { g: MyGroup; inicial?: string }) {
                       </Text>
                     ) : null}
                   </View>
-                  {leitura ? <ChevronRight size={18} color={cores.mutedForeground} /> : null}
+                  {leitura ? <ChevronRight size={18} color={colors.mutedForeground} /> : null}
                 </Pressable>
                 {pendente && dono ? (
                   <View className="flex-row gap-2">

@@ -19,6 +19,8 @@ COPY apps/web/package.json apps/web/
 # próprio). Sem o manifesto aqui, o `--filter @fatia/web...` não resolve o
 # workspace e o build morre com "Can't resolve '@fatia/api-client'".
 COPY packages/api-client/package.json packages/api-client/
+# @fatia/design (tokens, ícones, contraste) também é consumido como source.
+COPY packages/design/package.json packages/design/
 RUN pnpm install --frozen-lockfile --filter @fatia/web...
 
 # ---------- Build ----------
@@ -28,6 +30,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/web ./apps/web
+COPY packages/design ./packages/design
 # O source do pacote precisa existir: o Next o transpila junto
 # (`transpilePackages` em next.config.ts), não consome um dist.
 COPY packages/api-client ./packages/api-client

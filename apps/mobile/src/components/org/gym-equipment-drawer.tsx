@@ -23,7 +23,7 @@ import {
 import { useToast } from '@/components/ui/toast';
 import { EquipmentChip, EquipmentChooser } from '@/components/workout/equipment-chooser';
 import { toggled } from '@/components/workout/equipment';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 import { apiMessage, orgKeys } from './org-panel';
 
 const FIELD_CLASS =
@@ -122,8 +122,8 @@ export function GymEquipmentDrawer({
           onChangeText={setBusca}
           accessibilityLabel="Buscar equipamento"
           placeholder="Buscar: smith, esteira, polia…"
-          placeholderTextColor={cores.placeholder}
-          selectionColor={cores.primary}
+          placeholderTextColor={colors.placeholder}
+          selectionColor={colors.primaryText}
           className={FIELD_CLASS}
         />
       </DrawerHeader>
@@ -167,8 +167,8 @@ export function GymEquipmentDrawer({
                     maxLength={CUSTOM_EQUIPMENT_MAX_LENGTH}
                     accessibilityLabel="Nome do equipamento próprio"
                     placeholder="Ex.: Hack 45° da casa"
-                    placeholderTextColor={cores.placeholder}
-                    selectionColor={cores.primary}
+                    placeholderTextColor={colors.placeholder}
+                    selectionColor={colors.primaryText}
                     className={FIELD_CLASS}
                   />
                 </View>

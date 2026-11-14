@@ -7,7 +7,7 @@ import {
   type TextStyle,
 } from 'react-native';
 import { DrawerTextInput, cn } from '@/components/ui';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Campo de texto com a aparência do `Input` de `@/components/ui`, mas sobre
@@ -25,18 +25,18 @@ import { cores } from '@/theme/cores';
  *   sistema, invisível sobre o fundo escuro.
  */
 
-const estilos = StyleSheet.create({
-  campo: {
+// Layout fixo aqui; as cores entram no render (`drawerFieldStyle`), porque
+// mudam com o tema e um StyleSheet de módulo congelaria o tema do carregamento.
+const styles = StyleSheet.create({
+  field: {
     minHeight: 44,
     width: '100%',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: cores.border,
     backgroundColor: 'transparent',
     paddingHorizontal: 12,
     paddingVertical: 8,
     fontSize: 14,
-    color: cores.foreground,
   },
 });
 
@@ -56,13 +56,15 @@ export function DrawerInput({
       <Text className={cn('text-sm font-medium text-foreground', labelClassName)}>{label}</Text>
       <DrawerTextInput
         accessibilityLabel={label}
-        placeholderTextColor={cores.placeholder}
-        selectionColor={cores.primary}
-        style={[estilos.campo, style]}
+        placeholderTextColor={colors.placeholder}
+        selectionColor={colors.primaryText}
+        style={[drawerFieldStyle(), style]}
         {...props}
       />
     </View>
   );
 }
 
-export const estiloDoCampoDoDrawer = estilos.campo;
+export function drawerFieldStyle(): StyleProp<TextStyle> {
+  return [styles.field, { borderColor: colors.border, color: colors.foreground }];
+}

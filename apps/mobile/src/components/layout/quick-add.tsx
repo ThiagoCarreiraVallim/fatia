@@ -24,7 +24,7 @@ import { FoodSearchDrawer } from '@/components/nutrition/food-search-drawer';
 import { hojeIso } from '@/components/nutrition/helpers';
 import { LogStepsDrawer, LogWaterDrawer, LogWeightDrawer } from '@/components/progress';
 import { ChatHero, useChatMenuItem } from './chat-hero';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 const ICON: Record<QuickAddKey, LucideIcon> = {
   meal: Apple,
@@ -139,7 +139,7 @@ export function QuickAdd({ children }: { children: ReactNode }) {
                     className="min-h-24 w-[31%] items-center justify-center gap-2 rounded-xl border border-border bg-card px-2 py-4 active:opacity-80"
                     style={busy ? { opacity: 0.6 } : undefined}
                   >
-                    <Icon size={24} color={cores.primary} />
+                    <Icon size={24} color={colors.primaryText} />
                     <Text className="text-center text-[13px] font-semibold text-foreground">
                       {text}
                     </Text>

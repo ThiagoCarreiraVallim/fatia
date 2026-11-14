@@ -28,6 +28,9 @@ const ROTAS = [
   '/profile',
   '/profile/connect',
   '/profile/notifications',
+  '/profile/appearance',
+  // Galeria do DS v2 (#368): todos os componentes, nos dois temas.
+  '/design-system',
   '/plan',
   '/community',
 ];

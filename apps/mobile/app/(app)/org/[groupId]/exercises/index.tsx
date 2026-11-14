@@ -27,7 +27,7 @@ import {
   LoadingState,
 } from '@/components/ui';
 import { EquipmentSummary } from '@/components/workout/equipment-chooser';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /** O resumo do equipamento da academia; a lista inteira abre no drawer. */
 function GymEquipmentCard({
@@ -136,15 +136,15 @@ function CatalogPickerDrawer({
       <View className="px-4 py-3">
         <View className="relative justify-center">
           <View className="absolute left-3 z-10">
-            <Search size={16} color={cores.mutedForeground} />
+            <Search size={16} color={colors.mutedForeground} />
           </View>
           <DrawerTextInput
             value={q}
             onChangeText={setQ}
             accessibilityLabel="Buscar no catálogo"
             placeholder="Ex.: supino, agachamento…"
-            placeholderTextColor={cores.placeholder}
-            selectionColor={cores.primary}
+            placeholderTextColor={colors.placeholder}
+            selectionColor={colors.primaryText}
             className="min-h-[44px] rounded-md border border-input bg-transparent py-2 pl-9 pr-3 text-sm text-foreground"
           />
         </View>

@@ -16,6 +16,7 @@
     "@aws-sdk/client-s3": "^3.1152.0",
     "@aws-sdk/s3-request-presigner": "^3.1152.0",
     "@fatia/db": "workspace:*",
+    "@fatia/design": "workspace:^",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@nestjs/common": "^11.1.28",
     "@nestjs/config": "^4.0.4",

@@ -1,0 +1,37 @@
+---
+import { Icon } from 'astro-icon/components';
+import { CUSTOM_ICONS, ICON_STROKE, lucideKebab, type IconName } from '@fatia/design';
+
+/**
+ * Ícone do design system pelo nome do canvas (`apple`, `chart`, `spark`…), o
+ * mesmo mapa do app e da web (`@fatia/design/icons`). Traço 1,8 e cor herdada
+ * do texto; decorativo (`aria-hidden`) — quem dá nome é o texto ao lado.
+ */
+interface Props {
+  name: IconName;
+  class?: string;
+}
+
+const { name, class: className } = Astro.props;
+const kebab = lucideKebab(name);
+const custom = (CUSTOM_ICONS as Record<string, { paths: readonly string[] }>)[name];
+---
+
+{
+  kebab ? (
+    <Icon name={`lucide:${kebab}`} class={className} stroke-width={ICON_STROKE} aria-hidden="true" />
+  ) : (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width={ICON_STROKE}
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class={className}
+      aria-hidden="true"
+    >
+      {custom?.paths.map((d) => <path d={d} />)}
+    </svg>
+  )
+}

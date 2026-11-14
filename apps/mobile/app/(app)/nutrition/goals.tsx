@@ -7,7 +7,7 @@ import { nutritionApi, type UserGoals } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { Button, ErrorState, Input, Label, LoadingState } from '@/components/ui';
 import { mensagemDeErro } from '@/components/nutrition/helpers';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/app/(app)/nutrition/goals/page.tsx`.
@@ -98,7 +98,7 @@ export default function NutritionGoalsScreen() {
           onPress={() => router.push('/onboarding?refazer=1')}
           className="min-h-12 flex-row items-center gap-3 rounded-xl border border-border bg-card px-4 py-3"
         >
-          <Calculator size={18} color={cores.primary} />
+          <Calculator size={18} color={colors.primaryText} />
           <View className="flex-1">
             <Text className="text-sm font-semibold text-foreground">Recalcular com meus dados</Text>
             <Text className="text-xs text-muted-foreground">
