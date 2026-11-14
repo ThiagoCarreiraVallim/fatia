@@ -113,8 +113,9 @@ O editor de marca (`components/org/brand-color-field.tsx`) e a API (`@IsBrandCol
 mesma regra, `checkBrandColor` de `@fatia/design`:
 
 - o texto é branco ou `#0b1a05`, o que passar 4,5:1;
-- se nenhum passa, a cor é aceita com aviso e a sugestão do tom mais próximo que passa com
-  folga (5,5:1, mesmo matiz em OKLab): o roxo `#7c5cff` (4,3:1) vira ≈ `#6a4ae0`;
+- se nenhum passa, o editor avisa e sugere o tom mais próximo que passa com folga (5,5:1, mesmo
+  matiz em OKLab): o roxo `#7c5cff` (4,3:1) vira ≈ `#6a4ae0`; a API recusa a cor com o mesmo
+  motivo e a sugestão ([ADR 041](./ADR/041-tema-claro.md));
 - verde a menos de 0,1 de distância OKLab do `#2ce500` é recusado.
 
 ## Tipografia
