@@ -81,3 +81,11 @@ meta**, não sobre comer mais ou menos que o outro.
   pelo mesmo motivo (`oauth-facade.service.ts`).
 - **Ranking aberto a toda a comunidade:** expõe quem participa e quanto pontua a quem não entrou;
   o opt-in perderia o sentido.
+
+## Nota — foto de check-in (ADR 044, 2026-11-14)
+
+A [ADR 044](./044-desafios-com-revisao.md) revê esta decisão **só no ponto "foto"**: desafios
+podem ter check-in com foto, como **prova** vista só pela pessoa e pela equipe que revisa — nunca
+no ranking, no mural, nos agregados nem para os outros participantes. Foto de corpo continua
+proibida, e o ranking continua só de constância e aderência à própria meta. Peso e medida
+continuam fora como métrica.

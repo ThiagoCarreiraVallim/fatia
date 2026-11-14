@@ -69,3 +69,13 @@ Hoje, fora da conversa. O dono do produto decidiu adotar as três.
 - **Automático sem Desfazer.** Rejeitada: sem volta, a pessoa deixa de confiar no modo e desliga.
 - **Manter a ADR 022 como está.** Rejeitada pelo dono do produto: o toque por registro pesa mais no
   uso diário que o risco, dado o Desfazer.
+
+## Nota — redesign (#370, 2026-11-14)
+
+A conferência do redesign confirma onde cada parte desta decisão aparece, sem mudar nada nela:
+
+- O **modo por categoria** (Perguntar antes · Automático · Desligado) vive na tela
+  **Configurações da IA** (`Al-M24-Config-IA`, #385), aberta por Você → IA.
+- A **aprovação fora da conversa** (item 6) é o cartão "Fatia · esperando você" no menu da IA e no
+  topo do Hoje (`Al-H6c8-Menu-IA-ativa`, #369), com a regra da prévia completa: se a prévia não
+  couber, o botão vira "Abrir conversa".

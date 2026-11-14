@@ -31,8 +31,8 @@ Decisões arquiteturais relevantes do projeto. Cada ADR é imutável depois de a
 | [023](./023-checkpointer-no-postgres-da-fatia.md)                      | Estado da conversa num checkpointer, no Postgres da Fatia         | Accepted                               |
 | [024](./024-plano-free-e-pago-do-usuario.md)                           | Plano Free e Pago: a IA hospedada passa a ser vendida             | Accepted                               |
 | [025](./025-assentos-de-ia-por-comunidade.md)                          | Comunidades pagam a IA por assentos escolhidos                    | Accepted                               |
-| [026](./026-consentimento-ao-entrar-na-comunidade.md)                  | Consentimento por escopo ao entrar na comunidade                  | Accepted                               |
-| [027](./027-desafios-por-aderencia-a-propria-meta.md)                  | Desafios de nutrição medem aderência, nunca o valor               | Accepted                               |
+| [026](./026-consentimento-ao-entrar-na-comunidade.md)                  | Consentimento por escopo ao entrar na comunidade                  | Accepted (por papel: 043)              |
+| [027](./027-desafios-por-aderencia-a-propria-meta.md)                  | Desafios de nutrição medem aderência, nunca o valor               | Accepted (foto de check-in: 044)       |
 | [028](./028-imagens-de-posts-da-comunidade.md)                         | Imagens de posts da comunidade são armazenadas                    | Proposed                               |
 | [029](./029-playwright-com-logto-real.md)                              | Testes de interface com Playwright e login real no Logto          | Accepted                               |
 | [030](./030-catalogo-de-exercicios-da-comunidade.md)                   | Catálogo de exercícios da comunidade: tutorial por cima           | Accepted                               |
@@ -45,7 +45,11 @@ Decisões arquiteturais relevantes do projeto. Cada ADR é imutável depois de a
 | [037](./037-prd-descreve-o-produto-atual.md)                           | O PRD descreve o produto atual; só ADR muda o escopo negativo     | Accepted                               |
 | [038](./038-foto-da-refeicao-guardada.md)                              | A foto da refeição passa a ser guardada, com consentimento        | Accepted                               |
 | [039](./039-ia-grava-no-modo-automatico.md)                            | Modo automático: a IA grava sem pedir OK, quando a pessoa escolhe | Accepted                               |
-| [040](./040-navegacao-com-aba-hoje-e-botao-da-ia.md)                   | Navegação com aba Hoje e o botão da IA à direita                  | Accepted                               |
+| [040](./040-navegacao-com-aba-hoje-e-botao-da-ia.md)                   | Navegação com aba Hoje, aba Você e o botão da IA à direita        | Accepted (revisada em 2026-11-14)      |
+| [041](./041-tema-claro.md)                                             | Tema claro que segue o sistema, e contraste da cor da comunidade  | Accepted                               |
+| [042](./042-agenda-da-comunidade.md)                                   | Agenda da comunidade: informativa, sem reserva, vaga ou presença  | Accepted                               |
+| [043](./043-papeis-da-equipe.md)                                       | Papéis da equipe e consentimento por papel                        | Accepted                               |
+| [044](./044-desafios-com-revisao.md)                                   | Desafios com pontos e check-in por foto, revisado só pela equipe  | Accepted                               |
 
 ## Template
 
