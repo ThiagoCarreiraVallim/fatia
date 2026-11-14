@@ -112,6 +112,25 @@ export function completionsFor(draft: string, max = 3): string[] {
   }).slice(0, max);
 }
 
+export interface DrawerChipSection {
+  title: 'Sugestões' | 'Completar';
+  chips: string[];
+  /** `send` manda a frase para a IA; `fill` troca o rascunho por ela. */
+  onTap: 'send' | 'fill';
+}
+
+/**
+ * Os chips acima do campo. Texto livre que nenhuma frase completa não mostra
+ * nada — antes ficava só o rótulo "Completar", solto, sem chip.
+ */
+export function drawerChipSection(draft: string): DrawerChipSection | null {
+  if (!draft.trim()) {
+    return { title: 'Sugestões', chips: [...AI_DRAWER_SUGGESTIONS], onTap: 'send' };
+  }
+  const chips = completionsFor(draft);
+  return chips.length ? { title: 'Completar', chips, onTap: 'fill' } : null;
+}
+
 /** O bloco do Free (prancha `Al-H6c6`): o que a IA Pro faria, e para onde ir. */
 export const AI_PRO_TEASER = {
   title: 'Com a IA Pro',

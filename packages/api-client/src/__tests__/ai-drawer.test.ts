@@ -6,6 +6,7 @@ import {
   aiFabLabel,
   aiFabState,
   completionsFor,
+  drawerChipSection,
   conversationTimeLabel,
   drawerConversations,
   freeOfferCta,
@@ -189,6 +190,27 @@ describe('completar com o teclado aberto', () => {
 
   it('no máximo três frases', () => {
     expect(completionsFor('t').length).toBeLessThanOrEqual(3);
+  });
+});
+
+describe('seção de chips do menu', () => {
+  it('campo vazio: sugestões, e tocar manda a frase', () => {
+    expect(drawerChipSection('')).toEqual({
+      title: 'Sugestões',
+      chips: expect.arrayContaining(['Como foi minha semana?']),
+      onTap: 'send',
+    });
+  });
+
+  it('começo de frase conhecida: completar, e tocar troca o rascunho', () => {
+    const section = drawerChipSection('comi');
+    expect(section?.title).toBe('Completar');
+    expect(section?.onTap).toBe('fill');
+    expect(section?.chips.length).toBeGreaterThan(0);
+  });
+
+  it('texto livre sem frase que complete: nada, nem o rótulo', () => {
+    expect(drawerChipSection('quero saber se posso comer pizza')).toBeNull();
   });
 });
 

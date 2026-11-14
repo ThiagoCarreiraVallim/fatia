@@ -15,10 +15,9 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AI_DRAWER_MANUAL_ITEMS,
-  AI_DRAWER_SUGGESTIONS,
   AI_PRO_TEASER,
-  completionsFor,
   conversationTimeLabel,
+  drawerChipSection,
   drawerConversations,
   freeOfferCta,
   mealTypeForTime,
@@ -232,7 +231,7 @@ function AiDrawerBody({
   // manual vira um alternador, para o campo e os chips caberem.
   const keyboard = typing;
   const manualVisible = !keyboard || showManual;
-  const chips = draft.trim() ? completionsFor(draft) : [...AI_DRAWER_SUGGESTIONS];
+  const chipSection = drawerChipSection(draft);
   const listed = drawerConversations(conversations.data ?? [], 4);
   const cta = freeOfferCta(true);
 
@@ -276,7 +275,7 @@ function AiDrawerBody({
           )}
         </div>
         {manualVisible && (
-          <ul className="grid grid-cols-5 gap-1">
+          <ul className="grid grid-cols-4 gap-x-1 gap-y-3">
             {AI_DRAWER_MANUAL_ITEMS.map((item) => {
               const busy = item.key === 'workout' && (start.isPending || active.isLoading);
               const name = item.key === 'workout' ? workoutQuickLabel(hasActive) : item.label;
@@ -345,91 +344,101 @@ function AiDrawerBody({
       )}
 
       {locked && (
-        <section
-          aria-labelledby="ai-drawer-pro"
-          className="mx-4 flex flex-col gap-3 rounded-3xl bg-muted p-4"
-        >
-          <div>
-            <h3 id="ai-drawer-pro" className="text-[13px] font-semibold text-muted-foreground">
+        <section aria-labelledby="ai-drawer-pro" className="flex flex-col gap-3">
+          {/* Prancha `Al-H6c6`: o que a IA Pro faria, em chips com cadeado, e o card
+              com o convite embaixo. */}
+          <div className="flex flex-col gap-2">
+            <h3 id="ai-drawer-pro" className={cn(sectionLabel, 'px-6')}>
               {AI_PRO_TEASER.title}
             </h3>
-            <p className="font-display text-lg font-semibold text-foreground">
-              {AI_PRO_TEASER.lead}
-            </p>
-            <p className="text-sm text-muted-foreground">{AI_PRO_TEASER.body}</p>
+            <ul className="flex gap-2 overflow-x-auto px-4 pb-1">
+              {AI_PRO_TEASER.items.map((item) => (
+                <li key={item} className="shrink-0">
+                  <button
+                    type="button"
+                    aria-label={`${item} (exige o plano PRO)`}
+                    onClick={() => onGo(AI_PRO_TEASER.href)}
+                    className="anim-press flex h-11 items-center gap-2 rounded-full bg-muted px-4 text-[13px] text-foreground"
+                  >
+                    <Icon name="lock" size={14} className="text-muted-foreground" />
+                    {item}
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
-          <ul className="flex flex-col gap-1">
-            {AI_PRO_TEASER.items.map((item) => (
-              <li key={item}>
-                <button
-                  type="button"
-                  onClick={() => onGo(AI_PRO_TEASER.href)}
-                  className="flex min-h-11 w-full items-center gap-2 rounded-xl px-2 text-left text-sm text-foreground hover:bg-card"
-                >
-                  <Icon name="lock" size={14} className="text-muted-foreground" />
-                  <span className="flex-1">{item}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => onGo(cta.href)}
-              className="anim-press min-h-11 flex-1 rounded-full bg-foreground px-4 text-sm font-bold text-background"
-            >
-              {cta.label}
-            </button>
-            <Link
-              href="/profile/connect"
-              onClick={(e) => {
-                e.preventDefault();
-                onGo('/profile/connect');
-              }}
-              className="flex min-h-11 items-center rounded-full bg-card px-4 text-sm font-semibold text-foreground"
-            >
-              Minha IA (MCP)
-            </Link>
+          <div className="mx-4 flex flex-col gap-3 rounded-card bg-card p-4">
+            <div className="flex items-center gap-3">
+              <span
+                aria-hidden
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground"
+              >
+                <Icon name="spark" size={16} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-foreground">{AI_PRO_TEASER.lead}</p>
+                <p className="text-[13px] text-muted-foreground">{AI_PRO_TEASER.body}</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => onGo(cta.href)}
+                className="anim-press min-h-11 rounded-full bg-primary px-4 text-sm font-bold text-primary-foreground"
+              >
+                {cta.label}
+              </button>
+              <Link
+                href="/profile/connect"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onGo('/profile/connect');
+                }}
+                className="flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold text-foreground hover:bg-muted"
+              >
+                <Icon name="link" size={16} />
+                Minha IA (MCP)
+              </Link>
+            </div>
           </div>
         </section>
       )}
 
       {usable && (
         <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1">
-            <span className={cn(sectionLabel, 'px-6')}>
-              {draft.trim() ? 'Completar' : 'Sugestões'}
-            </span>
-            <ul
-              aria-label={draft.trim() ? 'Completar' : 'Sugestões'}
-              className="flex gap-2 overflow-x-auto px-4 pb-1"
-            >
-              {chips.map((phrase) => (
-                <li key={phrase} className="shrink-0">
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => (draft.trim() ? setDraft(phrase) : send(phrase))}
-                    className="anim-press h-11 rounded-full bg-muted px-4 text-[13px] text-foreground"
-                  >
-                    {phrase}
-                  </button>
-                </li>
-              ))}
-              {availability?.photos && !draft.trim() && (
-                <li className="shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => onGo('/nutrition/photo')}
-                    className="anim-press flex h-11 items-center gap-2 rounded-full bg-muted px-4 text-[13px] text-foreground"
-                  >
-                    <Icon name="camera" size={16} className="text-faint" />
-                    Foto do prato
-                  </button>
-                </li>
-              )}
-            </ul>
-          </div>
+          {chipSection && (
+            <div className="flex flex-col gap-1">
+              <span className={cn(sectionLabel, 'px-6')}>{chipSection.title}</span>
+              <ul aria-label={chipSection.title} className="flex gap-2 overflow-x-auto px-4 pb-1">
+                {chipSection.chips.map((phrase) => (
+                  <li key={phrase} className="shrink-0">
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() =>
+                        chipSection.onTap === 'fill' ? setDraft(phrase) : send(phrase)
+                      }
+                      className="anim-press h-11 rounded-full bg-muted px-4 text-[13px] text-foreground"
+                    >
+                      {phrase}
+                    </button>
+                  </li>
+                ))}
+                {availability?.photos && !draft.trim() && (
+                  <li className="shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => onGo('/nutrition/photo')}
+                      className="anim-press flex h-11 items-center gap-2 rounded-full bg-muted px-4 text-[13px] text-foreground"
+                    >
+                      <Icon name="camera" size={16} className="text-faint" />
+                      Foto do prato
+                    </button>
+                  </li>
+                )}
+              </ul>
+            </div>
+          )}
 
           {notice && (
             <p role="alert" className="px-6 text-xs text-danger">

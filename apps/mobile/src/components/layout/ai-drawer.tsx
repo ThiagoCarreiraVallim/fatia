@@ -12,10 +12,9 @@ import { useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AI_DRAWER_MANUAL_ITEMS,
-  AI_DRAWER_SUGGESTIONS,
   AI_PRO_TEASER,
-  completionsFor,
   conversationTimeLabel,
+  drawerChipSection,
   drawerConversations,
   freeOfferCta,
   mealTypeForTime,
@@ -109,7 +108,7 @@ export function AiDrawerProvider({ children }: { children: ReactNode }) {
     <AiDrawerContext.Provider value={value}>
       {children}
       <DrawerLayer>
-        <Drawer open={isOpen} onOpenChange={setIsOpen} snapPoints={['88%']}>
+        <Drawer open={isOpen} onOpenChange={setIsOpen}>
           <AiDrawerBody onPick={pick} onGo={go} />
         </Drawer>
         {meal ? (
@@ -202,14 +201,13 @@ function AiDrawerBody({
 
   const keyboard = typing;
   const manualVisible = !keyboard || showManual;
-  const chips = draft.trim() ? completionsFor(draft) : [...AI_DRAWER_SUGGESTIONS];
+  const chipSection = drawerChipSection(draft);
   const listed = drawerConversations(conversations.data ?? [], 4);
   const cta = freeOfferCta(inAppPurchaseAvailable());
   const recording = dictation.state === 'recording';
 
   return (
     <DrawerScrollView
-      className="flex-1"
       contentContainerStyle={{ paddingBottom: 32, gap: 20 }}
       keyboardShouldPersistTaps="handled"
     >
@@ -246,7 +244,8 @@ function AiDrawerBody({
           ) : null}
         </View>
         {manualVisible ? (
-          <View className="flex-row">
+          // Grade de 4 colunas da prancha `Al-H6c6`.
+          <View className="flex-row flex-wrap" style={{ rowGap: 12 }}>
             {AI_DRAWER_MANUAL_ITEMS.map((item) => {
               const busy = item.key === 'workout' && (start.isPending || active.isLoading);
               const name =
@@ -259,8 +258,8 @@ function AiDrawerBody({
                   accessibilityState={{ disabled: busy }}
                   disabled={busy}
                   onPress={() => choose(item.key)}
-                  className="flex-1 items-center gap-1 py-1 active:opacity-70"
-                  style={busy ? { opacity: 0.6 } : undefined}
+                  className="items-center gap-1 py-1 active:opacity-70"
+                  style={[{ width: '25%' }, busy ? { opacity: 0.6 } : null]}
                 >
                   <View
                     className="h-12 w-12 items-center justify-center rounded-full border"
@@ -311,72 +310,86 @@ function AiDrawerBody({
       ) : null}
 
       {locked ? (
-        <View className="mx-4 gap-3 rounded-3xl bg-muted p-4">
-          <View>
+        // Prancha `Al-H6c6`: o que a IA Pro faria, em chips com cadeado, e o card
+        // com o convite embaixo.
+        <View className="gap-3">
+          <View className="gap-2 px-4">
             <SectionLabel>{AI_PRO_TEASER.title}</SectionLabel>
-            <Text className="font-display-semibold text-lg text-foreground">
-              {AI_PRO_TEASER.lead}
-            </Text>
-            <Text className="text-sm text-muted-foreground">{AI_PRO_TEASER.body}</Text>
+            <View className="flex-row flex-wrap gap-2">
+              {AI_PRO_TEASER.items.map((item) => (
+                <Pressable
+                  key={item}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item} (exige o plano PRO)`}
+                  onPress={() => onGo(AI_PRO_TEASER.href)}
+                  className="h-11 flex-row items-center gap-2 rounded-full bg-muted px-4 active:opacity-70"
+                >
+                  <Icon name="lock" size={14} color={colors.mutedForeground} />
+                  <Text className="text-b2 text-foreground">{item}</Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
-          {AI_PRO_TEASER.items.map((item) => (
-            <Pressable
-              key={item}
-              accessibilityRole="button"
-              accessibilityLabel={`${item} (exige o plano PRO)`}
-              onPress={() => onGo(AI_PRO_TEASER.href)}
-              className="min-h-[44px] flex-row items-center gap-2 rounded-xl px-2"
-            >
-              <Icon name="lock" size={14} color={colors.mutedForeground} />
-              <Text className="flex-1 text-sm text-foreground">{item}</Text>
-            </Pressable>
-          ))}
-          <View className="flex-row gap-2">
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => onGo(cta.href)}
-              className="min-h-[44px] flex-1 items-center justify-center rounded-full bg-foreground px-4"
-            >
-              <Text className="font-sans-bold text-sm text-background">{cta.label}</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="link"
-              onPress={() => onGo('/profile/tokens')}
-              className="min-h-[44px] items-center justify-center rounded-full bg-card px-4"
-            >
-              <Text className="font-sans-semibold text-sm text-foreground">Minha IA (MCP)</Text>
-            </Pressable>
+          <View className="mx-4 gap-3 rounded-card bg-card p-4">
+            <View className="flex-row items-center gap-3">
+              <View className="h-10 w-10 items-center justify-center rounded-full bg-primary">
+                <Icon name="spark" size={16} color={colors.primaryForeground} />
+              </View>
+              <View className="flex-1">
+                <Text className="font-sans-bold text-sm text-foreground">{AI_PRO_TEASER.lead}</Text>
+                <Text className="text-b2 text-muted-foreground">{AI_PRO_TEASER.body}</Text>
+              </View>
+            </View>
+            <View className="flex-row gap-2">
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => onGo(cta.href)}
+                className="min-h-[44px] items-center justify-center rounded-full bg-primary px-4"
+              >
+                <Text className="font-sans-bold text-sm text-primary-foreground">{cta.label}</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="link"
+                onPress={() => onGo('/profile/tokens')}
+                className="min-h-[44px] flex-row items-center justify-center gap-2 rounded-full px-4"
+              >
+                <Icon name="link" size={16} color={colors.foreground} />
+                <Text className="font-sans-semibold text-sm text-foreground">Minha IA (MCP)</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       ) : null}
 
       {usable ? (
         <View className="gap-3">
-          <View className="gap-1 px-4">
-            <SectionLabel>{draft.trim() ? 'Completar' : 'Sugestões'}</SectionLabel>
-            <View className="flex-row flex-wrap gap-2">
-              {chips.map((phrase) => (
-                <Pressable
-                  key={phrase}
-                  accessibilityRole="button"
-                  onPress={() => (draft.trim() ? setDraft(phrase) : send(phrase))}
-                  className="h-11 justify-center rounded-full bg-muted px-4 active:opacity-70"
-                >
-                  <Text className="text-b2 text-foreground">{phrase}</Text>
-                </Pressable>
-              ))}
-              {availability?.photos && !draft.trim() ? (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => onGo('/nutrition/photo')}
-                  className="h-11 flex-row items-center gap-2 rounded-full bg-muted px-4"
-                >
-                  <Icon name="camera" size={16} color={colors.faintForeground} />
-                  <Text className="text-b2 text-foreground">Foto do prato</Text>
-                </Pressable>
-              ) : null}
+          {chipSection ? (
+            <View className="gap-1 px-4">
+              <SectionLabel>{chipSection.title}</SectionLabel>
+              <View className="flex-row flex-wrap gap-2">
+                {chipSection.chips.map((phrase) => (
+                  <Pressable
+                    key={phrase}
+                    accessibilityRole="button"
+                    onPress={() => (chipSection.onTap === 'fill' ? setDraft(phrase) : send(phrase))}
+                    className="h-11 justify-center rounded-full bg-muted px-4 active:opacity-70"
+                  >
+                    <Text className="text-b2 text-foreground">{phrase}</Text>
+                  </Pressable>
+                ))}
+                {availability?.photos && !draft.trim() ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => onGo('/nutrition/photo')}
+                    className="h-11 flex-row items-center gap-2 rounded-full bg-muted px-4"
+                  >
+                    <Icon name="camera" size={16} color={colors.faintForeground} />
+                    <Text className="text-b2 text-foreground">Foto do prato</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
-          </View>
+          ) : null}
 
           {dictation.error ? (
             <Text accessibilityRole="alert" className="px-6 text-xs text-danger">
