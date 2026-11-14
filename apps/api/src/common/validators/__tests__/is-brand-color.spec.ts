@@ -7,7 +7,7 @@ import { IsBrandColor, brandColorWarning } from '../is-brand-color';
 /**
  * Prova de que a API aplica a mesma regra do editor de marca do painel e do
  * app: o validador chama `checkBrandColor` de @fatia/design, o mesmo código
- * dos clientes. Pronto para o DTO de atualização da comunidade (#372).
+ * dos clientes. Os clientes avisam; a API recusa (ADR 041). Pronto para o DTO de atualização da comunidade (#372).
  */
 class UpdateBrandDto {
   @IsBrandColor()
@@ -25,8 +25,13 @@ describe('@IsBrandColor()', () => {
     expect(await errorsFor('#FF7A1A')).toEqual([]);
   });
 
-  it('aceita cor sem contraste (o aviso é do editor, não um bloqueio)', async () => {
-    expect(await errorsFor('#7C5CFF')).toEqual([]);
+  it('recusa cor sem contraste com o motivo e a sugestão (ADR 041: não é gravada)', async () => {
+    const errors = await errorsFor('#7C5CFF');
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatch(/4,5:1/);
+    expect(errors[0]).toContain(
+      (checkBrandColor('#7C5CFF') as { suggestion: string }).suggestion.toUpperCase(),
+    );
   });
 
   it.each(['#2CE500', '#2EE600', '#5CFF2E'])('recusa o verde do Fatia (%s)', async (cor) => {
@@ -40,9 +45,9 @@ describe('@IsBrandColor()', () => {
     expect(errors[0]).toMatch(/hexadecimal/);
   });
 
-  it('dá o mesmo veredito que o cliente', async () => {
+  it('recusa o que o cliente recusa ou avisa, e aceita o que passa', async () => {
     for (const cor of ['#FF7A1A', '#2CE500', '#1D4ED8', '#7C5CFF', '#00FF00']) {
-      const client = checkBrandColor(cor).status === 'rejected';
+      const client = checkBrandColor(cor).status !== 'ok';
       expect((await errorsFor(cor)).length > 0).toBe(client);
     }
   });

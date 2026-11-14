@@ -15,8 +15,9 @@ import {
  *
  * 1. A cor precisa aceitar texto branco ou o escuro da marca (#0B1A05) com
  *    4,5:1. O texto escolhido é o que tem mais contraste.
- * 2. Se nenhum passa, a cor ainda é aceita, mas vem um aviso e a sugestão do
- *    tom mais próximo que passa: o mesmo matiz, escurecido (para texto branco)
+ * 2. Se nenhum passa, vem um aviso (status `warning`) e a sugestão do tom
+ *    mais próximo que passa; o editor avisa antes de enviar e a API recusa a
+ *    cor (ADR 041). A sugestão é o mesmo matiz, escurecido (para texto branco)
  *    ou clareado (para texto escuro) em OKLab até {@link SUGGESTION_TARGET}.
  *    O alvo tem folga sobre 4,5 porque um tom que passa raspando volta a
  *    falhar em tela ruim e em texto fino; com 5,5 o roxo #7C5CFF vira ≈ #6A4AE0

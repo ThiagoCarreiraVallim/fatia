@@ -10,9 +10,9 @@ import { checkBrandColor } from '@fatia/design';
  * do app, pelo mesmo código (`checkBrandColor` de @fatia/design).
  *
  * - Recusa o que não é hex e o verde perto do verde do Fatia.
- * - Aceita cor que não chega a 4,5:1 com texto branco nem escuro: o editor já
- *   mostrou o aviso e a sugestão, e a escolha é da comunidade. A resposta pode
- *   repetir o aviso com {@link brandColorWarning}.
+ * - Recusa também a cor que não chega a 4,5:1 com texto branco nem escuro,
+ *   com o motivo e a sugestão de tom na mensagem: os clientes só avisam, mas a
+ *   cor ilegível não é gravada, venha de onde vier (ADR 041).
  *
  * Pronto para o DTO de atualização da comunidade quando o campo de cor de
  * `Group` existir (#372).
@@ -26,14 +26,14 @@ export function IsBrandColor(options?: ValidationOptions): PropertyDecorator {
       options,
       validator: {
         validate(value: unknown): boolean {
-          return typeof value === 'string' && checkBrandColor(value).status !== 'rejected';
+          return typeof value === 'string' && checkBrandColor(value).status === 'ok';
         },
         defaultMessage(args: ValidationArguments): string {
           const value = args.value;
           const result = checkBrandColor(typeof value === 'string' ? value : '');
-          return result.status === 'rejected'
-            ? result.message
-            : 'Use uma cor em hexadecimal, como #FF7A1A.';
+          return result.status === 'ok'
+            ? 'Use uma cor em hexadecimal, como #FF7A1A.'
+            : result.message;
         },
       },
     });
