@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Linking, Text, View } from 'react-native';
+import { Linking, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, Pencil } from 'lucide-react-native';
 import { workoutApi, type Exercise } from '@fatia/api-client';

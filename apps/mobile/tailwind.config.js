@@ -12,8 +12,30 @@
  *
  * @type {import('tailwindcss').Config}
  */
+const plugin = require('tailwindcss/plugin');
+
+/**
+ * `font-bold` e companhia trocam a família, não o `fontWeight`: no Android o
+ * peso pedido sozinho não troca o arquivo da fonte própria, e `fontWeight`
+ * junto de uma família carregada pode cair na fonte do sistema. Ficam depois
+ * das utilidades de família no CSS gerado, então vencem o `font-sans` que o
+ * `Text` do DS põe por padrão.
+ */
+const WEIGHT_FAMILIES = {
+  '.font-thin': 'Manrope_400Regular',
+  '.font-extralight': 'Manrope_400Regular',
+  '.font-light': 'Manrope_400Regular',
+  '.font-normal': 'Manrope_400Regular',
+  '.font-medium': 'Manrope_500Medium',
+  '.font-semibold': 'Manrope_600SemiBold',
+  '.font-bold': 'Manrope_700Bold',
+  '.font-extrabold': 'Manrope_800ExtraBold',
+  '.font-black': 'Manrope_800ExtraBold',
+};
+
 module.exports = {
   darkMode: 'class',
+  corePlugins: { fontWeight: false },
   content: ['./app/**/*.{ts,tsx}', './src/**/*.{ts,tsx}'],
   presets: [require('nativewind/preset')],
   theme: {
@@ -113,5 +135,13 @@ module.exports = {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    plugin(({ addUtilities }) => {
+      addUtilities(
+        Object.fromEntries(
+          Object.entries(WEIGHT_FAMILIES).map(([cls, family]) => [cls, { fontFamily: family }]),
+        ),
+      );
+    }),
+  ],
 };

@@ -1,4 +1,5 @@
-import { Image, Text, View } from 'react-native';
+import { Image, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import * as WebBrowser from 'expo-web-browser';
 import { Play, Users } from 'lucide-react-native';
 import type { CommunityGuide } from '@fatia/api-client';

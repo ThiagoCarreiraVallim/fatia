@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Droplet, MoreHorizontal } from 'lucide-react-native';
 import { progressApi, type TodaySummary } from '@fatia/api-client';

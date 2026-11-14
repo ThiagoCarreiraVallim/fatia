@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from './text';
 import { lightHaptic } from '@/theme/motion';
 import { cn } from './utils';
 

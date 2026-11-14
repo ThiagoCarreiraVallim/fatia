@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, TextInput, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import * as ImagePicker from 'expo-image-picker';
 import { ArrowUp, Camera, Mic, Square, X } from 'lucide-react-native';
 import type { ChatPhoto } from '@fatia/api-client';

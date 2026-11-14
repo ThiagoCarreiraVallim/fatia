@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Animated, Easing, Pressable, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { aiFabLabel } from '@fatia/api-client';
 import { Icon } from '@/components/ui';
 import { colors } from '@/theme/colors';

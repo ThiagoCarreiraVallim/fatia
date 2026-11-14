@@ -1,11 +1,11 @@
 import {
   StyleSheet,
-  Text,
   View,
   type StyleProp,
   type TextInputProps,
   type TextStyle,
 } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { DrawerTextInput, cn } from '@/components/ui';
 import { colors } from '@/theme/colors';
 

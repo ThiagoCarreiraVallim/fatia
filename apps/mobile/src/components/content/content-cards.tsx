@@ -1,4 +1,5 @@
-import { Image, Pressable, Text, View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { Dumbbell, Pin, Salad } from 'lucide-react-native';
 import {
   planTemplateSummary,

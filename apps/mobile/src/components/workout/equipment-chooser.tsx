@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { X } from 'lucide-react-native';
 import { equipmentLabel, filterCustomEquipment, groupedEquipmentOptions } from '@fatia/api-client';
 import { cn } from '@/components/ui';

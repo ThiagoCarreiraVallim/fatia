@@ -1,5 +1,6 @@
 import { Fragment } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import * as WebBrowser from 'expo-web-browser';
 import { parseChatMarkdown, type ChatInlineToken } from '@fatia/api-client';
 import { cn } from '@/components/ui';

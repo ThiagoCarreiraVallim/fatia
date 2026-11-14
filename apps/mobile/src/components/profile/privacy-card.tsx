@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { ExternalLink, Trash2 } from 'lucide-react-native';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
 import { ExportDataButton } from './export-data-button';

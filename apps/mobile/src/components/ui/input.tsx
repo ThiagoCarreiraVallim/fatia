@@ -29,7 +29,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
       placeholderTextColor={colors.placeholder}
       selectionColor={colors.primaryText}
       className={cn(
-        'min-h-[44px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground',
+        'min-h-[44px] w-full rounded-md border border-input bg-transparent px-3 py-2 font-sans text-sm text-foreground',
         props.editable === false && 'opacity-50',
         className,
       )}

@@ -25,6 +25,7 @@ export {
 export { FormField, FormMessage, type FormFieldRender } from './form';
 export { Input, type InputProps } from './input';
 export { Label } from './label';
+export { Text, type TextProps } from './text';
 export { EmptyState, ErrorState, LoadingState } from './state';
 export { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
 export { cn } from './utils';

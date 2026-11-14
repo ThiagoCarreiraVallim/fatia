@@ -1,5 +1,6 @@
 import { forwardRef, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, Text, View, type PressableProps } from 'react-native';
+import { ActivityIndicator, Pressable, View, type PressableProps } from 'react-native';
+import { Text } from './text';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from './utils';
 import { colors } from '@/theme/colors';

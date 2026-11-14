@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useKeepAwake } from 'expo-keep-awake';
 import { ChevronDown, ChevronUp, Play, Plus, Trash2 } from 'lucide-react-native';
 import {

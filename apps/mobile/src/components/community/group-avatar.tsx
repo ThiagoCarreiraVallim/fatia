@@ -1,4 +1,5 @@
-import { Image, Text, View } from 'react-native';
+import { Image, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 
 /** Avatar da comunidade (ADR 028), ou as iniciais quando ela não tem imagem. */
 export function GroupAvatar({

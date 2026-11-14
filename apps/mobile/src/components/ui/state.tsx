@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
+import { Text } from './text';
 import { Button } from './button';
 import { cn } from './utils';
 import { colors } from '@/theme/colors';

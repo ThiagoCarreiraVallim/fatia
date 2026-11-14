@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { DELETE_ACCOUNT_CONFIRMATION, usersApi } from '@fatia/api-client';
 import { useAuth } from '@/auth/auth-context';

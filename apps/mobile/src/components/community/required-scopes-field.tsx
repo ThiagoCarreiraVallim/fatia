@@ -1,4 +1,5 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import {
   SCOPE_DETAILS,
   SHARE_SCOPE_LABEL,

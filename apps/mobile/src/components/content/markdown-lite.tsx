@@ -1,4 +1,5 @@
-import { Linking, Text, View } from 'react-native';
+import { Linking, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { parseMarkdownLite, type InlineToken } from '@fatia/api-client';
 
 function inline(tokens: InlineToken[], key = ''): React.ReactNode[] {

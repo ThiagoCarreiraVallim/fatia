@@ -1,4 +1,5 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { Plus } from 'lucide-react-native';
 import type { TodaySummary } from '@fatia/api-client';
 import { Button, Card } from '@/components/ui';

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Pressable, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, Pressable, View } from 'react-native';
+import { Text } from './text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { UNDO_MS } from '@fatia/api-client';
 

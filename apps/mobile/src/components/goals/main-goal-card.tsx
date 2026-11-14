@@ -1,4 +1,5 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import Svg, { Circle, G } from 'react-native-svg';
 import { Flame } from 'lucide-react-native';
 import type { Goal } from '@fatia/api-client';

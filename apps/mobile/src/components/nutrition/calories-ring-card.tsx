@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useRouter } from 'expo-router';
 import Svg, { Circle, Defs, G, LinearGradient, Rect, Stop } from 'react-native-svg';
 import type { DayTotals, UserGoals } from '@fatia/api-client';

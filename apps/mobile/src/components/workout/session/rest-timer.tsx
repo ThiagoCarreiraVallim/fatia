@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { Pause, Play, Plus, SkipForward, Timer } from 'lucide-react-native';
 import { formatCountdown } from './format';
 import type { RestTimer as RestTimerState } from './use-rest-timer';

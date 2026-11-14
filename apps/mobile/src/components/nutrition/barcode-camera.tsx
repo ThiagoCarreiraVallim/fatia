@@ -1,4 +1,5 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Button } from '@/components/ui';
 import { TIPOS_DE_CODIGO } from './barcode';

@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useQuery } from '@tanstack/react-query';
 import { Pencil, Ruler, Weight } from 'lucide-react-native';
 import { progressApi, usersApi } from '@fatia/api-client';

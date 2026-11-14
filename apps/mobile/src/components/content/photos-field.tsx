@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import * as ImagePicker from 'expo-image-picker';
 import { X } from 'lucide-react-native';
 import { ApiError, MAX_GUIDE_PHOTOS, uploadMedia, type MediaPurpose } from '@fatia/api-client';

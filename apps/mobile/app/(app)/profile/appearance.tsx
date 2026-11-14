@@ -1,4 +1,5 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { THEME_PREFERENCE_LABELS, THEME_PREFERENCES, type ThemePreference } from '@fatia/design';
 import { Screen } from '@/components/layout/screen';
 import { Segmented } from '@/components/ui/selection';

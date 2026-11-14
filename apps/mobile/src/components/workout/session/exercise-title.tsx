@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { BookOpen } from 'lucide-react-native';
 import { useOpenExerciseDetail } from '@/components/workout/exercise-detail-host';
 import { colors } from '@/theme/colors';

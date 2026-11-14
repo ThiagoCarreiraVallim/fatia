@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useRouter, type Href } from 'expo-router';
 import { Dumbbell, Play } from 'lucide-react-native';
 import { nextWorkoutCopy, type TodaySummary } from '@fatia/api-client';

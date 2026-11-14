@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { ChevronDown, ChevronRight } from 'lucide-react-native';
 import { env } from '@/env';
 import { CopyMcpUrl } from './copy-mcp-url';

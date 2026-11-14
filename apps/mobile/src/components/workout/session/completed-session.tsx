@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { Clock, Dumbbell } from 'lucide-react-native';
 import {
   buildExerciseGroups,

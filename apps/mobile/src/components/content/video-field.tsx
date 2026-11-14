@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import * as ImagePicker from 'expo-image-picker';
 import { File } from 'expo-file-system';
 import { createUploadTask, FileSystemUploadType } from 'expo-file-system/legacy';

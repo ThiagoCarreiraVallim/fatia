@@ -1,4 +1,5 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import type { DayTotals, UserGoals } from '@fatia/api-client';
 import { cn } from '@/components/ui';
 import { NUMEROS_TABULARES, percentualDaMeta } from './helpers';
