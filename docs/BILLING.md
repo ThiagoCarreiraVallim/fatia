@@ -170,6 +170,13 @@ quinto campo sem alguém decidir isso explicitamente.
 | `PAST_DUE` fora da carência   | `none`             |
 | `CANCELED` / sem assinatura   | `none`             |
 
+**`TRIALING` não é estado do banco.** É um valor do tipo `StatusDeAssinatura` em
+`billing/ai-tier.ts`, escrito para a `GroupSubscription` desta seção (cobrança por aluno ativo),
+que nunca foi criada e foi superada pela ADR 025. O enum que existe, `SubscriptionStatus` (PRO
+pessoal), tem cinco valores — `PENDING`, `ACTIVE`, `PAST_DUE`, `CANCELED`, `EXPIRED` — e nenhum
+"teste". O teste grátis do PRO é decisão da #386 (assinatura `ACTIVE` com período curto ou origem
+própria), e não ganha status novo sem migração e revisão desta página.
+
 `none` **não é bloqueio**: é o app inteiro sem a IA por conta da academia. Registro manual, PWA, app
 nativo e o MCP com a IA do próprio usuário continuam funcionando, e quem traz a própria IA (#164)
 não percebe diferença nenhuma. O app é grátis para o aluno; ele não pode virar refém de uma disputa
@@ -275,6 +282,19 @@ nunca em `/users/me` (os domínios do aluno não importam `billing/`).
 
 Inadimplência **degrada**, como no grupo: tira só a IA hospedada. Registro manual, histórico e o MCP
 não mudam.
+
+### O que "Meu plano" mostra em cada estado (redesign, #386)
+
+Cada valor de `SubscriptionStatus` tem um jeito de aparecer (prancha `Dados-Estados`;
+[`DADOS_REDESIGN.md`](./DADOS_REDESIGN.md) §4):
+
+| Estado     | Na tela                                                    |
+| ---------- | ---------------------------------------------------------- |
+| `PENDING`  | "Aguardando pagamento" e o botão para abrir o pagamento    |
+| `ACTIVE`   | PRO com a data de renovação                                |
+| `PAST_DUE` | banner da carência: "segue até…" (`graceEndsAt`)           |
+| `CANCELED` | "Acaba em 4 dez", sem cobrar de novo (`cancelAtPeriodEnd`) |
+| `EXPIRED`  | volta ao Free, e nada se perde                             |
 
 ## Web: Asaas
 
@@ -399,12 +419,29 @@ muda a quantidade e não cancela** — é pagamento fora da loja. O membro vê "
 
 ### Faturas
 
+| `SeatInvoiceStatus` | No painel (Assentos, #403) |
+| ------------------- | -------------------------- |
+| `PENDING`           | a vencer                   |
+| `PAID`              | recibo                     |
+| `OVERDUE`           | aviso no topo do painel    |
+| `VOID`              | riscada                    |
+
 `GroupSeatInvoice` guarda cada cobrança do Asaas da assinatura dos assentos (`SUBSCRIPTION`) e de cada
 proporcional (`ADJUSTMENT`), atualizada a cada evento dela no webhook. É **cópia** do que o provedor
 diz, para o dono ver; o direito à IA continua decidido pelo pool e pelos ajustes. Evento fora de ordem
 não desfaz pagamento (paga só vira cancelada, por estorno ou contestação), e o link da fatura só é
 guardado se for `https`. Cobranças anteriores à Fase 6 não aparecem: o histórico começa no primeiro
 evento depois dela.
+
+## Programas e ofertas (redesign, #403)
+
+O redesign acrescenta **programas** (PRO por período para uma turma ou um desafio, como assento
+com fim) e **ofertas** (programas vendidos pela comunidade, pagos pelo Asaas, com repasse). O
+modelo de dados e o painel são da [#403](https://github.com/ThiagoCarreiraVallim/fatia/issues/403);
+o **checkout público da oferta** (link, cupom, conta depois do pagamento) é a
+[#421](https://github.com/ThiagoCarreiraVallim/fatia/issues/421) (Mapa 5.9), P2, fora da história
+do redesign. As regras desta página valem para os dois: CPF/CNPJ vai ao Asaas e não é guardado,
+webhook idempotente, e quem não pagou perde o conteúdo novo, nunca o que registrou.
 
 ## Webhook
 

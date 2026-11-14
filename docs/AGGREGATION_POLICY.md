@@ -228,6 +228,25 @@ No espírito da seção homônima do [`THREAT_MODEL.md`](./THREAT_MODEL.md): sup
   `MIN_CELL = 2`; isto está registrado aqui para a conversa não recomeçar do zero na primeira
   reclamação comercial.
 
+## O redesign não muda estas regras
+
+As telas novas do painel (#398–#400: visão geral, alunos em risco, relatório do mês, origens dos
+convites) e da comunidade passam pelas mesmas regras ([`DADOS_REDESIGN.md`](./DADOS_REDESIGN.md)):
+
+- **`MIN_CELL = 5`** em toda contagem do painel: "entraram", "ativaram em 48 h", "em risco",
+  respostas de questionário, "Vou" da agenda, check-ins de desafio. Abaixo disso, a tela diz
+  "amostra pequena demais para mostrar".
+- **Nunca comparar corpo.** Peso, medida, avaliação física e foto não entram em agregado, recorte
+  ou ranking.
+- **Desafios só de constância** e aderência à própria meta (ADR 027). O placar é opt-in e só
+  quem participa o vê; ele não é agregado e por isso não passa pelo limiar, mas todo número do
+  desafio mostrado à equipe no painel passa.
+- **Foto de check-in de desafio fica fora de qualquer agregado** — nem contagem de fotos por
+  pessoa, nem galeria ([ADR 044](./ADR/044-desafios-com-revisao.md)). A equipe a vê uma a uma, só
+  na fila de revisão.
+- **"Alunos em risco" continua contagem por faixa** (regra 8). Lista nominal de quem está em risco
+  só existe para quem consentiu individualmente, por vínculo — e aí não é agregado.
+
 ## Onde isso vive
 
 | Regra                       | Código                                                  | Teste                             |

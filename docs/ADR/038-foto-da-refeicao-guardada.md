@@ -75,3 +75,22 @@ implementação, sem reabrir o item principal (a foto passa a ser guardada).
   revisitar quando o custo de armazenamento importar.
 - **Continuar sem guardar (ADR 004).** Rejeitada pelo dono do produto: o valor para quem acompanha o
   aluno passou a pesar mais que a simplicidade.
+
+## Nota — redesign (#370, 2026-11-14)
+
+A conferência tela × banco do redesign ([`DADOS_REDESIGN.md`](../DADOS_REDESIGN.md)) confirma os
+padrões desta ADR, sem mudar nenhum item:
+
+- **Categoria 6, "Fotos das refeições"**, separada das cinco do `ShareScope` (`WORKOUT`,
+  `NUTRITION`, `BODY`, `HABITS`, `GOALS`). É valor novo no enum, com linha nova na tabela de leitura
+  do `PERMISSIONS.md` no mesmo PR que muda o código (até lá, na seção "Planejado" do documento).
+  Para a nutricionista ela só vale se a pessoa a liberar ([ADR 043](./043-papeis-da-equipe.md)).
+- **Preferência "Guardar fotos das refeições"** em Você → Conta (`Al-V1-Voce`), além da pergunta na
+  primeira foto (item 1).
+- **Descarte:** foto de rótulo, foto de pergunta e áudio do ditado continuam sem persistência
+  (itens 4 e 8).
+- **Issues donas:** schema `Meal` ↔ `MediaFile`, "Apagar só a foto" e a categoria nova (#374); foto
+  do prato e o fluxo da câmera (#385); a opção no perfil (#387); a pergunta no onboarding,
+  `Onb-03` (#371).
+- **Foto de desafio é outra regra:** prova de check-in vista só pela equipe que revisa, com prazo
+  próprio ([ADR 044](./044-desafios-com-revisao.md)). Ela não entra nesta categoria.

@@ -167,6 +167,31 @@ corrigido para refletir o contrato real (`notes` apenas).
 O código já usava `start_workout_session` e `finish_workout_session`; a doc ficou nos nomes
 antigos. Corrigido — e o teste-guarda impede que volte a divergir.
 
+## Planejadas pelo redesign
+
+O redesign (história #367) traz recursos novos do aluno, e pela ADR 006 cada um chega com tool. Os
+nomes abaixo são os propostos nas issues; **nenhuma existe ainda**, e por isso não entram na
+contagem do topo nem no `MCP.md`. Cada uma entra no PR da sua issue, com teste no `tool-catalog.spec.ts`,
+seção no `MCP.md` e a contagem atualizada (ver [`DADOS_REDESIGN.md`](./DADOS_REDESIGN.md)).
+
+| Recurso                            | Tools propostas                                                                                                                        | Issue |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| Hábitos e visitas                  | `list_habits`, `create_habit`, `log_habit`, `update_habit`, `delete_habit`, `list_gym_visits` (só leitura; o check-in por QR é câmera) | #390  |
+| Avaliação física                   | `list_assessments`, `get_assessment`, `log_assessment`, `compare_assessments`, `list_assessment_requests`, `submit_assessment_request` | #383  |
+| Lembretes                          | `list_reminders`, `create_reminder`, `update_reminder`, `delete_reminder`, `get_notification_settings`, `update_notification_settings` | #389  |
+| Agenda da comunidade (ADR 042)     | `list_group_agenda` (leitura), `set_agenda_interest` / `clear_agenda_interest` ("Vou"), `register_agenda_session`                      | #397  |
+| Circuitos                          | formato de circuito em `create_workout_plan` e rounds/tempo na sessão (tool própria só se a sessão não comportar)                      | #380  |
+| Plano recebido                     | `list_plan_offers`, `accept_plan_offer`, `decline_plan_offer`; `create_training_block` com 3 a 6 semanas                               | #379  |
+| Plano alimentar e substituições    | `get_nutrition_plan`, `accept_nutrition_plan`, `log_plan_meal`, `swap_plan_item`, `undo_plan_swap`                                     | #376  |
+| Questionários                      | `list_pending_questionnaires`, `get_questionnaire`, `answer_questionnaire`                                                             | #391  |
+| Foto da refeição (ADR 038, item 7) | as tools de refeição **só indicam** se há foto; `delete_meal_photo`; nenhuma tool manda a foto à IA hospedada (ADR 018)                | #374  |
+| Desafios por tipo (ADR 044)        | `get_my_challenge_progress`; sem tool de check-in com foto (câmera) nem de revisão (administração)                                     | #395  |
+
+Continua valendo a decisão de cima: **a administração da comunidade fica fora do MCP** — criar e
+enviar plano, pedir e registrar avaliação em nome do aluno, criar aula, montar questionário,
+revisar check-in, papéis, programas e ofertas — salvo uma ADR nova (#343). O modo automático por
+categoria também fica fora: o conector usa a confirmação do cliente da pessoa (ADR 039, item 8).
+
 ## Revisitar antes da submissão
 
 - [ ] **Medir uso real** por tool na instância hospedada (depende da observabilidade da #39).

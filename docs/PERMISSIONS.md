@@ -240,3 +240,34 @@ chamada. `hasSome` com lista casaria com tudo, e consentir treino abriria a diet
   Postgres real — sem vínculo, com escopo não consentido, com vínculo revogado e com o
   profissional demitido, todos com a **mesma** mensagem que um estranho recebe, mais o caminho
   feliz e a contagem de linhas de auditoria por escopo lido.
+
+## Planejado pela ADR 043 (#404) — ainda não está no código
+
+Esta seção fica **fora das tabelas que o `permission-matrix.spec.ts` lê**, de propósito: elas
+descrevem o `permissions.ts` de hoje, e uma linha antes do código quebraria o teste (ou, pior,
+mentiria). Quando a #404 e a #374 entrarem, o que está abaixo sobe para as tabelas de cima no
+mesmo PR que muda o código e o enum.
+
+**Papéis novos** ([ADR 043](./ADR/043-papeis-da-equipe.md)):
+
+- **Administrador (`ADMIN` da comunidade)** — membros, convites, conteúdo, moderação, desafios e
+  agenda; não vê faturas (`billing.*`) nem passa a posse (`group.transfer`). **Nunca recebe
+  vínculo.**
+- **Recepção (`RECEPTION`)** — nome, status e check-in de quem chega. **Nunca recebe vínculo.**
+- **Nutricionista** — não é valor de `GroupRole`: é o `PROFESSIONAL` com especialidade nutrição.
+  O vínculo dele só carrega `NUTRITION`, `GOALS`, `BODY` e, se liberada, "Fotos das refeições";
+  `WORKOUT` e `HABITS` nunca, mesmo que o aluno marque.
+
+**Consentimento por papel.** Ao entrar, o aluno escolhe o que cada papel vê (profissionais de
+treino, nutricionista, dono/criador). O vínculo de cada pessoa da equipe leva as categorias do
+papel dela; mudar de papel recalcula os vínculos e nunca acrescenta categoria sem aceite. Com
+"profissionais veem só quem acompanham" ligado, o profissional só lê quem acompanha.
+
+**6ª categoria de leitura — "Fotos das refeições"**
+([ADR 038](./ADR/038-foto-da-refeicao-guardada.md)). Valor novo de `ShareScope`, separado de
+`NUTRITION`: quem compartilha a alimentação continua mostrando só os números. Na tabela de
+leitura, a linha nova terá em "Quem NUNCA recebe" o `MEMBER`, o `ADMIN` da instância, o
+administrador e a recepção da comunidade.
+
+**O que não muda:** papel decide ação, vínculo decide leitura; toda leitura, inclusive a negada,
+vai para `ProfessionalAccessLog`; `MEMBER` nunca lê ninguém.

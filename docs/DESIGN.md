@@ -18,7 +18,9 @@ documento é corrigido.
 2. **Ícone no lugar de frase.** Explicação só no primeiro uso ou no estado vazio.
 3. **Registrar em 1 toque.** O botão + abre tudo; atalhos com valores prontos. O Free não tem IA
    no app ([ADR 024](./ADR/024-plano-free-e-pago-do-usuario.md)), então o registro manual é o
-   caminho principal.
+   caminho principal. Com a navegação nova
+   ([ADR 040](./ADR/040-navegacao-com-aba-hoje-e-botao-da-ia.md)) o "+" do centro sai e o registro
+   passa a sair do botão redondo da IA, que abre com o **registro manual primeiro** — também no Free.
 4. **Movimento que informa.** Anéis enchem, barras crescem, folhas sobem. Nada decorativo, e nada
    anda com "reduzir movimento".
 5. **Desfazer em vez de perguntar, quando refazer é barato.** Registros pequenos apagam na hora
@@ -28,7 +30,7 @@ documento é corrigido.
 
 ## Tema: escuro, claro e a escolha da pessoa
 
-Pela [ADR 041](./ADR/041-tema-claro-com-escolha-do-usuario.md) o produto tem os dois temas, com
+Pela [ADR 041](./ADR/041-tema-claro.md) o produto tem os dois temas, com
 os **mesmos nomes de token**. O padrão é seguir o sistema; a pessoa escolhe **Sistema, Escuro ou
 Claro** em Perfil → Aparência. A escolha é preferência de interface, guardada no aparelho
 (`localStorage` na web, `SecureStore` no app, chave `fatia.theme`), nunca na conta.
@@ -202,7 +204,11 @@ A galeria fica em `/design-system` na web e em `(app)/design-system` no app, só
 A navegação nova segue a [ADR 040](./ADR/040-navegacao-com-aba-hoje-e-botao-da-ia.md) (revisada
 em 14/11/2026): cinco abas só de ícone — **Hoje · Nutrição · Treino · Comunidade · Você** — e o
 botão redondo da IA (68 px) à direita. O componente visual (`layout/bottom-nav.tsx`, variante
-`v2`, e `layout/ai-button.tsx`) já existe; a troca da navegação é da #369. Até lá vale a barra
+`v2`, e `layout/ai-button.tsx`) já existe; a troca da navegação é da #369. Na navegação nova,
+Você é uma tela única com seções, no lugar do "Mais"; o sino de avisos fica no topo do Hoje e, em
+Você, os avisos são a linha "Notificações". O painel da equipe fica dentro da aba Comunidade
+("Mural | Painel"). A barra some nas tarefas de foco; no desktop, a barra lateral tem as cinco abas
+e o botão da IA. Hábito e Check-in só entram no menu da IA com a #390. Até a #369 vale a barra
 atual, descrita abaixo.
 
 Fonte única: `packages/api-client/src/navigation.ts` (`PRIMARY_TABS`, `menuSections`,
