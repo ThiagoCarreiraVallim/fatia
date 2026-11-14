@@ -1,0 +1,225 @@
+import type {
+  ChatActionPreview,
+  ChatConversationState,
+  ChatConversationSummary,
+  ChatInterruptValue,
+} from './chat';
+import type { MealType } from './nutrition';
+
+/**
+ * O menu do botão da IA, "O que vamos registrar?" (ADR 040, prancha
+ * `Ia-Drawer`). Web e app montam o mesmo menu, com os mesmos textos e na mesma
+ * ordem, a partir daqui: o registro manual primeiro (funciona sem IA, no Free,
+ * PRD §3.1), depois as conversas, as sugestões, a foto e o campo para falar com
+ * a IA. O botão também mostra o estado da IA (anel e selo), e o cartão
+ * "esperando você" aprova uma escrita pausada sem abrir a conversa (ADR 039).
+ */
+
+export type AiDrawerManualKey =
+  'meal' | 'water' | 'weight' | 'steps' | 'workout' | 'habit' | 'checkin';
+
+export interface AiDrawerManualItem {
+  key: AiDrawerManualKey;
+  label: string;
+  /** Nome do ícone no design system (`@fatia/design`, `ICONS`). */
+  icon: 'apple' | 'drop' | 'scale' | 'steps' | 'dumbbell' | 'habit' | 'check';
+}
+
+const MANUAL: AiDrawerManualItem[] = [
+  { key: 'meal', label: 'Refeição', icon: 'apple' },
+  { key: 'water', label: 'Água', icon: 'drop' },
+  { key: 'weight', label: 'Peso', icon: 'scale' },
+  { key: 'steps', label: 'Passos', icon: 'steps' },
+  { key: 'workout', label: 'Treino', icon: 'dumbbell' },
+];
+
+const HABITS: AiDrawerManualItem[] = [
+  { key: 'habit', label: 'Hábito', icon: 'habit' },
+  { key: 'checkin', label: 'Check-in', icon: 'check' },
+];
+
+/**
+ * Hábito e Check-in só existem com a #390 (etapa 11). Até lá não aparecem, nem
+ * desativados: um botão que não faz nada no meio do registro é pior que nenhum.
+ */
+export const HABITS_IN_AI_DRAWER = false;
+
+export function aiDrawerManualItems(opts: { habits?: boolean } = {}): AiDrawerManualItem[] {
+  return (opts.habits ?? HABITS_IN_AI_DRAWER) ? [...MANUAL, ...HABITS] : [...MANUAL];
+}
+
+/** O registro manual como o menu mostra hoje. */
+export const AI_DRAWER_MANUAL_ITEMS: readonly AiDrawerManualItem[] = aiDrawerManualItems();
+
+/**
+ * A refeição que o menu sugere pela hora local. É só o ponto de partida: quem
+ * quer outra registra pela Nutrição, tocando no tipo. Madrugada vira lanche —
+ * ninguém toma café da manhã às 3h, e jantar às 3h é do dia anterior.
+ */
+export function mealTypeForTime(now: Date): MealType {
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  if (minutes < 5 * 60) return 'SNACK';
+  if (minutes < 10 * 60 + 30) return 'BREAKFAST';
+  if (minutes < 15 * 60) return 'LUNCH';
+  if (minutes < 18 * 60) return 'SNACK';
+  return 'DINNER';
+}
+
+/**
+ * O treino do menu retoma a sessão aberta em vez de começar outra: a API
+ * recusa a segunda sessão aberta (#350), e duas confundiriam o histórico.
+ */
+export function workoutQuickLabel(hasActiveSession: boolean): string {
+  return hasActiveSession ? 'Continuar treino' : 'Começar treino livre';
+}
+
+// ---------------------------------------------------------------- IA
+
+/** Sugestões fixas, quando o campo está vazio. Tocar manda a frase para a IA. */
+export const AI_DRAWER_SUGGESTIONS: readonly string[] = [
+  'Quanto falta de proteína hoje?',
+  'Como foi minha semana?',
+  'Dor ou cansaço hoje?',
+];
+
+/**
+ * Frases de registro para completar o que a pessoa começou a digitar (prancha
+ * `Al-H6c7`). Lista local e fixa: o servidor não guarda histórico de
+ * digitação, e não vai passar a guardar para isto.
+ */
+const COMPLETIONS: readonly string[] = [
+  'Comi arroz, feijão e frango no almoço',
+  'Comi um pão com ovo no café',
+  'Comi uma fruta de lanche',
+  'Bebi 500 ml de água',
+  'Bebi um copo de água',
+  'Treinei peito e tríceps hoje',
+  'Treinei pernas hoje',
+  'Troca o exercício que dói o ombro',
+  'Pesei 72 kg hoje',
+  'Andei 8 mil passos',
+  'Quanto falta de proteína hoje?',
+  'Quantas calorias comi hoje?',
+];
+
+export function completionsFor(draft: string, max = 3): string[] {
+  const typed = draft.trim().toLowerCase();
+  if (!typed) return [];
+  return COMPLETIONS.filter((f) => {
+    const phrase = f.toLowerCase();
+    return phrase.startsWith(typed) && phrase !== typed;
+  }).slice(0, max);
+}
+
+/** O bloco do Free (prancha `Al-H6c6`): o que a IA Pro faria, e para onde ir. */
+export const AI_PRO_TEASER = {
+  title: 'Com a IA Pro',
+  lead: 'Registre falando ou por foto',
+  body: 'A Fatia anota e você só confere',
+  items: ['Foto do prato vira registro', 'Quanto falta de proteína?', 'Trocar exercício com dor'],
+  /** O chat bloqueado (Al-M1). */
+  href: '/plan?recurso=chat',
+} as const;
+
+/**
+ * O botão do bloco Free. Sem compra no app (iOS, `plan-offer.ts`), a loja
+ * proíbe oferecer o PRO: o caminho é o código da comunidade.
+ */
+export function freeOfferCta(canPurchase: boolean): { label: string; href: string } {
+  return canPurchase
+    ? { label: 'Ver o PRO', href: '/plan' }
+    : { label: 'Código da comunidade', href: '/community' };
+}
+
+// ---------------------------------------------------------------- estado do botão
+
+export interface AiFabState {
+  /** Alguma conversa com resposta correndo: o anel "trabalhando". */
+  thinking: boolean;
+  /** Quantas conversas esperam a pessoa (pausa aberta): o selo. */
+  waiting: number;
+}
+
+export function aiFabState(
+  conversations: readonly ChatConversationSummary[] | undefined,
+): AiFabState {
+  const list = conversations ?? [];
+  return {
+    thinking: list.some((c) => c.state === 'thinking'),
+    waiting: list.filter((c) => c.state === 'waiting').length,
+  };
+}
+
+/** Nome acessível do botão. O selo e o anel são visuais; quem não vê ouve o estado. */
+export function aiFabLabel(state: AiFabState, opts: { locked?: boolean } = {}): string {
+  if (opts.locked) return 'Abrir registro (IA no Pro)';
+  if (state.waiting > 0) return `IA · ${state.waiting} esperando você`;
+  if (state.thinking) return 'IA trabalhando · abrir';
+  return 'Abrir a IA';
+}
+
+// ---------------------------------------------------------------- conversas
+
+const STATE_ORDER: Record<ChatConversationState, number> = { waiting: 0, thinking: 1, idle: 2 };
+
+/**
+ * As conversas da seção "Conversas": em andamento no topo (esperando, depois
+ * pensando) e depois as recentes, poucas linhas.
+ */
+export function drawerConversations(
+  conversations: readonly ChatConversationSummary[],
+  limit = 4,
+): ChatConversationSummary[] {
+  return [...conversations]
+    .sort(
+      (a, b) =>
+        STATE_ORDER[a.state ?? 'idle'] - STATE_ORDER[b.state ?? 'idle'] ||
+        b.updatedAt.localeCompare(a.updatedAt),
+    )
+    .slice(0, limit);
+}
+
+const sameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate();
+
+/** O que vai à direita da conversa: o estado, ou quando foi ("hoje, 12:41", "ontem"). */
+export function conversationTimeLabel(c: ChatConversationSummary, now: Date = new Date()): string {
+  if (c.state === 'waiting') return 'esperando você';
+  if (c.state === 'thinking') return 'pensando…';
+  const at = new Date(c.updatedAt);
+  if (sameDay(at, now)) {
+    const hh = String(at.getHours()).padStart(2, '0');
+    const mm = String(at.getMinutes()).padStart(2, '0');
+    return `hoje, ${hh}:${mm}`;
+  }
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (sameDay(at, yesterday)) return 'ontem';
+  return at.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' });
+}
+
+// ---------------------------------------------------------------- cartão "esperando você"
+
+/**
+ * Até quantas linhas de prévia o cartão fora da conversa mostra. Acima disso a
+ * prévia não cabe inteira, e aprovar sem ver tudo não vale (ADR 039 §6).
+ */
+export const PENDING_CARD_MAX_LINES = 6;
+
+/**
+ * O que o cartão "Fatia · esperando você" oferece: `approve` ("Gravar assim")
+ * só com **uma** escrita a confirmar e a prévia válida e inteira no cartão;
+ * qualquer outra coisa (pergunta, várias escritas, prévia grande, inválida ou
+ * ainda carregando) vira `open` ("Abrir conversa").
+ */
+export function pendingCardMode(
+  value: ChatInterruptValue,
+  preview: ChatActionPreview | null | undefined,
+): 'approve' | 'open' {
+  if (value.kind !== 'confirm') return 'open';
+  if (value.actions.length !== 1 || value.actions[0]!.kind !== 'confirm') return 'open';
+  if (!preview || !preview.valida) return 'open';
+  return preview.linhas.length <= PENDING_CARD_MAX_LINES ? 'approve' : 'open';
+}
