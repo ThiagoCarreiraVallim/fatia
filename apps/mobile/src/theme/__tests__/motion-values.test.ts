@@ -39,3 +39,11 @@ describe('countUpValue', () => {
     expect(countUpValue(1066, 0, 0)).toBe(1066);
   });
 });
+
+describe('toastDuration', () => {
+  it('some em 2,5 s sem ação e fica 5 s com "Desfazer", igual à web', async () => {
+    const { toastDuration } = await import('../motion-values');
+    expect(toastDuration(false)).toBe(2500);
+    expect(toastDuration(true)).toBe(5000);
+  });
+});
