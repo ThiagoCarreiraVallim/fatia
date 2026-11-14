@@ -39,6 +39,7 @@ import { ExerciseService } from '../../workout/exercise.service';
 import { SessionSetService } from '../../workout/session-set.service';
 import { WorkoutPlanService } from '../../workout/workout-plan.service';
 import { WorkoutSessionService } from '../../workout/workout-session.service';
+import { MuscleSummaryService } from '../../workout/muscle-summary.service';
 import { silentNotifications } from '../../notifications/__tests__/silent-notifications';
 
 /**
@@ -82,6 +83,7 @@ describe('isolamento entre usuários', () => {
   const plans = new WorkoutPlanService(prisma);
   const sessions = new WorkoutSessionService(prisma);
   const sets = new SessionSetService(prisma);
+  const muscles = new MuscleSummaryService(prisma);
   const links = new ProfessionalLinkService(prisma);
   const access = new ProfessionalAccessService(prisma, new AccessAuditService(prisma));
   const groups = new GroupService(prisma, links);
@@ -216,7 +218,7 @@ describe('isolamento entre usuários', () => {
 
     // Exercício de catálogo público — usado nas séries. Não pertence a ninguém.
     const shared = await prisma.exercise.create({
-      data: { name: `${stamp}-shared-ex`, muscleGroup: 'peito' },
+      data: { name: `${stamp}-shared-ex`, muscleGroup: 'peito', primaryMuscles: ['chest'] },
     });
     owned.sharedExerciseId = shared.id;
 
@@ -448,6 +450,17 @@ describe('isolamento entre usuários', () => {
   });
 
   describe('listagens não incluem dados de outro usuário', () => {
+    it('séries por músculo da semana (#369): o dono vê as dele, o vizinho não vê nenhuma', async () => {
+      // Caminho feliz primeiro: sem ele, um resumo sempre zerado passaria.
+      const dono = await muscles.weekly(owned.userA, TZ);
+      expect(dono.sets.find((s) => s.group === 'peito')?.sets).toBeGreaterThan(0);
+
+      const vizinho = await muscles.weekly(owned.userB, TZ);
+      expect(vizinho.sets.every((s) => s.sets === 0)).toBe(true);
+      // O plano do user-A nunca vira sugestão para o user-B.
+      expect(vizinho.suggestedPlan?.id).not.toBe(owned.planId);
+    });
+
     it('list_meals volta vazio', async () => {
       await expect(meals.list(owned.userB, {}, TZ)).resolves.toEqual([]);
     });
@@ -2480,7 +2493,7 @@ describe('isolamento entre usuários', () => {
     });
 
     it('o dono vê a conversa na própria listagem', async () => {
-      const lista = await conversas.listar(owned.userA);
+      const lista = await conversas.list(owned.userA);
       expect(lista.map((c) => c.id)).toContain(owned.conversationId);
     });
 
@@ -2531,8 +2544,39 @@ describe('isolamento entre usuários', () => {
       );
     });
 
+    it('o estado e a contagem das conversas (#369) são só do dono', async () => {
+      const pausada = await conversas.iniciarTurno(owned.userA, randomUUID(), 'anota o almoço');
+      await conversas.completeTurn(owned.userA, pausada.conversationId, {
+        texto: '',
+        tools: [],
+        status: 'interrupted',
+        pausa: { id: 'int-iso', value: { kind: 'confirm', prompt: 'Gravo?', actions: [] } },
+        runId: null,
+      });
+      // O registro de turnos casa pelo id da conversa; o serviço tem de filtrar
+      // pelo dono antes. Aqui ele diria "rodando" para qualquer id.
+      const sempreRodando = () => true;
+      try {
+        expect((await conversas.pendingCount(owned.userA)).waiting).toBe(1);
+        const doDono = await conversas.list(owned.userA, { state: 'waiting' });
+        expect(doDono.map((c) => c.id)).toEqual([pausada.conversationId]);
+
+        expect(await conversas.pendingCount(owned.userB, sempreRodando)).toEqual({
+          waiting: 0,
+          thinking: 0,
+        });
+        for (const state of ['waiting', 'thinking', 'idle'] as const) {
+          const lista = await conversas.list(owned.userB, { state, isRunning: sempreRodando });
+          expect(lista.map((c) => c.id)).not.toContain(pausada.conversationId);
+          expect(lista.map((c) => c.id)).not.toContain(owned.conversationId);
+        }
+      } finally {
+        await prisma.conversation.deleteMany({ where: { id: pausada.conversationId } });
+      }
+    });
+
     it('a listagem do vizinho não inclui a conversa do user-A', async () => {
-      const lista = await conversas.listar(owned.userB);
+      const lista = await conversas.list(owned.userB);
       expect(lista.map((c) => c.id)).not.toContain(owned.conversationId);
     });
 
@@ -2567,9 +2611,9 @@ describe('isolamento entre usuários', () => {
       await expect(conversas.clearPauses(owned.userB, owned.conversationId)).rejects.toThrow(
         NotFoundException,
       );
-      // `encontrar` é a porta da primeira mensagem: o id da conversa alheia não
+      // `find` é a porta da primeira mensagem: o id da conversa alheia não
       // pode parecer "livre" para quem tenta criar uma conversa com ele.
-      await expect(conversas.encontrar(owned.userB, owned.conversationId)).rejects.toThrow(
+      await expect(conversas.find(owned.userB, owned.conversationId)).rejects.toThrow(
         NotFoundException,
       );
       expect(

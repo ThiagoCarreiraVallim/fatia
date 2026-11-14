@@ -1,0 +1,136 @@
+import { canonicalGroupsOf } from '../helpers/muscle-group';
+import { summarizeWeeklyMuscles, WEEKLY_SETS_TARGET } from '../muscle-summary.service';
+
+/**
+ * O que os cards da aba Treino (#369) e a semana da #377 leem: séries por grupo
+ * nos últimos 7 dias, os grupos descansados e um plano que os trabalha.
+ */
+const TZ = 'America/Sao_Paulo';
+// 2026-11-14, 15h em São Paulo.
+const NOW = new Date('2026-11-14T18:00:00Z');
+
+const ex = (id: number, primaryMuscles: string[], muscleGroup = 'peito') => ({
+  id,
+  muscleGroup,
+  primaryMuscles,
+});
+
+const BENCH = ex(1, ['chest', 'triceps']);
+const SQUAT = ex(2, ['quadriceps', 'glutes'], 'pernas');
+const ROW = ex(3, ['middle back', 'lats'], 'costas');
+const RUN = ex(4, ['quadriceps'], 'cardio');
+const NO_MUSCLES = ex(5, [], 'peito');
+
+const set = (exercise: ReturnType<typeof ex>, startedAt: string) => ({
+  exercise,
+  session: { startedAt: new Date(startedAt) },
+});
+
+describe('canonicalGroupsOf', () => {
+  it('leva os músculos anatômicos aos grupos do catálogo, sem repetir', () => {
+    expect(canonicalGroupsOf(['chest', 'triceps', 'biceps'])).toEqual(['peito', 'braço']);
+    expect(canonicalGroupsOf(['quadriceps', 'glutes', 'calves'])).toEqual(['pernas']);
+    expect(canonicalGroupsOf(['lats', 'middle back', 'traps'])).toEqual(['costas']);
+    expect(canonicalGroupsOf(['abdominals'])).toEqual(['core']);
+    expect(canonicalGroupsOf(['shoulders'])).toEqual(['ombro']);
+  });
+
+  it('ignora o que não é músculo do diagrama', () => {
+    expect(canonicalGroupsOf(['qualquer coisa'])).toEqual([]);
+  });
+});
+
+describe('summarizeWeeklyMuscles', () => {
+  it('conta as séries por grupo dos últimos 7 dias, com a meta 12', () => {
+    const summary = summarizeWeeklyMuscles({
+      sets: [
+        set(BENCH, '2026-11-13T12:00:00Z'),
+        set(BENCH, '2026-11-13T12:05:00Z'),
+        set(SQUAT, '2026-11-10T12:00:00Z'),
+      ],
+      plans: [],
+      now: NOW,
+      timezone: TZ,
+    });
+
+    expect(summary.target).toBe(WEEKLY_SETS_TARGET);
+    expect(WEEKLY_SETS_TARGET).toBe(12);
+    const sets = Object.fromEntries(summary.sets.map((s) => [s.group, s.sets]));
+    // Supino conta no peito e no braço (tríceps): cada grupo primário uma vez.
+    expect(sets).toMatchObject({ peito: 2, braço: 2, pernas: 1, costas: 0, ombro: 0, core: 0 });
+    expect(summary.sets.map((s) => s.group)).not.toContain('cardio');
+  });
+
+  it('cardio e exercício sem músculo primário ficam fora das séries de força', () => {
+    const summary = summarizeWeeklyMuscles({
+      sets: [set(RUN, '2026-11-13T12:00:00Z'), set(NO_MUSCLES, '2026-11-13T12:00:00Z')],
+      plans: [],
+      now: NOW,
+      timezone: TZ,
+    });
+    expect(summary.sets.every((s) => s.sets === 0)).toBe(true);
+  });
+
+  it('a semana segue o fuso da pessoa: 23h de domingo em SP é domingo, não segunda', () => {
+    // 2026-11-08 23h em São Paulo = 2026-11-09 02h UTC. Sete dias até 14/11
+    // começam em 08/11, então entra; um dia antes (07/11 23h) não.
+    const summary = summarizeWeeklyMuscles({
+      sets: [set(ROW, '2026-11-09T02:00:00Z'), set(ROW, '2026-11-08T02:00:00Z')],
+      plans: [],
+      now: NOW,
+      timezone: TZ,
+    });
+    expect(summary.sets.find((s) => s.group === 'costas')?.sets).toBe(1);
+  });
+
+  it('descansado é o grupo sem série há 2 dias ou mais, com "há N dias"', () => {
+    const summary = summarizeWeeklyMuscles({
+      sets: [
+        set(BENCH, '2026-11-14T12:00:00Z'), // hoje
+        set(SQUAT, '2026-11-11T12:00:00Z'), // há 3 dias
+        set(ROW, '2026-11-01T12:00:00Z'), // há 13 dias, fora da semana
+      ],
+      plans: [],
+      now: NOW,
+      timezone: TZ,
+    });
+
+    const rested = Object.fromEntries(summary.rested.map((r) => [r.group, r.daysSince]));
+    expect(rested).toMatchObject({ pernas: 3, costas: 13, ombro: null, core: null });
+    expect(rested).not.toHaveProperty('peito');
+    expect(rested).not.toHaveProperty('braço');
+    // Mais descansado primeiro; nunca treinado vem por último.
+    expect(summary.rested[0]!.group).toBe('costas');
+  });
+
+  it('sugere o plano da pessoa que mais trabalha os grupos descansados', () => {
+    const summary = summarizeWeeklyMuscles({
+      sets: [set(BENCH, '2026-11-14T12:00:00Z')],
+      plans: [
+        { id: 'push', name: 'Push', exercises: [{ exercise: BENCH }] },
+        {
+          id: 'legs',
+          name: 'Pernas e costas',
+          exercises: [{ exercise: SQUAT }, { exercise: ROW }],
+        },
+      ],
+      now: NOW,
+      timezone: TZ,
+    });
+    expect(summary.suggestedPlan).toEqual({
+      id: 'legs',
+      name: 'Pernas e costas',
+      groups: ['pernas', 'costas'],
+    });
+  });
+
+  it('sem plano que trabalhe os descansados, não sugere nada', () => {
+    const summary = summarizeWeeklyMuscles({
+      sets: [set(BENCH, '2026-11-14T12:00:00Z')],
+      plans: [{ id: 'push', name: 'Push', exercises: [{ exercise: BENCH }] }],
+      now: NOW,
+      timezone: TZ,
+    });
+    expect(summary.suggestedPlan).toBeNull();
+  });
+});

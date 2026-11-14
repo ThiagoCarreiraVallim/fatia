@@ -183,16 +183,17 @@ async function subirApp(): Promise<Cenario> {
     .overrideProvider(ConversationService)
     .useValue({
       // Dona da conversa é só a USER: a OUTRO_USER recebe o 404 de sempre.
-      assertDaPessoa: jest.fn(async (userId: string, id: string) => {
+      assertOwned: jest.fn(async (userId: string, id: string) => {
         if (userId !== USER) throw new NotFoundException('Conversa não encontrada.');
         return { id };
       }),
-      encontrar: jest.fn(async () => null),
+      find: jest.fn(async () => null),
       historicoParaOAgente: jest.fn(async () => []),
       clearPauses: jest.fn(async () => undefined),
       iniciarTurno: jest.fn(async () => ({ conversationId: CONVERSA })),
       completeTurn: jest.fn(async () => null),
-      listar: jest.fn(async () => []),
+      list: jest.fn(async () => []),
+      pendingCount: jest.fn(async () => ({ waiting: 2, thinking: 1 })),
     })
     .overrideProvider(CheckpointPurgeService)
     .useValue({ apagarConversa: jest.fn(async () => undefined) })
@@ -414,9 +415,9 @@ describe('POST /api/chat', () => {
 
   it('a retomada chega ao agente com o id da pausa e o valor intacto', async () => {
     const conversas = cenario.app.get(ConversationService) as unknown as {
-      encontrar: jest.Mock;
+      find: jest.Mock;
     };
-    conversas.encontrar.mockResolvedValueOnce({ id: CONVERSA, userId: USER });
+    conversas.find.mockResolvedValueOnce({ id: CONVERSA, userId: USER });
 
     const resposta = await conversar(cenario.url, {
       resume: { interruptId: 'pausa-1', value: { approvals: { c1: true } } },
@@ -777,5 +778,45 @@ describe('POST /api/chat/transcribe', () => {
 
     expect(resposta.status).toBe(429);
     expect(cenario.transcribe).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/chat/conversations com estado (#369)', () => {
+  let cenario: Cenario;
+
+  beforeEach(async () => {
+    cenario = await subirApp();
+  });
+
+  afterEach(async () => {
+    cenario.canal.encerrar();
+    await cenario.app.close();
+  });
+
+  const ler = (path: string) =>
+    fetch(`${cenario.url}${path}`, { headers: { Authorization: 'Bearer token-do-usuario' } });
+
+  it('passa estado e limite ao serviço, com o usuário do token', async () => {
+    const conversas = cenario.app.get(ConversationService) as unknown as { list: jest.Mock };
+
+    const resposta = await ler('/conversations?state=waiting&limit=3');
+
+    expect(resposta.status).toBe(200);
+    expect(conversas.list).toHaveBeenCalledWith(
+      USER,
+      expect.objectContaining({ state: 'waiting', limit: 3 }),
+    );
+  });
+
+  it('estado fora da lista e limite inválido são 400', async () => {
+    expect((await ler('/conversations?state=qualquer')).status).toBe(400);
+    expect((await ler('/conversations?limit=0')).status).toBe(400);
+  });
+
+  it('a contagem do selo sai de pending-count, antes de casar com `:id`', async () => {
+    const resposta = await ler('/conversations/pending-count');
+
+    expect(resposta.status).toBe(200);
+    expect(await resposta.json()).toEqual({ waiting: 2, thinking: 1 });
   });
 });

@@ -134,7 +134,21 @@ export class ChatController {
     @CurrentUser() user: CurrentUserPayload,
     @Query() query: ListConversationsQueryDto,
   ) {
-    return this.conversas.listar(user.id, query.q);
+    return this.conversas.list(user.id, {
+      q: query.q,
+      state: query.state,
+      limit: query.limit,
+      isRunning: (id) => this.runs.isRunning(user.id, id),
+    });
+  }
+
+  /**
+   * O selo do botão da IA: quantas conversas esperam a pessoa e quantas estão
+   * respondendo. Antes de `conversations/:id`, senão o `:id` casaria aqui.
+   */
+  @Get('conversations/pending-count')
+  pendingCount(@CurrentUser() user: CurrentUserPayload) {
+    return this.conversas.pendingCount(user.id, (id) => this.runs.isRunning(user.id, id));
   }
 
   /** Os agentes que a pessoa pode escolher numa conversa nova (Fase 7c), e o padrão. */
@@ -174,7 +188,7 @@ export class ChatController {
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
-    await this.conversas.assertDaPessoa(user.id, id);
+    await this.conversas.assertOwned(user.id, id);
     const run = this.runs.find(user.id, id);
     const desde = parseCursor(after ?? req.headers['last-event-id']);
     if (!run || (run.done && run.lastSeq <= desde)) {
@@ -194,7 +208,7 @@ export class ChatController {
   @Post('conversations/:id/stop')
   @HttpCode(204)
   async stop(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseUUIDPipe) id: string) {
-    await this.conversas.assertDaPessoa(user.id, id);
+    await this.conversas.assertOwned(user.id, id);
     this.chat.stop(user.id, id);
   }
 
@@ -211,7 +225,7 @@ export class ChatController {
    * Apaga a conversa **e** o estado que o agente guardou dela (ADR 023).
    *
    * Nessa ordem: a conversa sai primeiro porque é ela que prova de quem é o id
-   * (`assertDaPessoa`); a purga usa o mesmo par depois. Se a purga falhar, o
+   * (`assertOwned`); a purga usa o mesmo par depois. Se a purga falhar, o
    * checkpoint órfão não é alcançável por ninguém — a thread só abre com o dono
    * e uma conversa que já não existe —, mas o erro sobe para ser visto.
    */
