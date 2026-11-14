@@ -221,33 +221,24 @@
 }
 
 /*
-  O brilho do cartão do chat (`chat-hero.tsx`): uma faixa clara atravessa o
-  cartão em ~1,4 s e some por ~2,2 s, o mesmo ritmo do app. Com menos movimento
-  pedido ao sistema a faixa nem aparece — parada no meio do cartão ela seria só
-  uma mancha.
+  O anel "IA trabalhando" do botão da IA (#369, prancha Al-H6c8): meia volta de
+  borda girando. Com menos movimento pedido ao sistema ele para e fecha o
+  círculo, para o estado continuar visível sem girar.
 */
-.chat-hero-shine {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(110deg, transparent 42%, rgb(255 255 255 / 0.14) 50%, transparent 58%)
-    0 0 / 250% 100% no-repeat;
-  animation: fatia-chat-hero-shine 3.6s ease-in-out infinite;
+.ai-fab-ring {
+  animation: fatia-ai-ring 1s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .chat-hero-shine {
-    display: none;
+  .ai-fab-ring {
+    animation: none;
+    border-color: hsl(var(--primary));
   }
 }
 
-@keyframes fatia-chat-hero-shine {
-  0% {
-    background-position: 250% 0;
-  }
-  39%,
-  100% {
-    background-position: -150% 0;
+@keyframes fatia-ai-ring {
+  to {
+    transform: rotate(360deg);
   }
 }
 

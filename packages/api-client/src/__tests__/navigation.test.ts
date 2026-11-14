@@ -1,18 +1,49 @@
 import { describe, expect, it } from 'vitest';
-import { PRIMARY_TABS, ROUTES, activeNavKey, menuSections, routeInfo } from '../navigation';
+import {
+  HOME_TITLE,
+  PRIMARY_TABS,
+  ROUTES,
+  activeNavKey,
+  menuSections,
+  navBarMode,
+  routeInfo,
+} from '../navigation';
 
 const hrefs = (s: ReturnType<typeof menuSections>) => s.flatMap((x) => x.items.map((i) => i.href));
 
 describe('navegação', () => {
-  it('a barra tem Nutrição, Treino e Comunidade; o Início é a raiz, não aba', () => {
-    expect(PRIMARY_TABS.map((t) => [t.label, t.href])).toEqual([
-      ['Nutrição', '/nutrition'],
-      ['Treino', '/workout'],
-      ['Comunidade', '/community'],
+  it('a barra tem as cinco abas, na ordem Hoje · Nutrição · Treino · Comunidade · Você', () => {
+    expect(PRIMARY_TABS.map((t) => [t.key, t.label, t.href])).toEqual([
+      ['today', 'Hoje', '/'],
+      ['nutrition', 'Nutrição', '/nutrition'],
+      ['workout', 'Treino', '/workout'],
+      ['community', 'Comunidade', '/community'],
+      ['you', 'Você', '/you'],
     ]);
   });
 
-  it('o menu leva a todas as outras telas, em seções', () => {
+  it('cada aba tem ícone, e Você é o avatar da pessoa', () => {
+    expect(PRIMARY_TABS.map((t) => t.icon)).toEqual([
+      'home',
+      'apple',
+      'dumbbell',
+      'users',
+      'avatar',
+    ]);
+  });
+
+  it('"Mais" não existe mais: nem aba, nem chave', () => {
+    expect(PRIMARY_TABS.map((t) => t.key)).not.toContain('more');
+    for (const path of ['/progress', '/chat', '/xyz', '/profile/connect']) {
+      expect(activeNavKey(path)).not.toBe('more');
+    }
+  });
+
+  it('o título do Início é "Hoje"', () => {
+    expect(HOME_TITLE).toBe('Hoje');
+  });
+
+  it('o conteúdo de Você leva a todas as outras telas, em seções', () => {
     const web = menuSections({ platform: 'web', chatAvailable: true });
     expect(web.map((s) => s.title)).toEqual(['Você', 'Registros', 'IA']);
     expect(hrefs(web)).toEqual([
@@ -21,6 +52,7 @@ describe('navegação', () => {
       '/goals',
       '/progress/records',
       '/profile',
+      '/profile/notifications',
       '/nutrition/foods',
       '/nutrition/nutrient-targets',
       '/workout/plans',
@@ -29,6 +61,14 @@ describe('navegação', () => {
       '/profile/connect',
       '/plan',
     ]);
+  });
+
+  it('os avisos são uma linha de Você, não um sino no cabeçalho dela (ADR 040, item 4)', () => {
+    const voce = menuSections({ platform: 'mobile', chatAvailable: false })[0]!;
+    expect(voce.items.find((i) => i.key === 'notifications')).toMatchObject({
+      label: 'Notificações',
+      href: '/profile/notifications',
+    });
   });
 
   it('no Free o chat aparece com cadeado e leva ao plano (ADR 024)', () => {
@@ -46,51 +86,106 @@ describe('navegação', () => {
     expect(hrefs(menuSections({ platform: 'web', chatAvailable: false }))).not.toContain('/chat');
   });
 
-  it('no app o chat aparece como na web (Fase 9e), e "Conectar sua IA" vai para a tela de lá', () => {
+  it('no app "Conectar sua IA" vai para a tela de lá', () => {
     const app = hrefs(menuSections({ platform: 'mobile', chatAvailable: true }));
     expect(app).toContain('/chat');
     expect(app).toContain('/profile/tokens');
     expect(app).not.toContain('/profile/connect');
-    expect(hrefs(menuSections({ platform: 'mobile', chatAvailable: false }))).not.toContain(
-      '/chat',
-    );
-    const travado = menuSections({ platform: 'mobile', chatAvailable: true, chatLocked: true })
-      .flatMap((s) => s.items)
-      .find((i) => i.key === 'chat');
-    expect(travado).toMatchObject({ href: '/plan?recurso=chat', locked: true });
   });
 
   it.each([
-    ['/', 'home'],
+    ['/', 'today'],
     ['/nutrition', 'nutrition'],
     ['/nutrition/foods', 'nutrition'],
     ['/nutrition/goals', 'nutrition'],
+    ['/workout/plans/1', 'workout'],
     ['/workout/session/abc', 'workout'],
     ['/community', 'community'],
-    ['/community/g1', 'community'],
-    ['/progress', 'more'],
-    ['/goals', 'more'],
-    ['/profile/connect', 'more'],
-    ['/chat/abc', 'more'],
-    ['/nutritionx', 'more'],
+    ['/community/x', 'community'],
+    ['/org/x/members', 'community'],
+    ['/org/x', 'community'],
+    ['/students/m1', 'community'],
+    ['/you', 'you'],
+    ['/profile', 'you'],
+    ['/profile/notifications', 'you'],
+    ['/progress', 'you'],
+    ['/progress/records', 'you'],
+    ['/goals', 'you'],
+    ['/plan', 'you'],
+    ['/plan?recurso=chat', 'you'],
   ])('%s acende %s', (path, key) => {
     expect(activeNavKey(path)).toBe(key);
   });
 
-  describe('barra de topo: título e voltar', () => {
-    it('o Início não tem voltar', () => {
-      expect(routeInfo('/')).toEqual({ title: 'Início', parent: null, parentTitle: null });
+  it.each(['/chat', '/chat/abc', '/nutritionx', '/desconhecida'])(
+    '%s não acende aba nenhuma',
+    (path) => {
+      expect(activeNavKey(path)).toBeNull();
+    },
+  );
+
+  describe('navBarMode: a barra some nas tarefas de foco', () => {
+    it.each([
+      '/chat',
+      '/chat/c1',
+      '/chat/memories',
+      '/workout/session/s1',
+      '/nutrition/photo',
+      '/nutrition/scan',
+      '/community/new',
+      '/onboarding',
+      '/org/g1/content/plans/t1',
+      '/org/g1/content/tips/t1',
+      '/org/g1/exercises/12',
+    ])('%s esconde a barra', (path) => {
+      expect(navBarMode(path)).toBe('hidden');
     });
 
     it.each([
-      ['/nutrition', 'Nutrição', '/', 'Início'],
+      '/',
+      '/nutrition',
+      '/nutrition/foods',
+      '/workout',
+      '/workout/plans',
+      '/workout/plans/p1',
+      '/workout/history',
+      '/community',
+      '/community/g1',
+      '/you',
+      '/profile',
+      '/progress',
+      '/org/g1',
+      '/org/g1/members',
+    ])('%s mostra a barra', (path) => {
+      expect(navBarMode(path)).toBe('visible');
+    });
+
+    it('a sessão concluída é tela de ver: só a sessão em andamento esconde', () => {
+      expect(navBarMode('/workout/session/s1', { activeSessionId: 's1' })).toBe('hidden');
+      expect(navBarMode('/workout/session/s1', { activeSessionId: null })).toBe('visible');
+      expect(navBarMode('/workout/session/s1', { activeSessionId: 'outra' })).toBe('visible');
+    });
+  });
+
+  describe('barra de topo: título e voltar', () => {
+    it('o Hoje não tem voltar', () => {
+      expect(routeInfo('/')).toEqual({ title: 'Hoje', parent: null, parentTitle: null });
+    });
+
+    it.each([
+      ['/nutrition', 'Nutrição', '/', 'Hoje'],
+      ['/you', 'Você', '/', 'Hoje'],
+      ['/profile', 'Perfil', '/you', 'Você'],
+      ['/progress', 'Progresso', '/you', 'Você'],
+      ['/goals', 'Metas pessoais', '/you', 'Você'],
+      ['/profile/notifications', 'Notificações', '/profile', 'Perfil'],
       ['/nutrition/foods', 'Meus alimentos', '/nutrition', 'Nutrição'],
       ['/nutrition/goals?from=home', 'Metas do dia', '/nutrition', 'Nutrição'],
       ['/workout/plans/p1', 'Plano de treino', '/workout/plans', 'Planos de treino'],
       ['/workout/session/s1', 'Treino', '/workout/history', 'Histórico de treino'],
       ['/progress/records', 'Recordes', '/progress', 'Progresso'],
-      ['/plan', 'Meu plano', '/profile', 'Perfil'],
-      ['/chat/c1', 'Chat', '/', 'Início'],
+      ['/plan', 'Meu plano', '/you', 'Você'],
+      ['/chat/c1', 'Chat', '/', 'Hoje'],
       ['/community/g1', 'Comunidade', '/community', 'Comunidade'],
       ['/students/m1', 'Membro', '/students', 'Membros'],
       ['/community/new', 'Criar comunidade', '/community', 'Comunidade'],
@@ -111,7 +206,7 @@ describe('navegação', () => {
       expect(routeInfo('/desconhecida/a/b').parent).toBe('/');
     });
 
-    it('voltar sempre chega ao Início, sem ciclo', () => {
+    it('voltar sempre chega ao Hoje, sem ciclo', () => {
       for (const r of ROUTES) {
         let path: string | null = r.pattern.replace(/:\w+/g, 'x');
         const visitados = new Set<string>();

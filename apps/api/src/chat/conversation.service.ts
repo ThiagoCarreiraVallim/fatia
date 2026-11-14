@@ -45,6 +45,35 @@ export type TurnOutcome = {
   artifacts?: Record<string, Record<string, unknown>>;
 };
 
+export type ConversationState = 'idle' | 'thinking' | 'waiting';
+
+export interface ListConversationsOptions {
+  q?: string;
+  state?: ConversationState;
+  limit?: number;
+  /** Se a conversa tem resposta correndo agora (`ChatRunRegistry.isRunning`). */
+  isRunning?: (conversationId: string) => boolean;
+}
+
+export interface ConversationListItem {
+  id: string;
+  title: string | null;
+  agentGroupId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  state: ConversationState;
+}
+
+/**
+ * Responder vence esperar: enquanto a resposta corre, a pausa antiga já foi
+ * resolvida pelo turno novo (ou vai ser, quando ele terminar).
+ */
+export function conversationState(running: boolean, waiting: boolean): ConversationState {
+  if (running) return 'thinking';
+  if (waiting) return 'waiting';
+  return 'idle';
+}
+
 /** O que a tela manda sobre uma resposta. `review: null` desfaz o voto. */
 export type VotoNaResposta = {
   review: 'like' | 'dislike' | null;
@@ -63,7 +92,7 @@ export class ConversationService {
    * distinguir "não existe" de "existe e não é sua" transforma a rota num oráculo
    * de ids alheios.
    */
-  async assertDaPessoa(userId: string, conversationId: string) {
+  async assertOwned(userId: string, conversationId: string) {
     const conversa = await this.prisma.conversation.findFirst({
       where: { id: conversationId, userId },
     });
@@ -71,10 +100,19 @@ export class ConversationService {
     return conversa;
   }
 
-  /** Conversas da pessoa, mais recente primeiro. Sem as mensagens. */
-  async listar(userId: string, busca?: string) {
-    const termo = busca?.trim();
-    return this.prisma.conversation.findMany({
+  /**
+   * Conversas da pessoa, mais recente primeiro, sem as mensagens, cada uma com o
+   * `state` que o botão da IA mostra (ADR 040): `thinking` com resposta correndo
+   * no servidor, `waiting` com uma pausa aberta (confirmação ou pergunta) e
+   * `idle` no resto.
+   *
+   * `isRunning` vem do `ChatRunRegistry`, que mora na memória do processo (ADR
+   * 035): com mais de uma réplica o `thinking` pode faltar. `state` e `limit`
+   * filtram **depois** de calcular o estado, porque ele não é coluna.
+   */
+  async list(userId: string, opts: ListConversationsOptions = {}): Promise<ConversationListItem[]> {
+    const termo = opts.q?.trim();
+    const conversas = await this.prisma.conversation.findMany({
       where: {
         userId,
         ...(termo ? { title: { contains: termo, mode: Prisma.QueryMode.insensitive } } : {}),
@@ -82,6 +120,45 @@ export class ConversationService {
       orderBy: { updatedAt: 'desc' },
       select: { id: true, title: true, agentGroupId: true, createdAt: true, updatedAt: true },
     });
+    const waiting = await this.waitingIds(userId);
+    const isRunning = opts.isRunning ?? (() => false);
+    const comEstado = conversas.map((c) => ({
+      ...c,
+      state: conversationState(isRunning(c.id), waiting.has(c.id)),
+    }));
+    const filtradas = opts.state ? comEstado.filter((c) => c.state === opts.state) : comEstado;
+    return opts.limit !== undefined ? filtradas.slice(0, opts.limit) : filtradas;
+  }
+
+  /** Quantas conversas da pessoa esperam por ela, e quantas estão respondendo: o selo. */
+  async pendingCount(
+    userId: string,
+    isRunning: (conversationId: string) => boolean = () => false,
+  ): Promise<{ waiting: number; thinking: number }> {
+    const todas = await this.list(userId, { isRunning });
+    return {
+      waiting: todas.filter((c) => c.state === 'waiting').length,
+      thinking: todas.filter((c) => c.state === 'thinking').length,
+    };
+  }
+
+  /**
+   * As conversas desta pessoa com uma pausa aberta. `clearPauses` resolve toda
+   * pausa anterior quando a conversa anda, então uma resposta ainda
+   * `interrupted` é a pausa que espera a pessoa. O `userId` vai no `where` pela
+   * conversa: a mensagem não tem dono próprio.
+   */
+  private async waitingIds(userId: string): Promise<Set<string>> {
+    const pausadas = await this.prisma.message.findMany({
+      where: {
+        conversation: { userId },
+        role: MessageRole.assistant,
+        metadata: { path: ['status'], equals: 'interrupted' },
+      },
+      select: { conversationId: true },
+      distinct: ['conversationId'],
+    });
+    return new Set(pausadas.map((m) => m.conversationId));
   }
 
   /**
@@ -89,10 +166,10 @@ export class ConversationService {
    *
    * `null` só quando **ninguém** tem o id: o PWA gera o id da conversa nova, e a
    * primeira mensagem é que a cria. Um id que já é de outra pessoa é o mesmo 404
-   * de `assertDaPessoa` — senão a primeira mensagem viraria um jeito de escrever
+   * de `assertOwned` — senão a primeira mensagem viraria um jeito de escrever
    * na conversa alheia.
    */
-  async encontrar(userId: string, conversationId: string) {
+  async find(userId: string, conversationId: string) {
     const conversa = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
     if (!conversa) return null;
     if (conversa.userId !== userId) throw new NotFoundException('Conversa não encontrada.');
@@ -117,7 +194,7 @@ export class ConversationService {
   }
 
   async renomear(userId: string, conversationId: string, title: string) {
-    await this.assertDaPessoa(userId, conversationId);
+    await this.assertOwned(userId, conversationId);
     await this.prisma.conversation.updateMany({
       where: { id: conversationId, userId },
       data: { title },
@@ -126,9 +203,9 @@ export class ConversationService {
   }
 
   async obterComMensagens(userId: string, conversationId: string) {
-    const conversa = await this.assertDaPessoa(userId, conversationId);
+    const conversa = await this.assertOwned(userId, conversationId);
     const messages = await this.prisma.message.findMany({
-      // `conversationId` já saiu de `assertDaPessoa`: é a conversa desta pessoa,
+      // `conversationId` já saiu de `assertOwned`: é a conversa desta pessoa,
       // e não o id que veio da URL.
       where: { conversationId: conversa.id },
       orderBy: { createdAt: 'asc' },
@@ -147,7 +224,7 @@ export class ConversationService {
   }
 
   async apagar(userId: string, conversationId: string): Promise<void> {
-    await this.assertDaPessoa(userId, conversationId);
+    await this.assertOwned(userId, conversationId);
     // `deleteMany` com os dois campos, e não `delete({ where: { id } })`: entre a
     // checagem e a escrita existe uma janela, e repetir o `userId` fecha o
     // TOCTOU sem custo. As mensagens vão junto pelo `onDelete: Cascade`.
@@ -175,7 +252,7 @@ export class ConversationService {
     userId: string,
     conversationId: string,
   ): Promise<MensagemDoHistorico[]> {
-    await this.assertDaPessoa(userId, conversationId);
+    await this.assertOwned(userId, conversationId);
     const ultimas = await this.prisma.message.findMany({
       where: { conversationId },
       orderBy: { createdAt: 'desc' },
@@ -203,7 +280,7 @@ export class ConversationService {
     fotos = 0,
     agentGroupId: string | null = null,
   ): Promise<{ conversationId: string }> {
-    const conversa = await this.encontrar(userId, conversationId);
+    const conversa = await this.find(userId, conversationId);
 
     return this.prisma.$transaction(async (tx) => {
       const alvo =
@@ -244,7 +321,7 @@ export class ConversationService {
    * comentário de `Message.metadata`.
    */
   async clearPauses(userId: string, conversationId: string): Promise<void> {
-    const conversa = await this.assertDaPessoa(userId, conversationId);
+    const conversa = await this.assertOwned(userId, conversationId);
     const pausadas = await this.prisma.message.findMany({
       where: {
         conversationId: conversa.id,
@@ -337,7 +414,7 @@ export class ConversationService {
     messageId: string,
     voto: VotoNaResposta,
   ): Promise<string | null> {
-    const conversa = await this.assertDaPessoa(userId, conversationId);
+    const conversa = await this.assertOwned(userId, conversationId);
     const where = { id: messageId, conversationId: conversa.id, role: MessageRole.assistant };
     const { count } = await this.prisma.message.updateMany({
       where,

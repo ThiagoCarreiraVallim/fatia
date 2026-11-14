@@ -262,8 +262,11 @@ Siga a lista [O que ainda precisa de aparelho](./MOBILE_PARITY.md#o-que-ainda-pr
 do MOBILE_PARITY, que cobre login, Nutrição, treino, comunidade, painel, mural, avisos, compra e
 chat item por item. Uma ordem que rende:
 
-1. **Expo Go, conta demo:** login → assistente de primeira vez → registrar refeição (busca, código de
-   barras, foto) → treino com descanso → Progresso → comunidade (mural, desafios) → chat.
+1. **Expo Go, conta demo:** login → assistente de primeira vez → as cinco abas embaixo (Hoje,
+   Nutrição, Treino, Comunidade, Você) → botão redondo da IA → "O que vamos registrar?": uma água
+   manual e uma refeição ditada → registrar refeição (busca, código de barras, foto) → treino com
+   descanso, saindo da sessão para ver a barra "treino em andamento" → Progresso (pela aba Você) →
+   comunidade (mural, desafios) → chat.
 2. **Expo Go, conta equipe:** painel da Academia Demo (membros, convite, conteúdo, agente).
 3. **Dev build:** avisos (comentar com uma conta um post da outra, com o app fechado), link
    `fatia://c/<token>` de um convite, compra de teste, resposta do chat chegando com o app fechado.

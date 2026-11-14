@@ -28,7 +28,7 @@ import { sessionProgress } from './format';
 import { useCancelSession } from './use-cancel-session';
 import { useSessionExitGuard } from './use-exit-guard';
 import { useSessionLayout } from './use-session-layout';
-import { useRestTimer } from './use-rest-timer';
+import { useSessionRestTimer } from './rest-timer-provider';
 import { colors } from '@/theme/colors';
 
 /**
@@ -62,7 +62,9 @@ export function ActiveSession({
   useKeepAwake();
   const exit = useSessionExitGuard();
 
-  const rest = useRestTimer();
+  // Global (`RestTimerProvider`): a barra do treino em andamento mostra o
+  // descanso e o +30 s fora desta tela (#369).
+  const rest = useSessionRestTimer();
   const cancel = useCancelSession(session.id);
   const layout = useSessionLayout(session);
   const scrollRef = useRef<ScrollView>(null);

@@ -1,188 +1,201 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
 import { BottomNav } from '../bottom-nav';
 
 /**
- * A barra Nutrição · Treino · [ + ] · Comunidade · Mais. Sem Início: quem
- * volta a ele é a barra de topo. O caso olha os links
- * renderizados, e não o texto do arquivo — asserção que procura identificador
- * no fonte inteiro casa com a linha de `import` e passa sem provar nada.
+ * A barra nova (ADR 040 revisada, prancha `Al-H6c5`): cinco abas só de ícone —
+ * Hoje · Nutrição · Treino · Comunidade · Você — e, separado delas, o botão
+ * redondo da IA. Os casos olham os links e botões renderizados, pelo nome
+ * acessível: é o que o leitor de tela vê de uma barra sem texto.
  */
 
-const pathname = vi.hoisted(() => ({ atual: '/' }));
-vi.mock('next/navigation', () => ({ usePathname: () => pathname.atual }));
+const nav = vi.hoisted(() => ({ pathname: '/', push: vi.fn(), replace: vi.fn() }));
+vi.mock('next/navigation', () => ({
+  usePathname: () => nav.pathname,
+  useRouter: () => ({ push: nav.push, replace: nav.replace }),
+}));
 
-// O menu Registrar tem teste próprio (`quick-add.test.tsx`); aqui importa que o "+" o chama.
-const quickAdd = vi.hoisted(() => ({ open: vi.fn() }));
-vi.mock('../quick-add', () => ({ useQuickAdd: () => quickAdd }));
-
-vi.mock('@/components/ui/drawer', () => {
-  const Passthrough = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
-  return {
-    Drawer: ({ open, children }: { open: boolean; children: ReactNode }) =>
-      open ? <div role="dialog">{children}</div> : null,
-    DrawerContent: Passthrough,
-    DrawerHeader: Passthrough,
-    DrawerTitle: ({ children }: { children: ReactNode }) => <h2>{children}</h2>,
-    DrawerDescription: ({ children }: { children: ReactNode }) => <p>{children}</p>,
-  };
-});
+// O menu da IA tem teste próprio (`ai-drawer.test.tsx`); aqui importa que o botão o abre.
+const drawer = vi.hoisted(() => ({ open: vi.fn(), close: vi.fn(), isOpen: false }));
+vi.mock('../ai-drawer', () => ({ useAiDrawer: () => drawer }));
 
 vi.mock('@fatia/api-client', async () => {
   const actual = await vi.importActual<typeof import('@fatia/api-client')>('@fatia/api-client');
   return {
     ...actual,
     getChatAvailability: vi.fn(),
+    getPendingConversationsCount: vi.fn(),
+    listConversations: vi.fn(),
     usersApi: { me: vi.fn() },
+    workoutApi: { ...actual.workoutApi, getActiveSession: vi.fn() },
   };
 });
 
-import { getChatAvailability, usersApi } from '@fatia/api-client';
+import {
+  getChatAvailability,
+  getPendingConversationsCount,
+  listConversations,
+  usersApi,
+  workoutApi,
+} from '@fatia/api-client';
 
 const availability = vi.mocked(getChatAvailability);
-const me = vi.mocked(usersApi.me);
+const pending = vi.mocked(getPendingConversationsCount);
+const activeSession = vi.mocked(workoutApi.getActiveSession);
 
 function renderNav() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
+  return render(
     <QueryClientProvider client={client}>
       <BottomNav />
     </QueryClientProvider>,
   );
 }
 
-function hrefs(container: HTMLElement): string[] {
-  return within(container)
-    .getAllByRole('link')
-    .map((a) => a.getAttribute('href') ?? '');
-}
-
-async function abrirMais() {
-  const user = userEvent.setup();
-  await user.click(screen.getByRole('button', { name: 'Mais' }));
-  return screen.getByRole('dialog');
-}
+const principal = () => screen.getByRole('navigation', { name: 'Principal' });
 
 describe('BottomNav', () => {
   beforeEach(() => {
-    pathname.atual = '/';
-    availability.mockResolvedValue({ available: false } as never);
-    me.mockResolvedValue({ name: 'Ana Demo' } as never);
+    nav.pathname = '/';
+    drawer.isOpen = false;
+    availability.mockResolvedValue({
+      available: true,
+      allowed: true,
+      reason: 'ok',
+      photos: true,
+      dictation: true,
+    });
+    pending.mockResolvedValue({ waiting: 0, thinking: 0 });
+    vi.mocked(listConversations).mockResolvedValue([]);
+    vi.mocked(usersApi.me).mockResolvedValue({ name: 'Ana Demo' } as never);
+    activeSession.mockResolvedValue(null);
   });
 
   afterEach(() => vi.clearAllMocks());
 
-  it('tem Nutrição, Treino e Comunidade, com o Registrar no meio e o Mais no fim', () => {
+  it('tem as cinco abas na ordem do canvas, cada uma com nome', async () => {
     renderNav();
-    const nav = screen.getByRole('navigation', { name: 'Navegação principal' });
-    expect(hrefs(nav)).toEqual(['/nutrition', '/workout', '/community']);
-    const botoes = within(nav)
-      .getAllByRole('button')
-      .map((b) => b.getAttribute('aria-label') ?? b.textContent);
-    expect(botoes).toEqual(['Registrar', 'Mais']);
+    const links = within(await screen.findByRole('navigation', { name: 'Principal' })).getAllByRole(
+      'link',
+    );
+    expect(links.map((a) => a.getAttribute('aria-label'))).toEqual([
+      'Hoje',
+      'Nutrição',
+      'Treino',
+      'Comunidade',
+      'Você',
+    ]);
+    expect(links.map((a) => a.getAttribute('href'))).toEqual([
+      '/',
+      '/nutrition',
+      '/workout',
+      '/community',
+      '/you',
+    ]);
+    // "Mais" e "Registrar" saíram: não há outro botão dentro da barra.
+    expect(within(principal()).queryByRole('button')).toBeNull();
   });
 
-  it('o "+" abre o menu Registrar', async () => {
+  it('a aba ativa tem aria-current, inclusive nas sub-rotas', async () => {
+    nav.pathname = '/workout/plans/p1';
     renderNav();
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Registrar' }));
-    expect(quickAdd.open).toHaveBeenCalledTimes(1);
+    await screen.findByRole('navigation', { name: 'Principal' });
+    expect(screen.getByRole('link', { name: 'Treino' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Hoje' })).not.toHaveAttribute('aria-current');
   });
 
-  it('marca a aba da rota atual, inclusive nas sub-rotas', () => {
-    pathname.atual = '/nutrition/foods';
-    renderNav();
-    expect(screen.getByRole('link', { name: 'Nutrição' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: 'Treino' })).not.toHaveAttribute('aria-current');
-  });
+  it('Perfil e Progresso acendem Você; o painel da equipe acende Comunidade', async () => {
+    nav.pathname = '/profile/notifications';
+    const { unmount } = renderNav();
+    await screen.findByRole('navigation', { name: 'Principal' });
+    expect(screen.getByRole('link', { name: 'Você' })).toHaveAttribute('aria-current', 'page');
+    unmount();
 
-  it('a Comunidade fica marcada também no detalhe de uma comunidade', () => {
-    pathname.atual = '/community/abc';
+    nav.pathname = '/org/g1/members';
     renderNav();
+    await screen.findByRole('navigation', { name: 'Principal' });
     expect(screen.getByRole('link', { name: 'Comunidade' })).toHaveAttribute(
       'aria-current',
       'page',
     );
   });
 
-  it('no Início nenhuma aba fica marcada', () => {
-    pathname.atual = '/';
+  it('o botão da IA fica fora das abas e abre o menu', async () => {
     renderNav();
-    for (const nome of ['Nutrição', 'Treino', 'Comunidade']) {
-      expect(screen.getByRole('link', { name: nome })).not.toHaveAttribute('aria-current');
-    }
-    expect(screen.getByText('Mais')).not.toHaveClass('text-primary');
+    const ia = await screen.findByRole('button', { name: 'Abrir a IA' });
+    expect(within(principal()).queryByRole('button', { name: 'Abrir a IA' })).toBeNull();
+    await userEvent.setup().click(ia);
+    expect(drawer.open).toHaveBeenCalledOnce();
   });
 
-  it('numa tela que não está na barra, o Mais fica ativo', () => {
-    pathname.atual = '/progress';
+  it('o botão diz quantas conversas esperam, com o selo', async () => {
+    pending.mockResolvedValue({ waiting: 2, thinking: 0 });
     renderNav();
-    expect(screen.getByText('Mais')).toHaveClass('text-primary');
-    for (const nome of ['Nutrição', 'Treino', 'Comunidade']) {
-      expect(screen.getByRole('link', { name: nome })).not.toHaveAttribute('aria-current');
-    }
+    expect(await screen.findByRole('button', { name: 'IA · 2 esperando você' })).toBeVisible();
+    expect(screen.getByTestId('ai-fab-badge')).toHaveTextContent('2');
   });
 
-  it('o Mais abre o menu com o perfil e as metas no primeiro nível', async () => {
+  it('com conversa pensando, o anel liga e o nome diz "trabalhando"', async () => {
+    pending.mockResolvedValue({ waiting: 0, thinking: 1 });
     renderNav();
-    const menu = await abrirMais();
-    expect(await within(menu).findByText('Ana Demo')).toBeInTheDocument();
-    const links = hrefs(menu);
-    expect(links[0]).toBe('/profile');
-    expect(links).toEqual(
-      expect.arrayContaining(['/progress', '/nutrition/goals', '/goals', '/profile/connect']),
-    );
+    expect(await screen.findByRole('button', { name: 'IA trabalhando · abrir' })).toBeVisible();
+    expect(screen.getByTestId('ai-fab-ring')).toBeInTheDocument();
   });
 
-  it('sem IA na instância, o menu não oferece o chat', async () => {
-    renderNav();
-    const menu = await abrirMais();
-    await within(menu).findByText('Ana Demo');
-    expect(hrefs(menu)).not.toContain('/chat');
-  });
-
-  it('no Free, o chat aparece com cadeado e selo PRO e leva ao plano', async () => {
+  it('no Free o botão avisa que a IA é do Pro, e abre o registro do mesmo jeito', async () => {
     availability.mockResolvedValue({
       available: true,
       allowed: false,
       reason: 'plan_required',
-    } as never);
+      photos: false,
+      dictation: false,
+    });
     renderNav();
-    const menu = await abrirMais();
-    const chat = await within(menu).findByRole('link', { name: /Chat/ });
-    expect(chat).toHaveAttribute('href', '/plan?recurso=chat');
-    expect(chat).toHaveTextContent(/PRO/);
-    expect(chat).toHaveTextContent(/exige o plano PRO/);
+    expect(await screen.findByRole('button', { name: 'Abrir registro (IA no Pro)' })).toBeVisible();
+    expect(pending).not.toHaveBeenCalled();
   });
 
-  it('com IA disponível, o chat entra no menu', async () => {
-    availability.mockResolvedValue({ available: true } as never);
+  it.each(['/chat', '/chat/c1', '/nutrition/photo', '/nutrition/scan', '/community/new'])(
+    'some na tarefa de foco %s',
+    async (path) => {
+      nav.pathname = path;
+      renderNav();
+      await waitFor(() => expect(activeSession).toHaveBeenCalled());
+      expect(screen.queryByRole('navigation', { name: 'Principal' })).toBeNull();
+      expect(screen.queryByRole('button', { name: /IA/ })).toBeNull();
+    },
+  );
+
+  it('com treino em andamento, a barra do treino aparece acima do menu', async () => {
+    nav.pathname = '/nutrition';
+    activeSession.mockResolvedValue({
+      id: 's1',
+      userId: 'u',
+      planId: null,
+      startedAt: new Date(Date.now() - 60_000).toISOString(),
+      completedAt: null,
+      notes: null,
+      sets: [],
+      plannedExercises: [],
+    });
     renderNav();
-    const menu = await abrirMais();
-    expect(await within(menu).findByRole('link', { name: /Chat/ })).toHaveAttribute(
-      'href',
-      '/chat',
-    );
+    const barra = await screen.findByRole('link', { name: /^Treino em andamento/ });
+    expect(barra).toHaveAttribute('href', '/workout');
   });
 
-  it('o chat vira o cartão do topo do menu, antes do perfil, e não se repete na lista', async () => {
-    availability.mockResolvedValue({ available: true } as never);
+  it('no /workout com a sessão aberta (a sessão do PWA mora ali), a barra some', async () => {
+    nav.pathname = '/workout';
+    activeSession.mockResolvedValue({
+      id: 's1',
+      userId: 'u',
+      planId: null,
+      startedAt: new Date().toISOString(),
+      completedAt: null,
+      notes: null,
+    });
     renderNav();
-    const menu = await abrirMais();
-    await within(menu).findByRole('link', { name: /Chat/ });
-    const links = hrefs(menu);
-    expect(links.slice(0, 2)).toEqual(['/chat', '/profile']);
-    expect(links.filter((h) => h === '/chat')).toHaveLength(1);
-    expect(within(menu).getByTestId('chat-hero-shine')).toHaveClass('chat-hero-shine');
-  });
-
-  it('escolher o chat no cartão fecha o menu', async () => {
-    availability.mockResolvedValue({ available: true } as never);
-    renderNav();
-    const menu = await abrirMais();
-    await userEvent.setup().click(await within(menu).findByRole('link', { name: /Chat/ }));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('navigation', { name: 'Principal' })).toBeNull());
   });
 });

@@ -2,8 +2,9 @@ import { Toaster } from '@/components/ui/toaster';
 import { ChatRuntimeProvider } from '@/components/chat/chat-runtime-provider';
 import { redirect } from 'next/navigation';
 import { AppTopBar, TopBarProvider } from '@/components/layout/app-top-bar';
-import { BottomNav } from '@/components/layout/bottom-nav';
-import { QuickAddProvider } from '@/components/layout/quick-add';
+import { BottomNav, BottomSpacer } from '@/components/layout/bottom-nav';
+import { AiDrawerProvider } from '@/components/layout/ai-drawer';
+import { RestTimerProvider } from '@/components/workout/rest-timer-provider';
 import { SideNav } from '@/components/layout/side-nav';
 import { OnboardingGate } from '@/components/onboarding/onboarding-gate';
 import { PwaInstallPrompt } from '@/components/pwa-install-prompt';
@@ -19,26 +20,35 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       tela menos o Início, que é a raiz e abre com a saudação. O padding de área
       segura mantém o conteúdo fora do relógio/notch no PWA instalado
       (`black-translucent` + `viewportFit: cover`); a barra cobre essa faixa.
+
+      O menu da IA (ADR 040) e o descanso do treino moram acima das telas: o
+      botão da IA abre o menu de qualquer lugar, e a barra do treino em
+      andamento mostra o descanso fora da sessão.
     */
-    <QuickAddProvider>
-      {/* O chat mora aqui, acima de todas as telas: a resposta continua
+    <AiDrawerProvider>
+      <RestTimerProvider>
+        {/* O chat mora aqui, acima de todas as telas: a resposta continua
           chegando enquanto a pessoa navega (ADR 035). */}
-      <ChatRuntimeProvider>
-        <TopBarProvider>
-          <div className="flex min-h-screen flex-col bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] md:pl-64">
-            <AppTopBar />
-            {/* No desktop o conteúdo fica numa coluna legível, ao lado da `SideNav`. */}
-            <main className="flex-1 pt-4 pb-24">
-              <div className="mx-auto w-full max-w-3xl">{children}</div>
-            </main>
-            <BottomNav />
-            <SideNav />
-            <PwaInstallPrompt />
-            <OnboardingGate />
-            <Toaster />
-          </div>
-        </TopBarProvider>
-      </ChatRuntimeProvider>
-    </QuickAddProvider>
+        <ChatRuntimeProvider>
+          <TopBarProvider>
+            <div className="flex min-h-screen flex-col bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] md:pl-64">
+              <AppTopBar />
+              {/* No desktop o conteúdo fica numa coluna legível, ao lado da `SideNav`. */}
+              <main className="flex-1 pt-4 pb-24">
+                <div className="mx-auto w-full max-w-3xl">
+                  {children}
+                  <BottomSpacer />
+                </div>
+              </main>
+              <BottomNav />
+              <SideNav />
+              <PwaInstallPrompt />
+              <OnboardingGate />
+              <Toaster />
+            </div>
+          </TopBarProvider>
+        </ChatRuntimeProvider>
+      </RestTimerProvider>
+    </AiDrawerProvider>
   );
 }

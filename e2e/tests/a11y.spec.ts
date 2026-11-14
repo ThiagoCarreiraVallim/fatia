@@ -5,7 +5,7 @@ import { COMMUNITY_SLUG, newInvitePath, purgeDemo } from './community';
 
 /**
  * Acessibilidade automática (Fase 3): o axe roda nas telas do app, no menu
- * "Mais" e no Registrar, em celular e desktop, e falha em violação `serious` ou
+ * na aba Você e no menu da IA, em celular e desktop, e falha em violação `serious` ou
  * `critical`. Não substitui leitor de tela de verdade; pega o que dá para pegar
  * de máquina — contraste, rótulo, nome de botão, ARIA inválido.
  *
@@ -58,17 +58,16 @@ for (const rota of ROTAS) {
   });
 }
 
-test('axe: menu "Mais" e Registrar', async ({ page, isMobile }) => {
+test('axe: aba Você e o menu da IA', async ({ page }) => {
+  await page.goto('/you');
+  await page
+    .getByRole('link', { name: /^Notificações/ })
+    .first()
+    .waitFor();
+  expect(await auditar(page)).toEqual([]);
   await page.goto('/');
-  if (isMobile) {
-    await page.getByRole('button', { name: 'Mais', exact: true }).click();
-    await page.getByRole('dialog', { name: 'Menu' }).waitFor();
-    expect(await auditar(page)).toEqual([]);
-    await page.keyboard.press('Escape');
-    await page.getByRole('dialog').waitFor({ state: 'detached' });
-  }
-  await page.getByRole('button', { name: 'Registrar', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Registrar' }).waitFor();
+  await page.getByRole('button', { name: /^(Abrir a IA|Abrir registro|IA )/ }).click();
+  await page.getByRole('dialog', { name: 'O que vamos registrar?' }).waitFor();
   expect(await auditar(page)).toEqual([]);
 });
 

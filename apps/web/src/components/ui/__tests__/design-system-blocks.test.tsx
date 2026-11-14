@@ -1,39 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
-import { TabBar } from '@/components/layout/tab-bar';
 import { ShareCard, SHARE_CARD_FIELDS } from '@/components/sharing/share-card';
 import { BrandColorField } from '@/components/org/brand-color-field';
 import { brandStyle } from '@/components/community/brand-cover';
 import { ProBlock } from '@/components/billing/pro-block';
 
-/** Blocos de produto do DS v2 (#368): barra, cartão de compartilhar, cor da comunidade, PRO. */
-
-describe('TabBar', () => {
-  it('abas só com ícone têm nome, a ativa tem aria-current e a IA é um botão', async () => {
-    const onAi = vi.fn();
-    render(
-      <TabBar
-        active="today"
-        onAi={onAi}
-        items={[
-          { key: 'today', href: '/', label: 'Hoje', icon: 'home' },
-          { key: 'food', href: '/nutrition', label: 'Comer', icon: 'apple' },
-          { key: 'workout', href: '/workout', label: 'Treinar', icon: 'dumbbell' },
-          { key: 'me', href: '/profile', label: 'Você', icon: 'user' },
-        ]}
-      />,
-    );
-    const nav = screen.getByRole('navigation', { name: 'Navegação principal' });
-    expect(nav).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Hoje' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: 'Comer' })).not.toHaveAttribute('aria-current');
-    expect(screen.getAllByRole('link')).toHaveLength(4);
-    await userEvent.click(screen.getByRole('button', { name: 'Falar com a IA' }));
-    expect(onAi).toHaveBeenCalledOnce();
-  });
-});
+/** Blocos de produto do DS v2 (#368): cartão de compartilhar, cor da comunidade, PRO. */
 
 describe('ShareCard', () => {
   it('não tem campo para dado do corpo', () => {

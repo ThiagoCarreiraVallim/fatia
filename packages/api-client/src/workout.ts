@@ -103,6 +103,32 @@ export interface WorkoutSession {
   exerciseOrder?: number[];
   /** Exercícios do plano tirados desta sessão — já fora de `plannedExercises`. */
   removedExerciseIds?: number[];
+  /** O plano de onde a sessão veio, quando a listagem o inclui. */
+  plan?: { id: string; name: string } | null;
+}
+
+/** Os grupos de força da semana (`GET /workout/muscles/week`). Cardio fica fora. */
+export type StrengthMuscleGroup = 'peito' | 'costas' | 'pernas' | 'ombro' | 'braço' | 'core';
+
+export interface WeeklySetsByMuscle {
+  group: StrengthMuscleGroup;
+  sets: number;
+}
+
+export interface RestedMuscle {
+  group: StrengthMuscleGroup;
+  /** Dias desde a última série; `null` = nenhuma nos últimos 60 dias. */
+  daysSince: number | null;
+}
+
+export interface WeeklyMuscleSummary {
+  /** Primeiro dos 7 dias contados (YYYY-MM-DD, fuso da pessoa). */
+  from: string;
+  /** Meta de séries por grupo na semana (12). */
+  target: number;
+  sets: WeeklySetsByMuscle[];
+  rested: RestedMuscle[];
+  suggestedPlan: { id: string; name: string; groups: StrengthMuscleGroup[] } | null;
 }
 
 export interface WorkoutPlanExercise {
@@ -123,6 +149,11 @@ export interface WorkoutPlan {
 }
 
 export const workoutApi = {
+  /** Séries por grupo nos últimos 7 dias, os descansados e um plano que os trabalha. */
+  getWeeklyMuscleSummary: () => apiFetch<WeeklyMuscleSummary>('/api/workout/muscles/week'),
+  /** A última sessão concluída ou não, para o card "Repetir o último". */
+  getLastSession: async (): Promise<WorkoutSession | null> =>
+    (await workoutApi.listSessions({ limit: 1 }))[0] ?? null,
   getActiveSession: () => apiFetch<WorkoutSession | null>('/api/workout/sessions/active'),
   getSession: (id: string) => apiFetch<WorkoutSession>(`/api/workout/sessions/${id}`),
   listSessions: (params?: { date?: string; cursor?: string; limit?: number }) => {

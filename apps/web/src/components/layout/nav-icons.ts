@@ -1,4 +1,5 @@
 import {
+  Bell,
   ClipboardList,
   Crown,
   Flag,
@@ -21,6 +22,7 @@ export const MENU_ICON: Record<MenuIcon, LucideIcon> = {
   'daily-goals': Target,
   'personal-goals': Flag,
   profile: User,
+  notifications: Bell,
   foods: UtensilsCrossed,
   nutrients: FlaskConical,
   plans: ClipboardList,

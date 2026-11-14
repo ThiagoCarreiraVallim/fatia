@@ -34,4 +34,19 @@ describe('Início', () => {
       '/nutrition/goals',
     );
   });
+
+  it('o topo do Hoje tem o sino dos avisos, sozinho: Você é aba (ADR 040, item 4)', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <HomePage />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole('link', { name: 'Avisos' })).toHaveAttribute(
+      'href',
+      '/profile/notifications',
+    );
+    // O avatar saiu do topo do Hoje: a pessoa chega a Você pela aba.
+    expect(screen.queryByRole('link', { name: 'Você' })).toBeNull();
+  });
 });

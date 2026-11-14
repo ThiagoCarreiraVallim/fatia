@@ -5,12 +5,12 @@ import { useQuery } from '@tanstack/react-query';
 import { usersApi } from '@fatia/api-client';
 import { takePendingInvite } from '@/community/pending-invite';
 import { useAuth } from '@/auth/auth-context';
-import { BottomNav } from '@/components/layout/bottom-nav';
-import { QuickAdd } from '@/components/layout/quick-add';
+import { BottomChromeProvider, BottomNav } from '@/components/layout/bottom-nav';
+import { AiDrawerProvider } from '@/components/layout/ai-drawer';
+import { RestTimerProvider } from '@/components/workout/session/rest-timer-provider';
 import { ConfirmProvider, LoadingState } from '@/components/ui';
 import { usePush } from '@/notifications/use-push';
 import { ChatProvider } from '@/chat/chat-provider';
-import { BackgroundReply } from '@/components/chat/background-reply';
 
 /**
  * Guarda de sessão — equivalente de `apps/web/src/app/(app)/layout.tsx`, que
@@ -69,16 +69,21 @@ export default function AppLayout() {
   return (
     // O chat mora aqui, acima das abas: a resposta segue chegando enquanto a
     // pessoa navega (ADR 035).
+    // O descanso também: a barra "treino em andamento" mostra a contagem fora
+    // da sessão (#369).
     <ChatProvider>
       <ConfirmProvider>
-        <View className="flex-1 bg-background">
-          <Slot />
-          <BackgroundReply />
-          {/* O "+" global envolve a nav para acertar a ordem de pintura (ver o componente). */}
-          <QuickAdd>
-            <BottomNav />
-          </QuickAdd>
-        </View>
+        <RestTimerProvider>
+          <BottomChromeProvider>
+            <View className="flex-1 bg-background">
+              <Slot />
+              {/* O menu da IA envolve a nav para acertar a ordem de pintura (ver o componente). */}
+              <AiDrawerProvider>
+                <BottomNav />
+              </AiDrawerProvider>
+            </View>
+          </BottomChromeProvider>
+        </RestTimerProvider>
       </ConfirmProvider>
     </ChatProvider>
   );

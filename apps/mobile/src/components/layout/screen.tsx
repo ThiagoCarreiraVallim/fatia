@@ -2,10 +2,9 @@ import type { ReactNode } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TOP_BAR_HEIGHT, TopBar, useTopBarVisible } from './top-bar';
+import { useBottomChrome } from './bottom-nav';
+import { screenBottomPadding } from './bottom-space';
 import { colors } from '@/theme/colors';
-
-/** A altura da `BottomNav` (80) e um respiro: o "+" mora dentro dela. */
-const RESPIRO_INFERIOR = 96;
 
 /**
  * Moldura das telas autenticadas.
@@ -41,10 +40,17 @@ export function Screen({
   const insets = useSafeAreaInsets();
   const comBarra = useTopBarVisible();
   const paddingTop = insets.top + (comBarra ? TOP_BAR_HEIGHT : 16);
+  // Com a barra do treino em andamento, mais a altura dela para nada ficar atrás.
+  const chrome = useBottomChrome();
+  const paddingBottom = screenBottomPadding({
+    safeBottom: insets.bottom,
+    navVisible: chrome.visible,
+    workoutBar: chrome.workoutBar,
+  });
   const body = scroll ? (
     <ScrollView
       className="flex-1"
-      contentContainerStyle={{ paddingTop, paddingBottom: RESPIRO_INFERIOR }}
+      contentContainerStyle={{ paddingTop, paddingBottom }}
       keyboardShouldPersistTaps="handled"
       refreshControl={
         onRefresh ? (
@@ -61,7 +67,7 @@ export function Screen({
       {children}
     </ScrollView>
   ) : (
-    <View className="flex-1" style={{ paddingTop, paddingBottom: RESPIRO_INFERIOR }}>
+    <View className="flex-1" style={{ paddingTop, paddingBottom }}>
       {children}
     </View>
   );

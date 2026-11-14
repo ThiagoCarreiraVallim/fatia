@@ -6,6 +6,7 @@ import { WorkoutSessionService } from './workout-session.service';
 import { SessionSetService } from './session-set.service';
 import { PrescriptionService } from './prescription.service';
 import { TrainingBlockService } from './training-block.service';
+import { MuscleSummaryService } from './muscle-summary.service';
 import { WorkoutController } from './workout.controller';
 import { AddExerciseToPlanTool } from './mcp/add-exercise-to-plan.tool';
 import { ExplainFormTool } from './mcp/explain-form.tool';
@@ -53,6 +54,7 @@ import { UpdateWorkoutSessionTool } from './mcp/update-workout-session.tool';
     SessionSetService,
     PrescriptionService,
     TrainingBlockService,
+    MuscleSummaryService,
 
     // MCP tools
     AddExerciseToPlanTool,

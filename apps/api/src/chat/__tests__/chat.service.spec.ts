@@ -163,7 +163,7 @@ function montar(
   const chamadas: TurnInput[] = [];
 
   const conversas = {
-    encontrar: jest.fn(async (_userId: string, id: string) =>
+    find: jest.fn(async (_userId: string, id: string) =>
       opcoes.existente === false
         ? null
         : {
@@ -513,7 +513,7 @@ describe('ChatService — repasse do SSE', () => {
 describe('ChatService — ordem das guardas', () => {
   it('conversa alheia recusa sem chamar o agente', async () => {
     const { service, agent, uso, conversas } = montar();
-    conversas.encontrar.mockRejectedValueOnce(new NotFoundException('Conversa não encontrada.'));
+    conversas.find.mockRejectedValueOnce(new NotFoundException('Conversa não encontrada.'));
     const saida = destinoDeTeste();
 
     await expect(service.converse(USUARIO, turnoNovo('oi'), 'tok', saida.destino)).rejects.toThrow(

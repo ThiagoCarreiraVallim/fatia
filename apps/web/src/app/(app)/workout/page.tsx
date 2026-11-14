@@ -29,11 +29,12 @@ import { RpeModal } from '@/components/workout/rpe-modal';
 import { SessionHeader } from '@/components/workout/session-header';
 import { groupCardItem } from '@/components/workout/group-card-item';
 import { pluralize, sessionProgress } from '@/components/workout/format';
-import { useRestTimer } from '@/components/workout/use-rest-timer';
+import { useSessionRestTimer } from '@/components/workout/rest-timer-provider';
 import { ErrorState } from '@/components/elements/error-state';
 import { useSessionLayout } from '@/components/workout/use-session-layout';
 import { useWakeLock } from '@/components/workout/use-wake-lock';
 import { BlockTimeline } from '@/components/workout/block-timeline';
+import { WorkoutCardsCarousel } from '@/components/workout/cards/workout-cards';
 import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TopBarActions, topBarActionClass, useTopBarTitle } from '@/components/layout/app-top-bar';
@@ -53,9 +54,10 @@ function ActiveSession({ session }: { session: WorkoutSession }) {
   // que está segurando a barra.
   useWakeLock();
   const layout = useSessionLayout(session);
-  // Descanso e RPE moram aqui, e não no card: o card desmonta quando o foco
-  // passa para o próximo exercício (ver `active-exercise-card.tsx`).
-  const rest = useRestTimer();
+  // O descanso mora acima das telas (`RestTimerProvider`), e não no card: o
+  // card desmonta quando o foco passa para o próximo exercício, e a barra do
+  // treino em andamento mostra a contagem e o "+30 s" fora daqui.
+  const rest = useSessionRestTimer();
   const topRef = useRef<HTMLDivElement>(null);
 
   const [searchOpen, setSearchOpen] = useState(false);
@@ -283,6 +285,10 @@ function NoSession() {
           <History size={20} />
         </Link>
       </TopBarActions>
+
+      {/* Os cards do canvas (músculos descansados, repetir o último, séries
+          da semana) abrem a aba: nenhum depende de "próximo treino" (#369). */}
+      <WorkoutCardsCarousel />
 
       {/* Os planos da pessoa vêm primeiro, que é o que ela abre a tela para
           achar; a periodização — consultada uma vez por bloco, não a cada

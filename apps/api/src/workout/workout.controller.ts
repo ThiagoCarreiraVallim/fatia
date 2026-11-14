@@ -19,6 +19,7 @@ import { SessionSetService } from './session-set.service';
 import { ExerciseService } from './exercise.service';
 import { PrescriptionService } from './prescription.service';
 import { TrainingBlockService } from './training-block.service';
+import { MuscleSummaryService } from './muscle-summary.service';
 import { CreateTrainingBlockDto } from './dto/training-block.dto';
 import {
   AddPlanExerciseDto,
@@ -46,6 +47,7 @@ export class WorkoutController {
     private readonly exercises: ExerciseService,
     private readonly prescriptions: PrescriptionService,
     private readonly blocks: TrainingBlockService,
+    private readonly muscles: MuscleSummaryService,
   ) {}
 
   // -------- Blocos de periodização (#145) --------
@@ -190,6 +192,15 @@ export class WorkoutController {
   @Post('sessions')
   startSession(@CurrentUser() user: CurrentUserPayload, @Body() dto: StartSessionDto) {
     return this.sessions.start(user.id, dto);
+  }
+
+  /**
+   * Séries por grupo nos últimos 7 dias, os grupos descansados e um plano que
+   * os trabalha: os cards da aba Treino (#369). Derivado, não guarda nada.
+   */
+  @Get('muscles/week')
+  weeklyMuscles(@CurrentUser() user: CurrentUserPayload) {
+    return this.muscles.weekly(user.id, user.timezone);
   }
 
   @Get('sessions/active')

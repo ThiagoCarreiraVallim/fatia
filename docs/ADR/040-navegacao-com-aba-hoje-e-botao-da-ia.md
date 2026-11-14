@@ -1,6 +1,6 @@
 # ADR 040 — Navegação com aba Hoje, aba Você e o botão da IA à direita
 
-**Status:** Accepted (revisada em 2026-11-14 — ver "Revisão")
+**Status:** Accepted (revisada em 2026-11-14 — ver "Revisão"; implementada na #369)
 **Data:** 2026-11-09
 
 ## Contexto
@@ -106,3 +106,37 @@ navegação", e `.nav.n5` em `canvas.css`):
 O resto (botão da IA à direita, menu com registro manual primeiro, Hoje como raiz, `navigation.ts`
 como fonte única) não mudou. O componente visual (barra de 5 abas + botão da IA, nos dois temas)
 entra com a #368; a troca da navegação (`navigation.ts`, layouts, testes) é da #369.
+
+## Implementação (#369, 2026-11-14)
+
+A troca entrou no PWA e no app no mesmo trabalho. O que a implementação decidiu além do texto acima:
+
+- **Rotas de foco** (`navBarMode` em `navigation.ts`): `/chat` e `/chat/:id`, `/nutrition/photo`,
+  `/nutrition/scan`, `/community/new`, `/onboarding`, os editores do painel e a sessão de treino
+  aberta (`/workout/session/:id` no app). No PWA a sessão aberta mora em `/workout`, então
+  `/workout` com sessão aberta também esconde a barra.
+- **`/students`** (personal) não ganha barra própria nem some: acende **Comunidade**, como o
+  painel (`/org`). Perfil, Progresso, Metas e Plano acendem **Você**.
+- **Sino:** sozinho no topo do Hoje, ao lado das metas do dia; em Você, a linha **Notificações**
+  de `menuSections`. Os dois levam às preferências de notificação até a caixa de avisos da #389.
+- **Desktop:** o menu da IA é a mesma folha, aberta à direita com 480 px; a barra lateral tem o
+  logo, o botão da IA e as cinco abas com nome.
+- **Estado da IA no botão** vem de dados que já existem: `GET /chat/conversations?state=` e
+  `GET /chat/conversations/pending-count`. "Esperando você" é a conversa cuja última mensagem da IA
+  ficou `interrupted`; "pensando" é a que tem turno rodando no `ChatRunRegistry`, que é **em
+  memória** ([ADR 035](./035-chat-desacoplado-da-requisicao.md)): com mais de uma réplica da API, ou
+  depois de um reinício, uma conversa pode deixar de aparecer como "pensando". Ninguém é afetado
+  além do anel; a resposta segue chegando.
+- **Cartão "esperando você"**: aprova pelo `resume` com o `interruptId` da pausa; se a conversa
+  andou desde ela, o agente responde 409 e o cartão só oferece "Abrir conversa". O toast
+  "Gravado" ainda **não tem "Desfazer"**: o `resume` não devolve ao cliente o id do registro criado
+  (fica para o "Gravado" com retrato da #385).
+- **O descanso da sessão sobe para o layout** (`RestTimerProvider`), para a barra "treino em
+  andamento" mostrar a contagem e o "+30 s" fora da sessão; antes, sair da sessão cancelava o
+  descanso.
+- **No app, o aviso "Respondendo…" acima da barra saiu:** o anel do botão da IA faz o papel, e
+  também gira com a resposta que esta sessão está recebendo.
+- **Engrenagem** do menu (config da IA) fica de fora até a #385, que cria a tela.
+- **Cards da aba Treino:** `GET /workout/muscles/week` agrega `SessionSet` × `Exercise.primaryMuscles`
+  dos últimos 60 dias em grupos canônicos (meta de 12 séries por semana; descansado a partir de 2
+  dias), sem tabela nova. O humor do último treino vem com a #377.

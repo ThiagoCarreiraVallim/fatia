@@ -5,15 +5,21 @@ import {
   IsBase64,
   IsDefined,
   IsIn,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
+  Min,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { MAX_FOTOS_POR_MENSAGEM, TETO_DA_FOTO_DO_CHAT } from '../corpos-do-chat';
+import type { ConversationState } from '../conversation.service';
+
+const CONVERSATION_STATES: ConversationState[] = ['idle', 'thinking', 'waiting'];
 
 /**
  * Teto da mensagem que a pessoa acabou de escrever. É o mesmo do agente
@@ -111,6 +117,19 @@ export class ListConversationsQueryDto {
   @IsString()
   @MaxLength(TETO_DO_TITULO)
   q?: string;
+
+  /** Só as conversas neste estado: o menu da IA pede as em andamento. */
+  @IsOptional()
+  @IsIn(CONVERSATION_STATES)
+  state?: ConversationState;
+
+  /** Quantas linhas, no máximo. O menu mostra poucas. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
 }
 
 export class RenameConversationDto {
