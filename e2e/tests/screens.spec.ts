@@ -112,38 +112,33 @@ test.describe('telas', () => {
 });
 
 test.describe('drawers de registro', () => {
-  /** Abre o "+" global e escolhe o registro. Falso se o "+" não apareceu. */
+  /** O botão da IA: o nome muda com o estado dela (`aiFabLabel`). */
+  const IA = /^(Abrir a IA|Abrir registro|IA )/;
+
+  /** Abre o menu da IA e escolhe o registro. Falso se o botão não apareceu. */
   async function registrar(page: Page, item: string | RegExp): Promise<boolean> {
-    const mais = page.getByRole('button', { name: 'Registrar', exact: true });
-    if (!(await appears(mais))) return false;
-    await mais.click();
+    const ia = page.getByRole('button', { name: IA });
+    if (!(await appears(ia))) return false;
+    await ia.click();
     await page.getByRole('dialog').getByRole('button', { name: item }).click();
     return true;
   }
 
-  test('dashboard: menu do "+"', async ({ page }) => {
+  test('dashboard: menu da IA', async ({ page }) => {
     await page.goto('/');
     await settle(page);
-    await snap(page, '26-dashboard-botao-registrar', false);
-    const mais = page.getByRole('button', { name: 'Registrar', exact: true });
-    if (!(await appears(mais))) return;
-    await mais.click();
+    await snap(page, '26-dashboard-botao-ia', false);
+    const ia = page.getByRole('button', { name: IA });
+    if (!(await appears(ia))) return;
+    await ia.click();
     await appears(page.getByRole('dialog').getByRole('button', { name: /treino/i }));
-    await snap(page, '27-registrar-menu', false);
+    await snap(page, '27-menu-da-ia', false);
   });
 
-  test('menu "Mais" (celular) e barra lateral (desktop)', async ({ page, isMobile }) => {
-    await page.goto('/progress');
+  test('aba Você (celular) e barra lateral (desktop)', async ({ page, isMobile }) => {
+    await page.goto(isMobile ? '/you' : '/progress');
     await settle(page);
-    if (!isMobile) {
-      await snap(page, '36-barra-lateral', false);
-      return;
-    }
-    const mais = page.getByRole('button', { name: 'Mais', exact: true });
-    if (!(await appears(mais))) return;
-    await mais.click();
-    await appears(page.getByRole('dialog', { name: 'Menu' }));
-    await snap(page, '35-menu-mais', false);
+    await snap(page, isMobile ? '35-aba-voce' : '36-barra-lateral', false);
   });
 
   test('dashboard: água e peso', async ({ page }) => {
