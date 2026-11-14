@@ -12,6 +12,8 @@ import {
   mealTypeForTime,
   pendingCardMode,
   workoutQuickLabel,
+  openInterrupt,
+  approvalResume,
 } from '../ai-drawer';
 import type { ChatActionPreview, ChatConversationSummary, ChatInterruptValue } from '../chat';
 
@@ -237,5 +239,62 @@ describe('cartão "esperando você"', () => {
   it('sem prévia carregada ainda, não aprova', () => {
     expect(pendingCardMode(confirma(1), null)).toBe('open');
     expect(pendingCardMode(confirma(1), undefined)).toBe('open');
+  });
+});
+
+describe('aprovar fora da conversa', () => {
+  const interrupt = {
+    id: 'int-7',
+    value: {
+      kind: 'confirm' as const,
+      prompt: 'Confere?',
+      actions: [
+        {
+          kind: 'confirm' as const,
+          toolCallId: 'call-1',
+          tool: 'log_meal',
+          title: 'Registrar refeição',
+          prompt: 'Registrar?',
+          arguments: { mealType: 'LUNCH' },
+        },
+      ],
+    },
+  };
+
+  const mensagem = (status: 'resolved' | 'interrupted' | 'completed', comPausa: boolean) => ({
+    id: `m-${status}`,
+    role: 'assistant' as const,
+    content: '',
+    tools: null,
+    metadata: { status, ...(comPausa ? { interrupt } : {}) },
+    runId: null,
+    review: null,
+    createdAt: '2026-11-14T12:00:00Z',
+  });
+
+  const conversaCom = (messages: ReturnType<typeof mensagem>[]) => ({
+    id: 'c',
+    title: null,
+    createdAt: '',
+    updatedAt: '',
+    messages,
+  });
+
+  it('a pausa aberta é a da última resposta ainda interrompida', () => {
+    expect(
+      openInterrupt(conversaCom([mensagem('resolved', false), mensagem('interrupted', true)])),
+    ).toEqual(interrupt);
+    expect(openInterrupt(conversaCom([mensagem('completed', false)]))).toBeNull();
+    // Respondida depois (a pessoa escreveu outra coisa): não há mais pausa.
+    expect(
+      openInterrupt(conversaCom([mensagem('interrupted', true), mensagem('completed', false)])),
+    ).toBeNull();
+  });
+
+  it('"Gravar assim" responde à pausa com o interruptId e aprova só a escrita do cartão', () => {
+    expect(approvalResume(interrupt)).toEqual({
+      interruptId: 'int-7',
+      value: { approvals: { 'call-1': true } },
+    });
   });
 });

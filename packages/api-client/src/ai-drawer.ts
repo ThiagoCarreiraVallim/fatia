@@ -1,5 +1,6 @@
 import type {
   ChatActionPreview,
+  ChatConversation,
   ChatConversationState,
   ChatConversationSummary,
   ChatInterruptValue,
@@ -222,4 +223,40 @@ export function pendingCardMode(
   if (value.actions.length !== 1 || value.actions[0]!.kind !== 'confirm') return 'open';
   if (!preview || !preview.valida) return 'open';
   return preview.linhas.length <= PENDING_CARD_MAX_LINES ? 'approve' : 'open';
+}
+
+export interface OpenInterrupt {
+  id: string;
+  value: ChatInterruptValue;
+}
+
+/**
+ * A pausa que espera a pessoa nesta conversa: a da **última** resposta do
+ * assistente, se ela ainda está `interrupted`. Uma resposta depois dela (a
+ * pessoa escreveu outra coisa) já encerrou a pausa.
+ */
+export function openInterrupt(
+  conversation: Pick<ChatConversation, 'messages'>,
+): OpenInterrupt | null {
+  const last = [...conversation.messages].reverse().find((m) => m.role === 'assistant');
+  const meta = last?.metadata;
+  if (!meta || meta.status !== 'interrupted' || !meta.interrupt) return null;
+  return meta.interrupt;
+}
+
+/**
+ * O `resume` do "Gravar assim": responde **a esta** pausa (o agente confere o
+ * `interruptId` e devolve 409 se a conversa andou) e aprova só a escrita que o
+ * cartão mostrou. Os argumentos não vão junto: o agente executa os que estão
+ * no checkpoint, literais (ADR 039 §6).
+ */
+export function approvalResume(interrupt: OpenInterrupt): {
+  interruptId: string;
+  value: { approvals: Record<string, boolean> };
+} {
+  const approvals: Record<string, boolean> = {};
+  for (const action of interrupt.value.actions) {
+    if (action.kind === 'confirm') approvals[action.toolCallId] = true;
+  }
+  return { interruptId: interrupt.id, value: { approvals } };
 }
