@@ -38,8 +38,8 @@ opções abaixo foram avaliadas com isso em mente.
 
 O que pesa no contexto não é a contagem de tools, é o payload. Medido no que o registry
 serve de fato — `name`, `title`, `description`, `annotations` e o JSON Schema do input das
-130 tools: **107,6 k caracteres**, enviados em toda sessão que lista as tools.
-O denominador importa. Contar só `name + description + inputSchema` dá 88,0 k e subestima o
+131 tools: **108,1 k caracteres**, enviados em toda sessão que lista as tools.
+O denominador importa. Contar só `name + description + inputSchema` dá 88,4 k e subestima o
 catálogo em ~20% — `title` e `annotations` também vão no fio, em toda tool.
 
 Dentro desse total, os exemplos de invocação que a #111 acrescentou às 68 tools de escrita
@@ -59,7 +59,7 @@ e não em campo separado — estão na §Convenções de [`docs/MCP.md`](./MCP.m
 Além da contagem, cada tool declara `hostedInference` — se a execução dispara inferência **paga
 pela Fatia**. É recorte de custo, não de tamanho, e por isso mora aqui junto do resto.
 
-Hoje são **130** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
+Hoje são **131** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
 **0** tools com inferência hospedada.
 
 O segundo número é o ponto inteiro. Chamada vinda do cliente MCP do usuário roda no
@@ -173,6 +173,9 @@ O redesign (história #367) traz recursos novos do aluno, e pela ADR 006 cada um
 nomes abaixo são os propostos nas issues; **nenhuma existe ainda**, e por isso não entram na
 contagem do topo nem no `MCP.md`. Cada uma entra no PR da sua issue, com teste no `tool-catalog.spec.ts`,
 seção no `MCP.md` e a contagem atualizada (ver [`DADOS_REDESIGN.md`](./DADOS_REDESIGN.md)).
+
+Já entregue pelo redesign: `get_weekly_muscle_summary` (#369), a mesma leitura dos cards da aba
+Treino (`GET /workout/muscles/week`), com seção no `MCP.md` e na contagem do topo.
 
 | Recurso                            | Tools propostas                                                                                                                        | Issue |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----- |

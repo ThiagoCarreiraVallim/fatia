@@ -29,9 +29,10 @@ import {
  * `list_group_tips`), e a Fase 8a mais três (`list_group_challenges`,
  * `get_challenge_leaderboard`, `join_group_challenge`), nenhuma destrutiva. Sem medição nova.
  * O `update_meal_item` ganhou `nutrients` (paridade com o REST, ADR 006): muda o braço A.
+ * O redesign (#369) acrescentou `get_weekly_muscle_summary` (só leitura): muda o braço A.
  */
 
-const SHA_ENTIDADE = '6791f0872ca2bf0ff1793ef59678d9bac1bd701ee6fb3a4e68c4702d3cebeba4';
+const SHA_ENTIDADE = '91de69ccede70d7125a90fea6c6de7f95aa4acfb6612433d36b465f0e573f550';
 const SHA_INTENCAO = '7c36e15630e05e7188964f8bc3fc7fadb66db106b3280448aeb98fbd2abf9c7f';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */
