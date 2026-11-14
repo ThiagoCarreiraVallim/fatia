@@ -456,6 +456,26 @@ rodando, e deve ser feito antes de publicar:
 - [ ] Leitor de tela e fonte ampliada nos dois sistemas
 - [ ] Estados de erro, vazio e carregamento comparados lado a lado com o PWA
 
+## Redesign (#367) — o que muda para a paridade
+
+O redesign refaz as duas pontas a partir do mesmo canvas. Até cada issue entrar, as tabelas acima
+descrevem o código de hoje; o que já está decidido:
+
+- **Toda tela do redesign entra com o par app/PWA no mesmo PR.** A issue de cada tela lista as
+  superfícies; uma tela só num cliente é pendência e entra aqui como linha sem ✅.
+- **Navegação** ([ADR 040](./ADR/040-navegacao-com-aba-hoje-e-botao-da-ia.md), revisada; #369):
+  cinco abas — Hoje, Nutrição, Treino, Comunidade e **Você** — e o botão da IA, nos dois. A rota
+  **Você** (tela única com seções) substitui o drawer "Mais" do PWA e o menu do app; o **painel da
+  equipe** passa a abrir dentro da aba Comunidade ("Mural | Painel"), no app (`org/[groupId]`) e no
+  PWA (`(org)/org/[groupId]`). A fonte continua `navigation.ts`.
+- **Tema claro nos dois** ([ADR 041](./ADR/041-tema-claro.md); #368): o bloco claro de
+  `globals.css` e de `global.css` tem os mesmos nomes e valores, conferidos pelo `palette.test.ts`;
+  a escolha Sistema/Escuro/Claro fica no aparelho (`localStorage` no PWA, armazenamento local no
+  app).
+- **Cores dos macros** continuam as mesmas nos dois e citadas aqui pelo hex de `cores.ts`; a troca
+  da proteína para o tom do canvas vem com os tokens da #368.
+- **Dados novos** de cada tela e a issue que os cria: [`DADOS_REDESIGN.md`](./DADOS_REDESIGN.md).
+
 ## Como manter
 
 O que sustenta este documento:

@@ -8,11 +8,17 @@ nativo (`apps/mobile`) seguem o mesmo desenho; as diferenças estão em
 
 1. **Registrar sem IA em até 2 toques.** O plano Free não tem IA no app
    ([ADR 024](./ADR/024-plano-free-e-pago-do-usuario.md)), então o registro manual é o caminho principal, não a
-   correção. Todo registro sai do "+" da barra ("Registrar"), de qualquer tela.
+   correção. Todo registro sai do "+" da barra ("Registrar"), de qualquer tela. Com o redesign
+   ([ADR 040](./ADR/040-navegacao-com-aba-hoje-e-botao-da-ia.md)) o "+" do centro sai e o registro
+   passa a sair do botão redondo da IA, que abre com o **registro manual primeiro** — também no Free.
 2. **Celular primeiro, desktop de verdade.** O desenho nasce em 390 px; no desktop (`md`, 768 px)
    a barra de baixo vira uma barra lateral e o conteúdo fica numa coluna centralizada, em vez do
    celular esticado.
-3. **Só tema escuro.** Uma paleta, testada para contraste.
+3. **Só tema escuro** no código de hoje. Uma paleta, testada para contraste. **Vai mudar** pela
+   [ADR 041](./ADR/041-tema-claro.md): escuro e claro com os mesmos nomes de token, seguindo o tema
+   do sistema, com escolha manual Sistema/Escuro/Claro guardada no aparelho; no claro, o verde da
+   marca é só superfície. Os tokens, as fontes (Sora + Manrope) e a tabela abaixo mudam juntos na
+   #368, porque o `cores.test.ts` lê esta tabela.
 4. **Tudo que o app faz, o MCP faz.** Cada função nova tem tool equivalente
    ([`MCP.md`](./MCP.md)), para quem traz a própria IA.
 5. **Desfazer em vez de perguntar, quando refazer é barato.** Registros pequenos apagam na hora e
@@ -93,9 +99,14 @@ Fonte única: `packages/api-client/src/navigation.ts` (`PRIMARY_TABS`, `menuSect
   - As telas não repetem o título grande: o que era subtítulo continua no corpo.
 - **Barra de baixo** (celular): Nutrição, Treino, o **"+" Registrar** no centro, Comunidade e
   **Mais**. Não há aba Início: ele é a raiz, e chega-se a ele voltando de qualquer tela.
-  **Vai mudar** pela [ADR 040](./ADR/040-navegacao-com-aba-hoje-e-botao-da-ia.md): abas Hoje,
-  Nutrição, Treino e Comunidade, o botão redondo da IA à direita, e o "Mais" substituído pelo
-  avatar no topo do Hoje. Esta seção descreve o código até a mudança ser implementada.
+  **Vai mudar** pela [ADR 040](./ADR/040-navegacao-com-aba-hoje-e-botao-da-ia.md), revisada em
+  14/11 (implementação na #369): cinco abas só de ícone, com `aria-label` — Hoje, Nutrição, Treino,
+  Comunidade e **Você** (tela única com seções, no lugar do "Mais") —, e o botão redondo da IA à
+  direita, que abre o menu de registro. O sino de avisos fica no topo do Hoje; em Você, os avisos
+  são a linha "Notificações". O painel da equipe fica dentro da aba Comunidade ("Mural | Painel").
+  A barra some nas tarefas de foco; no desktop, a barra lateral tem as cinco abas e o botão da IA.
+  Hábito e Check-in só entram no menu da IA com a #390. Esta seção descreve o código até a mudança
+  ser implementada.
   - O "+" abre o menu Registrar: refeição (tipo pela hora), água, peso, passos e treino (retoma
     a sessão aberta). Ver `quick-add.ts` do api-client.
   - "Mais" fica ativo em qualquer tela fora das três abas e do Início e abre o drawer **Menu**: o cartão do
