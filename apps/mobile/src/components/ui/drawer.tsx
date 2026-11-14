@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import BottomSheet, {
   BottomSheetBackdrop,
+  type BottomSheetBackgroundProps,
   BottomSheetFlatList,
   BottomSheetScrollView,
   BottomSheetTextInput,
@@ -119,7 +120,10 @@ export function Drawer({
         if (index === -1) onOpenChange(false);
       }}
       backdropComponent={renderBackdrop}
-      backgroundStyle={{ backgroundColor: colors.background }}
+      // Fundo por classe, não por `colors.background`: assim fundo e texto
+      // (`text-foreground`) saem da mesma variável do tema, e nunca de temas
+      // diferentes quando o JS e o NativeWind divergem por um instante.
+      backgroundComponent={SheetBackground}
       handleIndicatorStyle={{ backgroundColor: colors.muted, width: 48 }}
       // `interactive` acompanha o teclado enquanto ele sobe, em vez de saltar
       // para a posição final — é o que torna digitar dentro do sheet suportável.
@@ -130,6 +134,10 @@ export function Drawer({
       {children}
     </BottomSheet>
   );
+}
+
+function SheetBackground({ style }: BottomSheetBackgroundProps) {
+  return <View pointerEvents="none" style={style} className="rounded-t-sheet bg-background" />;
 }
 
 /**
@@ -179,7 +187,7 @@ export function DrawerTitle({ className, children }: { className?: string; child
   return (
     <Text
       accessibilityRole="header"
-      className={cn('text-lg font-semibold text-foreground', className)}
+      className={cn('font-display-semibold text-lg text-foreground', className)}
     >
       {children}
     </Text>
