@@ -52,6 +52,7 @@ describe('navegação', () => {
       '/goals',
       '/progress/records',
       '/profile',
+      '/profile/notifications',
       '/nutrition/foods',
       '/nutrition/nutrient-targets',
       '/workout/plans',
@@ -60,6 +61,14 @@ describe('navegação', () => {
       '/profile/connect',
       '/plan',
     ]);
+  });
+
+  it('os avisos são uma linha de Você, não um sino no cabeçalho dela (ADR 040, item 4)', () => {
+    const voce = menuSections({ platform: 'mobile', chatAvailable: false })[0]!;
+    expect(voce.items.find((i) => i.key === 'notifications')).toMatchObject({
+      label: 'Notificações',
+      href: '/profile/notifications',
+    });
   });
 
   it('no Free o chat aparece com cadeado e leva ao plano (ADR 024)', () => {

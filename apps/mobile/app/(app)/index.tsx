@@ -64,9 +64,9 @@ export default function DashboardScreen() {
     <>
       <Screen onRefresh={atualizar} refreshing={atualizando}>
         <View className="gap-5 px-5 pb-4 pt-2">
-          {/* Topo do Hoje (ADR 040 revisada): data, saudação, metas, o sino dos
-              avisos e a pessoa. O sino leva às notificações até a caixa de avisos
-              da #389; o avatar abre a aba Você. */}
+          {/* Topo do Hoje (ADR 040 revisada, item 4): data, saudação, as metas do
+              dia e o sino dos avisos, sozinho — a pessoa chega a Você pela aba. O
+              sino leva às notificações até a caixa de avisos da #389. */}
           <View className="flex-row items-center gap-1">
             <View className="flex-1">
               <Text className="text-b2 capitalize text-muted-foreground">{todayLabel()}</Text>
@@ -90,16 +90,6 @@ export default function DashboardScreen() {
               className="h-11 w-11 items-center justify-center rounded-full"
             >
               <Bell size={20} color={colors.mutedForeground} />
-            </Pressable>
-            <Pressable
-              accessibilityRole="link"
-              accessibilityLabel="Você"
-              onPress={() => router.navigate('/you')}
-              className="h-11 w-11 items-center justify-center rounded-full bg-secondary"
-            >
-              <Text className="font-display text-sm text-foreground">
-                {(eu.data?.name ?? '?').trim().slice(0, 1).toUpperCase() || '?'}
-              </Text>
             </Pressable>
           </View>
 

@@ -60,7 +60,10 @@ for (const rota of ROTAS) {
 
 test('axe: aba Você e o menu da IA', async ({ page }) => {
   await page.goto('/you');
-  await page.getByRole('link', { name: 'Avisos' }).first().waitFor();
+  await page
+    .getByRole('link', { name: /^Notificações/ })
+    .first()
+    .waitFor();
   expect(await auditar(page)).toEqual([]);
   await page.goto('/');
   await page.getByRole('button', { name: /^(Abrir a IA|Abrir registro|IA )/ }).click();

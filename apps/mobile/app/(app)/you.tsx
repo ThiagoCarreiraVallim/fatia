@@ -30,6 +30,7 @@ const ICON: Record<MenuIcon, LucideIcon> = {
   'daily-goals': Target,
   'personal-goals': Flag,
   profile: User,
+  notifications: Bell,
   foods: UtensilsCrossed,
   nutrients: FlaskConical,
   plans: ClipboardList,
@@ -42,8 +43,8 @@ const ICON: Record<MenuIcon, LucideIcon> = {
 /**
  * A aba Você (ADR 040 revisada) — réplica de `apps/web/src/app/(app)/you/page.tsx`:
  * o que era o menu "Mais" (Progresso, metas, perfil, registros, a IA e o
- * plano), nas seções de `menuSections`, até a #387 redesenhar a tela. O sino
- * dos avisos fica aqui e no topo do Hoje.
+ * plano), nas seções de `menuSections`, até a #387 redesenhar a tela. Os
+ * avisos são a linha "Notificações" (ADR 040, item 4); o sino fica no topo do Hoje.
  */
 export default function YouScreen() {
   const router = useRouter();
@@ -57,18 +58,7 @@ export default function YouScreen() {
   const name = me.data?.name ?? '';
 
   return (
-    <Screen
-      actions={
-        <Pressable
-          accessibilityRole="link"
-          accessibilityLabel="Avisos"
-          onPress={() => router.push('/profile/notifications')}
-          className="h-11 w-11 items-center justify-center rounded-full"
-        >
-          <Bell size={20} color={colors.foreground} />
-        </Pressable>
-      }
-    >
+    <Screen>
       <View className="gap-6 px-5 pb-4 pt-2">
         <Pressable
           accessibilityRole="link"

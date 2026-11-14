@@ -6,13 +6,11 @@ import { usersApi } from '@fatia/api-client';
 import { Icon } from '@/components/ui/icon';
 import { MenuLinks } from '@/components/layout/menu-links';
 import { useNavMenu } from '@/components/layout/use-nav-menu';
-import { TopBarActions, topBarActionClass } from '@/components/layout/app-top-bar';
 
 /**
  * A aba Você (ADR 040 revisada): o que era o menu "Mais" — Progresso, metas,
- * perfil, registros, a IA e o plano — até a #387 redesenhar a tela. O sino dos
- * avisos fica aqui e no topo do Hoje, e leva às notificações até a caixa de
- * avisos da #389.
+ * perfil, registros, a IA e o plano — até a #387 redesenhar a tela. Os avisos
+ * são a linha "Notificações" (ADR 040, item 4); o sino fica no topo do Hoje.
  */
 export default function YouPage() {
   const sections = useNavMenu();
@@ -21,11 +19,6 @@ export default function YouPage() {
 
   return (
     <div className="space-y-6 px-5 pt-4 pb-4">
-      <TopBarActions>
-        <Link href="/profile/notifications" aria-label="Avisos" className={topBarActionClass}>
-          <Icon name="bell" size={20} />
-        </Link>
-      </TopBarActions>
       <Link
         href="/profile"
         className="flex min-h-14 items-center gap-3 rounded-3xl bg-card px-4 py-3"

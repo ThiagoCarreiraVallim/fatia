@@ -50,9 +50,9 @@ export default function HomePage() {
 
   return (
     <div className="space-y-5 px-5 pt-6 pb-4">
-      {/* Topo do Hoje (ADR 040 revisada): data, saudação, o sino dos avisos e a
-          pessoa. O sino leva às notificações até a caixa de avisos da #389; o
-          avatar abre a aba Você. */}
+      {/* Topo do Hoje (ADR 040 revisada, item 4): data, saudação, as metas do dia
+          e o sino dos avisos, sozinho — a pessoa chega a Você pela aba. O sino
+          leva às notificações até a caixa de avisos da #389. */}
       <section className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
           <p className="text-b2 capitalize text-muted-foreground">{dateLine ?? '\u00a0'}</p>
@@ -72,13 +72,6 @@ export default function HomePage() {
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Icon name="bell" size={20} />
-        </Link>
-        <Link
-          href="/you"
-          aria-label="Você"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-secondary font-display text-sm font-bold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <span aria-hidden>{(me.data?.name ?? '?').trim().slice(0, 1).toUpperCase() || '?'}</span>
         </Link>
       </section>
 

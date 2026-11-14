@@ -44,6 +44,7 @@ export type MenuIcon =
   | 'daily-goals'
   | 'personal-goals'
   | 'profile'
+  | 'notifications'
   | 'foods'
   | 'nutrients'
   | 'plans'
@@ -110,6 +111,14 @@ const MENU: { title: string; items: MenuItemDef[] }[] = [
         label: 'Perfil',
         description: 'Conta, altura e seus dados',
         href: '/profile',
+      },
+      // Os avisos são uma linha de Você, não um sino no cabeçalho dela (ADR 040,
+      // item 4). Leva às preferências até a caixa de avisos da #389.
+      {
+        key: 'notifications',
+        label: 'Notificações',
+        description: 'Avisos e lembretes',
+        href: '/profile/notifications',
       },
     ],
   },

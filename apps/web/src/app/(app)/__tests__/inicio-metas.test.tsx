@@ -35,7 +35,7 @@ describe('Início', () => {
     );
   });
 
-  it('o topo do Hoje tem o sino dos avisos e a pessoa, que abre a aba Você (#369)', () => {
+  it('o topo do Hoje tem o sino dos avisos, sozinho: Você é aba (ADR 040, item 4)', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
@@ -46,6 +46,7 @@ describe('Início', () => {
       'href',
       '/profile/notifications',
     );
-    expect(screen.getByRole('link', { name: 'Você' })).toHaveAttribute('href', '/you');
+    // O avatar saiu do topo do Hoje: a pessoa chega a Você pela aba.
+    expect(screen.queryByRole('link', { name: 'Você' })).toBeNull();
   });
 });
