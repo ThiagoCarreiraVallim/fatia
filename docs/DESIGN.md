@@ -16,11 +16,10 @@ documento é corrigido.
 
 1. **Um número por bloco.** O dado vem primeiro e grande (Sora); o rótulo vem pequeno embaixo.
 2. **Ícone no lugar de frase.** Explicação só no primeiro uso ou no estado vazio.
-3. **Registrar em 1 toque.** O botão + abre tudo; atalhos com valores prontos. O Free não tem IA
-   no app ([ADR 024](./ADR/024-plano-free-e-pago-do-usuario.md)), então o registro manual é o
-   caminho principal. Com a navegação nova
-   ([ADR 040](./ADR/040-navegacao-com-aba-hoje-e-botao-da-ia.md)) o "+" do centro sai e o registro
-   passa a sair do botão redondo da IA, que abre com o **registro manual primeiro** — também no Free.
+3. **Registrar em 1 toque.** O botão redondo da IA abre tudo, com o **registro manual primeiro** —
+   também no Free, que não tem IA no app ([ADR 024](./ADR/024-plano-free-e-pago-do-usuario.md)) e
+   tem no registro manual o caminho principal
+   ([ADR 040](./ADR/040-navegacao-com-aba-hoje-e-botao-da-ia.md)).
 4. **Movimento que informa.** Anéis enchem, barras crescem, folhas sobem. Nada decorativo, e nada
    anda com "reduzir movimento".
 5. **Desfazer em vez de perguntar, quando refazer é barato.** Registros pequenos apagam na hora
@@ -202,25 +201,46 @@ A galeria fica em `/design-system` na web e em `(app)/design-system` no app, só
 
 ## Navegação
 
-A navegação nova segue a [ADR 040](./ADR/040-navegacao-com-aba-hoje-e-botao-da-ia.md) (revisada
-em 14/11/2026): cinco abas só de ícone — **Hoje · Nutrição · Treino · Comunidade · Você** — e o
-botão redondo da IA (68 px) à direita. O componente visual (`layout/bottom-nav.tsx`, variante
-`v2`, e `layout/ai-button.tsx`) já existe; a troca da navegação é da #369. Na navegação nova,
-Você é uma tela única com seções, no lugar do "Mais"; o sino de avisos fica no topo do Hoje e, em
-Você, os avisos são a linha "Notificações". O painel da equipe fica dentro da aba Comunidade
-("Mural | Painel"). A barra some nas tarefas de foco; no desktop, a barra lateral tem as cinco abas
-e o botão da IA. Hábito e Check-in só entram no menu da IA com a #390. Até a #369 vale a barra
-atual, descrita abaixo.
+A navegação segue a [ADR 040](./ADR/040-navegacao-com-aba-hoje-e-botao-da-ia.md) (revisada em
+14/11/2026, entregue na #369): cinco abas só de ícone — **Hoje · Nutrição · Treino · Comunidade ·
+Você** — e o botão redondo da IA (68 px) à direita, separado delas. Não há mais "+" Registrar nem
+menu "Mais".
 
 Fonte única: `packages/api-client/src/navigation.ts` (`PRIMARY_TABS`, `menuSections`,
-`activeNavKey`, `ROUTES`/`routeInfo`), com teste. Web e app montam a partir dela.
+`activeNavKey`, `navBarMode`, `ROUTES`/`routeInfo`), com teste. Web e app montam a partir dela; os
+textos e regras do menu da IA, da barra do treino e dos cards de Treino vêm de `ai-drawer.ts`,
+`active-workout-bar.ts` e `workout-cards.ts`, também do api-client.
 
+- **Barra de baixo** (`layout/bottom-nav.tsx` nos dois): flutua 22 px acima da área segura, 68 px
+  de altura, raio 22, do canto esquerdo até o botão da IA. Cada aba tem nome para o leitor de tela;
+  a ativa tem `aria-current`/`selected` e fundo `foreground`. A aba Você mostra a inicial da
+  pessoa. Perfil, Progresso, Metas e Plano acendem Você; o painel da equipe (`/org`) e `/students`
+  acendem Comunidade.
+- **Some nas tarefas de foco** (`navBarMode`): conversa, câmera e leitor de código, criar
+  comunidade, onboarding, editores do painel e a sessão de treino aberta (no PWA, `/workout` com
+  sessão aberta, que é onde a sessão mora). Fica por baixo das folhas.
+- **Botão da IA** (`layout/ai-fab.tsx`): abre "O que vamos registrar?" (`layout/ai-drawer.tsx`). O
+  anel gira com conversa pensando (parado com "reduzir movimento") e o selo conta as que esperam a
+  pessoa; o nome acessível diz o mesmo (`aiFabLabel`). No Free o nome é "Abrir registro (IA no
+  Pro)". O voltar do sistema (Android, e o "voltar" do navegador no PWA) fecha o menu. O
+  `layout/ai-button.tsx` do PWA é só a peça da galeria.
+- **Menu da IA:** registro manual (Refeição, Água, Peso, Passos, Treino — Hábito e Check-in só com
+  a #390), conversas recentes com "esperando você"/"pensando…", sugestões ou completar, foto do
+  prato, campo, ditado ou enviar. Com o teclado aberto, as conversas recolhem e o registro manual
+  vira o botão "Manual". No Free, o bloco "Com a IA Pro" e "Minha IA (MCP)". No desktop a folha
+  abre à direita, com 480 px.
+- **Cartão "Fatia · esperando você"** (`layout/ai-pending-card.tsx`): acima da barra, aprova a
+  escrita pausada com "Gravar assim" só quando a prévia cabe inteira (até 6 linhas, uma escrita);
+  senão, "Abrir conversa" ([ADR 039](./ADR/039-ia-grava-no-modo-automatico.md) §6).
+- **Barra "treino em andamento"** (`layout/active-workout-bar.tsx`): 56 px, 10 px acima da barra
+  de baixo, mesma largura; leva à sessão e, no descanso, mostra a contagem e o "+30 s". As telas
+  ganham 64 px a mais de respiro embaixo enquanto ela aparece.
+- **Topo do Hoje:** data, saudação, metas do dia e o sino dos avisos. Você é uma tela com as seções
+  de `menuSections`, e os avisos são a linha "Notificações" (até a caixa de avisos da #389).
 - **Barra de topo** (`app-top-bar.tsx` no PWA, `layout/top-bar.tsx` no app) em toda tela menos o
-  Início: `‹` à esquerda (`aria-label="Voltar para <pai>"`), o título (17 px) e as ações à
-  direita. Voltar é hierárquico, pelo mapa `ROUTES`.
-- **Barra de baixo** (celular, até a #369): Nutrição, Treino, o "+" Registrar no centro,
-  Comunidade e Mais.
-- **Barra lateral** (desktop, `md+`): logo, "Registrar", as abas e as seções do menu à vista.
+  Hoje: `‹` à esquerda (`aria-label="Voltar para <pai>"`), o título (17 px) e as ações à direita.
+  Voltar é hierárquico, pelo mapa `ROUTES`.
+- **Barra lateral** (desktop, `md+`): logo, o botão da IA e as cinco abas com nome.
 
 ## Folhas (drawers)
 
