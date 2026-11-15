@@ -1,3 +1,4 @@
+import { SharedWithService } from '../../sharing/shared-with.service';
 import { randomUUID } from 'node:crypto';
 import {
   BadRequestException,
@@ -106,7 +107,12 @@ describe('isolamento entre usuários', () => {
   const memorias = new MemoryService(prisma);
   const inbox = new InboxService(prisma);
   const reminders = new ReminderService(prisma);
-  const nutritionPlans = new NutritionPlanService(prisma, meals, new DailyAdherenceService(prisma));
+  const nutritionPlans = new NutritionPlanService(
+    prisma,
+    meals,
+    new DailyAdherenceService(prisma),
+    new SharedWithService(prisma),
+  );
 
   /** Dados do user-A. Preenchido no beforeAll e sondado como user-B. */
   const owned = {

@@ -1,3 +1,4 @@
+import { SharedWithService } from '../../sharing/shared-with.service';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { ShareScope } from '@prisma/client';
 import { PrismaService } from '../../common/prisma.service';
@@ -18,7 +19,12 @@ import { todayInTz } from '../../progress/helpers/date-tz';
 describe('plano alimentar do profissional (integração)', () => {
   const prisma = new PrismaService();
   const meals = new MealService(prisma);
-  const plans = new NutritionPlanService(prisma, meals, new DailyAdherenceService(prisma));
+  const plans = new NutritionPlanService(
+    prisma,
+    meals,
+    new DailyAdherenceService(prisma),
+    new SharedWithService(prisma),
+  );
   const TZ = 'America/Sao_Paulo';
 
   const stamp = `plan-${Date.now()}`;

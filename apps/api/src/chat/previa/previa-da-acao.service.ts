@@ -363,6 +363,60 @@ export class PreviaDaAcaoService {
         const resto = modelo.items.length - itens.length;
         return `${modelo.name}: ${itens.join(', ')}${resto > 0 ? ` e mais ${resto}` : ''}`;
       }
+      // Plano alimentar (#376): tudo pelo dono do plano, nunca pelo id solto.
+      case 'planoAlimentar': {
+        const plano = await this.prisma.nutritionPlan.findFirst({
+          where: { id, userId },
+          select: { version: true },
+        });
+        return plano ? `Plano alimentar v${plano.version}` : null;
+      }
+      case 'refeicaoDoPlano': {
+        const refeicao = await this.prisma.nutritionPlanMeal.findFirst({
+          where: { id, plan: { userId } },
+          select: { name: true },
+        });
+        return refeicao?.name ?? null;
+      }
+      case 'opcaoDoPlano': {
+        const opcao = await this.prisma.nutritionPlanOption.findFirst({
+          where: { id, meal: { plan: { userId } } },
+          select: {
+            position: true,
+            items: { orderBy: { position: 'asc' }, select: { foodName: true } },
+          },
+        });
+        return opcao
+          ? `Opção ${opcao.position + 1}: ${opcao.items.map((i) => i.foodName).join(', ')}`
+          : null;
+      }
+      case 'itemDoPlano': {
+        const item = await this.prisma.nutritionPlanItem.findFirst({
+          where: { id, option: { meal: { plan: { userId } } } },
+          select: {
+            foodName: true,
+            grams: true,
+            option: { select: { meal: { select: { name: true } } } },
+          },
+        });
+        return item
+          ? `${numero(item.grams)} g de ${item.foodName} (${item.option.meal.name})`
+          : null;
+      }
+      case 'equivalenteDoPlano': {
+        const equivalente = await this.prisma.nutritionPlanEquivalent.findFirst({
+          where: { id, item: { option: { meal: { plan: { userId } } } } },
+          select: { foodName: true, grams: true },
+        });
+        return equivalente ? `${numero(equivalente.grams)} g de ${equivalente.foodName}` : null;
+      }
+      case 'trocaDoPlano': {
+        const troca = await this.prisma.nutritionSwap.findFirst({
+          where: { id, plan: { userId } },
+          select: { foodName: true, item: { select: { foodName: true } } },
+        });
+        return troca ? `${troca.foodName} no lugar de ${troca.item.foodName}` : null;
+      }
       case 'exercicioDoPlano': {
         const doPlano = await this.prisma.workoutPlanExercise.findFirst({
           where: { id, plan: { userId } },

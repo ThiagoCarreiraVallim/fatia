@@ -15,6 +15,10 @@ import { AcceptGroupInviteTool } from '../../../sharing/mcp/accept-group-invite.
 import { JoinGroupChallengeTool } from '../../../sharing/mcp/join-group-challenge.tool';
 import { CommentOnGroupPostTool } from '../../../sharing/mcp/comment-on-group-post.tool';
 import { hashInviteToken } from '../../../sharing/invite.service';
+import { AcceptNutritionPlanTool } from '../../../nutrition/mcp/accept-nutrition-plan.tool';
+import { LogPlanMealTool } from '../../../nutrition/mcp/log-plan-meal.tool';
+import { SwapPlanItemTool } from '../../../nutrition/mcp/swap-plan-item.tool';
+import { UndoPlanSwapTool } from '../../../nutrition/mcp/undo-plan-swap.tool';
 import { PreviaDaAcaoService } from '../previa-da-acao.service';
 
 /**
@@ -43,6 +47,10 @@ describe('PreviaDaAcaoService', () => {
     AcceptGroupInviteTool,
     JoinGroupChallengeTool,
     CommentOnGroupPostTool,
+    AcceptNutritionPlanTool,
+    LogPlanMealTool,
+    SwapPlanItemTool,
+    UndoPlanSwapTool,
   ];
   const discovery = {
     getProviders: () =>
@@ -340,6 +348,113 @@ describe('PreviaDaAcaoService', () => {
       AGORA,
     );
     expect(alheia.valida).toBe(false);
+  });
+
+  it('plano alimentar (#376): cada id vira nome, e só para o dono do plano', async () => {
+    const plano = await prisma.nutritionPlan.create({
+      data: {
+        userId: dono.id,
+        version: 2,
+        status: 'SENT',
+        kcalMin: 1760,
+        kcalMax: 1920,
+        proteinMinG: 130,
+        proteinMaxG: 150,
+        carbsMinG: 175,
+        carbsMaxG: 205,
+        fatMinG: 52,
+        fatMaxG: 64,
+        meals: {
+          create: {
+            mealType: 'BREAKFAST',
+            name: 'Café da manhã',
+            position: 0,
+            options: {
+              create: {
+                position: 0,
+                items: {
+                  create: {
+                    position: 0,
+                    foodName: 'Pão integral',
+                    grams: 50,
+                    kcal: 124,
+                    proteinG: 4,
+                    carbsG: 25,
+                    fatG: 1,
+                    equivalents: {
+                      create: {
+                        position: 0,
+                        foodName: 'Tapioca',
+                        grams: 40,
+                        kcal: 136,
+                        proteinG: 0,
+                        carbsG: 34,
+                        fatG: 0,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      include: {
+        meals: { include: { options: { include: { items: { include: { equivalents: true } } } } } },
+      },
+    });
+    const refeicao = plano.meals[0];
+    const opcao = refeicao.options[0];
+    const item = opcao.items[0];
+    const equivalente = item.equivalents[0];
+    const troca = await prisma.nutritionSwap.create({
+      data: {
+        planId: plano.id,
+        itemId: item.id,
+        equivalentId: equivalente.id,
+        date: '2026-09-25',
+        foodName: 'Tapioca',
+        grams: 40,
+        kcal: 136,
+      },
+    });
+
+    const casos: Array<
+      [string, Record<string, unknown>, Array<{ rotulo: string; valor: string }>]
+    > = [
+      [
+        'accept_nutrition_plan',
+        { planId: plano.id },
+        [{ rotulo: 'Plano alimentar', valor: 'Plano alimentar v2' }],
+      ],
+      [
+        'log_plan_meal',
+        { planMealId: refeicao.id, optionId: opcao.id },
+        [
+          { rotulo: 'Refeição do plano', valor: 'Café da manhã' },
+          { rotulo: 'Opção', valor: 'Opção 1: Pão integral' },
+        ],
+      ],
+      [
+        'swap_plan_item',
+        { itemId: item.id, equivalentId: equivalente.id },
+        [
+          { rotulo: 'Item do plano', valor: '50 g de Pão integral (Café da manhã)' },
+          { rotulo: 'Trocar por', valor: '40 g de Tapioca' },
+        ],
+      ],
+      [
+        'undo_plan_swap',
+        { swapId: troca.id },
+        [{ rotulo: 'Troca', valor: 'Tapioca no lugar de Pão integral' }],
+      ],
+    ];
+    for (const [tool, args, linhas] of casos) {
+      await expect(previas.previa(dono, tool, args)).resolves.toEqual({ valida: true, linhas });
+      const alheia = await previas.previa(outro, tool, args);
+      expect(alheia.valida).toBe(false);
+      expect(JSON.stringify(alheia)).not.toMatch(/Pão|Tapioca|Café/);
+    }
   });
 
   it('copiar dia: de quando para quando', async () => {

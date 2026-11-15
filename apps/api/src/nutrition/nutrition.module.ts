@@ -1,3 +1,4 @@
+import { SharedWithService } from '../sharing/shared-with.service';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { text } from 'express';
 import type { NextFunction, Request, Response } from 'express';
@@ -77,6 +78,8 @@ const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 })
   imports: [AiModule],
   controllers: [NutritionController, OnboardingController, NutritionPlanController],
   providers: [
+    // Do `sharing/`, mas só depende do Prisma: o aviso da troca (#376) sem ciclo de módulo.
+    SharedWithService,
     FoodService,
     FoodShortcutsService,
     FoodPortionService,

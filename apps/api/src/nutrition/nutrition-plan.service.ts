@@ -16,6 +16,7 @@ import { PrismaService } from '../common/prisma.service';
 import { assertDay, parseInstant } from '../common/dates';
 import { addDaysIso, dateInTz, todayInTz } from '../progress/helpers/date-tz';
 import { TEAM_ROLES } from '../sharing/permissions';
+import { SharedWithService } from '../sharing/shared-with.service';
 import { MealService, type ResolvedItem } from './meal.service';
 import { DailyAdherenceService } from './daily-adherence.service';
 import { assertGoalsValid } from './user-goals.service';
@@ -251,6 +252,7 @@ export class NutritionPlanService {
     private readonly prisma: PrismaService,
     private readonly meals: MealService,
     private readonly adherence: DailyAdherenceService,
+    private readonly sharedWith: SharedWithService,
   ) {}
 
   /**
@@ -800,25 +802,13 @@ export class NutritionPlanService {
     plan: { authorId: string | null; groupId: string | null; author: { name: string } | null },
   ): Promise<string | null> {
     if (!plan.authorId || !plan.groupId || !plan.author) return null;
-    const [link, membership] = await Promise.all([
-      this.prisma.professionalLink.findFirst({
-        where: {
-          subjectUserId: userId,
-          professionalId: plan.authorId,
-          groupId: plan.groupId,
-          revokedAt: null,
-          scopes: { has: ShareScope.NUTRITION },
-        },
-        select: { id: true },
-      }),
-      this.prisma.groupMembership.findUnique({
-        where: { groupId_userId: { groupId: plan.groupId, userId: plan.authorId } },
-        select: { status: true },
-      }),
-    ]);
-    return link && membership?.status === MembershipStatus.ACTIVE
-      ? firstName(plan.author.name)
-      : null;
+    const sees = await this.sharedWith.sharesWith({
+      subjectUserId: userId,
+      professionalId: plan.authorId,
+      groupId: plan.groupId,
+      scope: ShareScope.NUTRITION,
+    });
+    return sees ? firstName(plan.author.name) : null;
   }
 
   private async week(userId: string, timezone: string) {
