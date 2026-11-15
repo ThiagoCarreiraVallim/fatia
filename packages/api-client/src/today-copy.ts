@@ -66,6 +66,60 @@ export function dailyGoalTarget(key: string): DailyGoalTarget {
   return { kind: 'route', href: '/nutrition' };
 }
 
+/** Tom do ícone de uma meta, no mesmo vocabulário do `chipic` da prancha. */
+export type GoalTone = 'lime' | 'blue' | 'water' | 'amber';
+
+/** Ícone (nome do DS) e tom de cada linha de "Metas de hoje". */
+export function dailyGoalVisual(goal: Pick<DailyGoal, 'key' | 'met'>): {
+  icon: 'flame' | 'apple' | 'drop' | 'steps' | 'dumbbell' | 'sliders';
+  tone: GoalTone;
+} {
+  switch (goal.key) {
+    case 'kcal':
+      return { icon: 'flame', tone: 'lime' };
+    case 'protein':
+      return { icon: 'apple', tone: 'blue' };
+    case 'water':
+      return { icon: 'drop', tone: 'water' };
+    case 'steps':
+      return { icon: 'steps', tone: 'amber' };
+    case 'workout':
+      return { icon: 'dumbbell', tone: 'lime' };
+    default:
+      return { icon: 'sliders', tone: goal.met ? 'lime' : 'blue' };
+  }
+}
+
+/**
+ * A linha de uma meta pessoal no cartão do Hoje: "70,2 kg · faltam 2,2",
+ * "3/4 na semana", "meta 12 livros".
+ */
+export function personalGoalProgress(goal: {
+  kind: string;
+  unit: string;
+  targetValue: number;
+  currentValue: number | null;
+  progressPercent: number | null;
+}): { text: string; percent: number } {
+  const percent = Math.max(0, Math.min(100, Math.round(goal.progressPercent ?? 0)));
+  const cur = goal.currentValue;
+  if (cur === null) return { text: `meta ${formatTrim(goal.targetValue)} ${goal.unit}`, percent };
+  if (goal.kind === 'weight') {
+    const left = Math.abs(goal.targetValue - cur);
+    const tail = left < 0.05 ? 'meta batida' : `faltam ${formatDecimal(left)}`;
+    return { text: `${formatDecimal(cur)} ${goal.unit} · ${tail}`, percent };
+  }
+  if (goal.kind === 'workout_frequency') {
+    return { text: `${formatTrim(cur)}/${formatTrim(goal.targetValue)} na semana`, percent };
+  }
+  return { text: `${formatTrim(cur)}/${formatTrim(goal.targetValue)} ${goal.unit}`, percent };
+}
+
+/** Inteiro sem casa; fracionário com uma. */
+function formatTrim(n: number): string {
+  return Number.isInteger(n) ? formatInteger(n) : formatDecimal(n);
+}
+
 /** "faltam 7 copos", "falta 1 copo" ou "meta batida". */
 export function waterLeftLabel(totalMl: number, targetMl: number): string {
   const cups = Math.max(0, Math.ceil((targetMl - totalMl) / WATER_GLASS_ML));

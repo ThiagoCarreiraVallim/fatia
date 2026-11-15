@@ -28,6 +28,12 @@ export interface WeightProgress {
   deltaSinceLastKg: number | null;
 }
 
+/** A série de peso sem os registros soltos: o que o painel do profissional recebe. */
+export type WeightSeries = Pick<
+  WeightProgress,
+  'points' | 'weeklyAverages' | 'totalDeltaKg' | 'currentWeightKg'
+>;
+
 export interface StrengthProgress {
   exercise: { id: number; name: string };
   metric: string;

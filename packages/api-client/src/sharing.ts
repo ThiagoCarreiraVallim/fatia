@@ -1,6 +1,6 @@
 import { apiFetch } from './http';
 import type { Goal } from './goals';
-import type { WeightProgress } from './progress';
+import type { WeightSeries } from './progress';
 
 /**
  * Categorias de dado que o titular consente separadamente (ADR 014).
@@ -38,7 +38,7 @@ export interface Student {
 export type StudentReading =
   | { scope: 'WORKOUT'; plans: StudentPlan[]; sessions: StudentSession[]; volume: StudentVolume }
   | { scope: 'NUTRITION'; history: StudentNutritionHistory }
-  | { scope: 'BODY'; weight: WeightProgress }
+  | { scope: 'BODY'; weight: WeightSeries }
   | { scope: 'HABITS'; steps: StudentStepsProgress; water: StudentWaterProgress }
   | { scope: 'GOALS'; goals: Array<Omit<Goal, 'userId'>> };
 

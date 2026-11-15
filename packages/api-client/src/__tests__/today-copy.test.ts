@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   dailyGoalTarget,
+  dailyGoalVisual,
+  personalGoalProgress,
   dayShareCard,
   dayShareMessage,
   dailyGoalValue,
@@ -61,6 +63,62 @@ describe('Hoje (Al-H1/H3/H4/H5)', () => {
     expect(
       dailyGoalValue(goal({ key: 'nutrient:sodium_mg', unit: 'mg', current: 1240, max: 2000 })),
     ).toBe('1.240 / máx 2.000 mg');
+  });
+
+  it('ícone e tom de cada meta, como na prancha', () => {
+    expect(dailyGoalVisual(goal({ key: 'kcal' }))).toEqual({ icon: 'flame', tone: 'lime' });
+    expect(dailyGoalVisual(goal({ key: 'protein' }))).toEqual({ icon: 'apple', tone: 'blue' });
+    expect(dailyGoalVisual(goal({ key: 'water' }))).toEqual({ icon: 'drop', tone: 'water' });
+    expect(dailyGoalVisual(goal({ key: 'steps' }))).toEqual({ icon: 'steps', tone: 'amber' });
+    expect(dailyGoalVisual(goal({ key: 'workout' }))).toEqual({ icon: 'dumbbell', tone: 'lime' });
+    // Nutriente: verde quando batida, azul enquanto não.
+    expect(dailyGoalVisual(goal({ key: 'nutrient:fiber_g' }))).toEqual({
+      icon: 'sliders',
+      tone: 'blue',
+    });
+    expect(dailyGoalVisual(goal({ key: 'nutrient:sodium_mg', met: true }))).toEqual({
+      icon: 'sliders',
+      tone: 'lime',
+    });
+  });
+
+  it('meta pessoal no cartão do Hoje: quanto falta ou a contagem', () => {
+    expect(
+      personalGoalProgress({
+        kind: 'weight',
+        unit: 'kg',
+        targetValue: 68,
+        currentValue: 70.2,
+        progressPercent: 53,
+      }),
+    ).toEqual({ text: '70,2 kg · faltam 2,2', percent: 53 });
+    expect(
+      personalGoalProgress({
+        kind: 'workout_frequency',
+        unit: 'treinos',
+        targetValue: 4,
+        currentValue: 3,
+        progressPercent: 75,
+      }),
+    ).toEqual({ text: '3/4 na semana', percent: 75 });
+    expect(
+      personalGoalProgress({
+        kind: 'custom',
+        unit: 'livros',
+        targetValue: 12,
+        currentValue: null,
+        progressPercent: null,
+      }),
+    ).toEqual({ text: 'meta 12 livros', percent: 0 });
+    expect(
+      personalGoalProgress({
+        kind: 'weight',
+        unit: 'kg',
+        targetValue: 68,
+        currentValue: 68,
+        progressPercent: 100,
+      }),
+    ).toEqual({ text: '68,0 kg · meta batida', percent: 100 });
   });
 
   it('cada meta leva à tela dela; a água abre a folha de água', () => {
