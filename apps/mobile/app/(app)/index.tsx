@@ -1,29 +1,60 @@
 import { useCallback, useState } from 'react';
-import { Pressable, View } from 'react-native';
-import { Text } from '@/components/ui/text';
+import { Linking, Pressable, Share, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Bell, Target } from 'lucide-react-native';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { greetingLine, progressApi, usersApi } from '@fatia/api-client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  dayShareCard,
+  dayShareMessage,
+  goalsApi,
+  goalsChipLabel,
+  greetingLine,
+  INBOX_EMPTY_TOAST,
+  progressApi,
+  usersApi,
+  waterAddedToast,
+  WATER_GLASS_ML,
+  whatsappShareUrl,
+  type ShareTarget,
+  type TodaySummary,
+} from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { DrawerLayer, EmptyState, ErrorState, LoadingState } from '@/components/ui';
-import { LogStepsDrawer, LogWaterDrawer } from '@/components/progress';
+import { Icon } from '@/components/ui/icon';
+import { Text } from '@/components/ui/text';
+import { useToast } from '@/components/ui/toast';
+import { LogStepsDrawer } from '@/components/progress';
+import { ShareSheet } from '@/components/sharing/share-sheet';
+import type { ShareIdentity } from '@/components/sharing/share-card';
 import {
+  EventCard,
+  KcalCard,
   NextWorkoutCard,
-  NutritionMacroCard,
-  StepsCard,
-  StreakCard,
-  WaterCard,
-} from '@/components/dashboard';
+  PersonalGoalsCard,
+  ReceivedPlanBanner,
+  StepsTile,
+  StreakTile,
+  TodoCard,
+  WaterTile,
+  WeightTile,
+} from '@/components/today/today-cards';
+import { GoalsSheet } from '@/components/today/goals-sheet';
+import { InboxSheet } from '@/components/today/inbox-sheet';
+import { WaterSheet } from '@/components/today/water-sheet';
+import { WeightSheet } from '@/components/today/weight-sheet';
 import { colors } from '@/theme/colors';
 
 /**
- * Réplica de `apps/web/src/app/(app)/page.tsx`.
+ * Hoje (prancha Al-H1-Hoje), espelho de `apps/web/src/app/(app)/page.tsx`.
  *
- * Os drawers ficam aqui, irmãos do `<Screen>`, e não dentro dos cards que
- * os abrem como no PWA: o bottom sheet nativo não é portal e abriria com a
- * altura do card, rolando junto com o conteúdo. Ver `src/components/ui/drawer.tsx`.
+ * As folhas ficam aqui, irmãs do `<Screen>`, e não dentro dos cartões que as
+ * abrem: o bottom sheet nativo não é portal e abriria com a altura do cartão,
+ * rolando junto com o conteúdo. Ver `src/components/ui/drawer.tsx`.
  */
+
+type Sheet = 'goals' | 'water' | 'weight' | 'steps' | 'share' | 'inbox' | null;
+
+const DASHBOARD_KEY = ['dashboard', 'today'] as const;
+
 /** "Sáb, 14 nov", do relógio do aparelho. */
 function todayLabel(): string {
   return new Date()
@@ -31,85 +62,166 @@ function todayLabel(): string {
     .replace(/\./g, '');
 }
 
-export default function DashboardScreen() {
-  const [aguaAberto, setAguaAberto] = useState(false);
-  const [passosAberto, setPassosAberto] = useState(false);
-  const [atualizando, setAtualizando] = useState(false);
-  const queryClient = useQueryClient();
+function shareInput(data: TodaySummary) {
+  return { ...data, streakDays: data.streak.activeDays.periodos };
+}
+
+export default function TodayScreen() {
+  const [sheet, setSheet] = useState<Sheet>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const qc = useQueryClient();
   const router = useRouter();
+  const toast = useToast();
 
-  const eu = useQuery({ queryKey: ['users', 'me'], queryFn: () => usersApi.me() });
-  const hoje = useQuery({
-    queryKey: ['dashboard', 'today'],
-    queryFn: () => progressApi.today(),
-  });
-
+  const me = useQuery({ queryKey: ['users', 'me'], queryFn: () => usersApi.me() });
+  const today = useQuery({ queryKey: DASHBOARD_KEY, queryFn: () => progressApi.today() });
   // O `today()` só LÊ as conquistas; quem desbloqueia é esta chamada (ver a mesma nota no PWA).
-  const conquistas = useQuery({
+  useQuery({
     queryKey: ['achievements', 'refresh'],
     queryFn: () => progressApi.refreshAchievements(),
   });
+  const personal = useQuery({
+    queryKey: ['goals', 'active'],
+    queryFn: () => goalsApi.list({ status: 'active' }),
+  });
 
-  const atualizar = useCallback(async () => {
-    setAtualizando(true);
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
     try {
-      await queryClient.refetchQueries({ type: 'active' });
+      await qc.refetchQueries({ type: 'active' });
     } finally {
-      setAtualizando(false);
+      setRefreshing(false);
     }
-  }, [queryClient]);
+  }, [qc]);
 
-  const dados = hoje.data;
+  const data = today.data;
+  const closeOn = (o: boolean) => {
+    if (!o) setSheet(null);
+  };
+
+  // O "+" do cartão de água: um copo, e o total novo no toast.
+  const addGlass = useMutation({
+    mutationFn: () => progressApi.createWater({ ml: WATER_GLASS_ML }),
+    onSuccess: () => {
+      const total = (data?.water.todayMl ?? 0) + WATER_GLASS_ML;
+      qc.setQueryData<TodaySummary>(DASHBOARD_KEY, (old) =>
+        old ? { ...old, water: { ...old.water, todayMl: total } } : old,
+      );
+      void qc.invalidateQueries({ queryKey: ['dashboard'] });
+      void qc.invalidateQueries({ queryKey: ['water-logs'] });
+      toast.show({ message: waterAddedToast(WATER_GLASS_ML, total) });
+    },
+    onError: () => toast.show({ message: 'Não deu para registrar a água. Tente de novo.' }),
+  });
+
+  function openInbox() {
+    if (!data || data.inbox.unread === 0) {
+      toast.show({ message: INBOX_EMPTY_TOAST });
+      return;
+    }
+    setSheet('inbox');
+  }
+
+  async function share(target: ShareTarget, identity: ShareIdentity) {
+    if (!data) return;
+    const text = dayShareMessage(
+      dayShareCard(shareInput(data)),
+      identity.as === 'none' ? null : identity.value,
+    );
+    setSheet(null);
+    try {
+      if (target === 'whatsapp' && (await Linking.canOpenURL(whatsappShareUrl(text)))) {
+        await Linking.openURL(whatsappShareUrl(text));
+        return;
+      }
+      await Share.share({ message: text });
+    } catch {
+      // A pessoa fechou a folha do sistema: nada a avisar.
+    }
+  }
+
+  const goals = data?.dailyGoals;
+  const unread = (data?.inbox.unread ?? 0) > 0;
 
   return (
     <>
-      <Screen onRefresh={atualizar} refreshing={atualizando}>
-        <View className="gap-5 px-5 pb-4 pt-2">
-          {/* Topo do Hoje (ADR 040 revisada, item 4): data, saudação, as metas do
-              dia e o sino dos avisos, sozinho — a pessoa chega a Você pela aba. O
-              sino leva às notificações até a caixa de avisos da #389. */}
-          <View className="flex-row items-center gap-1">
-            <View className="flex-1">
-              <Text className="text-b2 capitalize text-muted-foreground">{todayLabel()}</Text>
+      <Screen onRefresh={refresh} refreshing={refreshing}>
+        <View className="gap-3.5 px-5 pb-4 pt-2">
+          {/* Topo (Al-H1): data e chip das metas, saudação, e o sino com ponto de não lido. */}
+          <View className="mb-1.5 flex-row items-start gap-2">
+            <View className="min-w-0 flex-1 gap-1">
+              <View className="flex-row items-center gap-2">
+                <Text className="text-b2 capitalize text-muted-foreground">{todayLabel()}</Text>
+                {goals && goals.total > 0 ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Metas do dia: ${goals.met} de ${goals.total}`}
+                    onPress={() => setSheet('goals')}
+                    className="h-7 flex-row items-center gap-1 rounded-pill bg-card px-2.5"
+                  >
+                    <Icon name="target" size={16} color={colors.primaryText} />
+                    <Text className="text-xs font-semibold text-foreground">
+                      {goalsChipLabel(goals.met, goals.total)}
+                    </Text>
+                  </Pressable>
+                ) : goals ? (
+                  <Pressable
+                    accessibilityRole="link"
+                    onPress={() => router.push('/nutrition/goals')}
+                    className="h-7 flex-row items-center gap-1 rounded-pill bg-card px-2.5"
+                  >
+                    <Icon name="target" size={16} color={colors.primaryText} />
+                    <Text className="text-xs font-semibold text-foreground">Definir metas</Text>
+                  </Pressable>
+                ) : null}
+              </View>
               <Text accessibilityRole="header" className="font-display text-h2 text-foreground">
-                {greetingLine(eu.data?.name)}
+                {greetingLine(me.data?.name)}
               </Text>
             </View>
-            {/* As metas do dia a um toque: antes eram Progresso → Perfil → Metas. */}
             <Pressable
-              accessibilityRole="link"
-              accessibilityLabel="Metas do dia"
-              onPress={() => router.push('/nutrition/goals')}
-              className="h-11 w-11 items-center justify-center rounded-full"
+              accessibilityRole="button"
+              accessibilityLabel={unread ? 'Avisos, há avisos novos' : 'Avisos'}
+              onPress={openInbox}
+              className="h-11 w-11 items-center justify-center rounded-full bg-card"
             >
-              <Target size={20} color={colors.mutedForeground} />
-            </Pressable>
-            <Pressable
-              accessibilityRole="link"
-              accessibilityLabel="Avisos"
-              onPress={() => router.push('/profile/notifications')}
-              className="h-11 w-11 items-center justify-center rounded-full"
-            >
-              <Bell size={20} color={colors.mutedForeground} />
+              <Icon name="bell" size={20} />
+              {unread ? (
+                <View
+                  className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-brand"
+                  style={{ borderWidth: 2, borderColor: colors.card }}
+                />
+              ) : null}
             </Pressable>
           </View>
 
-          {hoje.isLoading ? <LoadingState label="Carregando seu dia…" /> : null}
+          {today.isLoading ? <LoadingState label="Carregando seu dia…" /> : null}
 
-          {hoje.error ? (
-            <ErrorState error={hoje.error} onRetry={() => hoje.refetch()} />
-          ) : dados ? (
+          {today.error ? (
+            <ErrorState error={today.error} onRetry={() => today.refetch()} />
+          ) : data ? (
             <>
-              <NutritionMacroCard nutrition={dados.nutrition} />
-              <NextWorkoutCard workout={dados.workout} />
-              <WaterCard data={dados.water} onLogWater={() => setAguaAberto(true)} />
-              <StepsCard data={dados.steps} onLogSteps={() => setPassosAberto(true)} />
-              <StreakCard
-                streak={dados.streak}
-                achievements={conquistas.data ?? dados.achievements}
-              />
+              {data.receivedPlan ? <ReceivedPlanBanner plan={data.receivedPlan} /> : null}
+              {data.todo.count > 0 ? <TodoCard todo={data.todo} /> : null}
+              {data.nextEvent ? <EventCard event={data.nextEvent} /> : null}
+              <KcalCard nutrition={data.nutrition} />
+              <NextWorkoutCard workout={data.workout} />
+              <View className="flex-row gap-3.5">
+                <WaterTile
+                  water={data.water}
+                  onOpen={() => setSheet('water')}
+                  onAdd={() => addGlass.mutate()}
+                  adding={addGlass.isPending}
+                />
+                <StepsTile steps={data.steps} onOpen={() => setSheet('steps')} />
+              </View>
+              <View className="flex-row gap-3.5">
+                <WeightTile weight={data.weight} onOpen={() => setSheet('weight')} />
+                <StreakTile streak={data.streak} />
+              </View>
+              <PersonalGoalsCard goals={personal.data} loading={personal.isLoading} />
             </>
-          ) : hoje.isLoading ? null : (
+          ) : today.isLoading ? null : (
             <EmptyState
               title="Sem resumo para hoje"
               description="Puxe a tela para baixo para tentar de novo."
@@ -119,8 +231,33 @@ export default function DashboardScreen() {
       </Screen>
 
       <DrawerLayer>
-        <LogWaterDrawer open={aguaAberto} onClose={() => setAguaAberto(false)} />
-        <LogStepsDrawer open={passosAberto} onClose={() => setPassosAberto(false)} />
+        {data ? (
+          <>
+            <GoalsSheet
+              open={sheet === 'goals'}
+              onOpenChange={closeOn}
+              goals={data.dailyGoals}
+              onWater={() => setSheet('water')}
+              onSteps={() => setSheet('steps')}
+              onShare={() => setSheet('share')}
+            />
+            <WaterSheet
+              open={sheet === 'water'}
+              onOpenChange={closeOn}
+              targetMl={data.water.targetMl ?? 2500}
+            />
+            <ShareSheet
+              open={sheet === 'share'}
+              onOpenChange={closeOn}
+              data={dayShareCard(shareInput(data))}
+              person={{ name: me.data?.name ?? 'Você', handle: null }}
+              onShare={(t, id) => void share(t, id)}
+            />
+          </>
+        ) : null}
+        <WeightSheet open={sheet === 'weight'} onOpenChange={closeOn} />
+        <LogStepsDrawer open={sheet === 'steps'} onClose={() => setSheet(null)} />
+        <InboxSheet open={sheet === 'inbox'} onOpenChange={closeOn} />
       </DrawerLayer>
     </>
   );

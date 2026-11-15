@@ -29,7 +29,10 @@ describe('cores literais', () => {
   });
 
   it('os cards do Hoje não têm hex nem rgba fixos', () => {
-    const offenders = tsxFiles(path.join(ROOT, 'src/components/dashboard'))
+    const offenders = [
+      ...tsxFiles(path.join(ROOT, 'src/components/dashboard')),
+      ...tsxFiles(path.join(ROOT, 'src/components/today')),
+    ]
       .filter((f) => /'#[0-9a-fA-F]{3,8}'|rgba?\(/.test(readFileSync(f, 'utf8')))
       .map(rel);
     expect(offenders).toEqual([]);
