@@ -214,6 +214,11 @@ describe('navegação', () => {
       expect(navBarMode('/workout/session/s1', { activeSessionId: null })).toBe('visible');
       expect(navBarMode('/workout/session/s1', { activeSessionId: 'outra' })).toBe('visible');
     });
+
+    it('o Treino atual (#377) da sessão aberta também esconde a barra', () => {
+      expect(navBarMode('/workout/session/s1/edit', { activeSessionId: 's1' })).toBe('hidden');
+      expect(navBarMode('/workout/session/s1/edit', { activeSessionId: null })).toBe('visible');
+    });
   });
 
   describe('barra de topo: título e voltar', () => {

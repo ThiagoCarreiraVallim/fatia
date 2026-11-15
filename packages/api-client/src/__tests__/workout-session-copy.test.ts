@@ -34,6 +34,7 @@ const summary = (over: Partial<WorkoutSessionSummary> = {}): WorkoutSessionSumma
   sets: 19,
   volumeKg: 6230,
   feeling: null,
+  notes: null,
   overallFeeling: 2,
   comparison: null,
   records: [],
@@ -95,6 +96,16 @@ describe('Treino feito', () => {
         avgHeartRate: null,
       }),
     ).toBe('52,5 × 10');
+    // Carga redonda sem ",0", como no canvas ("35 × 8").
+    expect(
+      formatBestSet({
+        weightKg: 80,
+        reps: 5,
+        distanceMeters: null,
+        durationSeconds: null,
+        avgHeartRate: null,
+      }),
+    ).toBe('80 × 5');
     expect(
       formatBestSet({
         weightKg: null,

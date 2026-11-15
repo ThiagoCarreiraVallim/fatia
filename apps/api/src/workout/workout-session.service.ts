@@ -388,6 +388,7 @@ export class WorkoutSessionService {
         startedAt: session.startedAt,
         completedAt: session.completedAt,
         feeling: session.feeling,
+        notes: session.notes,
         exerciseOrder: session.exerciseOrder,
         plan: session.plan,
         sets: session.sets,

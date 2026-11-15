@@ -31,6 +31,7 @@ export interface SummaryInput {
     startedAt: Date;
     completedAt: Date | null;
     feeling: number | null;
+    notes: string | null;
     exerciseOrder: number[];
     plan: { name: string; exercises: { exerciseId: number; order: number }[] } | null;
     sets: SummarySet[];
@@ -84,6 +85,8 @@ export interface SessionSummary {
   volumeKg: number;
   /** O que a pessoa marcou em "Como foi o treino?". */
   feeling: number | null;
+  /** A observação já gravada, para a tela não apagá-la ao salvar. */
+  notes: string | null;
   /** O marcado, ou a média das séries quando ela não marcou. */
   overallFeeling: number | null;
   comparison: {
@@ -306,6 +309,7 @@ export function summarizeSession(input: SummaryInput): SessionSummary {
     sets: session.sets.length,
     volumeKg,
     feeling: session.feeling,
+    notes: session.notes,
     overallFeeling,
     comparison,
     records,

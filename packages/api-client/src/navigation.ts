@@ -267,7 +267,8 @@ export function navBarMode(
 ): NavBarMode {
   const path = segments(pathname);
   if (FOCUS_ROUTES.some((pattern) => match(pattern, path))) return 'hidden';
-  if (match('/workout/session/:id', path)) {
+  // A sessão e o "Treino atual" dela (#377).
+  if (match('/workout/session/:id', path) || match('/workout/session/:id/edit', path)) {
     if (opts.activeSessionId === undefined) return 'hidden';
     return opts.activeSessionId === path[2] ? 'hidden' : 'visible';
   }
@@ -305,6 +306,7 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/workout/plans/:id', title: 'Plano de treino', parent: '/workout/plans' },
   { pattern: '/workout/quick/:id', title: 'Treino rápido', parent: '/workout' },
   { pattern: '/workout/session/:id', title: 'Treino', parent: '/workout/history' },
+  { pattern: '/workout/session/:id/edit', title: 'Treino atual', parent: '/workout' },
   // Você: a quinta aba. Perfil, Progresso, Metas pessoais e Meu plano são dela.
   { pattern: '/you', title: 'Você', parent: null },
   { pattern: '/you/edit', title: 'Editar perfil', parent: '/you' },

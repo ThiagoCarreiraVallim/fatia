@@ -197,6 +197,8 @@ export interface WorkoutSessionSummary {
   sets: number;
   volumeKg: number;
   feeling: number | null;
+  /** A observação já gravada ("Como foi o treino?"). */
+  notes: string | null;
   overallFeeling: number | null;
   comparison: {
     sessionId: string;

@@ -66,6 +66,7 @@ const base = (over: Partial<SummaryInput['session']> = {}): SummaryInput => ({
     startedAt: new Date('2026-11-14T21:02:00Z'),
     completedAt: new Date('2026-11-14T21:54:00Z'),
     feeling: null,
+    notes: null,
     exerciseOrder: [],
     plan: {
       name: 'Push',

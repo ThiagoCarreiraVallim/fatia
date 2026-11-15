@@ -146,6 +146,11 @@ export const SIGNED_VIDEO_REFRESH_MS = 9 * 60 * 1000;
 
 const MINUS = '−';
 
+/** 52.5 → "52,5"; 80 → "80" (o canvas não mostra ",0"). */
+function trimDecimal(n: number): string {
+  return formatDecimal(n, 1).replace(/,0$/, '');
+}
+
 function signed(n: number, suffix = ''): string {
   if (n > 0) return `+${formatDecimal(n, 0)}${suffix}`;
   if (n < 0) return `${MINUS}${formatDecimal(Math.abs(n), 0)}${suffix}`;
@@ -157,12 +162,12 @@ export function formatBestSet(best: SummaryBestSet | null | undefined): string {
   if (!best) return '—';
   if (best.distanceMeters != null || best.durationSeconds != null) {
     const parts: string[] = [];
-    if (best.distanceMeters) parts.push(`${formatDecimal(best.distanceMeters / 1000, 1)} km`);
+    if (best.distanceMeters) parts.push(`${trimDecimal(best.distanceMeters / 1000)} km`);
     if (best.durationSeconds) parts.push(`${Math.round(best.durationSeconds / 60)} min`);
     if (best.avgHeartRate) parts.push(`${best.avgHeartRate} bpm`);
     return parts.join(' · ') || '—';
   }
-  if (best.weightKg) return `${formatDecimal(best.weightKg, 1)} × ${best.reps ?? 0}`;
+  if (best.weightKg) return `${trimDecimal(best.weightKg)} × ${best.reps ?? 0}`;
   return `${best.reps ?? 0} reps`;
 }
 
