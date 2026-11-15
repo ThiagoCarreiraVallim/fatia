@@ -192,6 +192,8 @@ describe('navegação', () => {
       '/org/g1/exercises/12',
       // Al-T19: o Novo plano é tela cheia com o "Criar plano" embaixo, sem a barra.
       '/workout/plans/new',
+      // Al-T12: o Bloco de treino fecha no X, com o "Começar bloco" embaixo.
+      '/workout/block',
     ])('%s esconde a barra', (path) => {
       expect(navBarMode(path)).toBe('hidden');
     });
@@ -245,6 +247,9 @@ describe('navegação', () => {
       ['/nutrition/plan', 'Plano alimentar', '/nutrition', 'Nutrição'],
       ['/workout/plans/p1', 'Plano de treino', '/workout/plans', 'Planos de treino'],
       ['/workout/plans/new', 'Novo plano', '/workout/plans', 'Planos de treino'],
+      ['/workout/offers/o1', 'Plano recebido', '/workout', 'Treino'],
+      ['/workout/agenda', 'Agenda', '/workout', 'Treino'],
+      ['/workout/templates', 'Modelos das comunidades', '/workout/plans', 'Planos de treino'],
       ['/workout/session/s1', 'Treino', '/workout/history', 'Histórico de treino'],
       ['/progress/records', 'Recordes', '/progress', 'Progresso'],
       ['/plan', 'Meu plano', '/you', 'Você'],
