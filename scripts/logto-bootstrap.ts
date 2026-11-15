@@ -7,8 +7,10 @@
  *   1. API resource (`LOGTO_AUDIENCE`);
  *   2. apps OIDC: Fatia Web (Traditional), Fatia MCP (Traditional), Fatia Mobile (Native);
  *   3. conector de e-mail (SMTP) com templates em pt-BR, se EMAIL_SMTP_HOST estiver definido;
- *   4. experiência de login: marca, pt-BR, termos, cadastro e "esqueci minha senha";
- *   5. usuário demo e usuário da equipe (só fora de produção), usados pelo Playwright e
+ *   4. conectores sociais Google e Apple, se as credenciais estiverem no ambiente (#371);
+ *   5. experiência de login: marca, pt-BR, termos, cadastro, "esqueci minha senha", Google e
+ *      Apple com vínculo automático pela mesma conta de e-mail verificado;
+ *   6. usuário demo e usuário da equipe (só fora de produção), usados pelo Playwright e
  *      pelo seed-demo — a equipe é a dona da "Academia Demo" e grava `EQUIPE_LOGTO_ID`.
  *
  * Pré-requisito: um app M2M com a role "Logto Management API access" em
@@ -283,11 +285,75 @@ async function ensureEmailConnector(api: Api): Promise<boolean> {
 }
 
 /**
+ * Google e Apple (Onb-01a/01b, #371). Cada um só entra com as credenciais no
+ * ambiente; sem elas, o botão do app leva à tela do Logto, que mostra só e-mail
+ * e senha. Devolve os `target` configurados, que a experiência de login lista e
+ * que o app usa em `direct_sign_in=social:<target>`.
+ *
+ * - Google: cliente OAuth "Web application" no Google Cloud, com o redirect
+ *   `<LOGTO_ENDPOINT>/callback/<id do conector>` (o console do Logto mostra).
+ * - Apple: Service ID com "Sign in with Apple", a chave .p8 (Key ID) e o Team ID.
+ */
+export const SOCIAL = {
+  google: {
+    connectorId: 'google-universal',
+    config: () =>
+      env('LOGTO_GOOGLE_CLIENT_ID') && env('LOGTO_GOOGLE_CLIENT_SECRET')
+        ? {
+            clientId: env('LOGTO_GOOGLE_CLIENT_ID'),
+            clientSecret: env('LOGTO_GOOGLE_CLIENT_SECRET'),
+            scope: 'openid profile email',
+          }
+        : null,
+  },
+  apple: {
+    connectorId: 'apple-universal',
+    config: () =>
+      env('LOGTO_APPLE_SERVICE_ID') &&
+      env('LOGTO_APPLE_TEAM_ID') &&
+      env('LOGTO_APPLE_KEY_ID') &&
+      env('LOGTO_APPLE_PRIVATE_KEY')
+        ? {
+            clientId: env('LOGTO_APPLE_SERVICE_ID'),
+            teamId: env('LOGTO_APPLE_TEAM_ID'),
+            keyId: env('LOGTO_APPLE_KEY_ID'),
+            // No .env a chave vem numa linha só, com \n no lugar das quebras.
+            privateKey: env('LOGTO_APPLE_PRIVATE_KEY').replace(/\\n/g, '\n'),
+            scope: 'name email',
+          }
+        : null,
+  },
+} as const;
+
+async function ensureSocialConnectors(api: Api): Promise<Array<keyof typeof SOCIAL>> {
+  const connectors = await api<Array<{ id: string; connectorId: string }>>('GET', '/connectors');
+  const enabled: Array<keyof typeof SOCIAL> = [];
+  for (const target of Object.keys(SOCIAL) as Array<keyof typeof SOCIAL>) {
+    const { connectorId, config } = SOCIAL[target];
+    const values = config();
+    if (!values) {
+      say(`Sem credenciais do ${target} — o login por ${target} fica desligado`);
+      continue;
+    }
+    const existing = connectors.find((c) => c.connectorId === connectorId);
+    if (existing) await api('PATCH', `/connectors/${existing.id}`, { config: values });
+    else await api('POST', '/connectors', { connectorId, config: values });
+    say(`Conector ${target} ${existing ? 'atualizado' : 'criado'}`);
+    enabled.push(target);
+  }
+  return enabled;
+}
+
+/**
  * Com e-mail: cadastro por e-mail verificado e "esqueci minha senha" por código.
  * Sem e-mail: cadastro por nome de usuário, sem recuperação (o Logto recusa
  * verificação sem conector).
  */
-async function configureSignInExperience(api: Api, hasEmail: boolean) {
+async function configureSignInExperience(
+  api: Api,
+  hasEmail: boolean,
+  social: Array<keyof typeof SOCIAL>,
+) {
   const passwordMethod = (identifier: 'email' | 'username') => ({
     identifier,
     password: true,
@@ -309,6 +375,10 @@ async function configureSignInExperience(api: Api, hasEmail: boolean) {
       : { identifiers: ['username'], password: true, verify: false },
     signIn: { methods: [passwordMethod('email'), passwordMethod('username')] },
     forgotPasswordMethods: hasEmail ? ['EmailVerificationCode'] : [],
+    // Google e Apple na tela do Logto e no `direct_sign_in` do app. Quem já tem
+    // conta com o mesmo e-mail verificado entra nela, sem conta duplicada.
+    socialSignInConnectorTargets: social,
+    socialSignIn: { automaticAccountLinking: true },
     // Explícita para não depender do default do Logto. `pwned` consulta o Have I
     // Been Pwned (k-anonimidade: só os 5 primeiros caracteres do hash saem).
     passwordPolicy: {
@@ -378,7 +448,8 @@ async function main() {
     envFileSetIfPlaceholder(MOBILE_ENV_PATH, 'EXPO_PUBLIC_LOGTO_APP_ID', mobile.id);
   }
 
-  await configureSignInExperience(api, await ensureEmailConnector(api));
+  const hasEmail = await ensureEmailConnector(api);
+  await configureSignInExperience(api, hasEmail, await ensureSocialConnectors(api));
   if (IS_PRODUCTION) {
     say('NODE_ENV=production — usuários de teste NÃO são criados');
   } else {
