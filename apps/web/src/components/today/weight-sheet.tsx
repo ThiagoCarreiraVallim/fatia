@@ -7,8 +7,9 @@ import {
   formatDecimal,
   progressApi,
   weightDeltaSinceLabel,
+  weightSheetBase,
+  weightSheetSeries,
   weightSparkPath,
-  WEIGHT_FALLBACK_KG,
   WEIGHT_STEP_KG,
 } from '@fatia/api-client';
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/drawer';
@@ -37,15 +38,9 @@ export function WeightSheet({
     queryFn: () => progressApi.weight(30),
     enabled: open,
   });
-  const data = progress.data;
-  const latest = data?.latest ?? null;
-  const loggedToday = latest?.date === today;
-  // Quem é o "antes": pesou hoje, compara com a pesagem anterior; senão, com a última.
-  const reference = loggedToday
-    ? (data?.previous ?? null)
-    : latest
-      ? { weightKg: latest.weightKg, date: latest.date }
-      : null;
+  const base = weightSheetBase(progress.data, today);
+  const loggedToday = base.todayLogId !== null;
+  const reference = base.reference;
 
   const [kg, setKg] = useState<number | null>(null);
   // Fechar descarta o ajuste: a próxima abertura parte do último registro.
@@ -53,12 +48,12 @@ export function WeightSheet({
     if (!o) setKg(null);
     onOpenChange(o);
   };
-  const value = kg ?? latest?.weightKg ?? WEIGHT_FALLBACK_KG;
+  const value = kg ?? base.startKg;
 
   const save = useMutation({
     mutationFn: () =>
-      loggedToday && latest
-        ? progressApi.updateWeight(latest.id, { weightKg: value })
+      base.todayLogId
+        ? progressApi.updateWeight(base.todayLogId, { weightKg: value })
         : progressApi.createWeight({ weightKg: value }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['progress', 'weight'] });
@@ -71,9 +66,8 @@ export function WeightSheet({
   });
 
   const delta = reference ? round1(value - reference.weightKg) : null;
-  const points = data?.points.map((p) => p.weightKg) ?? [];
-  const series = loggedToday ? [...points.slice(0, -1), value] : [...points, value];
-  const path = weightSparkPath(series, 300, 60);
+  const points = base.points;
+  const path = weightSparkPath(weightSheetSeries(points, value, loggedToday), 300, 60);
   const shown = formatDecimal(value);
 
   return (

@@ -15,6 +15,7 @@ import {
   usersApi,
   waterAddedToast,
   WATER_GLASS_ML,
+  whatsappShareUrl,
   type ShareTarget,
   type TodaySummary,
 } from '@fatia/api-client';
@@ -122,7 +123,7 @@ export default function HomePage() {
     const text = dayShareMessage(card, identity.as === 'none' ? null : identity.value);
     setSheet(null);
     if (target === 'whatsapp') {
-      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+      window.open(whatsappShareUrl(text), '_blank', 'noopener');
       return;
     }
     try {

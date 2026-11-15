@@ -107,7 +107,7 @@ export function WaterSheet({
             className="relative h-[132px] w-24 shrink-0 overflow-hidden rounded-[18px_18px_28px_28px] bg-muted shadow-[inset_0_0_0_2px_hsl(var(--border-strong))]"
           >
             <div
-              className="absolute inset-x-0 bottom-0 bg-gradient-to-b from-[#60a5fa] to-[#2b6fd0] transition-[height] duration-[600ms] ease-spring motion-reduce:transition-none"
+              className="absolute inset-x-0 bottom-0 bg-gradient-to-b from-[hsl(var(--water)/0.65)] to-[hsl(var(--water))] transition-[height] duration-[600ms] ease-spring motion-reduce:transition-none"
               style={{ height: `${fill}%` }}
             />
           </div>

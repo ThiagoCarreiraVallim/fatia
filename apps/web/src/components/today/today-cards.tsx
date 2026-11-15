@@ -50,7 +50,7 @@ export function ReceivedPlanBanner({ plan }: { plan: ReceivedPlan }) {
     >
       <span
         aria-hidden
-        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#2f4a7a] font-display text-[11px] font-bold text-[#dbe6ff]"
+        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--protein)/0.2)] font-display text-[11px] font-bold text-protein"
       >
         {initials(plan.fromName)}
       </span>
