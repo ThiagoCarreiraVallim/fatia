@@ -17,7 +17,7 @@ import {
 import { ErrorState } from '@/components/elements/error-state';
 import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TopBarActions, topBarActionClass } from '@/components/layout/app-top-bar';
+import { TabHeader, headerButtonClass } from '@/components/layout/tab-header';
 import { cn } from '@/lib/utils';
 import { BlockTimeline } from './block-timeline';
 import { useStartSession, WorkoutCardsCarousel } from './cards/workout-cards';
@@ -256,15 +256,15 @@ export function WorkoutHome({ onCardio }: { onCardio: () => void }) {
   });
 
   return (
-    <div className="space-y-6 px-5 pt-4 pb-4">
-      <TopBarActions>
-        <Link href="/workout/history" aria-label="Histórico" className={topBarActionClass}>
-          <History size={20} />
+    <div className="space-y-6 px-5 pt-2 pb-4">
+      <TabHeader title="Treino">
+        <Link href="/workout/history" aria-label="Histórico" className={headerButtonClass()}>
+          <History size={20} aria-hidden />
         </Link>
-        <Link href="/workout/plans" aria-label="Novo plano" className={topBarActionClass}>
-          <Plus size={20} />
+        <Link href="/workout/plans" aria-label="Novo plano" className={headerButtonClass()}>
+          <Plus size={20} aria-hidden />
         </Link>
-      </TopBarActions>
+      </TabHeader>
 
       {/* TODO(#379): aviso de plano recebido da equipe entra aqui, acima da semana. */}
 

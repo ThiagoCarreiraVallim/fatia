@@ -21,7 +21,7 @@ import { quickVisual } from '@/components/workout/quick-template-visual';
 import { useStartSession } from '@/components/workout/use-start-session';
 import { groupColorName, weekChips } from '@/components/workout/workout-home';
 import { colors } from '@/theme/colors';
-import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
+import { HeaderButton, TabHeader } from '@/components/layout/tab-header';
 
 /**
  * A aba Treino do redesign (prancha `Al-T1-Treino`, #377): a semana, os cards,
@@ -257,26 +257,6 @@ export default function WorkoutScreen() {
 
   return (
     <Screen
-      actions={
-        <>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Histórico de treinos"
-            onPress={() => router.push('/workout/history')}
-            className={TOP_BAR_ACTION}
-          >
-            <History size={20} color={colors.foreground} />
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Novo plano"
-            onPress={() => router.push('/workout/plans')}
-            className={TOP_BAR_ACTION}
-          >
-            <Plus size={22} color={colors.foreground} />
-          </Pressable>
-        </>
-      }
       refreshing={active.isRefetching || plans.isRefetching || summary.isRefetching}
       onRefresh={() => {
         void active.refetch();
@@ -284,7 +264,18 @@ export default function WorkoutScreen() {
         void summary.refetch();
       }}
     >
-      <View className="gap-6 px-5 pb-4 pt-4">
+      <View className="gap-6 px-5 pb-4 pt-2">
+        <TabHeader title="Treino">
+          <HeaderButton
+            label="Histórico de treinos"
+            onPress={() => router.push('/workout/history')}
+          >
+            <History size={20} color={colors.foreground} />
+          </HeaderButton>
+          <HeaderButton label="Novo plano" onPress={() => router.push('/workout/plans')}>
+            <Plus size={22} color={colors.foreground} />
+          </HeaderButton>
+        </TabHeader>
         {/* TODO(#379): o aviso "<treinador> enviou um plano · toque para ver e
             aceitar" entra aqui, acima da semana, quando houver plano recebido. */}
 

@@ -32,6 +32,9 @@ const PRESET_KEYS = new Set(PRESETS.map((p) => p.nutrientKey));
 const UNITS = NUTRIENT_UNITS;
 const CUSTOM = '__custom__';
 
+/** Campo preenchido da prancha: --s2 dentro do cartão, sem borda. */
+const FIELD = 'h-12 rounded-field border-0 bg-muted text-base';
+
 const fmt = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
 
 /**
@@ -129,8 +132,8 @@ export default function NutrientTargetsPage() {
   };
 
   return (
-    <div className="space-y-5 p-4 pb-28">
-      <p className="text-sm text-muted-foreground">
+    <div className="space-y-5 px-5 pb-28 pt-2">
+      <p className="text-[13px] text-muted-foreground">
         Além dos macros. Eles aparecem em Nutrição, no detalhe de cada refeição e nas Metas do dia.
         O valor de hoje soma o que você registra.
       </p>
@@ -146,7 +149,7 @@ export default function NutrientTargetsPage() {
       )}
 
       <section aria-labelledby="hoje" className="space-y-2">
-        <h2 id="hoje" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+        <h2 id="hoje" className="px-1 text-[13px] text-muted-foreground">
           Hoje
         </h2>
         {targets.data?.map((t) => (
@@ -166,27 +169,35 @@ export default function NutrientTargetsPage() {
         )}
       </section>
 
-      <section aria-labelledby="adicionar" className="space-y-4 rounded-2xl bg-card p-4">
-        <div>
-          <h2 id="adicionar" className="text-xs text-muted-foreground">
-            Adicionar nutriente
-          </h2>
-          <b className="block text-base">{pickName}</b>
+      <section
+        aria-labelledby="adicionar"
+        className="space-y-4 rounded-card bg-card p-4 shadow-[inset_0_0_0_1.5px_hsl(var(--primary)/0.35)]"
+      >
+        <div className="flex items-center gap-3">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-field bg-primary-soft text-primary">
+            <Plus size={20} aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <h2 id="adicionar" className="text-[13px] text-muted-foreground">
+              Adicionar nutriente
+            </h2>
+            <b className="block font-display text-[17px] font-semibold">{pickName}</b>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-1.5">
-          {PRESETS.map((p) => (
+          {/* Os que a pessoa já tem saem da lista, como na prancha. */}
+          {PRESETS.filter((p) => !existingKeys.has(p.nutrientKey)).map((p) => (
             <button
               key={p.nutrientKey}
               type="button"
-              disabled={existingKeys.has(p.nutrientKey)}
               aria-pressed={preset.nutrientKey === p.nutrientKey}
               onClick={() => pick(p)}
               className={cn(
-                'min-h-11 rounded-full px-3 py-1 text-xs font-bold transition-colors disabled:opacity-30',
+                'h-11 rounded-chip px-4 text-[15px] font-semibold transition-colors',
                 preset.nutrientKey === p.nutrientKey
                   ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground',
+                  : 'bg-muted text-foreground',
               )}
             >
               {p.label}
@@ -197,13 +208,13 @@ export default function NutrientTargetsPage() {
             onClick={() => pick({ nutrientKey: CUSTOM, label: '', unit: customUnit })}
             aria-pressed={isCustom}
             className={cn(
-              'flex min-h-11 items-center gap-1 rounded-full px-3 py-1 text-xs font-bold transition-colors',
+              'flex h-11 items-center gap-1.5 rounded-chip px-4 text-[15px] font-semibold transition-colors',
               isCustom
                 ? 'bg-primary text-primary-foreground'
-                : 'border border-border-strong text-foreground',
+                : 'text-foreground shadow-[inset_0_0_0_1px_hsl(var(--border-strong))]',
             )}
           >
-            <Plus size={14} aria-hidden />
+            <Plus size={16} aria-hidden />
             Outro
           </button>
         </div>
@@ -218,6 +229,7 @@ export default function NutrientTargetsPage() {
                 value={customLabel}
                 onChange={(e) => setCustomLabel(e.target.value)}
                 placeholder="Ex.: Vitamina D, Ômega 3, Creatina"
+                className={FIELD}
                 aria-invalid={nameError ? true : undefined}
                 aria-describedby={nameError ? 'clabel-erro' : undefined}
               />
@@ -260,7 +272,9 @@ export default function NutrientTargetsPage() {
 
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1">
-            <Label htmlFor="min">Mínimo ({unit})</Label>
+            <Label htmlFor="min" className="text-[13px] text-muted-foreground">
+              Mínimo ({unit})
+            </Label>
             <Input
               id="min"
               inputMode="decimal"
@@ -268,12 +282,15 @@ export default function NutrientTargetsPage() {
               value={min}
               onChange={(e) => setMin(e.target.value)}
               placeholder="quero pelo menos"
+              className={FIELD}
               aria-invalid={rangeError ? true : undefined}
               aria-describedby={rangeError ? 'faixa-erro' : undefined}
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="max">Máximo ({unit})</Label>
+            <Label htmlFor="max" className="text-[13px] text-muted-foreground">
+              Máximo ({unit})
+            </Label>
             <Input
               id="max"
               inputMode="decimal"
@@ -281,6 +298,7 @@ export default function NutrientTargetsPage() {
               value={max}
               onChange={(e) => setMax(e.target.value)}
               placeholder="quero no máximo"
+              className={FIELD}
               aria-invalid={rangeError ? true : undefined}
               aria-describedby={rangeError ? 'faixa-erro' : undefined}
             />
@@ -297,9 +315,8 @@ export default function NutrientTargetsPage() {
           full
           onClick={() => save.mutate()}
           disabled={!canSave || save.isPending}
-          className="gap-2"
+          className="rounded-pill bg-foreground text-background hover:bg-foreground/90"
         >
-          <Plus size={16} aria-hidden />
           {save.isPending ? 'Salvando…' : `Adicionar ${pickName}`}
         </Button>
         {save.error && (
@@ -351,16 +368,21 @@ function TargetRow({
   const status = progress?.status ?? 'none';
   const headingId = `meta-${target.nutrientKey}`;
   return (
-    <div
-      role="group"
-      aria-labelledby={headingId}
-      className="space-y-2 rounded-2xl border border-subtle bg-card p-4"
-    >
+    <div role="group" aria-labelledby={headingId} className="space-y-3 rounded-card bg-card p-4">
       <div className="flex items-center gap-2">
-        <p id={headingId} className="text-sm font-bold text-foreground">
+        <p id={headingId} className="font-display text-[17px] font-semibold text-foreground">
           {target.label}
         </p>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold">{kind}</span>
+        <span
+          className={cn(
+            'rounded-pill px-2.5 py-0.5 text-[11px] font-extrabold uppercase',
+            status === 'under' && kind === 'mín'
+              ? 'bg-warning text-background'
+              : 'bg-muted text-muted-foreground',
+          )}
+        >
+          {kind}
+        </span>
         {!PRESET_KEYS.has(target.nutrientKey) && (
           <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-bold text-primary">
             seu
@@ -370,13 +392,13 @@ function TargetRow({
           type="button"
           onClick={onDelete}
           aria-label={`Remover ${target.label}`}
-          className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-danger"
+          className="-my-2 -mr-2 ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-field text-muted-foreground hover:bg-muted hover:text-danger"
         >
-          <Trash2 size={16} />
+          <Trash2 size={18} />
         </button>
       </div>
       <div
-        className="h-1.5 overflow-hidden rounded-full bg-muted"
+        className="h-2 overflow-hidden rounded-pill bg-muted"
         role="progressbar"
         aria-label={target.label}
         aria-valuemin={0}
@@ -386,17 +408,30 @@ function TargetRow({
         <div
           className={cn(
             'h-full transition-all',
-            status === 'over' ? 'bg-danger' : status === 'under' ? 'bg-warning' : 'bg-primary',
+            'rounded-pill',
+            status === 'over' ? 'bg-danger' : status === 'under' ? 'bg-protein' : 'bg-primary',
           )}
           style={{ width: `${pct}%` }}
         />
       </div>
-      <div className="flex items-baseline justify-between text-xs">
+      <div className="flex items-baseline justify-between text-[15px]">
         <span className="tabular-nums text-muted-foreground">
           <b className="text-foreground">{progress ? `${fmt(total)} ${target.unit}` : '—'}</b>{' '}
           <span>de {goal}</span>
         </span>
-        {progress && <span className="font-bold">{nutrientStatusText(progress)}</span>}
+        {progress && (
+          <span
+            className={
+              status === 'over'
+                ? 'text-danger'
+                : status === 'under'
+                  ? 'text-protein'
+                  : 'text-primary'
+            }
+          >
+            {nutrientStatusText(progress)}
+          </span>
+        )}
       </div>
     </div>
   );

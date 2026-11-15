@@ -127,7 +127,8 @@ const MENU: { title: string; items: MenuItemDef[] }[] = [
   {
     title: 'Nutrição',
     items: [
-      link('nutrition-plan', 'Plano alimentar', 'apple', '/nutrition/plan'),
+      // Plano alimentar não é linha de Você: a prancha Al-V1 não tem, e o
+      // cabeçalho de Nutrição já leva a ele.
       link('daily-goals', 'Metas do dia', 'target', '/nutrition/goals'),
       link('nutrients', 'Metas de nutrientes', 'apple', '/nutrition/nutrient-targets'),
       link('foods', 'Meus alimentos', 'apple', '/nutrition/foods'),
@@ -247,6 +248,11 @@ const FOCUS_ROUTES = [
   '/chat/:id',
   '/nutrition/photo',
   '/nutrition/scan',
+  // Formulários de tela cheia sem a barra nas pranchas (Al-N6, Al-V9, Al-V8):
+  // o botão de salvar/confirmar fica no fim, livre.
+  '/nutrition/goals',
+  '/you/edit',
+  '/you/delete',
   '/community/new',
   '/onboarding',
   '/org/:id/content/plans/:templateId',
@@ -397,12 +403,18 @@ function find(path: string[]): RouteDef | undefined {
   return ROUTES.find((r) => match(r.pattern, path));
 }
 
+/** As 5 abas da barra de baixo (ADR 040): telas de ver, sem "voltar". */
+export const TAB_ROOTS = ['/', '/nutrition', '/workout', '/community', '/you'] as const;
+
 /**
- * Barra de topo (título e ações da tela): todas as telas menos o Hoje, que tem
- * cabeçalho próprio. A seta de voltar é outra coisa: só aparece com `parent`.
+ * Barra de topo (voltar, título e ações da tela): só nas telas empurradas. As
+ * 5 abas abrem com o título grande da própria tela e os botões redondos à
+ * direita (`TabHeader`, pranchas Al-H1, Al-N1, Al-T1, Al-V1, Cm-01), sem a
+ * barra pequena em cima. A seta de voltar é outra coisa: só aparece com `parent`.
  */
 export function hasTopBar(pathname: string): boolean {
-  return segments(pathname).length > 0;
+  const path = '/' + segments(pathname).join('/');
+  return !(TAB_ROOTS as readonly string[]).includes(path);
 }
 
 /** O caminho é de uma tela do mapa? Os `:param` casam qualquer segmento. */

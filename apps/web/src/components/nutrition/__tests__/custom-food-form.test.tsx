@@ -111,6 +111,23 @@ describe('CustomFoodForm (Al-N11)', () => {
     const user = userEvent.setup();
     renderForm();
     await fillServing(user);
-    expect(screen.getByText(/100 g/, { selector: 'p.rounded-lg' })).toBeInTheDocument();
+    expect(screen.getByText(/100 g/, { selector: 'p.rounded-pill' })).toBeInTheDocument();
+  });
+
+  it('o − e + da porção andam de 10 em 10 g, a partir do que foi digitado', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    const field = screen.getByLabelText(/tamanho da porção/i);
+    await user.click(screen.getByRole('button', { name: 'Porção mais 10 g' }));
+    expect(field).toHaveValue('10');
+    await user.clear(field);
+    await user.type(field, '37');
+    await user.click(screen.getByRole('button', { name: 'Porção mais 10 g' }));
+    expect(field).toHaveValue('50');
+    await user.click(screen.getByRole('button', { name: 'Porção menos 10 g' }));
+    await user.click(screen.getByRole('button', { name: 'Porção menos 10 g' }));
+    await user.click(screen.getByRole('button', { name: 'Porção menos 10 g' }));
+    await user.click(screen.getByRole('button', { name: 'Porção menos 10 g' }));
+    expect(field).toHaveValue('10');
   });
 });

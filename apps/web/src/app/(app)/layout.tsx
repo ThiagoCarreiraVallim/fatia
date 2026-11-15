@@ -38,7 +38,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <div className="flex min-h-screen flex-col bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
                 <AppTopBar />
                 {/* No desktop o conteúdo fica numa coluna legível, ao lado da `SideNav`. */}
-                <main className="flex-1 pt-4 pb-24">
+                <main className="flex-1 pt-4 pb-8">
                   <div className="mx-auto w-full max-w-3xl">
                     {children}
                     <BottomSpacer />

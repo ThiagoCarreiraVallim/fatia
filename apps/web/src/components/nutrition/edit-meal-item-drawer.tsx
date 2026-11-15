@@ -4,13 +4,11 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Drawer,
-  DrawerClose,
   DrawerContent,
   DrawerHeader,
   DrawerTitle,
   DrawerDescription,
 } from '@/components/ui/drawer';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ConfirmSheet } from '@/components/ui/confirm-sheet';
 import { Icon } from '@/components/ui/icon';
@@ -25,6 +23,7 @@ import {
   type MealItem,
 } from '@fatia/api-client';
 import { AmountPicker } from './amount-picker';
+import { cn } from '@/lib/utils';
 import { errorMessage } from './error-message';
 import { invalidateNutritionDay } from '@/lib/nutrition-cache';
 
@@ -117,9 +116,10 @@ export function EditMealItemDrawer({ item, date, onClose, context, onChanged }: 
     <>
       <Drawer open={open && !confirmingRemove} onOpenChange={(o) => !o && onClose()}>
         <DrawerContent className="px-4 pb-6">
-          <DrawerHeader className="px-0">
-            <DrawerDescription>Editar item</DrawerDescription>
-            <DrawerTitle>{item?.foodName}</DrawerTitle>
+          {/* Editar item (prancha Al-N14): o mesmo desenho da quantidade (Al-N3). */}
+          <DrawerHeader className="gap-0.5 px-0 pt-5">
+            <DrawerDescription className="text-xs">Editar item</DrawerDescription>
+            <DrawerTitle className="font-display text-h2">{item?.foodName}</DrawerTitle>
             {context && <p className="text-xs text-muted-foreground">{context}</p>}
           </DrawerHeader>
           <div className="my-3 space-y-4">
@@ -156,15 +156,30 @@ export function EditMealItemDrawer({ item, date, onClose, context, onChanged }: 
             )}
 
             {preview && (
-              <div className="space-y-2 rounded-card bg-muted p-3">
+              <div className="space-y-4">
                 <dl className="grid grid-cols-4 gap-2 text-center">
                   <Stat label="Calorias" value={String(preview.kcal)} unit="kcal" />
-                  <Stat label="Proteína" value={oneDecimal(preview.proteinG)} unit="prot g" />
-                  <Stat label="Carboidratos" value={oneDecimal(preview.carbsG)} unit="carb g" />
-                  <Stat label="Gorduras" value={oneDecimal(preview.fatG)} unit="gord g" />
+                  <Stat
+                    label="Proteína"
+                    value={oneDecimal(preview.proteinG)}
+                    unit="prot g"
+                    className="text-protein"
+                  />
+                  <Stat
+                    label="Carboidratos"
+                    value={oneDecimal(preview.carbsG)}
+                    unit="carb g"
+                    className="text-carbs"
+                  />
+                  <Stat
+                    label="Gorduras"
+                    value={oneDecimal(preview.fatG)}
+                    unit="gord g"
+                    className="text-fat"
+                  />
                 </dl>
                 {item?.nutrients && (
-                  <p className="text-center text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     {`Fibra ${oneDecimal(preview.fiberG)} g · Sódio ${preview.sodiumMg} mg`}
                   </p>
                 )}
@@ -180,28 +195,22 @@ export function EditMealItemDrawer({ item, date, onClose, context, onChanged }: 
               </p>
             )}
             <div className="flex gap-2">
-              <Button
+              <button
                 type="button"
-                variant="outline"
-                size="icon"
-                className="h-11 w-11 shrink-0 text-danger"
+                className="anim-press flex h-14 w-14 shrink-0 items-center justify-center rounded-pill bg-[hsl(var(--danger)/0.12)] text-danger"
                 aria-label="Remover item"
                 onClick={() => setConfirmingRemove(true)}
               >
-                <Icon name="trash" size={18} />
-              </Button>
-              <DrawerClose asChild>
-                <Button variant="outline" className="h-11 flex-1">
-                  Cancelar
-                </Button>
-              </DrawerClose>
-              <Button
-                className="h-11 flex-1"
+                <Icon name="trash" size={20} />
+              </button>
+              <button
+                type="button"
+                className="anim-press h-14 flex-1 rounded-pill bg-foreground text-[15px] font-bold text-background disabled:opacity-40"
                 onClick={() => mutation.mutate()}
                 disabled={mutation.isPending || grams === null}
               >
-                {mutation.isPending ? 'Salvando...' : 'Salvar'}
-              </Button>
+                {mutation.isPending ? 'Salvando...' : 'Salvar alterações'}
+              </button>
             </div>
           </div>
         </DrawerContent>
@@ -220,11 +229,21 @@ export function EditMealItemDrawer({ item, date, onClose, context, onChanged }: 
   );
 }
 
-function Stat({ label, value, unit }: { label: string; value: string; unit: string }) {
+function Stat({
+  label,
+  value,
+  unit,
+  className,
+}: {
+  label: string;
+  value: string;
+  unit: string;
+  className?: string;
+}) {
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col items-center gap-1 rounded-[16px] bg-muted px-1 py-2.5">
       <dt className="sr-only">{label}</dt>
-      <dd aria-label={label} className="font-display text-lg font-bold tabular-nums">
+      <dd aria-label={label} className={cn('text-lg font-bold tabular-nums', className)}>
         {value}
       </dd>
       <span aria-hidden className="text-[11px] text-muted-foreground">

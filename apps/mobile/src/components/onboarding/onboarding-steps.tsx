@@ -371,7 +371,7 @@ export function BodyStep({
         <Text className="text-[13px] font-semibold text-muted-foreground">Sexo biológico</Text>
         <Text className="text-xs text-faint">{BODY_REASONS.sex}</Text>
       </View>
-      <View accessibilityRole="radiogroup" className="flex-row gap-1 rounded-[16px] bg-card p-1">
+      <View accessibilityRole="radiogroup" className="flex-row gap-1 rounded-field bg-card p-1">
         {ONBOARDING_SEX.map((o) => (
           <Pressable
             key={o.value}
@@ -379,14 +379,14 @@ export function BodyStep({
             accessibilityState={{ checked: value.sex === o.value }}
             onPress={() => set({ sex: o.value })}
             className={cn(
-              'h-11 flex-1 items-center justify-center rounded-[12px]',
-              value.sex === o.value && 'bg-foreground',
+              'h-[38px] flex-1 items-center justify-center rounded-chip',
+              value.sex === o.value && 'bg-surface-3',
             )}
           >
             <Text
               className={cn(
                 'text-sm font-semibold',
-                value.sex === o.value ? 'text-background' : 'text-muted-foreground',
+                value.sex === o.value ? 'text-foreground' : 'text-muted-foreground',
               )}
             >
               {o.label}

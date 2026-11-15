@@ -10,6 +10,7 @@ import {
   goalsApi,
   goalsChipLabel,
   greetingLine,
+  todayDateLine,
   INBOX_EMPTY_TOAST,
   progressApi,
   usersApi,
@@ -19,6 +20,7 @@ import {
   type ShareTarget,
   type TodaySummary,
 } from '@fatia/api-client';
+import { headerButtonClass } from '@/components/layout/tab-header';
 import { ErrorState } from '@/components/ui/error-state';
 import { Icon } from '@/components/ui/icon';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -42,6 +44,7 @@ import { GoalsSheet } from '@/components/today/goals-sheet';
 import { InboxSheet } from '@/components/today/inbox-sheet';
 import { WaterSheet } from '@/components/today/water-sheet';
 import { WeightSheet } from '@/components/today/weight-sheet';
+import { cn } from '@/lib/utils';
 
 const noSubscription = () => () => undefined;
 
@@ -71,10 +74,7 @@ export default function HomePage() {
   // "Sáb, 14 nov": do relógio local, pelo mesmo motivo da saudação.
   const dateLine = useSyncExternalStore(
     noSubscription,
-    () =>
-      new Date()
-        .toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' })
-        .replace(/\./g, ''),
+    () => todayDateLine(),
     () => null,
   );
   const today = useQuery({ queryKey: DASHBOARD_KEY, queryFn: () => progressApi.today() });
@@ -142,18 +142,18 @@ export default function HomePage() {
   const goals = data?.dailyGoals;
 
   return (
-    <div className="flex flex-col gap-3.5 px-5 pb-4 pt-6">
+    <div className="flex flex-col gap-4 px-6 pb-4 pt-6">
       {/* Topo (Al-H1): data e chip das metas, saudação, e o sino com ponto de não lido. */}
       <section className="mb-1.5 flex items-start gap-2">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex items-center gap-2">
-            <p className="text-b2 capitalize text-muted-foreground">{dateLine ?? ' '}</p>
+            <p className="text-b2 text-muted-foreground">{dateLine ?? ' '}</p>
             {goals && goals.total > 0 ? (
               <button
                 type="button"
                 onClick={() => setSheet('goals')}
                 aria-label={`Metas do dia: ${goals.met} de ${goals.total}`}
-                className="inline-flex h-7 items-center gap-1 rounded-pill bg-card px-2.5 text-xs font-semibold"
+                className="inline-flex h-7 items-center gap-1.5 rounded-chip bg-card px-2.5 text-xs font-semibold text-muted-foreground"
               >
                 <Icon name="target" size={16} className="text-primary" />
                 {goalsChipLabel(goals.met, goals.total)}
@@ -161,20 +161,22 @@ export default function HomePage() {
             ) : goals ? (
               <Link
                 href="/nutrition/goals"
-                className="inline-flex h-7 items-center gap-1 rounded-pill bg-card px-2.5 text-xs font-semibold"
+                className="inline-flex h-7 items-center gap-1.5 rounded-chip bg-card px-2.5 text-xs font-semibold text-muted-foreground"
               >
                 <Icon name="target" size={16} className="text-primary" />
                 Definir metas
               </Link>
             ) : null}
           </div>
-          <h1 className="font-display text-h2 text-foreground">{greeting ?? ' '}</h1>
+          <h1 className="font-display text-[26px] font-bold leading-[1.15] tracking-[-0.02em] text-foreground">
+            {greeting ?? ' '}
+          </h1>
         </div>
         <button
           type="button"
           onClick={openInbox}
           aria-label={data && data.inbox.unread > 0 ? 'Avisos, há avisos novos' : 'Avisos'}
-          className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-card text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={cn(headerButtonClass(), 'relative')}
         >
           <Icon name="bell" size={20} />
           {data && data.inbox.unread > 0 && (
@@ -188,10 +190,10 @@ export default function HomePage() {
       </section>
 
       {today.isLoading && (
-        <div className="flex flex-col gap-3.5" aria-busy>
+        <div className="flex flex-col gap-4" aria-busy>
           <Skeleton className="h-[172px]" />
           <Skeleton className="h-[96px]" />
-          <div className="grid grid-cols-2 gap-3.5">
+          <div className="grid grid-cols-2 gap-3">
             <Skeleton className="h-[120px]" />
             <Skeleton className="h-[120px]" />
           </div>
@@ -214,7 +216,7 @@ export default function HomePage() {
           {data.nextEvent && <EventCard event={data.nextEvent} />}
           <KcalCard nutrition={data.nutrition} />
           <NextWorkoutCard workout={data.workout} />
-          <div className="grid grid-cols-2 gap-3.5">
+          <div className="grid grid-cols-2 gap-3">
             <WaterTile
               water={data.water}
               onOpen={() => setSheet('water')}
@@ -223,7 +225,7 @@ export default function HomePage() {
             />
             <StepsTile steps={data.steps} onOpen={() => setSheet('steps')} />
           </div>
-          <div className="grid grid-cols-2 gap-3.5">
+          <div className="grid grid-cols-2 gap-3">
             <WeightTile weight={data.weight} onOpen={() => setSheet('weight')} />
             <StreakTile streak={data.streak} />
           </div>

@@ -72,8 +72,10 @@ export function JoinByCodeDrawer({
       : 'Não deu para entrar agora. Tente de novo.'
     : null;
 
+  // Altura fixa nos dois passos: sem `DrawerContent` (BottomSheetView) o sheet
+  // de altura dinâmica não mede os filhos e abre com 0 px, invisível.
   return (
-    <Drawer open={open} onOpenChange={fechar} snapPoints={preview ? ['90%'] : undefined}>
+    <Drawer open={open} onOpenChange={fechar} snapPoints={preview ? ['90%'] : ['45%']}>
       <DrawerHeader>
         <DrawerTitle>{preview ? preview.name : 'Entrar com código'}</DrawerTitle>
         <DrawerDescription>

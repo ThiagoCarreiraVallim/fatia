@@ -155,7 +155,7 @@ export default function ScanScreen() {
               </View>
             ) : (
               <>
-                <View className="flex-1 overflow-hidden rounded-lg border border-border">
+                <View className="flex-1 overflow-hidden rounded-[28px] border-[3px] border-primary bg-card">
                   <PhotoCapture
                     onCapturada={(jpeg) => readLabel.mutate(jpeg)}
                     ativo={!readLabel.isPending && createForm === null}
@@ -180,7 +180,7 @@ export default function ScanScreen() {
             )
           ) : (
             <>
-              <View className="flex-1 overflow-hidden rounded-lg border border-border">
+              <View className="flex-1 overflow-hidden rounded-[28px] border-[3px] border-primary bg-card">
                 <BarcodeCamera
                   onLido={onCode}
                   ativo={result === null && ownFood === null && !lookup.isPending}

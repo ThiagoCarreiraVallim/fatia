@@ -140,6 +140,11 @@ A #418 ("Sobras das issues absorvidas") é revisada no fim da história.
 - **O canvas é base de design, não a fonte de verdade.** Interação, formulários e botões seguem a usabilidade. Por exemplo, altura e peso são digitáveis, além do − e do +.
 - **A figura humana com músculos usa sempre o SVG anatômico completo:** o `MuscleDiagram` da explicação do exercício, em web e app. A silhueta simplificada (`cards/body-silhouette.tsx`) foi apagada na #377: "Seus músculos hoje", "Músculos de hoje" e a aba Músculos do exercício usam o `MuscleDiagram`, que ganhou cores por músculo.
 
+- **Toda tela só fica pronta depois do print lado a lado com a prancha** (web e app), como manda `docs/VISUAL_CHECK.md`. As ferramentas são `scripts/render-board.mjs`, `scripts/shot-web.mjs` e `scripts/emu-shot.sh`. Em toda tela, confira:
+  - a estrutura: header, botões do topo, cards e ordem;
+  - que o menu e o botão da IA nunca ficam sobre botões de modal;
+  - que não há texto preto no tema escuro.
+
 ## Decisões do dono
 
 - **Etapa 1:**

@@ -68,7 +68,7 @@ describe('CopyMealSheet (Al-N9)', () => {
     const user = userEvent.setup();
     renderSheet();
 
-    await user.click(screen.getByRole('button', { name: /^amanhã$/ }));
+    await user.click(screen.getByRole('radio', { name: 'amanhã' }));
     await user.click(screen.getByRole('button', { name: 'Copiar para amanhã' }));
 
     await waitFor(() => expect(copyMeal).toHaveBeenCalledWith('meal-1', { toDate: '2026-11-16' }));

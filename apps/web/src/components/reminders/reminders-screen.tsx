@@ -14,10 +14,10 @@ import {
   type Reminder,
 } from '@fatia/api-client';
 import { TopBarActions } from '@/components/layout/app-top-bar';
+import { headerButtonClass } from '@/components/layout/tab-header';
 import { useWebPush } from '@/components/notifications/use-web-push';
 import { ChipIcon, stagger } from '@/components/today/parts';
 import { ToggleTrack } from '@/components/you/you-list';
-import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Skeleton } from '@/components/ui/skeleton';
 import { NOTIFICATION_SETTINGS_KEY, REMINDERS_KEY } from './keys';
@@ -102,25 +102,30 @@ export function RemindersScreen() {
           type="button"
           aria-label="Novo lembrete"
           onClick={() => setSheet({ open: true, reminder: null })}
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={headerButtonClass('lime')}
         >
-          <Icon name="plus" size={22} />
+          <Icon name="plus" size={20} />
         </button>
       </TopBarActions>
 
       {push.available && push.state !== 'on' && (
         <div
           role="status"
-          className="anim-fade flex items-center gap-3 rounded-field bg-[hsl(var(--warning)/0.12)] p-3"
+          className="anim-fade flex items-center gap-3 rounded-card bg-[hsl(var(--warning)/0.1)] px-4 py-3.5 shadow-[inset_0_0_0_1px_hsl(var(--warning)/0.3)]"
         >
           <ChipIcon icon="bell" tone="amber" size={32} />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold">Notificações bloqueadas</p>
-            <p className="text-[13px] text-muted-foreground">Nada vai tocar até liberar</p>
+            <p className="text-[15px] font-bold">Notificações bloqueadas</p>
+            <p className="text-xs text-faint">Nada vai tocar até liberar</p>
           </div>
-          <Button size="sm" disabled={push.busy} onClick={() => void allow()}>
+          <button
+            type="button"
+            disabled={push.busy}
+            onClick={() => void allow()}
+            className="inline-flex h-[34px] shrink-0 items-center rounded-chip bg-muted px-3.5 text-[13px] font-bold text-foreground disabled:opacity-50"
+          >
             Liberar
-          </Button>
+          </button>
         </div>
       )}
 
@@ -142,7 +147,7 @@ export function RemindersScreen() {
               <li
                 key={r.id}
                 style={stagger(i)}
-                className="anim-up flex min-h-16 items-center gap-2 py-2 pl-4 pr-2.5"
+                className="anim-up flex min-h-[60px] items-center gap-2 py-3.5 pl-[18px] pr-2.5"
               >
                 <button
                   type="button"
@@ -176,7 +181,7 @@ export function RemindersScreen() {
       )}
 
       {list.data && reminders.length === 0 && (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-b2 text-muted-foreground">
           Nenhum lembrete ainda. Toque no + para criar o primeiro.
         </p>
       )}
@@ -191,7 +196,7 @@ export function RemindersScreen() {
           <Icon name="moon" size={20} className="shrink-0 text-muted-foreground" />
           <span className="min-w-0 flex-1">
             <span className="block font-bold">Silêncio noturno</span>
-            <span className="block text-[13px] text-muted-foreground">
+            <span className="block text-xs text-faint">
               {quiet.from} – {quiet.to}
             </span>
           </span>
@@ -200,7 +205,7 @@ export function RemindersScreen() {
       )}
 
       {list.data && (
-        <p className="text-[13px] text-muted-foreground">
+        <p className="text-xs text-faint">
           {activeRemindersLabel(reminders)} · toque no lembrete para mudar horários e dias
         </p>
       )}

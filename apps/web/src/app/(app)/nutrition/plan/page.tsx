@@ -140,11 +140,11 @@ export default function NutritionPlanPage() {
   const authorName = viewing.author?.name ?? null;
 
   return (
-    <div className="space-y-5 p-4 pb-28">
+    <div className="space-y-5 px-5 pb-28 pt-2">
       {pending && (
         <section
           aria-label="Plano novo"
-          className="space-y-3 rounded-2xl border border-primary/40 bg-primary/10 p-4"
+          className="space-y-3 rounded-card bg-primary/10 p-4 shadow-[inset_0_0_0_1.5px_hsl(var(--primary)/0.35)]"
         >
           <p className="text-sm font-bold text-foreground">
             {pending.author?.name ?? 'Seu profissional'} mandou o plano v{pending.version}
@@ -163,15 +163,15 @@ export default function NutritionPlanPage() {
         </section>
       )}
 
-      <header className="space-y-2 rounded-2xl bg-card p-4">
+      <header className="space-y-3 rounded-card bg-gradient-to-br from-primary/15 via-card to-card p-5">
         <div className="flex items-center gap-2">
           <span
             aria-hidden
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-bold"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-protein/40 text-[13px] font-extrabold"
           >
             {initialsOf(authorName)}
           </span>
-          <span className="text-sm font-bold text-muted-foreground">
+          <span className="text-[15px] text-foreground/80">
             {authorName ?? 'Profissional'} · v{viewing.version}
           </span>
           {readOnly && (
@@ -181,14 +181,18 @@ export default function NutritionPlanPage() {
           )}
         </div>
         <p>
-          <span className="font-display text-4xl font-bold tabular-nums">
+          <span className="font-display text-[56px] font-bold leading-none tracking-[-0.04em] tabular-nums">
             {planKcalPerDay(viewing.goals)}
           </span>
-          <span className="text-sm text-muted-foreground"> kcal/dia</span>
+          <span className="text-[15px] text-foreground/80"> kcal/dia</span>
         </p>
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span className="tabular-nums">{planMacrosLine(viewing.goals)}</span>
-          {!readOnly && <span className="tabular-nums">{planWeekText(week)}</span>}
+          {!readOnly && (
+            <span className="rounded-pill bg-primary/15 px-3 py-1 text-[13px] font-extrabold uppercase tracking-[0.04em] text-primary tabular-nums">
+              {planWeekText(week)}
+            </span>
+          )}
         </div>
       </header>
 
@@ -259,21 +263,22 @@ function MealSection({
   return (
     <section aria-labelledby={headingId} className="space-y-2">
       <div className="flex items-center justify-between">
-        <h2 id={headingId} className="text-base font-bold">
+        <h2 id={headingId} className="font-display text-[22px] font-semibold">
           {meal.name}
         </h2>
         {meal.logged ? (
-          <span className="flex items-center gap-1 text-xs font-bold text-primary">
+          <span className="flex items-center gap-1 rounded-pill bg-primary/15 px-3 py-1 text-[13px] font-extrabold uppercase tracking-[0.04em] text-primary">
             <Check size={14} aria-hidden />
             feito
           </span>
         ) : (
-          !single && <span className="text-xs text-muted-foreground">toque para escolher</span>
+          !single && <span className="text-sm text-muted-foreground">toque para escolher</span>
         )}
       </div>
 
       {!single && (
-        <div className="grid gap-2">
+        // As opções lado a lado, arrastando (prancha Al-N5).
+        <div className="-mx-5 flex snap-x gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none]">
           {meal.options.map((o) => {
             const on = o.id === chosen;
             const done = meal.logged?.optionId === o.id;
@@ -285,14 +290,12 @@ function MealSection({
                 disabled={!!meal.logged && !done}
                 onClick={() => setChosen(on ? null : o.id)}
                 className={cn(
-                  'min-h-14 rounded-2xl bg-card px-4 py-3 text-left disabled:opacity-50',
+                  'min-h-24 w-[78%] shrink-0 snap-start rounded-card bg-card px-5 py-4 text-left disabled:opacity-50',
                   on && 'ring-2 ring-inset ring-primary',
                 )}
               >
-                <span className="block text-xs font-bold text-muted-foreground">
-                  {optionTitle(o)}
-                </span>
-                <span className="block text-sm font-bold">
+                <span className="block text-sm text-muted-foreground">{optionTitle(o)}</span>
+                <span className="mt-1.5 block text-[17px] font-semibold leading-snug">
                   {o.items.map((i) => i.swap?.foodName ?? i.foodName).join(', ')}
                 </span>
                 {done && (
@@ -308,7 +311,7 @@ function MealSection({
       )}
 
       {option && (
-        <div className="divide-y divide-subtle overflow-hidden rounded-2xl bg-card">
+        <div className="divide-y divide-border overflow-hidden rounded-card bg-card px-4">
           {option.items.map((item) => (
             <ItemRow
               key={item.id}
@@ -327,6 +330,7 @@ function MealSection({
           size="lg"
           variant="secondary"
           full
+          className="rounded-pill bg-card hover:bg-muted"
           disabled={logging}
           onClick={() => onLog(option.id)}
         >
@@ -354,20 +358,21 @@ function ItemRow({
   if (item.swap) {
     const swap = item.swap;
     return (
-      <div className="flex min-h-16 items-center gap-3 px-4 py-3">
+      <div className="flex min-h-[72px] items-center gap-3 py-3">
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
-            <span className="text-sm font-bold">{swap.foodName}</span>
+            <span className="text-[17px]">{swap.foodName}</span>
             <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-bold text-primary">
               trocado
             </span>
           </span>
-          <span className="block text-xs text-muted-foreground">{swappedLine(item)}</span>
+          <span className="block text-[15px] text-muted-foreground">{swappedLine(item)}</span>
         </span>
         {!readOnly && (
           <Button
-            size="sm"
-            variant="outline"
+            size="lg"
+            variant="secondary"
+            className="h-12 rounded-field bg-muted px-4 text-[15px] font-semibold hover:bg-surface-3"
             disabled={undoing}
             aria-label={`Desfazer troca de ${lower(swap.foodName)}`}
             onClick={() => onUndo(swap.id)}
@@ -379,16 +384,17 @@ function ItemRow({
     );
   }
   return (
-    <div className="flex min-h-16 items-center gap-3 px-4 py-3">
+    <div className="flex min-h-[72px] items-center gap-3 py-3">
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-bold">{item.foodName}</span>
-        <span className="block text-xs text-muted-foreground">{planFoodLine(item)}</span>
+        <span className="block text-[17px]">{item.foodName}</span>
+        <span className="block text-[15px] text-muted-foreground">{planFoodLine(item)}</span>
       </span>
       {item.equivalents.length > 0 ? (
         !readOnly && (
           <Button
-            size="sm"
-            variant="outline"
+            size="lg"
+            variant="secondary"
+            className="h-12 rounded-field bg-muted px-4 text-[15px] font-semibold hover:bg-surface-3"
             aria-label={`Trocar ${lower(item.foodName)}`}
             onClick={onSwap}
           >
@@ -397,7 +403,7 @@ function ItemRow({
           </Button>
         )
       ) : (
-        <span className="text-xs text-muted-foreground">sem troca</span>
+        <span className="text-[15px] text-muted-foreground">sem troca</span>
       )}
     </div>
   );

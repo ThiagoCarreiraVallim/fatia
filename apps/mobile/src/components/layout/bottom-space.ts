@@ -8,8 +8,13 @@ export const NAV_HEIGHT = 68;
 export const ACTIVE_WORKOUT_BAR_HEIGHT = 56;
 export const ACTIVE_WORKOUT_BAR_GAP = 10;
 
-/** Respiro entre o fim do conteúdo e a barra mais alta. */
+/** Respiro no fim da tela sem barra (tarefas de foco). */
 const BREATHING_ROOM = 16;
+/**
+ * Respiro entre o fim do conteúdo e a barra flutuante: o último botão e o fim
+ * da lista ficam ~32 px acima dela (pranchas: `padding-bottom` 124–132 px).
+ */
+const NAV_CLEARANCE = 32;
 
 /** O `paddingBottom` das telas para nada ficar atrás das barras. */
 export function screenBottomPadding(opts: {
@@ -19,5 +24,5 @@ export function screenBottomPadding(opts: {
 }): number {
   if (!opts.navVisible) return opts.safeBottom + BREATHING_ROOM;
   const workout = opts.workoutBar ? ACTIVE_WORKOUT_BAR_HEIGHT + ACTIVE_WORKOUT_BAR_GAP : 0;
-  return opts.safeBottom + NAV_BOTTOM + NAV_HEIGHT + BREATHING_ROOM + workout;
+  return opts.safeBottom + NAV_BOTTOM + NAV_HEIGHT + NAV_CLEARANCE + workout;
 }

@@ -145,7 +145,7 @@ export function YouScreen() {
   };
 
   return (
-    <div className="flex flex-col gap-6 px-6 pb-6 pt-4">
+    <div className="flex flex-col gap-6 px-6 pb-6 pt-6">
       <header className="flex items-center gap-4">
         <Link
           href="/you/edit"
@@ -158,12 +158,8 @@ export function YouScreen() {
           </span>
         </Link>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h1 className="truncate font-display text-2xl font-bold text-foreground">
-            {user?.name ?? ''}
-          </h1>
-          {user && (
-            <p className="truncate text-[13px] text-muted-foreground">{youHeaderLine(user)}</p>
-          )}
+          <h1 className="truncate font-display text-h2 text-foreground">{user?.name ?? ''}</h1>
+          {user && <p className="truncate text-xs text-faint">{youHeaderLine(user)}</p>}
           <div className="flex items-center gap-2">
             {showPlan && plan.data && (
               <Link href="/plan" aria-label={`Meu plano: ${plan.data.tier}`}>
@@ -172,7 +168,7 @@ export function YouScreen() {
             )}
             <Link
               href="/you/edit"
-              className="-my-3 py-3 text-[13px] font-bold text-primary hover:underline"
+              className="-my-3 py-3 text-xs font-bold text-primary hover:underline"
             >
               Editar perfil
             </Link>
@@ -181,25 +177,29 @@ export function YouScreen() {
       </header>
 
       <div className="grid grid-cols-2 gap-3">
-        <Link href="/progress" className="flex flex-col gap-1 rounded-card bg-card p-4">
-          <span className="text-[13px] text-muted-foreground">Peso atual</span>
-          <span className="font-display text-2xl font-bold tabular-nums text-foreground">
+        <Link href="/progress" className="flex flex-col gap-2 rounded-card bg-card px-[18px] py-4">
+          <span className="text-xs text-faint">Peso atual</span>
+          <span className="font-display text-[24px] font-bold leading-[1.1] tracking-[-0.02em] tabular-nums text-foreground">
             {weightText(today.data?.weight.latest?.weightKg)}
-            <span className="ms-0.5 text-sm font-semibold text-muted-foreground">kg</span>
+            <span className="ms-[3px] text-[10px] font-semibold tracking-normal text-muted-foreground">
+              kg
+            </span>
           </span>
         </Link>
         <button
           type="button"
           onClick={() => setHeightOpen(true)}
-          className="flex flex-col gap-1 rounded-card bg-card p-4 text-left"
+          className="flex flex-col gap-2 rounded-card bg-card px-[18px] py-4 text-left"
         >
-          <span className="flex w-full items-center justify-between text-[13px] text-muted-foreground">
+          <span className="flex w-full items-center justify-between text-xs text-faint">
             Estatura
-            <Icon name="edit" size={16} />
+            <Icon name="edit" size={16} className="text-muted-foreground" />
           </span>
-          <span className="font-display text-2xl font-bold tabular-nums text-foreground">
+          <span className="font-display text-[24px] font-bold leading-[1.1] tracking-[-0.02em] tabular-nums text-foreground">
             {user?.heightCm ? Math.round(user.heightCm) : '—'}
-            <span className="ms-0.5 text-sm font-semibold text-muted-foreground">cm</span>
+            <span className="ms-[3px] text-[10px] font-semibold tracking-normal text-muted-foreground">
+              cm
+            </span>
           </span>
         </button>
       </div>

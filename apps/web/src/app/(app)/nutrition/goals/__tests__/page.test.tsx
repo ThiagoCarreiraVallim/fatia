@@ -111,12 +111,30 @@ describe('GoalsPage', () => {
     renderPage();
     const block = await screen.findByRole('region', { name: 'Seus nutrientes' });
     expect(await within(block).findByText('hoje 14 g')).toBeInTheDocument();
-    expect(within(block).getByText('mín 25 g')).toBeInTheDocument();
+    expect(
+      within(block).getByRole('link', { name: 'Fibra, hoje 14 g, mín 25 g' }),
+    ).toBeInTheDocument();
     expect(within(block).getByRole('link', { name: 'Gerenciar' })).toHaveAttribute(
       'href',
       '/nutrition/nutrient-targets',
     );
     expect(within(block).getByRole('link', { name: 'Adicionar nutriente' })).toBeInTheDocument();
+  });
+
+  it('o − e + andam um passo a partir do que está no campo', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const min = await screen.findByLabelText('Mínimo de Calorias');
+    await waitFor(() => expect(min).toHaveValue('1800'));
+    await user.click(screen.getByRole('button', { name: 'Aumentar Mínimo de Calorias' }));
+    expect(min).toHaveValue('1850');
+    await user.click(screen.getByRole('button', { name: 'Diminuir Mínimo de Calorias' }));
+    expect(min).toHaveValue('1800');
+    const water = screen.getByLabelText('Água por dia (L)');
+    await user.clear(water);
+    await user.type(water, '2,5');
+    await user.click(screen.getByRole('button', { name: 'Aumentar Água por dia (L)' }));
+    expect(water).toHaveValue('2,75');
   });
 
   it('salvar avisa que salvou; mexer de novo apaga o aviso', async () => {

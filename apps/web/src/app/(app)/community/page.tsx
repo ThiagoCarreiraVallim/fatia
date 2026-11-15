@@ -10,7 +10,7 @@ import { PlanBadge } from '@/components/billing/plan-badge';
 import { GroupAvatar } from '@/components/community/group-avatar';
 import { JoinByCodeDrawer } from '@/components/community/join-by-code-drawer';
 import { communityKeys } from '@/components/community/query-keys';
-import { TopBarActions, topBarActionClass } from '@/components/layout/app-top-bar';
+import { TabHeader, headerButtonClass } from '@/components/layout/tab-header';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -23,19 +23,23 @@ export default function CommunityPage() {
 
   return (
     <div className="space-y-5 p-4">
-      <TopBarActions>
+      <TabHeader title="Comunidade">
         <button
           type="button"
-          className={topBarActionClass}
+          className={headerButtonClass()}
           aria-label="Entrar com código"
           onClick={() => setJoining(true)}
         >
           <KeyRound size={20} aria-hidden />
         </button>
-        <Link href="/community/new" className={topBarActionClass} aria-label="Criar comunidade">
+        <Link
+          href="/community/new"
+          className={headerButtonClass('lime')}
+          aria-label="Criar comunidade"
+        >
           <Plus size={20} aria-hidden />
         </Link>
-      </TopBarActions>
+      </TabHeader>
 
       {groups.isPending && (
         <div aria-busy="true" className="space-y-3">

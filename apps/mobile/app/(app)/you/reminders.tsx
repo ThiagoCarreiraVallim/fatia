@@ -13,6 +13,7 @@ import {
   type Reminder,
 } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
+import { headerButtonClass } from '@/components/layout/tab-header';
 import { NOTIFICATION_SETTINGS_KEY, REMINDERS_KEY } from '@/components/reminders/keys';
 import { ReminderSheet } from '@/components/reminders/reminder-sheet';
 import { ChipIcon } from '@/components/today/parts';
@@ -114,9 +115,9 @@ export default function RemindersScreen() {
             accessibilityRole="button"
             accessibilityLabel="Novo lembrete"
             onPress={() => setSheet({ open: true, reminder: null })}
-            className="h-11 w-11 items-center justify-center rounded-full bg-primary active:opacity-80"
+            className={headerButtonClass('lime')}
           >
-            <Icon name="plus" size={22} color={colors.primaryForeground} />
+            <Icon name="plus" size={20} color={colors.primaryForeground} />
           </Pressable>
         }
         onRefresh={() => void list.refetch()}
@@ -126,19 +127,21 @@ export default function RemindersScreen() {
           {receiving === false ? (
             <View
               accessibilityRole="alert"
-              className="flex-row items-center gap-3 rounded-field p-3"
-              style={{ backgroundColor: `${colors.warning}1f` }}
+              className="flex-row items-center gap-3 rounded-card px-4 py-3.5"
+              style={{
+                backgroundColor: `${colors.warning}1a`,
+                borderWidth: 1,
+                borderColor: `${colors.warning}4d`,
+              }}
             >
               <ChipIcon icon="bell" tone="amber" size={32} />
               <View className="flex-1">
-                <Text className="font-sans-bold text-sm text-foreground">
+                <Text className="font-sans-bold text-[15px] text-foreground">
                   Notificações bloqueadas
                 </Text>
-                <Text className="text-[13px] text-muted-foreground">
-                  Nada vai tocar até liberar
-                </Text>
+                <Text className="text-xs text-faint">Nada vai tocar até liberar</Text>
               </View>
-              <Button size="xs" loading={allowing} onPress={() => void allow()}>
+              <Button size="xs" variant="secondary" loading={allowing} onPress={() => void allow()}>
                 Liberar
               </Button>
             </View>
@@ -155,7 +158,7 @@ export default function RemindersScreen() {
                   <Animated.View
                     key={r.id}
                     entering={listEntering(i)}
-                    className="min-h-16 flex-row items-center gap-2 border-border py-2 pl-4 pr-2.5"
+                    className="min-h-[60px] flex-row items-center gap-2 border-border py-3.5 pl-[18px] pr-2.5"
                     style={i ? { borderTopWidth: 1 } : undefined}
                   >
                     <Pressable
@@ -194,7 +197,7 @@ export default function RemindersScreen() {
           ) : null}
 
           {list.data && reminders.length === 0 ? (
-            <Text className="text-sm text-muted-foreground">
+            <Text className="text-b2 text-muted-foreground">
               Nenhum lembrete ainda. Toque no + para criar o primeiro.
             </Text>
           ) : null}
@@ -210,7 +213,7 @@ export default function RemindersScreen() {
               <Icon name="moon" size={20} color={colors.mutedForeground} />
               <View className="flex-1">
                 <Text className="font-sans-bold text-foreground">Silêncio noturno</Text>
-                <Text className="text-[13px] text-muted-foreground">
+                <Text className="text-xs text-faint">
                   {quiet.from} – {quiet.to}
                 </Text>
               </View>
@@ -219,7 +222,7 @@ export default function RemindersScreen() {
           ) : null}
 
           {list.data ? (
-            <Text className="text-[13px] text-muted-foreground">
+            <Text className="text-xs text-faint">
               {activeRemindersLabel(reminders)} · toque no lembrete para mudar horários e dias
             </Text>
           ) : null}

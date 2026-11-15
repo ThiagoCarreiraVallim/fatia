@@ -366,7 +366,7 @@ export function BodyStep({
         <div
           role="radiogroup"
           aria-label="Sexo biológico"
-          className="flex gap-1 rounded-[16px] bg-card p-1"
+          className="flex gap-1 rounded-field bg-card p-1"
         >
           {ONBOARDING_SEX.map((o) => (
             <button
@@ -376,8 +376,8 @@ export function BodyStep({
               aria-checked={value.sex === o.value}
               onClick={() => set({ sex: o.value })}
               className={cn(
-                'h-11 flex-1 rounded-[12px] text-sm font-semibold transition-colors duration-fast',
-                value.sex === o.value ? 'bg-foreground text-background' : 'text-muted-foreground',
+                'h-[38px] flex-1 rounded-chip text-sm font-semibold transition-colors duration-fast',
+                value.sex === o.value ? 'bg-surface-3 text-foreground' : 'text-muted-foreground',
               )}
             >
               {o.label}

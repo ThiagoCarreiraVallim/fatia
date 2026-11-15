@@ -4,13 +4,14 @@ import { Text } from '@/components/ui/text';
 import { Minus, Plus } from 'lucide-react-native';
 import {
   amountGrams,
+  formatQuantity,
   MAX_QUANTITY,
   parseDecimalInput,
   stepQuantity,
   type Amount,
   type FoodPortion,
 } from '@fatia/api-client';
-import { Button, cn } from '@/components/ui';
+import { Button, DrawerTextInput, cn } from '@/components/ui';
 import { DrawerInput } from './drawer-input';
 import { NUMEROS_TABULARES, parsePositivo } from './helpers';
 import { colors } from '@/theme/colors';
@@ -37,12 +38,60 @@ export function AmountPicker({
   const [criando, setCriando] = useState(false);
   const gramas = amountGrams(quantidade, medidas);
 
+  const medida =
+    quantidade.kind === 'portion' ? medidas.find((m) => m.id === quantidade.portionId) : undefined;
+
   return (
-    <View className="gap-3">
+    <View className="gap-4">
+      {/* O número grande no meio, − e + nas pontas (prancha Al-N3). O número é
+        um campo: dá para digitar 1,5 ou 137 em vez de tocar várias vezes. */}
+      {quantidade.kind === 'grams' ? (
+        <View className="gap-1">
+          <View className="flex-row items-center justify-between gap-2">
+            <StepButton
+              direction={-1}
+              label="Menos 10 g"
+              onPress={() => onChange({ kind: 'grams', grams: stepGrams(quantidade.grams, -1) })}
+            />
+            <View className="min-w-0 flex-1 items-center gap-1">
+              {/* `decimal-pad`: o `numeric` do iOS não tem vírgula. */}
+              <DrawerTextInput
+                accessibilityLabel="Quantidade em gramas"
+                autoFocus={autoFocus}
+                keyboardType="decimal-pad"
+                inputMode="decimal"
+                value={quantidade.grams}
+                onChangeText={(valor) => onChange({ kind: 'grams', grams: valor })}
+                selectionColor={colors.primaryText}
+                style={[BIG_NUMBER, gramas === null ? { color: colors.destructive } : null]}
+              />
+              <Text className="text-[13px] text-muted-foreground">gramas</Text>
+            </View>
+            <StepButton
+              direction={1}
+              label="Mais 10 g"
+              onPress={() => onChange({ kind: 'grams', grams: stepGrams(quantidade.grams, 1) })}
+            />
+          </View>
+          {gramas === null ? (
+            <Text accessibilityRole="alert" className="text-center text-sm text-destructive">
+              Digite os gramas, como 120 ou 120,5.
+            </Text>
+          ) : null}
+        </View>
+      ) : (
+        <QuantityField
+          quantidade={quantidade}
+          gramas={gramas}
+          unitLabel={medida?.label ?? 'medida'}
+          onChange={onChange}
+        />
+      )}
+
       <View
         accessibilityRole="radiogroup"
         accessibilityLabel="Unidade"
-        className="flex-row flex-wrap gap-2"
+        className="flex-row flex-wrap gap-1.5"
       >
         <Chip
           marcado={quantidade.kind === 'grams'}
@@ -57,6 +106,7 @@ export function AmountPicker({
           <Chip
             key={m.id}
             marcado={quantidade.kind === 'portion' && quantidade.portionId === m.id}
+            own={m.mine}
             onPress={() =>
               onChange({
                 kind: 'portion',
@@ -65,17 +115,19 @@ export function AmountPicker({
               })
             }
           >
-            {`${m.label} · ${Math.round(m.grams)} g`}
+            {`${m.label} · ${Math.round(m.grams)} g${m.mine ? ' · sua' : ''}`}
           </Chip>
         ))}
         {!criando ? (
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Medida"
             onPress={() => setCriando(true)}
-            className="min-h-11 flex-row items-center gap-1 rounded-full border border-dashed border-border px-3"
+            style={{ borderWidth: 1, borderColor: colors.borderStrong }}
+            className="h-9 flex-row items-center gap-1.5 rounded-chip px-3.5"
           >
-            <Plus size={14} color={colors.placeholder} />
-            <Text className="text-sm text-muted-foreground">Nova medida</Text>
+            <Plus size={16} color={colors.mutedForeground} />
+            <Text className="font-sans-semibold text-[13px] text-muted-foreground">Medida</Text>
           </Pressable>
         ) : null}
       </View>
@@ -90,46 +142,22 @@ export function AmountPicker({
           }}
         />
       ) : null}
-
-      {quantidade.kind === 'grams' ? (
-        <View className="gap-1">
-          <View className="flex-row items-end gap-2">
-            <BotaoDoPasso
-              rotulo="Menos 10 g"
-              onPress={() => onChange({ kind: 'grams', grams: stepGrams(quantidade.grams, -1) })}
-            >
-              <Minus size={18} color={colors.foreground} />
-            </BotaoDoPasso>
-            <View className="flex-1">
-              {/* `decimal-pad`: o `numeric` do iOS não tem vírgula. */}
-              <DrawerInput
-                label="Quantidade (g)"
-                autoFocus={autoFocus}
-                keyboardType="decimal-pad"
-                inputMode="decimal"
-                value={quantidade.grams}
-                onChangeText={(valor) => onChange({ kind: 'grams', grams: valor })}
-              />
-            </View>
-            <BotaoDoPasso
-              rotulo="Mais 10 g"
-              onPress={() => onChange({ kind: 'grams', grams: stepGrams(quantidade.grams, 1) })}
-            >
-              <Plus size={18} color={colors.foreground} />
-            </BotaoDoPasso>
-          </View>
-          {gramas === null ? (
-            <Text accessibilityRole="alert" className="text-sm text-destructive">
-              Digite os gramas, como 120 ou 120,5.
-            </Text>
-          ) : null}
-        </View>
-      ) : (
-        <QuantityField quantidade={quantidade} gramas={gramas} onChange={onChange} />
-      )}
     </View>
   );
 }
+
+/** O número grande da prancha (Sora 56/700), sem cara de campo. */
+const BIG_NUMBER = {
+  ...NUMEROS_TABULARES,
+  alignSelf: 'stretch' as const,
+  textAlign: 'center' as const,
+  fontFamily: 'Sora_700Bold',
+  fontSize: 56,
+  lineHeight: 64,
+  letterSpacing: -2.2,
+  color: colors.foreground,
+  padding: 0,
+};
 
 /** ±10 g a partir do que está no campo; vazio ou ilegível começa de 0. */
 function stepGrams(text: string, direction: 1 | -1): string {
@@ -150,14 +178,17 @@ function quantityText(quantity: number): string {
 function QuantityField({
   quantidade,
   gramas,
+  unitLabel,
   onChange,
 }: {
   quantidade: Extract<Amount, { kind: 'portion' }>;
   gramas: number | null;
+  unitLabel: string;
   onChange: (quantidade: Amount) => void;
 }) {
   const [text, setText] = useState(quantityText(quantidade.quantity));
   const [synced, setSynced] = useState(quantidade.quantity);
+  const [editing, setEditing] = useState(false);
   if (synced !== quantidade.quantity && Number.isFinite(quantidade.quantity)) {
     setSynced(quantidade.quantity);
     setText(quantityText(quantidade.quantity));
@@ -171,16 +202,18 @@ function QuantityField({
 
   return (
     <View className="gap-1">
-      <View className="flex-row items-end gap-2">
-        <BotaoDoPasso rotulo="Menos" onPress={() => step(-1)}>
-          <Minus size={18} color={colors.foreground} />
-        </BotaoDoPasso>
-        <View className="w-24">
-          <DrawerInput
-            label="Quantas medidas"
+      <View className="flex-row items-center justify-between gap-2">
+        <StepButton direction={-1} label="Menos" onPress={() => step(-1)} />
+        <View className="min-w-0 flex-1 items-center gap-1">
+          <DrawerTextInput
+            accessibilityLabel="Quantas medidas"
             keyboardType="decimal-pad"
             inputMode="decimal"
-            value={text}
+            // Fora do foco, "1½" como na prancha; no foco, o número para editar.
+            value={editing || invalid ? text : formatQuantity(quantidade.quantity)}
+            onFocus={() => setEditing(true)}
+            onBlur={() => setEditing(false)}
+            selectionColor={colors.primaryText}
             onChangeText={(next) => {
               setText(next);
               const value = parseDecimalInput(next);
@@ -189,23 +222,20 @@ function QuantityField({
               setSynced(quantity);
               onChange({ ...quantidade, quantity });
             }}
+            style={[BIG_NUMBER, invalid ? { color: colors.destructive } : null]}
           />
-        </View>
-        <BotaoDoPasso rotulo="Mais" onPress={() => step(1)}>
-          <Plus size={18} color={colors.foreground} />
-        </BotaoDoPasso>
-        {gramas !== null ? (
           <Text
             accessibilityLiveRegion="polite"
             style={NUMEROS_TABULARES}
-            className="pb-3 text-sm text-muted-foreground"
+            className="text-[13px] text-muted-foreground"
           >
-            = {gramas.toLocaleString('pt-BR')} g
+            {gramas !== null ? `${unitLabel} · ${gramas.toLocaleString('pt-BR')} g` : unitLabel}
           </Text>
-        ) : null}
+        </View>
+        <StepButton direction={1} label="Mais" onPress={() => step(1)} />
       </View>
       {invalid ? (
-        <Text accessibilityRole="alert" className="text-sm text-destructive">
+        <Text accessibilityRole="alert" className="text-center text-sm text-destructive">
           {`Digite um número, como 1,5 (até ${MAX_QUANTITY}).`}
         </Text>
       ) : null}
@@ -216,11 +246,14 @@ function QuantityField({
 function Chip({
   marcado,
   rotuloAcessivel,
+  own = false,
   onPress,
   children,
 }: {
   marcado: boolean;
   rotuloAcessivel?: string;
+  /** Medida criada pela pessoa: o verde suave da prancha. */
+  own?: boolean;
   onPress: () => void;
   children: string;
 }) {
@@ -231,12 +264,15 @@ function Chip({
       accessibilityLabel={rotuloAcessivel ?? children}
       onPress={onPress}
       className={cn(
-        'min-h-11 items-center justify-center rounded-full border px-3',
-        marcado ? 'border-primary bg-primary/15' : 'border-border',
+        'h-9 items-center justify-center rounded-chip px-3.5',
+        marcado ? 'bg-foreground' : own ? 'bg-primary/15' : 'bg-muted',
       )}
     >
       <Text
-        className={cn('text-sm', marcado ? 'font-medium text-primary' : 'text-muted-foreground')}
+        className={cn(
+          'font-sans-semibold text-[13px]',
+          marcado ? 'text-background' : own ? 'text-primary' : 'text-muted-foreground',
+        )}
       >
         {children}
       </Text>
@@ -244,23 +280,31 @@ function Chip({
   );
 }
 
-function BotaoDoPasso({
-  rotulo,
+/** − apagado, + verde, 56 pt (prancha Al-N3). */
+function StepButton({
+  direction,
+  label,
   onPress,
-  children,
 }: {
-  rotulo: string;
+  direction: 1 | -1;
+  label: string;
   onPress: () => void;
-  children: React.ReactNode;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={rotulo}
+      accessibilityLabel={label}
       onPress={onPress}
-      className="h-11 w-11 items-center justify-center rounded-lg border border-border"
+      className={cn(
+        'h-14 w-14 items-center justify-center rounded-pill active:opacity-70',
+        direction > 0 ? 'bg-primary' : 'bg-surface-3',
+      )}
     >
-      {children}
+      {direction > 0 ? (
+        <Plus size={24} color={colors.primaryForeground} />
+      ) : (
+        <Minus size={18} color={colors.foreground} />
+      )}
     </Pressable>
   );
 }

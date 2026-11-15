@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import {
   amountGrams,
+  formatQuantity,
   MAX_QUANTITY,
   parseDecimalInput,
   stepQuantity,
@@ -42,9 +43,58 @@ export function AmountPicker({
   const [creating, setCreating] = useState(false);
   const grams = amountGrams(amount, portions);
 
+  const portion =
+    amount.kind === 'portion' ? portions.find((p) => p.id === amount.portionId) : undefined;
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Unidade">
+    <div className="space-y-4">
+      {/* O número grande no meio, − e + nas pontas (prancha Al-N3). O número é
+        um campo: dá para digitar 1,5 ou 137 em vez de tocar várias vezes. */}
+      {amount.kind === 'grams' ? (
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <StepButton
+              direction={-1}
+              label="Menos 10 g"
+              onClick={() => onChange({ kind: 'grams', grams: stepGrams(amount.grams, -1) })}
+            />
+            <div className="flex min-w-0 flex-1 flex-col items-center gap-1">
+              {/* Texto com teclado decimal, e não `type="number"`: o campo
+                numérico recusa a vírgula em parte dos navegadores. */}
+              <input
+                id={gramsId}
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                aria-label="Quantidade em gramas"
+                value={amount.grams}
+                aria-invalid={grams === null}
+                onChange={(e) => onChange({ kind: 'grams', grams: e.target.value })}
+                className={bigNumber}
+              />
+              <span className="text-[13px] text-muted-foreground">gramas</span>
+            </div>
+            <StepButton
+              direction={1}
+              label="Mais 10 g"
+              onClick={() => onChange({ kind: 'grams', grams: stepGrams(amount.grams, 1) })}
+            />
+          </div>
+          {grams === null && (
+            <p role="alert" className="text-center text-sm text-danger">
+              Digite os gramas, como 120 ou 120,5.
+            </p>
+          )}
+        </div>
+      ) : (
+        <QuantityField
+          amount={amount}
+          grams={grams}
+          unitLabel={portion?.label ?? 'medida'}
+          onChange={onChange}
+        />
+      )}
+
+      <div className="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Unidade">
         <Chip
           checked={amount.kind === 'grams'}
           label="gramas"
@@ -58,6 +108,7 @@ export function AmountPicker({
           <Chip
             key={p.id}
             checked={amount.kind === 'portion' && amount.portionId === p.id}
+            own={p.mine}
             onSelect={() =>
               onChange({
                 kind: 'portion',
@@ -66,17 +117,17 @@ export function AmountPicker({
               })
             }
           >
-            {p.label} · {Math.round(p.grams)} g
+            {p.label} · {Math.round(p.grams)} g{p.mine ? ' · sua' : ''}
           </Chip>
         ))}
         {!creating && (
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="inline-flex min-h-11 items-center gap-1 rounded-full border border-dashed px-3 text-sm text-muted-foreground hover:text-foreground"
+            className="anim-press inline-flex h-9 items-center gap-1.5 rounded-chip px-3.5 text-[13px] font-semibold text-muted-foreground shadow-[inset_0_0_0_1px_hsl(var(--border-strong))] hover:text-foreground"
           >
-            <Plus size={14} aria-hidden />
-            Nova medida
+            <Plus size={16} aria-hidden />
+            Medida
           </button>
         )}
       </div>
@@ -91,48 +142,13 @@ export function AmountPicker({
           }}
         />
       )}
-
-      {amount.kind === 'grams' ? (
-        <div className="space-y-1">
-          <label htmlFor={gramsId} className="text-sm font-medium">
-            Quantidade (g)
-          </label>
-          <div className="flex items-center gap-2">
-            <StepButton
-              direction={-1}
-              label="Menos 10 g"
-              onClick={() => onChange({ kind: 'grams', grams: stepGrams(amount.grams, -1) })}
-            />
-            {/* Texto com teclado decimal, e não `type="number"`: o campo numérico
-              recusa a vírgula em parte dos navegadores e some com o que foi digitado. */}
-            <Input
-              id={gramsId}
-              type="text"
-              inputMode="decimal"
-              autoComplete="off"
-              value={amount.grams}
-              aria-invalid={grams === null}
-              onChange={(e) => onChange({ kind: 'grams', grams: e.target.value })}
-              className="text-center text-lg font-semibold tabular-nums"
-            />
-            <StepButton
-              direction={1}
-              label="Mais 10 g"
-              onClick={() => onChange({ kind: 'grams', grams: stepGrams(amount.grams, 1) })}
-            />
-          </div>
-          {grams === null && (
-            <p role="alert" className="text-sm text-danger">
-              Digite os gramas, como 120 ou 120,5.
-            </p>
-          )}
-        </div>
-      ) : (
-        <QuantityField amount={amount} grams={grams} onChange={onChange} />
-      )}
     </div>
   );
 }
+
+/** O número grande da prancha (Sora 56/700), sem cara de campo até o foco. */
+const bigNumber =
+  'w-full min-w-0 rounded-field bg-transparent text-center font-display text-[56px] font-bold leading-none tracking-[-0.04em] tabular-nums text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring aria-[invalid=true]:text-danger';
 
 /** ±10 g a partir do que está no campo; vazio ou ilegível começa de 0. */
 function stepGrams(text: string, direction: 1 | -1): string {
@@ -151,16 +167,17 @@ function StepButton({
   onClick: () => void;
 }) {
   return (
-    <Button
+    <button
       type="button"
-      variant="outline"
-      size="icon"
-      className="h-11 w-11 shrink-0"
       aria-label={label}
       onClick={onClick}
+      className={cn(
+        'anim-press flex h-14 w-14 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        direction > 0 ? 'bg-primary text-primary-foreground' : 'bg-surface-3 text-foreground',
+      )}
     >
-      {direction > 0 ? <Plus size={16} aria-hidden /> : <Minus size={16} aria-hidden />}
-    </Button>
+      {direction > 0 ? <Plus size={24} aria-hidden /> : <Minus size={18} aria-hidden />}
+    </button>
   );
 }
 
@@ -176,14 +193,17 @@ function quantityText(quantity: number): string {
 function QuantityField({
   amount,
   grams,
+  unitLabel,
   onChange,
 }: {
   amount: Extract<Amount, { kind: 'portion' }>;
   grams: number | null;
+  unitLabel: string;
   onChange: (amount: Amount) => void;
 }) {
   const [text, setText] = useState(quantityText(amount.quantity));
   const [synced, setSynced] = useState(amount.quantity);
+  const [editing, setEditing] = useState(false);
   // O − e + (ou outra medida) mudam o número por fora: o campo acompanha.
   if (synced !== amount.quantity && Number.isFinite(amount.quantity)) {
     setSynced(amount.quantity);
@@ -199,35 +219,37 @@ function QuantityField({
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2">
         <StepButton direction={-1} label="Menos" onClick={() => step(-1)} />
-        <Input
-          type="text"
-          inputMode="decimal"
-          autoComplete="off"
-          aria-label="Quantas medidas"
-          aria-invalid={invalid}
-          value={text}
-          onChange={(e) => {
-            const next = e.target.value;
-            setText(next);
-            const value = parseDecimalInput(next);
-            const quantity = value !== null && value > 0 && value <= MAX_QUANTITY ? value : NaN;
-            setSynced(quantity);
-            onChange({ ...amount, quantity });
-          }}
-          className="w-20 text-center text-lg font-semibold tabular-nums"
-        />
+        <div className="flex min-w-0 flex-1 flex-col items-center gap-1">
+          <input
+            type="text"
+            inputMode="decimal"
+            autoComplete="off"
+            aria-label="Quantas medidas"
+            aria-invalid={invalid}
+            // Fora do foco, "1½" como na prancha; no foco, o número para editar.
+            value={editing || invalid ? text : formatQuantity(amount.quantity)}
+            onFocus={() => setEditing(true)}
+            onBlur={() => setEditing(false)}
+            onChange={(e) => {
+              const next = e.target.value;
+              setText(next);
+              const value = parseDecimalInput(next);
+              const quantity = value !== null && value > 0 && value <= MAX_QUANTITY ? value : NaN;
+              setSynced(quantity);
+              onChange({ ...amount, quantity });
+            }}
+            className={bigNumber}
+          />
+          <span aria-live="polite" className="text-[13px] tabular-nums text-muted-foreground">
+            {grams !== null ? `${unitLabel} · ${grams.toLocaleString('pt-BR')} g` : unitLabel}
+          </span>
+        </div>
         <StepButton direction={1} label="Mais" onClick={() => step(1)} />
-        {grams !== null && (
-          <span
-            aria-live="polite"
-            className="text-sm tabular-nums text-muted-foreground"
-          >{`= ${grams.toLocaleString('pt-BR')} g`}</span>
-        )}
       </div>
       {invalid && (
-        <p role="alert" className="text-sm text-danger">
+        <p role="alert" className="text-center text-sm text-danger">
           {`Digite um número, como 1,5 (até ${MAX_QUANTITY}).`}
         </p>
       )}
@@ -238,11 +260,14 @@ function QuantityField({
 function Chip({
   checked,
   label,
+  own = false,
   onSelect,
   children,
 }: {
   checked: boolean;
   label?: string;
+  /** Medida criada pela pessoa: o verde suave da prancha. */
+  own?: boolean;
   onSelect: () => void;
   children: React.ReactNode;
 }) {
@@ -254,10 +279,12 @@ function Chip({
       aria-label={label}
       onClick={onSelect}
       className={cn(
-        'inline-flex min-h-11 items-center rounded-full border px-3 text-sm transition-colors',
+        'anim-press relative inline-flex h-9 items-center rounded-chip px-3.5 text-[13px] font-semibold transition-colors after:absolute after:-inset-1',
         checked
-          ? 'border-primary bg-primary/15 font-medium text-primary'
-          : 'text-muted-foreground hover:text-foreground',
+          ? 'bg-foreground text-background'
+          : own
+            ? 'bg-primary-soft text-primary'
+            : 'bg-muted text-muted-foreground hover:text-foreground',
       )}
     >
       {children}

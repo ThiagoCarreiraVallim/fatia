@@ -64,7 +64,7 @@ describe('AppTopBar', () => {
   });
 
   it('as ações da tela aparecem na barra', () => {
-    pathname.atual = '/nutrition';
+    pathname.atual = '/nutrition/foods';
     montar(
       <TopBarActions>
         <button type="button">Copiar dia</button>

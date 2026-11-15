@@ -18,9 +18,11 @@ export {
   DrawerFooter,
   DrawerHeader,
   DrawerLayer,
+  DrawerPresenceProvider,
   DrawerScrollView,
   DrawerTextInput,
   DrawerTitle,
+  useAnyDrawerOpen,
 } from './drawer';
 export { FormField, FormMessage, type FormFieldRender } from './form';
 export { Input, type InputProps } from './input';

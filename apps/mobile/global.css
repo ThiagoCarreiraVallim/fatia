@@ -55,7 +55,7 @@
     :root {
       --background: 0 0% 7.5%; /* #131313 */
       --foreground: 15 7.1% 89%; /* #e5e2e1 */
-      --card: 0 0% 16.5%; /* #2a2a2a */
+      --card: 0 0% 12.2%; /* #1f1f1f, s1 do canvas */
       --card-foreground: 15 7.1% 89%; /* #e5e2e1 */
       --popover: 0 0% 10.2%; /* #1a1a1a */
       --popover-foreground: 15 7.1% 89%; /* #e5e2e1 */
@@ -64,7 +64,7 @@
       --primary-text: 108.5 100% 44.9%; /* #2ce500 */
       --secondary: 0 0% 20%; /* #333333 */
       --secondary-foreground: 15 7.1% 89%; /* #e5e2e1 */
-      --muted: 0 0% 12.2%; /* #1f1f1f */
+      --muted: 0 0% 16.5%; /* #2a2a2a, s2 do canvas */
       --muted-foreground: 97.2 22.1% 74.3%; /* #baccaf */
       --faint-foreground: 96.7 9.1% 61.2%; /* #9aa593 */
       --surface-3: 0 0% 20.4%; /* #343434 */
