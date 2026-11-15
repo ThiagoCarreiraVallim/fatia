@@ -1,9 +1,11 @@
 import { View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  customFoodPatch,
   customFoodToForm,
   emptyCustomFoodForm,
   nutritionApi,
+  type CustomFoodForm as FormValues,
   type CustomFoodInput,
   type Food,
 } from '@fatia/api-client';
@@ -15,26 +17,31 @@ import {
   DrawerTitle,
   useConfirm,
 } from '@/components/ui';
-import { FormularioDeAlimento } from './formulario-de-alimento';
+import { CustomFoodForm } from './custom-food-form';
 import { mensagemDeErro } from './helpers';
 
 /**
  * Réplica de `apps/web/src/components/nutrition/custom-food-drawer.tsx`:
- * cadastro (`food` nulo) ou edição, com apagar confirmado.
+ * cadastro (`food` nulo) ou edição, com apagar confirmado. `initial` chega
+ * preenchido pelo leitor (o rótulo lido, o código não achado).
  */
-export function AlimentoDrawer({
+export function CustomFoodDrawer({
   open,
   onOpenChange,
   food,
+  initial,
+  onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   food: Food | null;
+  initial?: FormValues;
+  onSaved?: (food: Food) => void;
 }) {
   const confirm = useConfirm();
   const qc = useQueryClient();
 
-  const concluir = () => {
+  const done = () => {
     // A busca e os atalhos guardam nome e valores do alimento.
     void qc.invalidateQueries({ queryKey: ['nutrition', 'custom-foods'] });
     void qc.invalidateQueries({ queryKey: ['nutrition', 'search'] });
@@ -42,28 +49,33 @@ export function AlimentoDrawer({
     onOpenChange(false);
   };
 
-  const salvar = useMutation<Food, Error, CustomFoodInput>({
+  const save = useMutation<Food, Error, CustomFoodInput>({
     mutationFn: (input) =>
-      food ? nutritionApi.updateCustomFood(food.id, input) : nutritionApi.createCustomFood(input),
-    onSuccess: concluir,
+      food
+        ? nutritionApi.updateCustomFood(food.id, customFoodPatch(input))
+        : nutritionApi.createCustomFood(input),
+    onSuccess: (saved) => {
+      done();
+      onSaved?.(saved);
+    },
   });
 
-  const apagar = useMutation<void, Error, number>({
+  const remove = useMutation<void, Error, number>({
     mutationFn: (id) => nutritionApi.deleteCustomFood(id),
-    onSuccess: concluir,
+    onSuccess: done,
   });
 
-  const confirmarApagar = (alvo: Food) =>
+  const confirmRemove = (target: Food) =>
     confirm({
-      title: `Apagar "${alvo.name}"?`,
+      title: `Apagar "${target.name}"?`,
       description:
         'Some da busca e dos atalhos. As refeições já registradas continuam com o nome e os valores.',
       confirmLabel: 'Apagar',
       destructive: true,
-      onConfirm: () => apagar.mutate(alvo.id),
+      onConfirm: () => remove.mutate(target.id),
     });
 
-  const falha = salvar.error ?? apagar.error;
+  const failure = save.error ?? remove.error;
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange} snapPoints={['85%']}>
@@ -73,23 +85,23 @@ export function AlimentoDrawer({
           <DrawerDescription>
             {food
               ? 'Valores por 100 g. As medidas se ajustam ao registrar.'
-              : 'Copie o rótulo. Ele aparece na busca ao registrar uma refeição.'}
+              : 'Confira o rótulo. Ele aparece na busca ao registrar uma refeição.'}
           </DrawerDescription>
         </DrawerHeader>
         {open ? (
-          <FormularioDeAlimento
+          <CustomFoodForm
             key={food?.id ?? 'novo'}
-            inicial={food ? customFoodToForm(food) : emptyCustomFoodForm()}
-            editando={!!food}
-            rotuloDoEnvio="Salvar"
-            enviando={salvar.isPending}
-            erro={falha ? mensagemDeErro(falha, { conflito: falha.message }) : undefined}
-            onEnviar={(input) => salvar.mutate(input)}
-            onCancelar={() => onOpenChange(false)}
-            rotuloDoCancelar="Cancelar"
-            rodape={
+            initial={food ? customFoodToForm(food) : (initial ?? emptyCustomFoodForm())}
+            editing={!!food}
+            submitLabel="Salvar"
+            pending={save.isPending}
+            error={failure ? mensagemDeErro(failure, { conflito: failure.message }) : undefined}
+            onSubmit={(input) => save.mutate(input)}
+            onCancel={() => onOpenChange(false)}
+            cancelLabel="Cancelar"
+            footer={
               food ? (
-                <Button variant="ghost" onPress={() => confirmarApagar(food)}>
+                <Button variant="ghost" onPress={() => confirmRemove(food)}>
                   Apagar alimento
                 </Button>
               ) : null
