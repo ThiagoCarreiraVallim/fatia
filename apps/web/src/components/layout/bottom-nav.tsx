@@ -20,7 +20,7 @@ import {
 } from './active-workout-bar';
 import { AiFab } from './ai-fab';
 import { AiPendingCard } from './ai-pending-card';
-import { useAiDrawer } from './ai-drawer';
+import { useAiMenu } from './ai-menu';
 import { aiUsable, useChatAvailability } from './use-ai-state';
 
 /** A barra flutua 22 px acima do fim da tela e tem 68 px (prancha `Al-H6c5`). */
@@ -96,23 +96,34 @@ function TabLink({ tab, on }: { tab: NavTab; on: boolean }) {
  */
 export function BottomNav() {
   const { pathname, session, visible, workoutBar } = useBottomChrome();
-  const drawer = useAiDrawer();
+  const menu = useAiMenu();
   const usable = aiUsable(useChatAvailability().data);
   const active = activeNavKey(pathname);
   if (!visible) return null;
 
   const above = NAV_BOTTOM + NAV_HEIGHT + ACTIVE_WORKOUT_BAR_GAP;
+  // Com o menu da IA aberto a barra desce e some (prancha `Al-H6c5`): o menu
+  // ocupa a tela e tem o próprio campo embaixo.
+  const away = menu.isOpen;
+  const hide = cn(
+    'transition-[opacity,transform] [transition-duration:400ms,600ms] [transition-timing-function:ease,cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none',
+    away && 'pointer-events-none translate-y-[60px] opacity-0',
+  );
   return (
     <>
-      {workoutBar && session && <ActiveWorkoutBar session={session} bottom={above} />}
+      {workoutBar && session && !away && <ActiveWorkoutBar session={session} bottom={above} />}
       <AiPendingCard
-        enabled={usable && !drawer.isOpen}
+        enabled={usable && !menu.isOpen}
         bottom={above + 2 + (workoutBar ? ACTIVE_WORKOUT_BAR_HEIGHT + ACTIVE_WORKOUT_BAR_GAP : 0)}
       />
       <nav
         aria-label="Principal"
         style={{ bottom: `calc(${NAV_BOTTOM}px + env(safe-area-inset-bottom))` }}
-        className="fixed left-4 right-[96px] z-50 flex h-[68px] items-center gap-0.5 rounded-[22px] bg-muted/85 px-1.5 shadow-[0_0_0_1px_hsl(var(--border-subtle)),0_20px_40px_-12px_rgba(0,0,0,0.7)] backdrop-blur-xl md:hidden"
+        inert={away || undefined}
+        className={cn(
+          'fixed left-4 right-[96px] z-50 flex h-[68px] items-center gap-0.5 rounded-[22px] bg-muted/85 px-1.5 shadow-[0_0_0_1px_hsl(var(--border-subtle)),0_20px_40px_-12px_rgba(0,0,0,0.7)] backdrop-blur-xl md:hidden',
+          hide,
+        )}
       >
         {PRIMARY_TABS.map((tab) => (
           <TabLink key={tab.key} tab={tab} on={active === tab.key} />
@@ -120,7 +131,7 @@ export function BottomNav() {
       </nav>
       <div
         style={{ bottom: `calc(${NAV_BOTTOM}px + env(safe-area-inset-bottom))` }}
-        className="fixed right-4 z-50 md:hidden"
+        className={cn('fixed right-4 z-50 md:hidden', hide)}
       >
         <AiFab />
       </div>

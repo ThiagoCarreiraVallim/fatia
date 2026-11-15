@@ -2,13 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
-import { AiDrawerProvider, useAiDrawer } from '../ai-drawer';
+import { AiMenuProvider, AiMenuStage, useAiMenu } from '../ai-menu';
 import { takeFirstMessage } from '@/components/chat/drawer-message';
 
 /**
- * O menu do botão da IA, "O que vamos registrar?" (prancha `Ia-Drawer` e
- * variações `Al-H6c6` Free e `Al-H6c7` teclado).
+ * O menu do botão da IA, "O que vamos registrar?" (prancha `Al-H6c5` e
+ * variações `Al-H6c6` Free, `Al-H6c7` teclado e `Al-H6c9` retomar). Não é
+ * folha: a tela atual encolhe até um notch no topo e o menu aparece atrás.
  */
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
@@ -16,22 +16,6 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/',
   useRouter: () => ({ push: nav.push, replace: nav.replace }),
 }));
-
-vi.mock('@/components/ui/drawer', () => {
-  const Passthrough = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
-  return {
-    Drawer: ({ open, children }: { open: boolean; children: ReactNode }) =>
-      open ? (
-        <div role="dialog" aria-label="O que vamos registrar?">
-          {children}
-        </div>
-      ) : null,
-    DrawerContent: Passthrough,
-    DrawerHeader: Passthrough,
-    DrawerTitle: ({ children }: { children: ReactNode }) => <h2>{children}</h2>,
-    DrawerDescription: ({ children }: { children: ReactNode }) => <p>{children}</p>,
-  };
-});
 
 // As folhas de registro têm testes próprios; aqui importa qual abre e com quê.
 vi.mock('@/components/nutrition/food-search-drawer', () => ({
@@ -56,10 +40,16 @@ vi.mock('@fatia/api-client', async () => {
     getChatAvailability: vi.fn(),
     listConversations: vi.fn(),
     workoutApi: { ...actual.workoutApi, getActiveSession: vi.fn(), startSession: vi.fn() },
+    nutritionApi: { ...actual.nutritionApi, myFoods: vi.fn() },
   };
 });
 
-import { getChatAvailability, listConversations, workoutApi } from '@fatia/api-client';
+import {
+  getChatAvailability,
+  listConversations,
+  nutritionApi,
+  workoutApi,
+} from '@fatia/api-client';
 
 const availability = vi.mocked(getChatAvailability);
 const conversations = vi.mocked(listConversations);
@@ -73,7 +63,7 @@ const PRO = {
 };
 
 function Trigger() {
-  const { open } = useAiDrawer();
+  const { open } = useAiMenu();
   return (
     <button type="button" onClick={open}>
       Abrir a IA
@@ -86,17 +76,28 @@ async function openDrawer() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <AiDrawerProvider>
+      <AiMenuProvider>
+        <AiMenuStage>
+          <p>Tela atual</p>
+        </AiMenuStage>
         <Trigger />
-      </AiDrawerProvider>
+      </AiMenuProvider>
     </QueryClientProvider>,
   );
   await user.click(screen.getByRole('button', { name: 'Abrir a IA' }));
-  return { user, menu: screen.getByRole('dialog') };
+  const menu = await screen.findByRole('dialog', { name: 'O que vamos registrar?' });
+  await waitFor(() => expect(front()).toHaveAttribute('data-state', 'open'));
+  return { user, menu };
 }
 
-describe('AiDrawer', () => {
+const front = () => screen.getByTestId('ai-menu-front');
+const notch = () => screen.getAllByRole('button', { name: 'Voltar para o Hoje' })[0]!;
+
+describe('menu da IA', () => {
   beforeEach(() => {
+    // A prancha é de 390 × 844.
+    Object.assign(window, { innerWidth: 390, innerHeight: 844 });
+    vi.mocked(nutritionApi.myFoods).mockResolvedValue({ favorites: [], recent: [] });
     availability.mockResolvedValue(PRO);
     conversations.mockResolvedValue([
       {
@@ -121,8 +122,9 @@ describe('AiDrawer', () => {
 
   it('o registro manual vem primeiro, com os cinco itens e sem Hábito e Check-in (#390)', async () => {
     const { menu } = await openDrawer();
-    const manual = within(menu).getByRole('heading', { name: 'Registrar manual' }).parentElement!
-      .parentElement!;
+    const manual = within(menu)
+      .getByRole('heading', { name: 'Registrar manual' })
+      .closest('section')!;
     expect(
       within(manual)
         .getAllByRole('button')
@@ -136,10 +138,10 @@ describe('AiDrawer', () => {
     const { user, menu } = await openDrawer();
     await user.click(within(menu).getByRole('button', { name: 'Água' }));
     expect(screen.getByTestId('agua')).toBeInTheDocument();
-    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 
     await user.click(screen.getByRole('button', { name: 'Abrir a IA' }));
-    await user.click(screen.getByRole('button', { name: 'Refeição' }));
+    await user.click(await screen.findByRole('button', { name: 'Refeição' }));
     expect(screen.getByTestId('refeicao')).toBeInTheDocument();
   });
 
@@ -221,7 +223,7 @@ describe('AiDrawer', () => {
     expect(nav.replace).toHaveBeenCalledWith('/plan');
   });
 
-  it('no Free: o cartão "Registre falando ou por foto" contrasta com a folha (s1 sobre s2)', async () => {
+  it('no Free: o cartão "Registre falando ou por foto" contrasta com o fundo do menu', async () => {
     availability.mockResolvedValue({
       available: true,
       allowed: false,
@@ -232,9 +234,12 @@ describe('AiDrawer', () => {
     const { menu } = await openDrawer();
     const lead = await within(menu).findByText('Registre falando ou por foto');
     const card = lead.closest('.rounded-card');
-    // A folha é bg-card (s2); cartão da mesma cor perde a borda (prancha Al-H6c6).
-    expect(card).toHaveClass('bg-muted');
-    expect(card).not.toHaveClass('bg-card');
+    // O menu é `bg-sunken` (#0c0c0c); o cartão sobe para `card`, que se destaca
+    // nele nos dois temas (teste de tokens do @fatia/design).
+    expect(menu).toHaveClass('bg-sunken');
+    expect(card).toHaveClass('bg-card');
+    expect(within(menu).getByRole('button', { name: 'Ver o PRO' })).toBeVisible();
+    expect(within(menu).getByRole('link', { name: 'Minha IA (MCP)' })).toBeVisible();
   });
 
   it('o "voltar" do navegador fecha o menu', async () => {
@@ -244,5 +249,78 @@ describe('AiDrawer', () => {
       fireEvent(window, new PopStateEvent('popstate'));
     });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('abrir encolhe a tela atual até o notch da prancha, e ela sai do alcance', async () => {
+    await openDrawer();
+    const f = front();
+    expect(f).toHaveStyle({ top: '8px', left: '36px', width: '318px', height: '160px' });
+    expect(f).toHaveStyle({ borderRadius: '32px' });
+    expect(f.firstElementChild).toHaveStyle({
+      transform: 'translateY(-30px) scale(0.815)',
+      transformOrigin: '50% 0',
+      width: '390px',
+    });
+    expect(f).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByText('Tela atual').closest('[aria-hidden="true"]')).toBe(f);
+    expect(f).toHaveAttribute('inert');
+    // O voltar do cabeçalho e o notch inteiro dizem para onde voltam.
+    expect(screen.getAllByRole('button', { name: 'Voltar para o Hoje' })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Conversas' })).toBeVisible();
+  });
+
+  it('tocar no notch volta para a tela, que ocupa a janela de novo', async () => {
+    const { user } = await openDrawer();
+    await user.click(notch());
+    expect(front()).toHaveAttribute('data-state', 'closed');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(front()).not.toHaveAttribute('aria-hidden');
+    expect(front().style.position).toBe('');
+    expect(screen.getByText('Tela atual')).toBeVisible();
+  });
+
+  it('o voltar do cabeçalho e o Esc fecham', async () => {
+    const { user, menu } = await openDrawer();
+    await user.click(within(menu).getByRole('button', { name: 'Voltar para o Hoje' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    await user.click(screen.getByRole('button', { name: 'Abrir a IA' }));
+    await screen.findByRole('dialog');
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('arrastar o notch para baixo fecha', async () => {
+    await openDrawer();
+    fireEvent.pointerDown(notch(), { clientY: 100 });
+    fireEvent.pointerMove(notch(), { clientY: 170 });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('com o teclado o notch baixa para 112 e o título sobe para a linha do voltar', async () => {
+    const { user, menu } = await openDrawer();
+    await user.click(await within(menu).findByRole('textbox'));
+    await waitFor(() => expect(front()).toHaveStyle({ height: '112px' }));
+    const title = within(menu).getByRole('heading', { name: 'O que vamos registrar?' });
+    expect(title.parentElement).toHaveStyle({ top: '136px' });
+    expect(title.parentElement).toContainElement(
+      within(menu).getByRole('button', { name: 'Conversas' }),
+    );
+    // Tocar no vazio esconde o teclado.
+    fireEvent.mouseDown(within(menu).getByRole('button', { name: 'Esconder teclado' }));
+    await waitFor(() => expect(front()).toHaveStyle({ height: '160px' }));
+  });
+
+  it('com conversa pendente o campo abre conversa nova (Al-H6c9)', async () => {
+    const { menu } = await openDrawer();
+    const campo = await within(menu).findByRole('textbox');
+    await waitFor(() => expect(campo).toHaveAttribute('placeholder', 'Nova conversa…'));
+  });
+
+  it('o completar traz o que a pessoa já registrou', async () => {
+    const { user, menu } = await openDrawer();
+    const campo = await within(menu).findByRole('textbox');
+    await user.type(campo, 'Regis');
+    expect(await within(menu).findByRole('button', { name: 'Registro do almoço' })).toBeVisible();
   });
 });

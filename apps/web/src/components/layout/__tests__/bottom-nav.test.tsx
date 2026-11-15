@@ -17,9 +17,9 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: nav.push, replace: nav.replace }),
 }));
 
-// O menu da IA tem teste próprio (`ai-drawer.test.tsx`); aqui importa que o botão o abre.
+// O menu da IA tem teste próprio (`ai-menu.test.tsx`); aqui importa que o botão o abre.
 const drawer = vi.hoisted(() => ({ open: vi.fn(), close: vi.fn(), isOpen: false }));
-vi.mock('../ai-drawer', () => ({ useAiDrawer: () => drawer }));
+vi.mock('../ai-menu', () => ({ useAiMenu: () => drawer }));
 
 vi.mock('@fatia/api-client', async () => {
   const actual = await vi.importActual<typeof import('@fatia/api-client')>('@fatia/api-client');
@@ -128,6 +128,21 @@ describe('BottomNav', () => {
     expect(within(principal()).queryByRole('button', { name: 'Abrir a IA' })).toBeNull();
     await userEvent.setup().click(ia);
     expect(drawer.open).toHaveBeenCalledOnce();
+  });
+
+  it('com o menu aberto a barra desce e some, e o botão diz que está aberto (Al-H6c5)', async () => {
+    drawer.isOpen = true;
+    renderNav();
+    const ia = await screen.findByRole('button', { name: 'Abrir a IA' });
+    expect(ia).toHaveAttribute('aria-expanded', 'true');
+    // `inert` tira as abas do alcance; a classe leva para baixo e apaga.
+    const barra = document.querySelector('nav[aria-label="Principal"]')!;
+    expect(barra).toHaveAttribute('inert');
+    expect(barra).toHaveClass('opacity-0', 'translate-y-[60px]', 'pointer-events-none');
+    expect(ia.parentElement).toHaveClass('opacity-0', 'pointer-events-none');
+    // O botão alterna: com o menu aberto, fecha.
+    await userEvent.setup().click(ia);
+    expect(drawer.close).toHaveBeenCalledOnce();
   });
 
   it('o botão diz quantas conversas esperam, com o selo', async () => {

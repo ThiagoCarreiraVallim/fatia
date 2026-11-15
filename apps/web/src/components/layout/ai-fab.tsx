@@ -3,7 +3,7 @@
 import { aiFabLabel } from '@fatia/api-client';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/utils';
-import { useAiDrawer } from './ai-drawer';
+import { useAiMenu } from './ai-menu';
 import { aiLocked, aiUsable, useAiPendingCount, useChatAvailability } from './use-ai-state';
 
 /**
@@ -14,7 +14,7 @@ import { aiLocked, aiUsable, useAiPendingCount, useChatAvailability } from './us
  * movimento" o anel fica parado, inteiro, em vez de girar.
  */
 export function AiFab({ className }: { className?: string }) {
-  const drawer = useAiDrawer();
+  const menu = useAiMenu();
   const availability = useChatAvailability().data;
   const usable = aiUsable(availability);
   const pending = useAiPendingCount(usable).data;
@@ -26,8 +26,8 @@ export function AiFab({ className }: { className?: string }) {
       type="button"
       aria-label={label}
       aria-haspopup="dialog"
-      aria-expanded={drawer.isOpen}
-      onClick={drawer.open}
+      aria-expanded={menu.isOpen}
+      onClick={menu.isOpen ? menu.close : menu.open}
       className={cn(
         'anim-press relative flex h-[68px] w-[68px] shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_10px_24px_-6px_hsl(var(--primary)/0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         className,

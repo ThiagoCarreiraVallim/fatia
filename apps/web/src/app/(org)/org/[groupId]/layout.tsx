@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { AppTopBar, TopBarProvider } from '@/components/layout/app-top-bar';
-import { AiDrawerProvider } from '@/components/layout/ai-drawer';
+import { AiMenuProvider, AiMenuStage } from '@/components/layout/ai-menu';
 import { BottomNav, BottomSpacer } from '@/components/layout/bottom-nav';
 import { RestTimerProvider } from '@/components/workout/rest-timer-provider';
 import { OrgShell } from '@/components/org/org-shell';
@@ -22,22 +22,24 @@ export default async function OrgLayout({ children }: { children: React.ReactNod
   if (!user) redirect('/login');
 
   return (
-    <AiDrawerProvider>
+    <AiMenuProvider>
       <RestTimerProvider>
         <TopBarProvider>
-          <div className="flex min-h-screen flex-col bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-            <AppTopBar wide />
-            <main className="flex-1 pb-28 md:pb-0">
-              <div className="mx-auto w-full max-w-6xl">
-                <OrgShell>{children}</OrgShell>
-                <BottomSpacer />
-              </div>
-            </main>
-            <BottomNav />
-            <Toaster />
-          </div>
+          <AiMenuStage>
+            <div className="flex min-h-screen flex-col bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+              <AppTopBar wide />
+              <main className="flex-1 pb-28 md:pb-0">
+                <div className="mx-auto w-full max-w-6xl">
+                  <OrgShell>{children}</OrgShell>
+                  <BottomSpacer />
+                </div>
+              </main>
+            </div>
+          </AiMenuStage>
+          <BottomNav />
+          <Toaster />
         </TopBarProvider>
       </RestTimerProvider>
-    </AiDrawerProvider>
+    </AiMenuProvider>
   );
 }
