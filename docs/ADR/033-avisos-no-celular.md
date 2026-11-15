@@ -81,6 +81,10 @@ prancha divergiram, valeu a prancha.
 - **Avisos agrupados sem conteúdo** (`Ex-06`): a novidade da comunidade sai como "5 novidades em
   <comunidade>" / "Toque para ver."; o comentário no mural mantém "Mais N comentários no seu
   post". "Sua denúncia foi revisada pela equipe" avisa quem denunciou, pelo tipo `MODERATION`.
+  A reação nova a um post (`FEED`, "Reações e comentários nos seus posts") avisa o autor
+  ("Bia reagiu ao seu post"); as seguintes na janela saem juntas com o nome de quem reagiu por
+  último ("Helena e mais 3 reagiram ao seu post", `PendingNotice.actor`). Trocar o emoji ou
+  reagir ao próprio post não avisa.
 - **Lembretes pessoais** (`Reminder`): água, refeição, peso, treino e passos, por intervalo
   ("a cada 2 h, das 8h às 20h") ou horários fixos, com os dias da semana. Quem envia é o
   **servidor** (`ReminderJob`, a cada minuto, no fuso da pessoa), não o aparelho: assim o mesmo

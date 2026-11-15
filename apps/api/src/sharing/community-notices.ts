@@ -76,6 +76,16 @@ export function commentNotice(p: { groupId: string; groupName: string; author: s
   };
 }
 
+/** O primeiro de uma janela; os seguintes saem juntos ("Helena e mais 3 reagiram"). */
+export function reactionNotice(p: { groupId: string; groupName: string; author: string }): Notice {
+  return {
+    kind: NotificationKind.FEED,
+    title: `${p.author} reagiu ao seu post`,
+    body: `No mural de ${p.groupName}.`,
+    url: `/community/${p.groupId}/feed`,
+  };
+}
+
 export function removedNotice(p: {
   groupId: string;
   groupName: string;

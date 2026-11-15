@@ -16,9 +16,18 @@ import {
   type ReportReason,
 } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
-import { NotificationService, type Notice } from '../notifications/notification.service';
+import {
+  NotificationService,
+  REACTION_KEY_PREFIX,
+  type Notice,
+} from '../notifications/notification.service';
 import { MediaService, type MediaView } from '../storage/media.service';
-import { commentNotice, removedNotice, reportReviewedNotice } from './community-notices';
+import {
+  commentNotice,
+  reactionNotice,
+  removedNotice,
+  reportReviewedNotice,
+} from './community-notices';
 import { requireContentRole } from './content-roles';
 import { cleanDisplayName, firstName } from './display-name';
 import { can, TEAM_ROLES } from './permissions';
@@ -338,11 +347,25 @@ export class PostService {
     const eu = await this.me(userId, groupId, 'post.read');
     const row = await this.findLive(groupId, postId);
     if (kind) {
+      const before = await this.prisma.groupPostReaction.findUnique({
+        where: { postId_membershipId: { postId: row.id, membershipId: eu.membershipId } },
+        select: { id: true },
+      });
       await this.prisma.groupPostReaction.upsert({
         where: { postId_membershipId: { postId: row.id, membershipId: eu.membershipId } },
         create: { postId: row.id, membershipId: eu.membershipId, kind },
         update: { kind },
       });
+      // Só a reação nova avisa: trocar de emoji não é novidade para o autor.
+      if (!before && row.membershipId !== eu.membershipId) {
+        const author = eu.displayName ?? eu.userNickname ?? firstName(eu.userName);
+        await this.notifyAuthor(
+          row.membershipId,
+          (groupName) => reactionNotice({ groupId, groupName, author }),
+          `${REACTION_KEY_PREFIX}${row.id}`,
+          author,
+        );
+      }
     } else {
       await this.prisma.groupPostReaction.deleteMany({
         where: { postId: row.id, membershipId: eu.membershipId },
@@ -665,6 +688,7 @@ export class PostService {
     membershipId: string,
     notice: (groupName: string) => Notice,
     groupKey?: string,
+    actor?: string,
   ): Promise<void> {
     const autor = await this.prisma.groupMembership.findFirst({
       where: { id: membershipId, status: MembershipStatus.ACTIVE },
@@ -673,7 +697,7 @@ export class PostService {
     if (!autor) return;
     const aviso = notice(autor.group.name);
     if (groupKey) {
-      this.notifications.notifyGrouped(autor.userId, groupKey, aviso, autor.group.name);
+      this.notifications.notifyGrouped(autor.userId, groupKey, aviso, autor.group.name, actor);
     } else {
       this.notifications.notify([autor.userId], aviso);
     }

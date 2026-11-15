@@ -367,8 +367,18 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
    * sai na hora; os que chegam dentro da janela de `GROUP_WINDOW_MS` são
    * contados e saem juntos no fim dela (`flushGrouped`), com `grouped(n)`.
    */
-  notifyGrouped(userId: string, key: string, notice: Notice, community: string): void {
-    this.track(this.deliverGrouped(userId, key, notice, community), notice.kind);
+  /**
+   * `actor` é o nome de quem agiu: o fechamento da janela de reações diz
+   * "Helena e mais 3 reagiram ao seu post" com o último (Ex-06).
+   */
+  notifyGrouped(
+    userId: string,
+    key: string,
+    notice: Notice,
+    community: string,
+    actor?: string,
+  ): void {
+    this.track(this.deliverGrouped(userId, key, notice, community, actor ?? null), notice.kind);
   }
 
   private async deliverGrouped(
@@ -376,19 +386,20 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
     key: string,
     notice: Notice,
     community: string,
+    actor: string | null,
   ): Promise<void> {
     const agora = new Date();
     // Atômico: dois comentários ao mesmo tempo não mandam dois avisos.
     const contado = await this.prisma.pendingNotice.updateMany({
       where: { key, userId, windowEndsAt: { gt: agora } },
-      data: { count: { increment: 1 } },
+      data: { count: { increment: 1 }, ...(actor ? { actor } : {}) },
     });
     if (contado.count > 0) return;
     const windowEndsAt = new Date(agora.getTime() + GROUP_WINDOW_MS);
     await this.prisma.pendingNotice.upsert({
       where: { key_userId: { key, userId } },
-      create: { key, userId, kind: notice.kind, community, url: notice.url, windowEndsAt },
-      update: { count: 0, community, url: notice.url, windowEndsAt },
+      create: { key, userId, kind: notice.kind, community, url: notice.url, windowEndsAt, actor },
+      update: { count: 0, community, url: notice.url, windowEndsAt, actor },
     });
     await this.deliver([userId], notice);
   }
@@ -402,7 +413,7 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
     let enviados = 0;
     for (const v of vencidas) {
       if (v.count > 0) {
-        await this.deliver([v.userId], groupedNotice(v.kind, v.count, v.community, v.url));
+        await this.deliver([v.userId], groupedNotice(v.kind, v.count, v.community, v.url, v));
         enviados += 1;
       }
       await this.prisma.pendingNotice.deleteMany({
@@ -539,17 +550,32 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
   }
 }
 
+/** Prefixo da chave de agrupamento das reações a um post. */
+export const REACTION_KEY_PREFIX = 'reaction:';
+
 /**
  * O aviso que fecha uma janela: só a contagem e o nome da comunidade, nunca o
- * que foi escrito (prancha Ex-06). Comentários no mural têm texto próprio; o
- * resto é "N novidades em <comunidade>".
+ * que foi escrito (prancha Ex-06). Comentários e reações no mural têm texto
+ * próprio; o resto é "N novidades em <comunidade>".
  */
 export function groupedNotice(
   kind: NotificationKind,
   count: number,
   community: string,
   url: string,
+  window: { key?: string; actor?: string | null } = {},
 ): Notice {
+  if (kind === NotificationKind.FEED && window.key?.startsWith(REACTION_KEY_PREFIX)) {
+    const { actor } = window;
+    const title = !actor
+      ? count === 1
+        ? 'Mais 1 reação no seu post'
+        : `Mais ${count} reações no seu post`
+      : count === 1
+        ? `${actor} reagiu ao seu post`
+        : `${actor} e mais ${count - 1} reagiram ao seu post`;
+    return { kind, title, body: `No mural de ${community}.`, url };
+  }
   if (kind === NotificationKind.FEED) {
     return {
       kind,

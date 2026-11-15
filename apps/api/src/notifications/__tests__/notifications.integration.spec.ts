@@ -499,6 +499,47 @@ describe('avisos no celular (integração)', () => {
       expect(JSON.stringify(r)).not.toContain('Mensagem bem pessoal');
     });
 
+    it('reação avisa o autor com o nome de quem reagiu; as seguintes saem juntas (Ex-06)', async () => {
+      const c = await comunidade();
+      const post = await posts.create(c.membro, c.groupId, { body: 'Treino', displayName: 'Ana' });
+      await posts.comment(c.outro, c.groupId, post.id, { body: 'Boa', displayName: 'Bia' });
+      await recebidos();
+      await posts.react(c.outro, c.groupId, post.id, 'FIRE');
+      // Trocar ou tirar a própria reação não avisa de novo.
+      await posts.react(c.outro, c.groupId, post.id, 'HEART');
+      await posts.react(c.outro, c.groupId, post.id, null);
+      const primeira = await recebidos();
+      expect(primeira).toEqual([
+        expect.objectContaining({
+          userId: c.membro,
+          title: 'Bia reagiu ao seu post',
+          body: 'No mural de Academia.',
+          url: `/community/${c.groupId}/feed`,
+        }),
+      ]);
+      const terceiro = await entra(c.groupId, 'MEMBER', 'Caio');
+      const quarto = await entra(c.groupId, 'MEMBER', 'Helena');
+      await prisma.groupMembership.updateMany({
+        where: { userId: quarto, groupId: c.groupId },
+        data: { displayName: 'Helena' },
+      });
+      await posts.react(c.dono, c.groupId, post.id, 'CLAP');
+      await posts.react(terceiro, c.groupId, post.id, 'STRONG');
+      await posts.react(quarto, c.groupId, post.id, 'HEART');
+      expect(await recebidos()).toEqual([]);
+      await notifications.flushGrouped(new Date(Date.now() + GROUP_WINDOW_MS + 1000));
+      expect((await recebidos()).map((r) => [r.userId, r.title])).toEqual([
+        [c.membro, 'Helena e mais 2 reagiram ao seu post'],
+      ]);
+    });
+
+    it('reagir ao próprio post não avisa ninguém', async () => {
+      const c = await comunidade();
+      const post = await posts.create(c.membro, c.groupId, { body: 'Treino', displayName: 'Ana' });
+      await posts.react(c.membro, c.groupId, post.id, 'FIRE');
+      expect(await recebidos()).toEqual([]);
+    });
+
     it('comentar no próprio post não avisa ninguém', async () => {
       const c = await comunidade();
       const post = await posts.create(c.membro, c.groupId, { body: 'Treino', displayName: 'Ana' });

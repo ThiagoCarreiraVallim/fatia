@@ -1921,6 +1921,8 @@ model PendingNotice {
   /// Nome da comunidade e caminho do toque — nada do conteúdo.
   community    String
   url          String
+  /// Nome de quem agiu por último, para "Helena e mais 3 reagiram ao seu post" (Ex-06, #389).
+  actor        String?
   windowEndsAt DateTime
   createdAt    DateTime         @default(now())
 
