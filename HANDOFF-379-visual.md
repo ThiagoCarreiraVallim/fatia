@@ -6,8 +6,8 @@ Pranchas renderizadas: todas em `board/`.
 
 ## Estado
 
-- [~] Al-T2 / T2b plano recebido (aceite direto, recusa sem confirmação no app, miniaturas)
-- [ ] Al-T1 aviso no Treino
+- [x] Al-T2 / T2b plano recebido (f830cf7d): cmp-Al-T2-Plano-recebido, cmp-Al-T2-aceito, cmp-Al-T2-recusado, cmp-Al-T2b-Plano-flexivel
+- [x] Al-T1 aviso no Treino (ae7a3e99): cmp-Al-T1-aviso. Botão Agenda (calendário) no header não está na prancha: única entrada da agenda, mantido
 - [ ] Al-T23 Modelos
 - [ ] Al-T12 Periodização
 - [ ] Al-T24 / T24b / T24c Agenda + Remarcar
@@ -15,8 +15,9 @@ Pranchas renderizadas: todas em `board/`.
 
 ## Dados do demo
 
-- Oferta `567d357f-b6d3-44e7-afba-28f954c6dee0` (CALENDAR, v1, PENDING no início).
+- Oferta `567d357f-b6d3-44e7-afba-28f954c6dee0` (CALENDAR, v1). Recusada e desfeita; virou FLEXIBLE só para o print e voltou; ACEITA no app às 17:52 (gera plano + 8 PlannedSession).
+- Comparações: `/tmp/fatia-vis-tools/cmp.sh <saída> <prancha> <web> <app>` (magick).
 
 ## Próximo passo
 
-Terminar Al-T2.
+Al-T24 agenda (com sessões do aceite), Remarcar, T24b, T24c.
