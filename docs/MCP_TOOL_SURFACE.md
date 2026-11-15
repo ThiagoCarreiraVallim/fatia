@@ -8,16 +8,16 @@
 
 | Domínio                                                     |   Tools | Arquivos                                    |
 | ----------------------------------------------------------- | ------: | ------------------------------------------- |
-| Workout (exercícios, planos, sessões, séries)               |      35 | `apps/api/src/workout/mcp/`                 |
+| Workout (exercícios, planos, sessões, séries, agenda)       |      37 | `apps/api/src/workout/mcp/`                 |
 | Progress (peso, passos, água, progresso, dashboard, streak) |      27 | `apps/api/src/progress/mcp/`                |
 | Nutrition (alimentos, refeições, itens, metas, plano)       |      28 | `apps/api/src/nutrition/mcp/`               |
-| Sharing (grupos, consentimento e painel do profissional)    |       9 | `apps/api/src/sharing/mcp/`                 |
+| Sharing (grupos, consentimento, plano recebido, painel)     |      12 | `apps/api/src/sharing/mcp/`                 |
 | Goals (metas pessoais)                                      |       6 | `apps/api/src/goals/mcp/`                   |
 | Meta (perfil)                                               |       3 | `apps/api/src/mcp/tools/meta/`              |
 | Conta (export e deleção — LGPD)                             |       2 | `apps/api/src/users/mcp/`                   |
 | Avisos (central do sino, #373; preferências de aviso, #389) |       4 | `apps/api/src/notifications/mcp/`           |
 | Lembretes pessoais (#389)                                   |       4 | `apps/api/src/notifications/reminders/mcp/` |
-| **Total**                                                   | **118** |                                             |
+| **Total**                                                   | **123** |                                             |
 
 ⚠️ Esta tabela é a única contagem da doc **sem guarda automática**: o
 `TOOL_COUNT_PATTERN` do `tool-catalog.spec.ts` só enxerga um número colado na palavra `tools`, e
@@ -40,12 +40,12 @@ opções abaixo foram avaliadas com isso em mente.
 
 O que pesa no contexto não é a contagem de tools, é o payload. Medido no que o registry
 serve de fato — `name`, `title`, `description`, `annotations` e o JSON Schema do input das
-146 tools: **131,0 k caracteres**, enviados em toda sessão que lista as tools.
-O denominador importa. Contar só `name + description + inputSchema` dá 109,0 k e subestima o
+151 tools: **135,6 k caracteres**, enviados em toda sessão que lista as tools.
+O denominador importa. Contar só `name + description + inputSchema` dá 112,9 k e subestima o
 catálogo em ~20% — `title` e `annotations` também vão no fio, em toda tool.
 
-Dentro desse total, os exemplos de invocação que a #111 acrescentou às 79 tools de escrita
-valem **7.508 caracteres** — média de **86** caracteres por tool, algo em torno de 6% do
+Dentro desse total, os exemplos de invocação que a #111 acrescentou às 82 tools de escrita
+valem **7.812 caracteres** — média de **87** caracteres por tool, algo em torno de 6% do
 catálogo. Os dois números são medidos no código pelo `tool-catalog.spec.ts`, junto com a
 contagem: a versão anterior desta frase dizia "4.110 caracteres, média de 91" — estagnada na
 medição da #111, feita quando o catálogo tinha 45 delas, e ainda por cima incoerente, porque
@@ -61,7 +61,7 @@ e não em campo separado — estão na §Convenções de [`docs/MCP.md`](./MCP.m
 Além da contagem, cada tool declara `hostedInference` — se a execução dispara inferência **paga
 pela Fatia**. É recorte de custo, não de tamanho, e por isso mora aqui junto do resto.
 
-Hoje são **146** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
+Hoje são **151** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
 **0** tools com inferência hospedada.
 
 O segundo número é o ponto inteiro. Chamada vinda do cliente MCP do usuário roda no
@@ -80,13 +80,14 @@ O campo é interno e não vai no fio, então o tamanho do catálogo servido, med
 
 ### Fica fora do MCP — administração de grupo (#154, #155)
 
-O domínio Sharing entra com **21 tools**. Dezenove são do lado do aluno: `list_my_groups`,
+O domínio Sharing entra com **24 tools**. Vinte e duas são do lado do aluno: `list_my_groups`,
 `join_group`, `get_group_invite`, `accept_group_invite`, `leave_group`, `set_group_sharing`,
 `list_data_sharing`, `grant_data_sharing`, `revoke_data_sharing`, `list_data_access_log` e as
 três do conteúdo da comunidade (Fase 7): `list_group_plans`, `adopt_group_plan` e
 `list_group_tips`, e as três dos desafios (Fase 8a): `list_group_challenges`,
 `get_challenge_leaderboard` e `join_group_challenge`, e as três do mural (Fase 8b): `list_group_posts`,
-`create_group_post` e `comment_on_group_post`. As outras duas são o painel do profissional da #157 — `list_my_students` e
+`create_group_post` e `comment_on_group_post`, e as três do plano de treino recebido (#379):
+`list_plan_offers`, `accept_plan_offer` e `decline_plan_offer`. As outras duas são o painel do profissional da #157 — `list_my_students` e
 `get_student_progress` —, e as duas **só leem**. Publicar plano pronto e dica é da equipe e
 fica só em REST, como o resto do painel. Criar comunidade, editá-la ou apagá-la, aprovar
 entrada, remover membro, convidar, revogar convite, transferir a comunidade e comprar ou
@@ -194,6 +195,13 @@ mesmas rotas do app (`/nutrition/plan`). Só a leitura é livre; aceitar (muda a
 registrar, trocar e desfazer são escritas reversíveis (`confirmableHint`). Nenhuma tool cria ou
 sugere plano: ele é autoral da equipe ([ADR 045](./ADR/045-plano-alimentar-autoral.md)), e o
 editor (#407) fica no painel, em REST.
+Também entregues: `list_plan_offers`, `accept_plan_offer` e `decline_plan_offer` (#379), o plano de
+treino que a equipe enviou, nas mesmas rotas do app (`/plan-offers`), e a agenda de treinos do
+aluno, `list_planned_sessions` e `reschedule_planned_session` (`/workout/agenda`, informativa pela
+ADR 042). Aceitar, recusar e remarcar são escritas reversíveis (`confirmableHint`); o "Desfazer" da
+recusa é o próprio `accept_plan_offer` sobre a versão recusada. `create_training_block` passou a
+aceitar `weeks` de 3 a 6. Enviar e atualizar a oferta é da equipe e fica em REST
+(`/professional/students/:membershipId/plan-offers`).
 
 | Recurso                            | Tools propostas                                                                                                                        | Issue |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----- |
@@ -201,7 +209,6 @@ editor (#407) fica no painel, em REST.
 | Avaliação física                   | `list_assessments`, `get_assessment`, `log_assessment`, `compare_assessments`, `list_assessment_requests`, `submit_assessment_request` | #383  |
 | Agenda da comunidade (ADR 042)     | `list_group_agenda` (leitura), `set_agenda_interest` / `clear_agenda_interest` ("Vou"), `register_agenda_session`                      | #397  |
 | Circuitos                          | formato de circuito em `create_workout_plan` e rounds/tempo na sessão (tool própria só se a sessão não comportar)                      | #380  |
-| Plano recebido                     | `list_plan_offers`, `accept_plan_offer`, `decline_plan_offer`; `create_training_block` com 3 a 6 semanas                               | #379  |
 | Questionários                      | `list_pending_questionnaires`, `get_questionnaire`, `answer_questionnaire`                                                             | #391  |
 | Foto da refeição (ADR 038, item 7) | as tools de refeição **só indicam** se há foto; `delete_meal_photo`; nenhuma tool manda a foto à IA hospedada (ADR 018)                | #374  |
 | Desafios por tipo (ADR 044)        | `get_my_challenge_progress`; sem tool de check-in com foto (câmera) nem de revisão (administração)                                     | #395  |
