@@ -61,6 +61,13 @@ model User {
   loadUnit         LoadUnit         @default(KG)
   distanceUnit     DistanceUnit     @default(KM)
 
+  /// Silêncio noturno (Você › Lembretes, #389): nenhum lembrete nem aviso
+  /// toca entre `quietFrom` e `quietTo`, minutos do dia no `timezone` da
+  /// pessoa. A janela pode virar a meia-noite (22:00–07:00 é o padrão).
+  quietHoursEnabled Boolean @default(true)
+  quietFrom         Int     @default(1320)
+  quietTo           Int     @default(420)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -99,6 +106,8 @@ model User {
   webPushSubscriptions    WebPushSubscription[]
   // Central de avisos do sino do Hoje (#373).
   inboxNotices            InboxNotice[]
+  // Lembretes pessoais (#389). A equipe não vê.
+  reminders               Reminder[]
 
   // Você (#387): foto, novidades lidas, tutoriais vistos, ideias enviadas e os
   // links de exportação.
@@ -1840,7 +1849,10 @@ enum DevicePlatform {
   ANDROID
 }
 
-/// O que cada aviso cobre; a pessoa desliga por tipo.
+/// O que cada aviso cobre; a pessoa desliga por tipo (prancha Al-V4, #389).
+/// O padrão de cada tipo, quando não há linha em `NotificationPreference`,
+/// está em `NOTIFICATION_DEFAULTS` (`notification.service.ts`): o grupo
+/// "Opcional" nasce desligado.
 enum NotificationKind {
   COMMUNITY
   CHALLENGES
@@ -1848,6 +1860,22 @@ enum NotificationKind {
   MODERATION
   /// A resposta do chat ficou pronta com o app fora de vista (Fase 9e).
   CHAT
+  /// O que a equipe manda para todos (#394). Separado dos lembretes (Apple 4.5.4).
+  ANNOUNCEMENTS
+  /// Treino ou alimentação enviados para a pessoa pela equipe.
+  PLAN_RECEIVED
+  /// A equipe pediu uma avaliação, com prazo (#383).
+  ASSESSMENT_REQUESTED
+  /// Perguntas depois do treino ou da semana (#391).
+  QUESTIONNAIRE
+  /// Agenda da comunidade: evento novo ou mudança de horário (#397).
+  SCHEDULE
+  /// Treino do dia, 1 h antes, quando a comunidade tem agenda (#397).
+  SCHEDULE_REMINDER
+  /// Parabéns da comunidade no dia do aniversário. "Opcional": nasce desligado.
+  BIRTHDAY
+  /// Os lembretes pessoais (`Reminder`). Sem chave na tela: cada lembrete tem a sua.
+  REMINDERS
 }
 
 /// Um celular em que a pessoa ligou os avisos. O token é da Expo e é único: o
@@ -1954,4 +1982,63 @@ model InboxNotice {
 
   @@index([userId, createdAt])
   @@index([userId, readAt])
+}
+
+// ============================================================
+// Lembretes pessoais (#389)
+// ============================================================
+
+/// Do que o lembrete lembra (prancha Al-V3). Cada tipo, menos o hábito, é
+/// conferido no servidor antes de sair: água batida, refeição registrada,
+/// treino feito, pesagem do dia, passos acima da meta.
+enum ReminderKind {
+  WATER
+  MEAL
+  WEIGHT
+  WORKOUT
+  STEPS
+  /// Hábito (#390). Aceito quando os hábitos existirem; até lá a API recusa.
+  HABIT
+}
+
+enum ReminderMode {
+  /// "A cada N h" entre `fromMinute` e `toMinute`.
+  INTERVAL
+  /// Horários fixos em `times`.
+  TIMES
+}
+
+/// Um lembrete pessoal (Você › Lembretes). Dado da pessoa: entra no export,
+/// morre com a conta e a equipe não vê. Horários em minutos do dia no fuso de
+/// `User.timezone`.
+model Reminder {
+  id         String       @id @default(uuid())
+  userId     String
+  kind       ReminderKind
+  /// O hábito do lembrete de hábito (#390). Sem FK até a tabela existir.
+  habitId    String?
+  mode       ReminderMode
+  /// Só no `INTERVAL`: de 1 a 6 horas.
+  everyHours Int?
+  fromMinute Int?
+  toMinute   Int?
+  /// Só no `TIMES`: minutos do dia, em ordem e sem repetir.
+  times      Int[]        @default([])
+  /// Dias da semana ISO (1 = segunda … 7 = domingo).
+  weekdays   Int[]
+  /// Passos: só lembra se o dia estiver abaixo disto ("se abaixo de 6 mil").
+  stepsBelow Int?
+  enabled    Boolean      @default(true)
+  /// Último envio pelo servidor; evita mandar o mesmo horário duas vezes.
+  lastSentAt DateTime?
+  /// Dia (YYYY-MM-DD, fuso da pessoa) e quantos saíram nele: o teto por dia.
+  sentDate   String?
+  sentCount  Int          @default(0)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([enabled])
 }
