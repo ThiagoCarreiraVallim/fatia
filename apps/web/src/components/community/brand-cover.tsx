@@ -20,7 +20,12 @@ export function brandStyle(color: string | null | undefined): React.CSSPropertie
   } as React.CSSProperties;
 }
 
-/** Capa da comunidade: fundo na cor dela, nome em Sora por cima. */
+/**
+ * Capa da comunidade (prancha Componentes-plano · 1.1): a cor dela numa faixa
+ * no alto do card, e o nome e a contagem embaixo, no texto do card. Texto
+ * nenhum vai sobre a cor: uma cor aceita com aviso (abaixo de 4,5:1) deixaria
+ * o subtítulo ilegível.
+ */
 export function BrandCover({
   name,
   color,
@@ -37,15 +42,18 @@ export function BrandCover({
   return (
     <header
       style={brandStyle(color)}
-      className={cn(
-        'flex min-h-[140px] items-end gap-4 rounded-card bg-brand p-5 text-brand-foreground',
-        className,
-      )}
+      className={cn('overflow-hidden rounded-card bg-card', className)}
     >
-      {logo}
-      <div className="min-w-0">
-        <h1 className="font-display text-2xl font-bold leading-tight">{name}</h1>
-        {subtitle && <p className="text-sm opacity-80">{subtitle}</p>}
+      <div
+        aria-hidden
+        className="h-[110px] bg-[linear-gradient(150deg,hsl(var(--brand)),hsl(var(--brand)/0.45))]"
+      />
+      <div className="flex items-center gap-3 p-4">
+        {logo}
+        <div className="min-w-0">
+          <h1 className="truncate font-display text-h3 font-bold text-foreground">{name}</h1>
+          {subtitle && <p className="text-b2 text-muted-foreground">{subtitle}</p>}
+        </div>
       </div>
     </header>
   );

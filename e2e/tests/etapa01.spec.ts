@@ -10,6 +10,11 @@ import { expect, type Locator, type Page, test } from '@playwright/test';
  * o axe em cada uma. Estados da IA vêm de respostas simuladas da API.
  */
 const STAGE = process.env.UI_STAGE ?? 'adhoc';
+
+// O axe mede contraste no meio da animação de entrada (opacidade subindo) e
+// acusa violação que some um instante depois. Com "reduzir movimento" as
+// animações do DS vão direto ao estado final, e a medição fica estável.
+test.use({ contextOptions: { reducedMotion: 'reduce' } });
 const IA = /^(Abrir a IA|Abrir registro|IA )/;
 
 async function snap(page: Page, name: string, fullPage = true) {

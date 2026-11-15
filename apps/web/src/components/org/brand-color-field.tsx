@@ -1,12 +1,11 @@
 'use client';
 
 import { useId } from 'react';
-import { checkBrandColor, formatRatio } from '@fatia/design';
+import { bestTextOn, checkBrandColor, formatRatio } from '@fatia/design';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { brandStyle } from '@/components/community/brand-cover';
-import { cn } from '@/lib/utils';
 
 /**
  * Campo da cor da comunidade no editor da marca. Mesma regra do app e da API
@@ -80,24 +79,42 @@ export function BrandColorField({
       )}
 
       {check && check.status !== 'rejected' && (
+        // Com aviso, o texto da prévia vai sobre o tom sugerido: texto sobre a
+        // cor sem contraste reprovaria no axe a própria tela que avisa dele. A
+        // cor escolhida aparece como amostra, sem texto em cima.
         <div
-          style={brandStyle(check.color)}
+          role="group"
           aria-label="Prévia"
-          className="flex items-center gap-3 rounded-card bg-card p-4"
+          className="flex flex-col gap-2 rounded-card bg-card p-4"
         >
-          <span
-            className={cn(
-              'inline-flex h-11 items-center rounded-[12px] bg-brand px-[18px] text-sm font-bold text-brand-foreground',
-            )}
+          <div
+            style={brandStyle(check.status === 'warning' ? check.suggestion : check.color)}
+            className="flex flex-wrap items-center gap-3"
           >
-            Entrar no desafio
-          </span>
-          <span className="rounded-full bg-brand px-2.5 py-0.5 text-xs font-bold text-brand-foreground">
-            PRO · Grupo
-          </span>
-          <span className="ml-auto text-xs text-muted-foreground">
-            {formatRatio(check.contrast)}:1
-          </span>
+            <span className="inline-flex h-11 items-center rounded-[12px] bg-brand px-[18px] text-sm font-bold text-brand-foreground">
+              Entrar no desafio
+            </span>
+            <span className="rounded-full bg-brand px-2.5 py-0.5 text-xs font-bold text-brand-foreground">
+              PRO · Grupo
+            </span>
+            <span className="ml-auto text-xs text-muted-foreground">
+              {formatRatio(
+                check.status === 'warning' ? bestTextOn(check.suggestion).contrast : check.contrast,
+              )}
+              :1
+            </span>
+          </div>
+          {check.status === 'warning' && (
+            <p className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span
+                aria-hidden
+                className="inline-block h-4 w-4 shrink-0 rounded-full"
+                style={{ background: check.color }}
+              />
+              Com o tom sugerido, {check.suggestion.toUpperCase()}. A sua cor,{' '}
+              {check.color.toUpperCase()}, fica com {formatRatio(check.contrast)}:1.
+            </p>
+          )}
         </div>
       )}
     </div>

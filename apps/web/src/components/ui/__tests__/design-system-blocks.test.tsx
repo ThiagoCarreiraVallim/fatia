@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { ShareCard, SHARE_CARD_FIELDS } from '@/components/sharing/share-card';
@@ -47,6 +47,16 @@ describe('cor da comunidade', () => {
     await userEvent.click(screen.getByRole('button', { name: /Usar #/ }));
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Cor da comunidade' })).toHaveValue('#6b4fde');
+  });
+
+  it('cor em aviso: a prévia com texto mostra o tom sugerido, e a escolhida só como amostra', () => {
+    render(<Field initial="#7C5CFF" />);
+    const preview = screen.getByRole('group', { name: 'Prévia' });
+    // Texto sobre a cor sem contraste reprovaria no axe a própria tela que avisa dele.
+    expect(within(preview).getByText('Entrar no desafio').closest('[style]')).toHaveStyle(
+      brandStyle('#6b4fde') as Record<string, string>,
+    );
+    expect(within(preview).getByText(/tom sugerido/)).toBeInTheDocument();
   });
 
   it('cor recusada cai na cor padrão na capa', () => {
