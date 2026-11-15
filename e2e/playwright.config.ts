@@ -57,7 +57,7 @@ export default defineConfig({
     {
       name: 'mobile-light',
       dependencies: ['setup'],
-      testMatch: /a11y\.spec\.ts/,
+      testMatch: /(a11y|etapa01-telas)\.spec\.ts/,
       use: {
         ...devices['Pixel 7'],
         colorScheme: 'light',
@@ -68,7 +68,7 @@ export default defineConfig({
     {
       name: 'desktop-light',
       dependencies: ['setup'],
-      testMatch: /a11y\.spec\.ts/,
+      testMatch: /(a11y|etapa01-telas)\.spec\.ts/,
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1440, height: 900 },
