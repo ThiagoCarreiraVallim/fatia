@@ -279,5 +279,12 @@ leitura `NUTRITION` (porta única do ADR 014, logada em `ProfessionalAccessLog`,
 identidade). Sem `NUTRITION`, a equipe não vê nada disso e o aviso da troca diz que ela "fica
 só no seu diário". Nenhum agregado novo foi criado (o `MIN_CELL` 5 não se aplica ainda).
 
+**Plano de treino recebido (#379).** Quem manda ou atualiza é a equipe (OWNER/PROFESSIONAL/
+CREATOR ativo na comunidade do aluno) e só com `ProfessionalLink` ativo entre os dois; sem
+vínculo, a rota responde como inexistente. O aluno aceita, recusa ou desfaz a recusa; nada muda
+no plano dele sem aceite. Recusar não revoga o vínculo nem mexe nos consentimentos. A equipe
+fica sabendo da resposta pelo aviso, sem ler o plano copiado nem a agenda do aluno. A agenda
+(`PlannedSession`) é do aluno e informativa: ninguém da equipe a lê nem a marca.
+
 **O que não muda:** papel decide ação, vínculo decide leitura; toda leitura, inclusive a negada,
 vai para `ProfessionalAccessLog`; `MEMBER` nunca lê ninguém.
