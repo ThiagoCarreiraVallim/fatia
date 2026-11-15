@@ -60,13 +60,15 @@ Pendências da etapa 2: cada uma depende de outra issue ou de algo externo.
   - Em Unidades, só carga e distância: peso fica em kg e estatura em cm.
   - Em Lembretes, a tela tem só a chave do silêncio noturno. A API já aceita mudar o horário.
 
-## Etapa 3: Nutrição (`em andamento`)
+## Etapa 3: Nutrição (`mergeado`, aguardando teste do dono)
 
-| Issue | Título                              | Estado   | Superfícies                                          |
-| ----- | ----------------------------------- | -------- | ---------------------------------------------------- |
-| #374  | O dia, a refeição e a foto guardada | validado | api, db, MCP, api-client, web, app                   |
-| #375  | Adicionar comida                    | validado | api, db, MCP (2 tools), agente, api-client, web, app |
-| #376  | Metas, nutrientes e plano alimentar | validado | api, db, MCP (5 tools), api-client, web, app         |
+| Issue | Título                              | Estado          | Superfícies                                          |
+| ----- | ----------------------------------- | --------------- | ---------------------------------------------------- |
+| #374  | O dia, a refeição e a foto guardada | mergeado (#427) | api, db, MCP, api-client, web, app                   |
+| #375  | Adicionar comida                    | mergeado (#429) | api, db, MCP (2 tools), agente, api-client, web, app |
+| #376  | Metas, nutrientes e plano alimentar | mergeado (#428) | api, db, MCP (5 tools), api-client, web, app         |
+
+Validação da etapa: revisão adversarial em cada PR (defeitos achados e corrigidos antes do merge: refeição perdida quando a foto expirava, "comi isso" duplicado, aviso de troca falso, leitura de rótulo derrubada por um campo, chave de nutriente livre, UPC-A × EAN-13); capturas em `e2e/tests/etapa03-telas.spec.ts` (`UI_STAGE=etapa-03`, 15 de 15, axe sem grave).
 
 Pendências da #374 (branch `redesign/374-nutricao-dia-refeicao`):
 

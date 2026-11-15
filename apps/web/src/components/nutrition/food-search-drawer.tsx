@@ -347,7 +347,7 @@ export function FoodSearchDrawer({
     : undefined;
   const templateError = logTemplate.error ?? deleteTemplate.error;
 
-  const title = mealId ? 'Adicionar item' : 'Nova refeição';
+  const title = mode === 'create' ? 'Criar alimento' : mealId ? 'Adicionar item' : 'Nova refeição';
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -710,13 +710,16 @@ function SearchPanel({
       </ul>
       <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm">
         <span className="text-muted-foreground">Não achou?</span>
-        <button
-          type="button"
-          onClick={() => onCreate(q.trim())}
-          className="min-h-9 font-medium text-primary underline"
-        >
-          Criar meu alimento
-        </button>
+        {/* Sem resultado, o "Criar “X”" acima já é o atalho: não repete. */}
+        {!(typing && !isFetching && !isError && data?.length === 0) && (
+          <button
+            type="button"
+            onClick={() => onCreate(q.trim())}
+            className="min-h-9 font-medium text-primary underline"
+          >
+            Criar meu alimento
+          </button>
+        )}
         <button type="button" onClick={onSwitchToManual} className="min-h-9 text-primary underline">
           Registrar só desta vez
         </button>

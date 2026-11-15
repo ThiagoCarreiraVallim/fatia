@@ -131,6 +131,19 @@ describe('FoodSearchDrawer', () => {
     await waitFor(() => expect(searchFoods).toHaveBeenCalledTimes(2));
   });
 
+  it('sem resultado mostra um só atalho de criar, e o formulário se chama "Criar alimento"', async () => {
+    searchFoods.mockResolvedValue([]);
+    const user = userEvent.setup();
+    renderDrawer();
+
+    await user.type(screen.getByPlaceholderText(/Ex\.: arroz/), 'granola da casa');
+    const criar = await screen.findByRole('button', { name: /Criar “granola da casa”/ });
+    expect(screen.queryByRole('button', { name: /^Criar meu alimento$/ })).not.toBeInTheDocument();
+
+    await user.click(criar);
+    expect(await screen.findByRole('heading', { name: 'Criar alimento' })).toBeInTheDocument();
+  });
+
   it('switches to the manual form when the user clicks "Registrar só desta vez"', async () => {
     searchFoods.mockResolvedValue([]);
     const user = userEvent.setup();
