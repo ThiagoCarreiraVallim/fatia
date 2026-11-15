@@ -81,9 +81,47 @@ def test_campo_ausente_fica_none_e_nao_zero():
     assert lido.sodium_mg is None
 
 
-def test_numero_negativo_reprova():
-    with pytest.raises(AIResponseUnparseable):
-        parse_label_reading(json.dumps({"per": "100g", "kcal": -5}))
+def test_numero_negativo_vira_none_sem_derrubar_a_leitura():
+    lido = parse_label_reading(json.dumps({"per": "100g", "kcal": -5, "protein_g": 3}))
+
+    assert lido.kcal is None
+    assert lido.protein_g == 3
+
+
+def test_nome_e_nota_longos_sao_cortados_e_nao_viram_502():
+    lido = parse_label_reading(
+        json.dumps({"per": "100g", "kcal": 50, "name": "G" * 400, "note": "n" * 900})
+    )
+
+    assert lido.kcal == 50
+    assert lido.name == "G" * 160
+    assert lido.note == "n" * 280
+
+
+def test_porcao_fora_da_faixa_some_e_o_resto_fica():
+    for porcao in (0, -10, 5000, "trinta"):
+        lido = parse_label_reading(
+            json.dumps({"per": "serving", "serving_grams": porcao, "kcal": 120})
+        )
+        assert lido.serving_grams is None
+        assert lido.kcal == 120
+
+
+def test_texto_onde_era_numero_vira_none():
+    lido = parse_label_reading(json.dumps({"per": "100g", "kcal": "muitas", "fat_g": 2}))
+
+    assert lido.kcal is None
+    assert lido.fat_g == 2
+
+
+async def test_falha_de_formato_leva_o_consumo_da_chamada():
+    """O provedor foi chamado e cobrou: o custo precisa chegar à cota mesmo sem rótulo."""
+    uso = Usage(model="z-ai/glm-5.3-flash", input_units=900, output_units=20)
+
+    with pytest.raises(AIResponseUnparseable) as erro:
+        await read_label(VisaoFalsa("não sei", uso), JPEG_MINIMO)
+
+    assert erro.value.usage == uso
 
 
 def test_base_desconhecida_reprova():
@@ -147,6 +185,17 @@ def test_prosa_do_modelo_vira_502(client_com_visao):
     resposta = client_com_visao("não sei").post("/read-label", json=_corpo())
 
     assert resposta.status_code == 502
+
+
+def test_502_de_formato_devolve_o_consumo_para_a_cota(client_com_visao):
+    uso = Usage(model="z-ai/glm-5.3-flash", input_units=900, output_units=20)
+
+    resposta = client_com_visao("não sei", uso).post("/read-label", json=_corpo())
+
+    assert resposta.status_code == 502
+    corpo = resposta.json()
+    assert corpo["error"]["code"] == "AI_RESPONSE_UNPARSEABLE"
+    assert corpo["usage"] == {"model": "z-ai/glm-5.3-flash", "inputUnits": 900, "outputUnits": 20}
 
 
 def test_segredo_configurado_e_exigido_no_header(client_com_visao):

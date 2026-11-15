@@ -99,6 +99,22 @@ export type TurnInput = {
 /** O que uma chamada consumiu, como o agente reportou. Unidade ausente é custo não medido. */
 export type AgentUsage = { model: string; inputUnits?: number; outputUnits?: number };
 
+/**
+ * O consumo de uma chamada que **chegou ao provedor e falhou depois** (o rótulo
+ * que veio fora de forma, #375). O provedor cobrou; o erro leva o custo até
+ * `HostedAiService`, que o lança na cota antes de repassar o erro.
+ */
+const SPENT = new WeakMap<object, AgentUsage>();
+
+export function withSpentUsage<E extends object>(error: E, usage: AgentUsage): E {
+  SPENT.set(error, usage);
+  return error;
+}
+
+export function spentUsage(error: unknown): AgentUsage | null {
+  return typeof error === 'object' && error !== null ? (SPENT.get(error) ?? null) : null;
+}
+
 /** O que o chat desta instância sabe fazer além de texto. */
 export type AgentCapabilities = { vision: boolean; transcription: boolean };
 

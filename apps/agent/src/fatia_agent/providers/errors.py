@@ -106,6 +106,10 @@ class AIResponseUnparseable(AIProviderError):
     """Veio 200, mas o corpo não tem a forma que a chamada precisa."""
 
     code = "AI_RESPONSE_UNPARSEABLE"
+    # O consumo da chamada que respondeu fora de forma: a leitura do rótulo o
+    # devolve junto do erro, para o custo contar na cota (#375). `object` e não
+    # `Usage` para este módulo não depender de `base`.
+    usage: object | None = None
 
 
 class AIResponseTruncated(AIProviderError):

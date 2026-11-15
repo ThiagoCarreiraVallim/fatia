@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from ..prompts.read_label_pt_br import INSTRUCAO, SISTEMA
 from ..providers.base import Usage, VisionCapability
+from ..providers.errors import AIResponseUnparseable
 from ..schemas.label_reading import LabelReading, parse_label_reading
 
 # Em constante pelo mesmo motivo do `PROMPT` do prato: o benchmark grava o sha256.
@@ -31,4 +32,10 @@ async def read_label(
 ) -> MeasuredLabel:
     """Lê a tabela pela capacidade de visão e valida a saída."""
     resposta = await provider.describe(image, prompt=PROMPT, media_type=media_type)
-    return MeasuredLabel(label=parse_label_reading(resposta.text), usage=resposta.usage)
+    try:
+        label = parse_label_reading(resposta.text)
+    except AIResponseUnparseable as erro:
+        # O provedor já cobrou: o consumo segue com o erro até a cota (`apps/api`).
+        erro.usage = resposta.usage
+        raise
+    return MeasuredLabel(label=label, usage=resposta.usage)

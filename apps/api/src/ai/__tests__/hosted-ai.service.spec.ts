@@ -6,6 +6,7 @@ import type { AiUsageService } from '../ai-usage.service';
 import { HostedAiService } from '../hosted-ai.service';
 import { INSTANCIA_LIBERADA, type AiEntitlement } from '../../billing/ai-entitlement';
 import { FakeAgentAdapter } from './fake-agent.adapter';
+import { withSpentUsage } from '../agent.adapter';
 
 /**
  * A IA hospedada num módulo só: portão de plano e cota → quem paga → agente →
@@ -174,6 +175,33 @@ describe('HostedAiService — toda chamada grava uso com quem pagou', () => {
       model: 'z-ai/glm-5.3-flash',
       units: { inputUnits: 900, outputUnits: 60 },
     });
+  });
+
+  it('rótulo ilegível que o provedor cobrou ainda conta na cota, e o erro segue', async () => {
+    const { service, agent, usage } = build();
+    const falha = withSpentUsage(new Error('ilegível'), {
+      model: 'z-ai/glm-5.3-flash',
+      inputUnits: 900,
+      outputUnits: 20,
+    });
+    agent.readLabel.mockRejectedValueOnce(falha);
+
+    await expect(service.readLabel(USER, JPEG)).rejects.toBe(falha);
+
+    expect(usage.record).toHaveBeenCalledWith(USER, {
+      feature: 'label_photo',
+      ...comunidade,
+      model: 'z-ai/glm-5.3-flash',
+      units: { inputUnits: 900, outputUnits: 20 },
+    });
+  });
+
+  it('rótulo que falhou sem chegar ao provedor não lança custo', async () => {
+    const { service, agent, usage } = build();
+    agent.readLabel.mockRejectedValueOnce(new Error('fora do ar'));
+
+    await expect(service.readLabel(USER, JPEG)).rejects.toThrow('fora do ar');
+    expect(usage.record).not.toHaveBeenCalled();
   });
 
   it('foto sem usage do agente vira lançamento não medido, e não nenhum', async () => {

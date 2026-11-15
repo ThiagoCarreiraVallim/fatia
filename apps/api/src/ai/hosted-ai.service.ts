@@ -6,10 +6,12 @@ import {
   AgentAdapter,
   type AgentCapabilities,
   type AgentLabel,
+  type AgentLabelReading,
   type AgentMealRecognition,
   type AgentStream,
   type AgentUsage,
   type TurnInput,
+  spentUsage,
 } from './agent.adapter';
 
 /** O que vai em `AiUsage.feature`. */
@@ -103,9 +105,18 @@ export class HostedAiService {
    */
   async readLabel(userId: string, jpeg: Buffer): Promise<AgentLabel> {
     const payer = await this.gate(userId);
-    const { label, usage } = await this.agent.readLabel(jpeg);
-    await this.record(userId, payer, 'label_photo', ...modelAndUnits(usage));
-    return label;
+    let reading: AgentLabelReading;
+    try {
+      reading = await this.agent.readLabel(jpeg);
+    } catch (error) {
+      // O provedor respondeu fora de forma e cobrou: sem isto, foto ilegível
+      // repetida seria inferência de graça, fora da cota.
+      const spent = spentUsage(error);
+      if (spent) await this.record(userId, payer, 'label_photo', ...modelAndUnits(spent));
+      throw error;
+    }
+    await this.record(userId, payer, 'label_photo', ...modelAndUnits(reading.usage));
+    return reading.label;
   }
 
   /**

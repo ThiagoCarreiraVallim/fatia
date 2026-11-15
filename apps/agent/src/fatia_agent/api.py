@@ -91,6 +91,7 @@ from .providers.errors import (
     AIProviderNotConfigured,
     AIProviderRefused,
     AIProviderTimeout,
+    AIResponseUnparseable,
 )
 from .recognition import MEDIA_TYPES_ACEITOS, read_label, recognize_meal
 from .settings import (
@@ -471,11 +472,11 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
             await provider.aclose()
         return {**medido.meal.model_dump(), "usage": _usage_body(medido.usage)}
 
-    @app.post("/read-label")
+    @app.post("/read-label", response_model=None)
     async def read_label_route(
         payload: RecognizeMealRequest,
         x_fatia_agent_key: Annotated[str | None, Header()] = None,
-    ) -> dict[str, object]:
+    ) -> dict[str, object] | JSONResponse:
         """Foto da tabela nutricional → valores para conferir (#375).
 
         Mesmo corpo, mesma credencial e mesmo silêncio de identidade do
@@ -488,6 +489,16 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
         provider = build_provider(resolved, transport=provider_transport)
         try:
             medido = await read_label(provider, imagem, media_type=payload.media_type)
+        except AIResponseUnparseable as erro:
+            # Mesmo envelope do handler, mais o consumo: a chamada aconteceu e conta
+            # na cota da pessoa, com ou sem rótulo legível.
+            return JSONResponse(
+                status_code=502,
+                content={
+                    "error": {"code": erro.code, "message": erro.message},
+                    "usage": _usage_body(getattr(erro, "usage", None)),
+                },
+            )
         finally:
             await provider.aclose()
         return {"label": medido.label.model_dump(), "usage": _usage_body(medido.usage)}

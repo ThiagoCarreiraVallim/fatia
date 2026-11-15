@@ -6,14 +6,32 @@ Mesma fronteira de `recognized_meal.py`: o texto do modelo vira dado aqui ou vir
 valor do rótulo, e o erro não se anuncia nunca mais.
 """
 
+import math
 from typing import Literal
 
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, ValidationError, field_validator
 
 from ..providers.errors import AIResponseUnparseable
 from .recognized_meal import first_json_object
 
 MAX_NOME = 160
+MAX_NOTA = 280
+MAX_PORCAO_G = 2_000
+
+_NUMEROS = ("kcal", "protein_g", "carbs_g", "fat_g", "fiber_g", "sodium_mg")
+
+
+def _numero_ou_none(valor: object) -> float | None:
+    """Número finito e não negativo, ou `None`.
+
+    Um campo estranho (negativo, texto, infinito) some sozinho em vez de derrubar a
+    leitura inteira num 502: o resto do rótulo continua útil, e a pessoa completa
+    o campo vazio olhando a embalagem. O `apps/api` confere de novo.
+    """
+    if isinstance(valor, bool) or not isinstance(valor, int | float):
+        return None
+    numero = float(valor)
+    return numero if math.isfinite(numero) and numero >= 0 else None
 
 
 class LabelReading(BaseModel):
@@ -26,24 +44,36 @@ class LabelReading(BaseModel):
 
     model_config = {"extra": "ignore"}
 
-    name: str | None = Field(default=None, max_length=MAX_NOME)
+    name: str | None = None
     per: Literal["serving", "100g"] = "100g"
-    serving_grams: float | None = Field(default=None, gt=0, le=2_000)
-    kcal: float | None = Field(default=None, ge=0)
-    protein_g: float | None = Field(default=None, ge=0)
-    carbs_g: float | None = Field(default=None, ge=0)
-    fat_g: float | None = Field(default=None, ge=0)
-    fiber_g: float | None = Field(default=None, ge=0)
-    sodium_mg: float | None = Field(default=None, ge=0)
-    note: str | None = Field(default=None, max_length=280)
+    serving_grams: float | None = None
+    kcal: float | None = None
+    protein_g: float | None = None
+    carbs_g: float | None = None
+    fat_g: float | None = None
+    fiber_g: float | None = None
+    sodium_mg: float | None = None
+    note: str | None = None
 
-    @field_validator("name")
+    @field_validator("name", "note", mode="before")
     @classmethod
-    def _sem_espaco_sobrando(cls, valor: str | None) -> str | None:
-        if valor is None:
+    def _texto_cortado(cls, valor: object, info: object) -> str | None:
+        if not isinstance(valor, str):
             return None
         limpo = " ".join(valor.split())
-        return limpo or None
+        teto = MAX_NOME if getattr(info, "field_name", "") == "name" else MAX_NOTA
+        return limpo[:teto] or None
+
+    @field_validator(*_NUMEROS, mode="before")
+    @classmethod
+    def _numero(cls, valor: object) -> float | None:
+        return _numero_ou_none(valor)
+
+    @field_validator("serving_grams", mode="before")
+    @classmethod
+    def _porcao(cls, valor: object) -> float | None:
+        numero = _numero_ou_none(valor)
+        return numero if numero is not None and 0 < numero <= MAX_PORCAO_G else None
 
 
 def parse_label_reading(texto: str) -> LabelReading:

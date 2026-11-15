@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import { MessageRole } from '@prisma/client';
-import { AgentStreamError } from '../agent.adapter';
+import { AgentStreamError, spentUsage } from '../agent.adapter';
 import { HttpAgentAdapter } from '../http-agent.adapter';
 
 /**
@@ -565,6 +565,29 @@ describe('HttpAgentAdapter.readLabel (#375)', () => {
     dublarFetch(json({ items: [] }));
 
     await expect(montar().readLabel(JPEG)).rejects.toBeInstanceOf(BadGatewayException);
+  });
+
+  it('502 de formato traz o consumo da chamada, para a cota contar', async () => {
+    dublarFetch(
+      json(
+        {
+          error: { code: 'AI_RESPONSE_UNPARSEABLE', message: 'x' },
+          usage: { model: 'z-ai/glm-5.3-flash', inputUnits: 900, outputUnits: 20 },
+        },
+        502,
+      ),
+    );
+
+    const erro = await montar()
+      .readLabel(JPEG)
+      .catch((e: unknown) => e);
+
+    expect(erro).toBeInstanceOf(Error);
+    expect(spentUsage(erro)).toEqual({
+      model: 'z-ai/glm-5.3-flash',
+      inputUnits: 900,
+      outputUnits: 20,
+    });
   });
 });
 

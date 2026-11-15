@@ -25,6 +25,7 @@ import {
   type AgentTranscription,
   type AgentUsage,
   type TurnInput,
+  withSpentUsage,
 } from './agent.adapter';
 
 /**
@@ -419,8 +420,16 @@ export class HttpAgentAdapter extends AgentAdapter {
   private async translateError(feature: Feature, http: Response): Promise<HttpException> {
     const body = (await http.json().catch(() => null)) as {
       error?: { code?: string };
+      usage?: unknown;
     } | null;
-    const code = body?.error?.code ?? '';
+    const exception = this.exceptionFor(feature, http, body?.error?.code ?? '');
+    // A chamada chegou ao provedor (o agente devolve o consumo no corpo do erro):
+    // o custo segue com a exceção para a cota.
+    const spent = readUsage(body?.usage);
+    return spent ? withSpentUsage(exception, spent) : exception;
+  }
+
+  private exceptionFor(feature: Feature, http: Response, code: string): HttpException {
     this.logger.warn(`Agente respondeu ${http.status} (${code || 'sem code'})`);
 
     const byCode = BY_CODE[code];
