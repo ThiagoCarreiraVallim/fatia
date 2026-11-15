@@ -40,7 +40,7 @@ export function PersonalNotice({
       {'avatar' in v.lead ? (
         <span
           aria-hidden
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--water)/0.2)] text-[11px] font-bold text-water"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--water)/0.2)] text-[11px] font-bold text-foreground"
         >
           {initials(v.lead.avatar)}
         </span>
