@@ -27,13 +27,27 @@ model User {
 
   // Perfil do onboarding: só alimentam a sugestão de metas (gasto pela
   // Mifflin-St Jeor). Nenhum aparece para terceiros nem entra em comparação.
-  sex           BiologicalSex?
-  birthDate     DateTime?      @db.Date
-  activityLevel ActivityLevel?
-  objective     BodyObjective?
+  sex              BiologicalSex?
+  birthDate        DateTime?      @db.Date
+  activityLevel    ActivityLevel?
+  objective        BodyObjective?
   // Nulo = ainda não passou pelo assistente de primeira vez (nem o pulou, nem
   // definiu metas por outro caminho). O app redireciona enquanto for nulo.
-  onboardedAt   DateTime?
+  onboardedAt      DateTime?
+  /// Etapa do onboarding em que a pessoa está (#371), para voltar na mesma tela
+  /// ao reabrir o app ou a web. Nulo = não começou ou já terminou. Continua
+  /// preenchida depois do `onboardedAt` enquanto faltam as etapas puláveis
+  /// (lembretes, notificações, IA). Chaves em `ONBOARDING_STEPS` da API.
+  onboardingStep   String?
+  /// Rascunho do que ainda não tem coluna própria (peso digitado, metas
+  /// escolhidas, origem da meta). Dado da pessoa: sai no export e some no fim.
+  onboardingDraft  Json?
+  /// Desde quando o cartão "Primeiros passos" aparece no Hoje: o fim do
+  /// onboarding. Quem entrou antes do #371 não vê o cartão.
+  firstStepsSince  DateTime?
+  /// Quando os três primeiros passos ficaram prontos: o cartão some no dia
+  /// seguinte, no fuso da pessoa.
+  firstStepsDoneAt DateTime?
 
   // Cliente no Asaas (assinatura PRO pela web, ADR 024). Só o id do provedor:
   // CPF e cartão ficam no Asaas, nunca aqui.

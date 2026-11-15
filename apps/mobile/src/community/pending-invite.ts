@@ -16,6 +16,12 @@ export async function savePendingInvite(token: string): Promise<void> {
   await SecureStore.setItemAsync(KEY, token);
 }
 
+/** Só lê: o onboarding abre as boas-vindas da comunidade e apaga ao responder (#371). */
+export async function peekPendingInvite(): Promise<string | null> {
+  const token = await SecureStore.getItemAsync(KEY);
+  return isInviteToken(token) ? token : null;
+}
+
 /** Lê e apaga: o convite pendente é retomado uma vez só. */
 export async function takePendingInvite(): Promise<string | null> {
   const token = await SecureStore.getItemAsync(KEY);

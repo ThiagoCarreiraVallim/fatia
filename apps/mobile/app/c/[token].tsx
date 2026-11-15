@@ -7,13 +7,17 @@ import {
   alreadyMemberGroupId,
   ApiError,
   groupsApi,
+  initialsOf,
+  onboardingPending,
   teamRoleLabel,
+  usersApi,
   type InvitePreview,
   type JoinConsent,
 } from '@fatia/api-client';
 import { useAuth } from '@/auth/auth-context';
 import { isInviteToken } from '@/community/invite-link';
 import { clearPendingInvite, savePendingInvite } from '@/community/pending-invite';
+import { AccountForm } from '@/components/auth/account-form';
 import { ConsentForm } from '@/components/community/consent-form';
 import { Screen } from '@/components/layout/screen';
 import { Button, EmptyState, LoadingState } from '@/components/ui';
@@ -58,7 +62,7 @@ function CartaoDoConvite({ preview }: { preview: InvitePreview }) {
 export default function InviteScreen() {
   const { token: bruto } = useLocalSearchParams<{ token: string }>();
   const token = isInviteToken(bruto) ? bruto : null;
-  const { status, signIn } = useAuth();
+  const { status } = useAuth();
   const router = useRouter();
   const qc = useQueryClient();
 
@@ -72,6 +76,18 @@ export default function InviteScreen() {
   useEffect(() => {
     if (token && status === 'signedOut') void savePendingInvite(token);
   }, [token, status]);
+
+  // Conta nova (ou onboarding pela metade): o convite vira as boas-vindas e o
+  // "o que a equipe vê" do onboarding (Onb-02 e Onb-03), não este cartão.
+  const me = useQuery({
+    queryKey: ['users', 'me'],
+    queryFn: () => usersApi.me(),
+    enabled: status === 'signedIn',
+  });
+  const toOnboarding = token !== null && me.data !== undefined && onboardingPending(me.data);
+  useEffect(() => {
+    if (toOnboarding) router.replace(`/onboarding?convite=${token}`);
+  }, [toOnboarding, router, token]);
 
   const accept = useMutation({
     mutationFn: (consent: JoinConsent) => groupsApi.acceptInvite(token!, consent),
@@ -98,7 +114,7 @@ export default function InviteScreen() {
       </Screen>
     );
   }
-  if (preview.isPending || status === 'loading') {
+  if (preview.isPending || status === 'loading' || toOnboarding) {
     return (
       <Screen title="Convite">
         <LoadingState label="Abrindo o convite…" />
@@ -136,16 +152,31 @@ export default function InviteScreen() {
             }
           />
         ) : (
-          <View className="gap-3">
-            <Text className="text-sm text-muted-foreground">
-              Entre ou crie sua conta para aceitar. Depois você escolhe o que a equipe pode ver.
+          // Onb-01a · Conta pelo convite: quem convidou, a comunidade e a conta.
+          <View className="gap-3.5">
+            <View className="h-[150px] justify-end rounded-card bg-brand px-6 pb-[18px]">
+              <View className="flex-row items-center gap-3">
+                <View className="h-14 w-14 items-center justify-center rounded-[18px] border-[3px] border-black/25 bg-brand">
+                  <Text className="font-display text-lg text-brand-foreground">
+                    {initialsOf(preview.data.group.name)}
+                  </Text>
+                </View>
+                <View className="flex-1">
+                  <Text className="text-[13px] font-bold text-brand-foreground/80">
+                    {preview.data.invitedBy
+                      ? `${preview.data.invitedBy} te convidou`
+                      : 'Você foi convidado'}
+                  </Text>
+                  <Text className="font-display text-h2 text-brand-foreground">
+                    {preview.data.group.name}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            <Text accessibilityRole="header" className="font-display text-[26px] text-foreground">
+              Crie sua conta para entrar
             </Text>
-            <Button size="lg" onPress={() => void signIn()}>
-              Entrar para aceitar
-            </Button>
-            <Button size="lg" variant="outline" onPress={() => void signIn('register')}>
-              Criar conta grátis
-            </Button>
+            <AccountForm brandCta />
           </View>
         )}
       </View>

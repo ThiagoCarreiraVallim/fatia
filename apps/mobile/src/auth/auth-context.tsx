@@ -9,6 +9,7 @@ import {
 } from 'react';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
+import { signInExtraParams, type FirstScreen, type SignInOptions } from './sign-in-params';
 import { env } from '@/env';
 import { discover, exchangeCode, memoizeDiscovery } from './oidc';
 import { SessionManager, toStoredSession } from './session-manager';
@@ -43,14 +44,15 @@ export type AuthStatus = 'loading' | 'signedIn' | 'signedOut';
 
 /**
  * Tela do Logto em que o login começa — o mesmo `first_screen` que o PWA manda
- * por `/api/logto/sign-in?tela=…`. Ausente = tela de entrar.
+ * por `/api/logto/sign-in?tela=…`. Ausente = tela de entrar. O e-mail digitado
+ * e o Google/Apple (Onb-01a/01b) vão em `options` (ver `sign-in-params.ts`).
  */
-export type FirstScreen = 'register' | 'reset_password';
+export type { FirstScreen, SignInOptions, SocialTarget } from './sign-in-params';
 
 interface AuthContextValue {
   status: AuthStatus;
   /** Abre o navegador do sistema e conclui o login. */
-  signIn(firstScreen?: FirstScreen): Promise<void>;
+  signIn(firstScreen?: FirstScreen, options?: Omit<SignInOptions, 'firstScreen'>): Promise<void>;
   signOut(): Promise<void>;
   /** Token válido para a API, renovando se preciso. */
   getAccessToken(): Promise<string | null>;
@@ -106,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [manager]);
 
   const signIn = useCallback(
-    async (firstScreen?: FirstScreen) => {
+    async (firstScreen?: FirstScreen, options: Omit<SignInOptions, 'firstScreen'> = {}) => {
       setError(null);
       try {
         const discovery = await endpoints();
@@ -127,10 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           codeChallengeMethod: AuthSession.CodeChallengeMethod.S256,
           // RFC 8707: sem isto o Logto emite um token opaco de userinfo em vez de
           // um JWT com a audience da API, e toda chamada volta 401.
-          extraParams: {
-            resource: env.logtoAudience,
-            ...(firstScreen ? { first_screen: firstScreen } : {}),
-          },
+          extraParams: signInExtraParams(env.logtoAudience, { ...options, firstScreen }),
         });
 
         // `promptAsync` usa ASWebAuthenticationSession no iOS e Custom Tabs no

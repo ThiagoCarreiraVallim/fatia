@@ -100,6 +100,11 @@ export interface InvitePreview {
    * quando o convite é de equipe, que não deve a exigência (`consent-scopes.ts`).
    */
   requiredSharingScopes: ShareScope[];
+  /**
+   * O desafio em andamento, para as boas-vindas (prancha Onb-02, #371): título
+   * e quantos participam. Nada sobre quem participa.
+   */
+  activeChallenge: { title: string; participants: number } | null;
 }
 
 export function hashInviteToken(token: string): string {
@@ -362,7 +367,8 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
   /** O cartão da comunidade para quem tem o link — logado ou não. */
   async preview(token: string): Promise<InvitePreview> {
     const convite = await this.valido(token);
-    const [grupo, equipe, memberCount, autor] = await Promise.all([
+    const now = new Date();
+    const [grupo, equipe, memberCount, autor, desafio] = await Promise.all([
       this.prisma.group.findUniqueOrThrow({
         where: { id: convite.groupId },
         select: {
@@ -391,6 +397,16 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
             select: { name: true },
           })
         : null,
+      this.prisma.groupChallenge.findFirst({
+        where: {
+          groupId: convite.groupId,
+          startsAt: { lte: now },
+          endsAt: { gt: now },
+          endedEarlyAt: null,
+        },
+        orderBy: { startsAt: 'desc' },
+        select: { title: true, _count: { select: { participants: true } } },
+      }),
     ]);
     const { requiredSharingScopes, ...group } = grupo;
     return {
@@ -402,6 +418,9 @@ export class InviteService implements OnModuleInit, OnModuleDestroy {
       emailBound: convite.email !== null,
       expiresAt: convite.expiresAt,
       requiredSharingScopes: convite.role === GroupRole.MEMBER ? requiredSharingScopes : [],
+      activeChallenge: desafio
+        ? { title: desafio.title, participants: desafio._count.participants }
+        : null,
     };
   }
 

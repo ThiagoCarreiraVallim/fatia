@@ -406,3 +406,16 @@
     box-shadow: 0 0 0 12px hsl(var(--primary) / 0);
   }
 }
+
+/* A linha que varre a foto no teste da IA (Onb-10a). */
+@keyframes onb-scan {
+  0% {
+    top: 0;
+  }
+  50% {
+    top: calc(100% - 2px);
+  }
+  100% {
+    top: 0;
+  }
+}

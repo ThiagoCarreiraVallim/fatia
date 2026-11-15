@@ -213,6 +213,21 @@ describe('AccountService', () => {
       }
     });
 
+    it('leva a etapa e o rascunho do onboarding (#371)', async () => {
+      prisma.user.findUnique.mockResolvedValue(USER);
+      await service.exportData('user-A');
+      expect(prisma.user.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          select: expect.objectContaining({
+            onboardingStep: true,
+            onboardingDraft: true,
+            firstStepsSince: true,
+            firstStepsDoneAt: true,
+          }),
+        }),
+      );
+    });
+
     it('devolve toda relação do User que não esteja declarada como fora', async () => {
       // A guarda é derivada do `schema.prisma`, não de uma lista escrita aqui: tabela nova
       // pendurada no `User` quebra este caso até alguém decidir, por escrito, se ela é dado do

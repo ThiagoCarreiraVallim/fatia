@@ -8,7 +8,10 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: nav.replace }),
   usePathname: () => nav.pathname,
 }));
-vi.mock('@fatia/api-client', () => ({ usersApi: { me: vi.fn() } }));
+vi.mock('@fatia/api-client', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@fatia/api-client')>();
+  return { onboardingPending: real.onboardingPending, usersApi: { me: vi.fn() } };
+});
 
 import { usersApi } from '@fatia/api-client';
 
@@ -40,6 +43,15 @@ describe('OnboardingGate', () => {
     await waitFor(() =>
       expect(nav.replace).toHaveBeenCalledWith('/onboarding?next=%2Fcommunity%2Fg1'),
     );
+  });
+
+  it('volta quem concluiu as metas mas parou numa etapa pulável (#371)', async () => {
+    vi.mocked(usersApi.me).mockResolvedValue({
+      onboardedAt: '2026-11-04T00:00:00Z',
+      onboardingStep: 'reminders',
+    } as never);
+    renderGate();
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/onboarding'));
   });
 
   it('deixa em paz quem já passou', async () => {

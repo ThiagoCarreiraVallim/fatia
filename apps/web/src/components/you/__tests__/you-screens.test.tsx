@@ -70,6 +70,7 @@ const ME: MeUser = {
   activityLevel: null,
   objective: null,
   onboardedAt: '2026-10-01T00:00:00Z',
+  onboardingStep: null,
   nickname: null,
   bio: null,
   avatarUrl: null,

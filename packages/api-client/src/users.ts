@@ -2,6 +2,7 @@ import { apiFetch } from './http';
 import type { UserGoals } from './nutrition';
 import type { DistanceUnit, LoadUnit } from './units';
 import { uploadMedia } from './community-content';
+import type { OnboardingStepKey } from './onboarding-flow';
 
 export type BiologicalSex = 'FEMALE' | 'MALE';
 export type ActivityLevel = 'SEDENTARY' | 'LIGHT' | 'MODERATE' | 'ACTIVE' | 'VERY_ACTIVE';
@@ -23,6 +24,11 @@ export interface MeUser {
   objective: BodyObjective | null;
   /** Nulo = ainda não passou pelo assistente de primeira vez. */
   onboardedAt: string | null;
+  /**
+   * A etapa do onboarding em que a pessoa parou (#371). Preenchida, o app volta
+   * ao onboarding, mesmo depois do `onboardedAt` (etapas puláveis).
+   */
+  onboardingStep: OnboardingStepKey | null;
   /** Como aparece nas comunidades; nulo = o primeiro nome. */
   nickname: string | null;
   bio: string | null;
