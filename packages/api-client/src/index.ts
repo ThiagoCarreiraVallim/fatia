@@ -29,6 +29,7 @@ export * from './portions';
 export * from './meal-templates';
 export * from './meal-day';
 export * from './custom-food';
+export * from './food-entry';
 export * from './barcode';
 export * from './goals';
 export * from './nutrition';

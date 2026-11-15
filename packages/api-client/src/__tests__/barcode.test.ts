@@ -223,6 +223,8 @@ describe('mealItemFromProduct', () => {
       proteinG: 1.4,
       carbsG: 11,
       fatG: 1.6,
+      // #374/#375: item de código de barras ou rótulo leva a origem BARCODE.
+      source: 'BARCODE',
     });
     expect('foodId' in item).toBe(false);
   });
@@ -430,6 +432,8 @@ describe('customFoodFromProduct', () => {
         carbsPer100g: 55,
         fatPer100g: 8,
         portions: [{ label: 'porção', grams: 20 }],
+        // Guardar em "Meus alimentos" liga o código: a próxima leitura acha este (#375).
+        barcode: '7891000100103',
       },
     });
   });
@@ -504,11 +508,16 @@ describe('savedProductItem', () => {
   };
 
   it('a porção do rótulo vira a medida, para o histórico dizer "1 porção (20 g)"', () => {
-    expect(savedProductItem(guardado, 20)).toEqual({ foodId: 7, portionId: 'p1', quantity: 1 });
+    expect(savedProductItem(guardado, 20)).toEqual({
+      foodId: 7,
+      portionId: 'p1',
+      quantity: 1,
+      source: 'BARCODE',
+    });
   });
 
   it('outra quantidade vai em gramas', () => {
-    expect(savedProductItem(guardado, 50)).toEqual({ foodId: 7, grams: 50 });
-    expect(savedProductItem({ id: 7 }, 20)).toEqual({ foodId: 7, grams: 20 });
+    expect(savedProductItem(guardado, 50)).toEqual({ foodId: 7, grams: 50, source: 'BARCODE' });
+    expect(savedProductItem({ id: 7 }, 20)).toEqual({ foodId: 7, grams: 20, source: 'BARCODE' });
   });
 });
