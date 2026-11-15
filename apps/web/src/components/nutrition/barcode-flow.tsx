@@ -8,12 +8,16 @@ import {
   lookupErrorMessage,
   nutritionApi,
   savedProductItem,
+  ApiError,
   type BarcodeLookup,
+  type CustomFoodForm,
   type Food,
   type ScanCloseReason,
 } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { BarcodeScanner, type BarcodeSource } from './barcode-scanner';
+import { LabelReader, useLabelReading } from './label-reader';
 import { ScannedProductPanel, type ScannedChoice } from './scanned-product-panel';
 
 export interface ScannedItemPayload {
@@ -27,14 +31,23 @@ export interface ScannedItemPayload {
   proteinG?: number;
   carbsG?: number;
   fatG?: number;
+  source?: 'BARCODE';
 }
+
+type ProductLookup = Exclude<BarcodeLookup, { status: 'own' }>;
+type Tab = 'code' | 'label';
 
 interface Props {
   /** Entrega o item à refeição aberta: o drawer decide se cria a refeição ou adiciona. */
   onAdd: (payload: ScannedItemPayload) => void;
   adding: boolean;
   addError?: string;
-  onCreateManually: () => void;
+  /** Cadastrar à mão, com o código lido (quando houver) já no formulário. */
+  onCreateManually: (barcode: string) => void;
+  /** O código é de um alimento da própria pessoa: vai direto para a quantidade. */
+  onPickOwn: (food: Food) => void;
+  /** O rótulo lido pela foto, para conferir no formulário de alimento próprio. */
+  onLabelRead: (form: CustomFoodForm) => void;
   /**
    * Quantos itens a refeição aberta já recebeu. Quando sobe, o produto entrou e
    * o leitor volta para a próxima embalagem (o drawer aberto pelo atalho de
@@ -46,8 +59,10 @@ interface Props {
 }
 
 /**
- * Leitor dentro do drawer de busca: câmera (ou código digitado) → Open Food
- * Facts → painel do produto → item na refeição.
+ * Leitor dentro do drawer de busca: câmera (ou código digitado) → os alimentos
+ * da pessoa → Open Food Facts → painel do produto → item na refeição. A aba
+ * "Rótulo" lê a tabela nutricional pela foto (#375); sem câmera de código, o
+ * digitado e a foto cobrem o mesmo caminho.
  *
  * Mora no drawer, e não numa tela própria como no app, para herdar o contexto da
  * refeição (dia, tipo, vários itens por abertura) sem passar nada pela URL.
@@ -57,13 +72,19 @@ export function BarcodeFlow({
   adding,
   addError,
   onCreateManually,
+  onPickOwn,
+  onLabelRead,
   addedCount = 0,
   onBack,
 }: Props) {
+  const labelAccess = useLabelReading();
+  const [tab, setTab] = useState<Tab>('code');
+  /** Código que não estava em lugar nenhum: segue para o rótulo e o cadastro. */
+  const [unknownCode, setUnknownCode] = useState('');
   const qc = useQueryClient();
   // Último código consultado: a câmera repete o mesmo várias vezes por segundo.
   const lastCode = useRef<string | null>(null);
-  const [result, setResult] = useState<BarcodeLookup | null>(null);
+  const [result, setResult] = useState<ProductLookup | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   /** Painel fechado sem registrar. A trava do código continua valendo. */
   const [dismissed, setDismissed] = useState(false);
@@ -85,8 +106,15 @@ export function BarcodeFlow({
 
   const lookup = useMutation<BarcodeLookup, Error, string>({
     mutationFn: (code) => nutritionApi.lookupBarcode(code),
-    onSuccess: setResult,
-    onError: (error) => setFailure(lookupErrorMessage(error)),
+    onSuccess: (found) => {
+      // O código vinculado a um alimento da pessoa vence o Open Food Facts.
+      if (found.status === 'own') onPickOwn(found.food);
+      else setResult(found);
+    },
+    onError: (error, code) => {
+      setUnknownCode(error instanceof ApiError && error.status === 404 ? code : '');
+      setFailure(lookupErrorMessage(error));
+    },
   });
 
   const save = useMutation<Food, Error, ScannedChoice>({
@@ -116,6 +144,7 @@ export function BarcodeFlow({
     setDismissed(reason === 'dismissed');
     setResult(null);
     setFailure(null);
+    setUnknownCode('');
     lookup.reset();
     save.reset();
   };
@@ -144,11 +173,27 @@ export function BarcodeFlow({
         <p role="alert" className="rounded-lg bg-muted px-3 py-3 text-sm">
           {failure}
         </p>
+        {unknownCode && labelAccess !== 'hidden' && (
+          <Button
+            className="min-h-12 w-full"
+            onClick={() => {
+              setFailure(null);
+              lookup.reset();
+              setTab('label');
+            }}
+          >
+            Ler o rótulo pela foto
+          </Button>
+        )}
         <div className="flex gap-2">
           <Button variant="outline" className="flex-1" onClick={() => close('rescan')}>
             Ler outro
           </Button>
-          <Button className="flex-1" onClick={onCreateManually}>
+          <Button
+            variant={unknownCode && labelAccess !== 'hidden' ? 'outline' : 'default'}
+            className="flex-1"
+            onClick={() => onCreateManually(unknownCode)}
+          >
             Cadastrar à mão
           </Button>
         </div>
@@ -164,8 +209,54 @@ export function BarcodeFlow({
     );
   }
 
+  const tabs =
+    labelAccess === 'hidden' ? null : (
+      <div
+        role="tablist"
+        aria-label="Como ler"
+        className="my-3 grid grid-cols-2 rounded-full bg-muted p-1"
+      >
+        {(
+          [
+            ['code', 'Código'],
+            ['label', 'Rótulo'],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={tab === key}
+            onClick={() => setTab(key)}
+            className={cn(
+              'min-h-10 rounded-full text-sm',
+              tab === key ? 'bg-background font-medium shadow-sm' : 'text-muted-foreground',
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    );
+
+  if (tab === 'label' && labelAccess !== 'hidden') {
+    return (
+      <>
+        {tabs}
+        {unknownCode && (
+          <p className="text-xs text-muted-foreground">{`Código ${unknownCode}: o alimento fica ligado a ele.`}</p>
+        )}
+        <LabelReader barcode={unknownCode} locked={labelAccess === 'locked'} onRead={onLabelRead} />
+        <Button variant="ghost" className="w-full" onClick={onBack}>
+          Voltar para a busca
+        </Button>
+      </>
+    );
+  }
+
   return (
     <>
+      {tabs}
       <BarcodeScanner onCode={handleCode} />
       {dismissed && (
         // O código descartado segue travado, senão a câmera o releria na hora.

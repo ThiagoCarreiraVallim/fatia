@@ -5,6 +5,8 @@ import {
   foodAmountPreview,
   foodOriginTag,
   isSearching,
+  filterMyFoods,
+  myFoodsEmptySearch,
   myFoodsTabs,
   resultsCaption,
 } from '../food-entry';
@@ -75,5 +77,28 @@ describe('quantidade ao vivo (Al-N3)', () => {
 describe('Meus alimentos (Al-N12)', () => {
   it('sem a aba "Lidos" (ADR 017): todos, alimentos e refeições', () => {
     expect(myFoodsTabs().map((t) => t.label)).toEqual(['Todos', 'Alimentos', 'Refeições']);
+  });
+});
+
+describe('filtro de Meus alimentos (Al-N12)', () => {
+  const foods = [{ name: 'Granola da casa' }, { name: 'Pão da padaria' }];
+  const meals = [{ name: 'Café de sempre' }];
+
+  it('a aba escolhe o que aparece', () => {
+    expect(filterMyFoods(foods, meals, 'all', '')).toEqual({ foods, meals });
+    expect(filterMyFoods(foods, meals, 'foods', '')).toEqual({ foods, meals: [] });
+    expect(filterMyFoods(foods, meals, 'meals', '')).toEqual({ foods: [], meals });
+  });
+
+  it('a busca ignora acento e caixa', () => {
+    expect(filterMyFoods(foods, meals, 'all', ' PAO ')).toEqual({
+      foods: [{ name: 'Pão da padaria' }],
+      meals: [],
+    });
+    expect(filterMyFoods(foods, meals, 'all', 'cafe').meals).toEqual(meals);
+  });
+
+  it('sem nada na busca, o texto diz o termo', () => {
+    expect(myFoodsEmptySearch(' kombucha ')).toBe('Nada com “kombucha” em Meus alimentos.');
   });
 });

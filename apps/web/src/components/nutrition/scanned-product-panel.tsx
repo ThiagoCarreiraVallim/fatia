@@ -38,7 +38,7 @@ export interface ScannedChoice {
 }
 
 interface Props {
-  lookup: BarcodeLookup;
+  lookup: Exclude<BarcodeLookup, { status: 'own' }>;
   customFoods: Food[];
   pending: boolean;
   error?: string;
@@ -291,7 +291,7 @@ function SaveOption({
         Guardar em Meus alimentos
       </label>
       <p className="text-xs text-muted-foreground">
-        Na próxima vez, ele aparece na busca sem precisar ler o código.
+        Fica ligado a este código: na próxima leitura, ele vem de Meus alimentos.
       </p>
       {parsed && !parsed.ok && (
         <p role="alert" className="text-xs text-danger">

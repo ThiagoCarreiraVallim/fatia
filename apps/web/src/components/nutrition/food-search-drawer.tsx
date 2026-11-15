@@ -14,15 +14,24 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
+  addTargetLabel,
   amountGrams,
   amountPayload,
   emptyCustomFoodForm,
+  emptySearchCopy,
+  foodAmountPreview,
+  foodOriginTag,
   initialAmount,
+  isSearching,
   nutritionApi,
+  parseDecimalInput,
+  resultsCaption,
   shortcutDetail,
   templateSummary,
   withFavorite,
   type Amount,
+  type AmountPreview,
+  type CustomFoodForm as CustomFoodValues,
   type CustomFoodInput,
   type Food,
   type FoodPortion,
@@ -32,6 +41,7 @@ import {
   type MealType,
 } from '@fatia/api-client';
 import { instanteNoDia } from '@/lib/dias';
+import { cn } from '@/lib/utils';
 import { AmountPicker } from './amount-picker';
 import { BarcodeFlow } from './barcode-flow';
 import { CustomFoodForm } from './custom-food-form';
@@ -65,21 +75,24 @@ interface ItemPayload {
   carbsG?: number;
   fatG?: number;
   nutrients?: Record<string, number>;
+  source?: 'BARCODE';
 }
+
+type BrowseTab = 'recent' | 'favorites' | 'templates' | 'mine';
 
 const INITIAL_AMOUNT: Amount = { kind: 'grams', grams: '100' };
 
 const INITIAL_MANUAL = { name: '', grams: '100', kcal: '', proteinG: '', carbsG: '', fatG: '' };
 
+// Vírgula decimal ("1,5") vale como no resto do app.
 function parsePositive(value: string): number | null {
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? n : null;
+  const n = parseDecimalInput(value);
+  return n !== null && n > 0 ? n : null;
 }
 
 function parseNonNegative(value: string): number | undefined {
   if (value.trim() === '') return undefined;
-  const n = Number(value);
-  return Number.isFinite(n) && n >= 0 ? n : undefined;
+  return parseDecimalInput(value) ?? undefined;
 }
 
 export function FoodSearchDrawer({
@@ -99,8 +112,12 @@ export function FoodSearchDrawer({
   // As medidas do alimento escolhido, mais as que a pessoa criar sem fechar o drawer.
   const [portions, setPortions] = useState<FoodPortion[]>([]);
   const [manual, setManual] = useState(INITIAL_MANUAL);
-  // Nome que a busca já tinha: "Criar "granola X"" chega com ele preenchido.
-  const [createName, setCreateName] = useState('');
+  // O formulário de alimento próprio já preenchido: com o nome que a busca
+  // tinha, o código que não foi achado ou o que a IA leu no rótulo.
+  const [createInitial, setCreateInitial] = useState<CustomFoodValues>(() => emptyCustomFoodForm());
+  // O alimento escolhido veio do código de barras (um alimento seu, vinculado).
+  const [pickedByBarcode, setPickedByBarcode] = useState(false);
+  const [savedOnly, setSavedOnly] = useState<string | null>(null);
   const [manualNutrients, setManualNutrients] = useState<Record<string, string>>({});
   // Vários itens por abertura: o primeiro cria a refeição, os seguintes entram nela.
   const [createdMealId, setCreatedMealId] = useState<string | null>(null);
@@ -131,7 +148,9 @@ export function FoodSearchDrawer({
       setAmount(INITIAL_AMOUNT);
       setPortions([]);
       setManual(INITIAL_MANUAL);
-      setCreateName('');
+      setCreateInitial(emptyCustomFoodForm());
+      setPickedByBarcode(false);
+      setSavedOnly(null);
       setManualNutrients({});
       setCreatedMealId(null);
       setAdded([]);
@@ -146,7 +165,7 @@ export function FoodSearchDrawer({
   const search = useQuery({
     queryKey: ['nutrition', 'search', debounced],
     queryFn: () => nutritionApi.searchFoods(debounced, 20),
-    enabled: open && mode === 'search' && debounced.trim().length >= 2,
+    enabled: open && mode === 'search' && isSearching(debounced),
   });
 
   const myFoodsKey = ['nutrition', 'my-foods', mealType ?? null] as const;
@@ -161,6 +180,12 @@ export function FoodSearchDrawer({
   );
 
   // Refeição salva registra a refeição inteira: só faz sentido ao criar uma nova.
+  const customFoods = useQuery({
+    queryKey: ['nutrition', 'custom-foods'],
+    queryFn: () => nutritionApi.customFoods(),
+    enabled: open,
+  });
+
   const templates = useQuery({
     queryKey: ['nutrition', 'meal-templates'],
     queryFn: () => nutritionApi.mealTemplates(),
@@ -217,6 +242,8 @@ export function FoodSearchDrawer({
       // para quem abriu pelo atalho de escanear (a próxima embalagem).
       setMode(startMode);
       setSelected(null);
+      setPickedByBarcode(false);
+      setSavedOnly(null);
       setQ('');
       setDebounced('');
       setAmount(INITIAL_AMOUNT);
@@ -227,22 +254,26 @@ export function FoodSearchDrawer({
   });
 
   // Criou, já escolhe: o alimento cai no seletor de quantidade da refeição aberta.
-  const createFood = useMutation<Food, Error, CustomFoodInput>({
-    mutationFn: (input) => nutritionApi.createCustomFood(input),
-    onSuccess: (food) => {
+  // "Só salvar" guarda e volta para a busca; o outro botão já cai na quantidade.
+  const createFood = useMutation<Food, Error, { input: CustomFoodInput; register: boolean }>({
+    mutationFn: ({ input }) => nutritionApi.createCustomFood(input),
+    onSuccess: (food, { register }) => {
       qc.invalidateQueries({ queryKey: ['nutrition', 'search'] });
       qc.invalidateQueries({ queryKey: ['nutrition', 'custom-foods'] });
       setMode('search');
-      pick(food);
+      if (register) pick(food);
+      else setSavedOnly(food.name);
     },
   });
 
-  const startCreate = (name: string) => {
+  const startCreateWith = (initial: CustomFoodValues) => {
     addItem.reset();
     createFood.reset();
-    setCreateName(name);
+    setSavedOnly(null);
+    setCreateInitial(initial);
     setMode('create');
   };
+  const startCreate = (name: string) => startCreateWith(emptyCustomFoodForm(name));
 
   const createPortion = async (label: string, grams: number) => {
     if (!selected) throw new Error('Sem alimento');
@@ -254,8 +285,10 @@ export function FoodSearchDrawer({
     return created;
   };
 
-  const pick = (food: Food | FoodShortcut) => {
+  const pick = (food: Food | FoodShortcut, byBarcode = false) => {
     addItem.reset();
+    setSavedOnly(null);
+    setPickedByBarcode(byBarcode);
     setSelected(food);
     setPortions(food.portions ?? []);
     setAmount(initialAmount(food));
@@ -263,22 +296,16 @@ export function FoodSearchDrawer({
 
   const grams = selected ? amountGrams(amount, portions) : null;
 
-  const preview = useMemo(() => {
-    if (!selected) return null;
-    const g = grams;
-    if (g === null) return null;
-    const ratio = g / 100;
-    return {
-      kcal: Math.round(selected.kcalPer100g * ratio),
-      proteinG: Math.round(selected.proteinPer100g * ratio),
-      carbsG: Math.round(selected.carbsPer100g * ratio),
-      fatG: Math.round(selected.fatPer100g * ratio),
-    };
-  }, [selected, grams]);
+  const preview = selected ? foodAmountPreview(selected, grams) : null;
 
   const submitFromSearch = () => {
     if (!selected || grams === null) return;
-    addItem.mutate({ foodId: selected.id, ...amountPayload(amount), label: selected.name });
+    addItem.mutate({
+      foodId: selected.id,
+      ...amountPayload(amount),
+      ...(pickedByBarcode ? { source: 'BARCODE' as const } : {}),
+      label: selected.name,
+    });
   };
 
   const submitManual = () => {
@@ -332,6 +359,16 @@ export function FoodSearchDrawer({
           </DrawerDescription>
         </DrawerHeader>
 
+        {savedOnly && added.length === 0 && (
+          <p
+            role="status"
+            className="flex items-center gap-2 rounded-lg bg-primary/10 px-3 py-2 text-sm text-primary"
+          >
+            <Check size={16} aria-hidden />
+            <span>{`${savedOnly} salvo em Meus alimentos`}</span>
+          </p>
+        )}
+
         {added.length > 0 && (
           <p
             role="status"
@@ -348,16 +385,25 @@ export function FoodSearchDrawer({
             adding={addItem.isPending}
             addError={addError}
             addedCount={added.length}
-            onCreateManually={() => startCreate('')}
+            onCreateManually={(barcode) => startCreateWith({ ...emptyCustomFoodForm(), barcode })}
+            onPickOwn={(food) => {
+              setMode('search');
+              pick(food, true);
+            }}
+            onLabelRead={startCreateWith}
             onBack={() => setMode('search')}
           />
         ) : mode === 'create' ? (
           <CustomFoodForm
-            initial={emptyCustomFoodForm(createName)}
-            submitLabel="Salvar e escolher quantidade"
+            initial={createInitial}
+            submitLabel="Salvar e registrar"
             pending={createFood.isPending}
             error={createFood.error?.message}
-            onSubmit={(input) => createFood.mutate(input)}
+            onSubmit={(input) => createFood.mutate({ input, register: true })}
+            saveOnly={{
+              label: 'Só salvar',
+              onSubmit: (input) => createFood.mutate({ input, register: false }),
+            }}
             onCancel={() => setMode('search')}
           />
         ) : mode === 'manual' ? (
@@ -396,6 +442,7 @@ export function FoodSearchDrawer({
             }
             canSubmit={grams !== null}
             preview={preview}
+            submitLabel={addTargetLabel(mealType)}
             onBack={() => {
               setSelected(null);
               addItem.reset();
@@ -414,6 +461,7 @@ export function FoodSearchDrawer({
             onRetry={() => search.refetch()}
             data={search.data}
             shortcuts={shortcuts.data}
+            customFoods={customFoods.data ?? []}
             templates={mealId ? [] : (templates.data ?? [])}
             onLogTemplate={(template) => logTemplate.mutate(template)}
             onDeleteTemplate={(template) => deleteTemplate.mutate(template.id)}
@@ -460,6 +508,7 @@ interface SearchPanelProps {
   onRetry: () => void;
   data: Food[] | undefined;
   shortcuts: FoodShortcuts | undefined;
+  customFoods: Food[];
   templates: MealTemplate[];
   onLogTemplate: (template: MealTemplate) => void;
   onDeleteTemplate: (template: MealTemplate) => void;
@@ -481,6 +530,7 @@ function SearchPanel({
   onRetry,
   data,
   shortcuts,
+  customFoods,
   templates,
   onLogTemplate,
   onDeleteTemplate,
@@ -492,10 +542,29 @@ function SearchPanel({
   onCreate,
   onScan,
 }: SearchPanelProps) {
-  const typing = debounced.trim().length >= 2;
-  const hasShortcuts =
-    templates.length > 0 ||
-    (!!shortcuts && shortcuts.favorites.length + shortcuts.recent.length > 0);
+  const typing = isSearching(debounced);
+  const [tab, setTab] = useState<BrowseTab>('recent');
+  // Ao registrar numa refeição aberta, "Salvas" (a refeição inteira) não cabe.
+  const tabs: Array<[BrowseTab, string]> = [
+    ['recent', 'Recentes'],
+    ['favorites', 'Favoritos'],
+    ...(templates.length > 0 ? [['templates', 'Salvas'] as [BrowseTab, string]] : []),
+    ['mine', 'Meus'],
+  ];
+  const browseFoods: Food[] =
+    tab === 'recent'
+      ? (shortcuts?.recent ?? [])
+      : tab === 'favorites'
+        ? (shortcuts?.favorites ?? [])
+        : tab === 'mine'
+          ? customFoods
+          : [];
+  const emptyTab: Record<BrowseTab, string> = {
+    recent: 'O que você registrar aparece aqui, a um toque.',
+    favorites: 'Toque na estrela de um alimento para ele morar aqui.',
+    templates: 'Nenhuma refeição salva.',
+    mine: 'Seus alimentos aparecem aqui: o produto embalado, a receita de casa.',
+  };
 
   return (
     <>
@@ -521,24 +590,47 @@ function SearchPanel({
           onClick={onScan}
           aria-label="Ler código de barras"
           title="Ler código de barras"
-          className="shrink-0"
+          className="h-11 w-11 shrink-0"
         >
           <ScanBarcode size={18} aria-hidden />
         </Button>
       </div>
+      {!typing && (
+        <div
+          role="tablist"
+          aria-label="Atalhos"
+          className="-mx-1 mb-2 flex gap-1 overflow-x-auto px-1"
+        >
+          {tabs.map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={tab === key}
+              onClick={() => setTab(key)}
+              className={cn(
+                'min-h-10 shrink-0 rounded-full px-4 text-sm',
+                tab === key
+                  ? 'bg-primary/15 font-medium text-primary'
+                  : 'bg-muted text-muted-foreground',
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {typing && !isFetching && !isError && (data?.length ?? 0) > 0 && (
+        <p className="mb-1 text-xs text-muted-foreground">{resultsCaption(data?.length ?? 0)}</p>
+      )}
       <ul className="-mx-4 max-h-[55vh] divide-y overflow-y-auto">
         {isFetching && <li className="px-4 py-3 text-sm text-muted-foreground">Buscando...</li>}
         {!isFetching && isError && (
           <li className="flex items-center justify-between px-4 py-3 text-sm">
             <span className="text-danger">Erro ao buscar alimentos.</span>
-            <button type="button" onClick={onRetry} className="text-primary underline">
+            <button type="button" onClick={onRetry} className="min-h-11 text-primary underline">
               Tentar novamente
             </button>
-          </li>
-        )}
-        {!typing && !hasShortcuts && (
-          <li className="px-4 py-3 text-sm text-muted-foreground">
-            Digite pelo menos 2 caracteres. O que você registrar aparece aqui, a um toque.
           </li>
         )}
         {!typing && templateError && (
@@ -546,11 +638,8 @@ function SearchPanel({
             {templateError}
           </li>
         )}
-        {!typing && templates.length > 0 && (
+        {!typing && tab === 'templates' && (
           <li>
-            <h3 className="px-4 pt-3 pb-1 text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
-              Refeições salvas
-            </h3>
             <ul aria-label="Refeições salvas" className="divide-y">
               {templates.map((template) => (
                 <TemplateRow
@@ -563,30 +652,38 @@ function SearchPanel({
             </ul>
           </li>
         )}
-        {!typing && shortcuts && (
-          <>
-            <ShortcutSection
-              title="Favoritos"
-              foods={shortcuts.favorites}
-              favoriteIds={favoriteIds}
-              onPick={onPick}
-              onToggleFavorite={onToggleFavorite}
-            />
-            <ShortcutSection
-              title="Recentes"
-              foods={shortcuts.recent}
-              favoriteIds={favoriteIds}
-              onPick={onPick}
-              onToggleFavorite={onToggleFavorite}
-            />
-          </>
+        {!typing && tab !== 'templates' && browseFoods.length === 0 && (
+          <li className="px-4 py-3 text-sm text-muted-foreground">{emptyTab[tab]}</li>
         )}
+        {!typing &&
+          tab !== 'templates' &&
+          browseFoods.map((food) => (
+            <FoodRow
+              key={food.id}
+              food={food}
+              favorite={favoriteIds.has(food.id)}
+              onPick={() => onPick(food)}
+              onToggleFavorite={() => onToggleFavorite(food)}
+              detail={
+                'lastGrams' in food
+                  ? shortcutDetail(food as FoodShortcut)
+                  : `${Math.round(food.kcalPer100g)} kcal/100g`
+              }
+            />
+          ))}
         {typing && !isFetching && !isError && data?.length === 0 && (
           <li className="space-y-2 px-4 py-3 text-sm">
-            <p className="text-muted-foreground">{`Nenhum resultado para "${debounced.trim()}".`}</p>
-            <Button variant="outline" size="sm" onClick={() => onCreate(debounced.trim())}>
+            <p className="font-medium">{emptySearchCopy(debounced).title}</p>
+            <p className="text-xs text-muted-foreground">
+              Produto embalado ou receita de casa? Cadastre uma vez e ele aparece aqui.
+            </p>
+            <Button
+              variant="outline"
+              className="min-h-11"
+              onClick={() => onCreate(debounced.trim())}
+            >
               <Plus size={14} aria-hidden />
-              {`Criar "${debounced.trim()}"`}
+              {emptySearchCopy(debounced).action}
             </Button>
           </li>
         )}
@@ -599,6 +696,7 @@ function SearchPanel({
               onPick={() => onPick(food)}
               onToggleFavorite={() => onToggleFavorite(food)}
               detail={`${Math.round(food.kcalPer100g)} kcal/100g · P${Math.round(food.proteinPer100g)} · C${Math.round(food.carbsPer100g)} · G${Math.round(food.fatPer100g)}`}
+              showOrigin
             />
           ))}
       </ul>
@@ -616,41 +714,6 @@ function SearchPanel({
         </button>
       </div>
     </>
-  );
-}
-
-function ShortcutSection({
-  title,
-  foods,
-  favoriteIds,
-  onPick,
-  onToggleFavorite,
-}: {
-  title: string;
-  foods: FoodShortcut[];
-  favoriteIds: ReadonlySet<number>;
-  onPick: (food: Food, lastGrams?: number | null) => void;
-  onToggleFavorite: (food: Food) => void;
-}) {
-  if (foods.length === 0) return null;
-  return (
-    <li>
-      <h3 className="px-4 pt-3 pb-1 text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
-        {title}
-      </h3>
-      <ul aria-label={title} className="divide-y">
-        {foods.map((food) => (
-          <FoodRow
-            key={food.id}
-            food={food}
-            favorite={favoriteIds.has(food.id)}
-            onPick={() => onPick(food)}
-            onToggleFavorite={() => onToggleFavorite(food)}
-            detail={shortcutDetail(food)}
-          />
-        ))}
-      </ul>
-    </li>
   );
 }
 
@@ -711,13 +774,17 @@ function FoodRow({
   detail,
   onPick,
   onToggleFavorite,
+  showOrigin = false,
 }: {
   food: Food;
   favorite: boolean;
   detail: string;
   onPick: () => void;
   onToggleFavorite: () => void;
+  /** Na busca, o selo de origem de cada linha (TACO, seu). */
+  showOrigin?: boolean;
 }) {
+  const origin = foodOriginTag(food);
   return (
     <li className="flex items-center">
       <button
@@ -729,8 +796,17 @@ function FoodRow({
           <p className="text-sm font-medium">{food.name}</p>
           <p className="text-xs text-muted-foreground tabular-nums">{detail}</p>
         </div>
-        {food.source === 'CUSTOM' && (
-          <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-[10px] uppercase">Meu</span>
+        {(showOrigin || food.source === 'CUSTOM') && (
+          <span
+            className={cn(
+              'shrink-0 rounded-full px-2 py-0.5 text-[10px]',
+              origin.tone === 'ok'
+                ? 'bg-primary/15 text-primary'
+                : 'bg-muted text-muted-foreground',
+            )}
+          >
+            {origin.label}
+          </span>
         )}
       </button>
       <FavoriteButton name={food.name} favorite={favorite} onToggle={onToggleFavorite} />
@@ -766,7 +842,8 @@ interface SelectedFoodPanelProps {
   onToggleFavorite: () => void;
   picker: React.ReactNode;
   canSubmit: boolean;
-  preview: { kcal: number; proteinG: number; carbsG: number; fatG: number } | null;
+  preview: AmountPreview | null;
+  submitLabel: string;
   onBack: () => void;
   onSubmit: () => void;
   isSubmitting: boolean;
@@ -780,11 +857,13 @@ function SelectedFoodPanel({
   picker,
   canSubmit,
   preview,
+  submitLabel,
   onBack,
   onSubmit,
   isSubmitting,
   error,
 }: SelectedFoodPanelProps) {
+  const fmt = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
   return (
     <div className="my-3 space-y-4">
       <div className="flex items-center rounded-lg border pl-3">
@@ -796,9 +875,14 @@ function SelectedFoodPanel({
       </div>
       {picker}
       {preview && (
-        <p className="text-sm tabular-nums text-muted-foreground">
-          Total: {preview.kcal} kcal · P{preview.proteinG} · C{preview.carbsG} · G{preview.fatG}
-        </p>
+        <div className="rounded-lg bg-muted px-3 py-2 text-sm tabular-nums">
+          <p className="font-medium">
+            {`Total: ${preview.kcal} kcal · P${fmt(preview.proteinG)} · C${fmt(preview.carbsG)} · G${fmt(preview.fatG)}`}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {`Fibra ${preview.fiberG === null ? '—' : `${fmt(preview.fiberG)} g`} · Sódio ${preview.sodiumMg === null ? '—' : `${preview.sodiumMg} mg`}`}
+          </p>
+        </div>
       )}
       {error && (
         <p role="alert" className="text-sm text-danger">
@@ -810,7 +894,7 @@ function SelectedFoodPanel({
           Voltar
         </Button>
         <Button className="flex-1" onClick={onSubmit} disabled={!canSubmit || isSubmitting}>
-          {isSubmitting ? 'Salvando...' : 'Adicionar'}
+          {isSubmitting ? 'Salvando...' : submitLabel}
         </Button>
       </div>
     </div>
@@ -874,15 +958,7 @@ function ManualForm({
         <label htmlFor="manual-grams" className="text-sm font-medium">
           Gramas
         </label>
-        <Input
-          id="manual-grams"
-          type="number"
-          inputMode="decimal"
-          value={values.grams}
-          onChange={set('grams')}
-          min={0}
-          step={1}
-        />
+        <Input id="manual-grams" inputMode="decimal" value={values.grams} onChange={set('grams')} />
       </div>
       <div className="grid grid-cols-4 gap-2">
         <ManualMacro id="manual-kcal" label="kcal" value={values.kcal} onChange={set('kcal')} />
@@ -915,12 +991,9 @@ function ManualForm({
                 </label>
                 <Input
                   id={`nut-${n.key}`}
-                  type="number"
                   inputMode="decimal"
                   value={nutrientValues[n.key] ?? ''}
                   onChange={(e) => onNutrientChange(n.key, e.target.value)}
-                  min={0}
-                  step={1}
                 />
               </div>
             ))}
@@ -958,15 +1031,7 @@ function ManualMacro({ id, label, value, onChange }: ManualMacroProps) {
       <label htmlFor={id} className="text-xs font-medium text-muted-foreground">
         {label}
       </label>
-      <Input
-        id={id}
-        type="number"
-        inputMode="decimal"
-        value={value}
-        onChange={onChange}
-        min={0}
-        step={1}
-      />
+      <Input id={id} inputMode="decimal" value={value} onChange={onChange} />
     </div>
   );
 }

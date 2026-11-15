@@ -98,6 +98,27 @@ export function myFoodsTabs(): Array<{ key: MyFoodsTab; label: string }> {
   ];
 }
 
+const comparable = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+
+/** O que a aba e a busca do Al-N12 deixam aparecer: alimentos e refeições salvas. */
+export function filterMyFoods<F extends { name: string }, M extends { name: string }>(
+  foods: readonly F[],
+  meals: readonly M[],
+  tab: MyFoodsTab,
+  q: string,
+): { foods: F[]; meals: M[] } {
+  const term = comparable(q);
+  const match = (item: { name: string }) => !term || comparable(item.name).includes(term);
+  return {
+    foods: tab === 'meals' ? [] : foods.filter(match),
+    meals: tab === 'foods' ? [] : meals.filter(match),
+  };
+}
+
+export function myFoodsEmptySearch(q: string): string {
+  return `Nada com “${q.trim()}” em Meus alimentos.`;
+}
+
 /** Texto do Al-N12 que explica o que cabe ali. */
 export const MY_FOODS_HINT =
   'O que não está na busca: produto embalado, receita de casa, o pão da padaria.';

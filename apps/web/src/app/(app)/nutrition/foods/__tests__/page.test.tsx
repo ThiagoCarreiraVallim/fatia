@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import type { Food } from '@fatia/api-client';
+import type { Food, MealTemplate } from '@fatia/api-client';
 import CustomFoodsPage from '../page';
 
 vi.mock('@/components/ui/drawer', () => {
@@ -35,6 +35,9 @@ vi.mock('@fatia/api-client', async () => {
       createCustomFood: vi.fn(),
       updateCustomFood: vi.fn(),
       deleteCustomFood: vi.fn(),
+      mealTemplates: vi.fn(),
+      deleteMealTemplate: vi.fn(),
+      nutrientTargets: vi.fn(),
     },
   };
 });
@@ -45,6 +48,8 @@ const customFoods = vi.mocked(nutritionApi.customFoods);
 const createCustomFood = vi.mocked(nutritionApi.createCustomFood);
 const updateCustomFood = vi.mocked(nutritionApi.updateCustomFood);
 const deleteCustomFood = vi.mocked(nutritionApi.deleteCustomFood);
+const mealTemplates = vi.mocked(nutritionApi.mealTemplates);
+const deleteMealTemplate = vi.mocked(nutritionApi.deleteMealTemplate);
 
 const granola: Food = {
   id: 7,
@@ -73,6 +78,8 @@ describe('Meus alimentos', () => {
     vi.clearAllMocks();
     params.atual = new URLSearchParams();
     customFoods.mockResolvedValue([granola]);
+    mealTemplates.mockResolvedValue([]);
+    vi.mocked(nutritionApi.nutrientTargets).mockResolvedValue([]);
   });
 
   it('lista os alimentos com os valores por 100 g', async () => {
@@ -115,6 +122,8 @@ describe('Meus alimentos', () => {
         proteinPer100g: 10,
         carbsPer100g: 60,
         fatPer100g: 18,
+        nutrients: null,
+        barcode: null,
       }),
     );
     await waitFor(() => expect(screen.queryByLabelText('drawer')).not.toBeInTheDocument());
@@ -159,5 +168,75 @@ describe('Meus alimentos', () => {
       ),
     );
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/nutrition/foods'));
+  });
+});
+
+describe('Meus alimentos: busca e abas (Al-N12)', () => {
+  const pao: Food = { ...granola, id: 8, name: 'Pão da padaria' };
+  const cafe = {
+    id: 't1',
+    name: 'Café de sempre',
+    mealType: 'BREAKFAST',
+    items: [],
+  } as unknown as MealTemplate;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    params.atual = new URLSearchParams();
+    customFoods.mockResolvedValue([granola, pao]);
+    mealTemplates.mockResolvedValue([cafe]);
+    deleteMealTemplate.mockResolvedValue(undefined);
+    vi.mocked(nutritionApi.nutrientTargets).mockResolvedValue([]);
+  });
+
+  it('abas Todos, Alimentos e Refeições, sem "Lidos"', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    expect(await screen.findByText('Granola')).toBeInTheDocument();
+    expect(await screen.findByText('Café de sempre')).toBeInTheDocument();
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
+      'Todos',
+      'Alimentos',
+      'Refeições',
+    ]);
+    await user.click(screen.getByRole('tab', { name: 'Refeições' }));
+    expect(screen.queryByText('Granola')).not.toBeInTheDocument();
+    expect(screen.getByText('Café de sempre')).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Alimentos' }));
+    expect(screen.getByText('Granola')).toBeInTheDocument();
+    expect(screen.queryByText('Café de sempre')).not.toBeInTheDocument();
+  });
+
+  it('a busca filtra pelo nome, sem acento', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText('Granola');
+    await user.type(screen.getByLabelText('Buscar em Meus alimentos'), 'pao');
+    expect(screen.getByText('Pão da padaria')).toBeInTheDocument();
+    expect(screen.queryByText('Granola')).not.toBeInTheDocument();
+  });
+
+  it('busca sem nada diz isso e oferece cadastrar', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText('Granola');
+    await user.type(screen.getByLabelText('Buscar em Meus alimentos'), 'kombucha');
+    expect(screen.getByText('Nada com “kombucha” em Meus alimentos.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Cadastrar alimento' }));
+    expect(screen.getByRole('heading', { name: 'Novo alimento' })).toBeInTheDocument();
+  });
+
+  it('apagar uma refeição salva pede confirmação', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Apagar Café de sempre' }));
+    expect(deleteMealTemplate).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Apagar' }));
+    await waitFor(() => expect(deleteMealTemplate).toHaveBeenCalledWith('t1'));
   });
 });
