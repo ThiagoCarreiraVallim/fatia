@@ -4,6 +4,8 @@ import { dayBoundsInTz, todayInTz, addDaysIso } from '../progress/helpers/date-t
 import { sumMacros, type ItemMacros } from './helpers/calc-macros';
 import { ITENS_EM_ORDEM } from './itens-em-ordem';
 import { assertDay } from '../common/dates';
+import { buildDayNutrients } from './helpers/day-nutrients';
+import { presentMeal } from './meal-presenter';
 
 export interface DayTotals extends ItemMacros {
   date: string;
@@ -24,7 +26,30 @@ export class NutritionSummaryService {
     });
     const allItems = meals.flatMap((m) => m.items);
     const totals = sumMacros(allItems);
-    return { date, totals, mealsCount: meals.length, meals };
+    return { date, totals, mealsCount: meals.length, meals: meals.map(presentMeal) };
+  }
+
+  /**
+   * O dia da tela Nutrição (#374): o resumo, a faixa de cada nutriente (metas do
+   * dia e metas de nutriente) e, em cada refeição, se há foto e de onde veio.
+   */
+  async getDayView(userId: string, date: string, timezone: string) {
+    const [day, goals, targets] = await Promise.all([
+      this.getDay(userId, date, timezone),
+      this.prisma.userGoals.findUnique({ where: { userId } }),
+      this.prisma.nutrientTarget.findMany({ where: { userId } }),
+    ]);
+    const micros: Record<string, number> = {};
+    for (const item of day.meals.flatMap((m) => m.items)) {
+      const map = item.nutrients;
+      if (!map || typeof map !== 'object' || Array.isArray(map)) continue;
+      for (const [key, value] of Object.entries(map)) {
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          micros[key] = (micros[key] ?? 0) + value;
+        }
+      }
+    }
+    return { ...day, nutrients: buildDayNutrients({ totals: day.totals, micros, goals, targets }) };
   }
 
   /** Histórico dos últimos N dias no fuso do usuário, com totais por dia + médias. */

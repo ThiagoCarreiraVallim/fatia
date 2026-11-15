@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { MealItemSource, Prisma } from '@prisma/client';
 import type { ResolvedItem } from '../meal.service';
 
 /** Campos de item que copiar refeição e refeição salva carregam adiante. */
@@ -14,6 +14,8 @@ export interface ItemSnapshotSource {
   nutrients: Prisma.JsonValue | null;
   portionLabel: string | null;
   portionQuantity: number | null;
+  /** A cópia de refeição leva a origem; a refeição salva não tem. */
+  source?: MealItemSource;
 }
 
 /**
@@ -35,5 +37,6 @@ export function snapshotOf(item: ItemSnapshotSource): ResolvedItem {
     ...(item.portionLabel !== null && item.portionQuantity !== null
       ? { portionLabel: item.portionLabel, portionQuantity: item.portionQuantity }
       : {}),
+    ...(item.source ? { source: item.source } : {}),
   };
 }

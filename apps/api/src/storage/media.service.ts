@@ -49,6 +49,18 @@ export const PERSONAL_MEDIA_PURPOSES = {
   user_avatar: { kinds: [MediaKind.IMAGE] },
 } as const satisfies Record<string, { kinds: readonly MediaKind[] }>;
 
+/**
+ * Foto do prato (ADR 038, #374). Não passa pela URL de envio: entra só pelo
+ * reconhecimento da refeição, quando a pessoa escolheu guardar as fotos, e
+ * vale enquanto a refeição existir.
+ */
+export const MEAL_PHOTO_PURPOSE = 'meal_photo';
+/**
+ * Foto guardada que não virou refeição some depois disto: a pessoa desistiu na
+ * tela de confirmação, e a ADR 038 diz que essa foto é descartada.
+ */
+export const UNLINKED_MEAL_PHOTO_MS = 60 * 60 * 1000;
+
 export type GroupMediaPurpose = keyof typeof MEDIA_PURPOSES;
 export type PersonalMediaPurpose = keyof typeof PERSONAL_MEDIA_PURPOSES;
 export type MediaPurpose = GroupMediaPurpose | PersonalMediaPurpose;
@@ -64,6 +76,11 @@ export const MEDIA_LIMITS: Record<MediaKind, { mimes: readonly string[]; maxByte
 /** Validade da URL de envio e da de leitura (ADR 028). */
 export const UPLOAD_URL_TTL_SEC = 10 * 60;
 export const READ_URL_TTL_SEC = 10 * 60;
+/**
+ * Os links das fotos no arquivo de exportação (LGPD): valem um dia, para a
+ * pessoa baixar as fotos depois de baixar o arquivo.
+ */
+export const EXPORT_URL_TTL_SEC = 24 * 60 * 60;
 /** Lado maior da imagem guardada, e o teto de pixels aceito na entrada. */
 const IMAGE_MAX_SIDE = 1600;
 const IMAGE_MAX_INPUT_PIXELS = 40_000_000;
@@ -85,6 +102,27 @@ export interface MediaView {
   url: string | null;
   width: number | null;
   height: number | null;
+}
+
+/**
+ * Sai sem metadado nenhum (EXIF e GPS inclusive), girada pela orientação, no
+ * máximo 1600 px, em WebP.
+ */
+function reencode(input: Buffer): Promise<{ data: Buffer; info: sharp.OutputInfo }> {
+  return (
+    sharp(input, { limitInputPixels: IMAGE_MAX_INPUT_PIXELS })
+      // `rotate()` sem argumento aplica a orientação do EXIF antes de ele sumir;
+      // o `sharp` não copia metadado nenhum para a saída sem `withMetadata`.
+      .rotate()
+      .resize({
+        width: IMAGE_MAX_SIDE,
+        height: IMAGE_MAX_SIDE,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .webp({ quality: 82 })
+      .toBuffer({ resolveWithObject: true })
+  );
 }
 
 const kindOf = (mime: string): MediaKind | null =>
@@ -241,18 +279,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
 
     let saida: { data: Buffer; info: sharp.OutputInfo };
     try {
-      saida = await sharp(await store.get(file.key), { limitInputPixels: IMAGE_MAX_INPUT_PIXELS })
-        // `rotate()` sem argumento aplica a orientação do EXIF antes de ele sumir;
-        // o `sharp` não copia metadado nenhum para a saída sem `withMetadata`.
-        .rotate()
-        .resize({
-          width: IMAGE_MAX_SIDE,
-          height: IMAGE_MAX_SIDE,
-          fit: 'inside',
-          withoutEnlargement: true,
-        })
-        .webp({ quality: 82 })
-        .toBuffer({ resolveWithObject: true });
+      saida = await reencode(await store.get(file.key));
     } catch {
       await this.discard([file]);
       throw new BadRequestException('Não deu para ler esta imagem. Tente outra.');
@@ -276,6 +303,39 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
       },
     });
     return this.view(pronta);
+  }
+
+  /**
+   * Guarda uma imagem pessoal que chegou pelo corpo de uma rota (a foto do
+   * prato, #374), sem URL de envio: recodificada como no `confirm` e pronta
+   * na hora. Sem bucket configurado devolve `null` e nada é guardado.
+   */
+  async storePersonalImage(
+    userId: string,
+    purpose: typeof MEAL_PHOTO_PURPOSE,
+    body: Buffer,
+  ): Promise<MediaFile | null> {
+    if (!this.store) return null;
+    const saida = await reencode(body);
+    const id = randomUUID();
+    const key = `users/${userId}/${id}.webp`;
+    await this.store.put(key, saida.data, 'image/webp');
+    return this.prisma.mediaFile.create({
+      data: {
+        id,
+        uploaderId: userId,
+        groupId: null,
+        purpose,
+        kind: MediaKind.IMAGE,
+        key,
+        mime: 'image/webp',
+        bytes: saida.data.length,
+        width: saida.info.width,
+        height: saida.info.height,
+        status: MediaStatus.READY,
+        confirmedAt: new Date(),
+      },
+    });
   }
 
   /**
@@ -328,6 +388,12 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  /** Link do arquivo no export da própria pessoa (`EXPORT_URL_TTL_SEC`). */
+  async exportUrl(file: Pick<MediaFile, 'key' | 'status'>): Promise<string | null> {
+    if (!this.store || file.status !== MediaStatus.READY) return null;
+    return this.store.presignGet(file.key, EXPORT_URL_TTL_SEC);
+  }
+
   async viewOrNull(file: MediaFile | null | undefined): Promise<MediaView | null> {
     return file ? this.view(file) : null;
   }
@@ -365,14 +431,26 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
             guidePhotoOf: { is: null },
             postImageOf: { is: null },
             userAvatarOf: { is: null },
+            mealPhotoOf: { is: null },
           },
         ],
       },
       select: { id: true, key: true },
       take: 500,
     });
-    await this.discard(lixo);
-    return lixo.length;
+    // A foto do prato que não virou refeição não espera as 24 h (ADR 038).
+    const fotosSoltas = await this.prisma.mediaFile.findMany({
+      where: {
+        purpose: MEAL_PHOTO_PURPOSE,
+        createdAt: { lt: new Date(now.getTime() - UNLINKED_MEAL_PHOTO_MS) },
+        mealPhotoOf: { is: null },
+        id: { notIn: lixo.map((f) => f.id) },
+      },
+      select: { id: true, key: true },
+      take: 500,
+    });
+    await this.discard([...lixo, ...fotosSoltas]);
+    return lixo.length + fotosSoltas.length;
   }
 
   /**

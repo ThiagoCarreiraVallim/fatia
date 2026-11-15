@@ -410,7 +410,8 @@ describe('MealService', () => {
 
       const result = await service.findById(userId, 'meal-1');
 
-      expect(result).toBe(meal);
+      // A refeição sai com o selo de foto e a origem (#374), nunca o id do arquivo.
+      expect(result).toEqual({ ...meal, hasPhoto: false, origin: 'MANUAL' });
     });
   });
 

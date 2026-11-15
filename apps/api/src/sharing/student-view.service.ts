@@ -5,6 +5,7 @@ import { ProfessionalAccessService } from './professional-access.service';
 import { TEAM_ROLES } from './permissions';
 import { GoalsService } from '../goals/goals.service';
 import { NutritionSummaryService } from '../nutrition/nutrition-summary.service';
+import { MealService } from '../nutrition/meal.service';
 import { ProgressService } from '../progress/progress.service';
 import { WorkoutPlanService } from '../workout/workout-plan.service';
 import { WorkoutSessionService } from '../workout/workout-session.service';
@@ -125,7 +126,12 @@ export type StudentReading =
       steps: Sem<ReturnType<ProgressService['stepsProgress']>>;
       water: Sem<ReturnType<ProgressService['waterProgress']>>;
     }
-  | { scope: typeof ShareScope.GOALS; goals: Sem<ReturnType<GoalsService['list']>> };
+  | { scope: typeof ShareScope.GOALS; goals: Sem<ReturnType<GoalsService['list']>> }
+  | {
+      scope: typeof ShareScope.MEAL_PHOTOS;
+      /** Uma URL assinada de curta duração por foto (ADR 028/038). */
+      photos: Sem<ReturnType<MealService['listPhotos']>>;
+    };
 
 export interface StudentReadResult {
   /** Ecoa o que foi pedido. O `userId` do aluno não sai daqui. */
@@ -178,6 +184,7 @@ export class StudentViewService {
     private readonly progress: ProgressService,
     private readonly nutrition: NutritionSummaryService,
     private readonly goals: GoalsService,
+    private readonly meals: MealService,
   ) {}
 
   /**
@@ -339,6 +346,13 @@ export class StudentViewService {
         return {
           scope: ShareScope.GOALS,
           goals: semIdentidade(await this.goals.list({}, ctx.userId, ctx.timezone)),
+        };
+      // Categoria própria (ADR 038): a porta conferiu MEAL_PHOTOS, e não
+      // NUTRITION, e a leitura entrou na trilha como qualquer outra.
+      case ShareScope.MEAL_PHOTOS:
+        return {
+          scope: ShareScope.MEAL_PHOTOS,
+          photos: semIdentidade(await this.meals.listPhotos(ctx.userId, days, ctx.timezone)),
         };
     }
   }

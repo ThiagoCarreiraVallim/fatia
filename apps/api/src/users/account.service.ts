@@ -6,11 +6,14 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
+import type { MediaFile } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { LogtoManagementService } from '../auth/logto-management.service';
 import { CheckpointPurgeService } from '../chat/checkpoint-purge.service';
 import { ACCOUNT_DELETION_HOOKS, type AccountDeletionHook } from './account-deletion.hook';
 import { ITENS_EM_ORDEM } from '../nutrition/itens-em-ordem';
+import { presentMeal } from '../nutrition/meal-presenter';
+import { MediaService } from '../storage/media.service';
 
 /**
  * Frase exata que o `delete_my_account` (MCP) exige. Longa de propósito: quem
@@ -40,6 +43,8 @@ export class AccountService {
     @Optional()
     @Inject(ACCOUNT_DELETION_HOOKS)
     private readonly ganchos: AccountDeletionHook[] = [],
+    /** Os links das fotos das refeições no arquivo de exportação (ADR 038). */
+    @Optional() private readonly media?: MediaService,
   ) {}
 
   /**
@@ -47,7 +52,7 @@ export class AccountService {
    * (alimentos e exercícios), porque é conteúdo autoral dele — mas não o catálogo
    * público TACO, que não é dado pessoal e tornaria o export inútil de tamanho.
    */
-  async exportData(userId: string) {
+  async exportData(userId: string, opts: { photoLinks?: boolean } = {}) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -129,7 +134,7 @@ export class AccountService {
       this.prisma.goal.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
       this.prisma.meal.findMany({
         where: { userId },
-        include: ITENS_EM_ORDEM,
+        include: { ...ITENS_EM_ORDEM, photoFile: true },
         orderBy: { eatenAt: 'asc' },
       }),
       this.prisma.food.findMany({
@@ -514,7 +519,9 @@ export class AccountService {
       nutritionGoals,
       nutrientTargets,
       personalGoals,
-      meals,
+      meals: await Promise.all(
+        meals.map((meal) => this.exportMeal(meal, opts.photoLinks === true)),
+      ),
       customFoods,
       favoriteFoods,
       foodPortions,
@@ -599,6 +606,29 @@ export class AccountService {
    * `User`. A identidade no Logto é apagada em seguida, num passo separado que
    * pode falhar sem desfazer o cascade — ver o comentário abaixo.
    */
+
+  /**
+   * A refeição no export: a foto entra como os dados do arquivo e, no arquivo
+   * baixado pelo link de exportação, um link assinado para baixá-la (ADR 038,
+   * item 5). Pelo MCP vai só o `hasPhoto`: nenhuma tool leva a foto à IA.
+   */
+  private async exportMeal<
+    M extends Parameters<typeof presentMeal>[0] & {
+      photoFile: MediaFile | null;
+    },
+  >(meal: M, photoLinks: boolean) {
+    const { photoFile, ...rest } = meal;
+    const photo = photoFile
+      ? {
+          mime: photoFile.mime,
+          bytes: photoFile.bytes,
+          width: photoFile.width,
+          height: photoFile.height,
+          ...(photoLinks && this.media ? { url: await this.media.exportUrl(photoFile) } : {}),
+        }
+      : null;
+    return { ...presentMeal(rest), photo };
+  }
   async deleteAccount(userId: string, confirmation: string, expected = DELETE_CONFIRMATION) {
     if (confirmation !== expected) {
       throw new BadRequestException(

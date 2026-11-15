@@ -18,6 +18,7 @@ const SCOPE_LABEL: Record<ShareScope, string> = {
   BODY: 'Peso e medidas',
   HABITS: 'Água e passos',
   GOALS: 'Metas',
+  MEAL_PHOTOS: 'Fotos das refeições',
 };
 
 function labels(scopes: ShareScope[]): string {
