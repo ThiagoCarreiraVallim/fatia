@@ -1,49 +1,51 @@
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { safeNextPath, signInHref } from '@/lib/next-path';
+import { AccountForm } from '@/components/auth/account-form';
+import { safeNextPath } from '@/lib/next-path';
 
-type Props = { searchParams: Promise<{ next?: string }> };
+type Props = { searchParams: Promise<{ next?: string; modo?: string }> };
 
-// prefetch={false} em todos os links: /api/logto/sign-in inicia o fluxo OAuth
-// por redirect, e um prefetch dispararia o fluxo antes do clique. `?next=` (o link
-// de convite, por exemplo) segue junto para a pessoa voltar a ele depois.
+/**
+ * Onb-01b · Conta direta: criar conta ou entrar, Google e Apple. `?next=` (o
+ * link de convite, por exemplo) segue junto para a pessoa voltar a ele depois.
+ * Os links ao Logto não fazem prefetch: um prefetch dispararia o OAuth antes do clique.
+ */
 export default async function LoginPage({ searchParams }: Props) {
-  const next = safeNextPath((await searchParams).next);
+  const params = await searchParams;
+  const next = safeNextPath(params.next);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-sm space-y-8">
-        <div className="space-y-2 text-center">
-          <h1 className="font-display text-4xl font-bold text-primary">Fatia</h1>
-          <p className="text-sm text-muted-foreground">
-            Seu diário de nutrição e treino — rápido de registrar, fácil de acompanhar.
-          </p>
-        </div>
-
-        <div className="space-y-3">
-          <Button asChild size="lg" className="w-full h-12 text-base">
-            <Link href={signInHref(next)} prefetch={false}>
-              Entrar
-            </Link>
-          </Button>
-          <Button asChild size="lg" variant="outline" className="w-full h-12 text-base">
-            <Link href={signInHref(next, 'cadastro')} prefetch={false}>
-              Criar conta grátis
-            </Link>
-          </Button>
-          <div className="text-center">
-            <Button asChild variant="link" className="text-muted-foreground">
-              <Link href={signInHref(next, 'senha')} prefetch={false}>
-                Esqueci minha senha
-              </Link>
-            </Button>
-          </div>
-        </div>
-
-        <p className="text-center text-xs text-muted-foreground">
-          A mesma conta funciona no seu assistente de IA pelo conector MCP.
-        </p>
+    <div className="relative mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-3.5 overflow-hidden px-6 pb-8 pt-[calc(env(safe-area-inset-top)+3rem)]">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-[90px] top-10 h-[300px] w-[300px] rounded-full bg-[radial-gradient(circle,hsl(var(--primary)/0.25),transparent_70%)]"
+      />
+      <div className="relative flex flex-col gap-4">
+        <span
+          aria-hidden
+          className="anim-pop font-display text-[28px] font-bold tracking-tight text-primary"
+        >
+          Fatia
+        </span>
+        <h1 className="anim-up font-display text-[34px] font-bold leading-[1.05] tracking-[-0.03em]">
+          Comer e treinar,
+          <br />
+          registrado em segundos.
+        </h1>
       </div>
+      <div className="mt-2">
+        <AccountForm next={next} mode={params.modo === 'entrar' ? 'login' : 'create'} />
+      </div>
+      <div className="flex-1" />
+      <p className="text-center text-xs text-faint">
+        Ao continuar você aceita os{' '}
+        <Link href="/terms" className="underline">
+          Termos
+        </Link>{' '}
+        e a{' '}
+        <Link href="/privacy" className="underline">
+          Privacidade
+        </Link>
+      </p>
     </div>
   );
 }
