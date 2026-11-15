@@ -20,7 +20,7 @@ import { Button } from '@/components/ui';
 import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { isExerciseComplete, loadValue, parseFirstRep, targetSetsOf } from './format';
 import { FeelingPicker } from './feeling-picker';
-import { setHeadline, STEPS } from './guided-session';
+import { loadStep, setHeadline, STEPS } from './guided-session';
 import { SetChips } from './set-chips';
 import { SetEditor } from './set-editor';
 import { ValueStepper } from './value-stepper';
@@ -203,7 +203,7 @@ export function ActiveExerciseCard({
               unit={unitLabel}
               accessibilityLabel={`carga em ${units.loadUnit === 'LB' ? 'libras' : 'quilos'} para ${group.exerciseName}`}
               value={loadFieldValue(weight, units.loadUnit)}
-              step={STEPS.load}
+              step={loadStep(units.loadUnit)}
               onChange={(next) => {
                 setTouched(true);
                 setWeight(loadToKg(next, units.loadUnit));

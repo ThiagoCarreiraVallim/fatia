@@ -15,7 +15,7 @@ import { Button, useConfirm } from '@/components/ui';
 import { Text } from '@/components/ui/text';
 import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { FeelingPicker } from './feeling-picker';
-import { STEPS } from './guided-session';
+import { loadStep, STEPS } from './guided-session';
 import { ValueStepper } from './value-stepper';
 
 /**
@@ -100,7 +100,7 @@ export function SetEditor({
           unit={isCardio ? 'km' : unitLabel}
           accessibilityLabel={isCardio ? 'distância em km' : `carga em ${unitLabel}`}
           value={load}
-          step={isCardio ? STEPS.distance : STEPS.load}
+          step={isCardio ? STEPS.distance : loadStep(units.loadUnit)}
           onChange={setLoad}
         />
         <ValueStepper

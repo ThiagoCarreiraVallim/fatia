@@ -7,6 +7,8 @@ import { Pencil } from 'lucide-react-native';
 import {
   feelingOf,
   formatBestSet,
+  kgToLoad,
+  loadUnitLabel,
   formatDecimal,
   workoutApi,
   type Exercise,
@@ -29,6 +31,7 @@ import { muscleLabelPt } from './muscle-labels';
 import { MuscleDiagram } from './muscle-diagram';
 import { groupColorName } from './workout-home';
 import { colors } from '@/theme/colors';
+import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 
 /**
  * "Como fazer" (prancha `Al-T9-Como-fazer`, #377): o vídeo, o nome com o
@@ -269,6 +272,7 @@ function HistoryTab({ exerciseId }: { exerciseId: number }) {
     queryKey: ['workout', 'exercise', exerciseId, 'stats'],
     queryFn: () => workoutApi.getExerciseStats(exerciseId),
   });
+  const units = useUnitPrefs();
   if (stats.isLoading) return <LoadingState />;
   const s = stats.data;
   if (!s || (!s.record && !s.last)) {
@@ -285,7 +289,7 @@ function HistoryTab({ exerciseId }: { exerciseId: number }) {
         <Row
           label="Recorde"
           detail={shortDate(s.record.date)}
-          value={formatBestSet({ ...s.record, avgHeartRate: null })}
+          value={formatBestSet({ ...s.record, avgHeartRate: null }, units.loadUnit)}
         />
       ) : null}
       {s.last ? (
@@ -298,11 +302,14 @@ function HistoryTab({ exerciseId }: { exerciseId: number }) {
           ]
             .filter(Boolean)
             .join(' · ')}
-          value={formatBestSet({ ...s.last.best, avgHeartRate: null })}
+          value={formatBestSet({ ...s.last.best, avgHeartRate: null }, units.loadUnit)}
         />
       ) : null}
       {s.estimated1RM != null ? (
-        <Row label="Máximo estimado" value={`~${formatDecimal(s.estimated1RM, 0)} kg`} />
+        <Row
+          label="Máximo estimado"
+          value={`~${formatDecimal(kgToLoad(s.estimated1RM, units.loadUnit), 0)} ${loadUnitLabel(units.loadUnit)}`}
+        />
       ) : null}
     </View>
   );

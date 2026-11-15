@@ -11,6 +11,7 @@ import {
   comparisonFacts,
   feelingOf,
   formatBestSet,
+  howItWentBody,
   muscleGroupLabel,
   noteShortcutsFor,
   questionsAudience,
@@ -31,6 +32,7 @@ import { FeelingPicker } from './feeling-picker';
 import { SetChips } from './set-chips';
 import { SetEditor } from './set-editor';
 import { colors } from '@/theme/colors';
+import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 
 /**
  * "Treino feito!" (pranchas `Al-T5-Fim` e `Al-T5b-Fim-perguntas`, #377): o
@@ -91,17 +93,24 @@ function Summary({
   const [openExercise, setOpenExercise] = useState<number | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
 
-  const facts = summaryFacts(summary);
+  const units = useUnitPrefs();
+  const facts = summaryFacts(summary, units.loadUnit);
+  // Fica aqui, e não nas perguntas: o resumo recarregado já traz o check-in, e
+  // o aviso de "enviadas" sumiria junto com o cartão.
+  const [questionsDone, setQuestionsDone] = useState<{ skipped: boolean } | null>(null);
   const headline = summaryHeadline(summary);
   const groups = useMemo(() => buildExerciseGroups(undefined, session.sets, []), [session.sets]);
   const maxGroupSets = Math.max(1, ...summary.muscles.groups.map((g) => g.sets));
 
   const save = useMutation({
-    mutationFn: () =>
-      workoutApi.updateSession(session.id, {
-        feeling: feeling ?? undefined,
-        notes: notes.trim() || undefined,
-      }),
+    mutationFn: async () => {
+      // Desmarcar a sensação ou apagar a observação também grava (#377).
+      const body = howItWentBody(
+        { feeling: session.feeling ?? null, notes: session.notes ?? null },
+        { feeling, notes },
+      );
+      if (Object.keys(body).length > 0) await workoutApi.updateSession(session.id, body);
+    },
     onSuccess: () => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       void qc.invalidateQueries({ queryKey: ['workout', 'session', session.id] });
@@ -174,7 +183,7 @@ function Summary({
                 {r.exerciseName}
               </Text>
               <Text className="font-sans-bold text-sm text-foreground">
-                {formatBestSet({ ...r, avgHeartRate: null })}
+                {formatBestSet({ ...r, avgHeartRate: null }, units.loadUnit)}
               </Text>
             </View>
           ))}
@@ -229,7 +238,7 @@ function Summary({
             <View key={e.exerciseId} className="gap-2 rounded-2xl bg-card px-4 py-3">
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`${e.exerciseName}, ${e.sets} séries, melhor ${formatBestSet(e.best)}${e.isRecord ? ', recorde' : ''}. Tocar para corrigir as séries`}
+                accessibilityLabel={`${e.exerciseName}, ${e.sets} séries, melhor ${formatBestSet(e.best, units.loadUnit)}${e.isRecord ? ', recorde' : ''}. Tocar para corrigir as séries`}
                 accessibilityState={{ expanded: open }}
                 onPress={() => {
                   setEditing(null);
@@ -242,7 +251,8 @@ function Summary({
                     {e.exerciseName}
                   </Text>
                   <Text className="text-[12px] text-muted-foreground">
-                    {e.sets} {e.sets === 1 ? 'série' : 'séries'} · {formatBestSet(e.best)}
+                    {e.sets} {e.sets === 1 ? 'série' : 'séries'} ·{' '}
+                    {formatBestSet(e.best, units.loadUnit)}
                   </Text>
                 </View>
                 {e.isRecord ? <Trophy size={16} color={colors.steps} /> : null}
@@ -268,8 +278,13 @@ function Summary({
         })}
       </View>
 
-      {summary.questions && !summary.checkin ? (
-        <TeamQuestions sessionId={session.id} questions={summary.questions} />
+      {summary.questions && (!summary.checkin || questionsDone) ? (
+        <TeamQuestions
+          sessionId={session.id}
+          questions={summary.questions}
+          done={questionsDone}
+          onDone={setQuestionsDone}
+        />
       ) : null}
 
       <View className="gap-3 rounded-3xl bg-card p-4">
@@ -325,15 +340,18 @@ function Summary({
 function TeamQuestions({
   sessionId,
   questions,
+  done,
+  onDone,
 }: {
   sessionId: string;
   questions: NonNullable<WorkoutSessionSummary['questions']>;
+  done: { skipped: boolean } | null;
+  onDone: (done: { skipped: boolean }) => void;
 }) {
   const qc = useQueryClient();
   const [fatigue, setFatigue] = useState<number | null>(null);
   const [pain, setPain] = useState<boolean | null>(null);
   const [painLocation, setPainLocation] = useState('');
-  const [done, setDone] = useState<{ skipped: boolean } | null>(null);
 
   const send = useMutation({
     mutationFn: (skipped: boolean) =>
@@ -343,7 +361,7 @@ function TeamQuestions({
       ),
     onSuccess: (_r, skipped) => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setDone({ skipped });
+      onDone({ skipped });
       void qc.invalidateQueries({ queryKey: ['workout', 'session', sessionId] });
     },
   });

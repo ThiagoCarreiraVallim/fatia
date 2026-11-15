@@ -4,6 +4,7 @@ import { Text } from '@/components/ui/text';
 import { cn } from '@/components/ui';
 import { setChipLabel } from './guided-session';
 import { targetSetsOf } from './format';
+import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 
 /**
  * As séries do exercício como chips (prancha `Al-T3-Sessao`): as feitas com
@@ -19,6 +20,7 @@ export function SetChips({
   editing: number | null;
   onEdit: (index: number | null) => void;
 }) {
+  const unit = useUnitPrefs().loadUnit;
   const total = Math.max(targetSetsOf(group), group.sets.length);
   const done = group.sets.length;
   return (
@@ -37,7 +39,7 @@ export function SetChips({
             accessibilityRole={set ? 'button' : 'text'}
             accessibilityLabel={
               set
-                ? `Corrigir série ${i + 1}: ${setChipLabel(set, group.isCardio)}`
+                ? `Corrigir série ${i + 1}: ${setChipLabel(set, group.isCardio, unit)}`
                 : current
                   ? `Série ${i + 1}, agora`
                   : `Série ${i + 1}, ainda não feita`
@@ -72,7 +74,7 @@ export function SetChips({
                     : 'text-muted-foreground',
               )}
             >
-              {set ? setChipLabel(set, group.isCardio) : current ? 'agora' : '—'}
+              {set ? setChipLabel(set, group.isCardio, unit) : current ? 'agora' : '—'}
             </Text>
           </Pressable>
         );

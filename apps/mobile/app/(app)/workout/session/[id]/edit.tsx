@@ -3,9 +3,10 @@ import { Pressable, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { Plus, Trash2 } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react-native';
 import {
   buildExerciseGroups,
+  moveExerciseInOrder,
   newSetClientKey,
   orderExerciseGroups,
   workoutApi,
@@ -42,7 +43,8 @@ import { colors } from '@/theme/colors';
 /**
  * "Treino atual" (prancha `Al-T17-Editar-sessao`, #377): todos os exercícios
  * da sessão com as séries, para corrigir uma série, somar outra ("+ Série",
- * copiando a última), tirar um exercício só de hoje ou pôr outro. "Voltar ao
+ * copiando a última), mudar a ordem (só desta sessão), tirar um exercício só
+ * de hoje ou pôr outro. "Voltar ao
  * treino" leva à sessão guiada, já no exercício escolhido.
  */
 export default function SessionOverviewScreen() {
@@ -92,8 +94,11 @@ function Overview({ session, refreshing }: { session: WorkoutSession; refreshing
   );
 
   const addSet = useMutation({
-    mutationFn: ({ group, key }: { group: ExerciseGroup; key: string }) =>
-      workoutApi.logSet(session.id, copyLastSet(group.exerciseId, group.sets.at(-1), key)),
+    mutationFn: ({ group, key }: { group: ExerciseGroup; key: string }) => {
+      const body = copyLastSet(group.exerciseId, group.sets.at(-1), key);
+      if (!body) throw new Error('Sem série para copiar');
+      return workoutApi.logSet(session.id, body);
+    },
     onSuccess: () => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       toast.show({ message: 'Série adicionada' });
@@ -106,6 +111,19 @@ function Overview({ session, refreshing }: { session: WorkoutSession; refreshing
     if (exerciseId != null) requestFocus(exerciseId);
     if (router.canGoBack()) router.back();
     else router.replace(`/workout/session/${session.id}`);
+  }
+
+  /** "+ Série" copia a última; sem nenhuma, a série é preenchida na sessão. */
+  function addSetTo(group: ExerciseGroup) {
+    if (group.sets.length === 0) {
+      backToSession(group.exerciseId);
+      return;
+    }
+    addSet.mutate({ group, key: newSetClientKey() });
+  }
+
+  function move(exerciseId: number, direction: 'up' | 'down') {
+    layout.reorder.mutate(moveExerciseInOrder(groups, exerciseId, direction));
   }
 
   function requestRemove(group: ExerciseGroup) {
@@ -158,7 +176,7 @@ function Overview({ session, refreshing }: { session: WorkoutSession; refreshing
         }
       >
         <View className="gap-3 px-5 pb-6 pt-4">
-          {groups.map((group) => {
+          {groups.map((group, position) => {
             const target = targetSetsOf(group);
             const done = isExerciseComplete(group);
             const status = group.isCardio
@@ -181,6 +199,32 @@ function Overview({ session, refreshing }: { session: WorkoutSession; refreshing
                       {group.exerciseName}
                     </Text>
                     <Text className="text-[12px] text-muted-foreground">{status}</Text>
+                  </View>
+                  <View className="flex-row">
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Subir ${group.exerciseName}`}
+                      disabled={position === 0 || layout.reorder.isPending}
+                      onPress={() => move(group.exerciseId, 'up')}
+                      className={cn(
+                        'h-11 w-11 items-center justify-center rounded-full active:bg-muted',
+                        position === 0 && 'opacity-30',
+                      )}
+                    >
+                      <ChevronUp size={18} color={colors.foreground} />
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Descer ${group.exerciseName}`}
+                      disabled={position === groups.length - 1 || layout.reorder.isPending}
+                      onPress={() => move(group.exerciseId, 'down')}
+                      className={cn(
+                        'h-11 w-11 items-center justify-center rounded-full active:bg-muted',
+                        position === groups.length - 1 && 'opacity-30',
+                      )}
+                    >
+                      <ChevronDown size={18} color={colors.foreground} />
+                    </Pressable>
                   </View>
                   <Pressable
                     accessibilityRole="button"
@@ -233,7 +277,7 @@ function Overview({ session, refreshing }: { session: WorkoutSession; refreshing
                     className="h-11 flex-1 rounded-full"
                     disabled={addSet.isPending}
                     accessibilityLabel={`Mais uma série de ${group.exerciseName}`}
-                    onPress={() => addSet.mutate({ group, key: newSetClientKey() })}
+                    onPress={() => addSetTo(group)}
                   >
                     <Plus size={15} color={colors.foreground} />
                     <Text className="font-sans-bold text-[13px] text-foreground">Série</Text>

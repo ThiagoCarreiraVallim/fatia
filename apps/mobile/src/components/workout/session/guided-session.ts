@@ -1,5 +1,12 @@
-import { feelingOf, rpeToFeeling, type ExerciseGroup, type SessionSet } from '@fatia/api-client';
-import { formatNumber, targetSetsOf, isExerciseComplete } from './format';
+import {
+  BRAZIL_UNITS,
+  feelingOf,
+  rpeToFeeling,
+  type ExerciseGroup,
+  type LoadUnit,
+  type SessionSet,
+} from '@fatia/api-client';
+import { formatNumber, loadValue, targetSetsOf, isExerciseComplete } from './format';
 
 /**
  * As contas da sessão guiada (prancha `Al-T3-Sessao`), fora dos componentes
@@ -11,6 +18,11 @@ import { formatNumber, targetSetsOf, isExerciseComplete } from './format';
 export const STEPS = { load: 2.5, reps: 1, distance: 0.1, minutes: 1 } as const;
 
 /** Soma o passo, arredonda na décima (0,1 + 0,2 não vira 0,30000004) e trava em zero. */
+/** O passo da carga na unidade da pessoa: 2,5 kg ou 5 lb, como no PWA. */
+export function loadStep(unit: LoadUnit): number {
+  return unit === 'LB' ? 5 : STEPS.load;
+}
+
 export function stepValue(value: number, delta: number): number {
   return Math.max(0, Math.round((value + delta) * 10) / 10);
 }
@@ -61,7 +73,7 @@ export function setHeadline({
 }
 
 /** O chip de uma série feita: "52,5×9 🙂", "15", "3,2km 20′". */
-export function setChipLabel(set: SessionSet, isCardio: boolean): string {
+export function setChipLabel(set: SessionSet, isCardio: boolean, unit: LoadUnit = 'KG'): string {
   const emoji = feelingOf(rpeToFeeling(set.rpe))?.emoji;
   let body: string;
   if (isCardio) {
@@ -71,7 +83,9 @@ export function setChipLabel(set: SessionSet, isCardio: boolean): string {
     body = parts.join(' ') || '✓';
   } else {
     const reps = set.reps ?? 0;
-    body = set.weightKg ? `${formatNumber(set.weightKg)}×${reps}` : String(reps);
+    body = set.weightKg
+      ? `${loadValue(set.weightKg, { ...BRAZIL_UNITS, loadUnit: unit })}×${reps}`
+      : String(reps);
   }
   return emoji ? `${body} ${emoji}` : body;
 }
@@ -91,7 +105,11 @@ export function setProgress(groups: readonly ExerciseGroup[]): {
   return { done, target, ratio: target === 0 ? 0 : Math.min(1, done / target) };
 }
 
-/** O corpo do "+ Série" do Treino atual: os valores da última, com chave nova. */
+/**
+ * O corpo do "+ Série" do Treino atual: os valores da última, com chave nova.
+ * Sem série anterior, `null`: uma série vazia contaria no progresso e no
+ * resumo, então a tela leva à sessão, onde a série é preenchida.
+ */
 export function copyLastSet(
   exerciseId: number,
   last: SessionSet | undefined,
@@ -104,8 +122,9 @@ export function copyLastSet(
   durationSeconds?: number;
   distanceMeters?: number;
   clientKey: string;
-} {
-  const body: ReturnType<typeof copyLastSet> = { exerciseId, clientKey };
+} | null {
+  if (!last) return null;
+  const body: NonNullable<ReturnType<typeof copyLastSet>> = { exerciseId, clientKey };
   if (last?.weightKg != null) body.weightKg = last.weightKg;
   if (last?.reps != null) body.reps = last.reps;
   if (last?.rpe != null) body.rpe = last.rpe;

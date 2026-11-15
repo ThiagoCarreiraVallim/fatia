@@ -8,6 +8,7 @@ import {
   parseAutoAdvance,
   serializeAutoAdvance,
   setChipLabel,
+  loadStep,
   setHeadline,
   setProgress,
   STEPS,
@@ -91,6 +92,16 @@ describe('textos da série', () => {
       '3,2km 20′',
     );
   });
+
+  it('chip em libras: a carga na unidade da pessoa', () => {
+    expect(setChipLabel(set({ weightKg: 100, reps: 5 }), false, 'LB')).toBe('220,5×5');
+    expect(setChipLabel(set({ weightKg: 100, reps: 5 }), false, 'KG')).toBe('100×5');
+  });
+
+  it('o passo do −/+ da carga: 2,5 kg ou 5 lb, como no PWA', () => {
+    expect(loadStep('KG')).toBe(2.5);
+    expect(loadStep('LB')).toBe(5);
+  });
 });
 
 describe('progresso da barra do treino em andamento', () => {
@@ -114,6 +125,10 @@ describe('+ Série no Treino atual', () => {
       'k1',
     );
     expect(body).toEqual({ exerciseId: 7, weightKg: 40, reps: 10, rpe: 8, clientKey: 'k1' });
+  });
+
+  it('sem série para copiar não grava nada: uma série vazia contaria no progresso', () => {
+    expect(copyLastSet(7, undefined, 'k1')).toBeNull();
   });
 });
 
