@@ -27,6 +27,7 @@ export * from './plan';
 export * from './food-shortcuts';
 export * from './portions';
 export * from './meal-templates';
+export * from './meal-day';
 export * from './custom-food';
 export * from './barcode';
 export * from './goals';

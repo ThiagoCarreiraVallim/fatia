@@ -20,6 +20,7 @@ export const SHARE_SCOPES: readonly ShareScope[] = [
   'BODY',
   'HABITS',
   'GOALS',
+  'MEAL_PHOTOS',
 ];
 
 /** O que a equipe passa a ver em cada categoria — o mesmo que o painel dela lê. */
@@ -29,6 +30,7 @@ export const SCOPE_DETAILS: Record<ShareScope, string> = {
   BODY: 'Pesagens e a evolução do peso',
   HABITS: 'Água e passos de cada dia',
   GOALS: 'Suas metas pessoais e o andamento delas',
+  MEAL_PHOTOS: 'As fotos guardadas dos seus pratos, separadas dos números',
 };
 
 const ROLE_LABEL: Record<GroupRole, string> = {
