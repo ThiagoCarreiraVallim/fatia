@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { ExerciseService } from '../workout/exercise.service';
@@ -84,7 +84,7 @@ function configOf(item: SnapshotItem, cardio: boolean) {
  * `fromTemplateId`, e é o `ContentService` que confere a cópia já existente
  * (`workoutPlan.findFirst({ where: { userId, fromTemplateId } })`) antes de
  * chamar esta máquina, que continua sem saber de onde o retrato veio. A oferta
- * do profissional ainda não grava proveniência.
+ * do profissional (#379) grava `fromOfferId` (`materializeOffer`).
  */
 @Injectable()
 export class PlanMaterializerService {
@@ -116,6 +116,68 @@ export class PlanMaterializerService {
    */
   async materialize(userId: string, snapshot: unknown, fromTemplateId?: string, groupId?: string) {
     const snap = this.validate(snapshot);
+    const exercises = await this.buildExercises(userId, snap, groupId);
+
+    // Um `create` aninhado, não `$transaction` interativa: plano e exercícios
+    // saem numa transação só do lado do Prisma, sem segurar conexão entre
+    // roundtrips — pgbouncer em transaction pooling (ADR 010).
+    return this.prisma.workoutPlan.create({
+      data: { userId, name: snap.name, fromTemplateId, exercises: { create: exercises } },
+      include: PLAN_INCLUDE,
+    });
+  }
+
+  /**
+   * O aceite de uma oferta da equipe (#379): o mesmo plano, com a proveniência
+   * da oferta. Exercício da comunidade não viaja por id numa oferta (ver
+   * `plan-snapshot.ts`), então não há `groupId`.
+   */
+  async materializeOffer(userId: string, snapshot: unknown, fromOfferId: string) {
+    const snap = this.validate(snapshot);
+    const exercises = await this.buildExercises(userId, snap);
+    return this.prisma.workoutPlan.create({
+      data: { userId, name: snap.name, fromOfferId, exercises: { create: exercises } },
+      include: PLAN_INCLUDE,
+    });
+  }
+
+  /**
+   * Aceitar a versão nova de uma oferta (#379) troca os exercícios do plano que
+   * a versão aceita criou, no mesmo plano: as sessões feitas continuam ligadas a
+   * ele. Só roda depois do aceite — nada muda no plano da pessoa sem ele.
+   *
+   * O `planId` é procurado com o `userId`: plano de outra pessoa responde como
+   * inexistente. Apagar e recriar os exercícios vai numa transação de lote (sem
+   * callback), pelo mesmo motivo do `create` aninhado acima.
+   */
+  async rematerialize(userId: string, planId: string, snapshot: unknown) {
+    const snap = this.validate(snapshot);
+    const owned = await this.prisma.workoutPlan.findFirst({
+      where: { id: planId, userId },
+      select: { id: true },
+    });
+    if (!owned) throw new NotFoundException('Plan not found');
+    const exercises = await this.buildExercises(userId, snap);
+    const [, plan] = await this.prisma.$transaction([
+      this.prisma.workoutPlanExercise.deleteMany({ where: { planId } }),
+      this.prisma.workoutPlan.update({
+        where: { id: planId },
+        data: { name: snap.name, exercises: { create: exercises } },
+        include: PLAN_INCLUDE,
+      }),
+    ]);
+    return plan;
+  }
+
+  /**
+   * Os exercícios do plano, já com a origem resolvida. Toda validação de id
+   * roda antes da primeira escrita (a cópia do exercício custom).
+   */
+  private async buildExercises(
+    userId: string,
+    snap: PlanSnapshot,
+    groupId?: string,
+  ): Promise<Prisma.WorkoutPlanExerciseUncheckedCreateWithoutPlanInput[]> {
     const groups = new Map([
       ...(await this.assertCatalogExercises(snap)),
       ...(await this.assertGroupExercises(snap, groupId)),
@@ -157,14 +219,7 @@ export class PlanMaterializerService {
           : {}),
       });
     }
-
-    // Um `create` aninhado, não `$transaction` interativa: plano e exercícios
-    // saem numa transação só do lado do Prisma, sem segurar conexão entre
-    // roundtrips — pgbouncer em transaction pooling (ADR 010).
-    return this.prisma.workoutPlan.create({
-      data: { userId, name: snap.name, fromTemplateId, exercises: { create: exercises } },
-      include: PLAN_INCLUDE,
-    });
+    return exercises;
   }
 
   private validate(snapshot: unknown): PlanSnapshot {

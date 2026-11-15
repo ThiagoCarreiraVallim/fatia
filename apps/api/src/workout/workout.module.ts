@@ -7,6 +7,9 @@ import { WorkoutSessionService } from './workout-session.service';
 import { SessionSetService } from './session-set.service';
 import { PrescriptionService } from './prescription.service';
 import { TrainingBlockService } from './training-block.service';
+import { AgendaService } from './agenda.service';
+import { ListPlannedSessionsTool } from './mcp/list-planned-sessions.tool';
+import { ReschedulePlannedSessionTool } from './mcp/reschedule-planned-session.tool';
 import { MuscleSummaryService } from './muscle-summary.service';
 import { WorkoutController } from './workout.controller';
 import { AddExerciseToPlanTool } from './mcp/add-exercise-to-plan.tool';
@@ -57,6 +60,9 @@ import { UpdateWorkoutSessionTool } from './mcp/update-workout-session.tool';
     SessionSetService,
     PrescriptionService,
     TrainingBlockService,
+    AgendaService,
+    ListPlannedSessionsTool,
+    ReschedulePlannedSessionTool,
     MuscleSummaryService,
     // Quem da equipe lê Treino: decide se o fim do treino traz as perguntas
     // (#377). Só depende do Prisma, como no módulo de nutrição.

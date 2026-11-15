@@ -19,6 +19,8 @@ import { SessionSetService } from './session-set.service';
 import { ExerciseService } from './exercise.service';
 import { PrescriptionService } from './prescription.service';
 import { TrainingBlockService } from './training-block.service';
+import { AgendaService } from './agenda.service';
+import { AgendaQueryDto, RescheduleSessionDto } from './dto/agenda.dto';
 import { MuscleSummaryService } from './muscle-summary.service';
 import { CreateTrainingBlockDto, TrainingBlockPreviewDto } from './dto/training-block.dto';
 import {
@@ -50,7 +52,26 @@ export class WorkoutController {
     private readonly prescriptions: PrescriptionService,
     private readonly blocks: TrainingBlockService,
     private readonly muscles: MuscleSummaryService,
+    private readonly agenda: AgendaService,
   ) {}
+
+  // -------- Agenda de treinos (#379, Al-T24) --------
+
+  /** Os dias do intervalo, com as sessões do plano de calendário. Informativa (ADR 042). */
+  @Get('agenda')
+  agendaRange(@CurrentUser() user: CurrentUserPayload, @Query() q: AgendaQueryDto) {
+    return this.agenda.range(user.id, user.timezone, q.from, q.to);
+  }
+
+  /** "Remarcar": de hoje até o fim do plano. Não reserva nada. */
+  @Patch('agenda/:id')
+  reschedule(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RescheduleSessionDto,
+  ) {
+    return this.agenda.reschedule(user.id, user.timezone, id, dto.date);
+  }
 
   // -------- Blocos de periodização (#145) --------
 
