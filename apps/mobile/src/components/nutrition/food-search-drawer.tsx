@@ -382,7 +382,7 @@ export function FoodSearchDrawer({
     });
   };
 
-  const titulo = mealId ? 'Adicionar item' : 'Nova refeição';
+  const titulo = modo === 'criar' ? 'Criar alimento' : mealId ? 'Adicionar item' : 'Nova refeição';
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange} snapPoints={['85%']}>
@@ -722,14 +722,17 @@ function SearchPanel({
 
       <View className="flex-row flex-wrap items-center justify-center gap-x-4 px-4">
         <Text className="text-sm text-muted-foreground">Não achou?</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Criar meu alimento"
-          onPress={() => onCriar(busca.trim())}
-          className="min-h-[44px] justify-center"
-        >
-          <Text className="text-sm font-medium text-primary underline">Criar meu alimento</Text>
-        </Pressable>
+        {/* Sem resultado, o "Criar “X”" da lista já é o atalho: não repete. */}
+        {!(digitando && !buscando && !comErro && (dados?.length ?? 0) === 0) && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Criar meu alimento"
+            onPress={() => onCriar(busca.trim())}
+            className="min-h-[44px] justify-center"
+          >
+            <Text className="text-sm font-medium text-primary underline">Criar meu alimento</Text>
+          </Pressable>
+        )}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Registrar só desta vez"
