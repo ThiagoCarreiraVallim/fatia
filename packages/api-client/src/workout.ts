@@ -90,6 +90,31 @@ export interface PlannedExercise {
   targetReps: string;
 }
 
+/** As respostas rápidas do fim do treino (#377). Escalas de 1 a 5. */
+export interface WorkoutCheckin {
+  id: string;
+  sessionId: string;
+  skipped: boolean;
+  difficulty: number | null;
+  fatigue: number | null;
+  pain: boolean | null;
+  painLocation: string | null;
+  motivation: number | null;
+  note: string | null;
+  answeredAt: string;
+  updatedAt: string;
+}
+
+export interface WorkoutCheckinInput {
+  skipped?: boolean;
+  difficulty?: number;
+  fatigue?: number;
+  pain?: boolean;
+  painLocation?: string;
+  motivation?: number;
+  note?: string;
+}
+
 export interface WorkoutSession {
   id: string;
   userId: string;
@@ -97,6 +122,9 @@ export interface WorkoutSession {
   startedAt: string;
   completedAt: string | null;
   notes: string | null;
+  /** "Como foi o treino?" (#377): 1 Leve … 5 No limite. */
+  feeling?: number | null;
+  checkin?: WorkoutCheckin | null;
   sets?: SessionSet[];
   plannedExercises?: PlannedExercise[];
   /** Ordem dos exercícios escolhida nesta sessão (ids). Vazia = a do plano. */
@@ -129,6 +157,100 @@ export interface WeeklyMuscleSummary {
   sets: WeeklySetsByMuscle[];
   rested: RestedMuscle[];
   suggestedPlan: { id: string; name: string; groups: StrengthMuscleGroup[] } | null;
+  /** A semana do calendário, segunda a domingo (#377). */
+  week?: TrainingWeek;
+}
+
+export interface TrainingWeek {
+  /** Segunda-feira, YYYY-MM-DD. */
+  start: string;
+  days: { date: string; trained: boolean; active: boolean; today: boolean }[];
+  /** Treinos terminados na semana. */
+  done: number;
+  /** Meta de treinos por semana; nula sem meta. */
+  target: number | null;
+}
+
+export interface SummaryBestSet {
+  weightKg: number | null;
+  reps: number | null;
+  distanceMeters: number | null;
+  durationSeconds: number | null;
+  avgHeartRate: number | null;
+}
+
+export interface PostWorkoutQuestion {
+  key: 'fatigue' | 'pain';
+  kind: 'scale' | 'yes_no';
+  label: string;
+  scaleLabels?: [string, string];
+}
+
+/** O "Treino feito!" (`GET /workout/sessions/:id/summary`, prancha Al-T5-Fim). */
+export interface WorkoutSessionSummary {
+  sessionId: string;
+  planId: string | null;
+  planName: string | null;
+  startedAt: string;
+  completedAt: string | null;
+  durationMinutes: number | null;
+  sets: number;
+  volumeKg: number;
+  feeling: number | null;
+  overallFeeling: number | null;
+  comparison: {
+    sessionId: string;
+    startedAt: string;
+    volumeDeltaPct: number | null;
+    setsDelta: number;
+    durationDeltaMinutes: number | null;
+  } | null;
+  records: {
+    exerciseId: number;
+    exerciseName: string;
+    weightKg: number | null;
+    reps: number | null;
+    distanceMeters: number | null;
+    durationSeconds: number | null;
+  }[];
+  muscles: {
+    groups: { group: StrengthMuscleGroup; sets: number }[];
+    primary: string[];
+    secondary: string[];
+  };
+  exercises: {
+    exerciseId: number;
+    exerciseName: string;
+    muscleGroup: MuscleGroup;
+    isCardio: boolean;
+    sets: number;
+    best: SummaryBestSet | null;
+    feeling: number | null;
+    isRecord: boolean;
+  }[];
+  checkin: (Omit<WorkoutCheckin, 'sessionId'> & { sessionId?: string }) | null;
+  /** Nulo: ninguém da equipe lê Treino, a folha de perguntas não aparece. */
+  questions: { askedBy: string[]; items: PostWorkoutQuestion[] } | null;
+}
+
+/** "Seus números" do Como fazer (`GET /workout/exercises/:id/stats`). */
+export interface ExerciseStats {
+  exerciseId: number;
+  isCardio: boolean;
+  record: {
+    weightKg: number | null;
+    reps: number | null;
+    distanceMeters: number | null;
+    durationSeconds: number | null;
+    date: string | null;
+  } | null;
+  last: {
+    date: string;
+    sets: number;
+    best: Omit<SummaryBestSet, 'avgHeartRate'>;
+    feeling: number | null;
+  } | null;
+  estimated1RM: number | null;
 }
 
 export interface WorkoutPlanExercise {
@@ -169,14 +291,32 @@ export const workoutApi = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  finishSession: (id: string, body?: { notes?: string }) =>
+  /** Idempotente: finalizar de novo não muda o horário do fim (#377). */
+  finishSession: (
+    id: string,
+    body?: { notes?: string; feeling?: number; checkin?: WorkoutCheckinInput },
+  ) =>
     apiFetch<WorkoutSession>(`/api/workout/sessions/${id}/finish`, {
       method: 'POST',
       body: JSON.stringify(body ?? {}),
     }),
+  /** O "Treino feito!": resumo, recordes, músculos e as perguntas da equipe. */
+  getSessionSummary: (id: string) =>
+    apiFetch<WorkoutSessionSummary>(`/api/workout/sessions/${id}/summary`),
+  /** As respostas do fim do treino. PUT: reenviar substitui. */
+  saveCheckin: (id: string, body: WorkoutCheckinInput) =>
+    apiFetch<WorkoutCheckin>(`/api/workout/sessions/${id}/checkin`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
   updateSession: (
     id: string,
-    body: { notes?: string; exerciseOrder?: number[]; removedExerciseIds?: number[] },
+    body: {
+      notes?: string;
+      feeling?: number;
+      exerciseOrder?: number[];
+      removedExerciseIds?: number[];
+    },
   ) =>
     apiFetch<WorkoutSession>(`/api/workout/sessions/${id}`, {
       method: 'PATCH',
@@ -197,6 +337,8 @@ export const workoutApi = {
       avgHeartRate?: number;
       kcalBurned?: number;
       notes?: string;
+      /** Uma por toque em "Concluir série": o reenvio devolve a mesma série. */
+      clientKey?: string;
     },
   ) =>
     apiFetch<SessionSet>(`/api/workout/sessions/${sessionId}/sets`, {
@@ -290,6 +432,8 @@ export const workoutApi = {
   /** O equipamento das academias da pessoa (marcado e próprio), para o editor de exercício. */
   gymEquipment: () => apiFetch<GymEquipmentState>('/api/workout/equipment'),
   getExercise: (id: number) => apiFetch<Exercise>(`/api/workout/exercises/${id}`),
+  /** Recorde, última vez e máximo estimado (prancha Al-T9, aba "Seu histórico"). */
+  getExerciseStats: (id: number) => apiFetch<ExerciseStats>(`/api/workout/exercises/${id}/stats`),
   updateExercise: (id: number, body: ExerciseEditInput) =>
     apiFetch<Exercise>(`/api/workout/exercises/${id}`, {
       method: 'PATCH',
