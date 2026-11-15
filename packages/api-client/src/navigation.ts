@@ -58,6 +58,7 @@ export type MenuKey =
   | 'connect'
   | 'communities'
   | 'notifications'
+  | 'reminders'
   | 'plan'
   | 'keep-photos'
   | 'units'
@@ -157,8 +158,9 @@ const MENU: { title: string; items: MenuItemDef[] }[] = [
   {
     title: 'Rotina e avisos',
     items: [
-      // Os avisos são uma linha de Você, não um sino no cabeçalho dela (ADR 040,
-      // item 4). Leva às preferências até a caixa de avisos da #389.
+      // Os avisos são linhas de Você, não um sino no cabeçalho dela (ADR 040,
+      // item 4). Lembretes (prancha Al-V2, #389) vêm antes das notificações.
+      link('reminders', 'Lembretes', 'bell', '/you/reminders'),
       link('notifications', 'Notificações', 'phone', '/profile/notifications'),
     ],
   },
@@ -303,6 +305,7 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/you', title: 'Você', parent: null },
   { pattern: '/you/edit', title: 'Editar perfil', parent: '/you' },
   { pattern: '/you/units', title: 'Unidades', parent: '/you' },
+  { pattern: '/you/reminders', title: 'Lembretes', parent: '/you' },
   { pattern: '/you/news', title: 'Novidades', parent: '/you' },
   { pattern: '/you/help', title: 'Ajuda e tutoriais', parent: '/you' },
   { pattern: '/you/delete', title: 'Apagar conta', parent: '/you' },
