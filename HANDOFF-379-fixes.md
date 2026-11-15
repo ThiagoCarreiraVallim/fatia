@@ -8,8 +8,8 @@ da raiz; se `/tmp` sumiu, recrie: DATABASE_URL do `.env` com `/fatia` → `/fati
 ## Checklist
 
 - [x] 1. Diff "o que mudou" cobre todos os campos do exercício + agenda (API e api-client)
-- [ ] 2. Remarcar usa o fim da versão ACEITA atual; recusa FLEXIBLE/sem versão
-- [ ] 3. Remarcar recusa sessão já feita (409)
+- [x] 2. Remarcar usa o fim da versão ACEITA atual; recusa FLEXIBLE/sem versão
+- [x] 3. Remarcar recusa sessão já feita (409)
 - [ ] 4. Falha parcial no aceite não deixa duas ACCEPTED; leitores pegam a maior ACCEPTED
 - [ ] 5. Oferta exige ProfessionalLink ativo (aceitar/recusar/desfazer, lista, Hoje, aviso)
 - [ ] 6. Corrida: claim exige que não haja versão maior (409)
@@ -17,10 +17,12 @@ da raiz; se `/tmp` sumiu, recrie: DATABASE_URL do `.env` com `/fatia` → `/fati
 
 ## Próximo passo
 
-Item 2: teste vermelho em `apps/api/src/workout/__tests__/agenda.integration.spec.ts` (remarcar
-com versão aceita nova cujo fim difere da versão que gerou a sessão; flexível recusa).
+Item 4: `accept` em `plan-offer.service.ts`: claim + materializar + supersede/agenda numa falha só;
+leitores (`versionsOf().accepted`, `AgendaService.acceptedPlans`) pegam a ACCEPTED de maior número.
+Teste no `plan-offer.integration.spec.ts` (falha forçada no `createMany` da agenda).
 
 ## Notas
 
 - Item 1: ordem trocada agora conta como mudança da versão (`diff.version: order`), sem marcar
   exercício. Antes "só a ordem não conta"; o pedido diz nunca "sem mudança" com retratos diferentes.
+- Itens 2 e 3 saíram num commit só (mesmo método e mesmo arquivo de teste).

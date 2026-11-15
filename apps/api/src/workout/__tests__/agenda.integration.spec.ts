@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma.service';
 import { AgendaService } from '../agenda.service';
 import { addDaysIso, dayBoundsInTz, todayInTz } from '../../progress/helpers/date-tz';
@@ -203,6 +203,79 @@ describe('agenda de treinos (integração)', () => {
       await expect(agenda.reschedule(ids.ana, TZ, row.id, addDaysIso(today, -1))).rejects.toThrow(
         BadRequestException,
       );
+    });
+
+    it('o fim é o da versão aceita agora, não o da versão que gerou a sessão', async () => {
+      // A v1 (2 semanas) gerou a sessão de ontem; a v2 aceita depois vai a 4 semanas.
+      const userId = await pessoa('Troca');
+      const start = addDaysIso(today, -3);
+      const planId = await planoDeCalendario(userId, 'Força', start, 2, [addDaysIso(today, -1)]);
+      const offer = await prisma.planOffer.findFirstOrThrow({ where: { userId } });
+      await prisma.planOfferVersion.updateMany({
+        where: { offerId: offer.id },
+        data: { status: 'SUPERSEDED' },
+      });
+      await prisma.planOfferVersion.create({
+        data: {
+          offerId: offer.id,
+          version: 2,
+          status: 'ACCEPTED',
+          title: 'Força',
+          snapshot: {},
+          snapshotVersion: 1,
+          schedule: 'CALENDAR',
+          startDate: start,
+          weeks: 4,
+          weekdays: [1, 2, 3, 4, 5, 6, 7],
+        },
+      });
+      const row = await prisma.plannedSession.findFirstOrThrow({ where: { planId } });
+      const depoisDaV1 = addDaysIso(start, 20);
+      const moved = await agenda.reschedule(userId, TZ, row.id, depoisDaV1);
+      expect(moved).toMatchObject({ date: depoisDaV1, endDate: addDaysIso(start, 27) });
+      await expect(agenda.reschedule(userId, TZ, row.id, addDaysIso(start, 28))).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('plano que virou flexível, ou sem versão aceita, não remarca', async () => {
+      const userId = await pessoa('Flex');
+      const start = addDaysIso(today, -3);
+      const planId = await planoDeCalendario(userId, 'Solto', start, 2, [addDaysIso(today, 1)]);
+      const offer = await prisma.planOffer.findFirstOrThrow({ where: { userId } });
+      await prisma.planOfferVersion.updateMany({
+        where: { offerId: offer.id },
+        data: { status: 'SUPERSEDED' },
+      });
+      const row = await prisma.plannedSession.findFirstOrThrow({ where: { planId } });
+      // Sem versão aceita.
+      await expect(agenda.reschedule(userId, TZ, row.id, today)).rejects.toThrow(ConflictException);
+      await prisma.planOfferVersion.create({
+        data: {
+          offerId: offer.id,
+          version: 2,
+          status: 'ACCEPTED',
+          title: 'Solto',
+          snapshot: {},
+          snapshotVersion: 1,
+          schedule: 'FLEXIBLE',
+        },
+      });
+      await expect(agenda.reschedule(userId, TZ, row.id, today)).rejects.toThrow(ConflictException);
+      const view = await agenda.range(userId, TZ, today, addDaysIso(today, 3));
+      const item = view.days.flatMap((d) => d.items).find((i) => i.id === row.id)!;
+      expect(item).toMatchObject({ state: 'planned', canReschedule: false });
+    });
+
+    it('sessão já feita não remarca (409)', async () => {
+      const feita = await prisma.plannedSession.findFirstOrThrow({
+        where: { planId: planAna, date: addDaysIso(today, -2) },
+      });
+      await expect(agenda.reschedule(ids.ana, TZ, feita.id, today)).rejects.toThrow(
+        ConflictException,
+      );
+      const row = await prisma.plannedSession.findUniqueOrThrow({ where: { id: feita.id } });
+      expect(row).toMatchObject({ date: addDaysIso(today, -2), status: 'PLANNED' });
     });
 
     it('sessão de outra pessoa responde como inexistente', async () => {
