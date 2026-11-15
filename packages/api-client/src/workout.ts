@@ -315,7 +315,7 @@ export const workoutApi = {
     id: string,
     body: {
       notes?: string;
-      feeling?: number;
+      feeling?: number | null;
       exerciseOrder?: number[];
       removedExerciseIds?: number[];
     },

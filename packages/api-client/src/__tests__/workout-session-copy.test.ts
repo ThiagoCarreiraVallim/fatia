@@ -3,12 +3,14 @@ import { ApiError } from '../http';
 import {
   activeSessionIdFromError,
   appendNoteShortcut,
+  howItWentBody,
   checkinDoneMessage,
   comparisonFacts,
   feelingOf,
   feelingToRpe,
   FEELINGS,
   formatBestSet,
+  formatTrainingVolume,
   musclesByRestTone,
   newSetClientKey,
   noteShortcutsFor,
@@ -126,6 +128,26 @@ describe('Treino feito', () => {
     ).toBe('2,4 km · 15 min · 138 bpm');
   });
 
+  it('em libras, a carga e o volume saem na unidade da pessoa', () => {
+    const best = {
+      weightKg: 100,
+      reps: 5,
+      distanceMeters: null,
+      durationSeconds: null,
+      avgHeartRate: null,
+    };
+    expect(formatBestSet(best, 'LB')).toBe('220,5 × 5');
+    expect(formatBestSet(best, 'KG')).toBe('100 × 5');
+    // Carga 0 é peso do corpo, não "0 × 12".
+    expect(formatBestSet({ ...best, weightKg: 0, reps: 12 }, 'LB')).toBe('12 reps');
+    expect(formatTrainingVolume(400, 'LB')).toBe('882 lb');
+    expect(formatTrainingVolume(6200, 'LB')).toBe('13,7 mil lb');
+    expect(summaryFacts(summary({ volumeKg: 400 }), 'LB')[2]).toEqual({
+      value: '882 lb',
+      label: 'volume',
+    });
+  });
+
   it('os quatro números do topo', () => {
     expect(summaryFacts(summary())).toEqual([
       { value: '52′', label: 'duração' },
@@ -169,6 +191,17 @@ describe('Treino feito', () => {
     expect(noteShortcutsFor('')).toContain('Dor no joelho');
     expect(noteShortcutsFor('dor no joelho')).not.toContain('Dor no joelho');
     expect(appendNoteShortcut('', 'Leve')).toBe('leve');
+  });
+
+  it('"Como foi o treino?" só manda o que mudou, e desmarcar ou apagar também grava', () => {
+    const saved = { feeling: 3, notes: 'leve' };
+    expect(howItWentBody(saved, { feeling: 3, notes: ' leve ' })).toEqual({});
+    expect(howItWentBody(saved, { feeling: null, notes: 'leve' })).toEqual({ feeling: null });
+    expect(howItWentBody(saved, { feeling: 3, notes: '  ' })).toEqual({ notes: '' });
+    expect(howItWentBody({ feeling: null, notes: null }, { feeling: 2, notes: 'ok' })).toEqual({
+      feeling: 2,
+      notes: 'ok',
+    });
     expect(appendNoteShortcut('leve', 'Subir carga')).toBe('leve, subir carga');
   });
 

@@ -1,5 +1,6 @@
 import { ApiError } from './http';
 import { formatDecimal } from './format';
+import { kgToLoad, loadUnitLabel, type LoadUnit } from './units';
 import { bodyTones, musclesOfGroups, type MuscleTone } from './workout-cards';
 import type {
   RestedMuscle,
@@ -157,8 +158,14 @@ function signed(n: number, suffix = ''): string {
   return `0${suffix}`;
 }
 
-/** "52,5 × 10", "15 reps", "2,4 km · 15 min · 138 bpm". */
-export function formatBestSet(best: SummaryBestSet | null | undefined): string {
+/**
+ * "52,5 × 10", "15 reps", "2,4 km · 15 min · 138 bpm". A carga sai na unidade
+ * da pessoa; carga 0 é peso do corpo, como no resumo da API.
+ */
+export function formatBestSet(
+  best: SummaryBestSet | null | undefined,
+  unit: LoadUnit = 'KG',
+): string {
   if (!best) return '—';
   if (best.distanceMeters != null || best.durationSeconds != null) {
     const parts: string[] = [];
@@ -167,24 +174,30 @@ export function formatBestSet(best: SummaryBestSet | null | undefined): string {
     if (best.avgHeartRate) parts.push(`${best.avgHeartRate} bpm`);
     return parts.join(' · ') || '—';
   }
-  if (best.weightKg) return `${trimDecimal(best.weightKg)} × ${best.reps ?? 0}`;
+  if (best.weightKg) return `${trimDecimal(kgToLoad(best.weightKg, unit))} × ${best.reps ?? 0}`;
   return `${best.reps ?? 0} reps`;
 }
 
-/** O volume: em toneladas a partir de 1 t, como no canvas. */
-export function formatTrainingVolume(kg: number): string {
-  if (kg >= 1000) return `${formatDecimal(kg / 1000, 1)} t`;
-  return `${formatDecimal(kg, 0)} kg`;
+/** O volume: em toneladas a partir de 1 t, como no canvas; em libras, "mil lb". */
+export function formatTrainingVolume(kg: number, unit: LoadUnit = 'KG'): string {
+  const value = kgToLoad(kg, unit);
+  const label = loadUnitLabel(unit);
+  if (value >= 1000)
+    return unit === 'LB'
+      ? `${formatDecimal(value / 1000, 1)} mil lb`
+      : `${formatDecimal(value / 1000, 1)} t`;
+  return `${formatDecimal(value, 0)} ${label}`;
 }
 
 /** Os quatro números do topo do "Treino feito!". */
 export function summaryFacts(
   s: Pick<WorkoutSessionSummary, 'durationMinutes' | 'sets' | 'volumeKg' | 'overallFeeling'>,
+  unit: LoadUnit = 'KG',
 ): { value: string; label: string }[] {
   return [
     { value: s.durationMinutes == null ? '—' : `${s.durationMinutes}′`, label: 'duração' },
     { value: String(s.sets), label: 'séries' },
-    { value: formatTrainingVolume(s.volumeKg), label: 'volume' },
+    { value: formatTrainingVolume(s.volumeKg, unit), label: 'volume' },
     { value: feelingOf(s.overallFeeling)?.emoji ?? '—', label: 'no geral' },
   ];
 }
@@ -241,6 +254,22 @@ export const NOTE_SHORTCUTS = ['Leve', 'Puxado', 'Dor no joelho', 'Dor na lombar
 export function noteShortcutsFor(note: string): string[] {
   const lower = note.toLowerCase();
   return NOTE_SHORTCUTS.filter((q) => !lower.includes(q.toLowerCase()));
+}
+
+/**
+ * O corpo do "Salvar" do "Como foi o treino?": só o que mudou. Desmarcar a
+ * sensação manda `null` e apagar a observação manda `''` — os dois apagam o
+ * que estava gravado; sem mudança, nada.
+ */
+export function howItWentBody(
+  saved: { feeling: number | null; notes: string | null },
+  current: { feeling: number | null; notes: string },
+): { feeling?: number | null; notes?: string } {
+  const body: { feeling?: number | null; notes?: string } = {};
+  if (current.feeling !== saved.feeling) body.feeling = current.feeling;
+  const notes = current.notes.trim();
+  if (notes !== (saved.notes ?? '')) body.notes = notes;
+  return body;
 }
 
 export function appendNoteShortcut(note: string, label: string): string {
