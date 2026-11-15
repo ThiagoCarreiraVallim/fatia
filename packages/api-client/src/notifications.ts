@@ -60,6 +60,25 @@ const json = (method: string, body?: unknown): RequestInit => ({
   ...(body === undefined ? {} : { body: JSON.stringify(body) }),
 });
 
+/** Um aviso da central do sino no Hoje (#373). */
+export interface InboxItem {
+  id: string;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  /** Caminho do toque, o mesmo do push. */
+  url: string;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export const inboxApi = {
+  list: () => apiFetch<{ items: InboxItem[]; unread: number }>('/api/users/me/inbox'),
+  /** Sem `ids`, marca todos. */
+  markRead: (ids?: string[]) =>
+    apiFetch<{ updated: number }>('/api/users/me/inbox/read', json('POST', ids ? { ids } : {})),
+};
+
 export const notificationsApi = {
   preferences: () => apiFetch<NotificationPreferences>('/api/users/me/notifications'),
   setPreferences: (input: Partial<NotificationPreferences>) =>

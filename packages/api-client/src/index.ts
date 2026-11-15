@@ -58,6 +58,7 @@ export * from './workout-cards';
 export * from './streak-copy';
 export * from './meal-timeline';
 export * from './dashboard-copy';
+export * from './today-copy';
 export * from './ai-drawer';
 export * from './plan-components-copy';
 export * from './onboarding';
