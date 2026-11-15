@@ -44,6 +44,7 @@ const makePrisma = () => ({
   feedbackIdea: { findMany: jest.fn().mockResolvedValue([]) },
   dataExport: { findMany: jest.fn().mockResolvedValue([]) },
   inboxNotice: { findMany: jest.fn().mockResolvedValue([]) },
+  reminder: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const SCHEMA = resolve(__dirname, '../../../../../packages/db/prisma/schema.prisma');
@@ -91,6 +92,8 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   // Só as datas de cada navegador; o endpoint fica de fora (Fase 9g).
   webPushSubscriptions: 'webPushSubscriptions',
   inboxNotices: 'inboxNotices',
+  // Lembretes pessoais (#389): a regra inteira; o contador do teto fica de fora.
+  reminders: 'reminders',
   accessLogs: 'accessLogs',
   // Chat com a IA hospedada (#249): o que a pessoa escreveu sobre a própria saúde, em prosa.
   conversations: 'conversations',
@@ -196,6 +199,7 @@ describe('AccountService', () => {
         'waterLog',
         'favoriteFood',
         'inboxNotice',
+        'reminder',
       ] as const) {
         expect(prisma[model].findMany).toHaveBeenCalledWith(
           expect.objectContaining({ where: expect.objectContaining({ userId: 'user-A' }) }),

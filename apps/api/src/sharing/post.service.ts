@@ -18,7 +18,7 @@ import {
 import { PrismaService } from '../common/prisma.service';
 import { NotificationService, type Notice } from '../notifications/notification.service';
 import { MediaService, type MediaView } from '../storage/media.service';
-import { commentNotice, removedNotice } from './community-notices';
+import { commentNotice, removedNotice, reportReviewedNotice } from './community-notices';
 import { requireContentRole } from './content-roles';
 import { cleanDisplayName, firstName } from './display-name';
 import { can, TEAM_ROLES } from './permissions';
@@ -607,13 +607,31 @@ export class PostService {
       select: { postId: true, commentId: true },
     });
     if (!r) throw new NotFoundException('Report not found');
+    const alvo = r.commentId ? { commentId: r.commentId } : { postId: r.postId, commentId: null };
+    // Quem denunciou e ainda está na comunidade fica sabendo que a equipe olhou
+    // (prancha Ex-06): só isso, sem a decisão nem o conteúdo.
+    const quemDenunciou = await this.prisma.groupPostReport.findMany({
+      where: { ...alvo, resolvedAt: null, reporter: { status: MembershipStatus.ACTIVE } },
+      select: {
+        reporter: { select: { userId: true } },
+        post: { select: { group: { select: { name: true } } } },
+      },
+    });
+    const avisar = () => {
+      if (quemDenunciou.length === 0) return;
+      this.notifications.notify(
+        quemDenunciou.map((d) => d.reporter.userId),
+        reportReviewedNotice({ groupId, groupName: quemDenunciou[0]!.post.group.name }),
+      );
+    };
     if (action === 'remove') {
       if (r.commentId) await this.removeComment(userId, groupId, r.postId, r.commentId);
       else await this.moderatePost(userId, groupId, r.postId, 'remove', await this.topReason(r));
+      avisar();
       return { resolved: 1 };
     }
-    const alvo = r.commentId ? { commentId: r.commentId } : { postId: r.postId, commentId: null };
     const feito = await this.resolveOp(alvo, eu.membershipId, 'dismissed', new Date());
+    avisar();
     return { resolved: feito.count };
   }
 

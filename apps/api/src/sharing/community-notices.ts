@@ -91,3 +91,16 @@ export function removedNotice(p: {
     url: `/community/${p.groupId}/feed`,
   };
 }
+
+/**
+ * Para quem denunciou (prancha Ex-06): a equipe revisou. Nem a decisão nem o
+ * que foi denunciado aparecem na tela bloqueada.
+ */
+export function reportReviewedNotice(p: { groupId: string; groupName: string }): Notice {
+  return {
+    kind: NotificationKind.MODERATION,
+    title: 'Sua denúncia foi revisada pela equipe',
+    body: `No mural de ${p.groupName}.`,
+    url: `/community/${p.groupId}`,
+  };
+}

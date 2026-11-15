@@ -1,0 +1,29 @@
+import { NotificationKind } from '@fatia/db';
+import { groupedNotice, NOTIFICATION_DEFAULTS } from '../notification.service';
+
+describe('aviso agrupado (prancha Ex-06, #389)', () => {
+  it('novidades da comunidade saem como "N novidades em <comunidade>", sem conteúdo', () => {
+    expect(groupedNotice(NotificationKind.COMMUNITY, 5, 'Academia Demo', '/community/g')).toEqual({
+      kind: 'COMMUNITY',
+      title: '5 novidades em Academia Demo',
+      body: 'Toque para ver.',
+      url: '/community/g',
+    });
+    expect(groupedNotice(NotificationKind.ANNOUNCEMENTS, 1, 'Academia', '/x').title).toBe(
+      '1 novidade em Academia',
+    );
+  });
+
+  it('comentários no mural mantêm o texto próprio', () => {
+    expect(groupedNotice(NotificationKind.FEED, 3, 'Academia', '/f').title).toBe(
+      'Mais 3 comentários no seu post',
+    );
+  });
+
+  it('só o grupo "Opcional" nasce desligado', () => {
+    const desligados = Object.entries(NOTIFICATION_DEFAULTS)
+      .filter(([, on]) => !on)
+      .map(([k]) => k);
+    expect(desligados).toEqual(['BIRTHDAY']);
+  });
+});
