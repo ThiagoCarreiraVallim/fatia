@@ -76,6 +76,16 @@ export function commentNotice(p: { groupId: string; groupName: string; author: s
   };
 }
 
+/** O primeiro de uma janela; os seguintes saem juntos ("Helena e mais 3 reagiram"). */
+export function reactionNotice(p: { groupId: string; groupName: string; author: string }): Notice {
+  return {
+    kind: NotificationKind.FEED,
+    title: `${p.author} reagiu ao seu post`,
+    body: `No mural de ${p.groupName}.`,
+    url: `/community/${p.groupId}/feed`,
+  };
+}
+
 export function removedNotice(p: {
   groupId: string;
   groupName: string;
@@ -89,5 +99,18 @@ export function removedNotice(p: {
         ? `No mural de ${p.groupName}. Só você vê o post, com o motivo.`
         : `No mural de ${p.groupName}.`,
     url: `/community/${p.groupId}/feed`,
+  };
+}
+
+/**
+ * Para quem denunciou (prancha Ex-06): a equipe revisou. Nem a decisão nem o
+ * que foi denunciado aparecem na tela bloqueada.
+ */
+export function reportReviewedNotice(p: { groupId: string; groupName: string }): Notice {
+  return {
+    kind: NotificationKind.MODERATION,
+    title: 'Sua denúncia foi revisada pela equipe',
+    body: `No mural de ${p.groupName}.`,
+    url: `/community/${p.groupId}`,
   };
 }

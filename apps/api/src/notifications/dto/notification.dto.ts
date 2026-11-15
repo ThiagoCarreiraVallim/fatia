@@ -48,6 +48,39 @@ export class NotificationPreferencesDto {
   @IsOptional()
   @IsBoolean()
   CHAT?: boolean;
+
+  // Os tipos da prancha Al-V4 (#389).
+  @IsOptional()
+  @IsBoolean()
+  ANNOUNCEMENTS?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  PLAN_RECEIVED?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  ASSESSMENT_REQUESTED?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  QUESTIONNAIRE?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  SCHEDULE?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  SCHEDULE_REMINDER?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  BIRTHDAY?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  REMINDERS?: boolean;
 }
 
 /** A inscrição que o `PushManager.subscribe` do navegador devolve, achatada. */

@@ -16,9 +16,18 @@ import {
   type ReportReason,
 } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
-import { NotificationService, type Notice } from '../notifications/notification.service';
+import {
+  NotificationService,
+  REACTION_KEY_PREFIX,
+  type Notice,
+} from '../notifications/notification.service';
 import { MediaService, type MediaView } from '../storage/media.service';
-import { commentNotice, removedNotice } from './community-notices';
+import {
+  commentNotice,
+  reactionNotice,
+  removedNotice,
+  reportReviewedNotice,
+} from './community-notices';
 import { requireContentRole } from './content-roles';
 import { cleanDisplayName, firstName } from './display-name';
 import { can, TEAM_ROLES } from './permissions';
@@ -338,11 +347,25 @@ export class PostService {
     const eu = await this.me(userId, groupId, 'post.read');
     const row = await this.findLive(groupId, postId);
     if (kind) {
+      const before = await this.prisma.groupPostReaction.findUnique({
+        where: { postId_membershipId: { postId: row.id, membershipId: eu.membershipId } },
+        select: { id: true },
+      });
       await this.prisma.groupPostReaction.upsert({
         where: { postId_membershipId: { postId: row.id, membershipId: eu.membershipId } },
         create: { postId: row.id, membershipId: eu.membershipId, kind },
         update: { kind },
       });
+      // Só a reação nova avisa: trocar de emoji não é novidade para o autor.
+      if (!before && row.membershipId !== eu.membershipId) {
+        const author = eu.displayName ?? eu.userNickname ?? firstName(eu.userName);
+        await this.notifyAuthor(
+          row.membershipId,
+          (groupName) => reactionNotice({ groupId, groupName, author }),
+          `${REACTION_KEY_PREFIX}${row.id}`,
+          author,
+        );
+      }
     } else {
       await this.prisma.groupPostReaction.deleteMany({
         where: { postId: row.id, membershipId: eu.membershipId },
@@ -607,13 +630,31 @@ export class PostService {
       select: { postId: true, commentId: true },
     });
     if (!r) throw new NotFoundException('Report not found');
+    const alvo = r.commentId ? { commentId: r.commentId } : { postId: r.postId, commentId: null };
+    // Quem denunciou e ainda está na comunidade fica sabendo que a equipe olhou
+    // (prancha Ex-06): só isso, sem a decisão nem o conteúdo.
+    const quemDenunciou = await this.prisma.groupPostReport.findMany({
+      where: { ...alvo, resolvedAt: null, reporter: { status: MembershipStatus.ACTIVE } },
+      select: {
+        reporter: { select: { userId: true } },
+        post: { select: { group: { select: { name: true } } } },
+      },
+    });
+    const avisar = () => {
+      if (quemDenunciou.length === 0) return;
+      this.notifications.notify(
+        quemDenunciou.map((d) => d.reporter.userId),
+        reportReviewedNotice({ groupId, groupName: quemDenunciou[0]!.post.group.name }),
+      );
+    };
     if (action === 'remove') {
       if (r.commentId) await this.removeComment(userId, groupId, r.postId, r.commentId);
       else await this.moderatePost(userId, groupId, r.postId, 'remove', await this.topReason(r));
+      avisar();
       return { resolved: 1 };
     }
-    const alvo = r.commentId ? { commentId: r.commentId } : { postId: r.postId, commentId: null };
     const feito = await this.resolveOp(alvo, eu.membershipId, 'dismissed', new Date());
+    avisar();
     return { resolved: feito.count };
   }
 
@@ -647,6 +688,7 @@ export class PostService {
     membershipId: string,
     notice: (groupName: string) => Notice,
     groupKey?: string,
+    actor?: string,
   ): Promise<void> {
     const autor = await this.prisma.groupMembership.findFirst({
       where: { id: membershipId, status: MembershipStatus.ACTIVE },
@@ -655,7 +697,7 @@ export class PostService {
     if (!autor) return;
     const aviso = notice(autor.group.name);
     if (groupKey) {
-      this.notifications.notifyGrouped(autor.userId, groupKey, aviso, autor.group.name);
+      this.notifications.notifyGrouped(autor.userId, groupKey, aviso, autor.group.name, actor);
     } else {
       this.notifications.notify([autor.userId], aviso);
     }

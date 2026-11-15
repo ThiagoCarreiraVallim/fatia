@@ -4,11 +4,13 @@ import { useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { IconName } from '@fatia/design';
 import {
+  activeRemindersLabel,
   billingApi,
   keepPhotosText,
   menuSections,
   newsApi,
   progressApi,
+  remindersApi,
   unitPrefsOf,
   unitsSummary,
   usersApi,
@@ -23,6 +25,7 @@ import { Button, useConfirm, useToast } from '@/components/ui';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { HeightSheet } from '@/components/you/height-sheet';
+import { REMINDERS_KEY } from '@/components/reminders/keys';
 import { NEWS_QUERY_KEY } from '@/components/you/news-cache';
 import { useExportData } from '@/components/you/use-export-data';
 import { UserAvatar } from '@/components/you/user-avatar';
@@ -53,6 +56,7 @@ export default function YouScreen() {
   const today = useQuery({ queryKey: ['dashboard', 'today'], queryFn: () => progressApi.today() });
   const plan = useQuery({ queryKey: ['billing', 'plan'], queryFn: () => billingApi.plan() });
   const news = useQuery({ queryKey: NEWS_QUERY_KEY, queryFn: () => newsApi.list(), retry: false });
+  const reminders = useQuery({ queryKey: REMINDERS_KEY, queryFn: () => remindersApi.list() });
   const chat = useChatAvailability().data;
   const exportData = useExportData();
 
@@ -78,6 +82,7 @@ export default function YouScreen() {
       qc.refetchQueries({ queryKey: ['dashboard', 'today'] }),
       qc.refetchQueries({ queryKey: ['billing', 'plan'] }),
       qc.refetchQueries({ queryKey: NEWS_QUERY_KEY }),
+      qc.refetchQueries({ queryKey: REMINDERS_KEY }),
     ]).finally(() => setRefreshing(false));
   }, [qc]);
 
@@ -109,6 +114,7 @@ export default function YouScreen() {
       );
     }
     if (item.key === 'units') return unitsSummary(units);
+    if (item.key === 'reminders' && reminders.data) return activeRemindersLabel(reminders.data);
     if (item.key === 'plan' && plan.data) return plan.data.tier === 'PRO' ? 'PRO' : 'Free';
     if (item.key === 'news' && unread > 0) {
       return (

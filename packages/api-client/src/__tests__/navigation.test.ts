@@ -67,6 +67,7 @@ describe('navegação', () => {
       '/chat',
       '/profile/connect',
       '/community',
+      '/you/reminders',
       '/profile/notifications',
       '/plan',
       null,
@@ -106,6 +107,12 @@ describe('navegação', () => {
     const avisos = menuSections({ platform: 'mobile', chatAvailable: false }).find(
       (s) => s.title === 'Rotina e avisos',
     )!;
+    expect(avisos.items.map((i) => i.key)).toEqual(['reminders', 'notifications']);
+    expect(avisos.items.find((i) => i.key === 'reminders')).toMatchObject({
+      label: 'Lembretes',
+      icon: 'bell',
+      href: '/you/reminders',
+    });
     expect(avisos.items.find((i) => i.key === 'notifications')).toMatchObject({
       label: 'Notificações',
       href: '/profile/notifications',

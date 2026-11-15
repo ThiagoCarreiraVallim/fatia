@@ -118,7 +118,8 @@ A troca entrou no PWA e no app no mesmo trabalho. O que a implementação decidi
 - **`/students`** (personal) não ganha barra própria nem some: acende **Comunidade**, como o
   painel (`/org`). Perfil, Progresso, Metas e Plano acendem **Você**.
 - **Sino:** sozinho no topo do Hoje, ao lado das metas do dia; em Você, a linha **Notificações**
-  de `menuSections`. Os dois levam às preferências de notificação até a caixa de avisos da #389.
+  de `menuSections`. Os dois levam às preferências de notificação (a central do sino é da #373;
+  a tela de Notificações virou a `Al-V4` na #389).
 - **Desktop:** o menu da IA é a mesma folha, aberta à direita com 480 px; a barra lateral tem o
   logo, o botão da IA e as cinco abas com nome.
 - **Estado da IA no botão** vem de dados que já existem: `GET /chat/conversations?state=` e
@@ -162,3 +163,14 @@ divergem, vale a prancha). O que a implementação decidiu além do item 3:
 - **Apagar sem o app**: `fat.ia.br/apagar-conta` (site estático) explica e leva a
   `app.fat.ia.br/apagar-conta`, pública, que pede login e mostra a mesma tela da `Al-V8`.
 - **Privacidade e Termos** ficam no fim de Você no app (diretriz 5.1.1 da App Store).
+
+## Lembretes e Notificações em Você (#389, 2026-11-15)
+
+- **"Rotina e avisos"** ganha **Lembretes** (`/you/reminders`, ícone sino, detalhe "N ativos")
+  antes de **Notificações**. "Hábitos" (#390) e a saúde do celular (#371) entram na mesma seção
+  com as issues deles.
+- **Lembretes** (`Al-V2`) tem o "+" lima no topo, que abre a folha de lembrete (`Al-V3`); tocar
+  num lembrete abre a mesma folha em modo edição (`Al-V3b`), com a lixeira. A folha é um sheet,
+  não uma tela: voltar fecha a folha e fica em Lembretes.
+- **Notificações** continua em `/profile/notifications` (a rota é a mesma desde a Fase 8c); a tela
+  agora é a `Al-V4`.

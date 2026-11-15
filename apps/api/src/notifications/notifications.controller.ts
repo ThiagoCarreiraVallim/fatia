@@ -55,6 +55,12 @@ export class NotificationsController {
     return this.notifications.preferences(user.id);
   }
 
+  /** A tela de Notificações inteira (prancha Al-V4, #389): chaves, silêncio e equipe. */
+  @Get('notification-settings')
+  settings(@CurrentUser() user: CurrentUserPayload) {
+    return this.notifications.settings(user.id);
+  }
+
   @Put('notifications')
   setPreferences(@CurrentUser() user: CurrentUserPayload, @Body() dto: NotificationPreferencesDto) {
     return this.notifications.setPreferences(user.id, dto);

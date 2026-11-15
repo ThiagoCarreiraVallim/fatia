@@ -60,6 +60,9 @@ describe('avisos no celular (integração)', () => {
     },
   } as unknown as WebPushService;
   const notifications = new NotificationService(prisma, push, webPush);
+  // Meio-dia em São Paulo: fora do silêncio noturno padrão, rode o teste quando rodar.
+  const MEIO_DIA = new Date('2026-11-16T15:00:00Z');
+  notifications.clock = () => MEIO_DIA;
   const inbox = new InboxService(prisma);
   const links = new ProfessionalLinkService(prisma);
   const memberships = new MembershipService(prisma, links, notifications);
@@ -357,7 +360,7 @@ describe('avisos no celular (integração)', () => {
   });
 
   describe('preferências', () => {
-    it('tudo ligado por padrão; desligar um tipo cala só ele', async () => {
+    it('tudo ligado por padrão, menos o "Opcional"; desligar um tipo cala só ele', async () => {
       const c = await comunidade();
       expect(await notifications.preferences(c.membro)).toEqual({
         COMMUNITY: true,
@@ -365,6 +368,14 @@ describe('avisos no celular (integração)', () => {
         FEED: true,
         MODERATION: true,
         CHAT: true,
+        ANNOUNCEMENTS: true,
+        PLAN_RECEIVED: true,
+        ASSESSMENT_REQUESTED: true,
+        QUESTIONNAIRE: true,
+        SCHEDULE: true,
+        SCHEDULE_REMINDER: true,
+        BIRTHDAY: false,
+        REMINDERS: true,
       });
       await notifications.setPreferences(c.membro, { FEED: false });
       const post = await posts.create(c.membro, c.groupId, { body: 'Oi', displayName: 'Ana' });
@@ -373,6 +384,100 @@ describe('avisos no celular (integração)', () => {
 
       await posts.moderatePost(c.dono, c.groupId, post.id, 'remove');
       expect((await recebidos()).map((r) => r.userId)).toEqual([c.membro]);
+    });
+
+    it('tipo "Opcional" (aniversário) só chega para quem ligou (#389)', async () => {
+      const a = await pessoa('Liga');
+      const b = await pessoa('Não liga');
+      await notifications.setPreferences(a, { BIRTHDAY: true });
+      notifications.notify([a, b], {
+        kind: 'BIRTHDAY',
+        title: 'Parabéns!',
+        body: 'Um abraço da comunidade.',
+        url: '/',
+      });
+      expect((await recebidos()).map((r) => r.userId)).toEqual([a]);
+      // A central guarda para os dois: desligado é não ser interrompido.
+      expect(await prisma.inboxNotice.count({ where: { userId: b, kind: 'BIRTHDAY' } })).toBe(1);
+    });
+  });
+
+  describe('silêncio noturno (#389)', () => {
+    const MADRUGADA = new Date('2026-11-16T05:00:00Z'); // 02:00 em São Paulo
+
+    afterEach(() => {
+      notifications.clock = () => new Date('2026-11-16T15:00:00Z');
+    });
+
+    it('no silêncio o aviso não toca, mas fica na central', async () => {
+      const id = await pessoa('Dorme');
+      notifications.clock = () => MADRUGADA;
+      notifications.notify([id], { kind: 'COMMUNITY', title: 'Oi', body: 'x', url: '/community' });
+      expect(await recebidos()).toEqual([]);
+      expect(await prisma.inboxNotice.count({ where: { userId: id } })).toBe(1);
+    });
+
+    it('a resposta do chat toca mesmo no silêncio: a pessoa está esperando', async () => {
+      const id = await pessoa('Pergunta');
+      notifications.clock = () => MADRUGADA;
+      notifications.notify([id], { kind: 'CHAT', title: 'Fatia', body: 'Pronta.', url: '/chat' });
+      expect((await recebidos()).map((r) => r.userId)).toEqual([id]);
+    });
+
+    it('silêncio desligado ou fora da janela, toca; a janela segue o fuso da pessoa', async () => {
+      const semSilencio = await pessoa('Sem');
+      await notifications.setQuietHours(semSilencio, { enabled: false });
+      const lisboa = await pessoa('Lisboa');
+      // 05:00 UTC são 05:00 em Lisboa; com silêncio das 22:00 às 04:00, já acabou.
+      await prisma.user.update({ where: { id: lisboa }, data: { timezone: 'Europe/Lisbon' } });
+      await notifications.setQuietHours(lisboa, { from: '22:00', to: '04:00' });
+      notifications.clock = () => MADRUGADA;
+      notifications.notify([semSilencio, lisboa], {
+        kind: 'COMMUNITY',
+        title: 'Oi',
+        body: 'x',
+        url: '/community',
+      });
+      expect((await recebidos()).map((r) => r.userId).sort()).toEqual([semSilencio, lisboa].sort());
+    });
+
+    it('o padrão é 22:00–07:00; horário fora da grade ou janela vazia é recusado', async () => {
+      const id = await pessoa('Janela', false);
+      expect(await notifications.quietHours(id)).toEqual({
+        enabled: true,
+        from: '22:00',
+        to: '07:00',
+      });
+      await expect(notifications.setQuietHours(id, { from: '22:03' })).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      await expect(
+        notifications.setQuietHours(id, { from: '07:00', to: '07:00' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(await notifications.setQuietHours(id, { from: '23:00', to: '06:30' })).toEqual({
+        enabled: true,
+        from: '23:00',
+        to: '06:30',
+      });
+    });
+  });
+
+  describe('tela de Notificações (#389)', () => {
+    it('"Da sua equipe" aparece com o nome do profissional só para quem é aluno', async () => {
+      const c = await comunidade();
+      const doMembro = await notifications.settings(c.membro);
+      expect(doMembro.team?.name).toMatch(/^Prof$/);
+      expect(doMembro.community).toEqual({ name: 'Academia' });
+      expect(doMembro.preferences.BIRTHDAY).toBe(false);
+      expect(doMembro.quietHours).toEqual({ enabled: true, from: '22:00', to: '07:00' });
+
+      // A dona não é aluna de ninguém; quem não está em comunidade, também não.
+      expect((await notifications.settings(c.dono)).team).toBeNull();
+      const sozinha = await pessoa('Sozinha', false);
+      expect(await notifications.settings(sozinha)).toMatchObject({
+        team: null,
+        community: null,
+      });
     });
   });
 
@@ -392,6 +497,47 @@ describe('avisos no celular (integração)', () => {
         url: `/community/${c.groupId}/feed`,
       });
       expect(JSON.stringify(r)).not.toContain('Mensagem bem pessoal');
+    });
+
+    it('reação avisa o autor com o nome de quem reagiu; as seguintes saem juntas (Ex-06)', async () => {
+      const c = await comunidade();
+      const post = await posts.create(c.membro, c.groupId, { body: 'Treino', displayName: 'Ana' });
+      await posts.comment(c.outro, c.groupId, post.id, { body: 'Boa', displayName: 'Bia' });
+      await recebidos();
+      await posts.react(c.outro, c.groupId, post.id, 'FIRE');
+      // Trocar ou tirar a própria reação não avisa de novo.
+      await posts.react(c.outro, c.groupId, post.id, 'HEART');
+      await posts.react(c.outro, c.groupId, post.id, null);
+      const primeira = await recebidos();
+      expect(primeira).toEqual([
+        expect.objectContaining({
+          userId: c.membro,
+          title: 'Bia reagiu ao seu post',
+          body: 'No mural de Academia.',
+          url: `/community/${c.groupId}/feed`,
+        }),
+      ]);
+      const terceiro = await entra(c.groupId, 'MEMBER', 'Caio');
+      const quarto = await entra(c.groupId, 'MEMBER', 'Helena');
+      await prisma.groupMembership.updateMany({
+        where: { userId: quarto, groupId: c.groupId },
+        data: { displayName: 'Helena' },
+      });
+      await posts.react(c.dono, c.groupId, post.id, 'CLAP');
+      await posts.react(terceiro, c.groupId, post.id, 'STRONG');
+      await posts.react(quarto, c.groupId, post.id, 'HEART');
+      expect(await recebidos()).toEqual([]);
+      await notifications.flushGrouped(new Date(Date.now() + GROUP_WINDOW_MS + 1000));
+      expect((await recebidos()).map((r) => [r.userId, r.title])).toEqual([
+        [c.membro, 'Helena e mais 2 reagiram ao seu post'],
+      ]);
+    });
+
+    it('reagir ao próprio post não avisa ninguém', async () => {
+      const c = await comunidade();
+      const post = await posts.create(c.membro, c.groupId, { body: 'Treino', displayName: 'Ana' });
+      await posts.react(c.membro, c.groupId, post.id, 'FIRE');
+      expect(await recebidos()).toEqual([]);
     });
 
     it('comentar no próprio post não avisa ninguém', async () => {
@@ -424,9 +570,28 @@ describe('avisos no celular (integração)', () => {
       const fila = await posts.reports(c.dono, c.groupId);
       await posts.resolveReport(c.dono, c.groupId, fila[0]!.reportId, 'remove');
       const r2 = await recebidos();
-      expect(r2.map((x) => [x.userId, x.title])).toEqual([
-        [c.membro, 'A equipe removeu seu comentário'],
-      ]);
+      expect(r2.map((x) => [x.userId, x.title]).sort()).toEqual(
+        [
+          [c.membro, 'A equipe removeu seu comentário'],
+          [c.outro, 'Sua denúncia foi revisada pela equipe'],
+        ].sort(),
+      );
+    });
+
+    it('denúncia descartada avisa quem denunciou, sem a decisão nem o conteúdo (Ex-06)', async () => {
+      const c = await comunidade();
+      const post = await posts.create(c.membro, c.groupId, { body: 'Texto do post' });
+      await posts.report(c.outro, c.groupId, post.id, { reason: 'OTHER' });
+      const fila = await posts.reports(c.dono, c.groupId);
+      await posts.resolveReport(c.dono, c.groupId, fila[0]!.reportId, 'dismiss');
+      const r = await recebidos();
+      expect(r).toHaveLength(1);
+      expect(r[0]).toMatchObject({
+        userId: c.outro,
+        title: 'Sua denúncia foi revisada pela equipe',
+        body: 'No mural de Academia.',
+      });
+      expect(JSON.stringify(r)).not.toContain('Texto do post');
     });
   });
 
@@ -612,6 +777,14 @@ describe('avisos no celular (integração)', () => {
       'FEED',
       'MODERATION',
       'CHAT',
+      'ANNOUNCEMENTS',
+      'PLAN_RECEIVED',
+      'ASSESSMENT_REQUESTED',
+      'QUESTIONNAIRE',
+      'SCHEDULE',
+      'SCHEDULE_REMINDER',
+      'BIRTHDAY',
+      'REMINDERS',
     ]);
   });
 });

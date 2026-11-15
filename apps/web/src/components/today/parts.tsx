@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
-import type { GoalTone } from '@fatia/api-client';
+import type { GoalTone, IconTone } from '@fatia/api-client';
 import type { IconName } from '@fatia/design';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/utils';
@@ -63,12 +63,15 @@ export function Bar({
   );
 }
 
-const TONE: Record<GoalTone | 'brand', string> = {
+const TONE: Record<IconTone, string> = {
   lime: 'bg-primary-soft text-primary',
   blue: 'bg-[hsl(var(--protein)/0.14)] text-protein',
   water: 'bg-[hsl(var(--water)/0.14)] text-water',
   amber: 'bg-[hsl(var(--steps)/0.14)] text-steps',
   brand: 'bg-brand-soft text-brand',
+  // `chipic pink` (Aniversário) e o `chipic` sem tom (Pesagem, Moderação).
+  pink: 'bg-[hsl(var(--fat)/0.14)] text-fat',
+  neutral: 'bg-surface-3 text-foreground',
 };
 
 /** Ícone num quadrado de canto 14 (11 no compacto), com o fundo do tom a 14%. */
@@ -78,19 +81,23 @@ export function ChipIcon({
   size = 40,
 }: {
   icon: IconName;
-  tone: GoalTone | 'brand';
-  size?: 34 | 40;
+  tone: IconTone;
+  size?: 32 | 34 | 40;
 }) {
   return (
     <span
       aria-hidden
       className={cn(
         'inline-flex shrink-0 items-center justify-center',
-        size === 34 ? 'h-[34px] w-[34px] rounded-[11px]' : 'h-10 w-10 rounded-[14px]',
+        size === 32
+          ? 'h-8 w-8 rounded-[10px]'
+          : size === 34
+            ? 'h-[34px] w-[34px] rounded-[11px]'
+            : 'h-10 w-10 rounded-[14px]',
         TONE[tone],
       )}
     >
-      <Icon name={icon} size={size === 34 ? 16 : 20} />
+      <Icon name={icon} size={size === 40 ? 20 : 16} />
     </span>
   );
 }

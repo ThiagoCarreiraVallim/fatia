@@ -72,6 +72,10 @@ export class AccountService {
         whatsappOptIn: true,
         loadUnit: true,
         distanceUnit: true,
+        // Silêncio noturno (#389), em minutos do dia no fuso da pessoa.
+        quietHoursEnabled: true,
+        quietFrom: true,
+        quietTo: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -112,6 +116,7 @@ export class AccountService {
       ideas,
       dataExports,
       inboxNotices,
+      reminders,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
       this.prisma.nutrientTarget.findMany({ where: { userId }, orderBy: { label: 'asc' } }),
@@ -457,6 +462,26 @@ export class AccountService {
         select: { kind: true, title: true, body: true, url: true, readAt: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
       }),
+      // Lembretes pessoais (#389): a regra inteira e quando saiu o último. O
+      // contador do teto do dia fica de fora: é controle interno do envio.
+      this.prisma.reminder.findMany({
+        where: { userId },
+        select: {
+          kind: true,
+          mode: true,
+          everyHours: true,
+          fromMinute: true,
+          toMinute: true,
+          times: true,
+          weekdays: true,
+          stepsBelow: true,
+          enabled: true,
+          lastSentAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
     ]);
 
     // `ProfessionalAccessLog.professionalId` é string pura, sem FK — é o que faz
@@ -512,6 +537,7 @@ export class AccountService {
       ideas,
       dataExports,
       inboxNotices,
+      reminders,
       accessLogs: accessLogs.map(({ professionalId, ...linha }) => ({
         ...linha,
         professionalName: nomesDeProfissional.get(professionalId) ?? null,
@@ -538,6 +564,7 @@ export class AccountService {
         tutorialsSeen: tutorialsSeen.length,
         ideas: ideas.length,
         inboxNotices: inboxNotices.length,
+        reminders: reminders.length,
         professionalLinks: professionalLinks.length,
         accessLogs: accessLogs.length,
         meals: meals.length,

@@ -50,6 +50,7 @@ import { DataExportService } from '../../users/data-export.service';
 import type { LogtoManagementService } from '../../auth/logto-management.service';
 import type { CheckpointPurgeService } from '../../chat/checkpoint-purge.service';
 import { InboxService } from '../../notifications/inbox.service';
+import { ReminderService } from '../../notifications/reminders/reminder.service';
 import { DashboardService } from '../../progress/dashboard.service';
 
 /**
@@ -102,6 +103,7 @@ describe('isolamento entre usuários', () => {
   const conversas = new ConversationService(prisma);
   const memorias = new MemoryService(prisma);
   const inbox = new InboxService(prisma);
+  const reminders = new ReminderService(prisma);
 
   /** Dados do user-A. Preenchido no beforeAll e sondado como user-B. */
   const owned = {
@@ -156,6 +158,7 @@ describe('isolamento entre usuários', () => {
     memoryId: '',
     /** Aviso do sino do user-A (#373). */
     inboxNoticeId: '',
+    reminderId: '',
   };
 
   beforeAll(async () => {
@@ -407,6 +410,14 @@ describe('isolamento entre usuários', () => {
           body: 'Bem-vinda à Academia.',
           url: '/community',
         },
+      })
+    ).id;
+    owned.reminderId = (
+      await reminders.create(owned.userA, {
+        kind: 'MEAL',
+        mode: 'TIMES',
+        times: ['12:30'],
+        weekdays: [1, 2, 3, 4, 5],
       })
     ).id;
   }, 60_000);
@@ -819,6 +830,24 @@ describe('isolamento entre usuários', () => {
         ).today({ userId, timezone: TZ });
       expect((await dashboard(owned.userA)).inbox.unread).toBeGreaterThan(0);
       expect((await dashboard(owned.userB)).inbox.unread).toBe(0);
+    });
+  });
+
+  describe('lembretes pessoais (#389)', () => {
+    it('list_reminders: o dono vê o lembrete, o vizinho não vê nada', async () => {
+      expect((await reminders.list(owned.userA)).map((r) => r.id)).toContain(owned.reminderId);
+      await expect(reminders.list(owned.userB)).resolves.toEqual([]);
+    });
+
+    it('update_reminder e delete_reminder com o id do user-A recusam e não mexem', async () => {
+      await expect(
+        reminders.update(owned.userB, owned.reminderId, { enabled: false, times: ['03:00'] }),
+      ).rejects.toThrow(NotFoundException);
+      await expect(reminders.remove(owned.userB, owned.reminderId)).rejects.toThrow(
+        NotFoundException,
+      );
+      const r = await prisma.reminder.findUnique({ where: { id: owned.reminderId } });
+      expect(r).toMatchObject({ userId: owned.userA, enabled: true, times: [750] });
     });
   });
 

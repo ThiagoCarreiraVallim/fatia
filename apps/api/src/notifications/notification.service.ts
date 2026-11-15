@@ -1,10 +1,17 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { DevicePlatform, NotificationKind } from '@fatia/db';
+import { DevicePlatform, GroupRole, MembershipStatus, NotificationKind } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { EXPO_PUSH_TOKEN, PushService } from './push.service';
 import { WebPushService, isPushEndpoint } from './web-push.service';
 import { recordInbox } from './inbox.service';
+import {
+  DEFAULT_QUIET,
+  formatClock,
+  inQuietHours,
+  localClock,
+  parseClock,
+} from './reminders/reminder-rules';
 
 export const NOTIFICATION_KINDS = Object.values(NotificationKind);
 export const DEVICE_PLATFORMS = Object.values(DevicePlatform);
@@ -41,6 +48,44 @@ export interface DeviceView {
 
 export type NotificationPreferences = Record<NotificationKind, boolean>;
 
+/**
+ * Como cada tipo nasce, enquanto a pessoa não mexeu nele (prancha Al-V4, #389):
+ * ligado, menos o grupo "Opcional" (o parabéns do aniversário), que só chega
+ * para quem ligou.
+ */
+export const NOTIFICATION_DEFAULTS: NotificationPreferences = {
+  ...(Object.fromEntries(NOTIFICATION_KINDS.map((k) => [k, true])) as NotificationPreferences),
+  BIRTHDAY: false,
+};
+const OPT_IN_KINDS = NOTIFICATION_KINDS.filter((k) => !NOTIFICATION_DEFAULTS[k]);
+
+/**
+ * Tipos que tocam mesmo no silêncio noturno: a resposta do chat é de quem
+ * acabou de perguntar e está esperando.
+ */
+const IGNORA_SILENCIO: readonly NotificationKind[] = [NotificationKind.CHAT];
+
+/** Silêncio noturno em "hh:mm", como a API recebe e devolve. */
+export interface QuietHoursView {
+  enabled: boolean;
+  from: string;
+  to: string;
+}
+
+/**
+ * A tela de Notificações inteira (prancha Al-V4): as chaves, o silêncio, a
+ * equipe que aparece em "Da sua equipe" (nula = a pessoa não está em
+ * comunidade com equipe, e o grupo some) e a comunidade da prévia.
+ */
+export interface NotificationSettings {
+  preferences: NotificationPreferences;
+  quietHours: QuietHoursView;
+  team: { name: string } | null;
+  community: { name: string } | null;
+}
+
+const TEAM_ROLES: GroupRole[] = [GroupRole.PROFESSIONAL, GroupRole.OWNER, GroupRole.CREATOR];
+
 const DEVICE_SELECT = { id: true, platform: true, createdAt: true, lastSeenAt: true } as const;
 
 const cut = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
@@ -59,6 +104,8 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(NotificationService.name);
   private readonly pending = new Set<Promise<void>>();
   private readonly timers: NodeJS.Timeout[] = [];
+  /** O relógio do silêncio noturno. Os testes fixam a hora para não depender de quando rodam. */
+  clock: () => Date = () => new Date();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -193,14 +240,102 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
 
   // ---------------------------------------------------------------- preferências
 
-  /** Sem linha gravada, o tipo está ligado. */
+  /** Sem linha gravada, vale o padrão do tipo (`NOTIFICATION_DEFAULTS`). */
   async preferences(userId: string): Promise<NotificationPreferences> {
     const linhas = await this.prisma.notificationPreference.findMany({ where: { userId } });
-    const prefs = Object.fromEntries(
-      NOTIFICATION_KINDS.map((k) => [k, true]),
-    ) as NotificationPreferences;
+    const prefs = { ...NOTIFICATION_DEFAULTS };
     for (const l of linhas) prefs[l.kind] = l.enabled;
     return prefs;
+  }
+
+  /** Tudo o que a tela de Notificações mostra (prancha Al-V4). */
+  async settings(userId: string): Promise<NotificationSettings> {
+    const [preferences, quietHours, vinculos] = await Promise.all([
+      this.preferences(userId),
+      this.quietHours(userId),
+      this.prisma.groupMembership.findMany({
+        where: { userId, status: MembershipStatus.ACTIVE },
+        orderBy: { joinedAt: 'asc' },
+        select: { groupId: true, role: true, group: { select: { name: true } } },
+      }),
+    ]);
+    // "Da sua equipe": a equipe de uma comunidade em que a pessoa é aluna.
+    const comoAluna = vinculos.filter((v) => v.role === GroupRole.MEMBER);
+    const equipe =
+      comoAluna.length === 0
+        ? []
+        : await this.prisma.groupMembership.findMany({
+            where: {
+              groupId: { in: comoAluna.map((v) => v.groupId) },
+              status: MembershipStatus.ACTIVE,
+              role: { in: TEAM_ROLES },
+              userId: { not: userId },
+            },
+            orderBy: { joinedAt: 'asc' },
+            take: 20,
+            select: {
+              role: true,
+              displayName: true,
+              user: { select: { nickname: true, name: true } },
+            },
+          });
+    // O profissional antes do dono e do criador: é quem manda plano e avaliação.
+    const quem = [...equipe].sort(
+      (a, b) => TEAM_ROLES.indexOf(a.role) - TEAM_ROLES.indexOf(b.role),
+    )[0];
+    const nome = quem
+      ? (quem.displayName ?? quem.user.nickname ?? quem.user.name).trim().split(/\s+/)[0]!
+      : null;
+    return {
+      preferences,
+      quietHours,
+      team: nome ? { name: nome } : null,
+      community: vinculos[0] ? { name: vinculos[0].group.name } : null,
+    };
+  }
+
+  async quietHours(userId: string): Promise<QuietHoursView> {
+    const u = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { quietHoursEnabled: true, quietFrom: true, quietTo: true },
+    });
+    const q = u
+      ? { enabled: u.quietHoursEnabled, from: u.quietFrom, to: u.quietTo }
+      : DEFAULT_QUIET;
+    return { enabled: q.enabled, from: formatClock(q.from), to: formatClock(q.to) };
+  }
+
+  /** Muda só o que veio. Início e fim iguais não é janela: recusa. */
+  async setQuietHours(
+    userId: string,
+    input: { enabled?: boolean; from?: string; to?: string },
+  ): Promise<QuietHoursView> {
+    const minuto = (v: string | undefined, campo: string) => {
+      if (v === undefined) return undefined;
+      const m = parseClock(v);
+      if (m === null) {
+        throw new BadRequestException(`${campo} precisa ser um horário hh:mm, de 5 em 5 minutos`);
+      }
+      return m;
+    };
+    const from = minuto(input.from, 'O início do silêncio');
+    const to = minuto(input.to, 'O fim do silêncio');
+    const atual = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { quietFrom: true, quietTo: true },
+    });
+    if ((from ?? atual.quietFrom) === (to ?? atual.quietTo)) {
+      throw new BadRequestException('O silêncio precisa começar e terminar em horários diferentes');
+    }
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(typeof input.enabled === 'boolean' ? { quietHoursEnabled: input.enabled } : {}),
+        ...(from !== undefined ? { quietFrom: from } : {}),
+        ...(to !== undefined ? { quietTo: to } : {}),
+      },
+    });
+    return this.quietHours(userId);
   }
 
   async setPreferences(
@@ -232,8 +367,18 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
    * sai na hora; os que chegam dentro da janela de `GROUP_WINDOW_MS` são
    * contados e saem juntos no fim dela (`flushGrouped`), com `grouped(n)`.
    */
-  notifyGrouped(userId: string, key: string, notice: Notice, community: string): void {
-    this.track(this.deliverGrouped(userId, key, notice, community), notice.kind);
+  /**
+   * `actor` é o nome de quem agiu: o fechamento da janela de reações diz
+   * "Helena e mais 3 reagiram ao seu post" com o último (Ex-06).
+   */
+  notifyGrouped(
+    userId: string,
+    key: string,
+    notice: Notice,
+    community: string,
+    actor?: string,
+  ): void {
+    this.track(this.deliverGrouped(userId, key, notice, community, actor ?? null), notice.kind);
   }
 
   private async deliverGrouped(
@@ -241,19 +386,20 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
     key: string,
     notice: Notice,
     community: string,
+    actor: string | null,
   ): Promise<void> {
     const agora = new Date();
     // Atômico: dois comentários ao mesmo tempo não mandam dois avisos.
     const contado = await this.prisma.pendingNotice.updateMany({
       where: { key, userId, windowEndsAt: { gt: agora } },
-      data: { count: { increment: 1 } },
+      data: { count: { increment: 1 }, ...(actor ? { actor } : {}) },
     });
     if (contado.count > 0) return;
     const windowEndsAt = new Date(agora.getTime() + GROUP_WINDOW_MS);
     await this.prisma.pendingNotice.upsert({
       where: { key_userId: { key, userId } },
-      create: { key, userId, kind: notice.kind, community, url: notice.url, windowEndsAt },
-      update: { count: 0, community, url: notice.url, windowEndsAt },
+      create: { key, userId, kind: notice.kind, community, url: notice.url, windowEndsAt, actor },
+      update: { count: 0, community, url: notice.url, windowEndsAt, actor },
     });
     await this.deliver([userId], notice);
   }
@@ -267,7 +413,7 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
     let enviados = 0;
     for (const v of vencidas) {
       if (v.count > 0) {
-        await this.deliver([v.userId], groupedNotice(v.kind, v.count, v.community, v.url));
+        await this.deliver([v.userId], groupedNotice(v.kind, v.count, v.community, v.url, v));
         enviados += 1;
       }
       await this.prisma.pendingNotice.deleteMany({
@@ -340,12 +486,40 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
         `Aviso "${notice.kind}" não entrou na central: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
-    const desligados = await this.prisma.notificationPreference.findMany({
-      where: { userId: { in: userIds }, kind: notice.kind, enabled: false },
+    // Tipo que nasce ligado: sai quem desligou. Tipo "Opcional": só quem ligou.
+    const optIn = OPT_IN_KINDS.includes(notice.kind);
+    const marcados = await this.prisma.notificationPreference.findMany({
+      where: { userId: { in: userIds }, kind: notice.kind, enabled: optIn },
       select: { userId: true },
     });
-    const fora = new Set(desligados.map((d) => d.userId));
-    const alvo = userIds.filter((id) => !fora.has(id));
+    const marcadosSet = new Set(marcados.map((d) => d.userId));
+    let alvo = userIds.filter((id) => (optIn ? marcadosSet.has(id) : !marcadosSet.has(id)));
+    // Silêncio noturno, no fuso de cada um: o aviso fica na central e não toca.
+    if (alvo.length > 0 && !IGNORA_SILENCIO.includes(notice.kind)) {
+      const agora = this.clock();
+      const quem = await this.prisma.user.findMany({
+        where: { id: { in: alvo } },
+        select: {
+          id: true,
+          timezone: true,
+          quietHoursEnabled: true,
+          quietFrom: true,
+          quietTo: true,
+        },
+      });
+      const dormindo = new Set(
+        quem
+          .filter((u) =>
+            inQuietHours(localClock(agora, u.timezone).minute, {
+              enabled: u.quietHoursEnabled,
+              from: u.quietFrom,
+              to: u.quietTo,
+            }),
+          )
+          .map((u) => u.id),
+      );
+      alvo = alvo.filter((id) => !dormindo.has(id));
+    }
     if (alvo.length === 0) return;
     const devices = await this.prisma.userDevice.findMany({
       where: { userId: { in: alvo } },
@@ -376,17 +550,45 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
   }
 }
 
-/** O aviso que fecha uma janela: só a contagem, nunca o que foi escrito. */
+/** Prefixo da chave de agrupamento das reações a um post. */
+export const REACTION_KEY_PREFIX = 'reaction:';
+
+/**
+ * O aviso que fecha uma janela: só a contagem e o nome da comunidade, nunca o
+ * que foi escrito (prancha Ex-06). Comentários e reações no mural têm texto
+ * próprio; o resto é "N novidades em <comunidade>".
+ */
 export function groupedNotice(
   kind: NotificationKind,
   count: number,
   community: string,
   url: string,
+  window: { key?: string; actor?: string | null } = {},
 ): Notice {
+  if (kind === NotificationKind.FEED && window.key?.startsWith(REACTION_KEY_PREFIX)) {
+    const { actor } = window;
+    const title = !actor
+      ? count === 1
+        ? 'Mais 1 reação no seu post'
+        : `Mais ${count} reações no seu post`
+      : count === 1
+        ? `${actor} reagiu ao seu post`
+        : `${actor} e mais ${count - 1} reagiram ao seu post`;
+    return { kind, title, body: `No mural de ${community}.`, url };
+  }
+  if (kind === NotificationKind.FEED) {
+    return {
+      kind,
+      title:
+        count === 1 ? 'Mais 1 comentário no seu post' : `Mais ${count} comentários no seu post`,
+      body: `No mural de ${community}.`,
+      url,
+    };
+  }
   return {
     kind,
-    title: count === 1 ? 'Mais 1 comentário no seu post' : `Mais ${count} comentários no seu post`,
-    body: `No mural de ${community}.`,
+    title: count === 1 ? `1 novidade em ${community}` : `${count} novidades em ${community}`,
+    body: 'Toque para ver.',
     url,
   };
 }

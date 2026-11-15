@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { deviceLabel, notificationTarget, vapidKeyBytes } from '../notifications';
+import {
+  deviceLabel,
+  NOTIFICATION_KINDS,
+  notificationGroups,
+  notificationPreview,
+  notificationTarget,
+  vapidKeyBytes,
+  type NotificationPreferences,
+} from '../notifications';
 
 describe('avisos no celular (helpers)', () => {
   it('o toque leva às telas da comunidade e ao convite', () => {
@@ -49,5 +57,60 @@ describe('vapidKeyBytes', () => {
     // "Fatia?" em base64 é "RmF0aWE/", em base64url sem "=" é "RmF0aWE_".
     expect(Array.from(vapidKeyBytes('RmF0aWE_'))).toEqual([70, 97, 116, 105, 97, 63]);
     expect(Array.from(vapidKeyBytes('YQ'))).toEqual([97]);
+  });
+});
+
+describe('tela de Notificações (prancha Al-V4, #389)', () => {
+  const tudo = Object.fromEntries(
+    NOTIFICATION_KINDS.map((k) => [k, true]),
+  ) as NotificationPreferences;
+
+  it('três grupos, na ordem da prancha; "Da sua equipe" só com equipe', () => {
+    const com = notificationGroups({ team: { name: 'Helena' } });
+    expect(com.map((g) => [g.title, g.detail])).toEqual([
+      ['Da sua equipe', 'Helena'],
+      ['Comunidade', null],
+      ['Opcional', null],
+    ]);
+    expect(com[0]!.items.map((i) => i.kind)).toEqual([
+      'PLAN_RECEIVED',
+      'ASSESSMENT_REQUESTED',
+      'QUESTIONNAIRE',
+    ]);
+    expect(com[1]!.items.map((i) => i.kind)).toEqual([
+      'COMMUNITY',
+      'ANNOUNCEMENTS',
+      'SCHEDULE',
+      'SCHEDULE_REMINDER',
+      'CHALLENGES',
+      'FEED',
+      'MODERATION',
+      'CHAT',
+    ]);
+    expect(com[2]!.items.map((i) => i.label)).toEqual(['Aniversário']);
+    expect(notificationGroups({ team: null }).map((g) => g.title)).toEqual([
+      'Comunidade',
+      'Opcional',
+    ]);
+  });
+
+  it('a prévia segue o que está ligado, com a equipe e a comunidade de verdade', () => {
+    const ctx = { team: { name: 'Helena' }, community: { name: 'Academia Demo' } };
+    expect(notificationPreview(tudo, ctx)).toBe(
+      'Helena enviou um plano novo · 5 novidades em Academia Demo',
+    );
+    expect(notificationPreview({ ...tudo, PLAN_RECEIVED: false }, ctx)).toBe(
+      '5 novidades em Academia Demo',
+    );
+    expect(notificationPreview({ ...tudo, PLAN_RECEIVED: false, COMMUNITY: false }, ctx)).toBe(
+      'Sua resposta do chat está pronta',
+    );
+    const nada = Object.fromEntries(
+      NOTIFICATION_KINDS.map((k) => [k, false]),
+    ) as NotificationPreferences;
+    expect(notificationPreview(nada, ctx)).toBe('Tudo desligado');
+    expect(notificationPreview(tudo, { team: null, community: null })).toBe(
+      '5 novidades na sua comunidade',
+    );
   });
 });

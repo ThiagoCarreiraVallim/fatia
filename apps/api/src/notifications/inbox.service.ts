@@ -9,8 +9,11 @@ export const INBOX_LIST_LIMIT = 50;
 /** Ids por chamada de "marcar como lido". */
 export const INBOX_MARK_MAX = 100;
 
-/** A resposta do chat pronta é aviso de momento; não fica na central. */
-const FORA_DA_CENTRAL: readonly NotificationKind[] = ['CHAT'];
+/**
+ * A resposta do chat pronta e o lembrete pessoal (#389) são avisos de momento:
+ * não ficam na central. O lembrete que passou não é novidade para rever depois.
+ */
+const FORA_DA_CENTRAL: readonly NotificationKind[] = ['CHAT', 'REMINDERS'];
 
 export type InboxItem = Pick<
   InboxNotice,

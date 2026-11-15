@@ -60,3 +60,40 @@ Três riscos:
   a plataforma e as datas.
 - Produção precisa de `PUSH_ENABLED=true` no compose e do projeto EAS (`EAS_PROJECT_ID`) no build
   do app; sem o projeto, o app diz que esta versão não recebe avisos.
+
+## Emenda: lembretes, tipos novos e silêncio noturno (#389, 2026-11-15)
+
+As pranchas `Al-V2`…`Al-V4` e `Ex-06` mudaram três pontos da decisão acima; onde a issue e a
+prancha divergiram, valeu a prancha.
+
+- **Treze tipos, em três grupos.** Entraram `PLAN_RECEIVED`, `ASSESSMENT_REQUESTED`,
+  `QUESTIONNAIRE` ("Da sua equipe", que só aparece para quem está numa comunidade com equipe e
+  leva o nome de quem atende), `ANNOUNCEMENTS`, `SCHEDULE`, `SCHEDULE_REMINDER` (Comunidade),
+  `BIRTHDAY` (Opcional) e `REMINDERS` (os lembretes pessoais, sem chave própria: cada lembrete
+  liga e desliga o seu). O enum ganhou os valores agora; quem **emite** cada tipo novo chega com a
+  tela dona dele (plano recebido, #383 avaliação, #391 questionário, #394 comunicados, #397
+  agenda). Até lá a chave existe e nada é enviado por ela.
+- **O item 3 deixa de valer para o Opcional.** `BIRTHDAY` nasce desligado: sem linha gravada,
+  não envia (`OPT_IN_KINDS`). Os outros continuam ligados por padrão.
+- **Silêncio noturno.** `User.quietHoursEnabled/quietFrom/quietTo` (padrão ligado, 22:00–07:00,
+  no fuso da pessoa). Dentro da janela o push não sai, mas o aviso continua indo para a central
+  do sino (#373). A resposta do chat (`CHAT`) ignora o silêncio: a pessoa acabou de pedir.
+- **Avisos agrupados sem conteúdo** (`Ex-06`): a novidade da comunidade sai como "5 novidades em
+  <comunidade>" / "Toque para ver."; o comentário no mural mantém "Mais N comentários no seu
+  post". "Sua denúncia foi revisada pela equipe" avisa quem denunciou, pelo tipo `MODERATION`.
+  A reação nova a um post (`FEED`, "Reações e comentários nos seus posts") avisa o autor
+  ("Bia reagiu ao seu post"); as seguintes na janela saem juntas com o nome de quem reagiu por
+  último ("Helena e mais 3 reagiram ao seu post", `PendingNotice.actor`). Trocar o emoji ou
+  reagir ao próprio post não avisa.
+- **Lembretes pessoais** (`Reminder`): água, refeição, peso, treino e passos, por intervalo
+  ("a cada 2 h, das 8h às 20h") ou horários fixos, com os dias da semana. Quem envia é o
+  **servidor** (`ReminderJob`, a cada minuto, no fuso da pessoa), não o aparelho: assim o mesmo
+  lembrete chega ao celular e ao navegador, respeita o silêncio e **não sai se já foi feito**
+  (água na meta ou registrada no intervalo, a refeição daquele horário, o peso do dia, o treino
+  começado, os passos acima da meta). Até 12 lembretes por dia e 30 regras por pessoa. O texto não
+  tem número ("Hora da água", "Hora do almoço"); vários no mesmo minuto viram "2 lembretes agora".
+  O lembrete de hábito (`HABIT`, `Al-V3c`) tem o valor no enum e é recusado pela API até os
+  hábitos existirem (#390).
+- **A tela de Notificações não lista mais os celulares** nem tem a chave "Avisos neste celular":
+  a prancha não mostra. Ligar os avisos virou o "Liberar" da faixa "Notificações bloqueadas" em
+  Lembretes; desligar é pelo sistema (ou saindo da conta, que apaga o aparelho).
