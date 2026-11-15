@@ -126,13 +126,13 @@ export default function PlansPage() {
       ))}
 
       <ShortcutLink
-        href="/community"
+        href="/workout/templates"
         icon={<Users size={20} aria-hidden />}
         title="Modelos das comunidades"
         subtitle="planos prontos dos seus grupos"
       />
       <ShortcutLink
-        href="/workout#bloco"
+        href="/workout/block"
         icon={<Layers size={20} aria-hidden />}
         title="Bloco de semanas"
         subtitle="organize força, volume e deload"

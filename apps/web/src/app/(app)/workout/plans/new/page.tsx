@@ -141,7 +141,7 @@ export default function NewPlanPage() {
       </section>
 
       <Link
-        href="/community"
+        href="/workout/templates"
         className="anim-press flex items-center gap-3 rounded-card px-4 py-3.5 shadow-[inset_0_0_0_1.5px_hsl(var(--border-strong))]"
       >
         <Layers size={20} aria-hidden className="text-muted-foreground" />

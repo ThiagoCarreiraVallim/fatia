@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, Heart, History, Plus, Zap } from 'lucide-react';
+import { CalendarDays, ChevronRight, Heart, History, Plus, Zap } from 'lucide-react';
 import {
   blockRow,
   dayOfMonth,
@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import { BlockTimeline } from './block-timeline';
 import { useStartSession, WorkoutCardsCarousel } from './cards/workout-cards';
 import { groupTone } from './group-tone';
+import { ReceivedOfferNotice } from './received-offer-notice';
 
 const sectionTitle = 'font-display text-[17px] font-semibold text-foreground';
 
@@ -354,6 +355,9 @@ export function WorkoutHome({ onCardio }: { onCardio: () => void }) {
   return (
     <div className="space-y-6 px-5 pt-2 pb-4">
       <TabHeader title="Treino">
+        <Link href="/workout/agenda" aria-label="Agenda" className={headerButtonClass()}>
+          <CalendarDays size={20} aria-hidden />
+        </Link>
         <Link href="/workout/history" aria-label="Histórico" className={headerButtonClass()}>
           <History size={20} aria-hidden />
         </Link>
@@ -362,7 +366,7 @@ export function WorkoutHome({ onCardio }: { onCardio: () => void }) {
         </Link>
       </TabHeader>
 
-      {/* TODO(#379): aviso de plano recebido da equipe entra aqui, acima da semana. */}
+      <ReceivedOfferNotice />
 
       {muscles.data?.week && <WeekStrip week={muscles.data.week} />}
 

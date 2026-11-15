@@ -1,7 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BlockPreview, TrainingBlock, TrainingBlockWeek } from '@fatia/api-client';
 
@@ -10,7 +9,10 @@ const ctx = vi.hoisted(() => ({
   push: vi.fn(),
 }));
 vi.mock('sonner', () => ({ toast: ctx.toast }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: ctx.push }) }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: ctx.push }),
+  usePathname: () => '/workout/block',
+}));
 vi.mock('@/components/workout/block-timeline', () => ({
   BlockTimeline: () => <p>linha do bloco em andamento</p>,
 }));
@@ -103,7 +105,9 @@ describe('Bloco de treino (Al-T12)', () => {
     api.latest.mockResolvedValue(null);
     renderPage();
     expect(await screen.findByText('Acúmulo 1')).toBeInTheDocument();
-    expect(api.preview).toHaveBeenCalledWith(expect.objectContaining({ weeks: 4, kind: 'hypertrophy' }));
+    expect(api.preview).toHaveBeenCalledWith(
+      expect.objectContaining({ weeks: 4, kind: 'hypertrophy' }),
+    );
     expect(screen.getByText('Deload')).toBeInTheDocument();
     expect(screen.getAllByText('intensidade 100% · volume 100%')).toHaveLength(3);
     expect(screen.getByText('intensidade 85% · volume 50%')).toBeInTheDocument();
@@ -118,12 +122,16 @@ describe('Bloco de treino (Al-T12)', () => {
     await userEvent.click(screen.getByRole('button', { name: '6 semanas' }));
     await userEvent.click(screen.getByRole('radio', { name: 'Força' }));
     await waitFor(() =>
-      expect(api.preview).toHaveBeenLastCalledWith(expect.objectContaining({ weeks: 6, kind: 'strength' })),
+      expect(api.preview).toHaveBeenLastCalledWith(
+        expect.objectContaining({ weeks: 6, kind: 'strength' }),
+      ),
     );
     expect(await screen.findByText('Acúmulo 5')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Começar bloco de 6 semanas' }));
     await waitFor(() =>
-      expect(api.create).toHaveBeenCalledWith(expect.objectContaining({ weeks: 6, kind: 'strength' })),
+      expect(api.create).toHaveBeenCalledWith(
+        expect.objectContaining({ weeks: 6, kind: 'strength' }),
+      ),
     );
     await waitFor(() => expect(ctx.push).toHaveBeenCalledWith('/workout'));
   });

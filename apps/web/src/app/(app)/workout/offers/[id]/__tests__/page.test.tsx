@@ -13,6 +13,7 @@ vi.mock('sonner', () => ({ toast: ctx.toast }));
 vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'o1' }),
   useRouter: () => ({ push: ctx.push }),
+  usePathname: () => '/workout/offers/o1',
 }));
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
@@ -42,7 +43,13 @@ vi.mock('@fatia/api-client', async () => {
   const actual = await vi.importActual<typeof import('@fatia/api-client')>('@fatia/api-client');
   return {
     ...actual,
-    planOffersApi: { list: vi.fn(), get: vi.fn(), accept: vi.fn(), decline: vi.fn(), undoDecline: vi.fn() },
+    planOffersApi: {
+      list: vi.fn(),
+      get: vi.fn(),
+      accept: vi.fn(),
+      decline: vi.fn(),
+      undoDecline: vi.fn(),
+    },
     workoutApi: { ...actual.workoutApi, startSession: vi.fn() },
   };
 });
@@ -137,7 +144,9 @@ describe('Plano recebido (Al-T2, Al-T2b)', () => {
 
   it('flexível: sem datas', async () => {
     api.get.mockResolvedValue(
-      offer({ shown: version({ schedule: 'FLEXIBLE', startDate: null, endDate: null, weeks: null }) }),
+      offer({
+        shown: version({ schedule: 'FLEXIBLE', startDate: null, endDate: null, weeks: null }),
+      }),
     );
     renderPage();
     expect(await screen.findByText('Flexível')).toBeInTheDocument();
@@ -147,7 +156,11 @@ describe('Plano recebido (Al-T2, Al-T2b)', () => {
   it('aceitar pergunta antes e manda a versão que está na tela', async () => {
     api.get.mockResolvedValue(offer());
     api.accept.mockResolvedValue(
-      offer({ shown: version({ status: 'ACCEPTED' }), planId: 'p9', accepted: { id: 'v1', version: 1, planId: 'p9' } }),
+      offer({
+        shown: version({ status: 'ACCEPTED' }),
+        planId: 'p9',
+        accepted: { id: 'v1', version: 1, planId: 'p9' },
+      }),
     );
     renderPage();
     await userEvent.click(await screen.findByRole('button', { name: 'Aceitar plano' }));
@@ -165,7 +178,9 @@ describe('Plano recebido (Al-T2, Al-T2b)', () => {
     renderPage();
     await userEvent.click(await screen.findByRole('button', { name: /Começar agora/ }));
     await waitFor(() =>
-      expect(workoutApi.startSession).toHaveBeenCalledWith(expect.objectContaining({ planId: 'p9' })),
+      expect(workoutApi.startSession).toHaveBeenCalledWith(
+        expect.objectContaining({ planId: 'p9' }),
+      ),
     );
     await waitFor(() => expect(ctx.push).toHaveBeenCalledWith('/workout'));
   });
@@ -221,7 +236,9 @@ describe('Plano recebido (Al-T2, Al-T2b)', () => {
         }),
       }),
     );
-    api.decline.mockResolvedValue(offer({ kind: 'update', shown: version({ id: 'v2', version: 2, status: 'DECLINED' }) }));
+    api.decline.mockResolvedValue(
+      offer({ kind: 'update', shown: version({ id: 'v2', version: 2, status: 'DECLINED' }) }),
+    );
     renderPage();
     expect(await screen.findByRole('heading', { name: 'Inferior v2' })).toBeInTheDocument();
     expect(screen.getByText('1 novo · 1 alterado · 1 removido')).toBeInTheDocument();

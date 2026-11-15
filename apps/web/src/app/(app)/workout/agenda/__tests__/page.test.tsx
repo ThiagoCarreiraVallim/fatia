@@ -10,7 +10,10 @@ const ctx = vi.hoisted(() => ({
   push: vi.fn(),
 }));
 vi.mock('sonner', () => ({ toast: ctx.toast }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: ctx.push }) }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: ctx.push }),
+  usePathname: () => '/workout/agenda',
+}));
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
     <a href={href} {...rest}>
