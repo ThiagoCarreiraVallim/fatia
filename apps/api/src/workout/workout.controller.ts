@@ -20,7 +20,7 @@ import { ExerciseService } from './exercise.service';
 import { PrescriptionService } from './prescription.service';
 import { TrainingBlockService } from './training-block.service';
 import { MuscleSummaryService } from './muscle-summary.service';
-import { CreateTrainingBlockDto } from './dto/training-block.dto';
+import { CreateTrainingBlockDto, TrainingBlockPreviewDto } from './dto/training-block.dto';
 import {
   AddPlanExerciseDto,
   AddPlanExercisesDto,
@@ -62,6 +62,18 @@ export class WorkoutController {
   @Get('blocks/active')
   getActiveBlock(@CurrentUser() user: CurrentUserPayload) {
     return this.blocks.getActive({ userId: user.id, timezone: user.timezone });
+  }
+
+  /** As semanas do bloco antes de criar (Al-T12, #379). */
+  @Get('blocks/preview')
+  previewBlock(@CurrentUser() user: CurrentUserPayload, @Query() q: TrainingBlockPreviewDto) {
+    return this.blocks.preview({ userId: user.id, timezone: user.timezone }, q);
+  }
+
+  /** O bloco mais recente, em qualquer estado (Al-T12, #379). */
+  @Get('blocks/latest')
+  latestBlock(@CurrentUser() user: CurrentUserPayload) {
+    return this.blocks.latest({ userId: user.id, timezone: user.timezone });
   }
 
   @Delete('blocks/:id')

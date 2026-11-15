@@ -2,7 +2,8 @@
  * O template de periodização em blocos (#145).
  *
  * Quatro semanas lineares, deliberadamente pobres: três de acúmulo/pico e uma de
- * deload. A issue pede um modelo "simples e explicável — que o usuário entenda
+ * deload. Desde a #379 o bloco vai de 3 a 6 semanas (`blockTemplate`), com os
+ * mesmos três focos; a tabela de 4 abaixo continua sendo o padrão. A issue pede um modelo "simples e explicável — que o usuário entenda
  * por que a semana é aquela" antes de qualquer coisa mais elaborada, e uma tabela
  * de quatro linhas cabe na frase que a tela mostra.
  *
@@ -27,7 +28,60 @@ export interface BlockWeekTemplate {
   volumeFactor: number;
 }
 
+/** O bloco padrão, e o único que existia antes da #379. */
 export const BLOCK_WEEKS_TOTAL = 4;
+
+/** De 3 a 6 semanas, a última sempre de deload (#379). */
+export const MIN_BLOCK_WEEKS = 3;
+export const MAX_BLOCK_WEEKS = 6;
+
+const DELOAD = { intensityFactor: 0.85, volumeFactor: 0.5 } as const;
+/** Quanto a carga sobe por semana de treino, até o pico. */
+const INTENSITY_STEP = 0.025;
+/** O volume do acúmulo vai de 100% a 120% ao longo das semanas de acúmulo. */
+const MAX_VOLUME_GAIN = 0.2;
+
+/** Três casas: 1.025 * 3 em ponto flutuante não é 1.075. */
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
+
+/**
+ * O bloco de N semanas (#379), com os mesmos três focos de sempre: a última é
+ * deload; antes dela, acúmulo e depois pico. Pico = metade das semanas de
+ * treino, arredondada para baixo (3 → 1, 4 → 1, 5 → 2, 6 → 2); o resto é
+ * acúmulo.
+ *
+ * A carga sobe 2,5% por semana de treino e o volume do acúmulo sobe até +20%;
+ * o pico volta o volume ao normal. Com 4 semanas a regra dá exatamente a
+ * tabela de antes (`BLOCK_TEMPLATE`), que é o que mantém iguais os blocos de 4
+ * semanas que já existem — e o teste confere número por número.
+ */
+export function blockTemplate(weeksTotal: number): BlockWeekTemplate[] {
+  if (
+    !Number.isInteger(weeksTotal) ||
+    weeksTotal < MIN_BLOCK_WEEKS ||
+    weeksTotal > MAX_BLOCK_WEEKS
+  ) {
+    throw new RangeError(`O bloco vai de ${MIN_BLOCK_WEEKS} a ${MAX_BLOCK_WEEKS} semanas.`);
+  }
+  const training = weeksTotal - 1;
+  const peaks = Math.floor(training / 2);
+  const accumulation = training - peaks;
+  const weeks: BlockWeekTemplate[] = [];
+  for (let i = 0; i < training; i++) {
+    const isAccumulation = i < accumulation;
+    weeks.push({
+      weekNumber: i + 1,
+      focus: isAccumulation ? 'accumulation' : 'peak',
+      intensityFactor: round3(1 + INTENSITY_STEP * i),
+      volumeFactor:
+        isAccumulation && accumulation > 1
+          ? round3(1 + (MAX_VOLUME_GAIN * i) / (accumulation - 1))
+          : 1.0,
+    });
+  }
+  weeks.push({ weekNumber: weeksTotal, focus: 'deload', ...DELOAD });
+  return weeks;
+}
 
 export const BLOCK_TEMPLATE: readonly BlockWeekTemplate[] = [
   { weekNumber: 1, focus: 'accumulation', intensityFactor: 1.0, volumeFactor: 1.0 },
@@ -49,6 +103,26 @@ export const REP_RANGE_BY_KIND: Readonly<Record<BlockKind, string>> = {
   hypertrophy: '8-12',
 };
 
+/**
+ * O nome da semana na tela do bloco (Al-T12): o foco, numerado quando se
+ * repete ("Acúmulo 2"). A numeração conta só as semanas do mesmo foco.
+ */
+export function weekLabel(
+  week: { weekNumber: number; focus: BlockFocus },
+  weeks: ReadonlyArray<{ weekNumber: number; focus: BlockFocus }>,
+): string {
+  const same = weeks.filter((w) => w.focus === week.focus);
+  const name = FOCUS_TITLE[week.focus];
+  if (same.length < 2) return name;
+  return `${name} ${same.findIndex((w) => w.weekNumber === week.weekNumber) + 1}`;
+}
+
+const FOCUS_TITLE: Readonly<Record<BlockFocus, string>> = {
+  accumulation: 'Acúmulo',
+  peak: 'Pico',
+  deload: 'Deload',
+};
+
 export const FOCUS_LABEL: Readonly<Record<BlockFocus, string>> = {
   accumulation: 'acúmulo',
   peak: 'pico',
@@ -65,19 +139,22 @@ export const KIND_LABEL: Readonly<Record<BlockKind, string>> = {
  * mostram a mesma coisa — e porque a explicação é o produto desta issue, não um
  * detalhe de apresentação de cada app.
  */
-export function describeWeek(week: {
-  weekNumber: number;
-  focus: BlockFocus;
-  intensityFactor: number;
-  volumeFactor: number;
-}): string {
+export function describeWeek(
+  week: {
+    weekNumber: number;
+    focus: BlockFocus;
+    intensityFactor: number;
+    volumeFactor: number;
+  },
+  weeksTotal: number = BLOCK_WEEKS_TOTAL,
+): string {
   const carga = pontosPercentuais(week.intensityFactor);
   const volume = pontosPercentuais(week.volumeFactor);
   const partes = [
     carga === 0 ? 'carga da sua prescrição' : `carga ${sinal(carga)}%`,
     volume === 0 ? 'volume normal' : `volume ${sinal(volume)}%`,
   ];
-  return `Semana ${week.weekNumber} de ${BLOCK_WEEKS_TOTAL} — ${FOCUS_LABEL[week.focus]}: ${partes.join(', ')}.`;
+  return `Semana ${week.weekNumber} de ${weeksTotal} — ${FOCUS_LABEL[week.focus]}: ${partes.join(', ')}.`;
 }
 
 /**
