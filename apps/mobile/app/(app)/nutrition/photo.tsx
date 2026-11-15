@@ -2,16 +2,17 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ApiError,
   nutritionApi,
   planHref,
+  usersApi,
   type MealRecognition,
   type MealType,
 } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
-import { Button, DrawerLayer, LoadingState } from '@/components/ui';
+import { Button, DrawerLayer, LoadingState, useActionSheet } from '@/components/ui';
 import { PhotoCapture } from '@/components/nutrition/photo-capture';
 import { RecognitionReviewDrawer } from '@/components/nutrition/recognition-review-drawer';
 import { hojeIso, mensagemDeErro } from '@/components/nutrition/helpers';
@@ -22,9 +23,10 @@ import { hojeIso, mensagemDeErro } from '@/components/nutrition/helpers';
  * Só existe no app nativo: o PWA não tem câmera nem galeria e continua na busca
  * por nome — ver `docs/MOBILE_PARITY.md`.
  *
- * **A foto não é armazenada em lugar nenhum** (ADR 004). Ela sai do aparelho,
- * é analisada e descartada; o que entra no banco são os dados estruturados que a
- * pessoa confirmar na tela seguinte. O que sai para o provedor está escrito em
+ * **A foto só fica guardada com o consentimento** (ADR 038, #374): na primeira
+ * foto o app pergunta "Guardar as fotos das refeições?" (a escolha muda em
+ * Você). Guardada, ela vai junto da refeição que a pessoa confirmar; sem o sim,
+ * ou sem refeição, é descartada. O que sai para o provedor está em
  * `docs/DATA_RETENTION.md`.
  *
  * **O reconhecimento não grava.** Ele devolve uma sugestão; quem grava é o
@@ -40,6 +42,10 @@ export default function PhotoScreen() {
   }>();
 
   const [resultado, setResultado] = useState<MealRecognition | null>(null);
+  const qc = useQueryClient();
+  const actionSheet = useActionSheet();
+  const me = useQuery({ queryKey: ['users', 'me'], queryFn: () => usersApi.me() });
+  const keepPhotos = me.data?.keepMealPhotos ?? null;
 
   const reconhecer = useMutation<MealRecognition, Error, string>({
     mutationFn: (jpegBase64) => nutritionApi.recognizeMealPhoto(jpegBase64),
@@ -47,6 +53,33 @@ export default function PhotoScreen() {
   });
 
   const dia = date ?? hojeIso();
+
+  /**
+   * Primeira foto (preferência ainda `null`): pergunta antes de mandar, porque
+   * é no reconhecimento que a foto fica guardada ou não. Fechar sem escolher
+   * não manda nada; a câmera continua aberta.
+   */
+  const recognize = (jpegBase64: string) => {
+    if (keepPhotos !== null || !me.data) {
+      reconhecer.mutate(jpegBase64);
+      return;
+    }
+    const choose = (keep: boolean) => {
+      void usersApi
+        .updateMe({ keepMealPhotos: keep })
+        .then((user) => qc.setQueryData(['users', 'me'], user))
+        .finally(() => reconhecer.mutate(jpegBase64));
+    };
+    actionSheet({
+      title: 'Guardar as fotos das refeições?',
+      description:
+        'Guardadas, ficam junto da refeição no seu diário, só para você. Dá para mudar em Você.',
+      options: [
+        { label: 'Guardar as fotos', onPress: () => choose(true) },
+        { label: 'Não guardar', onPress: () => choose(false) },
+      ],
+    });
+  };
 
   const irParaOManual = () => {
     // O registro manual é a mesma tela de nutrição de sempre. Voltar já basta:
@@ -67,7 +100,7 @@ export default function PhotoScreen() {
         <View className="flex-1 px-5 pb-4 pt-2">
           <View className="flex-1 overflow-hidden rounded-lg border border-border">
             <PhotoCapture
-              onCapturada={(base64) => reconhecer.mutate(base64)}
+              onCapturada={recognize}
               ativo={resultado === null && !reconhecer.isPending}
             />
           </View>
@@ -106,8 +139,9 @@ export default function PhotoScreen() {
               </>
             ) : !reconhecer.isPending && resultado === null ? (
               <Text className="text-center text-xs text-muted-foreground">
-                Enquadre o prato inteiro. A foto é analisada e descartada — o Fatia não guarda
-                imagem.
+                {keepPhotos === true
+                  ? 'Enquadre o prato inteiro. A foto fica guardada junto da refeição; dá para apagar só ela depois.'
+                  : 'Enquadre o prato inteiro. A foto é analisada e descartada.'}
               </Text>
             ) : null}
           </View>

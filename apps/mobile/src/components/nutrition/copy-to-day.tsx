@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { Check, ChevronLeft, ChevronRight } from 'lucide-react-native';
-import { dayLabel, shiftDay } from '@fatia/api-client';
-import { Button } from '@/components/ui';
+import { copyTargetDays, dayLabel, shiftDay } from '@fatia/api-client';
+import { Button, Chip } from '@/components/ui';
 import { colors } from '@/theme/colors';
 
 /**
@@ -13,7 +13,8 @@ import { colors } from '@/theme/colors';
  * um seletor de calendário: o caso comum é ontem → hoje ou hoje → amanhã, a um
  * ou dois toques, e o app não carrega dependência de date picker por isso.
  */
-export function CopiarParaDia({
+export function CopyToDay({
+  sourceDate,
   diaPadrao,
   hoje,
   pendente,
@@ -22,6 +23,8 @@ export function CopiarParaDia({
   onCopiar,
   onVer,
 }: {
+  /** O dia de origem: com ele, os próximos dias viram chips (prancha Al-N9). */
+  sourceDate?: string;
   diaPadrao: string;
   hoje: string;
   pendente: boolean;
@@ -36,7 +39,21 @@ export function CopiarParaDia({
 
   return (
     <View className="gap-2">
-      <Text className="text-sm font-medium text-foreground">Dia de destino</Text>
+      {sourceDate ? (
+        <View accessibilityLabel="Para" className="flex-row flex-wrap gap-1.5">
+          {copyTargetDays(sourceDate, hoje).map((day) => (
+            <Chip
+              key={day}
+              label={dayLabel(day, hoje)}
+              selected={day === dia}
+              onPress={() => setDia(day)}
+            />
+          ))}
+        </View>
+      ) : null}
+      <Text className="text-sm font-medium text-foreground">
+        {sourceDate ? 'Outro dia' : 'Dia de destino'}
+      </Text>
       <View className="flex-row items-center justify-between rounded-md border border-border p-1">
         <Pressable
           accessibilityRole="button"
