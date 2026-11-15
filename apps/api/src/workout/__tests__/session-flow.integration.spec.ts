@@ -93,6 +93,13 @@ describe('sessão de treino #377 (banco real)', () => {
     const c = await sets.create(userId, { ...corpo, clientKey: 'k2' });
     expect(c.id).not.toBe(a.id);
     expect(c.setNumber).toBe(2);
+    // A mesma chave noutro exercício não devolve a série alheia.
+    const outro = await prisma.exercise.create({
+      data: { name: `${stamp}-remada`, muscleGroup: 'costas', createdByUserId: userId },
+    });
+    await expect(sets.create(userId, { ...corpo, exerciseId: outro.id })).rejects.toThrow(
+      ConflictException,
+    );
     await prisma.workoutSession.delete({ where: { id: s.id } });
   });
 

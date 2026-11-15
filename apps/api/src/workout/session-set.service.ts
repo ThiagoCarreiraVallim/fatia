@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { rpeToFeeling } from './helpers/feeling';
@@ -89,7 +94,7 @@ export class SessionSetService {
     // antes é o caminho comum (rede que repete); o P2002 do índice único
     // (sessionId, clientKey) cobre as duas chegando juntas.
     if (clientKey) {
-      const existing = await this.findByClientKey(sessionId, clientKey);
+      const existing = await this.findByClientKey(sessionId, clientKey, exerciseId);
       if (existing) return existing;
     }
     try {
@@ -103,18 +108,27 @@ export class SessionSetService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        const existing = await this.findByClientKey(sessionId, clientKey);
+        const existing = await this.findByClientKey(sessionId, clientKey, exerciseId);
         if (existing) return existing;
       }
       throw error;
     }
   }
 
-  private findByClientKey(sessionId: string, clientKey: string) {
-    return this.prisma.sessionSet.findUnique({
+  /**
+   * A série já gravada com esta chave. Chave repetida em outro exercício não é
+   * reenvio, é cliente com defeito: devolver a série alheia faria o app mostrar
+   * a carga de um exercício no outro.
+   */
+  private async findByClientKey(sessionId: string, clientKey: string, exerciseId: number) {
+    const existing = await this.prisma.sessionSet.findUnique({
       where: { sessionId_clientKey: { sessionId, clientKey } },
       include: { exercise: true },
     });
+    if (existing && existing.exerciseId !== exerciseId) {
+      throw new ConflictException('clientKey já usada por outra série desta sessão.');
+    }
+    return existing;
   }
 
   /**
