@@ -36,8 +36,14 @@ config.resolver.disableHierarchicalLookup = false;
 // Worktrees de agentes (.claude/worktrees) e cópias locais de referência
 // (.canvas) moram dentro da raiz observada. Cada worktree tem node_modules
 // próprio que aparece e some durante o `pnpm install`, e o watcher sem
-// watchman derruba o Metro com ENOENT ao tentar observá-los.
-const ignored = [/[/\\]\.claude[/\\]/, /[/\\]\.canvas[/\\]/];
+// watchman derruba o Metro com ENOENT ao tentar observá-los. O mesmo vale para
+// os outros apps: o `nest start --watch` recria apps/api/dist enquanto o Metro
+// percorre a árvore, e o app nunca importa api, web, site ou agent.
+const ignored = [
+  /[/\\]\.claude[/\\]/,
+  /[/\\]\.canvas[/\\]/,
+  /[/\\]apps[/\\](api|web|site|agent)[/\\]/,
+];
 const blockList = config.resolver.blockList;
 config.resolver.blockList = [...(Array.isArray(blockList) ? blockList : blockList ? [blockList] : []), ...ignored];
 
