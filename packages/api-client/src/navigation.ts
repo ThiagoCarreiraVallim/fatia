@@ -302,6 +302,7 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/workout', title: 'Treino', parent: null },
   { pattern: '/workout/history', title: 'Histórico de treino', parent: '/workout' },
   { pattern: '/workout/plans', title: 'Planos de treino', parent: '/workout' },
+  { pattern: '/workout/plans/new', title: 'Novo plano', parent: '/workout/plans' },
   { pattern: '/workout/plans/:id', title: 'Plano de treino', parent: '/workout/plans' },
   { pattern: '/workout/quick/:id', title: 'Treino rápido', parent: '/workout' },
   { pattern: '/workout/session/:id', title: 'Treino', parent: '/workout/history' },

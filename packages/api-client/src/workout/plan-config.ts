@@ -5,6 +5,7 @@ import type {
   PlanTechnique,
   WorkoutPlanExercise,
 } from '../workout';
+import { MUSCLE_GROUP_LABEL } from '../community-exercises';
 import { isCardioExercise } from './is-cardio';
 
 /**
@@ -105,6 +106,17 @@ export function formatRest(seconds: number): string {
   return sec ? `${min}:${String(sec).padStart(2, '0')}` : `${min} min`;
 }
 
+/** O que a API grava quando o exercício entra sem configuração (3 × 8-12). */
+export const DEFAULT_PLAN_LINE = {
+  targetSets: 3,
+  targetReps: '8-12',
+  repUnit: 'REPS',
+  restSeconds: null,
+  cardioTarget: null,
+  cardioDurationSeconds: null,
+  cardioDistanceMeters: null,
+} as const;
+
 /** Trabalho de uma série de força, para a estimativa de minutos. */
 const WORK_SECONDS = 40;
 /** Descanso quando o plano não diz (o padrão da sessão). */
@@ -201,3 +213,51 @@ export function heartRateZones(
 /** O botão do Al-T8, que já diz quantos vão entrar. */
 export const addSelectionLabel = (n: number): string =>
   n === 0 ? 'Selecione os exercícios' : `Adicionar ${n} ${n === 1 ? 'exercício' : 'exercícios'}`;
+
+/**
+ * Cor de cada grupo na barra muscular (Al-T6/Al-T7), pelo nome do token do
+ * tema: os dois clientes resolvem o token na própria paleta.
+ */
+export type MuscleGroupTone =
+  'protein' | 'water' | 'ok' | 'steps' | 'carbs' | 'fat' | 'danger' | 'muted';
+
+const GROUP_TONE: Record<string, MuscleGroupTone> = {
+  peito: 'protein',
+  costas: 'water',
+  pernas: 'ok',
+  ombro: 'steps',
+  braço: 'carbs',
+  core: 'fat',
+  cardio: 'danger',
+};
+
+export const muscleGroupTone = (group: string): MuscleGroupTone => GROUP_TONE[group] ?? 'muted';
+
+/** "peito" → "Peito"; grupo fora da lista sai com a inicial maiúscula. */
+export const muscleGroupName = (group: string): string =>
+  (MUSCLE_GROUP_LABEL as Record<string, string>)[group] ??
+  group.charAt(0).toUpperCase() + group.slice(1);
+
+/** O texto da barra para leitor de tela: "Peito 57%, Ombro 43%". */
+export const muscleShareLabel = (share: ReturnType<typeof planMuscleShare>): string =>
+  share.map((s) => `${muscleGroupName(s.group)} ${s.percent}%`).join(', ');
+
+/** "6 exercícios · 19 séries · ~49 min" — a linha do card do plano. */
+export function planSummaryLine(lines: ReadonlyArray<Line>): string {
+  const sets = lines.reduce((acc, pe) => acc + pe.targetSets, 0);
+  const n = lines.length;
+  return `${n} ${n === 1 ? 'exercício' : 'exercícios'} · ${sets} ${sets === 1 ? 'série' : 'séries'} · ~${estimatePlanMinutes(lines)} min`;
+}
+
+/** "feito 12 vezes · último há 4 dias" — o histórico no topo do plano (Al-T7). */
+export function planHistoryLine(
+  timesDone: number,
+  lastDoneAt: string | null,
+  now: Date = new Date(),
+): string {
+  if (!timesDone || !lastDoneAt) return 'ainda não feito';
+  const day = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((day(now) - day(new Date(lastDoneAt))) / 86_400_000);
+  const when = days <= 0 ? 'hoje' : days === 1 ? 'ontem' : `há ${days} dias`;
+  return `feito ${timesDone} ${timesDone === 1 ? 'vez' : 'vezes'} · último ${when}`;
+}

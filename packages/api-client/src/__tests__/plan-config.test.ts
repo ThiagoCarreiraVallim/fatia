@@ -12,6 +12,11 @@ import {
   repRangeError,
   splitRepRange,
   joinRepRange,
+  muscleGroupName,
+  muscleGroupTone,
+  muscleShareLabel,
+  planSummaryLine,
+  planHistoryLine,
 } from '../workout/plan-config';
 import { ageFromBirthDate } from '../onboarding';
 
@@ -110,6 +115,36 @@ describe('resumo do plano (Al-T7)', () => {
     expect(
       cardioTargetSummary({ cardioTarget: 'TIME', cardioDurationSeconds: 1200 } as never),
     ).toBe('20 min');
+  });
+});
+
+describe('barra muscular e linha do card (Al-T6)', () => {
+  it('nomeia, colore e descreve os grupos; resume o plano numa linha', () => {
+    expect(muscleGroupName('ombro')).toBe('Ombro');
+    expect(muscleGroupName('glúteo')).toBe('Glúteo');
+    expect(muscleGroupTone('costas')).toBe('water');
+    expect(muscleGroupTone('outro')).toBe('muted');
+    expect(
+      muscleShareLabel([
+        { group: 'peito', sets: 4, percent: 57 },
+        { group: 'ombro', sets: 3, percent: 43 },
+      ]),
+    ).toBe('Peito 57%, Ombro 43%');
+    expect(planSummaryLine([pe({ targetSets: 1, restSeconds: 20 })])).toBe(
+      '1 exercício · 1 série · ~1 min',
+    );
+  });
+});
+
+describe('histórico do plano (Al-T7)', () => {
+  it('diz quantas vezes e há quanto tempo, em dias de calendário', () => {
+    const now = new Date('2026-11-15T10:00:00');
+    expect(planHistoryLine(12, '2026-11-11T20:00:00', now)).toBe(
+      'feito 12 vezes · último há 4 dias',
+    );
+    expect(planHistoryLine(1, '2026-11-15T07:00:00', now)).toBe('feito 1 vez · último hoje');
+    expect(planHistoryLine(2, '2026-11-14T23:00:00', now)).toBe('feito 2 vezes · último ontem');
+    expect(planHistoryLine(0, null, now)).toBe('ainda não feito');
   });
 });
 
