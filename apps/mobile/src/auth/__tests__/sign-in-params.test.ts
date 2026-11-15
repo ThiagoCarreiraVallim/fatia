@@ -6,7 +6,26 @@ describe('parâmetros do login (Onb-01a/01b)', () => {
     expect(signInExtraParams('https://api', {})).toEqual({ resource: 'https://api' });
     expect(
       signInExtraParams('https://api', { firstScreen: 'register', loginHint: ' ana@email.com ' }),
-    ).toEqual({ resource: 'https://api', first_screen: 'register', login_hint: 'ana@email.com' });
+    ).toEqual({
+      resource: 'https://api',
+      first_screen: 'register',
+      login_hint: 'ana@email.com',
+      prompt: 'login consent',
+    });
+  });
+
+  it('criar conta ou entrar com e-mail ignora a sessão aberta no navegador', () => {
+    // Sem `prompt=login` o Logto reaproveita a sessão do Custom Tab e "Criar
+    // conta" entrava direto na conta que já estava lá.
+    expect(signInExtraParams('https://api', { firstScreen: 'register' }).prompt).toBe(
+      'login consent',
+    );
+    expect(signInExtraParams('https://api', { loginHint: 'bia@email.com' }).prompt).toBe(
+      'login consent',
+    );
+    // Google/Apple e o "Entrar" sem e-mail seguem reaproveitando a sessão.
+    expect(signInExtraParams('https://api', { social: 'google' })).not.toHaveProperty('prompt');
+    expect(signInExtraParams('https://api', {})).not.toHaveProperty('prompt');
   });
 
   it('Google e Apple vão direto ao conector social', () => {
