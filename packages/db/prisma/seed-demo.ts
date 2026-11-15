@@ -533,6 +533,7 @@ async function seedCommunity(demoUserId: string) {
   });
 
   const conteudo = await seedCommunityContent(group.id, dona.id, profissional.id);
+  const planoAlimentar = await seedNutritionPlan(demoUserId, profissional.id, group.id);
   const catalogo = await seedCommunityExercises(group.id, dona.id, profissional.id);
   const agente = await seedCommunityAgent(group.id);
   const desafios = await seedCommunityChallenges(group.id, dona.id, [
@@ -553,7 +554,7 @@ async function seedCommunity(demoUserId: string) {
   // O demo entra pelo E2E: nenhuma associação (o assento cai junto, em cascata).
   await prisma.groupMembership.deleteMany({ where: { groupId: group.id, userId: demoUserId } });
   console.log(
-    `  ✓ Comunidade "${group.name}" (${COMMUNITY_SLUG}): dona ${dona.email}, 1 profissional, ${membros.length} membros, ${PENDING_REQUESTS.length} pedidos, ${sessoes.length} treinos, ${COMMUNITY_SEATS} assentos, ${conteudo}, ${catalogo}, ${agente}, ${desafios}, ${mural}.`,
+    `  ✓ Comunidade "${group.name}" (${COMMUNITY_SLUG}): dona ${dona.email}, 1 profissional, ${membros.length} membros, ${PENDING_REQUESTS.length} pedidos, ${sessoes.length} treinos, ${COMMUNITY_SEATS} assentos, ${conteudo}, ${planoAlimentar}, ${catalogo}, ${agente}, ${desafios}, ${mural}.`,
   );
 }
 
@@ -953,6 +954,228 @@ async function seedCommunityFeed(
     ],
   });
   return '5 posts no mural (1 fixado, 1 denunciado)';
+}
+
+/** Um alimento do plano: nome na TACO, gramas e a medida caseira que a tela mostra. */
+type PlanFood = [name: string, grams: number, portion?: [label: string, quantity: number]];
+
+/** Plano alimentar da Helena para o demo (#376), como nas pranchas Al-N5/N5b/N5c. */
+const DEMO_PLAN: {
+  goals: Record<
+    | 'kcalMin'
+    | 'kcalMax'
+    | 'proteinMinG'
+    | 'proteinMaxG'
+    | 'carbsMinG'
+    | 'carbsMaxG'
+    | 'fatMinG'
+    | 'fatMaxG',
+    number
+  >;
+  meals: Array<{
+    mealType: MealType;
+    name: string;
+    options: Array<Array<{ food: PlanFood; group?: string; equivalents?: PlanFood[] }>>;
+  }>;
+} = {
+  goals: {
+    kcalMin: 1760,
+    kcalMax: 1920,
+    proteinMinG: 130,
+    proteinMaxG: 150,
+    carbsMinG: 175,
+    carbsMaxG: 205,
+    fatMinG: 52,
+    fatMaxG: 64,
+  },
+  meals: [
+    {
+      mealType: 'BREAKFAST',
+      name: 'Café da manhã',
+      options: [
+        [
+          {
+            food: ['Pão, trigo, forma, integral', 50, ['fatia', 2]],
+            group: 'Carboidrato',
+            equivalents: [
+              ['Polvilho, doce', 40, ['col. de sopa de goma', 2]],
+              ['Aveia, flocos, crua', 30, ['col. de sopa', 4]],
+              ['Cuscuz, de milho, cozido com sal', 80, ['fatia', 1]],
+              ['Pão, trigo, francês', 50, ['unidade', 1]],
+            ],
+          },
+          {
+            food: ['Ovo, de galinha, inteiro, cozido/10minutos', 100, ['unidade', 2]],
+            group: 'Proteína',
+            equivalents: [
+              ['Iogurte, natural', 170, ['pote', 1]],
+              ['Frango, peito, sem pele, grelhado', 60, ['filé pequeno', 1]],
+            ],
+          },
+          { food: ['Mamão, Papaia, cru', 100, ['fatia média', 1]] },
+        ],
+      ],
+    },
+    {
+      mealType: 'LUNCH',
+      name: 'Almoço',
+      options: [
+        [
+          { food: ['Arroz, tipo 1, cozido', 120, ['col. de servir', 3]] },
+          { food: ['Feijão, carioca, cozido', 80, ['concha', 1]] },
+          {
+            food: ['Frango, peito, sem pele, grelhado', 120, ['filé', 1]],
+            group: 'Proteína',
+            equivalents: [['Carne, bovina, acém, moído, cozido', 110, ['col. de servir', 3]]],
+          },
+          { food: ['Alface, crespa, crua', 30, ['prato de sobremesa', 1]] },
+        ],
+        [
+          { food: ['Macarrão, trigo, cru', 70] },
+          { food: ['Carne, bovina, acém, moído, cozido', 120, ['col. de servir', 3]] },
+          { food: ['Tomate, com semente, cru', 60] },
+        ],
+        [
+          { food: ['Pintado, grelhado', 150, ['posta', 1]] },
+          { food: ['Batata, inglesa, cozida', 150] },
+          { food: ['Salada, de legumes, cozida no vapor', 100] },
+        ],
+      ],
+    },
+    {
+      mealType: 'SNACK',
+      name: 'Lanche',
+      options: [
+        [
+          {
+            food: ['Iogurte, natural', 170, ['pote', 1]],
+            group: 'Laticínio',
+            equivalents: [['Banana, prata, crua', 100, ['unidade', 1]]],
+          },
+          { food: ['Aveia, flocos, crua', 20, ['col. de sopa', 2]] },
+        ],
+      ],
+    },
+    {
+      mealType: 'DINNER',
+      name: 'Jantar',
+      options: [
+        [
+          { food: ['Salmão, sem pele, fresco, grelhado', 120, ['filé', 1]] },
+          { food: ['Arroz, integral, cozido', 100, ['col. de servir', 2]] },
+          { food: ['Brócolis, cozido', 80] },
+        ],
+      ],
+    },
+  ],
+};
+
+/**
+ * O plano alimentar da Helena para o demo (#376): o v1, em uso desde três
+ * semanas atrás, e o v2, esperando o aceite — é o roteiro do critério de pronto. O
+ * editor da equipe é a #407; aqui o plano entra direto, com os macros da TACO.
+ * O demo não está na comunidade, então a troca "fica só no diário" até ele
+ * entrar com Alimentação liberada.
+ */
+async function seedNutritionPlan(demoUserId: string, helenaId: string, groupId: string) {
+  await prisma.nutritionPlan.deleteMany({ where: { userId: demoUserId } });
+  // As refeições salvas que um aceite anterior criou saem com o plano.
+  await prisma.mealTemplate.deleteMany({
+    where: { userId: demoUserId, name: { contains: '(plano v' } },
+  });
+
+  const names = new Set<string>();
+  for (const meal of DEMO_PLAN.meals)
+    for (const option of meal.options)
+      for (const item of option) {
+        names.add(item.food[0]);
+        for (const eq of item.equivalents ?? []) names.add(eq[0]);
+      }
+  const foods = await prisma.food.findMany({
+    where: { name: { in: [...names] }, source: 'TACO' },
+  });
+  const byName = new Map(foods.map((f) => [f.name, f]));
+  const missing = [...names].filter((n) => !byName.has(n));
+  if (missing.length > 0) {
+    console.warn(`  ⚠ plano alimentar: fora da TACO, ignorados: ${missing.join('; ')}`);
+  }
+
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const snapshot = ([name, grams, portion]: PlanFood) => {
+    const f = byName.get(name)!;
+    const k = grams / 100;
+    return {
+      foodId: f.id,
+      groupId: f.groupId,
+      foodName: f.name,
+      grams,
+      kcal: round2(f.kcalPer100g * k),
+      proteinG: round2(f.proteinPer100g * k),
+      carbsG: round2(f.carbsPer100g * k),
+      fatG: round2(f.fatPer100g * k),
+      portionLabel: portion?.[0] ?? null,
+      portionQuantity: portion?.[1] ?? null,
+    };
+  };
+  const meals = DEMO_PLAN.meals.map((meal, mealPos) => ({
+    mealType: meal.mealType,
+    name: meal.name,
+    position: mealPos,
+    options: {
+      create: meal.options.map((items, optionPos) => ({
+        position: optionPos,
+        items: {
+          create: items
+            .filter((item) => byName.has(item.food[0]))
+            .map((item, itemPos) => ({
+              ...snapshot(item.food),
+              position: itemPos,
+              equivalenceGroup: item.group ?? null,
+              equivalents: {
+                create: (item.equivalents ?? [])
+                  .filter((eq) => byName.has(eq[0]))
+                  .map((eq, eqPos) => ({ ...snapshot(eq), position: eqPos })),
+              },
+            })),
+        },
+      })),
+    },
+  }));
+
+  const v1Goals = {
+    ...DEMO_PLAN.goals,
+    kcalMin: 1800,
+    kcalMax: 2000,
+    carbsMinG: 190,
+    carbsMaxG: 230,
+  };
+  await prisma.nutritionPlan.create({
+    data: {
+      userId: demoUserId,
+      authorId: helenaId,
+      groupId,
+      version: 1,
+      status: 'ACCEPTED',
+      ...v1Goals,
+      sentAt: localInstant(24, 10),
+      acceptedAt: localInstant(23, 8),
+      meals: { create: meals },
+    },
+  });
+  await prisma.nutritionPlan.create({
+    data: {
+      userId: demoUserId,
+      authorId: helenaId,
+      groupId,
+      version: 2,
+      status: 'SENT',
+      ...DEMO_PLAN.goals,
+      note: 'Ajustei o carboidrato para a nova fase. Qualquer dúvida, me chama no próximo treino.',
+      sentAt: localInstant(0, 7),
+      meals: { create: meals },
+    },
+  });
+  return 'plano alimentar (v1 em uso, v2 esperando aceite)';
 }
 
 async function seedCommunityExercises(groupId: string, donaId: string, profissionalId: string) {
