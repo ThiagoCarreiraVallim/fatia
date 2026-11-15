@@ -21,7 +21,18 @@ export interface WeightProgress {
   weeklyAverages: Array<{ weekStart: string; avgKg: number; deltaKg: number | null }>;
   totalDeltaKg: number;
   currentWeightKg: number | null;
+  /** O último registro, de qualquer data (#373). */
+  latest: { id: string; weightKg: number; date: string; loggedAt: string } | null;
+  /** O registro antes do último, para "−0,2 desde sexta". */
+  previous: { weightKg: number; date: string } | null;
+  deltaSinceLastKg: number | null;
 }
+
+/** A série de peso sem os registros soltos: o que o painel do profissional recebe. */
+export type WeightSeries = Pick<
+  WeightProgress,
+  'points' | 'weeklyAverages' | 'totalDeltaKg' | 'currentWeightKg'
+>;
 
 export interface StrengthProgress {
   exercise: { id: number; name: string };
@@ -116,6 +127,56 @@ export interface Achievement {
   context: unknown;
 }
 
+/** Uma meta do dia (Al-H5-Metas, #373). */
+export interface DailyGoal {
+  /** `kcal`, `protein`, `water`, `steps`, `workout` ou `nutrient:<chave>`. */
+  key: string;
+  label: string;
+  unit: string;
+  current: number;
+  min: number | null;
+  max: number | null;
+  met: boolean;
+  /** 0–100. */
+  percent: number;
+  /** Só na linha de treino. */
+  planName?: string | null;
+}
+
+/**
+ * Contratos dos cartões do Hoje cujos dados nascem em outras issues (#373): a API
+ * já devolve os campos vazios, e as telas já desenham quando vierem. Espelham
+ * `apps/api/src/progress/today-contracts.ts`.
+ */
+export type TodoKind = 'assessment' | 'plan_offer' | 'questionnaire';
+
+export interface TodoItem {
+  kind: TodoKind;
+  id: string;
+  title: string;
+  subtitle: string;
+  href: string;
+}
+
+export interface ReceivedPlan {
+  id: string;
+  title: string;
+  subtitle: string;
+  fromName: string;
+  href: string;
+}
+
+export interface NextEvent {
+  id: string;
+  title: string;
+  startsAt: string;
+  subtitle: string;
+  going: boolean;
+  past: boolean;
+  durationMin: number | null;
+  href: string;
+}
+
 export interface TodaySummary {
   date: string;
   nutrition: {
@@ -130,6 +191,7 @@ export interface TodaySummary {
       fatMinG: number;
       fatMaxG: number;
       dailyStepsTarget: number;
+      dailyWaterTargetMl?: number;
     } | null;
     mealsLogged: number;
     onTrack: boolean | null;
@@ -137,11 +199,22 @@ export interface TodaySummary {
   workout: {
     plannedToday: { planId: string; name: string } | null;
     /** Plano a oferecer no card: o do bloco ativo ou o seguinte da rotação. */
-    nextPlan: { planId: string; name: string; source: 'BLOCK' | 'ROTATION' } | null;
+    nextPlan: {
+      planId: string;
+      name: string;
+      source: 'BLOCK' | 'ROTATION';
+      /** Exercícios do plano; nulo quando o plano do bloco não está entre os da pessoa. */
+      exerciseCount?: number | null;
+    } | null;
     sessionInProgress: { id: string; startedAt: string } | null;
     completedToday: boolean;
   };
-  weight: { latest: { weightKg: number; loggedAt: string } | null; loggedToday: boolean };
+  weight: {
+    latest: { weightKg: number; loggedAt: string } | null;
+    loggedToday: boolean;
+    /** Último peso menos o primeiro dos últimos 30 dias; nulo com um registro só. */
+    change30dKg: number | null;
+  };
   steps: { today: number; target: number | null; goalReached: boolean | null; logged: boolean };
   water: {
     todayMl: number;
@@ -151,6 +224,16 @@ export interface TodaySummary {
   };
   streak: StreakSummary;
   achievements: Achievement[];
+  /** As metas do dia: o "Metas 2/5" do topo e a folha "Metas de hoje". */
+  dailyGoals: { met: number; total: number; items: DailyGoal[] };
+  /** O ponto do sino. */
+  inbox: { unread: number };
+  /** "Para fazer": pedidos da equipe. Vazio até as issues de cada fluxo. */
+  todo: { count: number; items: TodoItem[] };
+  /** "Novo treino da Helena" (#379). */
+  receivedPlan: ReceivedPlan | null;
+  /** Evento do dia na agenda da comunidade (#397). */
+  nextEvent: NextEvent | null;
 }
 
 export const progressApi = {

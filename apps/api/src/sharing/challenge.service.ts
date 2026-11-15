@@ -514,9 +514,15 @@ export class ChallengeService implements OnModuleInit, OnModuleDestroy {
     );
     const m = await this.prisma.groupMembership.findUniqueOrThrow({
       where: { groupId_userId: { groupId, userId } },
-      select: { id: true, displayName: true, user: { select: { name: true } } },
+      select: { id: true, displayName: true, user: { select: { name: true, nickname: true } } },
     });
-    return { role, membershipId: m.id, displayName: m.displayName, userName: m.user.name };
+    // Sem apelido na comunidade, vale o do perfil (Você, #387).
+    return {
+      role,
+      membershipId: m.id,
+      displayName: m.displayName ?? m.user.nickname,
+      userName: m.user.name,
+    };
   }
 
   /** Sempre pelo par da URL: id de desafio de outra comunidade é 404. */

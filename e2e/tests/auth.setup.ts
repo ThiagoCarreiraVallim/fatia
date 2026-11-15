@@ -16,10 +16,12 @@ import { logtoSignIn } from './logto';
 const DEMO_EMAIL = process.env.DEMO_EMAIL ?? 'demo@fatia.local';
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? 'Fatia-demo-2026!';
 
-/** Login de verdade no Logto, do botão "Entrar" até voltar ao app. */
+/** Login de verdade no Logto, da aba "Entrar" (Onb-01b) até voltar ao app. */
 async function signIn(page: Page, email: string, password: string) {
   await page.goto('/login');
-  await page.getByRole('link', { name: 'Entrar' }).click();
+  await page.getByRole('tab', { name: 'Entrar' }).click();
+  await page.getByRole('textbox', { name: 'E-mail' }).fill(email);
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
 
   await logtoSignIn(page, email, password);
 

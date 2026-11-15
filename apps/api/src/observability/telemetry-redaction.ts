@@ -44,6 +44,17 @@ export const DROPPED_SPAN_ATTRIBUTE_KEYS: readonly string[] = [
 export const URL_SPAN_ATTRIBUTE_KEYS: readonly string[] = ['url.full', 'http.url', 'http.target'];
 
 /**
+ * Rotas públicas cujo segredo vai **no caminho**: o link de exportação (#387) é
+ * `/exports/<token>`, e quem tivesse o token baixava os dados de saúde sem login.
+ * Cortar a query não alcança isso; o segmento vira `:token`.
+ */
+const SECRET_PATH = /(\/exports\/)[^/?#]+/g;
+
+export function redactSecretPath(value: string): string {
+  return value.replace(SECRET_PATH, '$1:token');
+}
+
+/**
  * Cabeçalhos só entram em span se alguém configurar `headersToSpanAttributes` — não é o default.
  * A remoção por prefixo existe para o dia em que alguém configurar "só para depurar" e esquecer:
  * `Authorization` e `Cookie` carregam o token de acesso inteiro.
@@ -83,7 +94,12 @@ export function redactSpanAttributes(attributes: Attributes): void {
     if (typeof value !== 'string') continue;
 
     if (URL_SPAN_ATTRIBUTE_KEYS.includes(key)) {
-      attributes[key] = stripQueryString(value);
+      attributes[key] = redactSecretPath(stripQueryString(value));
+      continue;
+    }
+
+    if (key === 'url.path') {
+      attributes[key] = redactSecretPath(value);
       continue;
     }
 

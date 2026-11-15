@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ACTIVITY_OPTIONS,
-  ONBOARDING_STEPS,
   ageFromBirthDate,
   brDateToIso,
   isoToBrDate,
@@ -28,6 +26,16 @@ const ME: MeUser = {
   activityLevel: null,
   objective: null,
   onboardedAt: null,
+  onboardingStep: null,
+  nickname: null,
+  bio: null,
+  avatarUrl: null,
+  avatarVisibility: 'COMMUNITIES',
+  keepMealPhotos: null,
+  whatsapp: null,
+  whatsappOptIn: false,
+  loadUnit: 'KG',
+  distanceUnit: 'KM',
 };
 
 const CORPO: BodyForm = {
@@ -52,11 +60,6 @@ const METAS = {
 };
 
 describe('onboarding', () => {
-  it('tem quatro passos, terminando nas metas', () => {
-    expect(ONBOARDING_STEPS.map((s) => s.key)).toEqual(['objective', 'body', 'activity', 'goals']);
-    expect(ACTIVITY_OPTIONS).toHaveLength(5);
-  });
-
   it('preenche com o perfil e a última pesagem, com vírgula decimal', () => {
     expect(initialBodyForm(ME, 64.5)).toEqual({
       sex: 'FEMALE',

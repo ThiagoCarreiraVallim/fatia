@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  AvatarVisibility,
   MembershipStatus,
   PostPolicy,
   type GroupRole,
@@ -15,9 +16,18 @@ import {
   type ReportReason,
 } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
-import { NotificationService, type Notice } from '../notifications/notification.service';
+import {
+  NotificationService,
+  REACTION_KEY_PREFIX,
+  type Notice,
+} from '../notifications/notification.service';
 import { MediaService, type MediaView } from '../storage/media.service';
-import { commentNotice, removedNotice } from './community-notices';
+import {
+  commentNotice,
+  reactionNotice,
+  removedNotice,
+  reportReviewedNotice,
+} from './community-notices';
 import { requireContentRole } from './content-roles';
 import { cleanDisplayName, firstName } from './display-name';
 import { can, TEAM_ROLES } from './permissions';
@@ -46,6 +56,12 @@ export interface AuthorView {
   /** Dono, profissional ou criador: o mural mostra o selo "Equipe". */
   team: boolean;
   isMe: boolean;
+  /**
+   * Foto de perfil, só quando a visibilidade escolhida deixa quem lê ver
+   * (prancha Al-V9): "Minhas comunidades" mostra a todos aqui; "Só a equipe",
+   * à equipe e à própria pessoa. Nulo = iniciais.
+   */
+  avatarUrl: string | null;
 }
 
 export interface PostView {
@@ -133,7 +149,9 @@ const AUTOR = {
     id: true,
     role: true,
     displayName: true,
-    user: { select: { name: true } },
+    user: {
+      select: { name: true, nickname: true, avatarVisibility: true, avatarFile: true },
+    },
   },
 } as const;
 
@@ -151,6 +169,8 @@ interface Eu {
   membershipId: string;
   displayName: string | null;
   userName: string;
+  /** O apelido do perfil (Você, #387), que vale em toda comunidade sem apelido próprio. */
+  userNickname: string | null;
   moderates: boolean;
 }
 
@@ -236,7 +256,7 @@ export class PostService {
       canPost: this.canPost(eu.role, policy),
       canModerate: eu.moderates,
       displayName: eu.displayName,
-      suggestedDisplayName: eu.displayName ?? firstName(eu.userName),
+      suggestedDisplayName: eu.displayName ?? eu.userNickname ?? firstName(eu.userName),
       posts: await Promise.all(rows.map((r) => this.view(r, eu))),
       nextCursor: temMais ? (pagina.at(-1)?.id ?? null) : null,
     };
@@ -257,15 +277,17 @@ export class PostService {
     const [comContagem] = await this.withCommentCounts([row], eu);
     return {
       ...(await this.view(comContagem!, eu)),
-      comments: comentarios.map((c) => ({
-        id: c.id,
-        body: c.body,
-        createdAt: c.createdAt,
-        author: this.author(c.author, eu),
-        removed: c.removedAt !== null,
-        canDelete: c.membershipId === eu.membershipId,
-        canModerate: eu.moderates && c.removedAt === null,
-      })),
+      comments: await Promise.all(
+        comentarios.map(async (c) => ({
+          id: c.id,
+          body: c.body,
+          createdAt: c.createdAt,
+          author: await this.author(c.author, eu),
+          removed: c.removedAt !== null,
+          canDelete: c.membershipId === eu.membershipId,
+          canModerate: eu.moderates && c.removedAt === null,
+        })),
+      ),
     };
   }
 
@@ -325,11 +347,25 @@ export class PostService {
     const eu = await this.me(userId, groupId, 'post.read');
     const row = await this.findLive(groupId, postId);
     if (kind) {
+      const before = await this.prisma.groupPostReaction.findUnique({
+        where: { postId_membershipId: { postId: row.id, membershipId: eu.membershipId } },
+        select: { id: true },
+      });
       await this.prisma.groupPostReaction.upsert({
         where: { postId_membershipId: { postId: row.id, membershipId: eu.membershipId } },
         create: { postId: row.id, membershipId: eu.membershipId, kind },
         update: { kind },
       });
+      // Só a reação nova avisa: trocar de emoji não é novidade para o autor.
+      if (!before && row.membershipId !== eu.membershipId) {
+        const author = eu.displayName ?? eu.userNickname ?? firstName(eu.userName);
+        await this.notifyAuthor(
+          row.membershipId,
+          (groupName) => reactionNotice({ groupId, groupName, author }),
+          `${REACTION_KEY_PREFIX}${row.id}`,
+          author,
+        );
+      }
     } else {
       await this.prisma.groupPostReaction.deleteMany({
         where: { postId: row.id, membershipId: eu.membershipId },
@@ -370,7 +406,7 @@ export class PostService {
       id: c.id,
       body: c.body,
       createdAt: c.createdAt,
-      author: this.author({ ...c.author, displayName: nome }, eu),
+      author: await this.author({ ...c.author, displayName: nome }, eu),
       removed: false,
       canDelete: true,
       canModerate: eu.moderates,
@@ -594,13 +630,31 @@ export class PostService {
       select: { postId: true, commentId: true },
     });
     if (!r) throw new NotFoundException('Report not found');
+    const alvo = r.commentId ? { commentId: r.commentId } : { postId: r.postId, commentId: null };
+    // Quem denunciou e ainda está na comunidade fica sabendo que a equipe olhou
+    // (prancha Ex-06): só isso, sem a decisão nem o conteúdo.
+    const quemDenunciou = await this.prisma.groupPostReport.findMany({
+      where: { ...alvo, resolvedAt: null, reporter: { status: MembershipStatus.ACTIVE } },
+      select: {
+        reporter: { select: { userId: true } },
+        post: { select: { group: { select: { name: true } } } },
+      },
+    });
+    const avisar = () => {
+      if (quemDenunciou.length === 0) return;
+      this.notifications.notify(
+        quemDenunciou.map((d) => d.reporter.userId),
+        reportReviewedNotice({ groupId, groupName: quemDenunciou[0]!.post.group.name }),
+      );
+    };
     if (action === 'remove') {
       if (r.commentId) await this.removeComment(userId, groupId, r.postId, r.commentId);
       else await this.moderatePost(userId, groupId, r.postId, 'remove', await this.topReason(r));
+      avisar();
       return { resolved: 1 };
     }
-    const alvo = r.commentId ? { commentId: r.commentId } : { postId: r.postId, commentId: null };
     const feito = await this.resolveOp(alvo, eu.membershipId, 'dismissed', new Date());
+    avisar();
     return { resolved: feito.count };
   }
 
@@ -634,6 +688,7 @@ export class PostService {
     membershipId: string,
     notice: (groupName: string) => Notice,
     groupKey?: string,
+    actor?: string,
   ): Promise<void> {
     const autor = await this.prisma.groupMembership.findFirst({
       where: { id: membershipId, status: MembershipStatus.ACTIVE },
@@ -642,7 +697,7 @@ export class PostService {
     if (!autor) return;
     const aviso = notice(autor.group.name);
     if (groupKey) {
-      this.notifications.notifyGrouped(autor.userId, groupKey, aviso, autor.group.name);
+      this.notifications.notifyGrouped(autor.userId, groupKey, aviso, autor.group.name, actor);
     } else {
       this.notifications.notify([autor.userId], aviso);
     }
@@ -668,13 +723,18 @@ export class PostService {
     );
     const m = await this.prisma.groupMembership.findUniqueOrThrow({
       where: { groupId_userId: { groupId, userId } },
-      select: { id: true, displayName: true, user: { select: { name: true } } },
+      select: {
+        id: true,
+        displayName: true,
+        user: { select: { name: true, nickname: true } },
+      },
     });
     return {
       role,
       membershipId: m.id,
       displayName: m.displayName,
       userName: m.user.name,
+      userNickname: m.user.nickname,
       moderates: can(role, 'content.moderate'),
     };
   }
@@ -687,9 +747,14 @@ export class PostService {
     return g.postPolicy;
   }
 
-  /** Quem ainda não tem apelido ganha um ao publicar: o escolhido ou o primeiro nome. */
+  /**
+   * Quem ainda não tem apelido ganha um ao publicar: o escolhido ou o primeiro
+   * nome. O apelido do perfil não é copiado para a comunidade: ele continua
+   * valendo pelo `nameOf`, e trocar no perfil troca aqui também.
+   */
   private async ensureDisplayName(eu: Eu, escolhido?: string): Promise<string> {
     if (eu.displayName && !escolhido) return eu.displayName;
+    if (!escolhido && eu.userNickname) return eu.userNickname;
     const nome = cleanDisplayName(escolhido ?? firstName(eu.userName));
     if (nome !== eu.displayName) {
       await this.prisma.groupMembership.update({
@@ -797,12 +862,20 @@ export class PostService {
     return rows.map((r) => ({ ...r, comments: porPost.get(r.id) ?? 0 }));
   }
 
+  /** Apelido da comunidade, senão o do perfil (Você, #387), senão o primeiro nome. */
   private nameOf(a: Autor): string {
-    return a.displayName ?? firstName(a.user.name);
+    return a.displayName ?? a.user.nickname ?? firstName(a.user.name);
   }
 
-  private author(a: Autor, eu: Eu): AuthorView {
+  private async author(a: Autor, eu: Eu): Promise<AuthorView> {
+    const isMe = a.id === eu.membershipId;
+    const podeVer =
+      a.user.avatarVisibility === AvatarVisibility.COMMUNITIES ||
+      isMe ||
+      TEAM_ROLES.includes(eu.role);
+    const foto = podeVer ? await this.media.viewOrNull(a.user.avatarFile) : null;
     return {
+      avatarUrl: foto?.url ?? null,
       displayName: this.nameOf(a),
       team: TEAM_ROLES.includes(a.role),
       isMe: a.id === eu.membershipId,
@@ -817,7 +890,7 @@ export class PostService {
       id: r.id,
       body: r.body,
       createdAt: r.createdAt,
-      author: this.author(r.author, eu),
+      author: await this.author(r.author, eu),
       images: await Promise.all(r.images.map((i) => this.media.view(i.file))),
       pinned: r.pinnedAt !== null && r.removedAt === null,
       removed: r.removedAt ? { reason: r.removedReason } : null,

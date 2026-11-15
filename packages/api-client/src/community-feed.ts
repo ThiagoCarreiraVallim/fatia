@@ -31,6 +31,8 @@ export interface PostAuthor {
   /** Dono, profissional ou criador. */
   team: boolean;
   isMe: boolean;
+  /** Foto de perfil, quando a visibilidade dela deixa você ver; nulo = iniciais. */
+  avatarUrl?: string | null;
 }
 
 export interface Post {

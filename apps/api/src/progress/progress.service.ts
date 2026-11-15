@@ -31,6 +31,13 @@ export class ProgressService {
       where: { userId: ctx.userId, loggedAt: { gte: dayBoundsInTz(fromIso, ctx.timezone).start } },
       orderBy: { loggedAt: 'asc' },
     });
+    // Os dois últimos de qualquer data, para "−0,2 desde sexta" (Al-H4-Peso, #373): o
+    // registro anterior pode ser de antes da janela do gráfico.
+    const [latest, previous] = await this.prisma.weightLog.findMany({
+      where: { userId: ctx.userId },
+      orderBy: { loggedAt: 'desc' },
+      take: 2,
+    });
     const points = logs.map((l) => ({
       date: dateInTz(l.loggedAt, ctx.timezone),
       weightKg: l.weightKg,
@@ -39,7 +46,24 @@ export class ProgressService {
     const totalDeltaKg =
       points.length >= 2 ? points[points.length - 1].weightKg - points[0].weightKg : 0;
     const currentWeightKg = points.length > 0 ? points[points.length - 1].weightKg : null;
-    return { points, weeklyAverages, totalDeltaKg, currentWeightKg };
+    return {
+      points,
+      weeklyAverages,
+      totalDeltaKg,
+      currentWeightKg,
+      latest: latest
+        ? {
+            id: latest.id,
+            weightKg: latest.weightKg,
+            date: dateInTz(latest.loggedAt, ctx.timezone),
+            loggedAt: latest.loggedAt.toISOString(),
+          }
+        : null,
+      previous: previous
+        ? { weightKg: previous.weightKg, date: dateInTz(previous.loggedAt, ctx.timezone) }
+        : null,
+      deltaSinceLastKg: latest && previous ? latest.weightKg - previous.weightKg : null,
+    };
   }
 
   private weeklyAverages(

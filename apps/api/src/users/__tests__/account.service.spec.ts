@@ -39,6 +39,12 @@ const makePrisma = () => ({
   userDevice: { findMany: jest.fn().mockResolvedValue([]) },
   notificationPreference: { findMany: jest.fn().mockResolvedValue([]) },
   webPushSubscription: { findMany: jest.fn().mockResolvedValue([]) },
+  userNewsRead: { findMany: jest.fn().mockResolvedValue([]) },
+  userTutorialSeen: { findMany: jest.fn().mockResolvedValue([]) },
+  feedbackIdea: { findMany: jest.fn().mockResolvedValue([]) },
+  dataExport: { findMany: jest.fn().mockResolvedValue([]) },
+  inboxNotice: { findMany: jest.fn().mockResolvedValue([]) },
+  reminder: { findMany: jest.fn().mockResolvedValue([]) },
 });
 
 const SCHEMA = resolve(__dirname, '../../../../../packages/db/prisma/schema.prisma');
@@ -85,6 +91,9 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   notificationPreferences: 'notificationPreferences',
   // Só as datas de cada navegador; o endpoint fica de fora (Fase 9g).
   webPushSubscriptions: 'webPushSubscriptions',
+  inboxNotices: 'inboxNotices',
+  // Lembretes pessoais (#389): a regra inteira; o contador do teto fica de fora.
+  reminders: 'reminders',
   accessLogs: 'accessLogs',
   // Chat com a IA hospedada (#249): o que a pessoa escreveu sobre a própria saúde, em prosa.
   conversations: 'conversations',
@@ -92,6 +101,13 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   memories: 'memories',
   // Plano Free/PRO (ADR 024): o histórico de assinatura é um contrato da pessoa.
   subscriptions: 'subscriptions',
+  // Você (#387): a foto de perfil é um arquivo enviado (metadados em `mediaUploaded`), o que a
+  // pessoa leu e assistiu, as ideias que mandou e os pedidos de exportação.
+  avatarFile: 'mediaUploaded',
+  newsReads: 'newsRead',
+  tutorialsSeen: 'tutorialsSeen',
+  feedbackIdeas: 'ideas',
+  dataExports: 'dataExports',
 };
 
 /**
@@ -182,6 +198,8 @@ describe('AccountService', () => {
         'stepLog',
         'waterLog',
         'favoriteFood',
+        'inboxNotice',
+        'reminder',
       ] as const) {
         expect(prisma[model].findMany).toHaveBeenCalledWith(
           expect.objectContaining({ where: expect.objectContaining({ userId: 'user-A' }) }),
@@ -193,6 +211,21 @@ describe('AccountService', () => {
           expect.objectContaining({ where: { createdByUserId: 'user-A' } }),
         );
       }
+    });
+
+    it('leva a etapa e o rascunho do onboarding (#371)', async () => {
+      prisma.user.findUnique.mockResolvedValue(USER);
+      await service.exportData('user-A');
+      expect(prisma.user.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          select: expect.objectContaining({
+            onboardingStep: true,
+            onboardingDraft: true,
+            firstStepsSince: true,
+            firstStepsDoneAt: true,
+          }),
+        }),
+      );
     });
 
     it('devolve toda relação do User que não esteja declarada como fora', async () => {

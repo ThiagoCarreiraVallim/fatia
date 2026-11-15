@@ -24,6 +24,7 @@ import {
   type PostReactionKind,
   type ReportReason,
 } from '@fatia/api-client';
+import { UserAvatar } from '@/components/you/user-avatar';
 import { MarkdownLite } from '@/components/content/markdown-lite';
 import { apiMessage, Choice } from '@/components/org/org-panel';
 import {
@@ -72,6 +73,8 @@ export function NicknameField({
 function Autor({ author, createdAt }: { author: PostAuthor; createdAt: string }) {
   return (
     <View className="flex-row flex-wrap items-center gap-x-2">
+      {/* Foto só quando a API manda: ela já respeita "Quem vê sua foto" (#387). */}
+      <UserAvatar name={author.displayName} url={author.avatarUrl ?? null} size={28} />
       <Text className="text-sm font-semibold text-foreground">
         {author.isMe ? `${author.displayName} (você)` : author.displayName}
       </Text>

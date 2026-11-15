@@ -22,4 +22,9 @@ export const site = {
   repoUrl: 'https://github.com/ThiagoCarreiraVallim/fatia',
   privacyUrl: `https://app.${DOMAIN}/privacy`,
   termsUrl: `https://app.${DOMAIN}/terms`,
+  /**
+   * Onde a pessoa apaga a conta sem o app (#387). `fat.ia.br/apagar-conta` é o link público que
+   * o Google Play pede; a página dele explica e leva para cá, que pede login e confirma.
+   */
+  deleteAccountUrl: `https://app.${DOMAIN}/apagar-conta`,
 } as const;

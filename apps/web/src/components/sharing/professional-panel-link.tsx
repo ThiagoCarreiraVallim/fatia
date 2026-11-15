@@ -1,9 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, Users } from 'lucide-react';
 import { professionalApi } from '@fatia/api-client';
+import { YouLinkRow } from '@/components/you/you-list';
 
 /**
  * A porta de entrada do painel do profissional (#157).
@@ -35,22 +34,13 @@ export function ProfessionalPanelLink() {
   const total = alunos.data?.length ?? 0;
   if (total === 0) return null;
 
+  // Uma linha de Você › Comunidade e equipe (prancha Al-V1): mesmo desenho das outras.
   return (
-    <Link
+    <YouLinkRow
       href="/students"
-      className="flex items-center gap-4 border-b border-subtle px-4 py-4 last:border-b-0"
-    >
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted/60">
-        <Users size={18} className="text-primary" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-base font-bold leading-tight text-foreground">Membros</p>
-        <p className="text-xs text-muted-foreground">
-          {total === 1 ? '1 pessoa compartilha com você' : `${total} pessoas compartilham com você`}{' '}
-          — somente leitura
-        </p>
-      </div>
-      <ChevronRight size={18} className="text-muted-foreground" />
-    </Link>
+      icon="users"
+      label="Membros"
+      subtitle={`${total === 1 ? '1 pessoa compartilha com você' : `${total} pessoas compartilham com você`} — somente leitura`}
+    />
   );
 }

@@ -5,7 +5,19 @@ import { Trash2 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { getRpeInfo, parseClock, workoutApi, type SessionSet } from '@fatia/api-client';
+import {
+  distanceToMeters,
+  distanceUnitLabel,
+  getRpeInfo,
+  loadFieldValue,
+  loadToKg,
+  loadUnitLabel,
+  metersToDistance,
+  parseClock,
+  workoutApi,
+  type SessionSet,
+} from '@fatia/api-client';
+import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { formatClock, formatNumber, parseDecimalInput } from './format';
 import { RpeBadge } from './rpe-badge';
 
@@ -24,6 +36,8 @@ export function SetRow({
 }) {
   const editable = !!sessionId;
   const qc = useQueryClient();
+  // Campos na unidade da pessoa (#387); o que vai para a API volta a kg e metros.
+  const units = useUnitPrefs();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const update = useMutation({
@@ -70,11 +84,19 @@ export function SetRow({
             onChange={(seconds) => update.mutate({ durationSeconds: seconds })}
           />
           <NumberCell
-            label={label('distância em metros')}
-            value={set.distanceMeters}
+            label={label(`distância em ${distanceUnitLabel(units.distanceUnit)}`)}
+            value={
+              set.distanceMeters == null
+                ? null
+                : metersToDistance(set.distanceMeters, units.distanceUnit)
+            }
             editable={editable}
-            suffix="m"
-            onChange={(distanceMeters) => update.mutate({ distanceMeters })}
+            suffix={units.distanceUnit === 'M' ? 'm' : ` ${distanceUnitLabel(units.distanceUnit)}`}
+            onChange={(d) =>
+              update.mutate({
+                distanceMeters: d == null ? d : distanceToMeters(d, units.distanceUnit),
+              })
+            }
           />
           <NumberCell
             label={label('frequência cardíaca média')}
@@ -92,11 +114,13 @@ export function SetRow({
             onChange={(reps) => update.mutate({ reps })}
           />
           <NumberCell
-            label={label('carga em kg')}
-            value={set.weightKg}
+            label={label(`carga em ${loadUnitLabel(units.loadUnit)}`)}
+            value={set.weightKg == null ? null : loadFieldValue(set.weightKg, units.loadUnit)}
             editable={editable}
             step="0.5"
-            onChange={(weightKg) => update.mutate({ weightKg })}
+            onChange={(w) =>
+              update.mutate({ weightKg: w == null ? w : loadToKg(w, units.loadUnit) })
+            }
           />
           <RpeCell
             label={label('esforço (RPE)')}

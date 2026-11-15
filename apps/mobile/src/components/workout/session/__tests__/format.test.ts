@@ -9,6 +9,7 @@ import {
   formatPace,
   formatPreviousSet,
   isExerciseComplete,
+  loadValue,
   parseDecimalInput,
   parseFirstRep,
   parseIntegerInput,
@@ -268,5 +269,21 @@ describe('groupCardItem', () => {
       targetSets: 1,
       targetReps: '—',
     });
+  });
+});
+
+describe('séries na unidade da pessoa (Você › Unidades, #387)', () => {
+  const forca = { weightKg: 100, reps: 8, rpe: 8 } as SessionSet;
+  const lb = { loadUnit: 'LB', distanceUnit: 'KM' } as const;
+
+  it('em lb a carga vem com uma casa e o rótulo certo', () => {
+    expect(loadValue(100, lb)).toBe('220,5');
+    expect(formatPreviousSet(forca, false, lb)).toBe('220,5 lb × 8 · RPE 8');
+    expect(previousCells(forca, false, lb)).toEqual(['8', '220,5', '8']);
+  });
+
+  it('em kg continua igual, e a distância muda para milhas', () => {
+    expect(formatPreviousSet(forca, false)).toBe('100 kg × 8 · RPE 8');
+    expect(formatDistance(5200, 'MI')).toBe('3,2 milhas');
   });
 });

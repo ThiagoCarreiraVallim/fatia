@@ -60,4 +60,44 @@ describe('/api/logto/[action]', () => {
     const fora = await GET(req, ctx('callback'));
     expect(fora.headers.get('location')).toBe('http://localhost:3030/');
   });
+
+  it('Google e Apple entram direto pelo conector social (#371)', async () => {
+    await GET(
+      new NextRequest('http://localhost:3030/api/logto/sign-in?social=apple'),
+      ctx('sign-in'),
+    );
+    expect(handleSignInClient).toHaveBeenLastCalledWith(
+      expect.objectContaining({ directSignIn: { method: 'social', target: 'apple' } }),
+    );
+
+    // Fora da lista fechada, ignora.
+    await GET(
+      new NextRequest('http://localhost:3030/api/logto/sign-in?social=evil'),
+      ctx('sign-in'),
+    );
+    expect(handleSignInClient.mock.lastCall?.[0]).not.toHaveProperty('directSignIn');
+  });
+
+  it('o e-mail digitado vai como login_hint, e o nome num cookie curto para o perfil', async () => {
+    const res = await GET(
+      new NextRequest(
+        'http://localhost:3030/api/logto/sign-in?tela=cadastro&email=ana%40email.com&nome=%20Ana%20%20Demo%20',
+      ),
+      ctx('sign-in'),
+    );
+    expect(handleSignInClient).toHaveBeenLastCalledWith(
+      expect.objectContaining({ firstScreen: 'register', loginHint: 'ana@email.com' }),
+    );
+    const nome = res.cookies.get('fatia_signup_name');
+    expect(nome?.value).toBe('Ana Demo');
+    // A tela do onboarding lê e apaga: não pode ser httpOnly.
+    expect(nome?.httpOnly).toBeFalsy();
+    expect(nome?.maxAge).toBe(600);
+
+    await GET(
+      new NextRequest('http://localhost:3030/api/logto/sign-in?email=sem-arroba'),
+      ctx('sign-in'),
+    );
+    expect(handleSignInClient.mock.lastCall?.[0]).not.toHaveProperty('loginHint');
+  });
 });

@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { redactSecretPath } from '../observability/telemetry-redaction';
 
 /**
  * Serializadores de log por **lista de permissão**, não por lista de bloqueio.
@@ -63,7 +64,7 @@ export function serializeRequest(req: RequisicaoParaLog) {
   return {
     id: req.id,
     method: req.method,
-    path: caminhoSemQuery(req.url ?? ''),
+    path: redactSecretPath(caminhoSemQuery(req.url ?? '')),
     headers: headersPermitidos(req.headers ?? {}),
     // Sem `remoteAddress`. Ele saiu na #39, quando o log deixou de morar só no `docker logs` e
     // passou a ser enviado ao Loki: IP é dado pessoal, e ali fica indexado num segundo store,

@@ -41,6 +41,17 @@ import { WorkoutPlanService } from '../../workout/workout-plan.service';
 import { WorkoutSessionService } from '../../workout/workout-session.service';
 import { MuscleSummaryService } from '../../workout/muscle-summary.service';
 import { silentNotifications } from '../../notifications/__tests__/silent-notifications';
+import { MediaService } from '../../storage/media.service';
+import { MemoryObjectStore } from '../../storage/memory-object-store';
+import { ProfileService } from '../../users/profile.service';
+import { YouService } from '../../you/you.service';
+import { AccountService } from '../../users/account.service';
+import { DataExportService } from '../../users/data-export.service';
+import type { LogtoManagementService } from '../../auth/logto-management.service';
+import type { CheckpointPurgeService } from '../../chat/checkpoint-purge.service';
+import { InboxService } from '../../notifications/inbox.service';
+import { ReminderService } from '../../notifications/reminders/reminder.service';
+import { DashboardService } from '../../progress/dashboard.service';
 
 /**
  * Isolamento multi-tenant, ponta a ponta contra Postgres real (issue #92).
@@ -91,6 +102,8 @@ describe('isolamento entre usuários', () => {
   const consent = new ConsentService(prisma, links);
   const conversas = new ConversationService(prisma);
   const memorias = new MemoryService(prisma);
+  const inbox = new InboxService(prisma);
+  const reminders = new ReminderService(prisma);
 
   /** Dados do user-A. Preenchido no beforeAll e sondado como user-B. */
   const owned = {
@@ -143,6 +156,9 @@ describe('isolamento entre usuários', () => {
     conversationId: '',
     /** O que o assistente guardou sobre o user-A, a pedido dele. */
     memoryId: '',
+    /** Aviso do sino do user-A (#373). */
+    inboxNoticeId: '',
+    reminderId: '',
   };
 
   beforeAll(async () => {
@@ -385,6 +401,25 @@ describe('isolamento entre usuários', () => {
       runId: null,
     });
     owned.memoryId = (await memorias.lembrar(owned.userA, 'Não come carne nem ovo.')).id;
+    owned.inboxNoticeId = (
+      await prisma.inboxNotice.create({
+        data: {
+          userId: owned.userA,
+          kind: 'COMMUNITY',
+          title: 'Seu pedido foi aprovado',
+          body: 'Bem-vinda à Academia.',
+          url: '/community',
+        },
+      })
+    ).id;
+    owned.reminderId = (
+      await reminders.create(owned.userA, {
+        kind: 'MEAL',
+        mode: 'TIMES',
+        times: ['12:30'],
+        weekdays: [1, 2, 3, 4, 5],
+      })
+    ).id;
   }, 60_000);
 
   afterAll(async () => {
@@ -761,6 +796,89 @@ describe('isolamento entre usuários', () => {
       await expect(nutrientTargets.delete(owned.userB, 'sodium_mg')).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('central de avisos do sino (#373)', () => {
+    it('list_inbox: o dono vê o aviso, o vizinho não vê nada', async () => {
+      // Caminho feliz primeiro: sem ele, uma central sempre vazia passaria.
+      const dono = await inbox.list(owned.userA);
+      expect(dono.items.map((i) => i.id)).toContain(owned.inboxNoticeId);
+      await expect(inbox.list(owned.userB)).resolves.toEqual({ items: [], unread: 0 });
+    });
+
+    it('mark_inbox_read com o id do user-A no corpo não marca nada', async () => {
+      await expect(inbox.markRead(owned.userB, [owned.inboxNoticeId])).resolves.toEqual({
+        updated: 0,
+      });
+      // "Marcar todos" do vizinho também não alcança o aviso do user-A.
+      await inbox.markRead(owned.userB);
+      const aviso = await prisma.inboxNotice.findUnique({ where: { id: owned.inboxNoticeId } });
+      expect(aviso?.readAt).toBeNull();
+    });
+
+    it('o ponto do sino no dashboard conta só os avisos de quem pede', async () => {
+      const dashboard = (userId: string) =>
+        new DashboardService(
+          prisma,
+          steps,
+          weights,
+          waters,
+          { compute: async () => ({}) } as never,
+          { list: async () => [] } as never,
+          { getActive: async () => null } as never,
+        ).today({ userId, timezone: TZ });
+      expect((await dashboard(owned.userA)).inbox.unread).toBeGreaterThan(0);
+      expect((await dashboard(owned.userB)).inbox.unread).toBe(0);
+    });
+  });
+
+  describe('lembretes pessoais (#389)', () => {
+    it('list_reminders: o dono vê o lembrete, o vizinho não vê nada', async () => {
+      expect((await reminders.list(owned.userA)).map((r) => r.id)).toContain(owned.reminderId);
+      await expect(reminders.list(owned.userB)).resolves.toEqual([]);
+    });
+
+    it('update_reminder e delete_reminder com o id do user-A recusam e não mexem', async () => {
+      await expect(
+        reminders.update(owned.userB, owned.reminderId, { enabled: false, times: ['03:00'] }),
+      ).rejects.toThrow(NotFoundException);
+      await expect(reminders.remove(owned.userB, owned.reminderId)).rejects.toThrow(
+        NotFoundException,
+      );
+      const r = await prisma.reminder.findUnique({ where: { id: owned.reminderId } });
+      expect(r).toMatchObject({ userId: owned.userA, enabled: true, times: [750] });
+    });
+  });
+
+  describe('rascunho do onboarding (#371)', () => {
+    it('o rascunho e a etapa de um não aparecem nem mudam pelo outro', async () => {
+      await onboarding.saveProgress(
+        owned.userA,
+        { step: 'body', weightKg: 81.3, goalSource: 'team' },
+        TZ,
+      );
+      const a = await onboarding.getProgress(owned.userA);
+      expect(a).toMatchObject({ step: 'body', profile: { weightKg: 81.3 } });
+
+      const b = await onboarding.getProgress(owned.userB);
+      expect(b.step).not.toBe('body');
+      expect(b.profile.weightKg).not.toBe(81.3);
+      expect(b.draft.goalSource).toBeUndefined();
+
+      // Salvar e terminar como user-B só mexe no user-B.
+      await onboarding.saveProgress(owned.userB, { step: 'goals', weightKg: 55 }, TZ);
+      await onboarding.finish(owned.userB);
+      const depois = await prisma.user.findUniqueOrThrow({ where: { id: owned.userA } });
+      expect(depois.onboardingStep).toBe('body');
+      expect(depois.onboardingDraft).toMatchObject({ weightKg: 81.3, goalSource: 'team' });
+    });
+
+    it('o cartão "Primeiros passos" conta só as refeições de quem pede', async () => {
+      await onboarding.finish(owned.userB);
+      const passos = await onboarding.firstSteps(owned.userB, TZ);
+      // O user-A tem refeição; o user-B não.
+      expect(passos?.items.find((i) => i.key === 'meal')?.done).toBe(false);
     });
   });
 
@@ -2796,6 +2914,82 @@ describe('isolamento entre usuários', () => {
         NotFoundException,
       );
       expect(await prisma.userMemory.findUnique({ where: { id: owned.memoryId } })).toBeTruthy();
+    });
+  });
+
+  describe('Você: foto, preferências, novidades e exportação (#387)', () => {
+    const store = new MemoryObjectStore();
+    const media = new MediaService(prisma, store);
+    const perfil = new ProfileService(prisma, media);
+    const voce = new YouService(prisma);
+    const exportacoes = new DataExportService(
+      prisma,
+      new AccountService(prisma, {} as LogtoManagementService, {} as CheckpointPurgeService),
+    );
+    const PNG = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    let fotoA = '';
+
+    beforeAll(async () => {
+      const t = await media.requestUpload(owned.userA, {
+        purpose: 'user_avatar',
+        mime: 'image/png',
+        bytes: PNG.length,
+      });
+      const f = await prisma.mediaFile.findUniqueOrThrow({ where: { id: t.fileId } });
+      store.upload(f.key, PNG, 'image/png');
+      fotoA = t.fileId;
+      await perfil.setAvatar(owned.userA, fotoA);
+      await perfil.updateMe(
+        owned.userA,
+        { nickname: 'Usuária A', bio: 'Só minha', loadUnit: 'LB', keepMealPhotos: true },
+        TZ,
+      );
+      await voce.markNewsRead(owned.userA);
+      await voce.markTutorialSeen(owned.userA, 'registrar-por-foto');
+    });
+
+    it('a foto do user-A não vira a do user-B, e continua do user-A', async () => {
+      await expect(perfil.setAvatar(owned.userB, fotoA)).rejects.toThrow(NotFoundException);
+      expect((await perfil.getMe(owned.userB)).avatarUrl).toBeNull();
+      const a = await prisma.user.findUniqueOrThrow({ where: { id: owned.userA } });
+      expect(a.avatarFileId).toBe(fotoA);
+    });
+
+    it('remover a foto do user-B não apaga a do user-A', async () => {
+      await perfil.removeAvatar(owned.userB);
+      expect(await prisma.mediaFile.findUnique({ where: { id: fotoA } })).toBeTruthy();
+    });
+
+    it('as preferências do user-A não aparecem no perfil do user-B', async () => {
+      expect(await perfil.getMe(owned.userB)).toMatchObject({
+        nickname: null,
+        bio: null,
+        loadUnit: 'KG',
+        keepMealPhotos: null,
+      });
+    });
+
+    it('novidades lidas e tutoriais vistos do user-A não contam para o user-B', async () => {
+      const deA = await voce.news(owned.userA);
+      expect(deA.unreadCount).toBe(0);
+      await prisma.user.update({
+        where: { id: owned.userB },
+        data: { createdAt: new Date('2026-01-01') },
+      });
+      expect((await voce.news(owned.userB)).unreadCount).toBeGreaterThan(0);
+      expect(await voce.tutorialsSeen(owned.userB)).toEqual({ seen: [] });
+    });
+
+    it('o link de exportação do user-B só traz o dado do user-B', async () => {
+      const link = await exportacoes.createLink(owned.userB);
+      const { body } = await exportacoes.download(link.url.split('/').at(-1)!);
+      expect(body.user.id).toBe(owned.userB);
+      expect(body.meals).toEqual([]);
+      expect(body.newsRead).toEqual([]);
+      expect(body.mediaUploaded).toEqual([]);
     });
   });
 

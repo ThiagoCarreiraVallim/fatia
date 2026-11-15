@@ -7,7 +7,20 @@ import { isKnownRoute } from './navigation';
  * mostra as mesmas chaves e os celulares para quem quer mudar de lá.
  */
 
-export type NotificationKind = 'COMMUNITY' | 'CHALLENGES' | 'FEED' | 'MODERATION' | 'CHAT';
+export type NotificationKind =
+  | 'COMMUNITY'
+  | 'CHALLENGES'
+  | 'FEED'
+  | 'MODERATION'
+  | 'CHAT'
+  | 'ANNOUNCEMENTS'
+  | 'PLAN_RECEIVED'
+  | 'ASSESSMENT_REQUESTED'
+  | 'QUESTIONNAIRE'
+  | 'SCHEDULE'
+  | 'SCHEDULE_REMINDER'
+  | 'BIRTHDAY'
+  | 'REMINDERS';
 export type DevicePlatform = 'IOS' | 'ANDROID';
 export type NotificationPreferences = Record<NotificationKind, boolean>;
 
@@ -18,37 +31,193 @@ export interface UserDevice {
   lastSeenAt: string;
 }
 
-/** Na ordem em que as chaves aparecem. */
+/** Todos os tipos, na ordem do banco. */
 export const NOTIFICATION_KINDS: readonly NotificationKind[] = [
   'COMMUNITY',
   'CHALLENGES',
   'FEED',
   'MODERATION',
   'CHAT',
+  'ANNOUNCEMENTS',
+  'PLAN_RECEIVED',
+  'ASSESSMENT_REQUESTED',
+  'QUESTIONNAIRE',
+  'SCHEDULE',
+  'SCHEDULE_REMINDER',
+  'BIRTHDAY',
+  'REMINDERS',
 ];
 
-export const NOTIFICATION_KIND_INFO: Record<NotificationKind, { label: string; hint: string }> = {
+/** Tom do ícone, no vocabulário do `chipic` da prancha. */
+export type IconTone = 'lime' | 'blue' | 'water' | 'amber' | 'brand' | 'pink' | 'neutral';
+
+export interface NotificationKindInfo {
+  label: string;
+  hint: string;
+  /** Nome do ícone do design system (`@fatia/design`). */
+  icon: string;
+  tone: IconTone;
+}
+
+/**
+ * Cada chave da tela de Notificações (prancha Al-V4, #389), com o texto, o
+ * ícone e o tom da prancha. `REMINDERS` não tem chave: cada lembrete tem a sua.
+ */
+export const NOTIFICATION_KIND_INFO: Record<
+  Exclude<NotificationKind, 'REMINDERS'>,
+  NotificationKindInfo
+> = {
+  PLAN_RECEIVED: {
+    label: 'Plano novo',
+    hint: 'Treino ou alimentação enviados para você',
+    icon: 'dumbbell',
+    tone: 'brand',
+  },
+  ASSESSMENT_REQUESTED: {
+    label: 'Avaliação pedida',
+    hint: 'Quando pedem uma avaliação, com o prazo',
+    icon: 'ruler',
+    tone: 'brand',
+  },
+  QUESTIONNAIRE: {
+    label: 'Questionário',
+    hint: 'Perguntas depois do treino ou da semana',
+    icon: 'review',
+    tone: 'brand',
+  },
   COMMUNITY: {
-    label: 'Comunidades',
-    hint: 'Convites, pedidos para entrar e entrada aprovada.',
+    label: 'Comunidade',
+    hint: 'Novidades e conteúdo da sua academia',
+    icon: 'users',
+    tone: 'brand',
+  },
+  ANNOUNCEMENTS: {
+    label: 'Comunicados da comunidade',
+    hint: 'O que a equipe manda para todos · separado dos lembretes',
+    icon: 'mega',
+    tone: 'brand',
+  },
+  SCHEDULE: {
+    label: 'Agenda da comunidade',
+    hint: 'Eventos novos e mudança de horário',
+    icon: 'cal',
+    tone: 'brand',
+  },
+  SCHEDULE_REMINDER: {
+    label: 'Treino do dia',
+    hint: 'Só quando a comunidade tem agenda · 1 h antes',
+    icon: 'clock',
+    tone: 'lime',
   },
   CHALLENGES: {
     label: 'Desafios',
-    hint: 'Desafio novo na comunidade e o fim dos desafios em que você entrou.',
+    hint: 'Início, posição e resultado',
+    icon: 'trophy',
+    tone: 'amber',
   },
   FEED: {
-    label: 'Comentários',
-    hint: 'Quando alguém comenta um post seu no mural.',
+    label: 'Mural',
+    hint: 'Reações e comentários nos seus posts',
+    icon: 'mega',
+    tone: 'blue',
   },
   MODERATION: {
     label: 'Moderação',
-    hint: 'Quando a equipe remove um post ou comentário seu.',
+    hint: 'Quando algo seu é revisado',
+    icon: 'shield',
+    tone: 'neutral',
   },
   CHAT: {
-    label: 'Chat',
-    hint: 'Quando a resposta do assistente fica pronta com o app fechado.',
+    label: 'Chat com a IA',
+    hint: 'Quando a resposta fica pronta',
+    icon: 'spark',
+    tone: 'lime',
+  },
+  BIRTHDAY: {
+    label: 'Aniversário',
+    hint: 'Um parabéns da comunidade no seu dia',
+    icon: 'gift',
+    tone: 'pink',
   },
 };
+
+export interface NotificationGroupItem extends NotificationKindInfo {
+  kind: Exclude<NotificationKind, 'REMINDERS'>;
+}
+
+export interface NotificationGroup {
+  title: string;
+  /** À direita do título: o nome da equipe em "Da sua equipe". */
+  detail: string | null;
+  items: NotificationGroupItem[];
+}
+
+const GROUPS: { title: string; team?: true; kinds: NotificationGroupItem['kind'][] }[] = [
+  {
+    title: 'Da sua equipe',
+    team: true,
+    kinds: ['PLAN_RECEIVED', 'ASSESSMENT_REQUESTED', 'QUESTIONNAIRE'],
+  },
+  {
+    title: 'Comunidade',
+    kinds: [
+      'COMMUNITY',
+      'ANNOUNCEMENTS',
+      'SCHEDULE',
+      'SCHEDULE_REMINDER',
+      'CHALLENGES',
+      'FEED',
+      'MODERATION',
+      'CHAT',
+    ],
+  },
+  { title: 'Opcional', kinds: ['BIRTHDAY'] },
+];
+
+/**
+ * Os três grupos da prancha Al-V4. "Da sua equipe" só aparece para quem está
+ * numa comunidade com equipe, e leva o nome dela à direita.
+ */
+export function notificationGroups(ctx: { team: { name: string } | null }): NotificationGroup[] {
+  return GROUPS.filter((g) => !g.team || ctx.team).map((g) => ({
+    title: g.title,
+    detail: g.team ? (ctx.team?.name ?? null) : null,
+    items: g.kinds.map((kind) => ({ kind, ...NOTIFICATION_KIND_INFO[kind] })),
+  }));
+}
+
+/**
+ * "Avisos chegam agrupados": a prévia de como o aviso chega, pelo que está
+ * ligado (prancha Al-V4). A equipe e a comunidade são as da pessoa; o "5" é só
+ * a amostra da contagem — o aviso nunca traz conteúdo.
+ */
+export function notificationPreview(
+  prefs: NotificationPreferences,
+  ctx: { team: { name: string } | null; community: { name: string } | null },
+): string {
+  const onde = ctx.community ? `em ${ctx.community.name}` : 'na sua comunidade';
+  const novidades = `5 novidades ${onde}`;
+  if (ctx.team && prefs.PLAN_RECEIVED)
+    return `${ctx.team.name} enviou um plano novo · ${novidades}`;
+  if (prefs.COMMUNITY) return novidades;
+  const algum = GROUPS[1]!.kinds.some((k) => prefs[k]);
+  return algum ? 'Sua resposta do chat está pronta' : 'Tudo desligado';
+}
+
+/** A tela de Notificações inteira (`GET /users/me/notification-settings`). */
+export interface NotificationSettings {
+  preferences: NotificationPreferences;
+  quietHours: QuietHours;
+  team: { name: string } | null;
+  community: { name: string } | null;
+}
+
+/** Silêncio noturno, em "hh:mm" no fuso da pessoa. */
+export interface QuietHours {
+  enabled: boolean;
+  from: string;
+  to: string;
+}
 
 export const DEVICE_PLATFORM_LABEL: Record<DevicePlatform, string> = {
   IOS: 'iPhone',
@@ -60,7 +229,29 @@ const json = (method: string, body?: unknown): RequestInit => ({
   ...(body === undefined ? {} : { body: JSON.stringify(body) }),
 });
 
+/** Um aviso da central do sino no Hoje (#373). */
+export interface InboxItem {
+  id: string;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  /** Caminho do toque, o mesmo do push. */
+  url: string;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export const inboxApi = {
+  list: () => apiFetch<{ items: InboxItem[]; unread: number }>('/api/users/me/inbox'),
+  /** Sem `ids`, marca todos. */
+  markRead: (ids?: string[]) =>
+    apiFetch<{ updated: number }>('/api/users/me/inbox/read', json('POST', ids ? { ids } : {})),
+};
+
 export const notificationsApi = {
+  settings: () => apiFetch<NotificationSettings>('/api/users/me/notification-settings'),
+  setQuietHours: (input: Partial<QuietHours>) =>
+    apiFetch<QuietHours>('/api/users/me/quiet-hours', json('PUT', input)),
   preferences: () => apiFetch<NotificationPreferences>('/api/users/me/notifications'),
   setPreferences: (input: Partial<NotificationPreferences>) =>
     apiFetch<NotificationPreferences>('/api/users/me/notifications', json('PUT', input)),

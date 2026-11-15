@@ -5,6 +5,7 @@ import { McpToolRegistry } from '../../mcp/mcp-tool.registry';
 import { TIPO_DA_REFEICAO } from '../../nutrition/mcp/list-meals.tool';
 import { gramsFromPortion, visiblePortions } from '../../nutrition/helpers/portion';
 import { hashInviteToken } from '../../sharing/invite.service';
+import { reminderTitle } from '../../notifications/reminders/reminder-rules';
 import {
   CAMPOS,
   COMPOSTOS,
@@ -318,6 +319,10 @@ export class PreviaDaAcaoService {
         return registro
           ? `${registro.steps.toLocaleString('pt-BR')} passos, ${dia(registro.date, ctx)}`
           : null;
+      }
+      case 'lembrete': {
+        const lembrete = await this.prisma.reminder.findFirst({ where: { id, userId } });
+        return lembrete ? reminderTitle(lembrete) : null;
       }
       case 'agua': {
         const registro = await this.prisma.waterLog.findFirst({

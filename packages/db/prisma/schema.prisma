@@ -27,17 +27,60 @@ model User {
 
   // Perfil do onboarding: só alimentam a sugestão de metas (gasto pela
   // Mifflin-St Jeor). Nenhum aparece para terceiros nem entra em comparação.
-  sex           BiologicalSex?
-  birthDate     DateTime?      @db.Date
-  activityLevel ActivityLevel?
-  objective     BodyObjective?
+  sex              BiologicalSex?
+  birthDate        DateTime?      @db.Date
+  activityLevel    ActivityLevel?
+  objective        BodyObjective?
   // Nulo = ainda não passou pelo assistente de primeira vez (nem o pulou, nem
   // definiu metas por outro caminho). O app redireciona enquanto for nulo.
-  onboardedAt   DateTime?
+  onboardedAt      DateTime?
+  /// Etapa do onboarding em que a pessoa está (#371), para voltar na mesma tela
+  /// ao reabrir o app ou a web. Nulo = não começou ou já terminou. Continua
+  /// preenchida depois do `onboardedAt` enquanto faltam as etapas puláveis
+  /// (lembretes, notificações, IA). Chaves em `ONBOARDING_STEPS` da API.
+  onboardingStep   String?
+  /// Rascunho do que ainda não tem coluna própria (peso digitado, metas
+  /// escolhidas, origem da meta). Dado da pessoa: sai no export e some no fim.
+  onboardingDraft  Json?
+  /// Desde quando o cartão "Primeiros passos" aparece no Hoje: o fim do
+  /// onboarding. Quem entrou antes do #371 não vê o cartão.
+  firstStepsSince  DateTime?
+  /// Quando os três primeiros passos ficaram prontos: o cartão some no dia
+  /// seguinte, no fuso da pessoa.
+  firstStepsDoneAt DateTime?
 
   // Cliente no Asaas (assinatura PRO pela web, ADR 024). Só o id do provedor:
   // CPF e cartão ficam no Asaas, nunca aqui.
   asaasCustomerId String? @unique
+
+  // Perfil nas comunidades (Você › Editar perfil, #387). O apelido vale para
+  // mural, comentários e ranking quando a comunidade não tem um próprio
+  // (`GroupMembership.displayName` continua vencendo). A bio tem até 140
+  // caracteres, conferidos na API.
+  nickname         String?
+  bio              String?
+  /// Foto de perfil (mídia `user_avatar`, ADR 028): EXIF removido no servidor.
+  avatarFileId     String?          @unique
+  /// Quem vê a foto. Fora das comunidades da pessoa, ninguém.
+  avatarVisibility AvatarVisibility @default(COMMUNITIES)
+  /// "Guardar fotos das refeições" (ADR 038). Nulo = ainda não respondeu, e a
+  /// foto é usada e descartada como antes.
+  keepMealPhotos   Boolean?
+  /// WhatsApp para a equipe chamar (o Fatia não tem chat entre pessoas). Só
+  /// aparece para a equipe com `whatsappOptIn` ligado.
+  whatsapp         String?
+  whatsappOptIn    Boolean          @default(false)
+  /// Unidades de exibição (Você › Unidades). Banco e API continuam métricos: a
+  /// conversão é só no cliente, e a equipe vê na unidade dela.
+  loadUnit         LoadUnit         @default(KG)
+  distanceUnit     DistanceUnit     @default(KM)
+
+  /// Silêncio noturno (Você › Lembretes, #389): nenhum lembrete nem aviso
+  /// toca entre `quietFrom` e `quietTo`, minutos do dia no `timezone` da
+  /// pessoa. A janela pode virar a meia-noite (22:00–07:00 é o padrão).
+  quietHoursEnabled Boolean @default(true)
+  quietFrom         Int     @default(1320)
+  quietTo           Int     @default(420)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -75,6 +118,18 @@ model User {
   notificationPreferences NotificationPreference[]
   pendingNotices          PendingNotice[]
   webPushSubscriptions    WebPushSubscription[]
+  // Central de avisos do sino do Hoje (#373).
+  inboxNotices            InboxNotice[]
+  // Lembretes pessoais (#389). A equipe não vê.
+  reminders               Reminder[]
+
+  // Você (#387): foto, novidades lidas, tutoriais vistos, ideias enviadas e os
+  // links de exportação.
+  avatarFile    MediaFile?         @relation("UserAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
+  newsReads     UserNewsRead[]
+  tutorialsSeen UserTutorialSeen[]
+  feedbackIdeas FeedbackIdea[]
+  dataExports   DataExport[]
 
   // B2B (ADR 014). Nenhuma destas relações dá acesso a dado de saúde por si só —
   // quem autoriza leitura é exclusivamente uma linha de `ProfessionalLink`.
@@ -109,6 +164,83 @@ enum BodyObjective {
 enum Role {
   USER
   ADMIN
+}
+
+/// Quem vê a foto de perfil (prancha Al-V9). Fora das comunidades da pessoa,
+/// ninguém vê, em nenhum dos dois.
+enum AvatarVisibility {
+  /// Membros e equipe das comunidades em que a pessoa está.
+  COMMUNITIES
+  /// Só a equipe; os outros membros veem as iniciais.
+  TEAM_ONLY
+}
+
+enum LoadUnit {
+  KG
+  LB
+}
+
+enum DistanceUnit {
+  KM
+  M
+  MI
+}
+
+/// Novidade que a pessoa já leu. O conteúdo das novidades vive em código
+/// (`news-catalog.ts`), como as conquistas: entra junto do deploy da função que
+/// ele anuncia, sem migration por entrada.
+model UserNewsRead {
+  userId String
+  newsId String
+  readAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, newsId])
+}
+
+/// Tutorial da ajuda que a pessoa já abriu (selo "assistido"). O conteúdo vive
+/// em `@fatia/api-client` (`tutorials.ts`), para o texto estar no aparelho sem
+/// internet.
+model UserTutorialSeen {
+  userId     String
+  tutorialId String
+  seenAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, tutorialId])
+}
+
+/// "Sugerir uma ideia" (Você › Novidades). Texto da pessoa, lido pela equipe do
+/// Fatia; sai no export e com a conta.
+model FeedbackIdea {
+  id        String   @id @default(uuid())
+  userId    String
+  body      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+/// Link de exportação dos dados (LGPD art. 18, V), válido por 24 h. Só o hash do
+/// token fica no banco, como no convite; o arquivo é montado na hora do
+/// download, então nenhuma cópia dos dados fica parada no servidor.
+model DataExport {
+  id           String    @id @default(uuid())
+  userId       String
+  /// sha256 do token, em hex.
+  tokenHash    String    @unique
+  expiresAt    DateTime
+  downloadedAt DateTime?
+  createdAt    DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
 }
 
 // OAuth facade pro MCP: Logto não expõe DCR público, então a API age
@@ -1396,6 +1528,7 @@ model MediaFile {
   guideVideoOf   GroupExerciseGuide?      @relation("GuideVideo")
   guidePhotoOf   GroupExerciseGuidePhoto?
   postImageOf    GroupPostImage?          @relation("PostImage")
+  userAvatarOf   User?                    @relation("UserAvatar")
 
   @@index([groupId])
   @@index([uploaderId])
@@ -1730,7 +1863,10 @@ enum DevicePlatform {
   ANDROID
 }
 
-/// O que cada aviso cobre; a pessoa desliga por tipo.
+/// O que cada aviso cobre; a pessoa desliga por tipo (prancha Al-V4, #389).
+/// O padrão de cada tipo, quando não há linha em `NotificationPreference`,
+/// está em `NOTIFICATION_DEFAULTS` (`notification.service.ts`): o grupo
+/// "Opcional" nasce desligado.
 enum NotificationKind {
   COMMUNITY
   CHALLENGES
@@ -1738,6 +1874,22 @@ enum NotificationKind {
   MODERATION
   /// A resposta do chat ficou pronta com o app fora de vista (Fase 9e).
   CHAT
+  /// O que a equipe manda para todos (#394). Separado dos lembretes (Apple 4.5.4).
+  ANNOUNCEMENTS
+  /// Treino ou alimentação enviados para a pessoa pela equipe.
+  PLAN_RECEIVED
+  /// A equipe pediu uma avaliação, com prazo (#383).
+  ASSESSMENT_REQUESTED
+  /// Perguntas depois do treino ou da semana (#391).
+  QUESTIONNAIRE
+  /// Agenda da comunidade: evento novo ou mudança de horário (#397).
+  SCHEDULE
+  /// Treino do dia, 1 h antes, quando a comunidade tem agenda (#397).
+  SCHEDULE_REMINDER
+  /// Parabéns da comunidade no dia do aniversário. "Opcional": nasce desligado.
+  BIRTHDAY
+  /// Os lembretes pessoais (`Reminder`). Sem chave na tela: cada lembrete tem a sua.
+  REMINDERS
 }
 
 /// Um celular em que a pessoa ligou os avisos. O token é da Expo e é único: o
@@ -1783,6 +1935,8 @@ model PendingNotice {
   /// Nome da comunidade e caminho do toque — nada do conteúdo.
   community    String
   url          String
+  /// Nome de quem agiu por último, para "Helena e mais 3 reagiram ao seu post" (Ex-06, #389).
+  actor        String?
   windowEndsAt DateTime
   createdAt    DateTime         @default(now())
 
@@ -1818,4 +1972,89 @@ model NotificationPreference {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, kind])
+}
+
+/// A central de avisos do sino no Hoje (#373): cada aviso que a pessoa recebeu,
+/// para rever depois. É gravado junto do envio (`NotificationService`), com o
+/// mesmo título e texto do push — que já nascem sem dado de saúde, porque
+/// aparecem na tela bloqueada. Vale para todo tipo menos `CHAT`: a resposta do
+/// chat pronta é aviso de momento, e quem quer a resposta abre a conversa.
+///
+/// Preferência desligada corta o push, não a linha: a central é o lugar de ver
+/// o que chegou sem ser interrompido. Linhas com mais de 90 dias saem na próxima
+/// gravação para a pessoa (`DATA_RETENTION.md`).
+model InboxNotice {
+  id        String           @id @default(uuid())
+  userId    String
+  kind      NotificationKind
+  title     String
+  body      String
+  /// Caminho do toque, o mesmo do push.
+  url       String
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+}
+
+// ============================================================
+// Lembretes pessoais (#389)
+// ============================================================
+
+/// Do que o lembrete lembra (prancha Al-V3). Cada tipo, menos o hábito, é
+/// conferido no servidor antes de sair: água batida, refeição registrada,
+/// treino feito, pesagem do dia, passos acima da meta.
+enum ReminderKind {
+  WATER
+  MEAL
+  WEIGHT
+  WORKOUT
+  STEPS
+  /// Hábito (#390). Aceito quando os hábitos existirem; até lá a API recusa.
+  HABIT
+}
+
+enum ReminderMode {
+  /// "A cada N h" entre `fromMinute` e `toMinute`.
+  INTERVAL
+  /// Horários fixos em `times`.
+  TIMES
+}
+
+/// Um lembrete pessoal (Você › Lembretes). Dado da pessoa: entra no export,
+/// morre com a conta e a equipe não vê. Horários em minutos do dia no fuso de
+/// `User.timezone`.
+model Reminder {
+  id         String       @id @default(uuid())
+  userId     String
+  kind       ReminderKind
+  /// O hábito do lembrete de hábito (#390). Sem FK até a tabela existir.
+  habitId    String?
+  mode       ReminderMode
+  /// Só no `INTERVAL`: de 1 a 6 horas.
+  everyHours Int?
+  fromMinute Int?
+  toMinute   Int?
+  /// Só no `TIMES`: minutos do dia, em ordem e sem repetir.
+  times      Int[]        @default([])
+  /// Dias da semana ISO (1 = segunda … 7 = domingo).
+  weekdays   Int[]
+  /// Passos: só lembra se o dia estiver abaixo disto ("se abaixo de 6 mil").
+  stepsBelow Int?
+  enabled    Boolean      @default(true)
+  /// Último envio pelo servidor; evita mandar o mesmo horário duas vezes.
+  lastSentAt DateTime?
+  /// Dia (YYYY-MM-DD, fuso da pessoa) e quantos saíram nele: o teto por dia.
+  sentDate   String?
+  sentCount  Int          @default(0)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([enabled])
 }

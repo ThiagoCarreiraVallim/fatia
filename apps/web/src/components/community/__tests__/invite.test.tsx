@@ -1,17 +1,21 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InvitePreview } from '@fatia/api-client';
 
 const nav = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: nav.replace }) }));
 vi.mock('@fatia/api-client', async () => {
   const actual = await vi.importActual<typeof import('@fatia/api-client')>('@fatia/api-client');
-  return { ...actual, groupsApi: { acceptInvite: vi.fn() } };
+  return {
+    ...actual,
+    groupsApi: { acceptInvite: vi.fn() },
+    usersApi: { me: vi.fn() },
+  };
 });
 
-import { ApiError, groupsApi } from '@fatia/api-client';
+import { ApiError, groupsApi, usersApi } from '@fatia/api-client';
 import { InviteAccept, InviteSignedOut } from '../invite';
 
 const PREVIEW: InvitePreview = {
@@ -23,6 +27,7 @@ const PREVIEW: InvitePreview = {
   emailBound: false,
   expiresAt: '2026-10-24T00:00:00Z',
   requiredSharingScopes: [],
+  activeChallenge: null,
 };
 const TOKEN = 'a'.repeat(43);
 
@@ -37,15 +42,34 @@ function renderAccept(preview: InvitePreview = PREVIEW) {
 
 describe('convite', () => {
   afterEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.mocked(usersApi.me).mockResolvedValue({
+      onboardedAt: '2026-10-01T00:00:00Z',
+      onboardingStep: null,
+    } as never);
+  });
 
-  it('sem sessão, mostra a comunidade e volta ao link depois do login', () => {
+  it('sem sessão (Onb-01a): capa da comunidade, quem convidou e a conta, voltando ao link', () => {
     render(<InviteSignedOut token={TOKEN} preview={PREVIEW} />);
     expect(screen.getByRole('heading', { name: 'Academia Demo' })).toBeInTheDocument();
-    expect(screen.getByText('Ana convidou você para entrar como membro.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Entrar para aceitar' })).toHaveAttribute(
+    expect(screen.getByText('Ana te convidou')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Crie sua conta para entrar' })).toBeInTheDocument();
+    const form = screen.getByRole('button', { name: 'Criar conta' }).closest('form')!;
+    expect(form.querySelector('input[name="next"]')).toHaveValue(`/c/${TOKEN}`);
+    expect(screen.getByRole('link', { name: 'Entrar' })).toHaveAttribute(
       'href',
       `/api/logto/sign-in?next=%2Fc%2F${TOKEN}`,
     );
+    expect(screen.getByRole('link', { name: 'Google' })).toHaveAttribute(
+      'href',
+      `/api/logto/sign-in?next=%2Fc%2F${TOKEN}&social=google`,
+    );
+  });
+
+  it('conta com o onboarding por fazer vai às boas-vindas da comunidade (#371)', async () => {
+    vi.mocked(usersApi.me).mockResolvedValue({ onboardedAt: null, onboardingStep: null } as never);
+    renderAccept();
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith(`/onboarding?convite=${TOKEN}`));
   });
 
   it('aceita com o que a pessoa marcou e leva à comunidade', async () => {

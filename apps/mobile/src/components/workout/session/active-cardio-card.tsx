@@ -16,6 +16,7 @@ import {
   parseIntegerInput,
 } from './format';
 import { colors } from '@/theme/colors';
+import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 
 /**
  * Réplica de `apps/web/src/components/workout/active-cardio-card.tsx`.
@@ -83,6 +84,7 @@ export function ActiveCardioCard({
   // sessão, e aqui a referência é só rótulo — não vira valor de campo nenhum.
   // Daí bastar buscar uma vez e descartar o que for desta sessão. O card de
   // força usa o `before` porque lá o dado é o palpite de carga (#190).
+  const units = useUnitPrefs();
   const previous = useQuery({
     queryKey: ['workout', 'last-set', group.exerciseId],
     queryFn: () => workoutApi.getLastSet(group.exerciseId),
@@ -91,6 +93,7 @@ export function ActiveCardioCard({
   const previousLabel = formatPreviousSet(
     previous.data && previous.data.sessionId !== sessionId ? previous.data : null,
     true,
+    units,
   );
 
   const distanceMeters = (() => {

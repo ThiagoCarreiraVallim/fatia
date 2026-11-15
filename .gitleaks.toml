@@ -11,3 +11,8 @@ useDefault = true
 description = "Token de convite inventado, do exemplo das descrições de get_group_invite e accept_group_invite (d8c4c7d)"
 regexTarget = "secret"
 regexes = ['''^q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c$''']
+
+[[allowlists]]
+description = "Token inventado do link de exportação, base64 de 'foobarbazqux1234567890abcdefghij', nos testes de log e span (8c5a151)"
+regexTarget = "secret"
+regexes = ['''^Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5MGFiY2RlZmdoaWo$''']

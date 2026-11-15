@@ -30,10 +30,18 @@ import {
  * `get_challenge_leaderboard`, `join_group_challenge`), nenhuma destrutiva. Sem medição nova.
  * O `update_meal_item` ganhou `nutrients` (paridade com o REST, ADR 006): muda o braço A.
  * O redesign (#369) acrescentou `get_weekly_muscle_summary` (só leitura): muda o braço A.
+ * A #387 mudou `get_me`, `update_me` (apelido, bio e unidades) e `export_my_data` (link de
+ * 24 h): mudam os dois braços.
+ * O redesign (#373) acrescentou `list_inbox` e `mark_inbox_read` e ampliou a descrição do
+ * `get_today_summary` (metas do dia, "Para fazer", avisos): muda o braço A. Com as duas juntas
+ * na redesign/etapa-02, os SHAs abaixo são o catálogo somado.
+ * A #389 acrescentou seis tools de lembretes e preferências de aviso; `delete_reminder`, por
+ * ser destrutiva, é servida também no braço B: mudam os dois braços (B passa a 43, 25 delas
+ * compartilhadas).
  */
 
-const SHA_ENTIDADE = '91de69ccede70d7125a90fea6c6de7f95aa4acfb6612433d36b465f0e573f550';
-const SHA_INTENCAO = '7c36e15630e05e7188964f8bc3fc7fadb66db106b3280448aeb98fbd2abf9c7f';
+const SHA_ENTIDADE = 'fc0a065209294ef021af025a80f727cd04b1d7a9c7cf710c8adbb09616e9159b';
+const SHA_INTENCAO = '30222b29b0e4131288fc6bc51ef147d027278cc45f274b66742ae691628af31e';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */
 function comoPython(valor: unknown): string {
@@ -158,13 +166,13 @@ describe('superfície do /mcp', () => {
           .map((t) => t.name),
       ].sort();
       expect(intencao.map((t) => t.name).sort()).toEqual(esperadas);
-      expect(intencao).toHaveLength(42);
+      expect(intencao).toHaveLength(43);
       expect(shaDoCatalogo(intencao)).toBe(SHA_INTENCAO);
     });
 
     it('serve as de entidade compartilhadas byte a byte iguais nas duas superfícies', () => {
       const compartilhadas = intencao.filter((t) => !INTENT_TOOLS.some((i) => i.name === t.name));
-      expect(compartilhadas).toHaveLength(24);
+      expect(compartilhadas).toHaveLength(25);
       for (const tool of compartilhadas) {
         const naEntidade = entidade.find((t) => t.name === tool.name);
         expect(naEntidade).toEqual(tool);

@@ -38,32 +38,52 @@ export const PRIMARY_TABS: NavTab[] = [
   { key: 'you', label: 'Você', href: '/you', icon: 'avatar' },
 ];
 
-export type MenuIcon =
+/**
+ * O que cada linha de Você faz: `link` abre uma tela; `toggle` liga e desliga
+ * ali mesmo ("Guardar fotos das refeições"); `action` dispara uma ação (trocar
+ * a senha, exportar os dados). A tela decide o que cada `key` faz.
+ */
+export type MenuItemKind = 'link' | 'toggle' | 'action';
+
+export type MenuKey =
   | 'progress'
+  | 'personal-goals'
   | 'records'
   | 'daily-goals'
-  | 'personal-goals'
-  | 'profile'
-  | 'notifications'
-  | 'foods'
   | 'nutrients'
+  | 'foods'
   | 'plans'
   | 'history'
   | 'chat'
   | 'connect'
-  | 'plan';
+  | 'communities'
+  | 'notifications'
+  | 'reminders'
+  | 'plan'
+  | 'keep-photos'
+  | 'units'
+  | 'appearance'
+  | 'news'
+  | 'help'
+  | 'password'
+  | 'export';
 
 export interface MenuItem {
-  key: MenuIcon;
+  key: MenuKey;
   label: string;
-  description: string;
-  href: string;
+  /** Nome do ícone do design system (`@fatia/design`, `ICONS`). */
+  icon: string;
+  kind: MenuItemKind;
+  /** Só nas linhas `link`. */
+  href: string | null;
+  /** Texto fixo à direita ou embaixo ("Claude, ChatGPT", "Arquivo com link, vale 24 h"). */
+  detail?: string;
   /** Função do plano PRO que esta pessoa não tem: mostra cadeado e leva ao plano. */
   locked?: boolean;
 }
 
 interface MenuItemDef extends Omit<MenuItem, 'href'> {
-  href: string | Record<NavPlatform, string>;
+  href: string | Record<NavPlatform, string> | null;
   /** Ausente = as duas pontas. */
   platforms?: NavPlatform[];
   /**
@@ -78,100 +98,95 @@ export interface MenuSection {
   items: MenuItem[];
 }
 
+const link = (
+  key: MenuKey,
+  label: string,
+  icon: string,
+  href: MenuItemDef['href'],
+  extra: Partial<MenuItemDef> = {},
+): MenuItemDef => ({ key, label, icon, kind: 'link', href, ...extra });
+
+/**
+ * As seções de Você, na ordem da prancha `Al-V1-Voce` (ADR 040, item 3). Só
+ * entram as linhas cujo destino existe: Sua semana e cards, Avaliações,
+ * Conquistas, Configurações da IA, Hábitos, Lembretes, a saúde do celular e
+ * Objetivo e rotina chegam com as issues donas das telas (#382, #383, #385,
+ * #389, #390, #371). Aparência fica em Conta pela ADR 041 e pela revisão da
+ * ADR 040, mesmo sem estar desenhada na prancha.
+ */
 const MENU: { title: string; items: MenuItemDef[] }[] = [
   {
-    title: 'Você',
+    title: 'Progresso',
     items: [
-      {
-        key: 'progress',
-        label: 'Progresso',
-        description: 'Peso, gráficos e consistência',
-        href: '/progress',
-      },
-      {
-        key: 'daily-goals',
-        label: 'Metas do dia',
-        description: 'Calorias, macros, água, passos e treinos',
-        href: '/nutrition/goals',
-      },
-      {
-        key: 'personal-goals',
-        label: 'Metas pessoais',
-        description: 'Peso-alvo e objetivos com prazo',
-        href: '/goals',
-      },
-      {
-        key: 'records',
-        label: 'Recordes',
-        description: 'Suas melhores marcas',
-        href: '/progress/records',
-      },
-      {
-        key: 'profile',
-        label: 'Perfil',
-        description: 'Conta, altura e seus dados',
-        href: '/profile',
-      },
-      // Os avisos são uma linha de Você, não um sino no cabeçalho dela (ADR 040,
-      // item 4). Leva às preferências até a caixa de avisos da #389.
-      {
-        key: 'notifications',
-        label: 'Notificações',
-        description: 'Avisos e lembretes',
-        href: '/profile/notifications',
-      },
+      link('progress', 'Progresso', 'trend', '/progress'),
+      link('personal-goals', 'Metas pessoais', 'target', '/goals'),
+      link('records', 'Recordes', 'trophy', '/progress/records'),
     ],
   },
   {
-    title: 'Registros',
+    title: 'Nutrição',
     items: [
-      {
-        key: 'foods',
-        label: 'Meus alimentos',
-        description: 'O que você cadastrou',
-        href: '/nutrition/foods',
-      },
-      {
-        key: 'nutrients',
-        label: 'Metas de nutrientes',
-        description: 'Fibra, sódio, açúcar e outros',
-        href: '/nutrition/nutrient-targets',
-      },
-      {
-        key: 'plans',
-        label: 'Planos de treino',
-        description: 'Seus treinos montados',
-        href: '/workout/plans',
-      },
-      {
-        key: 'history',
-        label: 'Histórico de treino',
-        description: 'Treinos já feitos',
-        href: '/workout/history',
-      },
+      link('daily-goals', 'Metas do dia', 'target', '/nutrition/goals'),
+      link('nutrients', 'Metas de nutrientes', 'apple', '/nutrition/nutrient-targets'),
+      link('foods', 'Meus alimentos', 'apple', '/nutrition/foods'),
+    ],
+  },
+  {
+    title: 'Treino',
+    items: [
+      link('plans', 'Planos de treino', 'dumbbell', '/workout/plans'),
+      link('history', 'Histórico', 'clock', '/workout/history'),
     ],
   },
   {
     title: 'IA',
     items: [
+      link('chat', 'Conversas', 'chat', '/chat', { requires: 'chat' }),
+      link(
+        'connect',
+        'Conectar sua IA',
+        'link',
+        { web: '/profile/connect', mobile: '/profile/tokens' },
+        { detail: 'Claude, ChatGPT' },
+      ),
+    ],
+  },
+  {
+    title: 'Comunidade e equipe',
+    items: [link('communities', 'Comunidades e o que compartilho', 'users', '/community')],
+  },
+  {
+    title: 'Rotina e avisos',
+    items: [
+      // Os avisos são linhas de Você, não um sino no cabeçalho dela (ADR 040,
+      // item 4). Lembretes (prancha Al-V2, #389) vêm antes das notificações.
+      link('reminders', 'Lembretes', 'bell', '/you/reminders'),
+      link('notifications', 'Notificações', 'phone', '/profile/notifications'),
+    ],
+  },
+  {
+    title: 'Conta',
+    items: [
+      link('plan', 'Meu plano', 'crown', '/plan'),
       {
-        key: 'chat',
-        label: 'Chat com a IA',
-        description: 'Pergunte e registre conversando',
-        href: '/chat',
-        requires: 'chat',
+        key: 'keep-photos',
+        label: 'Guardar fotos das refeições',
+        icon: 'image',
+        kind: 'toggle',
+        href: null,
       },
+      link('units', 'Unidades', 'ruler', '/you/units'),
+      link('appearance', 'Aparência', 'palette', '/profile/appearance'),
+      link('news', 'Novidades', 'gift', '/you/news'),
+      link('help', 'Ajuda e tutoriais', 'book', '/you/help'),
+      { key: 'password', label: 'Trocar senha', icon: 'lock', kind: 'action', href: null },
       {
-        key: 'connect',
-        label: 'Conectar sua IA',
-        description: 'Use o Claude ou outra IA com seus dados',
-        href: { web: '/profile/connect', mobile: '/profile/tokens' },
-      },
-      {
-        key: 'plan',
-        label: 'Meu plano',
-        description: 'Free ou PRO, e a IA do Fatia',
-        href: '/plan',
+        key: 'export',
+        label: 'Exportar meus dados',
+        icon: 'download',
+        kind: 'action',
+        href: null,
+        detail: 'Arquivo com link, vale 24 h',
       },
     ],
   },
@@ -189,7 +204,10 @@ export function menuSections(opts: {
       .filter((item) => !item.platforms || item.platforms.includes(opts.platform))
       .filter((item) => item.requires !== 'chat' || opts.chatAvailable)
       .map(({ platforms: _p, requires, ...item }) => {
-        const href = typeof item.href === 'string' ? item.href : item.href[opts.platform];
+        const href =
+          item.href === null || typeof item.href === 'string'
+            ? item.href
+            : item.href[opts.platform];
         return requires === 'chat' && opts.chatLocked
           ? { ...item, href: '/plan?recurso=chat', locked: true }
           : { ...item, href };
@@ -285,14 +303,21 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/workout/session/:id', title: 'Treino', parent: '/workout/history' },
   // Você: a quinta aba. Perfil, Progresso, Metas pessoais e Meu plano são dela.
   { pattern: '/you', title: 'Você', parent: null },
+  { pattern: '/you/edit', title: 'Editar perfil', parent: '/you' },
+  { pattern: '/you/units', title: 'Unidades', parent: '/you' },
+  { pattern: '/you/reminders', title: 'Lembretes', parent: '/you' },
+  { pattern: '/you/news', title: 'Novidades', parent: '/you' },
+  { pattern: '/you/help', title: 'Ajuda e tutoriais', parent: '/you' },
+  { pattern: '/you/delete', title: 'Apagar conta', parent: '/you' },
   { pattern: '/progress', title: 'Progresso', parent: '/you' },
   { pattern: '/progress/records', title: 'Recordes', parent: '/progress' },
   { pattern: '/goals', title: 'Metas pessoais', parent: '/you' },
+  // O perfil virou Você (#387): `/profile` só redireciona para lá.
   { pattern: '/profile', title: 'Perfil', parent: '/you' },
-  { pattern: '/profile/connect', title: 'Conectar sua IA', parent: '/profile' },
-  { pattern: '/profile/tokens', title: 'Conectar sua IA', parent: '/profile' },
-  { pattern: '/profile/notifications', title: 'Notificações', parent: '/profile' },
-  { pattern: '/profile/appearance', title: 'Aparência', parent: '/profile' },
+  { pattern: '/profile/connect', title: 'Conectar sua IA', parent: '/you' },
+  { pattern: '/profile/tokens', title: 'Conectar sua IA', parent: '/you' },
+  { pattern: '/profile/notifications', title: 'Notificações', parent: '/you' },
+  { pattern: '/profile/appearance', title: 'Aparência', parent: '/you' },
   // Galeria do design system: só fora de produção (notFound em produção), sem link.
   { pattern: '/design-system', title: 'Design system', parent: '/' },
   { pattern: '/plan', title: 'Meu plano', parent: '/you' },

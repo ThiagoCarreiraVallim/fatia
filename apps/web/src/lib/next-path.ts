@@ -18,11 +18,20 @@ export function safeNextPath(raw: string | null | undefined): string | null {
   return raw;
 }
 
-/** `/api/logto/sign-in` com a tela e o retorno, quando houver. */
-export function signInHref(next: string | null, tela?: 'cadastro' | 'senha'): string {
+/** Os conectores sociais do login (Onb-01a e Onb-01b), lista fechada. */
+export const SOCIAL_TARGETS = ['google', 'apple'] as const;
+export type SocialTarget = (typeof SOCIAL_TARGETS)[number];
+
+/** `/api/logto/sign-in` com a tela e o retorno, quando houver; `social` pula a tela do Logto. */
+export function signInHref(
+  next: string | null,
+  tela?: 'cadastro' | 'senha',
+  options: { social?: SocialTarget } = {},
+): string {
   const q = new URLSearchParams();
   if (tela) q.set('tela', tela);
   if (next) q.set('next', next);
+  if (options.social) q.set('social', options.social);
   const qs = q.toString();
   return `/api/logto/sign-in${qs ? `?${qs}` : ''}`;
 }

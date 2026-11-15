@@ -17,7 +17,9 @@ export type MediaPurpose =
   | 'exercise_video'
   | 'exercise_photo'
   | 'agent_avatar'
-  | 'post_image';
+  | 'post_image'
+  /** Foto de perfil (#387): pessoal, sem comunidade. */
+  | 'user_avatar';
 
 export interface MediaView {
   id: string;
@@ -194,8 +196,12 @@ export interface UploadTicket {
 }
 
 export const mediaApi = {
-  requestUpload: (input: { purpose: MediaPurpose; groupId: string; mime: string; bytes: number }) =>
-    apiFetch<UploadTicket>('/api/media/uploads', json('POST', input)),
+  requestUpload: (input: {
+    purpose: MediaPurpose;
+    groupId?: string;
+    mime: string;
+    bytes: number;
+  }) => apiFetch<UploadTicket>('/api/media/uploads', json('POST', input)),
   confirm: (fileId: string) => apiFetch<MediaView>(`/api/media/${fileId}/confirm`, json('POST')),
 };
 
@@ -218,7 +224,7 @@ export function imageProblem(file: { type: string; size: number }): string | nul
  * seletor —, porque o corpo não passa pela API nem pelo transporte autenticado.
  */
 export async function uploadMedia(
-  input: { purpose: MediaPurpose; groupId: string; mime: string; bytes: number },
+  input: { purpose: MediaPurpose; groupId?: string; mime: string; bytes: number },
   put: (url: string, headers: Record<string, string>) => Promise<{ ok: boolean; status: number }>,
 ): Promise<MediaView> {
   const ticket = await mediaApi.requestUpload(input);

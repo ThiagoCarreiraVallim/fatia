@@ -80,6 +80,8 @@ export interface InvitePreview {
   expiresAt: string;
   /** O que é obrigatório compartilhar para entrar por este convite; vazio em convite de equipe. */
   requiredSharingScopes: ShareScope[];
+  /** O desafio em andamento, para as boas-vindas (Onb-02): título e quantos participam. */
+  activeChallenge: { title: string; participants: number } | null;
 }
 
 /** Resposta de entrar, aceitar ou sair. `INVITED` = aguardando o dono aprovar. */

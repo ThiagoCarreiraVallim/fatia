@@ -140,6 +140,39 @@ const ORIGEM_DOS_PASSOS: Record<string, string> = {
 };
 
 const FOCO_DO_BLOCO: Record<string, string> = { strength: 'Força', hypertrophy: 'Hipertrofia' };
+/** Os tipos de lembrete (#389), como a prancha Al-V3 os chama. */
+const TIPO_DE_LEMBRETE: Record<string, string> = {
+  WATER: 'Água',
+  MEAL: 'Refeição',
+  WEIGHT: 'Pesagem',
+  WORKOUT: 'Treino',
+  STEPS: 'Passos',
+};
+const DIA_DA_SEMANA: Record<number, string> = {
+  1: 'Seg',
+  2: 'Ter',
+  3: 'Qua',
+  4: 'Qui',
+  5: 'Sex',
+  6: 'Sáb',
+  7: 'Dom',
+};
+/** Os tipos de aviso da prancha Al-V4 (#389). */
+const TIPO_DE_AVISO: Record<string, string> = {
+  COMMUNITY: 'Comunidade',
+  ANNOUNCEMENTS: 'Comunicados da comunidade',
+  SCHEDULE: 'Agenda da comunidade',
+  SCHEDULE_REMINDER: 'Treino do dia',
+  CHALLENGES: 'Desafios',
+  FEED: 'Mural',
+  MODERATION: 'Moderação',
+  CHAT: 'Chat com a IA',
+  PLAN_RECEIVED: 'Plano novo',
+  ASSESSMENT_REQUESTED: 'Avaliação pedida',
+  QUESTIONNAIRE: 'Questionário',
+  BIRTHDAY: 'Aniversário',
+  REMINDERS: 'Lembretes',
+};
 const NIVEL: Record<string, string> = {
   beginner: 'Iniciante',
   intermediate: 'Intermediário',
@@ -222,6 +255,12 @@ const escopos: Formato = (valor, ctx) =>
   Array.isArray(valor) ? (valor.length ? listaDeMapa(ESCOPOS)(valor, ctx) : 'Nada') : null;
 
 export const CAMPOS: Record<string, Campo> = {
+  // `mark_inbox_read` (#373): quantos avisos; sem a lista, a tool marca todos.
+  ids: {
+    rotulo: 'Avisos marcados como lidos',
+    formato: (valor) =>
+      Array.isArray(valor) ? (valor.length === 1 ? '1 aviso' : `${valor.length} avisos`) : null,
+  },
   scopes: { rotulo: 'Compartilha com a equipe', formato: escopos },
   applyGoals: {
     rotulo: 'Trocar minhas metas pelas do plano',
@@ -323,7 +362,9 @@ export const CAMPOS: Record<string, Campo> = {
   kind: {
     rotulo: 'Tipo',
     formato: (valor) =>
-      typeof valor === 'string' ? (FOCO_DO_BLOCO[valor] ?? TIPO_DE_META[valor] ?? valor) : null,
+      typeof valor === 'string'
+        ? (FOCO_DO_BLOCO[valor] ?? TIPO_DE_META[valor] ?? TIPO_DE_LEMBRETE[valor] ?? valor)
+        : null,
   },
   sessionsPerWeek: { rotulo: 'Treinos por semana', formato: semUnidade },
   muscleGroup: {
@@ -349,6 +390,49 @@ export const CAMPOS: Record<string, Campo> = {
   status: { rotulo: 'Situação', formato: deMapa(SITUACAO_DA_META) },
   heightCm: { rotulo: 'Altura', formato: comUnidade('cm', 0) },
   timezone: { rotulo: 'Fuso horário', formato: fuso },
+  // Apelido e bio do perfil (#387): aparecem a quem a visibilidade deixa, nas comunidades.
+  nickname: { rotulo: 'Nome nas comunidades', formato: texto },
+  bio: { rotulo: 'Sobre você', formato: texto },
+  loadUnit: { rotulo: 'Carga em', formato: deMapa({ KG: 'Quilos (kg)', LB: 'Libras (lb)' }) },
+  distanceUnit: {
+    rotulo: 'Distância em',
+    formato: deMapa({ KM: 'Quilômetros (km)', M: 'Metros (m)', MI: 'Milhas (mi)' }),
+  },
+  // Lembretes (#389): o horário já vem em "hh:mm", no fuso da pessoa.
+  mode: { rotulo: 'Como', formato: deMapa({ INTERVAL: 'Intervalo', TIMES: 'Horários fixos' }) },
+  everyHours: { rotulo: 'A cada', formato: comUnidade('h', 0) },
+  from: { rotulo: 'Primeiro aviso', formato: texto },
+  to: { rotulo: 'Último aviso', formato: texto },
+  times: {
+    rotulo: 'Horários',
+    formato: (valor) =>
+      Array.isArray(valor) && valor.length ? valor.map(String).join(', ') : null,
+  },
+  weekdays: {
+    rotulo: 'Dias',
+    formato: (valor) =>
+      Array.isArray(valor) && valor.length
+        ? valor.length === 7
+          ? 'Todos os dias'
+          : valor.map((d) => DIA_DA_SEMANA[Number(d)] ?? String(d)).join(', ')
+        : null,
+  },
+  stepsBelow: { rotulo: 'Só se abaixo de', formato: comUnidade('passos', 0) },
+  enabled: { rotulo: 'Ligado', formato: simOuNao },
+  // Preferências de aviso (#389).
+  preferences: {
+    rotulo: 'Avisos',
+    formato: (valor) => {
+      if (!valor || typeof valor !== 'object') return null;
+      const partes = Object.entries(valor as Record<string, unknown>)
+        .filter(([, v]) => typeof v === 'boolean')
+        .map(([k, v]) => `${TIPO_DE_AVISO[k] ?? k}: ${v ? 'ligado' : 'desligado'}`);
+      return partes.length ? partes.join(', ') : null;
+    },
+  },
+  quietHoursEnabled: { rotulo: 'Silêncio noturno', formato: simOuNao },
+  quietFrom: { rotulo: 'Silêncio começa', formato: texto },
+  quietTo: { rotulo: 'Silêncio termina', formato: texto },
 };
 
 /**
@@ -389,7 +473,8 @@ export type TipoDeRegistro =
   | 'convite'
   | 'planoDaComunidade'
   | 'desafioDaComunidade'
-  | 'postDaComunidade';
+  | 'postDaComunidade'
+  | 'lembrete';
 
 /**
  * Campo cujo sentido muda com a tool. `groupId` é grupo de alimento em
@@ -413,6 +498,7 @@ export const ID_POR_TOOL: Record<string, TipoDeRegistro> = {
   update_custom_food: 'alimento',
   set_food_favorite: 'alimento',
   update_water_log: 'agua',
+  update_reminder: 'lembrete',
   clone_exercise: 'exercicio',
   update_custom_exercise: 'exercicio',
 };
@@ -440,6 +526,7 @@ export const ROTULO_DO_REGISTRO: Record<TipoDeRegistro, string> = {
   planoDaComunidade: 'Plano da comunidade',
   desafioDaComunidade: 'Desafio',
   postDaComunidade: 'Post',
+  lembrete: 'Lembrete',
 };
 
 /** Campos com forma própria no cartão, montados pelo serviço. */

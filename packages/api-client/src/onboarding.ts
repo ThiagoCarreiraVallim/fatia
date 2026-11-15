@@ -1,12 +1,5 @@
 import type { UserGoals } from './nutrition';
-import type {
-  ActivityLevel,
-  BiologicalSex,
-  BodyObjective,
-  GoalsInput,
-  MeUser,
-  OnboardingProfile,
-} from './users';
+import type { BiologicalSex, GoalsInput, MeUser, OnboardingProfile } from './users';
 
 /**
  * Assistente de primeira vez, comum ao PWA e ao app.
@@ -16,55 +9,10 @@ import type {
  * erro aparecer no campo antes do envio.
  */
 
-export const ONBOARDING_STEPS = [
-  { key: 'objective', title: 'Qual é o seu objetivo?' },
-  { key: 'body', title: 'Sobre você' },
-  { key: 'activity', title: 'Como é a sua rotina?' },
-  { key: 'goals', title: 'Suas metas' },
-] as const;
-
-export type OnboardingStepKey = (typeof ONBOARDING_STEPS)[number]['key'];
-
-interface Option<T> {
-  value: T;
-  label: string;
-  description: string;
-}
-
-export const OBJECTIVE_OPTIONS: Option<BodyObjective>[] = [
-  {
-    value: 'LOSE',
-    label: 'Perder peso',
-    description: 'Comer um pouco abaixo do gasto, sem passar fome.',
-  },
-  { value: 'MAINTAIN', label: 'Manter o peso', description: 'Comer perto do que o corpo gasta.' },
-  {
-    value: 'GAIN',
-    label: 'Ganhar massa',
-    description: 'Comer um pouco acima do gasto, com mais proteína.',
-  },
-];
-
-export const ACTIVITY_OPTIONS: Option<ActivityLevel>[] = [
-  {
-    value: 'SEDENTARY',
-    label: 'Sedentário',
-    description: 'Trabalho sentado, quase sem exercício.',
-  },
-  { value: 'LIGHT', label: 'Leve', description: 'Caminhadas ou treino 1 a 3 vezes por semana.' },
-  { value: 'MODERATE', label: 'Moderado', description: 'Treino 3 a 5 vezes por semana.' },
-  { value: 'ACTIVE', label: 'Ativo', description: 'Treino puxado 6 ou 7 vezes por semana.' },
-  {
-    value: 'VERY_ACTIVE',
-    label: 'Muito ativo',
-    description: 'Trabalho braçal ou dois treinos por dia.',
-  },
-];
-
-export const SEX_OPTIONS: { value: BiologicalSex; label: string }[] = [
-  { value: 'FEMALE', label: 'Feminino' },
-  { value: 'MALE', label: 'Masculino' },
-];
+/**
+ * As etapas, a ordem e os textos das telas das pranchas Onb-* moram em
+ * `onboarding-flow.ts`; aqui ficam o formulário do corpo e o das metas.
+ */
 
 /** As faixas de `SUGGESTION_LIMITS` da API. */
 export const BODY_LIMITS = {

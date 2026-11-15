@@ -122,6 +122,39 @@ describe('comunidade (integração)', () => {
       });
     });
 
+    it('o cartão mostra o desafio em andamento e quantos participam (Onb-02, #371)', async () => {
+      const { dono, grupo } = await comunidade();
+      const { url } = await invites.create(dono, grupo.id, { role: 'MEMBER' });
+      expect((await invites.preview(token(url))).activeChallenge).toBeNull();
+
+      const agora = Date.now();
+      await prisma.groupChallenge.create({
+        data: {
+          groupId: grupo.id,
+          title: 'Semana ativa',
+          metric: 'ACTIVE_DAYS',
+          startsAt: new Date(agora - 86_400_000),
+          endsAt: new Date(agora + 86_400_000),
+          timezone: 'America/Sao_Paulo',
+        },
+      });
+      // Desafio que já acabou não entra.
+      await prisma.groupChallenge.create({
+        data: {
+          groupId: grupo.id,
+          title: 'Passado',
+          metric: 'STEPS',
+          startsAt: new Date(agora - 9 * 86_400_000),
+          endsAt: new Date(agora - 2 * 86_400_000),
+          timezone: 'America/Sao_Paulo',
+        },
+      });
+      expect((await invites.preview(token(url))).activeChallenge).toEqual({
+        title: 'Semana ativa',
+        participants: 0,
+      });
+    });
+
     it('recusar tudo também entra, e não cria vínculo nenhum', async () => {
       const { dono, grupo } = await comunidade();
       const { url } = await invites.create(dono, grupo.id, { role: 'MEMBER' });

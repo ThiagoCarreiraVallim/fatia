@@ -11,4 +11,17 @@ export const USER_SELECT = {
   activityLevel: true,
   objective: true,
   onboardedAt: true,
+  // A etapa da retomada (#371): enquanto preenchida, o app volta ao onboarding.
+  onboardingStep: true,
+  // Você (#387).
+  nickname: true,
+  bio: true,
+  avatarVisibility: true,
+  keepMealPhotos: true,
+  whatsapp: true,
+  whatsappOptIn: true,
+  loadUnit: true,
+  distanceUnit: true,
+  // A foto sai como URL assinada (`ProfileService`), nunca a chave do bucket.
+  avatarFile: true,
 } as const;

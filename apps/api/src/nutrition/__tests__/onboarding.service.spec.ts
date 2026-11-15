@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { BadRequestException } from '@nestjs/common';
 import { OnboardingService } from '../onboarding.service';
 import type { PrismaService } from '../../common/prisma.service';
@@ -115,6 +116,7 @@ describe('OnboardingService', () => {
           activityLevel: 'MODERATE',
           objective: 'LOSE',
           onboardedAt: expect.any(Date),
+          onboardingDraft: Prisma.DbNull,
         },
         select: { id: true, onboardedAt: true },
       });

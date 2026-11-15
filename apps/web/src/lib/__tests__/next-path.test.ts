@@ -33,4 +33,10 @@ describe('signInHref', () => {
       '/api/logto/sign-in?tela=cadastro&next=%2Fc%2Ftok',
     );
   });
+
+  it('Google e Apple vão direto ao conector (#371)', () => {
+    expect(signInHref('/c/tok', undefined, { social: 'google' })).toBe(
+      '/api/logto/sign-in?next=%2Fc%2Ftok&social=google',
+    );
+  });
 });

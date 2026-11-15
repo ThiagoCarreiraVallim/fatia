@@ -1,6 +1,16 @@
-import { IsBoolean, IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 import type { DevicePlatform } from '@fatia/db';
 import { DEVICE_PLATFORMS } from '../notification.service';
+import { INBOX_MARK_MAX } from '../inbox.service';
 
 export class RegisterDeviceDto {
   /** O formato exato da Expo é conferido no service. */
@@ -38,6 +48,39 @@ export class NotificationPreferencesDto {
   @IsOptional()
   @IsBoolean()
   CHAT?: boolean;
+
+  // Os tipos da prancha Al-V4 (#389).
+  @IsOptional()
+  @IsBoolean()
+  ANNOUNCEMENTS?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  PLAN_RECEIVED?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  ASSESSMENT_REQUESTED?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  QUESTIONNAIRE?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  SCHEDULE?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  SCHEDULE_REMINDER?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  BIRTHDAY?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  REMINDERS?: boolean;
 }
 
 /** A inscrição que o `PushManager.subscribe` do navegador devolve, achatada. */
@@ -59,4 +102,13 @@ export class WebPushUnsubscribeDto {
   @IsString()
   @MaxLength(1000)
   endpoint!: string;
+}
+
+/** Marcar avisos da central como lidos (#373). Sem `ids`, todos. */
+export class MarkInboxReadDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(INBOX_MARK_MAX)
+  @IsUUID('all', { each: true })
+  ids?: string[];
 }

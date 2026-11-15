@@ -4,7 +4,8 @@ import { Text } from '@/components/ui/text';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { ChevronRight, Dumbbell, Footprints, Trophy } from 'lucide-react-native';
-import { workoutApi } from '@fatia/api-client';
+import { formatDistanceIn, loadNumber, loadUnitLabel, workoutApi } from '@fatia/api-client';
+import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { Button, Card, EmptyState, LoadingState } from '@/components/ui';
 import { chartColors, formatDuration } from '@/components/charts';
 
@@ -179,9 +180,12 @@ function RecordValue({
   isCardio: boolean;
   record: NonNullable<PersonalRecord>;
 }) {
+  const units = useUnitPrefs();
   if (isCardio && isCardioRecord(record)) {
     const distance =
-      record.distanceMeters !== null ? `${(record.distanceMeters / 1000).toFixed(2)} km` : null;
+      record.distanceMeters !== null
+        ? formatDistanceIn(record.distanceMeters, units.distanceUnit)
+        : null;
     return (
       <>
         <Text className="text-lg font-extrabold text-primary">
@@ -198,7 +202,8 @@ function RecordValue({
     return (
       <>
         <Text className="text-lg font-extrabold text-primary">
-          {record.weightKg ?? '—'} <Text className="text-sm">kg</Text>
+          {record.weightKg != null ? loadNumber(record.weightKg, units.loadUnit) : '—'}{' '}
+          <Text className="text-sm">{loadUnitLabel(units.loadUnit)}</Text>
         </Text>
         <Text className="text-[10px] font-bold tracking-wide text-muted-foreground">
           {record.reps ? `${record.reps} reps` : 'PR'}

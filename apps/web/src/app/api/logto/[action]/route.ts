@@ -1,7 +1,12 @@
 import LogtoClient, { handleSignIn } from '@logto/next/server-actions';
 import { NextRequest, NextResponse } from 'next/server';
 import { logtoConfig } from '@/lib/logto';
-import { NEXT_COOKIE, NEXT_COOKIE_MAX_AGE_S, safeNextPath } from '@/lib/next-path';
+import { NEXT_COOKIE, NEXT_COOKIE_MAX_AGE_S, SOCIAL_TARGETS, safeNextPath } from '@/lib/next-path';
+import {
+  SIGNUP_NAME_COOKIE,
+  SIGNUP_NAME_MAX_AGE_S,
+  cleanSignupName,
+} from '@/lib/onboarding-cookies';
 
 type RouteContext = { params: Promise<{ action: string }> };
 
@@ -15,6 +20,9 @@ const FIRST_SCREENS = {
   senha: 'reset_password',
 } as const;
 
+/** Só um e-mail plausível vira `login_hint`: o Logto preenche o campo com ele. */
+const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
+
 export async function GET(request: NextRequest, ctx: RouteContext) {
   const { action } = await ctx.params;
 
@@ -23,11 +31,29 @@ export async function GET(request: NextRequest, ctx: RouteContext) {
     const tela = request.nextUrl.searchParams.get('tela');
     const firstScreen =
       tela && tela in FIRST_SCREENS ? FIRST_SCREENS[tela as keyof typeof FIRST_SCREENS] : undefined;
+    // Google e Apple (Onb-01a/01b) pulam a tela do Logto e vão direto ao conector.
+    const social = request.nextUrl.searchParams.get('social');
+    const target = SOCIAL_TARGETS.find((t) => t === social);
+    const email = request.nextUrl.searchParams.get('email')?.trim() ?? '';
     const { url } = await client.handleSignIn({
       redirectUri: `${logtoConfig.baseUrl}/api/logto/callback`,
       firstScreen,
+      ...(EMAIL.test(email) ? { loginHint: email } : {}),
+      ...(target ? { directSignIn: { method: 'social' as const, target } } : {}),
     });
     const resposta = NextResponse.redirect(url);
+    // O nome digitado em "Criar conta": o onboarding lê, grava no perfil e apaga.
+    // A senha fica na tela do Logto; o app nunca a vê (ADR 008).
+    const nome = cleanSignupName(request.nextUrl.searchParams.get('nome'));
+    if (nome) {
+      resposta.cookies.set(SIGNUP_NAME_COOKIE, nome, {
+        httpOnly: false,
+        sameSite: 'lax',
+        secure: logtoConfig.baseUrl.startsWith('https://'),
+        path: '/',
+        maxAge: SIGNUP_NAME_MAX_AGE_S,
+      });
+    }
     // Para onde voltar depois do login (o link de convite, por exemplo). Fica num
     // cookie porque o `redirectUri` do Logto é fixo, e só caminho deste app entra.
     const next = safeNextPath(request.nextUrl.searchParams.get('next'));
