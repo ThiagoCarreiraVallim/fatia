@@ -56,7 +56,7 @@ export const remindersApi = {
   update: (id: string, input: ReminderInput) =>
     apiFetch<Reminder>(`/api/users/me/reminders/${encodeURIComponent(id)}`, json('PATCH', input)),
   remove: (id: string) =>
-    apiFetch<{ removed: true }>(
+    apiFetch<{ deleted: true }>(
       `/api/users/me/reminders/${encodeURIComponent(id)}`,
       json('DELETE'),
     ),
