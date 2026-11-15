@@ -1,3 +1,4 @@
+import type { PrismaClient } from '@fatia/db';
 import { PrismaService } from '../../common/prisma.service';
 import { parseInviteArgs, runCommunityInvite } from '../community-invite';
 import { hashInviteToken } from '../invite.service';
@@ -34,6 +35,9 @@ describe('community:invite — argumentos', () => {
 /** Contra o Postgres de teste: o link vale, e o --purge devolve a pessoa ao estado de antes. */
 describe('community:invite (banco real)', () => {
   const prisma = new PrismaService();
+  // O script roda com o `PrismaClient` puro; o `PrismaService` omite `MealItem.seq`, e o
+  // tipo das relações profundas (mídia → refeição → itens) deixa de bater sem o cast.
+  const scriptDb = prisma as unknown as PrismaClient;
   const stamp = `community-invite-${Date.now()}`;
   let dona: string;
   let pessoa: string;
@@ -70,7 +74,7 @@ describe('community:invite (banco real)', () => {
   it('cria o convite em nome da dona e imprime o link com o token que a API confere', async () => {
     const agora = new Date('2026-10-17T12:00:00Z');
     const url = await runCommunityInvite(
-      prisma,
+      scriptDb,
       { slug: stamp, purge: false, role: 'MEMBER', days: 7 },
       'http://app.test/',
       agora,
@@ -106,7 +110,7 @@ describe('community:invite (banco real)', () => {
       },
     });
 
-    const msg = await runCommunityInvite(prisma, {
+    const msg = await runCommunityInvite(scriptDb, {
       slug: stamp,
       purge: true,
       email: `${stamp}-pessoa@test.local`,

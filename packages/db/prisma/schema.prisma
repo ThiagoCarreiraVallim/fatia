@@ -64,7 +64,7 @@ model User {
   /// Quem vê a foto. Fora das comunidades da pessoa, ninguém.
   avatarVisibility AvatarVisibility @default(COMMUNITIES)
   /// "Guardar fotos das refeições" (ADR 038). Nulo = ainda não respondeu, e a
-  /// foto é usada e descartada como antes.
+  /// foto é usada e descartada como antes. Só `true` guarda (#374).
   keepMealPhotos   Boolean?
   /// WhatsApp para a equipe chamar (o Fatia não tem chat entre pessoas). Só
   /// aparece para a equipe com `whatsappOptIn` ligado.
@@ -401,26 +401,43 @@ enum MealType {
 }
 
 model Meal {
-  id        String   @id @default(uuid())
-  userId    String
-  mealType  MealType
-  eatenAt   DateTime
-  notes     String?
-  createdAt DateTime @default(now())
+  id          String   @id @default(uuid())
+  userId      String
+  mealType    MealType
+  eatenAt     DateTime
+  notes       String?
+  /// Foto do prato (ADR 038, #374): mídia pessoal `meal_photo`, uma por
+  /// refeição. Só existe quando a pessoa escolheu guardar as fotos e a foto
+  /// virou esta refeição. Apagar a foto, a refeição ou a conta apaga o arquivo.
+  photoFileId String?  @unique
+  createdAt   DateTime @default(now())
 
-  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  items MealItem[]
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     MealItem[]
+  photoFile MediaFile? @relation("MealPhoto", fields: [photoFileId], references: [id], onDelete: SetNull)
 
   @@index([userId, eatenAt])
 }
 
+/// De onde veio o item (#374): é o que pinta o selo "IA" na refeição.
+enum MealItemSource {
+  /// Digitado ou escolhido na busca pela pessoa.
+  MANUAL
+  /// Estimado pela IA: foto do prato, ditado, chat ou conector MCP.
+  AI
+  /// Veio do plano alimentar ("Comi isso", #376).
+  PLAN
+  /// Código de barras ou foto do rótulo.
+  BARCODE
+}
+
 model MealItem {
-  id              String  @id @default(uuid())
+  id              String         @id @default(uuid())
   mealId          String
   /// A ordem de inserção, e só isso: os itens de uma refeição saem por ela (`ITENS_EM_ORDEM`).
   /// Sem ela, a ordem era a física da tabela, e um UPDATE que não cabe na página muda de lugar.
   /// O `PrismaService` a omite de toda resposta.
-  seq             Int     @default(autoincrement())
+  seq             Int            @default(autoincrement())
   foodId          Int? // null = item livre estimado pelo Claude
   groupId         Int? // copiado do food, ou inferido pelo Claude
   foodName        String // snapshot — sempre preenchido
@@ -437,6 +454,7 @@ model MealItem {
   // e sugestão da próxima vez; a conta usa `grams`. Nulos quando veio em gramas.
   portionLabel    String?
   portionQuantity Float?
+  source          MealItemSource @default(MANUAL)
 
   meal  Meal       @relation(fields: [mealId], references: [id], onDelete: Cascade)
   food  Food?      @relation(fields: [foodId], references: [id])
@@ -946,6 +964,9 @@ enum ShareScope {
   /// Água e passos.
   HABITS
   GOALS
+  /// Fotos das refeições (ADR 038, #374). Nunca implícita em `NUTRITION`:
+  /// quem compartilha Alimentação mostra só os números.
+  MEAL_PHOTOS
 }
 
 model Group {
@@ -1529,6 +1550,7 @@ model MediaFile {
   guidePhotoOf   GroupExerciseGuidePhoto?
   postImageOf    GroupPostImage?          @relation("PostImage")
   userAvatarOf   User?                    @relation("UserAvatar")
+  mealPhotoOf    Meal?                    @relation("MealPhoto")
 
   @@index([groupId])
   @@index([uploaderId])
