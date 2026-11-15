@@ -85,23 +85,27 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  goals              UserGoals?
-  authoredChallenges GroupChallenge[]  @relation("ChallengeAuthor")
-  personalGoals      Goal[]
-  meals              Meal[]
-  workoutPlans       WorkoutPlan[]
-  workoutSessions    WorkoutSession[]
-  weightLogs         WeightLog[]
-  stepLogs           StepLog[]
-  waterLogs          WaterLog[]
-  customFoods        Food[]            @relation("UserCustomFoods")
-  favoriteFoods      FavoriteFood[]
-  foodPortions       FoodPortion[]
-  mealTemplates      MealTemplate[]
-  customExercises    Exercise[]        @relation("UserCustomExercises")
-  nutrientTargets    NutrientTarget[]
-  achievements       UserAchievement[]
-  trainingBlocks     TrainingBlock[]
+  goals                  UserGoals?
+  authoredChallenges     GroupChallenge[]  @relation("ChallengeAuthor")
+  personalGoals          Goal[]
+  meals                  Meal[]
+  workoutPlans           WorkoutPlan[]
+  workoutSessions        WorkoutSession[]
+  weightLogs             WeightLog[]
+  stepLogs               StepLog[]
+  waterLogs              WaterLog[]
+  customFoods            Food[]            @relation("UserCustomFoods")
+  favoriteFoods          FavoriteFood[]
+  foodPortions           FoodPortion[]
+  mealTemplates          MealTemplate[]
+  customExercises        Exercise[]        @relation("UserCustomExercises")
+  nutrientTargets        NutrientTarget[]
+  achievements           UserAchievement[]
+  trainingBlocks         TrainingBlock[]
+  /// Plano alimentar que a equipe mandou para a pessoa (#376). É dado dela.
+  nutritionPlans         NutritionPlan[]   @relation("NutritionPlanSubject")
+  /// Planos que a pessoa, como profissional, escreveu para alunos (#376, #407).
+  nutritionPlansAuthored NutritionPlan[]   @relation("NutritionPlanAuthor")
 
   conversations  Conversation[]
   memories       UserMemory[]
@@ -337,12 +341,14 @@ model Food {
   searchName      String     @default("")
   createdAt       DateTime   @default(now())
 
-  group         FoodGroup?         @relation(fields: [groupId], references: [id])
-  createdBy     User?              @relation("UserCustomFoods", fields: [createdByUserId], references: [id], onDelete: Cascade)
-  mealItems     MealItem[]
-  favoritedBy   FavoriteFood[]
-  portions      FoodPortion[]
-  templateItems MealTemplateItem[]
+  group           FoodGroup?                @relation(fields: [groupId], references: [id])
+  createdBy       User?                     @relation("UserCustomFoods", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  mealItems       MealItem[]
+  favoritedBy     FavoriteFood[]
+  portions        FoodPortion[]
+  templateItems   MealTemplateItem[]
+  planItems       NutritionPlanItem[]
+  planEquivalents NutritionPlanEquivalent[]
 
   // Unicidade por (nome, source) só para públicos. Customs podem repetir nomes
   // entre usuários — unicidade real é (nome, source, createdByUserId).
@@ -408,8 +414,10 @@ model Meal {
   notes     String?
   createdAt DateTime @default(now())
 
-  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  items MealItem[]
+  user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items    MealItem[]
+  /// "Comi isso" no plano alimentar (#376): apagar a refeição desfaz o "feito".
+  planLogs NutritionPlanLog[]
 
   @@index([userId, eatenAt])
 }
@@ -460,9 +468,11 @@ model MealTemplate {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   items        MealTemplateItem[]
-  fromTemplate GroupPlanTemplate? @relation("MealFromTemplate", fields: [fromTemplateId], references: [id], onDelete: SetNull)
+  fromTemplate GroupPlanTemplate?    @relation("MealFromTemplate", fields: [fromTemplateId], references: [id], onDelete: SetNull)
+  /// Opção do plano alimentar que gerou esta refeição salva ao aceitar (#376).
+  planOptions  NutritionPlanOption[]
 
   @@unique([userId, name])
   @@index([userId])
@@ -489,6 +499,197 @@ model MealTemplateItem {
   group    FoodGroup?   @relation(fields: [groupId], references: [id], onDelete: SetNull)
 
   @@index([templateId])
+}
+
+// ============================================================
+// PLANO ALIMENTAR DO PROFISSIONAL (#376, ADR 045)
+// ============================================================
+
+/// SENT: chegou e espera o aceite. ACCEPTED: o plano em uso (um por pessoa).
+/// SUPERSEDED: veio uma versão nova, ou outro plano foi aceito. Recusar não
+/// muda nada: o plano fica SENT até ser aceito ou substituído.
+enum NutritionPlanStatus {
+  SENT
+  ACCEPTED
+  SUPERSEDED
+}
+
+/// Plano alimentar escrito por um profissional para um aluno (ADR 045: autoral,
+/// sem sugestão da IA). A linha é do ALUNO (`userId`): entra no export dele e
+/// some com a conta dele. O autor apagar a conta não leva o plano, só o nome.
+///
+/// As metas vêm como faixa, como `UserGoals`: aceitar com `applyGoals` copia
+/// as oito colunas para as metas do dia.
+model NutritionPlan {
+  id           String              @id @default(uuid())
+  userId       String
+  authorId     String?
+  /// Comunidade em que o plano foi enviado: diz quem da equipe vê as trocas.
+  groupId      String?
+  /// 1, 2, 3… por aluno e autor. Aparece como "· v2" no cabeçalho.
+  version      Int
+  status       NutritionPlanStatus @default(SENT)
+  kcalMin      Int
+  kcalMax      Int
+  proteinMinG  Int
+  proteinMaxG  Int
+  carbsMinG    Int
+  carbsMaxG    Int
+  fatMinG      Int
+  fatMaxG      Int
+  /// Aceitar aplica as faixas acima às metas do dia.
+  applyGoals   Boolean             @default(true)
+  /// Recado do profissional, texto puro.
+  note         String?
+  sentAt       DateTime            @default(now())
+  acceptedAt   DateTime?
+  supersededAt DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  user   User                @relation("NutritionPlanSubject", fields: [userId], references: [id], onDelete: Cascade)
+  author User?               @relation("NutritionPlanAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  group  Group?              @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  meals  NutritionPlanMeal[]
+  swaps  NutritionSwap[]
+
+  @@index([userId, status])
+  @@index([authorId])
+  @@index([groupId])
+}
+
+/// Uma refeição do plano (café, almoço…), com uma ou mais opções.
+model NutritionPlanMeal {
+  id       String   @id @default(uuid())
+  planId   String
+  mealType MealType
+  /// "Café da manhã", "Lanche da tarde": o nome que o profissional deu.
+  name     String
+  position Int
+
+  plan    NutritionPlan         @relation(fields: [planId], references: [id], onDelete: Cascade)
+  options NutritionPlanOption[]
+  logs    NutritionPlanLog[]
+
+  @@index([planId])
+}
+
+/// Uma opção da refeição. Refeição com uma opção só é o caso comum; com várias,
+/// o aluno escolhe qual comeu ("toque para escolher").
+model NutritionPlanOption {
+  id             String  @id @default(uuid())
+  mealId         String
+  position       Int
+  /// Refeição salva criada em nome do aluno ao aceitar. Apagá-la não mexe no plano.
+  mealTemplateId String?
+
+  meal         NutritionPlanMeal   @relation(fields: [mealId], references: [id], onDelete: Cascade)
+  mealTemplate MealTemplate?       @relation(fields: [mealTemplateId], references: [id], onDelete: SetNull)
+  items        NutritionPlanItem[]
+  logs         NutritionPlanLog[]
+
+  @@index([mealId])
+  @@index([mealTemplateId])
+}
+
+/// Um alimento da opção, já com os macros calculados (retrato, como
+/// `MealTemplateItem`): só alimentos da base, nunca o personalizado de outra
+/// conta. Sem equivalentes, a tela mostra "sem troca".
+model NutritionPlanItem {
+  id               String  @id @default(uuid())
+  optionId         String
+  position         Int
+  foodId           Int?
+  groupId          Int?
+  foodName         String
+  grams            Float
+  kcal             Float
+  proteinG         Float
+  carbsG           Float
+  fatG             Float
+  nutrients        Json?
+  portionLabel     String?
+  portionQuantity  Float?
+  /// Grupo de equivalência ("Carboidrato"), o título da folha de troca.
+  equivalenceGroup String?
+
+  option      NutritionPlanOption       @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  food        Food?                     @relation(fields: [foodId], references: [id], onDelete: SetNull)
+  equivalents NutritionPlanEquivalent[]
+  swaps       NutritionSwap[]
+
+  @@index([optionId])
+}
+
+/// Um equivalente que o profissional liberou para o item, com a quantidade já
+/// ajustada.
+model NutritionPlanEquivalent {
+  id              String  @id @default(uuid())
+  itemId          String
+  position        Int
+  foodId          Int?
+  groupId         Int?
+  foodName        String
+  grams           Float
+  kcal            Float
+  proteinG        Float
+  carbsG          Float
+  fatG            Float
+  nutrients       Json?
+  portionLabel    String?
+  portionQuantity Float?
+
+  item  NutritionPlanItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  food  Food?             @relation(fields: [foodId], references: [id], onDelete: SetNull)
+  swaps NutritionSwap[]
+
+  @@index([itemId])
+}
+
+/// "Comi isso": a refeição registrada a partir de uma refeição do plano, num
+/// dia. O dono é o da refeição (e o do plano), sem coluna de dono própria.
+model NutritionPlanLog {
+  id         String   @id @default(uuid())
+  planMealId String
+  optionId   String
+  mealId     String   @unique
+  /// YYYY-MM-DD no fuso da pessoa.
+  date       String
+  createdAt  DateTime @default(now())
+
+  planMeal NutritionPlanMeal   @relation(fields: [planMealId], references: [id], onDelete: Cascade)
+  option   NutritionPlanOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  meal     Meal                @relation(fields: [mealId], references: [id], onDelete: Cascade)
+
+  @@index([planMealId, date])
+}
+
+/// Troca registrada: num dia, o aluno comeu um equivalente no lugar do item.
+/// "Desfazer" grava `undoneAt` e volta ao item; a linha fica como trilha do
+/// diário. A equipe só vê com Alimentação liberada (`NUTRITION`).
+model NutritionSwap {
+  id           String    @id @default(uuid())
+  planId       String
+  itemId       String
+  equivalentId String
+  /// YYYY-MM-DD no fuso da pessoa.
+  date         String
+  /// Retrato do que foi comido no lugar.
+  foodName     String
+  grams        Float
+  kcal         Float
+  /// Item da refeição registrada que a troca alterou, quando o "comi isso" veio
+  /// antes (ou depois). Sem FK: o item pode sumir, e a troca continua no diário.
+  mealItemId   String?
+  createdAt    DateTime  @default(now())
+  undoneAt     DateTime?
+
+  plan       NutritionPlan           @relation(fields: [planId], references: [id], onDelete: Cascade)
+  item       NutritionPlanItem       @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  equivalent NutritionPlanEquivalent @relation(fields: [equivalentId], references: [id], onDelete: Cascade)
+
+  @@index([planId, date])
+  @@index([itemId, date])
 }
 
 // ============================================================
@@ -994,6 +1195,8 @@ model Group {
   agentChats            Conversation[]       @relation("ConversationAgent")
   /// Desafios da comunidade (Fase 8a, ADR 027).
   challenges            GroupChallenge[]
+  /// Planos alimentares que a equipe mandou a alunos (#376).
+  nutritionPlans        NutritionPlan[]
   /// Quem publica no mural (Fase 8b, ADR 032).
   postPolicy            PostPolicy           @default(ALL_MEMBERS)
   posts                 GroupPost[]

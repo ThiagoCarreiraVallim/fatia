@@ -20,6 +20,7 @@ Decisões que nasceram desta conferência:
 | [042](./ADR/042-agenda-da-comunidade.md)                            | Agenda da comunidade informativa, sem reserva, vaga ou presença      |
 | [043](./ADR/043-papeis-da-equipe.md)                                | Papéis da equipe (com nutricionista) e consentimento por papel       |
 | [044](./ADR/044-desafios-com-revisao.md)                            | Desafios com pontos e foto de check-in revisada só pela equipe       |
+| [045](./ADR/045-plano-alimentar-autoral.md)                         | Plano alimentar autoral do profissional, sem sugestão da IA          |
 
 ## 1. O que o Fatia guarda
 
