@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 145 tools): **124,8 k caracteres**
-hoje, dos quais **7.396 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 145 tools): **125,8 k caracteres**
+hoje, dos quais **7.464 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (103,0 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (104,1 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -1622,7 +1622,13 @@ Atualiza as notas de uma sessão, finalizada ou em andamento. Para corrigir sér
 
 ### `finish_workout_session`
 
-Marca sessão como concluída. Idempotente — chamar de novo só atualiza notes/completedAt.
+Marca sessão como concluída. Idempotente — chamar de novo não muda o horário do fim (a não
+ser com `completedAt` explícito); só atualiza notes, sensação e respostas.
+
+Desde a #377 grava também `feeling` ("Como foi o treino?", 1 Leve a 5 No limite, em
+`WorkoutSession.feeling`) e as respostas rápidas pós-treino (`WorkoutCheckin`, uma por sessão,
+substituída inteira a cada envio). A equipe lê as respostas só pela leitura de Treino do painel,
+com o escopo `WORKOUT` liberado e linha em `ProfessionalAccessLog`.
 
 **Input:**
 
@@ -1630,6 +1636,13 @@ Marca sessão como concluída. Idempotente — chamar de novo só atualiza notes
 {
   sessionId: string;
   notes?: string;
+  completedAt?: string;
+  feeling?: number;
+  difficulty?: number;
+  fatigue?: number;
+  pain?: boolean;
+  painLocation?: string;
+  motivation?: number;
 }
 ```
 
