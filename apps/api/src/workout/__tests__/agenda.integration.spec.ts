@@ -267,6 +267,29 @@ describe('agenda de treinos (integração)', () => {
       expect(item).toMatchObject({ state: 'planned', canReschedule: false });
     });
 
+    it('com duas versões aceitas, vale o fim da de maior número', async () => {
+      const userId = await pessoa('Duas');
+      const start = addDaysIso(today, -3);
+      const planId = await planoDeCalendario(userId, 'Dupla', start, 2, [addDaysIso(today, 1)]);
+      const offer = await prisma.planOffer.findFirstOrThrow({ where: { userId } });
+      await prisma.planOfferVersion.create({
+        data: {
+          offerId: offer.id,
+          version: 2,
+          status: 'ACCEPTED',
+          title: 'Dupla',
+          snapshot: {},
+          snapshotVersion: 1,
+          schedule: 'CALENDAR',
+          startDate: start,
+          weeks: 3,
+          weekdays: [1, 2, 3, 4, 5, 6, 7],
+        },
+      });
+      const view = await agenda.range(userId, TZ, today, addDaysIso(today, 3));
+      expect(view.calendarPlan).toMatchObject({ planId, weeksTotal: 3 });
+    });
+
     it('sessão já feita não remarca (409)', async () => {
       const feita = await prisma.plannedSession.findFirstOrThrow({
         where: { planId: planAna, date: addDaysIso(today, -2) },

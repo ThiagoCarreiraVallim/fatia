@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
@@ -84,7 +85,7 @@ function configOf(item: SnapshotItem, cardio: boolean) {
  * `fromTemplateId`, e é o `ContentService` que confere a cópia já existente
  * (`workoutPlan.findFirst({ where: { userId, fromTemplateId } })`) antes de
  * chamar esta máquina, que continua sem saber de onde o retrato veio. A oferta
- * do profissional (#379) grava `fromOfferId` (`materializeOffer`).
+ * do profissional (#379) grava `fromOfferId` (`offerPlanWrites`).
  */
 @Injectable()
 export class PlanMaterializerService {
@@ -128,45 +129,59 @@ export class PlanMaterializerService {
   }
 
   /**
-   * O aceite de uma oferta da equipe (#379): o mesmo plano, com a proveniência
-   * da oferta. Exercício da comunidade não viaja por id numa oferta (ver
-   * `plan-snapshot.ts`), então não há `groupId`.
-   */
-  async materializeOffer(userId: string, snapshot: unknown, fromOfferId: string) {
-    const snap = this.validate(snapshot);
-    const exercises = await this.buildExercises(userId, snap);
-    return this.prisma.workoutPlan.create({
-      data: { userId, name: snap.name, fromOfferId, exercises: { create: exercises } },
-      include: PLAN_INCLUDE,
-    });
-  }
-
-  /**
-   * Aceitar a versão nova de uma oferta (#379) troca os exercícios do plano que
-   * a versão aceita criou, no mesmo plano: as sessões feitas continuam ligadas a
-   * ele. Só roda depois do aceite — nada muda no plano da pessoa sem ele.
+   * As escritas do plano no aceite de uma oferta da equipe (#379), para o
+   * aceite pôr na **mesma** transação de lote que a troca de versão e a agenda:
+   * ou entra tudo, ou nada. Devolve as escritas sem rodar.
    *
+   * Sem `planId`, é a primeira versão: cria o plano com a proveniência da
+   * oferta, com o id gerado aqui para a agenda apontar para ele na mesma
+   * transação. Exercício da comunidade não viaja por id numa oferta (ver
+   * `plan-snapshot.ts`), então não há `groupId`.
+   *
+   * Com `planId`, é a versão nova: troca os exercícios do plano que a versão
+   * aceita criou, no mesmo plano (as sessões feitas continuam ligadas a ele).
    * O `planId` é procurado com o `userId`: plano de outra pessoa responde como
-   * inexistente. Apagar e recriar os exercícios vai numa transação de lote (sem
-   * callback), pelo mesmo motivo do `create` aninhado acima.
+   * inexistente.
+   *
+   * A cópia dos exercícios do autor (`buildExercises`) roda antes, fora da
+   * transação, como em `materialize`.
    */
-  async rematerialize(userId: string, planId: string, snapshot: unknown) {
+  async offerPlanWrites(
+    userId: string,
+    snapshot: unknown,
+    fromOfferId: string,
+    planId: string | null,
+  ): Promise<{ planId: string; writes: Prisma.PrismaPromise<unknown>[] }> {
     const snap = this.validate(snapshot);
-    const owned = await this.prisma.workoutPlan.findFirst({
-      where: { id: planId, userId },
-      select: { id: true },
-    });
-    if (!owned) throw new NotFoundException('Plan not found');
+    if (planId) {
+      const owned = await this.prisma.workoutPlan.findFirst({
+        where: { id: planId, userId },
+        select: { id: true },
+      });
+      if (!owned) throw new NotFoundException('Plan not found');
+    }
     const exercises = await this.buildExercises(userId, snap);
-    const [, plan] = await this.prisma.$transaction([
-      this.prisma.workoutPlanExercise.deleteMany({ where: { planId } }),
-      this.prisma.workoutPlan.update({
-        where: { id: planId },
-        data: { name: snap.name, exercises: { create: exercises } },
-        include: PLAN_INCLUDE,
-      }),
-    ]);
-    return plan;
+    if (!planId) {
+      const id = randomUUID();
+      return {
+        planId: id,
+        writes: [
+          this.prisma.workoutPlan.create({
+            data: { id, userId, name: snap.name, fromOfferId, exercises: { create: exercises } },
+          }),
+        ],
+      };
+    }
+    return {
+      planId,
+      writes: [
+        this.prisma.workoutPlanExercise.deleteMany({ where: { planId } }),
+        this.prisma.workoutPlan.update({
+          where: { id: planId },
+          data: { name: snap.name, exercises: { create: exercises } },
+        }),
+      ],
+    };
   }
 
   /**

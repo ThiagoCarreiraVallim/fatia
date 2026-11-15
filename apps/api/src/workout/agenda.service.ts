@@ -246,7 +246,8 @@ export class AgendaService {
       where: { userId, versions: { some: { status: 'ACCEPTED' } } },
       include: {
         author: { select: { name: true } },
-        versions: { where: { status: 'ACCEPTED' } },
+        // A de maior número: uma falha antiga pode ter deixado outra aceita para trás.
+        versions: { where: { status: 'ACCEPTED' }, orderBy: { version: 'desc' }, take: 1 },
         plans: { where: { userId }, select: { id: true, name: true } },
       },
     });

@@ -134,7 +134,8 @@ function parseSnapshot(snapshot: Prisma.JsonValue): PlanSnapshot | null {
 /** As versões da oferta, na leitura: a última, a aceita e a que a tela mostra. */
 function versionsOf(offer: OfferRow) {
   const latest = offer.versions.at(-1)!;
-  const accepted = offer.versions.find((v) => v.status === 'ACCEPTED') ?? null;
+  // A de maior número: uma falha antiga pode ter deixado outra aceita para trás.
+  const accepted = offer.versions.filter((v) => v.status === 'ACCEPTED').at(-1) ?? null;
   // A última fala por si quando espera resposta ou foi recusada; aceita ou
   // substituída, a tela mostra a que está em uso.
   const shown =
@@ -298,29 +299,31 @@ export class PlanOfferService {
     });
     if (claimed.count !== 1) throw new ConflictException(ALREADY_ANSWERED);
 
-    let planId: string;
+    // Plano, troca de versão e agenda vão numa transação de lote só: ou entra
+    // tudo, ou a versão volta ao que era e a pessoa pode tentar de novo. Nunca
+    // ficam duas versões aceitas.
     try {
-      const existing = this.planOf(offer, userId);
-      const plan = existing
-        ? await this.materializer.rematerialize(userId, existing, version.snapshot)
-        : await this.materializer.materializeOffer(userId, version.snapshot, offerId);
-      planId = plan.id;
+      const { planId, writes } = await this.materializer.offerPlanWrites(
+        userId,
+        version.snapshot,
+        offerId,
+        this.planOf(offer, userId),
+      );
+      await this.prisma.$transaction([
+        ...writes,
+        this.prisma.planOfferVersion.updateMany({
+          where: { offerId, status: 'ACCEPTED', id: { not: version.id } },
+          data: { status: 'SUPERSEDED', respondedAt: now },
+        }),
+        ...this.agendaWrites(userId, planId, version, todayInTz(timezone)),
+      ]);
     } catch (error) {
-      // A cópia falhou: a versão volta a esperar, e a pessoa pode tentar de novo.
       await this.prisma.planOfferVersion.update({
         where: { id: version.id },
         data: { status: version.status, respondedAt: version.respondedAt },
       });
       throw error;
     }
-
-    await this.prisma.$transaction([
-      this.prisma.planOfferVersion.updateMany({
-        where: { offerId, status: 'ACCEPTED', id: { not: version.id } },
-        data: { status: 'SUPERSEDED', respondedAt: now },
-      }),
-      ...this.agendaWrites(userId, planId, version, todayInTz(timezone)),
-    ]);
 
     await this.notifyTeam(offer, userId, version.title, 'accepted');
     return this.view(await this.findOffer(userId, offerId), userId);
