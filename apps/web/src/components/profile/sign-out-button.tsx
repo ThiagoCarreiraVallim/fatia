@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { LogOut } from 'lucide-react';
 import { notificationsApi } from '@fatia/api-client';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Button } from '@/components/ui/button';
+import { ConfirmSheet } from '@/components/ui/confirm-sheet';
+import { Icon } from '@/components/ui/icon';
 
 const SIGN_OUT_URL = '/api/logto/sign-out';
 
@@ -28,10 +29,9 @@ export async function leaveWebPush(): Promise<void> {
 }
 
 /**
- * "Sair da conta" com confirmação, como no app: o botão fica no fim do perfil,
- * logo abaixo de "Apagar minha conta", e um toque errado obrigava a entrar de
- * novo. Botão e não `<Link>`: o Next prefetcharia o handler de saída, que
- * limpa a sessão antes do clique.
+ * "Sair da conta" com confirmação em folha (prancha Al-V1): o botão fica no fim
+ * de Você, e um toque errado obrigava a entrar de novo. Botão e não `<Link>`: o
+ * Next prefetcharia o handler de saída, que limpa a sessão antes do clique.
  */
 export function SignOutButton() {
   const [open, setOpen] = useState(false);
@@ -48,21 +48,19 @@ export function SignOutButton() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-danger/50 bg-transparent px-4 py-4 text-base font-bold text-danger transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <LogOut size={18} aria-hidden />
+      <Button type="button" variant="outline" size="xl" full onClick={() => setOpen(true)}>
+        <Icon name="logout" size={16} />
         Sair da conta
-      </button>
-      <ConfirmDialog
+      </Button>
+      <ConfirmSheet
         open={open}
         onOpenChange={setOpen}
-        title="Sair da conta"
-        description="Você vai precisar entrar de novo para usar o Fatia."
+        title="Sair da conta?"
+        description="Seus dados ficam guardados. É só entrar de novo."
+        icon="logout"
         confirmLabel="Sair"
         pendingLabel="Saindo…"
+        cancelLabel="Ficar"
         pending={leaving}
         onConfirm={() => void signOut()}
       />

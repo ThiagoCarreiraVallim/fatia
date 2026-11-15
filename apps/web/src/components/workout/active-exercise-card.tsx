@@ -5,6 +5,9 @@ import { Check, Minus, Plus } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   describePrescription,
+  loadFieldValue,
+  loadToKg,
+  loadUnitLabel,
   prefillForNextSet,
   workoutApi,
   type ExerciseGroup,
@@ -12,10 +15,12 @@ import {
   type SessionSet,
 } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
+import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { ExerciseTitle } from './exercise-title';
 import {
   formatNumber,
   formatPreviousSet,
+  loadValue,
   parseDecimalInput,
   parseFirstRep,
   previousCells,
@@ -159,8 +164,12 @@ export function ActiveExerciseCard({
     },
   });
 
-  const previousLabel = formatPreviousSet(reference, false);
-  const referenceCells = previousCells(reference, false);
+  // Carga na unidade da pessoa (Você › Unidades, #387): o estado e a API
+  // continuam em kg; só o campo e as dicas mostram em lb.
+  const units = useUnitPrefs();
+  const unitLabel = loadUnitLabel(units.loadUnit);
+  const previousLabel = formatPreviousSet(reference, false, units);
+  const referenceCells = previousCells(reference, false, units);
 
   return (
     <div className="rounded-2xl border border-subtle bg-card p-4">
@@ -181,19 +190,19 @@ export function ActiveExerciseCard({
 
       <div className="mt-4 grid grid-cols-2 gap-3">
         <Stepper
-          label="CARGA (KG)"
-          accessibleLabel={`carga em quilos para ${group.exerciseName}`}
-          value={weight}
+          label={`CARGA (${unitLabel.toUpperCase()})`}
+          accessibleLabel={`carga em ${units.loadUnit === 'LB' ? 'libras' : 'quilos'} para ${group.exerciseName}`}
+          value={loadFieldValue(weight, units.loadUnit)}
           step={1}
           onChange={(n) => {
             setTouched(true);
-            setWeight(Math.max(0, n));
+            setWeight(loadToKg(Math.max(0, n), units.loadUnit));
           }}
           hint={
             reference?.weightKg != null
-              ? `Anterior: ${formatNumber(reference.weightKg)} kg`
+              ? `Anterior: ${loadValue(reference.weightKg, units)} ${unitLabel}`
               : prWeight != null
-                ? `🏆 Recorde: ${formatNumber(prWeight)} kg`
+                ? `🏆 Recorde: ${loadValue(prWeight, units)} ${unitLabel}`
                 : undefined
           }
         />
@@ -235,7 +244,7 @@ export function ActiveExerciseCard({
         <div className="grid grid-cols-[36px_1fr_1fr_1fr_32px] gap-2 text-[10px] font-bold tracking-wide text-muted-foreground">
           <div>Série</div>
           <div>Reps</div>
-          <div>Carga (kg)</div>
+          <div>Carga ({unitLabel})</div>
           <div>RPE</div>
           <div />
         </div>

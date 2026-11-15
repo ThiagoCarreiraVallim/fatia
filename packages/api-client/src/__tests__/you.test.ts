@@ -5,6 +5,8 @@ import {
   formatDistanceIn,
   formatLoad,
   isBrazilDefault,
+  loadFieldValue,
+  metersToDistance,
   loadNumber,
   loadToKg,
   unitPrefsOf,
@@ -61,6 +63,16 @@ describe('unidades (Al-V10/V10b)', () => {
     expect(distanceToMeters(400, 'M')).toBe(400);
     expect(formatDistanceIn(1609.344, 'MI')).toBe('1 milhas');
     expect(formatDistanceIn(10250, 'KM')).toBe('10,25 km');
+  });
+
+  it('o campo mostra na unidade da pessoa e volta para kg e metros', () => {
+    expect(loadFieldValue(100, 'LB')).toBe(220.5);
+    expect(loadFieldValue(82.5, 'KG')).toBe(82.5);
+    expect(loadToKg(loadFieldValue(100, 'LB'), 'LB')).toBeCloseTo(100, 1);
+    expect(metersToDistance(5200, 'KM')).toBe(5.2);
+    expect(metersToDistance(5200, 'MI')).toBe(3.23);
+    expect(metersToDistance(5200, 'M')).toBe(5200);
+    expect(distanceToMeters(metersToDistance(5200, 'MI'), 'MI')).toBeCloseTo(5200, -1);
   });
 
   it('a linha "Unidades" de Você resume a escolha', () => {

@@ -52,8 +52,8 @@ describe('SignOutButton', () => {
     render(<SignOutButton />);
     await user.click(screen.getByRole('button', { name: 'Sair da conta' }));
     const dialog = screen.getByRole('dialog');
-    expect(dialog).toHaveTextContent('Você vai precisar entrar de novo para usar o Fatia.');
-    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    expect(dialog).toHaveTextContent('Seus dados ficam guardados. É só entrar de novo.');
+    await user.click(within(dialog).getByRole('button', { name: 'Ficar' }));
     expect(assign).not.toHaveBeenCalled();
     expect(unsubscribeWebPush).not.toHaveBeenCalled();
   });

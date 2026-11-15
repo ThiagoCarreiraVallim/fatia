@@ -98,6 +98,18 @@ export function formatDistanceIn(meters: number | null | undefined, unit: Distan
   return `${decimal(meters / 1000, 2)} km`;
 }
 
+/** Metros → número na unidade da pessoa, para o campo (`5.2` km, `3.23` milhas). */
+export function metersToDistance(meters: number, unit: DistanceUnit): number {
+  if (unit === 'M') return Math.round(meters);
+  if (unit === 'MI') return Math.round((meters / METERS_PER_MILE) * 100) / 100;
+  return Math.round(meters) / 1000;
+}
+
+/** Carga para o campo de edição: uma casa em lb, como foi digitada em kg. */
+export function loadFieldValue(kg: number, unit: LoadUnit): number {
+  return unit === 'LB' ? Math.round(kgToLoad(kg, unit) * 10) / 10 : kg;
+}
+
 /** Distância digitada na unidade da pessoa → metros. */
 export function distanceToMeters(value: number, unit: DistanceUnit): number {
   if (unit === 'M') return value;

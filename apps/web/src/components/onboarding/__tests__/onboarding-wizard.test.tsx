@@ -72,6 +72,15 @@ describe('OnboardingWizard', () => {
       activityLevel: null,
       objective: null,
       onboardedAt: null,
+      nickname: null,
+      bio: null,
+      avatarUrl: null,
+      avatarVisibility: 'COMMUNITIES',
+      keepMealPhotos: null,
+      whatsapp: null,
+      whatsappOptIn: false,
+      loadUnit: 'KG',
+      distanceUnit: 'KM',
     });
     vi.mocked(progressApi.listWeights).mockResolvedValue({
       logs: [{ id: 'w', weightKg: 65.4 } as never],

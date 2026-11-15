@@ -42,6 +42,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { UserAvatar } from '@/components/you/user-avatar';
 
 export function apiMessage(err: unknown, padrao: string): string {
   return err instanceof ApiError && err.status < 500 && err.message ? err.message : padrao;
@@ -50,6 +51,8 @@ export function apiMessage(err: unknown, padrao: string): string {
 function Autor({ author, createdAt }: { author: PostAuthor; createdAt: string }) {
   return (
     <p className="flex flex-wrap items-center gap-x-2 text-sm">
+      {/* Foto só quando a API manda: ela já respeita "Quem vê sua foto" (#387). */}
+      <UserAvatar name={author.displayName} url={author.avatarUrl ?? null} size={28} />
       <span className="font-semibold">
         {author.isMe ? `${author.displayName} (você)` : author.displayName}
       </span>

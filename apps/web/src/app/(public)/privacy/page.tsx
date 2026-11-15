@@ -377,16 +377,18 @@ export default function PrivacyPage() {
         <p>Pela LGPD (art. 18) você pode, a qualquer momento:</p>
         <ul>
           <li>
-            <strong>Acessar e portar</strong> seus dados — exporte tudo em JSON pelo endpoint{' '}
-            <code>GET /users/me/export</code> ou pedindo ao Claude (&ldquo;exporte meus dados do
-            Fatia&rdquo;).
+            <strong>Acessar e portar</strong> seus dados — em Você › Exportar meus dados, ou pedindo
+            ao Claude (&ldquo;exporte meus dados do Fatia&rdquo;), você recebe um link para um
+            arquivo JSON com tudo. O link vale 24 horas; o arquivo é montado na hora do download e
+            não fica guardado no servidor.
           </li>
           <li>
             <strong>Corrigir</strong> qualquer registro — o app e o Claude editam tudo.
           </li>
           <li>
-            <strong>Eliminar</strong> a conta e todos os dados — <code>DELETE /users/me</code> ou
-            pedindo ao Claude. É irreversível e exige confirmação explícita.
+            <strong>Eliminar</strong> a conta e todos os dados — em Você › Apagar minha conta, pela
+            web em <a href="/apagar-conta">fat.ia.br/apagar-conta</a> ou pedindo ao Claude. É
+            irreversível e exige confirmação explícita.
           </li>
           <li>
             <strong>Revogar o consentimento</strong> — para a equipe de uma comunidade, ou para uma
