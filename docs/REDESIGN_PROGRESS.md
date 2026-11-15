@@ -94,12 +94,34 @@ Pendências da #376:
 - **Agregados:** nenhum agregado da equipe sobre planos ainda; quando vier, `MIN_CELL` 5.
 - **Desvio do canvas:** metas e nutrientes são digitáveis em vez de "−/+"; o aviso da troca usa o nome sem artigo ("Helena vê no seu diário").
 
+## Etapa 4: Treino A (em andamento)
+
+| Issue | Título                                     | Estado   | Superfícies                                 |
+| ----- | ------------------------------------------ | -------- | ------------------------------------------- |
+| #377  | Início, sessão em andamento e treino feito | validado | api, db, MCP (1 tool), api-client, web, app |
+| #378  | Planos e exercício                         | a fazer  |                                             |
+| #379  | Plano recebido, modelos, bloco e agenda    | a fazer  |                                             |
+
+Pendências da #377 (branch `redesign/377-treino-sessao`, migration `20261116000000_workout_feeling_and_checkin`):
+
+- **Sensação:** a escala de 5 (😎 Leve a 🥵 No limite) grava `SessionSet.rpe` 6–10 por série e `WorkoutSession.feeling` 1–5 no fim. A sensação por exercício é derivada da última série, sem tabela própria.
+- **Perguntas pós-treino (T5b):** conjunto fixo (cansaço e dor), mostrado só a quem compartilha o treino com a equipe. A equipe lê pela leitura de treino já registrada no `ProfessionalAccessLog`. As perguntas editáveis ficam com a #391. Ainda falta o alerta de dor para a equipe.
+- **Fora desta issue:** a estrela de favorito do T9 e as telas de plano e adicionar exercício ficam com a #378. O aviso de plano recebido fica com a #379 (só o ponto de extensão). Circuito e Modelos ficam com a #380 e a #379. O check-in de desafio também ficou de fora.
+- **Desvios do canvas:**
+  - Carga e repetições são digitáveis (vírgula decimal), além do −/+.
+  - A observação entra no treino feito (T5), não no fim do treino.
+  - No app, o vídeo abre no navegador do app; na web, toca na página.
+  - O reordenar do app saiu.
+  - O T9 não tem "Erros comuns".
+- **Concorrência:** a série é idempotente pela `clientKey`. Duas séries com chaves diferentes enviadas ao mesmo tempo ainda podem repetir o `setNumber`.
+- **Capturas** (Playwright e emulador) contra as pranchas: não feitas nesta sessão.
+
 ## Etapas seguintes
 
 | Etapa                                   | Issues                                                                                                                                     | Estado       |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
 | 3 · Nutrição                            | #374 o dia, a refeição e a foto · #375 adicionar comida · #376 metas, nutrientes e plano alimentar                                         | em andamento |
-| 4 · Treino A                            | #377 início, sessão e treino feito · #378 planos e exercício · #379 plano recebido, modelos, bloco e agenda                                | a fazer      |
+| 4 · Treino A                            | #377 início, sessão e treino feito · #378 planos e exercício · #379 plano recebido, modelos, bloco e agenda                                | em andamento |
 | 5 · Treino B e Progresso                | #380 circuitos · #381 treino livre e histórico · #382 progresso                                                                            | a fazer      |
 | 6 · IA, plano e MCP                     | #384 chat · #385 foto do prato, configurações e memórias · #386 plano e assinatura · #388 conectar sua IA                                  | a fazer      |
 | 7 · Comunidade no app                   | #393 comunidades e código · #394 mural · #395 desafios · #396 conteúdo da equipe                                                           | a fazer      |
@@ -114,7 +136,7 @@ A #418 ("Sobras das issues absorvidas") é revisada no fim da história.
 ## Regras de usabilidade e reaproveitamento
 
 - **O canvas é base de design, não a fonte de verdade.** Interação, formulários e botões seguem a usabilidade. Por exemplo, altura e peso são digitáveis, além do − e do +.
-- **A figura humana com músculos usa sempre o SVG anatômico completo:** o `MuscleDiagram` da explicação do exercício, em web e app. Ainda falta corrigir o card "Seus músculos hoje" (`cards/body-silhouette.tsx`), que está com uma silhueta simplificada. Isso fica na etapa 4 (#377).
+- **A figura humana com músculos usa sempre o SVG anatômico completo:** o `MuscleDiagram` da explicação do exercício, em web e app. A silhueta simplificada (`cards/body-silhouette.tsx`) foi apagada na #377: "Seus músculos hoje", "Músculos de hoje" e a aba Músculos do exercício usam o `MuscleDiagram`, que ganhou cores por músculo.
 
 ## Decisões do dono
 
