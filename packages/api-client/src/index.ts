@@ -65,6 +65,7 @@ export * from './today-copy';
 export * from './ai-drawer';
 export * from './plan-components-copy';
 export * from './onboarding';
+export * from './onboarding-flow';
 export * from './navigation';
 export * from './format';
 export * from './notifications';
