@@ -3,6 +3,19 @@ import { View } from 'react-native';
 import type { ProBlockState } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { Button } from '@/components/ui/button';
+import {
+  Bars,
+  Checkbox,
+  DayStrip,
+  Heatmap,
+  Ring,
+  StatBlock,
+  type Day,
+} from '@/components/ui/data-blocks';
+import { Chip, Segmented, Switch } from '@/components/ui/selection';
+import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
+import { Icon } from '@/components/ui/icon';
+import { colors } from '@/theme/colors';
 import { DrawerLayer } from '@/components/ui/drawer';
 import { Badge, STATUS_BADGE_LABELS } from '@/components/ui/badge';
 import { PortionField } from '@/components/ui/portion-field';
@@ -43,10 +56,22 @@ const PRO_STATES: { label: string; state: ProBlockState; canPurchase?: boolean }
   { label: 'PRO venceu', state: { kind: 'pro-expired' } },
 ];
 
+const DAYS: Day[] = [
+  { weekday: 'S', day: 2, label: 'segunda, 2 de novembro', done: true },
+  { weekday: 'T', day: 3, label: 'terça, 3 de novembro', done: true },
+  { weekday: 'Q', day: 4, label: 'quarta, 4 de novembro', done: true },
+  { weekday: 'Q', day: 5, label: 'quinta, 5 de novembro' },
+  { weekday: 'S', day: 6, label: 'sexta, 6 de novembro' },
+  { weekday: 'S', day: 7, label: 'sábado, 7 de novembro' },
+  { weekday: 'D', day: 8, label: 'domingo, 8 de novembro' },
+];
+
+const MUSCLE_GROUPS = ['Peito', 'Costas', 'Pernas', 'Ombros', 'Braços', 'Core'];
+
 /**
  * Galeria do DS v2 no app (#368): os componentes das pranchas Componentes e
- * Componentes-plano, para conferir no aparelho nos dois temas. Espelho
- * reduzido da `/design-system` da web.
+ * Componentes-plano, para conferir no aparelho nos dois temas. Mesmas seções
+ * da `/design-system` da web (o teste `data-blocks.test.ts` confere).
  */
 export default function DesignSystemScreen() {
   const toast = useToast();
@@ -54,17 +79,67 @@ export default function DesignSystemScreen() {
   const [weight, setWeight] = useState(72);
   const [share, setShare] = useState(false);
   const [ai, setAi] = useState<'idle' | 'generating' | 'draft'>('idle');
+  const [period, setPeriod] = useState<'day' | 'week' | 'month'>('week');
+  const [groups, setGroups] = useState<string[]>(['Pernas']);
+  const [on, setOn] = useState(true);
+  const [check, setCheck] = useState(false);
+  const [day, setDay] = useState(3);
 
   return (
     <>
       <Screen>
         <View className="gap-8 px-5 pb-10">
           <Section title="Botões">
+            <Button size="xl">Salvar</Button>
             <View className="flex-row flex-wrap gap-2">
-              <Button>Principal</Button>
               <Button variant="secondary">Secundário</Button>
               <Button variant="outline">Contorno</Button>
-              <Button variant="destructive">Apagar</Button>
+              <Button variant="text">Texto</Button>
+              <Button variant="danger">
+                <Icon name="trash" size={16} color={colors.danger} />
+                <Text className="font-sans-semibold text-sm text-danger">Apagar</Text>
+              </Button>
+            </View>
+            <View className="flex-row flex-wrap items-center gap-2">
+              <Button variant="add">Adicionar</Button>
+              <Button variant="secondary" size="sm">
+                Pequeno
+              </Button>
+              <Button variant="secondary" size="xs">
+                Mini
+              </Button>
+              <Button disabled>Desativado</Button>
+              <Button variant="ai">Gerar com IA</Button>
+              <Button variant="brand">Marca</Button>
+            </View>
+          </Section>
+
+          <Section title="Seleção">
+            <Segmented
+              label="Período"
+              value={period}
+              onChange={setPeriod}
+              options={[
+                { value: 'day', label: 'Dia' },
+                { value: 'week', label: 'Semana' },
+                { value: 'month', label: 'Mês' },
+              ]}
+            />
+            <View accessibilityLabel="Grupos musculares" className="flex-row flex-wrap gap-2">
+              {MUSCLE_GROUPS.map((g) => (
+                <Chip
+                  key={g}
+                  label={g}
+                  selected={groups.includes(g)}
+                  onPress={() =>
+                    setGroups((cur) => (cur.includes(g) ? cur.filter((x) => x !== g) : [...cur, g]))
+                  }
+                />
+              ))}
+            </View>
+            <View className="flex-row items-center gap-4">
+              <Switch checked={on} onCheckedChange={setOn} label="Lembretes" />
+              <Checkbox checked={check} onCheckedChange={setCheck} label="Feito" />
             </View>
           </Section>
 
@@ -76,6 +151,74 @@ export default function DesignSystemScreen() {
               label="colher de sopa"
             />
             <Ruler value={weight} onChange={setWeight} min={30} max={200} unit="kg" label="Peso" />
+          </Section>
+
+          <Section title="Blocos de dado">
+            <View className="flex-row flex-wrap items-center gap-4">
+              <Ring value={1240} max={2000} label="kcal restantes" />
+              <StatBlock
+                value="12"
+                unit="dias"
+                label="Sequência"
+                icon="flame"
+                tone="primary"
+                className="w-44"
+              />
+            </View>
+            <DayStrip days={DAYS} selected={day} onSelect={setDay} />
+            <Heatmap
+              levels={[0, 1, 2, 3, 3, 2, 1, 0, 3, 3, 2, 2, 1, 3]}
+              label="12 de 14 dias registrados"
+            />
+            <View className="rounded-card bg-card p-4">
+              <Text className="mb-3 font-sans-bold text-[13px] text-muted-foreground">
+                Treinos · semana
+              </Text>
+              <Bars
+                values={[1, 0, 1, 1, 0, 1, 0]}
+                highlight={[5]}
+                labels={['S', 'T', 'Q', 'Q2', 'S2', 'S3', 'D']}
+              />
+            </View>
+          </Section>
+
+          <Section title="Retorno">
+            <View
+              accessibilityRole="alert"
+              className="flex-row items-center gap-3 rounded-field bg-foreground px-4 py-3"
+            >
+              <Icon name="check" size={18} color={colors.background} />
+              <Text className="flex-1 font-sans-bold text-sm text-background">Série 3 salva</Text>
+              <Text className="font-sans-bold text-sm text-background underline">Desfazer</Text>
+            </View>
+            <View className="flex-row flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                onPress={() => toast.show({ message: 'Água registrada' })}
+              >
+                Toast
+              </Button>
+              <Button
+                variant="secondary"
+                onPress={() =>
+                  toast.show({
+                    message: 'Almoço apagado',
+                    action: { label: 'Desfazer', onPress: () => {} },
+                  })
+                }
+              >
+                Toast com Desfazer
+              </Button>
+            </View>
+          </Section>
+
+          <Section title="Estados">
+            <LoadingState />
+            <EmptyState
+              title="Nada registrado hoje"
+              description="Toque no botão da IA para registrar."
+            />
+            <ErrorState error={new Error('Não deu para carregar.')} onRetry={() => {}} />
           </Section>
 
           <Section title="Selos">

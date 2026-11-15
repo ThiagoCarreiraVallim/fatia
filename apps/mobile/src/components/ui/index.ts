@@ -32,3 +32,4 @@ export { cn } from './utils';
 export { ToastProvider, useToast } from './toast';
 export { Icon, ICON_COMPONENTS } from './icon';
 export { Chip, Segmented, Switch, type SegmentedOption } from './selection';
+export { Bars, Checkbox, DayStrip, Heatmap, Ring, StatBlock, type Day } from './data-blocks';
