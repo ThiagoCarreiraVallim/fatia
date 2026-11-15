@@ -3,17 +3,59 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, ShareScope, type WorkoutCheckin } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
+import { SharedWithService } from '../sharing/shared-with.service';
 import type {
   FinishSessionDto,
   ListSessionsDto,
   StartSessionDto,
   UpdateSessionDto,
+  WorkoutCheckinDto,
 } from './dto/session.dto';
+import { summarizeSession, type SessionSummary } from './session-summary';
+
+export interface PostWorkoutQuestion {
+  key: 'fatigue' | 'pain';
+  kind: 'scale' | 'yes_no';
+  label: string;
+  /** Rótulos das pontas da escala ("leve", "no limite"). */
+  scaleLabels?: [string, string];
+}
+
+/**
+ * As perguntas da equipe no fim do treino (prancha `Al-T5b-Fim-perguntas`).
+ * Enquanto a #391 não deixa a equipe escrever as dela, o conjunto é este,
+ * fixo, e aparece para quem tem vínculo com Treino liberado.
+ */
+export const DEFAULT_POST_WORKOUT_QUESTIONS: readonly PostWorkoutQuestion[] = [
+  {
+    key: 'fatigue',
+    kind: 'scale',
+    label: 'Cansaço depois do treino',
+    scaleLabels: ['leve', 'no limite'],
+  },
+  { key: 'pain', kind: 'yes_no', label: 'Sentiu dor ou desconforto?' },
+];
+
+export interface PostWorkoutQuestions {
+  /** Quem lê as respostas: os profissionais com Treino liberado. */
+  askedBy: string[];
+  items: readonly PostWorkoutQuestion[];
+}
+
+export type SessionSummaryView = SessionSummary & {
+  checkin: Omit<WorkoutCheckin, 'userId'> | null;
+  questions: PostWorkoutQuestions | null;
+};
 
 const SESSION_INCLUDE = {
+  // As respostas do fim do treino vão junto: o dono vê as dele, e a equipe as
+  // lê pela leitura de Treino do painel, que confere o escopo e registra
+  // (`StudentViewService`).
+  checkin: true,
   sets: {
     include: { exercise: true },
     orderBy: [{ exerciseId: 'asc' }, { setNumber: 'asc' }],
@@ -41,7 +83,16 @@ export interface PlannedExerciseView {
 
 @Injectable()
 export class WorkoutSessionService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly sharedWith: SharedWithService;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() sharedWith?: SharedWithService,
+  ) {
+    // Só depende do Prisma: quem monta o serviço à mão (specs, scripts) não
+    // precisa montar o resto do compartilhamento.
+    this.sharedWith = sharedWith ?? new SharedWithService(prisma);
+  }
 
   /**
    * Abre uma sessão. **Uma aberta por pessoa** (#350): quem garante é o índice
@@ -50,6 +101,16 @@ export class WorkoutSessionService {
    * A segunda recebe 409 dizendo qual sessão está aberta e como seguir.
    */
   async start(userId: string, dto: StartSessionDto) {
+    // O plano vem do corpo: precisa ser da pessoa. Sem isto a sessão de B
+    // apontaria para o plano de A, e o `findById` de B mostraria os exercícios
+    // de A em `plannedExercises`.
+    if (dto.planId) {
+      const plan = await this.prisma.workoutPlan.findFirst({
+        where: { id: dto.planId, userId },
+        select: { id: true },
+      });
+      if (!plan) throw new NotFoundException('Plan not found');
+    }
     try {
       return await this.prisma.workoutSession.create({
         data: {
@@ -65,11 +126,17 @@ export class WorkoutSessionService {
           where: { userId, completedAt: null },
           select: { id: true },
         });
-        throw new ConflictException(
-          `Já existe uma sessão de treino aberta (id ${aberta?.id ?? 'desconhecido'}). ` +
+        // O id vai também no corpo: o app e a web abrem a sessão aberta em vez
+        // de mostrar erro (#377), e o MCP lê a mesma mensagem de sempre.
+        throw new ConflictException({
+          statusCode: 409,
+          error: 'Conflict',
+          message:
+            `Já existe uma sessão de treino aberta (id ${aberta?.id ?? 'desconhecido'}). ` +
             'Retome-a registrando séries nela, ou encerre com finish_workout_session antes de ' +
             'abrir outra.',
-        );
+          activeSessionId: aberta?.id ?? null,
+        });
       }
       throw error;
     }
@@ -125,9 +192,9 @@ export class WorkoutSessionService {
   async finish(userId: string, id: string, dto: FinishSessionDto) {
     const session = await this.assertOwner(userId, id);
 
-    let completedAt = session.completedAt ?? new Date();
+    let requested: Date | null = null;
     if (dto.completedAt) {
-      const requested = new Date(dto.completedAt);
+      requested = new Date(dto.completedAt);
       if (Number.isNaN(requested.getTime())) {
         throw new BadRequestException('completedAt inválido — use ISO 8601.');
       }
@@ -141,16 +208,33 @@ export class WorkoutSessionService {
       if (requested.getTime() > Date.now() + 5 * 60 * 1000) {
         throw new BadRequestException('completedAt está no futuro.');
       }
-      completedAt = requested;
     }
 
-    return this.prisma.workoutSession.update({
+    // O fim é gravado só se ainda não há fim (`completedAt: null` no where):
+    // dois "Finalizar" ao mesmo tempo — duplo toque, a web e o app — leem a
+    // sessão aberta juntos, e sem a condição o segundo trocaria o horário do
+    // primeiro. Um `completedAt` explícito é correção e vale sempre.
+    if (requested) {
+      await this.prisma.workoutSession.update({
+        where: { id },
+        data: { completedAt: requested },
+      });
+    } else {
+      await this.prisma.workoutSession.updateMany({
+        where: { id, userId, completedAt: null },
+        data: { completedAt: new Date() },
+      });
+    }
+
+    const updated = await this.prisma.workoutSession.update({
       where: { id },
       data: {
-        completedAt,
         ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+        ...(dto.feeling !== undefined ? { feeling: dto.feeling } : {}),
       },
     });
+    if (dto.checkin) await this.saveCheckin(userId, id, dto.checkin);
+    return updated;
   }
 
   /**
@@ -190,6 +274,135 @@ export class WorkoutSessionService {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') return;
       throw err;
     }
+  }
+
+  /**
+   * Grava as respostas do fim do treino (#377, parte da #304). Uma linha por
+   * sessão, substituída inteira a cada envio: reenviar é idempotente, e o que
+   * não veio fica vazio. "Pular" guarda só que pulou.
+   *
+   * O `userId` da linha sai da sessão conferida, nunca do corpo.
+   */
+  async saveCheckin(userId: string, id: string, dto: WorkoutCheckinDto) {
+    const session = await this.assertOwner(userId, id);
+    if (!session.completedAt) {
+      throw new BadRequestException('Finalize o treino antes de responder as perguntas.');
+    }
+    const skipped = dto.skipped === true;
+    const answers = {
+      skipped,
+      difficulty: skipped ? null : (dto.difficulty ?? null),
+      fatigue: skipped ? null : (dto.fatigue ?? null),
+      pain: skipped ? null : (dto.pain ?? null),
+      painLocation: skipped || dto.pain !== true ? null : dto.painLocation?.trim() || null,
+      motivation: skipped ? null : (dto.motivation ?? null),
+      note: skipped ? null : dto.note?.trim() || null,
+    };
+    const { userId: _dono, ...checkin } = await this.prisma.workoutCheckin.upsert({
+      where: { sessionId: id },
+      create: { sessionId: id, userId: session.userId, ...answers },
+      update: { ...answers, answeredAt: new Date() },
+    });
+    void _dono;
+    return checkin;
+  }
+
+  /**
+   * Quem pergunta no fim do treino: os profissionais com vínculo ativo e
+   * Treino liberado (ADR 014). Sem nenhum, a folha não aparece. Só nomes:
+   * ninguém aqui vê dado de outra pessoa.
+   */
+  async postWorkoutQuestions(userId: string): Promise<PostWorkoutQuestions | null> {
+    // A mesma regra da porta do painel (vínculo vivo com Treino, os dois ativos
+    // na comunidade): só pergunta quem de fato vai poder ler a resposta.
+    const viewers = await this.sharedWith.viewersOf(userId, ShareScope.WORKOUT);
+    if (viewers.length === 0) return null;
+    const people = await this.prisma.user.findMany({
+      where: { id: { in: viewers } },
+      select: { name: true },
+      orderBy: { name: 'asc' },
+    });
+    return { askedBy: people.map((p) => p.name), items: DEFAULT_POST_WORKOUT_QUESTIONS };
+  }
+
+  /**
+   * O "Treino feito!" (prancha `Al-T5-Fim`): a conta é `summarizeSession`;
+   * aqui só as leituras, todas presas ao `userId`.
+   */
+  async summary(userId: string, id: string): Promise<SessionSummaryView> {
+    const session = await this.prisma.workoutSession.findFirst({
+      where: { id, userId },
+      include: {
+        checkin: true,
+        sets: {
+          include: { exercise: true },
+          orderBy: [{ exerciseId: 'asc' }, { setNumber: 'asc' }],
+        },
+        plan: { select: { name: true, exercises: { select: { exerciseId: true, order: true } } } },
+      },
+    });
+    if (!session) throw new NotFoundException('Session not found');
+
+    const exerciseIds = [...new Set(session.sets.map((s) => s.exerciseId))];
+    const [previous, priorSets, questions] = await Promise.all([
+      session.planId
+        ? this.prisma.workoutSession.findFirst({
+            where: {
+              userId,
+              planId: session.planId,
+              id: { not: session.id },
+              completedAt: { not: null },
+              startedAt: { lt: session.startedAt },
+            },
+            orderBy: { startedAt: 'desc' },
+            select: {
+              id: true,
+              startedAt: true,
+              completedAt: true,
+              sets: { select: { weightKg: true, reps: true } },
+            },
+          })
+        : null,
+      exerciseIds.length
+        ? this.prisma.sessionSet.findMany({
+            where: {
+              exerciseId: { in: exerciseIds },
+              session: { userId, startedAt: { lt: session.startedAt } },
+            },
+            select: {
+              exerciseId: true,
+              sessionId: true,
+              weightKg: true,
+              reps: true,
+              distanceMeters: true,
+            },
+          })
+        : [],
+      this.postWorkoutQuestions(userId),
+    ]);
+
+    const summary = summarizeSession({
+      session: {
+        id: session.id,
+        planId: session.planId,
+        startedAt: session.startedAt,
+        completedAt: session.completedAt,
+        feeling: session.feeling,
+        exerciseOrder: session.exerciseOrder,
+        plan: session.plan,
+        sets: session.sets,
+      },
+      previous,
+      priorSets,
+      now: new Date(),
+    });
+    let checkin: SessionSummaryView['checkin'] = null;
+    if (session.checkin) {
+      const { userId: _dono, ...rest } = session.checkin;
+      void _dono;
+      checkin = rest;
+    }
+    return { ...summary, checkin, questions };
   }
 
   private shapeSession(session: SessionWithRelations) {

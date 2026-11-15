@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
+import { rpeToFeeling } from './helpers/feeling';
 import { isCardioExercise } from './helpers/is-cardio';
 import { estimate1RM } from './helpers/estimate-1rm';
 import { readableExercises } from './helpers/exercise-access';
@@ -33,6 +35,7 @@ interface CreateSetInput {
   avgHeartRate?: number;
   kcalBurned?: number;
   notes?: string;
+  clientKey?: string;
 }
 
 interface UpdateSetInput {
@@ -81,15 +84,142 @@ export class SessionSetService {
     });
     const setNumber = (agg._max.setNumber ?? 0) + 1;
 
-    const { sessionId, exerciseId, ...fields } = dto;
-    return this.prisma.sessionSet.create({
-      data: { sessionId, exerciseId, setNumber, ...fields },
+    const { sessionId, exerciseId, clientKey, ...fields } = dto;
+    // O mesmo "Concluir série" reenviado: devolve a que já existe. A checagem
+    // antes é o caminho comum (rede que repete); o P2002 do índice único
+    // (sessionId, clientKey) cobre as duas chegando juntas.
+    if (clientKey) {
+      const existing = await this.findByClientKey(sessionId, clientKey);
+      if (existing) return existing;
+    }
+    try {
+      return await this.prisma.sessionSet.create({
+        data: { sessionId, exerciseId, setNumber, clientKey: clientKey ?? null, ...fields },
+        include: { exercise: true },
+      });
+    } catch (error) {
+      if (
+        clientKey &&
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const existing = await this.findByClientKey(sessionId, clientKey);
+        if (existing) return existing;
+      }
+      throw error;
+    }
+  }
+
+  private findByClientKey(sessionId: string, clientKey: string) {
+    return this.prisma.sessionSet.findUnique({
+      where: { sessionId_clientKey: { sessionId, clientKey } },
       include: { exercise: true },
     });
   }
 
-  async update(userId: string, id: string, dto: UpdateSetInput) {
-    const set = await this.assertOwnerSet(userId, id);
+  /**
+   * "Seus números" do Como fazer (prancha `Al-T9-Como-fazer`): o recorde, a
+   * última vez (do último treino terminado, com a sensação da última série) e
+   * o máximo estimado. Tudo pelo `userId`.
+   */
+  async exerciseStats(userId: string, exerciseId: number) {
+    const exercise = await this.prisma.exercise.findFirst({
+      where: { id: exerciseId, ...readableExercises(userId) },
+    });
+    if (!exercise) throw new NotFoundException('Exercise not found');
+    const cardio = isCardioExercise(exercise);
+
+    const [record, lastSession, strengthSets] = await Promise.all([
+      this.getPersonalRecord(userId, exerciseId),
+      this.prisma.workoutSession.findFirst({
+        where: { userId, completedAt: { not: null }, sets: { some: { exerciseId } } },
+        orderBy: { startedAt: 'desc' },
+        select: {
+          id: true,
+          startedAt: true,
+          sets: { where: { exerciseId }, orderBy: { setNumber: 'asc' } },
+        },
+      }),
+      cardio
+        ? Promise.resolve([])
+        : this.prisma.sessionSet.findMany({
+            where: { exerciseId, session: { userId }, weightKg: { gt: 0 }, reps: { gt: 0 } },
+            select: { weightKg: true, reps: true },
+          }),
+    ]);
+
+    let last: {
+      date: Date;
+      sets: number;
+      best: {
+        weightKg: number | null;
+        reps: number | null;
+        distanceMeters: number | null;
+        durationSeconds: number | null;
+      };
+      feeling: number | null;
+    } | null = null;
+    if (lastSession && lastSession.sets.length) {
+      const sets = lastSession.sets;
+      const best = cardio
+        ? {
+            weightKg: null,
+            reps: null,
+            distanceMeters: sets.reduce((a, x) => a + (x.distanceMeters ?? 0), 0) || null,
+            durationSeconds: sets.reduce((a, x) => a + (x.durationSeconds ?? 0), 0) || null,
+          }
+        : (() => {
+            const top = [...sets].sort(
+              (a, b) => (b.weightKg ?? 0) - (a.weightKg ?? 0) || (b.reps ?? 0) - (a.reps ?? 0),
+            )[0]!;
+            return {
+              weightKg: top.weightKg,
+              reps: top.reps,
+              distanceMeters: null,
+              durationSeconds: null,
+            };
+          })();
+      last = {
+        date: lastSession.startedAt,
+        sets: sets.length,
+        best,
+        feeling: rpeToFeeling(sets.at(-1)?.rpe),
+      };
+    }
+
+    let estimated1RM: number | null = null;
+    for (const s of strengthSets) {
+      const e = estimate1RM(s.weightKg!, s.reps!);
+      if (estimated1RM === null || e > estimated1RM) estimated1RM = e;
+    }
+
+    return {
+      exerciseId,
+      isCardio: cardio,
+      record: record
+        ? 'weightKg' in record
+          ? {
+              weightKg: record.weightKg,
+              reps: record.reps,
+              distanceMeters: null,
+              durationSeconds: null,
+              date: record.sessionDate,
+            }
+          : {
+              weightKg: null,
+              reps: null,
+              distanceMeters: record.distanceMeters,
+              durationSeconds: record.durationSeconds,
+              date: record.sessionDate,
+            }
+        : null,
+      last,
+      estimated1RM: estimated1RM === null ? null : Math.round(estimated1RM * 10) / 10,
+    };
+  }
+
+  async update(userId: string, id: string, dto: UpdateSetInput, sessionId?: string) {
+    const set = await this.assertOwnerSet(userId, id, sessionId);
 
     const exercise = await this.prisma.exercise.findUnique({ where: { id: set.exerciseId } });
     if (!exercise) throw new NotFoundException('Exercise not found');
@@ -111,8 +241,8 @@ export class SessionSetService {
     });
   }
 
-  async delete(userId: string, id: string): Promise<void> {
-    await this.assertOwnerSet(userId, id);
+  async delete(userId: string, id: string, sessionId?: string): Promise<void> {
+    await this.assertOwnerSet(userId, id, sessionId);
     await this.prisma.sessionSet.delete({ where: { id } });
   }
 
@@ -262,9 +392,14 @@ export class SessionSetService {
     );
   }
 
-  private async assertOwnerSet(userId: string, id: string) {
+  /**
+   * A série é da pessoa e, quando a rota traz a sessão
+   * (`/sessions/:sessionId/sets/:id`), é daquela sessão: o id da URL filha
+   * fica preso ao pai. O MCP não manda sessão e confere só o dono.
+   */
+  private async assertOwnerSet(userId: string, id: string, sessionId?: string) {
     const set = await this.prisma.sessionSet.findFirst({
-      where: { id },
+      where: { id, ...(sessionId ? { sessionId } : {}) },
       include: { session: { select: { userId: true } } },
     });
     // Mesma resposta para "não existe" e "não é sua" (§IDs de docs/MCP.md).
