@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Repeat2 } from 'lucide-react-native';
@@ -139,7 +139,7 @@ export default function NutritionPlanScreen() {
   return (
     <>
       <Screen onRefresh={() => void q.refetch()} refreshing={q.isRefetching}>
-        <View className="gap-5 p-4 pb-28">
+        <View className="gap-5 px-5 pb-28 pt-2">
           {q.isLoading ? <LoadingState label="Carregando plano…" /> : null}
           {q.error ? <ErrorState error={q.error} onRetry={() => void q.refetch()} /> : null}
           {data && !active && !pending ? (
@@ -150,7 +150,10 @@ export default function NutritionPlanScreen() {
           ) : null}
 
           {pending ? (
-            <View className="gap-3 rounded-2xl border border-primary/40 bg-primary/10 p-4">
+            <View
+              className="gap-3 rounded-card bg-primary/10 p-4"
+              style={{ borderWidth: 1.5, borderColor: `${colors.primary}59` }}
+            >
               <Text className="text-sm font-bold text-foreground">
                 {pending.author?.name ?? 'Seu profissional'} mandou o plano v{pending.version}
               </Text>
@@ -169,14 +172,23 @@ export default function NutritionPlanScreen() {
           ) : null}
 
           {viewing && data ? (
-            <View className="gap-2 rounded-2xl bg-card p-4">
+            <View className="gap-3 overflow-hidden rounded-card bg-card p-5">
+              {/* O verde de leve no cartão do plano, como na prancha. */}
+              <View
+                pointerEvents="none"
+                className="absolute inset-0"
+                style={{ backgroundColor: colors.primary, opacity: 0.07 }}
+              />
               <View className="flex-row items-center gap-2">
-                <View className="h-8 w-8 items-center justify-center rounded-full bg-muted">
-                  <Text className="text-xs font-bold text-foreground">
+                <View
+                  className="h-9 w-9 items-center justify-center rounded-full"
+                  style={{ backgroundColor: `${colors.protein}66` }}
+                >
+                  <Text className="font-sans-extrabold text-[13px] text-foreground">
                     {initialsOf(authorName)}
                   </Text>
                 </View>
-                <Text className="text-sm font-bold text-muted-foreground">
+                <Text className="text-[15px] text-foreground/80">
                   {authorName ?? 'Profissional'} · v{viewing.version}
                 </Text>
                 {readOnly ? (
@@ -186,19 +198,27 @@ export default function NutritionPlanScreen() {
                 ) : null}
               </View>
               <Text>
-                <Text style={NUMEROS_TABULARES} className="font-display text-4xl text-foreground">
+                <Text
+                  style={[NUMEROS_TABULARES, { letterSpacing: -2 }]}
+                  className="font-display text-[56px] leading-[60px] text-foreground"
+                >
                   {planKcalPerDay(viewing.goals)}
                 </Text>
-                <Text className="text-sm text-muted-foreground"> kcal/dia</Text>
+                <Text className="text-[15px] text-foreground/80"> kcal/dia</Text>
               </Text>
-              <View className="flex-row justify-between">
+              <View className="flex-row items-center justify-between">
                 <Text style={NUMEROS_TABULARES} className="text-sm text-muted-foreground">
                   {planMacrosLine(viewing.goals)}
                 </Text>
                 {!readOnly ? (
-                  <Text style={NUMEROS_TABULARES} className="text-sm text-muted-foreground">
-                    {planWeekText(data.week)}
-                  </Text>
+                  <View className="rounded-pill bg-primary/15 px-3 py-1">
+                    <Text
+                      style={NUMEROS_TABULARES}
+                      className="font-sans-extrabold text-[13px] uppercase tracking-[0.5px] text-primary"
+                    >
+                      {planWeekText(data.week)}
+                    </Text>
+                  </View>
                 ) : null}
               </View>
             </View>
@@ -276,21 +296,33 @@ function MealSection({
   return (
     <View className="gap-2">
       <View className="flex-row items-center justify-between">
-        <Text accessibilityRole="header" className="text-base font-bold text-foreground">
+        <Text
+          accessibilityRole="header"
+          className="font-display-semibold text-[22px] text-foreground"
+        >
           {meal.name}
         </Text>
         {meal.logged ? (
-          <View className="flex-row items-center gap-1">
+          <View className="flex-row items-center gap-1 rounded-pill bg-primary/15 px-3 py-1">
             <Check size={14} color={colors.primaryText} />
-            <Text className="text-xs font-bold text-primary">feito</Text>
+            <Text className="font-sans-extrabold text-[13px] uppercase tracking-[0.5px] text-primary">
+              feito
+            </Text>
           </View>
         ) : !single ? (
-          <Text className="text-xs text-muted-foreground">toque para escolher</Text>
+          <Text className="text-sm text-muted-foreground">toque para escolher</Text>
         ) : null}
       </View>
 
-      {!single
-        ? meal.options.map((o) => {
+      {!single ? (
+        // As opções lado a lado, arrastando (prancha Al-N5).
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          className="-mx-5"
+          contentContainerClassName="gap-2 px-5"
+        >
+          {meal.options.map((o) => {
             const on = o.id === chosen;
             const done = meal.logged?.optionId === o.id;
             const disabled = !!meal.logged && !done;
@@ -302,13 +334,13 @@ function MealSection({
                 disabled={disabled}
                 onPress={() => setChosen(on ? null : o.id)}
                 className={cn(
-                  'min-h-14 rounded-2xl border-2 bg-card px-4 py-3',
+                  'min-h-24 w-[290px] rounded-card border-2 bg-card px-5 py-4',
                   on ? 'border-primary' : 'border-transparent',
                   disabled && 'opacity-50',
                 )}
               >
-                <Text className="text-xs font-bold text-muted-foreground">{optionTitle(o)}</Text>
-                <Text className="text-sm font-bold text-foreground">
+                <Text className="text-sm text-muted-foreground">{optionTitle(o)}</Text>
+                <Text className="mt-1.5 font-sans-semibold text-[17px] leading-6 text-foreground">
                   {o.items.map((i) => i.swap?.foodName ?? i.foodName).join(', ')}
                 </Text>
                 {done ? (
@@ -319,11 +351,12 @@ function MealSection({
                 ) : null}
               </Pressable>
             );
-          })
-        : null}
+          })}
+        </ScrollView>
+      ) : null}
 
       {option ? (
-        <View className="overflow-hidden rounded-2xl bg-card">
+        <View className="overflow-hidden rounded-card bg-card px-4">
           {option.items.map((item, i) => (
             <ItemRow
               key={item.id}
@@ -342,6 +375,7 @@ function MealSection({
         <Button
           size="lg"
           variant="secondary"
+          className="rounded-pill bg-card"
           loading={logging}
           disabled={logging}
           onPress={() => onLog(option.id)}
@@ -372,30 +406,31 @@ function ItemRow({
   return (
     <View
       className={cn(
-        'min-h-16 flex-row items-center gap-3 px-4 py-3',
+        'min-h-[72px] flex-row items-center gap-3 py-3',
         divider && 'border-t border-border',
       )}
     >
       <View className="flex-1">
         {swap ? (
           <View className="flex-row items-center gap-2">
-            <Text className="text-sm font-bold text-foreground">{swap.foodName}</Text>
+            <Text className="text-[17px] text-foreground">{swap.foodName}</Text>
             <View className="rounded-full bg-primary/15 px-2 py-0.5">
               <Text className="text-[11px] font-bold text-primary">trocado</Text>
             </View>
           </View>
         ) : (
-          <Text className="text-sm font-bold text-foreground">{item.foodName}</Text>
+          <Text className="text-[17px] text-foreground">{item.foodName}</Text>
         )}
-        <Text className="text-xs text-muted-foreground">
+        <Text className="text-[15px] text-muted-foreground">
           {swap ? swappedLine(item) : planFoodLine(item)}
         </Text>
       </View>
       {swap ? (
         !readOnly ? (
           <Button
-            size="xs"
-            variant="outline"
+            size="lg"
+            variant="secondary"
+            className="h-12 rounded-field bg-muted px-4"
             disabled={undoing}
             accessibilityLabel={`Desfazer troca de ${lower(swap.foodName)}`}
             onPress={() => onUndo(swap.id)}
@@ -406,17 +441,18 @@ function ItemRow({
       ) : item.equivalents.length > 0 ? (
         !readOnly ? (
           <Button
-            size="xs"
-            variant="outline"
+            size="lg"
+            variant="secondary"
+            className="h-12 rounded-field bg-muted px-4"
             accessibilityLabel={`Trocar ${lower(item.foodName)}`}
             onPress={onSwap}
           >
-            <Repeat2 size={14} color={colors.foreground} />
-            <Text className="text-[13px] font-bold text-foreground">Trocar</Text>
+            <Repeat2 size={18} color={colors.foreground} />
+            <Text className="font-sans-semibold text-[15px] text-foreground">Trocar</Text>
           </Button>
         ) : null
       ) : (
-        <Text className="text-xs text-muted-foreground">sem troca</Text>
+        <Text className="text-[15px] text-muted-foreground">sem troca</Text>
       )}
     </View>
   );

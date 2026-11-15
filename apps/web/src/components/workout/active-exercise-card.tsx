@@ -1,13 +1,15 @@
 'use client';
 
-import { useState } from 'react';
-import { Check, Minus, Plus } from 'lucide-react';
+import { useRef, useState, type ReactNode } from 'react';
+import { Check, Minus, Plus, Trophy } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   describePrescription,
+  feelingToRpe,
   loadFieldValue,
   loadToKg,
   loadUnitLabel,
+  newSetClientKey,
   prefillForNextSet,
   workoutApi,
   type ExerciseGroup,
@@ -16,18 +18,16 @@ import {
 } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { useUnitPrefs } from '@/components/you/use-unit-prefs';
-import { ExerciseTitle } from './exercise-title';
 import {
   formatNumber,
   formatPreviousSet,
   loadValue,
   parseDecimalInput,
   parseFirstRep,
-  previousCells,
   targetSetsOf,
 } from './format';
 import { RestTimer } from './rest-timer';
-import { SetRow } from './set-row';
+import { FeelingPicker, SetChips } from './set-chips';
 import { DEFAULT_REST_SECONDS, type RestTimer as RestTimerState } from './use-rest-timer';
 
 /**
@@ -48,8 +48,16 @@ interface Props {
   onFinishExercise: () => void;
   /** Pede o RPE da série recém-registrada. */
   onAskRpe: (set: SessionSet) => void;
+  /** A última série planejada acabou de ser registrada (#377: "passar sozinho"). */
+  onExerciseComplete?: () => void;
   /** Frase para o leitor de tela quando a série é registrada. */
   onAnnounce?: (message: string) => void;
+  /** "1/7" e as setas do exercício, à direita da linha da série (prancha `Al-T3d`). */
+  nav?: ReactNode;
+  /** "Todas ›", ao lado dos chips das séries: abre o treino atual. */
+  onAll?: () => void;
+  /** O "Passar sozinho", que a prancha põe logo acima do "Concluir série". */
+  beforeSubmit?: ReactNode;
 }
 
 export function ActiveExerciseCard({
@@ -59,7 +67,11 @@ export function ActiveExerciseCard({
   rest,
   onFinishExercise,
   onAskRpe,
+  onExerciseComplete,
   onAnnounce,
+  nav,
+  onAll,
+  beforeSubmit,
 }: Props) {
   const qc = useQueryClient();
   const targetSets = targetSetsOf(group);
@@ -144,8 +156,15 @@ export function ActiveExerciseCard({
     if (prefillReps != null) setReps(prefillReps);
   }
 
+  // "Como foi a série?" (#377): opcional. Respondida aqui, grava no `rpe` e a
+  // pergunta de depois (o drawer de RPE) não aparece.
+  const [feeling, setFeeling] = useState<number | null>(null);
+  // Uma chave por toque em "Concluir série": o reenvio depois de uma falha usa
+  // a mesma, e a API devolve a série já gravada em vez de duplicar.
+  const clientKey = useRef<string | null>(null);
+
   const logSet = useMutation({
-    mutationFn: () =>
+    mutationFn: (key: string) =>
       workoutApi.logSet(sessionId, {
         exerciseId: group.exerciseId,
         // `??` e não `||`: carga 0 é carga. Barra fixa, paralela e afins são
@@ -154,151 +173,156 @@ export function ActiveExerciseCard({
         // tem essa leitura: é campo em branco, e segue sem ser enviado.
         weightKg: weight ?? undefined,
         reps: reps || undefined,
+        rpe: feeling != null ? feelingToRpe(feeling) : undefined,
+        clientKey: key,
       }),
     onSuccess: (created) => {
+      clientKey.current = null;
+      const answered = feeling != null;
+      setFeeling(null);
       qc.invalidateQueries({ queryKey: ['workout', 'active'] });
       qc.invalidateQueries({ queryKey: ['workout', 'session', sessionId] });
       onAnnounce?.(`Série ${doneSets + 1} de ${targetSets} registrada. Descanso iniciado.`);
       rest.start(restTarget);
-      onAskRpe(created);
+      if (!answered) onAskRpe(created);
+      if (doneSets + 1 >= targetSets) onExerciseComplete?.();
     },
   });
+
+  function concludeSet() {
+    clientKey.current ??= newSetClientKey();
+    logSet.mutate(clientKey.current);
+  }
 
   // Carga na unidade da pessoa (Você › Unidades, #387): o estado e a API
   // continuam em kg; só o campo e as dicas mostram em lb.
   const units = useUnitPrefs();
   const unitLabel = loadUnitLabel(units.loadUnit);
   const previousLabel = formatPreviousSet(reference, false, units);
-  const referenceCells = previousCells(reference, false, units);
+  const setNumber = Math.min(doneSets + 1, targetSets);
+  const headline = [
+    `Série ${setNumber} de ${targetSets}`,
+    group.targetReps ? `meta ${group.targetReps} reps` : null,
+    previousLabel ? `última vez ${previousLabel}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const isRecord = prWeight != null && prWeight > 0 && weight > prWeight;
+
+  const record =
+    prWeight != null
+      ? `recorde ${loadValue(prWeight, units)} ${unitLabel}${prReps != null ? ` × ${prReps}` : ''}`
+      : prReps != null
+        ? `recorde ${prReps} reps`
+        : null;
+  const resting = rest.remaining != null;
 
   return (
-    <div className="rounded-2xl border border-subtle bg-card p-4">
-      {/* Nome, "Como fazer" e a série logo abaixo, como no app. A faixa de
-          176px com gradiente que segurava o "SÉRIE 1 DE 3" empurrava os
-          steppers e o descanso para fora da primeira tela do celular. */}
-      <div className="flex flex-col items-center">
-        <ExerciseTitle
-          kicker="EM ANDAMENTO"
-          exerciseId={group.exerciseId}
-          exerciseName={group.exerciseName}
-        />
-        <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-[10px] font-extrabold text-foreground">
-          <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
-          SÉRIE {Math.min(doneSets + 1, targetSets)} DE {targetSets}
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <p className="min-w-0 flex-1 text-[15px] text-muted-foreground tabular-nums">{headline}</p>
+        {nav}
+      </div>
+
+      {isRecord && (
+        <p className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-3 py-1 text-xs font-extrabold text-primary-text">
+          <span aria-hidden>🏆</span>
+          Recorde!
         </p>
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <Stepper
-          label={`CARGA (${unitLabel.toUpperCase()})`}
-          accessibleLabel={`carga em ${units.loadUnit === 'LB' ? 'libras' : 'quilos'} para ${group.exerciseName}`}
-          value={loadFieldValue(weight, units.loadUnit)}
-          step={1}
-          onChange={(n) => {
-            setTouched(true);
-            setWeight(loadToKg(Math.max(0, n), units.loadUnit));
-          }}
-          hint={
-            reference?.weightKg != null
-              ? `Anterior: ${loadValue(reference.weightKg, units)} ${unitLabel}`
-              : prWeight != null
-                ? `🏆 Recorde: ${loadValue(prWeight, units)} ${unitLabel}`
-                : undefined
-          }
-        />
-        <Stepper
-          label="REPETIÇÕES"
-          accessibleLabel={`repetições para ${group.exerciseName}`}
-          value={reps}
-          step={1}
-          integer
-          onChange={(n) => {
-            setTouched(true);
-            setReps(Math.max(0, Math.round(n)));
-          }}
-          hint={
-            reference?.reps != null
-              ? `Anterior: ${reference.reps} reps`
-              : prReps != null
-                ? `🏆 Recorde: ${prReps} reps`
-                : undefined
-          }
-        />
-      </div>
-
-      {hint && (
-        <div className="mt-2 text-center text-[10px]">
-          <p className="font-bold text-primary">{hint.label}</p>
-          <p className="text-muted-foreground">{hint.reason}</p>
-        </div>
       )}
 
-      <div className="mt-4">
-        <RestTimer timer={rest} idleSeconds={restTarget} />
-      </div>
+      <SetChips
+        sessionId={sessionId}
+        sets={group.sets}
+        isCardio={false}
+        targetSets={targetSets}
+        onAll={onAll}
+      />
 
-      <div className="mt-4 space-y-1.5">
-        <p className="text-[10px] font-extrabold tracking-wide text-muted-foreground">
-          SÉRIES REALIZADAS
-        </p>
-        <div className="grid grid-cols-[36px_1fr_1fr_1fr_32px] gap-2 text-[10px] font-bold tracking-wide text-muted-foreground">
-          <div>Série</div>
-          <div>Reps</div>
-          <div>Carga ({unitLabel})</div>
-          <div>RPE</div>
-          <div />
-        </div>
+      {resting && (
+        <RestTimer
+          timer={rest}
+          idleSeconds={restTarget}
+          next={
+            isComplete
+              ? null
+              : `Próxima: série ${setNumber} · ${formatNumber(loadFieldValue(weight, units.loadUnit))} ${unitLabel} × ${reps}`
+          }
+        />
+      )}
 
-        {/* A última vez, na mesma grade das séries de hoje: comparar coluna a
-            coluna é mais rápido que ler "Anterior" embaixo de cada stepper. */}
-        {previousLabel && (
-          <div
-            aria-label={`Última vez: ${previousLabel}`}
-            role="group"
-            className="grid grid-cols-[36px_1fr_1fr_1fr_32px] items-center gap-2 rounded-lg border border-dashed border-subtle py-2 text-sm text-muted-foreground tabular-nums"
-          >
-            <div aria-hidden className="text-center text-[10px] font-bold">
-              ant.
-            </div>
-            {referenceCells.map((value, index) => (
-              <div key={index} aria-hidden className="px-2">
-                {value}
-              </div>
-            ))}
-            <div />
+      {!isComplete && (
+        <>
+          <div className="grid grid-cols-2 gap-2.5">
+            <Stepper
+              label={unitLabel}
+              accessibleLabel={`carga em ${units.loadUnit === 'LB' ? 'libras' : 'quilos'} para ${group.exerciseName}`}
+              value={loadFieldValue(weight, units.loadUnit)}
+              step={units.loadUnit === 'LB' ? 5 : 2.5}
+              onChange={(n) => {
+                setTouched(true);
+                setWeight(loadToKg(Math.max(0, n), units.loadUnit));
+              }}
+              caption={
+                record ? (
+                  <span className="inline-flex min-w-0 items-center gap-1 text-steps">
+                    <Trophy size={13} aria-hidden className="shrink-0" />
+                    <span className="truncate">{record}</span>
+                  </span>
+                ) : null
+              }
+              hint={
+                reference?.weightKg != null
+                  ? `Anterior: ${loadValue(reference.weightKg, units)} ${unitLabel}`
+                  : undefined
+              }
+            />
+            <Stepper
+              label="reps"
+              accessibleLabel={`repetições para ${group.exerciseName}`}
+              value={reps}
+              step={1}
+              integer
+              onChange={(n) => {
+                setTouched(true);
+                setReps(Math.max(0, Math.round(n)));
+              }}
+              caption={group.targetReps ? `meta ${group.targetReps}` : null}
+              hint={reference?.reps != null ? `Anterior: ${reference.reps} reps` : undefined}
+            />
           </div>
-        )}
 
-        {group.sets.map((s, idx) => (
-          <SetRow
-            key={s.id}
-            set={s}
-            index={idx}
-            isCardio={group.isCardio}
-            sessionId={sessionId}
-            showDelete
-          />
-        ))}
+          {hint && (
+            <p className="text-center text-xs text-muted-foreground">
+              <span className="font-bold text-primary-text">{hint.label}</span> · {hint.reason}
+            </p>
+          )}
 
-        {group.sets.length === 0 && (
-          <p className="py-2 text-xs text-muted-foreground">
-            Nenhuma série registrada neste exercício ainda.
-          </p>
-        )}
-      </div>
+          {!resting && (
+            <div className="space-y-2.5">
+              <p className="font-display text-[17px] font-semibold text-foreground">
+                Como foi a série?
+              </p>
+              <FeelingPicker label="Como foi a série?" value={feeling} onChange={setFeeling} />
+            </div>
+          )}
+        </>
+      )}
 
-      <div className="mt-4 space-y-2">
+      {beforeSubmit}
+
+      <div className="space-y-1">
         <Button
-          className="h-12 w-full rounded-full text-sm font-extrabold shadow-[0_0_20px_hsl(var(--primary)/0.45)]"
-          onClick={() => logSet.mutate()}
+          className="h-[60px] w-full rounded-full text-base font-extrabold"
+          onClick={concludeSet}
           disabled={logSet.isPending || isComplete}
         >
-          <Check size={16} className="mr-1.5" />
+          <Check size={18} className="mr-1.5" />
           {logSet.isPending
             ? 'Registrando...'
             : isComplete
               ? 'Exercício completo'
-              : 'Concluir Série'}
+              : `Concluir série ${setNumber}`}
         </Button>
         {logSet.isError && (
           <p role="alert" className="text-center text-xs text-danger">
@@ -306,13 +330,13 @@ export function ActiveExerciseCard({
             {logSet.error instanceof Error ? `: ${logSet.error.message}` : '.'}
           </p>
         )}
-        <Button
-          variant="outline"
-          className="h-12 w-full rounded-full text-sm font-extrabold"
+        <button
+          type="button"
           onClick={onFinishExercise}
+          className="anim-press mx-auto flex h-11 items-center px-4 text-[13px] font-bold text-muted-foreground"
         >
-          Finalizar Exercício
-        </Button>
+          Finalizar exercício
+        </button>
       </div>
     </div>
   );
@@ -333,6 +357,7 @@ function Stepper({
   step,
   integer,
   onChange,
+  caption,
   hint,
 }: {
   label: string;
@@ -342,6 +367,8 @@ function Stepper({
   step: number;
   integer?: boolean;
   onChange: (n: number) => void;
+  /** Logo abaixo do número: o recorde, a meta. */
+  caption?: ReactNode;
   hint?: string;
 }) {
   const [editing, setEditing] = useState(false);
@@ -358,58 +385,60 @@ function Stepper({
     setEditing(false);
   }
 
+  const roundButton =
+    'anim-press flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-surface-3 text-foreground';
+
   return (
-    <div className="rounded-xl bg-muted/40 px-2 py-2">
-      <p className="text-center text-[10px] font-bold tracking-wide text-muted-foreground">
-        {label}
+    <div className="flex flex-col items-center rounded-card bg-card px-3 py-4">
+      <p className="text-[13px] text-muted-foreground">{label}</p>
+      {editing ? (
+        <input
+          autoFocus
+          type="text"
+          inputMode={integer ? 'numeric' : 'decimal'}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onFocus={(e) => e.target.select()}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+            if (e.key === 'Escape') setEditing(false);
+          }}
+          className="h-12 w-full bg-transparent text-center font-display text-[40px] font-semibold text-foreground tabular-nums outline-none"
+          aria-label={`Valor de ${accessibleLabel}`}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={startEditing}
+          className="h-12 min-w-14 font-display text-[40px] font-semibold leading-none text-foreground tabular-nums"
+          aria-label={`Editar ${accessibleLabel}: ${formatNumber(value)}`}
+        >
+          {formatNumber(value)}
+        </button>
+      )}
+      <p className="mt-1 flex h-4 max-w-full items-center text-[11px] font-bold text-muted-foreground">
+        {caption}
       </p>
-      <div className="mt-1 flex items-center justify-between">
+      {hint && <p className="text-[10px] text-faint tabular-nums">{hint}</p>}
+      <div className="mt-3 flex gap-3">
         <button
           type="button"
           onClick={() => onChange(value - step)}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-background text-foreground hover:bg-accent"
+          className={roundButton}
           aria-label={`Diminuir ${accessibleLabel}`}
         >
-          <Minus size={16} />
+          <Minus size={18} />
         </button>
-        {editing ? (
-          <input
-            autoFocus
-            type="text"
-            inputMode={integer ? 'numeric' : 'decimal'}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onFocus={(e) => e.target.select()}
-            onBlur={commit}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-              if (e.key === 'Escape') setEditing(false);
-            }}
-            className="w-16 bg-transparent text-center text-2xl font-extrabold text-foreground tabular-nums outline-none"
-            aria-label={`Valor de ${accessibleLabel}`}
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={startEditing}
-            className="min-h-11 min-w-14 text-2xl font-extrabold text-foreground tabular-nums"
-            aria-label={`Editar ${accessibleLabel}: ${formatNumber(value)}`}
-          >
-            {formatNumber(value)}
-          </button>
-        )}
         <button
           type="button"
           onClick={() => onChange(value + step)}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-background text-foreground hover:bg-accent"
+          className={roundButton}
           aria-label={`Aumentar ${accessibleLabel}`}
         >
-          <Plus size={16} />
+          <Plus size={18} />
         </button>
       </div>
-      {hint && (
-        <p className="mt-1 text-center text-[10px] text-muted-foreground tabular-nums">{hint}</p>
-      )}
     </div>
   );
 }

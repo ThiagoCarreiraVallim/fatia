@@ -4,29 +4,35 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { ChevronRight, ClipboardList, Layers, Play, Plus, Trash2, Users } from 'lucide-react';
 import {
-  CalendarRange,
-  ChevronRight,
-  ClipboardList,
-  Play,
-  Plus,
-  Trash2,
-  Users,
-} from 'lucide-react';
-import { planSummaryLine, workoutApi, type WorkoutPlan } from '@fatia/api-client';
-import { Button } from '@/components/ui/button';
+  planExerciseChips,
+  planSummaryLine,
+  workoutApi,
+  type TrainingBlock,
+  type WorkoutPlan,
+} from '@fatia/api-client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ErrorState } from '@/components/elements/error-state';
+import { DockedAction, DockedPage } from '@/components/layout/bottom-nav';
 import { PlanMuscleBar } from '@/components/workout/plan-muscle-bar';
+import { cn } from '@/lib/utils';
 
-/** Planos (prancha Al-T6, #378). Circuitos ficam para a #380. */
+/** O `btn sm` do canvas: cinza (`--s2`), 12 px de canto. */
+const greyButton =
+  'anim-press inline-flex h-10 items-center justify-center gap-2 rounded-[12px] bg-muted text-sm font-bold text-foreground disabled:opacity-40';
+
+/**
+ * Planos (prancha Al-T6, #378): os cards dos planos, os atalhos para modelos e
+ * bloco, e o "Novo plano" preso embaixo. A aba Circuitos fica para a #380 e o
+ * plano recebido do personal para a #379.
+ */
 export default function PlansPage() {
   const qc = useQueryClient();
   const router = useRouter();
-  // Excluir pergunta antes: o histórico continua, mas o plano não volta.
-  const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null);
+  // Excluir pergunta antes, no próprio card (Al-T6): o histórico continua, mas o plano não volta.
+  const [askId, setAskId] = useState<string | null>(null);
 
   const plans = useQuery({
     queryKey: ['workout', 'plans'],
@@ -42,7 +48,7 @@ export default function PlansPage() {
   const remove = useMutation({
     mutationFn: (id: string) => workoutApi.deletePlan(id),
     onSuccess: () => {
-      setRemoveTarget(null);
+      setAskId(null);
       qc.invalidateQueries({ queryKey: ['workout', 'plans'] });
     },
   });
@@ -57,53 +63,21 @@ export default function PlansPage() {
   });
 
   const activeBlock = block.data ?? null;
-  const week = activeBlock?.currentWeek ?? null;
 
   return (
-    <div className="space-y-5 px-5 pt-4 pb-4">
+    <DockedPage className="px-4 pt-2">
       {activeBlock && (
-        <section
-          aria-label="Bloco de semanas em andamento"
-          className="rounded-2xl border border-primary/30 bg-primary/5 p-4"
-        >
-          <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase">
-            {activeBlock.kindLabel}
-            {activeBlock.planName ? ` · ${activeBlock.planName}` : ''}
-          </p>
-          {week && (
-            <>
-              <p className="mt-1 text-lg font-extrabold">
-                Semana {week.weekNumber} de {activeBlock.weeksTotal}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {week.sessionsDone} de {week.sessionsTarget} sessões nesta semana
-              </p>
-            </>
-          )}
-          {activeBlock.planId && activeBlock.planName && (
-            <Button
-              className="mt-3 w-full rounded-full"
-              disabled={start.isPending}
-              onClick={() => activeBlock.planId && start.mutate(activeBlock.planId)}
-            >
-              <Play size={16} fill="currentColor" className="mr-1.5" />
-              Começar {activeBlock.planName}
-            </Button>
-          )}
-        </section>
+        <BlockCard
+          block={activeBlock}
+          starting={start.isPending}
+          onStart={() => activeBlock.planId && start.mutate(activeBlock.planId)}
+        />
       )}
 
-      <Button asChild variant="outline" className="w-full gap-2 rounded-2xl">
-        <Link href="/workout/plans/new">
-          <Plus size={16} />
-          Novo plano
-        </Link>
-      </Button>
-
       {plans.isLoading && (
-        <div className="space-y-2">
+        <div className="space-y-4">
           {[1, 2].map((i) => (
-            <Skeleton key={i} className="h-28 rounded-2xl bg-muted" />
+            <Skeleton key={i} className="h-44 rounded-card bg-muted" />
           ))}
         </div>
       )}
@@ -133,118 +107,230 @@ export default function PlansPage() {
         </p>
       )}
 
-      <div className="space-y-3">
-        {plans.data?.map((plan) => (
-          <PlanCard
-            key={plan.id}
-            plan={plan}
-            starting={start.isPending}
-            onStart={() => start.mutate(plan.id)}
-            onDelete={() => setRemoveTarget({ id: plan.id, name: plan.name })}
-          />
-        ))}
-      </div>
-
-      <div className="space-y-2">
-        <ShortcutLink
-          href="/community"
-          icon={<Users size={18} />}
-          title="Modelos das comunidades"
-          subtitle="planos prontos dos seus grupos"
+      {plans.data?.map((plan) => (
+        <PlanCard
+          key={plan.id}
+          plan={plan}
+          starting={start.isPending}
+          asking={askId === plan.id}
+          removing={remove.isPending}
+          removeFailed={remove.isError && askId === plan.id}
+          onStart={() => start.mutate(plan.id)}
+          onAsk={() => {
+            remove.reset();
+            setAskId(plan.id);
+          }}
+          onCancel={() => setAskId(null)}
+          onDelete={() => remove.mutate(plan.id)}
         />
-        <ShortcutLink
-          href="/workout#bloco"
-          icon={<CalendarRange size={18} />}
-          title="Bloco de semanas"
-          subtitle="organize força, volume e deload"
-        />
-      </div>
+      ))}
 
-      <ConfirmDialog
-        open={removeTarget != null}
-        onOpenChange={(open) => {
-          if (!open) setRemoveTarget(null);
-        }}
-        title={`Excluir “${removeTarget?.name ?? ''}”?`}
-        description="O histórico das sessões continua."
-        confirmLabel="Excluir"
-        pendingLabel="Excluindo..."
-        pending={remove.isPending}
-        onConfirm={() => removeTarget && remove.mutate(removeTarget.id)}
+      <ShortcutLink
+        href="/community"
+        icon={<Users size={20} aria-hidden />}
+        title="Modelos das comunidades"
+        subtitle="planos prontos dos seus grupos"
       />
-    </div>
+      <ShortcutLink
+        href="/workout#bloco"
+        icon={<Layers size={20} aria-hidden />}
+        title="Bloco de semanas"
+        subtitle="organize força, volume e deload"
+      />
+
+      <DockedAction>
+        <Link
+          href="/workout/plans/new"
+          className="anim-press flex h-14 flex-1 items-center justify-center gap-2 rounded-pill bg-foreground text-[15px] font-bold text-background"
+        >
+          <Plus size={16} aria-hidden />
+          Novo plano
+        </Link>
+      </DockedAction>
+    </DockedPage>
+  );
+}
+
+/**
+ * O bloco em andamento no topo, no desenho do card do plano recebido (Al-T6):
+ * a semana, as sessões e o "Começar".
+ */
+function BlockCard({
+  block,
+  starting,
+  onStart,
+}: {
+  block: TrainingBlock;
+  starting: boolean;
+  onStart: () => void;
+}) {
+  const week = block.currentWeek ?? null;
+  return (
+    <section
+      aria-label="Bloco de semanas em andamento"
+      className="space-y-3 rounded-card bg-card p-4 shadow-[inset_0_0_0_1px_hsl(var(--border-strong))]"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className="min-w-0">
+          <span className="block text-[17px] font-bold">{block.kindLabel}</span>
+          {block.planName && <span className="block text-xs text-faint">{block.planName}</span>}
+        </span>
+        <span className="inline-flex h-[22px] shrink-0 items-center rounded-pill bg-[hsl(var(--info)/0.1)] px-[9px] text-[11px] font-extrabold uppercase tracking-[0.04em] text-info">
+          bloco
+        </span>
+      </div>
+      {week && (
+        <div className="space-y-1.5">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-[13px] font-bold">
+              Semana {week.weekNumber} de {block.weeksTotal}
+            </span>
+            <span className="text-xs text-faint tabular-nums">
+              {week.sessionsDone} de {week.sessionsTarget} sessões nesta semana
+            </span>
+          </div>
+          <div aria-hidden className="flex h-1.5 gap-[3px]">
+            {Array.from({ length: block.weeksTotal }, (_, i) => (
+              <span
+                key={i}
+                className={cn(
+                  'block h-full flex-1 rounded-[3px]',
+                  i + 1 < week.weekNumber ? 'bg-primary' : 'bg-surface-3',
+                )}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      {block.planId && block.planName && (
+        <div className="border-t border-border pt-3">
+          <button
+            type="button"
+            disabled={starting}
+            onClick={onStart}
+            className={cn(greyButton, 'h-11 w-full')}
+          >
+            <Play size={16} aria-hidden />
+            Começar {block.planName}
+          </button>
+        </div>
+      )}
+    </section>
   );
 }
 
 function PlanCard({
   plan,
   starting,
+  asking,
+  removing,
+  removeFailed,
   onStart,
+  onAsk,
+  onCancel,
   onDelete,
 }: {
   plan: WorkoutPlan;
   starting: boolean;
+  asking: boolean;
+  removing: boolean;
+  removeFailed: boolean;
   onStart: () => void;
+  onAsk: () => void;
+  onCancel: () => void;
   onDelete: () => void;
 }) {
   const exercises = [...(plan.exercises ?? [])].sort((a, b) => a.order - b.order);
-  const preview = exercises.slice(0, 3);
-  const more = exercises.length - preview.length;
+  const chips = planExerciseChips(exercises);
+  const template = Boolean(plan.fromTemplateId);
   return (
-    <article className="rounded-2xl border border-subtle bg-card p-4">
-      <Link href={`/workout/plans/${plan.id}`} className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h2 className="truncate text-base font-extrabold">{plan.name}</h2>
-            <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-bold uppercase text-muted-foreground">
-              {plan.fromTemplateId ? 'modelo' : 'seu'}
+    <article className="space-y-3 rounded-card bg-card p-4">
+      {/* O card inteiro (nome, chips e barra) abre o plano, como na prancha. */}
+      <Link href={`/workout/plans/${plan.id}`} className="block space-y-3">
+        <span className="flex items-start justify-between gap-2">
+          <span className="min-w-0">
+            <span className="block truncate text-[17px] font-bold text-foreground">
+              {plan.name}
             </span>
-          </div>
-          <p className="text-xs text-muted-foreground">{planSummaryLine(exercises)}</p>
-        </div>
-        <ChevronRight size={16} className="mt-1 shrink-0 text-muted-foreground" />
+            <span className="block text-xs text-faint">{planSummaryLine(exercises)}</span>
+          </span>
+          <span
+            className={cn(
+              'inline-flex h-[22px] shrink-0 items-center rounded-pill px-[9px] text-[11px] font-extrabold uppercase tracking-[0.04em]',
+              template ? 'bg-brand text-brand-foreground' : 'bg-primary-soft text-primary-text',
+            )}
+          >
+            {template ? 'modelo' : 'seu'}
+          </span>
+        </span>
+        {chips.length > 0 && (
+          <span className="flex flex-wrap gap-1.5">
+            {chips.map((c) => (
+              <span
+                key={c.label}
+                className="inline-flex h-[30px] items-center gap-1.5 whitespace-nowrap rounded-[15px] bg-muted pl-[3px] pr-2.5 text-xs font-semibold text-foreground"
+              >
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-3 text-[11px] font-extrabold">
+                  {c.label}
+                </span>
+                {c.name}
+              </span>
+            ))}
+          </span>
+        )}
+        <PlanMuscleBar exercises={exercises} />
       </Link>
 
-      {preview.length > 0 && (
-        <ol className="mt-3 space-y-1 text-sm">
-          {preview.map((pe, i) => (
-            <li key={pe.id} className="flex items-center gap-2">
-              <span className="w-4 text-xs font-bold text-muted-foreground tabular-nums">
-                {i + 1}
-              </span>
-              <span className="truncate">{pe.exercise.name}</span>
-            </li>
-          ))}
-          {more > 0 && (
-            <li className="flex items-center gap-2 text-muted-foreground">
-              <span className="w-4 text-xs font-bold">+</span>
-              {more} mais
-            </li>
-          )}
-        </ol>
-      )}
-
-      <PlanMuscleBar exercises={exercises} className="mt-3" />
-
-      <div className="mt-3 flex items-center gap-2">
-        <Button
-          className="h-11 flex-1 rounded-full"
+      <div className="flex items-center gap-2 border-t border-border pt-3">
+        <button
+          type="button"
+          className={cn(greyButton, 'flex-1')}
           aria-label={`Começar ${plan.name}`}
           disabled={starting || exercises.length === 0}
           onClick={onStart}
         >
-          <Play size={14} fill="currentColor" className="mr-1.5" />
+          <Play size={16} aria-hidden />
           Começar
-        </Button>
+        </button>
         <button
           type="button"
-          onClick={onDelete}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-danger"
+          onClick={onAsk}
+          className={cn(greyButton, 'w-10 shrink-0 text-muted-foreground')}
           aria-label={`Excluir plano ${plan.name}`}
+          aria-expanded={asking}
         >
-          <Trash2 size={16} />
+          <Trash2 size={16} aria-hidden />
         </button>
       </div>
+
+      {asking && (
+        <div
+          role="group"
+          aria-label={`Excluir “${plan.name}”?`}
+          className="space-y-2.5 rounded-[14px] bg-danger/10 p-3 shadow-[inset_0_0_0_1px_hsl(var(--danger)/0.35)]"
+        >
+          <p className="text-sm font-bold">Excluir “{plan.name}”?</p>
+          <p className="text-xs text-faint">O histórico das sessões continua.</p>
+          {removeFailed && (
+            <p role="alert" className="text-xs text-danger">
+              Não foi possível excluir. Tente de novo.
+            </p>
+          )}
+          <div className="flex gap-2">
+            <button type="button" onClick={onCancel} className={cn(greyButton, 'flex-1')}>
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={removing}
+              className="anim-press inline-flex h-10 flex-1 items-center justify-center rounded-[12px] bg-danger/15 text-sm font-bold text-danger disabled:opacity-40"
+            >
+              {removing ? 'Excluindo...' : 'Excluir'}
+            </button>
+          </div>
+        </div>
+      )}
     </article>
   );
 }
@@ -263,16 +349,14 @@ function ShortcutLink({
   return (
     <Link
       href={href}
-      className="flex items-center gap-3 rounded-2xl border border-subtle bg-card p-4 hover:bg-accent"
+      className="anim-press flex items-center gap-3 rounded-card px-4 py-3.5 shadow-[inset_0_0_0_1.5px_hsl(var(--border-strong))]"
     >
-      <span className="flex h-10 w-10 items-center justify-center rounded-field bg-muted text-primary">
-        {icon}
-      </span>
+      <span className="text-primary-text">{icon}</span>
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-bold">{title}</span>
-        <span className="block text-xs text-muted-foreground">{subtitle}</span>
+        <span className="block text-xs text-faint">{subtitle}</span>
       </span>
-      <ChevronRight size={16} className="text-muted-foreground" />
+      <ChevronRight size={16} aria-hidden className="text-faint" />
     </Link>
   );
 }

@@ -235,7 +235,7 @@ export function StepperButton({
       disabled={disabled}
       onPress={onPress}
       className={cn(
-        'h-10 w-10 items-center justify-center rounded-[14px] bg-surface-3',
+        'h-10 w-10 items-center justify-center rounded-[14px] bg-muted',
         disabled && 'opacity-40',
       )}
     >

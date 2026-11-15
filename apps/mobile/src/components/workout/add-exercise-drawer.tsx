@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Search, Star } from 'lucide-react-native';
+import { Check, Play, Search, Star, X } from 'lucide-react-native';
 import {
   addSelectionLabel,
   MUSCLE_GROUP_LABEL,
@@ -11,8 +11,6 @@ import {
   type Exercise,
 } from '@fatia/api-client';
 import {
-  Button,
-  Chip,
   cn,
   Drawer,
   DrawerDescription,
@@ -23,7 +21,10 @@ import {
   DrawerTitle,
 } from '@/components/ui';
 import { colors } from '@/theme/colors';
+import { headerButtonClass } from '@/components/layout/tab-header';
 import { CommunityBadge, MyGymToggle, useInCommunity } from './my-gym-filter';
+import { ExerciseGroupLine, ExerciseThumb } from './plan-exercise-row';
+import { groupColorName } from './workout-home';
 
 /**
  * Réplica de `apps/web/src/components/workout/add-exercise-drawer.tsx` (#378).
@@ -140,30 +141,66 @@ export function AddExerciseDrawer({
   const term = debounced.trim();
   const favEmpty = tab === 'favoritos' && !term && !search.isFetching && results.length === 0;
 
+  const count = selected.size;
+
   return (
-    <Drawer open={open} onOpenChange={onOpenChange} snapPoints={['90%']}>
+    // Al-T8: tela cheia, abaixo só da área segura; a barra de baixo some com a folha.
+    <Drawer open={open} onOpenChange={onOpenChange} snapPoints={['85%']}>
       <DrawerHeader>
-        <DrawerTitle>{planName ? `Adicionar ao ${planName}` : 'Adicionar exercício'}</DrawerTitle>
-        <DrawerDescription>
+        <View className="flex-row items-center gap-2">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Fechar"
+            onPress={() => onOpenChange(false)}
+            className={headerButtonClass()}
+          >
+            <X size={22} color={colors.foreground} />
+          </Pressable>
+          <View className="min-w-0 flex-1">
+            <DrawerTitle className="text-center font-display-semibold text-[17px]">
+              {planName ? `Adicionar ao ${planName}` : 'Adicionar exercício'}
+            </DrawerTitle>
+          </View>
+          {multi ? (
+            <View
+              accessibilityLabel={`${count} ${count === 1 ? 'selecionado' : 'selecionados'}`}
+              className={cn(
+                'h-[22px] min-w-11 items-center justify-center rounded-pill px-[9px]',
+                !count && 'bg-muted',
+              )}
+              style={count ? { backgroundColor: `${colors.primary}1f` } : undefined}
+            >
+              <Text
+                className={cn(
+                  'font-sans-extrabold text-[11px]',
+                  count ? 'text-primary' : 'text-muted-foreground',
+                )}
+              >
+                {count}
+              </Text>
+            </View>
+          ) : (
+            <View className="w-11" />
+          )}
+        </View>
+        <DrawerDescription className="sr-only h-0 opacity-0">
           {multi
             ? 'Marque quantos quiser. Eles entram no fim do plano, na ordem em que você marcou.'
             : 'Busque e selecione um exercício.'}
         </DrawerDescription>
       </DrawerHeader>
 
-      <View className="gap-2 px-4 py-3">
-        <View className="relative justify-center">
-          <View className="absolute left-3 z-10">
-            <Search size={16} color={colors.mutedForeground} />
-          </View>
+      <View className="gap-3 px-4 pb-3">
+        <View className="h-14 flex-row items-center gap-2.5 rounded-pill bg-card px-4">
+          <Search size={18} color={colors.mutedForeground} />
           <DrawerTextInput
             value={q}
             onChangeText={setQ}
             accessibilityLabel="Buscar exercício"
-            placeholder="Ex.: supino, corrida, agachamento..."
+            placeholder="Supino, remada, agachamento..."
             placeholderTextColor={colors.placeholder}
             selectionColor={colors.primaryText}
-            className="min-h-[44px] rounded-md border border-input bg-transparent py-2 pl-9 pr-3 text-sm text-foreground"
+            className="min-h-[44px] flex-1 bg-transparent text-base text-foreground"
           />
         </View>
         <ScrollView
@@ -173,131 +210,196 @@ export function AddExerciseDrawer({
           contentContainerClassName="gap-2"
           accessibilityLabel="Filtrar por grupo"
         >
-          {TABS.map((t) => (
-            <Chip
-              key={t.value}
-              label={t.label}
-              selected={tab === t.value}
-              onPress={() => setTab(t.value)}
-            />
-          ))}
+          {TABS.map((t) => {
+            const on = tab === t.value;
+            const dot = t.value !== 'favoritos' && t.value !== 'todos';
+            return (
+              <Pressable
+                key={t.value}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                onPress={() => setTab(t.value)}
+                className={cn(
+                  'h-9 flex-row items-center gap-1.5 rounded-[12px] px-3.5 active:opacity-80',
+                  on ? 'bg-foreground' : 'bg-card',
+                )}
+              >
+                {t.value === 'favoritos' ? (
+                  <Star size={14} color={on ? colors.background : colors.mutedForeground} />
+                ) : null}
+                {dot ? (
+                  <View
+                    className="h-[7px] w-[7px] rounded-[2px]"
+                    style={{ backgroundColor: colors[groupColorName(t.value)] }}
+                  />
+                ) : null}
+                <Text
+                  className={cn(
+                    'font-sans-semibold text-sm',
+                    on ? 'text-background' : 'text-muted-foreground',
+                  )}
+                >
+                  {t.label}
+                </Text>
+              </Pressable>
+            );
+          })}
         </ScrollView>
         {emComunidade ? <MyGymToggle checked={naAcademia} onChange={setNaAcademia} /> : null}
       </View>
 
       <DrawerFlatList
         className="flex-1"
+        contentContainerClassName="px-4"
         data={search.isFetching ? [] : results}
         keyboardShouldPersistTaps="handled"
         keyExtractor={(item: Exercise) => String(item.id)}
-        ItemSeparatorComponent={() => <View className="h-px bg-border" />}
         ListEmptyComponent={
           search.isFetching ? (
-            <Text className="px-4 py-3 text-sm text-muted-foreground">Buscando...</Text>
+            <Text className="px-1 py-3 text-sm text-faint">Buscando...</Text>
           ) : favEmpty ? (
-            <View className="items-center gap-2 px-6 py-8">
-              <Star size={28} color={colors.mutedForeground} />
-              <Text className="text-base font-semibold text-foreground">Nenhum favorito ainda</Text>
+            <View className="items-center gap-2 rounded-card bg-card px-6 py-8">
+              <View
+                className="mb-1 h-12 w-12 items-center justify-center rounded-2xl"
+                style={{ backgroundColor: `${colors.warning}29` }}
+              >
+                <Star size={20} color={colors.steps} />
+              </View>
+              <Text className="font-display text-base text-foreground">Nenhum favorito ainda</Text>
               <Text className="text-center text-sm text-muted-foreground">
                 Toque em Favoritar no Como fazer de um exercício. Ele aparece aqui e primeiro nas
                 sugestões.
               </Text>
-              <Button variant="outline" size="sm" onPress={() => setTab('todos')}>
-                Ver todos os exercícios
-              </Button>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setTab('todos')}
+                className="mt-1 h-11 flex-row items-center gap-2 rounded-[12px] bg-muted px-[18px] active:opacity-80"
+              >
+                <Play size={16} color={colors.foreground} />
+                <Text className="font-sans-bold text-sm text-foreground">
+                  Ver todos os exercícios
+                </Text>
+              </Pressable>
             </View>
           ) : (
-            <View className="items-center px-4 py-6">
-              <Text className="text-sm font-semibold text-foreground">
+            <View className="items-center rounded-card bg-card px-4 py-6">
+              <Text className="font-sans-semibold text-sm text-foreground">
                 {term ? `Nada com “${term}”` : 'Nenhum exercício aqui.'}
               </Text>
               {term ? (
-                <Text className="text-xs text-muted-foreground">
-                  Tente outro nome ou o grupo muscular
-                </Text>
+                <Text className="text-xs text-faint">Tente outro nome ou o grupo muscular</Text>
               ) : null}
             </View>
           )
         }
-        renderItem={({ item }: { item: Exercise }) => {
+        renderItem={({ item, index }: { item: Exercise; index: number }) => {
           const on = selected.has(item.id);
           const inPlan = existingExerciseIds.has(item.id);
+          const last = index === results.length - 1;
           const sub = [item.muscleGroup, item.equipment, inPlan ? 'já no plano' : null]
             .filter(Boolean)
             .join(' · ');
           return (
-            <Pressable
-              accessibilityRole={multi ? 'checkbox' : 'button'}
-              accessibilityLabel={`${item.name}, ${sub}`}
-              accessibilityState={
-                multi ? { checked: on || inPlan, disabled: inPlan } : { disabled: inPlan }
-              }
-              disabled={inPlan}
-              onPress={() => {
-                if (multi) toggle(item);
-                else {
-                  onAdd?.(item);
-                  onOpenChange(false);
-                }
-              }}
+            // O card único da lista (Al-T8): cada linha leva o pedaço do fundo
+            // e os cantos da primeira e da última.
+            <View
               className={cn(
-                'min-h-14 flex-row items-center gap-3 px-4 py-2 active:bg-accent',
-                inPlan && 'opacity-50',
+                'bg-card px-4',
+                index === 0 && 'rounded-t-card',
+                last && 'rounded-b-card',
               )}
             >
-              {multi ? (
-                <View
-                  className={cn(
-                    'h-6 w-6 items-center justify-center rounded-[8px]',
-                    on || inPlan ? 'bg-primary' : 'border-2 border-border-strong',
-                  )}
-                >
-                  {on || inPlan ? <Check size={16} color={colors.primaryForeground} /> : null}
+              <Pressable
+                accessibilityRole={multi ? 'checkbox' : 'button'}
+                accessibilityLabel={`${item.name}${item.favorite ? ', favorito' : ''}, ${sub}`}
+                accessibilityState={
+                  multi ? { checked: on || inPlan, disabled: inPlan } : { disabled: inPlan }
+                }
+                disabled={inPlan}
+                onPress={() => {
+                  if (multi) toggle(item);
+                  else {
+                    onAdd?.(item);
+                    onOpenChange(false);
+                  }
+                }}
+                className={cn(
+                  'min-h-[84px] flex-row items-center gap-3 py-2.5 active:opacity-80',
+                  index > 0 && 'border-t border-border',
+                  inPlan && 'opacity-50',
+                )}
+              >
+                <ExerciseThumb group={item.muscleGroup} />
+                <View className="min-w-0 flex-1 gap-0.5">
+                  <View className="flex-row items-center gap-1.5">
+                    <Text className="shrink font-sans-semibold text-[15px] text-foreground">
+                      {item.name}
+                    </Text>
+                    {item.favorite ? (
+                      <Star
+                        size={14}
+                        color={colors.mutedForeground}
+                        fill={colors.mutedForeground}
+                      />
+                    ) : null}
+                  </View>
+                  <View className="flex-row flex-wrap items-center gap-x-2 gap-y-1">
+                    <ExerciseGroupLine
+                      group={item.muscleGroup}
+                      detail={inPlan ? 'já no plano' : item.equipment}
+                    />
+                    {item.communityName ? (
+                      <CommunityBadge name={item.communityName} />
+                    ) : item.source === 'CUSTOM' ? (
+                      <View className="rounded-pill bg-muted px-2 py-0.5">
+                        <Text className="font-sans-bold text-[11px] text-foreground">custom</Text>
+                      </View>
+                    ) : null}
+                  </View>
                 </View>
-              ) : null}
-              <View className="flex-1 pr-2">
-                <View className="flex-row items-center gap-1.5">
-                  {item.favorite ? (
-                    <Star size={12} color={colors.primaryText} fill={colors.primaryText} />
-                  ) : null}
-                  <Text numberOfLines={1} className="text-sm font-medium text-foreground">
-                    {item.name}
-                  </Text>
-                </View>
-                <Text className="text-xs capitalize text-muted-foreground">{sub}</Text>
-              </View>
-              {item.communityName ? (
-                <CommunityBadge name={item.communityName} />
-              ) : item.source === 'CUSTOM' ? (
-                <View className="rounded bg-muted px-2 py-0.5">
-                  <Text className="text-xs text-foreground">custom</Text>
-                </View>
-              ) : null}
-            </Pressable>
+                {multi ? (
+                  <View
+                    className={cn(
+                      'h-7 w-7 items-center justify-center rounded-full',
+                      on || inPlan ? 'bg-primary' : 'border-2 border-border-strong',
+                    )}
+                  >
+                    {on || inPlan ? <Check size={16} color={colors.primaryForeground} /> : null}
+                  </View>
+                ) : null}
+              </Pressable>
+            </View>
           );
         }}
       />
 
-      <DrawerFooter>
+      <DrawerFooter className="pb-8">
         {addBatch.isError ? (
           <Text accessibilityRole="alert" className="text-sm text-danger">
             Não foi possível adicionar. Tente de novo.
           </Text>
         ) : null}
         {multi ? (
-          <Button
-            className="h-12 rounded-full"
-            disabled={selected.size === 0}
-            loading={addBatch.isPending}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: count === 0 || addBatch.isPending }}
+            disabled={count === 0 || addBatch.isPending}
             onPress={confirm}
+            className={cn(
+              'h-14 items-center justify-center rounded-pill active:opacity-80',
+              count ? 'bg-primary' : 'bg-card',
+            )}
           >
-            {addSelectionLabel(selected.size)}
-          </Button>
-        ) : (
-          <Button variant="ghost" onPress={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-        )}
+            <Text
+              className={cn(
+                'font-sans-bold text-[15px]',
+                count ? 'text-primary-foreground' : 'text-faint',
+              )}
+            >
+              {addBatch.isPending ? 'Adicionando...' : addSelectionLabel(count)}
+            </Text>
+          </Pressable>
+        ) : null}
       </DrawerFooter>
     </Drawer>
   );

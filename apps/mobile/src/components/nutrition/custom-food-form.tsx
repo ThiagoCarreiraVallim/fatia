@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { Check, ChevronDown, Plus, Square } from 'lucide-react-native';
+import { Check, ChevronDown, Minus, Plus, Square } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import {
   customFoodFromForm,
@@ -14,7 +14,7 @@ import {
   type CustomFoodForm as FormValues,
   type CustomFoodInput,
 } from '@fatia/api-client';
-import { Button, DrawerScrollView, cn } from '@/components/ui';
+import { Button, DrawerScrollView, DrawerTextInput, cn } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { DrawerInput } from './drawer-input';
 
@@ -25,6 +25,16 @@ import { DrawerInput } from './drawer-input';
  * micronutrientes inclusive, é a de `customFoodFromForm`, a mesma do PWA. Os
  * nutrientes personalizados da pessoa (#376) vêm primeiro.
  */
+
+const LABEL = 'font-sans-semibold text-sm text-muted-foreground';
+
+/** Cor do rótulo de cada macro, como na prancha. */
+const MACRO_TONE: Record<string, string> = {
+  kcal: 'text-muted-foreground',
+  protein: 'text-protein',
+  carbs: 'text-carbs',
+  fat: 'text-fat',
+};
 
 const MACRO_FIELDS = [
   ['kcal', 'Calorias (kcal)'],
@@ -79,6 +89,13 @@ export function CustomFoodForm({
   const more = moreMicronutrients(fields);
   const filledCount = Object.values(nutrients).filter((v) => v.trim() !== '').length;
 
+  const stepServing = (direction: 1 | -1) =>
+    setValues((prev) => {
+      const current = Number(prev.servingGrams.replace(',', '.'));
+      const base = Number.isFinite(current) ? current : 0;
+      const next = Math.max(10, Math.round((base + direction * 10) / 10) * 10);
+      return { ...prev, servingGrams: String(next) };
+    });
   const set = (key: keyof FormValues) => (value: string) => {
     setValues((prev) => ({ ...prev, [key]: value }));
     setErrors((prev) => ({ ...prev, [key]: undefined, macros: undefined }));
@@ -132,19 +149,21 @@ export function CustomFoodForm({
           onChangeText={set('name')}
           placeholder="Ex.: granola da marca X"
           maxLength={160}
+          filled
+          labelClassName={LABEL}
         />
         {fieldError('name')}
       </View>
 
       {editing ? null : (
-        <View className="gap-1">
-          <Text className="text-sm font-medium text-foreground">Valores do rótulo</Text>
-          <View accessibilityRole="radiogroup" className="flex-row gap-2">
+        <View className="flex-row items-center justify-between gap-3">
+          <Text className="text-sm text-muted-foreground">Valores do rótulo</Text>
+          <View accessibilityRole="radiogroup" className="flex-row gap-1 rounded-field bg-card p-1">
             <BasisChip checked={byServing} onPress={() => setBasis('serving')}>
-              Por porção
+              Porção
             </BasisChip>
             <BasisChip checked={!byServing} onPress={() => setBasis('100g')}>
-              Por 100 g
+              100 g
             </BasisChip>
           </View>
         </View>
@@ -152,14 +171,45 @@ export function CustomFoodForm({
 
       {editing ? null : (
         <View className="gap-1">
-          <DrawerInput
-            label={byServing ? 'Tamanho da porção (g)' : 'Porção do rótulo (g, opcional)'}
-            keyboardType="decimal-pad"
-            inputMode="decimal"
-            value={values.servingGrams}
-            onChangeText={set('servingGrams')}
-            placeholder="Ex.: 30"
-          />
+          <Text className={LABEL}>
+            {byServing ? 'Tamanho da porção (g)' : 'Porção do rótulo (g, opcional)'}
+          </Text>
+          {/* "− 40 g +" da prancha: o número é digitável, os passos são de 10 g. */}
+          <View className="h-[52px] flex-row items-center rounded-field bg-card px-1">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Porção menos 10 g"
+              onPress={() => stepServing(-1)}
+              className="h-11 w-11 items-center justify-center"
+            >
+              <Minus size={18} color={colors.foreground} />
+            </Pressable>
+            <DrawerTextInput
+              accessibilityLabel={byServing ? 'Tamanho da porção (g)' : 'Porção do rótulo (g)'}
+              keyboardType="decimal-pad"
+              inputMode="decimal"
+              value={values.servingGrams}
+              onChangeText={set('servingGrams')}
+              placeholder="Ex.: 30"
+              placeholderTextColor={colors.placeholder}
+              selectionColor={colors.primaryText}
+              style={{
+                flex: 1,
+                textAlign: 'center',
+                fontSize: 18,
+                fontFamily: 'Manrope_700Bold',
+                color: colors.foreground,
+              }}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Porção mais 10 g"
+              onPress={() => stepServing(1)}
+              className="h-11 w-11 items-center justify-center"
+            >
+              <Plus size={18} color={colors.foreground} />
+            </Pressable>
+          </View>
           {fieldError('servingGrams')}
         </View>
       )}
@@ -169,7 +219,8 @@ export function CustomFoodForm({
           <View key={key} className="w-[48%] gap-1">
             <DrawerInput
               label={label}
-              labelClassName="text-xs text-muted-foreground"
+              labelClassName={cn('font-sans-semibold text-sm', MACRO_TONE[key])}
+              filled
               keyboardType="decimal-pad"
               inputMode="decimal"
               value={values[key]}
@@ -183,7 +234,10 @@ export function CustomFoodForm({
       {fieldError('macros')}
 
       {!editing && preview ? (
-        <Text className="rounded-lg bg-muted px-3 py-2 text-xs text-foreground">{preview}</Text>
+        <View className="flex-row items-center gap-2 rounded-pill bg-card px-4 py-2.5">
+          <Check size={16} color={colors.primaryText} />
+          <Text className="flex-1 text-[13px] text-foreground">{preview}</Text>
+        </View>
       ) : null}
 
       <View className="gap-1">
@@ -215,6 +269,7 @@ export function CustomFoodForm({
               value={values.barcode ?? ''}
               onChangeText={set('barcode')}
               placeholder="Ex.: 7891000100103"
+              filled
             />
             {fieldError('barcode')}
             <Text className="text-xs text-muted-foreground">
@@ -224,7 +279,7 @@ export function CustomFoodForm({
         ) : null}
       </View>
 
-      <View className="rounded-2xl bg-card px-4">
+      <View className="rounded-card bg-card px-4">
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ expanded: microOpen }}
@@ -239,7 +294,7 @@ export function CustomFoodForm({
                 : 'Fibra, sódio, açúcar e outros'}
             </Text>
           </View>
-          <Text className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground">
+          <Text className="rounded-pill bg-muted px-2.5 py-0.5 font-sans-extrabold text-[11px] uppercase tracking-[0.4px] text-muted-foreground">
             opcional
           </Text>
           <ChevronDown size={16} color={colors.placeholder} />
@@ -266,6 +321,13 @@ export function CustomFoodForm({
                       placeholder="—"
                       value={nutrients[field.key] ?? ''}
                       onChangeText={(text) => setNutrient(field.key, text)}
+                      style={{
+                        borderWidth: 0,
+                        borderRadius: 14,
+                        backgroundColor: colors.muted,
+                        textAlign: 'right',
+                        fontFamily: 'Manrope_700Bold',
+                      }}
                     />
                   </View>
                   <Text className="w-6 text-xs text-muted-foreground">{field.unit}</Text>
@@ -289,10 +351,12 @@ export function CustomFoodForm({
                       accessibilityRole="button"
                       accessibilityLabel={`Adicionar ${field.label}`}
                       onPress={() => setExtraKeys((prev) => [...prev, field.key])}
-                      className="min-h-11 flex-row items-center gap-1 rounded-full bg-muted px-3"
+                      className="h-9 flex-row items-center gap-1.5 rounded-chip bg-muted px-3.5"
                     >
                       <Plus size={14} color={colors.placeholder} />
-                      <Text className="text-sm text-foreground">{field.label}</Text>
+                      <Text className="font-sans-semibold text-sm text-foreground">
+                        {field.label}
+                      </Text>
                     </Pressable>
                   ))}
                 </View>
@@ -315,24 +379,25 @@ export function CustomFoodForm({
 
       <View className="flex-row gap-2">
         {saveOnly ? (
-          <Button
-            variant="outline"
-            className="flex-1"
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: pending }}
             disabled={pending}
             onPress={() => {
               const input = parse();
               if (input) saveOnly.onSubmit(input);
             }}
+            className="h-14 flex-1 items-center justify-center rounded-pill bg-card"
           >
-            {saveOnly.label}
-          </Button>
+            <Text className="font-sans-bold text-[15px]">{saveOnly.label}</Text>
+          </Pressable>
         ) : (
           <Button variant="outline" className="flex-1" onPress={onCancel}>
             {cancelLabel}
           </Button>
         )}
         <Button
-          className="flex-1"
+          className={cn(saveOnly ? 'h-14 flex-[1.6] rounded-pill' : 'flex-1')}
           onPress={() => {
             const input = parse();
             if (input) onSubmit(input);
@@ -343,11 +408,6 @@ export function CustomFoodForm({
           {submitLabel}
         </Button>
       </View>
-      {saveOnly ? (
-        <Button variant="ghost" onPress={onCancel}>
-          {cancelLabel}
-        </Button>
-      ) : null}
       {footer}
     </DrawerScrollView>
   );
@@ -369,12 +429,15 @@ function BasisChip({
       accessibilityLabel={children}
       onPress={onPress}
       className={cn(
-        'min-h-11 items-center justify-center rounded-full border px-3',
-        checked ? 'border-primary bg-primary/15' : 'border-border',
+        'h-11 min-w-[88px] items-center justify-center rounded-[10px] px-4',
+        checked && 'bg-muted',
       )}
     >
       <Text
-        className={cn('text-sm', checked ? 'font-medium text-primary' : 'text-muted-foreground')}
+        className={cn(
+          'font-sans-semibold text-[15px]',
+          checked ? 'text-foreground' : 'text-muted-foreground',
+        )}
       >
         {children}
       </Text>

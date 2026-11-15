@@ -7,7 +7,10 @@ import type { TrainingBlock, WorkoutPlan, WorkoutPlanExercise } from '@fatia/api
 import PlansPage from '../page';
 
 const push = vi.fn();
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push }),
+  usePathname: () => '/workout/plans',
+}));
 vi.mock('next/link', () => ({
   default: ({ children, href }: { children: ReactNode; href: string }) => (
     <a href={href}>{children}</a>
@@ -24,6 +27,7 @@ vi.mock('@fatia/api-client', async () => {
       deletePlan: vi.fn(),
       startSession: vi.fn(),
       getActiveBlock: vi.fn(),
+      getActiveSession: vi.fn().mockResolvedValue(null),
     },
   };
 });
@@ -85,9 +89,9 @@ describe('PlansPage', () => {
     renderPage();
 
     await user.click(await screen.findByRole('button', { name: 'Excluir plano Push' }));
-    const dialog = await screen.findByRole('dialog');
-    expect(dialog).toHaveTextContent('Excluir “Push”?');
-    expect(dialog).toHaveTextContent('O histórico das sessões continua.');
+    // Al-T6: a pergunta abre no próprio card, não num diálogo.
+    const ask = await screen.findByRole('group', { name: 'Excluir “Push”?' });
+    expect(ask).toHaveTextContent('O histórico das sessões continua.');
     expect(deletePlan).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: 'Excluir' }));

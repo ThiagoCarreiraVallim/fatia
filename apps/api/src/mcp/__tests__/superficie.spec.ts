@@ -49,9 +49,11 @@ import {
  * A #378 acrescentou `set_exercise_favorite`, `favoritesOnly` em `search_exercise` e a
  * configuração do exercício em `add_exercise_to_plan` e `update_plan_exercise` (nenhuma
  * destrutiva nem de intenção): muda o braço A.
+ * A #377 acrescentou a sensação e as respostas pós-treino a `finish_workout_session`: muda o
+ * braço A. As duas chegaram juntas no merge da main na #378.
  */
 
-const SHA_ENTIDADE = '3fdfff0949b5a2544870d97cef069905ddd096b0774a2ec8a42c5ae403db8f48';
+const SHA_ENTIDADE = '0882c740a22eeda0e16c81e7163a2f59092d114056e055f0201c0afeedd3fe33';
 const SHA_INTENCAO = 'b6a721e51ea5e251bfded1aef71296eb761b0cfe6a8de1aa33cee35b61f4230b';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

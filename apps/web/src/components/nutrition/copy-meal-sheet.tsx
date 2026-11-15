@@ -12,17 +12,23 @@ import {
 } from '@fatia/api-client';
 import {
   Drawer,
-  DrawerClose,
   DrawerContent,
   DrawerDescription,
   DrawerHeader,
   DrawerTitle,
 } from '@/components/ui/drawer';
-import { Button } from '@/components/ui/button';
 import { Segmented } from '@/components/ui/segmented';
 import { CopyToDay } from './copy-to-day';
 
 type What = 'meal' | 'day';
+
+/** "Só o café", "Só o almoço": o segmentado diz qual refeição. */
+const SHORT_MEAL: Record<Meal['mealType'], string> = {
+  BREAKFAST: 'café',
+  LUNCH: 'almoço',
+  SNACK: 'lanche',
+  DINNER: 'jantar',
+};
 
 /** "4 itens · 373 kcal". */
 function mealCopySummary(meal: Meal): string {
@@ -84,24 +90,24 @@ export function CopyMealSheet({
       }}
     >
       <DrawerContent className="px-4 pb-6">
-        <DrawerHeader className="px-0">
-          <DrawerTitle>Copiar</DrawerTitle>
-          <DrawerDescription>
-            {what === 'meal'
-              ? `${mealCopySummary(meal)}. Fica no mesmo horário.`
-              : 'Todas as refeições do dia, cada uma no seu horário. O que já existir lá não duplica.'}
-          </DrawerDescription>
+        <DrawerHeader className="px-0 pt-5">
+          <DrawerTitle className="font-display text-h2">Copiar</DrawerTitle>
         </DrawerHeader>
         <Segmented
           label="O que copiar"
           options={[
-            { value: 'meal', label: 'Só a refeição' },
+            { value: 'meal', label: `Só o ${SHORT_MEAL[meal.mealType]}` },
             { value: 'day', label: 'O dia todo' },
           ]}
           value={what}
           onChange={reset}
-          className="mb-3"
+          className="mt-4"
         />
+        <DrawerDescription className="mb-4 mt-4 text-[13px]">
+          {what === 'meal'
+            ? `${mealCopySummary(meal)}. Fica no mesmo horário.`
+            : 'Todas as refeições do dia, cada uma no seu horário. O que já existir lá não duplica.'}
+        </DrawerDescription>
         {open && (
           <CopyToDay
             key={`${meal.id}-${what}`}
@@ -116,11 +122,6 @@ export function CopyMealSheet({
             onNavigate={() => onOpenChange(false)}
           />
         )}
-        <DrawerClose asChild>
-          <Button variant="ghost" className="mt-4 w-full">
-            Fechar
-          </Button>
-        </DrawerClose>
       </DrawerContent>
     </Drawer>
   );

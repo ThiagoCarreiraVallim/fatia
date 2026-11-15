@@ -49,7 +49,7 @@ export function Segmented<T extends string>({
             }}
             className={cn(
               'min-h-11 flex-1 items-center justify-center rounded-[12px]',
-              on && 'bg-card',
+              on && 'bg-surface-3',
             )}
           >
             <Text

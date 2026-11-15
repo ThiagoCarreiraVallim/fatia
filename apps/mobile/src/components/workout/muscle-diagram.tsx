@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { figureTone } from '@fatia/api-client';
 import { colors } from '@/theme/colors';
 import { describeMuscles } from './muscle-labels';
 import type { MusclePath } from './muscle-path';
@@ -20,8 +21,19 @@ import { FRONT_PATHS, FRONT_VIEW_BOX } from './muscle-paths-front';
  * 041): verde da marca no principal, água no secundário.
  */
 
-/** Mesma atenuação do `opacity: 0.2` que o PWA aplica no grupo não destacado. */
-const DIMMED_OPACITY = 0.2;
+/**
+ * Os cinzas fixos do desenho viram tokens do tema (`figureTone`, o mesmo do
+ * PWA): o músculo apagado no cinza do card, a pele um tom acima e o contorno na
+ * cor do card. Sem isso o boneco ficava claro e lavado no tema escuro.
+ */
+function themed(original: string | null | undefined): string | undefined {
+  const tone = figureTone(original);
+  if (tone === 'surface-3') return colors.surface3;
+  if (tone === 'border-strong') return colors.borderStrong;
+  if (tone === 'card') return colors.card;
+  if (tone === 'transparent') return 'transparent';
+  return original ?? undefined;
+}
 
 interface MuscleDiagramProps {
   primaryMuscles: string[];
@@ -29,6 +41,13 @@ interface MuscleDiagramProps {
   view?: 'front' | 'back' | 'both';
   /** Largura de cada boneco. O PWA usa `w-32` (128px). */
   width?: number;
+  /**
+   * Cor por músculo (chave `data-muscle`), no lugar de principal/secundário:
+   * o "Seus músculos hoje" pinta cada um no tom do descanso. Os de fora apagam.
+   */
+  colors?: Record<string, string>;
+  /** Descrição para leitor de tela quando `colors` substitui as listas. */
+  accessibilityLabel?: string;
 }
 
 function BodyView({
@@ -55,10 +74,9 @@ function BodyView({
             // estática — o índice é a única chave estável aqui.
             key={`${p.group ?? 'base'}-${index}`}
             d={p.d}
-            fill={color ?? p.fill ?? 'none'}
+            fill={color ?? themed(p.fill) ?? 'none'}
             fillRule={p.fillRule}
-            opacity={p.muscle && !color ? DIMMED_OPACITY : 1}
-            stroke={p.stroke}
+            stroke={themed(p.stroke)}
             strokeWidth={p.strokeWidth}
             strokeLinecap={p.stroke ? 'round' : undefined}
             strokeLinejoin={p.stroke ? 'round' : undefined}
@@ -74,21 +92,24 @@ export function MuscleDiagram({
   secondaryMuscles = [],
   view = 'both',
   width = 128,
+  colors: muscleColors,
+  accessibilityLabel,
 }: MuscleDiagramProps) {
   // Secundário entra primeiro para que um músculo listado nos dois acabe
   // vermelho, como no PWA (lá o segundo `paint` sobrescreve o primeiro).
   const highlight = useMemo(() => {
+    if (muscleColors) return new Map(Object.entries(muscleColors));
     const map = new Map<string, string>();
     for (const m of secondaryMuscles) map.set(m, colors.water);
     for (const m of primaryMuscles) map.set(m, colors.primary);
     return map;
-  }, [primaryMuscles, secondaryMuscles]);
+  }, [primaryMuscles, secondaryMuscles, muscleColors]);
 
   return (
     <View
       accessible
       accessibilityRole="image"
-      accessibilityLabel={describeMuscles(primaryMuscles, secondaryMuscles)}
+      accessibilityLabel={accessibilityLabel ?? describeMuscles(primaryMuscles, secondaryMuscles)}
       className="flex-row justify-center gap-2"
     >
       {view === 'front' || view === 'both' ? (

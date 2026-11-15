@@ -17,6 +17,9 @@ import {
   muscleShareLabel,
   planSummaryLine,
   planHistoryLine,
+  planCountsLine,
+  planDraftSummary,
+  planExerciseChips,
 } from '../workout/plan-config';
 import { ageFromBirthDate } from '../onboarding';
 
@@ -133,6 +136,44 @@ describe('barra muscular e linha do card (Al-T6)', () => {
     expect(planSummaryLine([pe({ targetSets: 1, restSeconds: 20 })])).toBe(
       '1 exercício · 1 série · ~1 min',
     );
+  });
+});
+
+describe('chips e contagens do plano (Al-T6, Al-T7, Al-T19)', () => {
+  const named = (name: string, order: number) => ({ order, exercise: { name } });
+
+  it('os três primeiros em ordem, com as duas primeiras palavras, e o "+ N mais"', () => {
+    expect(
+      planExerciseChips([
+        named('Crucifixo no cabo', 3),
+        named('Supino reto com barra', 1),
+        named('Desenvolvimento militar', 2),
+        named('Tríceps corda', 4),
+        named('Abdominal infra', 5),
+      ]),
+    ).toEqual([
+      { label: '1', name: 'Supino reto' },
+      { label: '2', name: 'Desenvolvimento militar' },
+      { label: '3', name: 'Crucifixo no' },
+      { label: '+', name: '2 mais' },
+    ]);
+  });
+
+  it('sem "+ mais" com até três, e nada com o plano vazio', () => {
+    expect(planExerciseChips([named('Stiff', 1)])).toEqual([{ label: '1', name: 'Stiff' }]);
+    expect(planExerciseChips([])).toEqual([]);
+  });
+
+  it('a contagem sem os minutos, que ficam à direita no Al-T7', () => {
+    expect(planCountsLine([pe({ targetSets: 4 }), pe({ targetSets: 3 })])).toBe(
+      '2 exercícios · 7 séries',
+    );
+    expect(planCountsLine([pe({ targetSets: 1 })])).toBe('1 exercício · 1 série');
+  });
+
+  it('o resumo curto do Novo plano: "3 · 10 séries · ~26 min", vazio sem exercício', () => {
+    expect(planDraftSummary([pe({ targetSets: 1, restSeconds: 20 })])).toBe('1 · 1 série · ~1 min');
+    expect(planDraftSummary([])).toBe('');
   });
 });
 

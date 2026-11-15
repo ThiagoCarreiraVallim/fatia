@@ -8,7 +8,7 @@ import { useAuth } from '@/auth/auth-context';
 import { BottomChromeProvider, BottomNav } from '@/components/layout/bottom-nav';
 import { AiMenuProvider } from '@/components/layout/ai-menu';
 import { RestTimerProvider } from '@/components/workout/session/rest-timer-provider';
-import { ConfirmProvider, LoadingState } from '@/components/ui';
+import { ConfirmProvider, DrawerPresenceProvider, LoadingState } from '@/components/ui';
 import { usePush } from '@/notifications/use-push';
 import { ChatProvider } from '@/chat/chat-provider';
 
@@ -76,17 +76,20 @@ export default function AppLayout() {
     // O descanso também: a barra "treino em andamento" mostra a contagem fora
     // da sessão (#369).
     <ChatProvider>
-      <ConfirmProvider>
-        <RestTimerProvider>
-          <BottomChromeProvider>
-            {/* A tela atual (o Slot) encolhe até o notch quando o menu da IA abre
+      {/* Drawer aberto em qualquer tela esconde a barra de baixo (`ui/drawer.tsx`). */}
+      <DrawerPresenceProvider>
+        <ConfirmProvider>
+          <RestTimerProvider>
+            <BottomChromeProvider>
+              {/* A tela atual (o Slot) encolhe até o notch quando o menu da IA abre
               (prancha Al-H6c5); a barra de abas some por cima dele. */}
-            <AiMenuProvider nav={<BottomNav />}>
-              <Slot />
-            </AiMenuProvider>
-          </BottomChromeProvider>
-        </RestTimerProvider>
-      </ConfirmProvider>
+              <AiMenuProvider nav={<BottomNav />}>
+                <Slot />
+              </AiMenuProvider>
+            </BottomChromeProvider>
+          </RestTimerProvider>
+        </ConfirmProvider>
+      </DrawerPresenceProvider>
     </ChatProvider>
   );
 }

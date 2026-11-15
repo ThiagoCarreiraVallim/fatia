@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { activeWorkoutBarView, formatClock, lastSessionSummary } from '../active-workout-bar';
+import {
+  activeWorkoutBarLines,
+  activeWorkoutBarView,
+  formatClock,
+  lastSessionSummary,
+} from '../active-workout-bar';
 import type { SessionSet, WorkoutSession } from '../workout';
 
 const NOW = new Date('2026-11-14T15:20:00Z');
@@ -185,5 +190,39 @@ describe('lastSessionSummary', () => {
   it('sem plano é "Treino livre"', () => {
     const s = session({ planId: null, completedAt: '2026-11-14T15:30:00Z' });
     expect(lastSessionSummary(s, null).name).toBe('Treino livre');
+  });
+});
+
+describe('activeWorkoutBarLines (prancha Al-T1b)', () => {
+  it('força: exercício e série em cima; plano e relógio embaixo', () => {
+    const s = session({ sets: [set(1, 'Supino reto')] });
+    expect(activeWorkoutBarLines(activeWorkoutBarView(s, null, NOW), 'Push')).toEqual({
+      primary: 'Supino reto · série 2 de 4',
+      secondary: 'Push · 20:00',
+    });
+  });
+
+  it('sem plano: "Treino livre" no lugar do nome', () => {
+    const s = session({ planId: null, sets: [set(1, 'Supino reto')] });
+    expect(activeWorkoutBarLines(activeWorkoutBarView(s, null, NOW), null).secondary).toBe(
+      'Treino livre · 20:00',
+    );
+  });
+
+  it('treino livre ainda vazio: não repete "Treino livre"', () => {
+    const s = session({ planId: null, plannedExercises: [], sets: [] });
+    expect(activeWorkoutBarLines(activeWorkoutBarView(s, null, NOW), null)).toEqual({
+      primary: 'Treino livre',
+      secondary: 'em andamento · 20:00',
+    });
+  });
+
+  it('descanso: a contagem fica no título, a próxima série embaixo', () => {
+    const s = session({ sets: [set(1, 'Supino reto')] });
+    const view = activeWorkoutBarView(s, { remaining: 45, running: true }, NOW);
+    expect(activeWorkoutBarLines(view, 'Push')).toEqual({
+      primary: 'Descanso · 00:45',
+      secondary: 'próxima: Supino reto · série 2 de 4',
+    });
   });
 });

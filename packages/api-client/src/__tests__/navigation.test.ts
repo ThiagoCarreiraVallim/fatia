@@ -6,6 +6,8 @@ import {
   activeNavKey,
   menuSections,
   navBarMode,
+  dockedActionBottom,
+  dockedActionReserve,
   routeInfo,
   hasTopBar,
 } from '../navigation';
@@ -59,7 +61,6 @@ describe('navegação', () => {
       '/progress',
       '/goals',
       '/progress/records',
-      '/nutrition/plan',
       '/nutrition/goals',
       '/nutrition/nutrient-targets',
       '/nutrition/foods',
@@ -181,11 +182,16 @@ describe('navegação', () => {
       '/workout/session/s1',
       '/nutrition/photo',
       '/nutrition/scan',
+      '/nutrition/goals',
+      '/you/edit',
+      '/you/delete',
       '/community/new',
       '/onboarding',
       '/org/g1/content/plans/t1',
       '/org/g1/content/tips/t1',
       '/org/g1/exercises/12',
+      // Al-T19: o Novo plano é tela cheia com o "Criar plano" embaixo, sem a barra.
+      '/workout/plans/new',
     ])('%s esconde a barra', (path) => {
       expect(navBarMode(path)).toBe('hidden');
     });
@@ -213,6 +219,11 @@ describe('navegação', () => {
       expect(navBarMode('/workout/session/s1', { activeSessionId: 's1' })).toBe('hidden');
       expect(navBarMode('/workout/session/s1', { activeSessionId: null })).toBe('visible');
       expect(navBarMode('/workout/session/s1', { activeSessionId: 'outra' })).toBe('visible');
+    });
+
+    it('o Treino atual (#377) da sessão aberta também esconde a barra', () => {
+      expect(navBarMode('/workout/session/s1/edit', { activeSessionId: 's1' })).toBe('hidden');
+      expect(navBarMode('/workout/session/s1/edit', { activeSessionId: null })).toBe('visible');
     });
   });
 
@@ -250,7 +261,7 @@ describe('navegação', () => {
       ['/community/g1/settings', 'Sobre a comunidade', '/community/g1', 'Comunidade'],
       ['/org/g1/moderation', 'Moderação', '/org/g1', 'Painel'],
     ])('%s: "%s", volta para %s', (path, title, parent, parentTitle) => {
-      expect(routeInfo(path)).toEqual({ title, parent, parentTitle });
+      expect(routeInfo(path)).toMatchObject({ title, parent, parentTitle });
     });
 
     it('rota fora do mapa volta ao ancestral conhecido mais próximo', () => {
@@ -282,14 +293,48 @@ describe('abas raiz', () => {
     }
   });
 
-  it('só o Hoje fica sem barra de topo: as outras abas têm título e ações', () => {
-    expect(hasTopBar('/')).toBe(false);
-    expect(hasTopBar('/workout')).toBe(true);
+  it('as abas abrem com o título grande da tela, sem a barra de topo pequena', () => {
+    for (const tab of ['/', '/nutrition', '/workout', '/community', '/you', '/you?x=1']) {
+      expect(hasTopBar(tab), tab).toBe(false);
+    }
     expect(hasTopBar('/workout/plans')).toBe(true);
+    expect(hasTopBar('/nutrition/goals')).toBe(true);
   });
 
   it('o que fica dentro de uma aba volta para ela', () => {
     expect(routeInfo('/workout/plans').parent).toBe('/workout');
     expect(routeInfo('/nutrition/foods').parent).toBe('/nutrition');
+  });
+});
+
+/**
+ * O botão de ação preso embaixo (Al-T6 "Novo plano", Al-T7 "Iniciar", Al-T19
+ * "Criar plano"): nas pranchas fica a 104 px do fim, 14 acima da barra (22 + 68).
+ */
+describe('dockedActionBottom', () => {
+  it('com a barra, 14 px acima dela; com o treino em andamento, acima da barra dele também', () => {
+    expect(dockedActionBottom({ navVisible: true, workoutBar: false })).toBe(104);
+    expect(dockedActionBottom({ navVisible: true, workoutBar: true })).toBe(170);
+  });
+
+  it('sem a barra (tarefa de foco), 22 px do fim, como o "Criar plano" do Al-T19', () => {
+    expect(dockedActionBottom({ navVisible: false, workoutBar: true })).toBe(22);
+  });
+
+  it('o conteúdo reserva o botão (56) e um respiro de 24 acima dele', () => {
+    expect(dockedActionReserve({ navVisible: true, workoutBar: false })).toBe(184);
+    expect(dockedActionReserve({ navVisible: false, workoutBar: false })).toBe(102);
+  });
+});
+
+describe('routeInfo.dismiss: tela que fecha no X em vez de voltar', () => {
+  it('o Novo plano (Al-T19) fecha no X', () => {
+    expect(routeInfo('/workout/plans/new').dismiss).toBe(true);
+  });
+
+  it('as outras voltam pela seta', () => {
+    expect(routeInfo('/workout/plans/p1').dismiss).toBeUndefined();
+    expect(routeInfo('/workout/plans').dismiss).toBeUndefined();
+    expect(routeInfo('/rota/que/nao/existe').dismiss).toBeUndefined();
   });
 });

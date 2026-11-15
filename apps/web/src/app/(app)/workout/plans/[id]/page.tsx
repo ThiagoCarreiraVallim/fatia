@@ -3,11 +3,12 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { Play, Pencil, Plus, Trash2, Check } from 'lucide-react';
+import { Play, Pencil, Plus, Check } from 'lucide-react';
 import {
   ApiError,
+  estimatePlanMinutes,
+  planCountsLine,
   planHistoryLine,
-  planSummaryLine,
   usersApi,
   workoutApi,
   type PlanExerciseInput,
@@ -15,7 +16,6 @@ import {
   type WorkoutPlanExercise,
 } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
 import { PlanExerciseRow } from '@/components/workout/plan-exercise-row';
 import { PlanExerciseSheet } from '@/components/workout/plan-exercise-sheet';
@@ -25,7 +25,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ErrorState } from '@/components/elements/error-state';
-import { topBarActionClass, useTopBarTitle } from '@/components/layout/app-top-bar';
+import { TopBarActions, topBarActionClass, useTopBarTitle } from '@/components/layout/app-top-bar';
+import { DockedAction, DockedPage } from '@/components/layout/bottom-nav';
+import { headerButtonClass } from '@/components/layout/tab-header';
+import { cn } from '@/lib/utils';
 
 interface MoveVars {
   a: WorkoutPlanExercise;
@@ -52,10 +55,8 @@ export default function PlanDetailPage() {
   const router = useRouter();
   const qc = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
-  const [editingName, setEditingName] = useState(false);
   const [nameEdit, setNameEdit] = useState('');
   const [announcement, setAnnouncement] = useState('');
-  const [deleteOpen, setDeleteOpen] = useState(false);
   // Al-T7: ver por padrão; editar mostra setas, lixeira, renomear e excluir.
   const [editing, setEditing] = useState(false);
   const [configId, setConfigId] = useState<string | null>(null);
@@ -77,15 +78,6 @@ export default function PlanDetailPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
       qc.invalidateQueries({ queryKey: ['workout', 'plans'] });
-      setEditingName(false);
-    },
-  });
-
-  const deletePlan = useMutation({
-    mutationFn: () => workoutApi.deletePlan(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['workout', 'plans'] });
-      router.push('/workout');
     },
   });
 
@@ -183,7 +175,8 @@ export default function PlanDetailPage() {
     },
   });
 
-  useTopBarTitle(plan.data?.name);
+  // Al-T7: a barra diz o modo ("Plano" / "Editando plano"); o nome vem grande embaixo.
+  useTopBarTitle(editing ? 'Editando plano' : 'Plano');
 
   if (plan.isLoading) {
     return (
@@ -222,18 +215,11 @@ export default function PlanDetailPage() {
   const existingIds = new Set(exercises.map((e) => e.exerciseId));
   const configuring = exercises.find((e) => e.id === configId) ?? null;
 
-  function startEditName() {
-    setNameEdit(plan.data?.name ?? '');
-    setEditingName(true);
-  }
-
   function submitName() {
     const trimmed = nameEdit.trim();
-    if (trimmed && trimmed !== plan.data?.name) {
-      renamePlan.mutate(trimmed);
-    } else {
-      setEditingName(false);
-    }
+    // Nome vazio volta ao que era, sem gravar.
+    if (trimmed && trimmed !== plan.data?.name) renamePlan.mutate(trimmed);
+    else setNameEdit(plan.data?.name ?? '');
   }
 
   function move(idx: number, delta: -1 | 1) {
@@ -250,86 +236,80 @@ export default function PlanDetailPage() {
     moveExercise.mutate({ a: exercises[idx], b: exercises[target] });
   }
 
-  return (
-    <div className="pb-4">
-      {editingName && (
-        <div className="flex items-center gap-2 px-5 pt-1 pb-2">
-          <Input
-            aria-label="Nome do plano"
-            autoFocus
-            value={nameEdit}
-            onChange={(e) => setNameEdit(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') submitName();
-              if (e.key === 'Escape') setEditingName(false);
-            }}
-            className="h-10 text-base font-bold"
-          />
-          <button
-            type="button"
-            onClick={submitName}
-            disabled={!nameEdit.trim() || renamePlan.isPending}
-            className={topBarActionClass}
-            aria-label="Salvar nome"
-          >
-            <Check size={20} />
-          </button>
-        </div>
-      )}
+  function toggleEditing() {
+    if (editing) {
+      submitName();
+    } else {
+      setNameEdit(plan.data?.name ?? '');
+    }
+    setEditing((e) => !e);
+  }
 
-      <div className="space-y-4 px-5 pt-2">
-        <section className="rounded-2xl border border-subtle bg-card p-4">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase">
-                {editing ? 'Editando plano' : plan.data.fromTemplateId ? 'modelo' : 'seu plano'}
-              </p>
-              <h2 className="truncate text-2xl font-extrabold">{plan.data.name}</h2>
-              <p className="text-xs text-muted-foreground">
-                {planHistoryLine(plan.data.timesDone ?? 0, plan.data.lastDoneAt ?? null)}
-              </p>
-            </div>
-            {/* Na própria tela, e não na barra de topo: é o botão que a
-                prancha põe ao lado do nome, e o leitor de tela o acha junto. */}
-            <button
-              type="button"
-              aria-pressed={editing}
-              onClick={() => {
-                setEditing((e) => !e);
-                setEditingName(false);
+  const history = planHistoryLine(plan.data.timesDone ?? 0, plan.data.lastDoneAt ?? null);
+
+  return (
+    <div className="px-4">
+      {/* O lápis e o check ficam na barra de topo, à direita (Al-T7). */}
+      <TopBarActions>
+        <button
+          type="button"
+          aria-pressed={editing}
+          onClick={toggleEditing}
+          aria-label={editing ? 'Concluir edição' : 'Editar plano'}
+          className={editing ? headerButtonClass('lime') : topBarActionClass}
+        >
+          {editing ? <Check size={20} aria-hidden /> : <Pencil size={18} aria-hidden />}
+        </button>
+      </TopBarActions>
+
+      <DockedPage className="pt-2">
+        <div className="space-y-2 px-1">
+          {editing ? (
+            // Renomear é editar o próprio título: sem botão a mais na tela.
+            <input
+              aria-label="Nome do plano"
+              value={nameEdit}
+              onChange={(e) => setNameEdit(e.target.value)}
+              onBlur={submitName}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur();
               }}
-              aria-label={editing ? 'Concluir edição' : 'Editar plano'}
-              className={
-                editing
-                  ? 'flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground'
-                  : 'flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-muted text-foreground'
-              }
-            >
-              {editing ? <Check size={20} /> : <Pencil size={18} />}
-            </button>
-          </div>
-          {editing && !editingName && (
-            <div className="mt-2 flex gap-2">
-              <Button variant="outline" size="sm" onClick={startEditName}>
-                <Pencil size={14} className="mr-1" />
-                Renomear
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-danger"
-                // O `confirm()` do navegador não diz o que acontece com o
-                // histórico, e destoa do resto do PWA; a confirmação diz.
-                onClick={() => setDeleteOpen(true)}
-              >
-                <Trash2 size={14} className="mr-1" />
-                Excluir plano
-              </Button>
-            </div>
+              className="w-full rounded-[14px] bg-card px-3 py-1 font-display text-[32px] font-bold leading-tight tracking-[-0.02em] text-foreground outline-none ring-primary focus:ring-2"
+            />
+          ) : (
+            <h1 className="font-display text-[32px] font-bold leading-tight tracking-[-0.02em]">
+              {plan.data.name}
+            </h1>
           )}
-          <p className="mt-3 text-sm font-semibold">{planSummaryLine(exercises)}</p>
-          <PlanMuscleBar exercises={exercises} legend className="mt-2" />
-        </section>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span
+              className={cn(
+                'inline-flex h-[22px] items-center rounded-pill px-[9px] text-[11px] font-extrabold uppercase tracking-[0.04em]',
+                plan.data.fromTemplateId
+                  ? 'bg-brand text-brand-foreground'
+                  : 'bg-primary-soft text-primary-text',
+              )}
+            >
+              {plan.data.fromTemplateId ? 'modelo' : 'seu plano'}
+            </span>
+            <span className="text-xs text-faint">{history}</span>
+          </div>
+          {renamePlan.isError && (
+            <p role="alert" className="text-xs text-danger">
+              Não foi possível renomear o plano.
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2 px-1">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-[13px] text-foreground">{planCountsLine(exercises)}</span>
+            <span className="text-xs text-faint tabular-nums">
+              ~{estimatePlanMinutes(exercises)} min
+            </span>
+          </div>
+          <PlanMuscleBar exercises={exercises} legend />
+        </div>
 
         {/* Região viva montada sempre, e não junto com o texto: um `aria-live`
             que nasce já preenchido costuma não ser anunciado — a primeira
@@ -368,7 +348,7 @@ export default function PlanDetailPage() {
           <button
             type="button"
             onClick={() => setAddOpen(true)}
-            className="flex w-full flex-col items-center gap-2 rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-6 text-center text-sm text-muted-foreground hover:bg-primary/10"
+            className="flex w-full flex-col items-center gap-2 rounded-card border border-dashed border-primary/30 bg-primary/5 p-6 text-center text-sm text-muted-foreground hover:bg-primary/10"
           >
             <Plus size={20} className="text-primary" />
             <span>
@@ -378,58 +358,68 @@ export default function PlanDetailPage() {
           </button>
         )}
 
-        <ol className="space-y-2">
-          {exercises.map((ex, idx) => (
-            <PlanExerciseRow
-              key={ex.id}
-              item={ex}
-              editing={editing}
-              isFirst={idx === 0}
-              isLast={idx === exercises.length - 1}
-              isMoving={moveExercise.isPending}
-              onConfigure={() => setConfigId(ex.id)}
-              onMoveUp={() => move(idx, -1)}
-              onMoveDown={() => move(idx, 1)}
-              onRemove={() => setRemoveTarget(ex)}
-            />
-          ))}
-        </ol>
+        {(exercises.length > 0 || editing) && (
+          <div className="rounded-card bg-card px-4">
+            <ol>
+              {exercises.map((ex, idx) => (
+                <PlanExerciseRow
+                  key={ex.id}
+                  item={ex}
+                  editing={editing}
+                  isFirst={idx === 0}
+                  isLast={idx === exercises.length - 1}
+                  isMoving={moveExercise.isPending}
+                  onConfigure={() => setConfigId(ex.id)}
+                  onMoveUp={() => move(idx, -1)}
+                  onMoveDown={() => move(idx, 1)}
+                  onRemove={() => setRemoveTarget(ex)}
+                />
+              ))}
+            </ol>
+            {editing && (
+              <button
+                type="button"
+                onClick={() => setAddOpen(true)}
+                className={cn(
+                  'flex min-h-14 w-full items-center gap-2 text-sm font-bold text-primary-text',
+                  exercises.length > 0 && 'border-t border-border',
+                )}
+              >
+                <Plus size={16} aria-hidden />
+                Adicionar exercício
+              </button>
+            )}
+          </div>
+        )}
 
-        <Button
-          variant="outline"
-          className="w-full gap-2 rounded-2xl"
-          onClick={() => setAddOpen(true)}
-        >
-          <Plus size={16} />
-          Adicionar exercício
-        </Button>
-
-        <p className="text-center text-xs text-muted-foreground">
+        <p className="px-1 text-xs text-faint">
           {editing
-            ? 'Use as setas para mudar a ordem. Toque no exercício para mudar séries, repetições, descanso e técnica.'
-            : 'Toque na imagem para ver como fazer. Toque no exercício para mudar séries, repetições e descanso.'}
+            ? 'Toque no exercício para mudar séries, repetições, descanso e técnica.'
+            : 'Toque na imagem para ver como fazer. Toque no lápis para editar séries, ordem e descanso.'}
         </p>
 
-        <Button
-          className="h-14 w-full rounded-full text-base font-extrabold shadow-[0_0_24px_hsl(var(--primary)/0.45)]"
-          onClick={() => start.mutate()}
-          disabled={start.isPending || exercises.length === 0}
-        >
-          <Play size={16} fill="currentColor" className="mr-1.5" />
-          {start.isPending ? 'Iniciando...' : `Iniciar ${plan.data.name}`}
-        </Button>
-      </div>
-
-      <ConfirmDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        title="Excluir plano?"
-        description="Os treinos já feitos com ele continuam no histórico."
-        confirmLabel="Excluir"
-        pendingLabel="Excluindo..."
-        pending={deletePlan.isPending}
-        onConfirm={() => deletePlan.mutate()}
-      />
+        <DockedAction>
+          {editing ? (
+            // Cada mudança já grava na hora; este botão fecha a edição, como o check.
+            <button
+              type="button"
+              onClick={toggleEditing}
+              className="anim-press flex h-14 flex-1 items-center justify-center rounded-pill bg-foreground text-[15px] font-bold text-background"
+            >
+              Salvar alterações
+            </button>
+          ) : (
+            <Button
+              className="h-14 flex-1 rounded-pill text-[15px] font-bold"
+              onClick={() => start.mutate()}
+              disabled={start.isPending || exercises.length === 0}
+            >
+              <Play size={16} aria-hidden />
+              {start.isPending ? 'Iniciando...' : `Iniciar ${plan.data.name}`}
+            </Button>
+          )}
+        </DockedAction>
+      </DockedPage>
 
       <ConfirmDialog
         open={removeTarget != null}

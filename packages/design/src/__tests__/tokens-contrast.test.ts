@@ -57,7 +57,8 @@ describe('fundo do menu da IA (--sunken)', () => {
     // O menu se revela por trás da tela que encolhe: precisa ser mais fundo que ela.
     expect(contrastRatio(p.sunken, p.background)).toBeGreaterThan(1.05);
     // O cartão do Free (Al-H6c6) fica sobre esse fundo e não pode sumir nele.
-    expect(contrastRatio(p.card, p.sunken)).toBeGreaterThan(1.2);
+    // Na prancha é o s1 (#1F1F1F) sobre #0C0C0C: ~1,19.
+    expect(contrastRatio(p.card, p.sunken)).toBeGreaterThan(1.15);
   });
 });
 

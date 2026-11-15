@@ -4,8 +4,9 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, X } from 'lucide-react';
 import { hasTopBar, routeInfo } from '@fatia/api-client';
+import { headerButtonClass } from './tab-header';
 
 /**
  * Barra de topo como no iOS: "voltar" e o título pequeno de onde a pessoa está.
@@ -68,9 +69,11 @@ export function useTopBarBack(onBack: (() => void) | null) {
   }, [setBack, onBack]);
 }
 
-/** Botão-ícone de ação na barra: mesmo alvo e cor do "voltar". */
-export const topBarActionClass =
-  'flex h-11 w-11 items-center justify-center rounded-full text-primary transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40';
+/**
+ * Botão-ícone de ação na barra: o `.ib` do canvas, igual ao "voltar" (44 × 44,
+ * cantos 14 px, fundo `--s1`). Para o verde de criar, `headerButtonClass('lime')`.
+ */
+export const topBarActionClass = headerButtonClass();
 
 /** Ações da tela, à direita na barra. Fora do provider não renderiza nada. */
 export function TopBarActions({ children }: { children: ReactNode }) {
@@ -78,28 +81,35 @@ export function TopBarActions({ children }: { children: ReactNode }) {
   return slot ? createPortal(children, slot) : null;
 }
 
-/** `wide`: a coluna do painel da comunidade, mais larga que a do app no desktop. */
+/**
+ * A barra das telas empurradas (pranchas Al-V2, Al-N7): "voltar" num quadrado
+ * de cantos arredondados à esquerda, o título (Sora 17/600) no meio e as ações
+ * à direita. As abas não têm barra (`hasTopBar`): abrem com o `TabHeader` da
+ * própria tela. Exceção: aba que pede título (`useTopBarTitle`, ex.: o treino
+ * em andamento em `/workout`) ganha a barra, com o título à esquerda.
+ *
+ * `wide`: a coluna do painel da comunidade, mais larga que a do app no desktop.
+ */
 export function AppTopBar({ wide = false }: { wide?: boolean }) {
   const pathname = usePathname();
   const ctx = useTopBarContext();
   const info = routeInfo(pathname);
-  if (!hasTopBar(pathname)) return null;
+  if (!hasTopBar(pathname) && !ctx?.title) return null;
   const parent = info.parent;
   const title = ctx?.title ?? info.title;
-  const label = `Voltar para ${info.parentTitle ?? ''}`;
-  const backClass =
-    'flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-primary transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  // Criar algo em tela cheia (Al-T19) fecha no X; o destino é o mesmo pai.
+  const label = info.dismiss ? 'Fechar' : `Voltar para ${info.parentTitle ?? ''}`;
 
   return (
-    <header className="sticky top-0 z-40 -mt-[env(safe-area-inset-top)] border-b border-subtle bg-background/85 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+    <header className="sticky top-0 z-40 -mt-[env(safe-area-inset-top)] bg-background/85 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
       <div
-        className={`mx-auto flex h-14 w-full items-center gap-1 px-2 ${wide ? 'max-w-6xl' : 'max-w-3xl'}`}
+        className={`mx-auto flex h-14 w-full items-center gap-3 px-4 ${wide ? 'max-w-6xl' : 'max-w-3xl'}`}
       >
-        {parent !== null ? (
+        {parent !== null && (
           <Link
             href={parent}
             aria-label={label}
-            className={backClass}
+            className={headerButtonClass()}
             onClick={(e) => {
               const intercept = ctx?.back;
               if (intercept) {
@@ -108,16 +118,19 @@ export function AppTopBar({ wide = false }: { wide?: boolean }) {
               }
             }}
           >
-            <ChevronLeft size={26} aria-hidden />
+            {info.dismiss ? <X size={22} aria-hidden /> : <ChevronLeft size={22} aria-hidden />}
           </Link>
-        ) : (
-          // Aba raiz (ADR 040): tela de ver, sem seta de voltar.
-          <span aria-hidden className="w-3 shrink-0" />
         )}
-        <h1 className="min-w-0 flex-1 truncate font-display text-[17px] font-semibold text-foreground">
+        <h1
+          className={`min-w-0 flex-1 truncate font-display text-[17px] font-semibold text-foreground ${parent !== null ? 'text-center' : ''}`}
+        >
           {title}
         </h1>
-        <div ref={ctx?.setSlot} className="flex shrink-0 items-center gap-1 pe-1" />
+        {/* Sem ações, um vazio do tamanho do "voltar" mantém o título no centro. */}
+        <div
+          ref={ctx?.setSlot}
+          className={`flex shrink-0 items-center gap-2 ${parent !== null ? 'empty:w-11' : ''}`}
+        />
       </div>
     </header>
   );

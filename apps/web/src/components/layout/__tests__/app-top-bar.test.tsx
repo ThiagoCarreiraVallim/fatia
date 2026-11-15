@@ -46,6 +46,13 @@ describe('AppTopBar', () => {
     );
   });
 
+  it('tela de criar em tela cheia fecha no X (Al-T19), indo para o mesmo pai', () => {
+    pathname.atual = '/workout/plans/new';
+    montar();
+    expect(screen.getByRole('link', { name: 'Fechar' })).toHaveAttribute('href', '/workout/plans');
+    expect(screen.queryByRole('link', { name: /Voltar/ })).not.toBeInTheDocument();
+  });
+
   it('o título da barra sai em Sora (h3 17/600, font-display)', () => {
     pathname.atual = '/workout/plans/abc';
     montar();
@@ -64,7 +71,7 @@ describe('AppTopBar', () => {
   });
 
   it('as ações da tela aparecem na barra', () => {
-    pathname.atual = '/nutrition';
+    pathname.atual = '/nutrition/foods';
     montar(
       <TopBarActions>
         <button type="button">Copiar dia</button>

@@ -1,11 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Check, Plus, ScanBarcode, Search, Star, Trash2 } from 'lucide-react-native';
+import {
+  Camera,
+  Check,
+  ChevronLeft,
+  Mic,
+  Plus,
+  ScanLine,
+  Search,
+  Star,
+  Trash2,
+  X,
+} from 'lucide-react-native';
 import {
   addTargetLabel,
+  aiLock,
+  mealForLabel,
+  planHref,
   amountGrams,
   amountPayload,
   emptyCustomFoodForm,
@@ -16,7 +30,7 @@ import {
   isSearching,
   nutritionApi,
   resultsCaption,
-  shortcutDetail,
+  shortcutLine,
   templateSummary,
   withFavorite,
   type Amount,
@@ -33,16 +47,17 @@ import {
   Button,
   Drawer,
   DrawerDescription,
-  Segmented,
   DrawerFlatList,
-  DrawerFooter,
   DrawerHeader,
   DrawerScrollView,
   DrawerTextInput,
   DrawerTitle,
+  cn,
   useConfirm,
 } from '@/components/ui';
-import { DrawerInput, drawerFieldStyle } from './drawer-input';
+import { HeaderButton } from '@/components/layout/tab-header';
+import { useAiMenu } from '@/components/layout/ai-menu';
+import { DrawerInput } from './drawer-input';
 import {
   NUMEROS_TABULARES,
   instanteNoDia,
@@ -75,6 +90,14 @@ import { colors } from '@/theme/colors';
  *   primeiro toque num resultado só fecha o teclado e a pessoa toca duas vezes.
  */
 
+const MEAL_TYPES: MealType[] = ['BREAKFAST', 'LUNCH', 'SNACK', 'DINNER'];
+const MEAL_CHIP_LABEL: Record<MealType, string> = {
+  BREAKFAST: 'Café',
+  LUNCH: 'Almoço',
+  SNACK: 'Lanche',
+  DINNER: 'Jantar',
+};
+
 type ItemDaRefeicao = Parameters<typeof nutritionApi.addItem>[1];
 type Modo = 'busca' | 'manual' | 'criar';
 type BrowseTab = 'recent' | 'favorites' | 'templates' | 'mine';
@@ -106,11 +129,15 @@ export function FoodSearchDrawer({
   open,
   onOpenChange,
   mealId,
-  mealType,
+  mealType: mealTypeProp,
   date,
   initialFood,
 }: Props) {
+  // "Para" (prancha Al-N15): a pessoa troca a refeição antes do primeiro item.
+  const [chosenType, setChosenType] = useState<MealType | null>(null);
+  const mealType = chosenType ?? mealTypeProp;
   const confirm = useConfirm();
+  const aiMenu = useAiMenu();
   const [modo, setModo] = useState<Modo>('busca');
   const [busca, setBusca] = useState('');
   const [buscaComAtraso, setBuscaComAtraso] = useState('');
@@ -184,8 +211,19 @@ export function FoodSearchDrawer({
       setNutrientesManuais({});
       setRefeicaoCriada(null);
       setAdicionados([]);
+      setChosenType(null);
     }
   }
+
+  // Foto do prato (Al-N15): só com IA de visão no servidor; no Free, leva ao plano.
+  const photoStatus = useQuery({
+    queryKey: ['nutrition', 'photo-recognition'],
+    queryFn: () => nutritionApi.photoRecognitionStatus(),
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+    enabled: open,
+  });
+  const photoLock = aiLock(photoStatus.data);
 
   useEffect(() => {
     const id = setTimeout(() => setBuscaComAtraso(busca), 300);
@@ -382,21 +420,96 @@ export function FoodSearchDrawer({
     });
   };
 
-  const titulo = modo === 'criar' ? 'Criar alimento' : mealId ? 'Adicionar item' : 'Nova refeição';
+  const titulo = mealId ? 'Adicionar item' : 'Nova refeição';
+  const browsing = modo === 'busca' && !selecionado;
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange} snapPoints={['85%']}>
       <View className="flex-1 bg-background">
-        <DrawerHeader>
-          <DrawerTitle>{titulo}</DrawerTitle>
-          <DrawerDescription>
-            {modo === 'manual'
-              ? 'Só para esta refeição: informe nome e macros.'
-              : modo === 'criar'
-                ? 'Copie o rótulo. O alimento fica salvo em Meus alimentos.'
-                : 'Toque num atalho ou busque. Dá para adicionar vários.'}
-          </DrawerDescription>
-        </DrawerHeader>
+        {browsing ? (
+          // Cabeçalho da busca (prancha Al-N15): fechar, "Adicionar" e quantos
+          // itens já entraram.
+          <View className="flex-row items-center gap-3 px-4 pb-2 pt-1">
+            <HeaderButton label="Fechar" onPress={() => onOpenChange(false)}>
+              <X size={20} color={colors.foreground} />
+            </HeaderButton>
+            <Text
+              accessibilityRole="header"
+              className="flex-1 text-center font-sans-bold text-[15px]"
+            >
+              {mealId ? 'Adicionar item' : 'Adicionar'}
+            </Text>
+            <View
+              accessibilityLabel={`${adicionados.length} ${adicionados.length === 1 ? 'item adicionado' : 'itens adicionados'}`}
+              className={cn(
+                'h-[22px] min-w-11 items-center justify-center rounded-pill px-2.5',
+                adicionados.length > 0 ? 'bg-primary' : 'bg-surface-3',
+              )}
+            >
+              <Text
+                style={NUMEROS_TABULARES}
+                className={cn(
+                  'font-sans-extrabold text-[11px]',
+                  adicionados.length > 0 ? 'text-primary-foreground' : 'text-muted-foreground',
+                )}
+              >
+                {adicionados.length}
+              </Text>
+            </View>
+          </View>
+        ) : modo === 'criar' ? (
+          // Novo alimento (prancha Al-N11): o "x" volta para a busca.
+          <View className="flex-row items-center gap-3 px-4 pb-2 pt-1">
+            <HeaderButton label="Voltar para a busca" onPress={() => setModo('busca')}>
+              <X size={20} color={colors.foreground} />
+            </HeaderButton>
+            <Text
+              accessibilityRole="header"
+              className="flex-1 pr-14 text-center font-sans-bold text-[15px]"
+            >
+              Novo alimento
+            </Text>
+          </View>
+        ) : selecionado && modo === 'busca' ? null : (
+          <DrawerHeader>
+            <DrawerTitle>{titulo}</DrawerTitle>
+            <DrawerDescription>Só para esta refeição: informe nome e macros.</DrawerDescription>
+          </DrawerHeader>
+        )}
+
+        {browsing && !mealId && refeicaoCriada === null ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            accessibilityRole="radiogroup"
+            accessibilityLabel="Para qual refeição"
+            className="grow-0"
+            contentContainerClassName="items-center gap-1.5 px-4 pb-1"
+          >
+            <Text className="w-9 text-xs text-muted-foreground">Para</Text>
+            {MEAL_TYPES.map((t) => (
+              <Pressable
+                key={t}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: mealType === t }}
+                onPress={() => setChosenType(t)}
+                className={cn(
+                  'h-9 justify-center rounded-chip px-3.5',
+                  mealType === t ? 'bg-foreground' : 'bg-card',
+                )}
+              >
+                <Text
+                  className={cn(
+                    'font-sans-semibold text-sm',
+                    mealType === t ? 'text-background' : 'text-muted-foreground',
+                  )}
+                >
+                  {MEAL_CHIP_LABEL[t]}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : null}
 
         {savedOnly && adicionados.length === 0 ? (
           <View
@@ -466,6 +579,7 @@ export function FoodSearchDrawer({
           <SelectedFoodPanel
             food={selecionado}
             submitLabel={addTargetLabel(mealType)}
+            forLabel={mealForLabel(mealType)}
             favorito={favoritos.has(selecionado.id)}
             onAlternarFavorito={() => alternarFavorito(selecionado)}
             gramas={gramas}
@@ -500,8 +614,6 @@ export function FoodSearchDrawer({
             onRegistrarModelo={(modelo) => registrarModelo.mutate(modelo)}
             onApagarModelo={confirmarApagarModelo}
             erroDoModelo={erroDoModelo ? mensagemDeErro(erroDoModelo) : undefined}
-            favoritos={favoritos}
-            onAlternarFavorito={alternarFavorito}
             onEscolher={escolher}
             onManual={() => {
               adicionar.reset();
@@ -509,20 +621,59 @@ export function FoodSearchDrawer({
             }}
             onCriar={comecarCadastro}
             onLerCodigo={lerCodigo}
+            photo={
+              photoLock === 'hidden'
+                ? undefined
+                : () => {
+                    onOpenChange(false);
+                    router.push(
+                      photoLock === 'locked' ? planHref('foto') : `/nutrition/photo?date=${date}`,
+                    );
+                  }
+            }
+            onTalkToAi={() => {
+              onOpenChange(false);
+              aiMenu.open();
+            }}
           />
         )}
 
-        <DrawerFooter className="pb-6">
-          {adicionados.length > 0 ? (
-            <Button onPress={() => onOpenChange(false)}>
-              {`Concluir · ${adicionados.length} ${adicionados.length === 1 ? 'item' : 'itens'}`}
-            </Button>
-          ) : (
-            <Button variant="ghost" onPress={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-          )}
-        </DrawerFooter>
+        {browsing ? (
+          // O fim da busca (prancha Al-N15): "Criar" e o concluir, que só acende
+          // depois do primeiro item.
+          <View className="flex-row items-center gap-2 px-4 pb-6 pt-3">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Criar"
+              onPress={() => comecarCadastro(busca.trim())}
+              className="h-14 flex-row items-center gap-2 rounded-pill bg-card px-[18px]"
+            >
+              <Plus size={16} color={colors.foreground} />
+              <Text className="font-sans-bold text-[15px]">Criar</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: adicionados.length === 0 }}
+              disabled={adicionados.length === 0}
+              onPress={() => onOpenChange(false)}
+              className={cn(
+                'h-14 flex-1 items-center justify-center rounded-pill',
+                adicionados.length > 0 ? 'bg-primary' : 'bg-card',
+              )}
+            >
+              <Text
+                className={cn(
+                  'font-sans-bold text-[15px]',
+                  adicionados.length > 0 ? 'text-primary-foreground' : 'text-muted-foreground',
+                )}
+              >
+                {adicionados.length > 0
+                  ? `Concluir · ${adicionados.length} ${adicionados.length === 1 ? 'item' : 'itens'}`
+                  : 'Selecione os itens'}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
       </View>
     </Drawer>
   );
@@ -542,12 +693,12 @@ function SearchPanel({
   onRegistrarModelo,
   onApagarModelo,
   erroDoModelo,
-  favoritos,
-  onAlternarFavorito,
   onEscolher,
   onManual,
   onCriar,
   onLerCodigo,
+  photo,
+  onTalkToAi,
 }: {
   busca: string;
   onBuscaChange: (valor: string) => void;
@@ -562,13 +713,16 @@ function SearchPanel({
   onRegistrarModelo: (modelo: MealTemplate) => void;
   onApagarModelo: (modelo: MealTemplate) => void;
   erroDoModelo?: string;
-  favoritos: ReadonlySet<number>;
-  onAlternarFavorito: (food: Food) => void;
   onEscolher: (food: Food | FoodShortcut) => void;
   onManual: () => void;
   onCriar: (nome: string) => void;
   onLerCodigo: () => void;
+  /** Foto do prato; sem IA de visão no servidor, o botão não aparece. */
+  photo?: () => void;
+  /** Fecha a busca e abre o menu da IA (ditar a refeição). */
+  onTalkToAi: () => void;
 }) {
+  const [focused, setFocused] = useState(true);
   const digitando = isSearching(buscaComAtraso);
   const [tab, setTab] = useState<BrowseTab>('recent');
   // Ao registrar numa refeição aberta, "Salvas" (a refeição inteira) não cabe.
@@ -599,149 +753,184 @@ function SearchPanel({
 
   return (
     <View className="flex-1">
-      <View className="flex-row items-center gap-2 px-4 py-3">
-        <View className="relative flex-1 justify-center">
-          {/* `pointerEvents` desligado: o ícone cobre a borda esquerda do campo
-              e sem isso o toque ali não abre o teclado. */}
-          <View pointerEvents="none" className="absolute left-3 z-10">
-            <Search size={16} color={colors.mutedForeground} />
-          </View>
+      <View className="flex-row items-center gap-2 px-4 pt-3">
+        <View
+          style={{ borderWidth: 1.5, borderColor: focused ? colors.primary : 'transparent' }}
+          className="h-[52px] flex-1 flex-row items-center gap-2 rounded-pill bg-card px-4"
+        >
+          <Search size={16} color={colors.faintForeground} />
           <DrawerTextInput
             autoFocus
             accessibilityLabel="Buscar alimento"
             value={busca}
             onChangeText={onBuscaChange}
-            placeholder="Ex.: arroz, frango, banana..."
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            placeholder="Arroz, frango, banana…"
             placeholderTextColor={colors.placeholder}
             selectionColor={colors.primaryText}
-            // Estilo em `style` e não em `className`: ver `drawer-input.tsx`.
-            style={[drawerFieldStyle(), { paddingLeft: 36 }]}
+            style={{ flex: 1, height: 48, fontSize: 16, color: colors.foreground }}
           />
         </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Ler código de barras"
+          accessibilityLabel="Ler código ou rótulo"
           onPress={onLerCodigo}
-          className="h-11 w-11 items-center justify-center rounded-md border border-border active:bg-accent"
+          className="h-[52px] w-[52px] items-center justify-center rounded-pill bg-muted active:opacity-70"
         >
-          <ScanBarcode size={18} color={colors.mutedForeground} />
+          <ScanLine size={20} color={colors.foreground} />
         </Pressable>
       </View>
 
       {!digitando ? (
-        <View className="px-4 pb-2">
-          <Segmented label="Atalhos" options={tabs} value={tab} onChange={setTab} />
-        </View>
-      ) : null}
-
-      <DrawerFlatList
-        style={{ flex: 1 }}
-        data={linhas}
-        keyExtractor={(linha: Row) =>
-          linha.kind === 'template' ? `modelo-${linha.template.id}` : String(linha.food.id)
-        }
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        ListHeaderComponent={
-          buscando ? (
-            <Text className="px-4 py-3 text-sm text-muted-foreground">Buscando...</Text>
-          ) : erroDoModelo && !digitando ? (
-            <Text accessibilityRole="alert" className="px-4 py-3 text-sm text-destructive">
-              {erroDoModelo}
-            </Text>
-          ) : digitando && !comErro && (dados?.length ?? 0) > 0 ? (
-            <Text className="px-4 pb-1 text-xs text-muted-foreground">
-              {resultsCaption(dados?.length ?? 0)}
-            </Text>
-          ) : null
-        }
-        ListEmptyComponent={
-          buscando ? null : comErro ? (
-            <View className="flex-row items-center justify-between px-4 py-3">
-              <Text accessibilityRole="alert" className="text-sm text-destructive">
-                Erro ao buscar alimentos.
-              </Text>
+        <>
+          <View className="flex-row gap-2 px-4 pt-3.5">
+            {photo ? (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Tentar novamente"
-                onPress={onRetry}
-                hitSlop={12}
-                className="min-h-[44px] justify-center"
+                onPress={photo}
+                className="h-12 flex-1 flex-row items-center justify-center gap-2 rounded-pill bg-card"
               >
-                <Text className="text-sm text-primary underline">Tentar novamente</Text>
+                <Camera size={16} color={colors.foreground} />
+                <Text className="font-sans-bold text-[13px]">Foto do prato</Text>
               </Pressable>
-            </View>
-          ) : !digitando ? (
-            <Text className="px-4 py-3 text-sm text-muted-foreground">{emptyTab[tab]}</Text>
-          ) : (
-            <View className="items-start gap-2 px-4 py-3">
-              <Text className="text-sm font-medium text-foreground">
-                {emptySearchCopy(buscaComAtraso).title}
-              </Text>
-              <Text className="text-xs text-muted-foreground">
-                Produto embalado ou receita de casa? Cadastre uma vez e ele aparece aqui.
-              </Text>
-              <Button
-                variant="outline"
-                onPress={() => onCriar(buscaComAtraso.trim())}
-                accessibilityLabel={emptySearchCopy(buscaComAtraso).action}
-              >
-                <View className="flex-row items-center gap-1">
-                  <Plus size={14} color={colors.primaryText} />
-                  <Text className="text-sm text-foreground">
-                    {emptySearchCopy(buscaComAtraso).action}
-                  </Text>
-                </View>
-              </Button>
-            </View>
-          )
-        }
-        renderItem={({ item: linha }: { item: Row }) =>
-          linha.kind === 'template' ? (
-            <LinhaDeModelo
-              modelo={linha.template}
-              onRegistrar={() => onRegistrarModelo(linha.template)}
-              onApagar={() => onApagarModelo(linha.template)}
-            />
-          ) : (
-            <FoodRow
-              food={linha.food}
-              showOrigin={digitando}
-              detalhe={
-                'lastGrams' in linha.food
-                  ? shortcutDetail(linha.food)
-                  : `${Math.round(linha.food.kcalPer100g)} kcal/100g · P${Math.round(linha.food.proteinPer100g)} · C${Math.round(linha.food.carbsPer100g)} · G${Math.round(linha.food.fatPer100g)}`
-              }
-              favorito={favoritos.has(linha.food.id)}
-              onEscolher={() => onEscolher(linha.food)}
-              onAlternarFavorito={() => onAlternarFavorito(linha.food)}
-            />
-          )
-        }
-      />
-
-      <View className="flex-row flex-wrap items-center justify-center gap-x-4 px-4">
-        <Text className="text-sm text-muted-foreground">Não achou?</Text>
-        {/* Sem resultado, o "Criar “X”" da lista já é o atalho: não repete. */}
-        {!(digitando && !buscando && !comErro && (dados?.length ?? 0) === 0) && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Criar meu alimento"
-            onPress={() => onCriar(busca.trim())}
-            className="min-h-[44px] justify-center"
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              onPress={onTalkToAi}
+              className="h-12 flex-1 flex-row items-center justify-center gap-2 rounded-pill bg-card"
+            >
+              <Mic size={16} color={colors.primaryText} />
+              <Text className="font-sans-bold text-[13px]">Falar com a IA</Text>
+            </Pressable>
+          </View>
+          <View
+            accessibilityRole="tablist"
+            accessibilityLabel="Atalhos"
+            className="mx-4 mt-3.5 flex-row gap-5 border-b border-border"
           >
-            <Text className="text-sm font-medium text-primary underline">Criar meu alimento</Text>
-          </Pressable>
-        )}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Registrar só desta vez"
-          onPress={onManual}
-          className="min-h-[44px] justify-center"
-        >
-          <Text className="text-sm text-primary underline">Registrar só desta vez</Text>
-        </Pressable>
+            {tabs.map((t) => (
+              <Pressable
+                key={t.value}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: tab === t.value }}
+                onPress={() => setTab(t.value)}
+                style={
+                  tab === t.value ? { borderBottomWidth: 2, borderColor: colors.primary } : null
+                }
+                className="h-10 justify-center"
+              >
+                <Text
+                  className={cn(
+                    'font-sans-bold text-sm',
+                    tab === t.value ? 'text-foreground' : 'text-muted-foreground',
+                  )}
+                >
+                  {t.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </>
+      ) : null}
+
+      <View className="mx-4 mt-3.5 flex-1 overflow-hidden rounded-card bg-card">
+        <DrawerFlatList
+          style={{ flex: 1 }}
+          data={linhas}
+          keyExtractor={(linha: Row) =>
+            linha.kind === 'template' ? `modelo-${linha.template.id}` : String(linha.food.id)
+          }
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          ListHeaderComponent={
+            buscando ? (
+              <Text className="px-4 py-3 text-sm text-muted-foreground">Buscando...</Text>
+            ) : erroDoModelo && !digitando ? (
+              <Text accessibilityRole="alert" className="px-4 py-3 text-sm text-destructive">
+                {erroDoModelo}
+              </Text>
+            ) : digitando && !comErro && (dados?.length ?? 0) > 0 ? (
+              <Text className="px-4 pb-1 text-xs text-muted-foreground">
+                {resultsCaption(dados?.length ?? 0)}
+              </Text>
+            ) : null
+          }
+          ListEmptyComponent={
+            buscando ? null : comErro ? (
+              <View className="flex-row items-center justify-between px-4 py-3">
+                <Text accessibilityRole="alert" className="text-sm text-destructive">
+                  Erro ao buscar alimentos.
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Tentar novamente"
+                  onPress={onRetry}
+                  hitSlop={12}
+                  className="min-h-[44px] justify-center"
+                >
+                  <Text className="text-sm text-primary underline">Tentar novamente</Text>
+                </Pressable>
+              </View>
+            ) : !digitando ? (
+              <Text className="px-4 py-3 text-sm text-muted-foreground">{emptyTab[tab]}</Text>
+            ) : (
+              <View className="items-start gap-2 px-4 py-3">
+                <Text className="text-sm font-medium text-foreground">
+                  {emptySearchCopy(buscaComAtraso).title}
+                </Text>
+                <Text className="text-xs text-muted-foreground">
+                  Produto embalado ou receita de casa? Cadastre uma vez e ele aparece aqui.
+                </Text>
+                <Button
+                  variant="outline"
+                  onPress={() => onCriar(buscaComAtraso.trim())}
+                  accessibilityLabel={emptySearchCopy(buscaComAtraso).action}
+                >
+                  <View className="flex-row items-center gap-1">
+                    <Plus size={14} color={colors.primaryText} />
+                    <Text className="text-sm text-foreground">
+                      {emptySearchCopy(buscaComAtraso).action}
+                    </Text>
+                  </View>
+                </Button>
+              </View>
+            )
+          }
+          renderItem={({ item: linha }: { item: Row }) =>
+            linha.kind === 'template' ? (
+              <LinhaDeModelo
+                modelo={linha.template}
+                onRegistrar={() => onRegistrarModelo(linha.template)}
+                onApagar={() => onApagarModelo(linha.template)}
+              />
+            ) : (
+              <FoodRow
+                food={linha.food}
+                showOrigin={digitando}
+                {...('lastGrams' in linha.food
+                  ? shortcutLine(linha.food)
+                  : {
+                      detail: `100 g · P ${Math.round(linha.food.proteinPer100g)} · C ${Math.round(linha.food.carbsPer100g)} · G ${Math.round(linha.food.fatPer100g)}`,
+                      kcal: linha.food.kcalPer100g,
+                    })}
+                onEscolher={() => onEscolher(linha.food)}
+              />
+            )
+          }
+        />
       </View>
+
+      {/* Fora da prancha, mas não some: o item avulso, sem cadastrar alimento.
+        O "Criar" fica no rodapé. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Registrar só desta vez"
+        onPress={onManual}
+        className="min-h-[44px] items-center justify-center"
+      >
+        <Text className="font-sans-semibold text-sm text-primary">Registrar só desta vez</Text>
+      </Pressable>
     </View>
   );
 }
@@ -783,77 +972,60 @@ function LinhaDeModelo({
   );
 }
 
+/** Linha da lista (prancha Al-N15): o toque abre a quantidade (Al-N3), onde fica a estrela. */
 function FoodRow({
   food,
-  detalhe,
-  favorito,
+  detail,
+  kcal,
   onEscolher,
-  onAlternarFavorito,
   showOrigin = false,
 }: {
   food: Food;
   /** Na busca, o selo de origem de cada linha (TACO, seu). */
   showOrigin?: boolean;
-  detalhe: string;
-  favorito: boolean;
+  detail: string;
+  /** As calorias da porção de costume, à direita. */
+  kcal: number;
   onEscolher: () => void;
-  onAlternarFavorito: () => void;
 }) {
   const origin = foodOriginTag(food);
   return (
-    <View className="min-h-[56px] flex-row items-center border-b border-border">
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${food.name}, ${detalhe}`}
-        onPress={onEscolher}
-        className="flex-1 flex-row items-center py-3 pl-4 active:bg-accent"
-      >
-        <View className="flex-1 pr-2">
-          <Text className="text-sm font-medium text-foreground">{food.name}</Text>
-          <Text style={NUMEROS_TABULARES} className="text-xs text-muted-foreground">
-            {detalhe}
-          </Text>
-        </View>
-        {showOrigin || food.source === 'CUSTOM' ? (
-          <Text
-            className={
-              origin.tone === 'ok'
-                ? 'rounded-full bg-primary/15 px-2 py-0.5 text-[10px] text-primary'
-                : 'rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground'
-            }
-          >
-            {origin.label}
-          </Text>
-        ) : null}
-      </Pressable>
-      <BotaoFavorito nome={food.name} favorito={favorito} onPress={onAlternarFavorito} />
-    </View>
-  );
-}
-
-function BotaoFavorito({
-  nome,
-  favorito,
-  onPress,
-}: {
-  nome: string;
-  favorito: boolean;
-  onPress: () => void;
-}) {
-  return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${favorito ? 'Desfavoritar' : 'Favoritar'} ${nome}`}
-      accessibilityState={{ selected: favorito }}
-      onPress={onPress}
-      hitSlop={4}
-      className="h-12 w-12 items-center justify-center"
+      accessibilityLabel={`${food.name}, ${detail}`}
+      onPress={onEscolher}
+      className="mx-4 min-h-[60px] flex-row items-center gap-3 border-b border-border py-2 active:opacity-70"
     >
-      <Star
-        size={18}
-        color={favorito ? colors.warning : colors.placeholder}
-        fill={favorito ? colors.warning : 'transparent'}
-      />
+      <View className="min-w-0 flex-1 gap-px">
+        <View className="flex-row items-center gap-1.5">
+          <Text numberOfLines={1} className="shrink font-sans-semibold text-[15px] text-foreground">
+            {food.name}
+          </Text>
+          {showOrigin || food.source === 'CUSTOM' ? (
+            <View
+              className={cn(
+                'h-[18px] justify-center rounded-pill px-2',
+                origin.tone === 'ok' ? 'bg-primary/15' : 'bg-muted',
+              )}
+            >
+              <Text
+                className={cn(
+                  'font-sans-extrabold text-[11px] uppercase',
+                  origin.tone === 'ok' ? 'text-primary' : 'text-muted-foreground',
+                )}
+              >
+                {origin.label}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        <Text numberOfLines={1} style={NUMEROS_TABULARES} className="text-xs text-muted-foreground">
+          {detail}
+        </Text>
+      </View>
+      <Text style={NUMEROS_TABULARES} className="font-sans-bold text-sm">
+        {Math.round(kcal)} <Text className="text-xs text-muted-foreground">kcal</Text>
+      </Text>
     </Pressable>
   );
 }
@@ -861,6 +1033,7 @@ function BotaoFavorito({
 function SelectedFoodPanel({
   food,
   submitLabel,
+  forLabel,
   favorito,
   onAlternarFavorito,
   gramas,
@@ -873,6 +1046,8 @@ function SelectedFoodPanel({
   food: Food;
   /** "Adicionar ao jantar": diz para onde vai. */
   submitLabel: string;
+  /** "para o jantar". */
+  forLabel: string;
   favorito: boolean;
   onAlternarFavorito: () => void;
   /** Gramas que vão ser gravadas (digitadas ou da medida); `null` se ainda não dá. */
@@ -886,30 +1061,51 @@ function SelectedFoodPanel({
   const previa = foodAmountPreview(food, gramas);
   const fmt = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
   const podeEnviar = gramas !== null;
+  const origin = foodOriginTag(food);
+  const sub = [origin.tone === 'ok' ? 'seu alimento' : origin.label, forLabel]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
-    <View className="flex-1 gap-4 px-4 py-3">
-      <View className="flex-row items-center rounded-lg border border-border pl-3">
-        <View className="flex-1 py-3">
-          <Text className="text-sm font-medium text-foreground">{food.name}</Text>
-          <Text className="text-xs text-muted-foreground">
-            {Math.round(food.kcalPer100g)} kcal/100g
+    <DrawerScrollView contentContainerClassName="gap-4 px-4 pb-6 pt-2">
+      {/* Quantidade (prancha Al-N3): nome grande, de onde vem e para onde vai. */}
+      <View className="flex-row items-start justify-between gap-3">
+        <View className="min-w-0 flex-1 gap-0.5">
+          <Text className="text-xs text-muted-foreground">Quantidade</Text>
+          <Text accessibilityRole="header" className="font-display text-h2 text-foreground">
+            {food.name}
           </Text>
+          <Text className="text-xs text-muted-foreground">{sub}</Text>
         </View>
-        <BotaoFavorito nome={food.name} favorito={favorito} onPress={onAlternarFavorito} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${favorito ? 'Desfavoritar' : 'Favoritar'} ${food.name}`}
+          accessibilityState={{ selected: favorito }}
+          onPress={onAlternarFavorito}
+          className="h-11 w-11 items-center justify-center rounded-pill bg-muted"
+        >
+          <Star
+            size={20}
+            color={favorito ? colors.warning : colors.foreground}
+            fill={favorito ? colors.warning : 'transparent'}
+          />
+        </Pressable>
       </View>
 
       {seletor}
 
       {previa ? (
-        <View className="rounded-lg bg-muted px-3 py-2">
-          <Text style={NUMEROS_TABULARES} className="text-sm font-medium text-foreground">
-            {`Total: ${previa.kcal} kcal · P${fmt(previa.proteinG)} · C${fmt(previa.carbsG)} · G${fmt(previa.fatG)}`}
-          </Text>
+        <>
+          <View className="flex-row gap-2">
+            <MacroTile value={String(previa.kcal)} label="kcal" />
+            <MacroTile value={fmt(previa.proteinG)} label="prot g" color={colors.protein} />
+            <MacroTile value={fmt(previa.carbsG)} label="carb g" color={colors.carbs} />
+            <MacroTile value={fmt(previa.fatG)} label="gord g" color={colors.fat} />
+          </View>
           <Text style={NUMEROS_TABULARES} className="text-xs text-muted-foreground">
             {`Fibra ${previa.fiberG === null ? '—' : `${fmt(previa.fiberG)} g`} · Sódio ${previa.sodiumMg === null ? '—' : `${previa.sodiumMg} mg`}`}
           </Text>
-        </View>
+        </>
       ) : null}
 
       {erro ? (
@@ -919,18 +1115,43 @@ function SelectedFoodPanel({
       ) : null}
 
       <View className="flex-row gap-2">
-        <Button variant="outline" className="flex-1" onPress={onBack}>
-          Voltar
-        </Button>
-        <Button
-          className="flex-1"
-          onPress={onSubmit}
-          disabled={!podeEnviar || enviando}
-          loading={enviando}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Voltar"
+          onPress={onBack}
+          className="h-14 w-14 items-center justify-center rounded-pill bg-muted"
         >
-          {submitLabel}
-        </Button>
+          <ChevronLeft size={20} color={colors.foreground} />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !podeEnviar || enviando }}
+          disabled={!podeEnviar || enviando}
+          onPress={onSubmit}
+          className={cn(
+            'h-14 flex-1 items-center justify-center rounded-pill bg-primary',
+            (!podeEnviar || enviando) && 'opacity-40',
+          )}
+        >
+          <Text className="font-sans-bold text-[15px] text-primary-foreground">
+            {enviando ? 'Salvando...' : submitLabel}
+          </Text>
+        </Pressable>
       </View>
+    </DrawerScrollView>
+  );
+}
+
+function MacroTile({ value, label, color }: { value: string; label: string; color?: string }) {
+  return (
+    <View className="flex-1 items-center gap-1 rounded-[16px] bg-muted px-1 py-2.5">
+      <Text
+        style={[NUMEROS_TABULARES, color ? { color } : null]}
+        className="font-sans-bold text-lg"
+      >
+        {value}
+      </Text>
+      <Text className="text-xs text-muted-foreground">{label}</Text>
     </View>
   );
 }

@@ -268,7 +268,7 @@ export function StepperButton({
       aria-label={label}
       onClick={onClick}
       disabled={disabled}
-      className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-surface-3 text-foreground transition-transform active:scale-95 disabled:opacity-40"
+      className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-muted text-foreground transition-transform active:scale-95 disabled:opacity-40"
     >
       {kind === 'plus' ? (
         <Icon name="plus" size={16} />

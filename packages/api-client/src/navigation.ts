@@ -127,7 +127,8 @@ const MENU: { title: string; items: MenuItemDef[] }[] = [
   {
     title: 'Nutrição',
     items: [
-      link('nutrition-plan', 'Plano alimentar', 'apple', '/nutrition/plan'),
+      // Plano alimentar não é linha de Você: a prancha Al-V1 não tem, e o
+      // cabeçalho de Nutrição já leva a ele.
       link('daily-goals', 'Metas do dia', 'target', '/nutrition/goals'),
       link('nutrients', 'Metas de nutrientes', 'apple', '/nutrition/nutrient-targets'),
       link('foods', 'Meus alimentos', 'apple', '/nutrition/foods'),
@@ -247,7 +248,14 @@ const FOCUS_ROUTES = [
   '/chat/:id',
   '/nutrition/photo',
   '/nutrition/scan',
+  // Formulários de tela cheia sem a barra nas pranchas (Al-N6, Al-V9, Al-V8):
+  // o botão de salvar/confirmar fica no fim, livre.
+  '/nutrition/goals',
+  '/you/edit',
+  '/you/delete',
   '/community/new',
+  // Al-T19: o Novo plano fecha no X e tem o "Criar plano" embaixo, sem a barra.
+  '/workout/plans/new',
   '/onboarding',
   '/org/:id/content/plans/:templateId',
   '/org/:id/content/tips/:tipId',
@@ -267,11 +275,34 @@ export function navBarMode(
 ): NavBarMode {
   const path = segments(pathname);
   if (FOCUS_ROUTES.some((pattern) => match(pattern, path))) return 'hidden';
-  if (match('/workout/session/:id', path)) {
+  // A sessão e o "Treino atual" dela (#377).
+  if (match('/workout/session/:id', path) || match('/workout/session/:id/edit', path)) {
     if (opts.activeSessionId === undefined) return 'hidden';
     return opts.activeSessionId === path[2] ? 'hidden' : 'visible';
   }
   return 'visible';
+}
+
+/**
+ * O botão de ação preso embaixo da tela (pranchas Al-T6, Al-T7, Al-T19:
+ * `bottom: 104px`). Fica 14 px acima da barra flutuante (22 + 68, a mesma conta
+ * do `bottom-space` do app e do `BottomNav` do PWA) e da barra do treino em
+ * andamento (56 + 10), para nunca ficar atrás delas. Medidas acima da área segura.
+ */
+const DOCK_NAV = 22 + 68;
+const DOCK_WORKOUT_BAR = 56 + 10;
+const DOCK_GAP = 14;
+const DOCK_FOCUS_GAP = 22;
+export const DOCKED_ACTION_HEIGHT = 56;
+
+export function dockedActionBottom(opts: { navVisible: boolean; workoutBar: boolean }): number {
+  if (!opts.navVisible) return DOCK_FOCUS_GAP;
+  return DOCK_NAV + DOCK_GAP + (opts.workoutBar ? DOCK_WORKOUT_BAR : 0);
+}
+
+/** Quanto o fim do conteúdo reserva para o botão preso não cobrir o último item. */
+export function dockedActionReserve(opts: { navVisible: boolean; workoutBar: boolean }): number {
+  return dockedActionBottom(opts) + DOCKED_ACTION_HEIGHT + 24;
 }
 
 /** Uma tela no mapa: o título pequeno da barra de topo e para onde "voltar" leva. */
@@ -281,6 +312,8 @@ interface RouteDef {
   title: string;
   /** null nas 5 abas da barra (ADR 040): são telas de ver, sem seta de voltar. */
   parent: string | null;
+  /** Fecha no X em vez da seta (criar algo em tela cheia, ex.: Al-T19). */
+  dismiss?: boolean;
 }
 
 export const HOME_TITLE = 'Hoje';
@@ -302,10 +335,11 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/workout', title: 'Treino', parent: null },
   { pattern: '/workout/history', title: 'Histórico de treino', parent: '/workout' },
   { pattern: '/workout/plans', title: 'Planos de treino', parent: '/workout' },
-  { pattern: '/workout/plans/new', title: 'Novo plano', parent: '/workout/plans' },
+  { pattern: '/workout/plans/new', title: 'Novo plano', parent: '/workout/plans', dismiss: true },
   { pattern: '/workout/plans/:id', title: 'Plano de treino', parent: '/workout/plans' },
   { pattern: '/workout/quick/:id', title: 'Treino rápido', parent: '/workout' },
   { pattern: '/workout/session/:id', title: 'Treino', parent: '/workout/history' },
+  { pattern: '/workout/session/:id/edit', title: 'Treino atual', parent: '/workout' },
   // Você: a quinta aba. Perfil, Progresso, Metas pessoais e Meu plano são dela.
   { pattern: '/you', title: 'Você', parent: null },
   { pattern: '/you/edit', title: 'Editar perfil', parent: '/you' },
@@ -381,6 +415,8 @@ export interface RouteInfo {
   parent: string | null;
   /** Título da tela de destino do "voltar" (para o rótulo acessível). */
   parentTitle: string | null;
+  /** O botão da esquerda é um X ("Fechar"), não a seta. Só aparece quando é. */
+  dismiss?: true;
 }
 
 function segments(path: string): string[] {
@@ -396,12 +432,18 @@ function find(path: string[]): RouteDef | undefined {
   return ROUTES.find((r) => match(r.pattern, path));
 }
 
+/** As 5 abas da barra de baixo (ADR 040): telas de ver, sem "voltar". */
+export const TAB_ROOTS = ['/', '/nutrition', '/workout', '/community', '/you'] as const;
+
 /**
- * Barra de topo (título e ações da tela): todas as telas menos o Hoje, que tem
- * cabeçalho próprio. A seta de voltar é outra coisa: só aparece com `parent`.
+ * Barra de topo (voltar, título e ações da tela): só nas telas empurradas. As
+ * 5 abas abrem com o título grande da própria tela e os botões redondos à
+ * direita (`TabHeader`, pranchas Al-H1, Al-N1, Al-T1, Al-V1, Cm-01), sem a
+ * barra pequena em cima. A seta de voltar é outra coisa: só aparece com `parent`.
  */
 export function hasTopBar(pathname: string): boolean {
-  return segments(pathname).length > 0;
+  const path = '/' + segments(pathname).join('/');
+  return !(TAB_ROOTS as readonly string[]).includes(path);
 }
 
 /** O caminho é de uma tela do mapa? Os `:param` casam qualquer segmento. */
@@ -441,5 +483,5 @@ export function routeInfo(pathname: string): RouteInfo {
     }
   }
   const parentTitle = parent === null ? null : (find(segments(parent))?.title ?? HOME_TITLE);
-  return { title, parent, parentTitle };
+  return { title, parent, parentTitle, ...(def?.dismiss ? { dismiss: true as const } : {}) };
 }

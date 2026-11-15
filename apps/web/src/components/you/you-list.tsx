@@ -12,16 +12,14 @@ import { cn } from '@/lib/utils';
 export function YouSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section aria-label={title} className="flex flex-col gap-2">
-      <h2 className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
-        {title}
-      </h2>
+      <h2 className="text-xs font-bold uppercase tracking-[0.06em] text-faint">{title}</h2>
       <ul className="divide-y divide-subtle overflow-hidden rounded-card bg-card">{children}</ul>
     </section>
   );
 }
 
 const rowClass =
-  'flex min-h-[52px] w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:opacity-60';
+  'flex min-h-[52px] w-full items-center gap-3.5 px-[18px] py-3.5 text-left transition-colors hover:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:opacity-60';
 
 function RowBody({
   icon,
@@ -39,7 +37,7 @@ function RowBody({
       <Icon name={icon} size={20} className="shrink-0 text-muted-foreground" />
       <span className="min-w-0 flex-1">
         <span className="block text-[15px] font-semibold text-foreground">{label}</span>
-        {subtitle && <span className="block text-[13px] text-muted-foreground">{subtitle}</span>}
+        {subtitle && <span className="block text-b2 text-muted-foreground">{subtitle}</span>}
       </span>
       {trailing}
     </>
@@ -73,11 +71,11 @@ export function YouLinkRow({
           trailing={
             <>
               {typeof detail === 'string' ? (
-                <span className="shrink-0 text-[13px] text-muted-foreground">{detail}</span>
+                <span className="shrink-0 text-xs text-faint">{detail}</span>
               ) : (
                 detail
               )}
-              <Icon name="chevR" size={18} className="shrink-0 text-faint" />
+              <Icon name="chevR" size={20} className="shrink-0 text-faint" />
             </>
           }
         />

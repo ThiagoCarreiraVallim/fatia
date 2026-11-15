@@ -20,12 +20,13 @@ import { describePickedImage } from '@/components/content/picked-image';
 import { Button, Input, LoadingState, Segmented, useToast } from '@/components/ui';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
+import { cn } from '@/components/ui/utils';
 import { UserAvatar } from '@/components/you/user-avatar';
 import { ToggleTrack } from '@/components/you/you-list';
 import { colors } from '@/theme/colors';
 
 const BIO_MAX = 140;
-const fieldClass = 'h-12 rounded-field border-0 bg-card px-3.5 text-[15px]';
+const fieldClass = 'h-[52px] rounded-field border-0 bg-card px-[18px] text-base';
 
 interface Form {
   name: string;
@@ -53,7 +54,14 @@ const formOf = (me: MeUser): Form => ({
  */
 export default function EditProfileScreen() {
   const me = useQuery({ queryKey: ['users', 'me'], queryFn: () => usersApi.me() });
-  return <Screen>{me.data ? <EditForm me={me.data} /> : <LoadingState />}</Screen>;
+  // O formulário monta a própria `Screen`: o Salvar fica no topo (prancha Al-V9).
+  return me.data ? (
+    <EditForm me={me.data} />
+  ) : (
+    <Screen>
+      <LoadingState />
+    </Screen>
+  );
 }
 
 function EditForm({ me }: { me: MeUser }) {
@@ -138,165 +146,192 @@ function EditForm({ me }: { me: MeUser }) {
   const shownName = form.name || me.name;
 
   return (
-    <View className="gap-[18px] px-6 pb-8 pt-2">
-      <View className="items-center gap-3">
-        <UserAvatar name={shownName} url={me.avatarUrl} size={112} />
-        <View className="flex-row flex-wrap justify-center gap-2">
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={busy}
-            onPress={() => photo.mutate('camera')}
-          >
-            Tirar foto
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={busy}
-            onPress={() => photo.mutate('gallery')}
-          >
-            Galeria
-          </Button>
-          {me.avatarUrl ? (
-            <Button size="sm" variant="danger" disabled={busy} onPress={() => removePhoto.mutate()}>
-              Remover
-            </Button>
-          ) : null}
-        </View>
-        <Text className="text-center text-[13px] text-muted-foreground">
-          {photo.isPending
-            ? 'Enviando a foto…'
-            : 'A foto é cortada em círculo. Localização e dados da câmera são apagados.'}
-        </Text>
-      </View>
-
-      <Field label="Nome">
-        <Input
-          accessibilityLabel="Nome"
-          className={fieldClass}
-          value={form.name}
-          maxLength={120}
-          onChangeText={(v) => set('name', v)}
-        />
-      </Field>
-
-      <Field
-        label="Como aparece nas comunidades"
-        hint="Vale para mural, comentários e ranking dos desafios."
-      >
-        <Input
-          accessibilityLabel="Como aparece nas comunidades"
-          className={fieldClass}
-          value={form.nickname}
-          maxLength={60}
-          placeholder={communityName({ name: shownName, nickname: null })}
-          onChangeText={(v) => set('nickname', v)}
-        />
-      </Field>
-
-      <Field label="Sobre você (opcional)" hint={`${form.bio.length}/${BIO_MAX}`}>
-        <Input
-          accessibilityLabel="Sobre você"
-          className="h-[88px] rounded-field border-0 bg-card px-3.5 py-3 text-[15px]"
-          multiline
-          textAlignVertical="top"
-          maxLength={BIO_MAX}
-          placeholder="Ex.: treino de manhã, correndo minha primeira 10 km"
-          value={form.bio}
-          onChangeText={(v) => set('bio', v.slice(0, BIO_MAX))}
-        />
-      </Field>
-
-      <View className="gap-2">
-        <Eyebrow>Quem vê sua foto</Eyebrow>
-        <Segmented
-          label="Quem vê sua foto"
-          options={AVATAR_VISIBILITY_OPTIONS}
-          value={form.visibility}
-          onChange={(v) => set('visibility', v)}
-        />
-        <Text className="text-[13px] text-muted-foreground">
-          {avatarVisibilityText(form.visibility)}
-        </Text>
-      </View>
-
-      <View className="gap-2">
-        <Eyebrow>Prévia na comunidade</Eyebrow>
-        <View className="gap-2.5 rounded-card bg-card p-4">
-          <View className="flex-row items-center gap-2">
-            <UserAvatar name={shownName} url={me.avatarUrl} size={28} />
-            <Text className="font-sans-bold text-sm text-foreground">
-              {communityName({ name: shownName, nickname: form.nickname })}
-            </Text>
-            <Text className="text-[13px] text-muted-foreground">agora</Text>
+    <Screen
+      actions={
+        <Button
+          size="xs"
+          className="h-11 px-4"
+          loading={save.isPending}
+          disabled={!form.name.trim()}
+          onPress={() => save.mutate()}
+        >
+          Salvar
+        </Button>
+      }
+    >
+      <View className="gap-[18px] px-6 pb-8 pt-2">
+        <View className="items-center gap-3">
+          <UserAvatar name={shownName} url={me.avatarUrl} size={112} />
+          <View className="flex-row flex-wrap justify-center gap-2">
+            <PhotoButton icon="camera" disabled={busy} onPress={() => photo.mutate('camera')}>
+              Tirar foto
+            </PhotoButton>
+            <PhotoButton icon="image" disabled={busy} onPress={() => photo.mutate('gallery')}>
+              Galeria
+            </PhotoButton>
+            {me.avatarUrl ? (
+              <PhotoButton danger disabled={busy} onPress={() => removePhoto.mutate()}>
+                Remover
+              </PhotoButton>
+            ) : null}
           </View>
-          <Text className="text-sm text-foreground">Fechei mais uma semana de treino!</Text>
-        </View>
-      </View>
-
-      <Field label="E-mail" hint="Para trocar o e-mail, fale com o suporte.">
-        <View className="h-12 justify-center rounded-field bg-card px-3.5">
-          <Text className="text-[15px] text-muted-foreground">{me.email}</Text>
-        </View>
-      </Field>
-
-      <Field label="WhatsApp">
-        <Input
-          accessibilityLabel="WhatsApp"
-          className={fieldClass}
-          keyboardType="phone-pad"
-          textContentType="telephoneNumber"
-          placeholder="(65) 99999-9999"
-          value={form.whatsapp}
-          onChangeText={(v) => set('whatsapp', v)}
-        />
-      </Field>
-
-      <Pressable
-        accessibilityRole="switch"
-        accessibilityLabel="Equipe pode me chamar no WhatsApp"
-        accessibilityState={{ checked: form.optIn && hasWhatsapp, disabled: !hasWhatsapp }}
-        disabled={!hasWhatsapp}
-        onPress={() => set('optIn', !form.optIn)}
-        className={
-          hasWhatsapp
-            ? 'flex-row items-center gap-3 rounded-card bg-card p-4'
-            : 'flex-row items-center gap-3 rounded-card bg-card p-4 opacity-60'
-        }
-      >
-        <Icon name="whats" size={20} color={colors.mutedForeground} />
-        <View className="flex-1">
-          <Text className="font-sans-bold text-[15px] text-foreground">
-            Equipe pode me chamar no WhatsApp
+          <Text className="text-center text-xs text-faint">
+            {photo.isPending
+              ? 'Enviando a foto…'
+              : 'A foto é cortada em círculo. Localização e dados da câmera são apagados.'}
           </Text>
+        </View>
+
+        <Field label="Nome">
+          <Input
+            accessibilityLabel="Nome"
+            className={fieldClass}
+            value={form.name}
+            maxLength={120}
+            onChangeText={(v) => set('name', v)}
+          />
+        </Field>
+
+        <Field
+          label="Como aparece nas comunidades"
+          hint="Vale para mural, comentários e ranking dos desafios."
+        >
+          <Input
+            accessibilityLabel="Como aparece nas comunidades"
+            className={fieldClass}
+            value={form.nickname}
+            maxLength={60}
+            placeholder={communityName({ name: shownName, nickname: null })}
+            onChangeText={(v) => set('nickname', v)}
+          />
+        </Field>
+
+        <Field label="Sobre você (opcional)" hint={`${form.bio.length}/${BIO_MAX}`}>
+          <Input
+            accessibilityLabel="Sobre você"
+            className="h-[88px] rounded-field border-0 bg-card px-3.5 py-3 text-base"
+            multiline
+            textAlignVertical="top"
+            maxLength={BIO_MAX}
+            placeholder="Ex.: treino de manhã, correndo minha primeira 10 km"
+            value={form.bio}
+            onChangeText={(v) => set('bio', v.slice(0, BIO_MAX))}
+          />
+        </Field>
+
+        <View className="gap-2">
+          <Eyebrow>Quem vê sua foto</Eyebrow>
+          <Segmented
+            label="Quem vê sua foto"
+            options={AVATAR_VISIBILITY_OPTIONS}
+            value={form.visibility}
+            onChange={(v) => set('visibility', v)}
+          />
           <Text className="text-[13px] text-muted-foreground">
-            {whatsappOptInText(form.optIn && hasWhatsapp)}
+            {avatarVisibilityText(form.visibility)}
           </Text>
         </View>
-        <ToggleTrack on={form.optIn && hasWhatsapp} />
-      </Pressable>
 
-      <Text className="text-[13px] text-muted-foreground">
-        O Fatia não tem chat entre pessoas. Conversas com a equipe ficam no WhatsApp.
+        <View className="gap-2">
+          <Eyebrow>Prévia na comunidade</Eyebrow>
+          <View className="gap-2.5 rounded-card bg-card p-4">
+            <View className="flex-row items-center gap-2">
+              <UserAvatar name={shownName} url={me.avatarUrl} size={28} />
+              <Text className="font-sans-bold text-sm text-foreground">
+                {communityName({ name: shownName, nickname: form.nickname })}
+              </Text>
+              <Text className="text-[13px] text-muted-foreground">agora</Text>
+            </View>
+            <Text className="text-sm text-foreground">Fechei mais uma semana de treino!</Text>
+          </View>
+        </View>
+
+        <Field label="E-mail" hint="Para trocar o e-mail, fale com o suporte.">
+          <View className="h-[52px] justify-center rounded-field bg-card px-[18px]">
+            <Text className="text-[15px] text-muted-foreground">{me.email}</Text>
+          </View>
+        </Field>
+
+        <Field label="WhatsApp">
+          <Input
+            accessibilityLabel="WhatsApp"
+            className={fieldClass}
+            keyboardType="phone-pad"
+            textContentType="telephoneNumber"
+            placeholder="(65) 99999-9999"
+            value={form.whatsapp}
+            onChangeText={(v) => set('whatsapp', v)}
+          />
+        </Field>
+
+        <Pressable
+          accessibilityRole="switch"
+          accessibilityLabel="Equipe pode me chamar no WhatsApp"
+          accessibilityState={{ checked: form.optIn && hasWhatsapp, disabled: !hasWhatsapp }}
+          disabled={!hasWhatsapp}
+          onPress={() => set('optIn', !form.optIn)}
+          className={
+            hasWhatsapp
+              ? 'flex-row items-center gap-3 rounded-card bg-card p-4'
+              : 'flex-row items-center gap-3 rounded-card bg-card p-4 opacity-60'
+          }
+        >
+          <Icon name="whats" size={20} color={colors.mutedForeground} />
+          <View className="flex-1">
+            <Text className="font-sans-bold text-[15px] text-foreground">
+              Equipe pode me chamar no WhatsApp
+            </Text>
+            <Text className="text-[13px] text-muted-foreground">
+              {whatsappOptInText(form.optIn && hasWhatsapp)}
+            </Text>
+          </View>
+          <ToggleTrack on={form.optIn && hasWhatsapp} />
+        </Pressable>
+
+        <Text className="text-xs text-faint">
+          O Fatia não tem chat entre pessoas. Conversas com a equipe ficam no WhatsApp.
+        </Text>
+      </View>
+    </Screen>
+  );
+}
+
+/** Botão da foto (`btn sm` da prancha): 44 de altura, cantos 12, fundo `--s2`. */
+function PhotoButton({
+  icon,
+  danger,
+  disabled,
+  onPress,
+  children,
+}: {
+  icon?: 'camera' | 'image';
+  danger?: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+  children: string;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      className={cn(
+        'h-11 flex-row items-center gap-2 rounded-[12px] bg-muted px-[18px] active:opacity-70',
+        disabled && 'opacity-50',
+      )}
+    >
+      {icon ? <Icon name={icon} size={16} color={colors.foreground} /> : null}
+      <Text className={cn('font-sans-bold text-sm', danger ? 'text-danger' : 'text-foreground')}>
+        {children}
       </Text>
-
-      <Button
-        size="xl"
-        className="w-full"
-        loading={save.isPending}
-        disabled={!form.name.trim()}
-        onPress={() => save.mutate()}
-      >
-        Salvar
-      </Button>
-    </View>
+    </Pressable>
   );
 }
 
 function Eyebrow({ children }: { children: string }) {
   return (
-    <Text className="font-sans-bold text-[11px] uppercase tracking-widest text-muted-foreground">
+    <Text className="font-sans-bold text-xs uppercase tracking-[0.72px] text-faint">
       {children}
     </Text>
   );
@@ -312,10 +347,10 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <View className="gap-1.5">
+    <View className="gap-2">
       <Text className="font-sans-semibold text-[13px] text-muted-foreground">{label}</Text>
       {children}
-      {hint ? <Text className="text-[13px] text-muted-foreground">{hint}</Text> : null}
+      {hint ? <Text className="text-xs text-faint">{hint}</Text> : null}
     </View>
   );
 }

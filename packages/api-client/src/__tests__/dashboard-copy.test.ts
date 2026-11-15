@@ -1,21 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { greetingLine, nextWorkoutCopy } from '../dashboard-copy';
+import { greetingLine, nextWorkoutCopy, todayDateLine } from '../dashboard-copy';
 import type { TodaySummary } from '../progress';
 
 const hora = (h: number) => new Date(2026, 6, 29, h);
 
 describe('greetingLine', () => {
   it('greets by first name', () => {
-    expect(greetingLine('Ana Demo', hora(15))).toBe('Boa tarde, Ana.');
-    expect(greetingLine('joão silva', hora(9))).toBe('Bom dia, João.');
+    expect(greetingLine('Ana Demo', hora(15))).toBe('Boa tarde, Ana');
+    expect(greetingLine('joão silva', hora(9))).toBe('Bom dia, João');
   });
 
   it('greets without a name when the stored one is not a real name', () => {
     // Fallbacks do provisionamento: parte local do e-mail, `sub` do Logto, "User".
-    expect(greetingLine('a1b2c3d4e5', hora(21))).toBe('Boa noite.');
-    expect(greetingLine('User', hora(3))).toBe('Boa madrugada.');
-    expect(greetingLine(undefined, hora(15))).toBe('Boa tarde.');
-    expect(greetingLine('', hora(15))).toBe('Boa tarde.');
+    expect(greetingLine('a1b2c3d4e5', hora(21))).toBe('Boa noite');
+    expect(greetingLine('User', hora(3))).toBe('Boa madrugada');
+    expect(greetingLine(undefined, hora(15))).toBe('Boa tarde');
+    expect(greetingLine('', hora(15))).toBe('Boa tarde');
+  });
+});
+
+describe('todayDateLine', () => {
+  it('writes the short date as the board does, only the weekday capitalized', () => {
+    // Prancha Al-H1: "Qua, 4 nov" (sem ponto e sem "De" maiúsculo).
+    expect(todayDateLine(new Date(2026, 10, 4))).toBe('Qua, 4 nov');
+    expect(todayDateLine(new Date(2026, 10, 15))).toBe('Dom, 15 nov');
   });
 });
 

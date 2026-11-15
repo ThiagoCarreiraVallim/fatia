@@ -22,7 +22,7 @@ import { animateTo } from '@/theme/motion';
 export const TABULAR: TextStyle = { fontVariant: ['tabular-nums'] };
 
 export const todayCard = 'gap-3 overflow-hidden rounded-card bg-card p-5';
-export const todayTile = 'flex-1 gap-2 overflow-hidden rounded-card bg-card px-[18px] py-4';
+export const todayTile = 'flex-1 basis-0 gap-2 overflow-hidden rounded-card bg-card px-[18px] py-4';
 
 export type Tone = IconTone;
 

@@ -6,21 +6,19 @@ import type { ReactNode } from 'react';
 import { mealTypeForTime, type DaySummary } from '@fatia/api-client';
 import NutritionPage from '../page';
 
-// As ações do topo vão por portal para a barra; aqui ficam no lugar.
-vi.mock('@/components/layout/app-top-bar', () => ({
-  TopBarActions: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  topBarActionClass: '',
-}));
-
+const replace = vi.fn();
 vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams('date=2026-05-19'),
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace }),
 }));
 
-// Os cards têm teste próprio; aqui só importa o que a tela decide.
-vi.mock('@/components/nutrition/weekly-trend-chart', () => ({ WeeklyTrendChart: () => null }));
-vi.mock('@/components/nutrition/custom-foods-card', () => ({ CustomFoodsCard: () => null }));
-vi.mock('@/components/nutrition/copy-day-drawer', () => ({ CopyDayDrawer: () => null }));
+vi.mock('next/link', () => ({
+  default: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 vi.mock('@/components/nutrition/food-search-drawer', () => ({
   FoodSearchDrawer: (props: { open: boolean; initialMode?: string; mealType?: string }) =>
     props.open ? (
@@ -30,12 +28,13 @@ vi.mock('@/components/nutrition/food-search-drawer', () => ({
 
 vi.mock('@fatia/api-client', async () => {
   const actual = await vi.importActual<typeof import('@fatia/api-client')>('@fatia/api-client');
-  return { ...actual, nutritionApi: { summary: vi.fn() } };
+  return { ...actual, nutritionApi: { summary: vi.fn(), history: vi.fn() } };
 });
 
 import { nutritionApi } from '@fatia/api-client';
 
 const summary = vi.mocked(nutritionApi.summary);
+const history = vi.mocked(nutritionApi.history);
 
 const emptyDay = {
   date: '2026-05-19',
@@ -55,13 +54,52 @@ function renderPage() {
 describe('NutritionPage', () => {
   beforeEach(() => {
     summary.mockReset().mockResolvedValue(emptyDay);
+    replace.mockReset();
+    history.mockReset().mockResolvedValue({
+      days: 7,
+      series: [{ date: '2026-05-18', meals: 2, kcal: 1500, proteinG: 0, carbsG: 0, fatG: 0 }],
+      averages: { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 },
+    });
+  });
+
+  it('o topo segue a prancha: título grande, leitor, plano e metas, sem cards de fora dela', async () => {
+    renderPage();
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Nutrição' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Plano alimentar' })).toHaveAttribute(
+      'href',
+      '/nutrition/plan',
+    );
+    expect(screen.getByRole('link', { name: 'Metas do dia' })).toHaveAttribute(
+      'href',
+      '/nutrition/goals',
+    );
+    await screen.findByRole('heading', { name: 'De onde veio' });
+    expect(screen.queryByText(/Tendência semanal/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Meus alimentos')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Copiar dia' })).not.toBeInTheDocument();
+  });
+
+  it('a faixa mostra a semana do dia, contorna o dia com refeição e troca o dia', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    // 2026-05-19 é terça: a semana vai de 18 a 24.
+    const selected = screen.getByRole('tab', { selected: true });
+    expect(selected).toHaveAccessibleName('terça, 19 de maio');
+    expect(
+      await screen.findByRole('tab', { name: 'segunda, 18 de maio, registrado' }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: 'quinta, 21 de maio' }));
+    expect(replace).toHaveBeenCalledWith('?date=2026-05-21', { scroll: false });
   });
 
   it('o atalho do topo abre a busca já no leitor, no tipo de refeição da hora', async () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(screen.getByRole('button', { name: 'Escanear código de barras' }));
+    await user.click(screen.getByRole('button', { name: 'Ler código ou rótulo' }));
 
     expect(screen.getByRole('dialog')).toHaveTextContent(
       `busca scan ${mealTypeForTime(new Date())}`,

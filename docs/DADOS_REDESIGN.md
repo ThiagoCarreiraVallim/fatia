@@ -61,7 +61,7 @@ Igual à tabela da #370. A coluna "Migração em" diz qual PR cria a tabela ou a
 | Foto da refeição                                | arquivo ligado à refeição, preferência "guardar fotos", categoria "Fotos das refeições"                        | #374, #385, #387     | #374                                                           |
 | Cota diária da IA                               | uso do dia por pessoa (pode ficar só no servidor)                                                              | #385, #386           | **nenhuma** — derivada de `AiUsage` (abaixo)                   |
 | Circuito                                        | formato (AMRAP, EMOM, Tabata, For Time), duração, trabalho/descanso, rounds, exercícios                        | #380                 | #380                                                           |
-| Humor do treino (observação com atalhos)        | observação da sessão                                                                                           | #377                 | **nenhuma** — é `WorkoutSession.notes` (abaixo)                |
+| Humor do treino (sensação e observação)         | sensação 1–5 da sessão, observação com atalhos; perguntas pós-treino                                           | #377                 | #377 — `WorkoutSession.feeling`, `WorkoutCheckin` (abaixo)     |
 | Origem do alimento (selo)                       | TACO / seu (o código fica em `Food.barcode`, só no alimento da pessoa)                                         | #375                 | `Food.barcode` opcional, único por pessoa (abaixo)             |
 | Marca da comunidade                             | cor, capa, textos, página de boas-vindas                                                                       | #372, #410           | #372 (cor e capa), #410 (páginas)                              |
 | Enquete, comunicado, "Para você"                | mural                                                                                                          | #394                 | #394                                                           |
@@ -95,8 +95,11 @@ Migração destrutiva exige ADR.
   `resetsAt`, `allowed`). A cota é de **custo**, não de número de mensagens: a tela de limites da
   #385 e o bloco PRO da #386 mostram proporção ("80% do dia") e a hora de renovar, nunca "N
   mensagens restantes". Sem tabela nova.
-- **Humor do treino.** "Como foi o treino?" grava em `WorkoutSession.notes`; os atalhos (emoji e
-  frases) só preenchem o texto (#377). Sem coluna nova.
+- **Humor do treino.** "Como foi o treino?" grava a sensação em `WorkoutSession.feeling` (1 Leve a
+  5 No limite, a escala do canvas) e o texto em `WorkoutSession.notes`; os atalhos de frase só
+  preenchem o texto. A sensação de cada série segue no `SessionSet.rpe` (6 a 10, mesma escala); a do
+  exercício no fim é derivada da última série. As perguntas da equipe (Al-T5b) gravam em
+  `WorkoutCheckin` (uma por sessão), com o conjunto fixo até a #391 (#377).
 - **Origem do alimento.** O selo lê `Food.source` (`TACO`, `CUSTOM` = "seu"). O produto lido no
   Open Food Facts não é guardado e não aparece na busca, então não há selo "código de barras". O
   código que a pessoa vincula ao próprio alimento mora em `Food.barcode` (opcional, único por
@@ -128,7 +131,7 @@ schema; a issue da tela usa o campo indicado.
 | Conquistas                    | Conquistas, Progresso              | `UserAchievement` (`key`, `unlockedAt`, `context`)                                  | #382       |
 | Bloco de treino               | Periodização                       | `TrainingBlock` (`kind`, `weeksTotal`, `status`) + `TrainingBlockWeek`              | #379       |
 | Origem do alimento            | Adicionar item                     | `Food.source`; `Food.barcode` no alimento da pessoa (§2)                            | #375       |
-| Como foi o treino             | Fim do treino                      | `WorkoutSession.notes`                                                              | #377       |
+| Como foi o treino             | Fim do treino                      | `WorkoutSession.feeling` (1–5) e `notes`; respostas em `WorkoutCheckin`             | #377       |
 | Favorito de exercício         | Como fazer                         | existe desde a #378: `FavoriteExercise` (único por pessoa e exercício)              | #378       |
 | Tipo de comunidade            | Criar comunidade, Checklist        | `GroupType`, `GroupVisibility`, `JoinPolicy`, `PostPolicy`, `requiredSharingScopes` | #372       |
 
@@ -208,9 +211,10 @@ campos de data dos modelos, não de enum.
 
 - **`Exercise`**: origem catálogo (`createdByUserId` nulo), da pessoa, cópia (`clonedFromId`) ou da
   comunidade (`groupOwned`, `groupId`) — #378, #396.
-- **`WorkoutPlan`** / **`WorkoutPlanExercise`** — #378. **`WorkoutSession`**: `notes` = "Como foi o
-  treino?", `exerciseOrder` e `removedExerciseIds` — #377, #381.
-- **`SessionSet`**: `rpe` de 6 a 10 (o emoji é só da tela), cardio com `durationSeconds`,
+- **`WorkoutPlan`** / **`WorkoutPlanExercise`** — #378. **`WorkoutSession`**: `feeling` e `notes` = "Como
+  foi o treino?", `exerciseOrder` e `removedExerciseIds` — #377, #381. **`WorkoutCheckin`**: respostas
+  pós-treino — #377.
+- **`SessionSet`**: `rpe` de 6 a 10 (o emoji é só da tela), `clientKey` para o reenvio não duplicar, cardio com `durationSeconds`,
   `distanceMeters`, `avgHeartRate`, `kcalBurned` — #377.
 - **Circuito** é dado novo, sem tabela aqui (#380).
 - **`TrainingBlock`** / **`TrainingBlockWeek`** ([ADR 019](./ADR/019-periodizacao-intencao-materializada-andamento-derivado.md)) — #379.

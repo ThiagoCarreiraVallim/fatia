@@ -7,8 +7,8 @@ import { ChevronRight, KeyRound, Plus } from 'lucide-react-native';
 import { groupsApi, membershipBadge, teamRoleLabel } from '@fatia/api-client';
 import { JoinByCodeDrawer } from '@/components/community/join-by-code-drawer';
 import { Screen } from '@/components/layout/screen';
-import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
-import { Button, EmptyState, ErrorState, LoadingState, cn } from '@/components/ui';
+import { HeaderButton, TabHeader } from '@/components/layout/tab-header';
+import { Button, DrawerLayer, EmptyState, ErrorState, LoadingState, cn } from '@/components/ui';
 import { GroupAvatar } from '@/components/community/group-avatar';
 import { colors } from '@/theme/colors';
 
@@ -20,31 +20,20 @@ export default function CommunityScreen() {
 
   return (
     <>
-      <Screen
-        actions={
-          <>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Entrar com código"
-              onPress={() => setJoining(true)}
-              className={TOP_BAR_ACTION}
-            >
-              <KeyRound size={20} color={colors.primaryText} />
-            </Pressable>
-            <Pressable
-              accessibilityRole="link"
-              accessibilityLabel="Criar comunidade"
+      <Screen onRefresh={() => void groups.refetch()} refreshing={groups.isRefetching}>
+        <View className="gap-4 px-5 pb-4 pt-2">
+          <TabHeader title="Comunidade">
+            <HeaderButton label="Entrar com código" onPress={() => setJoining(true)}>
+              <KeyRound size={20} color={colors.foreground} />
+            </HeaderButton>
+            <HeaderButton
+              label="Criar comunidade"
+              variant="lime"
               onPress={() => router.push('/community/new')}
-              className={TOP_BAR_ACTION}
             >
-              <Plus size={20} color={colors.primaryText} />
-            </Pressable>
-          </>
-        }
-        onRefresh={() => void groups.refetch()}
-        refreshing={groups.isRefetching}
-      >
-        <View className="gap-4 px-5 pb-4 pt-4">
+              <Plus size={20} color={colors.primaryForeground} />
+            </HeaderButton>
+          </TabHeader>
           {groups.isPending ? <LoadingState label="Carregando suas comunidades…" /> : null}
           {groups.isError ? (
             <ErrorState error={groups.error} onRetry={() => void groups.refetch()} />
@@ -99,11 +88,14 @@ export default function CommunityScreen() {
         </View>
       </Screen>
 
-      <JoinByCodeDrawer
-        open={joining}
-        onOpenChange={setJoining}
-        onJoined={(groupId) => router.push(`/community/${groupId}`)}
-      />
+      {/* Sem a camada o sheet não tem onde abrir e fica invisível (ver `ui/drawer.tsx`). */}
+      <DrawerLayer>
+        <JoinByCodeDrawer
+          open={joining}
+          onOpenChange={setJoining}
+          onJoined={(groupId) => router.push(`/community/${groupId}`)}
+        />
+      </DrawerLayer>
     </>
   );
 }

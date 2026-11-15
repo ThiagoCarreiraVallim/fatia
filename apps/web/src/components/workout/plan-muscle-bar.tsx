@@ -38,7 +38,7 @@ export function PlanMuscleBar({
       <div
         role="img"
         aria-label={muscleShareLabel(share)}
-        className="flex h-2 w-full gap-0.5 overflow-hidden rounded-pill"
+        className="flex h-1.5 w-full gap-0.5 overflow-hidden rounded-[3px]"
       >
         {share.map((s) => (
           <span
@@ -49,13 +49,12 @@ export function PlanMuscleBar({
         ))}
       </div>
       {legend && (
-        <ul
-          aria-hidden
-          className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground"
-        >
+        <ul aria-hidden className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-faint">
           {share.map((s) => (
-            <li key={s.group} className="flex items-center gap-1">
-              <span className={cn('h-2 w-2 rounded-full', TONE_BG[muscleGroupTone(s.group)])} />
+            <li key={s.group} className="flex items-center gap-1.5">
+              <span
+                className={cn('h-[7px] w-[7px] rounded-[2px]', TONE_BG[muscleGroupTone(s.group)])}
+              />
               {muscleGroupName(s.group)} {s.percent}%
             </li>
           ))}

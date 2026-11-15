@@ -1,5 +1,9 @@
 import { canonicalGroupsOf } from '../helpers/muscle-group';
-import { summarizeWeeklyMuscles, WEEKLY_SETS_TARGET } from '../muscle-summary.service';
+import {
+  summarizeTrainingWeek,
+  summarizeWeeklyMuscles,
+  WEEKLY_SETS_TARGET,
+} from '../muscle-summary.service';
 
 /**
  * O que os cards da aba Treino (#369) e a semana da #377 leem: séries por grupo
@@ -132,5 +136,67 @@ describe('summarizeWeeklyMuscles', () => {
       timezone: TZ,
     });
     expect(summary.suggestedPlan).toBeNull();
+  });
+});
+
+describe('summarizeTrainingWeek (#377)', () => {
+  const sess = (startedAt: string, completedAt: string | null) => ({
+    startedAt: new Date(startedAt),
+    completedAt: completedAt ? new Date(completedAt) : null,
+  });
+
+  it('segunda a domingo no fuso da pessoa, com os dias treinados e o total contra a meta', () => {
+    // NOW = sábado 14/11 15h em São Paulo; a semana começa na segunda 09/11.
+    const week = summarizeTrainingWeek({
+      sessions: [
+        sess('2026-11-09T22:00:00Z', '2026-11-09T23:00:00Z'),
+        sess('2026-11-11T12:00:00Z', '2026-11-11T13:00:00Z'),
+        sess('2026-11-11T20:00:00Z', '2026-11-11T21:00:00Z'),
+        // Domingo 08/11 às 23h em SP já é segunda em UTC: é da semana passada.
+        sess('2026-11-09T02:00:00Z', '2026-11-09T03:00:00Z'),
+        sess('2026-11-14T17:00:00Z', null),
+      ],
+      now: NOW,
+      timezone: TZ,
+      target: 4,
+    });
+    expect(week.start).toBe('2026-11-09');
+    expect(week.days.map((d) => d.date)).toEqual([
+      '2026-11-09',
+      '2026-11-10',
+      '2026-11-11',
+      '2026-11-12',
+      '2026-11-13',
+      '2026-11-14',
+      '2026-11-15',
+    ]);
+    expect(week.days.map((d) => d.trained)).toEqual([
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+    ]);
+    expect(week.days.map((d) => d.active)).toEqual([
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+    ]);
+    expect(week.days.map((d) => d.today)).toEqual([false, false, false, false, false, true, false]);
+    // Dois treinos no mesmo dia contam dois; o aberto ainda não conta.
+    expect(week.done).toBe(3);
+    expect(week.target).toBe(4);
+  });
+
+  it('sem meta, o alvo é nulo e a semana tem os 7 dias', () => {
+    const week = summarizeTrainingWeek({ sessions: [], now: NOW, timezone: TZ, target: null });
+    expect(week).toMatchObject({ done: 0, target: null });
+    expect(week.days).toHaveLength(7);
   });
 });

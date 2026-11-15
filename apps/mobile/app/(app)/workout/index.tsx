@@ -1,56 +1,286 @@
-import { Pressable, useWindowDimensions, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { Text } from '@/components/ui/text';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { ChevronRight, Dumbbell, History, ListChecks, Plus } from 'lucide-react-native';
-import { QUICK_TEMPLATES, workoutApi, type QuickTemplate } from '@fatia/api-client';
+import { ChevronRight, Heart, History, Plus, Zap } from 'lucide-react-native';
+import {
+  blockRow,
+  planCardInfo,
+  planExercisePreview,
+  planMuscleBars,
+  QUICK_TEMPLATES,
+  trainingWeekLabel,
+  workoutApi,
+  type QuickTemplate,
+  type TrainingWeek,
+  type WorkoutPlan,
+} from '@fatia/api-client';
 import { WorkoutCardsCarousel } from '@/components/workout/cards/workout-cards';
 import { Screen } from '@/components/layout/screen';
-import { Button, Carousel, ErrorState, LoadingState } from '@/components/ui';
+import { Carousel, ErrorState, LoadingState } from '@/components/ui';
 import { BlockTimeline } from '@/components/workout/block-timeline';
 import { quickVisual } from '@/components/workout/quick-template-visual';
-import { pluralize } from '@/components/workout/workout-stats';
+import { useStartSession } from '@/components/workout/use-start-session';
+import { groupColorName, weekChips } from '@/components/workout/workout-home';
 import { colors } from '@/theme/colors';
-import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
+import { HeaderButton, TabHeader } from '@/components/layout/tab-header';
+import { cn } from '@/components/ui/utils';
 
 /**
- * Réplica de `apps/web/src/app/(app)/workout/page.tsx`.
+ * A aba Treino do redesign (prancha `Al-T1-Treino`, #377): a semana, os cards,
+ * os planos da pessoa e os outros jeitos de treinar.
  *
- * Uma diferença de estrutura: no PWA esta página *vira* a sessão em andamento,
- * porque lá não existe rota para a sessão. No app nativo existe
- * (`/workout/session/[id]`), então aqui a sessão aberta aparece como um aviso no
- * topo que leva até ela. Assim o botão voltar do Android sai da sessão para o
- * seletor, em vez de sair do app.
- *
- * A ordem também é outra: os planos da pessoa vêm primeiro, que é o que ela
- * abre a tela para achar, e a periodização — consultada uma vez por bloco, não
- * a cada treino — desce para o fim.
+ * O treino em andamento não tem mais aviso aqui: a barra acima da navegação
+ * (`ActiveWorkoutBar`, prancha `Al-T1b`) já leva a ele em qualquer tela. E
+ * começar outro com um aberto cai no aberto (`useStartSession`, 409).
  */
 
-function SectionLabel({ children }: { children: string }) {
+function SectionTitle({ children, action }: { children: string; action?: React.ReactNode }) {
   return (
-    <Text className="text-[11px] font-extrabold tracking-wide text-muted-foreground">
-      {children}
-    </Text>
+    <View className="flex-row items-center justify-between">
+      <Text
+        accessibilityRole="header"
+        className="font-display-semibold text-[17px] text-foreground"
+      >
+        {children}
+      </Text>
+      {action}
+    </View>
   );
 }
 
-function ActiveSessionBanner({ sessionId, startedAt }: { sessionId: string; startedAt: string }) {
+/**
+ * A faixa da semana (prancha Al-T1), no desenho do `DayStrip` da Nutrição:
+ * hoje em verde, os dias treinados (e o do treino aberto) contornados.
+ */
+function WeekRow({ week, activeSessionId }: { week: TrainingWeek; activeSessionId?: string }) {
   const router = useRouter();
-  const time = new Date(startedAt).toLocaleTimeString('pt-BR', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
+  const chips = weekChips(week);
   return (
-    <View className="gap-3 rounded-2xl border border-border bg-card p-4">
-      <View>
-        <Text accessibilityRole="header" className="text-xl font-semibold text-foreground">
-          Treino em andamento
+    <View className="gap-2.5">
+      <View className="flex-row items-baseline justify-between">
+        <Text
+          accessibilityRole="header"
+          className="font-display-semibold text-[17px] text-foreground"
+        >
+          Semana
         </Text>
-        <Text className="text-xs text-muted-foreground">Iniciado às {time}</Text>
+        <Text className="text-[13px] text-muted-foreground">{trainingWeekLabel(week)}</Text>
       </View>
-      <Button onPress={() => router.push(`/workout/session/${sessionId}`)}>Continuar treino</Button>
+      <View className="flex-row justify-between gap-1.5">
+        {chips.map((chip) => {
+          const target =
+            chip.state === 'active' && activeSessionId
+              ? `/workout/session/${activeSessionId}`
+              : chip.state === 'trained'
+                ? '/workout/history'
+                : null;
+          const outlined = !chip.today && chip.state !== 'rest';
+          return (
+            <Pressable
+              key={chip.date}
+              accessibilityRole={target ? 'button' : 'text'}
+              accessibilityLabel={chip.label}
+              disabled={!target}
+              onPress={() => target && router.push(target as never)}
+              className={cn(
+                'h-16 flex-1 items-center justify-center gap-0.5 rounded-field',
+                chip.today ? 'bg-primary' : 'bg-muted',
+              )}
+              style={
+                outlined ? { borderWidth: 1.5, borderColor: `${colors.primaryText}80` } : undefined
+              }
+            >
+              <Text
+                className={cn(
+                  'font-sans-semibold text-xs',
+                  chip.today ? 'text-primary-foreground' : 'text-faint',
+                )}
+              >
+                {chip.letter}
+              </Text>
+              <Text
+                className={cn(
+                  'font-display-semibold text-base',
+                  chip.today ? 'text-primary-foreground' : 'text-foreground',
+                )}
+              >
+                {chip.day}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function MuscleShareBar({ plan }: { plan: WorkoutPlan }) {
+  const bars = planMuscleBars(plan);
+  if (bars.length === 0) return <View className="h-1.5 rounded-full bg-muted" />;
+  return (
+    <View className="h-1.5 flex-row gap-0.5 overflow-hidden rounded-full">
+      {bars.map((b) => (
+        <View
+          key={b.group}
+          style={{ flex: b.share, backgroundColor: colors[groupColorName(b.group)] }}
+        />
+      ))}
+    </View>
+  );
+}
+
+/** O cartão do plano (prancha Al-T1): nome e "SEU", resumo, prévia e a barra de músculos. */
+function PlanCard({ plan, width }: { plan: WorkoutPlan; width: number }) {
+  const router = useRouter();
+  const info = planCardInfo(plan);
+  const preview = planExercisePreview(plan);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${plan.name}, ${info}`}
+      onPress={() => router.push(`/workout/plans/${plan.id}`)}
+      style={{ width }}
+      className="gap-2.5 rounded-card bg-card p-4 active:opacity-80"
+    >
+      <View className="flex-row items-center justify-between gap-2">
+        <Text numberOfLines={1} className="flex-1 font-sans-bold text-[17px] text-foreground">
+          {plan.name}
+        </Text>
+        <View
+          className="rounded-pill px-2.5 py-0.5"
+          style={{ backgroundColor: `${colors.primary}29` }}
+        >
+          <Text className="font-sans-extrabold text-[11px] uppercase tracking-wide text-primary">
+            Seu
+          </Text>
+        </View>
+      </View>
+      <Text numberOfLines={1} className="text-[13px] text-muted-foreground">
+        {info}
+      </Text>
+      {preview ? (
+        <Text numberOfLines={1} className="text-sm text-foreground">
+          {preview}
+        </Text>
+      ) : null}
+      <View className="mt-auto">
+        <MuscleShareBar plan={plan} />
+      </View>
+    </Pressable>
+  );
+}
+
+function NewPlanCard({ width }: { width: number }) {
+  const router = useRouter();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Novo plano"
+      onPress={() => router.push('/workout/plans')}
+      style={{ width, borderWidth: 1.5, borderColor: colors.borderStrong }}
+      className="items-center justify-center gap-2 rounded-card p-4 active:opacity-80"
+    >
+      <View className="h-10 w-10 items-center justify-center rounded-full bg-muted">
+        <Plus size={16} color={colors.foreground} />
+      </View>
+      <Text className="font-sans-bold text-sm text-foreground">Novo plano</Text>
+    </Pressable>
+  );
+}
+
+/** Um jeito de começar (prancha Al-T1): ícone num quadrado de cor, nome e dica. */
+function WayCard({
+  title,
+  subtitle,
+  icon: Icon,
+  tone,
+  disabled,
+  onPress,
+}: {
+  title: string;
+  subtitle: string;
+  icon: typeof Plus;
+  tone: string;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${title}, ${subtitle}`}
+      accessibilityState={{ disabled: Boolean(disabled) }}
+      disabled={disabled}
+      onPress={onPress}
+      className="min-w-0 flex-1 flex-row items-center gap-2.5 rounded-[18px] bg-card p-3 active:opacity-80"
+      style={disabled ? { opacity: 0.6 } : undefined}
+    >
+      <View
+        className="h-9 w-9 items-center justify-center rounded-xl"
+        style={{ backgroundColor: `${tone}29` }}
+      >
+        <Icon size={16} color={tone} />
+      </View>
+      <View className="min-w-0 flex-1">
+        <Text className="font-sans-bold text-sm text-foreground">{title}</Text>
+        <Text numberOfLines={1} className="text-xs text-muted-foreground">
+          {subtitle}
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+
+/**
+ * O bloco numa linha (prancha Al-T1: "Bloco hipertrofia · semana 2 de 4" e as
+ * barras de volume). O toque abre o detalhe e o encerrar, ou o montar sem bloco.
+ */
+function BlockRow() {
+  const [open, setOpen] = useState(false);
+  const block = useQuery({
+    queryKey: ['workout', 'block'],
+    queryFn: () => workoutApi.getActiveBlock(),
+    retry: false,
+  });
+  if (block.isLoading) return null;
+  const row = block.data ? blockRow(block.data) : null;
+  return (
+    <View className="gap-2">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={row ? `${row.title}, ${row.detail}` : 'Periodização em blocos'}
+        onPress={() => setOpen((v) => !v)}
+        className="flex-row items-center gap-3 rounded-card bg-card px-4 py-3.5 active:opacity-80"
+      >
+        <View className="min-w-0 flex-1">
+          <Text className="font-sans-bold text-sm text-foreground">
+            {row ? row.title : 'Periodização em blocos'}
+          </Text>
+          <Text className="text-xs text-muted-foreground">
+            {row ? row.detail : '4 semanas planejadas, com deload no fim'}
+          </Text>
+        </View>
+        {row ? (
+          <View className="h-7 flex-row items-end gap-1">
+            {row.bars.map((b, i) => (
+              <View
+                key={i}
+                className="w-2.5 rounded-[3px]"
+                style={{
+                  height: `${Math.max(0.3, b.ratio) * 100}%`,
+                  backgroundColor: b.reached ? colors.primary : colors.surface3,
+                }}
+              />
+            ))}
+          </View>
+        ) : null}
+        <View style={open ? { transform: [{ rotate: '90deg' }] } : undefined}>
+          <ChevronRight size={16} color={colors.faintForeground} />
+        </View>
+      </Pressable>
+      {open ? <BlockTimeline /> : null}
     </View>
   );
 }
@@ -65,50 +295,26 @@ function QuickCard({ template, width }: { template: QuickTemplate; width: number
       accessibilityLabel={`${template.title}. ${template.level}, ${template.duration}, ${template.location}`}
       onPress={() => router.push(`/workout/quick/${template.id}`)}
       style={{ width, backgroundColor: tint }}
-      className="h-44 justify-end overflow-hidden rounded-2xl border border-border p-4 active:opacity-80"
+      className="h-36 justify-end overflow-hidden rounded-3xl p-4 active:opacity-80"
     >
       <View className="absolute right-3 top-3 opacity-30">
-        <Icon size={64} color={colors.foreground} />
+        <Icon size={56} color={colors.foreground} />
       </View>
-      <Text className="text-[10px] font-bold text-muted-foreground">{template.level}</Text>
-      <Text className="mt-1 text-base font-extrabold leading-tight text-foreground">
+      <Text className="text-[11px] font-sans-bold text-muted-foreground">{template.level}</Text>
+      <Text className="mt-1 text-base font-sans-bold leading-tight text-foreground">
         {template.title}
       </Text>
-      <Text className="mt-1 text-[11px] text-muted-foreground">
-        {template.duration} • {template.location}
+      <Text className="mt-1 text-[12px] text-muted-foreground">
+        {template.duration} · {template.location}
       </Text>
-    </Pressable>
-  );
-}
-
-function ShortcutCard({
-  label,
-  icon: Icon,
-  onPress,
-}: {
-  label: string;
-  icon: typeof Plus;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      className="flex-1 rounded-2xl border border-border bg-card p-4 active:opacity-80"
-    >
-      <View className="h-8 w-8 items-center justify-center rounded-lg bg-muted">
-        <Icon size={16} color={colors.foreground} />
-      </View>
-      <Text className="mt-3 text-sm font-bold leading-tight text-foreground">{label}</Text>
     </Pressable>
   );
 }
 
 export default function WorkoutScreen() {
   const router = useRouter();
-  const qc = useQueryClient();
   const { width } = useWindowDimensions();
+  const start = useStartSession();
 
   const active = useQuery({
     queryKey: ['workout', 'active'],
@@ -118,144 +324,120 @@ export default function WorkoutScreen() {
     refetchOnMount: 'always',
   });
 
+  // A mesma chave do carrossel: uma ida ao servidor para os dois.
+  const summary = useQuery({
+    queryKey: ['workout', 'muscles', 'week'],
+    queryFn: () => workoutApi.getWeeklyMuscleSummary(),
+  });
+
   const plans = useQuery({
     queryKey: ['workout', 'plans'],
     queryFn: () => workoutApi.listPlans(),
   });
 
-  const start = useMutation({
-    mutationFn: () => workoutApi.startSession({ startedAt: new Date().toISOString() }),
-    onSuccess: (session) => {
-      qc.invalidateQueries({ queryKey: ['workout', 'active'] });
-      router.push(`/workout/session/${session.id}`);
-    },
-  });
-
-  const quickCardWidth = Math.round((width - 40) * 0.78);
+  const planWidth = Math.min(240, Math.round((width - 40) * 0.62));
+  const quickCardWidth = Math.round((width - 40) * 0.7);
 
   return (
     <Screen
-      actions={
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Histórico de treinos"
-          onPress={() => router.push('/workout/history')}
-          className={TOP_BAR_ACTION}
-        >
-          <History size={20} color={colors.primaryText} />
-        </Pressable>
-      }
-      refreshing={active.isRefetching || plans.isRefetching}
+      refreshing={active.isRefetching || plans.isRefetching || summary.isRefetching}
       onRefresh={() => {
         void active.refetch();
         void plans.refetch();
+        void summary.refetch();
       }}
     >
-      <View className="gap-5 px-5 pb-4 pt-4">
-        {active.isLoading ? <LoadingState /> : null}
-        {active.data ? (
-          <ActiveSessionBanner sessionId={active.data.id} startedAt={active.data.startedAt} />
+      <View className="gap-6 px-5 pb-4 pt-2">
+        <TabHeader title="Treino">
+          <HeaderButton
+            label="Histórico de treinos"
+            onPress={() => router.push('/workout/history')}
+          >
+            <History size={20} color={colors.foreground} />
+          </HeaderButton>
+          <HeaderButton label="Novo plano" onPress={() => router.push('/workout/plans')}>
+            <Plus size={22} color={colors.foreground} />
+          </HeaderButton>
+        </TabHeader>
+        {/* TODO(#379): o aviso "<treinador> enviou um plano · toque para ver e
+            aceitar" entra aqui, acima da semana, quando houver plano recebido. */}
+
+        {summary.data?.week ? (
+          <WeekRow week={summary.data.week} activeSessionId={active.data?.id} />
         ) : null}
 
-        {/* Os cards do canvas (músculos descansados, repetir o último, séries da
-            semana) abrem a aba quando não há sessão aberta, como no PWA (#369). */}
-        {!active.isLoading && !active.data ? <WorkoutCardsCarousel /> : null}
+        <WorkoutCardsCarousel />
 
-        <View className="gap-2">
-          <View className="flex-row items-center justify-between">
-            <SectionLabel>MEUS PLANOS</SectionLabel>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Ver todos os planos"
-              onPress={() => router.push('/workout/plans')}
-              className="min-h-[44px] justify-center"
-            >
-              <Text className="text-[11px] font-extrabold text-primary">Ver tudo</Text>
-            </Pressable>
-          </View>
+        <View className="gap-3">
+          <SectionTitle
+            action={
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Ver todos os planos"
+                onPress={() => router.push('/workout/plans')}
+                className="min-h-[44px] justify-center px-1"
+              >
+                <Text className="font-sans-bold text-[13px] text-primary-text">Ver todos</Text>
+              </Pressable>
+            }
+          >
+            Seus planos
+          </SectionTitle>
 
           {plans.isLoading ? <LoadingState /> : null}
           {plans.isError ? (
             <ErrorState error={plans.error} onRetry={() => void plans.refetch()} />
           ) : null}
 
-          {plans.data && plans.data.length === 0 ? (
-            <Text className="text-sm text-muted-foreground">
-              Nenhum plano criado ainda.{' '}
-              <Text
-                accessibilityRole="link"
-                onPress={() => router.push('/workout/plans')}
-                className="font-bold text-primary underline"
-              >
-                Criar agora
-              </Text>
-            </Text>
+          {plans.data ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 10 }}
+            >
+              {plans.data.map((plan) => (
+                <PlanCard key={plan.id} plan={plan} width={planWidth} />
+              ))}
+              <NewPlanCard width={plans.data.length ? 140 : planWidth} />
+            </ScrollView>
           ) : null}
-
-          {plans.data?.map((plan) => {
-            const count = plan.exercises?.length ?? 0;
-            const countLabel = `${count} ${pluralize(count, 'exercício', 'exercícios')}`;
-            return (
-              <Pressable
-                key={plan.id}
-                accessibilityRole="button"
-                accessibilityLabel={`${plan.name}, ${countLabel}`}
-                onPress={() => router.push(`/workout/plans/${plan.id}`)}
-                className="min-h-[44px] flex-row items-center gap-3 rounded-2xl border border-border bg-card p-3 active:opacity-80"
-              >
-                <View className="h-12 w-12 items-center justify-center rounded-lg bg-muted">
-                  <Dumbbell size={20} color={colors.primaryText} />
-                </View>
-                <View className="min-w-0 flex-1">
-                  <Text numberOfLines={1} className="text-base font-bold text-foreground">
-                    {plan.name}
-                  </Text>
-                  <Text className="text-xs text-muted-foreground">{countLabel}</Text>
-                </View>
-                <ChevronRight size={16} color={colors.mutedForeground} />
-              </Pressable>
-            );
-          })}
         </View>
 
-        <View className="gap-2">
-          <SectionLabel>PERSONALIZAÇÃO</SectionLabel>
-          <View className="flex-row gap-3">
-            <ShortcutCard
-              label="Criar um treino personalizado"
-              icon={Plus}
-              onPress={() => router.push('/workout/plans')}
+        <View className="gap-3">
+          <SectionTitle>Outros jeitos de treinar</SectionTitle>
+          {/* Circuito e Modelos entram com a #380 e a #379. */}
+          <View className="flex-row gap-2">
+            <WayCard
+              title="Livre"
+              subtitle="monte na hora"
+              icon={Zap}
+              tone={colors.primaryText}
+              disabled={start.isPending}
+              onPress={() => start.mutate({})}
             />
-            <ShortcutCard
-              label="Meus planos de treino"
-              icon={ListChecks}
-              onPress={() => router.push('/workout/plans')}
+            <WayCard
+              title="Só cardio"
+              subtitle="esteira, bike…"
+              icon={Heart}
+              tone={colors.danger}
+              disabled={start.isPending}
+              onPress={() => start.mutate({ then: 'cardio' })}
             />
           </View>
         </View>
 
-        <Button
-          className="h-14 rounded-2xl"
-          textClassName="text-base font-extrabold tracking-wide"
-          loading={start.isPending}
-          onPress={() => start.mutate()}
-        >
-          INICIAR TREINO LIVRE
-        </Button>
+        <BlockRow />
 
-        <View className="gap-2">
-          <SectionLabel>TREINOS RÁPIDOS</SectionLabel>
+        {/* Os treinos rápidos não estão na prancha (os "Modelos" da #379 tomam o
+            lugar deles): ficam no fim, depois do bloco, para não sumirem antes. */}
+        <View className="gap-3">
+          <SectionTitle>Treinos rápidos</SectionTitle>
           <Carousel
             data={QUICK_TEMPLATES}
             itemWidth={quickCardWidth}
             keyExtractor={(t) => t.id}
             renderItem={({ item }) => <QuickCard template={item} width={quickCardWidth} />}
           />
-        </View>
-
-        <View className="gap-2">
-          <SectionLabel>PERIODIZAÇÃO</SectionLabel>
-          <BlockTimeline />
         </View>
       </View>
     </Screen>

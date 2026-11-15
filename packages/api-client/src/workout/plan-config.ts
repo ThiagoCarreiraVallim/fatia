@@ -249,6 +249,36 @@ export function planSummaryLine(lines: ReadonlyArray<Line>): string {
   return `${n} ${n === 1 ? 'exercício' : 'exercícios'} · ${sets} ${sets === 1 ? 'série' : 'séries'} · ~${estimatePlanMinutes(lines)} min`;
 }
 
+/** "6 exercícios · 19 séries": o resumo do Al-T7, com os minutos à parte, à direita. */
+export function planCountsLine(lines: ReadonlyArray<Pick<Line, 'targetSets'>>): string {
+  const sets = lines.reduce((acc, pe) => acc + pe.targetSets, 0);
+  const n = lines.length;
+  return `${n} ${n === 1 ? 'exercício' : 'exercícios'} · ${sets} ${sets === 1 ? 'série' : 'séries'}`;
+}
+
+/** "3 · 10 séries · ~26 min": o resumo curto ao lado de "Exercícios" no Novo plano (Al-T19). */
+export function planDraftSummary(lines: ReadonlyArray<Line>): string {
+  if (!lines.length) return '';
+  const sets = lines.reduce((acc, pe) => acc + pe.targetSets, 0);
+  return `${lines.length} · ${sets} ${sets === 1 ? 'série' : 'séries'} · ~${estimatePlanMinutes(lines)} min`;
+}
+
+/**
+ * Os chips do card do plano (Al-T6): os três primeiros exercícios, na ordem do
+ * plano, com as duas primeiras palavras do nome ("Supino reto"), e um "+ N mais".
+ */
+export function planExerciseChips(
+  exercises: ReadonlyArray<{ order: number; exercise: { name: string } }>,
+): Array<{ label: string; name: string }> {
+  const ordered = [...exercises].sort((a, b) => a.order - b.order);
+  const chips = ordered.slice(0, 3).map((e, i) => ({
+    label: String(i + 1),
+    name: e.exercise.name.trim().split(/\s+/).slice(0, 2).join(' '),
+  }));
+  if (ordered.length > 3) chips.push({ label: '+', name: `${ordered.length - 3} mais` });
+  return chips;
+}
+
 /** "feito 12 vezes · último há 4 dias" — o histórico no topo do plano (Al-T7). */
 export function planHistoryLine(
   timesDone: number,

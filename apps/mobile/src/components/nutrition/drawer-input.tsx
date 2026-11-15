@@ -44,12 +44,15 @@ export function DrawerInput({
   label,
   style,
   labelClassName,
+  filled = false,
   ...props
 }: Omit<TextInputProps, 'style'> & {
   label: string;
   style?: StyleProp<TextStyle>;
   /** O formulário manual usa rótulos menores nos campos de macro. */
   labelClassName?: string;
+  /** Campo preenchido da prancha Al-N11: 52 px em --s1, sem borda. */
+  filled?: boolean;
 }) {
   return (
     <View className="gap-1">
@@ -58,11 +61,22 @@ export function DrawerInput({
         accessibilityLabel={label}
         placeholderTextColor={colors.placeholder}
         selectionColor={colors.primaryText}
-        style={[drawerFieldStyle(), style]}
+        style={[drawerFieldStyle(), filled && filledFieldStyle(), style]}
         {...props}
       />
     </View>
   );
+}
+
+function filledFieldStyle(): TextStyle {
+  return {
+    minHeight: 52,
+    borderWidth: 0,
+    borderRadius: 14,
+    backgroundColor: colors.card,
+    paddingHorizontal: 16,
+    fontSize: 16,
+  };
 }
 
 export function drawerFieldStyle(): StyleProp<TextStyle> {

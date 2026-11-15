@@ -39,7 +39,7 @@ export function PlanMuscleBar({
         accessible
         accessibilityRole="image"
         accessibilityLabel={muscleShareLabel(share)}
-        className="h-2 w-full flex-row gap-0.5 overflow-hidden rounded-pill"
+        className="h-1.5 w-full flex-row gap-0.5 overflow-hidden rounded-[3px]"
       >
         {share.map((s) => (
           <View
@@ -56,9 +56,11 @@ export function PlanMuscleBar({
           className="flex-row flex-wrap gap-x-3 gap-y-1"
         >
           {share.map((s) => (
-            <View key={s.group} className="flex-row items-center gap-1">
-              <View className={cn('h-2 w-2 rounded-full', TONE_BG[muscleGroupTone(s.group)])} />
-              <Text className="text-[11px] text-muted-foreground">
+            <View key={s.group} className="flex-row items-center gap-1.5">
+              <View
+                className={cn('h-[7px] w-[7px] rounded-[2px]', TONE_BG[muscleGroupTone(s.group)])}
+              />
+              <Text className="text-xs text-faint">
                 {muscleGroupName(s.group)} {s.percent}%
               </Text>
             </View>

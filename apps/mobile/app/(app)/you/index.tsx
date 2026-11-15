@@ -200,12 +200,12 @@ export default function YouScreen() {
               <Text
                 accessibilityRole="header"
                 numberOfLines={1}
-                className="font-display text-2xl text-foreground"
+                className="font-display text-h2 text-foreground"
               >
                 {user?.name ?? ''}
               </Text>
               {user ? (
-                <Text numberOfLines={1} className="text-[13px] text-muted-foreground">
+                <Text numberOfLines={1} className="text-xs text-faint">
                   {youHeaderLine(user)}
                 </Text>
               ) : null}
@@ -237,9 +237,7 @@ export default function YouScreen() {
                   hitSlop={12}
                   onPress={() => router.push('/you/edit')}
                 >
-                  <Text className="font-sans-bold text-[13px] text-primary-text">
-                    Editar perfil
-                  </Text>
+                  <Text className="font-sans-bold text-xs text-primary-text">Editar perfil</Text>
                 </Pressable>
               </View>
             </View>
@@ -250,28 +248,36 @@ export default function YouScreen() {
               accessibilityRole="link"
               accessibilityLabel={`Peso atual: ${weightText(today.data?.weight.latest?.weightKg)} kg`}
               onPress={() => router.push('/progress')}
-              className="flex-1 gap-1 rounded-card bg-card p-4 active:opacity-80"
+              className="flex-1 basis-0 gap-2 rounded-card bg-card px-[18px] py-4 active:opacity-80"
             >
-              <Text className="text-[13px] text-muted-foreground">Peso atual</Text>
-              <Text className="font-display text-2xl text-foreground">
-                {weightText(today.data?.weight.latest?.weightKg)}
-                <Text className="text-sm text-muted-foreground"> kg</Text>
-              </Text>
+              <Text className="text-xs text-faint">Peso atual</Text>
+              <View className="flex-row items-baseline">
+                <Text className="font-display text-[24px] leading-[28px] tracking-[-0.48px] text-foreground">
+                  {weightText(today.data?.weight.latest?.weightKg)}
+                </Text>
+                <Text className="ml-[3px] font-sans-semibold text-[10px] text-muted-foreground">
+                  kg
+                </Text>
+              </View>
             </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Estatura: ${user?.heightCm ? Math.round(user.heightCm) : 'sem valor'} cm. Editar`}
               onPress={() => setHeightOpen(true)}
-              className="flex-1 gap-1 rounded-card bg-card p-4 active:opacity-80"
+              className="flex-1 basis-0 gap-2 rounded-card bg-card px-[18px] py-4 active:opacity-80"
             >
               <View className="flex-row items-center justify-between">
-                <Text className="text-[13px] text-muted-foreground">Estatura</Text>
+                <Text className="text-xs text-faint">Estatura</Text>
                 <Icon name="edit" size={16} color={colors.mutedForeground} />
               </View>
-              <Text className="font-display text-2xl text-foreground">
-                {user?.heightCm ? Math.round(user.heightCm) : '—'}
-                <Text className="text-sm text-muted-foreground"> cm</Text>
-              </Text>
+              <View className="flex-row items-baseline">
+                <Text className="font-display text-[24px] leading-[28px] tracking-[-0.48px] text-foreground">
+                  {user?.heightCm ? Math.round(user.heightCm) : '—'}
+                </Text>
+                <Text className="ml-[3px] font-sans-semibold text-[10px] text-muted-foreground">
+                  cm
+                </Text>
+              </View>
             </Pressable>
           </View>
 

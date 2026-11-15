@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -13,14 +13,13 @@ import {
   type MealItem,
 } from '@fatia/api-client';
 import {
-  Button,
   Drawer,
   DrawerContent,
   DrawerDescription,
-  DrawerFooter,
   DrawerHeader,
   DrawerTitle,
   Icon,
+  cn,
   useConfirm,
 } from '@/components/ui';
 import { TABULAR } from '@/components/today/parts';
@@ -141,9 +140,10 @@ export function EditMealItemDrawer({
   return (
     <Drawer open={aberto} onOpenChange={(estaAberto) => !estaAberto && onClose()}>
       <DrawerContent>
+        {/* Editar item (prancha Al-N14): o mesmo desenho da quantidade (Al-N3). */}
         <DrawerHeader>
-          <DrawerDescription>Editar item</DrawerDescription>
-          <DrawerTitle>{item?.foodName ?? ''}</DrawerTitle>
+          <DrawerDescription className="text-xs">Editar item</DrawerDescription>
+          <DrawerTitle className="font-display text-h2">{item?.foodName ?? ''}</DrawerTitle>
           {context ? <Text className="text-xs text-muted-foreground">{context}</Text> : null}
         </DrawerHeader>
 
@@ -168,15 +168,30 @@ export function EditMealItemDrawer({
             />
           )}
           {preview ? (
-            <View className="gap-2 rounded-card bg-muted p-3">
-              <View className="flex-row">
+            <View className="gap-4">
+              <View className="flex-row gap-2">
                 <Stat label="Calorias" value={String(preview.kcal)} unit="kcal" />
-                <Stat label="Proteína" value={oneDecimal(preview.proteinG)} unit="prot g" />
-                <Stat label="Carboidratos" value={oneDecimal(preview.carbsG)} unit="carb g" />
-                <Stat label="Gorduras" value={oneDecimal(preview.fatG)} unit="gord g" />
+                <Stat
+                  label="Proteína"
+                  value={oneDecimal(preview.proteinG)}
+                  unit="prot g"
+                  color={colors.protein}
+                />
+                <Stat
+                  label="Carboidratos"
+                  value={oneDecimal(preview.carbsG)}
+                  unit="carb g"
+                  color={colors.carbs}
+                />
+                <Stat
+                  label="Gorduras"
+                  value={oneDecimal(preview.fatG)}
+                  unit="gord g"
+                  color={colors.fat}
+                />
               </View>
               {item?.nutrients ? (
-                <Text className="text-center text-xs text-muted-foreground">
+                <Text className="text-xs text-muted-foreground">
                   {`Fibra ${oneDecimal(preview.fiberG)} g · Sódio ${preview.sodiumMg} mg`}
                 </Text>
               ) : null}
@@ -189,40 +204,56 @@ export function EditMealItemDrawer({
           ) : null}
         </View>
 
-        <DrawerFooter className="flex-row">
-          <Button
-            variant="outline"
+        <View className="flex-row gap-2 px-4 pb-6 pt-2">
+          <Pressable
+            accessibilityRole="button"
             accessibilityLabel="Remover item"
+            accessibilityState={{ disabled: remove.isPending }}
             onPress={askRemove}
             disabled={remove.isPending}
+            style={{ backgroundColor: `${colors.destructive}1f` }}
+            className="h-14 w-14 items-center justify-center rounded-pill"
           >
-            <Icon name="trash" size={18} color={colors.destructive} />
-          </Button>
-          <Button variant="outline" className="flex-1" onPress={onClose}>
-            Cancelar
-          </Button>
-          <Button
-            className="flex-1"
+            <Icon name="trash" size={20} color={colors.destructive} />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: salvar.isPending || gramas === null }}
             onPress={() => salvar.mutate()}
             disabled={salvar.isPending || gramas === null}
-            loading={salvar.isPending}
+            className={cn(
+              'h-14 flex-1 items-center justify-center rounded-pill bg-foreground',
+              (salvar.isPending || gramas === null) && 'opacity-40',
+            )}
           >
-            Salvar
-          </Button>
-        </DrawerFooter>
+            <Text className="font-sans-bold text-[15px] text-background">
+              {salvar.isPending ? 'Salvando...' : 'Salvar alterações'}
+            </Text>
+          </Pressable>
+        </View>
       </DrawerContent>
     </Drawer>
   );
 }
 
-function Stat({ label, value, unit }: { label: string; value: string; unit: string }) {
+function Stat({
+  label,
+  value,
+  unit,
+  color,
+}: {
+  label: string;
+  value: string;
+  unit: string;
+  color?: string;
+}) {
   return (
     <View
       accessible
       accessibilityLabel={`${label}: ${value} ${unit}`}
-      className="flex-1 items-center"
+      className="flex-1 items-center gap-1 rounded-[16px] bg-muted px-1 py-2.5"
     >
-      <Text style={TABULAR} className="font-display text-lg">
+      <Text style={[TABULAR, color ? { color } : null]} className="font-sans-bold text-lg">
         {value}
       </Text>
       <Text className="text-[11px] text-muted-foreground">{unit}</Text>

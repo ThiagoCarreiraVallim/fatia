@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { AccessibilityInfo, Pressable, View } from 'react-native';
+import { AccessibilityInfo, Pressable, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { Check, Pencil, Play, Plus, Trash2 } from 'lucide-react-native';
+import { Check, Pencil, Play, Plus } from 'lucide-react-native';
 import {
   ApiError,
+  estimatePlanMinutes,
+  planCountsLine,
   planHistoryLine,
-  planSummaryLine,
   usersApi,
   workoutApi,
   type PlanExerciseInput,
@@ -17,11 +18,12 @@ import {
 } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
+import { headerButtonClass } from '@/components/layout/tab-header';
 import {
   Button,
+  cn,
   EmptyState,
   ErrorState,
-  Input,
   LoadingState,
   useConfirm,
   useToast,
@@ -55,9 +57,8 @@ export default function PlanDetailScreen() {
   const toast = useToast();
   const confirm = useConfirm();
   const [addOpen, setAddOpen] = useState(false);
-  const [editingName, setEditingName] = useState(false);
   const [nameEdit, setNameEdit] = useState('');
-  // Al-T7: ver por padrão; editar mostra setas, lixeira, renomear e excluir.
+  // Al-T7: ver por padrão; editar mostra setas, lixeira, o adicionar e o nome editável.
   const [editing, setEditing] = useState(false);
   const [configId, setConfigId] = useState<string | null>(null);
   const { loadUnit } = useUnitPrefs();
@@ -77,15 +78,6 @@ export default function PlanDetailScreen() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
       qc.invalidateQueries({ queryKey: ['workout', 'plans'] });
-      setEditingName(false);
-    },
-  });
-
-  const deletePlan = useMutation({
-    mutationFn: () => workoutApi.deletePlan(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['workout', 'plans'] });
-      router.replace('/workout');
     },
   });
 
@@ -205,15 +197,17 @@ export default function PlanDetailScreen() {
   const existingIds = new Set(exercises.map((e) => e.exerciseId));
   const configuring = exercises.find((e) => e.id === configId) ?? null;
 
-  function startEditName() {
-    setNameEdit(planData.name);
-    setEditingName(true);
-  }
-
   function submitName() {
     const trimmed = nameEdit.trim();
+    // Nome vazio volta ao que era, sem gravar.
     if (trimmed && trimmed !== planData.name) renamePlan.mutate(trimmed);
-    else setEditingName(false);
+    else setNameEdit(planData.name);
+  }
+
+  function toggleEditing() {
+    if (editing) submitName();
+    else setNameEdit(planData.name);
+    setEditing((e) => !e);
   }
 
   function move(index: number, delta: -1 | 1) {
@@ -238,90 +232,110 @@ export default function PlanDetailScreen() {
     });
   }
 
-  function confirmDelete() {
-    confirm({
-      title: `Excluir “${planData.name}”?`,
-      description: 'O histórico das sessões continua.',
-      confirmLabel: 'Excluir',
-      destructive: true,
-      onConfirm: () => deletePlan.mutate(),
-    });
-  }
-
   return (
     <ExerciseDetailHost>
       <Screen
-        title={planData.name}
+        // Al-T7: a barra diz o modo; o nome vem grande embaixo.
+        title={editing ? 'Editando plano' : 'Plano'}
         actions={
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={editing ? 'Concluir edição' : 'Editar plano'}
             accessibilityState={{ selected: editing }}
-            onPress={() => {
-              setEditing((e) => !e);
-              setEditingName(false);
-            }}
-            className={TOP_BAR_ACTION}
+            onPress={toggleEditing}
+            className={editing ? headerButtonClass('lime') : TOP_BAR_ACTION}
           >
             {editing ? (
-              <Check size={20} color={colors.primaryText} />
+              <Check size={20} color={colors.primaryForeground} />
             ) : (
-              <Pencil size={19} color={colors.primaryText} />
+              <Pencil size={19} color={colors.foreground} />
             )}
           </Pressable>
         }
         refreshing={plan.isRefetching}
         onRefresh={() => void plan.refetch()}
+        footer={
+          editing ? (
+            // Cada mudança já grava na hora; este botão fecha a edição, como o check.
+            <Pressable
+              accessibilityRole="button"
+              onPress={toggleEditing}
+              className="h-14 flex-1 items-center justify-center rounded-pill bg-foreground active:opacity-80"
+            >
+              <Text className="font-sans-bold text-[15px] text-background">Salvar alterações</Text>
+            </Pressable>
+          ) : (
+            <Button
+              className="h-14 flex-1 rounded-pill"
+              disabled={exercises.length === 0}
+              loading={start.isPending}
+              onPress={() => start.mutate()}
+            >
+              <Play size={16} color={colors.primaryForeground} />
+              <Text className="font-sans-bold text-[15px] text-primary-foreground">
+                Iniciar {planData.name}
+              </Text>
+            </Button>
+          )
+        }
       >
-        <View className="gap-4 px-5 pb-4 pt-2">
-          {editingName ? (
-            <View className="flex-row items-center gap-2">
-              <Input
-                autoFocus
+        <View className="gap-4 px-4 pt-2">
+          <View className="gap-2 px-1">
+            {editing ? (
+              <TextInput
                 value={nameEdit}
                 onChangeText={setNameEdit}
                 accessibilityLabel="Nome do plano"
                 returnKeyType="done"
                 onSubmitEditing={submitName}
-                className="flex-1 text-base font-bold"
+                onBlur={submitName}
+                className="rounded-[14px] bg-card px-3 py-1 font-display text-[32px] text-foreground"
+                placeholderTextColor={colors.placeholder}
               />
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Salvar nome"
-                accessibilityState={{ disabled: !nameEdit.trim() || renamePlan.isPending }}
-                disabled={!nameEdit.trim() || renamePlan.isPending}
-                onPress={submitName}
-                className={TOP_BAR_ACTION}
+            ) : (
+              <Text
+                accessibilityRole="header"
+                className="font-display text-[32px] leading-[38px] text-foreground"
               >
-                <Check size={20} color={colors.primaryText} />
-              </Pressable>
-            </View>
-          ) : null}
-
-          <View className="gap-1 rounded-2xl border border-border bg-card p-4">
-            <Text className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-              {editing ? 'Editando plano' : planData.fromTemplateId ? 'modelo' : 'seu plano'}
-            </Text>
-            <Text className="text-2xl font-extrabold text-foreground">{planData.name}</Text>
-            <Text className="text-xs text-muted-foreground">
-              {planHistoryLine(planData.timesDone ?? 0, planData.lastDoneAt ?? null)}
-            </Text>
-            <Text className="mt-2 text-sm font-semibold text-foreground">
-              {planSummaryLine(exercises)}
-            </Text>
-            <PlanMuscleBar exercises={exercises} legend className="mt-1" />
-            {editing && !editingName ? (
-              <View className="mt-2 flex-row gap-2">
-                <Button variant="outline" size="sm" onPress={startEditName}>
-                  <Pencil size={14} color={colors.foreground} />
-                  <Text className="text-sm text-foreground">Renomear</Text>
-                </Button>
-                <Button variant="outline" size="sm" onPress={confirmDelete}>
-                  <Trash2 size={14} color={colors.danger} />
-                  <Text className="text-sm text-danger">Excluir plano</Text>
-                </Button>
+                {planData.name}
+              </Text>
+            )}
+            <View className="flex-row flex-wrap items-center gap-1.5">
+              <View
+                className={cn(
+                  'h-[22px] justify-center rounded-pill px-[9px]',
+                  planData.fromTemplateId && 'bg-brand',
+                )}
+                style={
+                  planData.fromTemplateId ? undefined : { backgroundColor: `${colors.primary}1f` }
+                }
+              >
+                <Text
+                  className={cn(
+                    'font-sans-extrabold text-[11px] uppercase tracking-wide',
+                    planData.fromTemplateId ? 'text-brand-foreground' : 'text-primary',
+                  )}
+                >
+                  {planData.fromTemplateId ? 'modelo' : 'seu plano'}
+                </Text>
               </View>
+              <Text className="text-xs text-faint">
+                {planHistoryLine(planData.timesDone ?? 0, planData.lastDoneAt ?? null)}
+              </Text>
+            </View>
+            {renamePlan.isError ? (
+              <Text accessibilityRole="alert" className="text-xs text-danger">
+                Não foi possível renomear o plano.
+              </Text>
             ) : null}
+          </View>
+
+          <View className="gap-2 px-1">
+            <View className="flex-row items-baseline justify-between gap-2">
+              <Text className="text-[13px] text-foreground">{planCountsLine(exercises)}</Text>
+              <Text className="text-xs text-faint">~{estimatePlanMinutes(exercises)} min</Text>
+            </View>
+            <PlanMuscleBar exercises={exercises} legend />
           </View>
 
           {exercises.length === 0 ? (
@@ -329,7 +343,7 @@ export default function PlanDetailScreen() {
               accessibilityRole="button"
               accessibilityLabel="Adicionar seu primeiro exercício"
               onPress={() => setAddOpen(true)}
-              className="items-center gap-2 rounded-2xl border border-dashed border-border bg-accent p-6 active:opacity-80"
+              className="items-center gap-2 rounded-card border border-dashed border-border bg-accent p-6 active:opacity-80"
             >
               <Plus size={20} color={colors.primaryText} />
               <Text className="text-center text-sm text-muted-foreground">
@@ -339,45 +353,43 @@ export default function PlanDetailScreen() {
             </Pressable>
           ) : null}
 
-          <View className="gap-2">
-            {exercises.map((ex, index) => (
-              <PlanExerciseRow
-                key={ex.id}
-                item={ex}
-                editing={editing}
-                isFirst={index === 0}
-                isLast={index === exercises.length - 1}
-                isMoving={moveExercise.isPending}
-                onConfigure={() => setConfigId(ex.id)}
-                onMoveUp={() => move(index, -1)}
-                onMoveDown={() => move(index, 1)}
-                onRemove={() => confirmRemoveExercise(ex)}
-              />
-            ))}
-          </View>
+          {exercises.length > 0 || editing ? (
+            <View className="rounded-card bg-card px-4">
+              {exercises.map((ex, index) => (
+                <PlanExerciseRow
+                  key={ex.id}
+                  item={ex}
+                  editing={editing}
+                  isFirst={index === 0}
+                  isLast={index === exercises.length - 1}
+                  isMoving={moveExercise.isPending}
+                  onConfigure={() => setConfigId(ex.id)}
+                  onMoveUp={() => move(index, -1)}
+                  onMoveDown={() => move(index, 1)}
+                  onRemove={() => confirmRemoveExercise(ex)}
+                />
+              ))}
+              {editing ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setAddOpen(true)}
+                  className={cn(
+                    'min-h-14 flex-row items-center gap-2 active:opacity-80',
+                    exercises.length > 0 && 'border-t border-border',
+                  )}
+                >
+                  <Plus size={16} color={colors.primaryText} />
+                  <Text className="font-sans-bold text-sm text-primary">Adicionar exercício</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
 
-          <Button variant="outline" className="rounded-2xl" onPress={() => setAddOpen(true)}>
-            <Plus size={16} color={colors.foreground} />
-            <Text className="text-sm font-medium text-foreground">Adicionar exercício</Text>
-          </Button>
-
-          <Text className="text-center text-xs text-muted-foreground">
+          <Text className="px-1 text-xs text-faint">
             {editing
-              ? 'Use as setas para mudar a ordem. Toque no exercício para mudar séries, repetições, descanso e técnica.'
-              : 'Toque na imagem para ver como fazer. Toque no exercício para mudar séries, repetições e descanso.'}
+              ? 'Toque no exercício para mudar séries, repetições, descanso e técnica.'
+              : 'Toque na imagem para ver como fazer. Toque no lápis para editar séries, ordem e descanso.'}
           </Text>
-
-          <Button
-            className="h-14 rounded-full"
-            disabled={exercises.length === 0}
-            loading={start.isPending}
-            onPress={() => start.mutate()}
-          >
-            <Play size={16} color={colors.background} fill={colors.background} />
-            <Text className="text-base font-extrabold text-primary-foreground">
-              Iniciar {planData.name}
-            </Text>
-          </Button>
         </View>
       </Screen>
 

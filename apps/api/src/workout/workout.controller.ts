@@ -34,6 +34,7 @@ import {
   ListSessionsDto,
   StartSessionDto,
   UpdateSessionDto,
+  WorkoutCheckinDto,
 } from './dto/session.dto';
 import { LogSetBodyDto, UpdateSetBodyDto } from './dto/set.dto';
 import { SearchExercisesDto } from './dto/exercise.dto';
@@ -268,6 +269,22 @@ export class WorkoutController {
     return this.sessions.finish(user.id, id, dto);
   }
 
+  /** O "Treino feito!" (#377): resumo, recordes, músculos e as perguntas da equipe. */
+  @Get('sessions/:id/summary')
+  sessionSummary(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseUUIDPipe) id: string) {
+    return this.sessions.summary(user.id, id);
+  }
+
+  /** As respostas do fim do treino (#377). PUT: reenviar substitui, não duplica. */
+  @Put('sessions/:id/checkin')
+  saveCheckin(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: WorkoutCheckinDto,
+  ) {
+    return this.sessions.saveCheckin(user.id, id, dto);
+  }
+
   @Delete('sessions/:id')
   @HttpCode(204)
   deleteSession(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseUUIDPipe) id: string) {
@@ -285,19 +302,26 @@ export class WorkoutController {
     return this.sets.create(user.id, { sessionId, ...dto });
   }
 
+  // A série fica presa à sessão da URL: `sessionId` de uma sessão e `id` de
+  // série de outra (mesmo as duas sendo da pessoa) dão 404.
   @Patch('sessions/:sessionId/sets/:id')
   updateSet(
     @CurrentUser() user: CurrentUserPayload,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateSetBodyDto,
   ) {
-    return this.sets.update(user.id, id, dto);
+    return this.sets.update(user.id, id, dto, sessionId);
   }
 
   @Delete('sessions/:sessionId/sets/:id')
   @HttpCode(204)
-  deleteSet(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseUUIDPipe) id: string) {
-    return this.sets.delete(user.id, id);
+  deleteSet(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.sets.delete(user.id, id, sessionId);
   }
 
   // -------- Progress (exercises) --------
@@ -309,6 +333,12 @@ export class WorkoutController {
     @Query('before') before?: string,
   ) {
     return this.sets.getLastForExercise(user.id, id, before);
+  }
+
+  /** "Seus números" do Como fazer (#377): recorde, última vez e máximo estimado. */
+  @Get('exercises/:id/stats')
+  exerciseStats(@CurrentUser() user: CurrentUserPayload, @Param('id', ParseIntPipe) id: number) {
+    return this.sets.exerciseStats(user.id, id);
   }
 
   @Get('exercises/:id/pr')

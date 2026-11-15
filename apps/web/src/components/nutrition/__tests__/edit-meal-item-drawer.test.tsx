@@ -75,7 +75,7 @@ describe('EditMealItemDrawer', () => {
     renderDrawer(item());
     await screen.findByRole('radio', { name: /colher de sopa/ });
     await user.click(screen.getByRole('button', { name: 'Mais' }));
-    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
 
     await waitFor(() => expect(updateItem).toHaveBeenCalled());
     const chaves = invalidate.mock.calls.map(
@@ -105,11 +105,12 @@ describe('EditMealItemDrawer', () => {
 
     const colher = await screen.findByRole('radio', { name: /colher de sopa/ });
     expect(colher).toBeChecked();
-    expect(screen.getByText('= 50 g')).toBeInTheDocument();
+    expect(screen.getByText(/· 50 g$/, { selector: 'span[aria-live]' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Mais' }));
-    expect(screen.getByLabelText('Quantas medidas')).toHaveValue('2,5');
-    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    // Fora do foco, a fração como na prancha (Al-N3).
+    expect(screen.getByLabelText('Quantas medidas')).toHaveValue('2½');
+    await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
 
     await waitFor(() =>
       expect(updateItem).toHaveBeenCalledWith('item-1', { portionId: 'p1', quantity: 2.5 }),
@@ -125,7 +126,7 @@ describe('EditMealItemDrawer', () => {
     expect(screen.getByRole('radio', { name: 'gramas' })).toBeChecked();
     await user.clear(screen.getByLabelText(/Quantidade/));
     await user.type(screen.getByLabelText(/Quantidade/), '150');
-    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
 
     await waitFor(() => expect(updateItem).toHaveBeenCalledWith('item-1', { grams: 150 }));
   });
@@ -145,7 +146,7 @@ describe('EditMealItemDrawer', () => {
     const field = await screen.findByLabelText('Quantas medidas');
     await user.clear(field);
     await user.type(field, '1,5');
-    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
 
     await waitFor(() =>
       expect(updateItem).toHaveBeenCalledWith('item-1', { portionId: 'p1', quantity: 1.5 }),
@@ -161,7 +162,7 @@ describe('EditMealItemDrawer', () => {
     expect(field).toHaveAttribute('inputmode', 'decimal');
     await user.clear(field);
     await user.type(field, '120,5');
-    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
 
     await waitFor(() => expect(updateItem).toHaveBeenCalledWith('item-1', { grams: 120.5 }));
   });
@@ -175,7 +176,7 @@ describe('EditMealItemDrawer', () => {
     await user.type(field, 'abc');
 
     expect(screen.getByRole('alert')).toHaveTextContent('Digite um número, como 1,5');
-    expect(screen.getByRole('button', { name: 'Salvar' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Salvar alterações' })).toBeDisabled();
   });
 
   it('as contas refazem na quantidade nova antes de salvar', async () => {

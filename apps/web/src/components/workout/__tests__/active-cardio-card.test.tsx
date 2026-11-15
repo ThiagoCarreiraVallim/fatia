@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ExerciseGroup } from '@fatia/api-client';
+import { workoutApi, type ExerciseGroup } from '@fatia/api-client';
 import { ActiveCardioCard } from '../active-cardio-card';
 
 // A referência da última vez é só rótulo aqui; sem o dublê, a query iria à rede.
@@ -10,7 +10,11 @@ vi.mock('@fatia/api-client', async () => {
   const actual = await vi.importActual<typeof import('@fatia/api-client')>('@fatia/api-client');
   return {
     ...actual,
-    workoutApi: { ...actual.workoutApi, getLastSet: vi.fn().mockResolvedValue(null) },
+    workoutApi: {
+      ...actual.workoutApi,
+      getLastSet: vi.fn().mockResolvedValue(null),
+      logSet: vi.fn(),
+    },
   };
 });
 
@@ -44,5 +48,19 @@ describe('ActiveCardioCard — duração digitada', () => {
   it('aceita h:mm:ss', async () => {
     await typeDuration('1:02:03');
     expect(screen.getByRole('button', { name: '1:02:03' })).toBeInTheDocument();
+  });
+});
+
+describe('ActiveCardioCard — chave da série (#377)', () => {
+  it('o reenvio depois de uma falha manda a mesma chave', async () => {
+    const logSet = vi.mocked(workoutApi.logSet);
+    logSet.mockRejectedValueOnce(new Error('rede')).mockResolvedValueOnce({} as never);
+    await typeDuration('20:00');
+    await userEvent.click(screen.getByRole('button', { name: /Salvar sessão/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Salvar sessão/ }));
+    expect(logSet).toHaveBeenCalledTimes(2);
+    const key = logSet.mock.calls[0]![1].clientKey;
+    expect(key).toBeTruthy();
+    expect(logSet.mock.calls[1]![1].clientKey).toBe(key);
   });
 });

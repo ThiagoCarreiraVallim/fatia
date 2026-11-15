@@ -3,7 +3,17 @@
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, Plus, Search, Trash2, UtensilsCrossed } from 'lucide-react';
+import {
+  Apple,
+  ChevronRight,
+  Info,
+  Plus,
+  ScanBarcode,
+  Search,
+  Star,
+  Trash2,
+  UtensilsCrossed,
+} from 'lucide-react';
 import {
   customFoodSummary,
   filterMyFoods,
@@ -70,11 +80,14 @@ function CustomFoodsContent() {
   const nothingShown = !nothingSaved && shown.foods.length + shown.meals.length === 0;
 
   return (
-    <div className="space-y-4 p-4" aria-busy={foods.isLoading}>
+    <div className="space-y-4 px-5 pb-28 pt-2" aria-busy={foods.isLoading}>
       <TopBarActions>
         <button
           type="button"
-          className={topBarActionClass}
+          className={cn(
+            topBarActionClass,
+            'bg-primary text-primary-foreground hover:bg-primary/90',
+          )}
           aria-label="Novo alimento"
           onClick={() => setEditing('novo')}
         >
@@ -82,14 +95,10 @@ function CustomFoodsContent() {
         </button>
       </TopBarActions>
 
-      <p className="text-sm text-muted-foreground">
-        {MY_FOODS_HINT} Cadastre uma vez e registre como qualquer alimento.
-      </p>
-
       <div className="relative">
         <Search
-          size={16}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+          size={20}
+          className="absolute left-5 top-1/2 -translate-y-1/2 text-muted-foreground"
           aria-hidden
         />
         <Input
@@ -97,11 +106,11 @@ function CustomFoodsContent() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Buscar nos seus"
-          className="pl-9"
+          className="h-[52px] rounded-pill border-0 bg-card pl-14 text-base"
         />
       </div>
 
-      <div role="tablist" aria-label="O que mostrar" className="flex gap-1">
+      <div role="tablist" aria-label="O que mostrar" className="flex gap-2">
         {myFoodsTabs().map(({ key, label }) => (
           <button
             key={key}
@@ -110,10 +119,8 @@ function CustomFoodsContent() {
             aria-selected={tab === key}
             onClick={() => setTab(key)}
             className={cn(
-              'min-h-10 rounded-full px-4 text-sm',
-              tab === key
-                ? 'bg-primary/15 font-medium text-primary'
-                : 'bg-muted text-muted-foreground',
+              'h-11 rounded-chip px-4 text-[15px] font-semibold',
+              tab === key ? 'bg-foreground text-background' : 'bg-card text-muted-foreground',
             )}
           >
             {label}
@@ -150,7 +157,7 @@ function CustomFoodsContent() {
       {shown.foods.length > 0 && (
         <ul
           aria-label="Meus alimentos"
-          className="divide-y rounded-2xl border border-subtle bg-card"
+          className="divide-y divide-border overflow-hidden rounded-card bg-card"
         >
           {shown.foods.map((food) => (
             <li key={food.id}>
@@ -158,15 +165,16 @@ function CustomFoodsContent() {
                 type="button"
                 onClick={() => setEditing(food)}
                 aria-label={`Editar ${food.name}`}
-                className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left hover:bg-accent/40"
+                className="flex min-h-[72px] w-full items-center gap-4 px-4 py-3 text-left hover:bg-muted/40"
               >
+                <FoodTile kind={food.barcode ? 'scanned' : 'food'} />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">{food.name}</span>
-                  <span className="block text-xs text-muted-foreground">
+                  <span className="block truncate text-[17px] font-semibold">{food.name}</span>
+                  <span className="block text-[15px] text-muted-foreground">
                     {customFoodSummary(food)}
                   </span>
                 </span>
-                <ChevronRight size={16} className="text-muted-foreground" aria-hidden />
+                <ChevronRight size={18} className="text-muted-foreground" aria-hidden />
               </button>
             </li>
           ))}
@@ -174,18 +182,17 @@ function CustomFoodsContent() {
       )}
       {shown.meals.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
-            Refeições salvas
-          </h2>
+          <h2 className="px-1 text-[13px] text-muted-foreground">Refeições salvas</h2>
           <ul
             aria-label="Refeições salvas"
-            className="divide-y rounded-2xl border border-subtle bg-card"
+            className="divide-y divide-border overflow-hidden rounded-card bg-card"
           >
             {shown.meals.map((template) => (
-              <li key={template.id} className="flex min-h-14 items-center gap-3 pl-4">
+              <li key={template.id} className="flex min-h-[72px] items-center gap-4 pl-4">
+                <FoodTile kind="meal" />
                 <span className="min-w-0 flex-1 py-3">
-                  <span className="block truncate text-sm font-medium">{template.name}</span>
-                  <span className="block text-xs text-muted-foreground">
+                  <span className="block truncate text-[17px] font-semibold">{template.name}</span>
+                  <span className="block text-[15px] text-muted-foreground">
                     {templateSummary(template)}
                   </span>
                 </span>
@@ -203,6 +210,14 @@ function CustomFoodsContent() {
         </section>
       )}
 
+      {/* O que cabe aqui, embaixo da lista como na prancha. */}
+      {!nothingSaved && (
+        <p className="flex gap-3 rounded-card bg-card px-4 py-4 text-sm text-muted-foreground">
+          <Info size={18} className="mt-0.5 shrink-0" aria-hidden />
+          <span>{MY_FOODS_HINT} Cadastre uma vez e registre como qualquer alimento.</span>
+        </p>
+      )}
+
       <CustomFoodDrawer
         open={editing !== null}
         onOpenChange={close}
@@ -218,6 +233,26 @@ function CustomFoodsContent() {
         onConfirm={() => deleting && removeTemplate.mutate(deleting.id)}
       />
     </div>
+  );
+}
+
+/** O quadradinho da prancha: maçã (alimento), código (lido) ou estrela (refeição). */
+function FoodTile({ kind }: { kind: 'food' | 'scanned' | 'meal' }) {
+  const Icon = kind === 'meal' ? Star : kind === 'scanned' ? ScanBarcode : Apple;
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'flex h-12 w-12 shrink-0 items-center justify-center rounded-field',
+        kind === 'meal'
+          ? 'bg-protein/15 text-protein'
+          : kind === 'scanned'
+            ? 'bg-warning/15 text-steps'
+            : 'bg-primary/15 text-primary',
+      )}
+    >
+      <Icon size={20} />
+    </span>
   );
 }
 

@@ -66,6 +66,8 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   meals: 'meals',
   workoutPlans: 'workoutPlans',
   workoutSessions: 'workoutSessions',
+  // As respostas do fim do treino (#377) saem dentro de cada sessão (`checkin`).
+  workoutCheckins: 'workoutSessions',
   weightLogs: 'weightLogs',
   stepLogs: 'stepLogs',
   waterLogs: 'waterLogs',

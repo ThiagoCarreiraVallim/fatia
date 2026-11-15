@@ -128,6 +128,27 @@ export function activeWorkoutBarLabel(view: ActiveWorkoutBarView): string {
   return `Treino em andamento: ${view.title}, ${view.detail}, ${view.clock}. Abrir a sessão`;
 }
 
+/**
+ * As duas linhas da barra (prancha `Al-T1b`): "Supino reto · série 3 de 4" em
+ * cima e "Push · 24:19" embaixo. No descanso a contagem sobe para o título.
+ */
+export function activeWorkoutBarLines(
+  view: ActiveWorkoutBarView,
+  /** A sessão não traz o plano: o nome sai da lista de planos, pelo `planId`. */
+  planName: string | null | undefined,
+): { primary: string; secondary: string } {
+  if (view.mode === 'rest')
+    return { primary: `${view.title} · ${view.clock}`, secondary: view.detail };
+  if (view.mode === 'amrap' || view.mode === 'intervals') {
+    return { primary: `${view.title} · ${view.detail}`, secondary: view.clock };
+  }
+  const plan = planName ?? 'Treino livre';
+  if (view.title === 'Treino livre') {
+    return { primary: view.title, secondary: `${view.detail} · ${view.clock}` };
+  }
+  return { primary: `${view.title} · ${view.detail}`, secondary: `${plan} · ${view.clock}` };
+}
+
 export interface LastSessionSummary {
   name: string;
   durationMinutes: number | null;

@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import {
@@ -12,7 +11,7 @@ import {
   DrawerDescription,
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
-import { workoutApi, type WorkoutSession } from '@fatia/api-client';
+import { ApiError, workoutApi, type WorkoutSession } from '@fatia/api-client';
 import { elapsedLabel, formatInteger, totalVolumeKg } from './format';
 
 interface Props {
@@ -24,21 +23,24 @@ interface Props {
 export function FinishSessionModal({ open, onOpenChange, session }: Props) {
   const qc = useQueryClient();
   const router = useRouter();
-  const [notes, setNotes] = useState(session.notes ?? '');
 
   const totalSets = session.sets?.length ?? 0;
   const totalVolume = totalVolumeKg(session.sets);
 
   const finish = useMutation({
-    mutationFn: async () => {
+    // A sensação e a observação vêm depois, no "Treino feito!" (#377). Sessão
+    // que já não existe (cancelada em outra aba) volta ao Treino: o "Treino
+    // feito!" dela seria uma página de "não encontrada".
+    mutationFn: async (): Promise<'finished' | 'gone'> => {
       try {
-        await workoutApi.finishSession(session.id, { notes: notes.trim() || undefined });
+        await workoutApi.finishSession(session.id);
+        return 'finished';
       } catch (err) {
-        const msg = err instanceof Error ? err.message : '';
-        if (!/not found/i.test(msg)) throw err;
+        if (err instanceof ApiError && err.status === 404) return 'gone';
+        throw err;
       }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.setQueryData(['workout', 'active'], null);
       qc.invalidateQueries({ queryKey: ['workout', 'active'] });
       qc.invalidateQueries({ queryKey: ['workout', 'sessions'] });
@@ -47,7 +49,7 @@ export function FinishSessionModal({ open, onOpenChange, session }: Props) {
       qc.invalidateQueries({ queryKey: ['workout', 'session', session.id] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       onOpenChange(false);
-      router.push('/workout');
+      router.push(result === 'gone' ? '/workout' : `/workout/session/${session.id}`);
     },
   });
 
@@ -56,7 +58,7 @@ export function FinishSessionModal({ open, onOpenChange, session }: Props) {
       <DrawerContent className="px-4 pb-6">
         <DrawerHeader className="px-0">
           <DrawerTitle>Finalizar treino</DrawerTitle>
-          <DrawerDescription>Confirme e salve sua sessão.</DrawerDescription>
+          <DrawerDescription>Depois você conta como foi.</DrawerDescription>
         </DrawerHeader>
 
         <div className="my-3 space-y-4">
@@ -77,20 +79,6 @@ export function FinishSessionModal({ open, onOpenChange, session }: Props) {
             </div>
           </div>
 
-          <div className="space-y-1">
-            <label htmlFor="session-notes" className="text-sm font-medium">
-              Observações (opcional)
-            </label>
-            <textarea
-              id="session-notes"
-              className="w-full rounded-md border px-3 py-2 text-sm resize-none"
-              rows={3}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Como foi o treino?"
-            />
-          </div>
-
           {finish.error && (
             <p className="text-sm text-danger">
               Erro ao finalizar treino:{' '}
@@ -98,8 +86,12 @@ export function FinishSessionModal({ open, onOpenChange, session }: Props) {
             </p>
           )}
 
-          <Button className="w-full" onClick={() => finish.mutate()} disabled={finish.isPending}>
-            {finish.isPending ? 'Salvando...' : 'Finalizar'}
+          <Button
+            className="h-12 w-full rounded-full font-extrabold"
+            onClick={() => finish.mutate()}
+            disabled={finish.isPending}
+          >
+            {finish.isPending ? 'Finalizando…' : 'Finalizar treino'}
           </Button>
         </div>
 

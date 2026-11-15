@@ -291,6 +291,19 @@ export const CAMPOS: Record<string, Campo> = {
   toDate: { rotulo: 'Copiar para', formato: dia },
   deadline: { rotulo: 'Prazo', formato: dia },
   notes: { rotulo: 'Observação', formato: texto },
+  // O fim do treino (#377): a escala de 5 do canvas e as respostas rápidas.
+  feeling: {
+    rotulo: 'Como foi o treino',
+    formato: (valor) =>
+      typeof valor === 'number'
+        ? (['Leve', 'Firme', 'Puxado', 'Muito puxado', 'No limite'][valor - 1] ?? null)
+        : null,
+  },
+  difficulty: { rotulo: 'Dificuldade (1 a 5)', formato: semUnidade },
+  fatigue: { rotulo: 'Cansaço (1 a 5)', formato: semUnidade },
+  motivation: { rotulo: 'Motivação (1 a 5)', formato: semUnidade },
+  pain: { rotulo: 'Sentiu dor', formato: simOuNao },
+  painLocation: { rotulo: 'Onde doeu', formato: texto },
   foodName: { rotulo: 'Alimento', formato: texto },
   favorite: { rotulo: 'Favorito', formato: simOuNao },
   grams: { rotulo: 'Quantidade', formato: comUnidade('g') },

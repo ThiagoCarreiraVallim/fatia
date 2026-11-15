@@ -17,14 +17,14 @@ export function YouSection({ title, children }: { title: string; children: React
     <View className="gap-2">
       <Text
         accessibilityRole="header"
-        className="font-sans-bold text-[11px] uppercase tracking-widest text-muted-foreground"
+        className="font-sans-bold text-xs uppercase tracking-[0.72px] text-faint"
       >
         {title}
       </Text>
       <View className="overflow-hidden rounded-card bg-card">
         {rows.map((row, i) => (
           <Fragment key={i}>
-            {i > 0 ? <View className="ml-12 h-px bg-border" /> : null}
+            {i > 0 ? <View className="h-px bg-border" /> : null}
             {row}
           </Fragment>
         ))}
@@ -65,22 +65,18 @@ export function YouRow({
       disabled={disabled}
       onPress={onPress}
       className={cn(
-        'min-h-[52px] flex-row items-center gap-3 px-4 py-3 active:bg-surface-3',
+        'min-h-[52px] flex-row items-center gap-3.5 px-[18px] py-3.5 active:bg-surface-3',
         disabled && 'opacity-60',
       )}
     >
       <Icon name={icon} size={20} color={colors.mutedForeground} />
       <View className="flex-1">
         <Text className="font-sans-semibold text-[15px] text-foreground">{label}</Text>
-        {subtitle ? <Text className="text-[13px] text-muted-foreground">{subtitle}</Text> : null}
+        {subtitle ? <Text className="text-b2 text-muted-foreground">{subtitle}</Text> : null}
       </View>
-      {typeof detail === 'string' ? (
-        <Text className="text-[13px] text-muted-foreground">{detail}</Text>
-      ) : (
-        detail
-      )}
+      {typeof detail === 'string' ? <Text className="text-xs text-faint">{detail}</Text> : detail}
       {kind === 'toggle' ? <ToggleTrack on={!!on} /> : null}
-      {kind === 'link' ? <Icon name="chevR" size={18} color={colors.faintForeground} /> : null}
+      {kind === 'link' ? <Icon name="chevR" size={20} color={colors.faintForeground} /> : null}
     </Pressable>
   );
 }

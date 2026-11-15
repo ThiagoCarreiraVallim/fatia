@@ -1,7 +1,10 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { workoutApi } from '@fatia/api-client';
 import { ExerciseDetailDrawer } from './exercise-detail-drawer';
+import { ExerciseDetailContext } from './exercise-detail-context';
+
+export { useOpenExerciseDetail } from './exercise-detail-context';
 
 /**
  * Hospeda o drawer de detalhe do exercício na raiz da tela.
@@ -15,26 +18,6 @@ import { ExerciseDetailDrawer } from './exercise-detail-drawer';
  * Toda tela que renderiza `ExerciseDetailCard` precisa envolver o conteúdo com
  * este provider; sem ele o toque no exercício não abre nada.
  */
-
-type OpenExerciseDetail = (exerciseId: number) => void;
-
-const ExerciseDetailContext = createContext<OpenExerciseDetail | null>(null);
-
-export function useOpenExerciseDetail(): OpenExerciseDetail {
-  const open = useContext(ExerciseDetailContext);
-  return useMemo(
-    () =>
-      open ??
-      (() => {
-        if (__DEV__) {
-          console.warn(
-            'ExerciseDetailCard fora de <ExerciseDetailHost>: o detalhe do exercício não abre.',
-          );
-        }
-      }),
-    [open],
-  );
-}
 
 export function ExerciseDetailHost({ children }: { children: ReactNode }) {
   const [exerciseId, setExerciseId] = useState<number | null>(null);

@@ -31,10 +31,9 @@ export function RemoveExerciseModal({ group, onOpenChange, onConfirm }: Props) {
       <DrawerContent className="px-4 pb-6">
         <DrawerHeader className="px-0">
           <DrawerTitle>Tirar {group?.exerciseName ?? 'exercício'} do treino?</DrawerTitle>
+          {/* Texto da prancha Al-T17 (#377). */}
           <DrawerDescription>
-            {count === 1
-              ? 'A série registrada será apagada'
-              : `As ${count} séries registradas serão apagadas`}
+            {count === 1 ? 'A série de hoje dele é apagada' : 'As séries de hoje dele são apagadas'}
             . O plano não muda: ele volta no próximo treino.
           </DrawerDescription>
         </DrawerHeader>

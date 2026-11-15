@@ -327,12 +327,12 @@ export function WaterTile({
         </Pressable>
       </View>
       <Pressable onPress={onOpen} accessible={false}>
-        <Text>
-          <Text style={TABULAR} className="font-display text-[26px] text-foreground">
+        <View className="flex-row items-baseline">
+          <Text style={TABULAR} className="font-display text-[26px] leading-[32px] text-foreground">
             {formatInteger(water.todayMl)}
           </Text>
           <Text className="text-xs text-faint"> /{formatDecimal(target / 1000)} L</Text>
-        </Text>
+        </View>
       </Pressable>
       <Bar percent={(water.todayMl / target) * 100} color={colors.water} label="Meta de água" />
     </Animated.View>
@@ -343,7 +343,7 @@ export function WaterTile({
 export function StepsTile({ steps, onOpen }: { steps: TodaySummary['steps']; onOpen: () => void }) {
   const pct = steps.target ? Math.min(100, Math.round((steps.today / steps.target) * 100)) : null;
   return (
-    <Animated.View entering={listEntering(4)} className="flex-1">
+    <Animated.View entering={listEntering(4)} className="flex-1 basis-0">
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Passos: ${formatInteger(steps.today)}${steps.target ? ` de ${formatInteger(steps.target)}` : ''}`}
@@ -354,14 +354,14 @@ export function StepsTile({ steps, onOpen }: { steps: TodaySummary['steps']; onO
           <Icon name="steps" size={22} color={colors.steps} />
           {pct !== null ? <Text className="text-xs text-faint">{pct}%</Text> : null}
         </View>
-        <Text>
-          <Text style={TABULAR} className="font-display text-[26px] text-foreground">
+        <View className="flex-row items-baseline">
+          <Text style={TABULAR} className="font-display text-[26px] leading-[32px] text-foreground">
             {formatInteger(steps.today)}
           </Text>
           {steps.target ? (
             <Text className="text-xs text-faint"> {stepsTargetShort(steps.target)}</Text>
           ) : null}
-        </Text>
+        </View>
         <Bar percent={pct ?? 0} color={colors.steps} />
       </Pressable>
     </Animated.View>
@@ -378,7 +378,7 @@ export function WeightTile({
 }) {
   const change = weightChange30dLabel(weight.change30dKg);
   return (
-    <Animated.View entering={listEntering(5)} className="flex-1">
+    <Animated.View entering={listEntering(5)} className="flex-1 basis-0">
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={
@@ -390,12 +390,12 @@ export function WeightTile({
         className={todayTile}
       >
         <Icon name="scale" size={22} color={colors.mutedForeground} />
-        <Text>
-          <Text className="font-display text-[26px] text-foreground">
+        <View className="flex-row items-baseline">
+          <Text className="font-display text-[26px] leading-[32px] text-foreground">
             {weight.latest ? formatDecimal(weight.latest.weightKg) : '—'}
           </Text>
           <Text className="text-xs text-faint"> kg</Text>
-        </Text>
+        </View>
         <Text className={cn('text-xs', change ? 'text-primary' : 'text-faint')}>
           {change ?? (weight.latest ? 'sem variação em 30 dias' : 'registrar peso')}
         </Text>
@@ -409,7 +409,7 @@ export function StreakTile({ streak }: { streak: TodaySummary['streak'] }) {
   const go = useGo();
   const days = streak.activeDays;
   return (
-    <Animated.View entering={listEntering(6)} className="flex-1">
+    <Animated.View entering={listEntering(6)} className="flex-1 basis-0">
       <Pressable
         accessibilityRole="link"
         accessibilityLabel={`${rotuloDeSequencia(days, 'dias')}. Ver semana`}
@@ -417,13 +417,13 @@ export function StreakTile({ streak }: { streak: TodaySummary['streak'] }) {
         className={todayTile}
       >
         <Icon name="flame" size={22} color={colors.warning} />
-        <Text>
-          <Text className="font-display text-[26px] text-foreground">
+        <View className="flex-row items-baseline">
+          <Text className="font-display text-[26px] leading-[32px] text-foreground">
             {days.periodos}
             {days.janelaEsgotada ? '+' : ''}
           </Text>
           <Text className="text-xs text-faint"> {days.periodos === 1 ? 'dia' : 'dias'}</Text>
-        </Text>
+        </View>
         <Text className="text-xs text-faint">sequência · ver semana</Text>
       </Pressable>
     </Animated.View>
