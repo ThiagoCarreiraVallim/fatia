@@ -18,7 +18,8 @@ export class ListPlanOffersTool implements McpToolDef {
     'Lista os planos de treino que a equipe da comunidade enviou ao usuário. Em pending vêm os que ' +
     'esperam resposta, cada um com os exercícios, a agenda (CALENDAR com datas ou FLEXIBLE sem ' +
     'datas), o recado e, quando é atualização de um plano já aceito (kind "update"), o que mudou ' +
-    '(diff: exercícios novos, removidos e alterados). Em accepted, os que estão em uso. Para ' +
+    '(diff: exercícios novos, removidos e alterados em qualquer campo; em diff.version, nome, ' +
+    'ordem e agenda). Em accepted, os que estão em uso. Para ' +
     'responder, use accept_plan_offer ou decline_plan_offer com shown.id como versionId.';
   readonly inputSchema = {} as const;
   async execute(_input: unknown, { userId }: McpToolContext) {

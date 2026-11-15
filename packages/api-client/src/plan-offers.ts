@@ -18,8 +18,35 @@ import type { TrainingBlock, TrainingBlockKind } from './workout';
 export type PlanOfferStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'SUPERSEDED';
 export type PlanSchedule = 'CALENDAR' | 'FLEXIBLE';
 
+/**
+ * Campo de um exercício que mudou. Os valores vêm crus da API (número, enum,
+ * `12:WARMUP,8x40` na tabela de séries); `exerciseChangeText` diz em português.
+ * `config` é o resto (a definição do exercício do autor): "configuração alterada".
+ */
 export interface FieldChange {
-  field: 'sets' | 'reps' | 'rest';
+  field:
+    | 'sets'
+    | 'reps'
+    | 'rest'
+    | 'load'
+    | 'loadMode'
+    | 'repUnit'
+    | 'technique'
+    | 'biSet'
+    | 'setTable'
+    | 'notes'
+    | 'cardioTarget'
+    | 'cardioDuration'
+    | 'cardioDistance'
+    | 'cardioIntensity'
+    | 'config';
+  before: string | null;
+  after: string | null;
+}
+
+/** O que mudou na versão fora de um exercício: nome, ordem e agenda. */
+export interface VersionChange {
+  field: 'title' | 'order' | 'schedule' | 'startDate' | 'weeks' | 'weekdays';
   before: string | null;
   after: string | null;
 }
@@ -59,6 +86,8 @@ export interface PlanDiff {
   added: string[];
   removed: string[];
   changed: Array<{ key: string; fields: FieldChange[] }>;
+  version?: VersionChange[];
+  hasChanges?: boolean;
 }
 
 export interface PlanOffer {
@@ -296,25 +325,101 @@ export function exerciseSetsText(e: Pick<OfferExercise, 'targetSets' | 'targetRe
   return reps ? `${e.targetSets} × ${reps}` : `${e.targetSets} séries`;
 }
 
-const FIELD_LABEL: Record<FieldChange['field'], string> = {
-  sets: 'séries',
-  reps: 'repetições',
-  rest: 'descanso',
+const decimal = (v: string) => v.replace('.', ',');
+
+const TECHNIQUE_TEXT: Record<string, string> = {
+  NORMAL: 'normal',
+  DROP_SET: 'drop-set',
+  TO_FAILURE: 'até a falha',
+};
+const SET_KIND_TEXT: Record<string, string> = { WARMUP: 'aquec.', DROP: 'drop' };
+const INTENSITY_TEXT: Record<string, string> = {
+  LIGHT: 'leve',
+  MODERATE: 'moderada',
+  VIGOROUS: 'forte',
+};
+
+/** `12:WARMUP,8x40` → "aquec. 12 · 8 × 40 kg". */
+function setTableText(v: string): string {
+  return v
+    .split(',')
+    .map((set) => {
+      const [main = '', kind] = set.split(':');
+      const [reps, load] = main.split('x');
+      const body = load ? `${reps} × ${decimal(load)} kg` : (reps ?? '');
+      return kind ? `${SET_KIND_TEXT[kind] ?? kind.toLowerCase()} ${body}` : body;
+    })
+    .join(' · ');
+}
+
+/** 1800 → "30 min"; 90 → "1:30 min". */
+const minutesText = (seconds: number) =>
+  seconds % 60
+    ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')} min`
+    : `${seconds / 60} min`;
+
+/** 5000 → "5 km"; 400 → "400 m". */
+const distanceText = (meters: number) =>
+  meters >= 1000 ? `${decimal(String(meters / 1000))} km` : `${meters} m`;
+
+/**
+ * Rótulo e valor de cada campo. Sem `value`, o campo diz só "alterada"
+ * (observação longa, configuração sem rótulo próprio).
+ */
+const FIELD_TEXT: Record<
+  FieldChange['field'],
+  { label: string; value?: (v: string) => string; empty?: string }
+> = {
+  sets: { label: 'séries', value: (v) => v },
+  reps: { label: 'repetições', value: (v) => v },
+  rest: { label: 'descanso', value: (v) => `${v} s`, empty: 'padrão' },
+  load: { label: 'carga inicial', value: (v) => `${decimal(v)} kg` },
+  loadMode: {
+    label: 'carga',
+    value: (v) => (v === 'BODYWEIGHT' ? 'peso do corpo' : 'com peso'),
+  },
+  repUnit: { label: 'unidade', value: (v) => (v === 'SECONDS' ? 'segundos' : 'repetições') },
+  technique: { label: 'técnica', value: (v) => TECHNIQUE_TEXT[v] ?? v.toLowerCase() },
+  biSet: { label: 'bi-set', value: (v) => (v === 'true' ? 'sim' : 'não') },
+  setTable: { label: 'séries uma a uma', value: setTableText, empty: 'nenhuma' },
+  notes: { label: 'observação alterada' },
+  cardioTarget: {
+    label: 'meta',
+    value: (v) => (v === 'DISTANCE' ? 'distância' : 'tempo'),
+    empty: 'nenhuma',
+  },
+  cardioDuration: { label: 'tempo', value: (v) => minutesText(Number(v)) },
+  cardioDistance: { label: 'distância', value: (v) => distanceText(Number(v)) },
+  cardioIntensity: { label: 'intensidade', value: (v) => INTENSITY_TEXT[v] ?? v.toLowerCase() },
+  config: { label: 'configuração alterada' },
 };
 
 /** "séries 4 → 5 · descanso 60 s → padrão", ou nulo sem mudança. */
 export function exerciseChangeText(changes: FieldChange[]): string | null {
   if (changes.length === 0) return null;
-  const value = (field: FieldChange['field'], v: string | null) => {
-    if (v === null || v === '') return 'padrão';
-    return field === 'rest' ? `${v} s` : v;
-  };
   return changes
-    .map((c) => `${FIELD_LABEL[c.field]} ${value(c.field, c.before)} → ${value(c.field, c.after)}`)
+    .map((c) => {
+      const t = FIELD_TEXT[c.field];
+      if (!t.value) return t.label;
+      const show = (v: string | null) => (v === null || v === '' ? (t.empty ?? '—') : t.value!(v));
+      return `${t.label} ${show(c.before)} → ${show(c.after)}`;
+    })
     .join(' · ');
 }
 
-/** "1 novo · 1 alterado · 2 removidos" no aviso da atualização. */
+/** As mudanças da versão, curtas: "nome alterado", "agora sem datas", "agenda alterada". */
+function versionChangeParts(changes: VersionChange[]): string[] {
+  const parts: string[] = [];
+  const has = (f: VersionChange['field']) => changes.some((c) => c.field === f);
+  if (has('title')) parts.push('nome alterado');
+  if (has('order')) parts.push('ordem alterada');
+  const schedule = changes.find((c) => c.field === 'schedule');
+  if (schedule) parts.push(schedule.after === 'FLEXIBLE' ? 'agora sem datas' : 'agora com datas');
+  else if (has('startDate') || has('weeks') || has('weekdays')) parts.push('agenda alterada');
+  return parts;
+}
+
+/** "1 novo · 1 alterado · 2 removidos · agenda alterada" no aviso da atualização. */
 export function diffSummary(d: PlanDiff): string {
   const parts: string[] = [];
   if (d.added.length) parts.push(`${d.added.length} ${d.added.length === 1 ? 'novo' : 'novos'}`);
@@ -324,7 +429,10 @@ export function diffSummary(d: PlanDiff): string {
   if (d.removed.length) {
     parts.push(`${d.removed.length} ${d.removed.length === 1 ? 'removido' : 'removidos'}`);
   }
-  return parts.length ? parts.join(' · ') : 'Sem mudança nos exercícios';
+  parts.push(...versionChangeParts(d.version ?? []));
+  if (parts.length) return parts.join(' · ');
+  // A API viu mudança que esta versão do app ainda não sabe dizer.
+  return d.hasChanges ? 'Plano ajustado' : 'Sem mudança';
 }
 
 /**

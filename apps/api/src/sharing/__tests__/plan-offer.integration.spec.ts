@@ -310,6 +310,8 @@ describe('plano recebido da equipe (integração)', () => {
       expect(view.shown.exercises.filter((e) => e.isNew).map((e) => e.exerciseId)).toEqual([
         ex.stiff,
       ]);
+      // A agenda também mudou (outro início, 1 semana, 3 dias): entra no "o que mudou".
+      expect(view.diff!.version.map((c) => c.field)).toEqual(['startDate', 'weeks', 'weekdays']);
 
       const plan = await prisma.workoutPlan.findUniqueOrThrow({
         where: { id: planId },

@@ -87,11 +87,82 @@ describe('plano recebido (Al-T2, Al-T2b)', () => {
     expect(exerciseChangeText([])).toBeNull();
   });
 
+  it('a configuração do exercício (#378) também diz o que mudou', () => {
+    expect(
+      exerciseChangeText([
+        { field: 'load', before: null, after: '22.5' },
+        { field: 'loadMode', before: 'WEIGHT', after: 'BODYWEIGHT' },
+        { field: 'repUnit', before: 'REPS', after: 'SECONDS' },
+        { field: 'technique', before: 'NORMAL', after: 'DROP_SET' },
+        { field: 'biSet', before: 'false', after: 'true' },
+      ]),
+    ).toBe(
+      'carga inicial — → 22,5 kg · carga com peso → peso do corpo · unidade repetições → segundos · técnica normal → drop-set · bi-set não → sim',
+    );
+    expect(
+      exerciseChangeText([{ field: 'setTable', before: '10x40', after: '12:WARMUP,8x40,6:DROP' }]),
+    ).toBe('séries uma a uma 10 × 40 kg → aquec. 12 · 8 × 40 kg · drop 6');
+    expect(
+      exerciseChangeText([
+        { field: 'notes', before: null, after: 'Desça devagar' },
+        { field: 'config', before: null, after: null },
+      ]),
+    ).toBe('observação alterada · configuração alterada');
+    expect(
+      exerciseChangeText([
+        { field: 'cardioTarget', before: 'TIME', after: 'DISTANCE' },
+        { field: 'cardioDuration', before: '1800', after: null },
+        { field: 'cardioDistance', before: null, after: '5000' },
+        { field: 'cardioIntensity', before: 'LIGHT', after: 'VIGOROUS' },
+      ]),
+    ).toBe(
+      'meta tempo → distância · tempo 30 min → — · distância — → 5 km · intensidade leve → forte',
+    );
+  });
+
   it('resumo do diff da atualização', () => {
     expect(
       diffSummary({ added: ['a'], removed: ['b', 'c'], changed: [{ key: 'd', fields: [] }] }),
     ).toBe('1 novo · 1 alterado · 2 removidos');
-    expect(diffSummary({ added: [], removed: [], changed: [] })).toBe('Sem mudança nos exercícios');
+    expect(diffSummary({ added: [], removed: [], changed: [] })).toBe('Sem mudança');
+  });
+
+  it('o resumo nunca diz "sem mudança" quando a versão mudou', () => {
+    const empty = { added: [], removed: [], changed: [] };
+    expect(
+      diffSummary({
+        ...empty,
+        version: [
+          { field: 'weeks', before: '4', after: '6' },
+          { field: 'weekdays', before: '1,3', after: '2,4' },
+        ],
+      }),
+    ).toBe('agenda alterada');
+    expect(
+      diffSummary({
+        ...empty,
+        version: [{ field: 'schedule', before: 'CALENDAR', after: 'FLEXIBLE' }],
+      }),
+    ).toBe('agora sem datas');
+    expect(
+      diffSummary({
+        ...empty,
+        version: [{ field: 'schedule', before: 'FLEXIBLE', after: 'CALENDAR' }],
+      }),
+    ).toBe('agora com datas');
+    expect(
+      diffSummary({
+        added: ['a'],
+        removed: [],
+        changed: [],
+        version: [
+          { field: 'title', before: 'Inferior', after: 'Pernas' },
+          { field: 'order', before: null, after: null },
+        ],
+      }),
+    ).toBe('1 novo · nome alterado · ordem alterada');
+    // Mudança que ainda não tem texto próprio: nunca "sem mudança".
+    expect(diffSummary({ ...empty, hasChanges: true })).toBe('Plano ajustado');
   });
 
   it('textos do aceito e do recusado, sem gênero', () => {

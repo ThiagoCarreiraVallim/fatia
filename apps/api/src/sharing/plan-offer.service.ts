@@ -21,7 +21,7 @@ import { WorkoutPlanService } from '../workout/workout-plan.service';
 import { MAX_OFFER_NOTE, MAX_OFFER_WEEKS, type SendPlanOfferDto } from './dto/plan-offer.dto';
 import { TEAM_ROLES } from './permissions';
 import { PlanMaterializerService } from './plan-materializer.service';
-import { diffPlanSnapshots, exerciseKey, type FieldChange, type PlanDiff } from './plan-offer-diff';
+import { diffOfferVersions, exerciseKey, type FieldChange, type PlanDiff } from './plan-offer-diff';
 import { offerAnsweredNotice, offerSentNotice, offerUpdatedNotice } from './plan-offer-notices';
 import {
   buildPlanSnapshot,
@@ -517,7 +517,13 @@ export class PlanOfferService {
     const { shown, accepted, kind } = versionsOf(offer);
     const shownSnap = parseSnapshot(shown.snapshot);
     const acceptedSnap = kind === 'update' && accepted ? parseSnapshot(accepted.snapshot) : null;
-    const diff = shownSnap && acceptedSnap ? diffPlanSnapshots(acceptedSnap, shownSnap) : null;
+    const diff =
+      shownSnap && acceptedSnap && accepted
+        ? diffOfferVersions(
+            { ...accepted, snapshot: acceptedSnap },
+            { ...shown, snapshot: shownSnap },
+          )
+        : null;
     const names = await this.namesOf([shownSnap, acceptedSnap]);
     const planId = this.planOf(offer, userId);
     return {
