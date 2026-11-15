@@ -266,6 +266,30 @@ export function nutrientRangeError(min: number | null, max: number | null): stri
   return null;
 }
 
+export interface NutrientPreset {
+  nutrientKey: string;
+  label: string;
+  unit: string;
+  suggestMax?: number;
+  suggestMin?: number;
+}
+
+/** Os nutrientes de um toque da tela Al-N7, com a sugestão de partida. */
+export const NUTRIENT_PRESETS: readonly NutrientPreset[] = [
+  { nutrientKey: 'sodium_mg', label: 'Sódio', unit: 'mg', suggestMax: 2000 },
+  { nutrientKey: 'sugar_g', label: 'Açúcar', unit: 'g', suggestMax: 50 },
+  { nutrientKey: 'fiber_g', label: 'Fibra', unit: 'g', suggestMin: 25 },
+  { nutrientKey: 'saturated_fat_g', label: 'Gordura saturada', unit: 'g', suggestMax: 22 },
+  { nutrientKey: 'caffeine_mg', label: 'Cafeína', unit: 'mg', suggestMax: 400 },
+  { nutrientKey: 'cholesterol_mg', label: 'Colesterol', unit: 'mg', suggestMax: 300 },
+  { nutrientKey: 'potassium_mg', label: 'Potássio', unit: 'mg', suggestMin: 3500 },
+  { nutrientKey: 'calcium_mg', label: 'Cálcio', unit: 'mg', suggestMin: 1000 },
+  { nutrientKey: 'iron_mg', label: 'Ferro', unit: 'mg', suggestMin: 8 },
+];
+
+/** Unidades de um nutriente que a pessoa cria. */
+export const NUTRIENT_UNITS = ['g', 'mg', 'µg', 'ml'] as const;
+
 /**
  * A chave de um nutriente que a pessoa cria ("Ômega 3" em g → `omega_3_g`).
  * Ninguém precisa digitar uma chave; vazio quando o nome não tem letra nem número.

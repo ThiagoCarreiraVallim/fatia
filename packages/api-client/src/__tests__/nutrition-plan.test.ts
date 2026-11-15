@@ -7,6 +7,7 @@ import {
   nutrientStatusText,
   acceptPlanText,
   customNutrientKey,
+  NUTRIENT_PRESETS,
   nutritionPlanApi,
   planFoodMacros,
   planWeekText,
@@ -107,6 +108,13 @@ describe('nutrientes', () => {
     expect(nutrientRangeError(Number.NaN, 25)).toBe('Digite um número, como 2,5.');
     expect(nutrientRangeError(25, null)).toBeNull();
     expect(nutrientRangeError(25, 25)).toBeNull();
+  });
+
+  it('a lista de nutrientes é a mesma no PWA e no app, sem chave repetida', () => {
+    const keys = NUTRIENT_PRESETS.map((p) => p.nutrientKey);
+    expect(new Set(keys).size).toBe(keys.length);
+    // Cálcio e ferro vêm da TACO; entram com a prancha Al-N7.
+    expect(keys).toEqual(expect.arrayContaining(['fiber_g', 'sodium_mg', 'calcium_mg', 'iron_mg']));
   });
 
   it('chave do nutriente próprio sai do nome e da unidade', () => {

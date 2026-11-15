@@ -5,10 +5,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Trash2, Plus, FlaskConical } from 'lucide-react';
 import {
   customNutrientKey,
+  NUTRIENT_PRESETS,
+  NUTRIENT_UNITS,
   nutrientRangeError,
   nutrientStatusText,
   nutritionApi,
   parseDecimalInput,
+  type NutrientPreset,
   type NutrientProgress,
   type NutrientTarget,
 } from '@fatia/api-client';
@@ -23,27 +26,10 @@ import { errorMessage } from '@/components/nutrition/error-message';
 import { hojeIso } from '@/lib/dias';
 import { cn } from '@/lib/utils';
 
-interface Preset {
-  nutrientKey: string;
-  label: string;
-  unit: string;
-  suggestMax?: number;
-  suggestMin?: number;
-}
-
-const PRESETS: Preset[] = [
-  { nutrientKey: 'sodium_mg', label: 'Sódio', unit: 'mg', suggestMax: 2000 },
-  { nutrientKey: 'sugar_g', label: 'Açúcar', unit: 'g', suggestMax: 50 },
-  { nutrientKey: 'fiber_g', label: 'Fibra', unit: 'g', suggestMin: 25 },
-  { nutrientKey: 'saturated_fat_g', label: 'Gordura saturada', unit: 'g', suggestMax: 22 },
-  { nutrientKey: 'caffeine_mg', label: 'Cafeína', unit: 'mg', suggestMax: 400 },
-  { nutrientKey: 'cholesterol_mg', label: 'Colesterol', unit: 'mg', suggestMax: 300 },
-  { nutrientKey: 'potassium_mg', label: 'Potássio', unit: 'mg', suggestMin: 3500 },
-  { nutrientKey: 'calcium_mg', label: 'Cálcio', unit: 'mg', suggestMin: 1000 },
-  { nutrientKey: 'iron_mg', label: 'Ferro', unit: 'mg', suggestMin: 8 },
-];
+type Preset = NutrientPreset;
+const PRESETS = NUTRIENT_PRESETS;
 const PRESET_KEYS = new Set(PRESETS.map((p) => p.nutrientKey));
-const UNITS = ['g', 'mg', 'µg', 'ml'] as const;
+const UNITS = NUTRIENT_UNITS;
 const CUSTOM = '__custom__';
 
 const fmt = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
