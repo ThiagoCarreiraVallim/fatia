@@ -1,4 +1,9 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+  ValidationPipe,
+} from '@nestjs/common';
 import { PrismaService } from '../../common/prisma.service';
 import { normalizeSearchText } from '../../common/search-text';
 import { PlanMaterializerService } from '../../sharing/plan-materializer.service';
@@ -6,12 +11,14 @@ import { buildPlanSnapshot } from '../../sharing/plan-snapshot';
 import { ExerciseService } from '../exercise.service';
 import { WorkoutPlanService } from '../workout-plan.service';
 import { WorkoutSessionService } from '../workout-session.service';
+import { AddPlanExerciseDto, UpdatePlanExerciseDto } from '../dto/plan.dto';
 
 /**
  * Planos e exercício configurado (#378), contra o banco real: o critério de
- * pronto da issue é "cria um plano, adiciona o mesmo exercício duas vezes,
- * define descanso e técnica, configura uma esteira por distância, salva, inicia
- * o treino e a sessão usa o descanso e a meta configurados".
+ * pronto da issue é "cria um plano, define descanso e técnica, configura uma
+ * esteira por distância, salva, inicia o treino e a sessão usa o descanso e a
+ * meta configurados". O mesmo exercício duas vezes no plano segue bloqueado
+ * (409): a sessão ainda agrupa as séries por exercício.
  */
 describe('Plano com exercício configurado (#378, banco real)', () => {
   const prisma = new PrismaService();
@@ -23,6 +30,7 @@ describe('Plano com exercício configurado (#378, banco real)', () => {
   let userId: string;
   let otherId: string;
   let strengthId: number;
+  let secondId: number;
   let cardioId: number;
   let otherCustomId: number;
 
@@ -48,6 +56,15 @@ describe('Plano com exercício configurado (#378, banco real)', () => {
         },
       })
     ).id;
+    secondId = (
+      await prisma.exercise.create({
+        data: {
+          name: `${stamp} Desenvolvimento`,
+          muscleGroup: 'ombro',
+          searchName: normalizeSearchText(`${stamp} Desenvolvimento`),
+        },
+      })
+    ).id;
     cardioId = (
       await prisma.exercise.create({
         data: {
@@ -64,11 +81,11 @@ describe('Plano com exercício configurado (#378, banco real)', () => {
 
   afterAll(async () => {
     await prisma.user.deleteMany({ where: { id: { in: [userId, otherId] } } });
-    await prisma.exercise.deleteMany({ where: { id: { in: [strengthId, cardioId] } } });
+    await prisma.exercise.deleteMany({ where: { id: { in: [strengthId, secondId, cardioId] } } });
     await prisma.$disconnect();
   });
 
-  it('critério de pronto: o mesmo exercício duas vezes, descanso, técnica e esteira por distância chegam à sessão', async () => {
+  it('critério de pronto: descanso, técnica e esteira por distância chegam à sessão; repetir é 409', async () => {
     const plan = await plans.create(userId, { name: 'Push' });
     const a = await plans.addExercise(userId, plan.id, {
       exerciseId: strengthId,
@@ -79,9 +96,12 @@ describe('Plano com exercício configurado (#378, banco real)', () => {
       startLoadKg: 8.5,
       notes: 'pegada neutra',
     });
-    // De novo o mesmo exercício: antes da #378 o único (planId, exerciseId) dava 409.
+    // De novo o mesmo exercício: 409 com mensagem clara, e nada muda.
+    await expect(plans.addExercise(userId, plan.id, { exerciseId: strengthId })).rejects.toThrow(
+      new ConflictException('Esse exercício já está no plano'),
+    );
     const b = await plans.addExercise(userId, plan.id, {
-      exerciseId: strengthId,
+      exerciseId: secondId,
       targetSets: 2,
       targetReps: '20',
       restSeconds: 45,
@@ -187,12 +207,23 @@ describe('Plano com exercício configurado (#378, banco real)', () => {
   it('adiciona vários de uma vez, no fim, e recusa o lote inteiro se um id não é visível', async () => {
     const plan = await plans.create(userId, { name: 'Lote' });
     await plans.addExercise(userId, plan.id, { exerciseId: strengthId });
-    const after = await plans.addExercises(userId, plan.id, {
-      exercises: [{ exerciseId: cardioId }, { exerciseId: strengthId }],
-    });
-    expect(after.exercises.map((e) => e.exerciseId)).toEqual([strengthId, cardioId, strengthId]);
+    const batch = {
+      exercises: [
+        { exerciseId: cardioId },
+        { exerciseId: strengthId },
+        { exerciseId: secondId },
+        { exerciseId: cardioId },
+      ],
+    };
+    const after = await plans.addExercises(userId, plan.id, batch);
+    // O que já estava (e a repetição dentro do lote) fica de fora, sem erro.
+    expect(after.exercises.map((e) => e.exerciseId)).toEqual([strengthId, cardioId, secondId]);
     // Cardio entra com uma série e sem faixa de repetições.
     expect(after.exercises[1]).toMatchObject({ targetSets: 1, targetReps: '' });
+
+    // Repetir o lote (resposta perdida, toque duplo) não duplica nem erra.
+    const retried = await plans.addExercises(userId, plan.id, batch);
+    expect(retried.exercises.map((e) => e.exerciseId)).toEqual([strengthId, cardioId, secondId]);
 
     await expect(
       plans.addExercises(userId, plan.id, {
@@ -202,7 +233,76 @@ describe('Plano com exercício configurado (#378, banco real)', () => {
     expect(await prisma.workoutPlanExercise.count({ where: { planId: plan.id } })).toBe(3);
   });
 
-  it('o retrato do plano leva a configuração e o exercício repetido, e a adoção copia', async () => {
+  it('dois lotes ao mesmo tempo com o mesmo exercício: uma linha só, nenhum erro', async () => {
+    const plan = await plans.create(userId, { name: 'Corrida' });
+    const results = await Promise.allSettled([
+      plans.addExercises(userId, plan.id, { exercises: [{ exerciseId: strengthId }] }),
+      plans.addExercises(userId, plan.id, { exercises: [{ exerciseId: strengthId }] }),
+    ]);
+    expect(results.every((r) => r.status === 'fulfilled')).toBe(true);
+    expect(
+      await prisma.workoutPlanExercise.count({
+        where: { planId: plan.id, exerciseId: strengthId },
+      }),
+    ).toBe(1);
+  });
+
+  it('null em campo obrigatório da configuração é 400 na validação, não 500 no banco', async () => {
+    const pipe = new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    });
+    const body = { type: 'body' as const, metatype: UpdatePlanExerciseDto };
+    for (const field of [
+      'targetSets',
+      'targetReps',
+      'repUnit',
+      'loadMode',
+      'technique',
+      'biSetWithNext',
+      'order',
+    ]) {
+      await expect(pipe.transform({ [field]: null }, body)).rejects.toThrow(BadRequestException);
+    }
+    await expect(pipe.transform({ sets: [{ kind: null, reps: 10 }] }, body)).rejects.toThrow(
+      BadRequestException,
+    );
+    await expect(
+      pipe.transform(
+        { exerciseId: 1, technique: null },
+        { type: 'body', metatype: AddPlanExerciseDto },
+      ),
+    ).rejects.toThrow(BadRequestException);
+    // Os campos que se limpam continuam aceitando null.
+    await expect(
+      pipe.transform(
+        { restSeconds: null, startLoadKg: null, notes: null, cardioTarget: null, sets: null },
+        body,
+      ),
+    ).resolves.toBeDefined();
+  });
+
+  it('a adoção descarta meta de cardio em exercício de força, como a escrita direta', async () => {
+    const plan = await plans.create(userId, { name: 'Forjado' });
+    await plans.addExercise(userId, plan.id, { exerciseId: strengthId, restSeconds: 60 });
+    const snapshot = buildPlanSnapshot(await plans.findById(userId, plan.id));
+    Object.assign(snapshot.exercises[0], {
+      cardioTarget: 'TIME',
+      cardioDurationSeconds: 600,
+      cardioIntensity: 'VIGOROUS',
+    });
+    const copy = await materializer.materialize(otherId, snapshot);
+    expect(copy.exercises[0]).toMatchObject({
+      restSeconds: 60,
+      cardioTarget: null,
+      cardioDurationSeconds: null,
+      cardioDistanceMeters: null,
+      cardioIntensity: null,
+    });
+  });
+
+  it('o retrato do plano leva a configuração, e a adoção copia', async () => {
     const plan = await plans.create(userId, { name: 'Modelo' });
     await plans.addExercise(userId, plan.id, {
       exerciseId: strengthId,
@@ -210,7 +310,7 @@ describe('Plano com exercício configurado (#378, banco real)', () => {
       technique: 'TO_FAILURE',
       biSetWithNext: true,
     });
-    const second = await plans.addExercise(userId, plan.id, { exerciseId: strengthId });
+    const second = await plans.addExercise(userId, plan.id, { exerciseId: secondId });
     await plans.updatePlanExercise(userId, plan.id, second.id, {
       sets: [
         { kind: 'WARMUP', reps: 15 },

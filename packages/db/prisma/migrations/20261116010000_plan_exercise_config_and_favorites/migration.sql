@@ -1,7 +1,7 @@
 -- #378: configuração do exercício no plano (descanso, técnica, carga inicial,
 -- meta de cardio, bi-set, série por série) e favorito de exercício.
--- Sem perda: as colunas novas são nulas ou têm padrão. Sai o único por
--- (planId, exerciseId), para o mesmo exercício poder aparecer duas vezes no plano.
+-- Sem perda: as colunas novas são nulas ou têm padrão. O único por
+-- (planId, exerciseId) continua: a sessão agrupa as séries por exercício.
 
 -- CreateEnum
 CREATE TYPE "PlanRepUnit" AS ENUM ('REPS', 'SECONDS');
@@ -20,9 +20,6 @@ CREATE TYPE "CardioTargetKind" AS ENUM ('TIME', 'DISTANCE');
 
 -- CreateEnum
 CREATE TYPE "CardioIntensity" AS ENUM ('LIGHT', 'MODERATE', 'VIGOROUS');
-
--- DropIndex
-DROP INDEX "WorkoutPlanExercise_planId_exerciseId_key";
 
 -- AlterTable
 ALTER TABLE "WorkoutPlanExercise" ADD COLUMN     "biSetWithNext" BOOLEAN NOT NULL DEFAULT false,

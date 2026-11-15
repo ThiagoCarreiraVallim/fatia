@@ -104,8 +104,9 @@ Pendências da #378 (branch `redesign/378-planos-exercicio`):
 
 - **Variante do Configurar:** a issue deixou em aberto. Entrou a A (Al-T21) como padrão, a tabela da B (Al-T21b) atrás de "Configurar série por série" e a D (Al-T21d) para cardio. A C (compacta) não entrou.
 - **Desvios do canvas:** números digitáveis (vírgula, teclado numérico) além do −/+; o tipo de carga é "unidade da pessoa × peso do corpo" (sem kg/lb lado a lado); "Início/Fim" do cardio é a ordem na lista; distância só em km; "Salvar alterações" do Al-T7 virou o check de concluir, porque cada mudança já grava; o Novo plano não configura antes de criar (o Configurar fica no plano criado); remover exercício e excluir plano perguntam antes.
-- **Para a #377:** a sessão e o plano expõem `restSeconds`, `technique`, `biSetWithNext`, `startLoadKg`, `loadMode`, `repUnit`, `notes`, `cardio*`, `sets` e `planExerciseId` em `PlannedExercise`. Exercício repetido no plano é permitido; `exerciseOrder` e `removedExerciseIds` da sessão ainda usam `exerciseId`.
+- **Para a #377:** a sessão e o plano expõem `restSeconds`, `technique`, `biSetWithNext`, `startLoadKg`, `loadMode`, `repUnit`, `notes`, `cardio*`, `sets` e `planExerciseId` em `PlannedExercise`. Exercício repetido no plano segue bloqueado (409 "Esse exercício já está no plano"; o lote pula o que já está), porque a sessão agrupa séries, ordem e remoção por `exerciseId`.
 - **Para a #379:** o snapshot v1 leva a configuração nova. Não há regra de plano recebido só leitura (ADR 014: o plano adotado é da pessoa).
+- **Exercício repetido no plano:** pendente para outra issue. Exige a sessão (`session-view`, `use-session-layout`, `removedExerciseIds`) passar a agrupar por `planExerciseId`.
 - **Fora desta issue:** aba Circuitos do Al-T6 (#380); "Modelos das comunidades" e "Começar de um modelo" levam à lista de comunidades até a #379 dar a tela própria.
 - **Capturas** (Playwright e emulador) contra as pranchas: não feitas nesta sessão.
 

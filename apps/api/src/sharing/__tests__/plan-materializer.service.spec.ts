@@ -311,7 +311,7 @@ describe('PlanMaterializerService.materialize', () => {
     expect(prisma.workoutPlan.create).not.toHaveBeenCalled();
   });
 
-  it('aceita o exercício custom repetido (#378) e copia a definição uma vez só', async () => {
+  it('recusa o exercício repetido antes de criar qualquer coisa', async () => {
     const repetido = {
       version: PLAN_SNAPSHOT_VERSION,
       name: 'Plano repetido',
@@ -333,19 +333,13 @@ describe('PlanMaterializerService.materialize', () => {
       ],
     };
 
-    // Até a #378 o único (planId, exerciseId) obrigava a recusar. Agora a
-    // linha do plano é identificada pela posição, e a segunda cópia reaproveita
-    // o exercício que a primeira acabou de criar.
-    const plano = (await service.materialize(ADOTANTE, repetido)) as unknown as {
-      data: { exercises: { create: Array<{ exerciseId: number; order: number }> } };
-    };
-    const linhas = plano.data.exercises.create;
-    expect(linhas).toHaveLength(2);
-    expect(linhas[0].exerciseId).toBe(linhas[1].exerciseId);
-    expect(exercises.createCustom).toHaveBeenCalledTimes(1);
+    await expect(service.materialize(ADOTANTE, repetido)).rejects.toThrow(/duas vezes/);
+    // Sem esta checagem, a primeira cópia já teria sido criada quando o
+    // `create` do plano falhasse com P2002 (o único segue na #378).
+    expect(exercises.createCustom).not.toHaveBeenCalled();
   });
 
-  it('aceita o exercício de CATÁLOGO repetido (#378): duas linhas, o mesmo id', async () => {
+  it('recusa o exercício de CATÁLOGO repetido, em vez de deixar o P2002 virar 500', async () => {
     // O ramo `catalog:` do dedupe não tinha teste: `assertCatalogExercises` faz
     // `new Set(ids)` antes da query, então um id repetido atravessa a
     // pré-passada inteira e só morre no `create`, em
@@ -373,10 +367,8 @@ describe('PlanMaterializerService.materialize', () => {
       ],
     };
 
-    const plano = (await service.materialize(ADOTANTE, repetido)) as unknown as {
-      data: { exercises: { create: Array<{ exerciseId: number }> } };
-    };
-    expect(plano.data.exercises.create.map((l) => l.exerciseId)).toEqual([SUPINO.id, SUPINO.id]);
+    await expect(service.materialize(ADOTANTE, repetido)).rejects.toThrow(/duas vezes/);
+    expect(prisma.workoutPlan.create).not.toHaveBeenCalled();
   });
 
   it('aceita dois customs que só diferem por caixa — o `@@unique` do Postgres é case-sensitive', async () => {

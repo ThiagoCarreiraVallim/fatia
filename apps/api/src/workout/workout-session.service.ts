@@ -35,8 +35,9 @@ type SessionWithRelations = Prisma.WorkoutSessionGetPayload<{ include: typeof SE
  * leva a configuração do exercício para a tela da sessão (#377) usar o
  * descanso, a técnica, a carga inicial, o bi-set e a meta de cardio.
  *
- * `planExerciseId` identifica a linha: o mesmo exercício pode estar duas vezes
- * no plano, e `exerciseId` sozinho não diz qual.
+ * `planExerciseId` identifica a linha do plano. Hoje cada exercício entra uma
+ * vez por plano (`@@unique([planId, exerciseId])`), porque a sessão agrupa as
+ * séries por `exerciseId`; repetir exercício fica para outra issue.
  */
 export interface PlannedExerciseView {
   planExerciseId: string;

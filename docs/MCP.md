@@ -1453,9 +1453,10 @@ Cria um plano vazio.
 
 ### `add_exercise_to_plan`
 
-Adiciona um exercício ao plano com a configuração dele (#378). O mesmo exercício pode entrar mais
-de uma vez: a linha do plano é identificada pelo `id` que volta. Faixa com mínimo acima do máximo
-("15-8") e meta de cardio em exercício que não é de cardio respondem `BAD_REQUEST`.
+Adiciona um exercício ao plano com a configuração dele (#378). Cada exercício entra uma vez por
+plano: repetir responde `CONFLICT` ("Esse exercício já está no plano"); para mudar a configuração,
+use `update_plan_exercise`. Faixa com mínimo acima do máximo ("15-8") e meta de cardio em exercício
+que não é de cardio respondem `BAD_REQUEST`.
 
 **Input:**
 
@@ -1484,8 +1485,7 @@ de uma vez: a linha do plano é identificada pelo `id` que volta. Faixa com mín
 
 ### `update_plan_exercise`
 
-Edita um item dentro do plano, identificado pelo `planExerciseId` (o mesmo exercício pode aparecer
-duas vezes). `sets` substitui a série por série inteira e recalcula `targetSets`/`targetReps`; `[]`
+Edita um item dentro do plano, identificado pelo `planExerciseId`. `sets` substitui a série por série inteira e recalcula `targetSets`/`targetReps`; `[]`
 ou `null` volta a séries iguais, e mudar `targetSets`/`targetReps` sem `sets` também limpa a tabela.
 
 **Input:**

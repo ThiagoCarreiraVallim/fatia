@@ -12,6 +12,7 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -38,6 +39,13 @@ import {
   type TechniqueValue,
 } from '../helpers/plan-exercise-config';
 
+/**
+ * Opcional, mas não anulável: ausente passa, `null` cai na validação (400).
+ * `@IsOptional` deixaria o `null` chegar a uma coluna NOT NULL — o Prisma
+ * recusava com 500.
+ */
+const OptionalNotNull = () => ValidateIf((_o: unknown, value: unknown) => value !== undefined);
+
 export class CreatePlanDto {
   @IsString() @MaxLength(100) name!: string;
 }
@@ -48,7 +56,7 @@ export class UpdatePlanDto {
 
 /** Uma série da tabela série por série (Al-T21b). */
 export class PlanSetDto {
-  @IsOptional() @IsIn(PLAN_SET_KINDS) kind?: PlanSetKindValue;
+  @OptionalNotNull() @IsIn(PLAN_SET_KINDS) kind?: PlanSetKindValue;
   @IsInt() @Min(1) @Max(MAX_SET_REPS) reps!: number;
   @IsOptional()
   @IsNumber({ allowNaN: false, allowInfinity: false, maxDecimalPlaces: 2 })
@@ -62,13 +70,14 @@ export class PlanSetDto {
  * campos na criação e na edição; `null` limpa o campo.
  *
  * `@IsOptional` deixa passar `null` e `undefined` — é o que permite limpar o
- * descanso ou a meta de cardio pela mesma rota.
+ * descanso ou a meta de cardio pela mesma rota. Os campos que não se limpam
+ * (séries, faixa, unidade, técnica, ordem) usam `OptionalNotNull`.
  */
 export class PlanExerciseConfigDto {
-  @IsOptional() @IsInt() @Min(1) @Max(MAX_TARGET_SETS) targetSets?: number;
-  @IsOptional() @IsString() @MaxLength(20) targetReps?: string; // "8-12", "5", "AMRAP"
-  @IsOptional() @IsIn(REP_UNITS) repUnit?: RepUnitValue;
-  @IsOptional() @IsIn(LOAD_MODES) loadMode?: LoadModeValue;
+  @OptionalNotNull() @IsInt() @Min(1) @Max(MAX_TARGET_SETS) targetSets?: number;
+  @OptionalNotNull() @IsString() @MaxLength(20) targetReps?: string; // "8-12", "5", "AMRAP"
+  @OptionalNotNull() @IsIn(REP_UNITS) repUnit?: RepUnitValue;
+  @OptionalNotNull() @IsIn(LOAD_MODES) loadMode?: LoadModeValue;
 
   @IsOptional()
   @IsNumber({ allowNaN: false, allowInfinity: false, maxDecimalPlaces: 2 })
@@ -77,8 +86,8 @@ export class PlanExerciseConfigDto {
   startLoadKg?: number | null;
 
   @IsOptional() @IsInt() @Min(0) @Max(MAX_REST_SECONDS) restSeconds?: number | null;
-  @IsOptional() @IsIn(TECHNIQUES) technique?: TechniqueValue;
-  @IsOptional() @IsBoolean() biSetWithNext?: boolean;
+  @OptionalNotNull() @IsIn(TECHNIQUES) technique?: TechniqueValue;
+  @OptionalNotNull() @IsBoolean() biSetWithNext?: boolean;
   @IsOptional() @IsString() @MaxLength(MAX_PLAN_NOTES) notes?: string | null;
 
   @IsOptional() @IsIn(CARDIO_TARGETS) cardioTarget?: CardioTargetValue | null;
@@ -109,11 +118,11 @@ export class PlanExerciseConfigDto {
 export class AddPlanExerciseDto extends PlanExerciseConfigDto {
   @IsInt() @Min(1) exerciseId!: number;
   /** Posição. Sem ela, o exercício entra no fim do plano. */
-  @IsOptional() @IsInt() @Min(0) order?: number;
+  @OptionalNotNull() @IsInt() @Min(0) order?: number;
 }
 
 export class UpdatePlanExerciseDto extends PlanExerciseConfigDto {
-  @IsOptional() @IsInt() @Min(0) order?: number;
+  @OptionalNotNull() @IsInt() @Min(0) order?: number;
 }
 
 class AddManyItemDto {

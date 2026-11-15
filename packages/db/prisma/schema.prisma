@@ -841,6 +841,9 @@ model WorkoutPlanExercise {
   /// Série por série (Al-T21b), opcional. Vazia = séries iguais (`targetSets` × `targetReps`).
   sets     WorkoutPlanExerciseSet[]
 
+  /// O mesmo exercício uma vez por plano: a sessão agrupa séries por exercício
+  /// (#378 manteve o bloqueio; repetir fica para outra issue).
+  @@unique([planId, exerciseId])
   @@index([planId])
 }
 

@@ -26,8 +26,7 @@ export class UpdatePlanExerciseTool implements McpToolDef {
   readonly hostedInference = false;
   readonly description =
     'Atualiza um exercício dentro do plano: séries, reps, descanso, técnica, carga inicial, ' +
-    'meta de cardio ou a série por série. A linha é a do planExerciseId (o mesmo exercício pode ' +
-    'aparecer duas vezes). Exemplo: {"planId":"11111111-2222-4333-8444-555555555555","planExerciseId":"66666666-7777-4888-8999-aaaaaaaaaaaa","targetReps":"6-8","restSeconds":120}';
+    'meta de cardio ou a série por série. A linha é a do planExerciseId. Exemplo: {"planId":"11111111-2222-4333-8444-555555555555","planExerciseId":"66666666-7777-4888-8999-aaaaaaaaaaaa","targetReps":"6-8","restSeconds":120}';
   readonly inputSchema = {
     planId: z.string().uuid().describe('ID do plano de treino'),
     planExerciseId: z.string().uuid().describe('ID da entrada do exercício no plano'),

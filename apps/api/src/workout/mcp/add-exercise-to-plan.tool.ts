@@ -25,7 +25,7 @@ export class AddExerciseToPlanTool implements McpToolDef {
   readonly hostedInference = false;
   readonly description =
     'Adiciona um exercício a um plano de treino, com séries, reps, descanso, técnica, carga inicial ' +
-    'e, no cardio, meta por tempo ou distância. O mesmo exercício pode entrar mais de uma vez. ' +
+    'e, no cardio, meta por tempo ou distância. Exercício que já está no plano responde CONFLICT. ' +
     'Exemplo: {"planId":"11111111-2222-4333-8444-555555555555","exerciseId":42,"targetSets":4,"targetReps":"8-12","restSeconds":90}';
   readonly inputSchema = {
     planId: z.string().uuid().describe('ID do plano de treino'),

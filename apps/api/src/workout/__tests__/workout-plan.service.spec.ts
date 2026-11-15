@@ -1,4 +1,5 @@
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { WorkoutPlanService } from '../workout-plan.service';
 import { readableExercises } from '../helpers/exercise-access';
 import type { PrismaService } from '../../common/prisma.service';
@@ -199,6 +200,17 @@ describe('WorkoutPlanService', () => {
         targetSets: 3,
         targetReps: '8-12',
       });
+    });
+
+    it('exercício já no plano é 409 com mensagem clara (o único voltou, #378)', async () => {
+      prisma.workoutPlan.findUnique.mockResolvedValue({ id: 'plan-1', userId });
+      prisma.workoutPlanExercise.create.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('único', { code: 'P2002', clientVersion: 'test' }),
+      );
+
+      const call = service.addExercise(userId, 'plan-1', { exerciseId: 1 });
+      await expect(call).rejects.toThrow(ConflictException);
+      await expect(call).rejects.toThrow('Esse exercício já está no plano');
     });
 
     it('re-throws unexpected errors unchanged', async () => {

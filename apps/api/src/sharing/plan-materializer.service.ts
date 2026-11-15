@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { ExerciseService } from '../workout/exercise.service';
 import { CATALOG_EXERCISE } from '../workout/helpers/exercise-access';
+import { isCardioExercise } from '../workout/helpers/is-cardio';
 import {
   describeIssues,
   PLAN_SNAPSHOT_VERSION,
@@ -20,8 +21,13 @@ const PLAN_INCLUDE = {
 
 type SnapshotItem = PlanSnapshot['exercises'][number];
 
-/** Os campos de configuração do item (#378), sem a origem do exercício. */
-function configOf(item: SnapshotItem) {
+/**
+ * Os campos de configuração do item (#378), sem a origem do exercício. Meta de
+ * cardio só em exercício de cardio: a escrita direta recusa com 400
+ * (`assertConfig`); aqui o retrato pode vir forjado ou de um exercício que mudou
+ * de grupo, e a adoção descarta os campos em vez de reprovar o plano.
+ */
+function configOf(item: SnapshotItem, cardio: boolean) {
   const {
     repUnit,
     loadMode,
@@ -44,10 +50,9 @@ function configOf(item: SnapshotItem) {
     technique,
     biSetWithNext,
     notes,
-    cardioTarget,
-    cardioDurationSeconds,
-    cardioDistanceMeters,
-    cardioIntensity,
+    ...(cardio
+      ? { cardioTarget, cardioDurationSeconds, cardioDistanceMeters, cardioIntensity }
+      : {}),
     sets,
   };
 }
@@ -111,8 +116,10 @@ export class PlanMaterializerService {
    */
   async materialize(userId: string, snapshot: unknown, fromTemplateId?: string, groupId?: string) {
     const snap = this.validate(snapshot);
-    await this.assertCatalogExercises(snap);
-    await this.assertGroupExercises(snap, groupId);
+    const groups = new Map([
+      ...(await this.assertCatalogExercises(snap)),
+      ...(await this.assertGroupExercises(snap, groupId)),
+    ]);
 
     const exercises: Prisma.WorkoutPlanExerciseUncheckedCreateWithoutPlanInput[] = [];
     for (const item of snap.exercises) {
@@ -124,7 +131,12 @@ export class PlanMaterializerService {
             : await this.copyCustomExercise(userId, item.exercise);
       // A configuração do exercício (#378) viaja junto; a série por série
       // entra aninhada, na mesma escrita do plano.
-      const { sets, ...config } = configOf(item);
+      const muscleGroup =
+        item.source === 'custom' ? item.exercise.muscleGroup : groups.get(exerciseId);
+      const { sets, ...config } = configOf(
+        item,
+        isCardioExercise({ muscleGroup: muscleGroup ?? '' }),
+      );
       exercises.push({
         exerciseId,
         order: item.order,
@@ -192,7 +204,8 @@ export class PlanMaterializerService {
    * na biblioteca de quem adota. Uma query só para todos os ids, antes de
    * qualquer escrita.
    */
-  private async assertCatalogExercises(snap: PlanSnapshot): Promise<void> {
+  /** Devolve o grupo muscular de cada id, para a adoção saber o que é cardio. */
+  private async assertCatalogExercises(snap: PlanSnapshot): Promise<Map<number, string>> {
     const ids = [
       ...new Set(
         snap.exercises.flatMap((item) =>
@@ -200,11 +213,11 @@ export class PlanMaterializerService {
         ),
       ),
     ];
-    if (ids.length === 0) return;
+    if (ids.length === 0) return new Map();
 
     const publicos = await this.prisma.exercise.findMany({
       where: { id: { in: ids }, ...CATALOG_EXERCISE },
-      select: { id: true },
+      select: { id: true, muscleGroup: true },
     });
 
     const encontrados = new Set(publicos.map((ex) => ex.id));
@@ -215,6 +228,7 @@ export class PlanMaterializerService {
           'de outra pessoa. Nada foi criado.',
       );
     }
+    return new Map(publicos.map((ex) => [ex.id, ex.muscleGroup]));
   }
 
   /**
@@ -223,17 +237,20 @@ export class PlanMaterializerService {
    * poria no plano de quem adota uma linha que ele não enxerga. Pré-passada
    * pelo mesmo motivo de `assertCatalogExercises`.
    */
-  private async assertGroupExercises(snap: PlanSnapshot, groupId?: string): Promise<void> {
+  private async assertGroupExercises(
+    snap: PlanSnapshot,
+    groupId?: string,
+  ): Promise<Map<number, string>> {
     const ids = [
       ...new Set(
         snap.exercises.flatMap((item) => (item.source === 'group' ? [item.groupExerciseId] : [])),
       ),
     ];
-    if (ids.length === 0) return;
+    if (ids.length === 0) return new Map();
     const daComunidade = groupId
       ? await this.prisma.exercise.findMany({
           where: { id: { in: ids }, groupOwned: true, groupId },
-          select: { id: true },
+          select: { id: true, muscleGroup: true },
         })
       : [];
     const encontrados = new Set(daComunidade.map((ex) => ex.id));
@@ -243,6 +260,7 @@ export class PlanMaterializerService {
         `O exercício ${forasteiro} não é do catálogo desta comunidade. Nada foi criado.`,
       );
     }
+    return new Map(daComunidade.map((ex) => [ex.id, ex.muscleGroup]));
   }
 
   /**

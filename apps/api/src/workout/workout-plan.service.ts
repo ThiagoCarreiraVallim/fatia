@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import type {
@@ -133,29 +138,40 @@ export class WorkoutPlanService {
     this.assertConfig(config, cardio, {});
 
     const summary = sets?.length ? summarizeSets(sets) : null;
-    // O mesmo exercício pode entrar de novo (#378): a linha é identificada pelo
-    // `id`, então não há mais 409 por repetição.
-    return this.prisma.workoutPlanExercise.create({
-      data: {
-        ...config,
-        planId,
-        exerciseId,
-        order: order ?? (await this.nextOrder(planId)),
-        targetSets:
-          summary?.targetSets ?? config.targetSets ?? (cardio ? 1 : DEFAULT_STRENGTH_SETS),
-        targetReps:
-          summary?.targetReps ?? config.targetReps ?? (cardio ? '' : DEFAULT_STRENGTH_REPS),
-        ...(sets?.length ? { sets: { create: setRows(sets) } } : {}),
-      },
-      include: PLAN_EXERCISE_INCLUDE,
-    });
+    // Um exercício por plano (`@@unique([planId, exerciseId])`): a sessão ainda
+    // agrupa as séries por exercício, e duas linhas iguais dividiriam as séries
+    // e sairiam juntas ao remover uma. Repetir fica para outra issue.
+    try {
+      return await this.prisma.workoutPlanExercise.create({
+        data: {
+          ...config,
+          planId,
+          exerciseId,
+          order: order ?? (await this.nextOrder(planId)),
+          targetSets:
+            summary?.targetSets ?? config.targetSets ?? (cardio ? 1 : DEFAULT_STRENGTH_SETS),
+          targetReps:
+            summary?.targetReps ?? config.targetReps ?? (cardio ? '' : DEFAULT_STRENGTH_REPS),
+          ...(sets?.length ? { sets: { create: setRows(sets) } } : {}),
+        },
+        include: PLAN_EXERCISE_INCLUDE,
+      });
+    } catch (err) {
+      if (isPrismaCode(err, 'P2002')) {
+        throw new ConflictException('Esse exercício já está no plano');
+      }
+      throw err;
+    }
   }
 
   /**
    * Seleção múltipla do "Adicionar exercício" (Al-T8): entram no fim, na ordem
-   * da seleção, com o padrão de cada tipo. Tudo ou nada: um id que a pessoa não
-   * enxerga recusa o lote inteiro antes de qualquer escrita, e a escrita é um
-   * `update` aninhado só (uma transação, sem segurar conexão — ADR 010).
+   * da seleção, com o padrão de cada tipo. Um id que a pessoa não enxerga recusa
+   * o lote inteiro antes de qualquer escrita.
+   *
+   * Idempotente: o que já está no plano (ou se repete no lote) fica de fora, sem
+   * erro. Repetir o pedido depois de perder a resposta devolve o mesmo plano, e
+   * dois lotes ao mesmo tempo esbarram no único e o `skipDuplicates` descarta.
    */
   async addExercises(userId: string, planId: string, dto: AddPlanExercisesDto): Promise<PlanView> {
     await this.assertOwner(userId, planId);
@@ -167,23 +183,28 @@ export class WorkoutPlanService {
     if (visible.length !== ids.length) throw new NotFoundException('Exercise not found');
     const byId = new Map(visible.map((e) => [e.id, e]));
 
-    const start = await this.nextOrder(planId);
-    await this.prisma.workoutPlan.update({
-      where: { id: planId },
-      data: {
-        exercises: {
-          create: dto.exercises.map((item, i) => {
-            const cardio = isCardioExercise(byId.get(item.exerciseId)!);
-            return {
-              exerciseId: item.exerciseId,
-              order: start + i,
-              targetSets: cardio ? 1 : DEFAULT_STRENGTH_SETS,
-              targetReps: cardio ? '' : DEFAULT_STRENGTH_REPS,
-            };
-          }),
-        },
-      },
+    const already = await this.prisma.workoutPlanExercise.findMany({
+      where: { planId, exerciseId: { in: ids } },
+      select: { exerciseId: true },
     });
+    const inPlan = new Set(already.map((e) => e.exerciseId));
+    const fresh = ids.filter((id) => !inPlan.has(id));
+    if (fresh.length > 0) {
+      const start = await this.nextOrder(planId);
+      await this.prisma.workoutPlanExercise.createMany({
+        data: fresh.map((exerciseId, i) => {
+          const cardio = isCardioExercise(byId.get(exerciseId)!);
+          return {
+            planId,
+            exerciseId,
+            order: start + i,
+            targetSets: cardio ? 1 : DEFAULT_STRENGTH_SETS,
+            targetReps: cardio ? '' : DEFAULT_STRENGTH_REPS,
+          };
+        }),
+        skipDuplicates: true,
+      });
+    }
     return this.findById(userId, planId);
   }
 
