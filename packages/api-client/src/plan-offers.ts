@@ -348,6 +348,41 @@ export function offerAnswerCopy(
     : { title: 'Recusado', body: told };
 }
 
+export type OfferStage = 'answer' | 'accepted' | 'declined' | 'superseded';
+
+/** Em que pé está a resposta, pela versão que a tela mostra. */
+export function offerStage(offer: Pick<PlanOffer, 'shown'>): OfferStage {
+  switch (offer.shown.status) {
+    case 'ACCEPTED':
+      return 'accepted';
+    case 'DECLINED':
+      return 'declined';
+    case 'SUPERSEDED':
+      return 'superseded';
+    default:
+      return 'answer';
+  }
+}
+
+/**
+ * Os botões presos embaixo da tela (prancha Al-T2): "Recusar" + "Aceitar
+ * plano" enquanto espera; aceito, só "Começar agora"; recusado, "Voltar".
+ * Aceitar e recusar não perguntam antes: recusar mostra "Desfazer".
+ */
+export function offerActions(offer: Pick<PlanOffer, 'shown' | 'kind' | 'planId'>): {
+  primary: string;
+  secondary: string | null;
+} {
+  const stage = offerStage(offer);
+  if (stage === 'answer') {
+    return offer.kind === 'update'
+      ? { primary: 'Aceitar troca', secondary: 'Manter a atual' }
+      : { primary: 'Aceitar plano', secondary: 'Recusar' };
+  }
+  if (stage === 'accepted' && offer.planId) return { primary: 'Começar agora', secondary: null };
+  return { primary: 'Voltar', secondary: null };
+}
+
 /** O aviso no início do Treino: "Helena enviou um plano · toque para ver". */
 export function receivedOfferBanner(
   o: Pick<PlanOfferSummary, 'authorName' | 'kind' | 'title' | 'version'>,

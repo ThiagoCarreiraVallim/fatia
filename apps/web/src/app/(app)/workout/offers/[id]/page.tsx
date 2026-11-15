@@ -11,11 +11,14 @@ import {
   exerciseChangeText,
   exerciseSetsText,
   initialsOf,
+  offerActions,
   offerAnswerCopy,
   offerSentLine,
+  offerStage,
   offerTitle,
   offerWhen,
   planOffersApi,
+  workoutApi,
   type OfferExercise,
   type PlanOffer,
 } from '@fatia/api-client';
@@ -23,10 +26,10 @@ import { ErrorState } from '@/components/elements/error-state';
 import { DockedAction, DockedPage } from '@/components/layout/bottom-nav';
 import { TopBarActions } from '@/components/layout/app-top-bar';
 import { errorMessage } from '@/components/nutrition/error-message';
-import { ConfirmSheet } from '@/components/ui/confirm-sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useStartSession } from '@/components/workout/cards/workout-cards';
-import { groupTone } from '@/components/workout/group-tone';
+import { ExerciseDetailDrawer } from '@/components/workout/exercise-detail-drawer';
+import { ExerciseGroupLine, ExerciseThumb } from '@/components/workout/plan-exercise-row';
 import { PLAN_OFFERS_KEY } from '@/components/workout/received-offer-notice';
 import { cn } from '@/lib/utils';
 
@@ -36,8 +39,8 @@ const firstName = (name: string | null | undefined) => name?.trim().split(/\s+/)
 
 /**
  * Plano de treino recebido da equipe (#379, pranchas Al-T2 e Al-T2b). Nada
- * muda sem o aceite: "Aceitar" pergunta antes; "Recusar" avisa a equipe e pode
- * ser desfeito. Na atualização, a tela diz o que mudou em relação à versão em
+ * muda sem o aceite. Como na prancha, aceitar e recusar são diretos: o aceite
+ * mostra "Começar agora"; a recusa avisa a equipe e oferece "Desfazer". Na atualização, a tela diz o que mudou em relação à versão em
  * uso e a pessoa troca ou mantém a atual.
  */
 export default function PlanOfferPage() {
@@ -46,7 +49,6 @@ export default function PlanOfferPage() {
   const qc = useQueryClient();
   const key = ['plan-offer', id] as const;
   const q = useQuery({ queryKey: key, queryFn: () => planOffersApi.get(id) });
-  const [confirmAccept, setConfirmAccept] = useState(false);
   const start = useStartSession();
 
   const settle = (offer: PlanOffer) => {
@@ -65,10 +67,7 @@ export default function PlanOfferPage() {
 
   const accept = useMutation({
     mutationFn: (versionId: string) => planOffersApi.accept(id, versionId),
-    onSuccess: (offer) => {
-      setConfirmAccept(false);
-      settle(offer);
-    },
+    onSuccess: settle,
     onError: fail('Não deu para aceitar o plano. Tente de novo.'),
   });
   const decline = useMutation({
@@ -112,8 +111,9 @@ export default function PlanOfferPage() {
   const isUpdate = offer.kind === 'update';
   const planId = offer.planId ?? offer.accepted?.planId ?? null;
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const answered =
-    v.status === 'ACCEPTED' ? 'accepted' : v.status === 'DECLINED' ? 'declined' : null;
+  const stage = offerStage(offer);
+  const actions = offerActions({ ...offer, planId });
+  const answered = stage === 'accepted' || stage === 'declined' ? stage : null;
   const answer = answered ? offerAnswerCopy(answered, authorName, offer.kind) : null;
   const busy = accept.isPending || decline.isPending || undo.isPending;
 
@@ -229,7 +229,7 @@ export default function PlanOfferPage() {
       {answered === 'declined' && answer && (
         <div
           role="status"
-          className="flex items-center gap-3 rounded-card bg-[hsl(var(--steps)/0.1)] px-4 py-3.5 shadow-[inset_0_0_0_1px_hsl(var(--steps)/0.3)]"
+          className="flex items-center gap-3 rounded-card bg-[hsl(var(--warning)/0.1)] px-4 py-3.5 shadow-[inset_0_0_0_1px_hsl(var(--warning)/0.3)]"
         >
           <span className="min-w-0 flex-1">
             <b className="block text-sm">{answer.title}</b>
@@ -247,7 +247,7 @@ export default function PlanOfferPage() {
       )}
 
       <DockedAction>
-        {v.status === 'PENDING' && (
+        {stage === 'answer' && (
           <>
             <button
               type="button"
@@ -255,19 +255,19 @@ export default function PlanOfferPage() {
               onClick={() => decline.mutate(v.id)}
               className={cn(pill, 'bg-muted px-5 text-foreground')}
             >
-              {isUpdate ? 'Manter a atual' : 'Recusar'}
+              {actions.secondary}
             </button>
             <button
               type="button"
               disabled={busy}
-              onClick={() => setConfirmAccept(true)}
+              onClick={() => accept.mutate(v.id)}
               className={cn(pill, 'flex-1 bg-primary text-primary-foreground')}
             >
-              {isUpdate ? 'Aceitar troca' : 'Aceitar plano'}
+              {actions.primary}
             </button>
           </>
         )}
-        {answered === 'accepted' && planId && (
+        {stage === 'accepted' && planId && (
           <button
             type="button"
             disabled={start.isPending}
@@ -275,40 +275,17 @@ export default function PlanOfferPage() {
             className={cn(pill, 'flex-1 bg-primary text-primary-foreground')}
           >
             <Play size={16} aria-hidden />
-            Começar agora
+            {actions.primary}
           </button>
         )}
-        {(answered === 'declined' || v.status === 'SUPERSEDED') && (
+        {actions.primary === 'Voltar' && (
           <Link href="/workout" className={cn(pill, 'flex-1 bg-muted text-foreground')}>
             Voltar
           </Link>
         )}
       </DockedAction>
-
-      <ConfirmSheet
-        open={confirmAccept}
-        onOpenChange={setConfirmAccept}
-        title={isUpdate ? `Trocar para ${offerTitle(v)}?` : `Aceitar ${offerTitle(v)}?`}
-        description={acceptText(offer)}
-        icon="check"
-        tone="default"
-        confirmLabel="Aceitar"
-        pendingLabel="Aceitando..."
-        pending={accept.isPending}
-        onConfirm={() => accept.mutate(v.id)}
-      />
     </DockedPage>
   );
-}
-
-/** O que o aceite faz, numa linha, antes de fazer. */
-function acceptText(offer: PlanOffer): string {
-  if (offer.kind === 'update') {
-    return 'O plano em uso passa para esta versão. Seus treinos feitos continuam no histórico.';
-  }
-  return offer.shown.schedule === 'CALENDAR'
-    ? 'Ele entra nos seus planos, e as sessões entram na sua agenda a partir de hoje.'
-    : 'Ele entra nos seus planos, sem datas: siga no seu ritmo.';
 }
 
 function Stat({ value, label }: { value: string; label: string }) {
@@ -320,6 +297,10 @@ function Stat({ value, label }: { value: string; label: string }) {
   );
 }
 
+/**
+ * Uma linha do plano (prancha: miniatura com o play e a borda na cor do grupo,
+ * nome, grupo e séries). Abre o Como fazer quando o exercício é do catálogo.
+ */
 function ExerciseRow({
   exercise: e,
   showChanges,
@@ -327,32 +308,55 @@ function ExerciseRow({
   exercise: OfferExercise;
   showChanges: boolean;
 }) {
-  const tone = groupTone((e.muscleGroup ?? '').toLowerCase());
+  const [detailOpen, setDetailOpen] = useState(false);
+  const detail = useQuery({
+    queryKey: ['workout', 'exercise', e.exerciseId],
+    queryFn: () => workoutApi.getExercise(e.exerciseId!),
+    enabled: detailOpen && e.exerciseId != null,
+  });
+  const group = (e.muscleGroup ?? '').toLowerCase();
   const change = showChanges ? exerciseChangeText(e.changes) : null;
-  return (
-    <li className="flex min-h-[72px] items-center gap-3 py-3">
+  const body = (
+    <>
+      <ExerciseThumb group={group} size={52} />
       <span className="min-w-0 flex-1 space-y-0.5">
         <span className="flex items-center gap-1.5">
           <span className="truncate text-[15px] font-semibold">{e.name}</span>
           {e.isNew && (
-            <span className="inline-flex h-[18px] shrink-0 items-center rounded-pill bg-primary/15 px-2 text-[11px] font-extrabold text-primary">
+            <span className="inline-flex h-[18px] shrink-0 items-center rounded-pill bg-primary/15 px-2 text-[11px] font-extrabold uppercase text-primary">
               novo
             </span>
           )}
         </span>
-        {e.muscleGroup && (
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-            <span
-              aria-hidden
-              className="h-[7px] w-[7px] rounded-[2px]"
-              style={{ background: tone }}
-            />
-            {e.muscleGroup}
-          </span>
-        )}
+        {e.muscleGroup && <ExerciseGroupLine group={group} />}
         {change && <span className="block text-xs font-semibold text-info">{change}</span>}
       </span>
       <b className="shrink-0 text-sm tabular-nums">{exerciseSetsText(e)}</b>
+    </>
+  );
+  return (
+    <li className="py-2.5">
+      {e.exerciseId != null ? (
+        <button
+          type="button"
+          aria-label={`Como fazer ${e.name}`}
+          onClick={() => setDetailOpen(true)}
+          className="flex min-h-[52px] w-full items-center gap-3 text-left"
+        >
+          {body}
+        </button>
+      ) : (
+        <span className="flex min-h-[52px] items-center gap-3">{body}</span>
+      )}
+      {e.exerciseId != null && (
+        <ExerciseDetailDrawer
+          exercise={detail.data ?? null}
+          open={detailOpen && !!detail.data}
+          onOpenChange={(o) => {
+            if (!o) setDetailOpen(false);
+          }}
+        />
+      )}
     </li>
   );
 }

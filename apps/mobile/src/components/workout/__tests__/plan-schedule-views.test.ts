@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { AgendaItem, PlanOffer, TrainingBlock } from '@fatia/api-client';
-import {
-  acceptConfirm,
-  declineConfirm,
-  offerActions,
-  offerStage,
-  pendingOfferBanner,
-} from '../offer-view';
+import type { AgendaItem, TrainingBlock } from '@fatia/api-client';
+import { pendingOfferBanner } from '../offer-view';
 import {
   agendaWindow,
   dayDot,
@@ -17,100 +11,7 @@ import {
 } from '../agenda-view';
 import { activeWeekRows, blockScreenState, blockStatusCopy } from '../block-view';
 
-const offer = (
-  over: Partial<PlanOffer> = {},
-  shown: Partial<PlanOffer['shown']> = {},
-): PlanOffer => ({
-  id: 'o1',
-  author: { name: 'Helena Personal' },
-  group: { id: 'g1', name: 'Academia Demo' },
-  kind: 'new',
-  accepted: null,
-  diff: null,
-  planId: null,
-  ...over,
-  shown: {
-    id: 'v1',
-    version: 1,
-    status: 'PENDING',
-    title: 'Inferior',
-    schedule: 'CALENDAR',
-    startDate: '2026-11-16',
-    endDate: '2026-12-13',
-    weeks: 4,
-    weekdays: [1, 4],
-    note: null,
-    sentAt: '2026-11-15T12:00:00.000Z',
-    respondedAt: null,
-    summary: { exercises: 4, sets: 14, minutes: 40 },
-    exercises: [],
-    removed: [],
-    ...shown,
-  },
-});
-
 describe('plano recebido no app (Al-T2, Al-T2b)', () => {
-  it('o estágio sai do status da versão mostrada', () => {
-    expect(offerStage(offer())).toBe('answer');
-    expect(offerStage(offer({}, { status: 'ACCEPTED' }))).toBe('accepted');
-    expect(offerStage(offer({}, { status: 'DECLINED' }))).toBe('declined');
-    expect(offerStage(offer({}, { status: 'SUPERSEDED' }))).toBe('superseded');
-  });
-
-  it('botões de baixo: novo, atualização, aceito e recusado', () => {
-    expect(offerActions(offer())).toEqual({ primary: 'Aceitar plano', secondary: 'Recusar' });
-    expect(offerActions(offer({ kind: 'update' }, { version: 2 }))).toEqual({
-      primary: 'Aceitar troca',
-      secondary: 'Manter atual',
-    });
-    expect(offerActions(offer({ planId: 'p1' }, { status: 'ACCEPTED' }))).toEqual({
-      primary: 'Começar agora',
-      secondary: 'Voltar',
-    });
-    expect(offerActions(offer({}, { status: 'DECLINED' }))).toEqual({
-      primary: 'Voltar',
-      secondary: null,
-    });
-  });
-
-  it('a confirmação do aceite diz o que acontece com a agenda', () => {
-    expect(acceptConfirm(offer())).toEqual({
-      title: 'Aceitar Inferior?',
-      description:
-        'Ele entra nos seus planos e as sessões vão para a sua agenda, de 16 nov a 13 dez.',
-      confirmLabel: 'Aceitar plano',
-    });
-    expect(
-      acceptConfirm(
-        offer({}, { schedule: 'FLEXIBLE', startDate: null, endDate: null, weeks: null }),
-      ).description,
-    ).toBe('Ele entra nos seus planos. Sem datas: você treina no seu ritmo.');
-    const update = acceptConfirm(
-      offer(
-        { kind: 'update', diff: { added: ['a'], removed: [], changed: [], hasChanges: true } },
-        { version: 2 },
-      ),
-    );
-    expect(update).toEqual({
-      title: 'Trocar pela v2?',
-      description: '1 novo. O plano em uso muda; o histórico dos treinos continua.',
-      confirmLabel: 'Aceitar troca',
-    });
-  });
-
-  it('recusar pergunta antes e lembra que dá para desfazer', () => {
-    expect(declineConfirm(offer())).toEqual({
-      title: 'Recusar Inferior?',
-      description: 'Avisamos Helena. Dá para desfazer depois.',
-      confirmLabel: 'Recusar',
-    });
-    expect(declineConfirm(offer({ kind: 'update', author: null }, { version: 2 }))).toEqual({
-      title: 'Manter a versão atual?',
-      description: 'Seu plano não muda. Avisamos a equipe.',
-      confirmLabel: 'Manter atual',
-    });
-  });
-
   it('o aviso no Treino: o primeiro pendente e quantos mais', () => {
     const p = {
       id: 'o1',

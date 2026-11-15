@@ -13,8 +13,10 @@ import {
   exerciseChangeText,
   exerciseSetsText,
   monthGrid,
+  offerActions,
   offerAnswerCopy,
   offerSentLine,
+  offerStage,
   offerTitle,
   offerWhen,
   planOffersApi,
@@ -107,6 +109,38 @@ describe('plano recebido (Al-T2, Al-T2b)', () => {
     expect(offerAnswerCopy('declined', 'Helena', 'update')).toEqual({
       title: 'Você manteve a versão atual',
       body: 'Avisamos Helena.',
+    });
+  });
+});
+
+describe('resposta ao plano recebido: igual no web e no app', () => {
+  const o = (over: Record<string, unknown> = {}, shown: Partial<OfferVersion> = {}) => ({
+    kind: 'new' as const,
+    planId: null as string | null,
+    shown: version(shown),
+    ...over,
+  });
+
+  it('o estágio sai do status da versão mostrada', () => {
+    expect(offerStage(o())).toBe('answer');
+    expect(offerStage(o({}, { status: 'ACCEPTED' }))).toBe('accepted');
+    expect(offerStage(o({}, { status: 'DECLINED' }))).toBe('declined');
+    expect(offerStage(o({}, { status: 'SUPERSEDED' }))).toBe('superseded');
+  });
+
+  it('botões de baixo como na prancha: aceito só tem "Começar agora"', () => {
+    expect(offerActions(o())).toEqual({ primary: 'Aceitar plano', secondary: 'Recusar' });
+    expect(offerActions(o({ kind: 'update' }, { version: 2 }))).toEqual({
+      primary: 'Aceitar troca',
+      secondary: 'Manter a atual',
+    });
+    expect(offerActions(o({ planId: 'p1' }, { status: 'ACCEPTED' }))).toEqual({
+      primary: 'Começar agora',
+      secondary: null,
+    });
+    expect(offerActions(o({}, { status: 'DECLINED' }))).toEqual({
+      primary: 'Voltar',
+      secondary: null,
     });
   });
 });

@@ -1,15 +1,16 @@
-import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, RotateCcw, X } from 'lucide-react-native';
+import { Check, Play, X } from 'lucide-react-native';
 import {
   diffSummary,
   exerciseChangeText,
   exerciseSetsText,
   initialsOf,
+  offerActions,
   offerAnswerCopy,
   offerSentLine,
+  offerStage,
   offerTitle,
   offerWhen,
   planOffersApi,
@@ -17,31 +18,23 @@ import {
   type PlanOffer,
 } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
-import {
-  ConfirmDrawer,
-  DrawerLayer,
-  ErrorState,
-  LoadingState,
-  cn,
-  useToast,
-} from '@/components/ui';
+import { ErrorState, LoadingState, cn, useToast } from '@/components/ui';
 import { Text } from '@/components/ui/text';
 import { mensagemDeErro } from '@/components/nutrition/helpers';
 import { useStartSession } from '@/components/workout/use-start-session';
+import { deviceTimezone } from '@/components/workout/offer-view';
 import {
-  acceptConfirm,
-  declineConfirm,
-  deviceTimezone,
-  offerActions,
-  offerStage,
-} from '@/components/workout/offer-view';
+  ExerciseDetailHost,
+  useOpenExerciseDetail,
+} from '@/components/workout/exercise-detail-host';
+import { ExerciseGroupLine, ExerciseThumb } from '@/components/workout/plan-exercise-row';
 import { colors } from '@/theme/colors';
 
 /**
  * Plano de treino recebido da equipe (#379, pranchas Al-T2 e Al-T2b). Réplica
- * de `apps/web/src/app/(app)/workout/offers/[id]/page.tsx`: aceitar e recusar
- * perguntam antes, recusar dá para desfazer, e a atualização mostra o que mudou
- * em cada exercício. Nada muda no plano sem o aceite.
+ * de `apps/web/src/app/(app)/workout/offers/[id]/page.tsx`: aceitar e recusar são
+ * diretos como na prancha (o aceite mostra "Começar agora"; a recusa,
+ * "Desfazer"), e a atualização mostra o que mudou em cada exercício.
  */
 
 const PILL = 'h-14 items-center justify-center rounded-pill active:opacity-80';
@@ -52,27 +45,34 @@ export default function PlanOfferScreen() {
   const qc = useQueryClient();
   const toast = useToast();
   const startSession = useStartSession();
-  const [asking, setAsking] = useState<'accept' | 'decline' | null>(null);
   const key = ['plan-offers', id] as const;
 
   const q = useQuery({ queryKey: key, queryFn: () => planOffersApi.get(id), enabled: !!id });
 
   const answered = (offer: PlanOffer) => {
     qc.setQueryData(key, offer);
-    setAsking(null);
     void qc.invalidateQueries({ queryKey: ['plan-offers'] });
     void qc.invalidateQueries({ queryKey: ['workout', 'plans'] });
     void qc.invalidateQueries({ queryKey: ['workout', 'agenda'] });
     void qc.invalidateQueries({ queryKey: ['dashboard'] });
   };
 
+  const fail = (alternativa: string) => (e: unknown) =>
+    toast.show({
+      message: mensagemDeErro(e, {
+        conflito: 'Esse plano mudou. Puxe a tela para ver a versão nova.',
+        alternativa,
+      }),
+    });
   const accept = useMutation({
     mutationFn: (versionId: string) => planOffersApi.accept(id, versionId),
     onSuccess: answered,
+    onError: fail('Não deu para aceitar. Tente de novo.'),
   });
   const decline = useMutation({
     mutationFn: (versionId: string) => planOffersApi.decline(id, versionId),
     onSuccess: answered,
+    onError: fail('Não deu para responder. Tente de novo.'),
   });
   const undo = useMutation({
     mutationFn: (versionId: string) => planOffersApi.undoDecline(id, versionId),
@@ -84,15 +84,16 @@ export default function PlanOfferScreen() {
   const offer = q.data;
   const stage = offer ? offerStage(offer) : null;
   const actions = offer ? offerActions(offer) : null;
+  const busy = accept.isPending || decline.isPending || startSession.isPending;
 
   const onPrimary = () => {
     if (!offer) return;
-    if (stage === 'answer') setAsking('accept');
+    if (stage === 'answer') accept.mutate(offer.shown.id);
     else if (stage === 'accepted' && offer.planId) startSession.mutate({ planId: offer.planId });
     else router.navigate('/workout' as Href);
   };
   const onSecondary = () => {
-    if (stage === 'answer') setAsking('decline');
+    if (stage === 'answer' && offer) decline.mutate(offer.shown.id);
     else router.navigate('/workout' as Href);
   };
 
@@ -102,23 +103,25 @@ export default function PlanOfferScreen() {
         {actions.secondary ? (
           <Pressable
             accessibilityRole="button"
+            disabled={busy}
             onPress={onSecondary}
-            className={cn(PILL, 'bg-muted px-5')}
+            className={cn(PILL, 'bg-muted px-5', busy && 'opacity-40')}
           >
             <Text className="font-sans-bold text-[15px] text-foreground">{actions.secondary}</Text>
           </Pressable>
         ) : null}
         <Pressable
           accessibilityRole="button"
-          disabled={startSession.isPending}
+          disabled={busy}
           onPress={onPrimary}
           className={cn(
             PILL,
-            'flex-1',
+            'flex-1 flex-row gap-2',
             stage === 'answer' || stage === 'accepted' ? 'bg-primary' : 'bg-muted',
-            startSession.isPending && 'opacity-40',
+            busy && 'opacity-40',
           )}
         >
+          {stage === 'accepted' ? <Play size={16} color={colors.primaryForeground} /> : null}
           <Text
             className={cn(
               'font-sans-bold text-[15px]',
@@ -134,7 +137,7 @@ export default function PlanOfferScreen() {
     ) : null;
 
   return (
-    <>
+    <ExerciseDetailHost>
       <Screen
         refreshing={q.isRefetching}
         onRefresh={() => void q.refetch()}
@@ -142,9 +145,9 @@ export default function PlanOfferScreen() {
         actions={
           <View
             className="h-[22px] justify-center rounded-pill px-[9px]"
-            style={{ backgroundColor: `${colors.warning}24` }}
+            style={{ backgroundColor: `${colors.info}1a` }}
           >
-            <Text className="font-sans-extrabold text-[11px] uppercase tracking-wide text-warning">
+            <Text className="font-sans-extrabold text-[11px] uppercase tracking-wide text-info">
               personal
             </Text>
           </View>
@@ -162,42 +165,7 @@ export default function PlanOfferScreen() {
           ) : null}
         </View>
       </Screen>
-
-      {offer ? (
-        <DrawerLayer>
-          <ConfirmDrawer
-            open={asking === 'accept'}
-            onOpenChange={(open) => !open && setAsking(null)}
-            {...acceptConfirm(offer)}
-            loading={accept.isPending}
-            error={
-              accept.error
-                ? mensagemDeErro(accept.error, {
-                    conflito: 'Esse plano mudou. Puxe a tela para ver a versão nova.',
-                    alternativa: 'Não deu para aceitar. Tente de novo.',
-                  })
-                : null
-            }
-            onConfirm={() => accept.mutate(offer.shown.id)}
-          />
-          <ConfirmDrawer
-            open={asking === 'decline'}
-            onOpenChange={(open) => !open && setAsking(null)}
-            {...declineConfirm(offer)}
-            destructive={offer.kind === 'new'}
-            loading={decline.isPending}
-            error={
-              decline.error
-                ? mensagemDeErro(decline.error, {
-                    alternativa: 'Não deu para responder. Tente de novo.',
-                  })
-                : null
-            }
-            onConfirm={() => decline.mutate(offer.shown.id)}
-          />
-        </DrawerLayer>
-      ) : null}
-    </>
+    </ExerciseDetailHost>
   );
 }
 
@@ -237,22 +205,21 @@ function OfferBody({
         </Text>
         <View className="flex-row flex-wrap items-center gap-2">
           <View
-            className="h-[26px] justify-center rounded-pill px-2.5"
+            className="h-[22px] justify-center rounded-pill px-[9px]"
             style={{
-              backgroundColor:
-                when.tone === 'calendar' ? `${colors.info}1f` : `${colors.primary}1f`,
+              backgroundColor: when.tone === 'calendar' ? `${colors.info}1a` : colors.muted,
             }}
           >
             <Text
               className={cn(
-                'font-sans-bold text-xs',
-                when.tone === 'calendar' ? 'text-info' : 'text-primary-text',
+                'font-sans-extrabold text-[11px] uppercase tracking-wide',
+                when.tone === 'calendar' ? 'text-info' : 'text-muted-foreground',
               )}
             >
               {when.label}
             </Text>
           </View>
-          <Text className="text-xs text-faint">{when.sub}</Text>
+          <Text className="text-xs text-muted-foreground">{when.sub}</Text>
         </View>
       </View>
 
@@ -282,27 +249,29 @@ function OfferBody({
       {v.note ? (
         <View className="flex-row gap-3 rounded-card bg-card p-4">
           <Avatar name={author} size={28} />
-          <Text className="min-w-0 flex-1 text-sm text-foreground">{v.note}</Text>
+          <View className="min-w-0 flex-1 gap-0.5">
+            <Text className="font-sans-bold text-[13px] text-foreground">
+              {author?.trim().split(/\s+/)[0] ?? 'Equipe'}
+            </Text>
+            <Text className="text-sm text-foreground">{v.note}</Text>
+          </View>
         </View>
       ) : null}
 
-      <AnswerCard offer={offer} undoing={undoing} onUndo={onUndo} />
-
-      <View className="overflow-hidden rounded-card bg-card">
+      <View className="overflow-hidden rounded-card bg-card px-4">
         {v.exercises.map((e, i) => (
           <ExerciseRow key={e.key} exercise={e} divider={i > 0} />
         ))}
         {v.removed.map((r) => (
-          <View
-            key={r.key}
-            className="flex-row items-center gap-3 border-t border-border px-4 py-3"
-          >
+          <View key={r.key} className="flex-row items-center gap-3 border-t border-border py-3">
             <X size={14} color={colors.danger} />
             <Text className="min-w-0 flex-1 text-sm text-faint line-through">{r.name}</Text>
             <Text className="text-xs text-danger">removido</Text>
           </View>
         ))}
       </View>
+
+      <AnswerCard offer={offer} undoing={undoing} onUndo={onUndo} />
 
       {stage === 'superseded' ? (
         <Text className="text-center text-xs text-faint">
@@ -335,24 +304,15 @@ function AnswerCard({
       accessibilityLiveRegion="polite"
       className="flex-row items-center gap-3 rounded-card p-4"
       style={{
-        backgroundColor: ok ? `${colors.primary}1a` : colors.card,
+        backgroundColor: ok ? `${colors.primary}1a` : `${colors.warning}1a`,
         borderWidth: 1,
-        borderColor: ok ? `${colors.primary}59` : colors.borderStrong,
+        borderColor: ok ? `${colors.primary}59` : `${colors.warning}4d`,
       }}
     >
-      <View
-        className="h-8 w-8 items-center justify-center rounded-full"
-        style={{ backgroundColor: ok ? colors.primary : colors.muted }}
-      >
-        {ok ? (
-          <Check size={16} color={colors.primaryForeground} />
-        ) : (
-          <X size={16} color={colors.mutedForeground} />
-        )}
-      </View>
+      {ok ? <Check size={20} color={colors.primary} /> : null}
       <View className="min-w-0 flex-1">
         <Text className="font-sans-bold text-sm text-foreground">{copy.title}</Text>
-        <Text className="text-xs text-faint">{copy.body}</Text>
+        <Text className="text-xs text-muted-foreground">{copy.body}</Text>
       </View>
       {!ok ? (
         <Pressable
@@ -365,7 +325,6 @@ function AnswerCard({
             undoing && 'opacity-40',
           )}
         >
-          <RotateCcw size={14} color={colors.foreground} />
           <Text className="font-sans-bold text-[13px] text-foreground">Desfazer</Text>
         </Pressable>
       ) : null}
@@ -374,31 +333,50 @@ function AnswerCard({
 }
 
 function ExerciseRow({ exercise: e, divider }: { exercise: OfferExercise; divider: boolean }) {
+  const openDetail = useOpenExerciseDetail();
   const change = exerciseChangeText(e.changes);
+  const group = (e.muscleGroup ?? '').toLowerCase();
   return (
-    <View className={cn('gap-0.5 px-4 py-3', divider && 'border-t border-border')}>
-      <View className="flex-row items-center gap-2">
-        <Text
-          numberOfLines={1}
-          className="min-w-0 flex-1 font-sans-semibold text-sm text-foreground"
-        >
-          {e.name}
-        </Text>
-        {e.isNew ? (
-          <View
-            className="h-[18px] justify-center rounded-pill px-2"
-            style={{ backgroundColor: `${colors.success}26` }}
+    <Pressable
+      accessibilityRole={e.exerciseId != null ? 'button' : undefined}
+      accessibilityLabel={e.exerciseId != null ? `Como fazer ${e.name}` : undefined}
+      disabled={e.exerciseId == null}
+      onPress={() => e.exerciseId != null && openDetail(e.exerciseId)}
+      className={cn(
+        'min-h-[72px] flex-row items-center gap-3 py-2.5',
+        divider && 'border-t border-border',
+      )}
+    >
+      <ExerciseThumb group={group} size={52} />
+      <View className="min-w-0 flex-1 gap-0.5">
+        <View className="flex-row items-center gap-1.5">
+          <Text
+            numberOfLines={1}
+            className="min-w-0 shrink font-sans-semibold text-[15px] text-foreground"
           >
-            <Text className="font-sans-extrabold text-[11px] text-success">novo</Text>
-          </View>
-        ) : null}
-        <Text className="text-sm text-foreground" style={{ fontVariant: ['tabular-nums'] }}>
-          {exerciseSetsText(e)}
-        </Text>
+            {e.name}
+          </Text>
+          {e.isNew ? (
+            <View
+              className="h-[18px] justify-center rounded-pill px-2"
+              style={{ backgroundColor: `${colors.primary}26` }}
+            >
+              <Text className="font-sans-extrabold text-[11px] uppercase text-primary-text">
+                novo
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        {e.muscleGroup ? <ExerciseGroupLine group={group} /> : null}
+        {change ? <Text className="text-xs text-info">{change}</Text> : null}
       </View>
-      {e.muscleGroup ? <Text className="text-xs text-faint">{e.muscleGroup}</Text> : null}
-      {change ? <Text className="text-xs text-info">{change}</Text> : null}
-    </View>
+      <Text
+        className="font-sans-bold text-sm text-foreground"
+        style={{ fontVariant: ['tabular-nums'] }}
+      >
+        {exerciseSetsText(e)}
+      </Text>
+    </Pressable>
   );
 }
 

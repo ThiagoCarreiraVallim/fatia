@@ -153,7 +153,7 @@ describe('Plano recebido (Al-T2, Al-T2b)', () => {
     expect(screen.getByText('sem datas · siga no seu ritmo')).toBeInTheDocument();
   });
 
-  it('aceitar pergunta antes e manda a versão que está na tela', async () => {
+  it('aceitar é direto (sem confirmação) e manda a versão que está na tela', async () => {
     api.get.mockResolvedValue(offer());
     api.accept.mockResolvedValue(
       offer({
@@ -164,12 +164,12 @@ describe('Plano recebido (Al-T2, Al-T2b)', () => {
     );
     renderPage();
     await userEvent.click(await screen.findByRole('button', { name: 'Aceitar plano' }));
-    expect(api.accept).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole('button', { name: 'Aceitar' }));
     await waitFor(() => expect(api.accept).toHaveBeenCalledWith('o1', 'v1'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(await screen.findByText('Plano aceito')).toBeInTheDocument();
     expect(screen.getByText('Avisamos Helena. Ele entrou nos seus planos.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Começar agora/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Voltar' })).not.toBeInTheDocument();
   });
 
   it('"Começar agora" abre o treino do plano aceito', async () => {
