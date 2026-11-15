@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 145 tools): **123,2 k caracteres**
-hoje, dos quais **7.326 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 145 tools): **124,8 k caracteres**
+hoje, dos quais **7.396 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (101,4 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (103,0 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -776,6 +776,13 @@ Limites por 100 g: até 900 kcal; proteína, carboidrato e gordura até 100 g ca
 100 g. Fora disso, ou com nome em branco ou `groupId` inexistente, responde `INVALID_INPUT`.
 Nome repetido entre os alimentos da própria pessoa responde `CONFLICT`.
 
+Micronutrientes (#375) vão em `nutrients`, também **por 100 g**, com a unidade no fim da chave
+(`fiber_g`, `sodium_mg`, `sugar_g`); prefira as chaves de `list_nutrient_targets`. Nutriente em
+gramas não passa de 100 g. `barcode` liga o código da embalagem ao alimento, só quando a pessoa
+pedir (ADR 017): é único entre os alimentos dela, e repetido responde `CONFLICT`. Daí em diante a
+leitura do código no app acha este alimento antes do Open Food Facts. Não há tool de leitura de
+rótulo (ADR 018): a IA que lê a foto manda os valores convertidos aqui.
+
 **Input:**
 
 ```typescript
@@ -787,6 +794,8 @@ Nome repetido entre os alimentos da própria pessoa responde `CONFLICT`.
   carbsPer100g: number;
   fatPer100g: number;
   portions?: Array<{ label: string; grams: number }>; // até 5, ex.: a porção do rótulo
+  nutrients?: Record<string, number>; // por 100 g: { fiber_g: 9, sodium_mg: 112 }
+  barcode?: string; // EAN/UPC, 8 a 14 dígitos
 }
 ```
 
@@ -811,6 +820,8 @@ já estão salvos.
   proteinPer100g?: number;
   carbsPer100g?: number;
   fatPer100g?: number;
+  nutrients?: Record<string, number> | null; // troca o mapa inteiro; null apaga
+  barcode?: string | null; // null desliga o código
 }
 ```
 
