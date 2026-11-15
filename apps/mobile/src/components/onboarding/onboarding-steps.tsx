@@ -28,6 +28,7 @@ import {
   onboardingReminderOptions,
   rangeLabel,
   remindersCta,
+  parseTypedBody,
   stepValue,
   stepsLabel,
   teamGoalsSummary,
@@ -411,6 +412,8 @@ export function BodyStep({
           label="Altura"
           unit="cm"
           display={String(value.heightCm)}
+          limits={H}
+          onType={(n) => set({ heightCm: n })}
           onMinus={() => set({ heightCm: stepValue(value.heightCm, -H.step, H) })}
           onPlus={() => set({ heightCm: stepValue(value.heightCm, H.step, H) })}
         />
@@ -418,6 +421,8 @@ export function BodyStep({
           label="Peso"
           unit="kg"
           display={decimalLabel(value.weightKg)}
+          limits={W}
+          onType={(n) => set({ weightKg: n })}
           onMinus={() => set({ weightKg: stepValue(value.weightKg, -W.step, W) })}
           onPlus={() => set({ weightKg: stepValue(value.weightKg, W.step, W) })}
         />
@@ -442,28 +447,62 @@ export function BodyStep({
   );
 }
 
+/**
+ * Altura e peso: o número é um campo de verdade (dá para digitar), e o − e o +
+ * ficam para o ajuste fino. A prancha só tinha os botões; digitar é mais rápido
+ * para quem sabe o próprio peso.
+ */
 function BodyStepper({
   label,
   unit,
   display,
+  limits,
+  onType,
   onMinus,
   onPlus,
 }: {
   label: string;
   unit: string;
   display: string;
+  limits: { min: number; max: number; step: number };
+  onType: (n: number) => void;
   onMinus: () => void;
   onPlus: () => void;
 }) {
+  const [editing, setEditing] = useState<string | null>(null);
+  const [focused, setFocused] = useState(false);
+  const commit = () => {
+    const n = parseTypedBody(editing ?? '', limits);
+    if (n !== null) onType(n);
+    setEditing(null);
+    setFocused(false);
+  };
   return (
     <View className="flex-1 gap-2">
       <Text className="text-[13px] font-semibold text-muted-foreground">{label}</Text>
       <View className="items-center gap-2.5 rounded-card bg-card px-2.5 py-3.5">
         <View
-          className="flex-row items-baseline gap-1"
-          accessibilityLabel={`${label}: ${display} ${unit}`}
+          className={cn(
+            'flex-row items-baseline gap-1 rounded-[12px] border-[1.5px] bg-background px-2 py-1',
+            focused ? 'border-primary' : 'border-transparent',
+          )}
         >
-          <Text className="font-display text-d3 text-foreground">{display}</Text>
+          <TextInput
+            accessibilityLabel={`${label} em ${unit}`}
+            keyboardType={limits.step >= 1 ? 'number-pad' : 'decimal-pad'}
+            returnKeyType="done"
+            selectTextOnFocus
+            value={editing ?? display}
+            onFocus={() => {
+              setEditing(display);
+              setFocused(true);
+            }}
+            onChangeText={setEditing}
+            onSubmitEditing={commit}
+            onBlur={commit}
+            maxLength={5}
+            className="min-w-[64px] text-center font-display text-d3 text-foreground"
+          />
           <Text className="text-sm font-semibold text-muted-foreground">{unit}</Text>
         </View>
         <View className="flex-row gap-2">

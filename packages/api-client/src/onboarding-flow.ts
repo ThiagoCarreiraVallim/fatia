@@ -189,6 +189,21 @@ export function stepValue(
   return Math.min(limits.max, Math.max(limits.min, next));
 }
 
+/**
+ * Altura ou peso digitados no lugar do stepper. Aceita vírgula ou ponto,
+ * arredonda no passo do stepper e prende na faixa (quem digita 400 kg vê 250 e
+ * percebe). Vazio, texto ou zero devolvem `null`: o campo volta ao valor de antes.
+ */
+export function parseTypedBody(
+  raw: string,
+  limits: { min: number; max: number; step: number },
+): number | null {
+  const n = Number(raw.trim().replace(',', '.'));
+  if (!raw.trim() || !Number.isFinite(n) || n <= 0) return null;
+  const rounded = limits.step >= 1 ? Math.round(n) : Math.round(n * 10) / 10;
+  return Math.min(limits.max, Math.max(limits.min, rounded));
+}
+
 /** 70.2 → "70,2". */
 export const decimalLabel = (n: number) => n.toFixed(1).replace('.', ',');
 
