@@ -126,7 +126,14 @@ Pendências da #378 (branch `redesign/378-planos-exercicio`):
 - **Para a #379:** o snapshot v1 leva a configuração nova. Não há regra de plano recebido só leitura (ADR 014: o plano adotado é da pessoa).
 - **Exercício repetido no plano:** pendente para outra issue. Exige a sessão (`session-view`, `use-session-layout`, `removedExerciseIds`) passar a agrupar por `planExerciseId`.
 - **Fora desta issue:** aba Circuitos do Al-T6 (#380); "Modelos das comunidades" e "Começar de um modelo" levam à lista de comunidades até a #379 dar a tela própria.
-- **Capturas** (Playwright e emulador) contra as pranchas: não feitas nesta sessão.
+- **Capturas** contra as pranchas: feitas na web e no app, com as telas T6, T7, T7 editando, T8, T8b, T19, T21, T21b e T21d. Ainda diferente da prancha:
+  - o título é "Planos de treino", porque a aba Circuitos ainda não existe;
+  - o card de plano recebido virou o card do bloco ativo;
+  - cada exercício tem setas para subir e para descer;
+  - o descanso também aceita segundos digitados;
+  - o T8 mantém "Na minha academia";
+  - o T8 e o T21 abrem no app como folhas a 85% da tela, como as outras do app, e não em tela cheia;
+  - a imagem do exercício é um placeholder.
 
 ## Etapas seguintes
 
