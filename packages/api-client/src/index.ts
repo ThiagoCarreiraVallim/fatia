@@ -45,6 +45,9 @@ export * from './community-feed';
 export * from './content-panel';
 export * from './markdown-lite';
 export * from './users';
+export * from './units';
+export * from './tutorials';
+export * from './you';
 export * from './workout';
 
 export * from './workout/is-cardio';

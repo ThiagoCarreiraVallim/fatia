@@ -44,29 +44,69 @@ describe('navegação', () => {
     expect(HOME_TITLE).toBe('Hoje');
   });
 
-  it('o conteúdo de Você leva a todas as outras telas, em seções', () => {
+  it('Você tem as seções da prancha Al-V1, com as telas que já existem', () => {
     const web = menuSections({ platform: 'web', chatAvailable: true });
-    expect(web.map((s) => s.title)).toEqual(['Você', 'Registros', 'IA']);
+    expect(web.map((s) => s.title)).toEqual([
+      'Progresso',
+      'Nutrição',
+      'Treino',
+      'IA',
+      'Comunidade e equipe',
+      'Rotina e avisos',
+      'Conta',
+    ]);
     expect(hrefs(web)).toEqual([
       '/progress',
-      '/nutrition/goals',
       '/goals',
       '/progress/records',
-      '/profile',
-      '/profile/notifications',
-      '/nutrition/foods',
+      '/nutrition/goals',
       '/nutrition/nutrient-targets',
+      '/nutrition/foods',
       '/workout/plans',
       '/workout/history',
       '/chat',
       '/profile/connect',
+      '/community',
+      '/profile/notifications',
       '/plan',
+      null,
+      '/you/units',
+      '/profile/appearance',
+      '/you/news',
+      '/you/help',
+      null,
+      null,
     ]);
   });
 
+  it('Conta tem o interruptor de fotos e as ações de senha e exportação', () => {
+    const conta = menuSections({ platform: 'web', chatAvailable: false }).at(-1)!;
+    expect(conta.items.filter((i) => i.kind !== 'link').map((i) => [i.key, i.kind])).toEqual([
+      ['keep-photos', 'toggle'],
+      ['password', 'action'],
+      ['export', 'action'],
+    ]);
+    expect(conta.items.find((i) => i.key === 'export')?.detail).toBe('Arquivo com link, vale 24 h');
+  });
+
+  it('toda linha leva ícone do design system', () => {
+    for (const s of menuSections({ platform: 'mobile', chatAvailable: true })) {
+      for (const i of s.items) expect(i.icon).toMatch(/^[a-zA-Z]+$/);
+    }
+  });
+
+  it('as telas novas de Você voltam para Você', () => {
+    for (const path of ['/you/edit', '/you/units', '/you/news', '/you/help', '/you/delete']) {
+      expect(routeInfo(path).parent).toBe('/you');
+      expect(activeNavKey(path)).toBe('you');
+    }
+  });
+
   it('os avisos são uma linha de Você, não um sino no cabeçalho dela (ADR 040, item 4)', () => {
-    const voce = menuSections({ platform: 'mobile', chatAvailable: false })[0]!;
-    expect(voce.items.find((i) => i.key === 'notifications')).toMatchObject({
+    const avisos = menuSections({ platform: 'mobile', chatAvailable: false }).find(
+      (s) => s.title === 'Rotina e avisos',
+    )!;
+    expect(avisos.items.find((i) => i.key === 'notifications')).toMatchObject({
       label: 'Notificações',
       href: '/profile/notifications',
     });
@@ -179,7 +219,7 @@ describe('navegação', () => {
       ['/profile', 'Perfil', '/you', 'Você'],
       ['/progress', 'Progresso', '/you', 'Você'],
       ['/goals', 'Metas pessoais', '/you', 'Você'],
-      ['/profile/notifications', 'Notificações', '/profile', 'Perfil'],
+      ['/profile/notifications', 'Notificações', '/you', 'Você'],
       ['/nutrition/foods', 'Meus alimentos', '/nutrition', 'Nutrição'],
       ['/nutrition/goals?from=home', 'Metas do dia', '/nutrition', 'Nutrição'],
       ['/workout/plans/p1', 'Plano de treino', '/workout/plans', 'Planos de treino'],
