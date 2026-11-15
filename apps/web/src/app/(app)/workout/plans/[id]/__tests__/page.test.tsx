@@ -53,7 +53,10 @@ vi.mock('@fatia/api-client', async () => {
       getExercise: vi.fn(),
       searchExercises: vi.fn(),
       addPlanExercise: vi.fn(),
+      addPlanExercises: vi.fn(),
     },
+    usersApi: { me: vi.fn().mockResolvedValue({ birthDate: null }) },
+    groupsApi: { mine: vi.fn().mockResolvedValue([]) },
   };
 });
 
@@ -83,6 +86,18 @@ function planExercise(id: string, name: string, order: number): WorkoutPlanExerc
     order,
     targetSets: 3,
     targetReps: '8-12',
+    repUnit: 'REPS',
+    loadMode: 'WEIGHT',
+    startLoadKg: null,
+    restSeconds: null,
+    technique: 'NORMAL',
+    biSetWithNext: false,
+    notes: null,
+    cardioTarget: null,
+    cardioDurationSeconds: null,
+    cardioDistanceMeters: null,
+    cardioIntensity: null,
+    sets: [],
     exercise: {
       id: order,
       name,
@@ -135,6 +150,8 @@ async function renderLoadedPage() {
   getPlan.mockResolvedValue(plan());
   const user = userEvent.setup();
   renderPage();
+  // As setas moram no modo de edição (Al-T7).
+  await user.click(await screen.findByRole('button', { name: 'Editar plano' }));
   await screen.findByRole('button', { name: /mover crucifixo para baixo/i });
   return user;
 }
@@ -364,6 +381,8 @@ describe('PlanDetailPage — reordenação', () => {
       plan([planExercise('pe-b', 'Crucifixo', 5), planExercise('pe-c', 'Crossover', 9)]),
     );
     await user.click(screen.getByRole('button', { name: /remover supino do plano/i }));
+    // Remover pergunta antes (#378).
+    await user.click(await screen.findByRole('button', { name: 'Remover' }));
     await waitFor(() => expect(nomesNaOrdem()).toEqual(['Crucifixo', 'Crossover']));
 
     pending.reject(new Error('Network error'));
@@ -412,5 +431,52 @@ describe('PlanDetailPage — reordenação', () => {
     expect(screen.getByRole('button', { name: /mover supino para cima/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /mover crossover para baixo/i })).toBeDisabled();
     expect(reorderPlanExercises).not.toHaveBeenCalled();
+  });
+});
+
+describe('PlanDetailPage — ver e configurar (Al-T7, #378)', () => {
+  const updatePlanExercise = vi.mocked(workoutApi.updatePlanExercise);
+
+  it('abre no modo ver: resumo, histórico e divisão por grupo, sem setas', async () => {
+    getPersonalRecord.mockResolvedValue(null);
+    getPlan.mockResolvedValue({
+      ...plan(),
+      timesDone: 3,
+      lastDoneAt: new Date().toISOString(),
+    });
+    renderPage();
+    expect(await screen.findByText('3 exercícios · 9 séries · ~20 min')).toBeInTheDocument();
+    expect(screen.getByText('feito 3 vezes · último hoje')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Peito 100%' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /mover supino/i })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Iniciar Peito' })).toBeEnabled();
+  });
+
+  it('tocar no exercício abre o Configurar e o Salvar grava o que mudou', async () => {
+    getPersonalRecord.mockResolvedValue(null);
+    getPlan.mockResolvedValue(plan());
+    updatePlanExercise.mockResolvedValue({} as never);
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Configurar Supino' }));
+    await user.click(screen.getByRole('button', { name: 'Mais uma série' }));
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    await waitFor(() =>
+      expect(updatePlanExercise).toHaveBeenCalledWith(
+        'plan-1',
+        'pe-a',
+        expect.objectContaining({ targetSets: 4, targetReps: '8-12' }),
+      ),
+    );
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Salvar' })).toBeNull());
+  });
+
+  it('remover pela lixeira pergunta antes', async () => {
+    const user = await renderLoadedPage();
+    removePlanExercise.mockResolvedValue(undefined);
+    await user.click(screen.getByRole('button', { name: /remover supino do plano/i }));
+    expect(removePlanExercise).not.toHaveBeenCalled();
+    await user.click(await screen.findByRole('button', { name: 'Remover' }));
+    await waitFor(() => expect(removePlanExercise).toHaveBeenCalledWith('plan-1', 'pe-a'));
   });
 });

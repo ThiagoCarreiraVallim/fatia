@@ -4,23 +4,28 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, Trash2, Plus, Dumbbell, ClipboardList } from 'lucide-react';
-import { workoutApi } from '@fatia/api-client';
+import {
+  CalendarRange,
+  ChevronRight,
+  ClipboardList,
+  Play,
+  Plus,
+  Trash2,
+  Users,
+} from 'lucide-react';
+import { planSummaryLine, workoutApi, type WorkoutPlan } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ErrorState } from '@/components/elements/error-state';
-import { pluralize } from '@/components/workout/format';
+import { PlanMuscleBar } from '@/components/workout/plan-muscle-bar';
 
+/** Planos (prancha Al-T6, #378). Circuitos ficam para a #380. */
 export default function PlansPage() {
   const qc = useQueryClient();
   const router = useRouter();
-  const [newName, setNewName] = useState('');
-  const [showForm, setShowForm] = useState(false);
-  // Excluir apagava o plano no primeiro clique, a um ícone de distância do
-  // próprio plano. O app pergunta antes; aqui também.
+  // Excluir pergunta antes: o histórico continua, mas o plano não volta.
   const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null);
 
   const plans = useQuery({
@@ -28,17 +33,10 @@ export default function PlansPage() {
     queryFn: () => workoutApi.listPlans(),
   });
 
-  const create = useMutation({
-    mutationFn: () => workoutApi.createPlan({ name: newName.trim() }),
-    onSuccess: (created) => {
-      qc.invalidateQueries({ queryKey: ['workout', 'plans'] });
-      setNewName('');
-      setShowForm(false);
-      // Leva direto para o plano recém-criado para adicionar exercícios —
-      // criar um plano "vazio" e ficar na lista passava a sensação de que
-      // nada tinha sido criado.
-      if (created?.id) router.push(`/workout/plans/${created.id}`);
-    },
+  const block = useQuery({
+    queryKey: ['workout', 'block'],
+    queryFn: () => workoutApi.getActiveBlock(),
+    retry: false,
   });
 
   const remove = useMutation({
@@ -49,47 +47,63 @@ export default function PlansPage() {
     },
   });
 
+  const start = useMutation({
+    mutationFn: (planId: string) =>
+      workoutApi.startSession({ planId, startedAt: new Date().toISOString() }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['workout', 'active'] });
+      router.push('/workout');
+    },
+  });
+
+  const activeBlock = block.data ?? null;
+  const week = activeBlock?.currentWeek ?? null;
+
   return (
     <div className="space-y-5 px-5 pt-4 pb-4">
-      {showForm ? (
-        <div className="flex gap-2">
-          <Input
-            aria-label="Nome do plano"
-            autoFocus
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Nome do plano"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && newName.trim()) create.mutate();
-              if (e.key === 'Escape') setShowForm(false);
-            }}
-          />
-          <Button
-            onClick={() => create.mutate()}
-            disabled={!newName.trim() || create.isPending}
-            size="sm"
-          >
-            Salvar
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>
-            Cancelar
-          </Button>
-        </div>
-      ) : (
-        <Button
-          variant="outline"
-          className="w-full gap-2 rounded-2xl"
-          onClick={() => setShowForm(true)}
+      {activeBlock && (
+        <section
+          aria-label="Bloco de semanas em andamento"
+          className="rounded-2xl border border-primary/30 bg-primary/5 p-4"
         >
+          <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase">
+            {activeBlock.kindLabel}
+            {activeBlock.planName ? ` · ${activeBlock.planName}` : ''}
+          </p>
+          {week && (
+            <>
+              <p className="mt-1 text-lg font-extrabold">
+                Semana {week.weekNumber} de {activeBlock.weeksTotal}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {week.sessionsDone} de {week.sessionsTarget} sessões nesta semana
+              </p>
+            </>
+          )}
+          {activeBlock.planId && activeBlock.planName && (
+            <Button
+              className="mt-3 w-full rounded-full"
+              disabled={start.isPending}
+              onClick={() => activeBlock.planId && start.mutate(activeBlock.planId)}
+            >
+              <Play size={16} fill="currentColor" className="mr-1.5" />
+              Começar {activeBlock.planName}
+            </Button>
+          )}
+        </section>
+      )}
+
+      <Button asChild variant="outline" className="w-full gap-2 rounded-2xl">
+        <Link href="/workout/plans/new">
           <Plus size={16} />
           Novo plano
-        </Button>
-      )}
+        </Link>
+      </Button>
 
       {plans.isLoading && (
         <div className="space-y-2">
           {[1, 2].map((i) => (
-            <Skeleton key={i} className="h-20 rounded-2xl bg-muted" />
+            <Skeleton key={i} className="h-28 rounded-2xl bg-muted" />
           ))}
         </div>
       )}
@@ -112,38 +126,38 @@ export default function PlansPage() {
         />
       )}
 
-      <div className="space-y-2">
+      {start.isError && (
+        <p role="alert" className="text-sm text-danger">
+          Não foi possível começar o treino.{' '}
+          {start.error instanceof Error ? start.error.message : ''}
+        </p>
+      )}
+
+      <div className="space-y-3">
         {plans.data?.map((plan) => (
-          <div
+          <PlanCard
             key={plan.id}
-            className="flex items-center gap-3 rounded-2xl border border-subtle bg-card p-4"
-          >
-            <Link
-              href={`/workout/plans/${plan.id}`}
-              className="flex flex-1 items-center gap-3 min-w-0"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
-                <Dumbbell size={20} className="text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="truncate text-base font-bold text-foreground">{plan.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {plan.exercises?.length ?? 0}{' '}
-                  {pluralize(plan.exercises?.length ?? 0, 'exercício', 'exercícios')}
-                </p>
-              </div>
-              <ChevronRight size={16} className="shrink-0 text-muted-foreground" />
-            </Link>
-            <button
-              type="button"
-              onClick={() => setRemoveTarget({ id: plan.id, name: plan.name })}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-danger"
-              aria-label={`Excluir plano ${plan.name}`}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
+            plan={plan}
+            starting={start.isPending}
+            onStart={() => start.mutate(plan.id)}
+            onDelete={() => setRemoveTarget({ id: plan.id, name: plan.name })}
+          />
         ))}
+      </div>
+
+      <div className="space-y-2">
+        <ShortcutLink
+          href="/community"
+          icon={<Users size={18} />}
+          title="Modelos das comunidades"
+          subtitle="planos prontos dos seus grupos"
+        />
+        <ShortcutLink
+          href="/workout#bloco"
+          icon={<CalendarRange size={18} />}
+          title="Bloco de semanas"
+          subtitle="organize força, volume e deload"
+        />
       </div>
 
       <ConfirmDialog
@@ -151,13 +165,114 @@ export default function PlansPage() {
         onOpenChange={(open) => {
           if (!open) setRemoveTarget(null);
         }}
-        title="Excluir plano?"
-        description={`"${removeTarget?.name ?? ''}" sai da lista. Os treinos já feitos com ele continuam no histórico.`}
+        title={`Excluir “${removeTarget?.name ?? ''}”?`}
+        description="O histórico das sessões continua."
         confirmLabel="Excluir"
         pendingLabel="Excluindo..."
         pending={remove.isPending}
         onConfirm={() => removeTarget && remove.mutate(removeTarget.id)}
       />
     </div>
+  );
+}
+
+function PlanCard({
+  plan,
+  starting,
+  onStart,
+  onDelete,
+}: {
+  plan: WorkoutPlan;
+  starting: boolean;
+  onStart: () => void;
+  onDelete: () => void;
+}) {
+  const exercises = [...(plan.exercises ?? [])].sort((a, b) => a.order - b.order);
+  const preview = exercises.slice(0, 3);
+  const more = exercises.length - preview.length;
+  return (
+    <article className="rounded-2xl border border-subtle bg-card p-4">
+      <Link href={`/workout/plans/${plan.id}`} className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h2 className="truncate text-base font-extrabold">{plan.name}</h2>
+            <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-bold uppercase text-muted-foreground">
+              {plan.fromTemplateId ? 'modelo' : 'seu'}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">{planSummaryLine(exercises)}</p>
+        </div>
+        <ChevronRight size={16} className="mt-1 shrink-0 text-muted-foreground" />
+      </Link>
+
+      {preview.length > 0 && (
+        <ol className="mt-3 space-y-1 text-sm">
+          {preview.map((pe, i) => (
+            <li key={pe.id} className="flex items-center gap-2">
+              <span className="w-4 text-xs font-bold text-muted-foreground tabular-nums">
+                {i + 1}
+              </span>
+              <span className="truncate">{pe.exercise.name}</span>
+            </li>
+          ))}
+          {more > 0 && (
+            <li className="flex items-center gap-2 text-muted-foreground">
+              <span className="w-4 text-xs font-bold">+</span>
+              {more} mais
+            </li>
+          )}
+        </ol>
+      )}
+
+      <PlanMuscleBar exercises={exercises} className="mt-3" />
+
+      <div className="mt-3 flex items-center gap-2">
+        <Button
+          className="h-11 flex-1 rounded-full"
+          aria-label={`Começar ${plan.name}`}
+          disabled={starting || exercises.length === 0}
+          onClick={onStart}
+        >
+          <Play size={14} fill="currentColor" className="mr-1.5" />
+          Começar
+        </Button>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-danger"
+          aria-label={`Excluir plano ${plan.name}`}
+        >
+          <Trash2 size={16} />
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function ShortcutLink({
+  href,
+  icon,
+  title,
+  subtitle,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-3 rounded-2xl border border-subtle bg-card p-4 hover:bg-accent"
+    >
+      <span className="flex h-10 w-10 items-center justify-center rounded-field bg-muted text-primary">
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-bold">{title}</span>
+        <span className="block text-xs text-muted-foreground">{subtitle}</span>
+      </span>
+      <ChevronRight size={16} className="text-muted-foreground" />
+    </Link>
   );
 }

@@ -3,24 +3,29 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { Play, Clock, Dumbbell, Lightbulb, Pencil, Plus, Trash2, Check } from 'lucide-react';
+import { Play, Pencil, Plus, Trash2, Check } from 'lucide-react';
 import {
   ApiError,
-  isCardioExercise,
+  planHistoryLine,
+  planSummaryLine,
+  usersApi,
   workoutApi,
+  type PlanExerciseInput,
   type WorkoutPlan,
   type WorkoutPlanExercise,
 } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
+import { PlanExerciseRow } from '@/components/workout/plan-exercise-row';
+import { PlanExerciseSheet } from '@/components/workout/plan-exercise-sheet';
+import { PlanMuscleBar } from '@/components/workout/plan-muscle-bar';
+import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ErrorState } from '@/components/elements/error-state';
-import { pluralize } from '@/components/workout/format';
-import { TopBarActions, topBarActionClass, useTopBarTitle } from '@/components/layout/app-top-bar';
+import { topBarActionClass, useTopBarTitle } from '@/components/layout/app-top-bar';
 
 interface MoveVars {
   a: WorkoutPlanExercise;
@@ -51,6 +56,16 @@ export default function PlanDetailPage() {
   const [nameEdit, setNameEdit] = useState('');
   const [announcement, setAnnouncement] = useState('');
   const [deleteOpen, setDeleteOpen] = useState(false);
+  // Al-T7: ver por padrão; editar mostra setas, lixeira, renomear e excluir.
+  const [editing, setEditing] = useState(false);
+  const [configId, setConfigId] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<WorkoutPlanExercise | null>(null);
+  const { loadUnit } = useUnitPrefs();
+  const me = useQuery({
+    queryKey: ['users', 'me'],
+    queryFn: () => usersApi.me(),
+    staleTime: 5 * 60_000,
+  });
 
   const plan = useQuery({
     queryKey: ['workout', 'plan', id],
@@ -75,15 +90,12 @@ export default function PlanDetailPage() {
   });
 
   const updateExercise = useMutation({
-    mutationFn: ({
-      exerciseId,
-      body,
-    }: {
-      exerciseId: string;
-      body: { targetSets?: number; targetReps?: string };
-    }) => workoutApi.updatePlanExercise(id, exerciseId, body),
+    mutationFn: ({ exerciseId, body }: { exerciseId: string; body: PlanExerciseInput }) =>
+      workoutApi.updatePlanExercise(id, exerciseId, body),
     onSuccess: () => {
+      setConfigId(null);
       qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
+      qc.invalidateQueries({ queryKey: ['workout', 'plans'] });
     },
   });
 
@@ -152,7 +164,10 @@ export default function PlanDetailPage() {
   const removeExercise = useMutation({
     mutationFn: (exerciseId: string) => workoutApi.removePlanExercise(id, exerciseId),
     onSuccess: () => {
+      setRemoveTarget(null);
+      setConfigId(null);
       qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
+      qc.invalidateQueries({ queryKey: ['workout', 'plans'] });
     },
   });
 
@@ -205,10 +220,7 @@ export default function PlanDetailPage() {
 
   const exercises = [...plan.data.exercises].sort((a, b) => a.order - b.order);
   const existingIds = new Set(exercises.map((e) => e.exerciseId));
-  const nextOrder = exercises.length > 0 ? Math.max(...exercises.map((e) => e.order)) + 1 : 1;
-  const totalSets = exercises.reduce((acc, e) => acc + e.targetSets, 0);
-  const estDuration = Math.max(15, totalSets * 5);
-  const estVolume = (totalSets * 1.5).toFixed(1);
+  const configuring = exercises.find((e) => e.id === configId) ?? null;
 
   function startEditName() {
     setNameEdit(plan.data?.name ?? '');
@@ -240,27 +252,6 @@ export default function PlanDetailPage() {
 
   return (
     <div className="pb-4">
-      <TopBarActions>
-        <button
-          type="button"
-          onClick={startEditName}
-          aria-label="Renomear plano"
-          className={topBarActionClass}
-        >
-          <Pencil size={19} />
-        </button>
-        <button
-          type="button"
-          // O `confirm()` do navegador não diz o que acontece com o histórico, e
-          // destoa do resto do PWA; a confirmação do app diz.
-          onClick={() => setDeleteOpen(true)}
-          aria-label="Excluir plano"
-          className={topBarActionClass}
-        >
-          <Trash2 size={19} />
-        </button>
-      </TopBarActions>
-
       {editingName && (
         <div className="flex items-center gap-2 px-5 pt-1 pb-2">
           <Input
@@ -287,51 +278,58 @@ export default function PlanDetailPage() {
       )}
 
       <div className="space-y-4 px-5 pt-2">
-        <div className="relative overflow-hidden rounded-2xl border border-subtle bg-card">
-          <div className="relative h-44 w-full overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-slate-700 via-stone-800 to-stone-900" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
-            <div className="absolute left-4 right-4 top-4 flex gap-2">
-              <span className="rounded-md bg-primary px-2 py-0.5 text-[10px] font-extrabold text-primary-foreground">
-                HIPERTROFIA
-              </span>
-            </div>
-            <div className="absolute inset-x-0 bottom-0 p-4">
-              <h2 className="text-2xl font-extrabold text-white">{plan.data.name}</h2>
-              <p className="mt-1 text-xs text-white/70">
-                {exercises.length} {pluralize(exercises.length, 'exercício', 'exercícios')} •{' '}
-                {totalSets} {pluralize(totalSets, 'série', 'séries')}
+        <section className="rounded-2xl border border-subtle bg-card p-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase">
+                {editing ? 'Editando plano' : plan.data.fromTemplateId ? 'modelo' : 'seu plano'}
+              </p>
+              <h2 className="truncate text-2xl font-extrabold">{plan.data.name}</h2>
+              <p className="text-xs text-muted-foreground">
+                {planHistoryLine(plan.data.timesDone ?? 0, plan.data.lastDoneAt ?? null)}
               </p>
             </div>
+            {/* Na própria tela, e não na barra de topo: é o botão que a
+                prancha põe ao lado do nome, e o leitor de tela o acha junto. */}
+            <button
+              type="button"
+              aria-pressed={editing}
+              onClick={() => {
+                setEditing((e) => !e);
+                setEditingName(false);
+              }}
+              aria-label={editing ? 'Concluir edição' : 'Editar plano'}
+              className={
+                editing
+                  ? 'flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground'
+                  : 'flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-muted text-foreground'
+              }
+            >
+              {editing ? <Check size={20} /> : <Pencil size={18} />}
+            </button>
           </div>
-          <div className="flex items-center gap-6 border-t border-subtle px-5 py-3">
-            <div className="flex items-center gap-2">
-              <Clock size={14} className="text-primary" />
-              <div>
-                <p className="text-[10px] font-bold tracking-wide text-muted-foreground">Duração</p>
-                <p className="text-sm font-extrabold text-foreground tabular-nums">
-                  {estDuration}m
-                </p>
-              </div>
+          {editing && !editingName && (
+            <div className="mt-2 flex gap-2">
+              <Button variant="outline" size="sm" onClick={startEditName}>
+                <Pencil size={14} className="mr-1" />
+                Renomear
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-danger"
+                // O `confirm()` do navegador não diz o que acontece com o
+                // histórico, e destoa do resto do PWA; a confirmação diz.
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 size={14} className="mr-1" />
+                Excluir plano
+              </Button>
             </div>
-            <div className="flex items-center gap-2">
-              <Dumbbell size={14} className="text-primary" />
-              <div>
-                <p className="text-[10px] font-bold tracking-wide text-muted-foreground">Volume</p>
-                <p className="text-sm font-extrabold text-foreground tabular-nums">
-                  {estVolume} Ton
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-extrabold text-foreground">
-            Exercícios{' '}
-            <span className="text-sm font-bold text-muted-foreground">({exercises.length})</span>
-          </h3>
-        </div>
+          )}
+          <p className="mt-3 text-sm font-semibold">{planSummaryLine(exercises)}</p>
+          <PlanMuscleBar exercises={exercises} legend className="mt-2" />
+        </section>
 
         {/* Região viva montada sempre, e não junto com o texto: um `aria-live`
             que nasce já preenchido costuma não ser anunciado — a primeira
@@ -380,28 +378,22 @@ export default function PlanDetailPage() {
           </button>
         )}
 
-        <div className="space-y-3">
+        <ol className="space-y-2">
           {exercises.map((ex, idx) => (
-            <ExerciseDetailCard
+            <PlanExerciseRow
               key={ex.id}
-              mode="plan"
               item={ex}
-              isCardio={isCardioExercise(ex.exercise)}
+              editing={editing}
               isFirst={idx === 0}
               isLast={idx === exercises.length - 1}
               isMoving={moveExercise.isPending}
-              onChangeSets={(n) =>
-                updateExercise.mutate({ exerciseId: ex.id, body: { targetSets: n } })
-              }
-              onChangeReps={(v) =>
-                updateExercise.mutate({ exerciseId: ex.id, body: { targetReps: v } })
-              }
-              onRemove={() => removeExercise.mutate(ex.id)}
+              onConfigure={() => setConfigId(ex.id)}
               onMoveUp={() => move(idx, -1)}
               onMoveDown={() => move(idx, 1)}
+              onRemove={() => setRemoveTarget(ex)}
             />
           ))}
-        </div>
+        </ol>
 
         <Button
           variant="outline"
@@ -412,16 +404,11 @@ export default function PlanDetailPage() {
           Adicionar exercício
         </Button>
 
-        <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
-          <div className="flex items-center gap-2">
-            <Lightbulb size={16} className="text-primary" />
-            <h4 className="text-sm font-extrabold text-foreground">Foco na Excêntrica</h4>
-          </div>
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            Mantenha o controle da descida (fase excêntrica) por 3 segundos para maximizar a
-            hipertrofia.
-          </p>
-        </div>
+        <p className="text-center text-xs text-muted-foreground">
+          {editing
+            ? 'Use as setas para mudar a ordem. Toque no exercício para mudar séries, repetições, descanso e técnica.'
+            : 'Toque na imagem para ver como fazer. Toque no exercício para mudar séries, repetições e descanso.'}
+        </p>
 
         <Button
           className="h-14 w-full rounded-full text-base font-extrabold shadow-[0_0_24px_hsl(var(--primary)/0.45)]"
@@ -429,7 +416,7 @@ export default function PlanDetailPage() {
           disabled={start.isPending || exercises.length === 0}
         >
           <Play size={16} fill="currentColor" className="mr-1.5" />
-          {start.isPending ? 'Iniciando...' : 'Iniciar Treino'}
+          {start.isPending ? 'Iniciando...' : `Iniciar ${plan.data.name}`}
         </Button>
       </div>
 
@@ -444,12 +431,47 @@ export default function PlanDetailPage() {
         onConfirm={() => deletePlan.mutate()}
       />
 
+      <ConfirmDialog
+        open={removeTarget != null}
+        onOpenChange={(open) => {
+          if (!open) setRemoveTarget(null);
+        }}
+        title="Remover exercício?"
+        description={`${removeTarget?.exercise.name ?? ''} sai deste plano. Os treinos já feitos continuam no histórico.`}
+        pending={removeExercise.isPending}
+        onConfirm={() => removeTarget && removeExercise.mutate(removeTarget.id)}
+      />
+
+      <PlanExerciseSheet
+        item={configuring}
+        open={configuring != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfigId(null);
+            updateExercise.reset();
+          }
+        }}
+        loadUnit={loadUnit}
+        birthDate={me.data?.birthDate ?? null}
+        saving={updateExercise.isPending}
+        removing={removeExercise.isPending}
+        error={
+          updateExercise.isError
+            ? `Não foi possível salvar. ${updateExercise.error instanceof Error ? updateExercise.error.message : ''}`
+            : null
+        }
+        onSave={(body) =>
+          configuring && updateExercise.mutate({ exerciseId: configuring.id, body })
+        }
+        onRemove={() => configuring && removeExercise.mutate(configuring.id)}
+      />
+
       <AddExerciseDrawer
         open={addOpen}
         onOpenChange={setAddOpen}
         planId={id}
+        planName={plan.data.name}
         existingExerciseIds={existingIds}
-        nextOrder={nextOrder}
       />
     </div>
   );

@@ -53,7 +53,7 @@ export function BlockTimeline() {
 
   if (!block.data) {
     return (
-      <div className="rounded-2xl border border-subtle bg-card p-4">
+      <div id="bloco" className="scroll-mt-20 rounded-2xl border border-subtle bg-card p-4">
         <p className="text-sm font-bold text-foreground">Periodização em blocos</p>
         <p className="mt-1 text-xs text-muted-foreground">
           Quatro semanas com carga e volume planejados, terminando em deload. Se você perder uma
@@ -97,7 +97,7 @@ function BlockCard({ block, onEncerrar }: { block: TrainingBlock; onEncerrar: ()
   const [confirmando, setConfirmando] = useState(false);
 
   return (
-    <section className="rounded-2xl border border-subtle bg-card p-4">
+    <section id="bloco" className="scroll-mt-20 rounded-2xl border border-subtle bg-card p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
