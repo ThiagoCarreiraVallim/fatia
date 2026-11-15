@@ -110,6 +110,49 @@ describe('ProgressService', () => {
   });
 
   describe('weightProgress', () => {
+    describe('último registro e a variação desde ele (Al-H4-Peso, #373)', () => {
+      it('devolve o último, o anterior e a diferença entre os dois', async () => {
+        prisma.weightLog.findMany
+          .mockResolvedValueOnce([{ weightKg: 70.4, loggedAt: new Date('2026-01-09T08:00:00Z') }])
+          .mockResolvedValueOnce([
+            { id: 'w2', weightKg: 70.2, loggedAt: new Date('2026-01-15T08:00:00Z') },
+            { id: 'w1', weightKg: 70.4, loggedAt: new Date('2026-01-09T08:00:00Z') },
+          ]);
+
+        const result = await service.weightProgress(30, ctx);
+
+        expect(result.latest).toEqual({
+          id: 'w2',
+          weightKg: 70.2,
+          date: '2026-01-15',
+          loggedAt: '2026-01-15T08:00:00.000Z',
+        });
+        expect(result.previous).toEqual({ weightKg: 70.4, date: '2026-01-09' });
+        expect(result.deltaSinceLastKg).toBeCloseTo(-0.2);
+        // Os dois últimos são da pessoa, e de qualquer data: o anterior pode ser de antes da janela.
+        expect(prisma.weightLog.findMany).toHaveBeenLastCalledWith({
+          where: { userId: 'user-A' },
+          orderBy: { loggedAt: 'desc' },
+          take: 2,
+        });
+      });
+
+      it('com um registro só não há variação; sem registro, nada', async () => {
+        prisma.weightLog.findMany
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([
+            { id: 'w1', weightKg: 70.4, loggedAt: new Date('2026-01-09T08:00:00Z') },
+          ]);
+        const um = await service.weightProgress(30, ctx);
+        expect(um.previous).toBeNull();
+        expect(um.deltaSinceLastKg).toBeNull();
+
+        prisma.weightLog.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+        const nenhum = await service.weightProgress(30, ctx);
+        expect(nenhum).toMatchObject({ latest: null, previous: null, deltaSinceLastKg: null });
+      });
+    });
+
     it('computes totalDeltaKg between first and last point', async () => {
       prisma.weightLog.findMany.mockResolvedValue([
         { id: 'a', loggedAt: new Date('2026-01-01T10:00:00Z'), weightKg: 80 },

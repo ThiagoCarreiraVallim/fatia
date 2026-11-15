@@ -63,6 +63,15 @@ function podar(valor: unknown): unknown {
   );
 }
 
+function weightSeries(p: Awaited<ReturnType<ProgressService['weightProgress']>>): WeightSeries {
+  return {
+    points: p.points,
+    weeklyAverages: p.weeklyAverages,
+    totalDeltaKg: p.totalDeltaKg,
+    currentWeightKg: p.currentWeightKg,
+  };
+}
+
 function semIdentidade<T>(valor: T): SemIdentidade<T> {
   return podar(valor) as SemIdentidade<T>;
 }
@@ -85,6 +94,16 @@ export interface StudentView {
 type Sem<T> = SemIdentidade<Awaited<T>>;
 
 /**
+ * O que o painel mostra do peso: a série e a variação do período. O último
+ * registro com id e o anterior, que a folha de peso do aluno usa (#373), ficam
+ * de fora — o painel não edita registro, e o id não acrescenta nada a quem lê.
+ */
+type WeightSeries = Pick<
+  Awaited<ReturnType<ProgressService['weightProgress']>>,
+  'points' | 'weeklyAverages' | 'totalDeltaKg' | 'currentWeightKg'
+>;
+
+/**
  * O conteúdo de UMA leitura. União discriminada pelo escopo: não existe forma de
  * devolver treino tendo conferido nutrição, porque o campo nem existe no outro
  * branch.
@@ -100,7 +119,7 @@ export type StudentReading =
       scope: typeof ShareScope.NUTRITION;
       history: Sem<ReturnType<NutritionSummaryService['getHistory']>>;
     }
-  | { scope: typeof ShareScope.BODY; weight: Sem<ReturnType<ProgressService['weightProgress']>> }
+  | { scope: typeof ShareScope.BODY; weight: SemIdentidade<WeightSeries> }
   | {
       scope: typeof ShareScope.HABITS;
       steps: Sem<ReturnType<ProgressService['stepsProgress']>>;
@@ -303,7 +322,7 @@ export class StudentViewService {
       case ShareScope.BODY:
         return {
           scope: ShareScope.BODY,
-          weight: semIdentidade(await this.progress.weightProgress(days, ctx)),
+          weight: semIdentidade(weightSeries(await this.progress.weightProgress(days, ctx))),
         };
       case ShareScope.HABITS: {
         const [steps, water] = await Promise.all([

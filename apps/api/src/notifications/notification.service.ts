@@ -4,6 +4,7 @@ import { DevicePlatform, NotificationKind } from '@fatia/db';
 import { PrismaService } from '../common/prisma.service';
 import { EXPO_PUSH_TOKEN, PushService } from './push.service';
 import { WebPushService, isPushEndpoint } from './web-push.service';
+import { recordInbox } from './inbox.service';
 
 export const NOTIFICATION_KINDS = Object.values(NotificationKind);
 export const DEVICE_PLATFORMS = Object.values(DevicePlatform);
@@ -327,6 +328,18 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
 
   private async deliver(userIds: string[], notice: Notice): Promise<void> {
     if (userIds.length === 0) return;
+    const title = cut(notice.title, TITLE_MAX);
+    const body = cut(notice.body, BODY_MAX);
+    // A central do sino (#373) guarda o aviso de todo destinatário, inclusive de
+    // quem desligou o push do tipo: desligar é não ser interrompido, não deixar
+    // de saber. Falha aqui não pode calar o push — vira log.
+    try {
+      await recordInbox(this.prisma, userIds, { kind: notice.kind, title, body, url: notice.url });
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Aviso "${notice.kind}" não entrou na central: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
     const desligados = await this.prisma.notificationPreference.findMany({
       where: { userId: { in: userIds }, kind: notice.kind, enabled: false },
       select: { userId: true },
@@ -338,8 +351,6 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
       where: { userId: { in: alvo } },
       select: { id: true, token: true },
     });
-    const title = cut(notice.title, TITLE_MAX);
-    const body = cut(notice.body, BODY_MAX);
     const r = await this.push.send(
       devices.map((d) => ({ to: d.token, title, body, url: notice.url })),
     );

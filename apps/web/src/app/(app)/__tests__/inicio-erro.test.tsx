@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { todaySummary } from '@/components/today/__tests__/fixture';
 import HomePage from '../page';
 
 /**
@@ -16,6 +17,7 @@ vi.mock('@fatia/api-client', async () => {
   return {
     ...actual,
     usersApi: { me: vi.fn(async () => ({ name: 'Ana' })) },
+    goalsApi: { list: vi.fn(async () => []) },
     progressApi: {
       ...actual.progressApi,
       today,
@@ -25,24 +27,28 @@ vi.mock('@fatia/api-client', async () => {
 });
 
 // Os cards têm testes próprios; aqui importa que o resumo chegou.
-vi.mock('@/components/dashboard/nutrition-macro-card', () => ({
-  NutritionMacroCard: () => <p>macros</p>,
+vi.mock('@/components/today/today-cards', () => ({
+  ReceivedPlanBanner: () => null,
+  TodoCard: () => null,
+  EventCard: () => null,
+  KcalCard: () => <p>macros</p>,
+  NextWorkoutCard: () => null,
+  WaterTile: () => null,
+  StepsTile: () => null,
+  WeightTile: () => null,
+  StreakTile: () => null,
+  PersonalGoalsCard: () => null,
 }));
-vi.mock('@/components/dashboard/next-workout-card', () => ({ NextWorkoutCard: () => null }));
-vi.mock('@/components/dashboard/steps-card', () => ({ StepsCard: () => null }));
-vi.mock('@/components/dashboard/streak-card', () => ({ StreakCard: () => null }));
-vi.mock('@/components/dashboard/water-card', () => ({ WaterCard: () => null }));
+vi.mock('@/components/today/goals-sheet', () => ({ GoalsSheet: () => null }));
+vi.mock('@/components/today/water-sheet', () => ({ WaterSheet: () => null }));
+vi.mock('@/components/today/weight-sheet', () => ({ WeightSheet: () => null }));
+vi.mock('@/components/today/inbox-sheet', () => ({ InboxSheet: () => null }));
+vi.mock('@/components/progress/log-steps-drawer', () => ({ LogStepsDrawer: () => null }));
+vi.mock('@/components/sharing/share-sheet', () => ({ ShareSheet: () => null }));
 
 describe('Início com falha no resumo', () => {
   it('mostra o erro e recarrega pelo "Tentar de novo"', async () => {
-    today.mockRejectedValueOnce(new Error('fora do ar')).mockResolvedValueOnce({
-      nutrition: {},
-      workout: {},
-      water: {},
-      steps: {},
-      streak: {},
-      achievements: [],
-    });
+    today.mockRejectedValueOnce(new Error('fora do ar')).mockResolvedValueOnce(todaySummary());
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>

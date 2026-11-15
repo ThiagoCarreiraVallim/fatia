@@ -3,17 +3,37 @@ import type { CurrentUserPayload } from '../common/decorators/current-user.decor
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import {
   DeviceParamDto,
+  MarkInboxReadDto,
   NotificationPreferencesDto,
   RegisterDeviceDto,
   WebPushSubscribeDto,
   WebPushUnsubscribeDto,
 } from './dto/notification.dto';
 import { NotificationService } from './notification.service';
+import { InboxService } from './inbox.service';
 
-/** Os celulares e as preferências de aviso de quem está logado (Fase 8c, ADR 033). */
+/**
+ * Os celulares, as preferências de aviso e a central do sino de quem está
+ * logado (Fase 8c, ADR 033; #373).
+ */
 @Controller('users/me')
 export class NotificationsController {
-  constructor(private readonly notifications: NotificationService) {}
+  constructor(
+    private readonly notifications: NotificationService,
+    private readonly inbox: InboxService,
+  ) {}
+
+  /** A central de avisos do sino no Hoje (#373): os mais recentes e quantos não foram lidos. */
+  @Get('inbox')
+  inboxList(@CurrentUser() user: CurrentUserPayload) {
+    return this.inbox.list(user.id);
+  }
+
+  /** Só marca aviso de quem está logado: id de outra pessoa no corpo não conta. */
+  @Post('inbox/read')
+  inboxRead(@CurrentUser() user: CurrentUserPayload, @Body() dto: MarkInboxReadDto) {
+    return this.inbox.markRead(user.id, dto.ids);
+  }
 
   @Get('devices')
   devices(@CurrentUser() user: CurrentUserPayload) {

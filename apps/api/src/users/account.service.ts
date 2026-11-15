@@ -111,6 +111,7 @@ export class AccountService {
       tutorialsSeen,
       ideas,
       dataExports,
+      inboxNotices,
     ] = await Promise.all([
       this.prisma.userGoals.findUnique({ where: { userId } }),
       this.prisma.nutrientTarget.findMany({ where: { userId }, orderBy: { label: 'asc' } }),
@@ -449,6 +450,13 @@ export class AccountService {
         select: { createdAt: true, expiresAt: true, downloadedAt: true },
         orderBy: { createdAt: 'asc' },
       }),
+      // A central de avisos do sino (#373): o que chegou para a pessoa e quando
+      // ela leu. Sem o id, que só serve para marcar como lido aqui dentro.
+      this.prisma.inboxNotice.findMany({
+        where: { userId },
+        select: { kind: true, title: true, body: true, url: true, readAt: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      }),
     ]);
 
     // `ProfessionalAccessLog.professionalId` é string pura, sem FK — é o que faz
@@ -503,6 +511,7 @@ export class AccountService {
       tutorialsSeen,
       ideas,
       dataExports,
+      inboxNotices,
       accessLogs: accessLogs.map(({ professionalId, ...linha }) => ({
         ...linha,
         professionalName: nomesDeProfissional.get(professionalId) ?? null,
@@ -528,6 +537,7 @@ export class AccountService {
         newsRead: newsRead.length,
         tutorialsSeen: tutorialsSeen.length,
         ideas: ideas.length,
+        inboxNotices: inboxNotices.length,
         professionalLinks: professionalLinks.length,
         accessLogs: accessLogs.length,
         meals: meals.length,

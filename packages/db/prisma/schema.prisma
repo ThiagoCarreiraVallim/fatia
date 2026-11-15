@@ -97,6 +97,8 @@ model User {
   notificationPreferences NotificationPreference[]
   pendingNotices          PendingNotice[]
   webPushSubscriptions    WebPushSubscription[]
+  // Central de avisos do sino do Hoje (#373).
+  inboxNotices            InboxNotice[]
 
   // Você (#387): foto, novidades lidas, tutoriais vistos, ideias enviadas e os
   // links de exportação.
@@ -1926,4 +1928,30 @@ model NotificationPreference {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, kind])
+}
+
+/// A central de avisos do sino no Hoje (#373): cada aviso que a pessoa recebeu,
+/// para rever depois. É gravado junto do envio (`NotificationService`), com o
+/// mesmo título e texto do push — que já nascem sem dado de saúde, porque
+/// aparecem na tela bloqueada. Vale para todo tipo menos `CHAT`: a resposta do
+/// chat pronta é aviso de momento, e quem quer a resposta abre a conversa.
+///
+/// Preferência desligada corta o push, não a linha: a central é o lugar de ver
+/// o que chegou sem ser interrompido. Linhas com mais de 90 dias saem na próxima
+/// gravação para a pessoa (`DATA_RETENTION.md`).
+model InboxNotice {
+  id        String           @id @default(uuid())
+  userId    String
+  kind      NotificationKind
+  title     String
+  body      String
+  /// Caminho do toque, o mesmo do push.
+  url       String
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
 }

@@ -1,4 +1,4 @@
-import type { WeightProgress } from '@fatia/api-client';
+import type { WeightSeries } from '@fatia/api-client';
 import { Card, EmptyState } from '@/components/ui';
 import {
   LineChart,
@@ -14,7 +14,7 @@ import {
  * curva monotônica, incluindo a folga de 1 kg acima e abaixo que o PWA pede ao
  * `recharts` com `dataMin - 1 / dataMax + 1`.
  */
-export function WeightChart({ data }: { data: WeightProgress }) {
+export function WeightChart({ data }: { data: WeightSeries }) {
   if (!data.points.length) {
     return (
       <Card>

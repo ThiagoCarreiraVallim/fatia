@@ -101,6 +101,25 @@ esconde a diferença é exatamente o que este documento existe para impedir.
 | `water-card`           | `dashboard/water-card`           | ✅  | erro do atalho é exibido; no PWA some                        |
 | —                      | `dashboard/macro-bar`            | ➕  | o alvo aqui é único, não faixa mín–máx como em nutrição      |
 
+### Hoje do redesign (#373) — 10 de 10
+
+A tela Hoje dos dois clientes usa `components/today/*` (pranchas Al-H1, Al-H3, Al-H4 e Al-H5). Os
+cartões antigos de `dashboard/*` acima ficaram fora da tela; a sequência com conquistas volta na
+Semana (S1).
+
+| PWA                                              | App nativo                            |     | Observação                                                                                                |
+| ------------------------------------------------ | ------------------------------------- | :-: | --------------------------------------------------------------------------------------------------------- |
+| `today/today-cards` (`KcalCard`)                 | `today/today-cards` (`KcalCard`)      | ✅  | anel "restam" e barras de macro pelo ponto médio da faixa                                                 |
+| `today/today-cards` (próximo treino)             | `today/today-cards` (próximo treino)  | ✅  | "6 exercícios" (`nextWorkoutDetail`)                                                                      |
+| `today/today-cards` (água, passos)               | `today/today-cards` (água, passos)    | ✅  | "+" soma um copo e avisa "+250 mL · N mL hoje"                                                            |
+| `today/today-cards` (peso, sequência)            | `today/today-cards` (peso, sequência) | ✅  | "−2,5 em 30 dias"                                                                                         |
+| `today/today-cards` (metas pessoais)             | `today/today-cards` (metas pessoais)  | ✅  | `personalGoalProgress`                                                                                    |
+| `today/today-cards` (banner, para fazer, evento) | idem                                  | ✅  | só aparecem com dado (#379, #383, #397)                                                                   |
+| `today/goals-sheet`                              | `today/goals-sheet`                   | ✅  | Al-H5; água e passos abrem a folha por cima, o resto é rota                                               |
+| `today/water-sheet`                              | `today/water-sheet`                   | ✅  | Al-H3; no app o copo é chapado no token água (sem gradiente)                                              |
+| `today/weight-sheet`                             | `today/weight-sheet`                  | ✅  | Al-H4; `weightSheetBase` decide criar ou corrigir; no app o traço mede o próprio comprimento (`spark.ts`) |
+| `today/inbox-sheet`                              | `today/inbox-sheet`                   | ✅  | sino: sem aviso novo só o toast "Sem novos avisos"                                                        |
+
 ### Nutrição — 19 de 19, mais 1 do scanner
 
 | PWA                     | App nativo                           |     | Observação                                                                                                                                                                                                                                                                      |
@@ -440,6 +459,7 @@ Este documento prova **cobertura**, não comportamento. O que só se confirma
 rodando, e deve ser feito antes de publicar:
 
 - [ ] Os números batem com o PWA para a mesma conta, no mesmo dia
+- [ ] Hoje (#373): chip "Metas N/M" abrindo Metas de hoje, sino com e sem aviso novo, "+" da água com o toast, copo enchendo na folha de água (Ontem/Hoje, lixeira), − e + do peso com o traço se desenhando, e Compartilhar meu dia pelo WhatsApp e pela folha do sistema
 - [ ] Login, refresh e logout nos dois sistemas, com o token saindo do cofre
 - [ ] Sheet de busca de alimento com o teclado aberto em tela pequena (iPhone SE)
 - [ ] Estrela de favorito e "Concluir · N itens" no sheet de busca (toque de 44 pt, leitor de tela)

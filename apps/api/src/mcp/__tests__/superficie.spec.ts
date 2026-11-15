@@ -32,9 +32,12 @@ import {
  * O redesign (#369) acrescentou `get_weekly_muscle_summary` (só leitura): muda o braço A.
  * A #387 mudou `get_me`, `update_me` (apelido, bio e unidades) e `export_my_data` (link de
  * 24 h): mudam os dois braços.
+ * O redesign (#373) acrescentou `list_inbox` e `mark_inbox_read` e ampliou a descrição do
+ * `get_today_summary` (metas do dia, "Para fazer", avisos): muda o braço A. Com as duas juntas
+ * na redesign/etapa-02, os SHAs abaixo são o catálogo somado.
  */
 
-const SHA_ENTIDADE = '9c58d2e30ed7dc36c1145d972c2bf1abf5b434edef5a71f847d00db10600d00d';
+const SHA_ENTIDADE = '55a652a389ac1f1734d4e97dcec06577176c0bfcece883211f51d024ebb7a591';
 const SHA_INTENCAO = 'fbb9a2de7c6b4ead937dc3e11e6cc37d1f657137615ee1271ee90c222cd3e351';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

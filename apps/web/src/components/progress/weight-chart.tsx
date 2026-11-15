@@ -9,9 +9,9 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { describeSeries, formatDecimal, type WeightProgress } from '@fatia/api-client';
+import { describeSeries, formatDecimal, type WeightSeries } from '@fatia/api-client';
 
-export function WeightChart({ data }: { data: WeightProgress }) {
+export function WeightChart({ data }: { data: WeightSeries }) {
   if (!data.points.length) {
     return (
       <div className="rounded-xl border border-subtle bg-card p-6 text-center text-sm text-muted-foreground">

@@ -104,7 +104,7 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **131 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **133 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 131 tools): **109,2 k caracteres**
-hoje, dos quais **6.409 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 133 tools): **110,6 k caracteres**
+hoje, dos quais **6.466 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (89,5 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (90,5 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -375,8 +375,10 @@ Listagens com potencial de crescer usam cursor-based:
 | **Memória do assistente**  | `list_memories`              | R        |
 |                            | `save_memory`                | C        |
 |                            | `forget_memory`              | D        |
+| **Avisos (sino)**          | `list_inbox`                 | R        |
+|                            | `mark_inbox_read`            | U        |
 
-Total: **131 tools**. Cada uma documentada abaixo.
+Total: **133 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -2284,6 +2286,10 @@ Série temporal de peso + médias semanais + delta.
   weeklyAverages: Array<{ weekStart: string; avgKg: number; deltaKg: number | null }>;
   totalDeltaKg: number; // peso final - peso inicial no período
   currentWeightKg: number | null;
+  // O último registro de qualquer data e o anterior a ele (#373): "−0,2 desde sexta".
+  latest: { id: string; weightKg: number; date: string; loggedAt: string } | null;
+  previous: { weightKg: number; date: string } | null;
+  deltaSinceLastKg: number | null; // latest − previous
 }
 ```
 
@@ -2442,6 +2448,7 @@ Resumo agregado pro Claude responder "como estou hoje?".
   weight: {
     latest: { weightKg: number; loggedAt: string } | null;
     loggedToday: boolean;
+    change30dKg: number | null; // último menos o primeiro dos últimos 30 dias
   };
   steps: {
     today: number;
@@ -2449,8 +2456,41 @@ Resumo agregado pro Claude responder "como estou hoje?".
     goalReached: boolean | null;
     logged: boolean;            // se há ao menos um log hoje
   };
+  water: { todayMl: number; targetMl: number | null; goalReached: boolean | null; logged: boolean };
   streak: StreakSummary;        // ver `get_streak`
   achievements: Achievement[];  // ver `list_achievements`; só LIDAS aqui
+  // Metas do dia (#373): uma linha por meta com alvo — kcal e proteína em faixa, água,
+  // passos, treino (só em dia de treino do bloco ou se já treinou) e as metas de nutriente.
+  dailyGoals: {
+    met: number;
+    total: number;
+    items: Array<{
+      key: string;              // 'kcal' | 'protein' | 'water' | 'steps' | 'workout' | 'nutrient:<chave>'
+      label: string;
+      unit: string;
+      current: number;
+      min: number | null;
+      max: number | null;
+      met: boolean;
+      percent: number;          // 0–100
+      planName?: string | null; // só na linha de treino
+    }>;
+  };
+  inbox: { unread: number };    // avisos não lidos do sino, ver `list_inbox`
+  // "Para fazer": pedidos da equipe (avaliação, plano a aceitar, questionário). Contrato pronto;
+  // os tipos chegam com as issues de cada fluxo (#383, #379, #391), até lá vem vazio.
+  todo: {
+    count: number;
+    items: Array<{
+      kind: 'assessment' | 'plan_offer' | 'questionnaire';
+      id: string;
+      title: string;
+      subtitle: string;
+      href: string;
+    }>;
+  };
+  receivedPlan: null;           // treino enviado pela equipe (#379); nulo até lá
+  nextEvent: null;              // evento do dia na agenda da comunidade (#397); nulo até lá
 }
 ```
 
@@ -3466,3 +3506,56 @@ Esquece uma memória pelo id.
 ```
 
 **Output:** `{ forgotten: true }`. `NOT_FOUND` quando o id não é de uma memória da pessoa.
+
+---
+
+## Avisos (sino)
+
+A central de avisos do sino no Hoje (#373): os avisos que chegaram para a pessoa — da comunidade,
+dos desafios, do mural e da moderação —, com o mesmo título e texto do push, que já nascem sem
+dado de saúde. A resposta pronta do chat não entra. Ficam 90 dias, vão no `export_my_data` e
+morrem com a conta.
+
+### `list_inbox`
+
+Os avisos, do mais recente para o mais antigo, e quantos não foram lidos. Só lê: não marca nada.
+
+**Input:**
+
+```typescript
+{
+  limit?: number; // 1–50, default 50
+}
+```
+
+**Output:**
+
+```typescript
+{
+  items: Array<{
+    id: string;
+    kind: 'COMMUNITY' | 'CHALLENGES' | 'FEED' | 'MODERATION';
+    title: string;
+    body: string;
+    url: string; // caminho do toque no app
+    readAt: string | null;
+    createdAt: string;
+  }>;
+  unread: number;
+}
+```
+
+### `mark_inbox_read`
+
+Marca avisos como lidos. Sem `ids`, todos. Id que não é da pessoa é ignorado — não dá erro, para
+não revelar se existe.
+
+**Input:**
+
+```typescript
+{
+  ids?: string[]; // uuids, de list_inbox; até 100
+}
+```
+
+**Output:** `{ updated: number }`
