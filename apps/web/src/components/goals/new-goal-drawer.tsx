@@ -136,7 +136,7 @@ export function NewGoalDrawer({ open, onClose }: Props) {
                   className={`rounded-xl border px-3 py-2 text-left text-xs font-bold transition-colors ${
                     kind === opt.kind
                       ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-white/10 bg-card text-foreground'
+                      : 'border-border bg-card text-foreground'
                   }`}
                 >
                   {opt.label}

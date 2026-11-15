@@ -30,7 +30,7 @@ export function ProfileMetrics() {
         <button
           type="button"
           onClick={() => setHeightOpen(true)}
-          className="rounded-2xl border border-subtle bg-card p-4 text-left transition-colors hover:border-white/20"
+          className="rounded-2xl border border-subtle bg-card p-4 text-left transition-colors hover:border-border-strong"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground">

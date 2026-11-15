@@ -76,7 +76,7 @@ function HeatmapCellView({ cell }: { cell: HeatmapCell }) {
       aria-label={cell.future ? undefined : `${label}: ${INTENSITY_LABEL[cell.intensity]}`}
       aria-hidden={cell.future || undefined}
       className={`aspect-square rounded-md ${
-        cell.future ? 'border border-dashed border-white/10' : styles[cell.intensity]
+        cell.future ? 'border border-dashed border-border' : styles[cell.intensity]
       } ${cell.intensity >= 3 ? 'shadow-[0_0_8px_hsl(var(--primary)/0.4)]' : ''}`}
     />
   );

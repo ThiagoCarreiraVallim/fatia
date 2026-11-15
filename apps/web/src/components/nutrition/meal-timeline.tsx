@@ -89,7 +89,7 @@ export function MealTimeline({ meals, date, today, onAddMeal }: Props) {
       )}
 
       <div className="relative">
-        <div className="absolute left-[19px] top-0 bottom-0 w-px bg-white/10" />
+        <div className="absolute left-[19px] top-0 bottom-0 w-px bg-border" />
 
         <div className="space-y-3">
           {buildMealTimeline(meals).map((entry) =>
@@ -111,10 +111,10 @@ export function MealTimeline({ meals, date, today, onAddMeal }: Props) {
                 aria-label={`Registrar ${mealTypeLabel[entry.mealType]}`}
                 className="relative flex w-full items-center gap-3 text-left"
               >
-                <div className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-white/20 bg-background text-base">
+                <div className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-border-strong bg-background text-base">
                   {mealTypeEmoji[entry.mealType]}
                 </div>
-                <div className="flex flex-1 items-center justify-between rounded-xl border border-dashed border-white/10 bg-card/50 px-4 py-3">
+                <div className="flex flex-1 items-center justify-between rounded-xl border border-dashed border-border bg-card/50 px-4 py-3">
                   <span className="text-[13px] text-muted-foreground">
                     {mealTypeLabel[entry.mealType]}
                   </span>
@@ -226,7 +226,7 @@ function MealCard({
         </div>
 
         {meal.items.length > 0 && (
-          <div className="divide-y divide-white/5 border-t border-subtle">
+          <div className="divide-y divide-subtle border-t border-subtle">
             {meal.items.map((item) => (
               <div key={item.id} className="flex items-center justify-between py-1 pr-1 pl-4">
                 <div className="min-w-0 flex-1 pr-2">

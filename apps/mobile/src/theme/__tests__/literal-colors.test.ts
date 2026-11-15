@@ -34,4 +34,20 @@ describe('cores literais', () => {
       .map(rel);
     expect(offenders).toEqual([]);
   });
+
+  it('nenhum componente usa branco translúcido fixo em borda, fundo, divisor ou traço', () => {
+    // O trilho do anel de calorias em rgba(255,255,255,0.06) e a borda
+    // border-white/5 da barra de topo somem no tema claro. Só a câmera, que
+    // é sempre escura, pode usar branco translúcido.
+    const allowed = new Set(['src/components/nutrition/photo-capture.tsx']);
+    const offenders = [...tsxFiles(path.join(ROOT, 'app')), ...tsxFiles(path.join(ROOT, 'src'))]
+      .map(rel)
+      .filter((f) => !allowed.has(f))
+      .filter((f) =>
+        /rgba\(\s*255\s*,\s*255\s*,\s*255|\b(border|bg|divide)-white\/\d+/.test(
+          readFileSync(path.join(ROOT, f), 'utf8'),
+        ),
+      );
+    expect(offenders).toEqual([]);
+  });
 });

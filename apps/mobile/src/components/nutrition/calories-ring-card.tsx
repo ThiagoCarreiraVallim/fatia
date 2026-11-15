@@ -65,7 +65,7 @@ export function CaloriesRingCard({ totals, goals }: Props) {
                 cy={CENTRO}
                 r={RAIO}
                 fill="none"
-                stroke="rgba(255,255,255,0.06)"
+                stroke={colors.border}
                 strokeWidth={14}
               />
               {proporcao > 0 ? (

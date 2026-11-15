@@ -50,7 +50,7 @@ export function TopBar({
   return (
     <View
       style={{ paddingTop: insets.top }}
-      className="absolute inset-x-0 top-0 z-50 border-b border-white/5 bg-background"
+      className="absolute inset-x-0 top-0 z-50 border-b border-border bg-background"
     >
       <View style={{ height: TOP_BAR_HEIGHT }} className="flex-row items-center gap-1 px-2">
         {parent !== null ? (

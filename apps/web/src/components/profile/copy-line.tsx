@@ -37,7 +37,7 @@ export function CopyLine({ value, copyLabel, wrap = false }: CopyLineProps) {
 
   return (
     <div className="space-y-1.5">
-      <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-muted/30 p-2">
+      <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/30 p-2">
         {/* Truncar economiza espaço enquanto o botão resolve. Quando ele falha, o texto passa a
             ser o único caminho, e um endereço cortado por reticências não dá para copiar à mão. */}
         <code className={`flex-1 text-xs ${wrap || failed ? 'break-words' : 'truncate'}`}>

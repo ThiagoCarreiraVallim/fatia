@@ -90,7 +90,7 @@ export function PersonalRecords() {
       )}
 
       {!loading && topExercises.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-white/10 bg-card/30 p-4 text-center">
+        <div className="rounded-2xl border border-dashed border-border bg-card/30 p-4 text-center">
           <p className="text-xs text-muted-foreground">
             Logue treinos para ver seus recordes pessoais.
           </p>

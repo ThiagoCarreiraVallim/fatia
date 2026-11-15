@@ -151,7 +151,7 @@ export function MemberReading({
 
   if (granted.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-white/10 bg-card/30 p-6 text-center">
+      <div className="rounded-2xl border border-dashed border-border bg-card/30 p-6 text-center">
         <Lock size={20} className="mx-auto text-muted-foreground" />
         <p className="mt-3 text-sm font-bold text-foreground">Nada autorizado</p>
         <p className="mt-1 text-xs text-muted-foreground">

@@ -129,7 +129,7 @@ export function PwaInstallPrompt() {
       role="dialog"
       aria-label="Instalar o Fatia"
     >
-      <div className="mx-auto flex max-w-md items-start gap-3 rounded-2xl border border-white/10 bg-muted/95 p-4 shadow-2xl backdrop-blur-xl">
+      <div className="mx-auto flex max-w-md items-start gap-3 rounded-2xl border border-border bg-muted/95 p-4 shadow-2xl backdrop-blur-xl">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
           <Download size={22} />
         </div>
