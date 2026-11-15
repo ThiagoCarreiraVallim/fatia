@@ -32,16 +32,17 @@ Legenda: [x] feito · [~] em andamento · [ ] não começado
 
 ### api-client / web / app
 
-- [ ] api-client: tipos e chamadas
-- [ ] Aviso de plano recebido no Treino (TODO(#379) em workout-home.tsx e app/(app)/workout/index.tsx)
-- [ ] Al-T2 / Al-T2b plano recebido (aceitar, recusar, desfazer, atualização com o que mudou)
-- [ ] Al-T23 Modelos (T6 e T19 passam a abrir esta tela)
-- [ ] Al-T12 Periodização 3 a 6 semanas
-- [ ] Al-T24 / T24b / T24c Agenda
+- [x] api-client: tipos e chamadas (a16a4a63)
+- [~] Aviso de plano recebido (em andamento: forks web e mobile) no Treino (TODO(#379) em workout-home.tsx e app/(app)/workout/index.tsx)
+- [~] Al-T2 / (em andamento: forks web e mobile) Al-T2b plano recebido (aceitar, recusar, desfazer, atualização com o que mudou)
+- [~] Al-T23 (em andamento: forks web e mobile) Modelos (T6 e T19 passam a abrir esta tela)
+- [~] Al-T12 (em andamento: forks web e mobile) Periodização 3 a 6 semanas
+- [~] Al-T24 / (em andamento: forks web e mobile) T24b / T24c Agenda
 
 ### Docs
 
-- [ ] REDESIGN_PROGRESS: "Decisões do dono" #379 (4 decisões do briefing)
+- [x] REDESIGN_PROGRESS: "Decisões do dono" #379 (4 decisões do briefing) + PERMISSIONS.md
+- [x] Cartão de confirmação do chat (rotulos.ts/previa): offerId, versionId, sessão da agenda, weeks (o rotulos.spec pegou na suíte completa)
 
 ## Arquivos tocados
 
