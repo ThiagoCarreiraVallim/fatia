@@ -1,7 +1,7 @@
 """Superfície HTTP do agente.
 
 Duas rotas de diagnóstico (`/health`, `/capabilities`) e quatro de inferência:
-`/recognize-meal` (#139), `/chat` (#248, ADR 023), `/title` e `/transcribe`
+`/recognize-meal` (#139), `/read-label` (#375), `/chat` (#248, ADR 023), `/title` e `/transcribe`
 (#141). O que a superfície estabelece é o **contrato de erro**: todo
 `AIProviderError`, todo `McpError` e todo corpo inválido viram um envelope
 `{"error": {"code", "message"}}` com um `code` estável, que é o que o NestJS
@@ -92,7 +92,7 @@ from .providers.errors import (
     AIProviderRefused,
     AIProviderTimeout,
 )
-from .recognition import MEDIA_TYPES_ACEITOS, recognize_meal
+from .recognition import MEDIA_TYPES_ACEITOS, read_label, recognize_meal
 from .settings import (
     AgentSettings,
     agent_auth_unavailable_reason,
@@ -470,6 +470,27 @@ def create_app(settings: AgentSettings | None = None) -> FastAPI:
         finally:
             await provider.aclose()
         return {**medido.meal.model_dump(), "usage": _usage_body(medido.usage)}
+
+    @app.post("/read-label")
+    async def read_label_route(
+        payload: RecognizeMealRequest,
+        x_fatia_agent_key: Annotated[str | None, Header()] = None,
+    ) -> dict[str, object]:
+        """Foto da tabela nutricional → valores para conferir (#375).
+
+        Mesmo corpo, mesma credencial e mesmo silêncio de identidade do
+        `/recognize-meal`. Não grava nada e a imagem morre com a requisição.
+        """
+        _exigir_credencial(resolved, x_fatia_agent_key)
+
+        imagem = _decodificar_imagem(payload.image_base64, payload.media_type, "image_base64")
+
+        provider = build_provider(resolved, transport=provider_transport)
+        try:
+            medido = await read_label(provider, imagem, media_type=payload.media_type)
+        finally:
+            await provider.aclose()
+        return {"label": medido.label.model_dump(), "usage": _usage_body(medido.usage)}
 
     @app.post("/title")
     async def title_route(

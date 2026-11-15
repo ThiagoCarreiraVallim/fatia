@@ -88,7 +88,7 @@ def parse_recognized_meal(texto: str) -> RecognizedMeal:
 
     Função pura: é ela que os testes exercitam, sem provedor e sem rede.
     """
-    bruto = _primeiro_objeto_json(texto)
+    bruto = first_json_object(texto)
     if bruto is None:
         raise AIResponseUnparseable(
             f"O modelo de visão respondeu em prosa, sem nenhum objeto JSON: {texto.strip()[:120]!r}"
@@ -110,7 +110,7 @@ def parse_recognized_meal(texto: str) -> RecognizedMeal:
     return meal
 
 
-def _primeiro_objeto_json(texto: str) -> dict[str, Any] | None:
+def first_json_object(texto: str) -> dict[str, Any] | None:
     """Primeiro objeto JSON balanceado do texto, ignorando o que vier em volta.
 
     Não é regex: chave dentro de string (`{"nome": "pão {caseiro}"}`) desbalancea

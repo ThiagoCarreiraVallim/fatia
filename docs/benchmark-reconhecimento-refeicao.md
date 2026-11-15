@@ -215,6 +215,30 @@ Quando o conjunto existir e o `eval` rodar, a recomendação de seguir ou não s
 publicada aqui **inclusive se o resultado for ruim** — como a issue exige. Se for
 "não seguir", vira ADR, e não uma nota de rodapé.
 
+## Rótulo (#375)
+
+A leitura da tabela nutricional (`/read-label`, #375, resto da #333) tem casos próprios, porque a
+pergunta é outra: **o modelo copiou a tabela certo?** A resposta está impressa na embalagem, sem
+balança. O manifesto é `apps/agent/eval/label-manifest.example.jsonl` (o real fica fora do git,
+com as fotos, como o do prato) e cada caso traz a coluna **por 100 g** do rótulo.
+
+- **Régua por campo** (kcal, proteína, carboidrato, gordura, fibra, sódio): acerta a até 5 % do
+  impresso, ou a até 1 unidade quando o impresso é pequeno.
+- **Campo não lido é erro**, e campo inventado onde o rótulo não tem também: é o zero falso que a
+  leitura existe para evitar.
+- Leitura devolvida por porção não conta como acerto num caso por 100 g: o prompt pede a coluna de
+  100 g quando ela existe, e o rótulo brasileiro (RDC 429/2020) sempre a tem.
+
+Roda pelo mesmo caminho de produção (`read_label`, mesmo prompt):
+
+```bash
+cd apps/agent
+uv run python -m fatia_agent.eval.label_cases --manifest eval/label-manifest.jsonl \
+  --images eval/images --base-url <gateway> --model <modelo de visão>
+```
+
+Sem número publicado ainda: falta fotografar os rótulos do conjunto `eval`.
+
 ## O que falta, na ordem
 
 1. Coletar e rotular ≥ 50 fotos conforme
