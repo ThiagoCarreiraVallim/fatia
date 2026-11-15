@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Linking, View } from 'react-native';
+import { Linking, Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ExternalLink, Pencil } from 'lucide-react-native';
+import { ExternalLink, Pencil, Star } from 'lucide-react-native';
 import { workoutApi, type Exercise } from '@fatia/api-client';
 import {
   Button,
@@ -71,6 +71,26 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
     },
   });
 
+  // A estrela do Como fazer (#378), igual à do PWA: otimista e volta atrás se
+  // a API recusar.
+  const [favorite, setFavorite] = useState<boolean | null>(null);
+  const [lastId, setLastId] = useState(exercise?.id);
+  if (lastId !== exercise?.id) {
+    setLastId(exercise?.id);
+    setFavorite(null);
+  }
+  const isFavorite = favorite ?? exercise?.favorite ?? false;
+  const favoriteMutation = useMutation({
+    mutationFn: ({ id, value }: { id: number; value: boolean }) =>
+      workoutApi.setExerciseFavorite(id, value),
+    onMutate: ({ value }) => setFavorite(value),
+    onError: (_e, { value }) => setFavorite(!value),
+    onSuccess: (_d, { id }) => {
+      qc.invalidateQueries({ queryKey: ['workout', 'exercises'] });
+      qc.invalidateQueries({ queryKey: ['workout', 'exercise', id] });
+    },
+  });
+
   const guia = exercise?.community ?? null;
   // O vídeo da comunidade substitui o do YouTube (Fase 7b).
   const videoId =
@@ -93,9 +113,34 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
       {exercise ? (
         <Drawer open={open} onOpenChange={onOpenChange} snapPoints={['85%']}>
           <DrawerHeader>
-            <DrawerTitle>{exercise.name}</DrawerTitle>
-            {exercise.muscleGroup ? (
-              <DrawerDescription className="capitalize">{exercise.muscleGroup}</DrawerDescription>
+            <View className="flex-row items-start justify-between gap-3">
+              <View className="min-w-0 flex-1">
+                <DrawerTitle>{exercise.name}</DrawerTitle>
+                {exercise.muscleGroup ? (
+                  <DrawerDescription className="capitalize">
+                    {exercise.muscleGroup}
+                  </DrawerDescription>
+                ) : null}
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Favoritar ${exercise.name}`}
+                accessibilityState={{ selected: isFavorite, disabled: favoriteMutation.isPending }}
+                disabled={favoriteMutation.isPending}
+                onPress={() => favoriteMutation.mutate({ id: exercise.id, value: !isFavorite })}
+                className="h-11 w-11 items-center justify-center rounded-full active:bg-accent"
+              >
+                <Star
+                  size={22}
+                  color={isFavorite ? colors.primaryText : colors.mutedForeground}
+                  fill={isFavorite ? colors.primaryText : 'transparent'}
+                />
+              </Pressable>
+            </View>
+            {favoriteMutation.isError ? (
+              <Text accessibilityRole="alert" className="text-xs text-danger">
+                Não foi possível salvar o favorito. Tente de novo.
+              </Text>
             ) : null}
           </DrawerHeader>
 

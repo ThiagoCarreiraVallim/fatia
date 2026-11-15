@@ -4,7 +4,6 @@ import {
   applyPlanMove,
   estimatePlanStats,
   formatSessionDuration,
-  nextPlanOrder,
   planMoveAnnouncement,
   planMoveDecision,
   pluralize,
@@ -263,16 +262,6 @@ describe('planMoveAnnouncement', () => {
     // Só sairia de uma resposta que não tem o que ela acabou de mover. Anunciar
     // "posição 0 de 2" é pior do que não anunciar.
     expect(planMoveAnnouncement([{ id: 'pe-c', order: 5 }], 'pe-b', 'Crucifixo')).toBeNull();
-  });
-});
-
-describe('nextPlanOrder', () => {
-  it('começa em 1', () => {
-    expect(nextPlanOrder([])).toBe(1);
-  });
-
-  it('vai depois do maior, mesmo com buracos', () => {
-    expect(nextPlanOrder([{ order: 1 }, { order: 7 }, { order: 3 }])).toBe(8);
   });
 });
 

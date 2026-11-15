@@ -4,11 +4,14 @@ import { Text } from '@/components/ui/text';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { Check, Clock, Dumbbell, Lightbulb, Pencil, Play, Plus, Trash2 } from 'lucide-react-native';
+import { Check, Pencil, Play, Plus, Trash2 } from 'lucide-react-native';
 import {
   ApiError,
-  isCardioExercise,
+  planHistoryLine,
+  planSummaryLine,
+  usersApi,
   workoutApi,
+  type PlanExerciseInput,
   type WorkoutPlan,
   type WorkoutPlanExercise,
 } from '@fatia/api-client';
@@ -24,15 +27,15 @@ import {
   useToast,
 } from '@/components/ui';
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
-import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { ExerciseDetailHost } from '@/components/workout/exercise-detail-host';
+import { PlanExerciseRow } from '@/components/workout/plan-exercise-row';
+import { PlanExerciseSheet } from '@/components/workout/plan-exercise-sheet';
+import { PlanMuscleBar } from '@/components/workout/plan-muscle-bar';
+import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import {
   applyPlanMove,
-  estimatePlanStats,
-  nextPlanOrder,
   planMoveAnnouncement,
   planMoveDecision,
-  pluralize,
   type PlanMove,
 } from '@/components/workout/workout-stats';
 import { colors } from '@/theme/colors';
@@ -45,18 +48,6 @@ import { colors } from '@/theme/colors';
  * ligado, arrastar é o gesto que move o foco.
  */
 
-function Stat({ icon: Icon, label, value }: { icon: typeof Clock; label: string; value: string }) {
-  return (
-    <View className="flex-row items-center gap-2">
-      <Icon size={14} color={colors.primaryText} />
-      <View>
-        <Text className="text-[10px] font-bold tracking-wide text-muted-foreground">{label}</Text>
-        <Text className="text-sm font-extrabold text-foreground">{value}</Text>
-      </View>
-    </View>
-  );
-}
-
 export default function PlanDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -66,6 +57,15 @@ export default function PlanDetailScreen() {
   const [addOpen, setAddOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameEdit, setNameEdit] = useState('');
+  // Al-T7: ver por padrão; editar mostra setas, lixeira, renomear e excluir.
+  const [editing, setEditing] = useState(false);
+  const [configId, setConfigId] = useState<string | null>(null);
+  const { loadUnit } = useUnitPrefs();
+  const me = useQuery({
+    queryKey: ['users', 'me'],
+    queryFn: () => usersApi.me(),
+    staleTime: 5 * 60_000,
+  });
 
   const plan = useQuery({
     queryKey: ['workout', 'plan', id],
@@ -90,22 +90,21 @@ export default function PlanDetailScreen() {
   });
 
   const updateExercise = useMutation({
-    mutationFn: ({
-      exerciseId,
-      body,
-    }: {
-      exerciseId: string;
-      body: { targetSets?: number; targetReps?: string };
-    }) => workoutApi.updatePlanExercise(id, exerciseId, body),
+    mutationFn: ({ exerciseId, body }: { exerciseId: string; body: PlanExerciseInput }) =>
+      workoutApi.updatePlanExercise(id, exerciseId, body),
     onSuccess: () => {
+      setConfigId(null);
       qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
+      qc.invalidateQueries({ queryKey: ['workout', 'plans'] });
     },
   });
 
   const removeExercise = useMutation({
     mutationFn: (exerciseId: string) => workoutApi.removePlanExercise(id, exerciseId),
     onSuccess: () => {
+      setConfigId(null);
       qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
+      qc.invalidateQueries({ queryKey: ['workout', 'plans'] });
     },
   });
 
@@ -204,7 +203,7 @@ export default function PlanDetailScreen() {
   const planData = plan.data;
   const exercises = [...planData.exercises].sort((a, b) => a.order - b.order);
   const existingIds = new Set(exercises.map((e) => e.exerciseId));
-  const { totalSets, estDurationMinutes, estVolumeTon } = estimatePlanStats(exercises);
+  const configuring = exercises.find((e) => e.id === configId) ?? null;
 
   function startEditName() {
     setNameEdit(planData.name);
@@ -229,10 +228,20 @@ export default function PlanDetailScreen() {
     moveExercise.mutate(decision);
   }
 
+  function confirmRemoveExercise(ex: WorkoutPlanExercise) {
+    confirm({
+      title: 'Remover exercício?',
+      description: `${ex.exercise.name} sai deste plano. Os treinos já feitos continuam no histórico.`,
+      confirmLabel: 'Remover',
+      destructive: true,
+      onConfirm: () => removeExercise.mutate(ex.id),
+    });
+  }
+
   function confirmDelete() {
     confirm({
-      title: 'Excluir plano?',
-      description: 'Os treinos já feitos com ele continuam no histórico.',
+      title: `Excluir “${planData.name}”?`,
+      description: 'O histórico das sessões continua.',
       confirmLabel: 'Excluir',
       destructive: true,
       onConfirm: () => deletePlan.mutate(),
@@ -244,24 +253,22 @@ export default function PlanDetailScreen() {
       <Screen
         title={planData.name}
         actions={
-          <>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Renomear plano"
-              onPress={startEditName}
-              className={TOP_BAR_ACTION}
-            >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={editing ? 'Concluir edição' : 'Editar plano'}
+            accessibilityState={{ selected: editing }}
+            onPress={() => {
+              setEditing((e) => !e);
+              setEditingName(false);
+            }}
+            className={TOP_BAR_ACTION}
+          >
+            {editing ? (
+              <Check size={20} color={colors.primaryText} />
+            ) : (
               <Pencil size={19} color={colors.primaryText} />
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Excluir plano"
-              onPress={confirmDelete}
-              className={TOP_BAR_ACTION}
-            >
-              <Trash2 size={19} color={colors.primaryText} />
-            </Pressable>
-          </>
+            )}
+          </Pressable>
         }
         refreshing={plan.isRefetching}
         onRefresh={() => void plan.refetch()}
@@ -291,29 +298,31 @@ export default function PlanDetailScreen() {
             </View>
           ) : null}
 
-          <View className="overflow-hidden rounded-2xl border border-border bg-card">
-            <View className="gap-1 bg-muted p-4 pt-10">
-              <View className="absolute left-4 top-4 rounded-md bg-primary px-2 py-0.5">
-                <Text className="text-[10px] font-extrabold text-primary-foreground">
-                  HIPERTROFIA
-                </Text>
+          <View className="gap-1 rounded-2xl border border-border bg-card p-4">
+            <Text className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              {editing ? 'Editando plano' : planData.fromTemplateId ? 'modelo' : 'seu plano'}
+            </Text>
+            <Text className="text-2xl font-extrabold text-foreground">{planData.name}</Text>
+            <Text className="text-xs text-muted-foreground">
+              {planHistoryLine(planData.timesDone ?? 0, planData.lastDoneAt ?? null)}
+            </Text>
+            <Text className="mt-2 text-sm font-semibold text-foreground">
+              {planSummaryLine(exercises)}
+            </Text>
+            <PlanMuscleBar exercises={exercises} legend className="mt-1" />
+            {editing && !editingName ? (
+              <View className="mt-2 flex-row gap-2">
+                <Button variant="outline" size="sm" onPress={startEditName}>
+                  <Pencil size={14} color={colors.foreground} />
+                  <Text className="text-sm text-foreground">Renomear</Text>
+                </Button>
+                <Button variant="outline" size="sm" onPress={confirmDelete}>
+                  <Trash2 size={14} color={colors.danger} />
+                  <Text className="text-sm text-danger">Excluir plano</Text>
+                </Button>
               </View>
-              <Text className="text-2xl font-extrabold text-foreground">{planData.name}</Text>
-              <Text className="text-xs text-muted-foreground">
-                {exercises.length} {pluralize(exercises.length, 'exercício', 'exercícios')} •{' '}
-                {totalSets} {pluralize(totalSets, 'série', 'séries')}
-              </Text>
-            </View>
-            <View className="flex-row items-center gap-6 border-t border-border px-5 py-3">
-              <Stat icon={Clock} label="Duração" value={`${estDurationMinutes}m`} />
-              <Stat icon={Dumbbell} label="Volume" value={`${estVolumeTon} Ton`} />
-            </View>
+            ) : null}
           </View>
-
-          <Text accessibilityRole="header" className="text-base font-extrabold text-foreground">
-            Exercícios{' '}
-            <Text className="text-sm font-bold text-muted-foreground">({exercises.length})</Text>
-          </Text>
 
           {exercises.length === 0 ? (
             <Pressable
@@ -330,25 +339,19 @@ export default function PlanDetailScreen() {
             </Pressable>
           ) : null}
 
-          <View className="gap-3">
+          <View className="gap-2">
             {exercises.map((ex, index) => (
-              <ExerciseDetailCard
+              <PlanExerciseRow
                 key={ex.id}
-                mode="plan"
                 item={ex}
-                isCardio={isCardioExercise(ex.exercise)}
+                editing={editing}
                 isFirst={index === 0}
                 isLast={index === exercises.length - 1}
                 isMoving={moveExercise.isPending}
-                onChangeSets={(n) =>
-                  updateExercise.mutate({ exerciseId: ex.id, body: { targetSets: n } })
-                }
-                onChangeReps={(v) =>
-                  updateExercise.mutate({ exerciseId: ex.id, body: { targetReps: v } })
-                }
-                onRemove={() => removeExercise.mutate(ex.id)}
+                onConfigure={() => setConfigId(ex.id)}
                 onMoveUp={() => move(index, -1)}
                 onMoveDown={() => move(index, 1)}
+                onRemove={() => confirmRemoveExercise(ex)}
               />
             ))}
           </View>
@@ -358,16 +361,11 @@ export default function PlanDetailScreen() {
             <Text className="text-sm font-medium text-foreground">Adicionar exercício</Text>
           </Button>
 
-          <View className="rounded-2xl border border-border bg-accent p-4">
-            <View className="flex-row items-center gap-2">
-              <Lightbulb size={16} color={colors.primaryText} />
-              <Text className="text-sm font-extrabold text-foreground">Foco na Excêntrica</Text>
-            </View>
-            <Text className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              Mantenha o controle da descida (fase excêntrica) por 3 segundos para maximizar a
-              hipertrofia.
-            </Text>
-          </View>
+          <Text className="text-center text-xs text-muted-foreground">
+            {editing
+              ? 'Use as setas para mudar a ordem. Toque no exercício para mudar séries, repetições, descanso e técnica.'
+              : 'Toque na imagem para ver como fazer. Toque no exercício para mudar séries, repetições e descanso.'}
+          </Text>
 
           <Button
             className="h-14 rounded-full"
@@ -376,17 +374,42 @@ export default function PlanDetailScreen() {
             onPress={() => start.mutate()}
           >
             <Play size={16} color={colors.background} fill={colors.background} />
-            <Text className="text-base font-extrabold text-primary-foreground">Iniciar Treino</Text>
+            <Text className="text-base font-extrabold text-primary-foreground">
+              Iniciar {planData.name}
+            </Text>
           </Button>
         </View>
       </Screen>
+
+      <PlanExerciseSheet
+        item={configuring}
+        open={configuring != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfigId(null);
+            updateExercise.reset();
+          }
+        }}
+        loadUnit={loadUnit}
+        birthDate={me.data?.birthDate ?? null}
+        saving={updateExercise.isPending}
+        error={
+          updateExercise.isError
+            ? `Não foi possível salvar. ${updateExercise.error instanceof Error ? updateExercise.error.message : ''}`
+            : null
+        }
+        onSave={(body) =>
+          configuring && updateExercise.mutate({ exerciseId: configuring.id, body })
+        }
+        onRemove={() => configuring && removeExercise.mutate(configuring.id)}
+      />
 
       <AddExerciseDrawer
         open={addOpen}
         onOpenChange={setAddOpen}
         planId={id}
+        planName={planData.name}
         existingExerciseIds={existingIds}
-        nextOrder={nextPlanOrder(exercises)}
       />
     </ExerciseDetailHost>
   );
