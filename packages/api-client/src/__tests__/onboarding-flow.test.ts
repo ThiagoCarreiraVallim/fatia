@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   KCAL_BAR,
   aiStepVariant,
+  codeFromQr,
   communityCodeHint,
   goalsRangeShift,
   kcalBarPosition,
@@ -292,6 +293,15 @@ describe('o teste da foto (Onb-10a)', () => {
       { foodId: 3, grams: 120 },
       { foodName: 'Frango grelhado', grams: 100, kcal: 165, proteinG: 31, carbsG: 0, fatG: 3.6 },
     ]);
+  });
+});
+
+describe('o QR da recepção (Onb-Codigo)', () => {
+  it('aceita o código puro ou um link com ele, e recusa o resto', () => {
+    expect(codeFromQr('demo30')).toBe('DEMO30');
+    expect(codeFromQr('https://app.fat.ia.br/community?code=demo30')).toBe('DEMO30');
+    expect(codeFromQr('https://app.fat.ia.br/c/academia-demo')).toBe('ACADEMIA-DEMO');
+    expect(codeFromQr('texto qualquer com espaço')).toBeNull();
   });
 });
 

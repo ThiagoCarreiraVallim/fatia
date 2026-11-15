@@ -504,6 +504,23 @@ export function communityCodeHint(state: CodeLookup): string {
 /** O código como se digita: sem espaço, minúsculo (é o `slug` da comunidade). */
 export const normalizeCommunityCode = (raw: string) => raw.trim().toLowerCase();
 
+/**
+ * O código lido do QR da recepção: o QR pode trazer só o código ou um link
+ * com `?code=`/`?codigo=` ou terminado no código. Fora disso, `null`.
+ */
+export function codeFromQr(raw: string): string | null {
+  const text = raw.trim();
+  if (/^[A-Za-z0-9_-]{3,32}$/.test(text)) return text.toUpperCase();
+  try {
+    const url = new URL(text);
+    const param = url.searchParams.get('code') ?? url.searchParams.get('codigo');
+    const candidate = param ?? url.pathname.split('/').filter(Boolean).pop() ?? '';
+    return /^[A-Za-z0-9_-]{3,32}$/.test(candidate) ? candidate.toUpperCase() : null;
+  } catch {
+    return null;
+  }
+}
+
 export const CODE_STEP_COPY = {
   title: 'Treina numa academia ou com um personal?',
   body: 'Com o código deles você entra na comunidade e recebe os treinos no app.',
@@ -567,9 +584,7 @@ export function photoTestSummary(rec: MealRecognition): {
  * gramas (a API calcula, como no registro manual); o resto leva os macros do
  * modelo. A confiança não é gravada.
  */
-export function photoTestMealItems(
-  rec: MealRecognition,
-): Array<
+export function photoTestMealItems(rec: MealRecognition): Array<
   | { foodId: number; grams: number }
   | {
       foodName: string;
