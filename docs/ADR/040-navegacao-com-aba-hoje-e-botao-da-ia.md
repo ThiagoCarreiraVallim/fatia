@@ -140,3 +140,25 @@ A troca entrou no PWA e no app no mesmo trabalho. O que a implementação decidi
 - **Cards da aba Treino:** `GET /workout/muscles/week` agrega `SessionSet` × `Exercise.primaryMuscles`
   dos últimos 60 dias em grupos canônicos (meta de 12 séries por semana; descansado a partir de 2
   dias), sem tabela nova. O humor do último treino vem com a #377.
+
+## Implementação de Você (#387, 2026-11-15)
+
+A tela Você segue a prancha `Al-V1-Voce` (decisão do dono do produto: onde a issue e a prancha
+divergem, vale a prancha). O que a implementação decidiu além do item 3:
+
+- **Linhas só com destino.** `menuSections` lista as linhas da prancha cujo destino já existe. Sua
+  semana e cards (#382), Avaliações com "1 pedida" (#383), Conquistas, Configurações da IA (#385),
+  Hábitos (#390), Lembretes com "5 ativos" (#389), a saúde do celular (#371) e Objetivo e rotina
+  entram com as issues donas das telas; até lá não aparecem, nem desativadas.
+- **Linhas que agem ali mesmo** (`kind` em `MenuItem`): "Guardar fotos das refeições" é um
+  interruptor (ADR 038, a mesma preferência da pergunta na primeira foto); "Trocar senha" abre o
+  "esqueci minha senha" do Logto, que manda o código por e-mail e volta para Você; "Exportar meus
+  dados" pede o link de 24 h (`POST /users/me/exports`) e o abre.
+- **Unidades**: só carga (kg/lb) e distância (km/m/milhas), como a `Al-V10`; peso e estatura ficam
+  em kg e cm. Banco e API seguem métricos; a conversão é só na tela, e a equipe vê na unidade dela.
+- **Quem vê a foto**: "Minhas comunidades" ou "Só a equipe", as duas opções da `Al-V9`.
+- **`/profile` vira `/you`**: as rotas antigas redirecionam, e Editar perfil, Unidades, Novidades,
+  Ajuda e Apagar conta moram em `/you/*` no PWA e no app.
+- **Apagar sem o app**: `fat.ia.br/apagar-conta` (site estático) explica e leva a
+  `app.fat.ia.br/apagar-conta`, pública, que pede login e mostra a mesma tela da `Al-V8`.
+- **Privacidade e Termos** ficam no fim de Você no app (diretriz 5.1.1 da App Store).

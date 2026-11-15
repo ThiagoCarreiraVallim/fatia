@@ -102,12 +102,17 @@ essa é a clientela dele, e é dado de terceiro.
 Dado novo das telas do redesign, com a issue que o cria ([`DADOS_REDESIGN.md`](./DADOS_REDESIGN.md)).
 Cada linha entra nesta página, no export e na exclusão no PR da issue dona.
 
-| Dado                                                         | Retenção                                                                                                                                               | Issue / ADR                                             |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
-| Telefone para WhatsApp e a permissão "equipe pode me chamar" | Enquanto a conta existir; desligar a permissão esconde o número da equipe. **A conversa não é guardada**: o painel só abre o link `wa.me` com o número | #387, #401, #402                                        |
-| Foto da refeição                                             | Enquanto a refeição existir; apagar a foto, a refeição ou a conta apaga o arquivo; só com a escolha "guardar fotos"                                    | #374, [ADR 038](./ADR/038-foto-da-refeicao-guardada.md) |
-| Foto de check-in de desafio                                  | Até 30 dias depois do fim do desafio; anulada, apagada na decisão; sair da comunidade, sair do desafio ou apagar a conta apaga na hora                 | #395, [ADR 044](./ADR/044-desafios-com-revisao.md)      |
-| Preferência de tema (Sistema/Escuro/Claro)                   | Só no aparelho (`localStorage`, armazenamento local do app); não vai à API                                                                             | #368, [ADR 041](./ADR/041-tema-claro.md)                |
+| Dado                                                                                            | Retenção                                                                                                                                                             | Issue / ADR                                             |
+| ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Telefone para WhatsApp e a permissão "equipe pode me chamar"                                    | Enquanto a conta existir; desligar a permissão esconde o número da equipe. **A conversa não é guardada**: o painel só abre o link `wa.me` com o número               | #387, #401, #402                                        |
+| Foto da refeição                                                                                | Enquanto a refeição existir; apagar a foto, a refeição ou a conta apaga o arquivo; só com a escolha "guardar fotos"                                                  | #374, [ADR 038](./ADR/038-foto-da-refeicao-guardada.md) |
+| Foto de check-in de desafio                                                                     | Até 30 dias depois do fim do desafio; anulada, apagada na decisão; sair da comunidade, sair do desafio ou apagar a conta apaga na hora                               | #395, [ADR 044](./ADR/044-desafios-com-revisao.md)      |
+| Preferência de tema (Sistema/Escuro/Claro)                                                      | Só no aparelho (`localStorage`, armazenamento local do app); não vai à API                                                                                           | #368, [ADR 041](./ADR/041-tema-claro.md)                |
+| Foto de perfil (`MediaFile` `user_avatar`) e quem vê (`avatarVisibility`)                       | Até a pessoa trocar ou remover a foto, ou apagar a conta: o arquivo sai do bucket na hora. EXIF removido no aparelho e no servidor. Sai no export (`mediaUploaded`)  | #387                                                    |
+| Apelido, bio (até 140), "Guardar fotos das refeições" e unidades de exibição (carga, distância) | Colunas de `User`: vão embora com a conta e saem no export. As unidades mudam só a tela; nada registrado é convertido                                                | #387, [ADR 038](./ADR/038-foto-da-refeicao-guardada.md) |
+| Novidades lidas (`UserNewsRead`) e tutoriais vistos (`UserTutorialSeen`)                        | Enquanto a conta existir (cascade); saem no export. O conteúdo das novidades e dos tutoriais vive em código, não é dado da pessoa                                    | #387                                                    |
+| Ideias enviadas (`FeedbackIdea`)                                                                | Enquanto a conta existir (cascade); saem no export                                                                                                                   | #387                                                    |
+| Link de exportação (`DataExport`)                                                               | Só o hash do token, com validade de 24 h; os vencidos da pessoa saem no pedido seguinte e todos vão com a conta. O arquivo é montado no download e não fica guardado | #387                                                    |
 
 O compartilhamento passa a ter **6 categorias**: as 5 de hoje (`WORKOUT`, `NUTRITION`, `BODY`,
 `HABITS`, `GOALS`) e "Fotos das refeições" (ADR 038). A equipe só vê o que o membro liberou, por
@@ -613,13 +618,13 @@ dias como versão antiga, o mesmo prazo dos dumps locais.
 
 ## Como o usuário exerce os direitos
 
-| Direito (LGPD art. 18)     | Como                                                                                                                            |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Acesso e portabilidade     | `GET /users/me/export` ou a tool MCP `export_my_data`                                                                           |
-| Correção                   | Qualquer tool de `update_*`, ou a própria UI                                                                                    |
-| Eliminação                 | `DELETE /users/me` ou a tool `delete_my_account`, com confirmação explícita; uma conversa ou uma memória, na tela do chat       |
-| Revogação do consentimento | `revoke_data_sharing` / `DELETE /sharing/consents/:linkId` para cortar o acesso de um profissional; apagar a conta para o resto |
-| Saber quem acessou         | `list_data_sharing` (quem pode ver) e `list_data_access_log` (quem viu, e quem tentou)                                          |
+| Direito (LGPD art. 18)     | Como                                                                                                                                                                                     |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Acesso e portabilidade     | Você › Exportar meus dados (`POST /users/me/exports`) ou a tool MCP `export_my_data`: link para o arquivo JSON, válido por 24 h                                                          |
+| Correção                   | Qualquer tool de `update_*`, ou a própria UI                                                                                                                                             |
+| Eliminação                 | Você › Apagar minha conta (digitando APAGAR), `fat.ia.br/apagar-conta` sem o app, ou a tool `delete_my_account`, com confirmação explícita; uma conversa ou uma memória, na tela do chat |
+| Revogação do consentimento | `revoke_data_sharing` / `DELETE /sharing/consents/:linkId` para cortar o acesso de um profissional; apagar a conta para o resto                                                          |
+| Saber quem acessou         | `list_data_sharing` (quem pode ver) e `list_data_access_log` (quem viu, e quem tentou)                                                                                                   |
 
 Nenhum deles depende de abrir um pedido ou esperar resposta humana — é o que a instrumentação
 via MCP permite: o usuário pede ao Claude e acontece.
