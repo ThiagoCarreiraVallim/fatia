@@ -91,6 +91,7 @@ model User {
   meals                  Meal[]
   workoutPlans           WorkoutPlan[]
   workoutSessions        WorkoutSession[]
+  workoutCheckins        WorkoutCheckin[]
   weightLogs             WeightLog[]
   stepLogs               StepLog[]
   waterLogs              WaterLog[]
@@ -826,9 +827,15 @@ model WorkoutSession {
   exerciseOrder      Int[] @default([])
   removedExerciseIds Int[] @default([])
 
-  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  plan WorkoutPlan? @relation(fields: [planId], references: [id])
-  sets SessionSet[]
+  /// "Como foi o treino?" (#377): a escala de 5 do canvas, 1 Leve, 2 Firme,
+  /// 3 Puxado, 4 Muito puxado, 5 No limite. Nulo = não marcou. A sensação de
+  /// cada série continua no `SessionSet.rpe` (6 a 10, a mesma escala).
+  feeling Int?
+
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan    WorkoutPlan?    @relation(fields: [planId], references: [id])
+  sets    SessionSet[]
+  checkin WorkoutCheckin?
   // E um índice único PARCIAL em (userId) onde completedAt é nulo — uma sessão
   // aberta por pessoa (#350). O Prisma não o descreve: está na migration
   // 20261026120000_one_open_workout_session.
@@ -855,11 +862,45 @@ model SessionSet {
 
   notes String?
 
+  /// Chave que o app gera ao tocar "Concluir série" (#377). O mesmo toque
+  /// reenviado (duplo toque, rede que cai e volta) devolve a série já gravada
+  /// em vez de criar outra. Nula para quem não manda (MCP, versões antigas).
+  clientKey String?
+
   session  WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   exercise Exercise       @relation(fields: [exerciseId], references: [id])
 
+  @@unique([sessionId, clientKey])
   @@index([sessionId])
   @@index([exerciseId])
+}
+
+/// Respostas rápidas depois do treino (#377, parte da #304): a folha
+/// "Perguntas da equipe" do fim do treino. Uma por sessão, e todas opcionais.
+/// `skipped` grava o "Pular": a equipe vê só que a pessoa pulou.
+///
+/// Dado do aluno: a equipe lê só pela porta do painel, com Treino liberado e
+/// linha em `ProfessionalAccessLog` (ADR 014). Escalas de 1 a 5; a faixa é
+/// conferida por CHECK na migration.
+model WorkoutCheckin {
+  id           String   @id @default(uuid())
+  sessionId    String   @unique
+  /// O dono da sessão, gravado pelo serviço a partir dela, nunca do corpo.
+  userId       String
+  skipped      Boolean  @default(false)
+  difficulty   Int?
+  fatigue      Int?
+  pain         Boolean?
+  painLocation String?
+  motivation   Int?
+  note         String?
+  answeredAt   DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  session WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, answeredAt])
 }
 
 // ============================================================

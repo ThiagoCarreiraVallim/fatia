@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil } from 'lucide-react';
 import {
   Drawer,
@@ -12,10 +12,50 @@ import {
   DrawerDescription,
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
+import { Segmented } from '@/components/ui/segmented';
+import { MarkdownLite } from '@/components/content/markdown-lite';
+import { groupTone } from './group-tone';
 import { MuscleDiagram } from './muscle-diagram';
-import { CommunityGuideSection } from './community-guide';
 import { ExerciseEditDrawer } from './exercise-edit-drawer';
-import { workoutApi, type Exercise } from '@fatia/api-client';
+import { ExerciseVideo } from './exercise-media';
+import { muscleLabelPt } from './muscle-labels';
+import { useUnitPrefs } from '@/components/you/use-unit-prefs';
+import {
+  feelingOf,
+  formatBestSet,
+  formatDecimal,
+  kgToLoad,
+  loadUnitLabel,
+  muscleGroupLabel,
+  workoutApi,
+  type Exercise,
+  type StrengthMuscleGroup,
+} from '@fatia/api-client';
+
+type Tab = 'steps' | 'muscles' | 'history';
+
+const TABS: { value: Tab; label: string }[] = [
+  { value: 'steps', label: 'Passos' },
+  { value: 'muscles', label: 'Músculos' },
+  { value: 'history', label: 'Seu histórico' },
+];
+
+const STRENGTH = new Set(['peito', 'costas', 'pernas', 'ombro', 'braço', 'core']);
+
+function groupLabel(group: string): string {
+  if (STRENGTH.has(group)) return muscleGroupLabel(group as StrengthMuscleGroup);
+  return group.charAt(0).toUpperCase() + group.slice(1);
+}
+
+/** "2 de out. de 2026", lendo YYYY-MM-DD como dia local (sem pular de fuso). */
+function longDate(ymd: string): string {
+  const [y, m, d] = ymd.slice(0, 10).split('-').map(Number);
+  return new Date(y!, (m ?? 1) - 1, d ?? 1).toLocaleDateString('pt-BR', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
 
 interface Props {
   exercise: Exercise | null;
@@ -37,6 +77,12 @@ const MECHANIC_LABEL: Record<string, string> = {
 export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Exercise | null>(null);
+  const [tab, setTab] = useState<Tab>('steps');
+  // A URL assinada do vídeo da comunidade pode vencer com a folha aberta: o
+  // erro do player pede o exercício de novo (URL nova).
+  const refreshVideo = () => {
+    if (exercise) void qc.invalidateQueries({ queryKey: ['workout', 'exercise', exercise.id] });
+  };
 
   // Editar um exercício base cria uma cópia editável (a base some das listagens
   // do usuário e aparece a cópia). Exercício custom é editado direto.
@@ -49,14 +95,6 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
       setEditing(copy);
     },
   });
-
-  const guia = exercise?.community ?? null;
-  // O vídeo da comunidade substitui o do YouTube: é o tutorial que a academia
-  // (ou quem a pessoa segue) gravou para este exercício.
-  const videoId =
-    exercise && !guia?.video?.url
-      ? (exercise.youtubeVideoIdPt ?? exercise.youtubeVideoId ?? null)
-      : null;
 
   const handleEdit = () => {
     if (!exercise) return;
@@ -73,12 +111,35 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
       {exercise && (
         <Drawer open={open} onOpenChange={onOpenChange}>
           <DrawerContent className="px-4 pb-6">
+            {/* O vídeo no topo (prancha Al-T9): o da comunidade ganha do YouTube. */}
+            <div className="pt-2">
+              <ExerciseVideo exercise={exercise} onExpired={refreshVideo} />
+            </div>
+
             <DrawerHeader className="px-0">
-              <DrawerTitle>{exercise.name}</DrawerTitle>
-              {exercise.muscleGroup && (
-                <DrawerDescription className="capitalize">{exercise.muscleGroup}</DrawerDescription>
-              )}
+              <DrawerTitle className="font-display text-[26px] font-semibold leading-tight">
+                {exercise.name}
+              </DrawerTitle>
+              {/* TODO(#378): a estrela de favorito entra aqui, ao lado do nome. */}
+              <DrawerDescription className="sr-only">Como fazer {exercise.name}</DrawerDescription>
+              <div className="flex flex-wrap items-center gap-2">
+                {exercise.muscleGroup && (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                    <span
+                      aria-hidden
+                      className="h-[7px] w-[7px] rounded-[2px]"
+                      style={{ background: groupTone(exercise.muscleGroup) }}
+                    />
+                    {groupLabel(exercise.muscleGroup)}
+                  </span>
+                )}
+                {details(exercise) && (
+                  <span className="text-xs text-muted-foreground">{details(exercise)}</span>
+                )}
+              </div>
             </DrawerHeader>
+
+            <Segmented label="Seções" options={TABS} value={tab} onChange={setTab} />
 
             {/* Rolável e focável: sem vídeo, nada aqui dentro recebe foco, e quem
                 usa só o teclado não conseguiria rolar até as instruções. */}
@@ -86,94 +147,11 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
               role="region"
               aria-label={`Detalhes de ${exercise.name}`}
               tabIndex={0}
-              className="max-h-[68vh] space-y-5 overflow-y-auto rounded-md py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="mt-3 max-h-[52vh] space-y-4 overflow-y-auto rounded-md py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {guia && <CommunityGuideSection guide={guia} exerciseName={exercise.name} />}
-
-              {/* Muscle diagram */}
-              {exercise.primaryMuscles && exercise.primaryMuscles.length > 0 && (
-                <MuscleDiagram
-                  primaryMuscles={exercise.primaryMuscles}
-                  secondaryMuscles={exercise.secondaryMuscles ?? []}
-                />
-              )}
-
-              {/* Badges */}
-              <div className="flex flex-wrap gap-2">
-                {exercise.level && (
-                  <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold">
-                    {LEVEL_LABEL[exercise.level] ?? exercise.level}
-                  </span>
-                )}
-                {exercise.mechanic && (
-                  <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold">
-                    {MECHANIC_LABEL[exercise.mechanic] ?? exercise.mechanic}
-                  </span>
-                )}
-                {exercise.equipment && (
-                  <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold capitalize">
-                    {exercise.equipment}
-                  </span>
-                )}
-              </div>
-
-              {/* Muscles list */}
-              {exercise.primaryMuscles && exercise.primaryMuscles.length > 0 && (
-                <div className="space-y-1">
-                  <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase">
-                    Músculos principais
-                  </p>
-                  <p className="text-sm capitalize">{exercise.primaryMuscles.join(', ')}</p>
-                  {exercise.secondaryMuscles && exercise.secondaryMuscles.length > 0 && (
-                    <>
-                      <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase mt-2">
-                        Músculos secundários
-                      </p>
-                      <p className="text-sm capitalize">{exercise.secondaryMuscles.join(', ')}</p>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* Instructions */}
-              {exercise.instructions && exercise.instructions.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase">
-                    Instruções
-                  </p>
-                  <ol className="space-y-2 list-none">
-                    {exercise.instructions.map((step, i) => (
-                      <li key={i} className="flex gap-3 text-sm leading-snug">
-                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">
-                          {i + 1}
-                        </span>
-                        <span>{step}</span>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              )}
-
-              {/* YouTube embed */}
-              {videoId && (
-                <div className="space-y-2">
-                  <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase">
-                    Vídeo demonstrativo
-                  </p>
-                  <div
-                    className="relative w-full overflow-hidden rounded-xl"
-                    style={{ paddingTop: '56.25%' }}
-                  >
-                    <iframe
-                      src={`https://www.youtube.com/embed/${videoId}`}
-                      title={`Demonstração: ${exercise.name}`}
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                      className="absolute inset-0 h-full w-full border-0"
-                    />
-                  </div>
-                </div>
-              )}
+              {tab === 'steps' && <StepsTab exercise={exercise} />}
+              {tab === 'muscles' && <MusclesTab exercise={exercise} />}
+              {tab === 'history' && <HistoryTab exerciseId={exercise.id} />}
 
               {/* Por último, discreto, como no app. Fixo no topo, o "editar" era
                   a primeira coisa do detalhe e empurrava para baixo o que a
@@ -213,5 +191,159 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
         }}
       />
     </>
+  );
+}
+
+function details(exercise: Exercise): string {
+  return [
+    exercise.equipment,
+    exercise.level ? (LEVEL_LABEL[exercise.level] ?? exercise.level) : null,
+    exercise.mechanic ? (MECHANIC_LABEL[exercise.mechanic] ?? exercise.mechanic) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function StepsTab({ exercise }: { exercise: Exercise }) {
+  const guide = exercise.community ?? null;
+  const photos = guide?.photos.filter((f) => f.url) ?? [];
+  const hasSteps = exercise.instructions && exercise.instructions.length > 0;
+  return (
+    <>
+      {hasSteps ? (
+        <ol className="list-none rounded-card bg-card px-4">
+          {exercise.instructions.map((step, i) => (
+            <li
+              key={i}
+              className="flex gap-3 border-border py-3.5 text-sm leading-snug text-foreground [&:not(:first-child)]:border-t"
+            >
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-[13px] font-bold text-primary-foreground">
+                {i + 1}
+              </span>
+              <span className="pt-1">{step}</span>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="text-sm text-muted-foreground">Sem passo a passo para este exercício.</p>
+      )}
+      {guide?.tips && (
+        <div className="rounded-card bg-card p-4 text-sm">
+          <p className="mb-1 text-xs font-bold text-primary-text">Dica da {guide.groupName}</p>
+          <MarkdownLite source={guide.tips} />
+        </div>
+      )}
+      {guide && photos.length > 0 && (
+        <ul className="grid grid-cols-2 gap-2" aria-label={`Fotos da ${guide.groupName}`}>
+          {photos.map((f, i) => (
+            <li key={f.id}>
+              {/* eslint-disable-next-line @next/next/no-img-element -- URL assinada e curta, fora do otimizador */}
+              <img
+                src={f.url!}
+                alt={`${exercise.name}, foto ${i + 1}`}
+                className="aspect-square w-full rounded-xl object-cover"
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+function MusclesTab({ exercise }: { exercise: Exercise }) {
+  const primary = exercise.primaryMuscles ?? [];
+  const secondary = exercise.secondaryMuscles ?? [];
+  if (primary.length === 0 && secondary.length === 0) {
+    return <p className="text-sm text-muted-foreground">Sem músculos cadastrados.</p>;
+  }
+  return (
+    <div className="flex items-center gap-4">
+      <div className="shrink-0">
+        <MuscleDiagram primaryMuscles={primary} secondaryMuscles={secondary} sizeClassName="w-24" />
+      </div>
+      <dl className="min-w-0 space-y-2 text-sm">
+        {primary.length > 0 && (
+          <div>
+            <dt className="text-[11px] font-bold text-muted-foreground">Principal</dt>
+            <dd className="text-foreground">{primary.map(muscleLabelPt).join(', ')}</dd>
+          </div>
+        )}
+        {secondary.length > 0 && (
+          <div>
+            <dt className="text-[11px] font-bold text-muted-foreground">Ajudam</dt>
+            <dd className="text-foreground">{secondary.map(muscleLabelPt).join(', ')}</dd>
+          </div>
+        )}
+      </dl>
+    </div>
+  );
+}
+
+function HistoryTab({ exerciseId }: { exerciseId: number }) {
+  const stats = useQuery({
+    queryKey: ['workout', 'exercise', exerciseId, 'stats'],
+    queryFn: () => workoutApi.getExerciseStats(exerciseId),
+  });
+  const unit = useUnitPrefs().loadUnit;
+  if (stats.isLoading) return <p className="text-sm text-muted-foreground">Carregando…</p>;
+  if (stats.isError) {
+    return (
+      <p role="alert" className="text-sm text-danger">
+        Não foi possível carregar seu histórico.
+      </p>
+    );
+  }
+  const data = stats.data;
+  if (!data || (!data.record && !data.last)) {
+    return <p className="text-sm text-muted-foreground">Você ainda não fez este exercício.</p>;
+  }
+  const feeling = feelingOf(data.last?.feeling);
+  const row = 'flex items-start justify-between gap-3 rounded-2xl bg-muted/50 px-3 py-2.5';
+  return (
+    <ul className="space-y-2">
+      {data.record && (
+        <li className={row}>
+          <div>
+            <p className="text-[11px] font-bold text-muted-foreground">Recorde</p>
+            <p className="text-base font-extrabold tabular-nums text-foreground">
+              {formatBestSet({ ...data.record, avgHeartRate: null }, unit)}
+            </p>
+          </div>
+          {data.record.date && (
+            <span className="text-xs text-muted-foreground">{longDate(data.record.date)}</span>
+          )}
+        </li>
+      )}
+      {data.last && (
+        <li className={row}>
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold text-muted-foreground">Última vez</p>
+            <p className="text-sm text-foreground">
+              {[
+                longDate(data.last.date),
+                `${data.last.sets} ${data.last.sets === 1 ? 'série' : 'séries'}`,
+                formatBestSet({ ...data.last.best, avgHeartRate: null }, unit),
+              ].join(' · ')}
+            </p>
+          </div>
+          {feeling && (
+            <span role="img" aria-label={feeling.label} className="text-xl">
+              {feeling.emoji}
+            </span>
+          )}
+        </li>
+      )}
+      {data.estimated1RM != null && (
+        <li className={row}>
+          <div>
+            <p className="text-[11px] font-bold text-muted-foreground">Máximo estimado</p>
+            <p className="text-base font-extrabold tabular-nums text-foreground">
+              {formatDecimal(kgToLoad(data.estimated1RM, unit), 1)} {loadUnitLabel(unit)}
+            </p>
+          </div>
+        </li>
+      )}
+    </ul>
   );
 }

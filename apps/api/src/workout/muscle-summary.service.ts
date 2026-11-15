@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
-import { addDaysIso, dateInTz, dayBoundsInTz } from '../progress/helpers/date-tz';
+import { addDaysIso, dateInTz, dayBoundsInTz, weekStartInTz } from '../progress/helpers/date-tz';
 import {
   CANONICAL_MUSCLE_GROUPS,
   canonicalGroupsOf,
@@ -35,6 +35,67 @@ export interface WeeklyMuscleSummary {
   rested: { group: StrengthGroup; daysSince: number | null }[];
   /** O plano da própria pessoa que mais trabalha os grupos descansados. */
   suggestedPlan: { id: string; name: string; groups: StrengthGroup[] } | null;
+}
+
+/** O que `GET /workout/muscles/week` devolve: a conta dos músculos e a semana do calendário. */
+export interface WorkoutWeekSummary extends WeeklyMuscleSummary {
+  /** Segunda a domingo, fuso da pessoa: "3 de 4 treinos" (#377). */
+  week: TrainingWeek;
+}
+
+export interface TrainingWeek {
+  /** Segunda-feira, YYYY-MM-DD. */
+  start: string;
+  days: {
+    date: string;
+    /** Teve treino terminado neste dia. */
+    trained: boolean;
+    /** O treino aberto agora começou neste dia. */
+    active: boolean;
+    today: boolean;
+  }[];
+  /** Treinos terminados na semana. */
+  done: number;
+  /** `UserGoals.weeklyWorkouts`; nulo sem meta. */
+  target: number | null;
+}
+
+export interface WeekInput {
+  sessions: { startedAt: Date; completedAt: Date | null }[];
+  now: Date;
+  timezone: string;
+  target: number | null;
+}
+
+/** A semana do calendário: dias com treino, o aberto e o total contra a meta. */
+export function summarizeTrainingWeek(input: WeekInput): TrainingWeek {
+  const start = weekStartInTz(input.now, input.timezone);
+  const today = dateInTz(input.now, input.timezone);
+  const dates = Array.from({ length: 7 }, (_, i) => addDaysIso(start, i));
+  const trained = new Set<string>();
+  const active = new Set<string>();
+  let done = 0;
+  for (const s of input.sessions) {
+    const day = dateInTz(s.startedAt, input.timezone);
+    if (day < start || day > dates[6]!) continue;
+    if (s.completedAt) {
+      trained.add(day);
+      done += 1;
+    } else {
+      active.add(day);
+    }
+  }
+  return {
+    start,
+    days: dates.map((date) => ({
+      date,
+      trained: trained.has(date),
+      active: active.has(date),
+      today: date === today,
+    })),
+    done,
+    target: input.target && input.target > 0 ? input.target : null,
+  };
 }
 
 interface ExerciseLike {
@@ -124,13 +185,14 @@ export class MuscleSummaryService {
     userId: string,
     timezone: string,
     now: Date = new Date(),
-  ): Promise<WeeklyMuscleSummary> {
+  ): Promise<WorkoutWeekSummary> {
+    const weekStart = dayBoundsInTz(weekStartInTz(now, timezone), timezone).start;
     const since = dayBoundsInTz(
       addDaysIso(dateInTz(now, timezone), -LOOKBACK_DAYS),
       timezone,
     ).start;
     const exerciseSelect = { select: { muscleGroup: true, primaryMuscles: true } } as const;
-    const [sets, plans] = await Promise.all([
+    const [sets, plans, weekSessions, goals] = await Promise.all([
       this.prisma.sessionSet.findMany({
         where: { session: { userId, startedAt: { gte: since } } },
         select: { exercise: exerciseSelect, session: { select: { startedAt: true } } },
@@ -140,7 +202,20 @@ export class MuscleSummaryService {
         orderBy: { createdAt: 'asc' },
         select: { id: true, name: true, exercises: { select: { exercise: exerciseSelect } } },
       }),
+      this.prisma.workoutSession.findMany({
+        where: { userId, startedAt: { gte: weekStart } },
+        select: { startedAt: true, completedAt: true },
+      }),
+      this.prisma.userGoals.findUnique({ where: { userId }, select: { weeklyWorkouts: true } }),
     ]);
-    return summarizeWeeklyMuscles({ sets, plans, now, timezone });
+    return {
+      ...summarizeWeeklyMuscles({ sets, plans, now, timezone }),
+      week: summarizeTrainingWeek({
+        sessions: weekSessions,
+        now,
+        timezone,
+        target: goals?.weeklyWorkouts ?? null,
+      }),
+    };
   }
 }

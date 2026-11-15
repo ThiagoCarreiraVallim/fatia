@@ -38,16 +38,25 @@ describe('RestTimer', () => {
     shown('01:50');
   });
 
-  it('+30s soma ao que falta, sem recomeçar a contagem', () => {
+  it('+15 s soma ao que falta, sem recomeçar a contagem (#377)', () => {
     render(<Harness idleSeconds={90} />);
     press('Iniciar descanso');
     advance(10_000);
     shown('01:20');
 
-    press('Somar 30 segundos ao descanso');
-    shown('01:50');
+    press('Somar 15 segundos ao descanso');
+    shown('01:35');
     advance(5_000);
-    shown('01:45');
+    shown('01:30');
+  });
+
+  it('−15 s tira do que falta, e o anel mostra quanto já passou (#377)', () => {
+    render(<Harness idleSeconds={90} />);
+    press('Iniciar descanso');
+    advance(30_000);
+    press('Tirar 15 segundos do descanso');
+    shown('00:45');
+    expect(screen.getByRole('timer', { name: 'Descanso' })).toBeInTheDocument();
   });
 
   it('pausado, o tempo não corre; retomado, continua de onde parou', () => {
@@ -87,9 +96,10 @@ describe('RestTimer', () => {
     expect(screen.getByRole('button', { name: 'Retomar descanso' })).toBeDisabled();
     // Ainda dá para esticar: quem não terminou de beber água ganha mais meio
     // minuto, e o descanso volta a correr sem pedir um "retomar".
-    press('Somar 30 segundos ao descanso');
-    shown('00:30');
+    expect(screen.getByRole('button', { name: 'Tirar 15 segundos do descanso' })).toBeDisabled();
+    press('Somar 15 segundos ao descanso');
+    shown('00:15');
     advance(5_000);
-    shown('00:25');
+    shown('00:10');
   });
 });

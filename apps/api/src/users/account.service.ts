@@ -202,9 +202,13 @@ export class AccountService {
         include: { exercises: { include: { exercise: { select: { id: true, name: true } } } } },
         orderBy: { createdAt: 'asc' },
       }),
+      // A sensação vem na própria linha; as respostas do fim do treino (#377) vêm junto.
       this.prisma.workoutSession.findMany({
         where: { userId },
-        include: { sets: { include: { exercise: { select: { id: true, name: true } } } } },
+        include: {
+          sets: { include: { exercise: { select: { id: true, name: true } } } },
+          checkin: true,
+        },
         orderBy: { startedAt: 'asc' },
       }),
       this.prisma.weightLog.findMany({ where: { userId }, orderBy: { loggedAt: 'asc' } }),

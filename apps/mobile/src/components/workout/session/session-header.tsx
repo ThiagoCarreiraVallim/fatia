@@ -1,88 +1,74 @@
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Check, ChevronDown } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { Button } from '@/components/ui';
-import { elapsedLabel, formatTimeOfDay, pluralize, type SessionProgress } from './format';
+import { formatClock } from './format';
+import { colors } from '@/theme/colors';
 
 /**
- * Cabeçalho da sessão: horário de início, as duas saídas e o progresso.
- *
- * Já foi fixo acima da lista, para o "quantos faltam" ficar sempre à vista.
- * Na prática ele roubava uma faixa da tela inteira o treino todo, e o que se
- * olha a cada série é o card do exercício. Agora rola com o conteúdo, como no
- * PWA; o progresso continua sendo a primeira coisa ao abrir a sessão.
+ * O topo da sessão guiada (pranchas `Al-T3` e `Al-T3d`): minimizar à esquerda
+ * (o treino segue na barra de baixo, `ActiveWorkoutBar`), o relógio numa
+ * pílula no meio e, à direita, o check que finaliza. O "Treino atual" (`Al-T17`)
+ * abre pelo "Todas ›" ao lado das séries.
  */
 export function SessionHeader({
   startedAt,
-  progress,
-  onCancel,
+  onMinimize,
   onFinish,
 }: {
   startedAt: string;
-  progress: SessionProgress;
-  onCancel: () => void;
+  onMinimize: () => void;
   onFinish: () => void;
 }) {
-  const elapsed = useElapsed(startedAt);
-  const progressLabel = `${progress.done}/${progress.total} ${pluralize(progress.total, 'exercício', 'exercícios')}`;
-
+  const insets = useSafeAreaInsets();
+  const clock = useClock(startedAt);
   return (
-    <View>
-      <View className="flex-row items-center justify-between gap-2">
-        <View className="min-w-0 flex-1">
-          {/* O título "Treino em andamento" mora na barra de topo. */}
-          <Text className="text-sm text-muted-foreground">
-            Iniciado às {formatTimeOfDay(startedAt)} · {elapsed}
-          </Text>
-        </View>
-
-        <Button variant="ghost" size="sm" onPress={onCancel} textClassName="text-muted-foreground">
-          Cancelar
-        </Button>
-        <Button variant="outline" size="sm" onPress={onFinish}>
-          Finalizar
-        </Button>
-      </View>
-
-      <View
-        accessibilityRole="progressbar"
-        accessibilityLabel={`Progresso do treino: ${progressLabel}`}
-        accessibilityValue={{ min: 0, max: progress.total, now: progress.done }}
-        className="mt-2 flex-row items-center gap-2"
+    <View
+      style={{ paddingTop: insets.top + 8 }}
+      className="flex-row items-center justify-between gap-2 bg-background px-4 pb-3"
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Minimizar treino"
+        accessibilityHint="O treino continua na barra de baixo"
+        onPress={onMinimize}
+        className="h-11 w-11 items-center justify-center rounded-full bg-muted active:opacity-80"
       >
-        <View className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-          <View
-            className="h-full rounded-full bg-primary"
-            style={{ width: `${Math.round(progress.ratio * 100)}%` }}
-          />
-        </View>
-        <Text className="text-[11px] font-bold text-muted-foreground">{progressLabel}</Text>
+        <ChevronDown size={20} color={colors.foreground} />
+      </Pressable>
+      <View
+        accessible
+        accessibilityLabel={`Tempo de treino ${clock}`}
+        className="h-9 flex-row items-center gap-2 rounded-full bg-muted px-3.5"
+      >
+        <View className="h-2 w-2 rounded-full bg-primary" />
+        <Text
+          className="font-sans-bold text-[15px] text-foreground"
+          style={{ fontVariant: ['tabular-nums'] }}
+        >
+          {clock}
+        </Text>
       </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Finalizar treino"
+        onPress={onFinish}
+        className="h-11 w-11 items-center justify-center rounded-full bg-muted active:opacity-80"
+      >
+        <Check size={20} color={colors.foreground} />
+      </Pressable>
     </View>
   );
 }
 
-/** Relógio da sessão. Um minuto de resolução dispensa tique de segundo. */
-function useElapsed(startedAt: string): string {
-  const [label, setLabel] = useState(() => elapsedLabel(startedAt));
-
-  // O recálculo imediato na troca de sessão sai do efeito e vira ajuste durante o
-  // render (#187): a comparação é a mesma que estava nas dependências, então o
-  // rótulo muda no mesmo momento, só que sem pintar um quadro com o tempo da
-  // sessão anterior. Não há passagem de montagem porque o `useState` acima já
-  // inicializa com o mesmo cálculo — no efeito, essa primeira linha era um no-op.
-  // O intervalo continua no efeito: assinar um temporizador é justamente o que
-  // efeito serve para fazer.
-  const [previousStartedAt, setPreviousStartedAt] = useState(startedAt);
-  if (previousStartedAt !== startedAt) {
-    setPreviousStartedAt(startedAt);
-    setLabel(elapsedLabel(startedAt));
-  }
-
+/** "24:18": o tempo desde o início, a cada segundo, contado pelo relógio e não por tique. */
+function useClock(startedAt: string): string {
+  const start = new Date(startedAt).getTime();
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const id = setInterval(() => setLabel(elapsedLabel(startedAt)), 15_000);
+    const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [startedAt]);
-
-  return label;
+  }, []);
+  return formatClock(Math.max(0, Math.floor((now - start) / 1000)));
 }

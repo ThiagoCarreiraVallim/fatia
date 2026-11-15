@@ -5,6 +5,7 @@ import {
   musclesOfGroups,
   restedHeadline,
   weeklySetsBars,
+  figureTone,
 } from '../workout-cards';
 
 describe('cards da aba Treino', () => {
@@ -81,5 +82,22 @@ describe('silhueta do card "Seus músculos hoje"', () => {
   it('a legenda tem um ponto por tom, na ordem da prancha', async () => {
     const { MUSCLE_TONE_LEGEND } = await import('../workout-cards');
     expect(MUSCLE_TONE_LEGEND.map((l) => l.tone)).toEqual(['rested', 'recovering', 'recent']);
+  });
+});
+
+describe('figureTone — o boneco no tema (sem caixa branca no escuro)', () => {
+  it('troca os cinzas fixos do desenho pelos tokens do tema', () => {
+    expect(figureTone('#BDBDBD')).toBe('surface-3');
+    expect(figureTone('#bdbdbd')).toBe('surface-3');
+    // As costas usam outro cinza para os músculos.
+    expect(figureTone('#AEAEB2')).toBe('surface-3');
+    expect(figureTone('#E0E0E0')).toBe('border-strong');
+    expect(figureTone('black')).toBe('card');
+  });
+
+  it('o fundo some e o resto fica como está', () => {
+    expect(figureTone('#F5F5F5')).toBe('transparent');
+    expect(figureTone('none')).toBeNull();
+    expect(figureTone(undefined)).toBeNull();
   });
 });

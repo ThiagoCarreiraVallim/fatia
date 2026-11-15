@@ -131,6 +131,19 @@ describe('SessionSetService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    it('rejects an empty set: no reps, duration nor distance (#377 "+ Série" vazia)', async () => {
+      prisma.exercise.findFirst.mockResolvedValue(strengthExercise);
+      await expect(
+        service.create(userId, { sessionId: 'sess-1', exerciseId: 1, weightKg: 80 }),
+      ).rejects.toThrow(BadRequestException);
+
+      prisma.exercise.findFirst.mockResolvedValue(cardioExercise);
+      await expect(service.create(userId, { sessionId: 'sess-1', exerciseId: 2 })).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prisma.sessionSet.create).not.toHaveBeenCalled();
+    });
+
     it('rejects cardio fields (durationSeconds) for a strength exercise', async () => {
       prisma.exercise.findFirst.mockResolvedValue(strengthExercise);
 

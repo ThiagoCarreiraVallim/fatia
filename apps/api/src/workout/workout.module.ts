@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { StorageModule } from '../storage/storage.module';
+import { SharedWithService } from '../sharing/shared-with.service';
 import { ExerciseService } from './exercise.service';
 import { WorkoutPlanService } from './workout-plan.service';
 import { WorkoutSessionService } from './workout-session.service';
@@ -56,6 +57,9 @@ import { UpdateWorkoutSessionTool } from './mcp/update-workout-session.tool';
     PrescriptionService,
     TrainingBlockService,
     MuscleSummaryService,
+    // Quem da equipe lê Treino: decide se o fim do treino traz as perguntas
+    // (#377). Só depende do Prisma, como no módulo de nutrição.
+    SharedWithService,
 
     // MCP tools
     AddExerciseToPlanTool,

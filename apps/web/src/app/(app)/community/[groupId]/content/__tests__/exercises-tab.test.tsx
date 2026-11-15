@@ -74,9 +74,11 @@ describe('comunidade › exercícios', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /Leg press da casa/ }));
     await waitFor(() => expect(workoutApi.getExercise).toHaveBeenCalledWith(42));
-    expect(
-      await screen.findByRole('region', { name: 'Tutorial de Academia Demo' }),
-    ).toBeInTheDocument();
+    // O Como fazer (#377) abre com o vídeo da comunidade no topo.
+    expect(await screen.findByLabelText('Vídeo: Leg press da casa')).toHaveAttribute(
+      'src',
+      'https://b/v',
+    );
   });
 
   it('lista que não carregou diz que falhou, e não que está vazia', async () => {

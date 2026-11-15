@@ -62,6 +62,7 @@ export * from './workout/quick-templates';
 export * from './session-view';
 export * from './active-workout-bar';
 export * from './workout-cards';
+export * from './workout-session-copy';
 export * from './streak-copy';
 export * from './meal-timeline';
 export * from './dashboard-copy';

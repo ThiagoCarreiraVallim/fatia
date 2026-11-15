@@ -78,20 +78,24 @@ describe('detalhe do exercício com o tutorial da comunidade', () => {
         })}
       />,
     );
-    const tutorial = screen.getByRole('region', { name: 'Tutorial de Academia Demo' });
-    expect(tutorial.querySelector('video')).toHaveAttribute('src', 'https://bucket/v.mp4?sig');
-    expect(tutorial.querySelector('strong')).toHaveTextContent('juntas');
+    // #377 (Como fazer): o vídeo da comunidade sobe para o topo da folha, e a
+    // dica e as fotos ficam na aba Passos.
+    expect(screen.getByLabelText('Vídeo: Supino reto')).toHaveAttribute(
+      'src',
+      'https://bucket/v.mp4?sig',
+    );
+    expect(screen.getByText('Dica da Academia Demo')).toBeInTheDocument();
+    expect(document.querySelector('strong')).toHaveTextContent('juntas');
     expect(screen.getByRole('img', { name: 'Supino reto, foto 1' })).toBeInTheDocument();
     expect(document.querySelector('iframe')).toBeNull();
   });
 
   it('sem tutorial da comunidade, segue o vídeo de sempre', () => {
     renderWithClient(<ExerciseDetailDrawer open onOpenChange={vi.fn()} exercise={supino()} />);
-    expect(document.querySelector('iframe')).toHaveAttribute(
-      'src',
+    expect(document.querySelector('iframe')?.getAttribute('src')).toContain(
       'https://www.youtube.com/embed/yt123',
     );
-    expect(screen.queryByRole('region', { name: /Tutorial de/ })).toBeNull();
+    expect(screen.queryByText(/^Dica da/)).toBeNull();
   });
 });
 

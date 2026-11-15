@@ -10,8 +10,10 @@ type MockPrisma = {
     findMany: jest.Mock;
     findUnique: jest.Mock;
     update: jest.Mock;
+    updateMany: jest.Mock;
     delete: jest.Mock;
   };
+  workoutPlan: { findFirst: jest.Mock };
 };
 
 const makePrisma = (): MockPrisma => ({
@@ -21,8 +23,10 @@ const makePrisma = (): MockPrisma => ({
     findMany: jest.fn(),
     findUnique: jest.fn(),
     update: jest.fn(),
+    updateMany: jest.fn(),
     delete: jest.fn(),
   },
+  workoutPlan: { findFirst: jest.fn() },
 });
 
 describe('WorkoutSessionService', () => {
@@ -37,6 +41,7 @@ describe('WorkoutSessionService', () => {
 
   describe('start', () => {
     it('creates a session with planId, parsed startedAt, and notes when provided', async () => {
+      prisma.workoutPlan.findFirst.mockResolvedValue({ id: 'plan-1' });
       prisma.workoutSession.create.mockResolvedValue({ id: 'sess-1' });
 
       await service.start(userId, {
@@ -259,7 +264,7 @@ describe('WorkoutSessionService', () => {
   });
 
   describe('finish', () => {
-    it('sets completedAt to now when the session is still active', async () => {
+    it('sets completedAt to now only where it is still null (two finishes at once keep the first)', async () => {
       prisma.workoutSession.findUnique.mockResolvedValue({
         id: 'sess-1',
         userId,
@@ -269,25 +274,28 @@ describe('WorkoutSessionService', () => {
 
       await service.finish(userId, 'sess-1', {});
 
-      const data = prisma.workoutSession.update.mock.calls[0][0].data;
-      expect(data.completedAt).toBeInstanceOf(Date);
+      const call = prisma.workoutSession.updateMany.mock.calls[0][0];
+      expect(call.where).toEqual({ id: 'sess-1', userId, completedAt: null });
+      expect(call.data.completedAt).toBeInstanceOf(Date);
     });
 
-    it('is idempotent: keeps the original completedAt when finishing an already-finished session', async () => {
-      const original = new Date('2026-01-15T10:00:00Z');
+    it('an explicit completedAt is a correction and always wins', async () => {
       prisma.workoutSession.findUnique.mockResolvedValue({
         id: 'sess-1',
         userId,
-        completedAt: original,
+        startedAt: new Date('2026-01-15T09:00:00Z'),
+        completedAt: new Date('2026-01-15T12:00:00Z'),
       });
       prisma.workoutSession.update.mockResolvedValue({});
 
-      await service.finish(userId, 'sess-1', {});
+      await service.finish(userId, 'sess-1', { completedAt: '2026-01-15T10:00:00Z' });
 
-      expect(prisma.workoutSession.update.mock.calls[0][0].data.completedAt).toBe(original);
+      expect(prisma.workoutSession.update.mock.calls[0][0].data.completedAt).toEqual(
+        new Date('2026-01-15T10:00:00Z'),
+      );
     });
 
-    it('updates notes only when they are provided', async () => {
+    it('updates notes and feeling only when they are provided', async () => {
       prisma.workoutSession.findUnique.mockResolvedValue({
         id: 'sess-1',
         userId,
@@ -295,11 +303,14 @@ describe('WorkoutSessionService', () => {
       });
       prisma.workoutSession.update.mockResolvedValue({});
 
-      await service.finish(userId, 'sess-1', { notes: 'felt strong' });
-      expect(prisma.workoutSession.update.mock.calls[0][0].data.notes).toBe('felt strong');
+      await service.finish(userId, 'sess-1', { notes: 'felt strong', feeling: 2 });
+      expect(prisma.workoutSession.update.mock.calls[0][0].data).toEqual({
+        notes: 'felt strong',
+        feeling: 2,
+      });
 
       await service.finish(userId, 'sess-1', {});
-      expect(prisma.workoutSession.update.mock.calls[1][0].data).not.toHaveProperty('notes');
+      expect(prisma.workoutSession.update.mock.calls[1][0].data).toEqual({});
     });
 
     it('refuses to finish a session owned by another user', async () => {
@@ -311,6 +322,7 @@ describe('WorkoutSessionService', () => {
 
       await expect(service.finish(userId, 'sess-1', {})).rejects.toThrow(NotFoundException);
       expect(prisma.workoutSession.update).not.toHaveBeenCalled();
+      expect(prisma.workoutSession.updateMany).not.toHaveBeenCalled();
     });
   });
 

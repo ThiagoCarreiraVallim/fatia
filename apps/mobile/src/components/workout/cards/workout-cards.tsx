@@ -2,19 +2,29 @@ import type { ReactNode } from 'react';
 import { Pressable, View, useWindowDimensions } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useRouter } from 'expo-router';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { Play, Repeat } from 'lucide-react-native';
 import {
+  daysAgoLabel,
+  feelingOf,
   formatDecimal,
   lastSessionSummary,
   lastWorkoutWhen,
+  muscleGroupLabel,
+  musclesByRestTone,
+  MUSCLE_TONE_LEGEND,
   restedHeadline,
   weeklySetsBars,
   workoutApi,
+  type MuscleTone,
   type WeeklyMuscleSummary,
   type WorkoutSession,
 } from '@fatia/api-client';
 import { Carousel, LoadingState } from '@/components/ui';
-import { BodySilhouette, BodyToneLegend } from './body-silhouette';
+import { MuscleDiagram } from '@/components/workout/muscle-diagram';
+import { useStartSession } from '@/components/workout/use-start-session';
+import { restToneColors } from '@/components/workout/workout-home';
+import { colors } from '@/theme/colors';
 
 /**
  * Os cards da aba Treino (prancha `Al-T-Cards-treino`) — réplica de
@@ -41,11 +51,13 @@ function Eyebrow({ children }: { children: ReactNode }) {
 function CardButton({
   label,
   primary,
+  icon: Icon,
   disabled,
   onPress,
 }: {
   label: string;
   primary?: boolean;
+  icon?: typeof Play;
   disabled?: boolean;
   onPress: () => void;
 }) {
@@ -57,11 +69,14 @@ function CardButton({
       onPress={onPress}
       className={
         primary
-          ? 'h-11 flex-1 items-center justify-center rounded-full bg-primary px-3'
-          : 'h-11 flex-1 items-center justify-center rounded-full bg-muted px-3'
+          ? 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-primary px-3'
+          : 'h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full bg-muted px-3'
       }
       style={disabled ? { opacity: 0.6 } : undefined}
     >
+      {Icon ? (
+        <Icon size={16} color={primary ? colors.primaryForeground : colors.foreground} />
+      ) : null}
       <Text
         numberOfLines={1}
         className={
@@ -76,30 +91,47 @@ function CardButton({
   );
 }
 
-/** Começa uma sessão com o plano e abre a tela dela. */
-function useStartPlan() {
-  const qc = useQueryClient();
-  const router = useRouter();
-  return useMutation({
-    mutationFn: (planId: string | null) =>
-      workoutApi.startSession({ planId: planId ?? undefined, startedAt: new Date().toISOString() }),
-    onSuccess: (session) => {
-      qc.setQueryData(['workout', 'active'], session);
-      void qc.invalidateQueries({ queryKey: ['workout', 'active'] });
-      router.push(`/workout/session/${session.id}`);
-    },
-  });
+/** O tom da legenda: o mesmo que o diagrama pinta (`restToneColors`). */
+function toneSwatch(tone: MuscleTone): { color: string; opacity: number } {
+  if (tone === 'rested') return { color: colors.primary, opacity: 1 };
+  if (tone === 'recovering') return { color: colors.steps, opacity: 1 };
+  return { color: colors.foreground, opacity: 0.2 };
+}
+
+function BodyToneLegend() {
+  return (
+    <View accessibilityLabel="Legenda" className="gap-1">
+      {MUSCLE_TONE_LEGEND.map((item) => {
+        const { color, opacity } = toneSwatch(item.tone);
+        return (
+          <View key={item.tone} className="flex-row items-center gap-1.5">
+            <View className="h-2 w-2 rounded-[2px]" style={{ backgroundColor: color, opacity }} />
+            <Text className="text-[13px] text-muted-foreground">{item.label}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
 }
 
 function RestedMusclesCard({ summary }: { summary: WeeklyMuscleSummary }) {
   const router = useRouter();
-  const start = useStartPlan();
+  const start = useStartSession();
   const plan = summary.suggestedPlan;
+  const tones = restToneColors(musclesByRestTone(summary.rested), {
+    primary: colors.primary,
+    steps: colors.steps,
+  });
+  const label = summary.rested.length
+    ? summary.rested
+        .map((r) => `${muscleGroupLabel(r.group)} · ${daysAgoLabel(r.daysSince)}`)
+        .join(', ')
+    : 'Nenhum grupo descansado';
   return (
     <Card label="Seus músculos hoje">
       <Eyebrow>Seus músculos hoje</Eyebrow>
       <View className="flex-row items-center gap-3.5">
-        <BodySilhouette rested={summary.rested} />
+        <MuscleDiagram primaryMuscles={[]} colors={tones} width={52} accessibilityLabel={label} />
         <View className="min-w-0 flex-1 gap-2">
           <Text className="font-sans-bold text-base text-foreground">
             {restedHeadline(summary.rested)}
@@ -111,9 +143,10 @@ function RestedMusclesCard({ summary }: { summary: WeeklyMuscleSummary }) {
         {plan ? (
           <CardButton
             primary
+            icon={Play}
             label={plan.name}
             disabled={start.isPending}
-            onPress={() => start.mutate(plan.id)}
+            onPress={() => start.mutate({ planId: plan.id })}
           />
         ) : null}
         <CardButton label="Outro plano" onPress={() => router.push('/workout/plans')} />
@@ -124,12 +157,14 @@ function RestedMusclesCard({ summary }: { summary: WeeklyMuscleSummary }) {
 
 function RepeatLastCard({ session }: { session: WorkoutSession }) {
   const router = useRouter();
-  const start = useStartPlan();
+  const start = useStartSession();
   const summary = lastSessionSummary(session);
+  const feeling = feelingOf(session.feeling);
   const facts = [
     summary.durationMinutes !== null ? `${summary.durationMinutes} min` : null,
     `${summary.sets} ${summary.sets === 1 ? 'série' : 'séries'}`,
     `${formatDecimal(summary.volumeTons)} t`,
+    feeling ? `${feeling.emoji} ${feeling.label}` : null,
   ].filter(Boolean);
   return (
     <Card label="Repetir o último treino">
@@ -143,8 +178,9 @@ function RepeatLastCard({ session }: { session: WorkoutSession }) {
       <View className="mt-auto flex-row gap-2">
         <CardButton
           label="Repetir"
+          icon={Repeat}
           disabled={start.isPending}
-          onPress={() => start.mutate(session.planId)}
+          onPress={() => start.mutate({ planId: session.planId })}
         />
         <CardButton primary label="Escolher outro" onPress={() => router.push('/workout/plans')} />
       </View>

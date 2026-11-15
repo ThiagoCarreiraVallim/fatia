@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react-native';
-import { workoutApi, type Exercise } from '@fatia/api-client';
+import { workoutApi, type Exercise, type MuscleGroup } from '@fatia/api-client';
 import {
   Button,
   Drawer,
@@ -28,9 +28,11 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onPick: (exercise: Exercise) => void;
+  /** Abre já filtrado num grupo (o "Só cardio" da aba Treino, #377). */
+  muscleGroup?: MuscleGroup;
 }
 
-export function ExerciseSearchDrawer({ open, onOpenChange, onPick }: Props) {
+export function ExerciseSearchDrawer({ open, onOpenChange, onPick, muscleGroup }: Props) {
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
   const [naAcademia, setNaAcademia] = useState(false);
@@ -56,9 +58,9 @@ export function ExerciseSearchDrawer({ open, onOpenChange, onPick }: Props) {
   }, [q]);
 
   const search = useQuery({
-    queryKey: ['workout', 'exercises', debounced, naAcademia],
+    queryKey: ['workout', 'exercises', debounced, naAcademia, muscleGroup ?? null],
     queryFn: () =>
-      workoutApi.searchExercises(debounced || undefined, undefined, { onlyMyGym: naAcademia }),
+      workoutApi.searchExercises(debounced || undefined, muscleGroup, { onlyMyGym: naAcademia }),
     enabled: open,
   });
 

@@ -7,8 +7,20 @@ import { WorkoutCardsCarousel } from '../cards/workout-cards';
 /** O carrossel da aba Treino (prancha `Al-T-Cards-treino`). */
 
 vi.mock('../muscle-diagram', () => ({
-  MuscleDiagram: ({ primaryMuscles }: { primaryMuscles: string[] }) => (
-    <div data-testid="diagrama">{primaryMuscles.join(',')}</div>
+  MuscleDiagram: ({
+    primaryMuscles,
+    colors,
+    label,
+  }: {
+    primaryMuscles: string[];
+    colors?: Record<string, string>;
+    label?: string;
+  }) => (
+    <div role="img" aria-label={label ?? primaryMuscles.join(',')} data-testid="diagrama">
+      {Object.entries(colors ?? {})
+        .map(([m, c]) => `${m}=${c}`)
+        .join(';')}
+    </div>
   ),
 }));
 
@@ -74,10 +86,14 @@ describe('cards da aba Treino', () => {
 
     const descansados = await screen.findByRole('region', { name: 'Seus músculos hoje' });
     expect(within(descansados).getByText('Costas e braços descansados')).toBeVisible();
-    // Silhueta da prancha, nas cores do DS, com os dias por extenso para quem não vê.
-    expect(
-      within(descansados).getByRole('img', { name: /Costas · há 4 dias, Braços · há 3 dias/ }),
-    ).toBeVisible();
+    // O corpo é o diagrama anatômico completo (nunca a silhueta simplificada),
+    // pintado pelo descanso de cada grupo, com os dias por extenso para quem não vê.
+    const corpo = within(descansados).getByRole('img', {
+      name: /Costas · há 4 dias, Braços · há 3 dias/,
+    });
+    expect(corpo).toHaveAttribute('data-testid', 'diagrama');
+    expect(corpo.textContent).toContain('lats=hsl(var(--primary))');
+    expect(corpo.textContent).toContain('chest=hsl(var(--foreground) / 0.18)');
     const legenda = within(descansados).getByRole('list', { name: 'Legenda' });
     expect(
       within(legenda)
@@ -93,12 +109,36 @@ describe('cards da aba Treino', () => {
     const ultimo = screen.getByRole('region', { name: 'Repetir o último treino' });
     expect(within(ultimo).getByText('Legs')).toBeVisible();
     expect(within(ultimo).getByText(/^53 min · 0 séries · 0(,0)? t$/)).toBeVisible();
-    // O humor ("Puxado") só vem com a #377.
+    // Sem sensação marcada, nada de humor.
     expect(within(ultimo).queryByText(/Puxado/)).toBeNull();
 
     const semana = screen.getByRole('region', { name: 'Séries por músculo na semana' });
     expect(within(semana).getByText('meta 12')).toBeVisible();
     expect(within(semana).getByRole('meter', { name: 'Peito: 6 de 12 séries' })).toBeVisible();
+  });
+
+  it('o último treino mostra a sensação marcada no fim (#377)', async () => {
+    vi.mocked(workoutApi.getWeeklyMuscleSummary).mockResolvedValue({
+      from: '2026-11-08',
+      target: 12,
+      sets: [],
+      rested: [],
+      suggestedPlan: null,
+    });
+    vi.mocked(workoutApi.getLastSession).mockResolvedValue({
+      id: 's1',
+      userId: 'u',
+      planId: null,
+      startedAt: '2026-11-13T10:00:00Z',
+      completedAt: '2026-11-13T10:53:00Z',
+      notes: null,
+      feeling: 3,
+      sets: [],
+    });
+    renderCards();
+    const ultimo = await screen.findByRole('region', { name: 'Repetir o último treino' });
+    expect(within(ultimo).getByText('Puxado')).toBeVisible();
+    expect(within(ultimo).getByText('😐')).toBeVisible();
   });
 
   it('sem treino nenhum, o "Repetir o último" não aparece', async () => {

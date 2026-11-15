@@ -48,7 +48,7 @@ import {
  * mudam os dois.
  */
 
-const SHA_ENTIDADE = '3df198db1b8e7f998ccf72bfcb2d995ad16a46d7be58f23a9c83f11e75bbb3f0';
+const SHA_ENTIDADE = '4f2cfcea79837b39529b50e05de3b97d60cc8b26841b9a8727592bf3dd79de6b';
 const SHA_INTENCAO = 'b6a721e51ea5e251bfded1aef71296eb761b0cfe6a8de1aa33cee35b61f4230b';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

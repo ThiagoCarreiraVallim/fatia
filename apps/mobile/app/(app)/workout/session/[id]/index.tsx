@@ -17,9 +17,12 @@ import { CompletedSession } from '@/components/workout/session/completed-session
  * Aqui tem — o histórico e a tela de treinos apontam para cá —, e um treino
  * termina *durante* a visita: separar em duas rotas obrigaria a navegar no meio
  * do "Finalizar".
+ *
+ * O "Treino atual" (prancha `Al-T17`) é a rota irmã `edit`.
  */
 export default function WorkoutSessionScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // `add=cardio`: o "Só cardio" da aba Treino abre a busca já em cardio.
+  const { id, add } = useLocalSearchParams<{ id: string; add?: string }>();
   const router = useRouter();
 
   const session = useQuery({
@@ -66,5 +69,9 @@ export default function WorkoutSessionScreen() {
     onRefresh: () => void session.refetch(),
   };
 
-  return session.data.completedAt ? <CompletedSession {...props} /> : <ActiveSession {...props} />;
+  return session.data.completedAt ? (
+    <CompletedSession {...props} />
+  ) : (
+    <ActiveSession {...props} initialSearch={add === 'cardio' ? 'cardio' : undefined} />
+  );
 }

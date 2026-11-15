@@ -13,6 +13,11 @@ export class LogSetBodyDto {
   @IsOptional() @IsInt() @Min(0) kcalBurned?: number;
   // common
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
+  /**
+   * Gerada pelo app a cada "Concluir série" (#377): o mesmo toque reenviado
+   * devolve a série já gravada, em vez de criar outra.
+   */
+  @IsOptional() @IsString() @MaxLength(64) clientKey?: string;
 }
 
 export class UpdateSetBodyDto {

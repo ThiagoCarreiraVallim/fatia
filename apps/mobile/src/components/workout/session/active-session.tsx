@@ -1,84 +1,86 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
-import { Text } from '@/components/ui/text';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { useKeepAwake } from 'expo-keep-awake';
-import { ChevronDown, ChevronUp, Play, Plus, Trash2 } from 'lucide-react-native';
+import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
 import {
   buildExerciseGroups,
-  moveExerciseInOrder,
+  muscleGroupLabel,
   orderExerciseGroups,
   pickFocusedGroup,
-  type ExerciseGroup,
-  type PendingExercise,
-  type SessionSet,
+  type MuscleGroup,
+  type StrengthMuscleGroup,
   type WorkoutSession,
 } from '@fatia/api-client';
-import { Screen } from '@/components/layout/screen';
-import { Button, ConfirmDrawer, DrawerLayer } from '@/components/ui';
-import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
+import { Text } from '@/components/ui/text';
+import { Button, ConfirmDrawer, DrawerLayer, cn, useConfirm } from '@/components/ui';
 import { ExerciseDetailHost } from '@/components/workout/exercise-detail-host';
+import { ExerciseHeading, useExerciseDetail } from '@/components/workout/exercise-media';
 import { ExerciseSearchDrawer } from '@/components/workout/exercise-search-drawer';
+import { groupColorName } from '@/components/workout/workout-home';
 import { ActiveCardioCard } from './active-cardio-card';
 import { ActiveExerciseCard } from './active-exercise-card';
-import { FinishSessionDrawer } from './finish-session-drawer';
-import { groupCardItem } from './exercise-card-item';
-import { RpeDrawer } from './rpe-drawer';
+import { isExerciseComplete, pluralize, targetSetsOf } from './format';
+import { guidedState, nextOpenIndex } from './guided-session';
+import { isResting, RestPanel } from './rest-panel';
 import { SessionHeader } from './session-header';
-import { SetRow } from './set-row';
-import { sessionProgress } from './format';
-import { useCancelSession } from './use-cancel-session';
+import { useAutoAdvance } from './use-auto-advance';
 import { useSessionExitGuard } from './use-exit-guard';
-import { useSessionLayout } from './use-session-layout';
+import { useFinishSession } from './use-finish-session';
+import { useFocusRequest, usePendingExercises } from './use-pending-exercises';
 import { useSessionRestTimer } from './rest-timer-provider';
 import { colors } from '@/theme/colors';
 
 /**
- * Sessão em andamento — o `ActiveSession` de `apps/web/src/app/(app)/workout/page.tsx`,
- * que no PWA vive dentro da tela de treinos porque lá não existe rota de sessão.
+ * A sessão guiada (pranchas `Al-T3-Sessao` e `Al-T3d-Sessao-sem-video`, #377).
  *
- * Um exercício por vez fica em foco (o primeiro incompleto que não foi pulado) e
- * os demais aparecem abaixo em modo leitura, editáveis série a série. É o mesmo
- * recorte do PWA: no meio do treino, decidir onde tocar já é esforço demais.
+ * Um exercício por tela, com "exercício X de N" e setas para os vizinhos. Três
+ * estados, decididos em `guidedState`:
  *
- * O foco segue a ordem, mas a academia não: o aparelho do próximo exercício
- * está ocupado e a pessoa pula para outro. Cada card abaixo tem "Fazer agora",
- * que o traz para o foco, e setas e lixeira para arrumar a ordem ou tirar o
- * exercício — só desta sessão (`use-session-layout.ts`).
+ * - trabalhando: carga e reps, "Como foi a série?" e "Concluir série N";
+ * - descansando: o anel do descanso global (`RestTimerProvider`);
+ * - escolhendo: o exercício acabou — a lista do que falta, "Adicionar
+ *   exercício" e "Finalizar treino". Com "Passar sozinho" ligado, a tela pula
+ *   direto para o próximo aberto quando o descanso termina.
  *
- * Os drawers são irmãos do `<Screen>`, dentro de `<DrawerLayer>`: o bottom sheet
- * nativo não é portal e, declarado dentro do card, abriria com a altura dele
- * (ver o cabeçalho de `ui/drawer.tsx`).
+ * Reordenar e tirar exercícios saíram daqui para o "Treino atual" (`Al-T17`,
+ * rota `edit`), que é onde o canvas os põe.
+ *
+ * Os drawers são irmãos do conteúdo, dentro de `<DrawerLayer>`: o bottom sheet
+ * nativo não é portal (ver `ui/drawer.tsx`).
  */
 export function ActiveSession({
   session,
   refreshing,
   onRefresh,
+  initialSearch,
 }: {
   session: WorkoutSession;
   refreshing: boolean;
   onRefresh: () => void;
+  /** "Só cardio" abre a sessão já com a busca filtrada. */
+  initialSearch?: MuscleGroup;
 }) {
-  // A tela apagando no meio da série obrigaria a desbloquear o celular com a
-  // mão que está segurando a barra — é o ganho nativo mais direto da issue.
+  // A tela apagando no meio da série obrigaria a desbloquear com a mão que
+  // segura a barra.
   useKeepAwake();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const exit = useSessionExitGuard();
-
-  // Global (`RestTimerProvider`): a barra do treino em andamento mostra o
-  // descanso e o +30 s fora desta tela (#369).
   const rest = useSessionRestTimer();
-  const cancel = useCancelSession(session.id);
-  const layout = useSessionLayout(session);
+  const confirm = useConfirm();
+  const finish = useFinishSession(session.id);
+  const { pending, add } = usePendingExercises(session.id);
+  const { focus: requestedFocus, request: requestFocus } = useFocusRequest(session.id);
+  const [autoAdvance, setAutoAdvance] = useAutoAdvance();
   const scrollRef = useRef<ScrollView>(null);
 
-  const [skipped, setSkipped] = useState<Set<number>>(() => new Set());
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [finishOpen, setFinishOpen] = useState(false);
-  const [rpeTarget, setRpeTarget] = useState<SessionSet | null>(null);
-  const [removeTarget, setRemoveTarget] = useState<ExerciseGroup | null>(null);
-
-  // Escolhidos na busca e ainda sem série: vivem só na tela (ver `buildExerciseGroups`).
-  const [pending, setPending] = useState<PendingExercise[]>([]);
-  const [pickedId, setPickedId] = useState<number | null>(null);
+  const [searchOpen, setSearchOpen] = useState(initialSearch != null);
+  const [searchGroup, setSearchGroup] = useState<MuscleGroup | undefined>(initialSearch);
+  const [currentId, setCurrentId] = useState<number | null>(null);
+  // A série que fechou o exercício: quando o descanso acabar, passa sozinho.
+  const [advanceFrom, setAdvanceFrom] = useState<number | null>(null);
 
   const groups = useMemo(
     () =>
@@ -89,62 +91,141 @@ export function ActiveSession({
     [session.plannedExercises, session.sets, session.exerciseOrder, pending],
   );
 
-  const focused = pickFocusedGroup(groups, skipped, pickedId);
+  const index = (() => {
+    const picked = groups.findIndex((g) => g.exerciseId === currentId);
+    if (picked >= 0) return picked;
+    const focused = pickFocusedGroup(groups, new Set(), null);
+    const i = focused ? groups.findIndex((g) => g.exerciseId === focused.exerciseId) : -1;
+    return i >= 0 ? i : groups.length - 1;
+  })();
+  const current = index >= 0 ? groups[index] : undefined;
+  const resting = isResting(rest);
+  const state = guidedState({
+    resting,
+    complete: current ? isExerciseComplete(current) : true,
+  });
+  const nextIndex = index >= 0 ? nextOpenIndex(groups, index) : null;
+  const next = nextIndex != null ? groups[nextIndex] : undefined;
+  const detail = useExerciseDetail(current?.exerciseId ?? 0);
 
-  const others = groups.filter((group) => group.exerciseId !== focused?.exerciseId);
-
-  function skipExercise(exerciseId: number) {
-    setSkipped((current) => new Set(current).add(exerciseId));
-  }
-
-  /** Traz o exercício para o foco — inclusive um que a pessoa tinha pulado. */
-  function doNow(exerciseId: number) {
-    setSkipped((current) => {
-      const next = new Set(current);
-      next.delete(exerciseId);
-      return next;
-    });
-    setPickedId(exerciseId);
+  function goTo(i: number) {
+    const target = groups[i];
+    if (!target) return;
+    setAdvanceFrom(null);
+    setCurrentId(target.exerciseId);
     scrollRef.current?.scrollTo({ y: 0, animated: true });
   }
 
-  /**
-   * Move entre os cards de baixo, e o que está em foco fica onde estava na
-   * ordem: senão, mexer em dois exercícios lá embaixo mudaria qual vem depois
-   * do atual.
-   */
-  function move(exerciseId: number, direction: 'up' | 'down') {
-    const ids = moveExerciseInOrder(others, exerciseId, direction);
-    if (focused) {
-      const index = groups.findIndex((g) => g.exerciseId === focused.exerciseId);
-      ids.splice(index, 0, focused.exerciseId);
+  // O "Treino atual" pediu um exercício (Continuar / Retomar / Iniciar). O
+  // ajuste é durante o render (#187); o efeito só limpa o pedido no cache,
+  // que é sistema externo a esta tela.
+  const [seenFocus, setSeenFocus] = useState<number | null>(null);
+  if (requestedFocus != null && requestedFocus !== seenFocus) {
+    setSeenFocus(requestedFocus);
+    setAdvanceFrom(null);
+    setCurrentId(requestedFocus);
+  } else if (requestedFocus == null && seenFocus != null) {
+    setSeenFocus(null);
+  }
+  useEffect(() => {
+    if (requestedFocus != null) requestFocus(null);
+  }, [requestedFocus, requestFocus]);
+
+  // Passar sozinho: o descanso da série que fechou o exercício acabou.
+  if (advanceFrom != null && !resting) {
+    setAdvanceFrom(null);
+    if (autoAdvance) {
+      const from = groups.findIndex((g) => g.exerciseId === advanceFrom);
+      const to = from >= 0 ? nextOpenIndex(groups, from) : null;
+      if (to != null) setCurrentId(groups[to]!.exerciseId);
     }
-    layout.reorder.mutate(ids);
   }
 
-  function removeExercise(group: ExerciseGroup) {
-    setRemoveTarget(null);
-    setPending((current) => current.filter((p) => p.id !== group.exerciseId));
-    if (pickedId === group.exerciseId) setPickedId(null);
-    // Escolhido na busca e ainda sem série: só existia na tela.
-    if (!group.isPlanned && group.sets.length === 0) return;
-    layout.remove.mutate(group);
+  function requestFinish() {
+    const done = groups.reduce((acc, g) => acc + g.sets.length, 0);
+    confirm({
+      title: 'Finalizar treino?',
+      description:
+        done === 0
+          ? 'Nenhuma série registrada ainda.'
+          : `${done} ${pluralize(done, 'série registrada', 'séries registradas')}.`,
+      confirmLabel: 'Finalizar',
+      cancelLabel: 'Continuar treinando',
+      onConfirm: () => finish.mutate(),
+    });
   }
 
-  /** Sem série registrada não há o que perder: tira direto, sem perguntar. */
-  function requestRemove(group: ExerciseGroup) {
-    if (group.sets.length === 0) removeExercise(group);
-    else setRemoveTarget(group);
-  }
+  const nextLabel = (() => {
+    if (current && !isExerciseComplete(current)) {
+      return `${current.exerciseName} · série ${current.sets.length + 1}`;
+    }
+    return next ? next.exerciseName : null;
+  })();
+
+  const groupName = detail.data?.muscleGroup;
+  const openOverview = () => router.push(`/workout/session/${session.id}/edit`);
+
+  // "1/7" e as setas, na linha da série (prancha `Al-T3d`).
+  const exerciseNav = (
+    <View className="flex-row items-center gap-1.5">
+      <Text className="text-[12px] text-faint" style={{ fontVariant: ['tabular-nums'] }}>
+        {index + 1}/{groups.length}
+      </Text>
+      <NavArrow label="Exercício anterior" disabled={index <= 0} onPress={() => goTo(index - 1)}>
+        <ChevronLeft size={16} color={colors.foreground} />
+      </NavArrow>
+      <NavArrow
+        label="Próximo exercício"
+        disabled={index >= groups.length - 1}
+        onPress={() => goTo(index + 1)}
+      >
+        <ChevronRight size={16} color={colors.foreground} />
+      </NavArrow>
+    </View>
+  );
+
+  // O "Passar sozinho" é um check, como na prancha; o rótulo explica o efeito.
+  const autoToggle = (
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: autoAdvance }}
+      accessibilityLabel="Passar sozinho para o próximo exercício"
+      onPress={() => setAutoAdvance(!autoAdvance)}
+      className="min-h-[48px] flex-row items-center gap-3 px-1"
+    >
+      <View
+        className={cn(
+          'h-6 w-6 items-center justify-center rounded-md',
+          autoAdvance ? 'bg-primary' : 'border-[1.5px] border-border-strong',
+        )}
+      >
+        {autoAdvance ? <Check size={16} color={colors.primaryForeground} /> : null}
+      </View>
+      <View className="flex-1">
+        <Text className="text-[13px] text-foreground">Passar sozinho para o próximo exercício</Text>
+        <Text className="text-[12px] text-muted-foreground">
+          {autoAdvance
+            ? 'ao terminar as séries, já abre o seguinte'
+            : 'ao terminar, você escolhe qual fazer'}
+        </Text>
+      </View>
+    </Pressable>
+  );
+  const remaining = groups.filter((g, i) => i !== index && !isExerciseComplete(g));
 
   return (
     <>
       <ExerciseDetailHost>
-        <Screen title="Treino em andamento" scroll={false} onBack={exit.requestExit}>
+        <View className="flex-1 bg-background">
+          <SessionHeader
+            startedAt={session.startedAt}
+            onMinimize={exit.leave}
+            onFinish={requestFinish}
+          />
           <ScrollView
             ref={scrollRef}
             className="flex-1"
-            contentContainerStyle={{ padding: 20, paddingBottom: 32, gap: 16 }}
+            contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32, gap: 16 }}
             keyboardShouldPersistTaps="handled"
             refreshControl={
               <RefreshControl
@@ -155,151 +236,157 @@ export function ActiveSession({
               />
             }
           >
-            <SessionHeader
-              startedAt={session.startedAt}
-              progress={sessionProgress(groups)}
-              onCancel={() => cancel.setCancelOpen(true)}
-              onFinish={() => setFinishOpen(true)}
-            />
+            {current ? (
+              <>
+                <ExerciseHeading
+                  key={`heading-${current.exerciseId}`}
+                  exerciseId={current.exerciseId}
+                  exerciseName={current.exerciseName}
+                  groupColor={
+                    groupName ? colors[groupColorName(groupName)] : colors.faintForeground
+                  }
+                  groupLabel={
+                    groupName
+                      ? groupName === 'cardio'
+                        ? 'Cardio'
+                        : muscleGroupLabel(groupName as StrengthMuscleGroup)
+                      : null
+                  }
+                />
 
-            {groups.length === 0 ? (
-              <Text className="text-sm text-muted-foreground">
-                Nenhum exercício registrado ainda. Adicione o primeiro abaixo.
-              </Text>
-            ) : null}
-
-            {focused && !focused.isCardio ? (
-              // `key` por exercício: sem ela o React reaproveita a instância ao
-              // trocar o foco, e a carga digitada no exercício anterior
-              // continuaria no campo do próximo.
-              <ActiveExerciseCard
-                key={focused.exerciseId}
-                sessionId={session.id}
-                sessionStartedAt={session.startedAt}
-                group={focused}
-                rest={rest}
-                onFinishExercise={() => skipExercise(focused.exerciseId)}
-                onAskRpe={setRpeTarget}
-              />
-            ) : null}
-
-            {focused && focused.isCardio ? (
-              <ActiveCardioCard
-                key={focused.exerciseId}
-                sessionId={session.id}
-                group={focused}
-                onFinishExercise={() => skipExercise(focused.exerciseId)}
-              />
-            ) : null}
-
-            {focused ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="-mt-2 self-center"
-                textClassName="text-muted-foreground"
-                onPress={() => requestRemove(focused)}
-              >
-                Tirar este exercício do treino
-              </Button>
-            ) : null}
-
-            {!focused && groups.length > 0 ? (
-              <View className="rounded-2xl border border-border bg-card p-4">
-                <Text className="text-sm font-bold text-foreground">Tudo feito por aqui.</Text>
-                <Text className="mt-1 text-xs text-muted-foreground">
-                  Finalize o treino no topo, ou adicione outro exercício abaixo.
+                {current.isCardio ? (
+                  <ActiveCardioCard
+                    key={current.exerciseId}
+                    sessionId={session.id}
+                    group={current}
+                    working={state === 'working'}
+                    onLogged={(completed) => {
+                      if (completed) setAdvanceFrom(current.exerciseId);
+                    }}
+                    nav={exerciseNav}
+                    onAll={openOverview}
+                    beforeSubmit={autoToggle}
+                  />
+                ) : (
+                  // `key` por exercício: sem ela a carga digitada no anterior
+                  // continuaria no campo do próximo.
+                  <ActiveExerciseCard
+                    key={current.exerciseId}
+                    sessionId={session.id}
+                    sessionStartedAt={session.startedAt}
+                    group={current}
+                    rest={rest}
+                    working={state === 'working'}
+                    onLogged={(completed) => {
+                      if (completed) setAdvanceFrom(current.exerciseId);
+                    }}
+                    nav={exerciseNav}
+                    onAll={openOverview}
+                    beforeSubmit={autoToggle}
+                  />
+                )}
+              </>
+            ) : (
+              <View className="gap-1 rounded-3xl bg-card p-4">
+                <Text className="font-sans-bold text-base text-foreground">Treino livre</Text>
+                <Text className="text-[13px] text-muted-foreground">
+                  Adicione o primeiro exercício para começar.
                 </Text>
+              </View>
+            )}
+
+            {state === 'resting' ? <RestPanel timer={rest} next={nextLabel} /> : null}
+
+            {state === 'picking' ? (
+              <View className="gap-3">
+                {current ? (
+                  <Text className="font-sans-bold text-base text-foreground">
+                    {remaining.length > 0 ? 'E agora?' : 'Tudo feito por aqui.'}
+                  </Text>
+                ) : null}
+                {remaining.map((g) => {
+                  const i = groups.indexOf(g);
+                  const target = targetSetsOf(g);
+                  const badge =
+                    g.sets.length === 0
+                      ? g.isCardio
+                        ? 'cardio'
+                        : `${target} ${pluralize(target, 'série', 'séries')}`
+                      : `${g.sets.length} de ${target}`;
+                  return (
+                    <Pressable
+                      key={g.exerciseId}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Fazer ${g.exerciseName}, ${badge}`}
+                      onPress={() => goTo(i)}
+                      className={cn(
+                        'min-h-[56px] flex-row items-center gap-3 rounded-2xl px-4 active:opacity-80',
+                        i === nextIndex ? 'bg-primary/15' : 'bg-card',
+                      )}
+                    >
+                      <Text
+                        numberOfLines={1}
+                        className="flex-1 font-sans-bold text-sm text-foreground"
+                      >
+                        {g.exerciseName}
+                      </Text>
+                      <View className="rounded-full bg-muted px-2.5 py-1">
+                        <Text className="text-[11px] font-sans-bold text-muted-foreground">
+                          {badge}
+                        </Text>
+                      </View>
+                      {i === nextIndex ? (
+                        <Text className="text-[11px] font-sans-bold text-primary-text">
+                          próximo
+                        </Text>
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+                <Button
+                  variant="outline"
+                  className="h-12 rounded-full"
+                  onPress={() => {
+                    setSearchGroup(undefined);
+                    setSearchOpen(true);
+                  }}
+                >
+                  <Plus size={16} color={colors.foreground} />
+                  <Text className="font-sans-bold text-sm text-foreground">
+                    Adicionar exercício
+                  </Text>
+                </Button>
+                <Button
+                  className="h-14 rounded-full"
+                  loading={finish.isPending}
+                  disabled={finish.isPending}
+                  onPress={requestFinish}
+                >
+                  Finalizar treino
+                </Button>
               </View>
             ) : null}
 
-            {others.length > 0 ? (
-              <Text className="mt-2 text-[11px] font-extrabold tracking-wide text-muted-foreground">
-                {focused ? 'PRÓXIMOS' : 'EXERCÍCIOS DO TREINO'}
-              </Text>
-            ) : null}
-
-            {others.map((group, index) => (
-              <ExerciseDetailCard
-                key={group.exerciseId}
-                mode="readonly"
-                isCardio={group.isCardio}
-                sessionId={session.id}
-                item={groupCardItem(group)}
-                loggedSets={group.sets}
-                renderSet={(args) => <SetRow {...args} onEditRpe={setRpeTarget} />}
-                footer={
-                  <ExerciseActions
-                    group={group}
-                    isFirst={index === 0}
-                    isLast={index === others.length - 1}
-                    disabled={layout.reorder.isPending}
-                    onDoNow={() => doNow(group.exerciseId)}
-                    onMove={(direction) => move(group.exerciseId, direction)}
-                    onRemove={() => requestRemove(group)}
-                  />
-                }
-              />
-            ))}
-
-            <Button variant="outline" className="rounded-2xl" onPress={() => setSearchOpen(true)}>
-              <Plus size={16} color={colors.foreground} />
-              <Text className="text-sm font-medium text-foreground">Adicionar exercício</Text>
-            </Button>
+            {state === 'working' && current ? null : autoToggle}
           </ScrollView>
-        </Screen>
+        </View>
       </ExerciseDetailHost>
 
       <DrawerLayer>
         <ExerciseSearchDrawer
           open={searchOpen}
           onOpenChange={setSearchOpen}
+          muscleGroup={searchGroup}
           onPick={(exercise) => {
-            setPending((prev) => [...prev, exercise]);
-            setPickedId(exercise.id);
+            add(exercise);
+            setCurrentId(exercise.id);
           }}
-        />
-        <RpeDrawer
-          open={rpeTarget != null}
-          onOpenChange={(open) => {
-            if (!open) setRpeTarget(null);
-          }}
-          sessionId={session.id}
-          set={rpeTarget}
-        />
-        <FinishSessionDrawer open={finishOpen} onOpenChange={setFinishOpen} session={session} />
-        <ConfirmDrawer
-          open={removeTarget != null}
-          onOpenChange={(open) => {
-            if (!open) setRemoveTarget(null);
-          }}
-          title={`Tirar ${removeTarget?.exerciseName ?? 'exercício'} do treino?`}
-          description={
-            removeTarget
-              ? `${removeTarget.sets.length === 1 ? 'A série registrada será apagada' : `As ${removeTarget.sets.length} séries registradas serão apagadas`}. O plano não muda: ele volta no próximo treino.`
-              : undefined
-          }
-          confirmLabel="Tirar do treino"
-          destructive
-          onConfirm={() => removeTarget && removeExercise(removeTarget)}
-        />
-        <ConfirmDrawer
-          open={cancel.cancelOpen}
-          onOpenChange={cancel.setCancelOpen}
-          title="Cancelar treino?"
-          description="Isso apaga a sessão e todos os exercícios registrados. Não dá para desfazer."
-          confirmLabel="Cancelar treino"
-          cancelLabel="Continuar treinando"
-          destructive
-          loading={cancel.isPending}
-          error={cancel.error}
-          onConfirm={cancel.cancel}
         />
         <ConfirmDrawer
           open={exit.exitOpen}
           onOpenChange={exit.setExitOpen}
           title="Sair do treino?"
-          description='O treino continua em andamento. Dá para voltar a ele pelo "Continuar treino", na tela de treinos.'
+          description="O treino continua em andamento. A barra de baixo leva de volta a ele."
           confirmLabel="Sair por enquanto"
           cancelLabel="Continuar treinando"
           onConfirm={exit.leave}
@@ -309,86 +396,26 @@ export function ActiveSession({
   );
 }
 
-/**
- * O pé de cada card da lista: "Fazer agora" à esquerda, que é o que se procura
- * no meio do treino, e as ações de arrumação à direita, menores.
- */
-function ExerciseActions({
-  group,
-  isFirst,
-  isLast,
-  disabled,
-  onDoNow,
-  onMove,
-  onRemove,
-}: {
-  group: ExerciseGroup;
-  isFirst: boolean;
-  isLast: boolean;
-  disabled: boolean;
-  onDoNow: () => void;
-  onMove: (direction: 'up' | 'down') => void;
-  onRemove: () => void;
-}) {
-  const target = group.targetSets ?? 0;
-  const done = group.isCardio ? group.sets.length > 0 : target > 0 && group.sets.length >= target;
-
-  return (
-    <View className="mt-3 flex-row items-center gap-1 border-t border-border pt-3">
-      {done ? (
-        <Text className="flex-1 text-xs font-bold text-primary">✓ Concluído</Text>
-      ) : (
-        <Button
-          size="sm"
-          className="mr-auto rounded-full px-4"
-          accessibilityLabel={`Fazer ${group.exerciseName} agora`}
-          onPress={onDoNow}
-        >
-          <Play size={14} color={colors.primaryForeground} fill={colors.primaryForeground} />
-          <Text className="text-xs font-extrabold text-primary-foreground">Fazer agora</Text>
-        </Button>
-      )}
-
-      <IconAction
-        label={`Mover ${group.exerciseName} para cima`}
-        disabled={isFirst || disabled}
-        onPress={() => onMove('up')}
-      >
-        <ChevronUp size={20} color={isFirst || disabled ? colors.border : colors.foreground} />
-      </IconAction>
-      <IconAction
-        label={`Mover ${group.exerciseName} para baixo`}
-        disabled={isLast || disabled}
-        onPress={() => onMove('down')}
-      >
-        <ChevronDown size={20} color={isLast || disabled ? colors.border : colors.foreground} />
-      </IconAction>
-      <IconAction label={`Tirar ${group.exerciseName} deste treino`} onPress={onRemove}>
-        <Trash2 size={18} color={colors.danger} />
-      </IconAction>
-    </View>
-  );
-}
-
-function IconAction({
+function NavArrow({
   label,
   disabled,
   onPress,
   children,
 }: {
   label: string;
-  disabled?: boolean;
+  disabled: boolean;
   onPress: () => void;
-  children: ReactNode;
+  children: React.ReactNode;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ disabled: Boolean(disabled) }}
+      accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      className="h-11 w-11 items-center justify-center rounded-full border border-border active:bg-accent"
+      style={disabled ? { opacity: 0.3 } : undefined}
+      className="h-9 w-9 items-center justify-center rounded-full bg-muted active:opacity-80"
     >
       {children}
     </Pressable>

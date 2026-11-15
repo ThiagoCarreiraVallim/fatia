@@ -340,22 +340,22 @@ const payload = tools.reduce(
  * número; o caso abaixo confere as duas pontas, então nem o texto some nem o número derrapa.
  */
 const PAYLOAD_CLAIMS: ReadonlyArray<{ file: string; text: string; medido: () => string }> = [
-  { file: 'docs/MCP.md', text: '**124,8 k caracteres**', medido: () => emK(payload.cheio) },
-  { file: 'docs/MCP.md', text: '(103,0 k)', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP.md', text: '**125,8 k caracteres**', medido: () => emK(payload.cheio) },
+  { file: 'docs/MCP.md', text: '(104,1 k)', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP.md',
-    text: '**7.396 são os exemplos**',
+    text: '**7.464 são os exemplos**',
     medido: () => emMilhar(payload.exemplos),
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**124,8 k caracteres**',
+    text: '**125,8 k caracteres**',
     medido: () => emK(payload.cheio),
   },
-  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 103,0 k', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 104,1 k', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**7.396 caracteres**',
+    text: '**7.464 caracteres**',
     medido: () => emMilhar(payload.exemplos),
   },
 ];
@@ -382,7 +382,6 @@ const DIVERGENCIAS_CONHECIDAS_DA_DOC = [
   'create_custom_food.fatPer100g',
   'create_custom_food.kcalPer100g',
   'create_custom_food.proteinPer100g',
-  'finish_workout_session.completedAt',
   'get_last_set_for_exercise.before',
   'get_last_set_for_exercise.beforeDate',
   'get_nutrition_history.days',

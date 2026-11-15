@@ -3393,6 +3393,157 @@ describe('isolamento entre usuários', () => {
     });
   });
 
+  describe('treino #377: plano no início, sensação, respostas e resumo', () => {
+    const studentView = new StudentViewService(
+      prisma,
+      access,
+      plans,
+      sessions,
+      progress,
+      nutritionSummary,
+      goals,
+      meals,
+      nutritionPlans,
+    );
+    /** Treino terminado do user-A, com as respostas do fim. */
+    let feitoA = '';
+
+    beforeAll(async () => {
+      const feito = await prisma.workoutSession.create({
+        data: {
+          userId: owned.userA,
+          planId: owned.planId,
+          startedAt: new Date(Date.now() - 5 * 86_400_000),
+          completedAt: new Date(Date.now() - 5 * 86_400_000 + 3_600_000),
+          feeling: 3,
+        },
+      });
+      feitoA = feito.id;
+      await sessions.saveCheckin(owned.userA, feitoA, {
+        fatigue: 4,
+        pain: true,
+        painLocation: 'joelho',
+      });
+    });
+
+    afterEach(async () => {
+      await prisma.professionalAccessLog.deleteMany({ where: { subjectUserId: owned.userA } });
+      await prisma.professionalLink.deleteMany({ where: { subjectUserId: owned.userA } });
+    });
+
+    it('start_workout_session com o plano do user-A no corpo recusa, sem abrir sessão', async () => {
+      const antes = await prisma.workoutSession.count({ where: { userId: owned.userB } });
+      await expect(sessions.start(owned.userB, { planId: owned.planId })).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(await prisma.workoutSession.count({ where: { userId: owned.userB } })).toBe(antes);
+    });
+
+    it('responder as perguntas na sessão do user-A recusa e não grava', async () => {
+      await expect(
+        sessions.saveCheckin(owned.userB, feitoA, { fatigue: 1, skipped: true }),
+      ).rejects.toThrow(NotFoundException);
+      expect(
+        await prisma.workoutCheckin.findUnique({ where: { sessionId: feitoA } }),
+      ).toMatchObject({ userId: owned.userA, fatigue: 4, skipped: false });
+    });
+
+    it('o resumo do treino do user-A não abre para o user-B', async () => {
+      await expect(sessions.summary(owned.userB, feitoA)).rejects.toThrow(NotFoundException);
+      // Caminho feliz: o dono vê as respostas, sem o userId na linha.
+      const dono = await sessions.summary(owned.userA, feitoA);
+      expect(dono.checkin).toMatchObject({ fatigue: 4, pain: true, painLocation: 'joelho' });
+      expect(dono.checkin).not.toHaveProperty('userId');
+    });
+
+    it('os números do exercício são só os de quem pergunta', async () => {
+      await expect(sets.exerciseStats(owned.userB, owned.customExerciseId)).rejects.toThrow(
+        NotFoundException,
+      );
+      const deA = await sets.exerciseStats(owned.userA, owned.sharedExerciseId);
+      expect(deA.record).toMatchObject({ weightKg: 60, reps: 8 });
+      const deB = await sets.exerciseStats(owned.userB, owned.sharedExerciseId);
+      expect(deB).toMatchObject({ record: null, last: null, estimated1RM: null });
+    });
+
+    it('série do user-A pela URL de uma sessão do user-B recusa', async () => {
+      const deB = await prisma.workoutSession.create({
+        data: { userId: owned.userB, startedAt: new Date(), completedAt: new Date() },
+      });
+      try {
+        await expect(sets.update(owned.userB, owned.setId, { reps: 1 }, deB.id)).rejects.toThrow(
+          NotFoundException,
+        );
+        await expect(sets.delete(owned.userB, owned.setId, deB.id)).rejects.toThrow(
+          NotFoundException,
+        );
+        expect(await prisma.sessionSet.findUnique({ where: { id: owned.setId } })).toMatchObject({
+          reps: 8,
+        });
+      } finally {
+        await prisma.workoutSession.delete({ where: { id: deB.id } });
+      }
+    });
+
+    it('a equipe lê as respostas só com Treino liberado, e a leitura fica na trilha', async () => {
+      // Sem Treino: recusa (e a recusa também é registrada).
+      await links.grant({
+        subjectUserId: owned.userA,
+        professionalId: owned.pro,
+        groupId: owned.groupId,
+        scopes: [ShareScope.NUTRITION],
+      });
+      await expect(
+        studentView.read(owned.pro, owned.membershipA, ShareScope.WORKOUT, 30),
+      ).rejects.toThrow(NotFoundException);
+      // A pergunta só aparece para quem tem Treino liberado.
+      expect((await sessions.summary(owned.userA, feitoA)).questions).toBeNull();
+
+      await prisma.professionalLink.deleteMany({ where: { subjectUserId: owned.userA } });
+      await links.grant({
+        subjectUserId: owned.userA,
+        professionalId: owned.pro,
+        groupId: owned.groupId,
+        scopes: [ShareScope.WORKOUT],
+      });
+      const r = await studentView.read(owned.pro, owned.membershipA, ShareScope.WORKOUT, 30);
+      if (r.reading.scope !== ShareScope.WORKOUT) throw new Error('escopo errado');
+      const sessao = r.reading.sessions.find((x) => x.id === feitoA);
+      expect(sessao?.checkin).toMatchObject({ fatigue: 4, pain: true, painLocation: 'joelho' });
+      expect(sessao?.feeling).toBe(3);
+      expect(JSON.stringify(r)).not.toContain(owned.userA);
+      expect((await sessions.summary(owned.userA, feitoA)).questions?.items.length).toBe(2);
+
+      const trilha = await prisma.professionalAccessLog.findMany({
+        where: { subjectUserId: owned.userA, scope: ShareScope.WORKOUT },
+        select: { denied: true, professionalId: true },
+        orderBy: { at: 'asc' },
+      });
+      expect(trilha).toEqual([
+        { denied: true, professionalId: owned.pro },
+        { denied: false, professionalId: owned.pro },
+      ]);
+
+      // Colega da mesma academia não lê nada.
+      await expect(
+        studentView.read(owned.colega, owned.membershipA, ShareScope.WORKOUT, 30),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('o export do user-A leva a sensação e as respostas; o do user-B, nada', async () => {
+      const conta = new AccountService(
+        prisma,
+        {} as LogtoManagementService,
+        {} as CheckpointPurgeService,
+      );
+      const deA = await conta.exportData(owned.userA);
+      const sessao = deA.workoutSessions.find((x) => x.id === feitoA);
+      expect(sessao).toMatchObject({ feeling: 3, checkin: { fatigue: 4, pain: true } });
+      const deB = await conta.exportData(owned.userB);
+      expect(JSON.stringify(deB)).not.toContain(feitoA);
+    });
+  });
+
   it('o dado do user-A continua intacto depois de todas as tentativas', async () => {
     // Fecha o ciclo: nenhuma das chamadas acima pode ter tido efeito colateral.
     const meal = await meals.findById(owned.userA, owned.mealId);
