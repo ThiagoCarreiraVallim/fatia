@@ -98,7 +98,7 @@ const TOOL_COUNT_SLICES: ReadonlyArray<{ file: string; text: string; count: () =
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '78 tools de escrita',
+    text: '79 tools de escrita',
     // As de escrita que ganharam exemplo na #111 — `delete_my_account` é isenta,
     // e é por isso que o número não é o total de tools de escrita.
     count: () =>
@@ -340,22 +340,22 @@ const payload = tools.reduce(
  * número; o caso abaixo confere as duas pontas, então nem o texto some nem o número derrapa.
  */
 const PAYLOAD_CLAIMS: ReadonlyArray<{ file: string; text: string; medido: () => string }> = [
-  { file: 'docs/MCP.md', text: '**124,8 k caracteres**', medido: () => emK(payload.cheio) },
-  { file: 'docs/MCP.md', text: '(103,0 k)', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP.md', text: '**129,9 k caracteres**', medido: () => emK(payload.cheio) },
+  { file: 'docs/MCP.md', text: '(108,0 k)', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP.md',
-    text: '**7.396 são os exemplos**',
+    text: '**7.440 são os exemplos**',
     medido: () => emMilhar(payload.exemplos),
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**124,8 k caracteres**',
+    text: '**129,9 k caracteres**',
     medido: () => emK(payload.cheio),
   },
-  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 103,0 k', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 108,0 k', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**7.396 caracteres**',
+    text: '**7.440 caracteres**',
     medido: () => emMilhar(payload.exemplos),
   },
 ];
@@ -377,7 +377,6 @@ const summaryTableEntries = new Set(
  * corrigido também, para sair daqui no mesmo commit.
  */
 const DIVERGENCIAS_CONHECIDAS_DA_DOC = [
-  'add_exercise_to_plan.order',
   'create_custom_food.carbsPer100g',
   'create_custom_food.fatPer100g',
   'create_custom_food.kcalPer100g',
@@ -421,7 +420,6 @@ const DIVERGENCIAS_CONHECIDAS_DA_DOC = [
   'update_custom_food.proteinPer100g',
   'update_meal.id',
   'update_meal.mealId',
-  'update_plan_exercise.planId',
   'update_set.setNumber',
   'update_workout_plan.name',
 ];

@@ -104,7 +104,7 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **145 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **146 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 145 tools): **124,8 k caracteres**
-hoje, dos quais **7.396 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
+`description`, `annotations` e o JSON Schema do input das 146 tools): **129,9 k caracteres**
+hoje, dos quais **7.440 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (103,0 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (108,0 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -303,6 +303,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `clone_exercise`               | C        |
 |                            | `update_custom_exercise`       | U        |
 |                            | `delete_custom_exercise`       | D        |
+|                            | `set_exercise_favorite`        | U        |
 | **Planos de treino**       | `create_workout_plan`          | C        |
 |                            | `get_workout_plan`             | R        |
 |                            | `list_workout_plans`           | R        |
@@ -390,7 +391,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `get_notification_settings`    | R        |
 |                            | `update_notification_settings` | U        |
 
-Total: **145 tools**. Cada uma documentada abaixo.
+Total: **146 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -735,6 +736,15 @@ Marca ou desmarca um alimento como favorito. Idempotente nos dois sentidos. Alim
 outro usuário responde `NOT_FOUND`, como em `get_food`.
 
 **Input:** `{ id: number; favorite: boolean }`  
+**Output:** `{ id: number; favorite: boolean }`
+
+### `set_exercise_favorite`
+
+Marca ou desmarca um exercício como favorito (#378), espelho de `set_food_favorite`. Idempotente nos
+dois sentidos. Exercício pessoal de outro usuário responde `NOT_FOUND`, como em
+`get_exercise_details`. Favoritos vêm primeiro em `search_exercise` e só eles com `favoritesOnly`.
+
+**Input:** `{ id: number; favorite: boolean }`
 **Output:** `{ id: number; favorite: boolean }`
 
 ### `create_food_portion`
@@ -1259,6 +1269,7 @@ Resumo agregado por dia em um período.
   muscleGroup?: string;
   limit?: number;
   onlyMyGym?: boolean; // Fase 7b: só o que a comunidade destaca e o equipamento dela
+  favoritesOnly?: boolean; // #378: só os favoritos da pessoa
 }
 ```
 
@@ -1272,11 +1283,13 @@ Resumo agregado por dia em um período.
     muscleGroup: string;
     isCustom: boolean;
     communityName: string | null; // a comunidade que criou o exercício ou gravou o tutorial
+    favorite: boolean; // #378
   }>;
 }
 ```
 
-Os exercícios da comunidade da pessoa (academia ou criador) vêm primeiro (ADR 030).
+Os favoritos vêm primeiro (#378); depois, os exercícios da comunidade da pessoa (academia ou
+criador) (ADR 030).
 
 ### `list_exercises_by_muscle`
 
@@ -1440,32 +1453,62 @@ Cria um plano vazio.
 
 ### `add_exercise_to_plan`
 
+Adiciona um exercício ao plano com a configuração dele (#378). O mesmo exercício pode entrar mais
+de uma vez: a linha do plano é identificada pelo `id` que volta. Faixa com mínimo acima do máximo
+("15-8") e meta de cardio em exercício que não é de cardio respondem `BAD_REQUEST`.
+
 **Input:**
 
 ```typescript
 {
   planId: string;
   exerciseId: number;
-  order?: number;          // default: append
-  targetSets: number;
-  targetReps: string;
+  order?: number;          // default: no fim
+  targetSets?: number;     // default: 3 (1 no cardio)
+  targetReps?: string;     // default: "8-12" ("" no cardio)
+  restSeconds?: number | null;       // descanso entre séries; null = padrão da sessão
+  technique?: 'NORMAL' | 'DROP_SET' | 'TO_FAILURE';
+  biSetWithNext?: boolean;           // faz este e o próximo em sequência, depois descansa
+  startLoadKg?: number | null;       // carga inicial (com BODYWEIGHT, o extra)
+  loadMode?: 'WEIGHT' | 'BODYWEIGHT';
+  repUnit?: 'REPS' | 'SECONDS';      // SECONDS: a faixa é de segundos (prancha)
+  notes?: string | null;             // pegada, banco, cadência (até 200)
+  cardioTarget?: 'TIME' | 'DISTANCE' | null; // só em exercício de cardio
+  cardioDurationSeconds?: number | null;
+  cardioDistanceMeters?: number | null;
+  cardioIntensity?: 'LIGHT' | 'MODERATE' | 'VIGOROUS' | null;
 }
 ```
 
-**Output:** `{ planExerciseId: string }`
+**Output:** a linha do plano (`WorkoutPlanExercise`, com `exercise` e `sets`)
 
 ### `update_plan_exercise`
 
-Edita um item dentro do plano.
+Edita um item dentro do plano, identificado pelo `planExerciseId` (o mesmo exercício pode aparecer
+duas vezes). `sets` substitui a série por série inteira e recalcula `targetSets`/`targetReps`; `[]`
+ou `null` volta a séries iguais, e mudar `targetSets`/`targetReps` sem `sets` também limpa a tabela.
 
 **Input:**
 
 ```typescript
 {
+  planId: string;
   planExerciseId: string;
   order?: number;
   targetSets?: number;
   targetReps?: string;
+  restSeconds?: number | null;       // descanso entre séries; null = padrão da sessão
+  technique?: 'NORMAL' | 'DROP_SET' | 'TO_FAILURE';
+  biSetWithNext?: boolean;           // faz este e o próximo em sequência, depois descansa
+  startLoadKg?: number | null;       // carga inicial (com BODYWEIGHT, o extra)
+  loadMode?: 'WEIGHT' | 'BODYWEIGHT';
+  repUnit?: 'REPS' | 'SECONDS';      // SECONDS: a faixa é de segundos (prancha)
+  notes?: string | null;             // pegada, banco, cadência (até 200)
+  cardioTarget?: 'TIME' | 'DISTANCE' | null; // só em exercício de cardio
+  cardioDurationSeconds?: number | null;
+  cardioDistanceMeters?: number | null;
+  cardioIntensity?: 'LIGHT' | 'MODERATE' | 'VIGOROUS' | null;
+  sets?: Array<{ kind?: 'WARMUP' | 'NORMAL' | 'DROP'; reps: number; loadKg?: number | null }> | null;
 }
 ```
 
