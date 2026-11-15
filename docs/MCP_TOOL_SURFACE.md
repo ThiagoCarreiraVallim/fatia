@@ -8,7 +8,7 @@
 
 | Domínio                                                     |   Tools | Arquivos                                    |
 | ----------------------------------------------------------- | ------: | ------------------------------------------- |
-| Workout (exercícios, planos, sessões, séries)               |      34 | `apps/api/src/workout/mcp/`                 |
+| Workout (exercícios, planos, sessões, séries)               |      35 | `apps/api/src/workout/mcp/`                 |
 | Progress (peso, passos, água, progresso, dashboard, streak) |      27 | `apps/api/src/progress/mcp/`                |
 | Nutrition (alimentos, refeições, itens, metas, plano)       |      28 | `apps/api/src/nutrition/mcp/`               |
 | Sharing (grupos, consentimento e painel do profissional)    |       9 | `apps/api/src/sharing/mcp/`                 |
@@ -17,7 +17,7 @@
 | Conta (export e deleção — LGPD)                             |       2 | `apps/api/src/users/mcp/`                   |
 | Avisos (central do sino, #373; preferências de aviso, #389) |       4 | `apps/api/src/notifications/mcp/`           |
 | Lembretes pessoais (#389)                                   |       4 | `apps/api/src/notifications/reminders/mcp/` |
-| **Total**                                                   | **117** |                                             |
+| **Total**                                                   | **118** |                                             |
 
 ⚠️ Esta tabela é a única contagem da doc **sem guarda automática**: o
 `TOOL_COUNT_PATTERN` do `tool-catalog.spec.ts` só enxerga um número colado na palavra `tools`, e
@@ -40,12 +40,12 @@ opções abaixo foram avaliadas com isso em mente.
 
 O que pesa no contexto não é a contagem de tools, é o payload. Medido no que o registry
 serve de fato — `name`, `title`, `description`, `annotations` e o JSON Schema do input das
-145 tools: **125,8 k caracteres**, enviados em toda sessão que lista as tools.
-O denominador importa. Contar só `name + description + inputSchema` dá 104,1 k e subestima o
+146 tools: **131,0 k caracteres**, enviados em toda sessão que lista as tools.
+O denominador importa. Contar só `name + description + inputSchema` dá 109,0 k e subestima o
 catálogo em ~20% — `title` e `annotations` também vão no fio, em toda tool.
 
-Dentro desse total, os exemplos de invocação que a #111 acrescentou às 78 tools de escrita
-valem **7.464 caracteres** — média de **87** caracteres por tool, algo em torno de 6% do
+Dentro desse total, os exemplos de invocação que a #111 acrescentou às 79 tools de escrita
+valem **7.508 caracteres** — média de **86** caracteres por tool, algo em torno de 6% do
 catálogo. Os dois números são medidos no código pelo `tool-catalog.spec.ts`, junto com a
 contagem: a versão anterior desta frase dizia "4.110 caracteres, média de 91" — estagnada na
 medição da #111, feita quando o catálogo tinha 45 delas, e ainda por cima incoerente, porque
@@ -61,7 +61,7 @@ e não em campo separado — estão na §Convenções de [`docs/MCP.md`](./MCP.m
 Além da contagem, cada tool declara `hostedInference` — se a execução dispara inferência **paga
 pela Fatia**. É recorte de custo, não de tamanho, e por isso mora aqui junto do resto.
 
-Hoje são **145** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
+Hoje são **146** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
 **0** tools com inferência hospedada.
 
 O segundo número é o ponto inteiro. Chamada vinda do cliente MCP do usuário roda no

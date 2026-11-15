@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePathname, useRouter } from 'expo-router';
-import { ChevronLeft } from 'lucide-react-native';
+import { ChevronLeft, X } from 'lucide-react-native';
 import { hasTopBar, routeInfo } from '@fatia/api-client';
 import { colors } from '@/theme/colors';
 import { headerButtonClass } from './tab-header';
@@ -61,11 +61,16 @@ export function TopBar({
         {parent !== null ? (
           <Pressable
             accessibilityRole="link"
-            accessibilityLabel={`Voltar para ${info.parentTitle ?? ''}`}
+            // Criar algo em tela cheia (Al-T19) fecha no X; o destino é o mesmo pai.
+            accessibilityLabel={info.dismiss ? 'Fechar' : `Voltar para ${info.parentTitle ?? ''}`}
             onPress={() => (onBack ? onBack() : router.navigate(parent))}
             className={headerButtonClass()}
           >
-            <ChevronLeft size={22} color={colors.foreground} />
+            {info.dismiss ? (
+              <X size={22} color={colors.foreground} />
+            ) : (
+              <ChevronLeft size={22} color={colors.foreground} />
+            )}
           </Pressable>
         ) : null}
         <Text

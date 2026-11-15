@@ -10,7 +10,7 @@ import {
   type Exercise,
 } from '@fatia/api-client';
 import { Text } from '@/components/ui/text';
-import { useOpenExerciseDetail } from './exercise-detail-host';
+import { useOpenExerciseDetail } from './exercise-detail-context';
 import { MuscleDiagram } from './muscle-diagram';
 import { colors } from '@/theme/colors';
 

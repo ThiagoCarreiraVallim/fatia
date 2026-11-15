@@ -38,6 +38,7 @@ import { LogSetTool } from './mcp/log-set.tool';
 import { RemoveExerciseFromPlanTool } from './mcp/remove-exercise-from-plan.tool';
 import { ReorderPlanExercisesTool } from './mcp/reorder-plan-exercises.tool';
 import { SearchExerciseTool } from './mcp/search-exercise.tool';
+import { SetExerciseFavoriteTool } from './mcp/set-exercise-favorite.tool';
 import { StartWorkoutSessionTool } from './mcp/start-workout-session.tool';
 import { UpdateCustomExerciseTool } from './mcp/update-custom-exercise.tool';
 import { UpdatePlanExerciseTool } from './mcp/update-plan-exercise.tool';
@@ -91,6 +92,7 @@ import { UpdateWorkoutSessionTool } from './mcp/update-workout-session.tool';
     RemoveExerciseFromPlanTool,
     ReorderPlanExercisesTool,
     SearchExerciseTool,
+    SetExerciseFavoriteTool,
     StartWorkoutSessionTool,
     UpdateCustomExerciseTool,
     UpdatePlanExerciseTool,

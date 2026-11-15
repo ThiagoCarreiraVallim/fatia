@@ -96,11 +96,11 @@ Pendências da #376:
 
 ## Etapa 4: Treino A (em andamento)
 
-| Issue | Título                                     | Estado   | Superfícies                                 |
-| ----- | ------------------------------------------ | -------- | ------------------------------------------- |
-| #377  | Início, sessão em andamento e treino feito | validado | api, db, MCP (1 tool), api-client, web, app |
-| #378  | Planos e exercício                         | a fazer  |                                             |
-| #379  | Plano recebido, modelos, bloco e agenda    | a fazer  |                                             |
+| Issue | Título                                     | Estado   | Superfícies                                      |
+| ----- | ------------------------------------------ | -------- | ------------------------------------------------ |
+| #377  | Início, sessão em andamento e treino feito | validado | api, db, MCP (1 tool), api-client, web, app      |
+| #378  | Planos, adicionar e configurar exercício   | validado | api, db, MCP (1 tool nova), api-client, web, app |
+| #379  | Plano recebido, modelos, bloco e agenda    | a fazer  |                                                  |
 
 Pendências da #377 (branch `redesign/377-treino-sessao`, migration `20261116000000_workout_feeling_and_checkin`):
 
@@ -117,6 +117,23 @@ Pendências da #377 (branch `redesign/377-treino-sessao`, migration `20261116000
   - O T9 não tem "Erros comuns".
 - **Concorrência:** a série é idempotente pela `clientKey`. Duas séries com chaves diferentes enviadas ao mesmo tempo ainda podem repetir o `setNumber`.
 - **Capturas** (Playwright e emulador) contra as pranchas: não feitas nesta sessão.
+
+Pendências da #378 (branch `redesign/378-planos-exercicio`):
+
+- **Variante do Configurar:** a issue deixou em aberto. Entrou a A (Al-T21) como padrão, a tabela da B (Al-T21b) atrás de "Configurar série por série" e a D (Al-T21d) para cardio. A C (compacta) não entrou.
+- **Desvios do canvas:** números digitáveis (vírgula, teclado numérico) além do −/+; o tipo de carga é "unidade da pessoa × peso do corpo" (sem kg/lb lado a lado); "Início/Fim" do cardio é a ordem na lista; distância só em km; "Salvar alterações" do Al-T7 virou o check de concluir, porque cada mudança já grava; o Novo plano não configura antes de criar (o Configurar fica no plano criado); remover exercício e excluir plano perguntam antes.
+- **Para a #377:** a sessão e o plano expõem `restSeconds`, `technique`, `biSetWithNext`, `startLoadKg`, `loadMode`, `repUnit`, `notes`, `cardio*`, `sets` e `planExerciseId` em `PlannedExercise`. Exercício repetido no plano segue bloqueado (409 "Esse exercício já está no plano"; o lote pula o que já está), porque a sessão agrupa séries, ordem e remoção por `exerciseId`.
+- **Para a #379:** o snapshot v1 leva a configuração nova. Não há regra de plano recebido só leitura (ADR 014: o plano adotado é da pessoa).
+- **Exercício repetido no plano:** pendente para outra issue. Exige a sessão (`session-view`, `use-session-layout`, `removedExerciseIds`) passar a agrupar por `planExerciseId`.
+- **Fora desta issue:** aba Circuitos do Al-T6 (#380); "Modelos das comunidades" e "Começar de um modelo" levam à lista de comunidades até a #379 dar a tela própria.
+- **Capturas** contra as pranchas: feitas na web e no app, com as telas T6, T7, T7 editando, T8, T8b, T19, T21, T21b e T21d. Ainda diferente da prancha:
+  - o título é "Planos de treino", porque a aba Circuitos ainda não existe;
+  - o card de plano recebido virou o card do bloco ativo;
+  - cada exercício tem setas para subir e para descer;
+  - o descanso também aceita segundos digitados;
+  - o T8 mantém "Na minha academia";
+  - o T8 e o T21 abrem no app como folhas a 85% da tela, como as outras do app, e não em tela cheia;
+  - a imagem do exercício é um placeholder.
 
 ## Etapas seguintes
 

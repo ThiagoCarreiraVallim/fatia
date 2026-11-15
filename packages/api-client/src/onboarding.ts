@@ -49,10 +49,13 @@ export function initialBodyForm(
   };
 }
 
-/** Idade completa em `today` (AAAA-MM-DD). */
+/**
+ * Idade completa em `today` (AAAA-MM-DD). Aceita a data com hora que a API
+ * devolve ("1990-11-20T00:00:00.000Z"): vale só a parte da data.
+ */
 export function ageFromBirthDate(birthDate: string, today: string): number {
-  const [by, bm, bd] = birthDate.split('-').map(Number);
-  const [ty, tm, td] = today.split('-').map(Number);
+  const [by, bm, bd] = birthDate.slice(0, 10).split('-').map(Number);
+  const [ty, tm, td] = today.slice(0, 10).split('-').map(Number);
   const hadBirthday = tm > bm || (tm === bm && td >= bd);
   return ty - by - (hadBirthday ? 0 : 1);
 }

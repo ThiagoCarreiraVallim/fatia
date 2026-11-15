@@ -86,7 +86,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   goals                  UserGoals?
-  authoredChallenges     GroupChallenge[]  @relation("ChallengeAuthor")
+  authoredChallenges     GroupChallenge[]   @relation("ChallengeAuthor")
   personalGoals          Goal[]
   meals                  Meal[]
   workoutPlans           WorkoutPlan[]
@@ -95,18 +95,19 @@ model User {
   weightLogs             WeightLog[]
   stepLogs               StepLog[]
   waterLogs              WaterLog[]
-  customFoods            Food[]            @relation("UserCustomFoods")
+  customFoods            Food[]             @relation("UserCustomFoods")
   favoriteFoods          FavoriteFood[]
   foodPortions           FoodPortion[]
   mealTemplates          MealTemplate[]
-  customExercises        Exercise[]        @relation("UserCustomExercises")
+  customExercises        Exercise[]         @relation("UserCustomExercises")
+  favoriteExercises      FavoriteExercise[]
   nutrientTargets        NutrientTarget[]
   achievements           UserAchievement[]
   trainingBlocks         TrainingBlock[]
   /// Plano alimentar que a equipe mandou para a pessoa (#376). É dado dela.
-  nutritionPlans         NutritionPlan[]   @relation("NutritionPlanSubject")
+  nutritionPlans         NutritionPlan[]    @relation("NutritionPlanSubject")
   /// Planos que a pessoa, como profissional, escreveu para alunos (#376, #407).
-  nutritionPlansAuthored NutritionPlan[]   @relation("NutritionPlanAuthor")
+  nutritionPlansAuthored NutritionPlan[]    @relation("NutritionPlanAuthor")
 
   conversations  Conversation[]
   memories       UserMemory[]
@@ -764,6 +765,7 @@ model Exercise {
   planExercises WorkoutPlanExercise[]
   sessionSets   SessionSet[]
   groupGuides   GroupExerciseGuide[]
+  favoritedBy   FavoriteExercise[]
 
   @@unique([name, createdByUserId])
   // Nome único dentro do catálogo da comunidade. `groupId` nulo (catálogo
@@ -797,19 +799,118 @@ model WorkoutPlan {
   @@index([userId, fromTemplateId])
 }
 
+/// Uma linha do plano. A identidade é o `id` (e a posição é `order`): o mesmo
+/// exercício pode aparecer duas vezes no plano (#378), então nada aqui é único
+/// por `exerciseId`.
 model WorkoutPlanExercise {
   id         String @id @default(uuid())
   planId     String
   exerciseId Int
   order      Int
   targetSets Int
-  targetReps String // "8-12", "5", "AMRAP" — string pra flexibilidade
+  /// "8-12", "5", "AMRAP" — string pra flexibilidade. Com `repUnit = SECONDS`,
+  /// a faixa é de segundos ("30-45"). Com a tabela série por série (`sets`), a
+  /// API recalcula `targetSets` e `targetReps` a partir dela.
+  targetReps String
 
-  plan     WorkoutPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  exercise Exercise    @relation(fields: [exerciseId], references: [id])
+  // Configuração do exercício (#378, Al-T21). Tudo opcional ou com padrão: o
+  // plano antigo continua igual, e a sessão usa o padrão dela quando é nulo.
+  /// Como a pessoa conta a série: repetições ou segundos (prancha).
+  repUnit       PlanRepUnit   @default(REPS)
+  /// Carga externa ou peso do corpo (aí `startLoadKg` é o extra).
+  loadMode      PlanLoadMode  @default(WEIGHT)
+  /// Carga inicial sugerida, sempre em kg (a conversão para lb é da tela).
+  startLoadKg   Float?
+  /// Descanso entre séries. Nulo = o padrão da sessão.
+  restSeconds   Int?
+  technique     PlanTechnique @default(NORMAL)
+  /// Faz este e o próximo em sequência e só então descansa. Só marcação e ordem
+  /// de execução (o circuito de verdade é a #380). No último exercício é ignorado.
+  biSetWithNext Boolean       @default(false)
+  /// Observação curta: pegada, banco, cadência.
+  notes         String?
 
+  // Meta do cardio (Al-T21d). Só faz sentido em exercício de cardio.
+  cardioTarget          CardioTargetKind?
+  cardioDurationSeconds Int?
+  cardioDistanceMeters  Float?
+  /// A faixa de FC sai da idade, na tela: aqui fica só a zona escolhida.
+  cardioIntensity       CardioIntensity?
+
+  plan     WorkoutPlan              @relation(fields: [planId], references: [id], onDelete: Cascade)
+  exercise Exercise                 @relation(fields: [exerciseId], references: [id])
+  /// Série por série (Al-T21b), opcional. Vazia = séries iguais (`targetSets` × `targetReps`).
+  sets     WorkoutPlanExerciseSet[]
+
+  /// O mesmo exercício uma vez por plano: a sessão agrupa séries por exercício
+  /// (#378 manteve o bloqueio; repetir fica para outra issue).
   @@unique([planId, exerciseId])
   @@index([planId])
+}
+
+/// A meta de cada série, quando a pessoa configura série por série (pirâmide,
+/// aquecimento, drop). Substituída inteira a cada gravação.
+model WorkoutPlanExerciseSet {
+  id             String      @id @default(uuid())
+  planExerciseId String
+  /// 1 = primeira série.
+  order          Int
+  kind           PlanSetKind @default(NORMAL)
+  /// Repetições, ou segundos quando a linha do plano é `repUnit = SECONDS`.
+  reps           Int
+  loadKg         Float?
+
+  planExercise WorkoutPlanExercise @relation(fields: [planExerciseId], references: [id], onDelete: Cascade)
+
+  @@unique([planExerciseId, order])
+}
+
+enum PlanRepUnit {
+  REPS
+  SECONDS
+}
+
+enum PlanLoadMode {
+  WEIGHT
+  BODYWEIGHT
+}
+
+enum PlanTechnique {
+  NORMAL
+  DROP_SET
+  TO_FAILURE
+}
+
+enum PlanSetKind {
+  WARMUP
+  NORMAL
+  DROP
+}
+
+enum CardioTargetKind {
+  TIME
+  DISTANCE
+}
+
+enum CardioIntensity {
+  LIGHT
+  MODERATE
+  VIGOROUS
+}
+
+/// Atalho da busca de exercício (#378): o que a pessoa marca no Como fazer
+/// aparece na aba Favoritos e primeiro nas sugestões. Espelha `FavoriteFood`.
+model FavoriteExercise {
+  id         String   @id @default(uuid())
+  userId     String
+  exerciseId Int
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, exerciseId])
+  @@index([userId, createdAt])
 }
 
 model WorkoutSession {

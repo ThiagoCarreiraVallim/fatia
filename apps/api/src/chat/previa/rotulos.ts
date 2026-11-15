@@ -254,6 +254,12 @@ const ESCOPOS: Record<string, string> = {
 const escopos: Formato = (valor, ctx) =>
   Array.isArray(valor) ? (valor.length ? listaDeMapa(ESCOPOS)(valor, ctx) : 'Nada') : null;
 
+const TECNICA: Record<string, string> = {
+  NORMAL: 'Normal',
+  DROP_SET: 'Drop-set',
+  TO_FAILURE: 'Até a falha',
+};
+
 export const CAMPOS: Record<string, Campo> = {
   // `mark_inbox_read` (#373): quantos avisos; sem a lista, a tool marca todos.
   ids: {
@@ -378,6 +384,46 @@ export const CAMPOS: Record<string, Campo> = {
   order: { rotulo: 'Posição no treino', formato: semUnidade },
   targetSets: { rotulo: 'Séries', formato: semUnidade },
   targetReps: { rotulo: 'Repetições', formato: texto },
+  // Configuração do exercício no plano (#378).
+  restSeconds: { rotulo: 'Descanso', formato: comUnidade('s', 0) },
+  technique: { rotulo: 'Técnica', formato: deMapa(TECNICA) },
+  biSetWithNext: { rotulo: 'Bi-set com o próximo', formato: simOuNao },
+  startLoadKg: { rotulo: 'Carga inicial', formato: comUnidade('kg') },
+  loadMode: {
+    rotulo: 'Carga',
+    formato: deMapa({ WEIGHT: 'Carga externa', BODYWEIGHT: 'Peso do corpo' }),
+  },
+  repUnit: { rotulo: 'Conta por', formato: deMapa({ REPS: 'Repetições', SECONDS: 'Segundos' }) },
+  cardioTarget: {
+    rotulo: 'Meta do cardio',
+    formato: deMapa({ TIME: 'Tempo', DISTANCE: 'Distância' }),
+  },
+  cardioDurationSeconds: {
+    rotulo: 'Duração alvo',
+    formato: (valor) => (typeof valor === 'number' ? `${numero(valor / 60, 1)} min` : null),
+  },
+  cardioDistanceMeters: {
+    rotulo: 'Distância alvo',
+    formato: (valor) => (typeof valor === 'number' ? `${numero(valor / 1000, 2)} km` : null),
+  },
+  cardioIntensity: {
+    rotulo: 'Intensidade',
+    formato: deMapa({ LIGHT: 'Leve', MODERATE: 'Moderada', VIGOROUS: 'Forte' }),
+  },
+  sets: {
+    rotulo: 'Série por série',
+    formato: (valor) => {
+      if (!Array.isArray(valor)) return null;
+      if (!valor.length) return 'Séries iguais';
+      return valor
+        .map((x: unknown) => {
+          const { reps, loadKg } = (x ?? {}) as { reps?: unknown; loadKg?: unknown };
+          const carga = typeof loadKg === 'number' ? ` × ${numero(loadKg)} kg` : '';
+          return typeof reps === 'number' ? `${reps}${carga}` : '?';
+        })
+        .join(', ');
+    },
+  },
   kind: {
     rotulo: 'Tipo',
     formato: (valor) =>
@@ -527,6 +573,7 @@ export const ID_POR_TOOL: Record<string, TipoDeRegistro> = {
   update_meal_item: 'itemDaRefeicao',
   update_custom_food: 'alimento',
   set_food_favorite: 'alimento',
+  set_exercise_favorite: 'exercicio',
   update_water_log: 'agua',
   update_reminder: 'lembrete',
   clone_exercise: 'exercicio',

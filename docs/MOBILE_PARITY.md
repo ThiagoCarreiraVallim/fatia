@@ -66,6 +66,7 @@ Nenhum placeholder restante no código.
 | `(app)/workout`                      | `app/(app)/workout/index.tsx`                            | ✅  | a sessão ativa vira aviso com "Continuar treino" em vez de tomar a tela                                                                                               |
 | `(app)/workout/history`              | `app/(app)/workout/history.tsx`                          | ✅  |                                                                                                                                                                       |
 | `(app)/workout/plans`                | `app/(app)/workout/plans/index.tsx`                      | ✅  |                                                                                                                                                                       |
+| `(app)/workout/plans/new`            | `app/(app)/workout/plans/new.tsx`                        | ✅  | Novo plano (#378): nome e lote de exercícios; o Configurar fica no plano criado                                                                                       |
 | `(app)/workout/plans/[id]`           | `app/(app)/workout/plans/[id].tsx`                       | ✅  |                                                                                                                                                                       |
 | `(app)/workout/quick/[templateId]`   | `app/(app)/workout/quick/[templateId].tsx`               | ✅  |                                                                                                                                                                       |
 | `(app)/workout/session/[id]`         | `app/(app)/workout/session/[id]/index.tsx`               | ✅  | uma rota para sessão ativa e concluída — o treino termina durante a visita                                                                                            |
@@ -147,29 +148,32 @@ Semana (S1).
 | `barcode-flow`          | `app/(app)/nutrition/scan.tsx`       | ✅  | abas Código/Rótulo nos dois; o rótulo usa upload com `capture` no PWA (`label-reader`) e `PhotoCapture` (câmera e galeria, Expo Go) no app; Free vê "Ver o plano PRO"; sem IA no servidor a aba some. No PWA é um modo do drawer de busca; no app é tela                                                                             |
 | —                       | `nutrition/barcode`                  | ➕  | só os formatos do `expo-camera`; a lógica pura (trava, porção, ficha incompleta, guardar) é comum em `@fatia/api-client` (`barcode.ts`)                                                                                                                                                                                              |
 
-### Treino — 17 de 17 (redesign #377)
+### Treino — 20 de 20 (redesign #377 e #378)
 
-| PWA                      | App nativo                             |     | Observação                                                                                |
-| ------------------------ | -------------------------------------- | :-: | ----------------------------------------------------------------------------------------- |
-| `add-exercise-drawer`    | `workout/add-exercise-drawer`          | ✅  |                                                                                           |
-| `block-timeline`         | `workout/block-timeline`               | ✅  | bloco de periodização (#145); a frase explicativa vem pronta da API                       |
-| `exercise-detail-card`   | `workout/exercise-detail-card`         | ✅  | aceita `renderSet` para receber a linha editável da sessão                                |
-| `exercise-detail-drawer` | `workout/exercise-detail-drawer`       | ✅  | T9: vídeo, Como fazer, Músculos (`MuscleDiagram`) e Seu histórico                         |
-| `exercise-media`         | `workout/exercise-media`               | ✅  | web toca o vídeo na página; o app mostra a capa e abre no navegador do app (Expo Go)      |
-| `exercise-edit-drawer`   | `workout/exercise-edit-drawer`         | ✅  |                                                                                           |
-| `exercise-search-drawer` | `workout/exercise-search-drawer`       | ✅  | aceita o grupo muscular inicial                                                           |
-| `muscle-diagram`         | `workout/muscle-diagram`               | ✅  | 206 traços com `id` e `data-muscle`; cores por músculo; substitui a silhueta simplificada |
-| `workout-home`           | `app/(app)/workout/index.tsx`          | ✅  | T1: semana, músculos de hoje e planos; a lógica do app fica em `workout/workout-home.ts`  |
-| `active-exercise-card`   | `workout/session/active-exercise-card` | ✅  | carga e repetições digitáveis além do −/+; sensação por série                             |
-| `active-cardio-card`     | `workout/session/active-cardio-card`   | ✅  |                                                                                           |
-| `set-chips`              | `workout/session/set-chips`            | ✅  | séries feitas em chips; tocar edita                                                       |
-| `rest-timer`             | `workout/session/rest-panel`           | ✅  | descanso com avanço automático (preferência no aparelho)                                  |
-| `finish-session-modal`   | `workout/session/use-finish-session`   | ✅  | no app, a sensação do treino em drawer (`feeling-picker`)                                 |
-| `current-workout-sheet`  | `workout/session/[id]/edit`            | ✅  | T17 "Treino atual": no app é rota própria                                                 |
-| `session/[id]` (T5)      | `workout/session/completed-session`    | ✅  | T5/T5b: resumo, recordes, músculos, observação e perguntas da equipe                      |
-| `cancel-session-modal`   | `workout/session/use-cancel-session`   | ✅  | virou `Alert` do sistema: pergunta sim/não destrutiva                                     |
-| —                        | `workout/exercise-detail-host`         | ➕  | hospeda o drawer de detalhe fora do card (ver "O que o React Native impôs")               |
-| —                        | `workout/session/session-header`       | ➕  | header fixo com o progresso dos exercícios                                                |
+| PWA                      | App nativo                             |     | Observação                                                                                    |
+| ------------------------ | -------------------------------------- | :-: | --------------------------------------------------------------------------------------------- |
+| `add-exercise-drawer`    | `workout/add-exercise-drawer`          | ✅  | seleção múltipla com Favoritos e grupos (#378)                                                |
+| `plan-exercise-sheet`    | `workout/plan-exercise-sheet`          | ✅  | Configurar exercício (#378): A, série por série (B) e cardio (D)                              |
+| `plan-exercise-row`      | `workout/plan-exercise-row`            | ✅  | linha do plano; no app o Como fazer abre pelo `ExerciseDetailHost`                            |
+| `plan-muscle-bar`        | `workout/plan-muscle-bar`              | ✅  | séries por grupo; a cor vem de `muscleGroupTone` no api-client                                |
+| `block-timeline`         | `workout/block-timeline`               | ✅  | bloco de periodização (#145); a frase explicativa vem pronta da API                           |
+| `exercise-detail-card`   | `workout/exercise-detail-card`         | ✅  | aceita `renderSet` para receber a linha editável da sessão                                    |
+| `exercise-detail-drawer` | `workout/exercise-detail-drawer`       | ✅  | T9: vídeo, Como fazer, Músculos (`MuscleDiagram`) e Seu histórico; estrela de favorito (#378) |
+| `exercise-media`         | `workout/exercise-media`               | ✅  | web toca o vídeo na página; o app mostra a capa e abre no navegador do app (Expo Go)          |
+| `exercise-edit-drawer`   | `workout/exercise-edit-drawer`         | ✅  |                                                                                               |
+| `exercise-search-drawer` | `workout/exercise-search-drawer`       | ✅  | aceita o grupo muscular inicial                                                               |
+| `muscle-diagram`         | `workout/muscle-diagram`               | ✅  | 206 traços com `id` e `data-muscle`; cores por músculo; substitui a silhueta simplificada     |
+| `workout-home`           | `app/(app)/workout/index.tsx`          | ✅  | T1: semana, músculos de hoje e planos; a lógica do app fica em `workout/workout-home.ts`      |
+| `active-exercise-card`   | `workout/session/active-exercise-card` | ✅  | carga e repetições digitáveis além do −/+; sensação por série                                 |
+| `active-cardio-card`     | `workout/session/active-cardio-card`   | ✅  |                                                                                               |
+| `set-chips`              | `workout/session/set-chips`            | ✅  | séries feitas em chips; tocar edita                                                           |
+| `rest-timer`             | `workout/session/rest-panel`           | ✅  | descanso com avanço automático (preferência no aparelho)                                      |
+| `finish-session-modal`   | `workout/session/use-finish-session`   | ✅  | no app, a sensação do treino em drawer (`feeling-picker`)                                     |
+| `current-workout-sheet`  | `workout/session/[id]/edit`            | ✅  | T17 "Treino atual": no app é rota própria                                                     |
+| `session/[id]` (T5)      | `workout/session/completed-session`    | ✅  | T5/T5b: resumo, recordes, músculos, observação e perguntas da equipe                          |
+| `cancel-session-modal`   | `workout/session/use-cancel-session`   | ✅  | virou `Alert` do sistema: pergunta sim/não destrutiva                                         |
+| —                        | `workout/exercise-detail-host`         | ➕  | hospeda o drawer de detalhe fora do card (ver "O que o React Native impôs")                   |
+| —                        | `workout/session/session-header`       | ➕  | header fixo com o progresso dos exercícios                                                    |
 
 Saíram na #377: `community-guide` e `cards/body-silhouette`, nos dois. No app saíram também
 `set-row`, `rpe-badge`, `rpe-drawer`, `finish-session-drawer`, `exercise-title` e `rest-timer`. O

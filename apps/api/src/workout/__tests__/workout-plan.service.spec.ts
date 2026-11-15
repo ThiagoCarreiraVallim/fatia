@@ -1,4 +1,5 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { WorkoutPlanService } from '../workout-plan.service';
 import { readableExercises } from '../helpers/exercise-access';
 import type { PrismaService } from '../../common/prisma.service';
@@ -11,6 +12,7 @@ type MockPrisma = {
     findUnique: jest.Mock;
     update: jest.Mock;
     delete: jest.Mock;
+    deleteMany: jest.Mock;
   };
   workoutPlanExercise: {
     create: jest.Mock;
@@ -18,9 +20,12 @@ type MockPrisma = {
     update: jest.Mock;
     updateMany: jest.Mock;
     delete: jest.Mock;
+    deleteMany: jest.Mock;
     count: jest.Mock;
+    aggregate: jest.Mock;
   };
-  exercise: { count: jest.Mock };
+  workoutSession: { groupBy: jest.Mock };
+  exercise: { findFirst: jest.Mock };
   $transaction: jest.Mock;
 };
 
@@ -32,6 +37,7 @@ const makePrisma = (): MockPrisma => ({
     findUnique: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
+    deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
   },
   workoutPlanExercise: {
     create: jest.fn(),
@@ -39,10 +45,14 @@ const makePrisma = (): MockPrisma => ({
     update: jest.fn(),
     updateMany: jest.fn(),
     delete: jest.fn(),
+    deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
     count: jest.fn(),
+    aggregate: jest.fn().mockResolvedValue({ _max: { order: null } }),
   },
+  // "Feito N vezes" (#378): nenhuma sessão por padrão.
+  workoutSession: { groupBy: jest.fn().mockResolvedValue([]) },
   // Visível por padrão; o caso do exercício alheio sobrescreve.
-  exercise: { count: jest.fn().mockResolvedValue(1) },
+  exercise: { findFirst: jest.fn().mockResolvedValue({ id: 1, muscleGroup: 'peito' }) },
   $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
 });
 
@@ -137,20 +147,19 @@ describe('WorkoutPlanService', () => {
   });
 
   describe('delete', () => {
-    it('deletes a plan the user owns', async () => {
-      prisma.workoutPlan.findUnique.mockResolvedValue({ id: 'plan-1', userId });
-      prisma.workoutPlan.delete.mockResolvedValue({});
-
+    it('deletes a plan the user owns, with the owner in the filter', async () => {
       await service.delete(userId, 'plan-1');
 
-      expect(prisma.workoutPlan.delete).toHaveBeenCalledWith({ where: { id: 'plan-1' } });
+      expect(prisma.workoutPlan.deleteMany).toHaveBeenCalledWith({
+        where: { id: 'plan-1', userId },
+      });
     });
 
-    it('refuses to delete a plan that belongs to another user', async () => {
-      prisma.workoutPlan.findUnique.mockResolvedValue({ id: 'plan-1', userId: 'user-B' });
+    it('refuses (404) a plan that belongs to another user or is already gone', async () => {
+      // O segundo toque do "Excluir" cai aqui também: 404, não o P2025 que virava 500.
+      prisma.workoutPlan.deleteMany.mockResolvedValue({ count: 0 });
 
       await expect(service.delete(userId, 'plan-1')).rejects.toThrow(NotFoundException);
-      expect(prisma.workoutPlan.delete).not.toHaveBeenCalled();
     });
   });
 
@@ -179,18 +188,29 @@ describe('WorkoutPlanService', () => {
       );
     });
 
-    it('translates P2002 (exercise already in plan) into ConflictException', async () => {
+    it('appends at the end (max order + 1) when no order is given', async () => {
       prisma.workoutPlan.findUnique.mockResolvedValue({ id: 'plan-1', userId });
-      prisma.workoutPlanExercise.create.mockRejectedValue({ code: 'P2002' });
+      prisma.workoutPlanExercise.aggregate.mockResolvedValue({ _max: { order: 7 } });
+      prisma.workoutPlanExercise.create.mockResolvedValue({ id: 'pe-1' });
 
-      await expect(
-        service.addExercise(userId, 'plan-1', {
-          exerciseId: 1,
-          order: 1,
-          targetSets: 3,
-          targetReps: '8-12',
-        }),
-      ).rejects.toThrow(ConflictException);
+      await service.addExercise(userId, 'plan-1', { exerciseId: 1 });
+
+      expect(prisma.workoutPlanExercise.create.mock.calls[0][0].data).toMatchObject({
+        order: 8,
+        targetSets: 3,
+        targetReps: '8-12',
+      });
+    });
+
+    it('exercício já no plano é 409 com mensagem clara (o único voltou, #378)', async () => {
+      prisma.workoutPlan.findUnique.mockResolvedValue({ id: 'plan-1', userId });
+      prisma.workoutPlanExercise.create.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('único', { code: 'P2002', clientVersion: 'test' }),
+      );
+
+      const call = service.addExercise(userId, 'plan-1', { exerciseId: 1 });
+      await expect(call).rejects.toThrow(ConflictException);
+      await expect(call).rejects.toThrow('Esse exercício já está no plano');
     });
 
     it('re-throws unexpected errors unchanged', async () => {
@@ -210,7 +230,7 @@ describe('WorkoutPlanService', () => {
 
     it('recusa exercício que a pessoa não enxerga, sem criar a linha (#92)', async () => {
       prisma.workoutPlan.findUnique.mockResolvedValue({ id: 'plan-1', userId });
-      prisma.exercise.count.mockResolvedValue(0);
+      prisma.exercise.findFirst.mockResolvedValue(null);
 
       await expect(
         service.addExercise(userId, 'plan-1', {
@@ -220,9 +240,9 @@ describe('WorkoutPlanService', () => {
           targetReps: '8-12',
         }),
       ).rejects.toThrow(NotFoundException);
-      expect(prisma.exercise.count).toHaveBeenCalledWith({
-        where: { id: 77, ...readableExercises(userId) },
-      });
+      expect(prisma.exercise.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 77, ...readableExercises(userId) } }),
+      );
       expect(prisma.workoutPlanExercise.create).not.toHaveBeenCalled();
     });
 
@@ -243,7 +263,10 @@ describe('WorkoutPlanService', () => {
   describe('updatePlanExercise', () => {
     it('updates the plan-exercise when both ownership and (planId, peId) match', async () => {
       prisma.workoutPlan.findUnique.mockResolvedValue({ id: 'plan-1', userId });
-      prisma.workoutPlanExercise.findFirst.mockResolvedValue({ id: 'pe-1' });
+      prisma.workoutPlanExercise.findFirst.mockResolvedValue({
+        id: 'pe-1',
+        exercise: { muscleGroup: 'peito' },
+      });
       prisma.workoutPlanExercise.update.mockResolvedValue({ id: 'pe-1', order: 5 });
 
       await service.updatePlanExercise(userId, 'plan-1', 'pe-1', { order: 5 });
@@ -266,17 +289,17 @@ describe('WorkoutPlanService', () => {
   describe('removeExercise', () => {
     it('deletes the plan-exercise when ownership and scoping match', async () => {
       prisma.workoutPlan.findUnique.mockResolvedValue({ id: 'plan-1', userId });
-      prisma.workoutPlanExercise.findFirst.mockResolvedValue({ id: 'pe-1' });
-      prisma.workoutPlanExercise.delete.mockResolvedValue({});
 
       await service.removeExercise(userId, 'plan-1', 'pe-1');
 
-      expect(prisma.workoutPlanExercise.delete).toHaveBeenCalledWith({ where: { id: 'pe-1' } });
+      expect(prisma.workoutPlanExercise.deleteMany).toHaveBeenCalledWith({
+        where: { id: 'pe-1', planId: 'plan-1' },
+      });
     });
 
     it('throws NotFoundException when the plan-exercise is not in that plan', async () => {
       prisma.workoutPlan.findUnique.mockResolvedValue({ id: 'plan-1', userId });
-      prisma.workoutPlanExercise.findFirst.mockResolvedValue(null);
+      prisma.workoutPlanExercise.deleteMany.mockResolvedValue({ count: 0 });
 
       await expect(service.removeExercise(userId, 'plan-1', 'pe-x')).rejects.toThrow(
         NotFoundException,

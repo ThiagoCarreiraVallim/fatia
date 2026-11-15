@@ -13,7 +13,7 @@ import {
 } from '@fatia/api-client';
 import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { Input } from '@/components/ui';
-import { useOpenExerciseDetail } from './exercise-detail-host';
+import { useOpenExerciseDetail } from './exercise-detail-context';
 import { colors } from '@/theme/colors';
 
 /**

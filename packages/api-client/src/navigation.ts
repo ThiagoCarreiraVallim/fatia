@@ -254,6 +254,8 @@ const FOCUS_ROUTES = [
   '/you/edit',
   '/you/delete',
   '/community/new',
+  // Al-T19: o Novo plano fecha no X e tem o "Criar plano" embaixo, sem a barra.
+  '/workout/plans/new',
   '/onboarding',
   '/org/:id/content/plans/:templateId',
   '/org/:id/content/tips/:tipId',
@@ -281,6 +283,28 @@ export function navBarMode(
   return 'visible';
 }
 
+/**
+ * O botão de ação preso embaixo da tela (pranchas Al-T6, Al-T7, Al-T19:
+ * `bottom: 104px`). Fica 14 px acima da barra flutuante (22 + 68, a mesma conta
+ * do `bottom-space` do app e do `BottomNav` do PWA) e da barra do treino em
+ * andamento (56 + 10), para nunca ficar atrás delas. Medidas acima da área segura.
+ */
+const DOCK_NAV = 22 + 68;
+const DOCK_WORKOUT_BAR = 56 + 10;
+const DOCK_GAP = 14;
+const DOCK_FOCUS_GAP = 22;
+export const DOCKED_ACTION_HEIGHT = 56;
+
+export function dockedActionBottom(opts: { navVisible: boolean; workoutBar: boolean }): number {
+  if (!opts.navVisible) return DOCK_FOCUS_GAP;
+  return DOCK_NAV + DOCK_GAP + (opts.workoutBar ? DOCK_WORKOUT_BAR : 0);
+}
+
+/** Quanto o fim do conteúdo reserva para o botão preso não cobrir o último item. */
+export function dockedActionReserve(opts: { navVisible: boolean; workoutBar: boolean }): number {
+  return dockedActionBottom(opts) + DOCKED_ACTION_HEIGHT + 24;
+}
+
 /** Uma tela no mapa: o título pequeno da barra de topo e para onde "voltar" leva. */
 interface RouteDef {
   /** Segmentos com `:param` para os dinâmicos. */
@@ -288,6 +312,8 @@ interface RouteDef {
   title: string;
   /** null nas 5 abas da barra (ADR 040): são telas de ver, sem seta de voltar. */
   parent: string | null;
+  /** Fecha no X em vez da seta (criar algo em tela cheia, ex.: Al-T19). */
+  dismiss?: boolean;
 }
 
 export const HOME_TITLE = 'Hoje';
@@ -309,6 +335,7 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/workout', title: 'Treino', parent: null },
   { pattern: '/workout/history', title: 'Histórico de treino', parent: '/workout' },
   { pattern: '/workout/plans', title: 'Planos de treino', parent: '/workout' },
+  { pattern: '/workout/plans/new', title: 'Novo plano', parent: '/workout/plans', dismiss: true },
   { pattern: '/workout/plans/:id', title: 'Plano de treino', parent: '/workout/plans' },
   { pattern: '/workout/quick/:id', title: 'Treino rápido', parent: '/workout' },
   { pattern: '/workout/session/:id', title: 'Treino', parent: '/workout/history' },
@@ -388,6 +415,8 @@ export interface RouteInfo {
   parent: string | null;
   /** Título da tela de destino do "voltar" (para o rótulo acessível). */
   parentTitle: string | null;
+  /** O botão da esquerda é um X ("Fechar"), não a seta. Só aparece quando é. */
+  dismiss?: true;
 }
 
 function segments(path: string): string[] {
@@ -454,5 +483,5 @@ export function routeInfo(pathname: string): RouteInfo {
     }
   }
   const parentTitle = parent === null ? null : (find(segments(parent))?.title ?? HOME_TITLE);
-  return { title, parent, parentTitle };
+  return { title, parent, parentTitle, ...(def?.dismiss ? { dismiss: true as const } : {}) };
 }

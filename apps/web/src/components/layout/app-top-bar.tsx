@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, X } from 'lucide-react';
 import { hasTopBar, routeInfo } from '@fatia/api-client';
 import { headerButtonClass } from './tab-header';
 
@@ -97,7 +97,8 @@ export function AppTopBar({ wide = false }: { wide?: boolean }) {
   if (!hasTopBar(pathname) && !ctx?.title) return null;
   const parent = info.parent;
   const title = ctx?.title ?? info.title;
-  const label = `Voltar para ${info.parentTitle ?? ''}`;
+  // Criar algo em tela cheia (Al-T19) fecha no X; o destino é o mesmo pai.
+  const label = info.dismiss ? 'Fechar' : `Voltar para ${info.parentTitle ?? ''}`;
 
   return (
     <header className="sticky top-0 z-40 -mt-[env(safe-area-inset-top)] bg-background/85 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
@@ -117,7 +118,7 @@ export function AppTopBar({ wide = false }: { wide?: boolean }) {
               }
             }}
           >
-            <ChevronLeft size={22} aria-hidden />
+            {info.dismiss ? <X size={22} aria-hidden /> : <ChevronLeft size={22} aria-hidden />}
           </Link>
         )}
         <h1

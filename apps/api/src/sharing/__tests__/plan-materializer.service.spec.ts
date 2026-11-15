@@ -335,7 +335,7 @@ describe('PlanMaterializerService.materialize', () => {
 
     await expect(service.materialize(ADOTANTE, repetido)).rejects.toThrow(/duas vezes/);
     // Sem esta checagem, a primeira cópia já teria sido criada quando o
-    // `create` do plano falhasse com P2002.
+    // `create` do plano falhasse com P2002 (o único segue na #378).
     expect(exercises.createCustom).not.toHaveBeenCalled();
   });
 
@@ -610,9 +610,10 @@ describe('buildPlanSnapshot', () => {
       expect(buildPlanSnapshot(planoCom({ targetReps: '' })).exercises[0].targetReps).toBe('');
     });
 
-    it('`targetSets` acima de 50, que o REST aceita por não ter teto', () => {
-      // A tool MCP corta em 20, o `AddPlanExerciseDto` é `@Min(1)` sem `@Max`.
-      // O teto do snapshot é o da coluna (`Int` = int4), não um número redondo.
+    it('`targetSets` acima de 50: o REST passou a cortar (#378), o plano gravado antes continua publicável', () => {
+      // A tool MCP corta em 20 e, desde a #378, o `AddPlanExerciseDto` em 50.
+      // Plano gravado antes do teto pode ter mais, e o snapshot não pode
+      // reprová-lo: o teto do snapshot segue o da coluna (`Int` = int4).
       expect(
         problemasDoDto(AddPlanExerciseDto, {
           exerciseId: 1,
@@ -620,7 +621,7 @@ describe('buildPlanSnapshot', () => {
           targetSets: 60,
           targetReps: '10',
         }),
-      ).toEqual([]);
+      ).not.toEqual([]);
 
       expect(buildPlanSnapshot(planoCom({ targetSets: 60 })).exercises[0].targetSets).toBe(60);
     });

@@ -5,6 +5,7 @@ import { TOP_BAR_HEIGHT, TopBar, useTopBarVisible } from './top-bar';
 import { useBottomChrome } from './bottom-nav';
 import { screenBottomPadding } from './bottom-space';
 import { colors } from '@/theme/colors';
+import { dockedActionBottom, dockedActionReserve } from '@fatia/api-client';
 
 /**
  * Moldura das telas autenticadas.
@@ -24,6 +25,7 @@ export function Screen({
   onRefresh,
   refreshing = false,
   scroll = true,
+  footer,
 }: {
   children: ReactNode;
   /** Só para tela dinâmica (nome do plano…); o título fixo vem do mapa de rotas. */
@@ -36,17 +38,26 @@ export function Screen({
   refreshing?: boolean;
   /** Desligue quando a tela tiver a própria lista rolável (FlatList). */
   scroll?: boolean;
+  /**
+   * O botão de ação preso embaixo (Al-T6 "Novo plano", Al-T7 "Iniciar", Al-T19
+   * "Criar plano"): 14 px acima da barra, ou a 22 px do fim sem ela. O conteúdo
+   * reserva o espaço dele para o último item não ficar atrás.
+   */
+  footer?: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
   const comBarra = useTopBarVisible();
   const paddingTop = insets.top + (comBarra ? TOP_BAR_HEIGHT : 16);
   // Com a barra do treino em andamento, mais a altura dela para nada ficar atrás.
   const chrome = useBottomChrome();
-  const paddingBottom = screenBottomPadding({
-    safeBottom: insets.bottom,
-    navVisible: chrome.visible,
-    workoutBar: chrome.workoutBar,
-  });
+  const dock = { navVisible: chrome.visible, workoutBar: chrome.workoutBar };
+  const paddingBottom = footer
+    ? insets.bottom + dockedActionReserve(dock)
+    : screenBottomPadding({
+        safeBottom: insets.bottom,
+        navVisible: chrome.visible,
+        workoutBar: chrome.workoutBar,
+      });
   const body = scroll ? (
     <ScrollView
       className="flex-1"
@@ -75,6 +86,14 @@ export function Screen({
   return (
     <View className="flex-1 bg-background">
       {body}
+      {footer ? (
+        <View
+          style={{ bottom: insets.bottom + dockedActionBottom(dock) }}
+          className="absolute inset-x-4 flex-row items-center gap-2"
+        >
+          {footer}
+        </View>
+      ) : null}
       <TopBar title={title} onBack={onBack} actions={actions} />
     </View>
   );

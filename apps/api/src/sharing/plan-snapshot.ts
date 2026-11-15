@@ -1,6 +1,21 @@
 import { BadRequestException } from '@nestjs/common';
 import { z } from 'zod';
 import { muscleGroupSchema, muscleListSchema } from '../workout/helpers/muscle-group';
+import {
+  CARDIO_INTENSITIES,
+  CARDIO_TARGETS,
+  LOAD_MODES,
+  MAX_CARDIO_DISTANCE_METERS,
+  MAX_CARDIO_DURATION_SECONDS,
+  MAX_LOAD_KG,
+  MAX_PLAN_NOTES,
+  MAX_PLAN_SETS,
+  MAX_REST_SECONDS,
+  MAX_SET_REPS,
+  PLAN_SET_KINDS,
+  REP_UNITS,
+  TECHNIQUES,
+} from '../workout/helpers/plan-exercise-config';
 
 /**
  * Formato congelado de um plano de treino para atravessar contas (ADR 014).
@@ -72,6 +87,30 @@ const prescricao = {
   order: z.number().int().min(0).max(INT4_MAX),
   targetSets: z.number().int().min(1).max(INT4_MAX),
   targetReps: z.string().max(20),
+  // Configuração do exercício (#378). Opcionais dentro da v1: o retrato antigo
+  // continua válido e adota como antes (descanso no padrão, técnica normal).
+  // Os limites são os de `PlanExerciseConfigDto`, pela mesma razão acima.
+  repUnit: z.enum(REP_UNITS).optional(),
+  loadMode: z.enum(LOAD_MODES).optional(),
+  startLoadKg: z.number().min(0).max(MAX_LOAD_KG).optional(),
+  restSeconds: z.number().int().min(0).max(MAX_REST_SECONDS).optional(),
+  technique: z.enum(TECHNIQUES).optional(),
+  biSetWithNext: z.boolean().optional(),
+  notes: z.string().max(MAX_PLAN_NOTES).optional(),
+  cardioTarget: z.enum(CARDIO_TARGETS).optional(),
+  cardioDurationSeconds: z.number().int().min(1).max(MAX_CARDIO_DURATION_SECONDS).optional(),
+  cardioDistanceMeters: z.number().min(1).max(MAX_CARDIO_DISTANCE_METERS).optional(),
+  cardioIntensity: z.enum(CARDIO_INTENSITIES).optional(),
+  sets: z
+    .array(
+      z.object({
+        kind: z.enum(PLAN_SET_KINDS),
+        reps: z.number().int().min(1).max(MAX_SET_REPS),
+        loadKg: z.number().min(0).max(MAX_LOAD_KG).optional(),
+      }),
+    )
+    .max(MAX_PLAN_SETS)
+    .optional(),
 } as const;
 
 /**
@@ -185,6 +224,22 @@ export type PlanoParaCongelar = {
     order: number;
     targetSets: number;
     targetReps: string;
+    repUnit?: (typeof REP_UNITS)[number];
+    loadMode?: (typeof LOAD_MODES)[number];
+    startLoadKg?: number | null;
+    restSeconds?: number | null;
+    technique?: (typeof TECHNIQUES)[number];
+    biSetWithNext?: boolean;
+    notes?: string | null;
+    cardioTarget?: (typeof CARDIO_TARGETS)[number] | null;
+    cardioDurationSeconds?: number | null;
+    cardioDistanceMeters?: number | null;
+    cardioIntensity?: (typeof CARDIO_INTENSITIES)[number] | null;
+    sets?: ReadonlyArray<{
+      kind: (typeof PLAN_SET_KINDS)[number];
+      reps: number;
+      loadKg: number | null;
+    }>;
     exercise: {
       id: number;
       name: string;
@@ -235,6 +290,26 @@ export function buildPlanSnapshot(plano: PlanoParaCongelar, groupId?: string): P
       order: item.order,
       targetSets: item.targetSets,
       targetReps: item.targetReps,
+      // Só o que difere do padrão viaja: o retrato fica do tamanho de antes
+      // para o plano que não usa a configuração nova.
+      ...semVazios({
+        repUnit: item.repUnit === 'SECONDS' ? item.repUnit : null,
+        loadMode: item.loadMode === 'BODYWEIGHT' ? item.loadMode : null,
+        startLoadKg: item.startLoadKg ?? null,
+        restSeconds: item.restSeconds ?? null,
+        technique: item.technique && item.technique !== 'NORMAL' ? item.technique : null,
+        biSetWithNext: item.biSetWithNext ? true : null,
+        notes: item.notes ?? null,
+        cardioTarget: item.cardioTarget ?? null,
+        cardioDurationSeconds: item.cardioDurationSeconds ?? null,
+        cardioDistanceMeters: item.cardioDistanceMeters ?? null,
+        cardioIntensity: item.cardioIntensity ?? null,
+        sets: (item.sets ?? []).map((st) => ({
+          kind: st.kind,
+          reps: st.reps,
+          ...(st.loadKg !== null ? { loadKg: st.loadKg } : {}),
+        })),
+      }),
     };
     if (item.exercise.groupOwned) {
       if (groupId && item.exercise.groupId === groupId) {

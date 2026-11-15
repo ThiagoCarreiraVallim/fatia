@@ -46,9 +46,14 @@ import {
  * A #375 acrescentou `nutrients` e `barcode` a `create_custom_food` e `update_custom_food`
  * (nenhuma das duas é destrutiva nem de intenção, mas a de entidade é servida nos dois braços):
  * mudam os dois.
+ * A #378 acrescentou `set_exercise_favorite`, `favoritesOnly` em `search_exercise` e a
+ * configuração do exercício em `add_exercise_to_plan` e `update_plan_exercise` (nenhuma
+ * destrutiva nem de intenção): muda o braço A.
+ * A #377 acrescentou a sensação e as respostas pós-treino a `finish_workout_session`: muda o
+ * braço A. As duas chegaram juntas no merge da main na #378.
  */
 
-const SHA_ENTIDADE = '4f2cfcea79837b39529b50e05de3b97d60cc8b26841b9a8727592bf3dd79de6b';
+const SHA_ENTIDADE = '0882c740a22eeda0e16c81e7163a2f59092d114056e055f0201c0afeedd3fe33';
 const SHA_INTENCAO = 'b6a721e51ea5e251bfded1aef71296eb761b0cfe6a8de1aa33cee35b61f4230b';
 
 /** `json.dumps(valor, ensure_ascii=False, sort_keys=True)` do Python, byte a byte. */

@@ -3,24 +3,32 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { Play, Clock, Dumbbell, Lightbulb, Pencil, Plus, Trash2, Check } from 'lucide-react';
+import { Play, Pencil, Plus, Check } from 'lucide-react';
 import {
   ApiError,
-  isCardioExercise,
+  estimatePlanMinutes,
+  planCountsLine,
+  planHistoryLine,
+  usersApi,
   workoutApi,
+  type PlanExerciseInput,
   type WorkoutPlan,
   type WorkoutPlanExercise,
 } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
 import { AddExerciseDrawer } from '@/components/workout/add-exercise-drawer';
+import { PlanExerciseRow } from '@/components/workout/plan-exercise-row';
+import { PlanExerciseSheet } from '@/components/workout/plan-exercise-sheet';
+import { PlanMuscleBar } from '@/components/workout/plan-muscle-bar';
+import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ErrorState } from '@/components/elements/error-state';
-import { pluralize } from '@/components/workout/format';
 import { TopBarActions, topBarActionClass, useTopBarTitle } from '@/components/layout/app-top-bar';
+import { DockedAction, DockedPage } from '@/components/layout/bottom-nav';
+import { headerButtonClass } from '@/components/layout/tab-header';
+import { cn } from '@/lib/utils';
 
 interface MoveVars {
   a: WorkoutPlanExercise;
@@ -47,10 +55,18 @@ export default function PlanDetailPage() {
   const router = useRouter();
   const qc = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
-  const [editingName, setEditingName] = useState(false);
   const [nameEdit, setNameEdit] = useState('');
   const [announcement, setAnnouncement] = useState('');
-  const [deleteOpen, setDeleteOpen] = useState(false);
+  // Al-T7: ver por padrão; editar mostra setas, lixeira, renomear e excluir.
+  const [editing, setEditing] = useState(false);
+  const [configId, setConfigId] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<WorkoutPlanExercise | null>(null);
+  const { loadUnit } = useUnitPrefs();
+  const me = useQuery({
+    queryKey: ['users', 'me'],
+    queryFn: () => usersApi.me(),
+    staleTime: 5 * 60_000,
+  });
 
   const plan = useQuery({
     queryKey: ['workout', 'plan', id],
@@ -62,28 +78,16 @@ export default function PlanDetailPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
       qc.invalidateQueries({ queryKey: ['workout', 'plans'] });
-      setEditingName(false);
-    },
-  });
-
-  const deletePlan = useMutation({
-    mutationFn: () => workoutApi.deletePlan(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['workout', 'plans'] });
-      router.push('/workout');
     },
   });
 
   const updateExercise = useMutation({
-    mutationFn: ({
-      exerciseId,
-      body,
-    }: {
-      exerciseId: string;
-      body: { targetSets?: number; targetReps?: string };
-    }) => workoutApi.updatePlanExercise(id, exerciseId, body),
+    mutationFn: ({ exerciseId, body }: { exerciseId: string; body: PlanExerciseInput }) =>
+      workoutApi.updatePlanExercise(id, exerciseId, body),
     onSuccess: () => {
+      setConfigId(null);
       qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
+      qc.invalidateQueries({ queryKey: ['workout', 'plans'] });
     },
   });
 
@@ -152,7 +156,10 @@ export default function PlanDetailPage() {
   const removeExercise = useMutation({
     mutationFn: (exerciseId: string) => workoutApi.removePlanExercise(id, exerciseId),
     onSuccess: () => {
+      setRemoveTarget(null);
+      setConfigId(null);
       qc.invalidateQueries({ queryKey: ['workout', 'plan', id] });
+      qc.invalidateQueries({ queryKey: ['workout', 'plans'] });
     },
   });
 
@@ -168,7 +175,8 @@ export default function PlanDetailPage() {
     },
   });
 
-  useTopBarTitle(plan.data?.name);
+  // Al-T7: a barra diz o modo ("Plano" / "Editando plano"); o nome vem grande embaixo.
+  useTopBarTitle(editing ? 'Editando plano' : 'Plano');
 
   if (plan.isLoading) {
     return (
@@ -205,23 +213,13 @@ export default function PlanDetailPage() {
 
   const exercises = [...plan.data.exercises].sort((a, b) => a.order - b.order);
   const existingIds = new Set(exercises.map((e) => e.exerciseId));
-  const nextOrder = exercises.length > 0 ? Math.max(...exercises.map((e) => e.order)) + 1 : 1;
-  const totalSets = exercises.reduce((acc, e) => acc + e.targetSets, 0);
-  const estDuration = Math.max(15, totalSets * 5);
-  const estVolume = (totalSets * 1.5).toFixed(1);
-
-  function startEditName() {
-    setNameEdit(plan.data?.name ?? '');
-    setEditingName(true);
-  }
+  const configuring = exercises.find((e) => e.id === configId) ?? null;
 
   function submitName() {
     const trimmed = nameEdit.trim();
-    if (trimmed && trimmed !== plan.data?.name) {
-      renamePlan.mutate(trimmed);
-    } else {
-      setEditingName(false);
-    }
+    // Nome vazio volta ao que era, sem gravar.
+    if (trimmed && trimmed !== plan.data?.name) renamePlan.mutate(trimmed);
+    else setNameEdit(plan.data?.name ?? '');
   }
 
   function move(idx: number, delta: -1 | 1) {
@@ -238,99 +236,79 @@ export default function PlanDetailPage() {
     moveExercise.mutate({ a: exercises[idx], b: exercises[target] });
   }
 
+  function toggleEditing() {
+    if (editing) {
+      submitName();
+    } else {
+      setNameEdit(plan.data?.name ?? '');
+    }
+    setEditing((e) => !e);
+  }
+
+  const history = planHistoryLine(plan.data.timesDone ?? 0, plan.data.lastDoneAt ?? null);
+
   return (
-    <div className="pb-4">
+    <div className="px-4">
+      {/* O lápis e o check ficam na barra de topo, à direita (Al-T7). */}
       <TopBarActions>
         <button
           type="button"
-          onClick={startEditName}
-          aria-label="Renomear plano"
-          className={topBarActionClass}
+          aria-pressed={editing}
+          onClick={toggleEditing}
+          aria-label={editing ? 'Concluir edição' : 'Editar plano'}
+          className={editing ? headerButtonClass('lime') : topBarActionClass}
         >
-          <Pencil size={19} />
-        </button>
-        <button
-          type="button"
-          // O `confirm()` do navegador não diz o que acontece com o histórico, e
-          // destoa do resto do PWA; a confirmação do app diz.
-          onClick={() => setDeleteOpen(true)}
-          aria-label="Excluir plano"
-          className={topBarActionClass}
-        >
-          <Trash2 size={19} />
+          {editing ? <Check size={20} aria-hidden /> : <Pencil size={18} aria-hidden />}
         </button>
       </TopBarActions>
 
-      {editingName && (
-        <div className="flex items-center gap-2 px-5 pt-1 pb-2">
-          <Input
-            aria-label="Nome do plano"
-            autoFocus
-            value={nameEdit}
-            onChange={(e) => setNameEdit(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') submitName();
-              if (e.key === 'Escape') setEditingName(false);
-            }}
-            className="h-10 text-base font-bold"
-          />
-          <button
-            type="button"
-            onClick={submitName}
-            disabled={!nameEdit.trim() || renamePlan.isPending}
-            className={topBarActionClass}
-            aria-label="Salvar nome"
-          >
-            <Check size={20} />
-          </button>
-        </div>
-      )}
-
-      <div className="space-y-4 px-5 pt-2">
-        <div className="relative overflow-hidden rounded-2xl border border-subtle bg-card">
-          <div className="relative h-44 w-full overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-slate-700 via-stone-800 to-stone-900" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
-            <div className="absolute left-4 right-4 top-4 flex gap-2">
-              <span className="rounded-md bg-primary px-2 py-0.5 text-[10px] font-extrabold text-primary-foreground">
-                HIPERTROFIA
-              </span>
-            </div>
-            <div className="absolute inset-x-0 bottom-0 p-4">
-              <h2 className="text-2xl font-extrabold text-white">{plan.data.name}</h2>
-              <p className="mt-1 text-xs text-white/70">
-                {exercises.length} {pluralize(exercises.length, 'exercício', 'exercícios')} •{' '}
-                {totalSets} {pluralize(totalSets, 'série', 'séries')}
-              </p>
-            </div>
+      <DockedPage className="pt-2">
+        <div className="space-y-2 px-1">
+          {editing ? (
+            // Renomear é editar o próprio título: sem botão a mais na tela.
+            <input
+              aria-label="Nome do plano"
+              value={nameEdit}
+              onChange={(e) => setNameEdit(e.target.value)}
+              onBlur={submitName}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur();
+              }}
+              className="w-full rounded-[14px] bg-card px-3 py-1 font-display text-[32px] font-bold leading-tight tracking-[-0.02em] text-foreground outline-none ring-primary focus:ring-2"
+            />
+          ) : (
+            <h1 className="font-display text-[32px] font-bold leading-tight tracking-[-0.02em]">
+              {plan.data.name}
+            </h1>
+          )}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span
+              className={cn(
+                'inline-flex h-[22px] items-center rounded-pill px-[9px] text-[11px] font-extrabold uppercase tracking-[0.04em]',
+                plan.data.fromTemplateId
+                  ? 'bg-brand text-brand-foreground'
+                  : 'bg-primary-soft text-primary-text',
+              )}
+            >
+              {plan.data.fromTemplateId ? 'modelo' : 'seu plano'}
+            </span>
+            <span className="text-xs text-faint">{history}</span>
           </div>
-          <div className="flex items-center gap-6 border-t border-subtle px-5 py-3">
-            <div className="flex items-center gap-2">
-              <Clock size={14} className="text-primary" />
-              <div>
-                <p className="text-[10px] font-bold tracking-wide text-muted-foreground">Duração</p>
-                <p className="text-sm font-extrabold text-foreground tabular-nums">
-                  {estDuration}m
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Dumbbell size={14} className="text-primary" />
-              <div>
-                <p className="text-[10px] font-bold tracking-wide text-muted-foreground">Volume</p>
-                <p className="text-sm font-extrabold text-foreground tabular-nums">
-                  {estVolume} Ton
-                </p>
-              </div>
-            </div>
-          </div>
+          {renamePlan.isError && (
+            <p role="alert" className="text-xs text-danger">
+              Não foi possível renomear o plano.
+            </p>
+          )}
         </div>
 
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-extrabold text-foreground">
-            Exercícios{' '}
-            <span className="text-sm font-bold text-muted-foreground">({exercises.length})</span>
-          </h3>
+        <div className="space-y-2 px-1">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-[13px] text-foreground">{planCountsLine(exercises)}</span>
+            <span className="text-xs text-faint tabular-nums">
+              ~{estimatePlanMinutes(exercises)} min
+            </span>
+          </div>
+          <PlanMuscleBar exercises={exercises} legend />
         </div>
 
         {/* Região viva montada sempre, e não junto com o texto: um `aria-live`
@@ -370,7 +348,7 @@ export default function PlanDetailPage() {
           <button
             type="button"
             onClick={() => setAddOpen(true)}
-            className="flex w-full flex-col items-center gap-2 rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-6 text-center text-sm text-muted-foreground hover:bg-primary/10"
+            className="flex w-full flex-col items-center gap-2 rounded-card border border-dashed border-primary/30 bg-primary/5 p-6 text-center text-sm text-muted-foreground hover:bg-primary/10"
           >
             <Plus size={20} className="text-primary" />
             <span>
@@ -380,76 +358,110 @@ export default function PlanDetailPage() {
           </button>
         )}
 
-        <div className="space-y-3">
-          {exercises.map((ex, idx) => (
-            <ExerciseDetailCard
-              key={ex.id}
-              mode="plan"
-              item={ex}
-              isCardio={isCardioExercise(ex.exercise)}
-              isFirst={idx === 0}
-              isLast={idx === exercises.length - 1}
-              isMoving={moveExercise.isPending}
-              onChangeSets={(n) =>
-                updateExercise.mutate({ exerciseId: ex.id, body: { targetSets: n } })
-              }
-              onChangeReps={(v) =>
-                updateExercise.mutate({ exerciseId: ex.id, body: { targetReps: v } })
-              }
-              onRemove={() => removeExercise.mutate(ex.id)}
-              onMoveUp={() => move(idx, -1)}
-              onMoveDown={() => move(idx, 1)}
-            />
-          ))}
-        </div>
-
-        <Button
-          variant="outline"
-          className="w-full gap-2 rounded-2xl"
-          onClick={() => setAddOpen(true)}
-        >
-          <Plus size={16} />
-          Adicionar exercício
-        </Button>
-
-        <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
-          <div className="flex items-center gap-2">
-            <Lightbulb size={16} className="text-primary" />
-            <h4 className="text-sm font-extrabold text-foreground">Foco na Excêntrica</h4>
+        {(exercises.length > 0 || editing) && (
+          <div className="rounded-card bg-card px-4">
+            <ol>
+              {exercises.map((ex, idx) => (
+                <PlanExerciseRow
+                  key={ex.id}
+                  item={ex}
+                  editing={editing}
+                  isFirst={idx === 0}
+                  isLast={idx === exercises.length - 1}
+                  isMoving={moveExercise.isPending}
+                  onConfigure={() => setConfigId(ex.id)}
+                  onMoveUp={() => move(idx, -1)}
+                  onMoveDown={() => move(idx, 1)}
+                  onRemove={() => setRemoveTarget(ex)}
+                />
+              ))}
+            </ol>
+            {editing && (
+              <button
+                type="button"
+                onClick={() => setAddOpen(true)}
+                className={cn(
+                  'flex min-h-14 w-full items-center gap-2 text-sm font-bold text-primary-text',
+                  exercises.length > 0 && 'border-t border-border',
+                )}
+              >
+                <Plus size={16} aria-hidden />
+                Adicionar exercício
+              </button>
+            )}
           </div>
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            Mantenha o controle da descida (fase excêntrica) por 3 segundos para maximizar a
-            hipertrofia.
-          </p>
-        </div>
+        )}
 
-        <Button
-          className="h-14 w-full rounded-full text-base font-extrabold shadow-[0_0_24px_hsl(var(--primary)/0.45)]"
-          onClick={() => start.mutate()}
-          disabled={start.isPending || exercises.length === 0}
-        >
-          <Play size={16} fill="currentColor" className="mr-1.5" />
-          {start.isPending ? 'Iniciando...' : 'Iniciar Treino'}
-        </Button>
-      </div>
+        <p className="px-1 text-xs text-faint">
+          {editing
+            ? 'Toque no exercício para mudar séries, repetições, descanso e técnica.'
+            : 'Toque na imagem para ver como fazer. Toque no lápis para editar séries, ordem e descanso.'}
+        </p>
+
+        <DockedAction>
+          {editing ? (
+            // Cada mudança já grava na hora; este botão fecha a edição, como o check.
+            <button
+              type="button"
+              onClick={toggleEditing}
+              className="anim-press flex h-14 flex-1 items-center justify-center rounded-pill bg-foreground text-[15px] font-bold text-background"
+            >
+              Salvar alterações
+            </button>
+          ) : (
+            <Button
+              className="h-14 flex-1 rounded-pill text-[15px] font-bold"
+              onClick={() => start.mutate()}
+              disabled={start.isPending || exercises.length === 0}
+            >
+              <Play size={16} aria-hidden />
+              {start.isPending ? 'Iniciando...' : `Iniciar ${plan.data.name}`}
+            </Button>
+          )}
+        </DockedAction>
+      </DockedPage>
 
       <ConfirmDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        title="Excluir plano?"
-        description="Os treinos já feitos com ele continuam no histórico."
-        confirmLabel="Excluir"
-        pendingLabel="Excluindo..."
-        pending={deletePlan.isPending}
-        onConfirm={() => deletePlan.mutate()}
+        open={removeTarget != null}
+        onOpenChange={(open) => {
+          if (!open) setRemoveTarget(null);
+        }}
+        title="Remover exercício?"
+        description={`${removeTarget?.exercise.name ?? ''} sai deste plano. Os treinos já feitos continuam no histórico.`}
+        pending={removeExercise.isPending}
+        onConfirm={() => removeTarget && removeExercise.mutate(removeTarget.id)}
+      />
+
+      <PlanExerciseSheet
+        item={configuring}
+        open={configuring != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfigId(null);
+            updateExercise.reset();
+          }
+        }}
+        loadUnit={loadUnit}
+        birthDate={me.data?.birthDate ?? null}
+        saving={updateExercise.isPending}
+        removing={removeExercise.isPending}
+        error={
+          updateExercise.isError
+            ? `Não foi possível salvar. ${updateExercise.error instanceof Error ? updateExercise.error.message : ''}`
+            : null
+        }
+        onSave={(body) =>
+          configuring && updateExercise.mutate({ exerciseId: configuring.id, body })
+        }
+        onRemove={() => configuring && removeExercise.mutate(configuring.id)}
       />
 
       <AddExerciseDrawer
         open={addOpen}
         onOpenChange={setAddOpen}
         planId={id}
+        planName={plan.data.name}
         existingExerciseIds={existingIds}
-        nextOrder={nextOrder}
       />
     </div>
   );

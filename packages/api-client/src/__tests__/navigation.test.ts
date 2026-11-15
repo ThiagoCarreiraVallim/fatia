@@ -6,6 +6,8 @@ import {
   activeNavKey,
   menuSections,
   navBarMode,
+  dockedActionBottom,
+  dockedActionReserve,
   routeInfo,
   hasTopBar,
 } from '../navigation';
@@ -188,6 +190,8 @@ describe('navegação', () => {
       '/org/g1/content/plans/t1',
       '/org/g1/content/tips/t1',
       '/org/g1/exercises/12',
+      // Al-T19: o Novo plano é tela cheia com o "Criar plano" embaixo, sem a barra.
+      '/workout/plans/new',
     ])('%s esconde a barra', (path) => {
       expect(navBarMode(path)).toBe('hidden');
     });
@@ -240,6 +244,7 @@ describe('navegação', () => {
       ['/nutrition/meals/m1?date=2026-11-15', 'Refeição', '/nutrition', 'Nutrição'],
       ['/nutrition/plan', 'Plano alimentar', '/nutrition', 'Nutrição'],
       ['/workout/plans/p1', 'Plano de treino', '/workout/plans', 'Planos de treino'],
+      ['/workout/plans/new', 'Novo plano', '/workout/plans', 'Planos de treino'],
       ['/workout/session/s1', 'Treino', '/workout/history', 'Histórico de treino'],
       ['/progress/records', 'Recordes', '/progress', 'Progresso'],
       ['/plan', 'Meu plano', '/you', 'Você'],
@@ -256,7 +261,7 @@ describe('navegação', () => {
       ['/community/g1/settings', 'Sobre a comunidade', '/community/g1', 'Comunidade'],
       ['/org/g1/moderation', 'Moderação', '/org/g1', 'Painel'],
     ])('%s: "%s", volta para %s', (path, title, parent, parentTitle) => {
-      expect(routeInfo(path)).toEqual({ title, parent, parentTitle });
+      expect(routeInfo(path)).toMatchObject({ title, parent, parentTitle });
     });
 
     it('rota fora do mapa volta ao ancestral conhecido mais próximo', () => {
@@ -299,5 +304,37 @@ describe('abas raiz', () => {
   it('o que fica dentro de uma aba volta para ela', () => {
     expect(routeInfo('/workout/plans').parent).toBe('/workout');
     expect(routeInfo('/nutrition/foods').parent).toBe('/nutrition');
+  });
+});
+
+/**
+ * O botão de ação preso embaixo (Al-T6 "Novo plano", Al-T7 "Iniciar", Al-T19
+ * "Criar plano"): nas pranchas fica a 104 px do fim, 14 acima da barra (22 + 68).
+ */
+describe('dockedActionBottom', () => {
+  it('com a barra, 14 px acima dela; com o treino em andamento, acima da barra dele também', () => {
+    expect(dockedActionBottom({ navVisible: true, workoutBar: false })).toBe(104);
+    expect(dockedActionBottom({ navVisible: true, workoutBar: true })).toBe(170);
+  });
+
+  it('sem a barra (tarefa de foco), 22 px do fim, como o "Criar plano" do Al-T19', () => {
+    expect(dockedActionBottom({ navVisible: false, workoutBar: true })).toBe(22);
+  });
+
+  it('o conteúdo reserva o botão (56) e um respiro de 24 acima dele', () => {
+    expect(dockedActionReserve({ navVisible: true, workoutBar: false })).toBe(184);
+    expect(dockedActionReserve({ navVisible: false, workoutBar: false })).toBe(102);
+  });
+});
+
+describe('routeInfo.dismiss: tela que fecha no X em vez de voltar', () => {
+  it('o Novo plano (Al-T19) fecha no X', () => {
+    expect(routeInfo('/workout/plans/new').dismiss).toBe(true);
+  });
+
+  it('as outras voltam pela seta', () => {
+    expect(routeInfo('/workout/plans/p1').dismiss).toBeUndefined();
+    expect(routeInfo('/workout/plans').dismiss).toBeUndefined();
+    expect(routeInfo('/rota/que/nao/existe').dismiss).toBeUndefined();
   });
 });

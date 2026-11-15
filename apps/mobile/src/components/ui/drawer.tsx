@@ -119,11 +119,14 @@ export function Drawer({
    * uma lista longa deve fixar, senão o sheet abre ocupando a tela inteira.
    */
   snapPoints,
+  topInset,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   children: ReactNode;
   snapPoints?: (string | number)[];
+  /** Com `snapPoints={['100%']}`: onde a folha para no topo (a área segura), para a tela cheia (Al-T8). */
+  topInset?: number;
 }) {
   const ref = useRef<BottomSheet>(null);
   const add = useContext(DrawerPresence)?.add;
@@ -156,6 +159,7 @@ export function Drawer({
       ref={ref}
       index={0}
       snapPoints={snapPoints}
+      topInset={topInset}
       enableDynamicSizing={!snapPoints}
       enablePanDownToClose
       // 550 ms com a curva do DS; com reduzir movimento, pula para o fim.

@@ -6,11 +6,13 @@ import { useQuery } from '@tanstack/react-query';
 import {
   PRIMARY_TABS,
   activeNavKey,
+  dockedActionBottom,
   navBarMode,
   usersApi,
   workoutApi,
   type NavTab,
 } from '@fatia/api-client';
+import type { ReactNode } from 'react';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/utils';
 import {
@@ -155,4 +157,58 @@ export function BottomSpacer() {
   const height =
     NAV_BOTTOM + NAV_HEIGHT + (workoutBar ? ACTIVE_WORKOUT_BAR_HEIGHT + ACTIVE_WORKOUT_BAR_GAP : 0);
   return <div aria-hidden style={{ height }} className="md:hidden" />;
+}
+
+/** O que fica abaixo do `<main>`: o `pb-8` dele e, com a barra, o `BottomSpacer`. */
+function belowContent(visible: boolean, workoutBar: boolean): number {
+  if (!visible) return 32;
+  return (
+    32 +
+    NAV_BOTTOM +
+    NAV_HEIGHT +
+    (workoutBar ? ACTIVE_WORKOUT_BAR_HEIGHT + ACTIVE_WORKOUT_BAR_GAP : 0)
+  );
+}
+
+/**
+ * A tela com botão preso embaixo (Al-T6, Al-T7, Al-T19): ocupa ao menos a
+ * altura visível, em coluna, para o `DockedAction` descer até o lugar dele
+ * mesmo quando a lista é curta.
+ */
+export function DockedPage({ children, className }: { children: ReactNode; className?: string }) {
+  const { visible, workoutBar } = useBottomChrome();
+  // 72 = a barra de topo (56) + o `pt-4` do `<main>`.
+  const below = belowContent(visible, workoutBar);
+  return (
+    <div
+      style={{ minHeight: `calc(100dvh - 72px - env(safe-area-inset-top) - ${below}px)` }}
+      className={cn('flex flex-col gap-4', className)}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
+ * O botão de ação preso embaixo da tela (pranchas Al-T6, Al-T7, Al-T19): fica
+ * 14 px acima da barra flutuante e da barra do treino (`dockedActionBottom`,
+ * api-client) — ou a 22 px do fim, sem a barra — e acompanha a rolagem. Vai no
+ * fim de um `DockedPage`: `sticky` prende enquanto há conteúdo embaixo, e no
+ * fim da página a margem negativa o deixa na mesma altura. Fica abaixo das
+ * folhas e diálogos (z-50) e da barra (z-40).
+ */
+export function DockedAction({ children }: { children: ReactNode }) {
+  const { visible, workoutBar } = useBottomChrome();
+  const bottom = dockedActionBottom({ navVisible: visible, workoutBar });
+  return (
+    <div
+      style={{
+        ['--dock' as string]: `${bottom}px`,
+        marginBottom: bottom - belowContent(visible, workoutBar),
+      }}
+      className="sticky bottom-[calc(var(--dock)+env(safe-area-inset-bottom))] z-30 mt-auto flex items-center gap-2 md:bottom-4"
+    >
+      {children}
+    </div>
+  );
 }

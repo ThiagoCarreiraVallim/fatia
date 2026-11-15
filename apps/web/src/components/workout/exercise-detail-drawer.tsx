@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil } from 'lucide-react';
+import { Pencil, Star } from 'lucide-react';
 import {
   Drawer,
   DrawerClose,
@@ -96,6 +96,27 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
     },
   });
 
+  // A estrela do Como fazer (#378): otimista, e volta atrás se a API recusar.
+  // O estado é local porque o `exercise` chega de quem abriu o drawer (busca,
+  // card do plano, sessão) e cada um guarda num cache diferente.
+  const [favorite, setFavorite] = useState<boolean | null>(null);
+  const [lastId, setLastId] = useState(exercise?.id);
+  if (lastId !== exercise?.id) {
+    setLastId(exercise?.id);
+    setFavorite(null);
+  }
+  const isFavorite = favorite ?? exercise?.favorite ?? false;
+  const favoriteMutation = useMutation({
+    mutationFn: ({ id, value }: { id: number; value: boolean }) =>
+      workoutApi.setExerciseFavorite(id, value),
+    onMutate: ({ value }) => setFavorite(value),
+    onError: (_e, { value }) => setFavorite(!value),
+    onSuccess: (_d, { id }) => {
+      qc.invalidateQueries({ queryKey: ['workout', 'exercises'] });
+      qc.invalidateQueries({ queryKey: ['workout', 'exercise', id] });
+    },
+  });
+
   const handleEdit = () => {
     if (!exercise) return;
     if (exercise.source === 'CUSTOM') {
@@ -117,10 +138,25 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
             </div>
 
             <DrawerHeader className="px-0">
-              <DrawerTitle className="font-display text-[26px] font-semibold leading-tight">
-                {exercise.name}
-              </DrawerTitle>
-              {/* TODO(#378): a estrela de favorito entra aqui, ao lado do nome. */}
+              <div className="flex items-start justify-between gap-3">
+                <DrawerTitle className="font-display text-[26px] font-semibold leading-tight">
+                  {exercise.name}
+                </DrawerTitle>
+                <button
+                  type="button"
+                  aria-pressed={isFavorite}
+                  aria-label={`Favoritar ${exercise.name}`}
+                  disabled={favoriteMutation.isPending}
+                  onClick={() => favoriteMutation.mutate({ id: exercise.id, value: !isFavorite })}
+                  className="-mt-1 -mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full hover:bg-accent"
+                >
+                  <Star
+                    size={20}
+                    aria-hidden
+                    className={isFavorite ? 'fill-primary text-primary' : 'text-muted-foreground'}
+                  />
+                </button>
+              </div>
               <DrawerDescription className="sr-only">Como fazer {exercise.name}</DrawerDescription>
               <div className="flex flex-wrap items-center gap-2">
                 {exercise.muscleGroup && (
@@ -137,6 +173,11 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
                   <span className="text-xs text-muted-foreground">{details(exercise)}</span>
                 )}
               </div>
+              {favoriteMutation.isError && (
+                <p role="alert" className="text-xs text-danger">
+                  Não foi possível salvar o favorito. Tente de novo.
+                </p>
+              )}
             </DrawerHeader>
 
             <Segmented label="Seções" options={TABS} value={tab} onChange={setTab} />

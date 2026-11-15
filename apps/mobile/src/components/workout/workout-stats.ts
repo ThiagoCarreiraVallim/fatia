@@ -164,12 +164,6 @@ export function planMoveAnnouncement(
   return `${name} movido para a posição ${posicao} de ${ordenados.length}`;
 }
 
-/** Próxima posição livre de um plano — `order` começa em 1. */
-export function nextPlanOrder(exercises: { order: number }[]): number {
-  if (exercises.length === 0) return 1;
-  return Math.max(...exercises.map((e) => e.order)) + 1;
-}
-
 export function pluralize(count: number, singular: string, plural: string): string {
   return count === 1 ? singular : plural;
 }

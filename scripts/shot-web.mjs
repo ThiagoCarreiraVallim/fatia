@@ -1,7 +1,9 @@
 // Print de rotas do PWA logado como o demo, no tamanho de celular (390×844) e,
 // com --desktop, também 1440×900. Para comparar com a prancha lado a lado.
 // Uso: node scripts/shot-web.mjs <saída> /rota [/rota ...] [--desktop] [--light]
-//      Ação antes do print: "/rota@click=Texto do botão" (clica e espera).
+//      Ação antes do print: "/rota@click=Texto do botão" (clica e espera) ou
+//      "/rota@label=Nome acessível" (botão só de ícone, pelo aria-label) ou
+//      "/rota@scroll=end" (rola até o fim, para ver o último item e as barras).
 import { chromium } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -32,6 +34,8 @@ for (const [tag, viewport] of sizes) {
     for (const a of actions) {
       const [kind, value] = a.split('=');
       if (kind === 'click') await page.getByText(value, { exact: false }).first().click().catch((e) => errors.push('click ' + value + ': ' + e.message.split('\n')[0]));
+      if (kind === 'scroll') await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      if (kind === 'label') await page.getByLabel(value, { exact: true }).first().click().catch((e) => errors.push('label ' + value + ': ' + e.message.split('\n')[0]));
       await page.waitForTimeout(900);
     }
     const name = spec.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'root';
