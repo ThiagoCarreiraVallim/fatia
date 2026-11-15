@@ -21,6 +21,7 @@ const TOKEN: Record<Exclude<ColorName, 'placeholder'>, string> = {
   mutedForeground: 'muted-foreground',
   faintForeground: 'faint-foreground',
   surface3: 'surface-3',
+  sunken: 'sunken',
   primary: 'primary',
   primaryText: 'primary-text',
   primaryForeground: 'primary-foreground',

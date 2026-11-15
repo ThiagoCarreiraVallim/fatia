@@ -6,7 +6,7 @@ import { Icon } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { useReducedMotion } from '@/theme/motion';
 import { useChatSnapshot } from '@/chat/chat-provider';
-import { useAiDrawer } from './ai-drawer';
+import { useAiMenu } from './ai-menu';
 import { aiLocked, aiUsable, useAiPendingCount, useChatAvailability } from './use-ai-state';
 
 /** O anel gira enquanto alguma conversa pensa; com "reduzir movimento", fica parado. */
@@ -54,7 +54,7 @@ function ThinkingRing() {
  * diz o mesmo (`aiFabLabel`).
  */
 export function AiFab() {
-  const drawer = useAiDrawer();
+  const menu = useAiMenu();
   const availability = useChatAvailability().data;
   const usable = aiUsable(availability);
   const pending = useAiPendingCount(usable).data;
@@ -73,8 +73,8 @@ export function AiFab() {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ expanded: drawer.isOpen }}
-      onPress={drawer.open}
+      accessibilityState={{ expanded: menu.isOpen }}
+      onPress={menu.isOpen ? menu.close : menu.open}
       style={{ elevation: 8 }}
       className="h-[68px] w-[68px] items-center justify-center rounded-full bg-primary active:opacity-80"
     >

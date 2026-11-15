@@ -24,7 +24,7 @@ import {
 } from './bottom-space';
 import { AiFab } from './ai-fab';
 import { AiPendingCard } from './ai-pending-card';
-import { useAiDrawer } from './ai-drawer';
+import { useAiMenu } from './ai-menu';
 import { aiUsable, useChatAvailability } from './use-ai-state';
 
 /** A sessão aberta, com a mesma chave da tela de Treino e do menu da IA. */
@@ -112,7 +112,7 @@ export function BottomNav() {
   const insets = useSafeAreaInsets();
   const { visible, workoutBar } = useBottomChrome();
   const session = useActiveSession().data ?? null;
-  const drawer = useAiDrawer();
+  const menu = useAiMenu();
   const usable = aiUsable(useChatAvailability().data);
   const active = activeNavKey(pathname);
   if (!visible) return null;
@@ -123,7 +123,7 @@ export function BottomNav() {
     <>
       {workoutBar && session ? <ActiveWorkoutBar session={session} bottom={above} /> : null}
       <AiPendingCard
-        enabled={usable && !drawer.isOpen}
+        enabled={usable && !menu.isOpen}
         bottom={above + 2 + (workoutBar ? ACTIVE_WORKOUT_BAR_HEIGHT + ACTIVE_WORKOUT_BAR_GAP : 0)}
       />
       <View

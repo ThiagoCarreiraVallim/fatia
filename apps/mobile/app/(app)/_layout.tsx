@@ -6,7 +6,7 @@ import { usersApi } from '@fatia/api-client';
 import { takePendingInvite } from '@/community/pending-invite';
 import { useAuth } from '@/auth/auth-context';
 import { BottomChromeProvider, BottomNav } from '@/components/layout/bottom-nav';
-import { AiDrawerProvider } from '@/components/layout/ai-drawer';
+import { AiMenuProvider } from '@/components/layout/ai-menu';
 import { RestTimerProvider } from '@/components/workout/session/rest-timer-provider';
 import { ConfirmProvider, LoadingState } from '@/components/ui';
 import { usePush } from '@/notifications/use-push';
@@ -75,13 +75,11 @@ export default function AppLayout() {
       <ConfirmProvider>
         <RestTimerProvider>
           <BottomChromeProvider>
-            <View className="flex-1 bg-background">
+            {/* A tela atual (o Slot) encolhe até o notch quando o menu da IA abre
+              (prancha Al-H6c5); a barra de abas some por cima dele. */}
+            <AiMenuProvider nav={<BottomNav />}>
               <Slot />
-              {/* O menu da IA envolve a nav para acertar a ordem de pintura (ver o componente). */}
-              <AiDrawerProvider>
-                <BottomNav />
-              </AiDrawerProvider>
-            </View>
+            </AiMenuProvider>
           </BottomChromeProvider>
         </RestTimerProvider>
       </ConfirmProvider>
