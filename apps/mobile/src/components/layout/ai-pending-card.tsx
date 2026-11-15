@@ -12,7 +12,11 @@ import {
   previewChatAction,
   streamChat,
   textoDeErroDoChat,
+  undoableWrite,
+  undoWrite,
   type ChatStreamError,
+  type ChatStreamFrame,
+  type UndoableWrite,
 } from '@fatia/api-client';
 import { Icon, useToast } from '@/components/ui';
 import { colors } from '@/theme/colors';
@@ -21,19 +25,24 @@ import { AI_WAITING_KEY } from './use-ai-state';
 async function approve(
   conversationId: string,
   resume: ReturnType<typeof approvalResume>,
-): Promise<void> {
+  toolCallId: string | undefined,
+): Promise<UndoableWrite | null> {
   let error: ChatStreamError | null = null;
+  const frames: ChatStreamFrame[] = [];
   for await (const frame of streamChat({ conversationId, resume })) {
     if (frame.event === 'error') error = frame.data as ChatStreamError;
+    else if (frame.event === 'updates') frames.push(frame);
   }
   if (error) throw new Error(textoDeErroDoChat(error));
+  return toolCallId ? undoableWrite(frames, toolCallId) : null;
 }
 
 /**
  * "Fatia · esperando você" — o `ai-pending-card.tsx` do PWA, mesmas regras:
  * só aprova daqui com a prévia inteira no cartão e uma escrita só
  * (`pendingCardMode`, ADR 039 §6). Conversa que andou desde a pausa (409)
- * vira "Abrir conversa". Sem "Desfazer" no aviso por ora (risco na #369).
+ * vira "Abrir conversa". Depois de gravar, o aviso "Almoço gravado" traz
+ * "Desfazer" (`undoableWrite`/`undoWrite` do api-client, iguais na web).
  */
 export function AiPendingCard({ enabled, bottom }: { enabled: boolean; bottom: number }) {
   const router = useRouter();
@@ -66,8 +75,28 @@ export function AiPendingCard({ enabled, bottom }: { enabled: boolean; bottom: n
   });
 
   const save = useMutation({
-    mutationFn: () => approve(conversationId!, approvalResume(interrupt!)),
-    onSuccess: () => toast.show({ message: `Gravado: ${confirm?.title ?? 'registro'}` }),
+    mutationFn: () => approve(conversationId!, approvalResume(interrupt!), confirm?.toolCallId),
+    onSuccess: (written) => {
+      void qc.invalidateQueries();
+      if (!written) {
+        toast.show({ message: `Gravado: ${confirm?.title ?? 'registro'}` });
+        return;
+      }
+      toast.show({
+        message: written.message,
+        action: {
+          label: 'Desfazer',
+          onPress: () => {
+            undoWrite(written)
+              .then(() => {
+                void qc.invalidateQueries();
+                toast.show({ message: 'Desfeito' });
+              })
+              .catch(() => toast.show({ message: 'Não deu para desfazer.' }));
+          },
+        },
+      });
+    },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: ['chat', 'conversations'] });
     },

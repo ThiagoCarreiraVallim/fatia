@@ -13,7 +13,11 @@ import {
   previewChatAction,
   streamChat,
   textoDeErroDoChat,
+  undoableWrite,
+  undoWrite,
   type ChatStreamError,
+  type ChatStreamFrame,
+  type UndoableWrite,
 } from '@fatia/api-client';
 import { Icon } from '@/components/ui/icon';
 import { toastDuration } from '@/components/ui/toaster';
@@ -21,19 +25,24 @@ import { cn } from '@/lib/utils';
 import { AI_WAITING_KEY } from './use-ai-state';
 
 /**
- * Responde à pausa com "Gravar assim" e lê o stream até o fim. Devolve o erro
+ * Responde à pausa com "Gravar assim" e lê o stream até o fim. Lança o erro
  * do turno, se houve: 409 quando a conversa andou desde a pausa (o agente
- * confere o `interruptId`), cota, rede.
+ * confere o `interruptId`), cota, rede. Devolve o registro criado, quando dá
+ * para desfazê-lo (`undoableWrite`).
  */
 async function approve(
   conversationId: string,
   resume: ReturnType<typeof approvalResume>,
-): Promise<void> {
+  toolCallId: string | undefined,
+): Promise<UndoableWrite | null> {
   let error: ChatStreamError | null = null;
+  const frames: ChatStreamFrame[] = [];
   for await (const frame of streamChat({ conversationId, resume })) {
     if (frame.event === 'error') error = frame.data as ChatStreamError;
+    else if (frame.event === 'updates') frames.push(frame);
   }
   if (error) throw new Error(textoDeErroDoChat(error));
+  return toolCallId ? undoableWrite(frames, toolCallId) : null;
 }
 
 /**
@@ -43,9 +52,9 @@ async function approve(
  * disso o botão principal vira "Abrir conversa". "Lembrar depois" esconde o
  * cartão desta pausa até a próxima.
  *
- * Sem "Desfazer" no toast por ora: aprovar por `resume` não devolve ao cliente
- * o id do registro criado (risco registrado na #369; vem com o "Gravado" com
- * retrato da #385).
+ * Depois de gravar, o aviso "Almoço gravado" traz "Desfazer" (5 s): o id do
+ * registro vem no resultado da tool, no próprio stream do turno, e o desfazer
+ * apaga pelo endpoint do recurso, que confere o dono pelo token.
  */
 export function AiPendingCard({ enabled, bottom }: { enabled: boolean; bottom: number }) {
   const router = useRouter();
@@ -78,9 +87,27 @@ export function AiPendingCard({ enabled, bottom }: { enabled: boolean; bottom: n
   });
 
   const save = useMutation({
-    mutationFn: () => approve(conversationId!, approvalResume(interrupt!)),
-    onSuccess: () => {
-      toast(`Gravado: ${confirm?.title ?? 'registro'}`, { duration: toastDuration(false) });
+    mutationFn: () => approve(conversationId!, approvalResume(interrupt!), confirm?.toolCallId),
+    onSuccess: (written) => {
+      void qc.invalidateQueries();
+      if (!written) {
+        toast(`Gravado: ${confirm?.title ?? 'registro'}`, { duration: toastDuration(false) });
+        return;
+      }
+      toast(written.message, {
+        duration: toastDuration(true),
+        action: {
+          label: 'Desfazer',
+          onClick: () => {
+            undoWrite(written)
+              .then(() => {
+                void qc.invalidateQueries();
+                toast('Desfeito', { duration: toastDuration(false) });
+              })
+              .catch(() => toast.error('Não deu para desfazer.'));
+          },
+        },
+      });
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: ['chat', 'conversations'] });

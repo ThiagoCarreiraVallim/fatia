@@ -4,8 +4,10 @@ import type {
   ChatConversationState,
   ChatConversationSummary,
   ChatInterruptValue,
+  ChatStreamFrame,
 } from './chat';
-import type { MealType } from './nutrition';
+import { nutritionApi, type MealType } from './nutrition';
+import { progressApi } from './progress';
 
 /**
  * O menu do botão da IA, "O que vamos registrar?" (ADR 040, prancha
@@ -278,4 +280,106 @@ export function approvalResume(interrupt: OpenInterrupt): {
     if (action.kind === 'confirm') approvals[action.toolCallId] = true;
   }
   return { interruptId: interrupt.id, value: { approvals } };
+}
+
+// ---------------------------------------------------------------- desfazer
+
+/** Escritas que o "Gravar assim" sabe desfazer: as do registro rápido. */
+export type UndoableTool = 'log_meal' | 'log_water' | 'log_weight' | 'log_steps';
+
+export interface UndoableWrite {
+  tool: UndoableTool;
+  /** Id do registro criado, como a API o devolveu no resultado da tool. */
+  id: string;
+  /** "Almoço gravado", o texto do aviso com "Desfazer". */
+  message: string;
+}
+
+const MEAL_SAVED: Record<MealType, string> = {
+  BREAKFAST: 'Café da manhã gravado',
+  LUNCH: 'Almoço gravado',
+  SNACK: 'Lanche gravado',
+  DINNER: 'Jantar gravado',
+};
+
+const SAVED: Record<Exclude<UndoableTool, 'log_meal'>, string> = {
+  log_water: 'Água gravada',
+  log_weight: 'Peso gravado',
+  log_steps: 'Passos gravados',
+};
+
+/**
+ * Onde está o id no resultado de cada tool: a refeição volta inteira; água,
+ * peso e passos voltam com o total do dia e o id do registro
+ * (`apps/api/src/progress/*-log.service.ts`).
+ */
+const ID_FIELD: Record<UndoableTool, string> = {
+  log_meal: 'id',
+  log_water: 'waterLogId',
+  log_weight: 'weightLogId',
+  log_steps: 'stepLogId',
+};
+
+const isObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
+
+function parseJson(text: unknown): unknown {
+  if (typeof text !== 'string') return null;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * O que desfazer depois de aprovar pelo cartão (prancha `Al-H6c8`: "Almoço
+ * gravado · Desfazer"). O registro criado chega no resultado da tool aprovada
+ * (`toolCallId`), dentro do quadro `updates` do próprio turno: o texto é o
+ * JSON que a API devolveu, com o id do registro. Fora das escritas conhecidas, com erro
+ * ou sem id, não há "Desfazer" (o aviso fica só "Gravado").
+ */
+export function undoableWrite(
+  frames: readonly ChatStreamFrame[],
+  toolCallId: string,
+): UndoableWrite | null {
+  for (const frame of frames) {
+    if (frame.event !== 'updates' || !isObject(frame.data)) continue;
+    for (const node of Object.values(frame.data)) {
+      const messages = isObject(node) && Array.isArray(node.messages) ? node.messages : [];
+      for (const m of messages as unknown[]) {
+        if (!isObject(m) || m.type !== 'tool' || m.tool_call_id !== toolCallId) continue;
+        if (m.status === 'error') return null;
+        const out = parseJson(m.content);
+        const tool = m.name;
+        if (!isObject(out) || typeof tool !== 'string' || !(tool in ID_FIELD)) return null;
+        const id = out[ID_FIELD[tool as UndoableTool]];
+        if (typeof id !== 'string') return null;
+        if (tool === 'log_meal') {
+          const type = out.mealType as MealType;
+          return { tool, id, message: MEAL_SAVED[type] ?? 'Refeição gravada' };
+        }
+        const t = tool as Exclude<UndoableTool, 'log_meal'>;
+        return { tool: t, id, message: SAVED[t] };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Apaga o registro que o "Gravar assim" criou. Cada endpoint confere o dono
+ * pelo token (ADR 010): um id de outra pessoa dá 404, nunca apaga.
+ */
+export function undoWrite(write: UndoableWrite): Promise<void> {
+  switch (write.tool) {
+    case 'log_meal':
+      return nutritionApi.deleteMeal(write.id);
+    case 'log_water':
+      return progressApi.deleteWater(write.id);
+    case 'log_weight':
+      return progressApi.deleteWeight(write.id);
+    case 'log_steps':
+      return progressApi.deleteStep(write.id);
+  }
 }

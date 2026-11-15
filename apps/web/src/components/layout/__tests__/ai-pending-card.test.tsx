@@ -21,6 +21,7 @@ vi.mock('@fatia/api-client', async () => {
     getConversation: vi.fn(),
     previewChatAction: vi.fn(),
     streamChat: vi.fn(),
+    undoWrite: vi.fn(),
   };
 });
 
@@ -29,6 +30,7 @@ import {
   listConversations,
   previewChatAction,
   streamChat,
+  undoWrite,
 } from '@fatia/api-client';
 
 const INTERRUPT = {
@@ -118,6 +120,48 @@ describe('AiPendingCard', () => {
     await waitFor(() =>
       expect(toast).toHaveBeenCalledWith('Gravado: Registrar refeição', expect.anything()),
     );
+  });
+
+  it('gravou a refeição: "Almoço gravado" com "Desfazer", que apaga o registro criado', async () => {
+    vi.mocked(undoWrite).mockResolvedValue(undefined);
+    vi.mocked(streamChat).mockImplementation(() =>
+      frames([
+        {
+          event: 'updates',
+          data: {
+            ferramentas: {
+              messages: [
+                {
+                  type: 'tool',
+                  name: 'log_meal',
+                  tool_call_id: 'call-9',
+                  status: 'success',
+                  content: JSON.stringify({ id: 'meal-77', mealType: 'LUNCH' }),
+                },
+              ],
+            },
+          },
+        },
+        { event: 'done', data: { status: 'completed' } },
+      ]),
+    );
+    renderCard();
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'Gravar assim' }));
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        'Almoço gravado',
+        expect.objectContaining({ action: expect.objectContaining({ label: 'Desfazer' }) }),
+      ),
+    );
+    const options = toast.mock.calls.find((c) => c[0] === 'Almoço gravado')![1] as {
+      action: { onClick: () => void };
+    };
+    options.action.onClick();
+    expect(undoWrite).toHaveBeenCalledWith({
+      tool: 'log_meal',
+      id: 'meal-77',
+      message: 'Almoço gravado',
+    });
   });
 
   it('"Responder" abre a conversa', async () => {
