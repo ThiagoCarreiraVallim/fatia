@@ -851,6 +851,37 @@ describe('isolamento entre usuários', () => {
     });
   });
 
+  describe('rascunho do onboarding (#371)', () => {
+    it('o rascunho e a etapa de um não aparecem nem mudam pelo outro', async () => {
+      await onboarding.saveProgress(
+        owned.userA,
+        { step: 'body', weightKg: 81.3, goalSource: 'team' },
+        TZ,
+      );
+      const a = await onboarding.getProgress(owned.userA);
+      expect(a).toMatchObject({ step: 'body', profile: { weightKg: 81.3 } });
+
+      const b = await onboarding.getProgress(owned.userB);
+      expect(b.step).not.toBe('body');
+      expect(b.profile.weightKg).not.toBe(81.3);
+      expect(b.draft.goalSource).toBeUndefined();
+
+      // Salvar e terminar como user-B só mexe no user-B.
+      await onboarding.saveProgress(owned.userB, { step: 'goals', weightKg: 55 }, TZ);
+      await onboarding.finish(owned.userB);
+      const depois = await prisma.user.findUniqueOrThrow({ where: { id: owned.userA } });
+      expect(depois.onboardingStep).toBe('body');
+      expect(depois.onboardingDraft).toMatchObject({ weightKg: 81.3, goalSource: 'team' });
+    });
+
+    it('o cartão "Primeiros passos" conta só as refeições de quem pede', async () => {
+      await onboarding.finish(owned.userB);
+      const passos = await onboarding.firstSteps(owned.userB, TZ);
+      // O user-A tem refeição; o user-B não.
+      expect(passos?.items.find((i) => i.key === 'meal')?.done).toBe(false);
+    });
+  });
+
   /**
    * Acesso profissional (ADR 014) — a única leitura entre contas do produto.
    *

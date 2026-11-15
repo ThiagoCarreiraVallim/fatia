@@ -62,6 +62,12 @@ export class AccountService {
         activityLevel: true,
         objective: true,
         onboardedAt: true,
+        // Retomada do onboarding (#371): a etapa, o rascunho (peso e metas ainda
+        // não confirmados) e o cartão "Primeiros passos".
+        onboardingStep: true,
+        onboardingDraft: true,
+        firstStepsSince: true,
+        firstStepsDoneAt: true,
         // Você (#387): o perfil das comunidades, as preferências e as unidades.
         // A foto entra em `mediaUploaded` (propósito `user_avatar`).
         nickname: true,
