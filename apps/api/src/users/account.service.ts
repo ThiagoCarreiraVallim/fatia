@@ -103,6 +103,8 @@ export class AccountService {
       foodPortions,
       mealTemplates,
       nutritionPlans,
+      planOffers,
+      plannedSessions,
       customExercises,
       favoriteExercises,
       workoutPlans,
@@ -193,6 +195,22 @@ export class AccountService {
           swaps: { orderBy: [{ date: 'asc' }, { createdAt: 'asc' }] },
         },
         orderBy: { sentAt: 'asc' },
+      }),
+      // Plano de treino recebido da equipe (#379): a oferta, cada versão com o
+      // retrato e a resposta, e a agenda. O autor vai pelo nome.
+      this.prisma.planOffer.findMany({
+        where: { userId },
+        omit: { authorId: true },
+        include: {
+          author: { select: { name: true } },
+          group: { select: { name: true } },
+          versions: { orderBy: { version: 'asc' } },
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.plannedSession.findMany({
+        where: { userId },
+        orderBy: [{ date: 'asc' }, { order: 'asc' }],
       }),
       this.prisma.exercise.findMany({
         where: { createdByUserId: userId },
@@ -576,6 +594,8 @@ export class AccountService {
       foodPortions,
       mealTemplates,
       nutritionPlans,
+      planOffers,
+      plannedSessions,
       customExercises,
       favoriteExercises,
       workoutPlans,
@@ -638,6 +658,9 @@ export class AccountService {
         mealTemplates: mealTemplates.length,
         nutritionPlans: nutritionPlans.length,
         nutritionSwaps: nutritionPlans.reduce((n, plan) => n + plan.swaps.length, 0),
+        planOffers: planOffers.length,
+        planOfferVersions: planOffers.reduce((n, offer) => n + offer.versions.length, 0),
+        plannedSessions: plannedSessions.length,
         customExercises: customExercises.length,
         favoriteExercises: favoriteExercises.length,
         workoutPlans: workoutPlans.length,

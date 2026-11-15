@@ -30,6 +30,8 @@ const makePrisma = () => ({
   foodPortion: { findMany: jest.fn().mockResolvedValue([]) },
   mealTemplate: { findMany: jest.fn().mockResolvedValue([]) },
   nutritionPlan: { findMany: jest.fn().mockResolvedValue([]) },
+  planOffer: { findMany: jest.fn().mockResolvedValue([]) },
+  plannedSession: { findMany: jest.fn().mockResolvedValue([]) },
   userSubscription: { findMany: jest.fn().mockResolvedValue([]) },
   groupMembership: { findMany: jest.fn().mockResolvedValue([]) },
   groupInvite: { findMany: jest.fn().mockResolvedValue([]) },
@@ -77,6 +79,9 @@ const CHAVE_NO_EXPORT: Record<string, string> = {
   mealTemplates: 'mealTemplates',
   // Plano alimentar recebido da equipe (#376): é do aluno, com as trocas e o "comi isso".
   nutritionPlans: 'nutritionPlans',
+  // Plano de treino recebido da equipe (#379), com as versões, e a agenda.
+  planOffers: 'planOffers',
+  plannedSessions: 'plannedSessions',
   customExercises: 'customExercises',
   // Favoritos de exercício (#378): o atalho que a pessoa marcou no Como fazer.
   favoriteExercises: 'favoriteExercises',
@@ -127,6 +132,9 @@ const FORA_DO_EXPORT: Record<string, string> = {
   linksAsProfessional: 'B2B: lista os PACIENTES do profissional — dado de terceiro.',
   nutritionPlansAuthored:
     'Planos alimentares que a pessoa escreveu como profissional (#376): cada um é dado do ' +
+    'aluno que o recebeu e sai no export DELE. Apagar a conta do autor só zera o autor.',
+  planOffersAuthored:
+    'Planos de treino que a pessoa ofereceu como profissional (#379): cada um é dado do ' +
     'aluno que o recebeu e sai no export DELE. Apagar a conta do autor só zera o autor.',
   aiUsage:
     'Livro-caixa da inferência que a Fatia pagou (#249): modelo e custo, nada do titular. ' +
@@ -213,6 +221,8 @@ describe('AccountService', () => {
         'inboxNotice',
         'reminder',
         'nutritionPlan',
+        'planOffer',
+        'plannedSession',
       ] as const) {
         expect(prisma[model].findMany).toHaveBeenCalledWith(
           expect.objectContaining({ where: expect.objectContaining({ userId: 'user-A' }) }),

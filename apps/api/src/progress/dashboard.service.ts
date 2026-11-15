@@ -9,7 +9,7 @@ import { TrainingBlockService } from '../workout/training-block.service';
 import { addDaysIso, dateInTz, dayBoundsInTz, todayInTz, weekStartInTz } from './helpers/date-tz';
 import { ITENS_EM_ORDEM } from '../nutrition/itens-em-ordem';
 import { computeDailyGoals } from './helpers/daily-goals';
-import type { NextEvent, ReceivedPlan, TodoSummary } from './today-contracts';
+import type { NextEvent, ReceivedPlan, TodoItem, TodoSummary } from './today-contracts';
 
 /** Janela da variação de peso que o cartão do Hoje mostra ("−2,5 em 30 dias"). */
 const WEIGHT_CHANGE_DAYS = 30;
@@ -51,6 +51,7 @@ export class DashboardService {
       nutrientTargets,
       unreadInbox,
       firstWeightInWindow,
+      pendingOffers,
     ] = await Promise.all([
       this.prisma.meal.findMany({
         // `lt`, não `lte`: o `end` do `dayBoundsInTz` é a meia-noite do dia SEGUINTE, então
@@ -116,6 +117,22 @@ export class DashboardService {
         },
         orderBy: { loggedAt: 'asc' },
         select: { id: true, weightKg: true },
+      }),
+      // Planos de treino da equipe esperando resposta (#379).
+      this.prisma.planOffer.findMany({
+        where: { userId: ctx.userId, versions: { some: { status: 'PENDING' } } },
+        select: {
+          id: true,
+          author: { select: { name: true } },
+          versions: {
+            where: { status: 'PENDING' },
+            orderBy: { version: 'desc' },
+            take: 1,
+            select: { id: true, title: true, version: true, schedule: true, weeks: true },
+          },
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: TODO_LIMIT + 1,
       }),
     ]);
 
@@ -187,8 +204,12 @@ export class DashboardService {
     // contrato já vai na resposta, e a tela some com o cartão enquanto vier vazio.
     // "Para fazer" (#383 avaliação, #379 plano a aceitar, #391 questionário),
     // treino recebido (#379) e evento do dia (#397).
-    const todo: TodoSummary = { count: 0, items: [] };
-    const receivedPlan: ReceivedPlan | null = null;
+    // O plano mais recente vai no cartão "Novo treino da Helena"; os outros, no
+    // "Para fazer" — o mesmo plano não aparece duas vezes.
+    const offers = pendingOffers.filter((o) => o.versions.length > 0);
+    const receivedPlan: ReceivedPlan | null = offers[0] ? receivedPlanOf(offers[0]) : null;
+    const todoItems = offers.slice(1, TODO_LIMIT + 1).map(planOfferTodo);
+    const todo: TodoSummary = { count: todoItems.length, items: todoItems };
     const nextEvent: NextEvent | null = null;
 
     // Só LÊ. Desbloquear aqui gravaria em `UserAchievement` no meio de um `GET` — a tool
@@ -402,4 +423,48 @@ export function nextInRotation(
   });
   const next = plans[(lastIdx + 1) % plans.length];
   return { planId: next.id, name: next.name, source: 'ROTATION' };
+}
+
+/** Quantos itens do "Para fazer" a resposta leva. */
+const TODO_LIMIT = 5;
+
+interface PendingOfferRow {
+  id: string;
+  author: { name: string } | null;
+  versions: Array<{
+    title: string;
+    version: number;
+    schedule: 'CALENDAR' | 'FLEXIBLE';
+    weeks: number | null;
+  }>;
+}
+
+const firstNameOf = (name: string | undefined) => name?.trim().split(/\s+/)[0] ?? 'equipe';
+
+/** "Inferior v2 · 4 semanas" ou "Push · flexível". */
+function offerLine(v: PendingOfferRow['versions'][number]): string {
+  const title = v.version > 1 ? `${v.title} v${v.version}` : v.title;
+  return `${title} · ${v.schedule === 'CALENDAR' && v.weeks ? `${v.weeks} semanas` : 'flexível'}`;
+}
+
+function receivedPlanOf(offer: PendingOfferRow): ReceivedPlan {
+  return {
+    id: offer.id,
+    title: `Novo treino de ${firstNameOf(offer.author?.name)}`,
+    subtitle: offerLine(offer.versions[0]!),
+    fromName: offer.author?.name ?? 'Equipe',
+    href: `/workout/offers/${offer.id}`,
+  };
+}
+
+function planOfferTodo(offer: PendingOfferRow): TodoItem {
+  const v = offer.versions[0]!;
+  const when = v.schedule === 'CALENDAR' && v.weeks ? `${v.weeks} semanas` : 'flexível';
+  return {
+    kind: 'plan_offer',
+    id: offer.id,
+    title: v.version > 1 ? `${v.title} v${v.version}` : v.title,
+    subtitle: `enviado por ${firstNameOf(offer.author?.name)} · ${when}`,
+    href: `/workout/offers/${offer.id}`,
+  };
 }
