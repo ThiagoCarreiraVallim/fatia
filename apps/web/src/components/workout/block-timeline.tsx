@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarRange } from 'lucide-react';
 import { workoutApi, type TrainingBlock, type TrainingBlockWeek } from '@fatia/api-client';
@@ -83,6 +84,12 @@ export function BlockTimeline() {
         >
           {criar.isPending ? 'MONTANDO...' : 'MONTAR BLOCO DE 4 SEMANAS'}
         </Button>
+        <Link
+          href="/workout/block"
+          className="mt-2 block text-center text-xs font-bold text-primary"
+        >
+          Outro tamanho: de 3 a 6 semanas
+        </Link>
       </div>
     );
   }

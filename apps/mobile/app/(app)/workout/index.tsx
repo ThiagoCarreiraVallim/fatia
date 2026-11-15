@@ -262,7 +262,7 @@ function BlockRow() {
             {row ? row.title : 'Periodização em blocos'}
           </Text>
           <Text className="text-xs text-muted-foreground">
-            {row ? row.detail : '4 semanas planejadas, com deload no fim'}
+            {row ? row.detail : 'de 3 a 6 semanas, com deload no fim'}
           </Text>
         </View>
         {row ? (

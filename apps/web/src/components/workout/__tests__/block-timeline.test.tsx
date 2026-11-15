@@ -137,6 +137,15 @@ describe('BlockTimeline', () => {
     await waitFor(() => expect(createBlock).toHaveBeenCalledWith({ planId: undefined }));
   });
 
+  it('leva ao bloco de 3 a 6 semanas para escolher outro tamanho (#379)', async () => {
+    getActiveBlock.mockResolvedValue(null);
+
+    renderTimeline();
+
+    const link = await screen.findByRole('link', { name: /de 3 a 6 semanas/ });
+    expect(link).toHaveAttribute('href', '/workout/block');
+  });
+
   it('periodiza o plano escolhido na tela, e não só pelo MCP', async () => {
     // Sem escolher o plano aqui, todo bloco montado pela tela nascia com
     // `planId: null` — e o `plannedToday` do dashboard nunca saía de nulo para
