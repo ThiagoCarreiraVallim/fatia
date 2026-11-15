@@ -16,6 +16,8 @@ import {
   AgentAdapter,
   AgentStreamError,
   type AgentCapabilities,
+  type AgentLabel,
+  type AgentLabelReading,
   type AgentMealRecognition,
   type AgentRecognizedItem,
   type AgentStream,
@@ -23,6 +25,7 @@ import {
   type AgentTranscription,
   type AgentUsage,
   type TurnInput,
+  withSpentUsage,
 } from './agent.adapter';
 
 /**
@@ -332,6 +335,33 @@ export class HttpAgentAdapter extends AgentAdapter {
     };
   }
 
+  /** A tabela nutricional (#375). Mesmo transporte e mesmo silêncio de identidade da foto. */
+  async readLabel(jpeg: Buffer): Promise<AgentLabelReading> {
+    const base = this.requireBase('photo');
+    const timeout = Number(this.config.get<string>('AGENT_TIMEOUT_MS', '')) || PHOTO_TIMEOUT_MS;
+    const http = await this.send('photo', `${base}/read-label`, {
+      method: 'POST',
+      headers: {
+        ...this.keyHeader(),
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ image_base64: jpeg.toString('base64'), media_type: 'image/jpeg' }),
+      signal: AbortSignal.timeout(timeout),
+    });
+
+    const body = (await http.json().catch(() => null)) as {
+      label?: unknown;
+      usage?: unknown;
+    } | null;
+    if (typeof body?.label !== 'object' || body.label === null) {
+      throw new BadGatewayException(
+        `A leitura do rótulo devolveu uma resposta inesperada. ${FEATURE_TEXT.photo.fallback}`,
+      );
+    }
+    return { label: body.label as AgentLabel, usage: readUsage(body.usage) };
+  }
+
   async sendFeedback(
     runId: string,
     review: 'like' | 'dislike' | null,
@@ -390,8 +420,16 @@ export class HttpAgentAdapter extends AgentAdapter {
   private async translateError(feature: Feature, http: Response): Promise<HttpException> {
     const body = (await http.json().catch(() => null)) as {
       error?: { code?: string };
+      usage?: unknown;
     } | null;
-    const code = body?.error?.code ?? '';
+    const exception = this.exceptionFor(feature, http, body?.error?.code ?? '');
+    // A chamada chegou ao provedor (o agente devolve o consumo no corpo do erro):
+    // o custo segue com a exceção para a cota.
+    const spent = readUsage(body?.usage);
+    return spent ? withSpentUsage(exception, spent) : exception;
+  }
+
+  private exceptionFor(feature: Feature, http: Response, code: string): HttpException {
     this.logger.warn(`Agente respondeu ${http.status} (${code || 'sem code'})`);
 
     const byCode = BY_CODE[code];

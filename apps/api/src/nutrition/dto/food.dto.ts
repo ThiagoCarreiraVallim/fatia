@@ -5,11 +5,14 @@ import {
   IsEnum,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -90,6 +93,21 @@ export class CreateCustomFoodDto {
   @ValidateNested({ each: true })
   @Type(() => CreateFoodPortionDto)
   portions?: CreateFoodPortionDto[];
+
+  /**
+   * Micronutrientes por 100 g, na mesma base dos macros (#375):
+   * `{ "fiber_g": 9, "sodium_mg": 112 }`. Chave e valor conferidos no service,
+   * que a tool MCP também usa.
+   */
+  @IsOptional()
+  @IsObject()
+  nutrients?: Record<string, number>;
+
+  /** Código de barras ligado pela pessoa (EAN/UPC, só dígitos). Único entre os alimentos dela. */
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{8,14}$/, { message: 'Código de barras: de 8 a 14 dígitos.' })
+  barcode?: string;
 }
 
 export class UpdateCustomFoodDto {
@@ -121,4 +139,17 @@ export class UpdateCustomFoodDto {
   @IsNumber()
   @Min(0)
   fatPer100g?: number;
+
+  /** `null` apaga todos os micronutrientes; um objeto troca o mapa inteiro. */
+  @IsOptional()
+  @ValidateIf((_o, value) => value !== null)
+  @IsObject()
+  nutrients?: Record<string, number> | null;
+
+  /** `null` desliga o código do alimento. */
+  @IsOptional()
+  @ValidateIf((_o, value) => value !== null)
+  @IsString()
+  @Matches(/^\d{8,14}$/, { message: 'Código de barras: de 8 a 14 dígitos.' })
+  barcode?: string | null;
 }

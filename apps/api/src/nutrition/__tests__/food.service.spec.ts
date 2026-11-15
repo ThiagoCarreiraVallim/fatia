@@ -476,4 +476,172 @@ describe('FoodService', () => {
       expect(prisma.foodGroup.findMany).toHaveBeenCalledWith({ orderBy: { name: 'asc' } });
     });
   });
+  // #375: micronutrientes e código de barras no alimento próprio.
+  describe('micronutrientes e código de barras (#375)', () => {
+    const base = {
+      name: 'Granola da casa',
+      kcalPer100g: 450,
+      proteinPer100g: 10,
+      carbsPer100g: 60,
+      fatPer100g: 18,
+    };
+    const p2002Barcode = new Prisma.PrismaClientKnownRequestError('dup', {
+      code: 'P2002',
+      clientVersion: 'x',
+      meta: { target: ['createdByUserId', 'barcode'] },
+    });
+
+    it('grava micronutrientes por 100 g e o código na criação', async () => {
+      prisma.food.create.mockResolvedValue(makeFood({ source: FoodSource.CUSTOM }));
+
+      await service.createCustom(userId, {
+        ...base,
+        nutrients: { fiber_g: 9, sodium_mg: 112.5 },
+        barcode: '7891000100103',
+      });
+
+      const data = prisma.food.create.mock.calls[0][0].data;
+      expect(data.nutrients).toEqual({ fiber_g: 9, sodium_mg: 112.5 });
+      expect(data.barcode).toBe('7891000100103');
+    });
+
+    it('micronutriente com chave fora do formato: 400', async () => {
+      await expect(
+        service.createCustom(userId, { ...base, nutrients: { 'Fibra!': 3 } }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.food.create).not.toHaveBeenCalled();
+    });
+
+    it('micronutriente negativo ou não finito: 400', async () => {
+      for (const value of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+        await expect(
+          service.createCustom(userId, { ...base, nutrients: { fiber_g: value } }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      }
+    });
+
+    it('micronutriente em gramas acima do peso do alimento: 400', async () => {
+      await expect(
+        service.createCustom(userId, { ...base, nutrients: { fiber_g: 120 } }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('código que não é EAN/UPC: 400', async () => {
+      await expect(
+        service.createCustom(userId, { ...base, barcode: '12ab' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('código já ligado a outro alimento da pessoa: 409 que fala do código, não do nome', async () => {
+      prisma.food.create.mockRejectedValue(p2002Barcode);
+
+      const err = await service
+        .createCustom(userId, { ...base, barcode: '7891000100103' })
+        .catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(ConflictException);
+      expect((err as ConflictException).message).toMatch(/código de barras/);
+    });
+
+    it('editar: troca o código, apaga com null e limpa os micronutrientes com null', async () => {
+      prisma.food.findUnique.mockResolvedValue(
+        makeFood({ source: FoodSource.CUSTOM, createdByUserId: userId }),
+      );
+      prisma.food.update.mockResolvedValue(makeFood({ source: FoodSource.CUSTOM }));
+
+      await service.updateCustom(userId, 1, { barcode: null, nutrients: null });
+
+      const data = prisma.food.update.mock.calls[0][0].data;
+      expect(data.barcode).toBeNull();
+      expect(data.nutrients).toBe(Prisma.DbNull);
+    });
+
+    it('editar com código repetido: 409', async () => {
+      prisma.food.findUnique.mockResolvedValue(
+        makeFood({ source: FoodSource.CUSTOM, createdByUserId: userId }),
+      );
+      prisma.food.update.mockRejectedValue(p2002Barcode);
+
+      await expect(
+        service.updateCustom(userId, 1, { barcode: '7891000100103' }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('findByBarcode procura só nos alimentos próprios da pessoa', async () => {
+      prisma.food.findFirst.mockResolvedValue(null);
+
+      await expect(service.findByBarcode(userId, '7891000100103')).resolves.toBeNull();
+
+      expect(prisma.food.findFirst.mock.calls[0][0].where).toEqual({
+        source: FoodSource.CUSTOM,
+        createdByUserId: userId,
+        barcode: '7891000100103',
+      });
+      // EAN-13 que já é canônico não muda.
+    });
+
+    it('findByBarcode com código inválido nem consulta o banco', async () => {
+      await expect(service.findByBarcode(userId, '../x')).resolves.toBeNull();
+      expect(prisma.food.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('P2002 sem os campos no meta: consulta qual conflito existe de fato', async () => {
+      const semAlvo = new Prisma.PrismaClientKnownRequestError('dup', {
+        code: 'P2002',
+        clientVersion: 'x',
+        meta: {},
+      });
+      prisma.food.create.mockRejectedValue(semAlvo);
+      // Há um alimento da pessoa com esse código: o conflito é o código.
+      prisma.food.findFirst.mockResolvedValueOnce({ id: 77 });
+
+      const err = await service
+        .createCustom(userId, { ...base, barcode: '7891000100103' })
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ConflictException);
+      expect((err as ConflictException).message).toMatch(/código de barras/);
+      expect(prisma.food.findFirst.mock.calls[0][0].where).toMatchObject({
+        createdByUserId: userId,
+        barcode: '7891000100103',
+      });
+
+      // Sem alimento com o código: era o nome.
+      prisma.food.findFirst.mockResolvedValueOnce(null);
+      const err2 = await service
+        .createCustom(userId, { ...base, barcode: '7891000100103' })
+        .catch((e: unknown) => e);
+      expect((err2 as ConflictException).message).toMatch(/chamado/);
+    });
+
+    describe('código canônico (GTIN-13)', () => {
+      it('UPC-A de 12 dígitos é gravado com o zero do EAN-13', async () => {
+        prisma.food.create.mockResolvedValue(makeFood({ source: FoodSource.CUSTOM }));
+        await service.createCustom(userId, { ...base, barcode: '012345678905' });
+        expect(prisma.food.create.mock.calls[0][0].data.barcode).toBe('0012345678905');
+      });
+
+      it('GTIN-14 com zero na frente vira o EAN-13; EAN-8 fica como está', async () => {
+        prisma.food.create.mockResolvedValue(makeFood({ source: FoodSource.CUSTOM }));
+        await service.createCustom(userId, { ...base, barcode: '07891000100103' });
+        await service.createCustom(userId, { ...base, barcode: '96385074' });
+        expect(prisma.food.create.mock.calls[0][0].data.barcode).toBe('7891000100103');
+        expect(prisma.food.create.mock.calls[1][0].data.barcode).toBe('96385074');
+      });
+
+      it('editar grava o código canônico', async () => {
+        prisma.food.findUnique.mockResolvedValue(
+          makeFood({ source: FoodSource.CUSTOM, createdByUserId: userId }),
+        );
+        prisma.food.update.mockResolvedValue(makeFood({ source: FoodSource.CUSTOM }));
+        await service.updateCustom(userId, 1, { barcode: '012345678905' });
+        expect(prisma.food.update.mock.calls[0][0].data.barcode).toBe('0012345678905');
+      });
+
+      it('a busca pelo UPC-A acha o EAN-13 guardado', async () => {
+        prisma.food.findFirst.mockResolvedValue(null);
+        await service.findByBarcode(userId, '012345678905');
+        expect(prisma.food.findFirst.mock.calls[0][0].where.barcode).toBe('0012345678905');
+      });
+    });
+  });
 });

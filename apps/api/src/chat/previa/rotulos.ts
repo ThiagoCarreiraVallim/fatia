@@ -309,6 +309,12 @@ export const CAMPOS: Record<string, Campo> = {
   proteinPer100g: { rotulo: 'Proteína em 100 g', formato: comUnidade('g') },
   carbsPer100g: { rotulo: 'Carboidrato em 100 g', formato: comUnidade('g') },
   fatPer100g: { rotulo: 'Gordura em 100 g', formato: comUnidade('g') },
+  // O código que a pessoa vincula ao próprio alimento (#375): quem confirma vê o número.
+  // `null` no update_custom_food desfaz o vínculo.
+  barcode: {
+    rotulo: 'Código de barras',
+    formato: (valor, ctx) => (valor === null ? 'tirar o vínculo' : texto(valor, ctx)),
+  },
   kcalMin: { rotulo: 'Calorias mínimas', formato: comUnidade('kcal', 0) },
   kcalMax: { rotulo: 'Calorias máximas', formato: comUnidade('kcal', 0) },
   proteinMinG: { rotulo: 'Proteína mínima', formato: comUnidade('g', 0) },

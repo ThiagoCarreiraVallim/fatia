@@ -129,4 +129,50 @@ describe('NutrientTargetService', () => {
       expect(where.meal.userId).toBe(userId);
     });
   });
+
+  describe('chave do nutriente (#375)', () => {
+    const base = { label: 'Vitamina C', unit: 'mg', min: 90 };
+
+    it('vira o formato dos micronutrientes do alimento: "Vitamina-C" → "vitamina_c"', async () => {
+      prisma.nutrientTarget.upsert.mockResolvedValue({});
+      await service.upsert(userId, { ...base, nutrientKey: ' Vitamina-C ' });
+      const args = prisma.nutrientTarget.upsert.mock.calls[0][0];
+      expect(args.where.userId_nutrientKey.nutrientKey).toBe('vitamina_c');
+      expect(args.create.nutrientKey).toBe('vitamina_c');
+    });
+
+    it('acento sai e o que não é letra ou número vira _', async () => {
+      prisma.nutrientTarget.upsert.mockResolvedValue({});
+      await service.upsert(userId, { ...base, nutrientKey: 'Ácido fólico (µg)' });
+      expect(prisma.nutrientTarget.upsert.mock.calls[0][0].create.nutrientKey).toBe(
+        'acido_folico_g',
+      );
+    });
+
+    it('chave sem nenhuma letra ou número: 400', async () => {
+      await expect(service.upsert(userId, { ...base, nutrientKey: '!!!' })).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('apagar acha a chave antiga, gravada antes da normalização', async () => {
+      prisma.nutrientTarget.findUnique.mockResolvedValueOnce({ id: 't' });
+      prisma.nutrientTarget.delete.mockResolvedValue({});
+      await service.delete(userId, 'Vitamina-C');
+      expect(
+        prisma.nutrientTarget.delete.mock.calls[0][0].where.userId_nutrientKey.nutrientKey,
+      ).toBe('Vitamina-C');
+    });
+
+    it('apagar pela chave digitada acha a normalizada', async () => {
+      prisma.nutrientTarget.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 't' });
+      prisma.nutrientTarget.delete.mockResolvedValue({});
+      await service.delete(userId, 'Vitamina-C');
+      expect(
+        prisma.nutrientTarget.delete.mock.calls[0][0].where.userId_nutrientKey.nutrientKey,
+      ).toBe('vitamina_c');
+    });
+  });
 });

@@ -127,7 +127,8 @@ def test_a_superficie_e_so_diagnostico_mais_as_rotas_de_inferencia(settings_fact
     A #134 não expunha rota de inferência nenhuma; a #139 expôs uma e a #248
     expõe a segunda (`/chat`); o `/title` nomeia a conversa (ADR 023) e o
     `/transcribe` é o ditado do chat (#141); o `/feedback` leva o voto ao trace
-    do Langfuse (ADR 034) e não infere nada, mas também exige a chave. Todas são
+    do Langfuse (ADR 034) e não infere nada, mas também exige a chave; o
+    `/read-label` lê o rótulo (#375), com a mesma chave do `/recognize-meal`. Todas são
     autenticadas por segredo compartilhado (ver `test_recognize_meal.py`,
     `chat/test_chat_route.py` e `chat/test_titulo.py`). Rota de inferência
     **anônima** seria um proxy aberto para o gateway pago — a fronteira de custo
@@ -145,6 +146,7 @@ def test_a_superficie_e_so_diagnostico_mais_as_rotas_de_inferencia(settings_fact
         "/health",
         "/capabilities",
         "/recognize-meal",
+        "/read-label",
         "/chat",
         "/title",
         "/transcribe",

@@ -138,6 +138,8 @@ export interface ScannedMealItem {
   proteinG: number;
   carbsG: number;
   fatG: number;
+  /** Item lido por código ou rótulo: pinta a origem na refeição (#374). */
+  source: 'BARCODE';
 }
 
 /**
@@ -155,7 +157,7 @@ export interface ScannedMealItem {
 export function mealItemFromProduct(product: ScannedProduct, amount: number): ScannedMealItem {
   const preview = productPreview(product, amount);
   if (preview === null) throw new Error('Quantidade inválida');
-  return { foodName: productName(product), grams: amount, ...preview };
+  return { foodName: productName(product), grams: amount, ...preview, source: 'BARCODE' };
 }
 
 const FIELD_LABEL: Record<string, string> = {
@@ -285,7 +287,7 @@ export function mealItemFromProductForm(values: ProductForm): ScannedMealItem | 
   const preview = productPreview(per100, amount);
   if (preview === null) return null;
 
-  return { foodName: clampName(name), grams: amount, ...preview };
+  return { foodName: clampName(name), grams: amount, ...preview, source: 'BARCODE' };
 }
 
 /** Teto da medida na API (`FoodPortion.grams`). */
@@ -314,6 +316,9 @@ export function customFoodFromProduct(product: ScannedProduct): CustomFoodParse 
   if (parsed.ok && serving !== null && serving > 0 && serving <= MAX_SERVING_GRAMS) {
     parsed.input.portions = [{ label: 'porção', grams: serving }];
   }
+  // Guardar é escolha explícita, e o código vai junto: a próxima leitura acha
+  // este alimento antes do Open Food Facts (#375, ADR 017).
+  if (parsed.ok && isValidBarcode(product.barcode)) parsed.input.barcode = product.barcode;
   return parsed;
 }
 
@@ -357,9 +362,11 @@ export function findSavedProduct<T extends Pick<Food, 'name'>>(
 export function savedProductItem(
   food: Pick<Food, 'id' | 'portions'>,
   grams: number,
-): { foodId: number; grams: number } | { foodId: number; portionId: string; quantity: number } {
+):
+  | { foodId: number; grams: number; source: 'BARCODE' }
+  | { foodId: number; portionId: string; quantity: number; source: 'BARCODE' } {
   const portion = food.portions?.find((p) => p.grams === grams);
   return portion
-    ? { foodId: food.id, portionId: portion.id, quantity: 1 }
-    : { foodId: food.id, grams };
+    ? { foodId: food.id, portionId: portion.id, quantity: 1, source: 'BARCODE' }
+    : { foodId: food.id, grams, source: 'BARCODE' };
 }

@@ -37,6 +37,9 @@ export abstract class AgentAdapter {
   /** Foto JPEG já sem metadados → alimentos candidatos (#139). */
   abstract recognizeMeal(jpeg: Buffer): Promise<AgentMealRecognition>;
 
+  /** Foto JPEG já sem metadados da tabela nutricional → valores lidos (#375). */
+  abstract readLabel(jpeg: Buffer): Promise<AgentLabelReading>;
+
   /** O voto de uma resposta, para o trace do turno (ADR 034). **Nunca lança.** */
   abstract sendFeedback(
     runId: string,
@@ -96,6 +99,22 @@ export type TurnInput = {
 /** O que uma chamada consumiu, como o agente reportou. Unidade ausente é custo não medido. */
 export type AgentUsage = { model: string; inputUnits?: number; outputUnits?: number };
 
+/**
+ * O consumo de uma chamada que **chegou ao provedor e falhou depois** (o rótulo
+ * que veio fora de forma, #375). O provedor cobrou; o erro leva o custo até
+ * `HostedAiService`, que o lança na cota antes de repassar o erro.
+ */
+const SPENT = new WeakMap<object, AgentUsage>();
+
+export function withSpentUsage<E extends object>(error: E, usage: AgentUsage): E {
+  SPENT.set(error, usage);
+  return error;
+}
+
+export function spentUsage(error: unknown): AgentUsage | null {
+  return typeof error === 'object' && error !== null ? (SPENT.get(error) ?? null) : null;
+}
+
 /** O que o chat desta instância sabe fazer além de texto. */
 export type AgentCapabilities = { vision: boolean; transcription: boolean };
 
@@ -123,3 +142,23 @@ export type AgentMealRecognition = {
   note: string | null;
   usage: AgentUsage | null;
 };
+
+/**
+ * A tabela nutricional como o modelo a leu (#375). Espelha
+ * `schemas/label_reading.py`. `per` diz a base dos números: a coluna "100 g"
+ * quando o rótulo a tem, senão a da porção. Campo ilegível vem `null`.
+ */
+export interface AgentLabel {
+  name: string | null;
+  per: 'serving' | '100g';
+  serving_grams: number | null;
+  kcal: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  fiber_g: number | null;
+  sodium_mg: number | null;
+  note: string | null;
+}
+
+export type AgentLabelReading = { label: AgentLabel; usage: AgentUsage | null };

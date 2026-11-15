@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import { MessageRole } from '@prisma/client';
-import { AgentStreamError } from '../agent.adapter';
+import { AgentStreamError, spentUsage } from '../agent.adapter';
 import { HttpAgentAdapter } from '../http-agent.adapter';
 
 /**
@@ -517,6 +517,77 @@ describe('HttpAgentAdapter.recognizeMeal', () => {
       ServiceUnavailableException,
     );
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe('HttpAgentAdapter.readLabel (#375)', () => {
+  const LIDO = {
+    name: 'Iogurte',
+    per: '100g',
+    serving_grams: 170,
+    kcal: 51,
+    protein_g: 4.1,
+    carbs_g: 5.3,
+    fat_g: 3,
+    fiber_g: null,
+    sodium_mg: 60,
+    note: null,
+  };
+
+  it('manda só a foto e o formato para /read-label, sem identidade', async () => {
+    dublarFetch(json({ label: LIDO, usage: null }));
+
+    await montar({ AGENT_API_KEY: 'segredo-do-compose' }).readLabel(JPEG);
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://agent.local:8100/read-label');
+    const enviado = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(Object.keys(enviado).sort()).toEqual(['image_base64', 'media_type']);
+    expect(Object.keys(init.headers as Record<string, string>).sort()).toEqual([
+      'Accept',
+      'Content-Type',
+      'X-Fatia-Agent-Key',
+    ]);
+  });
+
+  it('devolve o rótulo e o usage', async () => {
+    dublarFetch(
+      json({ label: LIDO, usage: { model: 'z-ai/glm-5.3-flash', inputUnits: 9, outputUnits: 2 } }),
+    );
+
+    await expect(montar().readLabel(JPEG)).resolves.toEqual({
+      label: LIDO,
+      usage: { model: 'z-ai/glm-5.3-flash', inputUnits: 9, outputUnits: 2 },
+    });
+  });
+
+  it('resposta sem `label` vira 502', async () => {
+    dublarFetch(json({ items: [] }));
+
+    await expect(montar().readLabel(JPEG)).rejects.toBeInstanceOf(BadGatewayException);
+  });
+
+  it('502 de formato traz o consumo da chamada, para a cota contar', async () => {
+    dublarFetch(
+      json(
+        {
+          error: { code: 'AI_RESPONSE_UNPARSEABLE', message: 'x' },
+          usage: { model: 'z-ai/glm-5.3-flash', inputUnits: 900, outputUnits: 20 },
+        },
+        502,
+      ),
+    );
+
+    const erro = await montar()
+      .readLabel(JPEG)
+      .catch((e: unknown) => e);
+
+    expect(erro).toBeInstanceOf(Error);
+    expect(spentUsage(erro)).toEqual({
+      model: 'z-ai/glm-5.3-flash',
+      inputUnits: 900,
+      outputUnits: 20,
+    });
   });
 });
 

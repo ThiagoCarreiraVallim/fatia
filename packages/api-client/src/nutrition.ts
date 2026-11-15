@@ -24,6 +24,10 @@ export interface Food {
   createdByUserId: string | null;
   /** Catálogo + as da pessoa. A API sempre manda; opcional para alimento montado à mão. */
   portions?: FoodPortion[];
+  /** Micronutrientes por 100 g: `{ "fiber_g": 2.7, "sodium_mg": 1 }`. */
+  nutrients?: Record<string, number> | null;
+  /** Código de barras que a pessoa ligou ao alimento próprio (#375). */
+  barcode?: string | null;
 }
 
 /** O que cria um alimento próprio: valores sempre por 100 g. */
@@ -35,6 +39,36 @@ export interface CustomFoodInput {
   fatPer100g: number;
   /** A porção do rótulo, só na criação: no PATCH as medidas têm rota própria. */
   portions?: Array<{ label: string; grams: number }>;
+  /** Micronutrientes por 100 g, na mesma base dos macros (#375). */
+  nutrients?: Record<string, number>;
+  /** EAN/UPC, só dígitos. Único entre os alimentos da pessoa (409 se repetir). */
+  barcode?: string;
+}
+
+/** O PATCH do alimento próprio: `null` apaga micronutrientes ou desliga o código. */
+export type CustomFoodPatch = Partial<
+  Omit<CustomFoodInput, 'portions' | 'nutrients' | 'barcode'>
+> & {
+  nutrients?: Record<string, number> | null;
+  barcode?: string | null;
+};
+
+/**
+ * A tabela nutricional lida pela IA (#375). **Nada foi gravado**: vira alimento
+ * só quando a pessoa confere e salva. `null` = não lido, nunca zero.
+ */
+export interface LabelReading {
+  name: string | null;
+  /** `100g`: valores da coluna por 100 g; `serving`: por porção de `servingGrams`. */
+  basis: 'serving' | '100g';
+  servingGrams: number | null;
+  kcal: number | null;
+  proteinG: number | null;
+  carbsG: number | null;
+  fatG: number | null;
+  fiberG: number | null;
+  sodiumMg: number | null;
+  note: string | null;
 }
 
 /** Alimento da busca com o histórico da pessoa: o atalho que poupa digitar. */
@@ -91,6 +125,8 @@ export interface OffAttribution {
 }
 
 export type BarcodeLookup =
+  /** A pessoa ligou este código a um alimento seu (#375): o OFF nem é consultado. */
+  | { status: 'own'; food: Food }
   | { status: 'ok'; product: ScannedProduct; attribution: OffAttribution }
   | {
       status: 'incomplete';
@@ -319,7 +355,7 @@ export const nutritionApi = {
   /** Nome repetido responde 409; valores fora do possível em 100 g, 400. */
   createCustomFood: (body: CustomFoodInput) =>
     apiFetch<Food>('/api/nutrition/foods', { method: 'POST', body: JSON.stringify(body) }),
-  updateCustomFood: (id: number, body: Partial<Omit<CustomFoodInput, 'portions'>>) =>
+  updateCustomFood: (id: number, body: CustomFoodPatch) =>
     apiFetch<Food>(`/api/nutrition/foods/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   /** As refeições já registradas guardam nome e valores; só o alimento some. */
   deleteCustomFood: (id: number) =>
@@ -340,6 +376,19 @@ export const nutritionApi = {
    */
   lookupBarcode: (code: string) =>
     apiFetch<BarcodeLookup>(`/api/nutrition/foods/barcode/${encodeURIComponent(code)}`),
+
+  /**
+   * Foto da tabela nutricional (JPEG em base64) → valores para conferir (#375).
+   * **Não grava nada e a foto não fica.** PRO: no Free responde 402
+   * (`AI_PLAN_REQUIRED`), e a tela mostra o "Meu plano" de sempre.
+   */
+  readLabel: (jpegBase64: string) =>
+    apiFetch<LabelReading>('/api/nutrition/foods/label', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: jpegBase64,
+      timeoutMs: 190_000,
+    }),
 
   /**
    * Se a entrada por foto deve aparecer na interface (#139).

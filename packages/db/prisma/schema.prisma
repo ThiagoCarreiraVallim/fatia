@@ -339,6 +339,10 @@ model Food {
   // teclado do celular ninguém acentua. Mantido por `FoodService`; ver
   // `apps/api/src/common/search-text.ts`.
   searchName      String     @default("")
+  /// Código de barras (EAN/UPC, só dígitos) que a pessoa ligou ao alimento
+  /// próprio (#375). É escolha dela, não cache do Open Food Facts (ADR 017):
+  /// só `CUSTOM` tem, e é único por dono, para a leitura achar um alimento só.
+  barcode         String?
   createdAt       DateTime   @default(now())
 
   group           FoodGroup?                @relation(fields: [groupId], references: [id])
@@ -353,6 +357,7 @@ model Food {
   // Unicidade por (nome, source) só para públicos. Customs podem repetir nomes
   // entre usuários — unicidade real é (nome, source, createdByUserId).
   @@unique([name, source, createdByUserId])
+  @@unique([createdByUserId, barcode])
   @@index([searchName])
   @@index([name])
   @@index([source])

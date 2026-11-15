@@ -71,7 +71,7 @@ interface Escolha {
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  resultado: BarcodeLookup;
+  resultado: Exclude<BarcodeLookup, { status: 'own' }>;
   /** Com `mealId`, adiciona à refeição. Sem ele, cria uma refeição nova. */
   mealId?: string;
   mealType?: MealType;
@@ -446,7 +446,7 @@ function OpcaoDeGuardar({
         <Text className="text-sm text-foreground">Guardar em Meus alimentos</Text>
       </Pressable>
       <Text className="text-xs text-muted-foreground">
-        Na próxima vez, ele aparece na busca sem precisar escanear.
+        Fica ligado a este código: na próxima leitura, ele vem de Meus alimentos.
       </Text>
       {cadastro && !cadastro.ok ? (
         <Text accessibilityRole="alert" className="text-xs text-destructive">

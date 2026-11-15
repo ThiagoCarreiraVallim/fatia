@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  customFoodPatch,
   customFoodToForm,
   emptyCustomFoodForm,
   nutritionApi,
@@ -43,7 +44,9 @@ export function CustomFoodDrawer({ open, onOpenChange, food }: Props) {
 
   const save = useMutation<Food, Error, CustomFoodInput>({
     mutationFn: (input) =>
-      food ? nutritionApi.updateCustomFood(food.id, input) : nutritionApi.createCustomFood(input),
+      food
+        ? nutritionApi.updateCustomFood(food.id, customFoodPatch(input))
+        : nutritionApi.createCustomFood(input),
     onSuccess: done,
   });
 

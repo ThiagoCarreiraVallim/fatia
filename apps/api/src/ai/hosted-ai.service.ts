@@ -5,14 +5,17 @@ import type { AiCallUnits } from './ai-pricing';
 import {
   AgentAdapter,
   type AgentCapabilities,
+  type AgentLabel,
+  type AgentLabelReading,
   type AgentMealRecognition,
   type AgentStream,
   type AgentUsage,
   type TurnInput,
+  spentUsage,
 } from './agent.adapter';
 
 /** O que vai em `AiUsage.feature`. */
-type AiFeature = 'chat' | 'chat_title' | 'transcription' | 'meal_photo';
+type AiFeature = 'chat' | 'chat_title' | 'transcription' | 'meal_photo' | 'label_photo';
 
 /**
  * A IA hospedada, num lugar só: **portão de plano e cota → quem paga → agente →
@@ -94,6 +97,26 @@ export class HostedAiService {
     const { items, note, usage } = await this.agent.recognizeMeal(jpeg);
     await this.record(userId, payer, 'meal_photo', ...modelAndUnits(usage));
     return { items, note };
+  }
+
+  /**
+   * Foto JPEG já sem metadados da tabela nutricional → valores lidos (#375).
+   * Não grava nada: a pessoa confere e salva pelo caminho do alimento próprio.
+   */
+  async readLabel(userId: string, jpeg: Buffer): Promise<AgentLabel> {
+    const payer = await this.gate(userId);
+    let reading: AgentLabelReading;
+    try {
+      reading = await this.agent.readLabel(jpeg);
+    } catch (error) {
+      // O provedor respondeu fora de forma e cobrou: sem isto, foto ilegível
+      // repetida seria inferência de graça, fora da cota.
+      const spent = spentUsage(error);
+      if (spent) await this.record(userId, payer, 'label_photo', ...modelAndUnits(spent));
+      throw error;
+    }
+    await this.record(userId, payer, 'label_photo', ...modelAndUnits(reading.usage));
+    return reading.label;
   }
 
   /**

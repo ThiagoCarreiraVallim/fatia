@@ -50,15 +50,73 @@ function assertPlausible(values: Per100g): void {
   }
 }
 
+/** Chave de `Food.nutrients`: a mesma forma de `NutrientTarget.nutrientKey` ("sodium_mg"). */
+const NUTRIENT_KEY = /^[a-z0-9_]{1,40}$/;
+const MAX_NUTRIENTS = 40;
+/** Teto de quem não é em gramas (mg, mcg…): 100 g de sal têm 39 300 mg de sódio. */
+const MAX_NUTRIENT_OTHER = 1_000_000;
+/** Mesma regra de `isValidBarcode` (api-client) e do Open Food Facts. */
+const BARCODE = /^\d{8,14}$/;
+
+/**
+ * Micronutrientes por 100 g (#375), validados aqui e não só no DTO: a tool MCP
+ * grava pelo mesmo método. Nutriente em gramas não pesa mais que o alimento.
+ */
+function validNutrients(nutrients: Record<string, unknown>): Record<string, number> {
+  const entries = Object.entries(nutrients);
+  if (entries.length > MAX_NUTRIENTS) {
+    throw new BadRequestException(`No máximo ${MAX_NUTRIENTS} micronutrientes por alimento.`);
+  }
+  const out: Record<string, number> = {};
+  for (const [key, value] of entries) {
+    if (!NUTRIENT_KEY.test(key)) {
+      throw new BadRequestException(`Micronutriente "${key}" fora do formato (ex.: fiber_g).`);
+    }
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+      throw new BadRequestException(`Valor inválido para ${key}.`);
+    }
+    const max = key.endsWith('_g') ? MAX_MACROS_PER_100G : MAX_NUTRIENT_OTHER;
+    if (value > max) throw new BadRequestException(`${key} passa do possível em 100 g.`);
+    out[key] = value;
+  }
+  return out;
+}
+
+function assertBarcode(code: string): void {
+  if (!BARCODE.test(code)) throw new BadRequestException('Código de barras: de 8 a 14 dígitos.');
+}
+
+/**
+ * O código na forma em que é guardado e procurado: o UPC-A de 12 dígitos e o
+ * GTIN-14 que começa com zero são o mesmo produto do EAN-13, e a câmera lê um ou
+ * outro conforme o leitor. Tudo de 12 a 14 dígitos vira GTIN-13 quando cabe; o
+ * EAN-8 fica como está.
+ */
+export function canonicalBarcode(code: string): string {
+  if (code.length < 12) return code;
+  const gtin14 = code.padStart(14, '0');
+  return gtin14.startsWith('0') ? gtin14.slice(1) : gtin14;
+}
+
 function trimmedName(name: string): string {
   const trimmed = name.trim();
   if (!trimmed) throw new BadRequestException('Dê um nome ao alimento.');
   return trimmed;
 }
 
-/** A única unique de `Food` que a pessoa alcança é `[name, source, createdByUserId]`. */
-function isDuplicateName(err: unknown): boolean {
-  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
+/**
+ * As uniques de `Food` que a pessoa alcança: `[name, source, createdByUserId]` e
+ * `[createdByUserId, barcode]`. A corrida de dois toques em "Salvar" cai aqui
+ * também, e vira 409, não 500.
+ */
+function uniqueViolation(err: unknown): 'barcode' | 'name' | 'unknown' | null {
+  if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== 'P2002') return null;
+  const target = err.meta?.target;
+  const fields = Array.isArray(target) ? target.map(String) : [String(target ?? '')];
+  if (fields.some((field) => field.includes('barcode'))) return 'barcode';
+  if (fields.some((field) => field.includes('name'))) return 'name';
+  // Alguns drivers não dizem o índice: quem decide é a consulta em `duplicateOr`.
+  return 'unknown';
 }
 
 @Injectable()
@@ -116,6 +174,9 @@ export class FoodService {
   async createCustom(userId: string, dto: CreateCustomFoodDto): Promise<FoodWithPortions> {
     const name = trimmedName(dto.name);
     assertPlausible(dto);
+    const nutrients = dto.nutrients ? validNutrients(dto.nutrients) : undefined;
+    if (dto.barcode) assertBarcode(dto.barcode);
+    const barcode = dto.barcode ? canonicalBarcode(dto.barcode) : undefined;
     await this.assertGroupExists(dto.groupId);
 
     const food = await this.prisma.food
@@ -130,6 +191,8 @@ export class FoodService {
           proteinPer100g: dto.proteinPer100g,
           carbsPer100g: dto.carbsPer100g,
           fatPer100g: dto.fatPer100g,
+          ...(nutrients && Object.keys(nutrients).length ? { nutrients } : {}),
+          ...(barcode ? { barcode } : {}),
           ...(dto.portions?.length
             ? {
                 portions: {
@@ -144,8 +207,8 @@ export class FoodService {
         },
         include: includePortions(userId),
       })
-      .catch((err: unknown) => {
-        throw this.duplicateOr(err, name);
+      .catch(async (err: unknown) => {
+        throw await this.duplicateOr(err, userId, name, barcode);
       });
     return withPortionViews(food, userId);
   }
@@ -170,18 +233,33 @@ export class FoodService {
       carbsPer100g: dto.carbsPer100g ?? food.carbsPer100g,
       fatPer100g: dto.fatPer100g ?? food.fatPer100g,
     });
+    if (dto.barcode) assertBarcode(dto.barcode);
     await this.assertGroupExists(dto.groupId);
+
+    const { nutrients, barcode: rawBarcode, ...rest } = dto;
+    const barcode =
+      rawBarcode === undefined || rawBarcode === null ? rawBarcode : canonicalBarcode(rawBarcode);
+    const data: Prisma.FoodUncheckedUpdateInput = {
+      ...rest,
+      ...(barcode !== undefined ? { barcode } : {}),
+      // `searchName` acompanha o nome — se ficar para trás, a busca continua
+      // achando o alimento pelo nome antigo e não pelo novo.
+      ...(name ? { name, searchName: normalizeSearchText(name) } : {}),
+    };
+    if (nutrients === null) data.nutrients = Prisma.DbNull;
+    else if (nutrients !== undefined) {
+      const valid = validNutrients(nutrients);
+      data.nutrients = Object.keys(valid).length ? valid : Prisma.DbNull;
+    }
 
     const updated = await this.prisma.food
       .update({
         where: { id },
-        // `searchName` acompanha o nome — se ficar para trás, a busca continua
-        // achando o alimento pelo nome antigo e não pelo novo.
-        data: { ...dto, ...(name ? { name, searchName: normalizeSearchText(name) } : {}) },
+        data,
         include: includePortions(userId),
       })
-      .catch((err: unknown) => {
-        throw this.duplicateOr(err, name ?? food.name);
+      .catch(async (err: unknown) => {
+        throw await this.duplicateOr(err, userId, name ?? food.name, barcode ?? undefined, id);
       });
     return withPortionViews(updated, userId);
   }
@@ -212,10 +290,54 @@ export class FoodService {
     if (!group) throw new BadRequestException('Grupo de alimento inexistente.');
   }
 
-  private duplicateOr(err: unknown, name: string): unknown {
-    return isDuplicateName(err)
-      ? new ConflictException(`Você já tem um alimento chamado "${name}".`)
-      : err;
+  private async duplicateOr(
+    err: unknown,
+    userId: string,
+    name: string,
+    barcode?: string,
+    exceptId?: number,
+  ): Promise<unknown> {
+    let kind = uniqueViolation(err);
+    if (kind === 'unknown') {
+      // O meta não disse qual índice: o código só conflita se outro alimento da
+      // pessoa já o tem. Senão, a única outra unique alcançável é o nome.
+      const holder = barcode
+        ? await this.prisma.food.findFirst({
+            where: {
+              createdByUserId: userId,
+              barcode,
+              ...(exceptId !== undefined ? { NOT: { id: exceptId } } : {}),
+            },
+            select: { id: true },
+          })
+        : null;
+      kind = holder ? 'barcode' : 'name';
+    }
+    switch (kind) {
+      case 'barcode':
+        return new ConflictException('Esse código de barras já está em outro alimento seu.');
+      case 'name':
+        return new ConflictException(`Você já tem um alimento chamado "${name}".`);
+      default:
+        return err;
+    }
+  }
+
+  /**
+   * O alimento próprio que a pessoa ligou a este código, ou `null` (#375). Só os
+   * dela: o código de outra conta não é achado nem confirmado.
+   */
+  async findByBarcode(userId: string, code: string): Promise<FoodWithPortions | null> {
+    if (!BARCODE.test(code)) return null;
+    const food = await this.prisma.food.findFirst({
+      where: {
+        source: FoodSource.CUSTOM,
+        createdByUserId: userId,
+        barcode: canonicalBarcode(code),
+      },
+      include: includePortions(userId),
+    });
+    return food ? withPortionViews(food, userId) : null;
   }
 
   async listGroups() {

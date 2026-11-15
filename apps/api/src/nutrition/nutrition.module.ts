@@ -8,6 +8,7 @@ import { FoodShortcutsService } from './food-shortcuts.service';
 import { FoodPortionService } from './food-portion.service';
 import { InferenceThrottlerGuard } from './inference-throttler.guard';
 import { MealRecognitionService } from './meal-recognition.service';
+import { LabelReadingService } from './label-reading.service';
 import { AiModule } from '../ai/ai.module';
 import { StorageModule } from '../storage/storage.module';
 import { OffFoodService } from './off-food.service';
@@ -87,6 +88,7 @@ const parseFotoBase64 = text({ type: 'text/plain', limit: TETO_DA_FOTO_BASE64 })
     FoodPortionService,
     InferenceThrottlerGuard,
     MealRecognitionService,
+    LabelReadingService,
     OffFoodService,
     MealService,
     MealItemService,
@@ -168,7 +170,9 @@ export class NutritionModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
     consumer
       .apply((req: Request, res: Response, next: NextFunction) => {
-        if (!req.path.endsWith('/meals/recognize')) return next();
+        if (!req.path.endsWith('/meals/recognize') && !req.path.endsWith('/foods/label')) {
+          return next();
+        }
         parseFotoBase64(req, res, next);
       })
       .forRoutes(NutritionController);

@@ -62,7 +62,7 @@ Igual à tabela da #370. A coluna "Migração em" diz qual PR cria a tabela ou a
 | Cota diária da IA                               | uso do dia por pessoa (pode ficar só no servidor)                                                              | #385, #386           | **nenhuma** — derivada de `AiUsage` (abaixo)                   |
 | Circuito                                        | formato (AMRAP, EMOM, Tabata, For Time), duração, trabalho/descanso, rounds, exercícios                        | #380                 | #380                                                           |
 | Humor do treino (observação com atalhos)        | observação da sessão                                                                                           | #377                 | **nenhuma** — é `WorkoutSession.notes` (abaixo)                |
-| Origem do alimento (selo)                       | TACO / código de barras / seu                                                                                  | #375                 | **nenhuma** — `Food.source` + selo da sessão (abaixo)          |
+| Origem do alimento (selo)                       | TACO / seu (o código fica em `Food.barcode`, só no alimento da pessoa)                                         | #375                 | `Food.barcode` opcional, único por pessoa (abaixo)             |
 | Marca da comunidade                             | cor, capa, textos, página de boas-vindas                                                                       | #372, #410           | #372 (cor e capa), #410 (páginas)                              |
 | Enquete, comunicado, "Para você"                | mural                                                                                                          | #394                 | #394                                                           |
 | Desafio com check-in por foto, pontos e revisão | tipos, pontuação, revisão pela equipe                                                                          | #395                 | #395 ([ADR 044](./ADR/044-desafios-com-revisao.md))            |
@@ -97,11 +97,12 @@ Migração destrutiva exige ADR.
   mensagens restantes". Sem tabela nova.
 - **Humor do treino.** "Como foi o treino?" grava em `WorkoutSession.notes`; os atalhos (emoji e
   frases) só preenchem o texto (#377). Sem coluna nova.
-- **Origem do alimento.** O selo lê `Food.source` (`TACO`, `CUSTOM` = "seu"). O selo "código de
-  barras" é só do resultado da sessão, que não é guardado; o alimento criado a partir do código ou da
-  foto do rótulo nasce `CUSTOM` ([ADR 017](./ADR/017-open-food-facts-para-industrializado.md),
-  nota do redesign). `USDA` continua no enum sem uso ([ADR 005](./ADR/005-taco-sem-usda-v1.md)).
-  Guardar o selo exigiria migração e revisão da ADR 017.
+- **Origem do alimento.** O selo lê `Food.source` (`TACO`, `CUSTOM` = "seu"). O produto lido no
+  Open Food Facts não é guardado e não aparece na busca, então não há selo "código de barras". O
+  código que a pessoa vincula ao próprio alimento mora em `Food.barcode` (opcional, único por
+  pessoa; migração `20261115110000_custom_food_barcode`), e o leitor procura nele primeiro
+  ([ADR 017](./ADR/017-open-food-facts-para-industrializado.md), atualização #375). `USDA` continua
+  no enum sem uso ([ADR 005](./ADR/005-taco-sem-usda-v1.md)).
 
 ### Telas sem prancha
 
@@ -126,7 +127,7 @@ schema; a issue da tela usa o campo indicado.
 | Série de cardio               | Cardio                             | `SessionSet.durationSeconds`, `distanceMeters`, `avgHeartRate`, `kcalBurned`        | #377, #381 |
 | Conquistas                    | Conquistas, Progresso              | `UserAchievement` (`key`, `unlockedAt`, `context`)                                  | #382       |
 | Bloco de treino               | Periodização                       | `TrainingBlock` (`kind`, `weeksTotal`, `status`) + `TrainingBlockWeek`              | #379       |
-| Origem do alimento            | Adicionar item                     | `Food.source` + selo de sessão para código de barras (§2)                           | #375       |
+| Origem do alimento            | Adicionar item                     | `Food.source`; `Food.barcode` no alimento da pessoa (§2)                            | #375       |
 | Como foi o treino             | Fim do treino                      | `WorkoutSession.notes`                                                              | #377       |
 | Favorito de exercício         | Como fazer                         | não existe: favorito só de alimento (`FavoriteFood`)                                | #378       |
 | Tipo de comunidade            | Criar comunidade, Checklist        | `GroupType`, `GroupVisibility`, `JoinPolicy`, `PostPolicy`, `requiredSharingScopes` | #372       |

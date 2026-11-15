@@ -6,19 +6,19 @@
 
 ## Dados do usuário
 
-| Dado                                                                                              | Onde     | Retenção                                                                                                                                                               |
-| ------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Perfil (`User`)                                                                                   | Postgres | Enquanto a conta existir                                                                                                                                               |
-| Metas de macros (`UserGoals`)                                                                     | Postgres | Enquanto a conta existir                                                                                                                                               |
-| Metas de nutrientes (`NutrientTarget`)                                                            | Postgres | Enquanto a conta existir                                                                                                                                               |
-| Plano alimentar recebido e trocas (`NutritionPlan` e filhos, `NutritionSwap`, `NutritionPlanLog`) | Postgres | É do aluno: enquanto a conta dele existir, entra no export e sai com a exclusão. Se quem escreveu apaga a conta, o plano fica sem autor (`authorId` nulo). Ver ADR 045 |
-| Metas pessoais (`Goal`)                                                                           | Postgres | Enquanto a conta existir                                                                                                                                               |
-| Refeições e itens (`Meal`, `MealItem`)                                                            | Postgres | Enquanto a conta existir                                                                                                                                               |
-| Alimentos custom (`Food` com `createdByUserId`)                                                   | Postgres | Enquanto a conta existir                                                                                                                                               |
-| Exercícios custom (`Exercise` com `createdByUserId`)                                              | Postgres | Enquanto a conta existir                                                                                                                                               |
-| Planos, sessões e séries de treino                                                                | Postgres | Enquanto a conta existir                                                                                                                                               |
-| Peso, passos, hidratação                                                                          | Postgres | Enquanto a conta existir                                                                                                                                               |
-| Assinatura do plano (`UserSubscription`)                                                          | Postgres | Enquanto a conta existir                                                                                                                                               |
+| Dado                                                                                                                   | Onde     | Retenção                                                                                                                                                               |
+| ---------------------------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Perfil (`User`)                                                                                                        | Postgres | Enquanto a conta existir                                                                                                                                               |
+| Metas de macros (`UserGoals`)                                                                                          | Postgres | Enquanto a conta existir                                                                                                                                               |
+| Metas de nutrientes (`NutrientTarget`)                                                                                 | Postgres | Enquanto a conta existir                                                                                                                                               |
+| Plano alimentar recebido e trocas (`NutritionPlan` e filhos, `NutritionSwap`, `NutritionPlanLog`)                      | Postgres | É do aluno: enquanto a conta dele existir, entra no export e sai com a exclusão. Se quem escreveu apaga a conta, o plano fica sem autor (`authorId` nulo). Ver ADR 045 |
+| Metas pessoais (`Goal`)                                                                                                | Postgres | Enquanto a conta existir                                                                                                                                               |
+| Refeições e itens (`Meal`, `MealItem`)                                                                                 | Postgres | Enquanto a conta existir                                                                                                                                               |
+| Alimentos custom (`Food` com `createdByUserId`), com micronutrientes e o código de barras que a pessoa vinculou (#375) | Postgres | Enquanto a conta existir; saem no export (todas as colunas) e vão com a conta. O código é da pessoa, não é cache do Open Food Facts (ADR 017)                          |
+| Exercícios custom (`Exercise` com `createdByUserId`)                                                                   | Postgres | Enquanto a conta existir                                                                                                                                               |
+| Planos, sessões e séries de treino                                                                                     | Postgres | Enquanto a conta existir                                                                                                                                               |
+| Peso, passos, hidratação                                                                                               | Postgres | Enquanto a conta existir                                                                                                                                               |
+| Assinatura do plano (`UserSubscription`)                                                                               | Postgres | Enquanto a conta existir                                                                                                                                               |
 
 **Não há expiração automática.** O histórico é o produto: um registro de peso de dois anos atrás
 é exatamente o que dá valor ao gráfico de progresso. Apagar por idade seria destruir a
@@ -173,12 +173,13 @@ retenção zero (ver adiante). Ligar isso na instância oficial continua depende
 consentimento específico. Aqui o conteúdo sai do dispositivo, atravessa o `apps/api`, vai ao
 `apps/agent` e de lá ao provedor, pelo OpenRouter. É este caminho que a tabela abaixo descreve.
 
-| Capacidade                  | O que vai ao provedor                                                                        | Persistido?                                 |
-| --------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| Visão — registro por foto   | a imagem do prato, reencodada em JPEG **sem EXIF**, e o prompt                               | **não**                                     |
-| Texto — chat                | a mensagem, as últimas falas da conversa, os resultados das tools lidas, as memórias, o fuso | a conversa, sim — em `Message`; ver adiante |
-| Visão — foto no chat        | tudo o que o texto leva, mais até três fotos da mensagem, recodificadas **sem EXIF**         | **não** — só quantas foram                  |
-| Transcrição — ditado (#141) | o áudio gravado e o formato dele                                                             | **não** — só a duração, como custo          |
+| Capacidade                  | O que vai ao provedor                                                                        | Persistido?                                       |
+| --------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| Visão — registro por foto   | a imagem do prato, reencodada em JPEG **sem EXIF**, e o prompt                               | **não**                                           |
+| Texto — chat                | a mensagem, as últimas falas da conversa, os resultados das tools lidas, as memórias, o fuso | a conversa, sim — em `Message`; ver adiante       |
+| Visão — rótulo (#375)       | a foto da tabela nutricional, reencodada em JPEG **sem EXIF**, e o prompt                    | **não** — só o custo em `AiUsage` (`label_photo`) |
+| Visão — foto no chat        | tudo o que o texto leva, mais até três fotos da mensagem, recodificadas **sem EXIF**         | **não** — só quantas foram                        |
+| Transcrição — ditado (#141) | o áudio gravado e o formato dele                                                             | **não** — só a duração, como custo                |
 
 A linha do chat é diferente das outras, e é por isso que ela está escrita por extenso: para
 responder "o que eu comi ontem", o modelo **precisa ver** o que a pessoa comeu ontem. O resultado
@@ -281,7 +282,8 @@ nada pessoal: sem o `userId`, sobra um custo e um nome de modelo. Pelo mesmo mot
 
 ## Consulta ao Open Food Facts (scanner de código de barras)
 
-O scanner (do app nativo e do PWA) consulta o [Open Food Facts](https://world.openfoodfacts.org) para descobrir
+O scanner (do app nativo e do PWA) procura o código primeiro nos alimentos da própria pessoa (o
+vínculo que ela fez, #375); só se não achar consulta o [Open Food Facts](https://world.openfoodfacts.org) para descobrir
 o produto embalado a partir do código lido. É a **única transferência de dado para terceiro** no
 fluxo de nutrição, e por isso está descrita aqui item a item. Decisão em
 [ADR 017](./ADR/017-open-food-facts-para-industrializado.md).
