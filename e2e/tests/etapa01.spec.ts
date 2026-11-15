@@ -150,6 +150,16 @@ test('#369 cards do carrossel de Treino e treino em andamento', async ({ page })
   await page.goto('/workout');
   await snap(page, 'e1-treino-cards', false);
   expect(await axe(page, 'treino')).toEqual([]);
+
+  // A figura do corpo cabe ao lado do texto: o diagrama de antes, 128 px numa
+  // caixa de 64, passava por cima do título e das linhas.
+  const card = page.getByRole('region', { name: 'Seus músculos hoje' });
+  if (await appears(card)) {
+    const figure = await card.getByRole('img').first().boundingBox();
+    const legend = await card.getByRole('list', { name: 'Legenda' }).boundingBox();
+    expect(figure && legend).toBeTruthy();
+    expect(figure!.x + figure!.width).toBeLessThanOrEqual(legend!.x);
+  }
 });
 
 test('#370 metas (estado de objetivo pessoal)', async ({ page }) => {

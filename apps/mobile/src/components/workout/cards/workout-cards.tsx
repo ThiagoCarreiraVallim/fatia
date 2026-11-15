@@ -4,12 +4,9 @@ import { Text } from '@/components/ui/text';
 import { useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  daysAgoLabel,
   formatDecimal,
   lastSessionSummary,
   lastWorkoutWhen,
-  muscleGroupLabel,
-  musclesOfGroups,
   restedHeadline,
   weeklySetsBars,
   workoutApi,
@@ -17,7 +14,7 @@ import {
   type WorkoutSession,
 } from '@fatia/api-client';
 import { Carousel, LoadingState } from '@/components/ui';
-import { MuscleDiagram } from '@/components/workout/muscle-diagram';
+import { BodySilhouette, BodyToneLegend } from './body-silhouette';
 
 /**
  * Os cards da aba Treino (prancha `Al-T-Cards-treino`) — réplica de
@@ -98,21 +95,16 @@ function RestedMusclesCard({ summary }: { summary: WeeklyMuscleSummary }) {
   const router = useRouter();
   const start = useStartPlan();
   const plan = summary.suggestedPlan;
-  const groups = summary.rested.map((r) => r.group);
   return (
     <Card label="Seus músculos hoje">
       <Eyebrow>Seus músculos hoje</Eyebrow>
       <View className="flex-row items-center gap-3.5">
-        <MuscleDiagram primaryMuscles={musclesOfGroups(groups)} view="front" width={64} />
-        <View className="min-w-0 flex-1 gap-1.5">
+        <BodySilhouette rested={summary.rested} />
+        <View className="min-w-0 flex-1 gap-2">
           <Text className="font-sans-bold text-base text-foreground">
             {restedHeadline(summary.rested)}
           </Text>
-          {summary.rested.slice(0, 3).map((r) => (
-            <Text key={r.group} className="text-[13px] text-muted-foreground">
-              {muscleGroupLabel(r.group)} · {daysAgoLabel(r.daysSince)}
-            </Text>
-          ))}
+          <BodyToneLegend />
         </View>
       </View>
       <View className="mt-auto flex-row gap-2">

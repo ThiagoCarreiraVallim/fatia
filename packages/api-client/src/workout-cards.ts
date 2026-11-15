@@ -32,6 +32,32 @@ export function musclesOfGroups(groups: readonly StrengthMuscleGroup[]): string[
   return groups.flatMap((g) => MUSCLES_OF_GROUP[g]);
 }
 
+/**
+ * O tom de cada grupo na silhueta do card: descansado (3+ dias ou sem treino
+ * recente), recuperando (2 dias) e recente (ontem ou hoje — o grupo nem está
+ * na lista de descansados da API).
+ */
+export type MuscleTone = 'rested' | 'recovering' | 'recent';
+
+export function bodyTones(
+  rested: readonly RestedMuscle[],
+): Record<StrengthMuscleGroup, MuscleTone> {
+  const tones = Object.fromEntries(
+    (Object.keys(GROUP_LABEL) as StrengthMuscleGroup[]).map((g) => [g, 'recent']),
+  ) as Record<StrengthMuscleGroup, MuscleTone>;
+  for (const r of rested) {
+    tones[r.group] = r.daysSince === null || r.daysSince >= 3 ? 'rested' : 'recovering';
+  }
+  return tones;
+}
+
+/** A legenda de pontos ao lado da silhueta (prancha `Al-T-Cards-treino`). */
+export const MUSCLE_TONE_LEGEND: readonly { tone: MuscleTone; label: string }[] = [
+  { tone: 'rested', label: 'descansado' },
+  { tone: 'recovering', label: 'há 2 dias' },
+  { tone: 'recent', label: 'ontem ou hoje' },
+];
+
 /** "há 3 dias", "ontem", "sem treino recente". */
 export function daysAgoLabel(days: number | null): string {
   if (days === null) return 'sem treino recente';

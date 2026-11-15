@@ -3,12 +3,9 @@
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  daysAgoLabel,
   formatDecimal,
   lastSessionSummary,
   lastWorkoutWhen,
-  muscleGroupLabel,
-  musclesOfGroups,
   restedHeadline,
   weeklySetsBars,
   workoutApi,
@@ -17,7 +14,7 @@ import {
 } from '@fatia/api-client';
 import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MuscleDiagram } from '@/components/workout/muscle-diagram';
+import { BodySilhouette, BodyToneLegend } from './body-silhouette';
 import { cn } from '@/lib/utils';
 
 const card = 'flex h-full flex-col gap-3.5 rounded-3xl bg-card p-[18px]';
@@ -44,25 +41,16 @@ function useStartPlan() {
 export function RestedMusclesCard({ summary }: { summary: WeeklyMuscleSummary }) {
   const start = useStartPlan();
   const plan = summary.suggestedPlan;
-  const groups = summary.rested.map((r) => r.group);
   return (
     <section aria-label="Seus músculos hoje" className={card}>
       <h3 className={eyebrow}>Seus músculos hoje</h3>
       <div className="flex items-center gap-3.5">
-        <div className="w-16 shrink-0">
-          <MuscleDiagram primaryMuscles={musclesOfGroups(groups)} view="front" />
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <BodySilhouette rested={summary.rested} />
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
           <p className="text-base font-bold leading-snug text-foreground">
             {restedHeadline(summary.rested)}
           </p>
-          <ul className="flex flex-col gap-1">
-            {summary.rested.slice(0, 3).map((r) => (
-              <li key={r.group} className="text-[13px] text-muted-foreground">
-                {muscleGroupLabel(r.group)} · {daysAgoLabel(r.daysSince)}
-              </li>
-            ))}
-          </ul>
+          <BodyToneLegend />
         </div>
       </div>
       <div className="mt-auto flex gap-2">

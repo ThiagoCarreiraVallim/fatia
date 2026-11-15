@@ -74,7 +74,16 @@ describe('cards da aba Treino', () => {
 
     const descansados = await screen.findByRole('region', { name: 'Seus músculos hoje' });
     expect(within(descansados).getByText('Costas e braços descansados')).toBeVisible();
-    expect(within(descansados).getByText('Costas · há 4 dias')).toBeVisible();
+    // Silhueta da prancha, nas cores do DS, com os dias por extenso para quem não vê.
+    expect(
+      within(descansados).getByRole('img', { name: /Costas · há 4 dias, Braços · há 3 dias/ }),
+    ).toBeVisible();
+    const legenda = within(descansados).getByRole('list', { name: 'Legenda' });
+    expect(
+      within(legenda)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual(['descansado', 'há 2 dias', 'ontem ou hoje']);
     expect(within(descansados).getByRole('button', { name: 'Pull' })).toBeVisible();
     expect(within(descansados).getByRole('link', { name: 'Outro plano' })).toHaveAttribute(
       'href',

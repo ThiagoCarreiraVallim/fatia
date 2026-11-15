@@ -58,3 +58,28 @@ describe('cards da aba Treino', () => {
     expect(lastWorkoutWhen(new Date(2026, 10, 10, 8, 0).toISOString(), now)).toBe('há 4 dias');
   });
 });
+
+describe('silhueta do card "Seus músculos hoje"', () => {
+  it('pinta cada grupo pelo descanso: 3+ dias ou nunca, 2 dias, e ontem/hoje', async () => {
+    const { bodyTones } = await import('../workout-cards');
+    const tones = bodyTones([
+      { group: 'costas', daysSince: null },
+      { group: 'pernas', daysSince: 5 },
+      { group: 'peito', daysSince: 2 },
+    ]);
+    expect(tones).toEqual({
+      costas: 'rested',
+      pernas: 'rested',
+      peito: 'recovering',
+      // Fora da lista de descansados: treinado ontem ou hoje.
+      ombro: 'recent',
+      braço: 'recent',
+      core: 'recent',
+    });
+  });
+
+  it('a legenda tem um ponto por tom, na ordem da prancha', async () => {
+    const { MUSCLE_TONE_LEGEND } = await import('../workout-cards');
+    expect(MUSCLE_TONE_LEGEND.map((l) => l.tone)).toEqual(['rested', 'recovering', 'recent']);
+  });
+});
