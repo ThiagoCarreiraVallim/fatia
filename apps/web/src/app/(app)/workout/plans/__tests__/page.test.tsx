@@ -156,11 +156,11 @@ describe('PlansPage', () => {
     );
     expect(screen.getByRole('link', { name: /Modelos das comunidades/ })).toHaveAttribute(
       'href',
-      '/community',
+      '/workout/templates',
     );
     expect(screen.getByRole('link', { name: /Bloco de semanas/ })).toHaveAttribute(
       'href',
-      '/workout#bloco',
+      '/workout/block',
     );
   });
 
