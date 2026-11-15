@@ -1,4 +1,5 @@
 import LogtoClient, { handleSignIn } from '@logto/next/server-actions';
+import { Prompt } from '@logto/next';
 import { NextRequest, NextResponse } from 'next/server';
 import { logtoConfig } from '@/lib/logto';
 import { NEXT_COOKIE, NEXT_COOKIE_MAX_AGE_S, SOCIAL_TARGETS, safeNextPath } from '@/lib/next-path';
@@ -35,11 +36,16 @@ export async function GET(request: NextRequest, ctx: RouteContext) {
     const social = request.nextUrl.searchParams.get('social');
     const target = SOCIAL_TARGETS.find((t) => t === social);
     const email = request.nextUrl.searchParams.get('email')?.trim() ?? '';
+    // "Criar conta" e o "Entrar" com e-mail ignoram a sessão que o Logto ainda
+    // guarda no navegador: sem isto o cadastro entrava direto na conta aberta.
+    // O `consent` fica porque é ele que libera o refresh token.
+    const freshLogin = firstScreen === 'register' || EMAIL.test(email);
     const { url } = await client.handleSignIn({
       redirectUri: `${logtoConfig.baseUrl}/api/logto/callback`,
       firstScreen,
       ...(EMAIL.test(email) ? { loginHint: email } : {}),
       ...(target ? { directSignIn: { method: 'social' as const, target } } : {}),
+      ...(freshLogin ? { prompt: [Prompt.Login, Prompt.Consent] } : {}),
     });
     const resposta = NextResponse.redirect(url);
     // O nome digitado em "Criar conta": o onboarding lê, grava no perfil e apaga.

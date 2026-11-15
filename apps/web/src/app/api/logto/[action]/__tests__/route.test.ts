@@ -100,4 +100,21 @@ describe('/api/logto/[action]', () => {
     );
     expect(handleSignInClient.mock.lastCall?.[0]).not.toHaveProperty('loginHint');
   });
+
+  it('criar conta ou entrar com e-mail ignora a sessão aberta no Logto', async () => {
+    await GET(
+      new NextRequest('http://localhost:3030/api/logto/sign-in?tela=cadastro'),
+      ctx('sign-in'),
+    );
+    expect(handleSignInClient.mock.lastCall?.[0]).toMatchObject({ prompt: ['login', 'consent'] });
+
+    await GET(
+      new NextRequest('http://localhost:3030/api/logto/sign-in?email=bia%40email.com'),
+      ctx('sign-in'),
+    );
+    expect(handleSignInClient.mock.lastCall?.[0]).toMatchObject({ prompt: ['login', 'consent'] });
+
+    await GET(new NextRequest('http://localhost:3030/api/logto/sign-in'), ctx('sign-in'));
+    expect(handleSignInClient.mock.lastCall?.[0]).not.toHaveProperty('prompt');
+  });
 });
