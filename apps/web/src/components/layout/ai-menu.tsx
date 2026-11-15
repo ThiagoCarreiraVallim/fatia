@@ -319,7 +319,7 @@ export function AiMenuStage({
         width: vp.width - (shown ? 2 * frame.inset : 0),
         height: shown ? frame.height : vp.height,
         borderRadius: shown ? frame.radius : 0,
-        boxShadow: shown ? '0 0 0 1px rgba(255,255,255,.06)' : '0 0 0 0 rgba(0,0,0,0)',
+        boxShadow: shown ? '0 0 0 1px hsl(var(--border-subtle))' : '0 0 0 0 transparent',
         transition: reduced
           ? 'none'
           : ['top', 'left', 'width', 'height', 'border-radius', 'box-shadow']
