@@ -94,3 +94,25 @@ padrões desta ADR, sem mudar nenhum item:
   `Onb-03` (#371).
 - **Foto de desafio é outra regra:** prova de check-in vista só pela equipe que revisa, com prazo
   próprio ([ADR 044](./044-desafios-com-revisao.md)). Ela não entra nesta categoria.
+
+## Nota — implementação (#374, 2026-11-15)
+
+O que entrou, sem mudar a decisão:
+
+- `Meal.photoFileId` aponta para um `MediaFile` privado (`purpose = meal_photo`, chave
+  `users/{userId}/{id}.webp`), reencodado em WebP sem EXIF pelo mesmo pipeline do avatar. Uma foto
+  por refeição; não há trocar, só "Apagar só a foto" (`DELETE /api/nutrition/meals/:id/photo` e a
+  tool MCP `delete_meal_photo`).
+- A foto é guardada **no reconhecimento** só com `keepMealPhotos = true`, e fica sem dono até a
+  refeição nova chegar com `photoFileId`. A faxina apaga a foto que não virou refeição em até
+  2 h (1 h de prazo + o intervalo da faxina). Com a preferência `null` ou `false`, nada é guardado.
+- A preferência continua a coluna `keepMealPhotos` da #387 (o rascunho falava em
+  `storeMealPhotos`). O app pergunta na primeira foto; o PWA não tem câmera de refeição.
+- Só refeição **nova** recebe a foto. Foto tirada para somar itens a uma refeição que já existe é
+  descartada (sem a pergunta de qual foto vale).
+- `ShareScope.MEAL_PHOTOS` existe e nunca vem junto de `NUTRITION`; a leitura da equipe registra
+  `ProfessionalAccessLog` como as outras categorias.
+- O export LGPD leva os metadados da foto; o link de baixar leva URL assinada de 24 h. A foto sai do
+  bucket ao apagar a foto, a refeição ou a conta.
+- `MealItem.source` (`MANUAL`, `AI`, `PLAN`, `BARCODE`) pinta o selo "IA". As tools MCP de refeição
+  gravam `AI` quando a origem não vem.
