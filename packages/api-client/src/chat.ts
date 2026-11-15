@@ -495,9 +495,18 @@ export function stopChatRun(conversationId: string): Promise<void> {
 
 // ---------------------------------------------------------------- conversas
 
+/**
+ * O que a conversa está fazendo agora, para o botão da IA e o menu (ADR 040):
+ * `thinking` = tem resposta correndo no servidor; `waiting` = parou numa pausa
+ * (confirmação ou pergunta) que só a pessoa destrava; `idle` = nada pendente.
+ */
+export type ChatConversationState = 'idle' | 'thinking' | 'waiting';
+
 export interface ChatConversationSummary {
   id: string;
   title: string | null;
+  /** Ausente em API antiga: trate como `idle`. */
+  state?: ChatConversationState;
   /** A comunidade cujo agente conduz a conversa; `null` é o assistente da Fatia. */
   agentGroupId?: string | null;
   createdAt: string;
@@ -629,9 +638,32 @@ export function transcribeAudio(audio: Blob): Promise<{ text: string }> {
   });
 }
 
-export function listConversations(busca?: string): Promise<ChatConversationSummary[]> {
-  const termo = busca?.trim();
-  return apiFetch(`/api/chat/conversations${termo ? `?q=${encodeURIComponent(termo)}` : ''}`);
+export interface ListConversationsOptions {
+  q?: string;
+  state?: ChatConversationState;
+  limit?: number;
+}
+
+/**
+ * As conversas da pessoa, mais recentes primeiro. Aceita a busca como texto
+ * (forma antiga) ou as opções do menu da IA (`state`, `limit`).
+ */
+export function listConversations(
+  opts?: string | ListConversationsOptions,
+): Promise<ChatConversationSummary[]> {
+  const o: ListConversationsOptions = typeof opts === 'string' ? { q: opts } : (opts ?? {});
+  const params = new URLSearchParams();
+  const term = o.q?.trim();
+  if (term) params.set('q', term);
+  if (o.state) params.set('state', o.state);
+  if (o.limit !== undefined) params.set('limit', String(o.limit));
+  const qs = params.toString();
+  return apiFetch(`/api/chat/conversations${qs ? `?${qs}` : ''}`);
+}
+
+/** Quantas conversas esperam a pessoa: o selo do botão da IA. */
+export function getPendingConversationsCount(): Promise<{ waiting: number; thinking: number }> {
+  return apiFetch('/api/chat/conversations/pending-count');
 }
 
 export function getConversation(id: string): Promise<ChatConversation> {

@@ -51,5 +51,30 @@ export default defineConfig({
         storageState: STORAGE_STATE,
       },
     },
+    // Tema claro (ADR 041): a auditoria de acessibilidade roda de novo com o
+    // sistema no claro — contraste é o que mais muda entre os temas. O do
+    // celular roda também com "reduzir movimento", que zera as animações do DS.
+    {
+      name: 'mobile-light',
+      dependencies: ['setup'],
+      testMatch: /(a11y|etapa01-telas)\.spec\.ts/,
+      use: {
+        ...devices['Pixel 7'],
+        colorScheme: 'light',
+        contextOptions: { reducedMotion: 'reduce' },
+        storageState: STORAGE_STATE,
+      },
+    },
+    {
+      name: 'desktop-light',
+      dependencies: ['setup'],
+      testMatch: /(a11y|etapa01-telas)\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1440, height: 900 },
+        colorScheme: 'light',
+        storageState: STORAGE_STATE,
+      },
+    },
   ],
 });

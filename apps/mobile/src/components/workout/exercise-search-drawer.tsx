@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react-native';
 import { workoutApi, type Exercise } from '@fatia/api-client';
@@ -13,7 +14,7 @@ import {
   DrawerTextInput,
   DrawerTitle,
 } from '@/components/ui';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 import { CommunityBadge, MyGymToggle, useInCommunity } from './my-gym-filter';
 
 /**
@@ -76,15 +77,15 @@ export function ExerciseSearchDrawer({ open, onOpenChange, onPick }: Props) {
       <View className="px-4 py-3">
         <View className="relative justify-center">
           <View className="absolute left-3 z-10">
-            <Search size={16} color={cores.mutedForeground} />
+            <Search size={16} color={colors.mutedForeground} />
           </View>
           <DrawerTextInput
             value={q}
             onChangeText={setQ}
             accessibilityLabel="Buscar exercício"
             placeholder="Ex.: supino, corrida, agachamento..."
-            placeholderTextColor={cores.placeholder}
-            selectionColor={cores.primary}
+            placeholderTextColor={colors.placeholder}
+            selectionColor={colors.primaryText}
             className="min-h-[44px] rounded-md border border-input bg-transparent py-2 pl-9 pr-3 text-sm text-foreground"
           />
         </View>

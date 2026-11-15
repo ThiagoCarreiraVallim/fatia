@@ -14,6 +14,19 @@ const badgeVariants = cva(
         destructive:
           'border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80',
         outline: 'text-foreground',
+        // Selos de estado do DS v2 (prancha Componentes · Selos): cor sempre
+        // acompanhada de texto; nunca a cor sozinha diz o estado.
+        free: 'border-transparent bg-muted text-foreground',
+        // Fundo a 10%, não 16%: a 16% o azul sobre o cartão escuro e o âmbar e o
+        // verde sobre o fundo claro ficavam abaixo de 4,5:1.
+        trial: 'border-transparent bg-[hsl(var(--info)/0.1)] text-info',
+        pro: 'border-transparent bg-primary text-primary-foreground',
+        'pro-community': 'border-transparent bg-brand text-brand-foreground',
+        lite: 'border-transparent bg-[hsl(var(--warning)/0.1)] text-warning',
+        // Contorno, sem fundo: o verde do claro sobre qualquer véu ficava em 4,3:1.
+        done: 'border-[hsl(var(--success)/0.45)] bg-transparent text-success',
+        pending: 'border-transparent bg-surface-3 text-muted-foreground',
+        risk: 'border-transparent bg-[hsl(var(--danger)/0.1)] text-danger',
       },
     },
     defaultVariants: {
@@ -28,5 +41,8 @@ export interface BadgeProps
 function Badge({ className, variant, ...props }: BadgeProps) {
   return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
 }
+
+/** Os textos vêm do api-client: o app usa os mesmos. */
+export { STATUS_BADGE_LABELS } from '@fatia/api-client';
 
 export { Badge, badgeVariants };

@@ -1,6 +1,10 @@
 import { cn } from '@/lib/utils';
 
-/** Avatar da comunidade (ADR 028), ou as iniciais quando ela não tem imagem. */
+/**
+ * Avatar da comunidade (ADR 028), ou as iniciais quando ela não tem imagem. As
+ * iniciais vão sobre o verde cheio: o verde a 10% com texto verde não passa
+ * 4,5:1 no tema claro (axe no mobile-light).
+ */
 export function GroupAvatar({
   name,
   url,
@@ -35,7 +39,7 @@ export function GroupAvatar({
       aria-hidden
       style={estilo}
       className={cn(
-        'flex shrink-0 items-center justify-center rounded-xl bg-primary/10 text-sm font-bold text-primary',
+        'flex shrink-0 items-center justify-center rounded-xl bg-primary text-sm font-bold text-primary-foreground',
         className,
       )}
     >

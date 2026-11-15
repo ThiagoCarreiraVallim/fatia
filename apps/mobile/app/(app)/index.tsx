@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useRouter } from 'expo-router';
-import { Target } from 'lucide-react-native';
+import { Bell, Target } from 'lucide-react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { greetingLine, progressApi, usersApi } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
@@ -14,7 +15,7 @@ import {
   StreakCard,
   WaterCard,
 } from '@/components/dashboard';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/app/(app)/page.tsx`.
@@ -23,6 +24,13 @@ import { cores } from '@/theme/cores';
  * os abrem como no PWA: o bottom sheet nativo não é portal e abriria com a
  * altura do card, rolando junto com o conteúdo. Ver `src/components/ui/drawer.tsx`.
  */
+/** "Sáb, 14 nov", do relógio do aparelho. */
+function todayLabel(): string {
+  return new Date()
+    .toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' })
+    .replace(/\./g, '');
+}
+
 export default function DashboardScreen() {
   const [aguaAberto, setAguaAberto] = useState(false);
   const [passosAberto, setPassosAberto] = useState(false);
@@ -57,25 +65,32 @@ export default function DashboardScreen() {
     <>
       <Screen onRefresh={atualizar} refreshing={atualizando}>
         <View className="gap-5 px-5 pb-4 pt-2">
-          <View className="flex-row items-center gap-3">
+          {/* Topo do Hoje (ADR 040 revisada, item 4): data, saudação, as metas do
+              dia e o sino dos avisos, sozinho — a pessoa chega a Você pela aba. O
+              sino leva às notificações até a caixa de avisos da #389. */}
+          <View className="flex-row items-center gap-1">
             <View className="flex-1">
-              <Text
-                accessibilityRole="header"
-                className="text-[18px] font-semibold text-foreground"
-              >
+              <Text className="text-b2 capitalize text-muted-foreground">{todayLabel()}</Text>
+              <Text accessibilityRole="header" className="font-display text-h2 text-foreground">
                 {greetingLine(eu.data?.name)}
               </Text>
-              <Text className="text-sm text-muted-foreground">Pronto para dominar o dia?</Text>
             </View>
             {/* As metas do dia a um toque: antes eram Progresso → Perfil → Metas. */}
             <Pressable
               accessibilityRole="link"
               accessibilityLabel="Metas do dia"
               onPress={() => router.push('/nutrition/goals')}
-              className="min-h-11 flex-row items-center gap-1.5 rounded-full border border-border px-4"
+              className="h-11 w-11 items-center justify-center rounded-full"
             >
-              <Target size={16} color={cores.primary} />
-              <Text className="text-sm font-semibold text-foreground">Metas</Text>
+              <Target size={20} color={colors.mutedForeground} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel="Avisos"
+              onPress={() => router.push('/profile/notifications')}
+              className="h-11 w-11 items-center justify-center rounded-full"
+            >
+              <Bell size={20} color={colors.mutedForeground} />
             </Pressable>
           </View>
 

@@ -49,3 +49,85 @@ export const billingApi = {
   /** Depois de comprar na loja: confirma na hora, sem esperar o webhook. */
   revenueCatSync: () => apiFetch<MyPlan>('/api/billing/revenuecat/sync', { method: 'POST' }),
 };
+
+/**
+ * Bloco PRO (prancha Componentes-plano 1.2): o plano da pessoa vira um de 9
+ * estados, e as telas (chat, foto, ditado, Meu plano, comunidade) só desenham.
+ * Puro, para o PWA e o app mostrarem o mesmo estado.
+ */
+export type ProBlockState =
+  | { kind: 'free'; trialDays: number }
+  | { kind: 'trial'; day: number; totalDays: number; daysLeft: number }
+  | { kind: 'pro'; interval: BillingInterval | null; renewsAt: string | null }
+  | { kind: 'pro-community'; groupName: string | null }
+  | { kind: 'pro-until'; until: string; daysLeft: number }
+  | { kind: 'lite-ending'; remaining: number; limit: number }
+  | { kind: 'free-no-purchase' }
+  | { kind: 'pending-grace'; aiUntil: string | null; graceDaysLeft: number }
+  | { kind: 'pro-expired' };
+
+export interface ProBlockContext {
+  now: Date;
+  /**
+   * Dá para comprar aqui? `false` no iOS sem compra no app: o bloco oferece
+   * liberar pela comunidade ou "Tenho um código", nunca um preço.
+   */
+  canPurchase: boolean;
+  /** Teste grátis em andamento (a API ainda não o expõe no `MyPlan`). */
+  trial?: { endsAt: string; totalDays: number };
+  /** Cota da IA Lite do dia (derivada de AiUsage). */
+  lite?: { used: number; limit: number };
+}
+
+const TRIAL_DAYS = 7;
+const DAY_MS = 86_400_000;
+/** Lite "acabando" quando sobra até 20% da cota. */
+const LITE_ENDING_SHARE = 0.2;
+
+function daysUntil(iso: string, now: Date): number {
+  return Math.max(0, Math.ceil((new Date(iso).getTime() - now.getTime()) / DAY_MS));
+}
+
+export function proBlockState(plan: MyPlan, ctx: ProBlockContext): ProBlockState | null {
+  // Instância sem exigência de plano: não há o que vender nem o que avisar.
+  if (!plan.requiresPlan) return null;
+
+  if (plan.reason === 'carencia' || (plan.status === 'PAST_DUE' && plan.graceEndsAt)) {
+    return {
+      kind: 'pending-grace',
+      aiUntil: plan.graceEndsAt,
+      graceDaysLeft: plan.graceEndsAt ? daysUntil(plan.graceEndsAt, ctx.now) : 0,
+    };
+  }
+
+  if (plan.tier === 'PRO') {
+    if (plan.source === 'GROUP') return { kind: 'pro-community', groupName: plan.groupName };
+    if (ctx.trial) {
+      const daysLeft = daysUntil(ctx.trial.endsAt, ctx.now);
+      const totalDays = ctx.trial.totalDays;
+      // "4 de 7 · 3 dias restantes": o dia corrente é o total menos o que falta.
+      const day = Math.max(1, totalDays - daysLeft);
+      return { kind: 'trial', day, totalDays, daysLeft };
+    }
+    if (plan.source === 'MANUAL' && plan.cancelAtPeriodEnd && plan.currentPeriodEnd) {
+      return {
+        kind: 'pro-until',
+        until: plan.currentPeriodEnd,
+        daysLeft: daysUntil(plan.currentPeriodEnd, ctx.now),
+      };
+    }
+    return { kind: 'pro', interval: plan.interval, renewsAt: plan.currentPeriodEnd };
+  }
+
+  if (plan.reason === 'expirada' || plan.reason === 'inadimplente' || plan.reason === 'cancelada') {
+    return { kind: 'pro-expired' };
+  }
+  if (ctx.lite && ctx.lite.limit > 0) {
+    const remaining = Math.max(0, ctx.lite.limit - ctx.lite.used);
+    if (remaining <= ctx.lite.limit * LITE_ENDING_SHARE) {
+      return { kind: 'lite-ending', remaining, limit: ctx.lite.limit };
+    }
+  }
+  if (!ctx.canPurchase) return { kind: 'free-no-purchase' };
+  return { kind: 'free', trialDays: TRIAL_DAYS };
+}

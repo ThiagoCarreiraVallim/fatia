@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Image, Text, View } from 'react-native';
+import { Image, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import * as ImagePicker from 'expo-image-picker';
 import { ImagePlus, X } from 'lucide-react-native';
 import { ApiError, uploadMedia, type MediaPurpose } from '@fatia/api-client';
 import { Button } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 import { IconLabel } from './content-ui';
 import { describePickedImage } from './picked-image';
 
@@ -100,7 +101,7 @@ export function ImageField({
             accessibilityLabel={`Remover ${label.toLowerCase()}`}
             onPress={() => onChange(null)}
           >
-            <IconLabel icon={X} label="Remover" color={cores.mutedForeground} />
+            <IconLabel icon={X} label="Remover" color={colors.mutedForeground} />
           </Button>
         ) : null}
       </View>

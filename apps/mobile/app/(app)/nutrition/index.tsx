@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Camera, Copy, Lock, ScanBarcode, Settings } from 'lucide-react-native';
@@ -26,7 +27,7 @@ import { WeeklyTrendChart } from '@/components/nutrition/weekly-trend-chart';
 import { hojeIso } from '@/components/nutrition/helpers';
 import { AcoesDaRefeicaoDrawer } from '@/components/nutrition/acoes-da-refeicao-drawer';
 import { CopiarDiaDrawer } from '@/components/nutrition/copiar-dia-drawer';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/app/(app)/nutrition/page.tsx`.
@@ -100,7 +101,7 @@ export default function NutritionScreen() {
                 onPress={() => router.push(`/nutrition/photo?date=${data}`)}
                 className={TOP_BAR_ACTION}
               >
-                <Camera size={20} color={cores.primary} />
+                <Camera size={20} color={colors.primaryText} />
               </Pressable>
             ) : fotoTrava === 'locked' ? (
               // Free (ADR 024): o botão aparece com cadeado e leva ao plano, em vez
@@ -111,9 +112,9 @@ export default function NutritionScreen() {
                 onPress={() => router.push(planHref('foto'))}
                 className={TOP_BAR_ACTION}
               >
-                <Camera size={20} color={cores.primary} />
+                <Camera size={20} color={colors.primaryText} />
                 <View className="absolute bottom-1.5 right-1.5 rounded-full bg-background p-0.5">
-                  <Lock size={10} color={cores.mutedForeground} />
+                  <Lock size={10} color={colors.mutedForeground} />
                 </View>
               </Pressable>
             ) : null}
@@ -126,7 +127,7 @@ export default function NutritionScreen() {
               onPress={() => router.push(`/nutrition/scan?date=${data}`)}
               className={TOP_BAR_ACTION}
             >
-              <ScanBarcode size={20} color={cores.primary} />
+              <ScanBarcode size={20} color={colors.primaryText} />
             </Pressable>
             {refeicoesDoDia > 0 ? (
               <Pressable
@@ -135,7 +136,7 @@ export default function NutritionScreen() {
                 onPress={() => setCopiandoDia(true)}
                 className={TOP_BAR_ACTION}
               >
-                <Copy size={20} color={cores.primary} />
+                <Copy size={20} color={colors.primaryText} />
               </Pressable>
             ) : null}
             <Pressable
@@ -144,7 +145,7 @@ export default function NutritionScreen() {
               onPress={() => router.push('/nutrition/goals')}
               className={TOP_BAR_ACTION}
             >
-              <Settings size={20} color={cores.primary} />
+              <Settings size={20} color={colors.primaryText} />
             </Pressable>
           </>
         }

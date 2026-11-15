@@ -1,24 +1,22 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Droplet, MoreHorizontal } from 'lucide-react-native';
 import { progressApi, type TodaySummary } from '@fatia/api-client';
 import { Button, FormMessage } from '@/components/ui';
 import { NUMEROS_TABULARES, formatVolume, percentualDaMeta } from './helpers';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/components/dashboard/water-card.tsx`.
  *
- * O azul é o token `water`; os tons translúcidos do PWA (`bg-water/10`)
- * viram cores chapadas: o modificador de opacidade não funciona nesta paleta,
- * que declara `hsl(var(--x))` sem canal alfa.
+ * O azul é o token `water`, lido no render (muda com o tema). O tom
+ * translúcido do PWA (`bg-water/10`) vira o hex com alfa: o modificador de
+ * opacidade não funciona nesta paleta, que declara `hsl(var(--x))` sem alfa.
  *
  * O drawer não é montado aqui: bottom sheet nativo não é portal e abriria com a
  * altura deste card. Ver o cabeçalho de `src/components/ui/drawer.tsx`.
  */
-const AZUL = cores.water;
-const AZUL_FUNDO = '#16233d';
-const AZUL_TEXTO = '#8ab4ff';
 const ATALHOS_ML = [250, 500, 750] as const;
 
 export function WaterCard({
@@ -42,15 +40,12 @@ export function WaterCard({
 
   return (
     <View className="overflow-hidden rounded-xl border border-border bg-card">
-      <View
-        pointerEvents="none"
-        style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(75,142,255,0.06)' }]}
-      />
+      <View pointerEvents="none" className="bg-water/5" style={StyleSheet.absoluteFill} />
 
       <View className="gap-4 p-5">
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-2">
-            <Droplet size={18} color={AZUL} />
+            <Droplet size={18} color={colors.water} />
             <Text accessibilityRole="header" className="text-[18px] font-semibold text-foreground">
               Hidratação
             </Text>
@@ -61,7 +56,7 @@ export function WaterCard({
             onPress={onLogWater}
             className="h-11 w-11 items-center justify-center rounded-xl bg-muted"
           >
-            <MoreHorizontal size={16} color={cores.mutedForeground} />
+            <MoreHorizontal size={16} color={colors.mutedForeground} />
           </Pressable>
         </View>
 
@@ -78,9 +73,9 @@ export function WaterCard({
             {data.goalReached ? (
               <View
                 className="ml-auto rounded-full px-2 py-0.5"
-                style={{ backgroundColor: AZUL_FUNDO }}
+                style={{ backgroundColor: `${colors.water}26` }}
               >
-                <Text className="text-[10px] font-bold" style={{ color: AZUL_TEXTO }}>
+                <Text className="text-[10px] font-bold" style={{ color: colors.water }}>
                   META BATIDA
                 </Text>
               </View>
@@ -97,7 +92,7 @@ export function WaterCard({
             >
               <View
                 className="h-full rounded-full"
-                style={{ width: `${percentual}%`, backgroundColor: AZUL }}
+                style={{ width: `${percentual}%`, backgroundColor: colors.water }}
               />
             </View>
           ) : null}
@@ -109,12 +104,12 @@ export function WaterCard({
               key={ml}
               variant="outline"
               size="sm"
-              className="flex-1 border-water bg-[#16233d]"
+              className="flex-1 border-water bg-water/10"
               disabled={adicionar.isPending}
               accessibilityLabel={`Adicionar ${ml} mililitros de água`}
               onPress={() => adicionar.mutate(ml)}
             >
-              <Text className="text-sm font-bold" style={{ color: AZUL_TEXTO }}>
+              <Text className="text-sm font-bold" style={{ color: colors.water }}>
                 +{ml} mL
               </Text>
             </Button>

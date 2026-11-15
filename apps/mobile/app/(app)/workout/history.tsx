@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { ChevronRight, Dumbbell } from 'lucide-react-native';
@@ -10,7 +11,7 @@ import {
   pluralize,
   summarizeSession,
 } from '@/components/workout/workout-stats';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /** Réplica de `apps/web/src/app/(app)/workout/history/page.tsx`. */
 
@@ -36,7 +37,7 @@ function SessionRow({ session }: { session: WorkoutSession }) {
       className="min-h-[44px] flex-row items-center gap-3 rounded-2xl border border-border bg-card p-4 active:opacity-80"
     >
       <View className="h-12 w-12 items-center justify-center rounded-lg bg-muted">
-        <Dumbbell size={20} color={cores.primary} />
+        <Dumbbell size={20} color={colors.primaryText} />
       </View>
       <View className="min-w-0 flex-1">
         <Text numberOfLines={1} className="text-base font-bold capitalize text-foreground">
@@ -45,7 +46,7 @@ function SessionRow({ session }: { session: WorkoutSession }) {
         <Text className="text-xs text-muted-foreground">{stats}</Text>
         <Text className="text-[11px] text-muted-foreground">{duration}</Text>
       </View>
-      <ChevronRight size={16} color={cores.mutedForeground} />
+      <ChevronRight size={16} color={colors.mutedForeground} />
     </Pressable>
   );
 }

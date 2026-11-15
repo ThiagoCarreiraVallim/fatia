@@ -1,4 +1,5 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { Flame, Lock, Trophy } from 'lucide-react-native';
 import {
   legendaDeTolerancia,
@@ -8,7 +9,7 @@ import {
 } from '@fatia/api-client';
 import { Card } from '@/components/ui';
 import { NUMEROS_TABULARES } from './helpers';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/components/dashboard/streak-card.tsx`.
@@ -17,8 +18,6 @@ import { cores } from '@/theme/cores';
  * cópia local: a frase da tolerância explica um número que muda na cara do usuário, e os dois
  * apps dizendo coisas diferentes sobre o mesmo número seria pior que não explicar.
  */
-const LARANJA = '#f97316';
-const AMBAR = '#f59e0b';
 
 export function StreakCard({
   streak,
@@ -42,7 +41,7 @@ export function StreakCard({
       </View>
 
       <View className="flex-row items-center gap-2">
-        <Flame size={28} color={LARANJA} />
+        <Flame size={28} color={colors.warning} />
         <Text style={NUMEROS_TABULARES} className="text-3xl font-semibold text-foreground">
           {rotuloDeSequencia(streak.activeDays, 'dias')}
         </Text>
@@ -72,9 +71,9 @@ export function StreakCard({
               }`}
             >
               {aberta ? (
-                <Trophy size={12} color={AMBAR} />
+                <Trophy size={12} color={colors.warning} />
               ) : (
-                <Lock size={12} color={cores.placeholder} />
+                <Lock size={12} color={colors.placeholder} />
               )}
               <Text className={`text-xs ${aberta ? 'text-foreground' : 'text-muted-foreground'}`}>
                 {a.title}

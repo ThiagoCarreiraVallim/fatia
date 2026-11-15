@@ -97,10 +97,30 @@ Os dois — consentimento e trilha — saem no `export_my_data`, porque são dad
 18 V). O que **não** sai é a lista de pessoas que o titular atende, quando ele é o profissional:
 essa é a clientela dele, e é dado de terceiro.
 
+### O que o redesign acrescenta (planejado)
+
+Dado novo das telas do redesign, com a issue que o cria ([`DADOS_REDESIGN.md`](./DADOS_REDESIGN.md)).
+Cada linha entra nesta página, no export e na exclusão no PR da issue dona.
+
+| Dado                                                         | Retenção                                                                                                                                               | Issue / ADR                                             |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
+| Telefone para WhatsApp e a permissão "equipe pode me chamar" | Enquanto a conta existir; desligar a permissão esconde o número da equipe. **A conversa não é guardada**: o painel só abre o link `wa.me` com o número | #387, #401, #402                                        |
+| Foto da refeição                                             | Enquanto a refeição existir; apagar a foto, a refeição ou a conta apaga o arquivo; só com a escolha "guardar fotos"                                    | #374, [ADR 038](./ADR/038-foto-da-refeicao-guardada.md) |
+| Foto de check-in de desafio                                  | Até 30 dias depois do fim do desafio; anulada, apagada na decisão; sair da comunidade, sair do desafio ou apagar a conta apaga na hora                 | #395, [ADR 044](./ADR/044-desafios-com-revisao.md)      |
+| Preferência de tema (Sistema/Escuro/Claro)                   | Só no aparelho (`localStorage`, armazenamento local do app); não vai à API                                                                             | #368, [ADR 041](./ADR/041-tema-claro.md)                |
+
+O compartilhamento passa a ter **6 categorias**: as 5 de hoje (`WORKOUT`, `NUTRITION`, `BODY`,
+`HABITS`, `GOALS`) e "Fotos das refeições" (ADR 038). A equipe só vê o que o membro liberou, por
+papel ([ADR 043](./ADR/043-papeis-da-equipe.md)), e toda leitura — inclusive a negada — fica em
+`ProfessionalAccessLog`, com a retenção da tabela acima.
+
 ## Dados que NÃO são armazenados
 
-- **Fotos de refeição.** Decisão registrada na [ADR 004](./ADR/004-sem-armazenamento-fotos.md) e
-  estendida pela [ADR 020](./ADR/020-foto-e-audio-trafegam-sem-persistencia.md). **Não há bucket
+- **Fotos de refeição** — **até a #374 entrar.** A [ADR 038](./ADR/038-foto-da-refeicao-guardada.md)
+  supera a ADR 004: a foto que vira refeição passa a ser guardada quando a pessoa escolher
+  (tabela acima). Até lá, vale o que segue. Decisão registrada na
+  [ADR 004](./ADR/004-sem-armazenamento-fotos.md) e estendida pela
+  [ADR 020](./ADR/020-foto-e-audio-trafegam-sem-persistencia.md). **Não há bucket
   para elas, não há disco, não há coluna** — em nenhum dos dois caminhos de IA. O bucket que existe
   desde a Fase 7a é só de mídia **publicada** pela comunidade
   ([ADR 028](./ADR/028-imagens-de-posts-da-comunidade.md)), e foto de refeição nunca passa por ele. O que muda entre eles é se a

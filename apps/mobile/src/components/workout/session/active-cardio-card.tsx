@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Pressable, Text, View } from 'react-native';
+import { AccessibilityInfo, Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { Check, Pause, Play, RotateCcw } from 'lucide-react-native';
@@ -14,7 +15,7 @@ import {
   parseDecimalInput,
   parseIntegerInput,
 } from './format';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/components/workout/active-cardio-card.tsx`.
@@ -198,9 +199,9 @@ export function ActiveCardioCard({
             className="h-12 w-12 items-center justify-center rounded-full bg-primary active:opacity-80"
           >
             {running ? (
-              <Pause size={20} color={cores.background} fill={cores.background} />
+              <Pause size={20} color={colors.background} fill={colors.background} />
             ) : (
-              <Play size={20} color={cores.background} fill={cores.background} />
+              <Play size={20} color={colors.background} fill={colors.background} />
             )}
           </Pressable>
 
@@ -210,7 +211,7 @@ export function ActiveCardioCard({
             onPress={reset}
             className="h-11 w-11 items-center justify-center rounded-full bg-background active:opacity-80"
           >
-            <RotateCcw size={16} color={cores.mutedForeground} />
+            <RotateCcw size={16} color={colors.mutedForeground} />
           </Pressable>
         </View>
       </View>
@@ -255,7 +256,7 @@ export function ActiveCardioCard({
           loading={save.isPending}
           onPress={() => save.mutate()}
         >
-          <Check size={16} color={cores.background} />
+          <Check size={16} color={colors.background} />
           <Text className="text-sm font-extrabold text-primary-foreground">
             {existing ? 'Atualizar sessão' : 'Salvar sessão'}
           </Text>

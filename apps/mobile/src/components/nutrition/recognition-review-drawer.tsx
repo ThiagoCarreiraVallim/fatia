@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, Square } from 'lucide-react-native';
 import { nutritionApi, type MealRecognition, type MealType } from '@fatia/api-client';
@@ -25,7 +26,7 @@ import {
   ROTULO_DE_CONFIANCA,
   type ItemEditavel,
 } from './recognition-mapping';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Tela de confirmação do reconhecimento por foto (#139). **Obrigatória.**
@@ -186,9 +187,15 @@ export function RecognitionReviewDrawer({
 
 /** Cores da faixa de confiança. Amarelo avisa; nunca esconde. */
 const COR_DA_CONFIANCA = {
-  alta: cores.mutedForeground,
-  media: cores.warning,
-  baixa: cores.warning,
+  get alta() {
+    return colors.mutedForeground;
+  },
+  get media() {
+    return colors.warning;
+  },
+  get baixa() {
+    return colors.warning;
+  },
 } as const;
 
 function LinhaDoItem({
@@ -213,9 +220,9 @@ function LinhaDoItem({
           className="h-11 w-11 items-center justify-center"
         >
           {item.incluido ? (
-            <Check size={20} color={cores.primary} />
+            <Check size={20} color={colors.primaryText} />
           ) : (
-            <Square size={20} color={cores.placeholder} />
+            <Square size={20} color={colors.placeholder} />
           )}
         </Pressable>
 

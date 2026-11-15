@@ -104,7 +104,7 @@ ausente nem chega ao teste — não compila, porque `McpToolDef` o exige.
 ### Inferência hospedada
 
 Toda tool declara também `hostedInference: boolean` — se a execução dispara inferência **paga
-pela Fatia** (visão, LLM, embedding). Hoje as **130 tools** declaram `false`, e é a resposta que
+pela Fatia** (visão, LLM, embedding). Hoje as **131 tools** declaram `false`, e é a resposta que
 se quer manter.
 
 O motivo é de custo, não de protocolo. Quem chama o `/mcp` é o modelo do usuário, na assinatura
@@ -184,12 +184,12 @@ o tipo e o caminho do campo. Devolver o schema intocado seria pior: um `union` o
 verificador que silencia é pior que verificador nenhum.
 
 **Custo em token.** Medido no payload realmente servido pelo registry (`name`, `title`,
-`description`, `annotations` e o JSON Schema do input das 130 tools): **107,6 k caracteres**
+`description`, `annotations` e o JSON Schema do input das 131 tools): **108,1 k caracteres**
 hoje, dos quais **6.403 são os exemplos** — acréscimo de **6,3%** sobre os 64,3 k de antes,
 pago em toda sessão que lista as tools. Média de **88** caracteres por tool; os maiores são
 `log_meal` (307) e `log_set` (268), que têm dois exemplos cada. Números registrados aqui
 para que uma futura discussão de tamanho de catálogo parta do dado, e não da impressão —
-atenção ao denominador: medir só `name + description + inputSchema` (88,0 k) subestima o
+atenção ao denominador: medir só `name + description + inputSchema` (88,4 k) subestima o
 catálogo em ~20% e infla o percentual para ~7%.
 
 A medição é refeita a cada rodada de `tool-catalog.spec.ts`, que compara estes números com o
@@ -309,6 +309,7 @@ Listagens com potencial de crescer usam cursor-based:
 | **Sessões de treino**      | `start_workout_session`      | C        |
 |                            | `get_workout_session`        | R        |
 |                            | `get_active_workout_session` | R        |
+|                            | `get_weekly_muscle_summary`  | R        |
 |                            | `list_workout_sessions`      | R        |
 |                            | `update_workout_session`     | U        |
 |                            | `finish_workout_session`     | U        |
@@ -375,7 +376,7 @@ Listagens com potencial de crescer usam cursor-based:
 |                            | `save_memory`                | C        |
 |                            | `forget_memory`              | D        |
 
-Total: **130 tools**. Cada uma documentada abaixo.
+Total: **131 tools**. Cada uma documentada abaixo.
 
 > Este catálogo é verificado automaticamente contra o código por
 > `apps/api/src/mcp/__tests__/tool-catalog.spec.ts`: adicionar, renomear ou remover uma tool sem
@@ -1423,6 +1424,23 @@ Retorna a sessão de treino ativa (iniciada e ainda não finalizada), se houver.
 
 **Input:** `{}`  
 **Output:** mesma forma de `get_workout_session`, ou `null` se não há sessão aberta.
+
+### `get_weekly_muscle_summary`
+
+Séries de força por grupo muscular nos últimos 7 dias (hoje incluído, no fuso da pessoa), com a meta semanal; os grupos mais descansados, com os dias desde a última série; e o plano da própria pessoa que mais trabalha os grupos descansados. É a mesma leitura dos cards da aba Treino (`GET /workout/muscles/week`, #369). Só lê, e só os dados de quem chama.
+
+**Input:** `{}`  
+**Output:**
+
+```typescript
+{
+  from: string; // YYYY-MM-DD, primeiro dos 7 dias
+  target: number; // séries por grupo na semana (ponto de partida, não prescrição)
+  sets: Array<{ group: 'peito' | 'costas' | 'pernas' | 'ombro' | 'braço' | 'core'; sets: number }>;
+  rested: Array<{ group: string; daysSince: number | null }>; // null = sem série em 60 dias
+  suggestedPlan: { id: string; name: string; groups: string[] } | null;
+}
+```
 
 ### `get_workout_session`
 

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -33,7 +34,7 @@ import {
 import { useAuth } from '@/auth/auth-context';
 import { Button, Input, Label, LoadingState } from '@/components/ui';
 import { hojeIso, mensagemDeErro } from '@/components/nutrition/helpers';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 const kcal = (n: number) => n.toLocaleString('pt-BR');
 
@@ -191,7 +192,7 @@ export default function OnboardingScreen() {
                   onPress={() => setPasso((p) => p - 1)}
                   className="h-11 w-11 items-center justify-center rounded-full"
                 >
-                  <ChevronLeft size={22} color={cores.mutedForeground} />
+                  <ChevronLeft size={22} color={colors.mutedForeground} />
                 </Pressable>
               ) : (
                 <View className="h-11 w-11" />

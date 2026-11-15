@@ -64,7 +64,7 @@ export function NutrientTargetsCard({ date }: { date: string }) {
       ) : nutrients.length === 0 ? (
         <Link
           href="/nutrition/nutrient-targets"
-          className="block rounded-xl border border-dashed border-white/10 p-4 text-center text-xs text-muted-foreground"
+          className="block rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground"
         >
           Acompanhe sódio, açúcar, fibra e outros. Toque para criar uma meta.
         </Link>

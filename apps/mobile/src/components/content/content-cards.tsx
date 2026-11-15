@@ -1,4 +1,5 @@
-import { Image, Pressable, Text, View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { Dumbbell, Pin, Salad } from 'lucide-react-native';
 import {
   planTemplateSummary,
@@ -6,7 +7,7 @@ import {
   type GroupTip,
   type PlanTemplate,
 } from '@fatia/api-client';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 import { RowChevron, StatusBadge } from './content-ui';
 import { MarkdownLite } from './markdown-lite';
 
@@ -45,7 +46,7 @@ export function TemplateCard({
         />
       ) : (
         <View className="h-16 w-16 items-center justify-center rounded-xl bg-muted">
-          <Icone size={24} color={cores.mutedForeground} />
+          <Icone size={24} color={colors.mutedForeground} />
         </View>
       )}
       <View className="flex-1 gap-1">
@@ -80,7 +81,7 @@ export function TipCard({ tip }: { tip: GroupTip }) {
         <View className="flex-row items-center gap-2">
           {tip.pinned ? (
             <View className="flex-row items-center gap-1">
-              <Pin size={14} color={cores.primary} />
+              <Pin size={14} color={colors.primaryText} />
               <Text className="text-xs font-semibold text-primary">Fixada</Text>
             </View>
           ) : null}

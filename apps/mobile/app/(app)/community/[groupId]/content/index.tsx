@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Dumbbell, PlayCircle } from 'lucide-react-native';
@@ -13,7 +14,7 @@ import {
   ExerciseDetailHost,
   useOpenExerciseDetail,
 } from '@/components/workout/exercise-detail-host';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 type Aba = 'plans' | 'tips' | 'exercises';
 const ABAS: Aba[] = ['plans', 'tips', 'exercises'];
@@ -55,7 +56,7 @@ function CommunityExercises({ groupId }: { groupId: string }) {
             />
           ) : (
             <View className="h-14 w-14 items-center justify-center rounded-xl bg-muted">
-              <Dumbbell size={20} color={cores.mutedForeground} />
+              <Dumbbell size={20} color={colors.mutedForeground} />
             </View>
           )}
           <View className="flex-1">
@@ -66,7 +67,7 @@ function CommunityExercises({ groupId }: { groupId: string }) {
               {[e.muscleGroup, e.equipment].filter(Boolean).join(' · ')}
             </Text>
           </View>
-          {e.video ? <PlayCircle size={20} color={cores.primary} /> : null}
+          {e.video ? <PlayCircle size={20} color={colors.primaryText} /> : null}
           <RowChevron />
         </Pressable>
       ))}

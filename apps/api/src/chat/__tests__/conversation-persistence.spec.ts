@@ -146,7 +146,7 @@ describe('ConversationService — o que sobra do turno', () => {
     const { conversationId } = await conversas.iniciarTurno(userId, id, 'oi');
 
     expect(conversationId).toBe(id);
-    expect(await conversas.encontrar(userId, id)).toMatchObject({ id, title: 'oi' });
+    expect(await conversas.find(userId, id)).toMatchObject({ id, title: 'oi' });
   });
 
   it('uma pausa sem texto é gravada, e sai da linha no turno seguinte', async () => {
@@ -305,19 +305,65 @@ describe('ConversationService — o que sobra do turno', () => {
     await conversas.titularSeProvisorio(userId, intacta.conversationId, primeira, 'Almoço');
     await conversas.titularSeProvisorio(userId, renomeada.conversationId, primeira, 'Almoço');
 
-    expect((await conversas.encontrar(userId, intacta.conversationId))?.title).toBe('Almoço');
-    expect((await conversas.encontrar(userId, renomeada.conversationId))?.title).toBe('Meu almoço');
+    expect((await conversas.find(userId, intacta.conversationId))?.title).toBe('Almoço');
+    expect((await conversas.find(userId, renomeada.conversationId))?.title).toBe('Meu almoço');
   });
 
   it('renomeia e acha pela busca no título, sem diferenciar maiúscula', async () => {
     const { conversationId } = await conversas.iniciarTurno(userId, randomUUID(), 'qualquer');
     await conversas.renomear(userId, conversationId, 'Plano de Cutting');
 
-    const achadas = await conversas.listar(userId, 'cutting');
+    const achadas = await conversas.list(userId, { q: 'cutting' });
     expect(achadas.map((c) => c.id)).toContain(conversationId);
-    expect((await conversas.listar(userId, 'bulking')).map((c) => c.id)).not.toContain(
+    expect((await conversas.list(userId, { q: 'bulking' })).map((c) => c.id)).not.toContain(
       conversationId,
     );
+  });
+
+  describe('o estado da conversa para o botão da IA (#369)', () => {
+    const pausa = { id: 'int-1', value: { kind: 'confirm', prompt: 'Gravo?', actions: [] } };
+
+    it('waiting com a pausa aberta, thinking com resposta correndo, idle depois de resolvida', async () => {
+      const { conversationId: parada } = await conversas.iniciarTurno(
+        userId,
+        randomUUID(),
+        'anota meu almoço',
+      );
+      await conversas.completeTurn(userId, parada, resposta({ status: 'interrupted', pausa }));
+      const { conversationId: correndo } = await conversas.iniciarTurno(
+        userId,
+        randomUUID(),
+        'resume minha semana',
+      );
+      const isRunning = (id: string) => id === correndo;
+
+      const estados = Object.fromEntries(
+        (await conversas.list(userId, { isRunning })).map((c) => [c.id, c.state]),
+      );
+      expect(estados[parada]).toBe('waiting');
+      expect(estados[correndo]).toBe('thinking');
+
+      expect(await conversas.pendingCount(userId, isRunning)).toEqual({ waiting: 1, thinking: 1 });
+
+      const soEsperando = await conversas.list(userId, { state: 'waiting', isRunning });
+      expect(soEsperando.map((c) => c.id)).toEqual([parada]);
+
+      // A pessoa respondeu: o turno de agora resolve a pausa, e ao terminar a
+      // conversa volta a idle.
+      await conversas.clearPauses(userId, parada);
+      await conversas.completeTurn(userId, parada, resposta({ texto: 'Gravado.' }));
+      const depois = await conversas.list(userId, { isRunning: () => false });
+      expect(depois.find((c) => c.id === parada)?.state).toBe('idle');
+      expect(depois.find((c) => c.id === correndo)?.state).toBe('idle');
+      expect((await conversas.pendingCount(userId)).waiting).toBe(0);
+    });
+
+    it('limit corta depois de ordenar pela mais recente', async () => {
+      const lista = await conversas.list(userId, { limit: 1 });
+      expect(lista).toHaveLength(1);
+      const todas = await conversas.list(userId);
+      expect(lista[0]!.id).toBe(todas[0]!.id);
+    });
   });
 });
 

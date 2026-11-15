@@ -14,7 +14,7 @@ export default async function LoginPage({ searchParams }: Props) {
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-8">
         <div className="space-y-2 text-center">
-          <h1 className="font-jakarta text-4xl font-bold text-primary">Fatia</h1>
+          <h1 className="font-display text-4xl font-bold text-primary">Fatia</h1>
           <p className="text-sm text-muted-foreground">
             Seu diário de nutrição e treino — rápido de registrar, fácil de acompanhar.
           </p>

@@ -86,7 +86,7 @@ export default function WorkoutHistoryPage() {
         <EmptyState
           icon={History}
           title="Nenhum treino registrado ainda"
-          description="Toque em + e escolha Treino para começar o primeiro."
+          description="Toque no botão da IA e escolha Treino para começar o primeiro."
         />
       )}
 

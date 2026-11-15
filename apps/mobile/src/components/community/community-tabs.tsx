@@ -1,4 +1,5 @@
-import { Pressable, ScrollView, Text } from 'react-native';
+import { Pressable, ScrollView } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { usePathname, useRouter } from 'expo-router';
 import { activeCommunityTab, communityTabs } from '@fatia/api-client';
 import { cn } from '@/components/ui';

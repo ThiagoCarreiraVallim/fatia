@@ -37,14 +37,21 @@ export function MuscleDiagram({
       // Reset: todos os grupos esmaecidos e sem cor
       doc.querySelectorAll('g[data-muscle]').forEach((el) => paint(el, null));
 
-      // Secundários (laranja)
+      // O SVG é outro documento: as variáveis do tema não chegam lá, então a
+      // cor do token é lida aqui e passada pronta.
+      const token = (name: string) =>
+        `hsl(${getComputedStyle(document.documentElement).getPropertyValue(name).trim()})`;
+
+      // Secundários (água)
+      const secondary = token('--water');
       secondaryMuscles.forEach((muscle) => {
-        doc.querySelectorAll(`g[data-muscle="${muscle}"]`).forEach((el) => paint(el, '#f97316'));
+        doc.querySelectorAll(`g[data-muscle="${muscle}"]`).forEach((el) => paint(el, secondary));
       });
 
-      // Primários (vermelho) — sobrescreve secundários no mesmo grupo
+      // Primários (verde da marca) — sobrescreve secundários no mesmo grupo
+      const primary = token('--primary');
       primaryMuscles.forEach((muscle) => {
-        doc.querySelectorAll(`g[data-muscle="${muscle}"]`).forEach((el) => paint(el, '#ef4444'));
+        doc.querySelectorAll(`g[data-muscle="${muscle}"]`).forEach((el) => paint(el, primary));
       });
     };
 

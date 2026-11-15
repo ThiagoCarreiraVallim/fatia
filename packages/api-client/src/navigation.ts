@@ -1,29 +1,41 @@
 /**
- * Navegação comum ao PWA e ao app: a mesma barra e o mesmo menu nas duas pontas.
+ * Navegação comum ao PWA e ao app: a mesma barra e o mesmo conteúdo de Você
+ * nas duas pontas (ADR 040, revisada em 2026-11).
  *
- * Barra de baixo: Nutrição · Treino · [ + ] · Comunidade · Mais. O "+" é o
- * Registrar (`quick-add.ts`); "Mais" abre o menu com todas as outras telas,
- * em seções. No desktop do PWA a barra lateral mostra tudo de uma vez.
+ * Barra de baixo: cinco abas só de ícone — Hoje · Nutrição · Treino ·
+ * Comunidade · Você — e, separado delas, o botão redondo da IA, que abre o
+ * menu "O que vamos registrar?" (`ai-drawer.ts`). No desktop do PWA a barra
+ * lateral mostra as mesmas cinco abas com o botão da IA no topo.
  *
- * O Início não é aba: é a raiz. Toda outra tela tem a barra de topo com
- * "voltar" e o título pequeno, como no iOS, e voltar sobe pelo mapa de rotas
- * (`ROUTES`) até o Início — não pelo histórico, então um link aberto direto
+ * O Hoje é a raiz. Toda outra tela tem a barra de topo com "voltar" e o título
+ * pequeno, como no iOS, e voltar sobe pelo mapa de rotas (`ROUTES`) até a aba
+ * dona da tela e daí ao Hoje — não pelo histórico, então um link aberto direto
  * também volta pelo caminho certo.
  */
 
 export type NavPlatform = 'web' | 'mobile';
-export type NavKey = 'home' | 'nutrition' | 'workout' | 'community' | 'more';
+export type NavKey = 'today' | 'nutrition' | 'workout' | 'community' | 'you';
+
+/**
+ * Ícone de cada aba, pelo nome do design system (`@fatia/design`, `ICONS`).
+ * `avatar` não é ícone: a aba Você mostra a inicial da pessoa.
+ */
+export type NavTabIcon = 'home' | 'apple' | 'dumbbell' | 'users' | 'avatar';
 
 export interface NavTab {
-  key: Exclude<NavKey, 'home' | 'more'>;
+  key: NavKey;
+  /** A barra só mostra o ícone; o nome é do leitor de tela (`aria-label`). */
   label: string;
   href: string;
+  icon: NavTabIcon;
 }
 
 export const PRIMARY_TABS: NavTab[] = [
-  { key: 'nutrition', label: 'Nutrição', href: '/nutrition' },
-  { key: 'workout', label: 'Treino', href: '/workout' },
-  { key: 'community', label: 'Comunidade', href: '/community' },
+  { key: 'today', label: 'Hoje', href: '/', icon: 'home' },
+  { key: 'nutrition', label: 'Nutrição', href: '/nutrition', icon: 'apple' },
+  { key: 'workout', label: 'Treino', href: '/workout', icon: 'dumbbell' },
+  { key: 'community', label: 'Comunidade', href: '/community', icon: 'users' },
+  { key: 'you', label: 'Você', href: '/you', icon: 'avatar' },
 ];
 
 export type MenuIcon =
@@ -32,6 +44,7 @@ export type MenuIcon =
   | 'daily-goals'
   | 'personal-goals'
   | 'profile'
+  | 'notifications'
   | 'foods'
   | 'nutrients'
   | 'plans'
@@ -98,6 +111,14 @@ const MENU: { title: string; items: MenuItemDef[] }[] = [
         label: 'Perfil',
         description: 'Conta, altura e seus dados',
         href: '/profile',
+      },
+      // Os avisos são uma linha de Você, não um sino no cabeçalho dela (ADR 040,
+      // item 4). Leva às preferências até a caixa de avisos da #389.
+      {
+        key: 'notifications',
+        label: 'Notificações',
+        description: 'Avisos e lembretes',
+        href: '/profile/notifications',
       },
     ],
   },
@@ -177,16 +198,60 @@ export function menuSections(opts: {
 }
 
 /**
- * Aba acesa para a rota. Nutrição, Treino e Comunidade acendem em toda a
- * subárvore (Meus alimentos é Nutrição, Planos é Treino); o Início não acende
- * aba nenhuma, e o resto — Progresso, Metas, Perfil, Chat — mora no "Mais".
+ * Aba acesa para a rota. Cada aba acende em toda a sua subárvore (Meus
+ * alimentos é Nutrição, Planos é Treino). Perfil, Progresso, Metas pessoais e
+ * Meu plano moram em Você; o painel da equipe (`/org`) e a área do
+ * profissional (`/students`) moram em Comunidade. O chat não é de aba nenhuma:
+ * `null`.
  */
-export function activeNavKey(pathname: string): NavKey {
-  if (pathname === '/') return 'home';
-  if (/^\/nutrition(\/|$)/.test(pathname)) return 'nutrition';
-  if (/^\/workout(\/|$)/.test(pathname)) return 'workout';
-  if (/^\/community(\/|$)/.test(pathname)) return 'community';
-  return 'more';
+export function activeNavKey(pathname: string): NavKey | null {
+  const path = pathname.split(/[?#]/)[0]!;
+  if (path === '/' || path === '') return 'today';
+  const under = (root: string) => new RegExp(`^/${root}(/|$)`).test(path);
+  if (under('nutrition')) return 'nutrition';
+  if (under('workout')) return 'workout';
+  if (under('community') || under('org') || under('students')) return 'community';
+  if (under('you') || under('profile') || under('progress') || under('goals') || under('plan')) {
+    return 'you';
+  }
+  return null;
+}
+
+/**
+ * Tarefas de foco: a barra de baixo some (ADR 040, item 6). Conversa aberta,
+ * câmera, leitor de código, criar comunidade, onboarding e os editores do
+ * painel. Os padrões casam a rota inteira, com os `:param`.
+ */
+const FOCUS_ROUTES = [
+  '/chat',
+  '/chat/:id',
+  '/nutrition/photo',
+  '/nutrition/scan',
+  '/community/new',
+  '/onboarding',
+  '/org/:id/content/plans/:templateId',
+  '/org/:id/content/tips/:tipId',
+  '/org/:id/exercises/:exerciseId',
+] as const;
+
+export type NavBarMode = 'visible' | 'hidden';
+
+/**
+ * A barra aparece nesta tela? A sessão de treino só esconde enquanto está em
+ * andamento: concluída, ela é tela de ver. `activeSessionId` ausente é "ainda
+ * não sei", e a barra fica escondida até saber, para não piscar sobre a sessão.
+ */
+export function navBarMode(
+  pathname: string,
+  opts: { activeSessionId?: string | null } = {},
+): NavBarMode {
+  const path = segments(pathname);
+  if (FOCUS_ROUTES.some((pattern) => match(pattern, path))) return 'hidden';
+  if (match('/workout/session/:id', path)) {
+    if (opts.activeSessionId === undefined) return 'hidden';
+    return opts.activeSessionId === path[2] ? 'hidden' : 'visible';
+  }
+  return 'visible';
 }
 
 /** Uma tela no mapa: o título pequeno da barra de topo e para onde "voltar" leva. */
@@ -194,11 +259,11 @@ interface RouteDef {
   /** Segmentos com `:param` para os dinâmicos. */
   pattern: string;
   title: string;
-  /** null só no Início. */
+  /** null nas 5 abas da barra (ADR 040): são telas de ver, sem seta de voltar. */
   parent: string | null;
 }
 
-export const HOME_TITLE = 'Início';
+export const HOME_TITLE = 'Hoje';
 
 /**
  * Todas as telas do PWA e do app. Telas dinâmicas têm título genérico; a
@@ -206,31 +271,36 @@ export const HOME_TITLE = 'Início';
  */
 export const ROUTES: readonly RouteDef[] = [
   { pattern: '/', title: HOME_TITLE, parent: null },
-  { pattern: '/nutrition', title: 'Nutrição', parent: '/' },
+  { pattern: '/nutrition', title: 'Nutrição', parent: null },
   { pattern: '/nutrition/foods', title: 'Meus alimentos', parent: '/nutrition' },
   { pattern: '/nutrition/goals', title: 'Metas do dia', parent: '/nutrition' },
   { pattern: '/nutrition/nutrient-targets', title: 'Metas de nutrientes', parent: '/nutrition' },
   { pattern: '/nutrition/scan', title: 'Escanear produto', parent: '/nutrition' },
   { pattern: '/nutrition/photo', title: 'Registrar por foto', parent: '/nutrition' },
-  { pattern: '/workout', title: 'Treino', parent: '/' },
+  { pattern: '/workout', title: 'Treino', parent: null },
   { pattern: '/workout/history', title: 'Histórico de treino', parent: '/workout' },
   { pattern: '/workout/plans', title: 'Planos de treino', parent: '/workout' },
   { pattern: '/workout/plans/:id', title: 'Plano de treino', parent: '/workout/plans' },
   { pattern: '/workout/quick/:id', title: 'Treino rápido', parent: '/workout' },
   { pattern: '/workout/session/:id', title: 'Treino', parent: '/workout/history' },
-  { pattern: '/progress', title: 'Progresso', parent: '/' },
+  // Você: a quinta aba. Perfil, Progresso, Metas pessoais e Meu plano são dela.
+  { pattern: '/you', title: 'Você', parent: null },
+  { pattern: '/progress', title: 'Progresso', parent: '/you' },
   { pattern: '/progress/records', title: 'Recordes', parent: '/progress' },
-  { pattern: '/goals', title: 'Metas pessoais', parent: '/' },
-  { pattern: '/profile', title: 'Perfil', parent: '/' },
+  { pattern: '/goals', title: 'Metas pessoais', parent: '/you' },
+  { pattern: '/profile', title: 'Perfil', parent: '/you' },
   { pattern: '/profile/connect', title: 'Conectar sua IA', parent: '/profile' },
   { pattern: '/profile/tokens', title: 'Conectar sua IA', parent: '/profile' },
   { pattern: '/profile/notifications', title: 'Notificações', parent: '/profile' },
-  { pattern: '/plan', title: 'Meu plano', parent: '/profile' },
+  { pattern: '/profile/appearance', title: 'Aparência', parent: '/profile' },
+  // Galeria do design system: só fora de produção (notFound em produção), sem link.
+  { pattern: '/design-system', title: 'Design system', parent: '/' },
+  { pattern: '/plan', title: 'Meu plano', parent: '/you' },
   { pattern: '/chat', title: 'Chat', parent: '/' },
   // Só no app: na web as memórias são uma gaveta da conversa. Antes do `:id`.
   { pattern: '/chat/memories', title: 'Memórias', parent: '/chat' },
   { pattern: '/chat/:id', title: 'Chat', parent: '/' },
-  { pattern: '/community', title: 'Comunidade', parent: '/' },
+  { pattern: '/community', title: 'Comunidade', parent: null },
   // Antes de `/community/:id`: a primeira rota que casa é a que vale.
   { pattern: '/community/new', title: 'Criar comunidade', parent: '/community' },
   { pattern: '/community/:id', title: 'Comunidade', parent: '/community' },
@@ -277,7 +347,7 @@ export const ROUTES: readonly RouteDef[] = [
 
 export interface RouteInfo {
   title: string;
-  /** Para onde "voltar" leva; null no Início. */
+  /** Para onde "voltar" leva; null no Hoje. */
   parent: string | null;
   /** Título da tela de destino do "voltar" (para o rótulo acessível). */
   parentTitle: string | null;
@@ -296,6 +366,14 @@ function find(path: string[]): RouteDef | undefined {
   return ROUTES.find((r) => match(r.pattern, path));
 }
 
+/**
+ * Barra de topo (título e ações da tela): todas as telas menos o Hoje, que tem
+ * cabeçalho próprio. A seta de voltar é outra coisa: só aparece com `parent`.
+ */
+export function hasTopBar(pathname: string): boolean {
+  return segments(pathname).length > 0;
+}
+
 /** O caminho é de uma tela do mapa? Os `:param` casam qualquer segmento. */
 export function isKnownRoute(pathname: string): boolean {
   return find(segments(pathname)) !== undefined;
@@ -312,7 +390,7 @@ function fillParams(parent: string, pattern: string, path: string[]): string {
 
 /**
  * Título e "voltar" da tela. Rota fora do mapa volta ao ancestral conhecido
- * mais próximo (no fim, o Início), nunca a lugar nenhum.
+ * mais próximo (no fim, o Hoje), nunca a lugar nenhum.
  */
 export function routeInfo(pathname: string): RouteInfo {
   const path = segments(pathname);

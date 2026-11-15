@@ -1,10 +1,11 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { Plus } from 'lucide-react-native';
 import type { TodaySummary } from '@fatia/api-client';
 import { Button, Card } from '@/components/ui';
 import { formatInteger } from '@/components/charts';
 import { NUMEROS_TABULARES, percentualDaMeta } from './helpers';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/components/dashboard/steps-card.tsx`.
@@ -56,7 +57,7 @@ export function StepsCard({
       ) : null}
 
       <Button variant="outline" size="sm" onPress={onLogSteps} accessibilityLabel="Logar passos">
-        <Plus size={14} color={cores.foreground} />
+        <Plus size={14} color={colors.foreground} />
         <Text className="text-sm font-medium text-foreground">Logar passos</Text>
       </Button>
     </Card>

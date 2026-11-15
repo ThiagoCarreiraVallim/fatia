@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { ChevronRight, Dumbbell, Footprints, Trophy } from 'lucide-react-native';

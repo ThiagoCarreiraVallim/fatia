@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Crown, LayoutDashboard } from 'lucide-react-native';
@@ -19,7 +20,7 @@ import { Screen } from '@/components/layout/screen';
 import { apiMessage } from '@/components/org/org-panel';
 import { Button, EmptyState, ErrorState, LoadingState, cn, useConfirm } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 const formatWhen = (iso: string) =>
   new Intl.DateTimeFormat('pt-BR', {
@@ -156,7 +157,7 @@ export default function CommunitySettingsScreen() {
             onPress={() => router.push(panelHref(g.id))}
             className="flex-row items-center gap-3 rounded-2xl border border-border bg-card p-4 active:opacity-80"
           >
-            <LayoutDashboard size={20} color={cores.primary} />
+            <LayoutDashboard size={20} color={colors.primaryText} />
             <View className="flex-1">
               <Text className="text-sm font-medium text-foreground">Abrir painel</Text>
               <Text className="text-xs text-muted-foreground">
@@ -165,7 +166,7 @@ export default function CommunitySettingsScreen() {
                   : 'Membros, o que compartilham com você, convites, planos e dicas.'}
               </Text>
             </View>
-            <ChevronRight size={18} color={cores.mutedForeground} />
+            <ChevronRight size={18} color={colors.mutedForeground} />
           </Pressable>
         ) : null}
 
@@ -181,7 +182,7 @@ export default function CommunitySettingsScreen() {
             onPress={() => router.push('/plan')}
             className="flex-row items-center gap-3 rounded-2xl border border-border bg-card p-4 active:opacity-80"
           >
-            <Crown size={20} color={cores.primary} />
+            <Crown size={20} color={colors.primaryText} />
             <View className="flex-1">
               <Text className="text-sm font-medium text-foreground">A comunidade paga seu PRO</Text>
               <Text className="text-xs text-muted-foreground">

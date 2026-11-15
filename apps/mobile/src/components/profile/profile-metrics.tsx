@@ -1,8 +1,9 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useQuery } from '@tanstack/react-query';
 import { Pencil, Ruler, Weight } from 'lucide-react-native';
 import { progressApi, usersApi } from '@fatia/api-client';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/components/profile/profile-metrics.tsx`.
@@ -22,7 +23,7 @@ export function ProfileMetrics({ onEditHeight }: { onEditHeight: () => void }) {
     <View className="flex-row gap-3">
       <View className="flex-1 rounded-2xl border border-border bg-card p-4">
         <View className="flex-row items-center gap-1.5">
-          <Weight size={12} color={cores.mutedForeground} />
+          <Weight size={12} color={colors.mutedForeground} />
           <Text className="text-[11px] font-bold text-muted-foreground">Peso Atual</Text>
         </View>
         <Text
@@ -44,10 +45,10 @@ export function ProfileMetrics({ onEditHeight }: { onEditHeight: () => void }) {
       >
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-1.5">
-            <Ruler size={12} color={cores.mutedForeground} />
+            <Ruler size={12} color={colors.mutedForeground} />
             <Text className="text-[11px] font-bold text-muted-foreground">Estatura</Text>
           </View>
-          <Pencil size={11} color={cores.mutedForeground} />
+          <Pencil size={11} color={colors.mutedForeground} />
         </View>
         <Text
           className="mt-1 text-xl font-extrabold text-foreground"

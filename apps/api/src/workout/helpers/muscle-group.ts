@@ -39,6 +39,43 @@ export const ANATOMICAL_MUSCLES = [
 
 export type AnatomicalMuscle = (typeof ANATOMICAL_MUSCLES)[number];
 
+export type CanonicalMuscleGroup = (typeof CANONICAL_MUSCLE_GROUPS)[number];
+
+/**
+ * Cada músculo do diagrama no grupo do catálogo. É o que soma as séries por
+ * grupo da semana (cards da aba Treino, #369): o exercício guarda o músculo
+ * anatômico, e a pessoa pensa em "peito", "pernas".
+ */
+const GROUP_OF_MUSCLE: Record<AnatomicalMuscle, CanonicalMuscleGroup> = {
+  chest: 'peito',
+  lats: 'costas',
+  'middle back': 'costas',
+  'lower back': 'costas',
+  traps: 'costas',
+  quadriceps: 'pernas',
+  hamstrings: 'pernas',
+  glutes: 'pernas',
+  calves: 'pernas',
+  adductors: 'pernas',
+  abductors: 'pernas',
+  shoulders: 'ombro',
+  neck: 'ombro',
+  biceps: 'braço',
+  triceps: 'braço',
+  forearms: 'braço',
+  abdominals: 'core',
+};
+
+/** Os grupos (sem repetir, na ordem em que aparecem) dos músculos dados. */
+export function canonicalGroupsOf(muscles: readonly string[]): CanonicalMuscleGroup[] {
+  const groups: CanonicalMuscleGroup[] = [];
+  for (const m of muscles) {
+    const g = GROUP_OF_MUSCLE[m as AnatomicalMuscle];
+    if (g && !groups.includes(g)) groups.push(g);
+  }
+  return groups;
+}
+
 /**
  * Lista de músculos para primary/secondary: cada item ∈ ANATOMICAL_MUSCLES.
  *

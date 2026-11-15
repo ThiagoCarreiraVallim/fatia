@@ -1,0 +1,14 @@
+{
+  // A API compila com `nest build` (tsc em CommonJS) e não transpila TypeScript
+  // de pacote do workspace: ela consome o `dist/`. Web, app e site leem o
+  // `src/` direto pela condição `import`/`react-native` do `exports`.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "types": []
+  },
+  "exclude": ["src/**/__tests__/**"]
+}

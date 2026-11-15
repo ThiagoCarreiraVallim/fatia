@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useQuery } from '@tanstack/react-query';
 import { groupsApi } from '@fatia/api-client';
 import { cn } from '@/components/ui';

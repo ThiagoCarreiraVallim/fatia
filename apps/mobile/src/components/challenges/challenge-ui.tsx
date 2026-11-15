@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { ChevronRight, Medal as MedalIcon, Trophy } from 'lucide-react-native';
 import {
   challengePeriod,
@@ -13,7 +14,7 @@ import {
   type Medal,
 } from '@fatia/api-client';
 import { cn } from '@/components/ui';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /** Equivalente de `apps/web/src/components/challenges/challenge-ui.tsx`. */
 
@@ -65,7 +66,7 @@ export function ChallengeCard({
       onPress={onPress}
       className="flex-row items-center gap-3 rounded-2xl border border-border bg-card p-4 active:opacity-80"
     >
-      <Trophy size={20} color={cores.primary} />
+      <Trophy size={20} color={colors.primaryText} />
       <View className="flex-1 gap-1">
         <View className="flex-row flex-wrap items-center gap-2">
           <Text className="text-sm font-semibold text-foreground">{c.title}</Text>
@@ -77,7 +78,7 @@ export function ChallengeCard({
         {resumo ? <Text className="text-xs font-medium text-foreground">{resumo}</Text> : null}
         {c.me?.medal ? <MedalBadge medal={c.me.medal} /> : null}
       </View>
-      <ChevronRight size={16} color={cores.mutedForeground} />
+      <ChevronRight size={16} color={colors.mutedForeground} />
     </Pressable>
   );
 }

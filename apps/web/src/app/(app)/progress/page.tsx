@@ -212,7 +212,7 @@ export default function ProgressPage() {
           <button
             type="button"
             onClick={() => setLogWeightOpen(true)}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 py-3 text-[13px] font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong py-3 text-[13px] font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary"
           >
             <Plus size={16} />
             Logar peso
@@ -220,7 +220,7 @@ export default function ProgressPage() {
           <button
             type="button"
             onClick={() => setLogStepsOpen(true)}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 py-3 text-[13px] font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong py-3 text-[13px] font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary"
           >
             <Plus size={16} />
             Logar passos

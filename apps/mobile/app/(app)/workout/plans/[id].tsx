@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { AccessibilityInfo, Pressable, Text, View } from 'react-native';
+import { AccessibilityInfo, Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -34,7 +35,7 @@ import {
   pluralize,
   type PlanMove,
 } from '@/components/workout/workout-stats';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/app/(app)/workout/plans/[id]/page.tsx`.
@@ -47,7 +48,7 @@ import { cores } from '@/theme/cores';
 function Stat({ icon: Icon, label, value }: { icon: typeof Clock; label: string; value: string }) {
   return (
     <View className="flex-row items-center gap-2">
-      <Icon size={14} color={cores.primary} />
+      <Icon size={14} color={colors.primaryText} />
       <View>
         <Text className="text-[10px] font-bold tracking-wide text-muted-foreground">{label}</Text>
         <Text className="text-sm font-extrabold text-foreground">{value}</Text>
@@ -250,7 +251,7 @@ export default function PlanDetailScreen() {
               onPress={startEditName}
               className={TOP_BAR_ACTION}
             >
-              <Pencil size={19} color={cores.primary} />
+              <Pencil size={19} color={colors.primaryText} />
             </Pressable>
             <Pressable
               accessibilityRole="button"
@@ -258,7 +259,7 @@ export default function PlanDetailScreen() {
               onPress={confirmDelete}
               className={TOP_BAR_ACTION}
             >
-              <Trash2 size={19} color={cores.primary} />
+              <Trash2 size={19} color={colors.primaryText} />
             </Pressable>
           </>
         }
@@ -285,7 +286,7 @@ export default function PlanDetailScreen() {
                 onPress={submitName}
                 className={TOP_BAR_ACTION}
               >
-                <Check size={20} color={cores.primary} />
+                <Check size={20} color={colors.primaryText} />
               </Pressable>
             </View>
           ) : null}
@@ -321,7 +322,7 @@ export default function PlanDetailScreen() {
               onPress={() => setAddOpen(true)}
               className="items-center gap-2 rounded-2xl border border-dashed border-border bg-accent p-6 active:opacity-80"
             >
-              <Plus size={20} color={cores.primary} />
+              <Plus size={20} color={colors.primaryText} />
               <Text className="text-center text-sm text-muted-foreground">
                 Plano criado! Agora{' '}
                 <Text className="font-bold text-primary">adicione seu primeiro exercício</Text>.
@@ -353,13 +354,13 @@ export default function PlanDetailScreen() {
           </View>
 
           <Button variant="outline" className="rounded-2xl" onPress={() => setAddOpen(true)}>
-            <Plus size={16} color={cores.foreground} />
+            <Plus size={16} color={colors.foreground} />
             <Text className="text-sm font-medium text-foreground">Adicionar exercício</Text>
           </Button>
 
           <View className="rounded-2xl border border-border bg-accent p-4">
             <View className="flex-row items-center gap-2">
-              <Lightbulb size={16} color={cores.primary} />
+              <Lightbulb size={16} color={colors.primaryText} />
               <Text className="text-sm font-extrabold text-foreground">Foco na Excêntrica</Text>
             </View>
             <Text className="mt-1 text-xs leading-relaxed text-muted-foreground">
@@ -374,7 +375,7 @@ export default function PlanDetailScreen() {
             loading={start.isPending}
             onPress={() => start.mutate()}
           >
-            <Play size={16} color={cores.background} fill={cores.background} />
+            <Play size={16} color={colors.background} fill={colors.background} />
             <Text className="text-base font-extrabold text-primary-foreground">Iniciar Treino</Text>
           </Button>
         </View>

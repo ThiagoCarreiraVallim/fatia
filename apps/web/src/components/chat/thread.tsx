@@ -25,6 +25,7 @@ import Link from 'next/link';
 import { erroDoChat, planHref, stopChatRun, textoDeErroDoChat } from '@fatia/api-client';
 import { cn } from '@/lib/utils';
 import { LiveJoin } from './live-join';
+import { DrawerMessage } from './drawer-message';
 import { field, ghostButton } from '@/components/elements/surfaces';
 import {
   EmptyState,
@@ -450,6 +451,7 @@ export function ChatThread() {
   return (
     <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
       <LiveJoin />
+      <DrawerMessage />
       <Conversation aria-busy={rodando} className="min-h-0">
         <ConversationContent>
           <AuiIf condition={(s) => s.thread.isEmpty && !s.thread.isLoading}>

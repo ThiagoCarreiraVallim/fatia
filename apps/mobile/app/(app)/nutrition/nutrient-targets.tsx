@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react-native';
 import { nutritionApi, type NutrientTarget } from '@fatia/api-client';
@@ -19,7 +20,7 @@ import {
   useConfirm,
 } from '@/components/ui';
 import { NUMEROS_TABULARES, mensagemDeErro } from '@/components/nutrition/helpers';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/app/(app)/nutrition/nutrient-targets/page.tsx`.
@@ -259,7 +260,7 @@ export default function NutrientTargetsScreen() {
               disabled={!podeSalvar || salvar.isPending}
               loading={salvar.isPending}
             >
-              <Plus size={16} color={cores.background} />
+              <Plus size={16} color={colors.background} />
               <Text className="text-sm font-medium text-primary-foreground">Salvar meta</Text>
             </Button>
 
@@ -334,7 +335,7 @@ function LinhaDaMeta({ meta, onRemover }: { meta: NutrientTarget; onRemover: () 
         hitSlop={8}
         className="h-11 w-11 items-center justify-center rounded-md active:bg-accent"
       >
-        <Trash2 size={16} color={cores.mutedForeground} />
+        <Trash2 size={16} color={colors.mutedForeground} />
       </Pressable>
     </View>
   );

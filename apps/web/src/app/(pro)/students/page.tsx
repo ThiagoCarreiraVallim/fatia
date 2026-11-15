@@ -30,7 +30,7 @@ export default function StudentsPage() {
       )}
 
       {!alunos.isLoading && lista.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-white/10 bg-card/30 p-6 text-center">
+        <div className="rounded-2xl border border-dashed border-border bg-card/30 p-6 text-center">
           <Users size={20} className="mx-auto text-muted-foreground" />
           <p className="mt-3 text-sm font-bold text-foreground">Ninguém por aqui ainda</p>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -43,7 +43,7 @@ export default function StudentsPage() {
         <Link
           key={aluno.membershipId}
           href={`/students/${aluno.membershipId}`}
-          className="flex items-start gap-3 rounded-2xl border border-subtle bg-card p-4 hover:border-white/10"
+          className="flex items-start gap-3 rounded-2xl border border-subtle bg-card p-4 hover:border-border-strong"
         >
           <div className="min-w-0 flex-1">
             <p className="truncate text-base font-bold text-foreground">{aluno.name}</p>

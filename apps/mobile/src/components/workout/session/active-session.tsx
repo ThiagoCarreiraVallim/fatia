@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useKeepAwake } from 'expo-keep-awake';
 import { ChevronDown, ChevronUp, Play, Plus, Trash2 } from 'lucide-react-native';
 import {
@@ -28,8 +29,8 @@ import { sessionProgress } from './format';
 import { useCancelSession } from './use-cancel-session';
 import { useSessionExitGuard } from './use-exit-guard';
 import { useSessionLayout } from './use-session-layout';
-import { useRestTimer } from './use-rest-timer';
-import { cores } from '@/theme/cores';
+import { useSessionRestTimer } from './rest-timer-provider';
+import { colors } from '@/theme/colors';
 
 /**
  * Sessão em andamento — o `ActiveSession` de `apps/web/src/app/(app)/workout/page.tsx`,
@@ -62,7 +63,9 @@ export function ActiveSession({
   useKeepAwake();
   const exit = useSessionExitGuard();
 
-  const rest = useRestTimer();
+  // Global (`RestTimerProvider`): a barra do treino em andamento mostra o
+  // descanso e o +30 s fora desta tela (#369).
+  const rest = useSessionRestTimer();
   const cancel = useCancelSession(session.id);
   const layout = useSessionLayout(session);
   const scrollRef = useRef<ScrollView>(null);
@@ -147,8 +150,8 @@ export function ActiveSession({
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                tintColor={cores.primary}
-                colors={[cores.primary]}
+                tintColor={colors.primaryText}
+                colors={[colors.primaryText]}
               />
             }
           >
@@ -240,7 +243,7 @@ export function ActiveSession({
             ))}
 
             <Button variant="outline" className="rounded-2xl" onPress={() => setSearchOpen(true)}>
-              <Plus size={16} color={cores.foreground} />
+              <Plus size={16} color={colors.foreground} />
               <Text className="text-sm font-medium text-foreground">Adicionar exercício</Text>
             </Button>
           </ScrollView>
@@ -341,7 +344,7 @@ function ExerciseActions({
           accessibilityLabel={`Fazer ${group.exerciseName} agora`}
           onPress={onDoNow}
         >
-          <Play size={14} color={cores.primaryForeground} fill={cores.primaryForeground} />
+          <Play size={14} color={colors.primaryForeground} fill={colors.primaryForeground} />
           <Text className="text-xs font-extrabold text-primary-foreground">Fazer agora</Text>
         </Button>
       )}
@@ -351,17 +354,17 @@ function ExerciseActions({
         disabled={isFirst || disabled}
         onPress={() => onMove('up')}
       >
-        <ChevronUp size={20} color={isFirst || disabled ? cores.border : cores.foreground} />
+        <ChevronUp size={20} color={isFirst || disabled ? colors.border : colors.foreground} />
       </IconAction>
       <IconAction
         label={`Mover ${group.exerciseName} para baixo`}
         disabled={isLast || disabled}
         onPress={() => onMove('down')}
       >
-        <ChevronDown size={20} color={isLast || disabled ? cores.border : cores.foreground} />
+        <ChevronDown size={20} color={isLast || disabled ? colors.border : colors.foreground} />
       </IconAction>
       <IconAction label={`Tirar ${group.exerciseName} deste treino`} onPress={onRemove}>
-        <Trash2 size={18} color={cores.danger} />
+        <Trash2 size={18} color={colors.danger} />
       </IconAction>
     </View>
   );

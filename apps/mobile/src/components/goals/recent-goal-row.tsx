@@ -1,8 +1,9 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { CheckCircle2, History } from 'lucide-react-native';
 import type { Goal } from '@fatia/api-client';
 import { formatValue } from './format';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /** Réplica do `RecentGoalRow` do PWA. */
 export function RecentGoalRow({ goal }: { goal: Goal }) {
@@ -16,9 +17,9 @@ export function RecentGoalRow({ goal }: { goal: Goal }) {
         }`}
       >
         {done ? (
-          <CheckCircle2 size={18} color={cores.primary} />
+          <CheckCircle2 size={18} color={colors.primaryText} />
         ) : (
-          <History size={16} color={cores.mutedForeground} />
+          <History size={16} color={colors.mutedForeground} />
         )}
       </View>
       <View className="min-w-0 flex-1">

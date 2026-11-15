@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Share, Text, View } from 'react-native';
+import { Share, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { Download } from 'lucide-react-native';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { usersApi } from '@fatia/api-client';
 import { Button, FormMessage } from '@/components/ui';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Portabilidade (LGPD art. 18, V) pelo app.
@@ -79,7 +80,7 @@ export function ExportDataButton() {
         accessibilityLabel="Exportar meus dados"
         accessibilityHint="Abre o menu de compartilhamento do sistema com seus dados em JSON"
       >
-        <Download size={16} color={cores.foreground} />
+        <Download size={16} color={colors.foreground} />
         <Text className="text-sm font-medium text-foreground">
           {pending ? 'Preparando…' : 'Exportar meus dados'}
         </Text>

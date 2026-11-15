@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { Text, View, type ViewProps } from 'react-native';
+import { View, type ViewProps } from 'react-native';
+import { Text } from './text';
 import { cn } from './utils';
 
 /**

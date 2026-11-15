@@ -17,6 +17,8 @@ WORKDIR /app
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/site/package.json apps/site/
+# @fatia/design (tokens, ícones, contraste) também é consumido como source.
+COPY packages/design/package.json packages/design/
 RUN pnpm install --frozen-lockfile --filter @fatia/site...
 
 # ---------- Build ----------
@@ -26,6 +28,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/site/node_modules ./apps/site/node_modules
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/site ./apps/site
+COPY packages/design ./packages/design
 
 # O site é estático: não há env em runtime, o domínio entra no HTML durante o
 # build. Vem do ${DOMAIN} do compose.

@@ -158,3 +158,21 @@ sem cache do OFF.
 
 Continua sem tool MCP de consulta por código: a IA externa não tem câmera, e quem tem o número em mãos
 o digita no app.
+
+## Nota — redesign (#375, 2026-11-14)
+
+O redesign mostra um selo de origem em cada resultado da busca: **TACO**, **código de barras** ou
+**seu** (`Dados-Alimentacao`, [`DADOS_REDESIGN.md`](../DADOS_REDESIGN.md)). Nada da decisão
+principal muda:
+
+- O selo **"código de barras" é só do resultado da sessão**: o produto lido no Open Food Facts
+  aparece com ele enquanto a tela está aberta, e o resultado continua **não guardado** (seção 3).
+- Ao **criar um alimento** a partir do código ou da **foto do rótulo** (botão novo da #375), o
+  `Food` nasce com `source = CUSTOM` — selo "seu" —, privado da pessoa, como na atualização de
+  2026-10. Não há valor novo em `FoodSource`; `USDA` continua no enum sem uso (ADR 005).
+- A **foto do rótulo** vai à IA e é descartada ([ADR 020](./020-foto-e-audio-trafegam-sem-persistencia.md);
+  [ADR 038](./038-foto-da-refeicao-guardada.md), item 4): só a foto que vira refeição pode ser
+  guardada.
+
+Guardar o selo "código de barras" no alimento exigiria migração (`Food.barcode` ou valor novo no
+enum) e revisão desta ADR, inclusive da obrigação da ODbL (seção 4).

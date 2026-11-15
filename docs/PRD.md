@@ -30,7 +30,10 @@ acompanha e a comunidade se motiva junto.
 | **Quem self-hosta**                                                                    | A stack inteira no próprio servidor, licença MIT                                                                      | Nada; `AI_REQUIRES_PLAN=false` libera a IA para a instância ([ADR 024](./ADR/024-plano-free-e-pago-do-usuario.md))                              |
 
 Papéis da comunidade: `OWNER`, `PROFESSIONAL`, `CREATOR` e `MEMBER` — o que cada um faz está em
-[`PERMISSIONS.md`](./PERMISSIONS.md).
+[`PERMISSIONS.md`](./PERMISSIONS.md). A [ADR 043](./ADR/043-papeis-da-equipe.md) acrescenta
+administrador e recepção (que nunca leem dado de aluno), a especialidade do profissional
+(nutricionista vê só alimentação, metas, corpo e, se liberadas, as fotos das refeições) e o
+consentimento por papel; a implementação é da #404.
 
 ## 3. Princípios que o produto não negocia
 
@@ -43,14 +46,18 @@ Papéis da comunidade: `OWNER`, `PROFESSIONAL`, `CREATOR` e `MEMBER` — o que c
 3. **Pagamento degrada, nunca bloqueia.** Inadimplência — do aluno ou da comunidade — tira só a IA
    hospedada, depois da carência. Registro, histórico e MCP continuam.
 4. **Ninguém compara corpo.** Desafios e rankings medem aderência à **própria** meta e constância,
-   nunca peso, medida ou foto ([ADR 027](./ADR/027-desafios-por-aderencia-a-propria-meta.md)).
+   nunca peso, medida ou foto ([ADR 027](./ADR/027-desafios-por-aderencia-a-propria-meta.md)). A
+   foto de check-in de um desafio é **prova**, vista só pela pessoa e pela equipe que revisa, nunca
+   no ranking nem no mural ([ADR 044](./ADR/044-desafios-com-revisao.md)).
 5. **MCP-first.** Toda função do app existe como tool MCP ([ADR 006](./ADR/006-mcp-first.md)),
    com duas exceções declaradas: inferência paga pela Fatia (ADR 018) e a administração da
    comunidade.
-6. **Foto de refeição não vira arquivo.** Foto e áudio vão à IA e somem
-   ([ADR 004](./ADR/004-sem-armazenamento-fotos.md), [ADR 020](./ADR/020-foto-e-audio-trafegam-sem-persistencia.md)).
+6. **A foto da refeição só fica guardada se a pessoa aceitar**, e a equipe só a vê com uma
+   categoria de compartilhamento própria ([ADR 038](./ADR/038-foto-da-refeicao-guardada.md)). O
+   áudio do ditado vai à IA e some ([ADR 020](./ADR/020-foto-e-audio-trafegam-sem-persistencia.md)).
    Imagem que a pessoa **publica** na comunidade é outra coisa e é guardada sem EXIF
-   ([ADR 028](./ADR/028-imagens-de-posts-da-comunidade.md)).
+   ([ADR 028](./ADR/028-imagens-de-posts-da-comunidade.md)). A foto de check-in de desafio vive só
+   até 30 dias depois do fim do desafio ([ADR 044](./ADR/044-desafios-com-revisao.md)).
 7. **Isolamento é da aplicação e é testado.** Recurso de outra pessoa responde `NOT_FOUND`, igual a
    inexistente ([ADR 010](./ADR/010-row-level-security.md), [`THREAT_MODEL.md`](./THREAT_MODEL.md)).
 
@@ -66,7 +73,8 @@ Papéis da comunidade: `OWNER`, `PROFESSIONAL`, `CREATOR` e `MEMBER` — o que c
   prescrição de carga; periodização em blocos.
 - **Progresso:** peso, passos, gráficos de carga, cardio e peso, sequências e conquistas.
 - **IA hospedada (PRO):** chat que registra e consulta pelo mesmo catálogo de tools, com
-  confirmação antes de escrever, memória e conversa que continua no servidor; foto do prato; ditado;
+  confirmação antes de escrever — ou gravação automática com Desfazer, por categoria, para quem
+  escolher ([ADR 039](./ADR/039-ia-grava-no-modo-automatico.md)) —, memória e conversa que continua no servidor; foto do prato; ditado;
   o agente da comunidade (nome, avatar e orientações da equipe).
 - **Comunidades:** entrar por convite, link ou código, com consentimento por categoria; mural com
   imagens, reações e comentários; desafios com ranking só de quem participa; planos prontos, dicas e
@@ -84,18 +92,44 @@ Papéis da comunidade: `OWNER`, `PROFESSIONAL`, `CREATOR` e `MEMBER` — o que c
 - PRO pessoal pela web (Asaas: Pix, boleto, cartão) e pelas lojas (RevenueCat); assentos de
   comunidade pela web. Valores, estados e webhooks em [`BILLING.md`](./BILLING.md).
 
+### Em implantação — o redesign ([#367](https://github.com/ThiagoCarreiraVallim/fatia/issues/367))
+
+O redesign refaz app, web, painel e site a partir do canvas, e traz produto novo. Cada item tem
+issue própria; o índice "dado novo → issue" e os estados que viram tela estão em
+[`DADOS_REDESIGN.md`](./DADOS_REDESIGN.md).
+
+- **Navegação:** cinco abas (Hoje · Nutrição · Treino · Comunidade · Você) e o botão da IA
+  ([ADR 040](./ADR/040-navegacao-com-aba-hoje-e-botao-da-ia.md)); tema escuro e claro, seguindo o
+  sistema ([ADR 041](./ADR/041-tema-claro.md)).
+- **Aluno:** o Hoje com o dia e o que fazer; lembretes; hábitos e check-in por QR; avaliação
+  física; circuitos (AMRAP, EMOM, Tabata, For Time); plano de treino e plano alimentar recebidos da
+  equipe, com aceite; questionários; foto da refeição guardada com consentimento (ADR 038).
+- **Comunidade:** agenda de aulas e eventos com "Vou", informativa
+  ([ADR 042](./ADR/042-agenda-da-comunidade.md)); enquetes, comunicados e "Para você" no mural;
+  desafios por tipo, com pontos e check-in por foto revisado pela equipe (ADR 044); marca da
+  comunidade com contraste conferido (ADR 041).
+- **Equipe:** papéis com administrador, recepção e nutricionista, e consentimento por papel
+  ([ADR 043](./ADR/043-papeis-da-equipe.md)); biblioteca e envio de planos; editor de alimentação;
+  automações; ficha da pessoa; alunos em risco por contagem (`AGGREGATION_POLICY.md`).
+- **Cobrança:** programas (PRO por período para uma turma ou desafio) e ofertas vendidas pela
+  comunidade (#403); checkout público de oferta em issue própria
+  ([#421](https://github.com/ThiagoCarreiraVallim/fatia/issues/421)).
+
 ## 5. Não-objetivos
 
 Valem para todo trabalho. Mudar qualquer linha desta seção exige ADR (ADR 037).
 
 **Fora, sem exceção prevista:**
 
-- ❌ **Comparar corpo** entre pessoas — ranking, desafio ou post com peso, medida ou foto de corpo (ADR 027)
-- ❌ **Guardar a foto da refeição** (ADR 004, ADR 020)
+- ❌ **Comparar corpo** entre pessoas — ranking, desafio ou post com peso, medida ou foto de corpo
+  (ADR 027). A foto de check-in de desafio é prova revisada pela equipe e nunca aparece a outros
+  membros (ADR 044)
 - ❌ **Bloquear o app ou o histórico por falta de pagamento** — só a IA hospedada degrada
 - ❌ **Inferência paga pela Fatia exposta pelo MCP** (ADR 018)
-- ❌ **Ser o sistema de gestão da academia** — matrícula, cobrança de mensalidade, catraca, agenda de
-  aulas. O Fatia complementa esse sistema; não o substitui
+- ❌ **Ser o sistema de gestão da academia** — matrícula, cobrança de mensalidade, catraca,
+  reserva de vaga, lista de espera e controle de presença. O Fatia complementa esse sistema; não o
+  substitui. A agenda de aulas e eventos da comunidade é informativa ("Vou", sem reserva, vaga ou
+  presença) e entra pela [ADR 042](./ADR/042-agenda-da-comunidade.md)
 - ❌ **Vender dado de aluno** ou entregar à equipe o que ele não consentiu, por qualquer preço
   ("pagar mais não compra recorte mais estreito", `BILLING.md`)
 - ❌ **Sugestão automática de receitas** geradas por IA
@@ -114,7 +148,6 @@ Valem para todo trabalho. Mudar qualquer linha desta seção exige ADR (ADR 037)
 | Fotos de progresso, privadas                       | [#300](https://github.com/ThiagoCarreiraVallim/fatia/issues/300) |
 | Receitas autorais (do profissional ou do aluno)    | [#334](https://github.com/ThiagoCarreiraVallim/fatia/issues/334) |
 | MCP para a equipe da comunidade                    | [#343](https://github.com/ThiagoCarreiraVallim/fatia/issues/343) |
-| Tema claro                                         | [#352](https://github.com/ThiagoCarreiraVallim/fatia/issues/352) |
 | Unidades e outros idiomas (hoje só pt-BR; ADR 016) | [#353](https://github.com/ThiagoCarreiraVallim/fatia/issues/353) |
 
 ## 6. Métricas de sucesso
@@ -149,3 +182,5 @@ Valem para todo trabalho. Mudar qualquer linha desta seção exige ADR (ADR 037)
   épica [#275](https://github.com/ThiagoCarreiraVallim/fatia/issues/275) reúne o que falta antes do
   piloto com academias
 - **Tools MCP:** [`MCP.md`](./MCP.md)
+- **Dados do redesign** (o que cada tela nova guarda, qual issue cria a tabela, estados que viram
+  tela e a conferência do Mapa): [`DADOS_REDESIGN.md`](./DADOS_REDESIGN.md)

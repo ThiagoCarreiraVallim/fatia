@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Text, View, type LayoutChangeEvent } from 'react-native';
+import { View, type LayoutChangeEvent } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useQuery } from '@tanstack/react-query';
 import Svg, { Path } from 'react-native-svg';
 import { nutritionApi } from '@fatia/api-client';
 import { ErrorState, LoadingState, cn } from '@/components/ui';
 import { NUMEROS_TABULARES, alturaDaBarra, caminhoDeBarra, inicialDoDia } from './helpers';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/components/nutrition/weekly-trend-chart.tsx`.
@@ -83,7 +84,7 @@ export function WeeklyTrendChart({ today }: { today: string }) {
                         larguraDaColuna,
                         altura,
                       )}
-                      fill={dia.date === today ? cores.primary : cores.muted}
+                      fill={dia.date === today ? colors.primaryText : colors.muted}
                     />
                   );
                 })}

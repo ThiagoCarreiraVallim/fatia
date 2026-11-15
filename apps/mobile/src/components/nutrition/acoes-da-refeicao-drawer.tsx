@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check } from 'lucide-react-native';
 import {
@@ -21,7 +22,7 @@ import {
 import { CopiarParaDia } from './copiar-para-dia';
 import { DrawerInput } from './drawer-input';
 import { ROTULO_REFEICAO, formatarHora, hojeIso, mensagemDeErro } from './helpers';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/components/nutrition/meal-actions-drawer.tsx`: copiar
@@ -128,7 +129,7 @@ function Acoes({
           </Text>
           {salvar.data ? (
             <View className="flex-row items-center gap-2 rounded-lg bg-primary/10 px-3 py-2">
-              <Check size={16} color={cores.primary} />
+              <Check size={16} color={colors.primaryText} />
               <Text className="flex-1 text-sm text-primary">
                 {`"${salvar.data.name}" salva. Ela aparece ao registrar uma refeição.`}
               </Text>

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { env } from '@/env';
 import { Screen } from '@/components/layout/screen';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui';

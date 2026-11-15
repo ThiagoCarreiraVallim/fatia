@@ -539,6 +539,23 @@ métrica de valor bruto ("mais proteína") para expor o que cada um comeu.
 027): num desafio de um dia, a pontuação de água **é** a água daquele dia, visível a quem participa.
 A pessoa entra sabendo o que conta (o texto da métrica está na tela de entrada).
 
+**Foto de check-in — dado novo ([ADR 044](./ADR/044-desafios-com-revisao.md), #395).** O que um
+atacante ganharia: como participante, ver a foto de outra pessoa (a casa, o corpo, a rotina); como
+equipe de outra comunidade, ler fotos que não revisa; ou usar o check-in para publicar foto de
+corpo. Mitigações exigidas na #395:
+
+- A foto só é servida à própria pessoa e a quem tem `challenge.manage` **naquela** comunidade,
+  buscando o check-in pelo par `{ id, challengeId, groupId }` da URL; participante, visitante e
+  ranking nunca recebem o arquivo nem a URL. Teste em `user-isolation.spec.ts`.
+- Só câmera do app, carimbo do servidor, EXIF e localização removidos nos dois lados, bucket
+  privado e URL assinada curta (ADR 028).
+- Foto anulada é apagada na decisão; as outras, 30 dias depois do fim do desafio; sair da
+  comunidade ou apagar a conta apaga na hora.
+- A sinalização "Não parece válido" não mostra a foto a quem sinaliza.
+
+**Não mitigado:** a equipe que revisa vê a foto inteira. É o preço da prova; a regra de não
+fotografar o corpo e a anulação com motivo são o que limita o que ela vê.
+
 ### 17. Mural da comunidade — conteúdo de qualquer membro (Fase 8b, ADR 032)
 
 O que um atacante ganharia: publicar ofensa, assédio, propaganda ou conselho de saúde perigoso

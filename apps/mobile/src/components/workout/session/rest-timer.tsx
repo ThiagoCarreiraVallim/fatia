@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { Pause, Play, Plus, SkipForward, Timer } from 'lucide-react-native';
 import { formatCountdown } from './format';
 import type { RestTimer as RestTimerState } from './use-rest-timer';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Bloco de descanso do card de série — o mesmo lugar do PWA, com os controles
@@ -18,7 +19,7 @@ export function RestTimer({ timer }: { timer: RestTimerState }) {
   return (
     <View className="mt-4 rounded-xl bg-muted px-4 py-3">
       <View className="flex-row items-center justify-center gap-2">
-        <Timer size={16} color={cores.primary} />
+        <Timer size={16} color={colors.primaryText} />
         <Text className="text-[10px] font-bold tracking-wide text-muted-foreground">
           TEMPO DE DESCANSO
         </Text>
@@ -48,12 +49,12 @@ export function RestTimer({ timer }: { timer: RestTimerState }) {
       <View className="mt-2 flex-row items-center justify-center gap-2">
         {idle ? (
           <Control label="Iniciar descanso" onPress={() => timer.start()}>
-            <Play size={16} color={cores.foreground} />
+            <Play size={16} color={colors.foreground} />
           </Control>
         ) : (
           <>
             <Control label="Somar 30 segundos ao descanso" onPress={() => timer.addTime(30)}>
-              <Plus size={16} color={cores.foreground} />
+              <Plus size={16} color={colors.foreground} />
               <Text className="text-xs font-bold text-foreground">30s</Text>
             </Control>
             <Control
@@ -62,13 +63,13 @@ export function RestTimer({ timer }: { timer: RestTimerState }) {
               onPress={timer.toggle}
             >
               {timer.running ? (
-                <Pause size={16} color={cores.foreground} />
+                <Pause size={16} color={colors.foreground} />
               ) : (
-                <Play size={16} color={cores.foreground} />
+                <Play size={16} color={colors.foreground} />
               )}
             </Control>
             <Control label="Pular descanso" onPress={timer.stop}>
-              <SkipForward size={16} color={cores.foreground} />
+              <SkipForward size={16} color={colors.foreground} />
             </Control>
           </>
         )}

@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import * as ImagePicker from 'expo-image-picker';
 import { X } from 'lucide-react-native';
 import { ApiError, MAX_GUIDE_PHOTOS, uploadMedia, type MediaPurpose } from '@fatia/api-client';
 import { Button } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 import type { ImageValue } from './image-field';
 import { describePickedImage } from './picked-image';
 
@@ -93,7 +94,7 @@ export function PhotosField({
                 onPress={() => onChange(value.filter((x) => x.fileId !== f.fileId))}
                 className="absolute right-1 top-1 h-7 w-7 items-center justify-center rounded-full border border-border bg-background active:opacity-80"
               >
-                <X size={14} color={cores.foreground} />
+                <X size={14} color={colors.foreground} />
               </Pressable>
             </View>
           ))}

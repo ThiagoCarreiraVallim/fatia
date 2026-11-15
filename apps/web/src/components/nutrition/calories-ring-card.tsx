@@ -50,14 +50,7 @@ export function CaloriesRingCard({ totals, goals }: Props) {
             viewBox="0 0 220 220"
             style={{ transform: 'rotate(-90deg)' }}
           >
-            <circle
-              cx={cx}
-              cy={cy}
-              r={r}
-              fill="none"
-              stroke="rgba(255,255,255,0.06)"
-              strokeWidth="14"
-            />
+            <circle cx={cx} cy={cy} r={r} fill="none" className="stroke-subtle" strokeWidth="14" />
             {pct > 0 && (
               <circle
                 cx={cx}
@@ -93,7 +86,7 @@ export function CaloriesRingCard({ totals, goals }: Props) {
               </span>
               <span className="text-[11px] text-muted-foreground">kcal</span>
             </div>
-            <div className="h-10 w-px bg-white/5" />
+            <div className="h-10 w-px bg-subtle" />
             <div className="flex flex-col items-center gap-0.5">
               <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
                 Restante

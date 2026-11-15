@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Linking, Pressable, Text, View } from 'react-native';
+import { Linking, Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check } from 'lucide-react-native';
 import {
@@ -12,7 +13,7 @@ import {
 import { Screen } from '@/components/layout/screen';
 import { Button, cn, ErrorState, LoadingState } from '@/components/ui';
 import { disablePush, enablePush, pushDeviceId, type PushSetup } from '@/notifications/push';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 const PREFS_KEY = ['users', 'me', 'notifications'] as const;
 
@@ -53,7 +54,7 @@ function Chave({
           ligado ? 'border-primary bg-primary' : 'border-muted-foreground',
         )}
       >
-        {ligado ? <Check size={14} color={cores.primaryForeground} /> : null}
+        {ligado ? <Check size={14} color={colors.primaryForeground} /> : null}
       </View>
       <View className="flex-1 gap-0.5">
         <Text className="text-sm font-medium text-foreground">{label}</Text>

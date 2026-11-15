@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useQuery } from '@tanstack/react-query';
 import { Calendar } from 'lucide-react-native';
 import { workoutApi, type WorkoutSession } from '@fatia/api-client';

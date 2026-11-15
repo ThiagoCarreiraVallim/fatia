@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Linking, Text, View } from 'react-native';
+import { Linking, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, Pencil } from 'lucide-react-native';
 import { workoutApi, type Exercise } from '@fatia/api-client';
@@ -15,7 +16,7 @@ import {
 import { CommunityGuideSection } from './community-guide';
 import { ExerciseEditDrawer } from './exercise-edit-drawer';
 import { MuscleDiagram } from './muscle-diagram';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/components/workout/exercise-detail-drawer.tsx`.
@@ -166,7 +167,7 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
                       void Linking.openURL(`https://www.youtube.com/watch?v=${videoId}`);
                     }}
                   >
-                    <ExternalLink size={16} color={cores.foreground} />
+                    <ExternalLink size={16} color={colors.foreground} />
                     <Text className="text-sm font-medium text-foreground">Assistir no YouTube</Text>
                   </Button>
                 </View>
@@ -181,7 +182,7 @@ export function ExerciseDetailDrawer({ exercise, open, onOpenChange }: Props) {
                 onPress={handleEdit}
                 className="mt-2 self-center"
               >
-                <Pencil size={14} color={cores.mutedForeground} />
+                <Pencil size={14} color={colors.mutedForeground} />
                 <Text className="text-xs font-medium text-muted-foreground">
                   {exercise.source === 'CUSTOM'
                     ? 'Editar exercício'

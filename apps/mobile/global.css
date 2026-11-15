@@ -3,45 +3,93 @@
 @tailwind utilities;
 
 @layer base {
+  /* Os mesmos tokens de apps/web/src/app/globals.css (fonte:
+     packages/design/src/tokens.ts). Se um lado mudar sem o outro,
+     src/theme/__tests__/palette.test.ts e o css-parity do pacote quebram.
+
+     A ordem é invertida em relação à web de propósito: o NativeWind só
+     reconhece `@media (prefers-color-scheme: dark)` como o bloco escuro; todo
+     `:root` fora dela vira o claro. O tema que vale é o do colorScheme do
+     NativeWind (Sistema, Escuro ou Claro, ADR 041). */
   :root {
-    /* Fatia dark palette — os mesmos valores de apps/web/src/app/globals.css.
-       Se um lado mudar sem o outro, src/theme/__tests__/palette.test.ts quebra. */
-    --background: 0 0% 7.5%; /* #131313 */
-    --foreground: 15 7% 89%; /* #e5e2e1 */
+    --background: 80 13% 95.5%; /* #f4f5f2 */
+    --foreground: 100 7.3% 8%; /* #141613 */
+    --card: 0 0% 100%; /* #ffffff */
+    --card-foreground: 100 7.3% 8%; /* #141613 */
+    --popover: 0 0% 100%; /* #ffffff */
+    --popover-foreground: 100 7.3% 8%; /* #141613 */
+    --primary: 108.5 100% 44.9%; /* #2ce500 */
+    --primary-foreground: 102.9 67.7% 6.1%; /* #0b1a05 */
+    --primary-text: 107.7 100% 24.9%; /* #1a7f00 */
+    --secondary: 85.7 11.5% 88%; /* #e1e4dd */
+    --secondary-foreground: 100 7.3% 8%; /* #141613 */
+    --muted: 84 12.8% 92.4%; /* #eceee9 */
+    --muted-foreground: 93.3 5.7% 31.2%; /* #4f544b */
+    --faint-foreground: 96 5% 39.6%; /* #646a60 */
+    --surface-3: 85.7 11.5% 88%; /* #e1e4dd */
+    --accent: 90 28.6% 89%; /* #e3ebdb */
+    --accent-foreground: 100 7.3% 8%; /* #141613 */
+    --destructive: 4.2 76.5% 40%; /* #b42318 */
+    --destructive-foreground: 0 0% 100%; /* #ffffff */
+    --border: 85.7 11.5% 88%; /* #e1e4dd */
+    --border-strong: 86.7 8.9% 80.2%; /* #cdd1c8 */
+    --input: 86.7 8.9% 80.2%; /* #cdd1c8 */
+    --ring: 107.7 100% 24.9%; /* #1a7f00 */
+    --danger: 4.2 76.5% 40%; /* #b42318 */
+    --success: 157.3 83.5% 26.1%; /* #0b7a50 */
+    --warning: 39.1 100% 27.1%; /* #8a5a00 */
+    --info: 212.9 76.4% 43.1%; /* #1a66c2 */
+    --ok: 107.7 100% 24.9%; /* #1a7f00 */
+    --kcal: 100 7.3% 8%; /* #141613 */
+    --protein: 221.2 83.2% 53.3%; /* #2563eb */
+    --carbs: 107.7 100% 24.9%; /* #1a7f00 */
+    --fat: 5.2 60.2% 45.3%; /* #b93a2e */
+    --water: 212.9 76.4% 43.1%; /* #1a66c2 */
+    --steps: 172.9 78.5% 25.5%; /* #0e7468 */
+    --brand: 25.2 100% 55.1%; /* #ff7a1a */
+    --brand-foreground: 27.1 100% 6.1%; /* #1f0e00 */
+    --sunken: 84 9.8% 90%; /* #e6e8e3 */
+  }
 
-    --card: 0 0% 16.5%; /* #2a2a2a */
-    --card-foreground: 15 7% 89%; /* #e5e2e1 */
-
-    --popover: 0 0% 10%;
-    --popover-foreground: 15 7% 89%;
-
-    --primary: 108 100% 45%; /* #2ce500 — brand green */
-    --primary-foreground: 0 0% 7.5%; /* #131313 */
-
-    --secondary: 0 0% 20%;
-    --secondary-foreground: 15 7% 89%;
-
-    --muted: 0 0% 12%; /* #201f1f */
-    --muted-foreground: 97 22% 74%; /* #baccaf */
-
-    --accent: 101 17% 25%; /* #3c4b35 */
-    --accent-foreground: 15 7% 89%;
-
-    --destructive: 356 100% 29%; /* #93000a */
-    --destructive-foreground: 15 7% 89%;
-
-    --border: 0 0% 20%;
-    --input: 0 0% 20%;
-    --ring: 108 100% 45%;
-
-    /* Cores de estado e de dado (Fase 3). Texto de erro usa --danger, legível no
-       escuro; --destructive continua só como fundo de botão perigoso. */
-    --danger: 351 95% 71%; /* #fb7185 */
-    --success: 160 84% 39%; /* #10b981 */
-    --warning: 43 96% 56%; /* #fbbf24 */
-    --protein: 218 100% 65%; /* #4b8eff */
-    --carbs: 108 100% 45%; /* #2ce500 */
-    --fat: 6 100% 84%; /* #ffb4ab */
-    --water: 213 94% 68%; /* #60a5fa */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: 0 0% 7.5%; /* #131313 */
+      --foreground: 15 7.1% 89%; /* #e5e2e1 */
+      --card: 0 0% 16.5%; /* #2a2a2a */
+      --card-foreground: 15 7.1% 89%; /* #e5e2e1 */
+      --popover: 0 0% 10.2%; /* #1a1a1a */
+      --popover-foreground: 15 7.1% 89%; /* #e5e2e1 */
+      --primary: 108.5 100% 44.9%; /* #2ce500 */
+      --primary-foreground: 102.9 67.7% 6.1%; /* #0b1a05 */
+      --primary-text: 108.5 100% 44.9%; /* #2ce500 */
+      --secondary: 0 0% 20%; /* #333333 */
+      --secondary-foreground: 15 7.1% 89%; /* #e5e2e1 */
+      --muted: 0 0% 12.2%; /* #1f1f1f */
+      --muted-foreground: 97.2 22.1% 74.3%; /* #baccaf */
+      --faint-foreground: 96.7 9.1% 61.2%; /* #9aa593 */
+      --surface-3: 0 0% 20.4%; /* #343434 */
+      --accent: 100.9 17.2% 25.1%; /* #3c4b35 */
+      --accent-foreground: 15 7.1% 89%; /* #e5e2e1 */
+      --destructive: 355.9 100% 28.8%; /* #93000a */
+      --destructive-foreground: 15 7.1% 89%; /* #e5e2e1 */
+      --border: 0 0% 22%; /* #383838 */
+      --border-strong: 0 0% 23.9%; /* #3d3d3d */
+      --input: 0 0% 22%; /* #383838 */
+      --ring: 108.5 100% 44.9%; /* #2ce500 */
+      --danger: 351.3 94.5% 71.4%; /* #fb7185 */
+      --success: 160.1 84.1% 39.4%; /* #10b981 */
+      --warning: 43.3 96.4% 56.3%; /* #fbbf24 */
+      --info: 213.1 93.9% 67.8%; /* #60a5fa */
+      --ok: 108.5 100% 44.9%; /* #2ce500 */
+      --kcal: 15 7.1% 89%; /* #e5e2e1 */
+      --protein: 218.1 100% 71.6%; /* #6ea3ff */
+      --carbs: 108.5 100% 44.9%; /* #2ce500 */
+      --fat: 6.4 100% 83.5%; /* #ffb4ab */
+      --water: 213.1 93.9% 67.8%; /* #60a5fa */
+      --steps: 172.5 66% 50.4%; /* #2dd4bf */
+      --brand: 25.2 100% 55.1%; /* #ff7a1a */
+      --brand-foreground: 27.1 100% 6.1%; /* #1f0e00 */
+      --sunken: 0 0% 4.7%; /* #0c0c0c */
+    }
   }
 }

@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Scale, TrendingDown, TrendingUp } from 'lucide-react-native';
 import { progressApi, type Exercise } from '@fatia/api-client';

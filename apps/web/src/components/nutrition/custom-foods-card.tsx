@@ -35,7 +35,7 @@ export function CustomFoodsCard() {
       {list.length === 0 ? (
         <Link
           href="/nutrition/foods?novo=1"
-          className="block rounded-xl border border-dashed border-white/10 p-4 text-center text-xs text-muted-foreground"
+          className="block rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground"
         >
           Produto embalado ou receita de casa que não está na busca? Toque para cadastrar.
         </Link>

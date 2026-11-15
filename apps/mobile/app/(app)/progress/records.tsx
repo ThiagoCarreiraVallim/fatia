@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useQuery } from '@tanstack/react-query';
 import { Dumbbell, Footprints, Trophy } from 'lucide-react-native';
 import { workoutApi, type PersonalRecordEntry } from '@fatia/api-client';

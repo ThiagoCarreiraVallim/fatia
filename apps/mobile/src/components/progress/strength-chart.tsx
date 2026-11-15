@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react-native';
 import { progressApi, workoutApi, type Exercise, type StrengthProgress } from '@fatia/api-client';

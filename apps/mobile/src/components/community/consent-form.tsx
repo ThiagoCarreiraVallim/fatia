@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { Check } from 'lucide-react-native';
 import {
   lockedScopes,
@@ -14,7 +15,7 @@ import {
   type TeamMember,
 } from '@fatia/api-client';
 import { Button, cn } from '@/components/ui';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/components/community/consent-form.tsx`: o que a
@@ -54,7 +55,7 @@ export function ScopeOption({
           locked && 'opacity-60',
         )}
       >
-        {checked ? <Check size={14} color={cores.primaryForeground} /> : null}
+        {checked ? <Check size={14} color={colors.primaryForeground} /> : null}
       </View>
       <View className="flex-1 gap-0.5">
         <Text className="text-sm font-medium text-foreground">{label}</Text>

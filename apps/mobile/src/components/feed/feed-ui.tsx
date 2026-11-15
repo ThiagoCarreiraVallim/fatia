@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MessageCircle, MoreHorizontal, Pin } from 'lucide-react-native';
 import {
@@ -34,7 +35,7 @@ import {
   type ActionSheetOption,
 } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 export const feedKey = (groupId: string) => ['community', 'feed', groupId] as const;
 export const postKey = (groupId: string, id: string) => ['community', 'feed', groupId, id] as const;
@@ -353,7 +354,7 @@ export function PostCard({ groupId, post, me }: { groupId: string; post: Post; m
         <View className="flex-1 gap-1">
           {post.pinned ? (
             <View className="flex-row items-center gap-1">
-              <Pin size={12} color={cores.primary} />
+              <Pin size={12} color={colors.primaryText} />
               <Text className="text-xs font-semibold text-primary">Fixado pela equipe</Text>
             </View>
           ) : null}
@@ -366,7 +367,7 @@ export function PostCard({ groupId, post, me }: { groupId: string; post: Post; m
             onPress={menu}
             className="min-h-[44px] min-w-[44px] items-center justify-center"
           >
-            <MoreHorizontal size={18} color={cores.mutedForeground} />
+            <MoreHorizontal size={18} color={colors.mutedForeground} />
           </Pressable>
         ) : null}
       </View>
@@ -406,7 +407,7 @@ export function PostCard({ groupId, post, me }: { groupId: string; post: Post; m
             onPress={() => setAbertos((v) => !v)}
             className="min-h-[36px] flex-row items-center gap-1"
           >
-            <MessageCircle size={14} color={cores.mutedForeground} />
+            <MessageCircle size={14} color={colors.mutedForeground} />
             <Text className="text-xs font-semibold text-muted-foreground">
               {commentsLabel(post.commentCount)}
             </Text>

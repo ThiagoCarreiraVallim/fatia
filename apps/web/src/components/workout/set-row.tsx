@@ -217,7 +217,7 @@ function NumberCell({
         if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
       }}
       placeholder="—"
-      className="h-9 border-white/10 bg-white/5 px-2 text-center text-sm font-bold tabular-nums backdrop-blur-sm focus-visible:border-primary/40 focus-visible:bg-white/10"
+      className="h-9 border-border bg-subtle px-2 text-center text-sm font-bold tabular-nums backdrop-blur-sm focus-visible:border-primary/40 focus-visible:bg-muted"
     />
   );
 }
@@ -271,7 +271,7 @@ function RpeCell({
           if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
         }}
         placeholder="—"
-        className="h-9 border-white/10 bg-white/5 px-2 pl-7 text-center text-sm font-bold tabular-nums backdrop-blur-sm focus-visible:border-primary/40 focus-visible:bg-white/10"
+        className="h-9 border-border bg-subtle px-2 pl-7 text-center text-sm font-bold tabular-nums backdrop-blur-sm focus-visible:border-primary/40 focus-visible:bg-muted"
       />
       {info && (
         <span
@@ -327,7 +327,7 @@ function DurationCell({
         if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
       }}
       placeholder="m:ss"
-      className="h-9 border-white/10 bg-white/5 px-2 text-center text-sm font-bold tabular-nums backdrop-blur-sm focus-visible:border-primary/40 focus-visible:bg-white/10"
+      className="h-9 border-border bg-subtle px-2 text-center text-sm font-bold tabular-nums backdrop-blur-sm focus-visible:border-primary/40 focus-visible:bg-muted"
     />
   );
 }

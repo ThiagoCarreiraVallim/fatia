@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { colors } from '@/theme/colors';
 import { describeMuscles } from './muscle-labels';
 import type { MusclePath } from './muscle-path';
 import { BACK_PATHS, BACK_VIEW_BOX } from './muscle-paths-back';
@@ -15,13 +16,10 @@ import { FRONT_PATHS, FRONT_VIEW_BOX } from './muscle-paths-front';
  * (`muscle-paths-front.ts` / `-back.ts`), cada um carregando o `id` do grupo e o
  * `data-muscle` do arquivo original, e a pintura é uma decisão por traço.
  *
- * As cores de destaque são as mesmas do PWA de propósito — vermelho e laranja
- * não são tokens do tema, são a convenção "principal / secundário" que a pessoa
- * já aprendeu no navegador.
+ * As cores de destaque são as mesmas do PWA de propósito, e são tokens (ADR
+ * 041): verde da marca no principal, água no secundário.
  */
 
-const PRIMARY_FILL = '#ef4444';
-const SECONDARY_FILL = '#f97316';
 /** Mesma atenuação do `opacity: 0.2` que o PWA aplica no grupo não destacado. */
 const DIMMED_OPACITY = 0.2;
 
@@ -81,8 +79,8 @@ export function MuscleDiagram({
   // vermelho, como no PWA (lá o segundo `paint` sobrescreve o primeiro).
   const highlight = useMemo(() => {
     const map = new Map<string, string>();
-    for (const m of secondaryMuscles) map.set(m, SECONDARY_FILL);
-    for (const m of primaryMuscles) map.set(m, PRIMARY_FILL);
+    for (const m of secondaryMuscles) map.set(m, colors.water);
+    for (const m of primaryMuscles) map.set(m, colors.primary);
     return map;
   }, [primaryMuscles, secondaryMuscles]);
 

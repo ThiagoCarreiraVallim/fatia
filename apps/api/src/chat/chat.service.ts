@@ -131,7 +131,7 @@ export class ChatService {
     }
     const fotos = fotosDoTurno(dto.photos ?? []);
 
-    const existente = await this.conversas.encontrar(user.id, dto.conversationId);
+    const existente = await this.conversas.find(user.id, dto.conversationId);
     if (dto.resume && !existente) throw new NotFoundException('Conversa não encontrada.');
 
     // Reservada já aqui: um segundo `POST` na mesma conversa recebe 409 em vez

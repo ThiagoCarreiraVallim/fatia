@@ -19,6 +19,7 @@ export {
 } from './http';
 
 export * from './billing';
+export * from './pro-block-copy';
 export * from './chat';
 export * from './chat-thread';
 export * from './chat-markdown';
@@ -52,10 +53,13 @@ export * from './workout/set-prefill';
 export * from './workout/prescription';
 export * from './workout/quick-templates';
 export * from './session-view';
+export * from './active-workout-bar';
+export * from './workout-cards';
 export * from './streak-copy';
 export * from './meal-timeline';
 export * from './dashboard-copy';
-export * from './quick-add';
+export * from './ai-drawer';
+export * from './plan-components-copy';
 export * from './onboarding';
 export * from './navigation';
 export * from './format';

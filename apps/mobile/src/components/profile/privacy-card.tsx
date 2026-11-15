@@ -1,9 +1,10 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { ExternalLink, Trash2 } from 'lucide-react-native';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
 import { ExportDataButton } from './export-data-button';
 import { openLegal, type LegalPath } from './legal';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Direitos da LGPD exercidos de dentro do app: portabilidade e eliminação.
@@ -31,7 +32,7 @@ export function PrivacyCard({ onDeleteAccount }: { onDeleteAccount: () => void }
           onPress={onDeleteAccount}
           className="min-h-[44px] flex-row items-center justify-center gap-2 rounded-md border border-destructive px-4 py-2 active:opacity-80"
         >
-          <Trash2 size={16} color={cores.destructive} />
+          <Trash2 size={16} color={colors.destructive} />
           <Text className="text-sm font-medium text-destructive">Apagar minha conta</Text>
         </Pressable>
 
@@ -54,7 +55,7 @@ function LegalLink({ path, label }: { path: LegalPath; label: string }) {
       className="min-h-[44px] flex-row items-center gap-1.5"
     >
       <Text className="text-sm text-muted-foreground underline">{label}</Text>
-      <ExternalLink size={12} color={cores.mutedForeground} />
+      <ExternalLink size={12} color={colors.mutedForeground} />
     </Pressable>
   );
 }

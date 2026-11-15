@@ -21,10 +21,16 @@ function diasAtras(n: number): string {
   return d.toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
 }
 
-/** O "+" global: abre o menu Registrar e escolhe o registro. */
-async function registrarPeloMais(page: Page, item: string) {
-  await page.getByRole('button', { name: 'Registrar', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: item }).click();
+/**
+ * O botão da IA (ADR 040 revisada): abre "O que vamos registrar?" e escolhe o
+ * registro manual. O nome do botão muda com o estado da IA (`aiFabLabel`).
+ */
+async function registrarPeloMenuDaIa(page: Page, item: string) {
+  await page.getByRole('button', { name: /^(Abrir a IA|Abrir registro|IA )/ }).click();
+  await page
+    .getByRole('dialog', { name: 'O que vamos registrar?' })
+    .getByRole('button', { name: item })
+    .click();
 }
 
 /**
@@ -104,7 +110,7 @@ test('água, peso e passos registrados ontem ficam ontem', async ({ page }) => {
     titulo: string;
     desfazer?: boolean;
   }) {
-    await registrarPeloMais(page, opts.item);
+    await registrarPeloMenuDaIa(page, opts.item);
     await expect(drawer.getByRole('button', { name: 'Próximo dia' })).toBeDisabled();
     await drawer.getByRole('button', { name: 'Dia anterior' }).click();
     await expect(drawer.getByText('ontem', { exact: true })).toBeVisible();
@@ -112,7 +118,7 @@ test('água, peso e passos registrados ontem ficam ontem', async ({ page }) => {
     await drawer.getByRole('button', { name: opts.salvar }).click();
     await expect(drawer).toHaveCount(0);
 
-    await registrarPeloMais(page, opts.item);
+    await registrarPeloMenuDaIa(page, opts.item);
     await expect(drawer.getByText('hoje', { exact: true })).toBeVisible();
     // A água põe a hora depois do dia: o nome do botão continua após a data.
     const linha = `${opts.titulo}, ${ontem}`;
@@ -166,7 +172,7 @@ test('refeição pelo "+" atualiza o dashboard sem recarregar', async ({ page })
   const hoje = await page.evaluate(() => new Date().toLocaleDateString('sv-SE'));
 
   try {
-    await registrarPeloMais(page, 'Refeição');
+    await registrarPeloMenuDaIa(page, 'Refeição');
     const drawer = page.getByRole('dialog');
     await drawer.getByRole('button', { name: /só desta vez/i }).click();
     await drawer.getByLabel('Nome').fill(nome);
@@ -184,15 +190,17 @@ test('refeição pelo "+" atualiza o dashboard sem recarregar', async ({ page })
   }
 });
 
-test('treino pelo "+" começa um livre e depois o retoma', async ({ page }) => {
+test('treino pelo menu da IA começa um livre e depois o retoma', async ({ page }) => {
   await page.goto('/');
-  await registrarPeloMais(page, 'Começar treino livre');
+  await registrarPeloMenuDaIa(page, 'Começar treino livre');
   await expect(page).toHaveURL(/\/workout$/);
   await expect(page.getByRole('heading', { name: 'Treino em andamento' })).toBeVisible();
 
   try {
-    // Com a sessão aberta, o "+" não cria outra.
-    await registrarPeloMais(page, 'Continuar treino');
+    // Com a sessão aberta, o menu não cria outra. No /workout a barra some
+    // (tarefa de foco), então o menu abre de outra tela.
+    await page.goto('/');
+    await registrarPeloMenuDaIa(page, 'Continuar treino');
     await expect(page.getByRole('heading', { name: 'Treino em andamento' })).toBeVisible();
     const res = await page.request.get('/api/proxy/workout/sessions?limit=5');
     const abertas = ((await res.json()) as { completedAt: string | null }[]).filter(
@@ -588,26 +596,36 @@ test('recalcular metas pelo assistente salva a sugestão e volta às metas', asy
   }
 });
 
-test('a barra leva a todas as telas, e o voltar do topo sobe até o Início', async ({ page }) => {
+test('a barra leva a todas as telas, e o voltar do topo sobe até o Hoje', async ({ page }) => {
   await page.goto('/');
-  const barra = page.getByRole('navigation', { name: 'Navegação principal' });
-  await expect(barra.getByRole('link')).toHaveText(['Nutrição', 'Treino', 'Comunidade']);
-  // O Início é a raiz: sem barra de topo.
+  // ADR 040 revisada: cinco abas (no celular só ícone, com o nome acessível).
+  const barra = page.getByRole('navigation', { name: 'Principal' });
+  for (const aba of ['Hoje', 'Nutrição', 'Treino', 'Comunidade', 'Você']) {
+    await expect(barra.getByRole('link', { name: aba, exact: true })).toBeVisible();
+  }
+  // O Hoje é a raiz: sem barra de topo.
   await expect(page.getByRole('link', { name: /^Voltar para/ })).toHaveCount(0);
 
   await page.getByRole('link', { name: 'Metas do dia' }).click();
   await expect(page).toHaveURL(/\/nutrition\/goals$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Metas do dia' })).toBeVisible();
 
-  // Numa tela fora da barra, o "Mais" fica marcado e o menu chega a ela.
-  await page.getByRole('button', { name: 'Mais', exact: true }).click();
-  const menu = page.getByRole('dialog', { name: 'Menu' });
-  await menu.getByRole('link', { name: /^Progresso/ }).click();
+  // O que era o menu "Mais" mora na aba Você.
+  await barra.getByRole('link', { name: 'Você', exact: true }).click();
+  await expect(page).toHaveURL(/\/you$/);
+  await page
+    .getByRole('main')
+    .getByRole('link', { name: /^Progresso/ })
+    .click();
   await expect(page).toHaveURL(/\/progress$/);
-  await expect(menu).toBeHidden();
+  await expect(barra.getByRole('link', { name: 'Você', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
 
-  await page.getByRole('button', { name: 'Mais', exact: true }).click();
-  await menu.getByRole('link', { name: /Ver perfil/ }).click();
+  await page.getByRole('link', { name: 'Voltar para Você' }).click();
+  await expect(page).toHaveURL(/\/you$/);
+  await page.getByRole('link', { name: /Ver perfil/ }).click();
   await expect(page).toHaveURL(/\/profile$/);
 
   // Rota funda aberta direto: o voltar segue o mapa, não o histórico.
@@ -615,8 +633,7 @@ test('a barra leva a todas as telas, e o voltar do topo sobe até o Início', as
   await expect(page.getByRole('heading', { level: 1, name: 'Planos de treino' })).toBeVisible();
   await page.getByRole('link', { name: 'Voltar para Treino' }).click();
   await expect(page).toHaveURL(/\/workout$/);
-  await page.getByRole('link', { name: 'Voltar para Início' }).click();
-  await expect(page).toHaveURL(/\/$/);
+  // Aba raiz é tela de ver (ADR 040): sem seta de voltar.
   await expect(page.getByRole('link', { name: /^Voltar para/ })).toHaveCount(0);
 });
 
@@ -676,9 +693,8 @@ test('Free: o chat trancado leva ao plano, e assinar abre o pagamento e fica agu
       route.fulfill({ contentType: 'text/html', body: '<title>Fatura</title>Fatura de teste' }),
     );
 
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Mais', exact: true }).click();
-  const chat = page.getByRole('dialog', { name: 'Menu' }).getByRole('link', { name: /Chat/ });
+  await page.goto('/you');
+  const chat = page.getByRole('main').getByRole('link', { name: /Chat/ });
   await expect(chat).toContainText('exige o plano PRO');
   await chat.click();
   await expect(page).toHaveURL(/\/plan\?recurso=chat$/);

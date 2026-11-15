@@ -1,9 +1,10 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useRouter } from 'expo-router';
 import type { TodaySummary } from '@fatia/api-client';
 import { MacroBar } from './macro-bar';
 import { NUMEROS_TABULARES, alvoMedio } from './helpers';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 /**
  * Réplica de `apps/web/src/components/dashboard/nutrition-macro-card.tsx`.
@@ -12,10 +13,18 @@ import { cores } from '@/theme/cores';
  * Nutrição e do PWA; as kcal ficam neutras para não se confundirem com nenhum.
  */
 const CORES = {
-  kcal: cores.foreground,
-  proteina: cores.protein,
-  carboidrato: cores.carbs,
-  gordura: cores.fat,
+  get kcal() {
+    return colors.foreground;
+  },
+  get proteina() {
+    return colors.protein;
+  },
+  get carboidrato() {
+    return colors.carbs;
+  },
+  get gordura() {
+    return colors.fat;
+  },
 } as const;
 
 export function NutritionMacroCard({ nutrition }: { nutrition: TodaySummary['nutrition'] }) {
@@ -34,10 +43,7 @@ export function NutritionMacroCard({ nutrition }: { nutrition: TodaySummary['nut
     >
       {/* Tinta verde do PWA. Lá é um gradiente; sem `expo-linear-gradient` no
           projeto, um véu chapado é a aproximação que não custa dependência. */}
-      <View
-        pointerEvents="none"
-        style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(44,229,0,0.06)' }]}
-      />
+      <View pointerEvents="none" className="bg-primary/5" style={StyleSheet.absoluteFill} />
 
       <View className="gap-4 p-5">
         <View className="flex-row items-center justify-between">

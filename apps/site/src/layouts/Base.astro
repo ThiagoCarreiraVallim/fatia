@@ -1,7 +1,6 @@
 ---
-import '@fontsource-variable/inter';
-import '@fontsource/plus-jakarta-sans/700.css';
-import '@fontsource/plus-jakarta-sans/800.css';
+import '@fontsource-variable/manrope';
+import '@fontsource-variable/sora';
 import '../styles/global.css';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
@@ -24,11 +23,12 @@ const canonicalUrl = new URL(canonical ?? Astro.url.pathname, Astro.site);
 ---
 
 <!doctype html>
-<html lang="pt-BR" class="dark">
+<html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#131313" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#131313" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f5f2" />
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonicalUrl} />

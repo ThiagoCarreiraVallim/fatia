@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Dumbbell, Pin, Salad } from 'lucide-react-native';
@@ -32,7 +33,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui';
-import { cores } from '@/theme/cores';
+import { colors } from '@/theme/colors';
 
 type Tab = 'plans' | 'tips';
 
@@ -144,7 +145,7 @@ function ContentLists({
                     {/* O alfinete sozinho não dizia nada; com a palavra, diz. */}
                     {d.pinned ? (
                       <View className="flex-row items-center gap-1">
-                        <Pin size={12} color={cores.primary} />
+                        <Pin size={12} color={colors.primaryText} />
                         <Text className="text-xs font-medium text-primary">Fixada</Text>
                       </View>
                     ) : null}

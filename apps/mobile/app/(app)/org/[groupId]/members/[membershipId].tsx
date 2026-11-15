@@ -1,4 +1,4 @@
-import { Text } from 'react-native';
+import { Text } from '@/components/ui/text';
 import { useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { orgApi, teamRoleLabel, type MyGroup } from '@fatia/api-client';
