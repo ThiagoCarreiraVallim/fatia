@@ -227,6 +227,7 @@ function mealItemData(src: ItemSnapshotSource): Prisma.MealItemUncheckedUpdateMa
     nutrients: src.nutrients === null ? Prisma.DbNull : (src.nutrients as Prisma.InputJsonValue),
     portionLabel: src.portionLabel,
     portionQuantity: src.portionQuantity,
+    source: 'PLAN',
   };
 }
 
@@ -554,9 +555,11 @@ export class NutritionPlanService {
       include: { equivalent: true },
     });
     const swapOf = new Map(swaps.map((s) => [s.itemId, s]));
-    const items: ResolvedItem[] = chosen.items.map((item) =>
-      snapshotOf(swapOf.get(item.id)?.equivalent ?? item),
-    );
+    // Origem do item (#374): o que entra pelo plano fica marcado como PLAN.
+    const items: ResolvedItem[] = chosen.items.map((item) => ({
+      ...snapshotOf(swapOf.get(item.id)?.equivalent ?? item),
+      source: 'PLAN',
+    }));
 
     const meal = await this.meals.createResolved(
       userId,

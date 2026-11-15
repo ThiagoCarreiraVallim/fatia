@@ -277,6 +277,8 @@ describe('plano alimentar do profissional (integração)', () => {
       const refeicao = await meals.findById(ids.ana, r.mealId);
       expect(refeicao.mealType).toBe('LUNCH');
       expect(refeicao.items.map((i) => i.grams)).toEqual([150]);
+      // Origem do item (#374): veio do plano.
+      expect(refeicao.items.map((i) => i.source)).toEqual(['PLAN']);
 
       const visao = await plans.overview(ids.ana, TZ);
       expect(visao.active!.meals[1]!.logged).toEqual({
@@ -500,7 +502,10 @@ describe('plano alimentar do profissional (integração)', () => {
       const mealId = (await emUso(bia)).meals[0]!.logged!.mealId;
       const gravado = (await meals.findById(bia, mealId)).items[0]!;
       // A pessoa corrigiu as gramas no diário: o nome e as gramas não batem mais com o plano.
-      await prisma.mealItem.update({ where: { id: gravado.id }, data: { grams: 65 } });
+      await prisma.mealItem.update({
+        where: { id: gravado.id },
+        data: { grams: 65, source: 'MANUAL' },
+      });
 
       const r = await plans.swap(
         bia,
@@ -511,6 +516,7 @@ describe('plano alimentar do profissional (integração)', () => {
       expect(depois).toMatchObject({
         foodName: item.equivalents[0]!.foodName,
         grams: item.equivalents[0]!.grams,
+        source: 'PLAN',
       });
 
       await plans.undoSwap(bia, r.swap.id);
