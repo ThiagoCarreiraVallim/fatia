@@ -11,6 +11,7 @@ import {
 } from '../notification.service';
 import type { ExpoReceipt, PushMessage, PushService } from '../push.service';
 import type { WebPushService, WebPushTarget } from '../web-push.service';
+import { InboxService, INBOX_RETENTION_DAYS } from '../inbox.service';
 import { DailyAdherenceService } from '../../nutrition/daily-adherence.service';
 import { addDaysIso, todayInTz } from '../../progress/helpers/date-tz';
 import { ScoreboardService } from '../../social/scoreboard.service';
@@ -59,6 +60,7 @@ describe('avisos no celular (integração)', () => {
     },
   } as unknown as WebPushService;
   const notifications = new NotificationService(prisma, push, webPush);
+  const inbox = new InboxService(prisma);
   const links = new ProfessionalLinkService(prisma);
   const memberships = new MembershipService(prisma, links, notifications);
   const groups = new GroupService(prisma, links, [], null as never);
@@ -503,6 +505,103 @@ describe('avisos no celular (integração)', () => {
         email: `${stamp}-ninguem@test.local`,
       });
       expect(await recebidos()).toEqual([]);
+    });
+  });
+
+  describe('central de avisos do sino (#373)', () => {
+    it('o aviso enviado fica na central de quem recebeu, e só na dele', async () => {
+      const c = await comunidade();
+      const post = await posts.create(c.membro, c.groupId, { body: 'Treino', displayName: 'Ana' });
+      await posts.comment(c.outro, c.groupId, post.id, {
+        body: 'Mensagem bem pessoal',
+        displayName: 'Bia',
+      });
+      await recebidos();
+
+      const minha = await inbox.list(c.membro);
+      expect(minha.unread).toBe(1);
+      expect(minha.items).toEqual([
+        expect.objectContaining({
+          kind: 'FEED',
+          title: 'Bia comentou seu post',
+          url: `/community/${c.groupId}/feed`,
+          readAt: null,
+        }),
+      ]);
+      expect(JSON.stringify(minha)).not.toContain('Mensagem bem pessoal');
+      // Quem comentou não recebeu aviso, e a central dele continua vazia.
+      expect(await inbox.list(c.outro)).toEqual({ items: [], unread: 0 });
+    });
+
+    it('preferência desligada cala o push, mas o aviso fica na central', async () => {
+      const c = await comunidade();
+      await notifications.setPreferences(c.membro, { FEED: false });
+      const post = await posts.create(c.membro, c.groupId, { body: 'Oi', displayName: 'Ana' });
+      await posts.comment(c.outro, c.groupId, post.id, { body: 'Boa!', displayName: 'Bia' });
+      expect(await recebidos()).toEqual([]);
+      expect((await inbox.list(c.membro)).unread).toBe(1);
+    });
+
+    it('resposta do chat não entra na central', async () => {
+      const id = await pessoa('Chat');
+      notifications.notify([id], {
+        kind: 'CHAT',
+        title: 'Resposta pronta',
+        body: '…',
+        url: '/chat',
+      });
+      await recebidos();
+      expect(await inbox.list(id)).toEqual({ items: [], unread: 0 });
+    });
+
+    it('marcar como lido: os próprios ou todos; id de outra pessoa não marca nada', async () => {
+      const a = await pessoa('A');
+      const b = await pessoa('B');
+      for (const title of ['Um', 'Dois']) {
+        notifications.notify([a], { kind: 'COMMUNITY', title, body: 'x', url: '/community' });
+        // Em ordem: o envio corre em segundo plano, e os dois juntos empatariam no relógio.
+        await notifications.drain();
+      }
+      notifications.notify([b], { kind: 'COMMUNITY', title: 'Do B', body: 'x', url: '/community' });
+      await recebidos();
+
+      const [doB] = (await inbox.list(b)).items;
+      // O id do B no corpo de quem é A: amarrado ao usuário, não marca.
+      expect(await inbox.markRead(a, [doB.id])).toEqual({ updated: 0 });
+      expect((await inbox.list(b)).unread).toBe(1);
+
+      const [maisNovo] = (await inbox.list(a)).items;
+      expect(maisNovo.title).toBe('Dois');
+      expect(await inbox.markRead(a, [maisNovo.id])).toEqual({ updated: 1 });
+      expect((await inbox.list(a)).unread).toBe(1);
+      expect(await inbox.markRead(a)).toEqual({ updated: 1 });
+      expect(await inbox.list(a)).toMatchObject({ unread: 0 });
+      expect((await inbox.list(b)).unread).toBe(1);
+    });
+
+    it(`aviso com mais de ${INBOX_RETENTION_DAYS} dias sai na próxima gravação`, async () => {
+      const id = await pessoa('Velho');
+      await prisma.inboxNotice.create({
+        data: {
+          userId: id,
+          kind: 'COMMUNITY',
+          title: 'Antigo',
+          body: 'x',
+          url: '/community',
+          createdAt: new Date(Date.now() - (INBOX_RETENTION_DAYS + 1) * 86_400_000),
+        },
+      });
+      notifications.notify([id], { kind: 'COMMUNITY', title: 'Novo', body: 'x', url: '/c' });
+      await recebidos();
+      expect((await inbox.list(id)).items.map((i) => i.title)).toEqual(['Novo']);
+    });
+
+    it('apagar a conta leva a central junto', async () => {
+      const id = await pessoa('Some');
+      notifications.notify([id], { kind: 'COMMUNITY', title: 'Oi', body: 'x', url: '/c' });
+      await recebidos();
+      await prisma.user.delete({ where: { id } });
+      expect(await prisma.inboxNotice.count({ where: { userId: id } })).toBe(0);
     });
   });
 

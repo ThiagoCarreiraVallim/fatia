@@ -6,16 +6,17 @@
 
 ## Contagem atual
 
-| Domínio                                                     |   Tools | Arquivos                       |
-| ----------------------------------------------------------- | ------: | ------------------------------ |
-| Workout (exercícios, planos, sessões, séries)               |      34 | `apps/api/src/workout/mcp/`    |
-| Progress (peso, passos, água, progresso, dashboard, streak) |      27 | `apps/api/src/progress/mcp/`   |
-| Nutrition (alimentos, refeições, itens, metas de nutriente) |      22 | `apps/api/src/nutrition/mcp/`  |
-| Sharing (grupos, consentimento e painel do profissional)    |       9 | `apps/api/src/sharing/mcp/`    |
-| Goals (metas pessoais)                                      |       6 | `apps/api/src/goals/mcp/`      |
-| Meta (perfil)                                               |       3 | `apps/api/src/mcp/tools/meta/` |
-| Conta (export e deleção — LGPD)                             |       2 | `apps/api/src/users/mcp/`      |
-| **Total**                                                   | **103** |                                |
+| Domínio                                                     |   Tools | Arquivos                          |
+| ----------------------------------------------------------- | ------: | --------------------------------- |
+| Workout (exercícios, planos, sessões, séries)               |      34 | `apps/api/src/workout/mcp/`       |
+| Progress (peso, passos, água, progresso, dashboard, streak) |      27 | `apps/api/src/progress/mcp/`      |
+| Nutrition (alimentos, refeições, itens, metas de nutriente) |      22 | `apps/api/src/nutrition/mcp/`     |
+| Sharing (grupos, consentimento e painel do profissional)    |       9 | `apps/api/src/sharing/mcp/`       |
+| Goals (metas pessoais)                                      |       6 | `apps/api/src/goals/mcp/`         |
+| Meta (perfil)                                               |       3 | `apps/api/src/mcp/tools/meta/`    |
+| Conta (export e deleção — LGPD)                             |       2 | `apps/api/src/users/mcp/`         |
+| Avisos (central do sino, #373)                              |       2 | `apps/api/src/notifications/mcp/` |
+| **Total**                                                   | **105** |                                   |
 
 ⚠️ Esta tabela é a única contagem da doc **sem guarda automática**: o
 `TOOL_COUNT_PATTERN` do `tool-catalog.spec.ts` só enxerga um número colado na palavra `tools`, e
@@ -38,12 +39,12 @@ opções abaixo foram avaliadas com isso em mente.
 
 O que pesa no contexto não é a contagem de tools, é o payload. Medido no que o registry
 serve de fato — `name`, `title`, `description`, `annotations` e o JSON Schema do input das
-131 tools: **108,1 k caracteres**, enviados em toda sessão que lista as tools.
-O denominador importa. Contar só `name + description + inputSchema` dá 88,4 k e subestima o
+133 tools: **109,4 k caracteres**, enviados em toda sessão que lista as tools.
+O denominador importa. Contar só `name + description + inputSchema` dá 89,4 k e subestima o
 catálogo em ~20% — `title` e `annotations` também vão no fio, em toda tool.
 
-Dentro desse total, os exemplos de invocação que a #111 acrescentou às 68 tools de escrita
-valem **6.403 caracteres** — média de **85** caracteres por tool, algo em torno de 6% do
+Dentro desse total, os exemplos de invocação que a #111 acrescentou às 69 tools de escrita
+valem **6.460 caracteres** — média de **85** caracteres por tool, algo em torno de 6% do
 catálogo. Os dois números são medidos no código pelo `tool-catalog.spec.ts`, junto com a
 contagem: a versão anterior desta frase dizia "4.110 caracteres, média de 91" — estagnada na
 medição da #111, feita quando o catálogo tinha 45 delas, e ainda por cima incoerente, porque
@@ -59,7 +60,7 @@ e não em campo separado — estão na §Convenções de [`docs/MCP.md`](./MCP.m
 Além da contagem, cada tool declara `hostedInference` — se a execução dispara inferência **paga
 pela Fatia**. É recorte de custo, não de tamanho, e por isso mora aqui junto do resto.
 
-Hoje são **131** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
+Hoje são **133** tools que só leem ou gravam dado — custo de IA para a Fatia igual a zero — e
 **0** tools com inferência hospedada.
 
 O segundo número é o ponto inteiro. Chamada vinda do cliente MCP do usuário roda no
@@ -176,6 +177,11 @@ seção no `MCP.md` e a contagem atualizada (ver [`DADOS_REDESIGN.md`](./DADOS_R
 
 Já entregue pelo redesign: `get_weekly_muscle_summary` (#369), a mesma leitura dos cards da aba
 Treino (`GET /workout/muscles/week`), com seção no `MCP.md` e na contagem do topo.
+Também entregues: `list_inbox` e `mark_inbox_read` (#373), a central de avisos do sino no Hoje
+(`GET /users/me/inbox` e `POST /users/me/inbox/read`). Marcar como lido é escrita reversível e
+idempotente, por isso `confirmableHint` no chat hospedado; o id do corpo só marca aviso de quem
+chama. O `get_today_summary` passou a trazer as metas do dia (N de M, por meta), o contrato do
+"Para fazer" e os avisos não lidos — a mesma resposta do `GET /dashboard/today`.
 
 | Recurso                            | Tools propostas                                                                                                                        | Issue |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----- |

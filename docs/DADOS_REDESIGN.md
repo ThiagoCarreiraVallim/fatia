@@ -34,7 +34,7 @@ A prancha `Dados-Visao` agrupa o banco em nove grupos. Os modelos de cada um:
 | 05 Registros do corpo e dia | `WeightLog`, `StepLog`, `WaterLog`                                                                                                                                                                          |
 | 06 Chat com IA              | `Conversation`, `Message`, `UserMemory`, `AiUsage`                                                                                                                                                          |
 | 07 Comunidades              | `Group`, `GroupMembership`, `GroupInvite`, `ProfessionalLink`, `ProfessionalAccessLog`, `GroupSeat*`, `GroupPlanTemplate`, `GroupTip`, `GroupExerciseGuide*`, `GroupAgent`, `GroupChallenge*`, `GroupPost*` |
-| 08 Notificações             | `NotificationPreference`, `PendingNotice`, `UserDevice`, `PushTicket`, `WebPushSubscription`                                                                                                                |
+| 08 Notificações             | `NotificationPreference`, `PendingNotice`, `UserDevice`, `PushTicket`, `WebPushSubscription`, `InboxNotice`                                                                                                 |
 | 09 Mídia                    | `MediaFile`                                                                                                                                                                                                 |
 
 O que a equipe pode ver é o `ShareScope`: **5 categorias** (`WORKOUT`, `NUTRITION`, `BODY`,
@@ -215,6 +215,7 @@ campos de data dos modelos, não de enum.
 - **`Conversation`** (geral ou do agente da comunidade, `agentGroupId`), **`Message`** (`tools` →
   chips e cartões; `review`, `reviewReasons`, `reviewNote`), **`UserMemory`** — #384, #385.
 - **`NotificationPreference`** (`NotificationKind`) e **`PendingNotice`** (aviso agrupado) — #389.
+- **`InboxNotice`** — a central de avisos do sino no Hoje (#373): cada aviso enviado, com `readAt`.
 - **`MediaFile`** (`MediaKind`, `bytes`, `width`, `height`, `MediaStatus`).
 - Foto: **só a foto que vira refeição é guardada, com consentimento** (ADR 038). Foto de rótulo,
   foto de pergunta e áudio do ditado são descartados ([ADR 020](./ADR/020-foto-e-audio-trafegam-sem-persistencia.md)).

@@ -8,6 +8,11 @@ import { AchievementService, type AchievementEntry } from './achievement.service
 import { TrainingBlockService } from '../workout/training-block.service';
 import { addDaysIso, dateInTz, dayBoundsInTz, todayInTz, weekStartInTz } from './helpers/date-tz';
 import { ITENS_EM_ORDEM } from '../nutrition/itens-em-ordem';
+import { computeDailyGoals } from './helpers/daily-goals';
+import type { NextEvent, ReceivedPlan, TodoSummary } from './today-contracts';
+
+/** Janela da variação de peso que o cartão do Hoje mostra ("−2,5 em 30 dias"). */
+const WEIGHT_CHANGE_DAYS = 30;
 
 interface UserCtx {
   userId: string;
@@ -43,6 +48,9 @@ export class DashboardService {
       streak,
       activeBlock,
       plans,
+      nutrientTargets,
+      unreadInbox,
+      firstWeightInWindow,
     ] = await Promise.all([
       this.prisma.meal.findMany({
         // `lt`, não `lte`: o `end` do `dayBoundsInTz` é a meia-noite do dia SEGUINTE, então
@@ -86,7 +94,28 @@ export class DashboardService {
             take: 1,
             select: { completedAt: true },
           },
+          // "6 exercícios" no cartão de próximo treino (Al-H1-Hoje).
+          _count: { select: { exercises: true } },
         },
+      }),
+      // Fibra mínima, sódio máximo e afins entram nas metas do dia (Al-H5-Metas).
+      this.prisma.nutrientTarget.findMany({
+        where: { userId: ctx.userId },
+        orderBy: { label: 'asc' },
+        select: { nutrientKey: true, label: true, unit: true, min: true, max: true },
+      }),
+      // O ponto do sino (#373).
+      this.prisma.inboxNotice.count({ where: { userId: ctx.userId, readAt: null } }),
+      // O primeiro peso da janela de 30 dias, para a variação do cartão de peso.
+      this.prisma.weightLog.findFirst({
+        where: {
+          userId: ctx.userId,
+          loggedAt: {
+            gte: dayBoundsInTz(addDaysIso(date, -(WEIGHT_CHANGE_DAYS - 1)), ctx.timezone).start,
+          },
+        },
+        orderBy: { loggedAt: 'asc' },
+        select: { id: true, weightKg: true },
       }),
     ]);
 
@@ -95,17 +124,16 @@ export class DashboardService {
         ? { planId: activeBlock.planId, name: activeBlock.planName }
         : null;
 
-    const consumed = meals
-      .flatMap((m) => m.items)
-      .reduce(
-        (acc, i) => ({
-          kcal: acc.kcal + i.kcal,
-          proteinG: acc.proteinG + i.proteinG,
-          carbsG: acc.carbsG + i.carbsG,
-          fatG: acc.fatG + i.fatG,
-        }),
-        { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 },
-      );
+    const items = meals.flatMap((m) => m.items);
+    const consumed = items.reduce(
+      (acc, i) => ({
+        kcal: acc.kcal + i.kcal,
+        proteinG: acc.proteinG + i.proteinG,
+        carbsG: acc.carbsG + i.carbsG,
+        fatG: acc.fatG + i.fatG,
+      }),
+      { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 },
+    );
 
     const onTrack = goals ? consumed.kcal >= goals.kcalMin && consumed.kcal <= goals.kcalMax : null;
 
@@ -117,6 +145,51 @@ export class DashboardService {
 
     const latestWeightToday =
       latestWeight && latestWeight.loggedAt >= dayStart && latestWeight.loggedAt <= dayEnd;
+
+    const change30dKg =
+      latestWeight && firstWeightInWindow && firstWeightInWindow.id !== latestWeight.id
+        ? latestWeight.weightKg - firstWeightInWindow.weightKg
+        : null;
+
+    const nutrientTotals = sumNutrients(items);
+    const dailyGoals = computeDailyGoals({
+      goals,
+      consumed,
+      waterMl: waterToday.totalMl,
+      steps: stepsToday.steps,
+      workout: {
+        planName: plannedToday?.name ?? null,
+        planned: plannedToday !== null,
+        completedToday: !!completedSession,
+      },
+      nutrients: nutrientTargets.map((t) => ({
+        ...t,
+        total: Math.round((nutrientTotals[t.nutrientKey] ?? 0) * 100) / 100,
+      })),
+    });
+
+    const exerciseCountOf = (planId: string) => {
+      const plan = plans.find((p) => p.id === planId);
+      return plan ? plan._count.exercises : null;
+    };
+    const rotation = nextInRotation(plans);
+    const nextPlan = plannedToday
+      ? {
+          ...plannedToday,
+          source: 'BLOCK' as const,
+          exerciseCount: exerciseCountOf(plannedToday.planId),
+        }
+      : rotation
+        ? { ...rotation, exerciseCount: exerciseCountOf(rotation.planId) }
+        : null;
+
+    // Pontos de extensão do Hoje (#373) cujos dados nascem em outras issues: o
+    // contrato já vai na resposta, e a tela some com o cartão enquanto vier vazio.
+    // "Para fazer" (#383 avaliação, #379 plano a aceitar, #391 questionário),
+    // treino recebido (#379) e evento do dia (#397).
+    const todo: TodoSummary = { count: 0, items: [] };
+    const receivedPlan: ReceivedPlan | null = null;
+    const nextEvent: NextEvent | null = null;
 
     // Só LÊ. Desbloquear aqui gravaria em `UserAchievement` no meio de um `GET` — a tool
     // `get_today_summary` declara `readOnlyHint: true` e o Claude a chama sem confirmar, então
@@ -150,9 +223,7 @@ export class DashboardService {
         // O que o card de "próximo treino" oferece: o plano do bloco, ou, sem
         // bloco, o seguinte ao último plano treinado. `plannedToday` continua
         // sendo só o do bloco, porque é o que ele promete.
-        nextPlan: plannedToday
-          ? { ...plannedToday, source: 'BLOCK' as const }
-          : nextInRotation(plans),
+        nextPlan,
         sessionInProgress,
         completedToday: !!completedSession,
       },
@@ -161,6 +232,8 @@ export class DashboardService {
           ? { weightKg: latestWeight.weightKg, loggedAt: latestWeight.loggedAt.toISOString() }
           : null,
         loggedToday: !!latestWeightToday,
+        /** Último peso menos o primeiro dos últimos 30 dias; nulo com um registro só. */
+        change30dKg,
       },
       steps: {
         today: stepsToday.steps,
@@ -176,6 +249,12 @@ export class DashboardService {
       },
       streak,
       achievements,
+      /** As metas do dia, uma linha por meta com alvo: o "Metas 2/5" do topo. */
+      dailyGoals,
+      inbox: { unread: unreadInbox },
+      todo,
+      receivedPlan,
+      nextEvent,
     };
   }
 
@@ -281,6 +360,21 @@ export class DashboardService {
       weight: { startKg, currentKg, deltaKg },
     };
   }
+}
+
+/** Soma do dia de cada micronutriente rastreado (`MealItem.nutrients`, ADR 009). */
+function sumNutrients(items: Array<{ nutrients: unknown }>): Record<string, number> {
+  const totals: Record<string, number> = {};
+  for (const item of items) {
+    const map = item.nutrients;
+    if (!map || typeof map !== 'object' || Array.isArray(map)) continue;
+    for (const [key, value] of Object.entries(map as Record<string, unknown>)) {
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        totals[key] = (totals[key] ?? 0) + value;
+      }
+    }
+  }
+  return totals;
 }
 
 type PlanWithLastSession = {

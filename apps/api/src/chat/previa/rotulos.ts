@@ -222,6 +222,12 @@ const escopos: Formato = (valor, ctx) =>
   Array.isArray(valor) ? (valor.length ? listaDeMapa(ESCOPOS)(valor, ctx) : 'Nada') : null;
 
 export const CAMPOS: Record<string, Campo> = {
+  // `mark_inbox_read` (#373): quantos avisos; sem a lista, a tool marca todos.
+  ids: {
+    rotulo: 'Avisos marcados como lidos',
+    formato: (valor) =>
+      Array.isArray(valor) ? (valor.length === 1 ? '1 aviso' : `${valor.length} avisos`) : null,
+  },
   scopes: { rotulo: 'Compartilha com a equipe', formato: escopos },
   applyGoals: {
     rotulo: 'Trocar minhas metas pelas do plano',

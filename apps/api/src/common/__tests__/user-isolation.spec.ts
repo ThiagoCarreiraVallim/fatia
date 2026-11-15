@@ -41,6 +41,8 @@ import { WorkoutPlanService } from '../../workout/workout-plan.service';
 import { WorkoutSessionService } from '../../workout/workout-session.service';
 import { MuscleSummaryService } from '../../workout/muscle-summary.service';
 import { silentNotifications } from '../../notifications/__tests__/silent-notifications';
+import { InboxService } from '../../notifications/inbox.service';
+import { DashboardService } from '../../progress/dashboard.service';
 
 /**
  * Isolamento multi-tenant, ponta a ponta contra Postgres real (issue #92).
@@ -91,6 +93,7 @@ describe('isolamento entre usuários', () => {
   const consent = new ConsentService(prisma, links);
   const conversas = new ConversationService(prisma);
   const memorias = new MemoryService(prisma);
+  const inbox = new InboxService(prisma);
 
   /** Dados do user-A. Preenchido no beforeAll e sondado como user-B. */
   const owned = {
@@ -143,6 +146,8 @@ describe('isolamento entre usuários', () => {
     conversationId: '',
     /** O que o assistente guardou sobre o user-A, a pedido dele. */
     memoryId: '',
+    /** Aviso do sino do user-A (#373). */
+    inboxNoticeId: '',
   };
 
   beforeAll(async () => {
@@ -385,6 +390,17 @@ describe('isolamento entre usuários', () => {
       runId: null,
     });
     owned.memoryId = (await memorias.lembrar(owned.userA, 'Não come carne nem ovo.')).id;
+    owned.inboxNoticeId = (
+      await prisma.inboxNotice.create({
+        data: {
+          userId: owned.userA,
+          kind: 'COMMUNITY',
+          title: 'Seu pedido foi aprovado',
+          body: 'Bem-vinda à Academia.',
+          url: '/community',
+        },
+      })
+    ).id;
   }, 60_000);
 
   afterAll(async () => {
@@ -761,6 +777,40 @@ describe('isolamento entre usuários', () => {
       await expect(nutrientTargets.delete(owned.userB, 'sodium_mg')).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('central de avisos do sino (#373)', () => {
+    it('list_inbox: o dono vê o aviso, o vizinho não vê nada', async () => {
+      // Caminho feliz primeiro: sem ele, uma central sempre vazia passaria.
+      const dono = await inbox.list(owned.userA);
+      expect(dono.items.map((i) => i.id)).toContain(owned.inboxNoticeId);
+      await expect(inbox.list(owned.userB)).resolves.toEqual({ items: [], unread: 0 });
+    });
+
+    it('mark_inbox_read com o id do user-A no corpo não marca nada', async () => {
+      await expect(inbox.markRead(owned.userB, [owned.inboxNoticeId])).resolves.toEqual({
+        updated: 0,
+      });
+      // "Marcar todos" do vizinho também não alcança o aviso do user-A.
+      await inbox.markRead(owned.userB);
+      const aviso = await prisma.inboxNotice.findUnique({ where: { id: owned.inboxNoticeId } });
+      expect(aviso?.readAt).toBeNull();
+    });
+
+    it('o ponto do sino no dashboard conta só os avisos de quem pede', async () => {
+      const dashboard = (userId: string) =>
+        new DashboardService(
+          prisma,
+          steps,
+          weights,
+          waters,
+          { compute: async () => ({}) } as never,
+          { list: async () => [] } as never,
+          { getActive: async () => null } as never,
+        ).today({ userId, timezone: TZ });
+      expect((await dashboard(owned.userA)).inbox.unread).toBeGreaterThan(0);
+      expect((await dashboard(owned.userB)).inbox.unread).toBe(0);
     });
   });
 

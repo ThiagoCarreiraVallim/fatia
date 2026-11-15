@@ -33,8 +33,10 @@ type MockPrisma = {
   meal: { findMany: jest.Mock; count: jest.Mock };
   userGoals: { findUnique: jest.Mock };
   workoutSession: { findFirst: jest.Mock; findMany: jest.Mock; count: jest.Mock };
-  weightLog: { findMany: jest.Mock };
+  weightLog: { findMany: jest.Mock; findFirst: jest.Mock };
   workoutPlan: { findMany: jest.Mock };
+  nutrientTarget: { findMany: jest.Mock };
+  inboxNotice: { count: jest.Mock };
 };
 
 /**
@@ -75,15 +77,19 @@ const makePrisma = (): MockPrisma => ({
   meal: { findMany: jest.fn(), count: jest.fn() },
   userGoals: { findUnique: jest.fn() },
   workoutSession: { findFirst: jest.fn(), findMany: jest.fn(), count: jest.fn() },
-  weightLog: { findMany: jest.fn() },
+  weightLog: { findMany: jest.fn(), findFirst: jest.fn().mockResolvedValue(null) },
   workoutPlan: { findMany: jest.fn().mockResolvedValue([]) },
+  nutrientTarget: { findMany: jest.fn().mockResolvedValue([]) },
+  inboxNotice: { count: jest.fn().mockResolvedValue(0) },
 });
 
 const makeStepLogs = (): MockStepLogs => ({ getStepsForDate: jest.fn() });
 const makeWeightLogs = (): MockWeightLogs => ({ getLatest: jest.fn() });
 const makeWaterLogs = (): MockWaterLogs => ({ getForDate: jest.fn() });
 
-const makeItem = (overrides: Partial<Record<string, number>> = {}) => ({
+const makeItem = (
+  overrides: Partial<Record<string, number>> = {},
+): { kcal: number; proteinG: number; carbsG: number; fatG: number; nutrients?: unknown } => ({
   kcal: 500,
   proteinG: 30,
   carbsG: 60,
@@ -300,6 +306,7 @@ describe('DashboardService', () => {
         id,
         name,
         sessions: lastCompletedAt ? [{ completedAt: new Date(lastCompletedAt) }] : [],
+        _count: { exercises: 6 },
       });
 
       beforeEach(() => {
@@ -320,7 +327,12 @@ describe('DashboardService', () => {
 
         const result = await service.today(ctx);
 
-        expect(result.workout.nextPlan).toEqual({ planId: 'p3', name: 'Legs', source: 'ROTATION' });
+        expect(result.workout.nextPlan).toEqual({
+          planId: 'p3',
+          name: 'Legs',
+          source: 'ROTATION',
+          exerciseCount: 6,
+        });
         expect(prisma.workoutPlan.findMany).toHaveBeenCalledWith(
           expect.objectContaining({ where: { userId: 'user-A' } }),
         );
@@ -342,7 +354,12 @@ describe('DashboardService', () => {
 
         const result = await service.today(ctx);
 
-        expect(result.workout.nextPlan).toEqual({ planId: 'p1', name: 'Push', source: 'ROTATION' });
+        expect(result.workout.nextPlan).toEqual({
+          planId: 'p1',
+          name: 'Push',
+          source: 'ROTATION',
+          exerciseCount: 6,
+        });
       });
 
       it('prefere o plano do bloco ativo à rotação', async () => {
@@ -351,7 +368,22 @@ describe('DashboardService', () => {
 
         const result = await service.today(ctx);
 
-        expect(result.workout.nextPlan).toEqual({ planId: 'p9', name: 'Força', source: 'BLOCK' });
+        // O plano do bloco não está na lista de planos: sem contagem, em vez de inventar.
+        expect(result.workout.nextPlan).toEqual({
+          planId: 'p9',
+          name: 'Força',
+          source: 'BLOCK',
+          exerciseCount: null,
+        });
+      });
+
+      it('conta os exercícios do plano do bloco quando ele está entre os planos', async () => {
+        trainingBlocks.getActive.mockResolvedValue({ planId: 'p1', planName: 'Push' });
+        prisma.workoutPlan.findMany.mockResolvedValue([plano('p1', 'Push')]);
+
+        const result = await service.today(ctx);
+
+        expect(result.workout.nextPlan?.exerciseCount).toBe(6);
       });
 
       it('é nulo sem bloco e sem planos', async () => {
@@ -403,6 +435,101 @@ describe('DashboardService', () => {
 
       expect(result.weight.loggedToday).toBe(false);
       expect(result.weight.latest?.weightKg).toBe(80);
+    });
+
+    describe('painel do Hoje (#373)', () => {
+      beforeEach(() => {
+        prisma.meal.findMany.mockResolvedValue([]);
+        prisma.userGoals.findUnique.mockResolvedValue(null);
+        prisma.workoutSession.findFirst.mockResolvedValue(null);
+        weightLogs.getLatest.mockResolvedValue(null);
+        stepLogs.getStepsForDate.mockResolvedValue({ steps: 0, logCount: 0, sources: [] });
+      });
+
+      it('conta as metas do dia, incluindo fibra e sódio das metas de nutriente', async () => {
+        prisma.meal.findMany.mockResolvedValue([
+          makeMeal([
+            {
+              ...makeItem({ kcal: 2000, proteinG: 71 }),
+              nutrients: { fiber_g: 14, sodium_mg: 1240 },
+            },
+          ]),
+        ]);
+        prisma.userGoals.findUnique.mockResolvedValue({
+          ...makeGoals(),
+          proteinMinG: 120,
+          proteinMaxG: 160,
+          dailyWaterTargetMl: 2500,
+        });
+        prisma.nutrientTarget.findMany.mockResolvedValue([
+          { nutrientKey: 'fiber_g', label: 'Fibra', unit: 'g', min: 25, max: null },
+          { nutrientKey: 'sodium_mg', label: 'Sódio', unit: 'mg', min: null, max: 2000 },
+        ]);
+
+        const result = await service.today(ctx);
+
+        expect(prisma.nutrientTarget.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { userId: 'user-A' } }),
+        );
+        // kcal em faixa e sódio abaixo do máximo; proteína, água, passos e fibra não.
+        expect(result.dailyGoals).toMatchObject({ met: 2, total: 6 });
+        expect(result.dailyGoals.items.find((g) => g.key === 'nutrient:fiber_g')).toMatchObject({
+          current: 14,
+          met: false,
+        });
+      });
+
+      it('traz os avisos não lidos do sino, só de quem pediu', async () => {
+        prisma.inboxNotice.count.mockResolvedValue(3);
+
+        const result = await service.today(ctx);
+
+        expect(result.inbox).toEqual({ unread: 3 });
+        expect(prisma.inboxNotice.count).toHaveBeenCalledWith({
+          where: { userId: 'user-A', readAt: null },
+        });
+      });
+
+      it('"Para fazer", treino recebido e evento: contrato pronto, vazio até as issues deles', async () => {
+        const result = await service.today(ctx);
+
+        expect(result.todo).toEqual({ count: 0, items: [] });
+        expect(result.receivedPlan).toBeNull();
+        expect(result.nextEvent).toBeNull();
+      });
+
+      it('variação do peso em 30 dias: o último menos o primeiro da janela', async () => {
+        weightLogs.getLatest.mockResolvedValue({
+          id: 'w2',
+          weightKg: 70.2,
+          loggedAt: new Date('2026-01-15T08:00:00Z'),
+        });
+        prisma.weightLog.findFirst.mockResolvedValue({
+          id: 'w1',
+          weightKg: 72.7,
+          loggedAt: new Date('2025-12-20T08:00:00Z'),
+        });
+
+        const result = await service.today(ctx);
+
+        expect(result.weight.change30dKg).toBeCloseTo(-2.5);
+        expect(prisma.weightLog.findFirst).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({ userId: 'user-A' }),
+            orderBy: { loggedAt: 'asc' },
+          }),
+        );
+      });
+
+      it('um registro só na janela não é variação', async () => {
+        const unico = { id: 'w1', weightKg: 70.2, loggedAt: new Date('2026-01-15T08:00:00Z') };
+        weightLogs.getLatest.mockResolvedValue(unico);
+        prisma.weightLog.findFirst.mockResolvedValue(unico);
+
+        const result = await service.today(ctx);
+
+        expect(result.weight.change30dKg).toBeNull();
+      });
     });
 
     describe('streaks e conquistas', () => {
