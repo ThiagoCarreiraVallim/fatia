@@ -20,7 +20,7 @@ Para ler as pranchas: a cópia local fica em `.canvas/project/<Prancha>.dc.html`
 | #369  | Navegação: 5 abas, botão da IA e menu               | mergeado | Menu da IA: a tela encolhe até virar notch (Al-H6c5). No app não há "Ver o PRO" (regra da loja) |
 | #370  | Dados do redesign × banco, estados e ADRs           | mergeado | `docs/DADOS_REDESIGN.md`                                                                        |
 
-## Etapa 2: Onboarding, Hoje e Você (`validado`, branch `redesign/etapa-02`)
+## Etapa 2: Onboarding, Hoje e Você (`mergeado`, PR #424; correções #425)
 
 | Issue | Título                           | Estado   | Superfícies                                       |
 | ----- | -------------------------------- | -------- | ------------------------------------------------- |
@@ -76,6 +76,11 @@ Pendências da etapa 2: cada uma depende de outra issue ou de algo externo.
 | 12 · Site e fora de tela                | #415 site · #416 página pública e convite · #417 e-mail e lojas                                                                            | a fazer |
 
 A #418 ("Sobras das issues absorvidas") é revisada no fim da história.
+
+## Regras de usabilidade e reaproveitamento
+
+- **O canvas é base de design, não a fonte de verdade.** Interação, formulários e botões seguem a usabilidade. Por exemplo, altura e peso são digitáveis, além do − e do +.
+- **A figura humana com músculos usa sempre o SVG anatômico completo:** o `MuscleDiagram` da explicação do exercício, em web e app. Ainda falta corrigir o card "Seus músculos hoje" (`cards/body-silhouette.tsx`), que está com uma silhueta simplificada. Isso fica na etapa 4 (#377).
 
 ## Decisões do dono
 

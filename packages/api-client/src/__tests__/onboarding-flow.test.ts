@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BODY_STEPPERS,
+  parseTypedBody,
   KCAL_BAR,
   aiStepVariant,
   codeFromQr,
@@ -316,5 +318,25 @@ describe('código da comunidade (Onb-Codigo)', () => {
     expect(communityCodeHint({ code: 'XYZ123', status: 'not-found' })).toBe(
       'Nenhuma comunidade com esse código.',
     );
+  });
+});
+
+describe('altura e peso digitados (Onb-05)', () => {
+  const H = BODY_STEPPERS.height;
+  const W = BODY_STEPPERS.weight;
+
+  it('aceita vírgula ou ponto e arredonda como o stepper', () => {
+    expect(parseTypedBody('70,25', W)).toBe(70.3);
+    expect(parseTypedBody(' 82.4 ', W)).toBe(82.4);
+    expect(parseTypedBody('175', H)).toBe(175);
+    expect(parseTypedBody('175,6', H)).toBe(176);
+  });
+
+  it('fora da faixa vira o limite; vazio ou texto não muda nada', () => {
+    expect(parseTypedBody('400', W)).toBe(W.max);
+    expect(parseTypedBody('20', W)).toBe(W.min);
+    expect(parseTypedBody('', W)).toBeNull();
+    expect(parseTypedBody('abc', H)).toBeNull();
+    expect(parseTypedBody('0', H)).toBeNull();
   });
 });

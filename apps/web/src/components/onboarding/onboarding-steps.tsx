@@ -29,6 +29,7 @@ import {
   onboardingReminderOptions,
   rangeLabel,
   remindersCta,
+  parseTypedBody,
   stepValue,
   stepsLabel,
   teamGoalsSummary,
@@ -410,7 +411,8 @@ export function BodyStep({
           onPlus={() => set({ heightCm: stepValue(value.heightCm, H.step, H) })}
           minusLabel="Menos altura"
           plusLabel="Mais altura"
-          onType={(n) => set({ heightCm: Math.round(n) })}
+          limits={H}
+          onType={(n) => set({ heightCm: n })}
         />
         <BodyStepper
           label="Peso"
@@ -420,7 +422,8 @@ export function BodyStep({
           onPlus={() => set({ weightKg: stepValue(value.weightKg, W.step, W) })}
           minusLabel="Menos peso"
           plusLabel="Mais peso"
-          onType={(n) => set({ weightKg: Math.round(n * 10) / 10 })}
+          limits={W}
+          onType={(n) => set({ weightKg: n })}
         />
       </div>
       <p className="flex items-center gap-2 text-xs text-faint">
@@ -447,10 +450,16 @@ export function BodyStep({
   );
 }
 
+/**
+ * Altura e peso: o número é um campo de verdade (dá para digitar), e o − e o +
+ * ficam para o ajuste fino. A prancha só tinha os botões; digitar é mais rápido
+ * para quem sabe o próprio peso.
+ */
 function BodyStepper({
   label,
   unit,
   display,
+  limits,
   onMinus,
   onPlus,
   minusLabel,
@@ -460,6 +469,7 @@ function BodyStepper({
   label: string;
   unit: string;
   display: string;
+  limits: { min: number; max: number; step: number };
   onMinus: () => void;
   onPlus: () => void;
   minusLabel: string;
@@ -467,22 +477,34 @@ function BodyStepper({
   onType: (n: number) => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
+  const commit = () => {
+    const n = parseTypedBody(editing ?? '', limits);
+    if (n !== null) onType(n);
+    setEditing(null);
+  };
   return (
     <div className="flex flex-col gap-2">
       <span className="text-[13px] font-semibold text-muted-foreground">{label}</span>
       <div className="flex flex-col items-center gap-2.5 rounded-card bg-card px-2.5 py-3.5">
-        <label className="flex items-baseline gap-1">
+        <label className="flex items-baseline gap-1 rounded-[12px] border-[1.5px] border-transparent bg-background px-2 py-1 focus-within:border-primary">
           <span className="sr-only">{`${label} em ${unit}`}</span>
           <input
-            inputMode="decimal"
+            inputMode={limits.step >= 1 ? 'numeric' : 'decimal'}
+            enterKeyHint="done"
             value={editing ?? display}
-            onFocus={() => setEditing(display)}
-            onChange={(e) => setEditing(e.target.value)}
-            onBlur={() => {
-              const n = Number((editing ?? '').replace(',', '.'));
-              if (Number.isFinite(n) && n > 0) onType(n);
-              setEditing(null);
+            onFocus={(e) => {
+              setEditing(display);
+              e.currentTarget.select();
             }}
+            onChange={(e) => setEditing(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur();
+              if (e.key === 'Escape') {
+                setEditing(null);
+                e.currentTarget.blur();
+              }
+            }}
+            onBlur={commit}
             className="w-[4.5ch] bg-transparent text-center font-display text-d3 tabular-nums outline-none"
           />
           <span className="text-sm font-semibold text-muted-foreground">{unit}</span>
