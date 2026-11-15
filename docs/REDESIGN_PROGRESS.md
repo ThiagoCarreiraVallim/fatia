@@ -96,11 +96,11 @@ Pendências da #376:
 
 ## Etapa 4: Treino A (em andamento)
 
-| Issue | Título                                     | Estado   | Superfícies                                      |
-| ----- | ------------------------------------------ | -------- | ------------------------------------------------ |
-| #377  | Início, sessão em andamento e treino feito | validado | api, db, MCP (1 tool), api-client, web, app      |
-| #378  | Planos, adicionar e configurar exercício   | validado | api, db, MCP (1 tool nova), api-client, web, app |
-| #379  | Plano recebido, modelos, bloco e agenda    | a fazer  |                                                  |
+| Issue | Título                                     | Estado       | Superfícies                                        |
+| ----- | ------------------------------------------ | ------------ | -------------------------------------------------- |
+| #377  | Início, sessão em andamento e treino feito | validado     | api, db, MCP (1 tool), api-client, web, app        |
+| #378  | Planos, adicionar e configurar exercício   | validado     | api, db, MCP (1 tool nova), api-client, web, app   |
+| #379  | Plano recebido, modelos, bloco e agenda    | em andamento | api, db, MCP (5 tools novas), api-client, web, app |
 
 Pendências da #377 (branch `redesign/377-treino-sessao`, migration `20261116000000_workout_feeling_and_checkin`):
 
@@ -162,6 +162,15 @@ A #418 ("Sobras das issues absorvidas") é revisada no fim da história.
   - que o menu e o botão da IA nunca ficam sobre botões de modal;
   - que não há texto preto no tema escuro.
 
+Pendências da #379 (branch `redesign/379-plano-recebido-agenda`, migration `20261116020000_plan_offers_and_agenda`):
+
+- **Plano recebido:** `PlanOffer` com versões (`PlanOfferVersion`). A equipe manda e atualiza por `POST /professional/students/:membershipId/plan-offers[/:offerId/versions]`, só com `ProfessionalLink` ativo. O aluno aceita, recusa e desfaz em `/plan-offers`. Recusar não mexe no vínculo nem nos consentimentos. O aceite copia pelo `PlanMaterializerService` (ADR 014); a atualização aceita reescreve os exercícios do mesmo plano.
+- **Avisos:** envio e atualização vão ao aluno (`PLAN_RECEIVED`); aceite, recusa e "manteve a versão atual" vão a quem mandou (`COMMUNITY`).
+- **Agenda:** `PlannedSession` nasce só do aceite de plano de calendário. "Feito" e "não feito" são lidos do treino concluído, nunca gravados.
+- **Modelos:** `GET /groups/templates` agrupa por comunidade os planos publicados; adotar segue o fluxo da comunidade.
+- **MCP:** `list_plan_offers`, `accept_plan_offer`, `decline_plan_offer`, `list_planned_sessions`, `reschedule_planned_session`; `create_training_block` aceita `weeks` 3–6. A administração da equipe fica fora do MCP.
+- **Ainda não conferido:** capturas contra as pranchas (o dono faz a passada visual); a tela da equipe para mandar o plano (só o endpoint mínimo).
+
 ## Decisões do dono
 
 - **Etapa 1:**
@@ -173,6 +182,11 @@ A #418 ("Sobras das issues absorvidas") é revisada no fim da história.
   - Login com Google e Apple juntos.
   - Onde a issue diverge da prancha, **segue o canvas**.
   - Apagar conta pela web: página simples no estilo Al-V8.
+- **Etapa 4 (#379):**
+  - Calendário × flexível: a oferta tem `schedule`. Aceitar plano de calendário gera as sessões da agenda; o flexível não gera linha, e o app só calcula a próxima sessão.
+  - "O que mudou": diff por exercício entre o snapshot aceito e o novo (novo, removido, alterado em séries, repetições e descanso). A pessoa aceita a atualização ou mantém a versão atual; nada muda sem aceite.
+  - Bloco de semanas: de 3 a 6, com os focos de hoje. A última é deload; o meio é acúmulo e depois pico (3: acúmulo, pico, deload; 6: acúmulo ×3, pico ×2, deload). Os blocos de 4 semanas não mudam; seguem as regras da ADR 019, inclusive o deload por sinal.
+  - "Remarcar" na agenda: qualquer dia de hoje até o fim do plano, nunca depois. Só informativo, sem presença nem reserva.
 - **Sempre:**
   - O app não vende fora da loja.
   - A foto só é guardada quando vira refeição, com consentimento (ADR 038).
