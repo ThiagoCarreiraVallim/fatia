@@ -367,7 +367,7 @@ function AiDrawerBody({
               ))}
             </ul>
           </div>
-          <div className="mx-4 flex flex-col gap-3 rounded-card bg-card p-4">
+          <div className="mx-4 flex flex-col gap-3 rounded-card bg-muted p-4">
             <div className="flex items-center gap-3">
               <span
                 aria-hidden
@@ -394,7 +394,7 @@ function AiDrawerBody({
                   e.preventDefault();
                   onGo('/profile/connect');
                 }}
-                className="flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold text-foreground hover:bg-muted"
+                className="flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold text-foreground hover:bg-background"
               >
                 <Icon name="link" size={16} />
                 Minha IA (MCP)

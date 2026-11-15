@@ -221,6 +221,22 @@ describe('AiDrawer', () => {
     expect(nav.replace).toHaveBeenCalledWith('/plan');
   });
 
+  it('no Free: o cartão "Registre falando ou por foto" contrasta com a folha (s1 sobre s2)', async () => {
+    availability.mockResolvedValue({
+      available: true,
+      allowed: false,
+      reason: 'plan_required',
+      photos: false,
+      dictation: false,
+    });
+    const { menu } = await openDrawer();
+    const lead = await within(menu).findByText('Registre falando ou por foto');
+    const card = lead.closest('.rounded-card');
+    // A folha é bg-card (s2); cartão da mesma cor perde a borda (prancha Al-H6c6).
+    expect(card).toHaveClass('bg-muted');
+    expect(card).not.toHaveClass('bg-card');
+  });
+
   it('o "voltar" do navegador fecha o menu', async () => {
     await openDrawer();
     expect(screen.getByRole('dialog')).toBeInTheDocument();

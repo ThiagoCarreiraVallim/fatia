@@ -88,6 +88,16 @@ test('#369 menu da IA: Free (prancha H6c6)', async ({ page }) => {
   await appears(page.getByRole('dialog').getByText('Registrar manual'));
   await snap(page, 'e1-menu-ia-free', false);
   expect(await axe(page, 'menu-free')).toEqual([]);
+  // O cartão do Free (s1) precisa contrastar com a folha (s2), como na prancha.
+  const dialog = page.getByRole('dialog');
+  const card = dialog
+    .getByText('Registre falando ou por foto')
+    .locator('xpath=ancestor::div[contains(@class,"rounded-card")][1]');
+  const [cardBg, sheetBg] = await Promise.all([
+    card.evaluate((el) => getComputedStyle(el).backgroundColor),
+    dialog.evaluate((el) => getComputedStyle(el).backgroundColor),
+  ]);
+  expect(cardBg).not.toBe(sheetBg);
 });
 
 test('#369 menu da IA: PRO com conversas (H6c5) e ativa (H6c8)', async ({ page }) => {
