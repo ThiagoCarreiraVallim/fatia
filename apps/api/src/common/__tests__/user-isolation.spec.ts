@@ -75,6 +75,9 @@ import { NutritionPlanService } from '../../nutrition/nutrition-plan.service';
 const TZ = 'America/Sao_Paulo';
 const TODAY = '2026-03-10';
 
+/** O código que o user-A ligou ao alimento dele (#375). */
+const BARCODE_A = '7891000100103';
+
 describe('isolamento entre usuários', () => {
   const prisma = new PrismaService();
 
@@ -310,6 +313,8 @@ describe('isolamento entre usuários', () => {
       proteinPer100g: 10,
       carbsPer100g: 10,
       fatPer100g: 1,
+      nutrients: { fiber_g: 3 },
+      barcode: BARCODE_A,
     });
     owned.customFoodId = customFood.id;
     await shortcuts.setFavorite(owned.userA, customFood.id, true);
@@ -617,6 +622,58 @@ describe('isolamento entre usuários', () => {
     it('update_custom_food recusa', async () => {
       await expect(
         foods.updateCustom(owned.userB, owned.customFoodId, { name: 'invadido' }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    // #375: o código de barras é do alimento próprio, e o alimento é da pessoa.
+    it('a leitura do código não acha o alimento que outra conta ligou ao código', async () => {
+      await expect(foods.findByBarcode(owned.userB, BARCODE_A)).resolves.toBeNull();
+      const deA = await foods.findByBarcode(owned.userA, BARCODE_A);
+      expect(deA?.id).toBe(owned.customFoodId);
+    });
+
+    it('o mesmo código vale para outra conta: a unicidade é por dono', async () => {
+      const deB = await foods.createCustom(owned.userB, {
+        name: 'Iogurte do B',
+        kcalPer100g: 60,
+        proteinPer100g: 4,
+        carbsPer100g: 5,
+        fatPer100g: 3,
+        barcode: BARCODE_A,
+      });
+      expect(deB.barcode).toBe(BARCODE_A);
+      await expect(foods.findByBarcode(owned.userA, BARCODE_A)).resolves.toMatchObject({
+        id: owned.customFoodId,
+      });
+      await foods.deleteCustom(owned.userB, deB.id);
+    });
+
+    it('dois "Salvar" ao mesmo tempo com o mesmo código: um grava, o outro é 409, não 500', async () => {
+      const make = (name: string) =>
+        foods.createCustom(owned.userB, {
+          name,
+          kcalPer100g: 60,
+          proteinPer100g: 4,
+          carbsPer100g: 5,
+          fatPer100g: 3,
+          barcode: '7896004000014',
+        });
+      const results = await Promise.allSettled([make('Corrida 1'), make('Corrida 2')]);
+
+      const ok = results.filter((r) => r.status === 'fulfilled');
+      const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+      expect(ok).toHaveLength(1);
+      expect(failed).toHaveLength(1);
+      expect(failed[0].reason).toBeInstanceOf(ConflictException);
+      await foods.deleteCustom(
+        owned.userB,
+        (ok[0] as PromiseFulfilledResult<{ id: number }>).value.id,
+      );
+    });
+
+    it('update_custom_food não liga código a alimento de outro', async () => {
+      await expect(
+        foods.updateCustom(owned.userB, owned.customFoodId, { barcode: '7896004000014' }),
       ).rejects.toThrow(NotFoundException);
     });
 
