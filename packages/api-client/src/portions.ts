@@ -69,6 +69,7 @@ export function amountGrams(amount: Amount, portions: FoodPortion[]): number | n
     const grams = Number(amount.grams.replace(',', '.'));
     return Number.isFinite(grams) && grams > 0 ? grams : null;
   }
+  if (!(amount.quantity > 0)) return null;
   const portion = portions.find((p) => p.id === amount.portionId);
   return portion ? gramsFor(portion.grams, amount.quantity) : null;
 }

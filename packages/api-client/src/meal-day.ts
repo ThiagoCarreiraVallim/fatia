@@ -4,7 +4,8 @@
  * faixa marcada, o "De onde veio" e o campo numérico que aceita vírgula.
  */
 import { formatDecimal, formatInteger } from './format';
-import type { DayNutrient, Meal, MealType } from './nutrition';
+import { shiftDay } from './meal-templates';
+import type { DayNutrient, Meal, MealItem, MealType } from './nutrition';
 
 /** Inteiro com milhar a partir de 10; abaixo disso uma casa ("2,5 g"). */
 export function formatNutrientAmount(value: number, unit: string): string {
@@ -109,6 +110,41 @@ export function parseDecimalInput(input: string): number | null {
   if (!/^\d+(\.\d+)?$/.test(text)) return null;
   const value = Number(text);
   return Number.isFinite(value) ? value : null;
+}
+
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/** As contas do item em `grams`, para a tela de editar mostrar antes de salvar. */
+export function scaleMealItem(
+  item: Pick<MealItem, 'grams' | 'kcal' | 'proteinG' | 'carbsG' | 'fatG' | 'nutrients'>,
+  grams: number,
+): {
+  kcal: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+  fiberG: number;
+  sodiumMg: number;
+} {
+  const factor = item.grams > 0 ? grams / item.grams : 0;
+  return {
+    kcal: Math.round(item.kcal * factor),
+    proteinG: round1(item.proteinG * factor),
+    carbsG: round1(item.carbsG * factor),
+    fatG: round1(item.fatG * factor),
+    fiberG: round1((item.nutrients?.fiber_g ?? 0) * factor),
+    sodiumMg: Math.round((item.nutrients?.sodium_mg ?? 0) * factor),
+  };
+}
+
+/** Os dias que viram chips no "Copiar para": de hoje em diante, sem o dia de origem. */
+export function copyTargetDays(date: string, today: string, count = 5): string[] {
+  const days: string[] = [];
+  for (let offset = 0; days.length < count; offset++) {
+    const day = shiftDay(today, offset);
+    if (day !== date) days.push(day);
+  }
+  return days;
 }
 
 /**

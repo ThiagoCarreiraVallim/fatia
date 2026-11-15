@@ -120,6 +120,11 @@ describe('amountGrams e amountPayload', () => {
   it('medida que sumiu da lista não tem gramas', () => {
     expect(amountGrams({ kind: 'portion', portionId: 'x', quantity: 1 }, [colher])).toBeNull();
   });
+
+  it('quantidade digitada que não dá para ler (NaN, 0) não tem gramas (#374)', () => {
+    expect(amountGrams({ kind: 'portion', portionId: 'p2', quantity: NaN }, [concha])).toBeNull();
+    expect(amountGrams({ kind: 'portion', portionId: 'p2', quantity: 0 }, [concha])).toBeNull();
+  });
 });
 
 describe('itemAmountText', () => {

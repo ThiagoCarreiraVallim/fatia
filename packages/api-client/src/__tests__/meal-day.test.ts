@@ -7,7 +7,9 @@ import {
   mealNutrientValue,
   mealShareOfDay,
   mealSummary,
+  copyTargetDays,
   parseDecimalInput,
+  scaleMealItem,
 } from '../meal-day';
 import type { DayNutrient, Meal } from '../nutrition';
 
@@ -129,5 +131,34 @@ describe('campo numérico digitável', () => {
     expect(parseDecimalInput('12,')).toBeNull();
     expect(parseDecimalInput('abc')).toBeNull();
     expect(parseDecimalInput('-3')).toBeNull();
+  });
+});
+
+describe('editar item e copiar (N14, N9)', () => {
+  it('refaz as contas do item na quantidade nova', () => {
+    expect(scaleMealItem(meal.items[0], 150)).toEqual({
+      kcal: 192,
+      proteinG: 3.8,
+      carbsG: 42,
+      fatG: 0.3,
+      fiberG: 2.4,
+      sodiumMg: 2,
+    });
+    expect(scaleMealItem({ ...meal.items[0], grams: 0 }, 50).kcal).toBe(0);
+  });
+
+  it('oferece os próximos dias como chips, sem o dia de origem', () => {
+    expect(copyTargetDays('2026-11-15', '2026-11-15')).toEqual([
+      '2026-11-16',
+      '2026-11-17',
+      '2026-11-18',
+      '2026-11-19',
+      '2026-11-20',
+    ]);
+    expect(copyTargetDays('2026-11-14', '2026-11-15', 3)).toEqual([
+      '2026-11-15',
+      '2026-11-16',
+      '2026-11-17',
+    ]);
   });
 });
