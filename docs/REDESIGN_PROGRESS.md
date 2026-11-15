@@ -24,10 +24,10 @@ Para ler as pranchas: a cópia local fica em `.canvas/project/<Prancha>.dc.html`
 
 | Issue | Título                           | Estado   | Superfícies                                       |
 | ----- | -------------------------------- | -------- | ------------------------------------------------- |
-| #387  | Você e conta                     | validado | api, web, app; `fat.ia.br/apagar-conta` no site   |
-| #373  | Hoje: resumo, metas, água e peso | validado | api, web, app                                     |
-| #389  | Lembretes e notificações         | validado | api, web, app, MCP                                |
-| #371  | Onboarding do aluno              | validado | api, web, app; conectores Google e Apple no Logto |
+| #387  | Você e conta                     | mergeado | api, web, app; `fat.ia.br/apagar-conta` no site   |
+| #373  | Hoje: resumo, metas, água e peso | mergeado | api, web, app                                     |
+| #389  | Lembretes e notificações         | mergeado | api, web, app, MCP                                |
+| #371  | Onboarding do aluno              | mergeado | api, web, app; conectores Google e Apple no Logto |
 
 Pendências da etapa 2: cada uma depende de outra issue ou de algo externo.
 
