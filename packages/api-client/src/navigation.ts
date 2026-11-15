@@ -49,6 +49,7 @@ export type MenuKey =
   | 'progress'
   | 'personal-goals'
   | 'records'
+  | 'nutrition-plan'
   | 'daily-goals'
   | 'nutrients'
   | 'foods'
@@ -126,6 +127,7 @@ const MENU: { title: string; items: MenuItemDef[] }[] = [
   {
     title: 'Nutrição',
     items: [
+      link('nutrition-plan', 'Plano alimentar', 'apple', '/nutrition/plan'),
       link('daily-goals', 'Metas do dia', 'target', '/nutrition/goals'),
       link('nutrients', 'Metas de nutrientes', 'apple', '/nutrition/nutrient-targets'),
       link('foods', 'Meus alimentos', 'apple', '/nutrition/foods'),
@@ -293,6 +295,7 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/nutrition/foods', title: 'Meus alimentos', parent: '/nutrition' },
   { pattern: '/nutrition/goals', title: 'Metas do dia', parent: '/nutrition' },
   { pattern: '/nutrition/nutrient-targets', title: 'Metas de nutrientes', parent: '/nutrition' },
+  { pattern: '/nutrition/plan', title: 'Plano alimentar', parent: '/nutrition' },
   { pattern: '/nutrition/scan', title: 'Escanear produto', parent: '/nutrition' },
   { pattern: '/nutrition/photo', title: 'Registrar por foto', parent: '/nutrition' },
   { pattern: '/workout', title: 'Treino', parent: null },

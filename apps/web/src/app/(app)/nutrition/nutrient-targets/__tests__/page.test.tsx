@@ -13,6 +13,7 @@ vi.mock('@fatia/api-client', async () => {
       nutrientTargets: vi.fn(),
       upsertNutrientTarget: vi.fn(),
       deleteNutrientTarget: vi.fn(),
+      nutrientSummary: vi.fn(),
     },
   };
 });
@@ -21,6 +22,8 @@ import { nutritionApi } from '@fatia/api-client';
 
 const nutrientTargets = vi.mocked(nutritionApi.nutrientTargets);
 const deleteNutrientTarget = vi.mocked(nutritionApi.deleteNutrientTarget);
+const upsertNutrientTarget = vi.mocked(nutritionApi.upsertNutrientTarget);
+const nutrientSummary = vi.mocked(nutritionApi.nutrientSummary);
 
 const sodio = {
   id: 't1',
@@ -44,6 +47,88 @@ describe('NutrientTargetsPage', () => {
   beforeEach(() => {
     nutrientTargets.mockReset().mockResolvedValue([sodio]);
     deleteNutrientTarget.mockReset().mockResolvedValue(undefined as never);
+    upsertNutrientTarget.mockReset().mockResolvedValue({} as never);
+    nutrientSummary.mockReset().mockResolvedValue({
+      date: '2026-11-15',
+      nutrients: [
+        {
+          nutrientKey: 'sodium_mg',
+          label: 'Sódio',
+          unit: 'mg',
+          min: null,
+          max: 2000,
+          total: 1240,
+          status: 'ok',
+        },
+      ],
+    });
+  });
+
+  it('cada meta mostra o tipo, o valor de hoje e o status', async () => {
+    renderPage();
+    const row = await screen.findByRole('group', { name: 'Sódio' });
+    expect(within(row).getByText('máx')).toBeInTheDocument();
+    expect(await within(row).findByText('1.240 mg')).toBeInTheDocument();
+    expect(within(row).getByText('de 2.000 mg')).toBeInTheDocument();
+    expect(within(row).getByText('dentro do limite')).toBeInTheDocument();
+    expect(within(row).queryByText('seu')).not.toBeInTheDocument();
+  });
+
+  it('nutriente que a pessoa criou leva o selo "seu"', async () => {
+    nutrientTargets.mockResolvedValue([
+      {
+        ...sodio,
+        id: 't2',
+        nutrientKey: 'omega_3_g',
+        label: 'Ômega 3',
+        unit: 'g',
+        max: null,
+        min: 1,
+      },
+    ]);
+    renderPage();
+    const row = await screen.findByRole('group', { name: 'Ômega 3' });
+    expect(within(row).getByText('seu')).toBeInTheDocument();
+  });
+
+  it('Outro: nome e unidade, sem digitar chave; vírgula decimal', async () => {
+    nutrientTargets.mockResolvedValue([]);
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Outro' }));
+    expect(screen.queryByLabelText('Chave')).not.toBeInTheDocument();
+    expect(screen.getByText(/Os alimentos da base não trazem esse valor/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Nome do nutriente'), 'Ômega 3');
+    await user.click(screen.getByRole('radio', { name: 'g' }));
+    await user.type(screen.getByLabelText(/Mínimo/), '1,5');
+    await user.click(screen.getByRole('button', { name: /Adicionar Ômega 3/ }));
+
+    await waitFor(() =>
+      expect(upsertNutrientTarget).toHaveBeenCalledWith({
+        nutrientKey: 'omega_3_g',
+        label: 'Ômega 3',
+        unit: 'g',
+        min: 1.5,
+        max: undefined,
+      }),
+    );
+  });
+
+  it('mínimo acima do máximo avisa e não salva', async () => {
+    nutrientTargets.mockResolvedValue([]);
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Fibra' }));
+    const min = screen.getByLabelText(/Mínimo/);
+    await user.clear(min);
+    await user.type(min, '30');
+    await user.type(screen.getByLabelText(/Máximo/), '25');
+
+    expect(screen.getByRole('alert')).toHaveTextContent('O mínimo (30) passa do máximo (25).');
+    expect(screen.getByRole('button', { name: /Adicionar Fibra/ })).toBeDisabled();
+    expect(upsertNutrientTarget).not.toHaveBeenCalled();
   });
 
   it('remover pede confirmação e só apaga ao confirmar', async () => {

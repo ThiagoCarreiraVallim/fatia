@@ -5,7 +5,11 @@ import {
   goalsToDraft,
   nutrientRangeError,
   nutrientStatusText,
+  acceptPlanText,
+  customNutrientKey,
   nutritionPlanApi,
+  planFoodMacros,
+  planWeekText,
   optionTitle,
   parseDecimalInput,
   parseGoalsDraft,
@@ -105,6 +109,13 @@ describe('nutrientes', () => {
     expect(nutrientRangeError(25, 25)).toBeNull();
   });
 
+  it('chave do nutriente próprio sai do nome e da unidade', () => {
+    expect(customNutrientKey('Ômega 3', 'g')).toBe('omega_3_g');
+    expect(customNutrientKey('  Vitamina D ', 'µg')).toBe('vitamina_d_mcg');
+    expect(customNutrientKey('Creatina!!', 'mg')).toBe('creatina_mg');
+    expect(customNutrientKey('   ', 'mg')).toBe('');
+  });
+
   it('o status do dia em palavras', () => {
     const base = { nutrientKey: 'k', label: 'Fibra', unit: 'g' };
     expect(nutrientStatusText({ ...base, min: 25, max: null, total: 14, status: 'under' })).toBe(
@@ -176,6 +187,29 @@ describe('plano alimentar', () => {
       '1,5 unidades',
     );
     expect(planPortionText(food({ portionLabel: null, portionQuantity: null }))).toBe('50 g');
+  });
+
+  it('macros do alimento, carboidrato primeiro como na prancha', () => {
+    expect(planFoodMacros(food())).toBe('C 25 · P 4,7 · G 1,7');
+  });
+
+  it('dias na meta na semana', () => {
+    expect(planWeekText({ inRangeDays: 5, days: 7 })).toBe('5/7 na semana');
+  });
+
+  it('o aceite diz o que muda antes de mudar', () => {
+    const plan = {
+      version: 2,
+      applyGoals: true,
+      author: { name: 'Helena Personal' },
+      goals: { kcalMin: 1760, kcalMax: 1920 },
+    } as never;
+    expect(acceptPlanText(plan, true)).toBe(
+      'Suas metas do dia passam a ser 1.760–1.920 kcal, as do plano. As refeições do plano viram refeições salvas. O plano em uso hoje sai e fica no histórico.',
+    );
+    expect(acceptPlanText({ ...(plan as object), applyGoals: false } as never, false)).toBe(
+      'Suas metas do dia continuam as suas. As refeições do plano viram refeições salvas.',
+    );
   });
 
   it('linha do alimento: medida e kcal', () => {

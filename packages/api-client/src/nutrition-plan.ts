@@ -266,6 +266,23 @@ export function nutrientRangeError(min: number | null, max: number | null): stri
   return null;
 }
 
+/**
+ * A chave de um nutriente que a pessoa cria ("Ômega 3" em g → `omega_3_g`).
+ * Ninguém precisa digitar uma chave; vazio quando o nome não tem letra nem número.
+ */
+export function customNutrientKey(name: string, unit: string): string {
+  const slug = name
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 34); // a API aceita 40 na chave, com o sufixo da unidade
+  if (!slug) return '';
+  const u = unit === 'µg' ? 'mcg' : unit.toLowerCase();
+  return `${slug}_${u}`;
+}
+
 /** "faltam 11 g", "passou 400 mg"… — o status do dia em palavras. */
 export function nutrientStatusText(p: NutrientProgress): string {
   const amount = (n: number) => `${fmt(n, 1)} ${p.unit}`;
@@ -348,4 +365,25 @@ export function swapToastText(r: Pick<PlanSwapResult, 'teamSees' | 'viewerName'>
   return r.teamSees && r.viewerName
     ? `Troca registrada · ${r.viewerName} vê no seu diário`
     : 'Troca registrada · fica só no seu diário';
+}
+
+/** "C 25 · P 4,7 · G 1,7" — na ordem da folha de troca. */
+export function planFoodMacros(f: Pick<PlanFood, 'carbsG' | 'proteinG' | 'fatG'>): string {
+  return `C ${fmt(f.carbsG, 1)} · P ${fmt(f.proteinG, 1)} · G ${fmt(f.fatG, 1)}`;
+}
+
+export function planWeekText(week: NutritionPlanOverview['week']): string {
+  return `${week.inRangeDays}/${week.days} na semana`;
+}
+
+/** O que o diálogo de aceite avisa antes de trocar o plano e as metas. */
+export function acceptPlanText(
+  plan: Pick<NutritionPlan, 'applyGoals' | 'goals'>,
+  replacesActive: boolean,
+): string {
+  const goals = plan.applyGoals
+    ? `Suas metas do dia passam a ser ${fmt(plan.goals.kcalMin)}–${fmt(plan.goals.kcalMax)} kcal, as do plano.`
+    : 'Suas metas do dia continuam as suas.';
+  const old = replacesActive ? ' O plano em uso hoje sai e fica no histórico.' : '';
+  return `${goals} As refeições do plano viram refeições salvas.${old}`;
 }
