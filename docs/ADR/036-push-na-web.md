@@ -53,3 +53,11 @@ pronta", que interessa a quem usa só a web.
 - **Push da web pela Expo:** a Expo não entrega Web Push para PWA próprio.
 - **Agrupar no aparelho** (Android `group`, iOS `thread-id`): agrupa na bandeja, mas cada
   comentário continua acordando o celular.
+
+## Emenda (#389, 2026-11-15)
+
+A chave "Avisos neste navegador" saiu da tela de Notificações (prancha `Al-V4`). O navegador é
+inscrito pelo "Liberar" da faixa "Notificações bloqueadas" em Lembretes (`Al-V2`), que pede a
+permissão e faz a mesma inscrição (`useWebPush`). A faixa só aparece quando a instância tem as
+chaves `WEB_PUSH_*` e o navegador sabe receber push. Para parar, a pessoa bloqueia o site no
+navegador; a inscrição morta some pelo recibo, como antes.

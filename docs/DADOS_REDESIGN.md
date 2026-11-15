@@ -112,23 +112,23 @@ As telas que o Mapa marca "a fazer" sem prancha ficam **fora da história 1**, e
 Divergências que o canvas já corrigiu para seguir o banco (`Dados-Lacunas`). Não são trabalho de
 schema; a issue da tela usa o campo indicado.
 
-| O que a tela mostra           | Prancha / tela                     | Campo do banco                                                                          | Issue      |
-| ----------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------- | ---------- |
-| Tipos de notificação          | Notificações, Onb-09               | `NotificationKind` (5: COMMUNITY, CHALLENGES, FEED, MODERATION, CHAT) + `PendingNotice` | #389, #371 |
-| Categoria "metas"             | Onb-03, Equipe · O que você vê     | `ShareScope.GOALS` (5 categorias; a 6ª é dado novo)                                     | #371, #404 |
-| Nível de atividade            | Onb-06 Rotina, Retomada            | `ActivityLevel` (5: SEDENTARY…VERY_ACTIVE)                                              | #371       |
-| Nome do usuário               | Onb-01 Conta                       | `User.name`                                                                             | #371       |
-| Origem dos passos             | Saúde do celular, Registrar passos | `StepSource` (8 valores) com selo no registro                                           | #371, #373 |
-| Assinatura cancelada          | Meu plano: estados                 | `SubscriptionStatus` (5)                                                                | #386       |
-| Objetivo expirado e arquivado | Metas pessoais                     | `GoalStatus` (4)                                                                        | #382       |
-| Avaliação da resposta         | Ferramentas e confirmação          | `Message.review` (`like`/`dislike`), `reviewReasons`, `reviewNote`                      | #384       |
-| Série de cardio               | Cardio                             | `SessionSet.durationSeconds`, `distanceMeters`, `avgHeartRate`, `kcalBurned`            | #377, #381 |
-| Conquistas                    | Conquistas, Progresso              | `UserAchievement` (`key`, `unlockedAt`, `context`)                                      | #382       |
-| Bloco de treino               | Periodização                       | `TrainingBlock` (`kind`, `weeksTotal`, `status`) + `TrainingBlockWeek`                  | #379       |
-| Origem do alimento            | Adicionar item                     | `Food.source` + selo de sessão para código de barras (§2)                               | #375       |
-| Como foi o treino             | Fim do treino                      | `WorkoutSession.notes`                                                                  | #377       |
-| Favorito de exercício         | Como fazer                         | não existe: favorito só de alimento (`FavoriteFood`)                                    | #378       |
-| Tipo de comunidade            | Criar comunidade, Checklist        | `GroupType`, `GroupVisibility`, `JoinPolicy`, `PostPolicy`, `requiredSharingScopes`     | #372       |
+| O que a tela mostra           | Prancha / tela                     | Campo do banco                                                                      | Issue      |
+| ----------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------- | ---------- |
+| Tipos de notificação          | Notificações, Onb-09               | `NotificationKind` (13 desde a #389, em três grupos; ADR 033) + `PendingNotice`     | #389, #371 |
+| Categoria "metas"             | Onb-03, Equipe · O que você vê     | `ShareScope.GOALS` (5 categorias; a 6ª é dado novo)                                 | #371, #404 |
+| Nível de atividade            | Onb-06 Rotina, Retomada            | `ActivityLevel` (5: SEDENTARY…VERY_ACTIVE)                                          | #371       |
+| Nome do usuário               | Onb-01 Conta                       | `User.name`                                                                         | #371       |
+| Origem dos passos             | Saúde do celular, Registrar passos | `StepSource` (8 valores) com selo no registro                                       | #371, #373 |
+| Assinatura cancelada          | Meu plano: estados                 | `SubscriptionStatus` (5)                                                            | #386       |
+| Objetivo expirado e arquivado | Metas pessoais                     | `GoalStatus` (4)                                                                    | #382       |
+| Avaliação da resposta         | Ferramentas e confirmação          | `Message.review` (`like`/`dislike`), `reviewReasons`, `reviewNote`                  | #384       |
+| Série de cardio               | Cardio                             | `SessionSet.durationSeconds`, `distanceMeters`, `avgHeartRate`, `kcalBurned`        | #377, #381 |
+| Conquistas                    | Conquistas, Progresso              | `UserAchievement` (`key`, `unlockedAt`, `context`)                                  | #382       |
+| Bloco de treino               | Periodização                       | `TrainingBlock` (`kind`, `weeksTotal`, `status`) + `TrainingBlockWeek`              | #379       |
+| Origem do alimento            | Adicionar item                     | `Food.source` + selo de sessão para código de barras (§2)                           | #375       |
+| Como foi o treino             | Fim do treino                      | `WorkoutSession.notes`                                                              | #377       |
+| Favorito de exercício         | Como fazer                         | não existe: favorito só de alimento (`FavoriteFood`)                                | #378       |
+| Tipo de comunidade            | Criar comunidade, Checklist        | `GroupType`, `GroupVisibility`, `JoinPolicy`, `PostPolicy`, `requiredSharingScopes` | #372       |
 
 ## 4. Estados que viram tela
 
@@ -215,6 +215,8 @@ campos de data dos modelos, não de enum.
 - **`Conversation`** (geral ou do agente da comunidade, `agentGroupId`), **`Message`** (`tools` →
   chips e cartões; `review`, `reviewReasons`, `reviewNote`), **`UserMemory`** — #384, #385.
 - **`NotificationPreference`** (`NotificationKind`) e **`PendingNotice`** (aviso agrupado) — #389.
+- **`Reminder`** (`ReminderKind`, `ReminderMode`) e o silêncio noturno em `User` — entregues na
+  #389; o lembrete de hábito espera a #390.
 - **`InboxNotice`** — a central de avisos do sino no Hoje (#373): cada aviso enviado, com `readAt`.
 - **`MediaFile`** (`MediaKind`, `bytes`, `width`, `height`, `MediaStatus`).
 - Foto: **só a foto que vira refeição é guardada, com consentimento** (ADR 038). Foto de rótulo,

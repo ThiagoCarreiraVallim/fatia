@@ -56,7 +56,8 @@ Nenhum placeholder restante no código.
 | —                                    | `app/(app)/nutrition/photo.tsx`                          | ➕  | registro por foto (#139); o PWA não tem, ver abaixo                         |
 | `(app)/plan`                         | `app/(app)/plan.tsx`                                     | ⚠️  | Meu plano (ADR 024); o app vende só pela loja (RevenueCat), ver abaixo      |
 | `(app)/profile`                      | `app/(app)/profile/index.tsx`                            | ✅  |                                                                             |
-| `(app)/profile/notifications`        | `app/(app)/profile/notifications.tsx`                    | ✅  | no app liga os avisos neste celular; a web lista os celulares e tira um     |
+| `(app)/profile/notifications`        | `app/(app)/profile/notifications.tsx`                    | ✅  | prancha Al-V4 nos dois (#389)                                               |
+| `(app)/you/reminders`                | `app/(app)/you/reminders.tsx`                            | ✅  | "Liberar": Web Push no PWA, permissão do sistema no app (#389)              |
 | `(app)/profile/connect`              | `app/(app)/profile/tokens.tsx`                           | ⚠️  | o PWA virou fluxo guiado (#164); o nativo ainda é a tela antiga, ver abaixo |
 | `(app)/progress`                     | `app/(app)/progress/index.tsx`                           | ✅  |                                                                             |
 | `(app)/progress/records`             | `app/(app)/progress/records.tsx`                         | ✅  |                                                                             |
