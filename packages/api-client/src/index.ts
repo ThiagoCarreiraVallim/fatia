@@ -54,6 +54,8 @@ export * from './you';
 export * from './workout';
 
 export * from './workout/is-cardio';
+export * from './workout/plan-config';
+export * from './workout/plan-exercise-draft';
 export * from './workout/rpe';
 export * from './workout/set-prefill';
 export * from './workout/prescription';

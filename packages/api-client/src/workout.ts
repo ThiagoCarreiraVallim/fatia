@@ -39,6 +39,8 @@ export interface Exercise {
   communityName?: string | null;
   /** No detalhe: o tutorial da comunidade da pessoa, se houver. */
   community?: CommunityGuide | null;
+  /** Na busca e no detalhe: a pessoa marcou como favorito (#378). */
+  favorite?: boolean;
 }
 
 /** Vídeo, fotos e dicas que a comunidade da pessoa pôs no exercício (ADR 030). */
@@ -81,13 +83,55 @@ export interface SessionSet {
   exercise: Exercise;
 }
 
-export interface PlannedExercise {
+// Configuração do exercício no plano (#378, Al-T21 e Al-T21d).
+export type PlanRepUnit = 'REPS' | 'SECONDS';
+export type PlanLoadMode = 'WEIGHT' | 'BODYWEIGHT';
+export type PlanTechnique = 'NORMAL' | 'DROP_SET' | 'TO_FAILURE';
+export type PlanSetKind = 'WARMUP' | 'NORMAL' | 'DROP';
+export type CardioTargetKind = 'TIME' | 'DISTANCE';
+export type CardioIntensity = 'LIGHT' | 'MODERATE' | 'VIGOROUS';
+
+/** Uma série da tabela série por série (Al-T21b). `reps` é segundos com `repUnit = SECONDS`. */
+export interface PlanSet {
+  order: number;
+  kind: PlanSetKind;
+  reps: number;
+  loadKg: number | null;
+}
+
+/** O que a linha do plano configura, além de séries e faixa. */
+export interface PlanExerciseConfig {
+  repUnit: PlanRepUnit;
+  loadMode: PlanLoadMode;
+  /** Sempre em kg; a tela converte para lb. Com BODYWEIGHT, o peso extra. */
+  startLoadKg: number | null;
+  /** Nulo = o descanso padrão da sessão. */
+  restSeconds: number | null;
+  technique: PlanTechnique;
+  biSetWithNext: boolean;
+  notes: string | null;
+  cardioTarget: CardioTargetKind | null;
+  cardioDurationSeconds: number | null;
+  cardioDistanceMeters: number | null;
+  cardioIntensity: CardioIntensity | null;
+}
+
+/**
+ * O exercício do plano como a sessão lê. A #377 usa `restSeconds` no timer,
+ * a meta de cardio e a intensidade como guia, `biSetWithNext` na ordem de
+ * execução e `sets` para a meta de cada série. `planExerciseId` identifica a
+ * linha: o mesmo exercício pode aparecer duas vezes no plano.
+ */
+export interface PlannedExercise extends Partial<PlanExerciseConfig> {
+  /** Opcional só para quem monta a sessão à mão (testes, treino rápido); a API sempre manda. */
+  planExerciseId?: string;
   exerciseId: number;
   exerciseName: string;
   muscleGroup: MuscleGroup;
   order: number;
   targetSets: number;
   targetReps: string;
+  sets?: PlanSet[];
 }
 
 export interface WorkoutSession {
@@ -131,13 +175,15 @@ export interface WeeklyMuscleSummary {
   suggestedPlan: { id: string; name: string; groups: StrengthMuscleGroup[] } | null;
 }
 
-export interface WorkoutPlanExercise {
+export interface WorkoutPlanExercise extends PlanExerciseConfig {
   id: string;
   planId: string;
   exerciseId: number;
   order: number;
   targetSets: number;
   targetReps: string;
+  /** Série por série; vazia = `targetSets` séries iguais. */
+  sets: PlanSet[];
   exercise: Exercise;
 }
 
@@ -145,8 +191,33 @@ export interface WorkoutPlan {
   id: string;
   userId: string;
   name: string;
+  /** Plano pronto da comunidade de onde veio (adoção). */
+  fromTemplateId?: string | null;
   exercises: WorkoutPlanExercise[];
+  /** Sessões encerradas com este plano (#378). */
+  timesDone?: number;
+  lastDoneAt?: string | null;
 }
+
+/** O que se pode mandar ao criar ou editar a linha do plano. `null` limpa o campo. */
+export type PlanExerciseInput = Partial<{
+  order: number;
+  targetSets: number;
+  targetReps: string;
+  repUnit: PlanRepUnit;
+  loadMode: PlanLoadMode;
+  startLoadKg: number | null;
+  restSeconds: number | null;
+  technique: PlanTechnique;
+  biSetWithNext: boolean;
+  notes: string | null;
+  cardioTarget: CardioTargetKind | null;
+  cardioDurationSeconds: number | null;
+  cardioDistanceMeters: number | null;
+  cardioIntensity: CardioIntensity | null;
+  /** Substitui a tabela inteira; `[]` volta a séries iguais. */
+  sets: Array<{ kind: PlanSetKind; reps: number; loadKg?: number | null }> | null;
+}>;
 
 export const workoutApi = {
   /** Séries por grupo nos últimos 7 dias, os descansados e um plano que os trabalha. */
@@ -238,19 +309,21 @@ export const workoutApi = {
     }),
   deletePlan: (id: string) => apiFetch<void>(`/api/workout/plans/${id}`, { method: 'DELETE' }),
 
-  addPlanExercise: (
-    planId: string,
-    body: { exerciseId: number; order: number; targetSets: number; targetReps: string },
-  ) =>
+  addPlanExercise: (planId: string, body: { exerciseId: number } & PlanExerciseInput) =>
     apiFetch<WorkoutPlanExercise>(`/api/workout/plans/${planId}/exercises`, {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  updatePlanExercise: (
-    planId: string,
-    id: string,
-    body: { order?: number; targetSets?: number; targetReps?: string },
-  ) =>
+  /**
+   * Seleção múltipla do "Adicionar exercício" (Al-T8): todos no fim, na ordem
+   * dada, numa escrita só. Repetir o id repete o exercício no plano.
+   */
+  addPlanExercises: (planId: string, exerciseIds: number[]) =>
+    apiFetch<WorkoutPlan>(`/api/workout/plans/${planId}/exercises/batch`, {
+      method: 'POST',
+      body: JSON.stringify({ exercises: exerciseIds.map((exerciseId) => ({ exerciseId })) }),
+    }),
+  updatePlanExercise: (planId: string, id: string, body: PlanExerciseInput) =>
     apiFetch<WorkoutPlanExercise>(`/api/workout/plans/${planId}/exercises/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
@@ -279,17 +352,30 @@ export const workoutApi = {
       body: JSON.stringify({ exercises }),
     }),
 
-  searchExercises: (q?: string, muscleGroup?: MuscleGroup, opts: { onlyMyGym?: boolean } = {}) => {
+  searchExercises: (
+    q?: string,
+    muscleGroup?: MuscleGroup,
+    opts: { onlyMyGym?: boolean; favoritesOnly?: boolean; limit?: number } = {},
+  ) => {
     const qs = new URLSearchParams();
     if (q) qs.set('q', q);
     if (muscleGroup) qs.set('muscleGroup', muscleGroup);
     if (opts.onlyMyGym) qs.set('onlyMyGym', 'true');
+    if (opts.favoritesOnly) qs.set('favoritesOnly', 'true');
+    if (opts.limit) qs.set('limit', String(opts.limit));
     const query = qs.toString();
     return apiFetch<Exercise[]>(`/api/workout/exercises${query ? `?${query}` : ''}`);
   },
   /** O equipamento das academias da pessoa (marcado e próprio), para o editor de exercício. */
   gymEquipment: () => apiFetch<GymEquipmentState>('/api/workout/equipment'),
   getExercise: (id: number) => apiFetch<Exercise>(`/api/workout/exercises/${id}`),
+  /** A aba Favoritos do "Adicionar exercício" (#378). */
+  listFavoriteExercises: () => apiFetch<Exercise[]>('/api/workout/exercises/favorites'),
+  /** Estrela do Como fazer (#378). Idempotente nos dois sentidos. */
+  setExerciseFavorite: (id: number, favorite: boolean) =>
+    apiFetch<void>(`/api/workout/exercises/${id}/favorite`, {
+      method: favorite ? 'PUT' : 'DELETE',
+    }),
   updateExercise: (id: number, body: ExerciseEditInput) =>
     apiFetch<Exercise>(`/api/workout/exercises/${id}`, {
       method: 'PATCH',
