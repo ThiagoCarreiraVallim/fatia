@@ -69,7 +69,7 @@ export function TopBar({
         <Text
           accessibilityRole="header"
           numberOfLines={1}
-          className="flex-1 text-[17px] font-semibold text-foreground"
+          className="flex-1 font-display-semibold text-[17px] text-foreground"
         >
           {title || info.title}
         </Text>

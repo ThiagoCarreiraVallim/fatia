@@ -187,6 +187,15 @@ describe('Selos e faixas', () => {
   });
 });
 
+describe('títulos no CSS', () => {
+  const css = readFileSync(join(__dirname, '..', '..', '..', 'app', 'globals.css'), 'utf8');
+
+  it('h1, h2 e h3 saem em Sora por padrão (título de tela, de seção e de card)', () => {
+    const base = css.slice(css.indexOf('@layer base'), css.indexOf('@layer utilities'));
+    expect(base).toMatch(/h1,\s*h2,\s*h3\s*\{\s*@apply font-display;/);
+  });
+});
+
 describe('movimento no CSS', () => {
   const css = readFileSync(join(__dirname, '..', '..', '..', 'app', 'globals.css'), 'utf8');
   const reduced = css.slice(css.lastIndexOf('@media (prefers-reduced-motion: reduce)'));

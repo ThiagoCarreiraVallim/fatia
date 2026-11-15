@@ -51,4 +51,11 @@ describe('fontes no app', () => {
     expect(utilities['.font-bold']?.fontFamily).toBe('Manrope_700Bold');
     expect(utilities['.font-extrabold']?.fontFamily).toBe('Manrope_800ExtraBold');
   });
+
+  it('o título da barra de topo sai em Sora 600 (h3 17/600)', () => {
+    const src = readFileSync(path.join(ROOT, 'src/components/layout/top-bar.tsx'), 'utf8');
+    const title = src.match(/accessibilityRole="header"[\s\S]*?className="([^"]+)"/)?.[1] ?? '';
+    expect(title.split(' ')).toContain('font-display-semibold');
+    expect(title.split(' ')).not.toContain('font-semibold');
+  });
 });

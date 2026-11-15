@@ -46,6 +46,13 @@ describe('AppTopBar', () => {
     );
   });
 
+  it('o título da barra sai em Sora (h3 17/600, font-display)', () => {
+    pathname.atual = '/workout/plans/abc';
+    montar();
+    const title = screen.getByRole('heading', { level: 1 });
+    expect(title).toHaveClass('font-display', 'font-semibold', 'text-[17px]');
+  });
+
   it('a tela troca o título genérico pelo nome real', () => {
     pathname.atual = '/workout/plans/abc';
     function Tela() {

@@ -114,7 +114,7 @@ export function AppTopBar({ wide = false }: { wide?: boolean }) {
           // Aba raiz (ADR 040): tela de ver, sem seta de voltar.
           <span aria-hidden className="w-3 shrink-0" />
         )}
-        <h1 className="min-w-0 flex-1 truncate text-[17px] font-semibold text-foreground">
+        <h1 className="min-w-0 flex-1 truncate font-display text-[17px] font-semibold text-foreground">
           {title}
         </h1>
         <div ref={ctx?.setSlot} className="flex shrink-0 items-center gap-1 pe-1" />

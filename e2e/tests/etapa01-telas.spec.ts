@@ -51,6 +51,17 @@ async function audit(page: Page, name: string) {
   return found.filter((v) => v.impacto === 'serious' || v.impacto === 'critical');
 }
 
+/**
+ * Título de topo em Sora (DESIGN.md h3 17/600; #368). O validador mediu
+ * Manrope em todas as telas menos o Hoje, que não tem barra de topo.
+ */
+async function expectSoraTitle(page: Page) {
+  const title = page.locator('header h1, main h1, main h2').first();
+  await expect(title).toBeVisible();
+  const family = await title.evaluate((el) => getComputedStyle(el).fontFamily);
+  expect(family).toMatch(/Sora/);
+}
+
 const TELAS: Array<[string, string]> = [
   ['t1-hoje', '/'],
   ['t1-nutricao', '/nutrition'],
@@ -72,6 +83,7 @@ for (const [nome, rota] of TELAS) {
     await page.goto(rota);
     await snap(page, nome);
     expect(await audit(page, nome)).toEqual([]);
+    await expectSoraTitle(page);
   });
 }
 
@@ -115,6 +127,7 @@ test.describe('painel da equipe', () => {
       const nome = `t1-painel${sub.replace('/', '-') || '-visao'}`;
       await snap(page, nome);
       expect(await audit(page, nome)).toEqual([]);
+      await expectSoraTitle(page);
     });
   }
 });

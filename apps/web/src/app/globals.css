@@ -153,6 +153,15 @@
       'calt' 1;
   }
 
+  /* Títulos em Sora (DESIGN.md: h1 28/700, h2 22/700, h3 17/600). A classe
+     da tela continua mandando no tamanho e no peso; `font-sans` explícito
+     ainda vence, por ser utilidade. */
+  h1,
+  h2,
+  h3 {
+    @apply font-display;
+  }
+
   /* Foco visível em todo controle, inclusive os que não são `Button`: o anel
      do Tailwind (`ring`) só existe onde alguém o pôs na classe. */
   a:focus-visible,

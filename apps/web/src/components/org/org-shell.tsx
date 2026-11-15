@@ -98,7 +98,7 @@ export function OrgShell({ children }: { children: ReactNode }) {
     <OrgGroupContext.Provider value={g}>
       <div className="md:flex md:gap-8 md:px-6 md:pt-6">
         <aside className="hidden w-56 shrink-0 md:block">
-          <p className="truncate px-2 text-sm font-bold text-foreground">{g.name}</p>
+          <p className="truncate px-2 font-display text-sm font-bold text-foreground">{g.name}</p>
           <p className="px-2 text-xs text-muted-foreground">{teamRoleLabel(g.role)}</p>
           <nav aria-label="Seções do painel" className="mt-4">
             <ul className="space-y-0.5">
