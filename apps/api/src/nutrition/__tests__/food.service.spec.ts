@@ -577,11 +577,71 @@ describe('FoodService', () => {
         createdByUserId: userId,
         barcode: '7891000100103',
       });
+      // EAN-13 que já é canônico não muda.
     });
 
     it('findByBarcode com código inválido nem consulta o banco', async () => {
       await expect(service.findByBarcode(userId, '../x')).resolves.toBeNull();
       expect(prisma.food.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('P2002 sem os campos no meta: consulta qual conflito existe de fato', async () => {
+      const semAlvo = new Prisma.PrismaClientKnownRequestError('dup', {
+        code: 'P2002',
+        clientVersion: 'x',
+        meta: {},
+      });
+      prisma.food.create.mockRejectedValue(semAlvo);
+      // Há um alimento da pessoa com esse código: o conflito é o código.
+      prisma.food.findFirst.mockResolvedValueOnce({ id: 77 });
+
+      const err = await service
+        .createCustom(userId, { ...base, barcode: '7891000100103' })
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ConflictException);
+      expect((err as ConflictException).message).toMatch(/código de barras/);
+      expect(prisma.food.findFirst.mock.calls[0][0].where).toMatchObject({
+        createdByUserId: userId,
+        barcode: '7891000100103',
+      });
+
+      // Sem alimento com o código: era o nome.
+      prisma.food.findFirst.mockResolvedValueOnce(null);
+      const err2 = await service
+        .createCustom(userId, { ...base, barcode: '7891000100103' })
+        .catch((e: unknown) => e);
+      expect((err2 as ConflictException).message).toMatch(/chamado/);
+    });
+
+    describe('código canônico (GTIN-13)', () => {
+      it('UPC-A de 12 dígitos é gravado com o zero do EAN-13', async () => {
+        prisma.food.create.mockResolvedValue(makeFood({ source: FoodSource.CUSTOM }));
+        await service.createCustom(userId, { ...base, barcode: '012345678905' });
+        expect(prisma.food.create.mock.calls[0][0].data.barcode).toBe('0012345678905');
+      });
+
+      it('GTIN-14 com zero na frente vira o EAN-13; EAN-8 fica como está', async () => {
+        prisma.food.create.mockResolvedValue(makeFood({ source: FoodSource.CUSTOM }));
+        await service.createCustom(userId, { ...base, barcode: '07891000100103' });
+        await service.createCustom(userId, { ...base, barcode: '96385074' });
+        expect(prisma.food.create.mock.calls[0][0].data.barcode).toBe('7891000100103');
+        expect(prisma.food.create.mock.calls[1][0].data.barcode).toBe('96385074');
+      });
+
+      it('editar grava o código canônico', async () => {
+        prisma.food.findUnique.mockResolvedValue(
+          makeFood({ source: FoodSource.CUSTOM, createdByUserId: userId }),
+        );
+        prisma.food.update.mockResolvedValue(makeFood({ source: FoodSource.CUSTOM }));
+        await service.updateCustom(userId, 1, { barcode: '012345678905' });
+        expect(prisma.food.update.mock.calls[0][0].data.barcode).toBe('0012345678905');
+      });
+
+      it('a busca pelo UPC-A acha o EAN-13 guardado', async () => {
+        prisma.food.findFirst.mockResolvedValue(null);
+        await service.findByBarcode(userId, '012345678905');
+        expect(prisma.food.findFirst.mock.calls[0][0].where.barcode).toBe('0012345678905');
+      });
     });
   });
 });

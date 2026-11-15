@@ -17,6 +17,22 @@ export interface NutrientProgress {
   status: NutrientStatus;
 }
 
+/**
+ * A chave na forma dos micronutrientes do alimento (`^[a-z0-9_]{1,40}$`): sem
+ * isso, uma meta "Vitamina-C" aparecia primeiro no cadastro de alimento (Al-N11)
+ * e o salvar dava 400 (#375). Sem acento, minúscula, o resto vira `_`.
+ */
+export function nutrientKeySlug(raw: string): string {
+  return raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 40)
+    .replace(/_+$/, '');
+}
+
 @Injectable()
 export class NutrientTargetService {
   constructor(private readonly prisma: PrismaService) {}
@@ -33,6 +49,10 @@ export class NutrientTargetService {
     if (dto.min != null && dto.max != null && dto.min > dto.max) {
       throw new BadRequestException(`O mínimo de ${dto.label} não pode passar do máximo.`);
     }
+    const nutrientKey = nutrientKeySlug(dto.nutrientKey);
+    if (!nutrientKey) {
+      throw new BadRequestException('A chave do nutriente precisa de letras ou números.');
+    }
     const data = {
       label: dto.label,
       unit: dto.unit,
@@ -41,16 +61,25 @@ export class NutrientTargetService {
       period: dto.period ?? 'daily',
     };
     return this.prisma.nutrientTarget.upsert({
-      where: { userId_nutrientKey: { userId, nutrientKey: dto.nutrientKey } },
-      create: { userId, nutrientKey: dto.nutrientKey, ...data },
+      where: { userId_nutrientKey: { userId, nutrientKey } },
+      create: { userId, nutrientKey, ...data },
       update: data,
     });
   }
 
-  async delete(userId: string, nutrientKey: string): Promise<{ deleted: true }> {
-    const existing = await this.prisma.nutrientTarget.findUnique({
+  async delete(userId: string, rawKey: string): Promise<{ deleted: true }> {
+    // A chave como veio primeiro: metas gravadas antes da normalização seguem apagáveis.
+    let nutrientKey = rawKey;
+    let existing = await this.prisma.nutrientTarget.findUnique({
       where: { userId_nutrientKey: { userId, nutrientKey } },
     });
+    const slug = nutrientKeySlug(rawKey);
+    if (!existing && slug && slug !== rawKey) {
+      nutrientKey = slug;
+      existing = await this.prisma.nutrientTarget.findUnique({
+        where: { userId_nutrientKey: { userId, nutrientKey } },
+      });
+    }
     if (!existing) throw new NotFoundException('Nutrient target not found');
     await this.prisma.nutrientTarget.delete({
       where: { userId_nutrientKey: { userId, nutrientKey } },

@@ -170,6 +170,8 @@ demanda, por código, e **nada do que ele devolve é guardado** no catálogo.
    diz que o alimento fica ligado ao código). Não é cache do Open Food Facts: o vínculo é da pessoa,
    como o nome que ela deu ao alimento, e só ela o vê (isolamento por usuário). Duas pessoas podem
    ligar o mesmo código cada uma ao seu alimento; a mesma pessoa não pode ligar um código a dois (409).
+   O código é guardado e procurado em forma canônica (GTIN-13): o UPC-A de 12 dígitos e o GTIN-14
+   com zero na frente são o mesmo produto do EAN-13; o EAN-8 fica como está.
 2. **`GET /nutrition/foods/barcode/:code` procura primeiro nos alimentos da pessoa.** Achou, devolve
    `{ status: 'own', food }` e a tela vai direto para a quantidade, com `MealItem.source = BARCODE`.
    Só se não achar consulta o Open Food Facts. Fecha o ciclo "cadastrei à mão, escaneio de novo e
