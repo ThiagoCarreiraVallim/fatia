@@ -53,6 +53,31 @@ describe('ActiveWorkoutBar', () => {
     expect(screen.queryByRole('button', { name: /30 segundos/ })).toBeNull();
   });
 
+  it('uma linha fina mostra as séries feitas contra as planejadas (#377)', () => {
+    const doneSet = {
+      id: 'x1',
+      sessionId: 's1',
+      exerciseId: 1,
+      setNumber: 1,
+      weightKg: 40,
+      reps: 8,
+      rpe: null,
+      durationSeconds: null,
+      distanceMeters: null,
+      avgHeartRate: null,
+      kcalBurned: null,
+      notes: null,
+    } as NonNullable<WorkoutSession['sets']>[number];
+    render(
+      <RestTimerProvider>
+        <ActiveWorkoutBar session={{ ...SESSION, sets: [doneSet] }} bottom={100} />
+      </RestTimerProvider>,
+    );
+    const bar = screen.getByRole('progressbar', { name: 'Séries do treino' });
+    expect(bar).toHaveAttribute('aria-valuenow', '1');
+    expect(bar).toHaveAttribute('aria-valuemax', '4');
+  });
+
   it('o descanso começado na sessão aparece na barra, e o +30 s mexe nele sem navegar', async () => {
     const user = userEvent.setup();
     render(

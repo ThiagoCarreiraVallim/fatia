@@ -1,13 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Check, Minus, Plus } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   describePrescription,
+  feelingToRpe,
   loadFieldValue,
   loadToKg,
   loadUnitLabel,
+  newSetClientKey,
   prefillForNextSet,
   workoutApi,
   type ExerciseGroup,
@@ -23,11 +25,10 @@ import {
   loadValue,
   parseDecimalInput,
   parseFirstRep,
-  previousCells,
   targetSetsOf,
 } from './format';
 import { RestTimer } from './rest-timer';
-import { SetRow } from './set-row';
+import { FeelingPicker, SetChips } from './set-chips';
 import { DEFAULT_REST_SECONDS, type RestTimer as RestTimerState } from './use-rest-timer';
 
 /**
@@ -48,6 +49,8 @@ interface Props {
   onFinishExercise: () => void;
   /** Pede o RPE da série recém-registrada. */
   onAskRpe: (set: SessionSet) => void;
+  /** A última série planejada acabou de ser registrada (#377: "passar sozinho"). */
+  onExerciseComplete?: () => void;
   /** Frase para o leitor de tela quando a série é registrada. */
   onAnnounce?: (message: string) => void;
 }
@@ -59,6 +62,7 @@ export function ActiveExerciseCard({
   rest,
   onFinishExercise,
   onAskRpe,
+  onExerciseComplete,
   onAnnounce,
 }: Props) {
   const qc = useQueryClient();
@@ -144,8 +148,15 @@ export function ActiveExerciseCard({
     if (prefillReps != null) setReps(prefillReps);
   }
 
+  // "Como foi a série?" (#377): opcional. Respondida aqui, grava no `rpe` e a
+  // pergunta de depois (o drawer de RPE) não aparece.
+  const [feeling, setFeeling] = useState<number | null>(null);
+  // Uma chave por toque em "Concluir série": o reenvio depois de uma falha usa
+  // a mesma, e a API devolve a série já gravada em vez de duplicar.
+  const clientKey = useRef<string | null>(null);
+
   const logSet = useMutation({
-    mutationFn: () =>
+    mutationFn: (key: string) =>
       workoutApi.logSet(sessionId, {
         exerciseId: group.exerciseId,
         // `??` e não `||`: carga 0 é carga. Barra fixa, paralela e afins são
@@ -154,22 +165,41 @@ export function ActiveExerciseCard({
         // tem essa leitura: é campo em branco, e segue sem ser enviado.
         weightKg: weight ?? undefined,
         reps: reps || undefined,
+        rpe: feeling != null ? feelingToRpe(feeling) : undefined,
+        clientKey: key,
       }),
     onSuccess: (created) => {
+      clientKey.current = null;
+      const answered = feeling != null;
+      setFeeling(null);
       qc.invalidateQueries({ queryKey: ['workout', 'active'] });
       qc.invalidateQueries({ queryKey: ['workout', 'session', sessionId] });
       onAnnounce?.(`Série ${doneSets + 1} de ${targetSets} registrada. Descanso iniciado.`);
       rest.start(restTarget);
-      onAskRpe(created);
+      if (!answered) onAskRpe(created);
+      if (doneSets + 1 >= targetSets) onExerciseComplete?.();
     },
   });
+
+  function concludeSet() {
+    clientKey.current ??= newSetClientKey();
+    logSet.mutate(clientKey.current);
+  }
 
   // Carga na unidade da pessoa (Você › Unidades, #387): o estado e a API
   // continuam em kg; só o campo e as dicas mostram em lb.
   const units = useUnitPrefs();
   const unitLabel = loadUnitLabel(units.loadUnit);
   const previousLabel = formatPreviousSet(reference, false, units);
-  const referenceCells = previousCells(reference, false, units);
+  const setNumber = Math.min(doneSets + 1, targetSets);
+  const headline = [
+    `Série ${setNumber} de ${targetSets}`,
+    group.targetReps ? `meta ${group.targetReps} reps` : null,
+    previousLabel ? `última vez ${previousLabel}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const isRecord = prWeight != null && prWeight > 0 && weight > prWeight;
 
   return (
     <div className="rounded-2xl border border-subtle bg-card p-4">
@@ -182,10 +212,15 @@ export function ActiveExerciseCard({
           exerciseId={group.exerciseId}
           exerciseName={group.exerciseName}
         />
-        <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-[10px] font-extrabold text-foreground">
-          <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
-          SÉRIE {Math.min(doneSets + 1, targetSets)} DE {targetSets}
+        <p className="mt-2 text-center text-[13px] font-bold text-muted-foreground tabular-nums">
+          {headline}
         </p>
+        {isRecord && (
+          <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-primary-soft px-3 py-1 text-xs font-extrabold text-primary-text">
+            <span aria-hidden>🏆</span>
+            Recorde!
+          </p>
+        )}
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3">
@@ -193,7 +228,7 @@ export function ActiveExerciseCard({
           label={`CARGA (${unitLabel.toUpperCase()})`}
           accessibleLabel={`carga em ${units.loadUnit === 'LB' ? 'libras' : 'quilos'} para ${group.exerciseName}`}
           value={loadFieldValue(weight, units.loadUnit)}
-          step={1}
+          step={units.loadUnit === 'LB' ? 5 : 2.5}
           onChange={(n) => {
             setTouched(true);
             setWeight(loadToKg(Math.max(0, n), units.loadUnit));
@@ -237,51 +272,17 @@ export function ActiveExerciseCard({
         <RestTimer timer={rest} idleSeconds={restTarget} />
       </div>
 
-      <div className="mt-4 space-y-1.5">
-        <p className="text-[10px] font-extrabold tracking-wide text-muted-foreground">
-          SÉRIES REALIZADAS
-        </p>
-        <div className="grid grid-cols-[36px_1fr_1fr_1fr_32px] gap-2 text-[10px] font-bold tracking-wide text-muted-foreground">
-          <div>Série</div>
-          <div>Reps</div>
-          <div>Carga ({unitLabel})</div>
-          <div>RPE</div>
-          <div />
-        </div>
+      <div className="mt-4">
+        <p className="mb-2 text-[13px] font-bold text-foreground">Como foi a série?</p>
+        <FeelingPicker label="Como foi a série?" value={feeling} onChange={setFeeling} />
+      </div>
 
-        {/* A última vez, na mesma grade das séries de hoje: comparar coluna a
-            coluna é mais rápido que ler "Anterior" embaixo de cada stepper. */}
-        {previousLabel && (
-          <div
-            aria-label={`Última vez: ${previousLabel}`}
-            role="group"
-            className="grid grid-cols-[36px_1fr_1fr_1fr_32px] items-center gap-2 rounded-lg border border-dashed border-subtle py-2 text-sm text-muted-foreground tabular-nums"
-          >
-            <div aria-hidden className="text-center text-[10px] font-bold">
-              ant.
-            </div>
-            {referenceCells.map((value, index) => (
-              <div key={index} aria-hidden className="px-2">
-                {value}
-              </div>
-            ))}
-            <div />
-          </div>
-        )}
-
-        {group.sets.map((s, idx) => (
-          <SetRow
-            key={s.id}
-            set={s}
-            index={idx}
-            isCardio={group.isCardio}
-            sessionId={sessionId}
-            showDelete
-          />
-        ))}
-
-        {group.sets.length === 0 && (
-          <p className="py-2 text-xs text-muted-foreground">
+      <div className="mt-4 space-y-2">
+        <p className="text-[13px] font-bold text-foreground">Séries de hoje</p>
+        {group.sets.length > 0 ? (
+          <SetChips sessionId={sessionId} sets={group.sets} isCardio={false} />
+        ) : (
+          <p className="text-xs text-muted-foreground">
             Nenhuma série registrada neste exercício ainda.
           </p>
         )}
@@ -289,8 +290,8 @@ export function ActiveExerciseCard({
 
       <div className="mt-4 space-y-2">
         <Button
-          className="h-12 w-full rounded-full text-sm font-extrabold shadow-[0_0_20px_hsl(var(--primary)/0.45)]"
-          onClick={() => logSet.mutate()}
+          className="h-14 w-full rounded-full text-base font-extrabold shadow-[0_0_20px_hsl(var(--primary)/0.45)]"
+          onClick={concludeSet}
           disabled={logSet.isPending || isComplete}
         >
           <Check size={16} className="mr-1.5" />
@@ -298,7 +299,7 @@ export function ActiveExerciseCard({
             ? 'Registrando...'
             : isComplete
               ? 'Exercício completo'
-              : 'Concluir Série'}
+              : `Concluir série ${setNumber}`}
         </Button>
         {logSet.isError && (
           <p role="alert" className="text-center text-xs text-danger">

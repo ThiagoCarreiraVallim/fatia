@@ -1,13 +1,13 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Pause, Play, Plus, SkipForward, Timer } from 'lucide-react';
+import { Pause, Play, SkipForward } from 'lucide-react';
 import { formatCountdown } from './format';
 import type { RestTimer as RestTimerState } from './use-rest-timer';
 
 /**
- * Bloco de descanso do card de série, com os controles que o app ganhou e o
- * PWA não tinha: `+30s`, pausar e pular. Antes o descanso só contava — quem
+ * Bloco de descanso do card de série (prancha Al-T3): anel, `−15 s`, pausar,
+ * `+15 s` e pular. Antes o descanso só contava — quem
  * precisava de mais meio minuto ou já estava pronto não tinha o que fazer.
  *
  * Parado, mostra o descanso que vai valer (`idleSeconds`, o prescrito para o
@@ -27,26 +27,36 @@ export function RestTimer({
   const total = idle ? seconds : timer.total;
   const elapsedRatio = total > 0 ? 1 - Math.min(1, seconds / total) : 0;
 
-  return (
-    <div className="rounded-xl bg-muted/40 px-4 py-3">
-      <div className="flex items-center justify-center gap-2 text-primary">
-        <Timer size={16} aria-hidden />
-        <p className="text-[10px] font-bold tracking-wide text-muted-foreground">
-          TEMPO DE DESCANSO
-        </p>
-      </div>
+  const R = 52;
+  const C = 2 * Math.PI * R;
 
-      {/* Sem região viva no número: anunciar cada segundo atropelaria o leitor
-          de tela. Quem fala é o aviso do fim, logo abaixo. */}
-      <p className="mt-1 text-center text-3xl font-extrabold text-primary tabular-nums">
-        {formatCountdown(seconds)}
+  return (
+    <div className="rounded-3xl bg-muted/40 px-4 py-4">
+      <p className="text-center text-[11px] font-bold tracking-wide text-muted-foreground">
+        Descanso
       </p>
 
-      <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-primary to-blue-500 transition-all"
-          style={{ width: `${Math.round(elapsedRatio * 100)}%` }}
-        />
+      {/* O anel enche conforme o descanso passa. Sem região viva no número:
+          anunciar cada segundo atropelaria o leitor de tela. Quem fala é o
+          aviso do fim, logo abaixo. */}
+      <div role="timer" aria-label="Descanso" className="relative mx-auto mt-2 h-32 w-32">
+        <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90" aria-hidden>
+          <circle cx="60" cy="60" r={R} fill="none" strokeWidth="8" className="stroke-muted" />
+          <circle
+            cx="60"
+            cy="60"
+            r={R}
+            fill="none"
+            strokeWidth="8"
+            strokeLinecap="round"
+            strokeDasharray={C}
+            strokeDashoffset={C * (1 - elapsedRatio)}
+            className="stroke-primary transition-[stroke-dashoffset] duration-500"
+          />
+        </svg>
+        <p className="absolute inset-0 flex items-center justify-center text-3xl font-extrabold text-foreground tabular-nums">
+          {formatCountdown(seconds)}
+        </p>
       </div>
 
       {/* Montada sempre, e não junto com o texto: um `aria-live` que nasce já
@@ -59,16 +69,19 @@ export function RestTimer({
         {timer.finished ? 'Descanso terminado. Hora da próxima série.' : ''}
       </p>
 
-      <div className="mt-2 flex items-center justify-center gap-2">
+      <div className="mt-3 flex items-center justify-center gap-2">
         {idle ? (
           <Control label="Iniciar descanso" onClick={() => timer.start(idleSeconds)}>
             <Play size={16} />
           </Control>
         ) : (
           <>
-            <Control label="Somar 30 segundos ao descanso" onClick={() => timer.addTime(30)}>
-              <Plus size={16} />
-              <span className="text-xs font-bold">30s</span>
+            <Control
+              label="Tirar 15 segundos do descanso"
+              disabled={timer.finished}
+              onClick={() => timer.addTime(-15)}
+            >
+              <span className="text-xs font-bold">−15 s</span>
             </Control>
             <Control
               label={timer.running ? 'Pausar descanso' : 'Retomar descanso'}
@@ -77,12 +90,22 @@ export function RestTimer({
             >
               {timer.running ? <Pause size={16} /> : <Play size={16} />}
             </Control>
-            <Control label="Pular descanso" onClick={timer.stop}>
-              <SkipForward size={16} />
+            <Control label="Somar 15 segundos ao descanso" onClick={() => timer.addTime(15)}>
+              <span className="text-xs font-bold">+15 s</span>
             </Control>
           </>
         )}
       </div>
+      {!idle && (
+        <button
+          type="button"
+          onClick={timer.stop}
+          className="anim-press mx-auto mt-2 flex h-11 items-center gap-1.5 rounded-full px-4 text-sm font-bold text-primary"
+        >
+          <SkipForward size={16} aria-hidden />
+          Pular descanso
+        </button>
+      )}
     </div>
   );
 }

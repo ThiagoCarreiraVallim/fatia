@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Pause, Play, RotateCcw } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { parseClock, workoutApi, type ExerciseGroup } from '@fatia/api-client';
+import { newSetClientKey, parseClock, workoutApi, type ExerciseGroup } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ExerciseTitle } from './exercise-title';
@@ -106,6 +106,10 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
     units,
   );
 
+  // Uma chave por série nova (#377): o reenvio depois de uma falha devolve a
+  // mesma série em vez de gravar duas corridas.
+  const clientKey = useRef<string | null>(null);
+
   const persist = useMutation({
     mutationFn: () => {
       const body = {
@@ -121,9 +125,11 @@ export function ActiveCardioCard({ sessionId, group, onFinishExercise }: Props) 
       if (existing) {
         return workoutApi.updateSet(sessionId, existing.id, body);
       }
-      return workoutApi.logSet(sessionId, body);
+      clientKey.current ??= newSetClientKey();
+      return workoutApi.logSet(sessionId, { ...body, clientKey: clientKey.current });
     },
     onSuccess: () => {
+      clientKey.current = null;
       qc.invalidateQueries({ queryKey: ['workout', 'active'] });
       qc.invalidateQueries({ queryKey: ['workout', 'session', sessionId] });
       setRunning(false);

@@ -4,15 +4,28 @@ import { useEffect, useRef } from 'react';
 import { describeMuscles } from './muscle-labels';
 
 interface MuscleDiagramProps {
-  primaryMuscles: string[];
+  primaryMuscles?: string[];
   secondaryMuscles?: string[];
   view?: 'front' | 'back' | 'both';
+  /**
+   * Cor por músculo (chave `data-muscle` → cor CSS pronta, `hsl(var(--x))`).
+   * Quando vem, vence primário/secundário: é o "Seus músculos hoje" (#377)
+   * pintando cada grupo pelo descanso. O que não está no mapa fica esmaecido.
+   */
+  colors?: Record<string, string>;
+  /** Rótulo do desenho para leitor de tela; sem ele, descreve os músculos. */
+  label?: string;
+  /** Largura de cada vista, em classe Tailwind (padrão `w-32`). */
+  sizeClassName?: string;
 }
 
 export function MuscleDiagram({
-  primaryMuscles,
+  primaryMuscles = [],
   secondaryMuscles = [],
   view = 'both',
+  colors,
+  label,
+  sizeClassName = 'w-32',
 }: MuscleDiagramProps) {
   const frontRef = useRef<HTMLObjectElement>(null);
   const backRef = useRef<HTMLObjectElement>(null);
@@ -41,6 +54,19 @@ export function MuscleDiagram({
       // cor do token é lida aqui e passada pronta.
       const token = (name: string) =>
         `hsl(${getComputedStyle(document.documentElement).getPropertyValue(name).trim()})`;
+      // `hsl(var(--x))` e `hsl(var(--x) / 0.2)` viram a cor resolvida.
+      const resolve = (css: string) =>
+        css.replace(/var\((--[\w-]+)\)/g, (_, name: string) =>
+          getComputedStyle(document.documentElement).getPropertyValue(name).trim(),
+        );
+
+      if (colors) {
+        for (const [muscle, color] of Object.entries(colors)) {
+          const value = resolve(color);
+          doc.querySelectorAll(`g[data-muscle="${muscle}"]`).forEach((el) => paint(el, value));
+        }
+        return;
+      }
 
       // Secundários (água)
       const secondary = token('--water');
@@ -64,13 +90,13 @@ export function MuscleDiagram({
     // Also try immediately if already loaded
     if (frontEl?.contentDocument?.readyState === 'complete') highlight(frontEl);
     if (backEl?.contentDocument?.readyState === 'complete') highlight(backEl);
-  }, [primaryMuscles, secondaryMuscles]);
+  }, [primaryMuscles, secondaryMuscles, colors]);
 
   return (
     // Os dois `<object>` são desenho: o grupo fala por eles, como no app.
     <div
       role="img"
-      aria-label={describeMuscles(primaryMuscles, secondaryMuscles)}
+      aria-label={label ?? describeMuscles(primaryMuscles, secondaryMuscles)}
       className="flex gap-2 justify-center"
     >
       {(view === 'front' || view === 'both') && (
@@ -78,7 +104,7 @@ export function MuscleDiagram({
           ref={frontRef}
           data="/muscle-front.svg"
           type="image/svg+xml"
-          className="pointer-events-none w-32 h-auto"
+          className={`pointer-events-none h-auto ${sizeClassName}`}
           aria-hidden
           tabIndex={-1}
         />
@@ -88,7 +114,7 @@ export function MuscleDiagram({
           ref={backRef}
           data="/muscle-back.svg"
           type="image/svg+xml"
-          className="pointer-events-none w-32 h-auto"
+          className={`pointer-events-none h-auto ${sizeClassName}`}
           aria-hidden
           tabIndex={-1}
         />

@@ -1,52 +1,76 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { Clock, Dumbbell } from 'lucide-react';
-import { buildExerciseGroups, orderExerciseGroups, workoutApi } from '@fatia/api-client';
-import { ExerciseDetailCard } from '@/components/workout/exercise-detail-card';
+import { useParams, useRouter } from 'next/navigation';
+import { Share2, Trophy } from 'lucide-react';
+import { toast } from 'sonner';
+import {
+  ApiError,
+  appendNoteShortcut,
+  checkinDoneMessage,
+  comparisonFacts,
+  feelingOf,
+  formatBestSet,
+  formatTrainingVolume,
+  muscleGroupLabel,
+  noteShortcutsFor,
+  questionsAudience,
+  questionsTitle,
+  recordsTitle,
+  summaryFacts,
+  summaryHeadline,
+  workoutApi,
+  type PostWorkoutQuestion,
+  type WorkoutCheckinInput,
+  type WorkoutSessionSummary,
+} from '@fatia/api-client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { ErrorState } from '@/components/elements/error-state';
 import { useTopBarTitle } from '@/components/layout/app-top-bar';
-import { groupCardItem } from '@/components/workout/group-card-item';
-import { elapsedLabel, formatInteger, pluralize, totalVolumeKg } from '@/components/workout/format';
+import { MuscleDiagram } from '@/components/workout/muscle-diagram';
+import { FeelingPicker } from '@/components/workout/set-chips';
+import { groupTone } from '@/components/workout/group-tone';
+import { cn } from '@/lib/utils';
 
+const card = 'rounded-3xl border border-subtle bg-card p-4';
+const title = 'text-base font-extrabold text-foreground';
+
+/**
+ * "Treino feito!" (pranchas Al-T5 e Al-T5b): o fim do treino e, pelo
+ * histórico, o resumo de qualquer sessão. Números, comparação com o último do
+ * mesmo plano, recordes, músculos, a lista com a melhor série de cada
+ * exercício, "Como foi o treino?" e, quando alguém da equipe lê Treino, as
+ * perguntas dela.
+ */
 export default function SessionDetailPage() {
   const { id } = useParams<{ id: string }>();
 
   const query = useQuery({
-    queryKey: ['workout', 'session', id],
-    queryFn: () => workoutApi.getSession(id),
+    queryKey: ['workout', 'session', id, 'summary'],
+    queryFn: () => workoutApi.getSessionSummary(id),
   });
-
-  const session = query.data;
-  // O dia do treino é o título: "quarta-feira, 14 de out.".
-  useTopBarTitle(
-    session
-      ? new Date(session.startedAt).toLocaleDateString('pt-BR', {
-          weekday: 'long',
-          day: 'numeric',
-          month: 'short',
-        })
-      : null,
-  );
+  useTopBarTitle(query.data ? 'Treino feito' : null);
 
   if (query.isLoading) {
     return (
       <div className="space-y-3 px-5 pt-4">
-        <Skeleton className="h-6 w-32 rounded bg-muted" />
-        <Skeleton className="h-44 rounded-2xl bg-muted" />
-        <Skeleton className="h-32 rounded-2xl bg-muted" />
+        <Skeleton className="h-8 w-48 rounded bg-muted" />
+        <Skeleton className="h-24 rounded-3xl bg-muted" />
+        <Skeleton className="h-44 rounded-3xl bg-muted" />
       </div>
     );
   }
 
+  const notFound = query.error instanceof ApiError && query.error.status === 404;
+
   // Falha de rede não é "sessão não encontrada": dizer isso faria a pessoa
-  // achar que o treino sumiu. O app separa os dois casos, e aqui também.
-  if (query.isError) {
+  // achar que o treino sumiu.
+  if (query.isError && !notFound) {
     return (
       <div className="px-5 pt-4">
         <ErrorState
@@ -60,7 +84,7 @@ export default function SessionDetailPage() {
     );
   }
 
-  if (!session) {
+  if (!query.data) {
     return (
       <div className="px-5 pt-4">
         <EmptyState
@@ -75,91 +99,401 @@ export default function SessionDetailPage() {
     );
   }
 
-  const groups = orderExerciseGroups(
-    buildExerciseGroups(session.plannedExercises, session.sets),
-    session.exerciseOrder,
-  );
-  const totalSets = session.sets?.length ?? 0;
-  const totalVolume = totalVolumeKg(session.sets);
+  return <WorkoutDone summary={query.data} />;
+}
 
-  const dateLabel = new Date(session.startedAt).toLocaleDateString('pt-BR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'short',
-  });
-
-  const durationLabel = session.completedAt
-    ? elapsedLabel(session.startedAt, session.completedAt)
-    : 'Em andamento';
+function WorkoutDone({ summary }: { summary: WorkoutSessionSummary }) {
+  const facts = summaryFacts(summary);
+  const totalGroupSets = summary.muscles.groups.reduce((acc, g) => acc + g.sets, 0);
 
   return (
-    <div className="pb-4">
-      <div className="space-y-4 px-5 pt-2">
-        <div className="relative overflow-hidden rounded-2xl border border-subtle bg-card">
-          <div className="relative h-44 w-full overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-slate-700 via-stone-800 to-stone-900" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
-            <div className="absolute left-4 right-4 top-4 flex gap-2">
-              <span className="rounded-md bg-primary px-2 py-0.5 text-[10px] font-extrabold text-primary-foreground">
-                CONCLUÍDO
-              </span>
-            </div>
-            <div className="absolute inset-x-0 bottom-0 p-4">
-              <h2 className="text-2xl font-extrabold capitalize text-white">{dateLabel}</h2>
-              <p className="mt-1 text-xs text-white/70">
-                {groups.length} {pluralize(groups.length, 'exercício', 'exercícios')} • {totalSets}{' '}
-                {pluralize(totalSets, 'série', 'séries')}
-              </p>
-            </div>
+    <div className="space-y-4 px-5 pt-2 pb-6">
+      <header className="space-y-1">
+        <h1 className="font-display text-3xl font-extrabold text-foreground">Treino feito!</h1>
+        <p className="text-sm text-muted-foreground">{summaryHeadline(summary)}</p>
+      </header>
+
+      <dl className="grid grid-cols-4 gap-2">
+        {facts.map((f) => (
+          <div key={f.label} className="rounded-2xl bg-muted/50 px-2 py-3 text-center">
+            <dd className="text-lg font-extrabold text-foreground tabular-nums">{f.value}</dd>
+            <dt className="text-[11px] text-muted-foreground">{f.label}</dt>
           </div>
-          <div className="flex items-center gap-6 border-t border-subtle px-5 py-3">
-            <div className="flex items-center gap-2">
-              <Clock size={14} className="text-primary" />
-              <div>
-                <p className="text-[10px] font-bold tracking-wide text-muted-foreground">Duração</p>
-                <p className="text-sm font-extrabold text-foreground tabular-nums">
-                  {durationLabel}
+        ))}
+      </dl>
+
+      {summary.comparison && (
+        <section aria-labelledby="feito-comparacao" className={card}>
+          <h2 id="feito-comparacao" className={title}>
+            Comparado ao último {summary.planName ?? 'treino'}
+          </h2>
+          <ul className="mt-3 grid grid-cols-3 gap-2">
+            {comparisonFacts(summary.comparison).map((c) => (
+              <li key={c.label} className="text-center">
+                <p
+                  className={cn(
+                    'text-base font-extrabold tabular-nums',
+                    c.tone === 'up' && 'text-success',
+                    c.tone === 'down' && 'text-warning',
+                    c.tone === 'flat' && 'text-foreground',
+                  )}
+                >
+                  {c.value}
                 </p>
-              </div>
+                <p className="text-[11px] text-muted-foreground">{c.label}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {summary.records.length > 0 && (
+        <section aria-labelledby="feito-recordes" className={card}>
+          <h2 id="feito-recordes" className={cn(title, 'flex items-center gap-2')}>
+            <Trophy size={18} className="text-primary" aria-hidden />
+            {recordsTitle(summary.records.length)}
+          </h2>
+          <ul className="mt-2 space-y-1">
+            {summary.records.map((r) => (
+              <li key={r.exerciseId} className="flex justify-between gap-2 text-sm">
+                <span className="truncate text-foreground">{r.exerciseName}</span>
+                <span className="shrink-0 font-bold tabular-nums text-foreground">
+                  {formatBestSet({ ...r, avgHeartRate: null })}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {(summary.muscles.primary.length > 0 || summary.muscles.groups.length > 0) && (
+        <section aria-labelledby="feito-musculos" className={card}>
+          <h2 id="feito-musculos" className={title}>
+            Músculos de hoje
+          </h2>
+          <div className="mt-3 flex items-center gap-4">
+            <div className="shrink-0">
+              <MuscleDiagram
+                primaryMuscles={summary.muscles.primary}
+                secondaryMuscles={summary.muscles.secondary}
+                view="both"
+                sizeClassName="w-16"
+              />
             </div>
-            <div className="flex items-center gap-2">
-              <Dumbbell size={14} className="text-primary" />
-              <div>
-                <p className="text-[10px] font-bold tracking-wide text-muted-foreground">Volume</p>
-                <p className="text-sm font-extrabold text-foreground tabular-nums">
-                  {totalVolume > 0 ? `${formatInteger(totalVolume)} kg` : '—'}
-                </p>
-              </div>
-            </div>
+            <ul className="min-w-0 flex-1 space-y-2">
+              {summary.muscles.groups.map((g) => (
+                <li key={g.group} className="space-y-1">
+                  <div className="flex justify-between text-[13px]">
+                    <span className="text-foreground">{muscleGroupLabel(g.group)}</span>
+                    <span className="tabular-nums text-muted-foreground">{g.sets}</span>
+                  </div>
+                  <div aria-hidden className="h-1.5 rounded-full bg-surface-3">
+                    <span
+                      className="block h-full rounded-full"
+                      style={{
+                        width: `${totalGroupSets ? (g.sets / totalGroupSets) * 100 : 0}%`,
+                        background: groupTone(g.group),
+                      }}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
           </div>
-        </div>
+        </section>
+      )}
 
-        {session.notes && (
-          <div className="rounded-2xl border border-subtle bg-card px-4 py-3">
-            <p className="text-[10px] font-bold tracking-wide text-muted-foreground">OBSERVAÇÕES</p>
-            <p className="mt-1 text-sm">{session.notes}</p>
-          </div>
-        )}
+      {summary.exercises.length > 0 && (
+        <section aria-labelledby="feito-exercicios" className={card}>
+          <h2 id="feito-exercicios" className={title}>
+            Exercícios
+          </h2>
+          <ul aria-label="Exercícios do treino" className="mt-2 divide-y divide-subtle">
+            {summary.exercises.map((e) => {
+              const feeling = feelingOf(e.feeling);
+              return (
+                <li key={e.exerciseId} className="flex items-center gap-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold text-foreground">{e.exerciseName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {e.sets} {e.sets === 1 ? 'série' : 'séries'}
+                    </p>
+                  </div>
+                  <span className="text-sm font-bold tabular-nums text-foreground">
+                    {formatBestSet(e.best)}
+                  </span>
+                  {e.isRecord && (
+                    <Trophy size={16} className="text-primary" aria-label="Recorde" role="img" />
+                  )}
+                  {feeling && (
+                    <span role="img" aria-label={feeling.label}>
+                      {feeling.emoji}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
-        <h3 className="text-base font-extrabold text-foreground">
-          Exercícios{' '}
-          <span className="text-sm font-bold text-muted-foreground">({groups.length})</span>
-        </h3>
+      {summary.questions && !summary.checkin && (
+        <TeamQuestions
+          sessionId={summary.sessionId}
+          askedBy={summary.questions.askedBy}
+          items={summary.questions.items}
+        />
+      )}
 
-        <div className="space-y-3">
-          {groups.map((g) => (
-            <ExerciseDetailCard
-              key={g.exerciseId}
-              mode="readonly"
-              isCardio={g.isCardio}
-              sessionId={session.id}
-              canDeleteSet={false}
-              item={groupCardItem(g)}
-              loggedSets={g.sets}
-            />
+      {/* TODO(#desafios): o check-in do desafio da comunidade entra aqui. */}
+
+      <HowItWent summary={summary} />
+    </div>
+  );
+}
+
+function HowItWent({ summary }: { summary: WorkoutSessionSummary }) {
+  const router = useRouter();
+  const qc = useQueryClient();
+  const [feeling, setFeeling] = useState<number | null>(summary.feeling);
+  const [note, setNote] = useState(summary.notes ?? '');
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const body: { feeling?: number; notes?: string } = {};
+      if (feeling != null && feeling !== summary.feeling) body.feeling = feeling;
+      // Apagar a observação também grava; sem mudança, não manda nada.
+      if (note.trim() !== (summary.notes ?? '')) body.notes = note.trim();
+      if (Object.keys(body).length > 0) await workoutApi.updateSession(summary.sessionId, body);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['workout', 'session', summary.sessionId] });
+      void qc.invalidateQueries({ queryKey: ['workout', 'sessions'] });
+      router.push('/workout');
+    },
+  });
+
+  async function share() {
+    const text = [
+      `Treino feito! ${summaryHeadline(summary)}`,
+      `${summary.sets} séries · ${formatTrainingVolume(summary.volumeKg)}`,
+    ].join('\n');
+    try {
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        await navigator.share({ text });
+        return;
+      }
+      await navigator.clipboard.writeText(text);
+      toast('Resumo copiado.');
+    } catch {
+      // Compartilhar cancelado pela pessoa: nada a fazer.
+    }
+  }
+
+  const shortcuts = noteShortcutsFor(note);
+
+  return (
+    <section aria-labelledby="feito-como-foi" className={cn(card, 'space-y-3')}>
+      <h2 id="feito-como-foi" className={title}>
+        Como foi o treino?
+      </h2>
+      <FeelingPicker label="Como foi o treino?" value={feeling} onChange={setFeeling} size="lg" />
+      <Textarea
+        aria-label="Observação do treino"
+        placeholder="Algo para lembrar no próximo? (opcional)"
+        value={note}
+        maxLength={500}
+        rows={3}
+        onChange={(e) => setNote(e.target.value)}
+      />
+      {shortcuts.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {shortcuts.map((label) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => setNote((current) => appendNoteShortcut(current, label))}
+              className="anim-press min-h-11 rounded-full bg-muted px-3 text-[13px] font-bold text-foreground"
+            >
+              {label}
+            </button>
           ))}
         </div>
+      )}
+      {save.isError && (
+        <p role="alert" className="text-center text-xs text-danger">
+          Não foi possível salvar. Tente de novo.
+        </p>
+      )}
+      <div className="grid grid-cols-[auto_1fr] gap-2">
+        <button
+          type="button"
+          onClick={() => void share()}
+          className="anim-press flex h-12 items-center gap-2 rounded-full bg-muted px-4 text-sm font-bold text-foreground"
+        >
+          <Share2 size={16} aria-hidden />
+          Compartilhar
+        </button>
+        <button
+          type="button"
+          disabled={save.isPending}
+          onClick={() => save.mutate()}
+          className="anim-press h-12 rounded-full bg-primary text-sm font-extrabold text-primary-foreground disabled:opacity-60"
+        >
+          {save.isPending ? 'Salvando…' : 'Salvar'}
+        </button>
       </div>
-    </div>
+    </section>
+  );
+}
+
+/** As perguntas rápidas da equipe (prancha Al-T5b): só quem lê Treino pergunta. */
+function TeamQuestions({
+  sessionId,
+  askedBy,
+  items,
+}: {
+  sessionId: string;
+  askedBy: string[];
+  items: readonly PostWorkoutQuestion[];
+}) {
+  const qc = useQueryClient();
+  const [fatigue, setFatigue] = useState<number | null>(null);
+  const [pain, setPain] = useState<boolean | null>(null);
+  const [painLocation, setPainLocation] = useState('');
+  const [done, setDone] = useState<string | null>(null);
+
+  const send = useMutation({
+    mutationFn: (body: WorkoutCheckinInput) => workoutApi.saveCheckin(sessionId, body),
+    onSuccess: (_r, body) => {
+      setDone(checkinDoneMessage(body.skipped === true, askedBy));
+      void qc.invalidateQueries({ queryKey: ['workout', 'session', sessionId] });
+    },
+  });
+
+  if (done) {
+    return (
+      <p
+        role="status"
+        className="rounded-3xl bg-muted/50 px-4 py-3 text-center text-sm text-foreground"
+      >
+        {done}
+      </p>
+    );
+  }
+
+  function submit() {
+    const body: WorkoutCheckinInput = {};
+    if (fatigue != null) body.fatigue = fatigue;
+    if (pain != null) body.pain = pain;
+    if (pain && painLocation.trim()) body.painLocation = painLocation.trim();
+    send.mutate(body);
+  }
+
+  const heading = questionsTitle(askedBy);
+
+  return (
+    <section aria-labelledby="feito-perguntas" className={cn(card, 'space-y-4')}>
+      <h2 id="feito-perguntas" className={title}>
+        {heading}
+      </h2>
+
+      {items.map((q) =>
+        q.kind === 'scale' ? (
+          <div key={q.key} className="space-y-2">
+            <p className="text-sm font-bold text-foreground">{q.label}</p>
+            <div role="radiogroup" aria-label={q.label} className="grid grid-cols-5 gap-1.5">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  role="radio"
+                  aria-checked={fatigue === n}
+                  aria-label={String(n)}
+                  onClick={() => setFatigue(fatigue === n ? null : n)}
+                  className={cn(
+                    'anim-press h-11 rounded-2xl border text-sm font-extrabold tabular-nums',
+                    fatigue === n
+                      ? 'border-primary bg-primary-soft text-foreground'
+                      : 'border-subtle bg-muted text-muted-foreground',
+                  )}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+            {q.scaleLabels && (
+              <div className="flex justify-between text-[11px] text-muted-foreground">
+                <span>{q.scaleLabels[0]}</span>
+                <span>{q.scaleLabels[1]}</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div key={q.key} className="space-y-2">
+            <p className="text-sm font-bold text-foreground">{q.label}</p>
+            <div role="radiogroup" aria-label={q.label} className="grid grid-cols-2 gap-2">
+              {[
+                { label: 'Não', value: false },
+                { label: 'Sim', value: true },
+              ].map((o) => (
+                <button
+                  key={o.label}
+                  type="button"
+                  role="radio"
+                  aria-checked={pain === o.value}
+                  onClick={() => setPain(pain === o.value ? null : o.value)}
+                  className={cn(
+                    'anim-press h-11 rounded-2xl border text-sm font-bold',
+                    pain === o.value
+                      ? 'border-primary bg-primary-soft text-foreground'
+                      : 'border-subtle bg-muted text-muted-foreground',
+                  )}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            {pain && (
+              <input
+                type="text"
+                aria-label="Onde doeu?"
+                placeholder="Onde doeu? (opcional)"
+                maxLength={120}
+                value={painLocation}
+                onChange={(e) => setPainLocation(e.target.value)}
+                className="h-11 w-full rounded-2xl border border-subtle bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            )}
+          </div>
+        ),
+      )}
+
+      {send.isError && (
+        <p role="alert" className="text-center text-xs text-danger">
+          Não foi possível enviar. Tente de novo.
+        </p>
+      )}
+
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          disabled={send.isPending}
+          onClick={() => send.mutate({ skipped: true })}
+          className="anim-press h-12 rounded-full bg-muted text-sm font-bold text-foreground disabled:opacity-60"
+        >
+          Pular
+        </button>
+        <button
+          type="button"
+          disabled={send.isPending}
+          onClick={submit}
+          className="anim-press h-12 rounded-full bg-primary text-sm font-extrabold text-primary-foreground disabled:opacity-60"
+        >
+          Enviar
+        </button>
+      </div>
+      <p className="text-center text-[11px] text-muted-foreground">{questionsAudience(askedBy)}</p>
+    </section>
   );
 }

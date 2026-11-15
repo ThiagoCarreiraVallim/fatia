@@ -14,7 +14,7 @@ import {
 import { CommunityBadge, MyGymToggle, useInCommunity } from './my-gym-filter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { workoutApi, type Exercise } from '@fatia/api-client';
+import { workoutApi, type Exercise, type MuscleGroup } from '@fatia/api-client';
 
 interface Props {
   open: boolean;
@@ -24,9 +24,11 @@ interface Props {
    * primeira série real — escolher não registra nada.
    */
   onPick: (exercise: Exercise) => void;
+  /** Abre já filtrada num grupo ("Só cardio" do início). */
+  muscleGroup?: MuscleGroup;
 }
 
-export function ExerciseSearchDrawer({ open, onOpenChange, onPick }: Props) {
+export function ExerciseSearchDrawer({ open, onOpenChange, onPick, muscleGroup }: Props) {
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
   const [naAcademia, setNaAcademia] = useState(false);
@@ -52,9 +54,9 @@ export function ExerciseSearchDrawer({ open, onOpenChange, onPick }: Props) {
   }, [q]);
 
   const search = useQuery({
-    queryKey: ['workout', 'exercises', debounced, naAcademia],
+    queryKey: ['workout', 'exercises', debounced, naAcademia, muscleGroup ?? null],
     queryFn: () =>
-      workoutApi.searchExercises(debounced || undefined, undefined, { onlyMyGym: naAcademia }),
+      workoutApi.searchExercises(debounced || undefined, muscleGroup, { onlyMyGym: naAcademia }),
     enabled: open,
   });
 

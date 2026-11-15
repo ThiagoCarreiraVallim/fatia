@@ -47,6 +47,10 @@ export function ActiveWorkoutBar({
   const now = useNow();
   const view = activeWorkoutBarView(session, rest, now);
   const resting = view.mode === 'rest';
+  // A linha fina embaixo (#377): séries feitas contra as planejadas. Sem plano,
+  // não há contra o que medir e ela some.
+  const planned = (session.plannedExercises ?? []).reduce((acc, e) => acc + (e.targetSets ?? 0), 0);
+  const done = session.sets?.length ?? 0;
 
   return (
     <div
@@ -90,6 +94,21 @@ export function ActiveWorkoutBar({
         >
           +30 s
         </button>
+      )}
+      {planned > 0 && (
+        <span
+          role="progressbar"
+          aria-label="Séries do treino"
+          aria-valuemin={0}
+          aria-valuemax={planned}
+          aria-valuenow={Math.min(done, planned)}
+          className="pointer-events-none absolute inset-x-5 bottom-1 h-0.5 overflow-hidden rounded-full bg-foreground/10"
+        >
+          <span
+            style={{ width: `${Math.min(1, done / planned) * 100}%` }}
+            className="block h-full rounded-full bg-primary transition-[width]"
+          />
+        </span>
       )}
     </div>
   );

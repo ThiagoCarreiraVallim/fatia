@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { elapsedLabel, pluralize, type SessionProgress } from './format';
+import Link from 'next/link';
+import { ChevronDown } from 'lucide-react';
+import { formatClock, pluralize, type SessionProgress } from './format';
 
 /**
- * Cabeçalho da sessão: horário de início, tempo corrido, as duas saídas e o
- * progresso — o `session-header.tsx` do app. Antes o PWA mostrava só "Iniciado
- * às 18:00", e quanto do treino faltava era conta de cabeça descendo a lista.
+ * Cabeçalho da sessão (prancha Al-T3): minimizar (a barra do treino em
+ * andamento segue nas outras telas), o relógio do treino e o finalizar. O
+ * progresso fica logo abaixo, numa linha fina.
  */
 export function SessionHeader({
   startedAt,
@@ -20,28 +21,43 @@ export function SessionHeader({
   onCancel: () => void;
   onFinish: () => void;
 }) {
-  const elapsed = useElapsed(startedAt);
+  const seconds = useElapsedSeconds(startedAt);
   const progressLabel = `${progress.done}/${progress.total} ${pluralize(progress.total, 'exercício', 'exercícios')}`;
-  const time = new Date(startedAt).toLocaleTimeString('pt-BR', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 
   return (
     <div>
       <div className="flex items-center justify-between gap-2">
-        {/* O título "Treino em andamento" mora na barra de topo. */}
-        <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-          Iniciado às {time} · {elapsed}
-        </p>
-        <div className="flex gap-2">
-          <Button variant="ghost" size="sm" onClick={onCancel}>
-            Cancelar
-          </Button>
-          <Button variant="outline" size="sm" onClick={onFinish}>
-            Finalizar
-          </Button>
+        <Link
+          href="/"
+          aria-label="Minimizar treino"
+          className="anim-press flex h-11 w-11 items-center justify-center rounded-full bg-muted text-foreground"
+        >
+          <ChevronDown size={20} aria-hidden />
+        </Link>
+        <div className="flex flex-col items-center">
+          <span
+            role="timer"
+            aria-label="Tempo de treino"
+            className="font-display text-xl font-extrabold text-foreground tabular-nums"
+          >
+            {formatClock(seconds)}
+          </span>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="min-h-8 px-2 text-[11px] font-bold text-muted-foreground"
+          >
+            Cancelar treino
+          </button>
         </div>
+        <button
+          type="button"
+          onClick={onFinish}
+          aria-label="Finalizar treino"
+          className="anim-press h-11 rounded-full bg-primary px-4 text-sm font-extrabold text-primary-foreground"
+        >
+          Finalizar
+        </button>
       </div>
 
       <div className="mt-2 flex items-center gap-2">
@@ -52,7 +68,7 @@ export function SessionHeader({
           aria-valuemax={progress.total}
           aria-valuenow={progress.done}
           aria-valuetext={progressLabel}
-          className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"
+          className="h-1 flex-1 overflow-hidden rounded-full bg-muted"
         >
           <div
             className="h-full rounded-full bg-primary transition-all"
@@ -65,23 +81,25 @@ export function SessionHeader({
   );
 }
 
-/** Relógio da sessão. Um minuto de resolução dispensa tique de segundo. */
-function useElapsed(startedAt: string): string {
-  const [label, setLabel] = useState(() => elapsedLabel(startedAt));
+/** Os segundos desde o início, de segundo em segundo. */
+function useElapsedSeconds(startedAt: string): number {
+  const compute = () =>
+    Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000));
+  const [seconds, setSeconds] = useState(compute);
 
-  // Troca de sessão recalcula durante o render, e não num efeito (#187): sem
-  // pintar um quadro com o tempo da sessão anterior. O intervalo fica no efeito,
-  // que é o lugar de assinar um temporizador.
+  // Troca de sessão recalcula durante o render, e não num efeito (#187).
   const [previousStartedAt, setPreviousStartedAt] = useState(startedAt);
   if (previousStartedAt !== startedAt) {
     setPreviousStartedAt(startedAt);
-    setLabel(elapsedLabel(startedAt));
+    setSeconds(compute());
   }
 
   useEffect(() => {
-    const id = setInterval(() => setLabel(elapsedLabel(startedAt)), 15_000);
+    const tick = () =>
+      setSeconds(Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000)));
+    const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [startedAt]);
 
-  return label;
+  return Number.isFinite(seconds) ? seconds : 0;
 }

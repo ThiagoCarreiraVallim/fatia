@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ExerciseGroup, LoadPrescription, SessionSet } from '@fatia/api-client';
@@ -28,6 +28,8 @@ const getLastSet = vi.mocked(workoutApi.getLastSet);
 const getPersonalRecord = vi.mocked(workoutApi.getPersonalRecord);
 const getPrescription = vi.mocked(workoutApi.getPrescription);
 const logSet = vi.mocked(workoutApi.logSet);
+const updateSet = vi.mocked(workoutApi.updateSet);
+const deleteSet = vi.mocked(workoutApi.deleteSet);
 
 const SESSION_ID = 'sessao-de-hoje';
 const STARTED_AT = '2026-08-01T18:00:00.000Z';
@@ -318,7 +320,7 @@ describe('ActiveExerciseCard', () => {
     renderCard();
 
     await user.click(increaseWeight());
-    expect(weightValue()).toBe('1');
+    expect(weightValue()).toBe('2,5');
 
     resolvePrescription({
       status: 'ok',
@@ -331,7 +333,7 @@ describe('ActiveExerciseCard', () => {
     });
 
     await waitFor(() => expect(screen.getByText(/Sugestão/)).toBeInTheDocument());
-    expect(weightValue()).toBe('1');
+    expect(weightValue()).toBe('2,5');
   });
 
   it('não sobrescreve o que a pessoa digitou quando a referência chega depois', async () => {
@@ -345,12 +347,12 @@ describe('ActiveExerciseCard', () => {
     renderCard();
 
     await user.click(increaseWeight());
-    expect(weightValue()).toBe('1');
+    expect(weightValue()).toBe('2,5');
 
     resolveLastSet(makeSet({ id: 'antigo', weightKg: 62.5, reps: 10 }));
 
     await waitFor(() => expect(screen.getByText('Anterior: 62,5 kg')).toBeInTheDocument());
-    expect(weightValue()).toBe('1');
+    expect(weightValue()).toBe('2,5');
   });
   it('registrar a série começa o descanso prescrito e pede o RPE dela', async () => {
     getPrescription.mockResolvedValue({
@@ -377,7 +379,7 @@ describe('ActiveExerciseCard', () => {
     await waitFor(() => expect(onAskRpe).toHaveBeenCalledWith(created));
     expect(screen.getByRole('button', { name: 'Pular descanso' })).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Somar 30 segundos ao descanso' }),
+      screen.getByRole('button', { name: 'Somar 15 segundos ao descanso' }),
     ).toBeInTheDocument();
   });
 
@@ -410,14 +412,114 @@ describe('ActiveExerciseCard', () => {
     expect(weightValue()).toBe('82,5');
   });
 
-  it('põe a última vez na grade das séries, e diz quando ainda não há série hoje', async () => {
+  it('diz a série, a meta e a última vez numa linha só, e quando ainda não há série hoje', async () => {
     getLastSet.mockResolvedValue(makeSet({ id: 'antigo', weightKg: 62.5, reps: 10, rpe: 8 }));
     renderCard();
 
-    const previousRow = await screen.findByRole('group', {
-      name: 'Última vez: 62,5 kg × 10 · RPE 8',
-    });
-    expect(previousRow).toHaveTextContent('ant.');
+    expect(
+      await screen.findByText('Série 1 de 3 · meta 8-12 reps · última vez 62,5 kg × 10 · RPE 8'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Nenhuma série registrada neste exercício ainda.')).toBeInTheDocument();
+  });
+});
+
+describe('ActiveExerciseCard — sessão guiada (#377)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getLastSet.mockResolvedValue(null);
+    getPersonalRecord.mockResolvedValue(null);
+    getPrescription.mockResolvedValue({ status: 'insufficient_history' });
+  });
+
+  it('a carga anda de 2,5 em 2,5 kg', async () => {
+    const user = userEvent.setup();
+    renderCard();
+    await waitFor(() => expect(weightValue()).toBe('0'));
+    await user.click(increaseWeight());
+    expect(weightValue()).toBe('2,5');
+  });
+
+  it('"Como foi a série?" grava a sensação no RPE e dispensa a pergunta depois', async () => {
+    logSet.mockResolvedValue(makeSet({ id: 'nova', reps: 8 }));
+    const onAskRpe = vi.fn();
+    const user = userEvent.setup();
+    renderCard(makeGroup(), makeClient(), onAskRpe);
+    await waitFor(() => expect(repsValue()).toBe('8'));
+
+    const feelings = screen.getByRole('radiogroup', { name: 'Como foi a série?' });
+    await user.click(within(feelings).getByRole('radio', { name: /Puxado/ }));
+    await user.click(screen.getByRole('button', { name: 'Concluir série 1' }));
+
+    await waitFor(() => expect(logSet).toHaveBeenCalledTimes(1));
+    expect(logSet.mock.calls[0]![1]).toMatchObject({ rpe: 8, reps: 8 });
+    expect(onAskRpe).not.toHaveBeenCalled();
+  });
+
+  it('o reenvio depois de uma falha usa a mesma chave; a série seguinte ganha outra', async () => {
+    logSet
+      .mockRejectedValueOnce(new Error('rede caiu'))
+      .mockResolvedValueOnce(makeSet({ id: 'nova', reps: 8 }))
+      .mockResolvedValueOnce(makeSet({ id: 'outra', reps: 8 }));
+    const user = userEvent.setup();
+    renderCard();
+    await waitFor(() => expect(repsValue()).toBe('8'));
+
+    await user.click(screen.getByRole('button', { name: 'Concluir série 1' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('rede caiu');
+    await user.click(screen.getByRole('button', { name: 'Concluir série 1' }));
+    await waitFor(() => expect(logSet).toHaveBeenCalledTimes(2));
+    const first = logSet.mock.calls[0]![1].clientKey;
+    expect(first).toBeTruthy();
+    expect(logSet.mock.calls[1]![1].clientKey).toBe(first);
+
+    await user.click(screen.getByRole('button', { name: /Concluir série/ }));
+    await waitFor(() => expect(logSet).toHaveBeenCalledTimes(3));
+    expect(logSet.mock.calls[2]![1].clientKey).not.toBe(first);
+  });
+
+  it('carga acima do recorde ganha o selo de recorde', async () => {
+    getPersonalRecord.mockResolvedValue({ weightKg: 2, reps: 5 } as never);
+    const user = userEvent.setup();
+    renderCard();
+    await screen.findByText(/Recorde: 2 kg/);
+    expect(screen.queryByText('Recorde!')).toBeNull();
+    await user.click(increaseWeight());
+    expect(screen.getByText('Recorde!')).toBeInTheDocument();
+  });
+
+  it('a série feita vira um chip; tocar edita carga, reps e sensação, e Salvar grava', async () => {
+    updateSet.mockResolvedValue(makeSet());
+    const user = userEvent.setup();
+    renderCard(makeGroup({ sets: [makeSet({ weightKg: 40, reps: 10, rpe: 7 })] }));
+
+    await user.click(screen.getByRole('button', { name: 'Editar série 1: 40 kg × 10, Firme' }));
+    const editor = screen.getByRole('group', { name: 'Editar série 1' });
+    const load = within(editor).getByRole('textbox', { name: 'Carga da série 1 (kg)' });
+    expect(load).toHaveAttribute('inputmode', 'decimal');
+    await user.clear(load);
+    await user.type(load, '42,5');
+    await user.click(within(editor).getByRole('button', { name: 'Mais 1 repetição' }));
+    await user.click(within(editor).getByRole('radio', { name: /No limite/ }));
+    await user.click(within(editor).getByRole('button', { name: 'Salvar' }));
+
+    await waitFor(() =>
+      expect(updateSet).toHaveBeenCalledWith(SESSION_ID, 'set-1', {
+        weightKg: 42.5,
+        reps: 11,
+        rpe: 10,
+      }),
+    );
+  });
+
+  it('excluir a série pede confirmação antes de apagar', async () => {
+    deleteSet.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderCard(makeGroup({ sets: [makeSet({ weightKg: 40, reps: 10 })] }));
+
+    await user.click(screen.getByRole('button', { name: /^Editar série 1/ }));
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(deleteSet).not.toHaveBeenCalled();
+    await user.click(await screen.findByRole('button', { name: 'Excluir série' }));
+    await waitFor(() => expect(deleteSet).toHaveBeenCalledWith(SESSION_ID, 'set-1'));
   });
 });

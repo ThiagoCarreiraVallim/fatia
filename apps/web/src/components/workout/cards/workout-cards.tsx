@@ -2,9 +2,18 @@
 
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import {
+  activeSessionIdFromError,
+  daysAgoLabel,
+  feelingOf,
   formatDecimal,
   lastSessionSummary,
+  muscleGroupLabel,
+  MUSCLE_TONE_LEGEND,
+  musclesByRestTone,
+  type MuscleTone,
+  type RestedMuscle,
   lastWorkoutWhen,
   restedHeadline,
   weeklySetsBars,
@@ -14,8 +23,47 @@ import {
 } from '@fatia/api-client';
 import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BodySilhouette, BodyToneLegend } from './body-silhouette';
+import { MuscleDiagram } from '../muscle-diagram';
 import { cn } from '@/lib/utils';
+
+/** A cor de cada tom do descanso, em token (o diagrama resolve a variável). */
+const TONE_FILL: Record<MuscleTone, string> = {
+  rested: 'hsl(var(--primary))',
+  recovering: 'hsl(var(--steps))',
+  recent: 'hsl(var(--foreground) / 0.18)',
+};
+
+/**
+ * "Seus músculos hoje" (#377): o diagrama anatômico completo, cada músculo no
+ * tom do descanso do grupo. Nunca a silhueta simplificada da prancha.
+ */
+export function RestedBody({ rested }: { rested: readonly RestedMuscle[] }) {
+  const colors = useMemo(() => {
+    const tones = musclesByRestTone(rested);
+    return Object.fromEntries(Object.entries(tones).map(([m, t]) => [m, TONE_FILL[t]]));
+  }, [rested]);
+  const label = rested.length
+    ? rested.map((r) => `${muscleGroupLabel(r.group)} · ${daysAgoLabel(r.daysSince)}`).join(', ')
+    : 'Nenhum grupo descansado';
+  return <MuscleDiagram colors={colors} label={label} view="both" sizeClassName="w-14" />;
+}
+
+export function BodyToneLegend() {
+  return (
+    <ul aria-label="Legenda" className="flex flex-col gap-1">
+      {MUSCLE_TONE_LEGEND.map((item) => (
+        <li key={item.tone} className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
+          <span
+            aria-hidden
+            className="h-2 w-2 shrink-0 rounded-[2px]"
+            style={{ background: TONE_FILL[item.tone] }}
+          />
+          {item.label}
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 const card = 'flex h-full flex-col gap-3.5 rounded-3xl bg-card p-[18px]';
 const eyebrow = 'text-[13px] font-bold text-muted-foreground';
@@ -24,14 +72,26 @@ const primaryBtn =
 const secondaryBtn =
   'anim-press flex h-11 flex-1 items-center justify-center rounded-full bg-muted px-3 text-sm font-extrabold text-foreground';
 
-/** Começa uma sessão com o plano: a tela de Treino passa a mostrar a sessão aberta. */
-function useStartPlan() {
+/**
+ * Começa uma sessão: a tela de Treino passa a mostrar a sessão aberta. Se já
+ * havia uma aberta (409, outra aba, o app, o MCP), mostra essa em vez de erro.
+ */
+export function useStartSession() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (planId: string | null) =>
-      workoutApi.startSession({ planId: planId ?? undefined, startedAt: new Date().toISOString() }),
+    mutationFn: async (planId: string | null) => {
+      try {
+        return await workoutApi.startSession({
+          planId: planId ?? undefined,
+          startedAt: new Date().toISOString(),
+        });
+      } catch (error) {
+        if (activeSessionIdFromError(error)) return null;
+        throw error;
+      }
+    },
     onSuccess: (session) => {
-      qc.setQueryData(['workout', 'active'], session);
+      if (session) qc.setQueryData(['workout', 'active'], session);
       void qc.invalidateQueries({ queryKey: ['workout', 'active'] });
     },
   });
@@ -39,13 +99,15 @@ function useStartPlan() {
 
 /** 1 · Músculos descansados: sugere o plano da pessoa que os trabalha, sem obrigar. */
 export function RestedMusclesCard({ summary }: { summary: WeeklyMuscleSummary }) {
-  const start = useStartPlan();
+  const start = useStartSession();
   const plan = summary.suggestedPlan;
   return (
     <section aria-label="Seus músculos hoje" className={card}>
       <h3 className={eyebrow}>Seus músculos hoje</h3>
       <div className="flex items-center gap-3.5">
-        <BodySilhouette rested={summary.rested} />
+        <div className="shrink-0">
+          <RestedBody rested={summary.rested} />
+        </div>
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <p className="text-base font-bold leading-snug text-foreground">
             {restedHeadline(summary.rested)}
@@ -72,10 +134,11 @@ export function RestedMusclesCard({ summary }: { summary: WeeklyMuscleSummary })
   );
 }
 
-/** 2 · Repetir o último: para quem faz sempre o mesmo treino. O humor vem com a #377. */
+/** 2 · Repetir o último: para quem faz sempre o mesmo treino, com a sensação marcada no fim. */
 export function RepeatLastCard({ session }: { session: WorkoutSession }) {
-  const start = useStartPlan();
+  const start = useStartSession();
   const summary = lastSessionSummary(session);
+  const feeling = feelingOf(session.feeling);
   const facts = [
     summary.durationMinutes !== null ? `${summary.durationMinutes} min` : null,
     `${summary.sets} ${summary.sets === 1 ? 'série' : 'séries'}`,
@@ -89,6 +152,14 @@ export function RepeatLastCard({ session }: { session: WorkoutSession }) {
           {summary.name}
         </p>
         <p className="text-[13px] tabular-nums text-muted-foreground">{facts.join(' · ')}</p>
+        {feeling ? (
+          <p className="flex items-center gap-1.5 text-sm text-foreground">
+            <span aria-hidden className="text-lg">
+              {feeling.emoji}
+            </span>
+            <span>{feeling.label}</span>
+          </p>
+        ) : null}
       </div>
       <div className="mt-auto flex gap-2">
         <button
