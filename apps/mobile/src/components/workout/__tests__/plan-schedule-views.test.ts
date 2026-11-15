@@ -17,7 +17,10 @@ import {
 } from '../agenda-view';
 import { activeWeekRows, blockScreenState, blockStatusCopy } from '../block-view';
 
-const offer = (over: Partial<PlanOffer> = {}, shown: Partial<PlanOffer['shown']> = {}): PlanOffer => ({
+const offer = (
+  over: Partial<PlanOffer> = {},
+  shown: Partial<PlanOffer['shown']> = {},
+): PlanOffer => ({
   id: 'o1',
   author: { name: 'Helena Personal' },
   group: { id: 'g1', name: 'Academia Demo' },
@@ -78,8 +81,9 @@ describe('plano recebido no app (Al-T2, Al-T2b)', () => {
       confirmLabel: 'Aceitar plano',
     });
     expect(
-      acceptConfirm(offer({}, { schedule: 'FLEXIBLE', startDate: null, endDate: null, weeks: null }))
-        .description,
+      acceptConfirm(
+        offer({}, { schedule: 'FLEXIBLE', startDate: null, endDate: null, weeks: null }),
+      ).description,
     ).toBe('Ele entra nos seus planos. Sem datas: você treina no seu ritmo.');
     const update = acceptConfirm(
       offer(
