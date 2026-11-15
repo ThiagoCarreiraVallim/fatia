@@ -46,6 +46,16 @@ Pendências da etapa 2: cada uma depende de outra issue ou de algo externo.
   - Na web, o QR da recepção não é lido: só dá para digitar o código.
   - O teste grátis pela web leva a `/plan` (#386).
   - A categoria "Fotos das refeições" da Onb-03 não existe no enum `ShareScope` e precisa de migração.
+- **Revisão de segurança (etapa 2):** sem bloqueante.
+  - Corrigido:
+    - o token do link de exportação não aparece mais no log nem no span;
+    - o limite de baixas conta por link (antes contava por IP);
+    - o link dura só mais 15 min depois da primeira baixa;
+    - os tutoriais vistos têm limite de linhas.
+  - Em aberto:
+    - limitar as fotos de perfil pendentes por pessoa (upload `user_avatar`);
+    - o job de lembretes varre todos os lembretes a cada minuto (filtrar por próximo envio);
+    - conferir que o conector Google do Logto descarta e-mail com `email_verified=false` antes de ligar o vínculo automático de contas.
 - **Decisão "segue o canvas":**
   - Em Unidades, só carga e distância: peso fica em kg e estatura em cm.
   - Em Lembretes, a tela tem só a chave do silêncio noturno. A API já aceita mudar o horário.
