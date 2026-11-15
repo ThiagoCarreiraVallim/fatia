@@ -136,8 +136,8 @@ describe('Adicionar exercício ao plano (Al-T8)', () => {
     expect(await screen.findByText('Nada com “zzz”')).toBeInTheDocument();
   });
 
-  it('exercício que já está no plano pode entrar de novo, marcado', async () => {
-    search.mockResolvedValue([ex(1, 'Supino reto')]);
+  it('exercício que já está no plano aparece marcado e não entra de novo', async () => {
+    search.mockResolvedValue([ex(1, 'Supino reto'), ex(2, 'Crucifixo')]);
     const user = userEvent.setup();
     renderWithClient(
       <AddExerciseDrawer
@@ -149,7 +149,10 @@ describe('Adicionar exercício ao plano (Al-T8)', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Todos' }));
     expect(await screen.findByText('já no plano')).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'Supino reto' })).toBeEnabled();
+    const inPlan = screen.getByRole('checkbox', { name: 'Supino reto' });
+    expect(inPlan).toBeDisabled();
+    await user.click(inPlan);
+    expect(screen.getByRole('button', { name: 'Selecione os exercícios' })).toBeDisabled();
   });
 });
 

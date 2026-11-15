@@ -120,7 +120,7 @@ export interface PlanExerciseConfig {
  * O exercício do plano como a sessão lê. A #377 usa `restSeconds` no timer,
  * a meta de cardio e a intensidade como guia, `biSetWithNext` na ordem de
  * execução e `sets` para a meta de cada série. `planExerciseId` identifica a
- * linha: o mesmo exercício pode aparecer duas vezes no plano.
+ * linha do plano (cada exercício entra uma vez por plano).
  */
 export interface PlannedExercise extends Partial<PlanExerciseConfig> {
   /** Opcional só para quem monta a sessão à mão (testes, treino rápido); a API sempre manda. */

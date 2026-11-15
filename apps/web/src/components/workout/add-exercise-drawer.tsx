@@ -28,7 +28,7 @@ import { CommunityBadge, MyGymToggle, useInCommunity } from './my-gym-filter';
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Só marca "já no plano": repetir exercício é permitido desde a #378. */
+  /** Já no plano: aparece marcado e não entra de novo (um por plano; a sessão agrupa por exercício). */
   existingExerciseIds: Set<number>;
   /** Com plano: seleção múltipla gravada numa requisição só (Al-T8). */
   planId?: string;
@@ -259,29 +259,31 @@ export function AddExerciseDrawer({
                     <button
                       type="button"
                       role="checkbox"
-                      aria-checked={on}
+                      aria-checked={on || inPlan}
                       aria-label={exercise.name}
+                      disabled={inPlan}
                       onClick={() => toggle(exercise)}
-                      className="flex min-h-14 w-full items-center gap-3 px-4 py-2 text-left hover:bg-accent"
+                      className="flex min-h-14 w-full items-center gap-3 px-4 py-2 text-left hover:bg-accent disabled:opacity-50 disabled:hover:bg-transparent"
                     >
                       <span
                         aria-hidden
                         className={cn(
                           'flex h-6 w-6 shrink-0 items-center justify-center rounded-[8px]',
-                          on
+                          on || inPlan
                             ? 'bg-primary text-primary-foreground'
                             : 'shadow-[inset_0_0_0_2px_hsl(var(--border-strong))]',
                         )}
                       >
-                        {on && <Check size={16} />}
+                        {(on || inPlan) && <Check size={16} />}
                       </span>
                       {body}
                     </button>
                   ) : (
                     <button
                       type="button"
+                      disabled={inPlan}
                       onClick={() => pickSingle(exercise)}
-                      className="flex min-h-14 w-full items-center justify-between gap-3 px-4 py-2 text-left hover:bg-accent"
+                      className="flex min-h-14 w-full items-center justify-between gap-3 px-4 py-2 text-left hover:bg-accent disabled:opacity-50"
                     >
                       {body}
                     </button>

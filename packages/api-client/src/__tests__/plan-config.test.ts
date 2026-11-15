@@ -152,6 +152,9 @@ describe('frequência cardíaca pela idade (Al-T21d)', () => {
   it('usa a idade e calcula as três zonas sobre 220 − idade', () => {
     expect(ageFromBirthDate('1996-05-10', '2026-05-09')).toBe(29);
     expect(ageFromBirthDate('1996-05-10', '2026-05-10')).toBe(30);
+    // `usersApi.me` devolve data e hora (ISO); no mês do aniversário, o dia conta.
+    expect(ageFromBirthDate('1990-11-20T00:00:00.000Z', '2026-11-25')).toBe(36);
+    expect(ageFromBirthDate('1990-11-20T00:00:00.000Z', '2026-11-19')).toBe(35);
     expect(heartRateZones(30)).toEqual({
       LIGHT: [114, 133],
       MODERATE: [133, 152],

@@ -36,7 +36,7 @@ import { CommunityBadge, MyGymToggle, useInCommunity } from './my-gym-filter';
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Só marca "já no plano": repetir exercício é permitido desde a #378. */
+  /** Já no plano: aparece marcado e não entra de novo (um por plano; a sessão agrupa por exercício). */
   existingExerciseIds: Set<number>;
   planId?: string;
   planName?: string;
@@ -229,7 +229,10 @@ export function AddExerciseDrawer({
             <Pressable
               accessibilityRole={multi ? 'checkbox' : 'button'}
               accessibilityLabel={`${item.name}, ${sub}`}
-              accessibilityState={multi ? { checked: on } : undefined}
+              accessibilityState={
+                multi ? { checked: on || inPlan, disabled: inPlan } : { disabled: inPlan }
+              }
+              disabled={inPlan}
               onPress={() => {
                 if (multi) toggle(item);
                 else {
@@ -237,16 +240,19 @@ export function AddExerciseDrawer({
                   onOpenChange(false);
                 }
               }}
-              className="min-h-14 flex-row items-center gap-3 px-4 py-2 active:bg-accent"
+              className={cn(
+                'min-h-14 flex-row items-center gap-3 px-4 py-2 active:bg-accent',
+                inPlan && 'opacity-50',
+              )}
             >
               {multi ? (
                 <View
                   className={cn(
                     'h-6 w-6 items-center justify-center rounded-[8px]',
-                    on ? 'bg-primary' : 'border-2 border-border-strong',
+                    on || inPlan ? 'bg-primary' : 'border-2 border-border-strong',
                   )}
                 >
-                  {on ? <Check size={16} color={colors.primaryForeground} /> : null}
+                  {on || inPlan ? <Check size={16} color={colors.primaryForeground} /> : null}
                 </View>
               ) : null}
               <View className="flex-1 pr-2">
