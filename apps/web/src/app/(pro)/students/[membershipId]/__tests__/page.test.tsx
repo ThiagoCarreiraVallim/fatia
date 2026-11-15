@@ -248,6 +248,48 @@ describe('painel do profissional — a tela contra o payload real (#157)', () =>
     expect(readStudent).toHaveBeenCalledWith('mem-a', 'HABITS');
   });
 
+  it('fotos das refeições: categoria própria, lida só quando liberada (#374, ADR 038)', async () => {
+    // Alimentação liberada não basta: a aba das fotos aparece riscada até o
+    // aluno liberar "Fotos das refeições".
+    listStudents.mockResolvedValue([aluno(['NUTRITION', 'MEAL_PHOTOS'])]);
+    readStudent.mockImplementation((_id, scope) =>
+      Promise.resolve(
+        scope === 'MEAL_PHOTOS'
+          ? envelope({
+              scope: 'MEAL_PHOTOS',
+              photos: [
+                {
+                  mealId: 'm1',
+                  mealType: 'LUNCH',
+                  eatenAt: '2026-11-15T15:41:00Z',
+                  photo: { id: 'f1', url: 'https://bucket/f1.webp?sig', width: 800, height: 600 },
+                },
+              ],
+            })
+          : NUTRITION,
+      ),
+    );
+
+    renderPage();
+    expect(await screen.findByText('2026-07-28')).toBeTruthy();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Fotos das refeições' }));
+
+    const img = await screen.findByRole('img', { name: /Almoço/ });
+    expect(img.getAttribute('src')).toBe('https://bucket/f1.webp?sig');
+    expect(readStudent).toHaveBeenCalledWith('mem-a', 'MEAL_PHOTOS');
+  });
+
+  it('Alimentação liberada não abre a categoria das fotos', async () => {
+    listStudents.mockResolvedValue([aluno(['NUTRITION'])]);
+    readStudent.mockResolvedValue(NUTRITION);
+
+    renderPage();
+    await screen.findByText('2026-07-28');
+
+    expect(screen.queryByRole('button', { name: 'Fotos das refeições' })).toBeNull();
+  });
+
   it('sem categoria autorizada não dispara leitura nenhuma', async () => {
     listStudents.mockResolvedValue([aluno([])]);
 

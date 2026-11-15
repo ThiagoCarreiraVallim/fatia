@@ -68,6 +68,7 @@ export function CopyDayDrawer({ open, onOpenChange, date, today, mealCount }: Pr
             <CopyToDay
               key={date}
               inputId="copy-day-date"
+              sourceDate={date}
               defaultTarget={defaultCopyTarget(date, today)}
               today={today}
               pending={copy.isPending}

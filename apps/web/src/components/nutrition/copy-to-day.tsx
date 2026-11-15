@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Check } from 'lucide-react';
-import { dayLabel } from '@fatia/api-client';
+import { copyTargetDays, dayLabel } from '@fatia/api-client';
 import { Button } from '@/components/ui/button';
+import { Chip } from '@/components/ui/chip';
 import { Input } from '@/components/ui/input';
 
 /**
@@ -21,7 +22,10 @@ export function CopyToDay({
   done,
   onCopy,
   onNavigate,
+  sourceDate,
 }: {
+  /** O dia de origem: com ele, os próximos dias viram chips (prancha Al-N9). */
+  sourceDate?: string;
   defaultTarget: string;
   today: string;
   inputId: string;
@@ -37,8 +41,17 @@ export function CopyToDay({
 
   return (
     <div className="space-y-2">
+      {sourceDate && (
+        <div className="flex flex-wrap gap-1.5" aria-label="Para">
+          {copyTargetDays(sourceDate, today).map((day) => (
+            <Chip key={day} selected={day === target} onClick={() => setTarget(day)}>
+              {dayLabel(day, today)}
+            </Chip>
+          ))}
+        </div>
+      )}
       <label htmlFor={inputId} className="text-sm font-medium">
-        Dia de destino
+        {sourceDate ? 'Outro dia' : 'Dia de destino'}
       </label>
       <div className="flex gap-2">
         <Input
