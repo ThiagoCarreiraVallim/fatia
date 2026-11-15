@@ -467,7 +467,7 @@ rodando, e deve ser feito antes de publicar:
 - [ ] Chat: pergunta com resposta chegando aos pedaços, trocar de aba no meio e ver o anel do botão da IA girando, voltar e ver a resposta; mandar o app para o segundo plano no meio e voltar (a resposta continua de onde estava); "Parar resposta"
 - [ ] Chat: confirmar uma escrita (registrar refeição) com o resumo, responder uma pergunta do assistente, foto pela câmera e pela galeria, ditado (diálogo do microfone na primeira vez, recusar e ver o aviso), memórias e apagar uma
 - [ ] Chat com o app fechado (dev build com push): mandar pergunta, fechar o app e receber "Sua resposta está pronta."; o toque abre a conversa
-- [ ] Cores dos macros e de erro (`cores.ts`) iguais às do PWA lado a lado
+- [ ] Cores dos macros e de erro (`apps/mobile/src/theme/colors.ts`) iguais às do PWA lado a lado
 - [ ] Diagrama muscular destacando os grupos certos
 - [ ] Aparelho de entrada, não só simulador — os gráficos são o ponto a observar
 - [ ] Leitor de tela e fonte ampliada nos dois sistemas
@@ -490,7 +490,7 @@ descrevem o código de hoje; o que já está decidido:
   `globals.css` e de `global.css` tem os mesmos nomes e valores, conferidos pelo `palette.test.ts`;
   a escolha Sistema/Escuro/Claro fica no aparelho (`localStorage` no PWA, armazenamento local no
   app).
-- **Cores dos macros** continuam as mesmas nos dois e citadas aqui pelo hex de `cores.ts`; a troca
+- **Cores dos macros** continuam as mesmas nos dois e citadas aqui pelo hex de `apps/mobile/src/theme/colors.ts`; a troca
   da proteína para o tom do canvas vem com os tokens da #368.
 - **Dados novos** de cada tela e a issue que os cria: [`DADOS_REDESIGN.md`](./DADOS_REDESIGN.md).
 

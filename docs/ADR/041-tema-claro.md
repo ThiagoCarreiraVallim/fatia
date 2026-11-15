@@ -33,7 +33,7 @@ verde parecido com o do Fatia confunde a comunidade com a marca e com o "dentro 
    sem resposta do sistema, escuro.
 3. **Mesmos nomes de token, dois blocos de valores.** A fonte é `packages/design/src/tokens.ts`;
    `globals.css` (web), `global.css` (app) e o CSS do site repetem os valores com os mesmos nomes, e
-   `palette.test.ts` e `cores.test.ts` conferem a paridade dos dois blocos. Valores claros do canvas (`canvas.css`, classe `.light`):
+   `palette.test.ts` e `colors.test.ts` conferem a paridade dos dois blocos. Valores claros do canvas (`canvas.css`, classe `.light`):
 
    | Token       | Escuro    | Claro     | Por quê                                              |
    | ----------- | --------- | --------- | ---------------------------------------------------- |
@@ -99,7 +99,7 @@ verde parecido com o do Fatia confunde a comunidade com a marca e com o "dentro 
 ### Negativas
 
 - Toda tela passa a ter duas aparências para conferir: `ui:snap` e axe dobram.
-- `palette.test.ts` e `cores.test.ts` ganham o bloco claro; um token novo precisa dos dois valores.
+- `palette.test.ts` e `colors.test.ts` ganham o bloco claro; um token novo precisa dos dois valores.
 - A API ganha dependência de `@fatia/design` para a validação de marca.
 - No app, `colors` (antes `cores`) passou a ler o tema vigente: cor guardada em constante de módulo
   congela o tema do carregamento, e trocar o tema remonta a árvore de telas.
@@ -107,7 +107,7 @@ verde parecido com o do Fatia confunde a comunidade com a marca e com o "dentro 
 ### Neutras
 
 - O MCP não muda: tema é coisa da tela.
-- Os tokens, as fontes e a tabela do `DESIGN.md` mudam junto, na #368, porque o `cores.test.ts`
+- Os tokens, as fontes e a tabela do `DESIGN.md` mudam junto, na #368, porque o `colors.test.ts`
   lê a tabela do `DESIGN.md`.
 
 ## Alternativas consideradas
@@ -118,6 +118,9 @@ verde parecido com o do Fatia confunde a comunidade com a marca e com o "dentro 
   claros sem uso, que envelhecem sem ninguém ver.
 - **Preferência de tema na API.** Rejeitada: não é dado da pessoa, e sincronizar entre aparelhos não
   vale uma coluna e um campo no export.
-- **Recusar toda cor que não passa.** Rejeitada: a equipe escolhe a cor da marca dela; sugerir o tom
-  mais próximo resolve sem tirar a escolha.
+- **Recusar a cor sem sugerir um tom.** Rejeitada: a equipe escolhe a cor da marca dela, e uma
+  recusa seca a deixaria tentando no escuro. Os clientes avisam e mostram o tom mais próximo que
+  passa **antes** de enviar; a API recusa (400, com o motivo e a sugestão) só o que ainda chega sem
+  passar, o que mantém a regra mesmo fora dos clientes (itens 9 e 11).
+- **Ajustar a cor sozinho, sem a equipe ver.** Rejeitada: gravaria uma cor que ninguém escolheu.
 - **Validação só no cliente.** Rejeitada: a API aceitaria a cor ilegível de qualquer outro caminho.

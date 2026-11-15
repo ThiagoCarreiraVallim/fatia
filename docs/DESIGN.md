@@ -259,7 +259,7 @@ Todo formulário curto é folha de baixo (vaul no PWA, gorhom bottom-sheet no na
 | Erro       | `ui/error-state.tsx` + "Tentar novamente"  | `ErrorState`                |
 | Aviso      | `toast` do `sonner` (`ui/toaster.tsx`)     | `useToast` (`ui/toast.tsx`) |
 
-Estado vazio sempre diz o que fazer a seguir ("Toque em + para registrar").
+Estado vazio sempre diz o que fazer a seguir ("Toque no botão da IA para registrar"; o "+ Registrar" saiu com a ADR 040).
 
 ### Desfazer e confirmar
 
