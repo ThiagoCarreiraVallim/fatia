@@ -16,6 +16,7 @@ vi.mock('@/components/ui/drawer', () => {
     DrawerTitle: ({ children }: { children: ReactNode }) => <h2>{children}</h2>,
     DrawerDescription: ({ children }: { children: ReactNode }) => <p>{children}</p>,
     DrawerClose: Passthrough,
+    DrawerFooter: Passthrough,
   };
 });
 
@@ -23,13 +24,19 @@ vi.mock('@fatia/api-client', async () => {
   const actual = await vi.importActual<typeof import('@fatia/api-client')>('@fatia/api-client');
   return {
     ...actual,
-    nutritionApi: { updateItem: vi.fn(), portions: vi.fn(), createPortion: vi.fn() },
+    nutritionApi: {
+      updateItem: vi.fn(),
+      portions: vi.fn(),
+      createPortion: vi.fn(),
+      deleteItem: vi.fn(),
+    },
   };
 });
 
 import { nutritionApi } from '@fatia/api-client';
 
 const updateItem = vi.mocked(nutritionApi.updateItem);
+const deleteItem = vi.mocked(nutritionApi.deleteItem);
 const portions = vi.mocked(nutritionApi.portions);
 
 const item = (extra: Partial<MealItem> = {}): MealItem => ({
@@ -86,6 +93,7 @@ describe('EditMealItemDrawer', () => {
 
   beforeEach(() => {
     updateItem.mockReset().mockResolvedValue({} as MealItem);
+    deleteItem.mockReset().mockResolvedValue(undefined as never);
     portions
       .mockReset()
       .mockResolvedValue([{ id: 'p1', label: 'colher de sopa', grams: 25, mine: false }]);
@@ -100,8 +108,7 @@ describe('EditMealItemDrawer', () => {
     expect(screen.getByText('= 50 g')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Mais' }));
-    // O número muda no nome, para o leitor de tela anunciar o passo.
-    expect(screen.getByRole('status', { name: 'Quantas medidas: 2½' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Quantas medidas')).toHaveValue('2,5');
     await user.click(screen.getByRole('button', { name: 'Salvar' }));
 
     await waitFor(() =>
@@ -126,8 +133,71 @@ describe('EditMealItemDrawer', () => {
   it('item livre (sem alimento) não busca medidas: só gramas', async () => {
     renderDrawer(item({ foodId: null, portionLabel: null, portionQuantity: null }));
 
-    expect(screen.getByLabelText(/Quantidade/)).toHaveValue(50);
+    expect(screen.getByLabelText(/Quantidade/)).toHaveValue('50');
     expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
     expect(portions).not.toHaveBeenCalled();
+  });
+
+  it('a quantidade da medida é digitável, com vírgula, sem depender do − e +', async () => {
+    const user = userEvent.setup();
+    renderDrawer(item());
+
+    const field = await screen.findByLabelText('Quantas medidas');
+    await user.clear(field);
+    await user.type(field, '1,5');
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+
+    await waitFor(() =>
+      expect(updateItem).toHaveBeenCalledWith('item-1', { portionId: 'p1', quantity: 1.5 }),
+    );
+  });
+
+  it('gramas aceitam vírgula e o teclado é o decimal', async () => {
+    const user = userEvent.setup();
+    renderDrawer(item({ grams: 120, portionLabel: null, portionQuantity: null }));
+
+    await screen.findByRole('radio', { name: /colher de sopa/ });
+    const field = screen.getByLabelText(/Quantidade/);
+    expect(field).toHaveAttribute('inputmode', 'decimal');
+    await user.clear(field);
+    await user.type(field, '120,5');
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+
+    await waitFor(() => expect(updateItem).toHaveBeenCalledWith('item-1', { grams: 120.5 }));
+  });
+
+  it('número que não dá para ler diz o erro e não salva', async () => {
+    const user = userEvent.setup();
+    renderDrawer(item());
+
+    const field = await screen.findByLabelText('Quantas medidas');
+    await user.clear(field);
+    await user.type(field, 'abc');
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Digite um número, como 1,5');
+    expect(screen.getByRole('button', { name: 'Salvar' })).toBeDisabled();
+  });
+
+  it('as contas refazem na quantidade nova antes de salvar', async () => {
+    const user = userEvent.setup();
+    renderDrawer(item());
+
+    await screen.findByRole('radio', { name: /colher de sopa/ });
+    expect(screen.getByLabelText('Calorias')).toHaveTextContent('64');
+    await user.click(screen.getByRole('button', { name: 'Mais' }));
+
+    // 2½ colheres de 25 g = 62,5 g; o item tinha 64 kcal em 50 g.
+    expect(screen.getByLabelText('Calorias')).toHaveTextContent('80');
+  });
+
+  it('remover o item pede confirmação antes de apagar', async () => {
+    const user = userEvent.setup();
+    renderDrawer(item());
+
+    await user.click(screen.getByRole('button', { name: 'Remover item' }));
+    expect(deleteItem).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Remover' }));
+
+    await waitFor(() => expect(deleteItem).toHaveBeenCalledWith('item-1'));
   });
 });

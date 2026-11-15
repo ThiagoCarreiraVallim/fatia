@@ -30,7 +30,8 @@ export class RecordMealTool extends IntentTool<'record_meal'> {
       const [melhor] = await this.foods.search(userId, { q: item.food, limit: 1 }); // search_food
       if (melhor) {
         casamentos.push({ food: item.food, matched: { id: melhor.id, name: melhor.name } });
-        items.push({ foodId: melhor.id, grams: item.grams });
+        // Quem registra pelo MCP é uma IA: o item nasce `AI` (#374), como no log_meal.
+        items.push({ foodId: melhor.id, grams: item.grams, source: 'AI' as const });
         continue;
       }
       const informados = [item.kcal, item.proteinG, item.carbsG, item.fatG].some(
@@ -48,6 +49,7 @@ export class RecordMealTool extends IntentTool<'record_meal'> {
         proteinG: item.proteinG,
         carbsG: item.carbsG,
         fatG: item.fatG,
+        source: 'AI' as const,
       });
     }
 

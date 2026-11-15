@@ -67,6 +67,7 @@ export class MealItemService {
     if (dto.fatG !== undefined) fatG = dto.fatG;
 
     Object.assign(data, { grams, kcal, proteinG, carbsG, fatG });
+    if (dto.source !== undefined) data.source = dto.source;
     if (dto.nutrients !== undefined) {
       const clean: Record<string, number> = {};
       for (const [k, v] of Object.entries(dto.nutrients)) {

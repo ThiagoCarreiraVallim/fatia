@@ -69,7 +69,7 @@ const TOOL_COUNT_PATTERN = /\*{0,2}(\d+)\*{0,2}\s+(?:tools|ferramentas|ações)\
 const TOOL_COUNT_SLICES: ReadonlyArray<{ file: string; text: string; count: () => number }> = [
   {
     file: 'README.md',
-    text: '(**B**, hoje 43 tools',
+    text: '(**B**, hoje 44 tools',
     // O catálogo do braço B do eval da fronteira: as de intenção mais as de entidade que a
     // superfície de intenção serve iguais.
     count: () =>
@@ -77,7 +77,7 @@ const TOOL_COUNT_SLICES: ReadonlyArray<{ file: string; text: string; count: () =
   },
   {
     file: 'docs/SUBMISSION_CHECKLIST.md',
-    text: '`delete_*` (17 tools)',
+    text: '`delete_*` (18 tools)',
     count: () => tools.filter(({ tool }) => tool.name.startsWith('delete_')).length,
   },
   {
@@ -98,7 +98,7 @@ const TOOL_COUNT_SLICES: ReadonlyArray<{ file: string; text: string; count: () =
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '73 tools de escrita',
+    text: '74 tools de escrita',
     // As de escrita que ganharam exemplo na #111 — `delete_my_account` é isenta,
     // e é por isso que o número não é o total de tools de escrita.
     count: () =>
@@ -340,22 +340,22 @@ const payload = tools.reduce(
  * número; o caso abaixo confere as duas pontas, então nem o texto some nem o número derrapa.
  */
 const PAYLOAD_CLAIMS: ReadonlyArray<{ file: string; text: string; medido: () => string }> = [
-  { file: 'docs/MCP.md', text: '**117,4 k caracteres**', medido: () => emK(payload.cheio) },
-  { file: 'docs/MCP.md', text: '(96,6 k)', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP.md', text: '**119,0 k caracteres**', medido: () => emK(payload.cheio) },
+  { file: 'docs/MCP.md', text: '(98,0 k)', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP.md',
-    text: '**6.902 são os exemplos**',
+    text: '**6.956 são os exemplos**',
     medido: () => emMilhar(payload.exemplos),
   },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**117,4 k caracteres**',
+    text: '**119,0 k caracteres**',
     medido: () => emK(payload.cheio),
   },
-  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 96,6 k', medido: () => emK(payload.estreito) },
+  { file: 'docs/MCP_TOOL_SURFACE.md', text: 'dá 98,0 k', medido: () => emK(payload.estreito) },
   {
     file: 'docs/MCP_TOOL_SURFACE.md',
-    text: '**6.902 caracteres**',
+    text: '**6.956 caracteres**',
     medido: () => emMilhar(payload.exemplos),
   },
 ];

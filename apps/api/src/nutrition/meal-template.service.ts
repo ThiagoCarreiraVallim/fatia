@@ -91,7 +91,10 @@ export class MealTemplateService {
           userId,
           name,
           mealType,
-          items: { create: items.map((item, position) => ({ ...item, position })) },
+          // A refeição salva não guarda a origem: registrá-la de novo é um gesto da pessoa.
+          items: {
+            create: items.map(({ source: _source, ...item }, position) => ({ ...item, position })),
+          },
         },
         include: TEMPLATE_INCLUDE,
       });

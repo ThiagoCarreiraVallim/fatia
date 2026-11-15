@@ -9,7 +9,7 @@ import type { WeightSeries } from './progress';
  * nativo e não depende do `@fatia/db`. `permission-matrix.spec.ts` confere o
  * enum do schema contra `docs/PERMISSIONS.md`, e é de lá que esta lista sai.
  */
-export type ShareScope = 'WORKOUT' | 'NUTRITION' | 'BODY' | 'HABITS' | 'GOALS';
+export type ShareScope = 'WORKOUT' | 'NUTRITION' | 'BODY' | 'HABITS' | 'GOALS' | 'MEAL_PHOTOS';
 
 export const SHARE_SCOPE_LABEL: Record<ShareScope, string> = {
   WORKOUT: 'Treino',
@@ -17,6 +17,7 @@ export const SHARE_SCOPE_LABEL: Record<ShareScope, string> = {
   BODY: 'Peso e medidas',
   HABITS: 'Água e passos',
   GOALS: 'Metas',
+  MEAL_PHOTOS: 'Fotos das refeições',
 };
 
 /** Um aluno na lista do profissional. Metadado de associação, nunca dado de saúde. */
@@ -40,7 +41,19 @@ export type StudentReading =
   | { scope: 'NUTRITION'; history: StudentNutritionHistory }
   | { scope: 'BODY'; weight: WeightSeries }
   | { scope: 'HABITS'; steps: StudentStepsProgress; water: StudentWaterProgress }
-  | { scope: 'GOALS'; goals: Array<Omit<Goal, 'userId'>> };
+  | { scope: 'GOALS'; goals: Array<Omit<Goal, 'userId'>> }
+  | { scope: 'MEAL_PHOTOS'; photos: StudentMealPhoto[] };
+
+/**
+ * Uma foto de refeição lida pela equipe (ADR 038): só com "Fotos das refeições"
+ * liberada, com URL assinada de curta duração. Os números são de Alimentação.
+ */
+export interface StudentMealPhoto {
+  mealId: string;
+  mealType: 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK';
+  eatenAt: string;
+  photo: { id: string; url: string | null; width: number | null; height: number | null };
+}
 
 export interface StudentPlan {
   id: string;

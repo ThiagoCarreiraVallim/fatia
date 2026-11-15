@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import {
   amountGrams,
-  formatQuantity,
+  MAX_QUANTITY,
+  parseDecimalInput,
   stepQuantity,
   type Amount,
   type FoodPortion,
@@ -96,52 +97,139 @@ export function AmountPicker({
           <label htmlFor={gramsId} className="text-sm font-medium">
             Quantidade (g)
           </label>
-          <Input
-            id={gramsId}
-            type="number"
-            inputMode="decimal"
-            value={amount.grams}
-            onChange={(e) => onChange({ kind: 'grams', grams: e.target.value })}
-            min={0}
-            step={1}
-          />
-        </div>
-      ) : (
-        <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-11 w-11"
-            aria-label="Menos"
-            onClick={() => onChange({ ...amount, quantity: stepQuantity(amount.quantity, -1) })}
-          >
-            <Minus size={16} aria-hidden />
-          </Button>
-          <output
-            // Com o número no nome, o leitor diz "Quantas medidas: 2" a cada passo.
-            aria-label={`Quantas medidas: ${formatQuantity(amount.quantity)}`}
-            aria-live="polite"
-            className="min-w-10 text-center text-lg font-semibold tabular-nums"
-          >
-            {formatQuantity(amount.quantity)}
-          </output>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-11 w-11"
-            aria-label="Mais"
-            onClick={() => onChange({ ...amount, quantity: stepQuantity(amount.quantity, 1) })}
-          >
-            <Plus size={16} aria-hidden />
-          </Button>
-          {grams !== null && (
-            <span className="text-sm tabular-nums text-muted-foreground">
-              = {grams.toLocaleString('pt-BR')} g
-            </span>
+          <div className="flex items-center gap-2">
+            <StepButton
+              direction={-1}
+              label="Menos 10 g"
+              onClick={() => onChange({ kind: 'grams', grams: stepGrams(amount.grams, -1) })}
+            />
+            {/* Texto com teclado decimal, e não `type="number"`: o campo numérico
+              recusa a vírgula em parte dos navegadores e some com o que foi digitado. */}
+            <Input
+              id={gramsId}
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              value={amount.grams}
+              aria-invalid={grams === null}
+              onChange={(e) => onChange({ kind: 'grams', grams: e.target.value })}
+              className="text-center text-lg font-semibold tabular-nums"
+            />
+            <StepButton
+              direction={1}
+              label="Mais 10 g"
+              onClick={() => onChange({ kind: 'grams', grams: stepGrams(amount.grams, 1) })}
+            />
+          </div>
+          {grams === null && (
+            <p role="alert" className="text-sm text-danger">
+              Digite os gramas, como 120 ou 120,5.
+            </p>
           )}
         </div>
+      ) : (
+        <QuantityField amount={amount} grams={grams} onChange={onChange} />
+      )}
+    </div>
+  );
+}
+
+/** ±10 g a partir do que está no campo; vazio ou ilegível começa de 0. */
+function stepGrams(text: string, direction: 1 | -1): string {
+  const current = parseDecimalInput(text) ?? 0;
+  const next = Math.max(10, Math.round((current + direction * 10) / 10) * 10);
+  return String(next);
+}
+
+function StepButton({
+  direction,
+  label,
+  onClick,
+}: {
+  direction: 1 | -1;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon"
+      className="h-11 w-11 shrink-0"
+      aria-label={label}
+      onClick={onClick}
+    >
+      {direction > 0 ? <Plus size={16} aria-hidden /> : <Minus size={16} aria-hidden />}
+    </Button>
+  );
+}
+
+/** "1,5" no campo: a vírgula é como a pessoa escreve; o ponto também vale. */
+function quantityText(quantity: number): string {
+  return String(quantity).replace('.', ',');
+}
+
+/**
+ * Quantas medidas: digitável (1,5; 0,25) e com − e + de meio em meio. O campo
+ * guarda o texto enquanto a pessoa digita; o número só sobe quando dá para ler.
+ */
+function QuantityField({
+  amount,
+  grams,
+  onChange,
+}: {
+  amount: Extract<Amount, { kind: 'portion' }>;
+  grams: number | null;
+  onChange: (amount: Amount) => void;
+}) {
+  const [text, setText] = useState(quantityText(amount.quantity));
+  const [synced, setSynced] = useState(amount.quantity);
+  // O − e + (ou outra medida) mudam o número por fora: o campo acompanha.
+  if (synced !== amount.quantity && Number.isFinite(amount.quantity)) {
+    setSynced(amount.quantity);
+    setText(quantityText(amount.quantity));
+  }
+  const parsed = parseDecimalInput(text);
+  const invalid = parsed === null || parsed <= 0 || parsed > MAX_QUANTITY;
+
+  const step = (direction: 1 | -1) => {
+    const base = Number.isFinite(amount.quantity) ? amount.quantity : 1;
+    onChange({ ...amount, quantity: stepQuantity(base, direction) });
+  };
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2">
+        <StepButton direction={-1} label="Menos" onClick={() => step(-1)} />
+        <Input
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
+          aria-label="Quantas medidas"
+          aria-invalid={invalid}
+          value={text}
+          onChange={(e) => {
+            const next = e.target.value;
+            setText(next);
+            const value = parseDecimalInput(next);
+            const quantity = value !== null && value > 0 && value <= MAX_QUANTITY ? value : NaN;
+            setSynced(quantity);
+            onChange({ ...amount, quantity });
+          }}
+          className="w-20 text-center text-lg font-semibold tabular-nums"
+        />
+        <StepButton direction={1} label="Mais" onClick={() => step(1)} />
+        {grams !== null && (
+          <span
+            aria-live="polite"
+            className="text-sm tabular-nums text-muted-foreground"
+          >{`= ${grams.toLocaleString('pt-BR')} g`}</span>
+        )}
+      </div>
+      {invalid && (
+        <p role="alert" className="text-sm text-danger">
+          {`Digite um número, como 1,5 (até ${MAX_QUANTITY}).`}
+        </p>
       )}
     </div>
   );

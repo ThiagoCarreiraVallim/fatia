@@ -295,6 +295,7 @@ export const ROUTES: readonly RouteDef[] = [
   { pattern: '/nutrition/nutrient-targets', title: 'Metas de nutrientes', parent: '/nutrition' },
   { pattern: '/nutrition/scan', title: 'Escanear produto', parent: '/nutrition' },
   { pattern: '/nutrition/photo', title: 'Registrar por foto', parent: '/nutrition' },
+  { pattern: '/nutrition/meals/:id', title: 'Refeição', parent: '/nutrition' },
   { pattern: '/workout', title: 'Treino', parent: null },
   { pattern: '/workout/history', title: 'Histórico de treino', parent: '/workout' },
   { pattern: '/workout/plans', title: 'Planos de treino', parent: '/workout' },

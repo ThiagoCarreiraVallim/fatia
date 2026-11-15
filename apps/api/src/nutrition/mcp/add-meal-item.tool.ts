@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
+import { MealItemSource } from '@prisma/client';
 import { MealItemService } from '../meal-item.service';
 import { MAX_PORTION_QUANTITY, MIN_PORTION_QUANTITY } from '../dto/meal.dto';
 import {
@@ -61,11 +62,16 @@ export class AddMealItemTool implements McpToolDef {
       .int()
       .optional()
       .describe('ID do grupo alimentar. Copiado do alimento quando há foodId'),
+    source: z
+      .nativeEnum(MealItemSource)
+      .optional()
+      .describe('Origem do item: AI (estimado por você), MANUAL, BARCODE ou PLAN. Padrão AI'),
   } as const;
   execute(
     { mealId, ...item }: { mealId: string } & Record<string, unknown>,
     { userId }: McpToolContext,
   ) {
-    return this.mealItems.add(userId, mealId, item as never);
+    // Pelo MCP quem registra é uma IA: sem origem dita, o item é `AI` (#374).
+    return this.mealItems.add(userId, mealId, { source: MealItemSource.AI, ...item } as never);
   }
 }

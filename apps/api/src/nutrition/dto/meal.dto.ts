@@ -15,7 +15,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { MealType } from '@prisma/client';
+import { MealItemSource, MealType } from '@prisma/client';
 
 /** Um quarto de colher até vinte unidades: fora disso é engano de digitação. */
 export const MIN_PORTION_QUANTITY = 0.25;
@@ -59,6 +59,11 @@ export class MealItemInputDto {
   @IsOptional()
   @IsInt()
   groupId?: number;
+
+  /** De onde veio o item (#374): `AI` pinta o selo "IA" na refeição. Padrão `MANUAL`. */
+  @IsOptional()
+  @IsEnum(MealItemSource)
+  source?: MealItemSource;
 }
 
 export class CreateMealDto {
@@ -72,6 +77,14 @@ export class CreateMealDto {
   @IsString()
   @MaxLength(500)
   notes?: string;
+
+  /**
+   * A foto guardada pelo reconhecimento (`POST /meals/recognize`), ligada a esta
+   * refeição (ADR 038). Só a da própria pessoa, ainda sem refeição.
+   */
+  @IsOptional()
+  @IsUUID()
+  photoFileId?: string;
 
   @IsArray()
   @ArrayMinSize(1)
@@ -133,4 +146,9 @@ export class UpdateMealItemDto {
   @IsOptional() @IsNumber() @Min(0) carbsG?: number;
   @IsOptional() @IsNumber() @Min(0) fatG?: number;
   @IsOptional() @IsObject() nutrients?: Record<string, number>;
+
+  /** Corrigir a origem (#374): a pessoa conferiu a porção da IA, por exemplo. */
+  @IsOptional()
+  @IsEnum(MealItemSource)
+  source?: MealItemSource;
 }

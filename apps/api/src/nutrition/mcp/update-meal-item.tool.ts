@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
+import { MealItemSource } from '@prisma/client';
 import { MealItemService } from '../meal-item.service';
 import { MAX_PORTION_QUANTITY, MIN_PORTION_QUANTITY } from '../dto/meal.dto';
 import {
@@ -44,6 +45,10 @@ export class UpdateMealItemTool implements McpToolDef {
         'Micronutrientes do item, por chave (ex.: {"fiber_g":3.2,"sodium_mg":410}). ' +
           'Substitui os que o item tinha; {} apaga',
       ),
+    source: z
+      .nativeEnum(MealItemSource)
+      .optional()
+      .describe('Nova origem do item: AI, MANUAL, BARCODE ou PLAN'),
   } as const;
   execute({ id, ...rest }: { id: string } & Record<string, unknown>, { userId }: McpToolContext) {
     return this.mealItems.update(userId, id, rest);

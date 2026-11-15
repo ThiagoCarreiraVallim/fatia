@@ -45,7 +45,7 @@ Pendências da etapa 2: cada uma depende de outra issue ou de algo externo.
   - Onb-P1, saúde do celular, precisa de um dev build com Health Connect e HealthKit. A etapa aparece sozinha quando a integração estiver disponível.
   - Na web, o QR da recepção não é lido: só dá para digitar o código.
   - O teste grátis pela web leva a `/plan` (#386).
-  - A categoria "Fotos das refeições" da Onb-03 não existe no enum `ShareScope` e precisa de migração.
+  - A categoria "Fotos das refeições" da Onb-03 entrou no enum `ShareScope` com a #374 (`MEAL_PHOTOS`).
 - **Revisão de segurança (etapa 2):** sem bloqueante.
   - Corrigido:
     - o token do link de exportação não aparece mais no log nem no span;
@@ -60,20 +60,36 @@ Pendências da etapa 2: cada uma depende de outra issue ou de algo externo.
   - Em Unidades, só carga e distância: peso fica em kg e estatura em cm.
   - Em Lembretes, a tela tem só a chave do silêncio noturno. A API já aceita mudar o horário.
 
+## Etapa 3: Nutrição (`em andamento`)
+
+| Issue | Título                              | Estado   | Superfícies                        |
+| ----- | ----------------------------------- | -------- | ---------------------------------- |
+| #374  | O dia, a refeição e a foto guardada | validado | api, db, MCP, api-client, web, app |
+| #375  | Adicionar comida                    | a fazer  |                                    |
+| #376  | Metas, nutrientes e plano alimentar | a fazer  |                                    |
+
+Pendências da #374 (branch `redesign/374-nutricao-dia-refeicao`):
+
+- **Plano alimentar:** o cartão do lanche do plano ("Comi isso" / "Trocar") tem só o contrato (`PlannedMealSuggestion`, `PlannedMealSlot`); sem plano não desenha nada. Quem preenche é a #376.
+- **Foto:** só refeição nova recebe a foto; somar itens por foto a uma refeição que já existe descarta a imagem. A foto do chat fica com a #385. O PWA não tem câmera de refeição: a pergunta "Guardar as fotos das refeições?" está no app, e a preferência fica em Você nos dois.
+- **Trocar tipo e hora da refeição** (o lápis e o relógio do Al-N8) e a estrela de favorito do Al-N14 ficam para a #375/#376. O "+ Nutriente" leva às metas de nutrientes até a Al-N7 (#376).
+- **Removidos:** anel de calorias, bento de macros, card de metas de nutrientes, timeline e drawer de ações da refeição (web e app), trocados pelas telas novas.
+- **Capturas** (Playwright e emulador) contra as pranchas: não feitas nesta sessão.
+
 ## Etapas seguintes
 
-| Etapa                                   | Issues                                                                                                                                     | Estado  |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------- |
-| 3 · Nutrição                            | #374 o dia, a refeição e a foto · #375 adicionar comida · #376 metas, nutrientes e plano alimentar                                         | a fazer |
-| 4 · Treino A                            | #377 início, sessão e treino feito · #378 planos e exercício · #379 plano recebido, modelos, bloco e agenda                                | a fazer |
-| 5 · Treino B e Progresso                | #380 circuitos · #381 treino livre e histórico · #382 progresso                                                                            | a fazer |
-| 6 · IA, plano e MCP                     | #384 chat · #385 foto do prato, configurações e memórias · #386 plano e assinatura · #388 conectar sua IA                                  | a fazer |
-| 7 · Comunidade no app                   | #393 comunidades e código · #394 mural · #395 desafios · #396 conteúdo da equipe                                                           | a fazer |
-| 8 · Painel base                         | #398 layout e ⌘K · #399 para revisar · #400 relatório · #401 membros · #402 ficha                                                          | a fazer |
-| 9 · Painel: conta e conteúdo            | #403 assentos e faturas · #404 equipe · #405 biblioteca · #406 editor de treino · #407 editor de alimentação · #408 dicas e catálogo       | a fazer |
-| 10 · Painel: IA, configuração e celular | #409 automações · #410 boas-vindas · #411 assistente · #412 demo · #413 configurações · #414 painel no celular · #372 onboarding da equipe | a fazer |
-| 11 · Aluno e equipe                     | #383 avaliação · #390 semana, hábitos e QR · #391 questionários · #392 cards · #397 agenda                                                 | a fazer |
-| 12 · Site e fora de tela                | #415 site · #416 página pública e convite · #417 e-mail e lojas                                                                            | a fazer |
+| Etapa                                   | Issues                                                                                                                                     | Estado       |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
+| 3 · Nutrição                            | #374 o dia, a refeição e a foto · #375 adicionar comida · #376 metas, nutrientes e plano alimentar                                         | em andamento |
+| 4 · Treino A                            | #377 início, sessão e treino feito · #378 planos e exercício · #379 plano recebido, modelos, bloco e agenda                                | a fazer      |
+| 5 · Treino B e Progresso                | #380 circuitos · #381 treino livre e histórico · #382 progresso                                                                            | a fazer      |
+| 6 · IA, plano e MCP                     | #384 chat · #385 foto do prato, configurações e memórias · #386 plano e assinatura · #388 conectar sua IA                                  | a fazer      |
+| 7 · Comunidade no app                   | #393 comunidades e código · #394 mural · #395 desafios · #396 conteúdo da equipe                                                           | a fazer      |
+| 8 · Painel base                         | #398 layout e ⌘K · #399 para revisar · #400 relatório · #401 membros · #402 ficha                                                          | a fazer      |
+| 9 · Painel: conta e conteúdo            | #403 assentos e faturas · #404 equipe · #405 biblioteca · #406 editor de treino · #407 editor de alimentação · #408 dicas e catálogo       | a fazer      |
+| 10 · Painel: IA, configuração e celular | #409 automações · #410 boas-vindas · #411 assistente · #412 demo · #413 configurações · #414 painel no celular · #372 onboarding da equipe | a fazer      |
+| 11 · Aluno e equipe                     | #383 avaliação · #390 semana, hábitos e QR · #391 questionários · #392 cards · #397 agenda                                                 | a fazer      |
+| 12 · Site e fora de tela                | #415 site · #416 página pública e convite · #417 e-mail e lojas                                                                            | a fazer      |
 
 A #418 ("Sobras das issues absorvidas") é revisada no fim da história.
 

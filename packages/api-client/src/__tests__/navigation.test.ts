@@ -229,6 +229,7 @@ describe('navegação', () => {
       ['/profile/notifications', 'Notificações', '/you', 'Você'],
       ['/nutrition/foods', 'Meus alimentos', '/nutrition', 'Nutrição'],
       ['/nutrition/goals?from=home', 'Metas do dia', '/nutrition', 'Nutrição'],
+      ['/nutrition/meals/m1?date=2026-11-15', 'Refeição', '/nutrition', 'Nutrição'],
       ['/workout/plans/p1', 'Plano de treino', '/workout/plans', 'Planos de treino'],
       ['/workout/session/s1', 'Treino', '/workout/history', 'Histórico de treino'],
       ['/progress/records', 'Recordes', '/progress', 'Progresso'],

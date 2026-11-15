@@ -17,7 +17,7 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from '@/components/ui';
-import { CopiarParaDia } from './copiar-para-dia';
+import { CopyToDay } from './copy-to-day';
 import { hojeIso, mensagemDeErro } from './helpers';
 
 /** Réplica de `apps/web/src/components/nutrition/copy-day-drawer.tsx`. */
@@ -65,8 +65,9 @@ export function CopiarDiaDrawer({
           </DrawerDescription>
         </DrawerHeader>
         <View className="px-4 py-3">
-          <CopiarParaDia
+          <CopyToDay
             key={date}
+            sourceDate={date}
             diaPadrao={defaultCopyTarget(date, hoje)}
             hoje={hoje}
             pendente={copiar.isPending}

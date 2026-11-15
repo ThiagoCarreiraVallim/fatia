@@ -321,7 +321,7 @@ describe('FoodSearchDrawer', () => {
 
       await user.click(await screen.findByRole('button', { name: /^Café com leite/ }));
 
-      expect(screen.getByLabelText(/Quantidade/)).toHaveValue(200);
+      expect(screen.getByLabelText(/Quantidade/)).toHaveValue('200');
     });
 
     it('favorita um resultado da busca', async () => {

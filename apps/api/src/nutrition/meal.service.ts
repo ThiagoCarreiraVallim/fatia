@@ -3,10 +3,13 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { MediaStatus, Prisma, type MealItemSource } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
-import { dayBoundsInTz } from '../progress/helpers/date-tz';
+import { MEAL_PHOTO_PURPOSE, MediaService, type MediaView } from '../storage/media.service';
+import { presentMeal } from './meal-presenter';
+import { addDaysIso, dayBoundsInTz, todayInTz } from '../progress/helpers/date-tz';
 import type { CreateMealDto, ListMealsDto, MealItemInputDto, UpdateMealDto } from './dto/meal.dto';
 import { calcMacrosFromFood, calcNutrientsFromFood, type ItemMacros } from './helpers/calc-macros';
 import { gramsFromPortion, visiblePortions } from './helpers/portion';
@@ -22,6 +25,7 @@ export interface ResolvedItem extends ItemMacros {
   portionLabel?: string;
   portionQuantity?: number;
   nutrients?: Prisma.InputJsonValue;
+  source?: MealItemSource;
 }
 
 /** Mantém só pares chave→número finito (ignora lixo) ou undefined se vazio. */
@@ -52,17 +56,50 @@ function fingerprintItems(
 
 @Injectable()
 export class MealService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    /** Apaga o arquivo da foto junto (ADR 038). Opcional só para os testes de cálculo. */
+    @Optional() private readonly media?: MediaService,
+  ) {}
 
   async create(userId: string, dto: CreateMealDto) {
     // Aqui, e não só no DTO: a tool MCP chega com `z.string()`.
     const eatenAt = parseInstant(dto.eatenAt, 'eatenAt');
     const items = await this.resolveItems(userId, dto.items);
-    return this.createResolved(
-      userId,
-      { mealType: dto.mealType, eatenAt, notes: dto.notes },
-      items,
-    );
+    const photoFileId = dto.photoFileId
+      ? await this.findUnlinkedPhoto(userId, dto.photoFileId)
+      : undefined;
+    const meal = { mealType: dto.mealType, eatenAt, notes: dto.notes };
+    try {
+      return await this.createResolved(userId, { ...meal, photoFileId }, items);
+    } catch (error) {
+      // Dois salvamentos ao mesmo tempo com a mesma foto: o segundo perde só a
+      // foto (uma por refeição), não a refeição.
+      if (!photoFileId || !isPhotoTaken(error)) throw error;
+      return this.createResolved(userId, meal, items);
+    }
+  }
+
+  /**
+   * A foto que vai virar desta refeição: guardada pelo reconhecimento para esta
+   * pessoa e ainda sem refeição. A de outra pessoa, a já usada e a que a limpeza
+   * já levou dão no mesmo: a refeição é gravada sem foto, sem dizer qual foi o
+   * caso (#92). Um id do corpo nunca liga o arquivo de outro, e perder a foto
+   * não pode custar a refeição que a pessoa revisou.
+   */
+  private async findUnlinkedPhoto(userId: string, fileId: string): Promise<string | undefined> {
+    const file = await this.prisma.mediaFile.findFirst({
+      where: {
+        id: fileId,
+        uploaderId: userId,
+        groupId: null,
+        purpose: MEAL_PHOTO_PURPOSE,
+        status: MediaStatus.READY,
+        mealPhotoOf: { is: null },
+      },
+      select: { id: true },
+    });
+    return file?.id;
   }
 
   /**
@@ -72,10 +109,15 @@ export class MealService {
    */
   async createResolved(
     userId: string,
-    meal: { mealType: CreateMealDto['mealType']; eatenAt: Date; notes?: string },
+    meal: {
+      mealType: CreateMealDto['mealType'];
+      eatenAt: Date;
+      notes?: string;
+      photoFileId?: string;
+    },
     items: ResolvedItem[],
   ) {
-    const { mealType, eatenAt, notes } = meal;
+    const { mealType, eatenAt, notes, photoFileId } = meal;
     const duplicate = await this.findDuplicate(userId, eatenAt, mealType, items);
     if (duplicate) {
       throw new ConflictException(
@@ -85,16 +127,19 @@ export class MealService {
       );
     }
 
-    return this.prisma.meal.create({
-      data: {
-        userId,
-        mealType,
-        eatenAt,
-        notes,
-        items: { create: items },
-      },
-      include: ITENS_EM_ORDEM,
-    });
+    return presentMeal(
+      await this.prisma.meal.create({
+        data: {
+          userId,
+          mealType,
+          eatenAt,
+          notes,
+          photoFileId,
+          items: { create: items },
+        },
+        include: ITENS_EM_ORDEM,
+      }),
+    );
   }
 
   /**
@@ -130,7 +175,23 @@ export class MealService {
       include: ITENS_EM_ORDEM,
     });
     if (!meal) throw new NotFoundException('Meal not found');
-    return meal;
+    return presentMeal(meal);
+  }
+
+  /**
+   * A refeição com a foto, para a tela da refeição: URL assinada de curta
+   * duração (ADR 028), emitida só para a dona.
+   */
+  async findWithPhoto(userId: string, id: string) {
+    const meal = await this.prisma.meal.findFirst({
+      where: { id, userId },
+      include: { ...ITENS_EM_ORDEM, photoFile: true },
+    });
+    if (!meal) throw new NotFoundException('Meal not found');
+    const { photoFile, ...rest } = meal;
+    const photo: MediaView | null =
+      photoFile && this.media ? await this.media.view(photoFile) : null;
+    return { ...presentMeal(rest), photo };
   }
 
   /**
@@ -144,32 +205,95 @@ export class MealService {
       const { start, end } = dayBoundsInTz(assertDay(params.date, 'date'), timezone);
       where.eatenAt = { gte: start, lt: end };
     }
-    return this.prisma.meal.findMany({
+    const meals = await this.prisma.meal.findMany({
       where,
       include: ITENS_EM_ORDEM,
       orderBy: [{ eatenAt: 'desc' }, { id: 'desc' }],
       take: limit,
       ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
     });
+    return meals.map(presentMeal);
   }
 
   async update(userId: string, id: string, dto: UpdateMealDto) {
     const eatenAt = dto.eatenAt ? parseInstant(dto.eatenAt, 'eatenAt') : undefined;
     await this.assertOwner(userId, id);
-    return this.prisma.meal.update({
-      where: { id },
-      data: {
-        mealType: dto.mealType,
-        eatenAt,
-        notes: dto.notes,
-      },
-      include: ITENS_EM_ORDEM,
-    });
+    return presentMeal(
+      await this.prisma.meal.update({
+        where: { id },
+        data: {
+          mealType: dto.mealType,
+          eatenAt,
+          notes: dto.notes,
+        },
+        include: ITENS_EM_ORDEM,
+      }),
+    );
   }
 
+  /**
+   * As fotos das refeições dos últimos `days` dias, para quem a pessoa liberou
+   * "Fotos das refeições" (ADR 038, item 3). Só a foto e o contexto mínimo da
+   * refeição; os números são da categoria Alimentação.
+   */
+  async listPhotos(userId: string, days: number, timezone: string) {
+    const today = todayInTz(timezone);
+    const { start } = dayBoundsInTz(addDaysIso(today, -(days - 1)), timezone);
+    const { end } = dayBoundsInTz(today, timezone);
+    const meals = await this.prisma.meal.findMany({
+      where: { userId, eatenAt: { gte: start, lt: end }, photoFileId: { not: null } },
+      select: { id: true, mealType: true, eatenAt: true, photoFile: true },
+      orderBy: { eatenAt: 'desc' },
+      take: 60,
+    });
+    const out: Array<{
+      mealId: string;
+      mealType: (typeof meals)[number]['mealType'];
+      eatenAt: Date;
+      photo: MediaView;
+    }> = [];
+    for (const meal of meals) {
+      if (!meal.photoFile || !this.media) continue;
+      out.push({
+        mealId: meal.id,
+        mealType: meal.mealType,
+        eatenAt: meal.eatenAt,
+        photo: await this.media.view(meal.photoFile),
+      });
+    }
+    return out;
+  }
+
+  /** Apagar a refeição apaga o arquivo da foto (ADR 038, item 5). */
   async delete(userId: string, id: string): Promise<void> {
-    await this.assertOwner(userId, id);
+    const meal = await this.assertOwner(userId, id);
     await this.prisma.meal.delete({ where: { id } });
+    await this.discardPhoto(meal.photoFileId);
+  }
+
+  /**
+   * "Apagar só a foto" (#374): o arquivo some do bucket e a refeição fica com
+   * os números. Sem foto, 404: não há o que apagar, e repetir não finge sucesso.
+   */
+  async deletePhoto(userId: string, id: string) {
+    const meal = await this.assertOwner(userId, id);
+    if (!meal.photoFileId) throw new NotFoundException('Photo not found');
+    const updated = await this.prisma.meal.update({
+      where: { id },
+      data: { photoFileId: null },
+      include: ITENS_EM_ORDEM,
+    });
+    await this.discardPhoto(meal.photoFileId);
+    return presentMeal(updated);
+  }
+
+  private async discardPhoto(fileId: string | null): Promise<void> {
+    if (!fileId) return;
+    if (this.media) {
+      await this.media.discardById(fileId);
+    } else {
+      await this.prisma.mediaFile.deleteMany({ where: { id: fileId } });
+    }
   }
 
   /** Medida visível do alimento, ou 404 — alheia e inexistente respondem igual. */
@@ -187,9 +311,13 @@ export class MealService {
   }
 
   private async assertOwner(userId: string, id: string) {
-    const meal = await this.prisma.meal.findUnique({ where: { id }, select: { userId: true } });
+    const meal = await this.prisma.meal.findUnique({
+      where: { id },
+      select: { userId: true, photoFileId: true },
+    });
     // Mesma resposta para "não existe" e "não é sua" (§IDs de docs/MCP.md).
     if (!meal || meal.userId !== userId) throw new NotFoundException('Meal not found');
+    return meal;
   }
 
   /**
@@ -221,6 +349,7 @@ export class MealService {
           ...amount,
           ...macros,
           nutrients,
+          ...(item.source ? { source: item.source } : {}),
         });
       } else {
         if (!item.foodName) {
@@ -243,6 +372,7 @@ export class MealService {
           carbsG: item.carbsG ?? 0,
           fatG: item.fatG ?? 0,
           nutrients: sanitizeNutrients(item.nutrients),
+          ...(item.source ? { source: item.source } : {}),
         });
       }
     }
@@ -278,4 +408,12 @@ export class MealService {
       portionQuantity: item.quantity,
     };
   }
+}
+
+/** A violação de unicidade de `Meal.photoFileId`: outra refeição levou a foto antes. */
+function isPhotoTaken(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+    return false;
+  }
+  return JSON.stringify(error.meta ?? {}).includes('photoFileId');
 }

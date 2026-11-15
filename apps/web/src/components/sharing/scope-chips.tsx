@@ -2,7 +2,7 @@
 
 import { SHARE_SCOPE_LABEL, type ShareScope } from '@fatia/api-client';
 
-const TODOS: ShareScope[] = ['WORKOUT', 'NUTRITION', 'BODY', 'HABITS', 'GOALS'];
+const ALL_SCOPES: ShareScope[] = ['WORKOUT', 'NUTRITION', 'MEAL_PHOTOS', 'BODY', 'HABITS', 'GOALS'];
 
 /**
  * O que este aluno autorizou — e, com o mesmo peso visual, o que ele **não**
@@ -16,7 +16,7 @@ const TODOS: ShareScope[] = ['WORKOUT', 'NUTRITION', 'BODY', 'HABITS', 'GOALS'];
 export function ScopeChips({ granted }: { granted: ShareScope[] }) {
   return (
     <ul className="mt-2 flex flex-wrap gap-1.5">
-      {TODOS.map((scope) => {
+      {ALL_SCOPES.map((scope) => {
         const autorizado = granted.includes(scope);
         return (
           <li

@@ -4,7 +4,8 @@ import { Text } from '@/components/ui/text';
 import { Minus, Plus } from 'lucide-react-native';
 import {
   amountGrams,
-  formatQuantity,
+  MAX_QUANTITY,
+  parseDecimalInput,
   stepQuantity,
   type Amount,
   type FoodPortion,
@@ -19,7 +20,7 @@ import { colors } from '@/theme/colors';
  * digitadas ou medida caseira × quantidade, com a conta em gramas ao lado. A
  * regra (meios, "½", gramas da medida) mora em `@fatia/api-client/portions`.
  */
-export function SeletorDeQuantidade({
+export function AmountPicker({
   medidas,
   quantidade,
   onChange,
@@ -91,46 +92,123 @@ export function SeletorDeQuantidade({
       ) : null}
 
       {quantidade.kind === 'grams' ? (
-        <DrawerInput
-          label="Quantidade (g)"
-          autoFocus={autoFocus}
-          keyboardType="numeric"
-          inputMode="decimal"
-          value={quantidade.grams}
-          onChangeText={(valor) => onChange({ kind: 'grams', grams: valor })}
-        />
-      ) : (
-        <View className="flex-row items-center gap-3">
-          <BotaoDoPasso
-            rotulo="Menos"
-            onPress={() =>
-              onChange({ ...quantidade, quantity: stepQuantity(quantidade.quantity, -1) })
-            }
-          >
-            <Minus size={18} color={colors.foreground} />
-          </BotaoDoPasso>
-          <Text
-            accessibilityLabel={`Quantas medidas: ${formatQuantity(quantidade.quantity)}`}
-            style={NUMEROS_TABULARES}
-            className="min-w-10 text-center text-lg font-semibold text-foreground"
-          >
-            {formatQuantity(quantidade.quantity)}
-          </Text>
-          <BotaoDoPasso
-            rotulo="Mais"
-            onPress={() =>
-              onChange({ ...quantidade, quantity: stepQuantity(quantidade.quantity, 1) })
-            }
-          >
-            <Plus size={18} color={colors.foreground} />
-          </BotaoDoPasso>
-          {gramas !== null ? (
-            <Text style={NUMEROS_TABULARES} className="text-sm text-muted-foreground">
-              = {gramas.toLocaleString('pt-BR')} g
+        <View className="gap-1">
+          <View className="flex-row items-end gap-2">
+            <BotaoDoPasso
+              rotulo="Menos 10 g"
+              onPress={() => onChange({ kind: 'grams', grams: stepGrams(quantidade.grams, -1) })}
+            >
+              <Minus size={18} color={colors.foreground} />
+            </BotaoDoPasso>
+            <View className="flex-1">
+              {/* `decimal-pad`: o `numeric` do iOS não tem vírgula. */}
+              <DrawerInput
+                label="Quantidade (g)"
+                autoFocus={autoFocus}
+                keyboardType="decimal-pad"
+                inputMode="decimal"
+                value={quantidade.grams}
+                onChangeText={(valor) => onChange({ kind: 'grams', grams: valor })}
+              />
+            </View>
+            <BotaoDoPasso
+              rotulo="Mais 10 g"
+              onPress={() => onChange({ kind: 'grams', grams: stepGrams(quantidade.grams, 1) })}
+            >
+              <Plus size={18} color={colors.foreground} />
+            </BotaoDoPasso>
+          </View>
+          {gramas === null ? (
+            <Text accessibilityRole="alert" className="text-sm text-destructive">
+              Digite os gramas, como 120 ou 120,5.
             </Text>
           ) : null}
         </View>
+      ) : (
+        <QuantityField quantidade={quantidade} gramas={gramas} onChange={onChange} />
       )}
+    </View>
+  );
+}
+
+/** ±10 g a partir do que está no campo; vazio ou ilegível começa de 0. */
+function stepGrams(text: string, direction: 1 | -1): string {
+  const current = parseDecimalInput(text) ?? 0;
+  return String(Math.max(10, Math.round((current + direction * 10) / 10) * 10));
+}
+
+/** "1,5" no campo: a vírgula é como a pessoa escreve; o ponto também vale. */
+function quantityText(quantity: number): string {
+  return String(quantity).replace('.', ',');
+}
+
+/**
+ * Quantas medidas: digitável (1,5; 0,25) e com − e + de meio em meio, como no
+ * PWA. O campo guarda o texto enquanto a pessoa digita; o número só sobe quando
+ * dá para ler.
+ */
+function QuantityField({
+  quantidade,
+  gramas,
+  onChange,
+}: {
+  quantidade: Extract<Amount, { kind: 'portion' }>;
+  gramas: number | null;
+  onChange: (quantidade: Amount) => void;
+}) {
+  const [text, setText] = useState(quantityText(quantidade.quantity));
+  const [synced, setSynced] = useState(quantidade.quantity);
+  if (synced !== quantidade.quantity && Number.isFinite(quantidade.quantity)) {
+    setSynced(quantidade.quantity);
+    setText(quantityText(quantidade.quantity));
+  }
+  const parsed = parseDecimalInput(text);
+  const invalid = parsed === null || parsed <= 0 || parsed > MAX_QUANTITY;
+  const step = (direction: 1 | -1) => {
+    const base = Number.isFinite(quantidade.quantity) ? quantidade.quantity : 1;
+    onChange({ ...quantidade, quantity: stepQuantity(base, direction) });
+  };
+
+  return (
+    <View className="gap-1">
+      <View className="flex-row items-end gap-2">
+        <BotaoDoPasso rotulo="Menos" onPress={() => step(-1)}>
+          <Minus size={18} color={colors.foreground} />
+        </BotaoDoPasso>
+        <View className="w-24">
+          <DrawerInput
+            label="Quantas medidas"
+            keyboardType="decimal-pad"
+            inputMode="decimal"
+            value={text}
+            onChangeText={(next) => {
+              setText(next);
+              const value = parseDecimalInput(next);
+              const quantity =
+                value !== null && value > 0 && value <= MAX_QUANTITY ? value : Number.NaN;
+              setSynced(quantity);
+              onChange({ ...quantidade, quantity });
+            }}
+          />
+        </View>
+        <BotaoDoPasso rotulo="Mais" onPress={() => step(1)}>
+          <Plus size={18} color={colors.foreground} />
+        </BotaoDoPasso>
+        {gramas !== null ? (
+          <Text
+            accessibilityLiveRegion="polite"
+            style={NUMEROS_TABULARES}
+            className="pb-3 text-sm text-muted-foreground"
+          >
+            = {gramas.toLocaleString('pt-BR')} g
+          </Text>
+        ) : null}
+      </View>
+      {invalid ? (
+        <Text accessibilityRole="alert" className="text-sm text-destructive">
+          {`Digite um número, como 1,5 (até ${MAX_QUANTITY}).`}
+        </Text>
+      ) : null}
     </View>
   );
 }

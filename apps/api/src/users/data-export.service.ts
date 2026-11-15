@@ -66,7 +66,7 @@ export class DataExportService {
     if (link.expiresAt <= now) {
       throw new GoneException('Este link venceu. Peça uma nova exportação no app.');
     }
-    const body = await this.account.exportData(link.userId);
+    const body = await this.account.exportData(link.userId, { photoLinks: true });
     // A janela conta da primeira baixa; as seguintes não a esticam.
     const firstDownload = link.downloadedAt ?? now;
     const cutoff = new Date(firstDownload.getTime() + EXPORT_LINK_REDOWNLOAD_MS);

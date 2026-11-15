@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import sharp from 'sharp';
 import {
   BadRequestException,
   ConflictException,
@@ -74,7 +75,10 @@ const TODAY = '2026-03-10';
 describe('isolamento entre usuários', () => {
   const prisma = new PrismaService();
 
-  const meals = new MealService(prisma);
+  // A foto da refeição (#374) mora no bucket: em memória aqui.
+  const mealPhotoStore = new MemoryObjectStore();
+  const mealMedia = new MediaService(prisma, mealPhotoStore);
+  const meals = new MealService(prisma, mealMedia);
   const foods = new FoodService(prisma);
   const shortcuts = new FoodShortcutsService(prisma, foods);
   const portions = new FoodPortionService(prisma, foods);
@@ -1137,6 +1141,7 @@ describe('isolamento entre usuários', () => {
       progress,
       nutritionSummary,
       goals,
+      meals,
     );
 
     /** Mensagem da recusa. Estoura se a leitura for **autorizada**. */
@@ -2990,6 +2995,129 @@ describe('isolamento entre usuários', () => {
       expect(body.meals).toEqual([]);
       expect(body.newsRead).toEqual([]);
       expect(body.mediaUploaded).toEqual([]);
+    });
+  });
+
+  describe('foto da refeição (#374, ADR 038)', () => {
+    const studentView = new StudentViewService(
+      prisma,
+      access,
+      plans,
+      sessions,
+      progress,
+      nutritionSummary,
+      goals,
+      meals,
+    );
+    let fotoA = '';
+    let fotoSoltaA = '';
+    let refeicaoComFoto = '';
+
+    const jpeg = () =>
+      sharp({ create: { width: 40, height: 30, channels: 3, background: { r: 9, g: 8, b: 7 } } })
+        .jpeg()
+        .toBuffer();
+
+    beforeAll(async () => {
+      fotoA = (await mealMedia.storePersonalImage(owned.userA, 'meal_photo', await jpeg()))!.id;
+      fotoSoltaA = (await mealMedia.storePersonalImage(owned.userA, 'meal_photo', await jpeg()))!
+        .id;
+      const meal = await meals.create(owned.userA, {
+        mealType: MealType.LUNCH,
+        eatenAt: new Date().toISOString(),
+        photoFileId: fotoA,
+        items: [{ foodName: 'Prato feito', grams: 300, kcal: 600, source: 'AI' }],
+      });
+      refeicaoComFoto = meal.id;
+    });
+
+    afterEach(async () => {
+      await prisma.professionalAccessLog.deleteMany({ where: { subjectUserId: owned.userA } });
+      await prisma.professionalLink.deleteMany({ where: { subjectUserId: owned.userA } });
+    });
+
+    afterAll(async () => {
+      await prisma.meal.deleteMany({ where: { id: refeicaoComFoto } });
+      await prisma.mediaFile.deleteMany({ where: { id: { in: [fotoA, fotoSoltaA] } } });
+    });
+
+    it('o user-B não liga a foto do user-A a uma refeição dele', async () => {
+      // A foto solta é a candidata perfeita: pronta e sem refeição. Só o dono
+      // a liga; o id vindo do corpo não atravessa contas.
+      // A refeição do B é gravada sem foto: o id alheio é ignorado, sem dizer
+      // se o arquivo existe.
+      const doB = await meals.create(owned.userB, {
+        mealType: MealType.SNACK,
+        eatenAt: new Date().toISOString(),
+        photoFileId: fotoSoltaA,
+        items: [{ foodName: 'Banana', grams: 100, kcal: 90 }],
+      });
+      expect(doB.hasPhoto).toBe(false);
+      await prisma.meal.delete({ where: { id: doB.id } });
+      const solta = await prisma.mediaFile.findUniqueOrThrow({
+        where: { id: fotoSoltaA },
+        include: { mealPhotoOf: true },
+      });
+      expect(solta.mealPhotoOf).toBeNull();
+    });
+
+    it('o user-B não lê a refeição com foto do user-A nem apaga só a foto', async () => {
+      await expect(meals.findWithPhoto(owned.userB, refeicaoComFoto)).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(meals.deletePhoto(owned.userB, refeicaoComFoto)).rejects.toThrow(
+        NotFoundException,
+      );
+      const arquivo = await prisma.mediaFile.findUniqueOrThrow({ where: { id: fotoA } });
+      expect(mealPhotoStore.objects.has(arquivo.key)).toBe(true);
+      // A dona vê a foto, por URL assinada.
+      const daDona = await meals.findWithPhoto(owned.userA, refeicaoComFoto);
+      expect(daDona.hasPhoto).toBe(true);
+      expect(daDona.photo?.url).toContain('memory://get/users/');
+      expect(await meals.listPhotos(owned.userB, 30, TZ)).toEqual([]);
+    });
+
+    it('a equipe com Alimentação não vê as fotos; com Fotos das refeições vê, e fica na trilha', async () => {
+      await links.grant({
+        subjectUserId: owned.userA,
+        professionalId: owned.pro,
+        groupId: owned.groupId,
+        scopes: [ShareScope.NUTRITION],
+      });
+      await expect(
+        studentView.read(owned.pro, owned.membershipA, ShareScope.MEAL_PHOTOS, 30),
+      ).rejects.toThrow(NotFoundException);
+      const nutricao = await studentView.read(
+        owned.pro,
+        owned.membershipA,
+        ShareScope.NUTRITION,
+        30,
+      );
+      // Os números de Alimentação não carregam foto nenhuma.
+      expect(JSON.stringify(nutricao)).not.toContain('memory://');
+
+      await prisma.professionalLink.deleteMany({ where: { subjectUserId: owned.userA } });
+      await links.grant({
+        subjectUserId: owned.userA,
+        professionalId: owned.pro,
+        groupId: owned.groupId,
+        scopes: [ShareScope.NUTRITION, ShareScope.MEAL_PHOTOS],
+      });
+      const fotos = await studentView.read(
+        owned.pro,
+        owned.membershipA,
+        ShareScope.MEAL_PHOTOS,
+        30,
+      );
+      if (fotos.reading.scope !== ShareScope.MEAL_PHOTOS) throw new Error('escopo errado');
+      expect(fotos.reading.photos.map((p) => p.mealId)).toEqual([refeicaoComFoto]);
+
+      const trilha = await prisma.professionalAccessLog.findMany({
+        where: { subjectUserId: owned.userA, scope: ShareScope.MEAL_PHOTOS },
+        select: { denied: true },
+        orderBy: { at: 'asc' },
+      });
+      expect(trilha).toEqual([{ denied: true }, { denied: false }]);
     });
   });
 

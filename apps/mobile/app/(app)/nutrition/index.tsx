@@ -1,31 +1,19 @@
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { Text } from '@/components/ui/text';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Camera, Copy, Lock, ScanBarcode, Settings } from 'lucide-react-native';
-import {
-  aiLock,
-  nutritionApi,
-  planHref,
-  type Meal,
-  type MealItem,
-  type MealType,
-} from '@fatia/api-client';
+import { aiLock, nutritionApi, planHref, type DayNutrient, type MealType } from '@fatia/api-client';
 import { Screen } from '@/components/layout/screen';
 import { TOP_BAR_ACTION } from '@/components/layout/top-bar';
 import { ErrorState, LoadingState } from '@/components/ui';
-import { CaloriesRingCard } from '@/components/nutrition/calories-ring-card';
 import { DateNavigator } from '@/components/nutrition/date-navigator';
-import { EditMealItemDrawer } from '@/components/nutrition/edit-meal-item-drawer';
 import { FoodSearchDrawer } from '@/components/nutrition/food-search-drawer';
-import { MacroBentoGrid } from '@/components/nutrition/macro-bento-grid';
-import { MealTimeline } from '@/components/nutrition/meal-timeline';
-import { NutrientTargetsCard } from '@/components/nutrition/nutrient-targets-card';
+import { DayMealSources } from '@/components/nutrition/day-meal-sources';
+import { DayNutrientsCard } from '@/components/nutrition/day-nutrients-card';
 import { MeusAlimentosCard } from '@/components/nutrition/meus-alimentos-card';
 import { WeeklyTrendChart } from '@/components/nutrition/weekly-trend-chart';
 import { hojeIso } from '@/components/nutrition/helpers';
-import { AcoesDaRefeicaoDrawer } from '@/components/nutrition/acoes-da-refeicao-drawer';
 import { CopiarDiaDrawer } from '@/components/nutrition/copiar-dia-drawer';
 import { colors } from '@/theme/colors';
 
@@ -41,22 +29,30 @@ import { colors } from '@/theme/colors';
  *   `Screen` um bottom sheet se posicionaria em relação ao conteúdo rolável e
  *   subiria junto com a rolagem.
  */
+/** Uma API sem a faixa do dia (de antes da #374) ainda mostra as calorias. */
+function kcalFallback(kcal: number): DayNutrient {
+  return {
+    key: 'kcal',
+    label: 'Calorias',
+    unit: 'kcal',
+    value: kcal,
+    min: null,
+    max: null,
+    status: 'none',
+  };
+}
+
 export default function NutritionScreen() {
   const router = useRouter();
   const [data, setData] = useState(hojeIso);
   const [novaRefeicao, setNovaRefeicao] = useState<MealType | null>(null);
-  const [adicionandoEm, setAdicionandoEm] = useState<string | null>(null);
-  const [editando, setEditando] = useState<MealItem | null>(null);
-  const [agindoEm, setAgindoEm] = useState<Meal | null>(null);
+  // O chip escolhido vale para o cartão e para o "De onde veio".
+  const [nutrientKey, setNutrientKey] = useState<string | null>(null);
   const [copiandoDia, setCopiandoDia] = useState(false);
 
   const resumo = useQuery({
     queryKey: ['nutrition', 'summary', data],
     queryFn: () => nutritionApi.summary(data),
-  });
-  const metas = useQuery({
-    queryKey: ['nutrition', 'goals'],
-    queryFn: () => nutritionApi.goals(),
   });
   /**
    * Se a instância tem IA de visão configurada (#139). Sem ela a entrada por
@@ -77,17 +73,12 @@ export default function NutritionScreen() {
 
   const atualizar = () => {
     void resumo.refetch();
-    void metas.refetch();
   };
 
   const refeicoesDoDia = resumo.data?.meals.filter((m) => m.items.length > 0).length ?? 0;
 
-  const drawerDeBuscaAberto = novaRefeicao !== null || adicionandoEm !== null;
-
-  const fecharBusca = () => {
-    setNovaRefeicao(null);
-    setAdicionandoEm(null);
-  };
+  const nutrients = resumo.data?.nutrients ?? [];
+  const selectedNutrient = nutrientKey ? nutrients.find((n) => n.key === nutrientKey) : undefined;
 
   return (
     <>
@@ -150,12 +141,12 @@ export default function NutritionScreen() {
           </>
         }
         onRefresh={atualizar}
-        refreshing={resumo.isRefetching || metas.isRefetching}
+        refreshing={resumo.isRefetching}
       >
         <View className="gap-5 px-5 pb-4 pt-4">
           <DateNavigator date={data} onChange={setData} />
 
-          {resumo.isLoading || metas.isLoading ? <LoadingState label="Carregando o dia…" /> : null}
+          {resumo.isLoading ? <LoadingState label="Carregando o dia…" /> : null}
 
           {resumo.error ? (
             <ErrorState error={resumo.error} onRetry={() => void resumo.refetch()} />
@@ -163,43 +154,29 @@ export default function NutritionScreen() {
 
           {resumo.data ? (
             <>
-              <CaloriesRingCard totals={resumo.data.totals} goals={metas.data ?? null} />
-              <MacroBentoGrid totals={resumo.data.totals} goals={metas.data ?? null} />
-              <NutrientTargetsCard date={data} />
-              <MealTimeline
+              <DayNutrientsCard
+                nutrients={nutrients}
+                selected={selectedNutrient?.key ?? null}
+                onSelect={setNutrientKey}
+              />
+              <DayMealSources
                 meals={resumo.data.meals}
+                nutrient={selectedNutrient ?? nutrients[0] ?? kcalFallback(resumo.data.totals.kcal)}
                 date={data}
                 onAddMeal={setNovaRefeicao}
-                onAddItem={setAdicionandoEm}
-                onEditItem={setEditando}
-                onMealActions={setAgindoEm}
               />
               <WeeklyTrendChart today={hojeIso()} />
               <MeusAlimentosCard />
             </>
           ) : null}
-
-          {metas.error ? (
-            <Text accessibilityRole="alert" className="text-sm text-destructive">
-              Não foi possível carregar suas metas.
-            </Text>
-          ) : null}
         </View>
       </Screen>
 
       <FoodSearchDrawer
-        open={drawerDeBuscaAberto}
-        onOpenChange={(aberto) => !aberto && fecharBusca()}
-        mealId={adicionandoEm ?? undefined}
+        open={novaRefeicao !== null}
+        onOpenChange={(aberto) => !aberto && setNovaRefeicao(null)}
         mealType={novaRefeicao ?? undefined}
         date={data}
-      />
-      <EditMealItemDrawer item={editando} date={data} onClose={() => setEditando(null)} />
-      <AcoesDaRefeicaoDrawer
-        meal={agindoEm}
-        date={data}
-        onClose={() => setAgindoEm(null)}
-        onVerDia={setData}
       />
       <CopiarDiaDrawer
         open={copiandoDia}
