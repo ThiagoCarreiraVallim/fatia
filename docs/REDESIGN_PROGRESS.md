@@ -60,11 +60,24 @@ Pendências da etapa 2: cada uma depende de outra issue ou de algo externo.
   - Em Unidades, só carga e distância: peso fica em kg e estatura em cm.
   - Em Lembretes, a tela tem só a chave do silêncio noturno. A API já aceita mudar o horário.
 
+## Etapa 3: Nutrição (em andamento)
+
+| Issue | Título                              | Estado   | Superfícies                      |
+| ----- | ----------------------------------- | -------- | -------------------------------- |
+| #376  | Metas, nutrientes e plano alimentar | validado | api, db, MCP (5 tools), web, app |
+
+Pendências da #376:
+
+- **Editor e envio:** o plano entra por `NutritionPlanService.send` (seed do demo). O editor da equipe é a #407; o envio e a notificação `PLAN_RECEIVED` ficam com a #405.
+- **#374:** quando `MealItem.source` existir, o "comi isso" e a troca devem marcar a origem "plano" (ponto de integração em `NutritionPlanService.logMeal` e `swap`).
+- **Agregados:** nenhum agregado da equipe sobre planos ainda; quando vier, `MIN_CELL` 5.
+- **Desvio do canvas:** metas e nutrientes são digitáveis em vez de "−/+"; o aviso da troca usa o nome sem artigo ("Helena vê no seu diário").
+
 ## Etapas seguintes
 
 | Etapa                                   | Issues                                                                                                                                     | Estado  |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------- |
-| 3 · Nutrição                            | #374 o dia, a refeição e a foto · #375 adicionar comida · #376 metas, nutrientes e plano alimentar                                         | a fazer |
+| 3 · Nutrição                            | #374 o dia, a refeição e a foto · #375 adicionar comida · #376 metas, nutrientes e plano alimentar (#376: validado)                        | a fazer |
 | 4 · Treino A                            | #377 início, sessão e treino feito · #378 planos e exercício · #379 plano recebido, modelos, bloco e agenda                                | a fazer |
 | 5 · Treino B e Progresso                | #380 circuitos · #381 treino livre e histórico · #382 progresso                                                                            | a fazer |
 | 6 · IA, plano e MCP                     | #384 chat · #385 foto do prato, configurações e memórias · #386 plano e assinatura · #388 conectar sua IA                                  | a fazer |

@@ -269,5 +269,12 @@ papel dela; mudar de papel recalcula os vínculos e nunca acrescenta categoria s
 leitura, a linha nova terá em "Quem NUNCA recebe" o `MEMBER`, o `ADMIN` da instância, o
 administrador e a recepção da comunidade.
 
+**Plano alimentar do profissional (#376, [ADR 045](./ADR/045-plano-alimentar-autoral.md)).**
+Quem escreve é a equipe (OWNER/PROFESSIONAL/CREATOR ativo na comunidade do aluno); o plano é
+do aluno. As trocas, o "comi isso" e a adesão da semana só aparecem para a equipe dentro da
+leitura `NUTRITION` (porta única do ADR 014, logada em `ProfessionalAccessLog`, sem
+identidade). Sem `NUTRITION`, a equipe não vê nada disso e o aviso da troca diz que ela "fica
+só no seu diário". Nenhum agregado novo foi criado (o `MIN_CELL` 5 não se aplica ainda).
+
 **O que não muda:** papel decide ação, vínculo decide leitura; toda leitura, inclusive a negada,
 vai para `ProfessionalAccessLog`; `MEMBER` nunca lê ninguém.
