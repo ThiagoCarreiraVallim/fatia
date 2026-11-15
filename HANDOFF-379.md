@@ -13,20 +13,22 @@ Legenda: [x] feito · [~] em andamento · [ ] não começado
 - [x] Bloco 3 a 6 semanas: `blockTemplate(n)`, `weekLabel`, `describeWeek(week, total)`, DTO `weeks`, `GET /workout/blocks/preview`, `GET /workout/blocks/latest`
 - [x] Helper puro do diff ("o que mudou"): `apps/api/src/sharing/plan-offer-diff.ts`
 - [x] Helper puro da agenda: `apps/api/src/workout/helpers/planned-schedule.ts`
-- [ ] Serviço de ofertas (aluno): listar, ver, aceitar, recusar, desfazer, aceitar atualização, manter versão
-- [ ] Endpoint mínimo do profissional: enviar / atualizar oferta (exige ProfessionalLink ativo)
-- [ ] Materializar o aceite: WorkoutPlan com fromOfferId; CALENDAR gera PlannedSession
-- [ ] Agenda: listar semana, remarcar (hoje..fim do plano), flexível = próxima sessão calculada
-- [ ] Notificações: envio, atualização (aluno); aceite, recusa (equipe)
-- [ ] user-isolation.spec.ts: aluno A não vê oferta de B
-- [ ] LGPD: export inclui ofertas, versões, agenda; exclusão apaga; docs/DATA_RETENTION.md
-- [ ] Seed demo: uma oferta pendente para o usuário demo
+- [x] Serviço de ofertas (aluno): `sharing/plan-offer.service.ts` + `plan-offer.controller.ts` (/plan-offers)
+- [x] Endpoint mínimo do profissional: POST /professional/students/:membershipId/plan-offers (+ /:offerId/versions)
+- [x] Materializar o aceite: `materializeOffer` / `rematerialize`; CALENDAR gera PlannedSession
+- [x] Agenda: `workout/agenda.service.ts`, GET /workout/agenda?from&to, PATCH /workout/agenda/:id
+- [x] Notificações: `sharing/plan-offer-notices.ts`
+- [x] user-isolation.spec.ts: bloco #379 (mutação conferida: tirar userId deixa vermelho)
+- [x] LGPD: export (account.service) + DATA_RETENTION; exclusão por cascade
+- [x] Seed demo: `seedPlanOffer` em seed-demo.ts
+- [x] Hoje: receivedPlan + todo plan_offer (dashboard.service)
+- [x] Modelos: GET /groups/templates (ContentService.listWorkoutTemplatesForMe)
 
 ### MCP
 
 - [x] `create_training_block` aceita `weeks` 3..6
-- [ ] `list_plan_offers`, `accept_plan_offer`, `decline_plan_offer`, agenda listar/remarcar
-- [ ] docs/MCP_TOOL_SURFACE.md, docs/MCP.md, testes de fingerprint
+- [x] `list_plan_offers`, `accept_plan_offer`, `decline_plan_offer`, `list_planned_sessions`, `reschedule_planned_session`
+- [x] docs/MCP_TOOL_SURFACE.md, docs/MCP.md, fingerprint (151 tools)
 
 ### api-client / web / app
 
@@ -70,4 +72,10 @@ cd apps/api && npx jest <caminho>
 
 ## Próximo passo exato
 
-Ler docs (CLAUDE.md, ADR 014/019/042, DADOS_REDESIGN, REDESIGN_PROGRESS) e o módulo `apps/api/src/sharing` (plan-snapshot, adoção de group plans) e escrever o serviço de ofertas do aluno com testes vermelhos primeiro.
+api-client (`packages/api-client/src/plan-offers.ts`, agenda, templates, block preview/latest) com testes; depois web e app (telas: /workout/offers/[id], /workout/agenda, /workout/templates, /workout/block) e os dois TODO(#379).
+
+## Notas
+
+- `invite-email-retention.spec.ts` falhou uma vez rodando o diretório inteiro em paralelo e passou sozinho e na segunda rodada: flaky pré-existente, não tocado.
+- Avisos à equipe usam `NotificationKind.COMMUNITY` (não há tipo de equipe) e levam ao painel `/org/:groupId/members`.
+- "Desfazer" no MCP = `accept_plan_offer` sobre a versão recusada (accept aceita PENDING ou DECLINED se for a última).

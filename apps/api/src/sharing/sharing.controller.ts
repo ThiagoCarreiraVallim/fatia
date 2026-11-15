@@ -14,6 +14,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser, type CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { ConsentService } from './consent.service';
+import { ContentService } from './content.service';
 import { GroupService } from './group.service';
 import { InviteService } from './invite.service';
 import { MembershipService } from './membership.service';
@@ -62,6 +63,7 @@ export class SharingController {
     private readonly memberships: MembershipService,
     private readonly invites: InviteService,
     private readonly consents: ConsentService,
+    private readonly content: ContentService,
   ) {}
 
   @Post()
@@ -74,6 +76,17 @@ export class SharingController {
   @SelfOnly()
   listMine(@CurrentUser() user: CurrentUserPayload) {
     return this.groups.listMine(user.id);
+  }
+
+  /**
+   * Modelos das comunidades (Al-T23, #379): os planos de treino publicados de
+   * todas as comunidades em que quem chama é membro ativo. Antes de `:groupId`,
+   * senão "templates" seria lido como id de comunidade.
+   */
+  @Get('templates')
+  @SelfOnly()
+  listTemplates(@CurrentUser() user: CurrentUserPayload) {
+    return this.content.listWorkoutTemplatesForMe(user.id);
   }
 
   /**
