@@ -3,7 +3,15 @@ import { Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronUp, Play, Trash2, Trophy } from 'lucide-react-native';
-import { workoutApi, type SessionSet, type WorkoutPlanExercise } from '@fatia/api-client';
+import {
+  formatDistanceIn,
+  loadNumber,
+  loadUnitLabel,
+  workoutApi,
+  type SessionSet,
+  type WorkoutPlanExercise,
+} from '@fatia/api-client';
+import { useUnitPrefs } from '@/components/you/use-unit-prefs';
 import { Input } from '@/components/ui';
 import { useOpenExerciseDetail } from './exercise-detail-host';
 import { colors } from '@/theme/colors';
@@ -141,6 +149,7 @@ function SessionModeCard({
   footer,
 }: SessionCardProps) {
   const showDelete = Boolean(sessionId) && canDeleteSet;
+  const units = useUnitPrefs();
 
   return (
     <View className="rounded-2xl border border-border bg-card p-4">
@@ -159,7 +168,7 @@ function SessionModeCard({
             ) : (
               <>
                 <ColumnHeader wide>Reps</ColumnHeader>
-                <ColumnHeader wide>Carga (kg)</ColumnHeader>
+                <ColumnHeader wide>{`Carga (${loadUnitLabel(units.loadUnit)})`}</ColumnHeader>
                 <ColumnHeader wide>RPE</ColumnHeader>
               </>
             )}
@@ -213,15 +222,21 @@ function ReadonlySetRow({
   isCardio: boolean;
   reserveDeleteColumn: boolean;
 }) {
+  // Na unidade da pessoa (Você › Unidades, #387); o banco segue em kg e metros.
+  const units = useUnitPrefs();
   const values = isCardio
     ? [
         formatSeconds(set.durationSeconds),
-        formatMeters(set.distanceMeters),
+        units.distanceUnit === 'KM'
+          ? formatMeters(set.distanceMeters)
+          : set.distanceMeters == null
+            ? '—'
+            : formatDistanceIn(set.distanceMeters, units.distanceUnit),
         set.avgHeartRate != null ? String(set.avgHeartRate) : '—',
       ]
     : [
         set.reps != null ? String(set.reps) : '—',
-        set.weightKg != null ? String(set.weightKg) : '—',
+        set.weightKg != null ? loadNumber(set.weightKg, units.loadUnit) : '—',
         set.rpe != null ? String(set.rpe) : '—',
       ];
 
@@ -254,6 +269,7 @@ function PlanModeCard({
 }: PlanCardProps) {
   const [sets, setSets] = useState(String(item.targetSets));
   const [reps, setReps] = useState(item.targetReps);
+  const units = useUnitPrefs();
 
   const pr = useQuery({
     queryKey: ['workout', 'pr', item.exercise.id],
@@ -270,7 +286,7 @@ function PlanModeCard({
 
   const prLabel =
     prWeight != null
-      ? `${prWeight}kg${prReps != null ? ` × ${prReps}` : ''}`
+      ? `${loadNumber(prWeight, units.loadUnit)}${loadUnitLabel(units.loadUnit)}${prReps != null ? ` × ${prReps}` : ''}`
       : prDistance != null
         ? `${prDistance}m`
         : null;
