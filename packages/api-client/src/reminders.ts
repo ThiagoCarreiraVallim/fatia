@@ -195,7 +195,8 @@ const TYPES: ReminderTypeOption[] = [
 
 /**
  * Os chips de tipo da folha. "Hábito" só existe quando a pessoa tem hábitos
- * (#390) e nunca na edição — o tipo de um lembrete salvo não muda.
+ * (#390) e nunca na edição (prancha Al-V3b): um lembrete salvo troca entre os
+ * outros tipos, mas não vira lembrete de hábito.
  */
 export function reminderTypes(opts: { habits: boolean; editing: boolean }): ReminderTypeOption[] {
   return TYPES.filter((t) => t.kind !== 'HABIT' || (opts.habits && !opts.editing));

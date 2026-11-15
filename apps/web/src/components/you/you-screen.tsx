@@ -6,10 +6,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import type { IconName } from '@fatia/design';
 import {
+  activeRemindersLabel,
   billingApi,
   keepPhotosText,
   newsApi,
   progressApi,
+  remindersApi,
   unitPrefsOf,
   unitsSummary,
   usersApi,
@@ -19,6 +21,7 @@ import {
 } from '@fatia/api-client';
 import { PlanBadge } from '@/components/billing/plan-badge';
 import { PLAN_QUERY_KEY } from '@/components/billing/plan-screen';
+import { REMINDERS_KEY } from '@/components/reminders/keys';
 import { useNavMenu } from '@/components/layout/use-nav-menu';
 import { SignOutButton } from '@/components/profile/sign-out-button';
 import { ProfessionalPanelLink } from '@/components/sharing/professional-panel-link';
@@ -49,6 +52,7 @@ export function YouScreen() {
   const today = useQuery({ queryKey: ['dashboard', 'today'], queryFn: () => progressApi.today() });
   const plan = useQuery({ queryKey: PLAN_QUERY_KEY, queryFn: () => billingApi.plan() });
   const news = useQuery({ queryKey: NEWS_QUERY_KEY, queryFn: () => newsApi.list() });
+  const reminders = useQuery({ queryKey: REMINDERS_KEY, queryFn: () => remindersApi.list() });
   const exportData = useExportData();
 
   const keepPhotos = useMutation({
@@ -68,6 +72,7 @@ export function YouScreen() {
 
   const detailOf = (item: MenuItem): React.ReactNode => {
     if (item.key === 'units') return unitsSummary(units);
+    if (item.key === 'reminders' && reminders.data) return activeRemindersLabel(reminders.data);
     if (item.key === 'plan' && plan.data) return plan.data.tier === 'PRO' ? 'PRO' : 'Free';
     if (item.key === 'news' && unread > 0) {
       return (

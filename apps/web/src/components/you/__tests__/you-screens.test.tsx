@@ -18,6 +18,7 @@ const api = vi.hoisted(() => ({
   markSeen: vi.fn(),
   availability: vi.fn(),
   listStudents: vi.fn(),
+  reminders: vi.fn(),
   toast: vi.fn(),
   push: vi.fn(),
 }));
@@ -44,6 +45,7 @@ vi.mock('@fatia/api-client', async () => {
     newsApi: { list: api.news, markRead: api.markRead },
     tutorialsApi: { seen: api.seen, markSeen: api.markSeen },
     professionalApi: { ...actual.professionalApi, listStudents: api.listStudents },
+    remindersApi: { ...actual.remindersApi, list: api.reminders },
     getChatAvailability: api.availability,
   };
 });
@@ -125,6 +127,11 @@ beforeEach(() => {
   api.markSeen.mockImplementation(async (id: string) => ({ seen: [id] }));
   api.availability.mockResolvedValue({ available: false });
   api.listStudents.mockResolvedValue([]);
+  api.reminders.mockResolvedValue([
+    { id: 'r1', enabled: true },
+    { id: 'r2', enabled: true },
+    { id: 'r3', enabled: false },
+  ]);
   vi.stubGlobal('location', { ...window.location, assign });
   window.localStorage.clear();
 });
@@ -147,6 +154,11 @@ describe('Você (Al-V1)', () => {
       '/you/units',
     );
     expect(await screen.findByLabelText('1 não lidas')).toBeInTheDocument();
+    // Lembretes (Al-V2, #389) em "Rotina e avisos", com quantos estão ligados.
+    expect(await screen.findByRole('link', { name: /Lembretes.*2 ativos/ })).toHaveAttribute(
+      'href',
+      '/you/reminders',
+    );
     expect(screen.getByRole('link', { name: 'Apagar minha conta' })).toHaveAttribute(
       'href',
       '/you/delete',
